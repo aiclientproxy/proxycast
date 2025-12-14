@@ -8,7 +8,9 @@ use uuid::Uuid;
 pub fn get_model_map() -> HashMap<&'static str, &'static str> {
     let mut map = HashMap::new();
     map.insert("claude-opus-4-5", "claude-opus-4.5");
+    map.insert("claude-opus-4-5-20251101", "claude-opus-4.5");
     map.insert("claude-haiku-4-5", "claude-haiku-4.5");
+    map.insert("claude-haiku-4-5-20251001", "claude-haiku-4.5");
     map.insert("claude-sonnet-4-5", "CLAUDE_SONNET_4_5_20250929_V1_0");
     map.insert(
         "claude-sonnet-4-5-20250929",
@@ -32,6 +34,111 @@ pub fn get_model_map() -> HashMap<&'static str, &'static str> {
 
 pub const DEFAULT_MODEL: &str = "CLAUDE_SONNET_4_5_20250929_V1_0";
 
+/// 预处理消息：合并连续的 tool 消息到前一个 assistant 消息后的 user 消息
+fn preprocess_messages(messages: &[&ChatMessage]) -> Vec<ProcessedMessage> {
+    let mut result: Vec<ProcessedMessage> = Vec::new();
+    let mut pending_tool_results: Vec<CWToolResult> = Vec::new();
+
+    for msg in messages {
+        match msg.role.as_str() {
+            "tool" => {
+                // 收集 tool 结果
+                let content = msg.get_content_text();
+                let tool_id = msg.tool_call_id.clone().unwrap_or_default();
+                pending_tool_results.push(CWToolResult {
+                    content: vec![CWTextContent { text: content }],
+                    status: "success".to_string(),
+                    tool_use_id: tool_id,
+                });
+            }
+            "user" => {
+                // 如果有待处理的 tool results，合并到这个 user 消息
+                let content = msg.get_content_text();
+                let mut tool_results = pending_tool_results.clone();
+                pending_tool_results.clear();
+
+                // 去重 tool_results
+                let mut seen_ids = std::collections::HashSet::new();
+                tool_results.retain(|tr| seen_ids.insert(tr.tool_use_id.clone()));
+
+                result.push(ProcessedMessage {
+                    role: "user".to_string(),
+                    content,
+                    tool_calls: None,
+                    tool_results: if tool_results.is_empty() {
+                        None
+                    } else {
+                        Some(tool_results)
+                    },
+                });
+            }
+            "assistant" => {
+                // 如果有待处理的 tool results，先创建一个 user 消息
+                if !pending_tool_results.is_empty() {
+                    let mut tool_results = pending_tool_results.clone();
+                    pending_tool_results.clear();
+
+                    // 去重 tool_results
+                    let mut seen_ids = std::collections::HashSet::new();
+                    tool_results.retain(|tr| seen_ids.insert(tr.tool_use_id.clone()));
+
+                    result.push(ProcessedMessage {
+                        role: "user".to_string(),
+                        content: "Tool results provided.".to_string(),
+                        tool_calls: None,
+                        tool_results: Some(tool_results),
+                    });
+                }
+
+                let content = msg.get_content_text();
+                let tool_calls = msg.tool_calls.as_ref().map(|calls| {
+                    calls
+                        .iter()
+                        .map(|tc| CWToolUse {
+                            input: serde_json::from_str(&tc.function.arguments)
+                                .unwrap_or(serde_json::json!({})),
+                            name: tc.function.name.clone(),
+                            tool_use_id: tc.id.clone(),
+                        })
+                        .collect()
+                });
+
+                result.push(ProcessedMessage {
+                    role: "assistant".to_string(),
+                    content,
+                    tool_calls,
+                    tool_results: None,
+                });
+            }
+            _ => {}
+        }
+    }
+
+    // 处理末尾的 tool results
+    if !pending_tool_results.is_empty() {
+        let mut tool_results = pending_tool_results;
+        let mut seen_ids = std::collections::HashSet::new();
+        tool_results.retain(|tr| seen_ids.insert(tr.tool_use_id.clone()));
+
+        result.push(ProcessedMessage {
+            role: "user".to_string(),
+            content: "Tool results provided.".to_string(),
+            tool_calls: None,
+            tool_results: Some(tool_results),
+        });
+    }
+
+    result
+}
+
+#[derive(Debug, Clone)]
+struct ProcessedMessage {
+    role: String,
+    content: String,
+    tool_calls: Option<Vec<CWToolUse>>,
+    tool_results: Option<Vec<CWToolResult>>,
+}
+
 /// 将 OpenAI ChatCompletionRequest 转换为 CodeWhisperer 请求
 pub fn convert_openai_to_codewhisperer(
     request: &ChatCompletionRequest,
@@ -47,15 +154,18 @@ pub fn convert_openai_to_codewhisperer(
 
     // 提取 system prompt 和消息
     let mut system_prompt = String::new();
-    let mut messages: Vec<&ChatMessage> = Vec::new();
+    let mut raw_messages: Vec<&ChatMessage> = Vec::new();
 
     for msg in &request.messages {
         if msg.role == "system" {
             system_prompt = msg.get_content_text();
         } else {
-            messages.push(msg);
+            raw_messages.push(msg);
         }
     }
+
+    // 预处理消息：合并 tool 消息
+    let messages = preprocess_messages(&raw_messages);
 
     // 构建历史记录
     let mut history: Vec<HistoryItem> = Vec::new();
@@ -63,16 +173,27 @@ pub fn convert_openai_to_codewhisperer(
 
     // 处理 system prompt - 合并到第一条用户消息
     if !system_prompt.is_empty() && !messages.is_empty() && messages[0].role == "user" {
-        let first_content = messages[0].get_content_text();
+        let first_content = &messages[0].content;
         let combined = format!("{system_prompt}\n\n{first_content}");
+
+        let mut user_msg = UserInputMessage {
+            content: combined,
+            model_id: cw_model.clone(),
+            origin: "AI_EDITOR".to_string(),
+            images: None,
+            user_input_message_context: None,
+        };
+
+        // 如果第一条消息有 tool_results，也要包含
+        if let Some(ref tool_results) = messages[0].tool_results {
+            user_msg.user_input_message_context = Some(UserInputMessageContext {
+                tools: None,
+                tool_results: Some(tool_results.clone()),
+            });
+        }
+
         history.push(HistoryItem::User(UserHistoryItem {
-            user_input_message: UserInputMessage {
-                content: combined,
-                model_id: cw_model.clone(),
-                origin: "AI_EDITOR".to_string(),
-                images: None,
-                user_input_message_context: None,
-            },
+            user_input_message: user_msg,
         }));
         start_idx = 1;
     }
@@ -85,29 +206,28 @@ pub fn convert_openai_to_codewhisperer(
     {
         match msg.role.as_str() {
             "user" => {
-                let content = msg.get_content_text();
-                let tool_results = extract_tool_results(msg);
+                let content = if msg.content.is_empty() {
+                    if msg.tool_results.is_some() {
+                        "Tool results provided.".to_string()
+                    } else {
+                        "Continue".to_string()
+                    }
+                } else {
+                    msg.content.clone()
+                };
 
                 let mut user_msg = UserInputMessage {
-                    content: if content.is_empty() {
-                        if tool_results.is_some() {
-                            "Tool results provided.".to_string()
-                        } else {
-                            "Continue".to_string()
-                        }
-                    } else {
-                        content
-                    },
+                    content,
                     model_id: cw_model.clone(),
                     origin: "AI_EDITOR".to_string(),
                     images: None,
                     user_input_message_context: None,
                 };
 
-                if tool_results.is_some() {
+                if let Some(ref tool_results) = msg.tool_results {
                     user_msg.user_input_message_context = Some(UserInputMessageContext {
                         tools: None,
-                        tool_results,
+                        tool_results: Some(tool_results.clone()),
                     });
                 }
 
@@ -116,41 +236,16 @@ pub fn convert_openai_to_codewhisperer(
                 }));
             }
             "assistant" => {
-                let content = msg.get_content_text();
-                let tool_uses = extract_tool_uses(msg);
+                let content = if msg.content.is_empty() {
+                    "I understand.".to_string()
+                } else {
+                    msg.content.clone()
+                };
 
                 history.push(HistoryItem::Assistant(AssistantHistoryItem {
                     assistant_response_message: AssistantResponseMessage {
-                        content: if content.is_empty() {
-                            "I understand.".to_string()
-                        } else {
-                            content
-                        },
-                        tool_uses,
-                    },
-                }));
-            }
-            "tool" => {
-                let tool_content = msg.get_content_text();
-                let tool_id = msg.tool_call_id.clone().unwrap_or_default();
-
-                history.push(HistoryItem::User(UserHistoryItem {
-                    user_input_message: UserInputMessage {
-                        content: format!(
-                            "Tool result: {}",
-                            &tool_content[..tool_content.len().min(200)]
-                        ),
-                        model_id: cw_model.clone(),
-                        origin: "AI_EDITOR".to_string(),
-                        images: None,
-                        user_input_message_context: Some(UserInputMessageContext {
-                            tools: None,
-                            tool_results: Some(vec![CWToolResult {
-                                content: vec![CWTextContent { text: tool_content }],
-                                status: "success".to_string(),
-                                tool_use_id: tool_id,
-                            }]),
-                        }),
+                        content,
+                        tool_uses: msg.tool_calls.clone(),
                     },
                 }));
             }
@@ -162,19 +257,23 @@ pub fn convert_openai_to_codewhisperer(
     let history = fix_history_alternation(history, &cw_model);
 
     // 构建当前消息
-    let current_content = if messages.is_empty() {
-        "Continue".to_string()
+    let (current_content, current_tool_results) = if messages.is_empty() {
+        ("Continue".to_string(), None)
     } else {
         let last_msg = messages.last().unwrap();
         if last_msg.role == "assistant" {
-            "Continue".to_string()
+            ("Continue".to_string(), None)
         } else {
-            let content = last_msg.get_content_text();
-            if content.is_empty() {
-                "Continue".to_string()
+            let content = if last_msg.content.is_empty() {
+                if last_msg.tool_results.is_some() {
+                    "Tool results provided.".to_string()
+                } else {
+                    "Continue".to_string()
+                }
             } else {
-                content
-            }
+                last_msg.content.clone()
+            };
+            (content, last_msg.tool_results.clone())
         }
     };
 
@@ -211,13 +310,6 @@ pub fn convert_openai_to_codewhisperer(
             .collect()
     });
 
-    let current_tool_results = if !messages.is_empty() {
-        let last_msg = messages.last().unwrap();
-        extract_tool_results(last_msg)
-    } else {
-        None
-    };
-
     let user_input_message_context = if tools.is_some() || current_tool_results.is_some() {
         Some(UserInputMessageContext {
             tools,
@@ -250,36 +342,6 @@ pub fn convert_openai_to_codewhisperer(
     }
 }
 
-fn extract_tool_results(msg: &ChatMessage) -> Option<Vec<CWToolResult>> {
-    if msg.role == "tool" {
-        let content = msg.get_content_text();
-        let tool_id = msg.tool_call_id.clone().unwrap_or_default();
-        return Some(vec![CWToolResult {
-            content: vec![CWTextContent { text: content }],
-            status: "success".to_string(),
-            tool_use_id: tool_id,
-        }]);
-    }
-    None
-}
-
-fn extract_tool_uses(msg: &ChatMessage) -> Option<Vec<CWToolUse>> {
-    msg.tool_calls.as_ref().map(|calls| {
-        calls
-            .iter()
-            .map(|tc| {
-                let input: serde_json::Value =
-                    serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::json!({}));
-                CWToolUse {
-                    input,
-                    name: tc.function.name.clone(),
-                    tool_use_id: tc.id.clone(),
-                }
-            })
-            .collect()
-    })
-}
-
 /// 修复历史记录，确保 user/assistant 严格交替
 fn fix_history_alternation(history: Vec<HistoryItem>, model_id: &str) -> Vec<HistoryItem> {
     if history.is_empty() {
@@ -290,15 +352,49 @@ fn fix_history_alternation(history: Vec<HistoryItem>, model_id: &str) -> Vec<His
 
     for item in history {
         match &item {
-            HistoryItem::User(_) => {
-                // 如果上一条也是 user，插入占位 assistant
-                if let Some(HistoryItem::User(_)) = fixed.last() {
-                    fixed.push(HistoryItem::Assistant(AssistantHistoryItem {
-                        assistant_response_message: AssistantResponseMessage {
-                            content: "I understand.".to_string(),
-                            tool_uses: None,
-                        },
-                    }));
+            HistoryItem::User(user_item) => {
+                // 如果上一条也是 user，合并 tool_results 或插入占位 assistant
+                if let Some(HistoryItem::User(last_user)) = fixed.last_mut() {
+                    // 尝试合并 tool_results
+                    let has_tool_results = user_item
+                        .user_input_message
+                        .user_input_message_context
+                        .as_ref()
+                        .map(|ctx| ctx.tool_results.is_some())
+                        .unwrap_or(false);
+
+                    if has_tool_results {
+                        // 合并 tool_results 到上一个 user 消息
+                        let new_results = user_item
+                            .user_input_message
+                            .user_input_message_context
+                            .as_ref()
+                            .and_then(|ctx| ctx.tool_results.clone())
+                            .unwrap_or_default();
+
+                        if let Some(ref mut ctx) = last_user.user_input_message.user_input_message_context {
+                            if let Some(ref mut existing) = ctx.tool_results {
+                                existing.extend(new_results);
+                            } else {
+                                ctx.tool_results = Some(new_results);
+                            }
+                        } else {
+                            last_user.user_input_message.user_input_message_context =
+                                Some(UserInputMessageContext {
+                                    tools: None,
+                                    tool_results: Some(new_results),
+                                });
+                        }
+                        continue;
+                    } else {
+                        // 插入占位 assistant
+                        fixed.push(HistoryItem::Assistant(AssistantHistoryItem {
+                            assistant_response_message: AssistantResponseMessage {
+                                content: "I understand.".to_string(),
+                                tool_uses: None,
+                            },
+                        }));
+                    }
                 }
                 fixed.push(item);
             }

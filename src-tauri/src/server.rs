@@ -571,10 +571,27 @@ async fn anthropic_messages(
             if status.is_success() {
                 match resp.text().await {
                     Ok(body) => {
-                        // 记录原始响应长度和预览
+                        // 记录原始响应长度
                         state.logs.write().await.add(
                             "debug",
                             &format!("[RESP] Raw body length: {} bytes", body.len()),
+                        );
+
+                        // 保存原始响应到文件用于调试
+                        let request_id = uuid::Uuid::new_v4().to_string()[..8].to_string();
+                        state.logs.read().await.log_raw_response(&request_id, &body);
+                        state.logs.write().await.add(
+                            "debug",
+                            &format!("[RESP] Raw response saved to raw_response_{request_id}.txt"),
+                        );
+
+                        // 记录响应的前500字符用于调试
+                        state.logs.write().await.add(
+                            "debug",
+                            &format!(
+                                "[RESP] Body preview: {}",
+                                &body.chars().take(500).collect::<String>()
+                            ),
                         );
 
                         let parsed = parse_cw_response(&body);
@@ -847,18 +864,18 @@ fn build_anthropic_stream_response(
 
     let mut block_index = 0;
 
-    // 2. 文本内容块
-    if !content.is_empty() {
-        // content_block_start
-        let block_start = serde_json::json!({
-            "type": "content_block_start",
-            "index": block_index,
-            "content_block": {"type": "text", "text": ""}
-        });
-        events.push(format!(
-            "event: content_block_start\ndata: {block_start}\n\n"
-        ));
+    // 2. 文本内容块 - 即使为空也要发送，Claude Code 需要至少一个 content block
+    // content_block_start
+    let block_start = serde_json::json!({
+        "type": "content_block_start",
+        "index": block_index,
+        "content_block": {"type": "text", "text": ""}
+    });
+    events.push(format!(
+        "event: content_block_start\ndata: {block_start}\n\n"
+    ));
 
+    if !content.is_empty() {
         // content_block_delta - 发送完整内容
         let block_delta = serde_json::json!({
             "type": "content_block_delta",
@@ -868,16 +885,16 @@ fn build_anthropic_stream_response(
         events.push(format!(
             "event: content_block_delta\ndata: {block_delta}\n\n"
         ));
-
-        // content_block_stop
-        let block_stop = serde_json::json!({
-            "type": "content_block_stop",
-            "index": block_index
-        });
-        events.push(format!("event: content_block_stop\ndata: {block_stop}\n\n"));
-
-        block_index += 1;
     }
+
+    // content_block_stop
+    let block_stop = serde_json::json!({
+        "type": "content_block_stop",
+        "index": block_index
+    });
+    events.push(format!("event: content_block_stop\ndata: {block_stop}\n\n"));
+
+    block_index += 1;
 
     // 3. Tool use 块
     for tc in &tool_calls {
@@ -974,109 +991,117 @@ struct CWParsedResponse {
 }
 
 /// 解析 CodeWhisperer AWS Event Stream 响应
+/// AWS Event Stream 是二进制格式，JSON payload 嵌入在二进制头部之间
 fn parse_cw_response(body: &str) -> CWParsedResponse {
     let mut result = CWParsedResponse::default();
-    let mut current_tool: Option<(String, String, String)> = None; // (id, name, input)
+    // 使用 HashMap 来跟踪多个并发的 tool calls
+    // key: toolUseId, value: (name, input_accumulated)
+    let mut tool_map: std::collections::HashMap<String, (String, String)> =
+        std::collections::HashMap::new();
 
-    // 解析所有 JSON 事件
-    let patterns = [
-        r#"\{"content":"#,
-        r#"\{"name":"#,
-        r#"\{"input":"#,
-        r#"\{"stop":"#,
+    // 将字符串转换为字节，因为 AWS Event Stream 包含二进制数据
+    let bytes = body.as_bytes();
+
+    // 搜索所有 JSON 对象的模式
+    // AWS Event Stream 格式: [binary headers]{"content":"..."}[binary trailer]
+    let json_patterns: &[&[u8]] = &[
+        b"{\"content\":",
+        b"{\"name\":",
+        b"{\"input\":",
+        b"{\"stop\":",
+        b"{\"followupPrompt\":",
+        b"{\"toolUseId\":",
     ];
 
     let mut pos = 0;
-    while pos < body.len() {
+    while pos < bytes.len() {
         // 找到下一个 JSON 对象的开始
-        let mut next_start = body.len();
-        for pattern in &patterns {
-            if let Some(idx) = body[pos..].find(pattern) {
-                next_start = next_start.min(pos + idx);
+        let mut next_start: Option<usize> = None;
+
+        for pattern in json_patterns {
+            if let Some(idx) = find_subsequence(&bytes[pos..], pattern) {
+                let abs_pos = pos + idx;
+                if next_start.is_none() || abs_pos < next_start.unwrap() {
+                    next_start = Some(abs_pos);
+                }
             }
         }
 
-        if next_start >= body.len() {
-            break;
-        }
+        let start = match next_start {
+            Some(s) => s,
+            None => break,
+        };
 
-        // 找到匹配的 }
-        if let Some(json_str) = extract_json_object(&body[next_start..]) {
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(json_str) {
+        // 从 start 位置提取完整的 JSON 对象
+        if let Some(json_str) = extract_json_from_bytes(&bytes[start..]) {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&json_str) {
                 // 处理 content 事件
                 if let Some(content) = value.get("content").and_then(|v| v.as_str()) {
                     // 跳过 followupPrompt
                     if value.get("followupPrompt").is_none() {
-                        let unescaped = content
-                            .replace("\\n", "\n")
-                            .replace("\\t", "\t")
-                            .replace("\\\"", "\"")
-                            .replace("\\\\", "\\");
-                        result.content.push_str(&unescaped);
+                        result.content.push_str(content);
                     }
                 }
-                // 处理 tool use 开始事件
-                else if let (Some(name), Some(tool_use_id)) = (
-                    value.get("name").and_then(|v| v.as_str()),
-                    value.get("toolUseId").and_then(|v| v.as_str()),
-                ) {
-                    let input = value
+                // 处理 tool use 事件 (包含 toolUseId)
+                else if let Some(tool_use_id) = value.get("toolUseId").and_then(|v| v.as_str()) {
+                    let name = value
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let input_chunk = value
                         .get("input")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
-                    current_tool = Some((tool_use_id.to_string(), name.to_string(), input));
+                    let is_stop = value.get("stop").and_then(|v| v.as_bool()).unwrap_or(false);
 
-                    // 如果同时有 stop，直接完成
-                    if value.get("stop").and_then(|v| v.as_bool()).unwrap_or(false) {
-                        if let Some((id, name, input)) = current_tool.take() {
-                            result.tool_calls.push(ToolCall {
-                                id,
-                                call_type: "function".to_string(),
-                                function: FunctionCall {
-                                    name,
-                                    arguments: input,
-                                },
-                            });
+                    // 获取或创建 tool entry
+                    let entry = tool_map
+                        .entry(tool_use_id.to_string())
+                        .or_insert_with(|| (String::new(), String::new()));
+
+                    // 更新 name（如果有）
+                    if !name.is_empty() {
+                        entry.0 = name;
+                    }
+
+                    // 累积 input
+                    entry.1.push_str(&input_chunk);
+
+                    // 如果是 stop 事件，完成这个 tool call
+                    if is_stop {
+                        if let Some((name, input)) = tool_map.remove(tool_use_id) {
+                            if !name.is_empty() {
+                                result.tool_calls.push(ToolCall {
+                                    id: tool_use_id.to_string(),
+                                    call_type: "function".to_string(),
+                                    function: FunctionCall { name, arguments: input },
+                                });
+                            }
                         }
                     }
                 }
-                // 处理 input 续传事件
-                else if let Some(input) = value.get("input").and_then(|v| v.as_str()) {
-                    if let Some((_, _, ref mut current_input)) = current_tool {
-                        current_input.push_str(input);
-                    }
-                }
-                // 处理 stop 事件
+                // 处理独立的 stop 事件（没有 toolUseId）
                 else if value.get("stop").and_then(|v| v.as_bool()).unwrap_or(false) {
-                    if let Some((id, name, input)) = current_tool.take() {
-                        result.tool_calls.push(ToolCall {
-                            id,
-                            call_type: "function".to_string(),
-                            function: FunctionCall {
-                                name,
-                                arguments: input,
-                            },
-                        });
-                    }
+                    // 这种情况不应该发生，但以防万一
                 }
             }
-            pos = next_start + json_str.len();
+            pos = start + json_str.len();
         } else {
-            pos = next_start + 1;
+            pos = start + 1;
         }
     }
 
-    // 处理未完成的 tool call
-    if let Some((id, name, input)) = current_tool {
-        result.tool_calls.push(ToolCall {
-            id,
-            call_type: "function".to_string(),
-            function: FunctionCall {
-                name,
-                arguments: input,
-            },
-        });
+    // 处理未完成的 tool calls（没有收到 stop 事件的）
+    for (id, (name, input)) in tool_map {
+        if !name.is_empty() {
+            result.tool_calls.push(ToolCall {
+                id,
+                call_type: "function".to_string(),
+                function: FunctionCall { name, arguments: input },
+            });
+        }
     }
 
     // 解析 bracket 格式的 tool calls: [Called xxx with args: {...}]
@@ -1085,7 +1110,50 @@ fn parse_cw_response(body: &str) -> CWParsedResponse {
     result
 }
 
-/// 从字符串中提取完整的 JSON 对象
+/// 在字节数组中查找子序列
+fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+/// 从字节数组中提取 JSON 对象字符串
+fn extract_json_from_bytes(bytes: &[u8]) -> Option<String> {
+    if bytes.is_empty() || bytes[0] != b'{' {
+        return None;
+    }
+
+    let mut brace_count = 0;
+    let mut in_string = false;
+    let mut escape_next = false;
+    let mut end_pos = None;
+
+    for (i, &b) in bytes.iter().enumerate() {
+        if escape_next {
+            escape_next = false;
+            continue;
+        }
+
+        match b {
+            b'\\' if in_string => escape_next = true,
+            b'"' => in_string = !in_string,
+            b'{' if !in_string => brace_count += 1,
+            b'}' if !in_string => {
+                brace_count -= 1;
+                if brace_count == 0 {
+                    end_pos = Some(i + 1);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    end_pos.and_then(|end| String::from_utf8(bytes[..end].to_vec()).ok())
+}
+
+/// 从字符串中提取完整的 JSON 对象 (保留用于兼容)
+#[allow(dead_code)]
 fn extract_json_object(s: &str) -> Option<&str> {
     if !s.starts_with('{') {
         return None;

@@ -225,6 +225,26 @@ impl KiroProvider {
         let cw_request = convert_openai_to_codewhisperer(request, profile_arn);
         let url = self.get_base_url();
 
+        // Debug: 记录转换后的请求
+        if let Ok(json_str) = serde_json::to_string_pretty(&cw_request) {
+            // 保存到文件用于调试
+            let debug_path = dirs::home_dir()
+                .unwrap_or_default()
+                .join(".proxycast")
+                .join("logs")
+                .join(format!("cw_request_{}.json", uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("unknown")));
+            let _ = std::fs::write(&debug_path, &json_str);
+            tracing::debug!("[CW_REQ] Request saved to {:?}", debug_path);
+            
+            // 记录历史消息数量和 tool_results 情况
+            let history_len = cw_request.conversation_state.history.as_ref().map(|h| h.len()).unwrap_or(0);
+            let current_has_tools = cw_request.conversation_state.current_message.user_input_message
+                .user_input_message_context.as_ref()
+                .map(|ctx| ctx.tool_results.as_ref().map(|tr| tr.len()).unwrap_or(0))
+                .unwrap_or(0);
+            tracing::info!("[CW_REQ] history={} current_tool_results={}", history_len, current_has_tools);
+        }
+
         let resp = self
             .client
             .post(&url)
