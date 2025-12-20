@@ -89,6 +89,7 @@ export function TlsSettings() {
     );
   }
 
+  const tlsSupported = false;
   const tls = config.server.tls;
   const isConfigValid = !tls.enable || (tls.cert_path && tls.key_path);
 
@@ -121,6 +122,16 @@ export function TlsSettings() {
       )}
 
       <div className="p-4 rounded-lg border space-y-4">
+        {!tlsSupported && (
+          <div className="flex items-start gap-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 p-3 text-sm text-yellow-700 dark:text-yellow-400">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>
+              当前版本暂不支持 TLS。启用后服务将无法启动，请使用反向代理或 TLS
+              终止。
+            </span>
+          </div>
+        )}
+
         {/* 启用开关 */}
         <label className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50">
           <div>
@@ -133,12 +144,17 @@ export function TlsSettings() {
             type="checkbox"
             checked={tls.enable}
             onChange={(e) => updateTls({ enable: e.target.checked })}
+            disabled={!tlsSupported}
             className="w-4 h-4 rounded border-gray-300"
           />
         </label>
 
         {/* 证书路径 */}
-        <div className={tls.enable ? "" : "opacity-50 pointer-events-none"}>
+        <div
+          className={
+            tls.enable && tlsSupported ? "" : "opacity-50 pointer-events-none"
+          }
+        >
           <label className="block text-sm font-medium mb-1.5">
             证书文件路径 {tls.enable && <span className="text-red-500">*</span>}
           </label>
@@ -165,7 +181,11 @@ export function TlsSettings() {
         </div>
 
         {/* 私钥路径 */}
-        <div className={tls.enable ? "" : "opacity-50 pointer-events-none"}>
+        <div
+          className={
+            tls.enable && tlsSupported ? "" : "opacity-50 pointer-events-none"
+          }
+        >
           <label className="block text-sm font-medium mb-1.5">
             私钥文件路径 {tls.enable && <span className="text-red-500">*</span>}
           </label>
@@ -201,7 +221,7 @@ export function TlsSettings() {
 
         <button
           onClick={handleSave}
-          disabled={saving || (tls.enable && !isConfigValid)}
+          disabled={saving || !tlsSupported || (tls.enable && !isConfigValid)}
           className="w-full px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
         >
           {saving ? "保存中..." : "保存 TLS 设置"}

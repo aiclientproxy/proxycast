@@ -88,7 +88,8 @@ export function RemoteManagementSettings() {
   }
 
   const rm = config.remote_management;
-  const isEnabled = rm.secret_key && rm.secret_key.length > 0;
+  const isEnabled = Boolean(rm.secret_key && rm.secret_key.length > 0);
+  const remoteAccessSupported = false;
 
   return (
     <div className="space-y-4">
@@ -121,6 +122,13 @@ export function RemoteManagementSettings() {
       )}
 
       <div className="p-4 rounded-lg border space-y-4">
+        {!remoteAccessSupported && (
+          <div className="flex items-start gap-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 p-3 text-sm text-yellow-700 dark:text-yellow-400">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>当前版本未启用 TLS，暂不支持远程管理访问，请保持关闭。</span>
+          </div>
+        )}
+
         {/* 管理密钥 */}
         <div>
           <label className="block text-sm font-medium mb-1.5">管理密钥</label>
@@ -179,7 +187,7 @@ export function RemoteManagementSettings() {
 
         {/* 允许远程访问 */}
         <label
-          className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 ${!isEnabled ? "opacity-50 pointer-events-none" : ""}`}
+          className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 ${!isEnabled || !remoteAccessSupported ? "opacity-50 pointer-events-none" : ""}`}
         >
           <div>
             <span className="text-sm font-medium">允许远程访问</span>
@@ -194,7 +202,7 @@ export function RemoteManagementSettings() {
               updateRemoteManagement({ allow_remote: e.target.checked })
             }
             className="w-4 h-4 rounded border-gray-300"
-            disabled={!isEnabled}
+            disabled={!isEnabled || !remoteAccessSupported}
           />
         </label>
 
@@ -222,7 +230,7 @@ export function RemoteManagementSettings() {
         </label>
 
         {/* 警告提示 */}
-        {isEnabled && rm.allow_remote && (
+        {remoteAccessSupported && isEnabled && rm.allow_remote && (
           <div className="flex items-start gap-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 p-3 text-sm text-yellow-700 dark:text-yellow-400">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             <span>

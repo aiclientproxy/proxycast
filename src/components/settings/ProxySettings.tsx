@@ -173,7 +173,7 @@ export function ProxySettings() {
                     ...config,
                     server: {
                       ...config.server,
-                      port: parseInt(e.target.value) || 3001,
+                      port: parseInt(e.target.value) || 8999,
                     },
                   })
                 }

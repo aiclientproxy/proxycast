@@ -148,7 +148,7 @@ export function ApiServerPage() {
         ...config,
         server: {
           ...config.server,
-          port: parseInt(editPort) || 3001,
+          port: parseInt(editPort) || 8999,
           api_key: editApiKey,
         },
       };
@@ -236,8 +236,8 @@ export function ApiServerPage() {
 
   const serverUrl = status
     ? `http://${status.host}:${status.port}`
-    : "http://localhost:3001";
-  const apiKey = config?.server.api_key || "proxycast-key";
+    : `http://localhost:${config?.server.port ?? 8999}`;
+  const apiKey = config?.server.api_key ?? "";
 
   // Test endpoints
   const testEndpoints = [

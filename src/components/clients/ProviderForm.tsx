@@ -142,7 +142,7 @@ const presets: Record<AppType, ProviderPreset[]> = {
       name: "ProxyCast",
       category: "proxy",
       iconColor: "#3b82f6",
-      defaultBaseUrl: "http://127.0.0.1:3001",
+      defaultBaseUrl: "http://127.0.0.1:8999",
     },
     // 从凭证池导入
     {
@@ -192,7 +192,7 @@ model = "gpt-4o"
       iconColor: "#3b82f6",
       defaultCodexAuth: {
         api_key: "proxycast",
-        api_base_url: "http://127.0.0.1:3001/v1",
+        api_base_url: "http://127.0.0.1:8999/v1",
       },
     },
     // 从凭证池导入
@@ -228,7 +228,7 @@ model = "gpt-4o"
       iconColor: "#3b82f6",
       defaultGeminiEnv: {
         GEMINI_API_KEY: "proxycast",
-        GOOGLE_GEMINI_BASE_URL: "http://127.0.0.1:3001",
+        GOOGLE_GEMINI_BASE_URL: "http://127.0.0.1:8999",
         GEMINI_MODEL: "gemini-2.0-flash",
       },
     },
@@ -562,7 +562,7 @@ export function ProviderForm({
           const config = await getConfig();
           const proxyApiKey = config.server.api_key || "";
           const proxyHost = config.server.host || "127.0.0.1";
-          const proxyPort = config.server.port || 3001;
+          const proxyPort = config.server.port || 8999;
           const proxyBaseUrl = `http://${proxyHost}:${proxyPort}`;
 
           if (appType === "claude") {
@@ -681,7 +681,7 @@ export function ProviderForm({
       const config = await getConfig();
       const proxyApiKey = config.server.api_key || "";
       const proxyHost = config.server.host || "127.0.0.1";
-      const proxyPort = config.server.port || 3001;
+      const proxyPort = config.server.port || 8999;
       const proxyBaseUrl = `http://${proxyHost}:${proxyPort}`;
 
       if (appType === "claude") {

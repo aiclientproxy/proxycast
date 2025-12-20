@@ -53,7 +53,7 @@ const providerModels: Record<PoolProviderType, string[]> = {
   ],
   openai: [], // 自定义 API，无预设模型
   claude: [], // 自定义 API，无预设模型
-  codex: ["gpt-4o", "gpt-4o-mini", "o1", "o1-mini", "o3-mini"], // Codex OAuth
+  codex: ["gpt-4o", "gpt-4o-mini", "o1", "o1-mini", "o3-mini"], // Codex（OAuth / API Key）
   claude_oauth: [
     "claude-3-5-sonnet-latest",
     "claude-3-5-haiku-latest",

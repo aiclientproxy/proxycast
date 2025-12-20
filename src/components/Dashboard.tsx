@@ -153,7 +153,7 @@ export function Dashboard() {
 
   const serverUrl = status
     ? `http://${status.host}:${status.port}`
-    : "http://localhost:3001";
+    : "http://localhost:8999";
 
   const getProviderName = (id: string) => {
     switch (id) {
