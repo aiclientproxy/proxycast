@@ -1619,6 +1619,8 @@ pub fn run() {
             // Path utility commands
             commands::config_cmd::expand_path,
             commands::config_cmd::open_auth_dir,
+            // Update check command
+            commands::config_cmd::check_for_updates,
             // MCP commands
             commands::mcp_cmd::get_mcp_servers,
             commands::mcp_cmd::add_mcp_server,
