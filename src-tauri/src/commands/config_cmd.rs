@@ -15,6 +15,17 @@ pub struct ConfigStatus {
     pub has_env: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VersionCheckResult {
+    pub current: String,
+    pub latest: Option<String>,
+    #[serde(rename = "hasUpdate")]
+    pub has_update: bool,
+    #[serde(rename = "downloadUrl")]
+    pub download_url: Option<String>,
+    pub error: Option<String>,
+}
+
 /// Get the config directory path for an app type
 fn get_config_dir(app_type: &AppType) -> Option<PathBuf> {
     let home = dirs::home_dir()?;
@@ -199,6 +210,7 @@ pub async fn set_auto_launch(app: AppHandle, enabled: bool) -> Result<bool, Stri
     Ok(enabled)
 }
 
+<<<<<<< HEAD
 // ============ Config Import/Export Commands ============
 
 /// 配置导出选项
@@ -572,4 +584,93 @@ pub async fn open_auth_dir(path: String) -> Result<bool, String> {
     }
 
     Ok(true)
+}
+
+#[tauri::command]
+pub async fn check_for_updates() -> Result<VersionCheckResult, String> {
+    const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+    const GITHUB_API_URL: &str =
+        "https://api.github.com/repos/aiclientproxy/proxycast/releases/latest";
+
+    let client = reqwest::Client::new();
+
+    match client
+        .get(GITHUB_API_URL)
+        .header("User-Agent", "ProxyCast")
+        .send()
+        .await
+    {
+        Ok(response) => {
+            if response.status().is_success() {
+                match response.json::<serde_json::Value>().await {
+                    Ok(data) => {
+                        let latest_version = data["tag_name"]
+                            .as_str()
+                            .unwrap_or("")
+                            .trim_start_matches('v');
+
+                        let download_url = data["html_url"].as_str().map(|s| s.to_string());
+
+                        let has_update = version_compare(CURRENT_VERSION, latest_version);
+
+                        Ok(VersionCheckResult {
+                            current: CURRENT_VERSION.to_string(),
+                            latest: Some(latest_version.to_string()),
+                            has_update,
+                            download_url,
+                            error: None,
+                        })
+                    }
+                    Err(e) => Ok(VersionCheckResult {
+                        current: CURRENT_VERSION.to_string(),
+                        latest: None,
+                        has_update: false,
+                        download_url: None,
+                        error: Some(format!("解析响应失败: {}", e)),
+                    }),
+                }
+            } else {
+                Ok(VersionCheckResult {
+                    current: CURRENT_VERSION.to_string(),
+                    latest: None,
+                    has_update: false,
+                    download_url: None,
+                    error: Some(format!("GitHub API 请求失败: {}", response.status())),
+                })
+            }
+        }
+        Err(e) => Ok(VersionCheckResult {
+            current: CURRENT_VERSION.to_string(),
+            latest: None,
+            has_update: false,
+            download_url: None,
+            error: Some(format!("网络请求失败: {}", e)),
+        }),
+    }
+}
+
+/// 简单的版本比较函数
+/// 返回 true 如果 latest > current
+fn version_compare(current: &str, latest: &str) -> bool {
+    // 移除 'v' 前缀
+    let current = current.trim_start_matches('v');
+    let latest = latest.trim_start_matches('v');
+
+    let current_parts: Vec<u32> = current.split('.').filter_map(|s| s.parse().ok()).collect();
+    let latest_parts: Vec<u32> = latest.split('.').filter_map(|s| s.parse().ok()).collect();
+
+    let max_len = current_parts.len().max(latest_parts.len());
+
+    for i in 0..max_len {
+        let current_part = current_parts.get(i).unwrap_or(&0);
+        let latest_part = latest_parts.get(i).unwrap_or(&0);
+
+        if latest_part > current_part {
+            return true;
+        } else if latest_part < current_part {
+            return false;
+        }
+    }
+
+    false
 }

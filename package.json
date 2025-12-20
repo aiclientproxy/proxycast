@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.13.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aiclientproxy/proxycast.git"
+  },
+  "homepage": "https://github.com/aiclientproxy/proxycast",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
