@@ -4,6 +4,8 @@ version = "0.7.0"
 description = "AI API Proxy Desktop App"
 authors = ["you"]
 edition = "2021"
+repository = "https://github.com/aiclientproxy/proxycast"
+homepage = "https://github.com/aiclientproxy/proxycast"
 
 [lib]
 name = "proxycast_lib"

@@ -11,6 +11,8 @@ interface VersionInfo {
   current: string;
   latest?: string;
   hasUpdate: boolean;
+  downloadUrl?: string;
+  error?: string;
 }
 
 interface ToolVersion {
@@ -20,10 +22,12 @@ interface ToolVersion {
 }
 
 export function AboutSection() {
-  const [versionInfo] = useState<VersionInfo>({
+  const [versionInfo, setVersionInfo] = useState<VersionInfo>({
     current: "0.7.0",
     latest: undefined,
     hasUpdate: false,
+    downloadUrl: undefined,
+    error: undefined,
   });
   const [checking, setChecking] = useState(false);
   const [toolVersions, setToolVersions] = useState<ToolVersion[]>([]);
@@ -46,9 +50,18 @@ export function AboutSection() {
 
   const handleCheckUpdate = async () => {
     setChecking(true);
-    // TODO: 实现版本检查
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setChecking(false);
+    try {
+      const result = await invoke<VersionInfo>("check_for_updates");
+      setVersionInfo(result);
+    } catch (error) {
+      console.error("Failed to check for updates:", error);
+      setVersionInfo((prev) => ({
+        ...prev,
+        error: "检查更新失败",
+      }));
+    } finally {
+      setChecking(false);
+    }
   };
 
   return (
@@ -68,24 +81,45 @@ export function AboutSection() {
           <span className="text-sm">版本 {versionInfo.current}</span>
           {versionInfo.hasUpdate ? (
             <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs">
-              有新版本
+              有新版本 {versionInfo.latest}
             </span>
-          ) : (
+          ) : versionInfo.error ? (
+            <span className="flex items-center gap-1 text-xs text-red-500">
+              <AlertCircle className="h-3 w-3" />
+              {versionInfo.error}
+            </span>
+          ) : versionInfo.latest ? (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <CheckCircle2 className="h-3 w-3" />
               已是最新
             </span>
-          )}
+          ) : null}
         </div>
 
-        <button
-          onClick={handleCheckUpdate}
-          disabled={checking}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border text-sm hover:bg-muted disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${checking ? "animate-spin" : ""}`} />
-          检查更新
-        </button>
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={handleCheckUpdate}
+            disabled={checking}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border text-sm hover:bg-muted disabled:opacity-50"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${checking ? "animate-spin" : ""}`}
+            />
+            检查更新
+          </button>
+
+          {versionInfo.hasUpdate && versionInfo.downloadUrl && (
+            <a
+              href={versionInfo.downloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm hover:bg-green-700"
+            >
+              <ExternalLink className="h-4 w-4" />
+              下载新版本
+            </a>
+          )}
+        </div>
       </div>
 
       {/* 链接 */}
@@ -102,7 +136,7 @@ export function AboutSection() {
             <ExternalLink className="h-4 w-4 text-muted-foreground" />
           </a>
           <a
-            href="https://github.com/aiclientproxy/proxycast/wiki"
+            href="https://aiclientproxy.github.io/proxycast/"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50"

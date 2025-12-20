@@ -1438,6 +1438,7 @@ pub fn run() {
             commands::config_cmd::get_tool_versions,
             commands::config_cmd::get_auto_launch_status,
             commands::config_cmd::set_auto_launch,
+            commands::config_cmd::check_for_updates,
             // MCP commands
             commands::mcp_cmd::get_mcp_servers,
             commands::mcp_cmd::add_mcp_server,
