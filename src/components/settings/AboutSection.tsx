@@ -23,7 +23,7 @@ interface ToolVersion {
 
 export function AboutSection() {
   const [versionInfo, setVersionInfo] = useState<VersionInfo>({
-    current: "0.8.0",
+    current: "0.13.0",
     latest: undefined,
     hasUpdate: false,
     downloadUrl: undefined,
