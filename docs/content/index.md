@@ -81,12 +81,12 @@ ProxyCast 会自动检测本地的 AI 客户端凭证文件：
 
 ### 3. 启动服务
 
-点击仪表盘的「启动服务」按钮，API Server 默认运行在 `http://127.0.0.1:9090`。
+点击仪表盘的「启动服务」按钮，API Server 默认运行在 `http://127.0.0.1:8999`。
 
 ### 4. 测试 API
 
 ```bash
-curl http://127.0.0.1:9090/v1/chat/completions \
+curl http://127.0.0.1:8999/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-api-key" \
   -d '{

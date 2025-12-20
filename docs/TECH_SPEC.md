@@ -85,8 +85,8 @@ src/
 ### 路由模式
 
 ```
-http://localhost:3000/{provider}/v1/chat/completions
-http://localhost:3000/{provider}/v1/messages
+http://localhost:8999/{provider}/v1/chat/completions
+http://localhost:8999/{provider}/v1/messages
 ```
 
 ### 支持的端点
@@ -104,8 +104,8 @@ http://localhost:3000/{provider}/v1/messages
 {
   "server": {
     "host": "127.0.0.1",
-    "port": 3000,
-    "apiKey": "proxycast-key"
+    "port": 8999,
+    "apiKey": "your-api-key"
   },
   "providers": {
     "kiro": {

@@ -75,7 +75,7 @@
 - **Per-Key 代理** - 为每个凭证单独配置代理
 
 ### 🔐 安全与管理
-- **TLS/HTTPS 支持** - 可选启用 HTTPS 加密通信
+- **HTTPS 部署** - 当前版本不内置 TLS，请使用反向代理进行 HTTPS 终止
 - **远程管理 API** - 通过 API 远程管理配置和凭证
 - **访问控制** - 支持 localhost 限制和密钥认证
 
@@ -145,8 +145,8 @@
 3. **启动服务** - 在 Dashboard 点击"启动服务器"
 4. **配置客户端** - 在 Cherry-Studio、Cline 等工具中配置：
    ```
-   API Base URL: http://localhost:3001/v1
-   API Key: proxycast-key
+   API Base URL: http://localhost:8999/v1
+   API Key: 启动时自动生成的密钥（可在设置页查看/修改）
    ```
 
 ---
@@ -156,9 +156,9 @@
 ### OpenAI Chat Completions
 
 ```bash
-curl http://localhost:3001/v1/chat/completions \
+curl http://localhost:8999/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer proxycast-key" \
+  -H "Authorization: Bearer your-api-key" \
   -d '{
     "model": "claude-sonnet-4-5-20250514",
     "messages": [
@@ -171,9 +171,9 @@ curl http://localhost:3001/v1/chat/completions \
 ### Anthropic Messages API
 
 ```bash
-curl http://localhost:3001/v1/messages \
+curl http://localhost:8999/v1/messages \
   -H "Content-Type: application/json" \
-  -H "x-api-key: proxycast-key" \
+  -H "x-api-key: your-api-key" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
     "model": "claude-sonnet-4-5-20250514",
