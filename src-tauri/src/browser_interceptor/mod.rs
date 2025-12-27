@@ -38,6 +38,9 @@ pub enum BrowserInterceptorError {
     StateError(String),
     PlatformError(String),
     NotificationError(String),
+    AlreadyRunning,
+    UnsupportedPlatform(String),
+    IoError(String),
 }
 
 impl fmt::Display for BrowserInterceptorError {
@@ -48,10 +51,19 @@ impl fmt::Display for BrowserInterceptorError {
             BrowserInterceptorError::StateError(msg) => write!(f, "状态管理错误: {}", msg),
             BrowserInterceptorError::PlatformError(msg) => write!(f, "平台错误: {}", msg),
             BrowserInterceptorError::NotificationError(msg) => write!(f, "通知错误: {}", msg),
+            BrowserInterceptorError::AlreadyRunning => write!(f, "拦截器已在运行"),
+            BrowserInterceptorError::UnsupportedPlatform(msg) => write!(f, "不支持的平台: {}", msg),
+            BrowserInterceptorError::IoError(msg) => write!(f, "IO错误: {}", msg),
         }
     }
 }
 
 impl Error for BrowserInterceptorError {}
+
+impl From<std::io::Error> for BrowserInterceptorError {
+    fn from(err: std::io::Error) -> Self {
+        BrowserInterceptorError::IoError(err.to_string())
+    }
+}
 
 pub type Result<T> = std::result::Result<T, BrowserInterceptorError>;

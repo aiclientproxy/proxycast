@@ -108,19 +108,21 @@ impl WindowsInterceptor {
                 let mut buffer = vec![0u16; 1024];
                 let mut buffer_size = buffer.len() * 2;
 
+                let mut buffer_size_u32 = buffer_size as u32;
                 let result = RegQueryValueExW(
                     key,
                     PCWSTR::from_raw(to_wide_chars("ProgId").as_ptr()),
                     None,
                     None,
                     Some(buffer.as_mut_ptr() as *mut u8),
-                    Some(&mut buffer_size as *mut u32),
+                    Some(&mut buffer_size_u32),
                 );
 
                 RegCloseKey(key);
 
                 if result.is_ok() {
-                    let prog_id = String::from_utf16_lossy(&buffer[..buffer_size / 2 - 1]);
+                    let actual_size = buffer_size_u32 as usize;
+                    let prog_id = String::from_utf16_lossy(&buffer[..actual_size / 2 - 1]);
                     self.original_browser = Some(prog_id);
                     tracing::info!(
                         "备份原始默认浏览器: {}",
