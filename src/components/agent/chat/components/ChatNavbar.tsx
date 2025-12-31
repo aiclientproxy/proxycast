@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Bot, ChevronDown, Check, Box, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Popover,
   PopoverContent,
@@ -28,7 +27,7 @@ export const ChatNavbar: React.FC<ChatNavbarProps> = ({
   setProviderType,
   model,
   setModel,
-  isRunning,
+  isRunning: _isRunning,
   onToggleHistory,
   onToggleFullscreen: _onToggleFullscreen,
   onToggleSettings,
@@ -150,13 +149,6 @@ export const ChatNavbar: React.FC<ChatNavbarProps> = ({
 
       {/* Right: Status & Settings */}
       <div className="flex items-center gap-2">
-        <Badge
-          variant={isRunning ? "default" : "secondary"}
-          className="h-5 text-[10px] px-1.5"
-        >
-          {isRunning ? "Ready" : "Offline"}
-        </Badge>
-
         <Button
           variant="ghost"
           size="icon"

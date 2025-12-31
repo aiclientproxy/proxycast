@@ -193,7 +193,10 @@ pub struct NativeChatResponse {
 }
 
 /// Token 使用量
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// 记录 API 调用的 token 消耗
+/// Requirements: 1.3 - THE Streaming_Handler SHALL emit a done event with token usage statistics
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TokenUsage {
     /// 输入 token 数
     pub input_tokens: u32,
@@ -201,17 +204,151 @@ pub struct TokenUsage {
     pub output_tokens: u32,
 }
 
+impl TokenUsage {
+    /// 创建新的 TokenUsage
+    pub fn new(input_tokens: u32, output_tokens: u32) -> Self {
+        Self {
+            input_tokens,
+            output_tokens,
+        }
+    }
+
+    /// 计算总 token 数
+    pub fn total(&self) -> u32 {
+        self.input_tokens + self.output_tokens
+    }
+}
+
 /// 流式响应事件
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// 定义流式输出过程中的各种事件类型
+/// Requirements: 1.1, 1.3, 1.4
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum StreamEvent {
     /// 文本增量
+    /// Requirements: 1.1 - THE Streaming_Handler SHALL emit text deltas to the frontend in real-time
     #[serde(rename = "text_delta")]
     TextDelta { text: String },
+
+    /// 工具调用开始
+    /// Requirements: 7.6 - WHILE the Tool_Loop is executing, THE Frontend SHALL display the current tool being executed
+    #[serde(rename = "tool_start")]
+    ToolStart {
+        /// 工具名称
+        tool_name: String,
+        /// 工具调用 ID
+        tool_id: String,
+    },
+
+    /// 工具调用结束
+    /// Requirements: 7.6 - 工具执行完成后通知前端
+    #[serde(rename = "tool_end")]
+    ToolEnd {
+        /// 工具调用 ID
+        tool_id: String,
+        /// 工具执行结果
+        result: ToolExecutionResult,
+    },
+
     /// 完成
+    /// Requirements: 1.3 - THE Streaming_Handler SHALL emit a done event with token usage statistics
     #[serde(rename = "done")]
     Done { usage: Option<TokenUsage> },
+
     /// 错误
+    /// Requirements: 1.4 - IF a streaming error occurs, THEN THE Streaming_Handler SHALL emit an error event
     #[serde(rename = "error")]
     Error { message: String },
+}
+
+/// 工具执行结果（用于 StreamEvent）
+///
+/// 简化版的工具结果，用于前端显示
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ToolExecutionResult {
+    /// 是否成功
+    pub success: bool,
+    /// 输出内容
+    pub output: String,
+    /// 错误信息（如果失败）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl ToolExecutionResult {
+    /// 创建成功结果
+    pub fn success(output: impl Into<String>) -> Self {
+        Self {
+            success: true,
+            output: output.into(),
+            error: None,
+        }
+    }
+
+    /// 创建失败结果
+    pub fn failure(error: impl Into<String>) -> Self {
+        let error_msg = error.into();
+        Self {
+            success: false,
+            output: String::new(),
+            error: Some(error_msg),
+        }
+    }
+
+    /// 创建带输出的失败结果
+    pub fn failure_with_output(output: impl Into<String>, error: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            output: output.into(),
+            error: Some(error.into()),
+        }
+    }
+}
+
+/// 流式响应结果
+///
+/// 流式处理完成后的最终结果
+/// Requirements: 1.1, 1.3
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamResult {
+    /// 完整的响应内容
+    pub content: String,
+    /// 工具调用列表（如果有）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
+    /// Token 使用量
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<TokenUsage>,
+}
+
+impl StreamResult {
+    /// 创建新的流式结果
+    pub fn new(content: String) -> Self {
+        Self {
+            content,
+            tool_calls: None,
+            usage: None,
+        }
+    }
+
+    /// 设置工具调用
+    pub fn with_tool_calls(mut self, tool_calls: Vec<ToolCall>) -> Self {
+        self.tool_calls = Some(tool_calls);
+        self
+    }
+
+    /// 设置 token 使用量
+    pub fn with_usage(mut self, usage: TokenUsage) -> Self {
+        self.usage = Some(usage);
+        self
+    }
+
+    /// 是否有工具调用
+    pub fn has_tool_calls(&self) -> bool {
+        self.tool_calls
+            .as_ref()
+            .map(|tc| !tc.is_empty())
+            .unwrap_or(false)
+    }
 }

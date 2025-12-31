@@ -130,17 +130,27 @@ export function AgentChatPage({
               />
             </ChatContent>
           ) : (
-            <EmptyState />
+            <EmptyState
+              input={input}
+              setInput={setInput}
+              onSend={(text) => {
+                setInput(text);
+                // 使用 setTimeout 确保 state 更新后再发送
+                setTimeout(() => handleSend([], false, false), 0);
+              }}
+            />
           )}
 
-          <Inputbar
-            input={input}
-            setInput={setInput}
-            onSend={handleSend}
-            isLoading={isSending}
-            disabled={!processStatus.running && false}
-            onClearMessages={handleClearMessages}
-          />
+          {hasMessages && (
+            <Inputbar
+              input={input}
+              setInput={setInput}
+              onSend={handleSend}
+              isLoading={isSending}
+              disabled={!processStatus.running && false}
+              onClearMessages={handleClearMessages}
+            />
+          )}
         </ChatContainer>
       </MainArea>
 

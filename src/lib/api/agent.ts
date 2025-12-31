@@ -2,9 +2,163 @@
  * Agent API
  *
  * 原生 Rust Agent 的前端 API 封装
+ * 支持流式输出和工具调用
  */
 
 import { invoke } from "@tauri-apps/api/core";
+
+// ============================================================
+// 流式事件类型 (Requirements: 9.1, 9.2, 9.3)
+// ============================================================
+
+/**
+ * Token 使用量统计
+ * Requirements: 9.5 - THE Frontend SHALL display token usage statistics after each Agent response
+ */
+export interface TokenUsage {
+  /** 输入 token 数 */
+  input_tokens: number;
+  /** 输出 token 数 */
+  output_tokens: number;
+}
+
+/**
+ * 工具执行结果
+ * Requirements: 9.2 - THE Frontend SHALL display a collapsible section showing the tool result
+ */
+export interface ToolExecutionResult {
+  /** 是否成功 */
+  success: boolean;
+  /** 输出内容 */
+  output: string;
+  /** 错误信息（如果失败） */
+  error?: string;
+}
+
+/**
+ * 流式事件类型
+ * Requirements: 9.1, 9.2, 9.3
+ */
+export type StreamEvent =
+  | StreamEventTextDelta
+  | StreamEventToolStart
+  | StreamEventToolEnd
+  | StreamEventDone
+  | StreamEventError;
+
+/**
+ * 文本增量事件
+ * Requirements: 9.3 - THE Frontend SHALL distinguish between text responses and tool call responses visually
+ */
+export interface StreamEventTextDelta {
+  type: "text_delta";
+  text: string;
+}
+
+/**
+ * 工具调用开始事件
+ * Requirements: 9.1 - WHEN a tool is being executed, THE Frontend SHALL display a tool execution indicator with the tool name
+ */
+export interface StreamEventToolStart {
+  type: "tool_start";
+  /** 工具名称 */
+  tool_name: string;
+  /** 工具调用 ID */
+  tool_id: string;
+}
+
+/**
+ * 工具调用结束事件
+ * Requirements: 9.2 - WHEN a tool completes, THE Frontend SHALL display a collapsible section showing the tool result
+ */
+export interface StreamEventToolEnd {
+  type: "tool_end";
+  /** 工具调用 ID */
+  tool_id: string;
+  /** 工具执行结果 */
+  result: ToolExecutionResult;
+}
+
+/**
+ * 完成事件
+ * Requirements: 9.5 - THE Frontend SHALL display token usage statistics after each Agent response
+ */
+export interface StreamEventDone {
+  type: "done";
+  /** Token 使用量（可选） */
+  usage?: TokenUsage;
+}
+
+/**
+ * 错误事件
+ */
+export interface StreamEventError {
+  type: "error";
+  /** 错误信息 */
+  message: string;
+}
+
+/**
+ * 工具调用状态（用于 UI 显示）
+ */
+export interface ToolCallState {
+  /** 工具调用 ID */
+  id: string;
+  /** 工具名称 */
+  name: string;
+  /** 执行状态 */
+  status: "running" | "completed" | "failed";
+  /** 执行结果（完成后） */
+  result?: ToolExecutionResult;
+  /** 开始时间 */
+  startTime: Date;
+  /** 结束时间（完成后） */
+  endTime?: Date;
+}
+
+/**
+ * 解析流式事件
+ * @param data - 原始事件数据
+ * @returns 解析后的流式事件
+ */
+export function parseStreamEvent(data: unknown): StreamEvent | null {
+  if (!data || typeof data !== "object") return null;
+
+  const event = data as Record<string, unknown>;
+  const type = event.type as string;
+
+  switch (type) {
+    case "text_delta":
+      return {
+        type: "text_delta",
+        text: (event.text as string) || "",
+      };
+    case "tool_start":
+      return {
+        type: "tool_start",
+        tool_name: (event.tool_name as string) || "",
+        tool_id: (event.tool_id as string) || "",
+      };
+    case "tool_end":
+      return {
+        type: "tool_end",
+        tool_id: (event.tool_id as string) || "",
+        result: event.result as ToolExecutionResult,
+      };
+    case "done":
+      return {
+        type: "done",
+        usage: event.usage as TokenUsage | undefined,
+      };
+    case "error":
+      return {
+        type: "error",
+        message: (event.message as string) || "Unknown error",
+      };
+    default:
+      return null;
+  }
+}
 
 /**
  * Agent 状态

@@ -1,3 +1,5 @@
+import type { ToolCallState, TokenUsage } from "@/lib/api/agent";
+
 export interface MessageImage {
   data: string;
   mediaType: string;
@@ -12,6 +14,10 @@ export interface Message {
   isThinking?: boolean;
   thinkingContent?: string;
   search_results?: any[]; // For potential future use
+  /** 工具调用列表（assistant 消息可能包含） */
+  toolCalls?: ToolCallState[];
+  /** Token 使用量（响应完成后） */
+  usage?: TokenUsage;
 }
 
 export interface ChatSession {

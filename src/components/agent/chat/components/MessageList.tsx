@@ -28,6 +28,8 @@ import {
   ThinkingContent,
 } from "../styles";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { StreamingRenderer } from "./StreamingRenderer";
+import { TokenUsageDisplay } from "./TokenUsageDisplay";
 import { Message } from "../types";
 
 interface MessageListProps {
@@ -166,6 +168,14 @@ export const MessageList: React.FC<MessageListProps> = ({
                       </Button>
                     </div>
                   </div>
+                ) : msg.role === "assistant" ? (
+                  /* 使用 StreamingRenderer 渲染 assistant 消息 - Requirements: 9.3, 9.4 */
+                  <StreamingRenderer
+                    content={msg.content}
+                    isStreaming={msg.isThinking}
+                    toolCalls={msg.toolCalls}
+                    showCursor={msg.isThinking && !msg.content}
+                  />
                 ) : (
                   <MarkdownRenderer content={msg.content} />
                 )}
@@ -181,6 +191,11 @@ export const MessageList: React.FC<MessageListProps> = ({
                       />
                     ))}
                   </div>
+                )}
+
+                {/* Token 使用量显示 - Requirements: 9.5 */}
+                {msg.role === "assistant" && !msg.isThinking && msg.usage && (
+                  <TokenUsageDisplay usage={msg.usage} />
                 )}
 
                 {editingId !== msg.id && (
