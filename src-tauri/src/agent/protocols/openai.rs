@@ -159,10 +159,21 @@ impl OpenAIProtocol {
         let mut parser = OpenAISSEParser::new();
         let mut final_usage = None;
 
+        eprintln!("[OpenAIProtocol] 开始处理 SSE 流...");
+
         while let Some(chunk) = stream.next().await {
             match chunk {
                 Ok(bytes) => {
                     let text = String::from_utf8_lossy(&bytes);
+                    eprintln!(
+                        "[OpenAIProtocol] 收到 chunk: {} bytes, 内容: {}",
+                        bytes.len(),
+                        if text.len() > 200 {
+                            format!("{}...", &text[..200])
+                        } else {
+                            text.to_string()
+                        }
+                    );
                     buffer.push_str(&text);
 
                     // 处理完整的 SSE 事件（以 \n\n 分隔）
@@ -287,6 +298,11 @@ impl Protocol for OpenAIProtocol {
 
         let url = format!("{}{}", base_url, self.endpoint());
 
+        eprintln!(
+            "[OpenAIProtocol] 发送请求到: {} model={} stream={}",
+            url, model, request.stream
+        );
+
         let response = client
             .post(&url)
             .header("Authorization", format!("Bearer {}", api_key))
@@ -294,9 +310,13 @@ impl Protocol for OpenAIProtocol {
             .json(&request)
             .send()
             .await
-            .map_err(|e| format!("请求失败: {}", e))?;
+            .map_err(|e| {
+                eprintln!("[OpenAIProtocol] 请求发送失败: {}", e);
+                format!("请求失败: {}", e)
+            })?;
 
         let status = response.status();
+        eprintln!("[OpenAIProtocol] 响应状态: {}", status);
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
             error!("[OpenAIProtocol] 请求失败: {} - {}", status, body);

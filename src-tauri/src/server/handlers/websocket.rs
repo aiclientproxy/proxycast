@@ -867,16 +867,37 @@ pub async fn call_provider_openai_for_ws(
                 }
                 return Err(e.to_string());
             }
-            if !antigravity.is_token_valid() {
-                if let Err(e) = antigravity.refresh_token().await {
-                    if let Some(db) = &state.db {
-                        let _ = state.pool_service.mark_unhealthy(
-                            db,
-                            &credential.uuid,
-                            Some(&format!("Token refresh failed: {}", e)),
+
+            // 使用新的 validate_token() 方法检查 Token 状态
+            let validation_result = antigravity.validate_token();
+            tracing::info!("[Antigravity WS] Token 验证结果: {:?}", validation_result);
+
+            // 根据验证结果决定是否刷新
+            if validation_result.needs_refresh() {
+                tracing::info!("[Antigravity WS] Token 需要刷新，开始刷新...");
+                match antigravity.refresh_token_with_retry(3).await {
+                    Ok(new_token) => {
+                        tracing::info!(
+                            "[Antigravity WS] Token 刷新成功，新 token 长度: {}",
+                            new_token.len()
                         );
+                        // 刷新成功，标记为健康
+                        if let Some(db) = &state.db {
+                            let _ = state.pool_service.mark_healthy(db, &credential.uuid, None);
+                        }
                     }
-                    return Err(e.to_string());
+                    Err(refresh_error) => {
+                        tracing::error!("[Antigravity WS] Token 刷新失败: {:?}", refresh_error);
+                        // 使用新的 mark_unhealthy_with_details 方法
+                        if let Some(db) = &state.db {
+                            let _ = state.pool_service.mark_unhealthy_with_details(
+                                db,
+                                &credential.uuid,
+                                &refresh_error,
+                            );
+                        }
+                        return Err(refresh_error.user_message());
+                    }
                 }
             }
 

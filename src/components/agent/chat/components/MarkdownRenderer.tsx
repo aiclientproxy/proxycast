@@ -144,7 +144,40 @@ const MarkdownContainer = styled.div`
 
   img {
     max-width: 100%;
+    max-height: 512px;
     border-radius: 8px;
+    object-fit: contain;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+
+    &:hover {
+      transform: scale(1.02);
+    }
+  }
+`;
+
+// 图片容器样式
+const ImageContainer = styled.div`
+  margin: 1em 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const GeneratedImage = styled.img`
+  max-width: 100%;
+  max-height: 512px;
+  border-radius: 8px;
+  object-fit: contain;
+  cursor: pointer;
+  border: 1px solid hsl(var(--border));
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+
+  &:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 `;
 
@@ -200,59 +233,186 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = memo(
       setTimeout(() => setCopied(null), 2000);
     };
 
+    // 预处理内容：检测并提取 base64 图片
+    const processedContent = React.useMemo(() => {
+      // 匹配 markdown 图片语法中的 base64 data URL
+      const base64ImageRegex =
+        /!\[([^\]]*)\]\((data:image\/[^;]+;base64,[^)]+)\)/g;
+      let result = content;
+      const images: { alt: string; src: string; placeholder: string }[] = [];
+
+      let match;
+      let index = 0;
+      while ((match = base64ImageRegex.exec(content)) !== null) {
+        const placeholder = `__BASE64_IMAGE_${index}__`;
+        images.push({
+          alt: match[1] || "Generated Image",
+          src: match[2],
+          placeholder,
+        });
+        result = result.replace(match[0], placeholder);
+        index++;
+      }
+
+      return { text: result, images };
+    }, [content]);
+
+    // 渲染 base64 图片
+    const renderBase64Images = () => {
+      if (processedContent.images.length === 0) return null;
+
+      return processedContent.images.map((img, idx) => {
+        const handleImageClick = () => {
+          const newWindow = window.open();
+          if (newWindow) {
+            newWindow.document.write(`
+              <html>
+                <head>
+                  <title>${img.alt}</title>
+                  <style>
+                    body { 
+                      margin: 0; 
+                      display: flex; 
+                      justify-content: center; 
+                      align-items: center; 
+                      min-height: 100vh; 
+                      background: #1a1a1a; 
+                    }
+                    img { 
+                      max-width: 100%; 
+                      max-height: 100vh; 
+                      object-fit: contain; 
+                    }
+                  </style>
+                </head>
+                <body>
+                  <img src="${img.src}" alt="${img.alt}" />
+                </body>
+              </html>
+            `);
+            newWindow.document.close();
+          }
+        };
+
+        return (
+          <ImageContainer key={`base64-img-${idx}`}>
+            <GeneratedImage
+              src={img.src}
+              alt={img.alt}
+              onClick={handleImageClick}
+              title="点击查看大图"
+              onError={(e) => {
+                console.error("[MarkdownRenderer] 图片加载失败:", img.alt);
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+              onLoad={() => {
+                console.log("[MarkdownRenderer] 图片加载成功:", img.alt);
+              }}
+            />
+            <span
+              style={{
+                fontSize: "12px",
+                color: "hsl(var(--muted-foreground))",
+                textAlign: "center",
+              }}
+            >
+              🖼️ AI 生成图片 - 点击查看大图
+            </span>
+          </ImageContainer>
+        );
+      });
+    };
+
+    // 检查处理后的文本是否只包含占位符
+    const hasOnlyPlaceholders = React.useMemo(() => {
+      const trimmed = processedContent.text.trim();
+      return /^(__BASE64_IMAGE_\d+__\s*)+$/.test(trimmed) || trimmed === "";
+    }, [processedContent.text]);
+
     return (
       <MarkdownContainer>
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkMath]}
-          rehypePlugins={[rehypeRaw, rehypeKatex]}
-          components={{
-            code({ inline, className, children, ...props }: any) {
-              const match = /language-(\w+)/.exec(className || "");
-              const codeContent = String(children).replace(/\n$/, "");
-              const language = match ? match[1] : "text";
+        {/* 先渲染 base64 图片 */}
+        {renderBase64Images()}
 
-              // Inline code
-              if (inline) {
+        {/* 如果还有其他内容，渲染 markdown */}
+        {!hasOnlyPlaceholders && processedContent.text.trim() && (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeRaw, rehypeKatex]}
+            components={{
+              code({ inline, className, children, ...props }: any) {
+                const match = /language-(\w+)/.exec(className || "");
+                const codeContent = String(children).replace(/\n$/, "");
+                const language = match ? match[1] : "text";
+
+                // Inline code
+                if (inline) {
+                  return (
+                    <code className={className} {...props}>
+                      {children}
+                    </code>
+                  );
+                }
+
+                // Block code
+                const isCopied = copied === codeContent;
+
                 return (
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
+                  <CodeBlockContainer>
+                    <CodeHeader>
+                      <span>{language}</span>
+                      <CopyButton onClick={() => handleCopy(codeContent)}>
+                        {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                        {isCopied ? "Copied" : "Copy"}
+                      </CopyButton>
+                    </CodeHeader>
+                    <SyntaxHighlighter
+                      style={oneDark}
+                      language={language}
+                      PreTag="div"
+                      customStyle={{
+                        margin: 0,
+                        padding: "16px",
+                        background: "transparent",
+                        fontSize: "13px",
+                      }}
+                      {...props}
+                    >
+                      {codeContent}
+                    </SyntaxHighlighter>
+                  </CodeBlockContainer>
                 );
-              }
+              },
+              // 普通图片渲染（非 base64）
+              img({ src, alt, ...props }: any) {
+                // base64 图片已经在上面单独处理了，这里只处理普通 URL 图片
+                if (src?.startsWith("data:")) {
+                  return null; // 跳过 base64 图片，已在上面处理
+                }
 
-              // Block code
-              const isCopied = copied === codeContent;
+                const handleImageClick = () => {
+                  if (src) {
+                    window.open(src, "_blank");
+                  }
+                };
 
-              return (
-                <CodeBlockContainer>
-                  <CodeHeader>
-                    <span>{language}</span>
-                    <CopyButton onClick={() => handleCopy(codeContent)}>
-                      {isCopied ? <Check size={14} /> : <Copy size={14} />}
-                      {isCopied ? "Copied" : "Copy"}
-                    </CopyButton>
-                  </CodeHeader>
-                  <SyntaxHighlighter
-                    style={oneDark}
-                    language={language}
-                    PreTag="div"
-                    customStyle={{
-                      margin: 0,
-                      padding: "16px",
-                      background: "transparent",
-                      fontSize: "13px",
-                    }}
-                    {...props}
-                  >
-                    {codeContent}
-                  </SyntaxHighlighter>
-                </CodeBlockContainer>
-              );
-            },
-          }}
-        >
-          {content}
-        </ReactMarkdown>
+                return (
+                  <ImageContainer>
+                    <GeneratedImage
+                      src={src}
+                      alt={alt || "Image"}
+                      onClick={handleImageClick}
+                      title="点击查看大图"
+                      {...props}
+                    />
+                  </ImageContainer>
+                );
+              },
+            }}
+          >
+            {processedContent.text}
+          </ReactMarkdown>
+        )}
       </MarkdownContainer>
     );
   },

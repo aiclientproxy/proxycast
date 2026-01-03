@@ -6,6 +6,7 @@ import {
   Trash2,
   Settings,
   CheckCircle2,
+  KeyRound,
 } from "lucide-react";
 
 export interface ErrorInfo {
@@ -20,7 +21,8 @@ export interface ErrorInfo {
     | "migrate"
     | "config"
     | "general"
-    | "success";
+    | "success"
+    | "reauth"; // 需要重新授权
   uuid?: string; // 相关凭证的UUID（如果有的话）
 }
 
@@ -84,6 +86,12 @@ const ErrorTypeConfig = {
     color: "text-green-600 dark:text-green-400",
     bgColor: "bg-green-50 dark:bg-green-950/30",
     borderColor: "border-green-200 dark:border-green-800",
+  },
+  reauth: {
+    icon: KeyRound,
+    color: "text-amber-600 dark:text-amber-400",
+    bgColor: "bg-amber-50 dark:bg-amber-950/30",
+    borderColor: "border-amber-200 dark:border-amber-800",
   },
 };
 

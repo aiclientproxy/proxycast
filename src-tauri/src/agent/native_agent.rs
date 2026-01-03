@@ -686,6 +686,11 @@ impl NativeAgentState {
         self.agent.read().is_some()
     }
 
+    /// 获取当前 Agent 的 provider 类型
+    pub fn get_provider_type(&self) -> Option<ProviderType> {
+        self.agent.read().as_ref().map(|a| a.provider_type)
+    }
+
     pub fn reset(&self) {
         *self.agent.write() = None;
     }

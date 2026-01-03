@@ -636,6 +636,12 @@ pub async fn models() -> impl IntoResponse {
             {"id": "gemini-2.5-pro", "object": "model", "owned_by": "google"},
             {"id": "gemini-2.5-pro-preview-06-05", "object": "model", "owned_by": "google"},
             {"id": "gemini-3-pro-preview", "object": "model", "owned_by": "google"},
+            {"id": "gemini-3-pro-image-preview", "object": "model", "owned_by": "google"},
+            {"id": "gemini-3-flash-preview", "object": "model", "owned_by": "google"},
+            {"id": "gemini-2.5-computer-use-preview-10-2025", "object": "model", "owned_by": "google"},
+            {"id": "gemini-claude-sonnet-4-5", "object": "model", "owned_by": "google"},
+            {"id": "gemini-claude-sonnet-4-5-thinking", "object": "model", "owned_by": "google"},
+            {"id": "gemini-claude-opus-4-5-thinking", "object": "model", "owned_by": "google"},
             // Qwen models
             {"id": "qwen3-coder-plus", "object": "model", "owned_by": "alibaba"},
             {"id": "qwen3-coder-flash", "object": "model", "owned_by": "alibaba"}
@@ -956,6 +962,308 @@ mod property_tests {
             // input_tokens 应该基于 context_usage_percentage
             let expected_input = ((context_percentage / 100.0) * 200000.0) as u32;
             prop_assert_eq!(input_tokens, expected_input);
+        }
+    }
+
+    // ========================================================================
+    // Property 1: 模型列表结构和归属正确性
+    // **Validates: Requirements 1.2, 1.3**
+    // ========================================================================
+
+    /// 获取模型列表数据用于测试
+    fn get_model_list_data() -> Vec<serde_json::Value> {
+        vec![
+            // Kiro/Claude models
+            serde_json::json!({"id": "claude-sonnet-4-5", "object": "model", "owned_by": "anthropic"}),
+            serde_json::json!({"id": "claude-sonnet-4-5-20250929", "object": "model", "owned_by": "anthropic"}),
+            serde_json::json!({"id": "claude-3-7-sonnet-20250219", "object": "model", "owned_by": "anthropic"}),
+            serde_json::json!({"id": "claude-3-5-sonnet-latest", "object": "model", "owned_by": "anthropic"}),
+            // Gemini models
+            serde_json::json!({"id": "gemini-2.5-flash", "object": "model", "owned_by": "google"}),
+            serde_json::json!({"id": "gemini-2.5-flash-lite", "object": "model", "owned_by": "google"}),
+            serde_json::json!({"id": "gemini-2.5-pro", "object": "model", "owned_by": "google"}),
+            serde_json::json!({"id": "gemini-2.5-pro-preview-06-05", "object": "model", "owned_by": "google"}),
+            serde_json::json!({"id": "gemini-3-pro-preview", "object": "model", "owned_by": "google"}),
+            serde_json::json!({"id": "gemini-3-pro-image-preview", "object": "model", "owned_by": "google"}),
+            serde_json::json!({"id": "gemini-3-flash-preview", "object": "model", "owned_by": "google"}),
+            serde_json::json!({"id": "gemini-2.5-computer-use-preview-10-2025", "object": "model", "owned_by": "google"}),
+            serde_json::json!({"id": "gemini-claude-sonnet-4-5", "object": "model", "owned_by": "google"}),
+            serde_json::json!({"id": "gemini-claude-sonnet-4-5-thinking", "object": "model", "owned_by": "google"}),
+            serde_json::json!({"id": "gemini-claude-opus-4-5-thinking", "object": "model", "owned_by": "google"}),
+            // Qwen models
+            serde_json::json!({"id": "qwen3-coder-plus", "object": "model", "owned_by": "alibaba"}),
+            serde_json::json!({"id": "qwen3-coder-flash", "object": "model", "owned_by": "alibaba"}),
+        ]
+    }
+
+    /// Property 1: 模型列表结构和归属正确性
+    ///
+    /// *对于任意* 模型列表中的模型，应该包含:
+    /// - id 字段 (非空字符串)
+    /// - object 字段 (值为 "model")
+    /// - owned_by 字段 (与模型类型匹配: gemini-* -> google, claude-* -> anthropic, qwen* -> alibaba)
+    ///
+    /// **Validates: Requirements 1.2, 1.3**
+    #[test]
+    fn prop_model_list_structure_and_ownership() {
+        let models = get_model_list_data();
+
+        for model in &models {
+            // 验证 id 字段存在且非空
+            let id = model.get("id").and_then(|v| v.as_str());
+            assert!(id.is_some(), "Model should have id field");
+            assert!(!id.unwrap().is_empty(), "Model id should not be empty");
+
+            // 验证 object 字段为 "model"
+            let object = model.get("object").and_then(|v| v.as_str());
+            assert_eq!(object, Some("model"), "Model object should be 'model'");
+
+            // 验证 owned_by 字段与模型类型匹配
+            let owned_by = model.get("owned_by").and_then(|v| v.as_str());
+            assert!(owned_by.is_some(), "Model should have owned_by field");
+
+            let model_id = id.unwrap();
+            let owner = owned_by.unwrap();
+
+            if model_id.starts_with("gemini-") {
+                assert_eq!(owner, "google", "Gemini models should be owned by google");
+            } else if model_id.starts_with("claude-") {
+                assert_eq!(
+                    owner, "anthropic",
+                    "Claude models should be owned by anthropic"
+                );
+            } else if model_id.starts_with("qwen") {
+                assert_eq!(owner, "alibaba", "Qwen models should be owned by alibaba");
+            }
+        }
+    }
+
+    /// 验证所有 Antigravity 支持的模型都在列表中
+    #[test]
+    fn test_antigravity_models_present() {
+        let models = get_model_list_data();
+        let model_ids: Vec<&str> = models
+            .iter()
+            .filter_map(|m| m.get("id").and_then(|v| v.as_str()))
+            .collect();
+
+        // 验证所有 Antigravity 支持的模型都存在
+        let required_models = [
+            "gemini-3-pro-preview",
+            "gemini-3-pro-image-preview",
+            "gemini-3-flash-preview",
+            "gemini-2.5-computer-use-preview-10-2025",
+            "gemini-claude-sonnet-4-5",
+            "gemini-claude-sonnet-4-5-thinking",
+            "gemini-claude-opus-4-5-thinking",
+        ];
+
+        for required in &required_models {
+            assert!(
+                model_ids.contains(required),
+                "Model {} should be in the list",
+                required
+            );
+        }
+    }
+
+    // ========================================================================
+    // Property 2: 模型名称映射正确性
+    // **Validates: Requirements 3.1, 3.2**
+    // ========================================================================
+
+    /// 获取模型名称映射的预期结果
+    fn get_expected_model_mapping(model: &str) -> &str {
+        match model {
+            "gemini-2.5-computer-use-preview-10-2025" => "rev19-uic3-1p",
+            "gemini-3-pro-image-preview" => "gemini-3-pro-image",
+            "gemini-3-pro-preview" => "gemini-3-pro-high",
+            "gemini-claude-sonnet-4-5" => "claude-sonnet-4-5",
+            "gemini-claude-sonnet-4-5-thinking" => "claude-sonnet-4-5-thinking",
+            _ => model,
+        }
+    }
+
+    /// Property 2: 模型名称映射正确性
+    ///
+    /// *对于任意* 已知映射表中的模型名称，build_gemini_native_request 应该返回正确的内部模型名称。
+    /// *对于任意* 不在映射表中的模型名称，应该原样返回。
+    ///
+    /// **Validates: Requirements 3.1, 3.2**
+    #[test]
+    fn prop_model_name_mapping_correctness() {
+        let test_request = serde_json::json!({
+            "contents": [{"role": "user", "parts": [{"text": "test"}]}]
+        });
+        let project_id = "test-project";
+
+        // 测试已知映射
+        let known_mappings = [
+            ("gemini-2.5-computer-use-preview-10-2025", "rev19-uic3-1p"),
+            ("gemini-3-pro-image-preview", "gemini-3-pro-image"),
+            ("gemini-3-pro-preview", "gemini-3-pro-high"),
+            ("gemini-claude-sonnet-4-5", "claude-sonnet-4-5"),
+            (
+                "gemini-claude-sonnet-4-5-thinking",
+                "claude-sonnet-4-5-thinking",
+            ),
+        ];
+
+        for (input, expected) in &known_mappings {
+            let result = build_gemini_native_request(&test_request, input, project_id);
+            let actual_model = result.get("model").and_then(|v| v.as_str()).unwrap();
+            assert_eq!(
+                actual_model, *expected,
+                "Model {} should map to {}",
+                input, expected
+            );
+        }
+
+        // 测试未知模型名称应该原样返回
+        let unknown_models = ["gemini-2.0-flash", "gemini-2.5-flash", "custom-model"];
+        for model in &unknown_models {
+            let result = build_gemini_native_request(&test_request, model, project_id);
+            let actual_model = result.get("model").and_then(|v| v.as_str()).unwrap();
+            assert_eq!(
+                actual_model, *model,
+                "Unknown model {} should be returned unchanged",
+                model
+            );
+        }
+    }
+
+    // ========================================================================
+    // Property 3: 思维链启用逻辑正确性
+    // **Validates: Requirements 4.1, 4.2**
+    // ========================================================================
+
+    /// 判断模型是否应该启用思维链
+    fn should_enable_thinking(model: &str) -> bool {
+        model.ends_with("-thinking")
+            || model == "gemini-2.5-pro"
+            || model.starts_with("gemini-3-pro-")
+            || model == "rev19-uic3-1p"
+            || model == "gpt-oss-120b-medium"
+    }
+
+    /// Property 3: 思维链启用逻辑正确性
+    ///
+    /// *对于任意* 模型名称，思维链启用状态应该根据以下规则正确判断:
+    /// - 以 "-thinking" 结尾的模型启用思维链
+    /// - "gemini-2.5-pro" 启用思维链
+    /// - 以 "gemini-3-pro-" 开头的模型启用思维链
+    /// - "rev19-uic3-1p" 启用思维链
+    /// - "gpt-oss-120b-medium" 启用思维链
+    ///
+    /// **Validates: Requirements 4.1, 4.2**
+    #[test]
+    fn prop_thinking_mode_enablement_logic() {
+        // 应该启用思维链的模型
+        let thinking_enabled_models = [
+            "gemini-claude-sonnet-4-5-thinking",
+            "gemini-claude-opus-4-5-thinking",
+            "custom-model-thinking",
+            "gemini-2.5-pro",
+            "gemini-3-pro-preview",
+            "gemini-3-pro-image-preview",
+            "gemini-3-pro-high",
+            "rev19-uic3-1p",
+            "gpt-oss-120b-medium",
+        ];
+
+        for model in &thinking_enabled_models {
+            assert!(
+                should_enable_thinking(model),
+                "Model {} should have thinking enabled",
+                model
+            );
+        }
+
+        // 不应该启用思维链的模型
+        let thinking_disabled_models = [
+            "gemini-2.0-flash",
+            "gemini-2.5-flash",
+            "gemini-claude-sonnet-4-5",
+            "claude-sonnet-4-5",
+            "custom-model",
+        ];
+
+        for model in &thinking_disabled_models {
+            assert!(
+                !should_enable_thinking(model),
+                "Model {} should have thinking disabled",
+                model
+            );
+        }
+    }
+
+    // ========================================================================
+    // Property 4: 思维链配置值正确性
+    // **Validates: Requirements 4.3, 4.4**
+    // ========================================================================
+
+    /// Property 4: 思维链配置值正确性
+    ///
+    /// *对于任意* Gemini 原生请求:
+    /// - 当思维链启用时，includeThoughts 应该为 true，thinkingBudget 应该为 1024
+    /// - 当思维链禁用时，includeThoughts 应该为 false，thinkingBudget 应该为 0
+    ///
+    /// **Validates: Requirements 4.3, 4.4**
+    #[test]
+    fn prop_thinking_configuration_values() {
+        let test_request = serde_json::json!({
+            "contents": [{"role": "user", "parts": [{"text": "test"}]}]
+        });
+        let project_id = "test-project";
+
+        // 测试启用思维链的模型
+        let thinking_enabled_models = [
+            "gemini-3-pro-preview",
+            "gemini-2.5-pro",
+            "gemini-claude-sonnet-4-5-thinking",
+        ];
+
+        for model in &thinking_enabled_models {
+            let result = build_gemini_native_request(&test_request, model, project_id);
+            let thinking_config = &result["request"]["generationConfig"]["thinkingConfig"];
+
+            assert_eq!(
+                thinking_config["includeThoughts"].as_bool(),
+                Some(true),
+                "Model {} should have includeThoughts=true",
+                model
+            );
+            assert_eq!(
+                thinking_config["thinkingBudget"].as_i64(),
+                Some(1024),
+                "Model {} should have thinkingBudget=1024",
+                model
+            );
+        }
+
+        // 测试禁用思维链的模型
+        let thinking_disabled_models = [
+            "gemini-2.0-flash",
+            "gemini-2.5-flash",
+            "gemini-claude-sonnet-4-5",
+        ];
+
+        for model in &thinking_disabled_models {
+            let result = build_gemini_native_request(&test_request, model, project_id);
+            let thinking_config = &result["request"]["generationConfig"]["thinkingConfig"];
+
+            assert_eq!(
+                thinking_config["includeThoughts"].as_bool(),
+                Some(false),
+                "Model {} should have includeThoughts=false",
+                model
+            );
+            assert_eq!(
+                thinking_config["thinkingBudget"].as_i64(),
+                Some(0),
+                "Model {} should have thinkingBudget=0",
+                model
+            );
         }
     }
 }

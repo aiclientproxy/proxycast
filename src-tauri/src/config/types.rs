@@ -583,11 +583,33 @@ impl Default for RoutingConfig {
     fn default() -> Self {
         Self {
             default_provider: default_provider(),
-            rules: Vec::new(),
+            rules: default_routing_rules(),
             model_aliases: HashMap::new(),
             exclusions: HashMap::new(),
         }
     }
+}
+
+/// 默认路由规则
+///
+/// 为常见的模型模式提供默认路由：
+/// - `gemini-*` → Antigravity (Antigravity 支持 Gemini 系列模型)
+/// - `claude-*` → Kiro (默认使用 Kiro 处理 Claude 模型)
+fn default_routing_rules() -> Vec<RoutingRuleConfig> {
+    vec![
+        // Gemini 模型路由到 Antigravity
+        RoutingRuleConfig {
+            pattern: "gemini-*".to_string(),
+            provider: "antigravity".to_string(),
+            priority: 10,
+        },
+        // Claude 模型路由到 Kiro
+        RoutingRuleConfig {
+            pattern: "claude-*".to_string(),
+            provider: "kiro".to_string(),
+            priority: 10,
+        },
+    ]
 }
 
 /// 路由规则配置
@@ -935,7 +957,12 @@ mod unit_tests {
     fn test_routing_config_default() {
         let config = RoutingConfig::default();
         assert_eq!(config.default_provider, "kiro");
-        assert!(config.rules.is_empty());
+        // 默认包含 gemini-* 和 claude-* 的路由规则
+        assert_eq!(config.rules.len(), 2);
+        assert_eq!(config.rules[0].pattern, "gemini-*");
+        assert_eq!(config.rules[0].provider, "antigravity");
+        assert_eq!(config.rules[1].pattern, "claude-*");
+        assert_eq!(config.rules[1].provider, "kiro");
         assert!(config.model_aliases.is_empty());
         assert!(config.exclusions.is_empty());
     }

@@ -472,6 +472,7 @@ export function useAgentChat() {
         activeSessionId, // 传递 sessionId 以保持上下文
         model || undefined,
         imagesToSend,
+        providerType, // 传递用户选择的 provider
       );
     } catch (error) {
       toast.error(`发送失败: ${error}`);

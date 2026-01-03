@@ -93,9 +93,8 @@ impl RequestProcessor {
 
     /// 使用默认配置创建请求处理器
     pub fn with_defaults(pool_service: Arc<ProviderPoolService>) -> Self {
-        use crate::ProviderType;
         Self {
-            router: Arc::new(RwLock::new(Router::new(ProviderType::Kiro))),
+            router: Arc::new(RwLock::new(Self::create_router_with_defaults())),
             mapper: Arc::new(RwLock::new(ModelMapper::new())),
             injector: Arc::new(RwLock::new(Injector::new())),
             retrier: Arc::new(Retrier::with_defaults()),
@@ -109,6 +108,24 @@ impl RequestProcessor {
         }
     }
 
+    /// 创建带默认路由规则的路由器
+    fn create_router_with_defaults() -> Router {
+        use crate::router::RoutingRule;
+        use crate::ProviderType;
+
+        let mut router = Router::new(ProviderType::Kiro);
+
+        // 添加默认路由规则：gemini-* → Antigravity
+        router.add_rule(RoutingRule::new("gemini-*", ProviderType::Antigravity, 10));
+
+        // 添加默认路由规则：claude-* → Kiro
+        router.add_rule(RoutingRule::new("claude-*", ProviderType::Kiro, 10));
+
+        tracing::info!("[ROUTER] 初始化默认路由规则: gemini-* → Antigravity, claude-* → Kiro");
+
+        router
+    }
+
     /// 使用共享的统计和 Token 追踪器创建请求处理器
     ///
     /// 这允许 RequestProcessor 与 TelemetryState 共享同一个 StatsAggregator 和 TokenTracker，
@@ -118,9 +135,8 @@ impl RequestProcessor {
         stats: Arc<ParkingLotRwLock<StatsAggregator>>,
         tokens: Arc<ParkingLotRwLock<TokenTracker>>,
     ) -> Self {
-        use crate::ProviderType;
         Self {
-            router: Arc::new(RwLock::new(Router::new(ProviderType::Kiro))),
+            router: Arc::new(RwLock::new(Self::create_router_with_defaults())),
             mapper: Arc::new(RwLock::new(ModelMapper::new())),
             injector: Arc::new(RwLock::new(Injector::new())),
             retrier: Arc::new(Retrier::with_defaults()),

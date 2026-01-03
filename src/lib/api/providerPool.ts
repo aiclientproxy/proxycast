@@ -563,6 +563,20 @@ export const providerPoolApi = {
   async migratePrivateConfig(config: unknown): Promise<MigrationResult> {
     return invoke("migrate_private_config_to_pool", { config });
   },
+
+  // 获取单个凭证的健康状态
+  // Requirements: 4.4
+  async getCredentialHealth(
+    uuid: string,
+  ): Promise<CredentialHealthInfo | null> {
+    return invoke("get_credential_health", { uuid });
+  },
+
+  // 获取所有凭证的健康状态
+  // Requirements: 4.4
+  async getAllCredentialHealth(): Promise<CredentialHealthInfo[]> {
+    return invoke("get_all_credential_health");
+  },
 };
 
 // Migration result
@@ -614,6 +628,27 @@ export interface KiroFingerprintInfo {
   source: string;
   /** 认证方式 */
   auth_method: string;
+}
+
+// 凭证健康状态信息
+// Requirements: 4.4
+export interface CredentialHealthInfo {
+  /** 凭证 UUID */
+  uuid: string;
+  /** 凭证名称 */
+  name?: string;
+  /** Provider 类型 */
+  provider_type: string;
+  /** 是否健康 */
+  is_healthy: boolean;
+  /** 最后错误信息 */
+  last_error?: string;
+  /** 最后错误时间（RFC3339 格式） */
+  last_error_time?: string;
+  /** 错误次数 */
+  failure_count: number;
+  /** 是否需要重新授权 */
+  requires_reauth: boolean;
 }
 
 // Playwright 状态

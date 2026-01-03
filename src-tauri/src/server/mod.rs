@@ -560,23 +560,43 @@ async fn update_processor_config(processor: &RequestProcessor, config: &Config) 
     {
         let mut router = processor.router.write().await;
         router.clear_rules();
-        for rule in &config.routing.rules {
-            // 解析 provider 字符串为 ProviderType
-            if let Ok(provider_type) = rule.provider.parse::<crate::ProviderType>() {
-                router.add_rule(crate::router::RoutingRule {
-                    pattern: rule.pattern.clone(),
-                    target_provider: provider_type,
-                    priority: rule.priority,
-                    enabled: true,
-                });
-            } else {
-                tracing::warn!("[HOT_RELOAD] 无法解析 provider: {}", rule.provider);
+
+        // 如果配置文件中有路由规则，使用配置文件的规则
+        // 否则使用默认规则
+        if !config.routing.rules.is_empty() {
+            for rule in &config.routing.rules {
+                // 解析 provider 字符串为 ProviderType
+                if let Ok(provider_type) = rule.provider.parse::<crate::ProviderType>() {
+                    router.add_rule(crate::router::RoutingRule {
+                        pattern: rule.pattern.clone(),
+                        target_provider: provider_type,
+                        priority: rule.priority,
+                        enabled: true,
+                    });
+                } else {
+                    tracing::warn!("[HOT_RELOAD] 无法解析 provider: {}", rule.provider);
+                }
             }
+            tracing::debug!(
+                "[HOT_RELOAD] 路由规则已更新: {} 条规则（来自配置文件）",
+                config.routing.rules.len()
+            );
+        } else {
+            // 使用默认路由规则
+            router.add_rule(crate::router::RoutingRule::new(
+                "gemini-*",
+                crate::ProviderType::Antigravity,
+                10,
+            ));
+            router.add_rule(crate::router::RoutingRule::new(
+                "claude-*",
+                crate::ProviderType::Kiro,
+                10,
+            ));
+            tracing::debug!(
+                "[HOT_RELOAD] 路由规则已更新: 使用默认规则 (gemini-* → Antigravity, claude-* → Kiro)"
+            );
         }
-        tracing::debug!(
-            "[HOT_RELOAD] 路由规则已更新: {} 条规则",
-            config.routing.rules.len()
-        );
     }
 
     // 更新模型映射器
@@ -851,6 +871,11 @@ async fn run_server(
         .route("/v1/chat/completions", post(handlers::chat_completions))
         .route("/v1/messages", post(handlers::anthropic_messages))
         .route("/v1/messages/count_tokens", post(count_tokens))
+        // 图像生成 API 路由
+        .route(
+            "/v1/images/generations",
+            post(handlers::handle_image_generation),
+        )
         // Gemini 原生协议路由
         .route("/v1/gemini/*path", post(gemini_generate_content))
         // WebSocket 路由
@@ -1033,18 +1058,46 @@ async fn gemini_generate_content(
                     .into_response();
             }
 
-            // 检查并刷新 token
-            if antigravity.is_token_expiring_soon() {
-                if let Err(e) = antigravity.refresh_token().await {
-                    return (
-                        StatusCode::UNAUTHORIZED,
-                        Json(serde_json::json!({
-                            "error": {
-                                "message": format!("Token 刷新失败: {}", e)
-                            }
-                        })),
-                    )
-                        .into_response();
+            // 使用新的 validate_token() 方法检查 Token 状态
+            let validation_result = antigravity.validate_token();
+            tracing::info!(
+                "[Antigravity Gemini] Token 验证结果: {:?}",
+                validation_result
+            );
+
+            // 根据验证结果决定是否刷新
+            if validation_result.needs_refresh() {
+                tracing::info!("[Antigravity Gemini] Token 需要刷新，开始刷新...");
+                match antigravity.refresh_token_with_retry(3).await {
+                    Ok(new_token) => {
+                        tracing::info!(
+                            "[Antigravity Gemini] Token 刷新成功，新 token 长度: {}",
+                            new_token.len()
+                        );
+                    }
+                    Err(refresh_error) => {
+                        tracing::error!("[Antigravity Gemini] Token 刷新失败: {:?}", refresh_error);
+
+                        // 根据错误类型返回不同的状态码和消息
+                        let (status, message) = if refresh_error.requires_reauth() {
+                            (StatusCode::UNAUTHORIZED, refresh_error.user_message())
+                        } else {
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                refresh_error.user_message(),
+                            )
+                        };
+
+                        return (
+                            status,
+                            Json(serde_json::json!({
+                                "error": {
+                                    "message": message
+                                }
+                            })),
+                        )
+                            .into_response();
+                    }
                 }
             }
 

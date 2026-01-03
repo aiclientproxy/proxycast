@@ -672,9 +672,51 @@ export function CredentialCard({
 
       {/* Error Message */}
       {credential.last_error_message && (
-        <div className="mx-4 mb-3 rounded-lg bg-red-100 p-3 text-xs text-red-700 dark:bg-red-900/30 dark:text-red-300">
-          {credential.last_error_message.slice(0, 150)}
-          {credential.last_error_message.length > 150 && "..."}
+        <div
+          className={`mx-4 mb-3 rounded-lg p-3 text-xs ${
+            credential.last_error_message.includes("invalid_grant") ||
+            credential.last_error_message.includes("重新授权") ||
+            credential.last_error_message.includes("凭证已过期")
+              ? "bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700"
+              : "bg-red-100 dark:bg-red-900/30"
+          }`}
+        >
+          <div
+            className={`${
+              credential.last_error_message.includes("invalid_grant") ||
+              credential.last_error_message.includes("重新授权") ||
+              credential.last_error_message.includes("凭证已过期")
+                ? "text-amber-700 dark:text-amber-300"
+                : "text-red-700 dark:text-red-300"
+            }`}
+          >
+            {credential.last_error_message.slice(0, 150)}
+            {credential.last_error_message.length > 150 && "..."}
+          </div>
+          {/* 重新授权提示 */}
+          {(credential.last_error_message.includes("invalid_grant") ||
+            credential.last_error_message.includes("重新授权") ||
+            credential.last_error_message.includes("凭证已过期")) && (
+            <div className="mt-2 pt-2 border-t border-amber-300 dark:border-amber-700">
+              <div className="flex items-center justify-between">
+                <span className="text-amber-600 dark:text-amber-400 font-medium">
+                  💡 需要重新授权
+                </span>
+                {onRefreshToken && (
+                  <button
+                    onClick={onRefreshToken}
+                    disabled={refreshingToken}
+                    className="px-3 py-1 text-xs font-medium bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  >
+                    {refreshingToken ? "刷新中..." : "尝试刷新"}
+                  </button>
+                )}
+              </div>
+              <p className="mt-1 text-amber-600/80 dark:text-amber-400/80">
+                请删除此凭证并重新添加，或尝试刷新 Token
+              </p>
+            </div>
+          )}
         </div>
       )}
 

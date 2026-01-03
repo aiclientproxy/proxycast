@@ -4125,3 +4125,24 @@ mod playwright_tests {
         );
     }
 }
+
+/// 获取单个凭证的健康状态
+/// Requirements: 4.4
+#[tauri::command]
+pub async fn get_credential_health(
+    db: State<'_, DbConnection>,
+    pool_service: State<'_, ProviderPoolServiceState>,
+    uuid: String,
+) -> Result<Option<crate::services::provider_pool_service::CredentialHealthInfo>, String> {
+    pool_service.0.get_credential_health(&db, &uuid)
+}
+
+/// 获取所有凭证的健康状态
+/// Requirements: 4.4
+#[tauri::command]
+pub async fn get_all_credential_health(
+    db: State<'_, DbConnection>,
+    pool_service: State<'_, ProviderPoolServiceState>,
+) -> Result<Vec<crate::services::provider_pool_service::CredentialHealthInfo>, String> {
+    pool_service.0.get_all_credential_health(&db)
+}

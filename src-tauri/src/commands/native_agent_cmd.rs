@@ -147,34 +147,65 @@ pub async fn native_agent_chat_stream(
     session_id: Option<String>,
     model: Option<String>,
     images: Option<Vec<ImageInputParam>>,
+    provider: Option<String>,
 ) -> Result<(), String> {
     tracing::info!(
-        "[NativeAgent] 发送流式消息: message_len={}, model={:?}, event={}, session={:?}",
+        "[NativeAgent] 发送流式消息: message_len={}, model={:?}, provider={:?}, event={}, session={:?}",
         message.len(),
         model,
+        provider,
         event_name,
         session_id
     );
 
-    // 如果 Agent 未初始化，自动初始化
-    if !agent_state.is_initialized() {
-        let (port, api_key, running, default_provider) = {
-            let state = app_state.read().await;
-            (
-                state.config.server.port,
-                state.running_api_key.clone(),
-                state.running,
-                state.config.routing.default_provider.clone(),
-            )
-        };
+    // 获取配置信息
+    let (port, api_key, running, default_provider) = {
+        let state = app_state.read().await;
+        (
+            state.config.server.port,
+            state.running_api_key.clone(),
+            state.running,
+            state.config.routing.default_provider.clone(),
+        )
+    };
 
-        if !running {
-            return Err("ProxyCast API Server 未运行".to_string());
+    if !running {
+        return Err("ProxyCast API Server 未运行".to_string());
+    }
+
+    let api_key = api_key.ok_or_else(|| "未配置 API Key".to_string())?;
+
+    // 使用前端传递的 provider，如果没有则使用默认值
+    let provider_str = provider.unwrap_or(default_provider);
+    let provider_type = ProviderType::from_str(&provider_str);
+
+    tracing::info!(
+        "[NativeAgent] 使用 provider: {:?} (原始值: {})",
+        provider_type,
+        provider_str
+    );
+
+    // 如果 Agent 未初始化，或者 provider 发生变化，重新初始化
+    let need_reinit = if !agent_state.is_initialized() {
+        tracing::info!("[NativeAgent] Agent 未初始化，需要初始化");
+        true
+    } else if let Some(current_provider) = agent_state.get_provider_type() {
+        if current_provider != provider_type {
+            tracing::info!(
+                "[NativeAgent] Provider 发生变化: {:?} -> {:?}，需要重新初始化",
+                current_provider,
+                provider_type
+            );
+            true
+        } else {
+            false
         }
+    } else {
+        true
+    };
 
-        let api_key = api_key.ok_or_else(|| "未配置 API Key".to_string())?;
+    if need_reinit {
         let base_url = format!("http://127.0.0.1:{}", port);
-        let provider_type = ProviderType::from_str(&default_provider);
         agent_state.init(base_url, api_key, provider_type)?;
     }
 

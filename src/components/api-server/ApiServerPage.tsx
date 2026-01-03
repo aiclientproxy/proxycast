@@ -263,19 +263,24 @@ export function ApiServerPage() {
 
   const testModel = getTestModel(defaultProvider);
 
-  // 根据 Provider 类型获取 Gemini 测试模型
-  const getGeminiTestModel = (provider: string): string => {
+  // 根据 Provider 类型获取 Gemini 测试模型列表
+  const getGeminiTestModels = (provider: string): string[] => {
     switch (provider) {
       case "antigravity":
-        return "gemini-3-pro-preview";
+        return [
+          "gemini-3-pro-preview",
+          "gemini-3-pro-image-preview",
+          "gemini-3-flash-preview",
+          "gemini-claude-sonnet-4-5",
+        ];
       case "gemini":
-        return "gemini-2.0-flash";
+        return ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"];
       default:
-        return "gemini-2.0-flash";
+        return ["gemini-2.0-flash"];
     }
   };
 
-  const geminiTestModel = getGeminiTestModel(defaultProvider);
+  const geminiTestModels = getGeminiTestModels(defaultProvider);
 
   // 是否显示 Gemini 测试端点
   const showGeminiTest =
@@ -329,28 +334,24 @@ export function ApiServerPage() {
     },
     // Gemini 原生协议测试（仅在 Antigravity 或 Gemini Provider 时显示）
     ...(showGeminiTest
-      ? [
-          {
-            id: "gemini",
-            name: "Gemini Generate",
-            method: "POST",
-            path: `/v1/gemini/${geminiTestModel}:generateContent`,
-            needsAuth: true,
-            body: JSON.stringify({
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    { text: "What is 2+2? Answer with just the number." },
-                  ],
-                },
-              ],
-              generationConfig: {
-                maxOutputTokens: 100,
+      ? geminiTestModels.map((model, index) => ({
+          id: `gemini-${index}`,
+          name: `Gemini ${model}`,
+          method: "POST",
+          path: `/v1/gemini/${model}:generateContent`,
+          needsAuth: true,
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [{ text: "What is 2+2? Answer with just the number." }],
               },
-            }),
-          },
-        ]
+            ],
+            generationConfig: {
+              maxOutputTokens: 100,
+            },
+          }),
+        }))
       : []),
   ];
 

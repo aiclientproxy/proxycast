@@ -303,7 +303,7 @@ export async function sendAgentMessage(
  *     // 处理文本增量
  *   }
  * });
- * await sendAgentMessageStream(message, eventName, sessionId);
+ * await sendAgentMessageStream(message, eventName, sessionId, model, undefined, provider);
  * ```
  */
 export async function sendAgentMessageStream(
@@ -312,6 +312,7 @@ export async function sendAgentMessageStream(
   sessionId?: string,
   model?: string,
   images?: ImageInput[],
+  provider?: string,
 ): Promise<void> {
   return await invoke("native_agent_chat_stream", {
     message,
@@ -319,6 +320,7 @@ export async function sendAgentMessageStream(
     sessionId,
     model,
     images,
+    provider,
   });
 }
 

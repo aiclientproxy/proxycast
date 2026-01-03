@@ -307,13 +307,16 @@ impl ProviderCredential {
 
         // Antigravity 凭证只支持特定的模型
         if let CredentialData::AntigravityOAuth { .. } = &self.credential {
-            // Antigravity 支持的模型列表
+            // Antigravity 支持的模型列表（与 antigravity.rs 中的 ANTIGRAVITY_MODELS 保持同步）
             const ANTIGRAVITY_SUPPORTED_MODELS: &[&str] = &[
                 "gemini-3-pro-preview",
                 "gemini-3-pro-image-preview",
+                "gemini-3-flash-preview",
+                "gemini-2.5-flash",
                 "gemini-2.5-computer-use-preview-10-2025",
                 "gemini-claude-sonnet-4-5",
                 "gemini-claude-sonnet-4-5-thinking",
+                "gemini-claude-opus-4-5-thinking",
             ];
             return ANTIGRAVITY_SUPPORTED_MODELS.contains(&model);
         }

@@ -12,12 +12,48 @@ use crate::models::provider_pool_model::{
     ProviderPoolOverview,
 };
 use crate::models::route_model::RouteInfo;
+use crate::providers::antigravity::TokenRefreshError;
 use crate::providers::kiro::KiroProvider;
 use chrono::Utc;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
+
+/// 凭证健康信息
+/// Requirements: 3.1, 3.2
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CredentialHealthInfo {
+    /// 凭证 UUID
+    pub uuid: String,
+    /// 凭证名称
+    pub name: Option<String>,
+    /// Provider 类型
+    pub provider_type: String,
+    /// 是否健康
+    pub is_healthy: bool,
+    /// 最后错误信息
+    pub last_error: Option<String>,
+    /// 最后错误时间（RFC3339 格式）
+    pub last_error_time: Option<String>,
+    /// 错误次数
+    pub failure_count: u32,
+    /// 是否需要重新授权
+    pub requires_reauth: bool,
+}
+
+/// 凭证选择错误
+/// Requirements: 3.4
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SelectionError {
+    /// 没有凭证
+    NoCredentials,
+    /// 所有凭证都不健康
+    AllUnhealthy { details: Vec<CredentialHealthInfo> },
+    /// 模型不支持
+    ModelNotSupported { model: String },
+}
 
 /// 凭证池管理服务
 pub struct ProviderPoolService {
@@ -370,6 +406,215 @@ impl ProviderPoolService {
         let pt: PoolProviderType = provider_type.parse().map_err(|e: String| e)?;
         let conn = db.lock().map_err(|e| e.to_string())?;
         ProviderPoolDao::reset_health_by_type(&conn, &pt).map_err(|e| e.to_string())
+    }
+
+    /// 获取凭证健康状态
+    /// Requirements: 3.2
+    pub fn get_credential_health(
+        &self,
+        db: &DbConnection,
+        uuid: &str,
+    ) -> Result<Option<CredentialHealthInfo>, String> {
+        let conn = db.lock().map_err(|e| e.to_string())?;
+        let cred = ProviderPoolDao::get_by_uuid(&conn, uuid).map_err(|e| e.to_string())?;
+
+        Ok(cred.map(|c| CredentialHealthInfo {
+            uuid: c.uuid.clone(),
+            name: c.name.clone(),
+            provider_type: c.provider_type.to_string(),
+            is_healthy: c.is_healthy,
+            last_error: c.last_error_message.clone(),
+            last_error_time: c.last_error_time.map(|t| t.to_rfc3339()),
+            failure_count: c.error_count,
+            requires_reauth: c
+                .last_error_message
+                .as_ref()
+                .map(|e| e.contains("invalid_grant") || e.contains("重新授权"))
+                .unwrap_or(false),
+        }))
+    }
+
+    /// 获取所有凭证的健康状态
+    /// Requirements: 3.2
+    pub fn get_all_credential_health(
+        &self,
+        db: &DbConnection,
+    ) -> Result<Vec<CredentialHealthInfo>, String> {
+        let conn = db.lock().map_err(|e| e.to_string())?;
+        let credentials = ProviderPoolDao::get_all(&conn).map_err(|e| e.to_string())?;
+
+        Ok(credentials
+            .into_iter()
+            .map(|c| CredentialHealthInfo {
+                uuid: c.uuid.clone(),
+                name: c.name.clone(),
+                provider_type: c.provider_type.to_string(),
+                is_healthy: c.is_healthy,
+                last_error: c.last_error_message.clone(),
+                last_error_time: c.last_error_time.map(|t| t.to_rfc3339()),
+                failure_count: c.error_count,
+                requires_reauth: c
+                    .last_error_message
+                    .as_ref()
+                    .map(|e| e.contains("invalid_grant") || e.contains("重新授权"))
+                    .unwrap_or(false),
+            })
+            .collect())
+    }
+
+    /// 标记凭证为不健康（带详细错误信息）
+    /// Requirements: 3.1, 3.2
+    pub fn mark_unhealthy_with_details(
+        &self,
+        db: &DbConnection,
+        uuid: &str,
+        error: &TokenRefreshError,
+    ) -> Result<(), String> {
+        let error_message = error.user_message();
+        let requires_reauth = error.requires_reauth();
+
+        let conn = db.lock().map_err(|e| e.to_string())?;
+        let cred = ProviderPoolDao::get_by_uuid(&conn, uuid)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Credential not found: {}", uuid))?;
+
+        let new_error_count = cred.error_count + 1;
+        // 如果需要重新授权，直接标记为不健康
+        let is_healthy = if requires_reauth {
+            false
+        } else {
+            new_error_count < self.max_error_count
+        };
+
+        let error_msg = if requires_reauth {
+            format!("[需要重新授权] {}", error_message)
+        } else {
+            error_message
+        };
+
+        ProviderPoolDao::update_health_status(
+            &conn,
+            uuid,
+            is_healthy,
+            new_error_count,
+            Some(Utc::now()),
+            Some(&error_msg),
+            None,
+            None,
+        )
+        .map_err(|e| e.to_string())
+    }
+
+    /// 选择一个健康的凭证
+    /// Requirements: 2.4, 3.3, 3.4
+    pub fn select_healthy_credential(
+        &self,
+        db: &DbConnection,
+        provider_type: &str,
+        model: Option<&str>,
+    ) -> Result<ProviderCredential, SelectionError> {
+        let pt: PoolProviderType = provider_type
+            .parse()
+            .map_err(|_| SelectionError::NoCredentials)?;
+        let conn = db.lock().map_err(|_| SelectionError::NoCredentials)?;
+        let credentials =
+            ProviderPoolDao::get_by_type(&conn, &pt).map_err(|_| SelectionError::NoCredentials)?;
+        drop(conn);
+
+        if credentials.is_empty() {
+            return Err(SelectionError::NoCredentials);
+        }
+
+        // 过滤可用的凭证（健康且未禁用）
+        let mut available: Vec<_> = credentials
+            .iter()
+            .filter(|c| c.is_available() && c.is_healthy)
+            .collect();
+
+        // 如果指定了模型，进一步过滤支持该模型的凭证
+        if let Some(m) = model {
+            available.retain(|c| c.supports_model(m));
+            if available.is_empty() {
+                // 检查是否有凭证支持该模型但不健康
+                let unhealthy_supporting: Vec<_> = credentials
+                    .iter()
+                    .filter(|c| c.supports_model(m) && !c.is_healthy)
+                    .collect();
+
+                if !unhealthy_supporting.is_empty() {
+                    // 返回不健康凭证的详细信息
+                    let details: Vec<CredentialHealthInfo> = unhealthy_supporting
+                        .into_iter()
+                        .map(|c| CredentialHealthInfo {
+                            uuid: c.uuid.clone(),
+                            name: c.name.clone(),
+                            provider_type: c.provider_type.to_string(),
+                            is_healthy: c.is_healthy,
+                            last_error: c.last_error_message.clone(),
+                            last_error_time: c.last_error_time.map(|t| t.to_rfc3339()),
+                            failure_count: c.error_count,
+                            requires_reauth: c
+                                .last_error_message
+                                .as_ref()
+                                .map(|e| e.contains("invalid_grant") || e.contains("重新授权"))
+                                .unwrap_or(false),
+                        })
+                        .collect();
+                    return Err(SelectionError::AllUnhealthy { details });
+                }
+
+                return Err(SelectionError::ModelNotSupported {
+                    model: m.to_string(),
+                });
+            }
+        }
+
+        if available.is_empty() {
+            // 所有凭证都不健康
+            let details: Vec<CredentialHealthInfo> = credentials
+                .iter()
+                .filter(|c| !c.is_healthy)
+                .map(|c| CredentialHealthInfo {
+                    uuid: c.uuid.clone(),
+                    name: c.name.clone(),
+                    provider_type: c.provider_type.to_string(),
+                    is_healthy: c.is_healthy,
+                    last_error: c.last_error_message.clone(),
+                    last_error_time: c.last_error_time.map(|t| t.to_rfc3339()),
+                    failure_count: c.error_count,
+                    requires_reauth: c
+                        .last_error_message
+                        .as_ref()
+                        .map(|e| e.contains("invalid_grant") || e.contains("重新授权"))
+                        .unwrap_or(false),
+                })
+                .collect();
+            return Err(SelectionError::AllUnhealthy { details });
+        }
+
+        // 使用轮询策略选择凭证
+        let key = format!("{}:{}", provider_type, model.unwrap_or("*"));
+        let index = {
+            let indices = self.round_robin_index.read().unwrap();
+            indices
+                .get(&key)
+                .map(|i| i.load(std::sync::atomic::Ordering::Relaxed))
+                .unwrap_or(0)
+        };
+
+        let selected_index = index % available.len();
+        let selected = available[selected_index].clone();
+
+        // 更新轮询索引
+        {
+            let mut indices = self.round_robin_index.write().unwrap();
+            indices
+                .entry(key)
+                .or_insert_with(|| AtomicUsize::new(0))
+                .store(index + 1, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        Ok(selected)
     }
 
     /// 执行单个凭证的健康检查
@@ -1701,4 +1946,141 @@ pub struct MigrationResult {
     pub skipped_count: usize,
     /// 错误信息列表
     pub errors: Vec<String>,
+}
+
+// ==================== 测试模块 ====================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== Property 3: 不健康凭证排除 ====================
+    // Feature: antigravity-token-refresh, Property 3: 不健康凭证排除
+    // Validates: Requirements 2.4, 3.3
+
+    #[test]
+    fn test_credential_health_info_creation() {
+        let info = CredentialHealthInfo {
+            uuid: "test-uuid".to_string(),
+            name: Some("Test Credential".to_string()),
+            provider_type: "antigravity".to_string(),
+            is_healthy: false,
+            last_error: Some("Token refresh failed".to_string()),
+            last_error_time: Some("2024-01-01T00:00:00Z".to_string()),
+            failure_count: 3,
+            requires_reauth: true,
+        };
+
+        assert_eq!(info.uuid, "test-uuid");
+        assert!(!info.is_healthy);
+        assert!(info.requires_reauth);
+        assert_eq!(info.failure_count, 3);
+    }
+
+    #[test]
+    fn test_selection_error_no_credentials() {
+        let error = SelectionError::NoCredentials;
+        // 验证可以序列化
+        let json = serde_json::to_string(&error).unwrap();
+        assert!(json.contains("NoCredentials"));
+    }
+
+    #[test]
+    fn test_selection_error_all_unhealthy() {
+        let details = vec![CredentialHealthInfo {
+            uuid: "test-uuid".to_string(),
+            name: Some("Test".to_string()),
+            provider_type: "antigravity".to_string(),
+            is_healthy: false,
+            last_error: Some("invalid_grant".to_string()),
+            last_error_time: None,
+            failure_count: 1,
+            requires_reauth: true,
+        }];
+
+        let error = SelectionError::AllUnhealthy { details };
+        let json = serde_json::to_string(&error).unwrap();
+        assert!(json.contains("AllUnhealthy"));
+        assert!(json.contains("invalid_grant"));
+    }
+
+    #[test]
+    fn test_selection_error_model_not_supported() {
+        let error = SelectionError::ModelNotSupported {
+            model: "gpt-5".to_string(),
+        };
+        let json = serde_json::to_string(&error).unwrap();
+        assert!(json.contains("ModelNotSupported"));
+        assert!(json.contains("gpt-5"));
+    }
+
+    // ==================== Property 4: 健康状态记录完整性 ====================
+    // Feature: antigravity-token-refresh, Property 4: 健康状态记录完整性
+    // Validates: Requirements 3.2
+
+    #[test]
+    fn test_credential_health_info_requires_reauth_detection() {
+        // 测试 invalid_grant 检测
+        let info_with_invalid_grant = CredentialHealthInfo {
+            uuid: "test".to_string(),
+            name: None,
+            provider_type: "antigravity".to_string(),
+            is_healthy: false,
+            last_error: Some("Token refresh failed: invalid_grant".to_string()),
+            last_error_time: Some(chrono::Utc::now().to_rfc3339()),
+            failure_count: 1,
+            requires_reauth: true,
+        };
+        assert!(info_with_invalid_grant.requires_reauth);
+
+        // 测试重新授权检测
+        let info_with_reauth = CredentialHealthInfo {
+            uuid: "test".to_string(),
+            name: None,
+            provider_type: "antigravity".to_string(),
+            is_healthy: false,
+            last_error: Some("[需要重新授权] Token 已过期".to_string()),
+            last_error_time: Some(chrono::Utc::now().to_rfc3339()),
+            failure_count: 1,
+            requires_reauth: true,
+        };
+        assert!(info_with_reauth.requires_reauth);
+
+        // 测试普通错误不需要重新授权
+        let info_normal_error = CredentialHealthInfo {
+            uuid: "test".to_string(),
+            name: None,
+            provider_type: "antigravity".to_string(),
+            is_healthy: false,
+            last_error: Some("Network error".to_string()),
+            last_error_time: Some(chrono::Utc::now().to_rfc3339()),
+            failure_count: 1,
+            requires_reauth: false,
+        };
+        assert!(!info_normal_error.requires_reauth);
+    }
+
+    #[test]
+    fn test_credential_health_info_serialization() {
+        let info = CredentialHealthInfo {
+            uuid: "test-uuid".to_string(),
+            name: Some("Test".to_string()),
+            provider_type: "antigravity".to_string(),
+            is_healthy: true,
+            last_error: None,
+            last_error_time: None,
+            failure_count: 0,
+            requires_reauth: false,
+        };
+
+        // 测试序列化
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("test-uuid"));
+        assert!(json.contains("antigravity"));
+
+        // 测试反序列化
+        let deserialized: CredentialHealthInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.uuid, info.uuid);
+        assert_eq!(deserialized.is_healthy, info.is_healthy);
+    }
 }

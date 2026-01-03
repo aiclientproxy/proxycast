@@ -38,6 +38,98 @@ const OAUTH_SCOPES: &[&str] = &[
 // Token 刷新提前量（秒）
 const REFRESH_SKEW: i64 = 3000;
 
+// Token 即将过期的阈值（秒）- 10 分钟
+const TOKEN_EXPIRING_SOON_THRESHOLD: i64 = 600;
+
+/// Token 验证结果
+/// Requirements: 1.1, 1.2, 1.3, 1.4
+#[derive(Debug, Clone, PartialEq)]
+pub enum TokenValidationResult {
+    /// Token 有效，包含剩余有效时间（秒）
+    Valid { expires_in_secs: i64 },
+    /// Token 即将过期（少于 10 分钟），需要主动刷新
+    ExpiringSoon { expires_in_secs: i64 },
+    /// Token 已过期
+    Expired,
+    /// Token 无效（缺失、为空或格式错误）
+    Invalid { reason: String },
+}
+
+impl TokenValidationResult {
+    /// 是否需要刷新 Token
+    pub fn needs_refresh(&self) -> bool {
+        matches!(
+            self,
+            TokenValidationResult::ExpiringSoon { .. }
+                | TokenValidationResult::Expired
+                | TokenValidationResult::Invalid { .. }
+        )
+    }
+
+    /// 是否可以使用（有效或即将过期但仍可用）
+    pub fn is_usable(&self) -> bool {
+        matches!(
+            self,
+            TokenValidationResult::Valid { .. } | TokenValidationResult::ExpiringSoon { .. }
+        )
+    }
+}
+
+/// Token 刷新错误类型
+/// Requirements: 2.1
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TokenRefreshError {
+    /// OAuth invalid_grant 错误 - 需要用户重新授权
+    InvalidGrant { message: String },
+    /// 网络错误 - 可以重试
+    NetworkError { message: String },
+    /// 服务器错误 (5xx) - 可以重试
+    ServerError { message: String },
+    /// 未知错误
+    Unknown { message: String },
+}
+
+impl TokenRefreshError {
+    /// 是否需要用户重新授权
+    pub fn requires_reauth(&self) -> bool {
+        matches!(self, TokenRefreshError::InvalidGrant { .. })
+    }
+
+    /// 是否可以重试
+    pub fn is_retryable(&self) -> bool {
+        matches!(
+            self,
+            TokenRefreshError::NetworkError { .. } | TokenRefreshError::ServerError { .. }
+        )
+    }
+
+    /// 获取用户友好的错误消息
+    pub fn user_message(&self) -> String {
+        match self {
+            TokenRefreshError::InvalidGrant { .. } => {
+                "Antigravity 授权已过期，请重新登录授权".to_string()
+            }
+            TokenRefreshError::NetworkError { message } => {
+                format!("网络连接失败: {}", message)
+            }
+            TokenRefreshError::ServerError { message } => {
+                format!("Google 服务暂时不可用: {}", message)
+            }
+            TokenRefreshError::Unknown { message } => {
+                format!("Token 刷新失败: {}", message)
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for TokenRefreshError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.user_message())
+    }
+}
+
+impl std::error::Error for TokenRefreshError {}
+
 /// Antigravity 支持的模型列表
 pub const ANTIGRAVITY_MODELS: &[&str] = &[
     "gemini-3-pro-preview",
@@ -328,6 +420,252 @@ impl AntigravityProvider {
         }
 
         true
+    }
+
+    /// 验证 Token 状态（支持多种时间格式）
+    /// Requirements: 1.1, 1.2, 1.3, 1.4
+    pub fn validate_token(&self) -> TokenValidationResult {
+        // 检查 access_token 是否存在且非空
+        match &self.credentials.access_token {
+            None => {
+                return TokenValidationResult::Invalid {
+                    reason: "access_token 缺失".to_string(),
+                };
+            }
+            Some(token) if token.trim().is_empty() => {
+                return TokenValidationResult::Invalid {
+                    reason: "access_token 为空".to_string(),
+                };
+            }
+            _ => {}
+        }
+
+        // 检查是否被禁用
+        if self.credentials.enable == Some(false) {
+            return TokenValidationResult::Invalid {
+                reason: "凭证已被禁用".to_string(),
+            };
+        }
+
+        // 检查 refresh_token 是否存在（用于后续刷新）
+        if self.credentials.refresh_token.is_none() {
+            return TokenValidationResult::Invalid {
+                reason: "refresh_token 缺失，无法刷新".to_string(),
+            };
+        }
+
+        let now = chrono::Utc::now();
+        let now_millis = now.timestamp_millis();
+
+        // 尝试解析过期时间（支持多种格式）
+        let expires_in_secs: Option<i64> = {
+            // 优先检查 RFC3339 格式
+            if let Some(expire_str) = &self.credentials.expire {
+                if let Ok(expires) = chrono::DateTime::parse_from_rfc3339(expire_str) {
+                    Some((expires.timestamp_millis() - now_millis) / 1000)
+                } else {
+                    // RFC3339 解析失败，尝试其他格式
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        .or_else(|| {
+            // 兼容毫秒时间戳格式
+            self.credentials
+                .expiry_date
+                .map(|expiry| (expiry - now_millis) / 1000)
+        })
+        .or_else(|| {
+            // 兼容 timestamp + expires_in 格式
+            match (self.credentials.timestamp, self.credentials.expires_in) {
+                (Some(timestamp), Some(expires_in)) => {
+                    let expiry = timestamp + (expires_in * 1000);
+                    Some((expiry - now_millis) / 1000)
+                }
+                _ => None,
+            }
+        });
+
+        match expires_in_secs {
+            Some(secs) if secs <= 0 => TokenValidationResult::Expired,
+            Some(secs) if secs <= TOKEN_EXPIRING_SOON_THRESHOLD => {
+                TokenValidationResult::ExpiringSoon {
+                    expires_in_secs: secs,
+                }
+            }
+            Some(secs) => TokenValidationResult::Valid {
+                expires_in_secs: secs,
+            },
+            None => {
+                // 无法解析过期时间，视为已过期（Requirements: 1.4）
+                TokenValidationResult::Invalid {
+                    reason: "无法解析过期时间格式".to_string(),
+                }
+            }
+        }
+    }
+
+    /// 分类 Token 刷新错误
+    /// Requirements: 2.1
+    fn classify_refresh_error(status: u16, body: &str) -> TokenRefreshError {
+        // 检查是否是 invalid_grant 错误
+        if status == 400 && body.contains("invalid_grant") {
+            return TokenRefreshError::InvalidGrant {
+                message: "Refresh token 已失效或被撤销".to_string(),
+            };
+        }
+
+        // 服务器错误 (5xx)
+        if status >= 500 {
+            return TokenRefreshError::ServerError {
+                message: format!("HTTP {}: {}", status, body),
+            };
+        }
+
+        // 其他客户端错误
+        if status >= 400 {
+            return TokenRefreshError::Unknown {
+                message: format!("HTTP {}: {}", status, body),
+            };
+        }
+
+        TokenRefreshError::Unknown {
+            message: body.to_string(),
+        }
+    }
+
+    /// 带重试的 Token 刷新
+    /// Requirements: 2.2, 2.3
+    pub async fn refresh_token_with_retry(
+        &mut self,
+        max_retries: u32,
+    ) -> Result<String, TokenRefreshError> {
+        let refresh_token = self
+            .credentials
+            .refresh_token
+            .as_ref()
+            .ok_or_else(|| TokenRefreshError::InvalidGrant {
+                message: "No refresh token available".to_string(),
+            })?
+            .clone();
+
+        let params = [
+            ("client_id", OAUTH_CLIENT_ID),
+            ("client_secret", OAUTH_CLIENT_SECRET),
+            ("refresh_token", refresh_token.as_str()),
+            ("grant_type", "refresh_token"),
+        ];
+
+        let mut last_error: Option<TokenRefreshError> = None;
+        let mut retry_count = 0;
+
+        while retry_count <= max_retries {
+            if retry_count > 0 {
+                // 指数退避：100ms, 200ms, 400ms, ...
+                let delay_ms = 100 * (1 << (retry_count - 1));
+                tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                tracing::info!(
+                    "[Antigravity] Token 刷新重试 {}/{}, 延迟 {}ms",
+                    retry_count,
+                    max_retries,
+                    delay_ms
+                );
+            }
+
+            let result = self
+                .client
+                .post("https://oauth2.googleapis.com/token")
+                .form(&params)
+                .send()
+                .await;
+
+            match result {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if status.is_success() {
+                        // 成功，解析响应
+                        match resp.json::<serde_json::Value>().await {
+                            Ok(data) => {
+                                let new_token = data["access_token"].as_str().ok_or_else(|| {
+                                    TokenRefreshError::Unknown {
+                                        message: "响应中缺少 access_token".to_string(),
+                                    }
+                                })?;
+
+                                self.credentials.access_token = Some(new_token.to_string());
+
+                                // 更新过期时间
+                                if let Some(expires_in) = data["expires_in"].as_i64() {
+                                    let now = chrono::Utc::now();
+                                    let expires_at = now + chrono::Duration::seconds(expires_in);
+                                    self.credentials.expire = Some(expires_at.to_rfc3339());
+                                    self.credentials.expiry_date =
+                                        Some(expires_at.timestamp_millis());
+                                    self.credentials.expires_in = Some(expires_in);
+                                    self.credentials.timestamp = Some(now.timestamp_millis());
+                                }
+
+                                // 更新 refresh_token（如果返回了新的）
+                                if let Some(new_refresh) = data["refresh_token"].as_str() {
+                                    self.credentials.refresh_token = Some(new_refresh.to_string());
+                                }
+
+                                self.credentials.last_refresh =
+                                    Some(chrono::Utc::now().to_rfc3339());
+
+                                // 保存凭证
+                                if let Err(e) = self.save_credentials().await {
+                                    tracing::warn!("[Antigravity] 保存凭证失败: {}", e);
+                                }
+
+                                return Ok(new_token.to_string());
+                            }
+                            Err(e) => {
+                                last_error = Some(TokenRefreshError::Unknown {
+                                    message: format!("解析响应失败: {}", e),
+                                });
+                            }
+                        }
+                    } else {
+                        // 请求失败
+                        let status_code = status.as_u16();
+                        let body = resp.text().await.unwrap_or_default();
+                        let error = Self::classify_refresh_error(status_code, &body);
+
+                        // invalid_grant 不重试
+                        if error.requires_reauth() {
+                            return Err(error);
+                        }
+
+                        // 可重试的错误
+                        if error.is_retryable() {
+                            last_error = Some(error);
+                            retry_count += 1;
+                            continue;
+                        }
+
+                        return Err(error);
+                    }
+                }
+                Err(e) => {
+                    // 网络错误，可重试
+                    last_error = Some(TokenRefreshError::NetworkError {
+                        message: e.to_string(),
+                    });
+                    retry_count += 1;
+                    continue;
+                }
+            }
+
+            retry_count += 1;
+        }
+
+        // 所有重试都失败
+        Err(last_error.unwrap_or_else(|| TokenRefreshError::Unknown {
+            message: "Token 刷新失败，已达到最大重试次数".to_string(),
+        }))
     }
 
     pub async fn refresh_token(&mut self) -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -1605,20 +1943,31 @@ impl StreamingProvider for AntigravityProvider {
         &self,
         request: &ChatCompletionRequest,
     ) -> Result<StreamResponse, ProviderError> {
+        tracing::info!("[ANTIGRAVITY_STREAM] ========== call_api_stream 开始 ==========");
+
         let token = self
             .credentials
             .access_token
             .as_ref()
             .ok_or_else(|| ProviderError::AuthenticationError("No access token".to_string()))?;
 
+        tracing::info!("[ANTIGRAVITY_STREAM] Token 长度: {} 字符", token.len());
+
         let project_id = self.project_id.clone().unwrap_or_else(generate_project_id);
         let actual_model = alias_to_model_name(&request.model);
+
+        tracing::info!(
+            "[ANTIGRAVITY_STREAM] project_id={}, request.model={}, actual_model={}",
+            project_id,
+            request.model,
+            actual_model
+        );
 
         // 使用统一的转换函数构建请求体
         let payload = convert_openai_to_antigravity_with_context(request, &project_id);
 
-        tracing::debug!(
-            "[ANTIGRAVITY_STREAM] 请求体: {}",
+        tracing::info!(
+            "[ANTIGRAVITY_STREAM] 请求体 (完整): {}",
             serde_json::to_string_pretty(&payload).unwrap_or_default()
         );
 
@@ -1631,8 +1980,15 @@ impl StreamingProvider for AntigravityProvider {
                 base_url
             );
 
+            eprintln!("[ANTIGRAVITY_STREAM] ========== 发起 HTTP 请求 ==========");
+            eprintln!("[ANTIGRAVITY_STREAM] URL: {}", url);
+            eprintln!("[ANTIGRAVITY_STREAM] Model: {}", actual_model);
+            eprintln!(
+                "[ANTIGRAVITY_STREAM] Token 前20字符: {}...",
+                &token[..20.min(token.len())]
+            );
             tracing::info!(
-                "[ANTIGRAVITY_STREAM] 发起流式请求: url={} model={}",
+                "[ANTIGRAVITY_STREAM] ========== 发起 HTTP 请求 ==========\n  URL: {}\n  Model: {}\n  Method: POST",
                 url,
                 actual_model
             );
@@ -1640,7 +1996,7 @@ impl StreamingProvider for AntigravityProvider {
             let result = self
                 .client
                 .post(&url)
-                .header("Authorization", format!("Bearer {token}"))
+                .header("Authorization", format!("Bearer {}", token))
                 .header("Content-Type", "application/json")
                 .header("Accept", "text/event-stream")
                 .header("User-Agent", "antigravity/1.11.5 windows/amd64")
@@ -1651,13 +2007,23 @@ impl StreamingProvider for AntigravityProvider {
             match result {
                 Ok(resp) => {
                     let status = resp.status();
+                    eprintln!("[ANTIGRAVITY_STREAM] HTTP 响应状态: {}", status);
+                    tracing::info!("[ANTIGRAVITY_STREAM] HTTP 响应状态: {}", status);
+
                     if status.is_success() {
-                        tracing::info!("[ANTIGRAVITY_STREAM] 流式响应开始: status={}", status);
+                        eprintln!("[ANTIGRAVITY_STREAM] ✓ 流式响应成功建立");
+                        tracing::info!("[ANTIGRAVITY_STREAM] ✓ 流式响应成功建立，返回流");
                         return Ok(reqwest_stream_to_stream_response(resp));
                     } else {
                         let body = resp.text().await.unwrap_or_default();
-                        tracing::warn!(
-                            "[ANTIGRAVITY_STREAM] 请求失败 ({}): {} - {}",
+                        eprintln!(
+                            "[ANTIGRAVITY_STREAM] ✗ 请求失败\n  Base URL: {}\n  Status: {}\n  Body: {}",
+                            base_url,
+                            status,
+                            &body[..body.len().min(500)]
+                        );
+                        tracing::error!(
+                            "[ANTIGRAVITY_STREAM] ✗ 请求失败\n  Base URL: {}\n  Status: {}\n  Body: {}",
                             base_url,
                             status,
                             body
@@ -1666,12 +2032,21 @@ impl StreamingProvider for AntigravityProvider {
                     }
                 }
                 Err(e) => {
-                    tracing::warn!("[ANTIGRAVITY_STREAM] 连接失败 ({}): {}", base_url, e);
+                    eprintln!(
+                        "[ANTIGRAVITY_STREAM] ✗ 连接失败\n  Base URL: {}\n  Error: {}",
+                        base_url, e
+                    );
+                    tracing::error!(
+                        "[ANTIGRAVITY_STREAM] ✗ 连接失败\n  Base URL: {}\n  Error: {}",
+                        base_url,
+                        e
+                    );
                     last_error = Some(ProviderError::from_reqwest_error(&e));
                 }
             }
         }
 
+        tracing::error!("[ANTIGRAVITY_STREAM] 所有 base URL 都失败了");
         Err(last_error.unwrap_or_else(|| {
             ProviderError::NetworkError("All Antigravity base URLs failed".to_string())
         }))
@@ -1687,5 +2062,319 @@ impl StreamingProvider for AntigravityProvider {
 
     fn stream_format(&self) -> StreamFormat {
         StreamFormat::GeminiStream
+    }
+}
+
+// ==================== 测试模块 ====================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    // 辅助函数：检查是否为 Valid 状态
+    fn is_valid(result: &TokenValidationResult) -> bool {
+        matches!(result, TokenValidationResult::Valid { .. })
+    }
+
+    // 辅助函数：检查是否为 ExpiringSoon 状态
+    fn is_expiring_soon(result: &TokenValidationResult) -> bool {
+        matches!(result, TokenValidationResult::ExpiringSoon { .. })
+    }
+
+    // 辅助函数：检查是否为 Expired 状态
+    fn is_expired(result: &TokenValidationResult) -> bool {
+        matches!(result, TokenValidationResult::Expired)
+    }
+
+    // 辅助函数：检查是否为 Invalid 状态
+    fn is_invalid(result: &TokenValidationResult) -> bool {
+        matches!(result, TokenValidationResult::Invalid { .. })
+    }
+
+    // ==================== Property 1: Token 过期时间解析正确性 ====================
+    // Feature: antigravity-token-refresh, Property 1: Token 过期时间解析正确性
+    // Validates: Requirements 1.1, 1.3
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100))]
+
+        /// Property 1: 对于任何有效的过期时间（RFC3339 格式），validate_token() 应正确判断状态
+        #[test]
+        fn prop_validate_token_rfc3339_format(
+            expires_in_secs in -3600i64..7200i64, // -1小时到2小时
+        ) {
+            let now = chrono::Utc::now();
+            let expires_at = now + chrono::Duration::seconds(expires_in_secs);
+
+            let mut provider = AntigravityProvider::new();
+            provider.credentials.access_token = Some("test_token".to_string());
+            provider.credentials.refresh_token = Some("test_refresh".to_string());
+            provider.credentials.expire = Some(expires_at.to_rfc3339());
+
+            let result = provider.validate_token();
+
+            if expires_in_secs <= 0 {
+                prop_assert!(is_expired(&result), "Expected Expired for expires_in_secs={}", expires_in_secs);
+            } else if expires_in_secs <= TOKEN_EXPIRING_SOON_THRESHOLD {
+                prop_assert!(is_expiring_soon(&result), "Expected ExpiringSoon for expires_in_secs={}", expires_in_secs);
+            } else {
+                prop_assert!(is_valid(&result), "Expected Valid for expires_in_secs={}", expires_in_secs);
+            }
+        }
+
+        /// Property 1: 对于任何有效的过期时间（毫秒时间戳格式），validate_token() 应正确判断状态
+        #[test]
+        fn prop_validate_token_timestamp_format(
+            expires_in_secs in -3600i64..7200i64,
+        ) {
+            let now = chrono::Utc::now();
+            let expires_at = now + chrono::Duration::seconds(expires_in_secs);
+
+            let mut provider = AntigravityProvider::new();
+            provider.credentials.access_token = Some("test_token".to_string());
+            provider.credentials.refresh_token = Some("test_refresh".to_string());
+            provider.credentials.expiry_date = Some(expires_at.timestamp_millis());
+
+            let result = provider.validate_token();
+
+            if expires_in_secs <= 0 {
+                prop_assert!(is_expired(&result), "Expected Expired for expires_in_secs={}", expires_in_secs);
+            } else if expires_in_secs <= TOKEN_EXPIRING_SOON_THRESHOLD {
+                prop_assert!(is_expiring_soon(&result), "Expected ExpiringSoon for expires_in_secs={}", expires_in_secs);
+            } else {
+                prop_assert!(is_valid(&result), "Expected Valid for expires_in_secs={}", expires_in_secs);
+            }
+        }
+
+        /// Property 1: 对于任何有效的过期时间（timestamp + expires_in 格式），validate_token() 应正确判断状态
+        #[test]
+        fn prop_validate_token_expires_in_format(
+            expires_in_secs in 1i64..7200i64, // 只测试正数，因为这个格式不支持负数
+        ) {
+            let now = chrono::Utc::now();
+
+            let mut provider = AntigravityProvider::new();
+            provider.credentials.access_token = Some("test_token".to_string());
+            provider.credentials.refresh_token = Some("test_refresh".to_string());
+            provider.credentials.timestamp = Some(now.timestamp_millis());
+            provider.credentials.expires_in = Some(expires_in_secs);
+
+            let result = provider.validate_token();
+
+            // 由于时间精度问题，允许 1 秒的误差
+            if expires_in_secs <= 1 {
+                prop_assert!(is_expired(&result) || is_expiring_soon(&result), "Expected Expired or ExpiringSoon for expires_in_secs={}", expires_in_secs);
+            } else if expires_in_secs <= TOKEN_EXPIRING_SOON_THRESHOLD {
+                prop_assert!(is_expiring_soon(&result), "Expected ExpiringSoon for expires_in_secs={}", expires_in_secs);
+            } else {
+                prop_assert!(is_valid(&result), "Expected Valid for expires_in_secs={}", expires_in_secs);
+            }
+        }
+    }
+
+    // ==================== Property 2: 空 Token 检测 ====================
+    // Feature: antigravity-token-refresh, Property 2: 空 Token 检测
+    // Validates: Requirements 1.2
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100))]
+
+        /// Property 2: 对于任何空或仅包含空白字符的 token，validate_token() 应返回 Invalid
+        #[test]
+        fn prop_validate_token_empty_detection(
+            whitespace in "[ \t\n\r]*", // 生成各种空白字符组合
+        ) {
+            let mut provider = AntigravityProvider::new();
+            provider.credentials.access_token = Some(whitespace);
+            provider.credentials.refresh_token = Some("test_refresh".to_string());
+
+            let result = provider.validate_token();
+
+            prop_assert!(is_invalid(&result), "Expected Invalid for empty/whitespace token");
+        }
+    }
+
+    /// Property 2: None token 应返回 Invalid
+    #[test]
+    fn test_validate_token_none() {
+        let mut provider = AntigravityProvider::new();
+        provider.credentials.access_token = None;
+        provider.credentials.refresh_token = Some("test_refresh".to_string());
+
+        let result = provider.validate_token();
+
+        assert!(
+            matches!(result, TokenValidationResult::Invalid { reason } if reason.contains("缺失"))
+        );
+    }
+
+    /// Property 2: 缺少 refresh_token 应返回 Invalid
+    #[test]
+    fn test_validate_token_no_refresh_token() {
+        let mut provider = AntigravityProvider::new();
+        provider.credentials.access_token = Some("test_token".to_string());
+        provider.credentials.refresh_token = None;
+
+        let result = provider.validate_token();
+
+        assert!(
+            matches!(result, TokenValidationResult::Invalid { reason } if reason.contains("refresh_token"))
+        );
+    }
+
+    /// Property 2: 禁用的凭证应返回 Invalid
+    #[test]
+    fn test_validate_token_disabled() {
+        let mut provider = AntigravityProvider::new();
+        provider.credentials.access_token = Some("test_token".to_string());
+        provider.credentials.refresh_token = Some("test_refresh".to_string());
+        provider.credentials.enable = Some(false);
+
+        let result = provider.validate_token();
+
+        assert!(
+            matches!(result, TokenValidationResult::Invalid { reason } if reason.contains("禁用"))
+        );
+    }
+
+    // ==================== TokenRefreshError 测试 ====================
+
+    #[test]
+    fn test_classify_refresh_error_invalid_grant() {
+        let error =
+            AntigravityProvider::classify_refresh_error(400, r#"{"error": "invalid_grant"}"#);
+        assert!(matches!(error, TokenRefreshError::InvalidGrant { .. }));
+        assert!(error.requires_reauth());
+        assert!(!error.is_retryable());
+    }
+
+    #[test]
+    fn test_classify_refresh_error_server_error() {
+        let error = AntigravityProvider::classify_refresh_error(500, "Internal Server Error");
+        assert!(matches!(error, TokenRefreshError::ServerError { .. }));
+        assert!(!error.requires_reauth());
+        assert!(error.is_retryable());
+    }
+
+    #[test]
+    fn test_classify_refresh_error_unknown() {
+        let error = AntigravityProvider::classify_refresh_error(403, "Forbidden");
+        assert!(matches!(error, TokenRefreshError::Unknown { .. }));
+        assert!(!error.requires_reauth());
+        assert!(!error.is_retryable());
+    }
+
+    // ==================== TokenValidationResult 方法测试 ====================
+
+    #[test]
+    fn test_token_validation_result_needs_refresh() {
+        assert!(!TokenValidationResult::Valid {
+            expires_in_secs: 3600
+        }
+        .needs_refresh());
+        assert!(TokenValidationResult::ExpiringSoon {
+            expires_in_secs: 300
+        }
+        .needs_refresh());
+        assert!(TokenValidationResult::Expired.needs_refresh());
+        assert!(TokenValidationResult::Invalid {
+            reason: "test".to_string()
+        }
+        .needs_refresh());
+    }
+
+    #[test]
+    fn test_token_validation_result_is_usable() {
+        assert!(TokenValidationResult::Valid {
+            expires_in_secs: 3600
+        }
+        .is_usable());
+        assert!(TokenValidationResult::ExpiringSoon {
+            expires_in_secs: 300
+        }
+        .is_usable());
+        assert!(!TokenValidationResult::Expired.is_usable());
+        assert!(!TokenValidationResult::Invalid {
+            reason: "test".to_string()
+        }
+        .is_usable());
+    }
+
+    // ==================== Property 5: 重试次数限制 ====================
+    // Feature: antigravity-token-refresh, Property 5: 重试次数限制
+    // Validates: Requirements 2.2
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100))]
+
+        /// Property 5: 对于任何 HTTP 状态码，错误分类应正确识别可重试错误
+        #[test]
+        fn prop_classify_error_retryable(
+            status in 100u16..600u16,
+        ) {
+            let error = AntigravityProvider::classify_refresh_error(status, "test error");
+
+            // 5xx 错误应该是可重试的
+            if status >= 500 {
+                prop_assert!(error.is_retryable(), "5xx errors should be retryable");
+            }
+
+            // 400 + invalid_grant 不应该重试
+            if status == 400 {
+                let invalid_grant_error = AntigravityProvider::classify_refresh_error(400, "invalid_grant");
+                prop_assert!(!invalid_grant_error.is_retryable(), "invalid_grant should not be retryable");
+                prop_assert!(invalid_grant_error.requires_reauth(), "invalid_grant should require reauth");
+            }
+        }
+
+        /// Property 5: 对于任何错误类型，user_message 应返回非空字符串
+        #[test]
+        fn prop_error_user_message_not_empty(
+            status in 100u16..600u16,
+            body in ".*",
+        ) {
+            let error = AntigravityProvider::classify_refresh_error(status, &body);
+            let message = error.user_message();
+            prop_assert!(!message.is_empty(), "User message should not be empty");
+        }
+    }
+
+    /// 测试 TokenRefreshError 的 Display 实现
+    #[test]
+    fn test_token_refresh_error_display() {
+        let errors = vec![
+            TokenRefreshError::InvalidGrant {
+                message: "test".to_string(),
+            },
+            TokenRefreshError::NetworkError {
+                message: "test".to_string(),
+            },
+            TokenRefreshError::ServerError {
+                message: "test".to_string(),
+            },
+            TokenRefreshError::Unknown {
+                message: "test".to_string(),
+            },
+        ];
+
+        for error in errors {
+            let display = format!("{}", error);
+            assert!(!display.is_empty());
+        }
+    }
+
+    /// 测试缺少 refresh_token 时 refresh_token_with_retry 应返回 InvalidGrant 错误
+    #[tokio::test]
+    async fn test_refresh_token_with_retry_no_refresh_token() {
+        let mut provider = AntigravityProvider::new();
+        provider.credentials.access_token = Some("test_token".to_string());
+        provider.credentials.refresh_token = None;
+
+        let result = provider.refresh_token_with_retry(3).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.requires_reauth());
     }
 }

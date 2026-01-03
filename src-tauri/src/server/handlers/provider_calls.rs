@@ -350,24 +350,53 @@ pub async fn call_provider_anthropic(
                 )
                     .into_response();
             }
-            // 检查并刷新 token
-            if antigravity.is_token_expiring_soon() {
-                if let Err(e) = antigravity.refresh_token().await {
-                    // 记录 Token 刷新失败
-                    if let Some(db) = &state.db {
-                        let _ = state.pool_service.mark_unhealthy(
-                            db,
-                            &credential.uuid,
-                            Some(&format!("Token refresh failed: {}", e)),
-                        );
+
+            // 使用新的 validate_token() 方法检查 Token 状态
+            let validation_result = antigravity.validate_token();
+            tracing::info!("[Antigravity] Token 验证结果: {:?}", validation_result);
+
+            // 根据验证结果决定是否刷新
+            if validation_result.needs_refresh() {
+                tracing::info!("[Antigravity] Token 需要刷新，开始刷新...");
+                match antigravity.refresh_token_with_retry(3).await {
+                    Ok(new_token) => {
+                        tracing::info!("[Antigravity] Token 刷新成功，新 token 长度: {}", new_token.len());
+                        // 刷新成功，标记为健康
+                        if let Some(db) = &state.db {
+                            let _ = state.pool_service.mark_healthy(
+                                db,
+                                &credential.uuid,
+                                None,
+                            );
+                        }
                     }
-                    return (
-                        StatusCode::UNAUTHORIZED,
-                        Json(serde_json::json!({"error": {"message": format!("Token refresh failed: {}", e)}})),
-                    )
-                        .into_response();
+                    Err(refresh_error) => {
+                        tracing::error!("[Antigravity] Token 刷新失败: {:?}", refresh_error);
+                        // 使用新的 mark_unhealthy_with_details 方法
+                        if let Some(db) = &state.db {
+                            let _ = state.pool_service.mark_unhealthy_with_details(
+                                db,
+                                &credential.uuid,
+                                &refresh_error,
+                            );
+                        }
+
+                        // 根据错误类型返回不同的状态码和消息
+                        let (status, message) = if refresh_error.requires_reauth() {
+                            (StatusCode::UNAUTHORIZED, refresh_error.user_message())
+                        } else {
+                            (StatusCode::INTERNAL_SERVER_ERROR, refresh_error.user_message())
+                        };
+
+                        return (
+                            status,
+                            Json(serde_json::json!({"error": {"message": message}})),
+                        )
+                            .into_response();
+                    }
                 }
             }
+
             // 设置项目 ID
             if let Some(pid) = project_id {
                 antigravity.project_id = Some(pid.clone());
@@ -1071,30 +1100,321 @@ pub async fn call_provider_openai(
                 .into_response()
         }
         CredentialData::AntigravityOAuth { creds_file_path, project_id } => {
+            eprintln!("\n========== [ANTIGRAVITY] 开始处理 Antigravity 请求 ==========");
+            eprintln!("[ANTIGRAVITY] 凭证文件: {}", creds_file_path);
+            eprintln!("[ANTIGRAVITY] 项目ID: {:?}", project_id);
+            eprintln!("[ANTIGRAVITY] 模型: {}", request.model);
+            eprintln!("[ANTIGRAVITY] 流式: {}", request.stream);
+
             let mut antigravity = AntigravityProvider::new();
             if let Err(e) = antigravity.load_credentials_from_path(creds_file_path).await {
+                eprintln!("[ANTIGRAVITY] 加载凭证失败: {}", e);
+                // 记录凭证加载失败
+                if let Some(db) = &state.db {
+                    let _ = state.pool_service.mark_unhealthy(
+                        db,
+                        &credential.uuid,
+                        Some(&format!("Failed to load credentials: {}", e)),
+                    );
+                }
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(serde_json::json!({"error": {"message": format!("Failed to load Antigravity credentials: {}", e)}})),
                 )
                     .into_response();
             }
-            // 检查并刷新 token
-            if antigravity.is_token_expiring_soon() {
-                if let Err(e) = antigravity.refresh_token().await {
-                    return (
-                        StatusCode::UNAUTHORIZED,
-                        Json(serde_json::json!({"error": {"message": format!("Token refresh failed: {}", e)}})),
-                    )
-                        .into_response();
+            eprintln!("[ANTIGRAVITY] 凭证加载成功");
+
+            // 使用新的 validate_token() 方法检查 Token 状态
+            let validation_result = antigravity.validate_token();
+            eprintln!("[ANTIGRAVITY] Token 验证结果: {:?}", validation_result);
+            eprintln!("[ANTIGRAVITY] needs_refresh() = {}", validation_result.needs_refresh());
+            tracing::info!("[Antigravity] Token 验证结果: {:?}", validation_result);
+
+            // 根据验证结果决定是否刷新
+            if validation_result.needs_refresh() {
+                eprintln!("[ANTIGRAVITY] Token 需要刷新，开始刷新...");
+                tracing::info!("[Antigravity] Token 需要刷新，开始刷新...");
+                match antigravity.refresh_token_with_retry(3).await {
+                    Ok(new_token) => {
+                        eprintln!("[ANTIGRAVITY] Token 刷新成功，新 token 长度: {}", new_token.len());
+                        tracing::info!("[Antigravity] Token 刷新成功，新 token 长度: {}", new_token.len());
+                        // 刷新成功，标记为健康
+                        if let Some(db) = &state.db {
+                            let _ = state.pool_service.mark_healthy(
+                                db,
+                                &credential.uuid,
+                                None,
+                            );
+                        }
+                    }
+                    Err(refresh_error) => {
+                        eprintln!("[ANTIGRAVITY] Token 刷新失败: {:?}", refresh_error);
+                        tracing::error!("[Antigravity] Token 刷新失败: {:?}", refresh_error);
+                        // 使用新的 mark_unhealthy_with_details 方法
+                        if let Some(db) = &state.db {
+                            let _ = state.pool_service.mark_unhealthy_with_details(
+                                db,
+                                &credential.uuid,
+                                &refresh_error,
+                            );
+                        }
+
+                        // 根据错误类型返回不同的状态码和消息
+                        let (status, message) = if refresh_error.requires_reauth() {
+                            (StatusCode::UNAUTHORIZED, refresh_error.user_message())
+                        } else {
+                            (StatusCode::INTERNAL_SERVER_ERROR, refresh_error.user_message())
+                        };
+
+                        return (
+                            status,
+                            Json(serde_json::json!({"error": {"message": message}})),
+                        )
+                            .into_response();
+                    }
                 }
+            } else {
+                eprintln!("[ANTIGRAVITY] Token 不需要刷新，继续使用现有 Token");
             }
+
             // 设置项目 ID
             if let Some(pid) = project_id {
                 antigravity.project_id = Some(pid.clone());
             } else if let Err(e) = antigravity.discover_project().await {
                 tracing::warn!("[Antigravity] Failed to discover project: {}", e);
             }
+
+            tracing::info!("[ANTIGRAVITY] request.stream = {}, model = {}, project_id = {:?}",
+                request.stream, request.model, antigravity.project_id);
+
+            // 检查是否为流式请求
+            if request.stream {
+                tracing::info!("[ANTIGRAVITY_STREAM] ========== 开始处理流式请求 ==========");
+                tracing::info!("[ANTIGRAVITY_STREAM] model={}, has_token={}",
+                    request.model, antigravity.credentials.access_token.is_some());
+
+                // 检查是否是图片生成模型
+                // 注意：gemini-3-pro-image-preview 是支持图片理解的模型，不是图片生成模型
+                // 只有明确的图片生成模型才需要走非流式路径
+                let is_image_generation_model = request.model == "imagen"
+                    || request.model.starts_with("imagen-")
+                    || request.model.contains("image-generation");
+                tracing::info!("[ANTIGRAVITY_STREAM] is_image_generation_model={}", is_image_generation_model);
+
+                // 对于图片生成模型，使用非流式请求然后模拟流式返回
+                if is_image_generation_model {
+                    tracing::info!("[ANTIGRAVITY_STREAM] 图片生成模型，使用非流式请求");
+
+                    // 获取 project_id 用于请求
+                    let proj_id = antigravity.project_id.clone().unwrap_or_default();
+                    // 转换请求格式 - 这已经是完整的 Antigravity 请求格式
+                    let antigravity_request = convert_openai_to_antigravity_with_context(request, &proj_id);
+
+                    // 直接调用 call_api，因为 antigravity_request 已经是完整格式
+                    match antigravity.call_api("generateContent", &antigravity_request).await {
+                        Ok(resp) => {
+                            // 保存原始响应到文件用于调试
+                            let resp_str = serde_json::to_string_pretty(&resp).unwrap_or_default();
+                            let debug_dir = dirs::home_dir()
+                                .map(|h| h.join(".proxycast/logs"))
+                                .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+                            let _ = std::fs::create_dir_all(&debug_dir);
+                            let debug_file = debug_dir.join("antigravity_image_response.json");
+                            let _ = std::fs::write(&debug_file, &resp_str);
+                            tracing::info!("[ANTIGRAVITY_STREAM] 原始响应已保存到: {:?}, 大小: {} bytes", debug_file, resp_str.len());
+                            eprintln!("[ANTIGRAVITY_STREAM] 原始响应已保存到: {:?}, 大小: {} bytes", debug_file, resp_str.len());
+
+                            tracing::info!("[ANTIGRAVITY_STREAM] 图片生成完成，转换为流式响应");
+
+                            // 将非流式响应转换为 OpenAI 格式
+                            let openai_response = convert_antigravity_to_openai_response(&resp, &request.model);
+
+                            // 保存转换后的响应到文件
+                            let openai_str = serde_json::to_string_pretty(&openai_response).unwrap_or_default();
+                            let openai_debug_file = debug_dir.join("antigravity_image_openai_response.json");
+                            let _ = std::fs::write(&openai_debug_file, &openai_str);
+                            tracing::info!("[ANTIGRAVITY_STREAM] OpenAI 响应已保存到: {:?}, 大小: {} bytes", openai_debug_file, openai_str.len());
+                            eprintln!("[ANTIGRAVITY_STREAM] OpenAI 响应已保存到: {:?}, 大小: {} bytes", openai_debug_file, openai_str.len());
+
+                            // 将非流式响应转换为流式 SSE 格式
+                            let model = request.model.clone();
+                            let chunk_id = format!("chatcmpl-{}", uuid::Uuid::new_v4());
+                            let created = chrono::Utc::now().timestamp();
+
+                            // 提取内容
+                            let content = openai_response
+                                .get("choices")
+                                .and_then(|c| c.as_array())
+                                .and_then(|arr| arr.first())
+                                .and_then(|choice| choice.get("message"))
+                                .and_then(|msg| msg.get("content"))
+                                .and_then(|c| c.as_str())
+                                .unwrap_or("");
+
+                            tracing::info!("[ANTIGRAVITY_STREAM] 图片内容长度: {} 字符", content.len());
+                            eprintln!("[ANTIGRAVITY_STREAM] 图片内容长度: {} 字符", content.len());
+
+                            // 构建 SSE 事件
+                            let mut sse_events = String::new();
+
+                            // 发送内容 chunk
+                            if !content.is_empty() {
+                                let chunk_response = serde_json::json!({
+                                    "id": chunk_id,
+                                    "object": "chat.completion.chunk",
+                                    "created": created,
+                                    "model": model,
+                                    "choices": [{
+                                        "index": 0,
+                                        "delta": {
+                                            "content": content
+                                        },
+                                        "finish_reason": null
+                                    }]
+                                });
+                                sse_events.push_str(&format!("data: {}\n\n", chunk_response.to_string()));
+                            }
+
+                            // 发送结束 chunk
+                            let done_response = serde_json::json!({
+                                "id": chunk_id,
+                                "object": "chat.completion.chunk",
+                                "created": created,
+                                "model": model,
+                                "choices": [{
+                                    "index": 0,
+                                    "delta": {},
+                                    "finish_reason": "stop"
+                                }]
+                            });
+                            sse_events.push_str(&format!("data: {}\n\n", done_response.to_string()));
+                            sse_events.push_str("data: [DONE]\n\n");
+
+                            return Response::builder()
+                                .status(StatusCode::OK)
+                                .header(header::CONTENT_TYPE, "text/event-stream")
+                                .header(header::CACHE_CONTROL, "no-cache")
+                                .header(header::CONNECTION, "keep-alive")
+                                .body(Body::from(sse_events))
+                                .unwrap_or_else(|_| {
+                                    (
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        Json(serde_json::json!({"error": {"message": "Failed to build streaming response"}})),
+                                    )
+                                        .into_response()
+                                });
+                        }
+                        Err(e) => {
+                            tracing::error!("[ANTIGRAVITY_STREAM] 图片生成失败: {}", e);
+                            return (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(serde_json::json!({"error": {"message": e.to_string()}})),
+                            )
+                                .into_response();
+                        }
+                    }
+                }
+
+                match antigravity.call_api_stream(request).await {
+                    Ok(stream_response) => {
+                        eprintln!("[ANTIGRAVITY_STREAM] ✓ 流式响应已建立");
+                        tracing::info!("[ANTIGRAVITY_STREAM] ✓ 流式响应已建立");
+
+                        let model = request.model.clone();
+
+                        // Antigravity 返回的是分片的 JSON，需要累积所有数据后解析
+                        // 使用 channel 来收集所有数据，然后一次性返回
+                        let (tx, rx) = tokio::sync::oneshot::channel::<Result<String, String>>();
+
+                        // 在后台任务中收集所有数据
+                        let model_clone = model.clone();
+                        tokio::spawn(async move {
+                            use futures::StreamExt;
+                            let mut stream = stream_response;
+                            let mut all_data = String::new();
+                            let mut chunk_count = 0u32;
+
+                            while let Some(result) = stream.next().await {
+                                chunk_count += 1;
+                                match result {
+                                    Ok(bytes) => {
+                                        let text = String::from_utf8_lossy(&bytes);
+                                        all_data.push_str(&text);
+
+                                        if chunk_count <= 3 {
+                                            eprintln!("[ANTIGRAVITY_STREAM] 收集 chunk #{}: {} bytes", chunk_count, bytes.len());
+                                        } else if chunk_count % 200 == 0 {
+                                            eprintln!("[ANTIGRAVITY_STREAM] 已收集 {} 个 chunk, 总大小: {} bytes", chunk_count, all_data.len());
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("[ANTIGRAVITY_STREAM] chunk #{} 错误: {}", chunk_count, e);
+                                        let _ = tx.send(Err(e.to_string()));
+                                        return;
+                                    }
+                                }
+                            }
+
+                            eprintln!("[ANTIGRAVITY_STREAM] 流结束，共收集 {} 个 chunk, 总大小: {} bytes", chunk_count, all_data.len());
+
+                            // 尝试解析累积的 JSON 数据
+                            // Antigravity 返回格式: { "response": { "candidates": [...] } }
+                            let result = parse_antigravity_accumulated_response(&all_data, &model_clone);
+                            let _ = tx.send(result);
+                        });
+
+                        // 等待数据收集完成，然后构建 SSE 响应
+                        let sse_stream = async_stream::stream! {
+                            match rx.await {
+                                Ok(Ok(sse_content)) => {
+                                    // 返回累积的 SSE 事件
+                                    yield Ok::<_, std::io::Error>(axum::body::Bytes::from(sse_content));
+                                }
+                                Ok(Err(e)) => {
+                                    eprintln!("[ANTIGRAVITY_STREAM] 解析错误: {}", e);
+                                    let error_event = format!(
+                                        "data: {{\"error\": {{\"message\": \"{}\"}}}}\n\ndata: [DONE]\n\n",
+                                        e.replace("\"", "\\\"")
+                                    );
+                                    yield Ok(axum::body::Bytes::from(error_event));
+                                }
+                                Err(_) => {
+                                    eprintln!("[ANTIGRAVITY_STREAM] channel 接收错误");
+                                    let error_event = "data: {\"error\": {\"message\": \"Internal error\"}}\n\ndata: [DONE]\n\n";
+                                    yield Ok(axum::body::Bytes::from(error_event.to_string()));
+                                }
+                            }
+                        };
+
+                        return Response::builder()
+                            .status(StatusCode::OK)
+                            .header(header::CONTENT_TYPE, "text/event-stream")
+                            .header(header::CACHE_CONTROL, "no-cache")
+                            .header(header::CONNECTION, "keep-alive")
+                            .header("X-Accel-Buffering", "no")
+                            .body(Body::from_stream(sse_stream))
+                            .unwrap_or_else(|_| {
+                                (
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    Json(
+                                        serde_json::json!({"error": {"message": "Failed to build streaming response"}}),
+                                    ),
+                                )
+                                    .into_response()
+                            });
+                    }
+                    Err(e) => {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(serde_json::json!({"error": {"message": e.to_string()}})),
+                        )
+                            .into_response();
+                    }
+                }
+            }
+
+            // 非流式请求处理
             // 获取 project_id 用于请求
             let proj_id = antigravity.project_id.clone().unwrap_or_default();
             // 转换请求格式
@@ -2262,4 +2582,357 @@ pub async fn handle_kiro_stream(
             )
                 .into_response()
         })
+}
+
+/// 解析 Antigravity 累积的流式响应数据
+///
+/// Antigravity 返回的流式数据是分片的 JSON，格式如下：
+/// ```json
+/// {
+///   "response": {
+///     "candidates": [{
+///       "content": {
+///         "role": "model",
+///         "parts": [
+///           { "text": "..." },
+///           { "inlineData": { "mimeType": "image/jpeg", "data": "base64..." } }
+///         ]
+///       }
+///     }]
+///   }
+/// }
+/// ```
+fn parse_antigravity_accumulated_response(data: &str, model: &str) -> Result<String, String> {
+    eprintln!(
+        "[ANTIGRAVITY_PARSE] 开始解析累积数据，大小: {} bytes",
+        data.len()
+    );
+
+    // 保存原始数据到文件用于调试
+    let debug_dir = dirs::home_dir()
+        .map(|h| h.join(".proxycast/logs"))
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+    let _ = std::fs::create_dir_all(&debug_dir);
+    let debug_file = debug_dir.join("antigravity_stream_raw.txt");
+    let _ = std::fs::write(&debug_file, data);
+    eprintln!("[ANTIGRAVITY_PARSE] 原始数据已保存到: {:?}", debug_file);
+
+    // 打印数据的前1000字符用于调试
+    eprintln!(
+        "[ANTIGRAVITY_PARSE] 数据前1000字符:\n{}",
+        &data[..data.len().min(1000)]
+    );
+
+    // 尝试解析 JSON
+    // Antigravity 流式响应可能是多个 JSON 对象，每个对象一行
+    // 或者是一个大的 JSON 对象
+
+    // 首先尝试直接解析为单个 JSON
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+        eprintln!("[ANTIGRAVITY_PARSE] 单个 JSON 解析成功");
+        return parse_antigravity_json(&json, model);
+    }
+
+    // 如果失败，尝试按行解析，找到包含 candidates 的 JSON
+    eprintln!("[ANTIGRAVITY_PARSE] 单个 JSON 解析失败，尝试按行解析");
+
+    let mut all_text = String::new();
+    let mut all_images: Vec<(String, String)> = Vec::new(); // (mime_type, data)
+    let mut found_any = false;
+
+    for line in data.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        // 尝试解析每一行
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+            if let Some((text, images)) = extract_content_from_json(&json) {
+                all_text.push_str(&text);
+                all_images.extend(images);
+                found_any = true;
+            }
+        }
+    }
+
+    if found_any {
+        eprintln!(
+            "[ANTIGRAVITY_PARSE] 按行解析成功，文本长度: {}, 图片数: {}",
+            all_text.len(),
+            all_images.len()
+        );
+        return build_sse_response(&all_text, &all_images, model);
+    }
+
+    // 如果还是失败，尝试找到 JSON 对象的边界
+    eprintln!("[ANTIGRAVITY_PARSE] 按行解析失败，尝试查找 JSON 边界");
+
+    // 查找所有 { 开头的位置，尝试解析
+    let mut start = 0;
+    while let Some(pos) = data[start..].find('{') {
+        let json_start = start + pos;
+        // 尝试从这个位置解析 JSON
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data[json_start..]) {
+            eprintln!("[ANTIGRAVITY_PARSE] 在位置 {} 找到有效 JSON", json_start);
+            return parse_antigravity_json(&json, model);
+        }
+        start = json_start + 1;
+        if start >= data.len() {
+            break;
+        }
+    }
+
+    Err(format!("无法解析响应数据，请查看 {:?}", debug_file))
+}
+
+/// 从 JSON 中提取内容
+fn extract_content_from_json(json: &serde_json::Value) -> Option<(String, Vec<(String, String)>)> {
+    // 尝试多种路径
+    let candidates = json
+        .get("response")
+        .and_then(|r| r.get("candidates"))
+        .or_else(|| json.get("candidates"))
+        .and_then(|c| c.as_array())?;
+
+    if candidates.is_empty() {
+        return None;
+    }
+
+    let mut text = String::new();
+    let mut images = Vec::new();
+
+    for candidate in candidates {
+        if let Some(parts) = candidate
+            .get("content")
+            .and_then(|c| c.get("parts"))
+            .and_then(|p| p.as_array())
+        {
+            for part in parts {
+                if let Some(t) = part.get("text").and_then(|t| t.as_str()) {
+                    text.push_str(t);
+                }
+                if let Some(inline_data) =
+                    part.get("inlineData").or_else(|| part.get("inline_data"))
+                {
+                    if let Some(data) = inline_data.get("data").and_then(|d| d.as_str()) {
+                        let mime = inline_data
+                            .get("mimeType")
+                            .or_else(|| inline_data.get("mime_type"))
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("image/png");
+                        images.push((mime.to_string(), data.to_string()));
+                    }
+                }
+            }
+        }
+    }
+
+    if text.is_empty() && images.is_empty() {
+        None
+    } else {
+        Some((text, images))
+    }
+}
+
+/// 解析 Antigravity JSON 响应
+fn parse_antigravity_json(json: &serde_json::Value, model: &str) -> Result<String, String> {
+    eprintln!(
+        "[ANTIGRAVITY_PARSE] 解析 JSON，顶层类型: {}",
+        if json.is_object() {
+            "object"
+        } else if json.is_array() {
+            "array"
+        } else {
+            "other"
+        }
+    );
+
+    if let Some(obj) = json.as_object() {
+        eprintln!(
+            "[ANTIGRAVITY_PARSE] 顶层 keys: {:?}",
+            obj.keys().collect::<Vec<_>>()
+        );
+    }
+
+    if let Some((text, images)) = extract_content_from_json(json) {
+        return build_sse_response(&text, &images, model);
+    }
+
+    // 如果是数组，尝试处理每个元素
+    if let Some(arr) = json.as_array() {
+        eprintln!("[ANTIGRAVITY_PARSE] 顶层是数组，长度: {}", arr.len());
+        let mut all_text = String::new();
+        let mut all_images = Vec::new();
+
+        for item in arr {
+            if let Some((text, images)) = extract_content_from_json(item) {
+                all_text.push_str(&text);
+                all_images.extend(images);
+            }
+        }
+
+        if !all_text.is_empty() || !all_images.is_empty() {
+            return build_sse_response(&all_text, &all_images, model);
+        }
+    }
+
+    Err("响应中没有 candidates".to_string())
+}
+
+/// 构建 SSE 响应
+fn build_sse_response(
+    text: &str,
+    images: &[(String, String)],
+    model: &str,
+) -> Result<String, String> {
+    let mut content = text.to_string();
+
+    // 添加图片
+    for (mime, data) in images {
+        let image_url = format!("data:{};base64,{}", mime, data);
+        content.push_str(&format!("\n\n![Generated Image]({})", image_url));
+    }
+
+    eprintln!("[ANTIGRAVITY_PARSE] 构建 SSE，内容长度: {}", content.len());
+
+    let chunk_id = format!("chatcmpl-{}", uuid::Uuid::new_v4());
+    let created = chrono::Utc::now().timestamp();
+
+    let mut sse_output = String::new();
+
+    if !content.is_empty() {
+        let content_chunk = serde_json::json!({
+            "id": &chunk_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "delta": { "content": content },
+                "finish_reason": serde_json::Value::Null
+            }]
+        });
+        sse_output.push_str(&format!("data: {}\n\n", content_chunk.to_string()));
+    }
+
+    let done_chunk = serde_json::json!({
+        "id": &chunk_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": model,
+        "choices": [{
+            "index": 0,
+            "delta": {},
+            "finish_reason": "stop"
+        }]
+    });
+    sse_output.push_str(&format!("data: {}\n\n", done_chunk.to_string()));
+    sse_output.push_str("data: [DONE]\n\n");
+
+    Ok(sse_output)
+}
+
+/// 将 Gemini 流式响应 chunk 转换为 OpenAI SSE 格式
+///
+/// Gemini 流式响应格式:
+/// ```json
+/// {"candidates":[{"content":{"parts":[{"text":"Hello"}],"role":"model"},"finishReason":"STOP"}]}
+/// ```
+///
+/// OpenAI SSE 格式:
+/// ```
+/// data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+/// ```
+fn convert_gemini_chunk_to_openai_sse(json: &serde_json::Value, model: &str) -> Option<String> {
+    // 检查是否有 candidates
+    let candidates = json.get("candidates")?.as_array()?;
+    if candidates.is_empty() {
+        return None;
+    }
+
+    let candidate = &candidates[0];
+
+    // 提取文本内容
+    let mut content_delta: Option<String> = None;
+    let mut has_image = false;
+    let mut image_data: Option<String> = None;
+
+    if let Some(content) = candidate.get("content") {
+        if let Some(parts) = content.get("parts").and_then(|p| p.as_array()) {
+            for part in parts {
+                // 处理文本
+                if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                    content_delta = Some(text.to_string());
+                }
+
+                // 处理图片（inlineData）
+                if let Some(inline_data) =
+                    part.get("inlineData").or_else(|| part.get("inline_data"))
+                {
+                    if let Some(data) = inline_data.get("data").and_then(|d| d.as_str()) {
+                        let mime_type = inline_data
+                            .get("mimeType")
+                            .or_else(|| inline_data.get("mime_type"))
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("image/png");
+
+                        // 将图片作为 markdown 格式的 data URL
+                        let image_url = format!("data:{};base64,{}", mime_type, data);
+                        image_data = Some(format!("\n\n![Generated Image]({})", image_url));
+                        has_image = true;
+                    }
+                }
+            }
+        }
+    }
+
+    // 检查 finish_reason
+    let finish_reason = candidate
+        .get("finishReason")
+        .and_then(|f| f.as_str())
+        .map(|r| match r {
+            "STOP" => "stop",
+            "MAX_TOKENS" => "length",
+            "SAFETY" => "content_filter",
+            "RECITATION" => "content_filter",
+            _ => "stop",
+        });
+
+    // 如果没有内容变化且没有 finish_reason，跳过
+    if content_delta.is_none() && !has_image && finish_reason.is_none() {
+        return None;
+    }
+
+    // 合并文本和图片内容
+    let final_content = match (content_delta, image_data) {
+        (Some(text), Some(img)) => Some(format!("{}{}", text, img)),
+        (Some(text), None) => Some(text),
+        (None, Some(img)) => Some(img),
+        (None, None) => None,
+    };
+
+    // 构建 OpenAI 格式的 delta
+    let mut delta = serde_json::json!({});
+    if let Some(content) = final_content {
+        delta["content"] = serde_json::Value::String(content);
+    }
+
+    // 构建完整的 SSE 事件
+    let chunk_id = format!("chatcmpl-{}", uuid::Uuid::new_v4());
+    let created = chrono::Utc::now().timestamp();
+
+    let response = serde_json::json!({
+        "id": chunk_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": model,
+        "choices": [{
+            "index": 0,
+            "delta": delta,
+            "finish_reason": finish_reason
+        }]
+    });
+
+    Some(format!("data: {}\n\n", response.to_string()))
 }

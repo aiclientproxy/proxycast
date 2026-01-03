@@ -622,7 +622,15 @@ pub async fn chat_completions(
     headers: HeaderMap,
     Json(mut request): Json<ChatCompletionRequest>,
 ) -> Response {
+    // ========== 详细日志：请求入口 ==========
+    eprintln!("\n========== [CHAT_COMPLETIONS] 收到请求 ==========");
+    eprintln!("[CHAT_COMPLETIONS] URL: /v1/chat/completions");
+    eprintln!("[CHAT_COMPLETIONS] 模型: {}", request.model);
+    eprintln!("[CHAT_COMPLETIONS] 流式: {}", request.stream);
+    eprintln!("[CHAT_COMPLETIONS] 消息数量: {}", request.messages.len());
+
     if let Err(e) = verify_api_key(&headers, &state.api_key).await {
+        eprintln!("[CHAT_COMPLETIONS] 认证失败!");
         state
             .logs
             .write()
@@ -630,9 +638,11 @@ pub async fn chat_completions(
             .add("warn", "Unauthorized request to /v1/chat/completions");
         return e.into_response();
     }
+    eprintln!("[CHAT_COMPLETIONS] 认证成功");
 
     // 创建请求上下文
     let mut ctx = RequestContext::new(request.model.clone()).with_stream(request.stream);
+    eprintln!("[CHAT_COMPLETIONS] 请求ID: {}", ctx.request_id);
 
     state.logs.write().await.add(
         "info",
@@ -643,11 +653,20 @@ pub async fn chat_completions(
     );
 
     // 使用 RequestProcessor 解析模型别名和路由
+    eprintln!("[CHAT_COMPLETIONS] 开始路由解析...");
     let provider = state.processor.resolve_and_route(&mut ctx).await;
+    eprintln!(
+        "[CHAT_COMPLETIONS] 路由结果: provider={:?}, resolved_model={}",
+        provider, ctx.resolved_model
+    );
 
     // 更新请求中的模型名为解析后的模型
     if ctx.resolved_model != ctx.original_model {
         request.model = ctx.resolved_model.clone();
+        eprintln!(
+            "[CHAT_COMPLETIONS] 模型别名解析: {} -> {}",
+            ctx.original_model, ctx.resolved_model
+        );
         state.logs.write().await.add(
             "info",
             &format!(
@@ -681,6 +700,10 @@ pub async fn chat_completions(
     // 根据客户端类型选择 Provider
     // **Validates: Requirements 3.1, 3.3, 3.4**
     let (selected_provider, client_type) = select_provider_for_client(&headers, &state).await;
+    eprintln!(
+        "[CHAT_COMPLETIONS] 客户端类型: {}, 选择的Provider: {}",
+        client_type, selected_provider
+    );
 
     // 记录客户端检测和 Provider 选择结果
     state.logs.write().await.add(
@@ -701,17 +724,73 @@ pub async fn chat_completions(
     );
 
     // 尝试从凭证池中选择凭证
+    // 优先使用路由规则选择的 provider，如果找不到再回退到 selected_provider
+    eprintln!("[CHAT_COMPLETIONS] 开始选择凭证...");
     let credential = match &state.db {
-        Some(db) => state
-            .pool_service
-            .select_credential(db, &selected_provider, Some(&request.model))
-            .ok()
-            .flatten(),
-        None => None,
+        Some(db) => {
+            // 首先尝试使用路由规则选择的 provider
+            let provider_str = provider.to_string();
+            eprintln!(
+                "[CHAT_COMPLETIONS] 尝试从凭证池选择: provider={}, model={}",
+                provider_str, request.model
+            );
+            let cred = state
+                .pool_service
+                .select_credential(db, &provider_str, Some(&request.model))
+                .ok()
+                .flatten();
+
+            if cred.is_some() {
+                eprintln!("[CHAT_COMPLETIONS] 找到凭证: provider={}", provider_str);
+            } else {
+                eprintln!("[CHAT_COMPLETIONS] 未找到凭证: provider={}", provider_str);
+            }
+
+            // 如果路由规则的 provider 没有找到凭证，回退到 selected_provider
+            if cred.is_none() && provider_str != selected_provider {
+                eprintln!(
+                    "[CHAT_COMPLETIONS] 回退到 selected_provider: {}",
+                    selected_provider
+                );
+                state.logs.write().await.add(
+                    "debug",
+                    &format!(
+                        "[ROUTE] No credential found for routed provider '{}', trying selected_provider '{}'",
+                        provider_str, selected_provider
+                    ),
+                );
+                let fallback_cred = state
+                    .pool_service
+                    .select_credential(db, &selected_provider, Some(&request.model))
+                    .ok()
+                    .flatten();
+                if fallback_cred.is_some() {
+                    eprintln!(
+                        "[CHAT_COMPLETIONS] 回退凭证找到: provider={}",
+                        selected_provider
+                    );
+                } else {
+                    eprintln!("[CHAT_COMPLETIONS] 回退凭证也未找到!");
+                }
+                fallback_cred
+            } else {
+                cred
+            }
+        }
+        None => {
+            eprintln!("[CHAT_COMPLETIONS] 数据库未初始化!");
+            None
+        }
     };
 
     // 如果找到凭证池中的凭证，使用它
     if let Some(cred) = credential {
+        eprintln!(
+            "[CHAT_COMPLETIONS] 使用凭证: type={}, name={:?}, uuid={}",
+            cred.provider_type,
+            cred.name,
+            &cred.uuid[..8.min(cred.uuid.len())]
+        );
         state.logs.write().await.add(
             "info",
             &format!(
@@ -764,7 +843,12 @@ pub async fn chat_completions(
             }
         }
 
+        eprintln!("[CHAT_COMPLETIONS] 调用 Provider: {}", cred.provider_type);
         let response = call_provider_openai(&state, &cred, &request, flow_id.as_deref()).await;
+        eprintln!(
+            "[CHAT_COMPLETIONS] Provider 响应状态: {}",
+            response.status()
+        );
 
         // 记录请求统计
         let is_success = response.status().is_success();

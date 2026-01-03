@@ -99,6 +99,10 @@ export const PROVIDER_CONFIG: Record<
   antigravity: {
     label: "Antigravity",
     models: [
+      "gemini-3-pro-preview",
+      "gemini-3-pro-image-preview",
+      "gemini-3-flash-preview",
+      "gemini-2.5-computer-use-preview-10-2025",
       "gemini-claude-sonnet-4-5",
       "gemini-claude-sonnet-4-5-thinking",
       "gemini-claude-opus-4-5-thinking",

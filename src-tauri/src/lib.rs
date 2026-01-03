@@ -2166,6 +2166,8 @@ pub fn run() {
             commands::provider_pool_cmd::start_gemini_oauth_login,
             commands::provider_pool_cmd::exchange_gemini_code,
             commands::provider_pool_cmd::get_kiro_credential_fingerprint,
+            commands::provider_pool_cmd::get_credential_health,
+            commands::provider_pool_cmd::get_all_credential_health,
             // Kiro Builder ID 登录命令
             commands::provider_pool_cmd::start_kiro_builder_id_login,
             commands::provider_pool_cmd::poll_kiro_builder_id_auth,
