@@ -61,6 +61,7 @@ const PROVIDER_ACCESS_URLS: Record<string, string> = {
   burncloud: "https://ai.burncloud.com/api/usage/token/",
   alayanew: "https://www.alayanew.com/",
   longcat: "https://longcat.chat/",
+  nearai: "https://cloud.near.ai",
   poe: "https://poe.com/api_key",
   huggingface: "https://huggingface.co/settings/tokens",
   "vercel-gateway": "https://vercel.com/account/tokens",

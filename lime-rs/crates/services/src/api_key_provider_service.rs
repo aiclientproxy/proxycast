@@ -13,6 +13,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use chrono::Utc;
 use lime_core::api_host_utils::{
     is_openai_responses_compatible_host, normalize_openai_compatible_api_host,
+    normalize_openai_model_discovery_host,
 };
 use lime_core::database::dao::api_key_provider::{
     infer_managed_provider_type, ApiKeyEntry, ApiKeyProvider, ApiKeyProviderDao,
@@ -436,6 +437,24 @@ data: [DONE]\n";
             ),
             "https://gateway.example.com/proxy/v1/images/generations"
         );
+    }
+
+    #[test]
+    fn test_build_nearai_models_api_url_uses_public_catalog_path() {
+        assert_eq!(
+            ApiKeyProviderService::build_nearai_models_api_url("https://cloud-api.near.ai/v1"),
+            "https://cloud-api.near.ai/v1/model/list"
+        );
+        assert_eq!(
+            ApiKeyProviderService::build_nearai_models_api_url(
+                "https://cloud-api.near.ai/v1/chat/completions"
+            ),
+            "https://cloud-api.near.ai/v1/model/list"
+        );
+        assert!(ApiKeyProviderService::is_nearai_provider(
+            "nearai",
+            "https://example.com/v1"
+        ));
     }
 
     #[test]
@@ -1802,6 +1821,29 @@ impl ApiKeyProviderService {
                         .then(|| normalized.to_string())
                 })
             })
+    }
+
+    fn is_nearai_provider(provider_id: &str, api_host: &str) -> bool {
+        let provider = provider_id.trim().to_ascii_lowercase();
+        let host = api_host.trim().to_ascii_lowercase();
+
+        matches!(provider.as_str(), "nearai" | "near-ai" | "near_ai")
+            || host.contains("cloud-api.near.ai")
+    }
+
+    fn build_nearai_models_api_url(api_host: &str) -> String {
+        let normalized_host = normalize_openai_model_discovery_host(api_host);
+        let host = normalized_host.trim_end_matches('/');
+
+        if host.ends_with("/model/list") {
+            return host.to_string();
+        }
+
+        if let Some((prefix, _)) = host.split_once("/v1") {
+            return format!("{prefix}/v1/model/list");
+        }
+
+        format!("{host}/v1/model/list")
     }
 
     fn build_openai_images_url(api_host: &str) -> String {
@@ -3653,9 +3695,14 @@ impl ApiKeyProviderService {
                     tracing::debug!("[TEST_CONNECTION] image_generation result: {image_result:?}");
                     image_result
                 } else {
-                    let models_result = self
-                        .test_openai_models_endpoint(&api_key, &provider.api_host)
-                        .await;
+                    let models_result = if Self::is_nearai_provider(provider_id, &provider.api_host)
+                    {
+                        self.test_nearai_models_endpoint(&api_key, &provider.api_host)
+                            .await
+                    } else {
+                        self.test_openai_models_endpoint(&api_key, &provider.api_host)
+                            .await
+                    };
 
                     tracing::debug!("[TEST_CONNECTION] models_result: {models_result:?}");
 
@@ -3739,6 +3786,57 @@ impl ApiKeyProviderService {
 
         if models.is_empty() {
             Err("未获取到任何模型".to_string())
+        } else {
+            Ok(models)
+        }
+    }
+
+    async fn test_nearai_models_endpoint(
+        &self,
+        api_key: &str,
+        api_host: &str,
+    ) -> Result<Vec<String>, String> {
+        let url = Self::build_nearai_models_api_url(api_host);
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|e| format!("创建 NEAR AI 模型目录客户端失败: {e}"))?;
+
+        let mut request = client.get(&url);
+        if !api_key.trim().is_empty() {
+            request = request.header("Authorization", format!("Bearer {}", api_key.trim()));
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| format!("获取 NEAR AI 模型列表失败: {e}"))?;
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .map_err(|e| format!("读取 NEAR AI 模型列表失败: {e}"))?;
+
+        if !status.is_success() {
+            return Err(format!("获取 NEAR AI 模型列表失败: {status} - {body}"));
+        }
+
+        let payload: Value =
+            serde_json::from_str(&body).map_err(|e| format!("解析 NEAR AI 模型列表失败: {e}"))?;
+        let models: Vec<String> = payload
+            .get("models")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.get("modelId").and_then(Value::as_str))
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if models.is_empty() {
+            Err("未获取到任何 NEAR AI 模型".to_string())
         } else {
             Ok(models)
         }
