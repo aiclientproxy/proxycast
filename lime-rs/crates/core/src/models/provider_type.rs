@@ -98,6 +98,7 @@ impl std::str::FromStr for ProviderType {
             "together" | "togetherai" => Ok(ProviderType::OpenAI),
             "fireworks" | "fireworksai" => Ok(ProviderType::OpenAI),
             "perplexity" => Ok(ProviderType::OpenAI),
+            "nearai" | "near-ai" | "near_ai" => Ok(ProviderType::OpenAI),
             "siliconflow" => Ok(ProviderType::OpenAI),
             "oneapi" | "one-api" | "newapi" | "new-api" => Ok(ProviderType::OpenAI),
             "custom" | "custom_openai" => Ok(ProviderType::OpenAI),

@@ -16,6 +16,7 @@ use super::{
     google::GoogleProvider,
     lead_worker::LeadWorkerProvider,
     litellm::LiteLLMProvider,
+    nearai::NearAiProvider,
     ollama::OllamaProvider,
     openai::OpenAiProvider,
     openrouter::OpenRouterProvider,
@@ -74,6 +75,7 @@ async fn init_registry() -> RwLock<ProviderRegistry> {
         );
         registry.register::<GoogleProvider, _>(|m| Box::pin(GoogleProvider::from_env(m)), true);
         registry.register::<LiteLLMProvider, _>(|m| Box::pin(LiteLLMProvider::from_env(m)), false);
+        registry.register::<NearAiProvider, _>(|m| Box::pin(NearAiProvider::from_env(m)), false);
         registry.register::<OllamaProvider, _>(|m| Box::pin(OllamaProvider::from_env(m)), true);
         registry.register::<OpenAiProvider, _>(|m| Box::pin(OpenAiProvider::from_env(m)), true);
         registry
@@ -148,7 +150,7 @@ async fn get_from_registry(name: &str) -> Result<ProviderEntry> {
 ///
 /// Aster 原生支持的 Provider:
 /// - openai, anthropic, google, azure, bedrock, ollama, gcpvertexai
-/// - openrouter, litellm, databricks, codex, xai, venice, tetrate
+/// - openrouter, litellm, databricks, codex, xai, venice, nearai, tetrate
 /// - snowflake, sagemaker_tgi, githubcopilot, gemini_cli, cursor_agent, claude_code
 ///
 /// 其他 Provider 会映射到兼容的 Provider
@@ -240,6 +242,7 @@ fn map_provider_alias(name: &str) -> String {
         "siliconflow" => "openai",
         "mistral" => "openai",
         "cohere" => "openai",
+        "near-ai" | "near_ai" | "near ai" => "nearai",
 
         // API 聚合服务
         "oneapi" | "one-api" | "one_api" => "openai",

@@ -37,6 +37,7 @@ const XIAOMI_MODEL_FETCH_HOST_KEYWORDS: &[&str] = &["xiaomimimo.com"];
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ModelFetchProtocol {
     OpenAiCompatible,
+    NearAi,
     ResponsesCompatible,
     Anthropic,
     Gemini,
@@ -1747,6 +1748,10 @@ impl ModelRegistryService {
         api_host: &str,
         provider_type: ApiProviderType,
     ) -> bool {
+        if Self::is_nearai_model_fetch(provider_id, api_host) {
+            return false;
+        }
+
         if Self::uses_declared_models_for_model_fetch(provider_id, api_host, Some(provider_type)) {
             return false;
         }
@@ -1810,6 +1815,14 @@ impl ModelRegistryService {
         provider_type: Option<ApiProviderType>,
     ) -> bool {
         Self::is_fal_like_model_fetch(provider_id, api_host, provider_type)
+    }
+
+    fn is_nearai_model_fetch(provider_id: &str, api_host: &str) -> bool {
+        let provider = provider_id.trim().to_ascii_lowercase();
+        let host = api_host.trim().to_ascii_lowercase();
+
+        matches!(provider.as_str(), "nearai" | "near-ai" | "near_ai")
+            || host.contains("cloud-api.near.ai")
     }
 
     fn provider_models_cache_key(
@@ -2245,6 +2258,10 @@ impl ModelRegistryService {
         api_host: &str,
         provider_type: Option<ApiProviderType>,
     ) -> ModelFetchProtocol {
+        if Self::is_nearai_model_fetch(provider_id, api_host) {
+            return ModelFetchProtocol::NearAi;
+        }
+
         if let Some(provider_type) = provider_type {
             return match provider_type {
                 ApiProviderType::OpenaiResponse | ApiProviderType::Codex => {
@@ -2320,6 +2337,21 @@ impl ModelRegistryService {
         } else {
             format!("{host}/v1/models")
         }
+    }
+
+    fn build_nearai_models_api_url(api_host: &str) -> String {
+        let normalized_host = normalize_openai_model_discovery_host(api_host);
+        let host = normalized_host.trim_end_matches('/');
+
+        if host.ends_with("/model/list") {
+            return host.to_string();
+        }
+
+        if let Some((prefix, _)) = host.split_once("/v1") {
+            return format!("{prefix}/v1/model/list");
+        }
+
+        format!("{host}/v1/model/list")
     }
 
     fn parse_api_host_url(api_host: &str) -> Option<reqwest::Url> {
@@ -2469,6 +2501,7 @@ impl ModelRegistryService {
         }
 
         let url = match Self::resolve_model_fetch_protocol(provider_id, api_host, provider_type) {
+            ModelFetchProtocol::NearAi => Self::build_nearai_models_api_url(host),
             ModelFetchProtocol::Gemini => Self::build_gemini_models_api_url(host),
             ModelFetchProtocol::Ollama => Self::build_ollama_models_api_url(host),
             ModelFetchProtocol::ResponsesCompatible => return None,
@@ -2581,6 +2614,7 @@ impl ModelRegistryService {
             ModelFetchProtocol::Gemini => ApiProviderType::Gemini,
             ModelFetchProtocol::Ollama => ApiProviderType::Ollama,
             ModelFetchProtocol::OpenAiCompatible
+            | ModelFetchProtocol::NearAi
             | ModelFetchProtocol::ResponsesCompatible
             | ModelFetchProtocol::Unsupported => ApiProviderType::Openai,
         });
@@ -2589,6 +2623,7 @@ impl ModelRegistryService {
             ModelFetchProtocol::OpenAiCompatible | ModelFetchProtocol::Anthropic => {
                 Self::build_models_api_url(normalized_host)
             }
+            ModelFetchProtocol::NearAi => Self::build_nearai_models_api_url(normalized_host),
             ModelFetchProtocol::Gemini => Self::build_gemini_models_api_url(normalized_host),
             ModelFetchProtocol::Ollama => Self::build_ollama_models_api_url(normalized_host),
             ModelFetchProtocol::ResponsesCompatible => unreachable!(),
@@ -2664,6 +2699,16 @@ impl ModelRegistryService {
                 )
                 .await?;
                 Self::parse_openai_models_response(&body)?
+            }
+            ModelFetchProtocol::NearAi => {
+                let body = Self::send_models_api_request(
+                    &client,
+                    &request.url,
+                    &request.headers,
+                    request.protocol,
+                )
+                .await?;
+                Self::parse_nearai_models_response(&body)?
             }
             ModelFetchProtocol::Anthropic => {
                 Self::call_anthropic_models_api(&client, &request.url, &request.headers).await?
@@ -2803,6 +2848,22 @@ impl ModelRegistryService {
         })?;
 
         Ok(api_response.data)
+    }
+
+    fn parse_nearai_models_response(body: &str) -> Result<Vec<ApiModelResponse>, ModelsApiError> {
+        let api_response: NearAiModelsResponse = serde_json::from_str(body).map_err(|e| {
+            ModelsApiError::new(
+                ModelFetchErrorKind::InvalidResponse,
+                format!("解析 NEAR AI 模型目录失败: {e}"),
+            )
+        })?;
+
+        Ok(api_response
+            .models
+            .into_iter()
+            .filter(|model| model.is_public_catalog_model())
+            .map(RawNearAiModelResponse::into_api_model)
+            .collect())
     }
 
     async fn call_anthropic_models_api(
@@ -3303,6 +3364,137 @@ impl ModelsApiError {
 #[derive(Debug, Deserialize)]
 struct ApiModelsResponse {
     data: Vec<ApiModelResponse>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NearAiModelsResponse {
+    #[serde(default)]
+    models: Vec<RawNearAiModelResponse>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawNearAiModelResponse {
+    model_id: String,
+    #[serde(default)]
+    metadata: Option<RawNearAiModelMetadata>,
+}
+
+impl RawNearAiModelResponse {
+    fn is_public_catalog_model(&self) -> bool {
+        if self
+            .model_id
+            .trim()
+            .eq_ignore_ascii_case("openai/privacy-filter")
+        {
+            return false;
+        }
+
+        let Some(metadata) = self.metadata.as_ref() else {
+            return false;
+        };
+        let input_modalities = metadata
+            .architecture
+            .as_ref()
+            .map(|architecture| architecture.input_modalities.as_slice())
+            .unwrap_or(&[]);
+        let output_modalities = metadata
+            .architecture
+            .as_ref()
+            .map(|architecture| architecture.output_modalities.as_slice())
+            .unwrap_or(&[]);
+
+        let has_text_input = input_modalities
+            .iter()
+            .any(|modality| modality.eq_ignore_ascii_case("text"));
+        let has_text_output = output_modalities
+            .iter()
+            .any(|modality| modality.eq_ignore_ascii_case("text"));
+        let has_image_output = output_modalities
+            .iter()
+            .any(|modality| modality.eq_ignore_ascii_case("image"));
+
+        has_text_input && (has_text_output || has_image_output)
+    }
+
+    fn into_api_model(self) -> ApiModelResponse {
+        let metadata = self.metadata.unwrap_or_default();
+        let architecture = metadata.architecture.unwrap_or_default();
+        let has_text_output = architecture
+            .output_modalities
+            .iter()
+            .any(|modality| modality.eq_ignore_ascii_case("text"));
+        let has_image_input = architecture
+            .input_modalities
+            .iter()
+            .any(|modality| modality.eq_ignore_ascii_case("image"));
+        let has_image_output = architecture
+            .output_modalities
+            .iter()
+            .any(|modality| modality.eq_ignore_ascii_case("image"));
+
+        let mut task_families = Vec::new();
+        let mut runtime_features = Vec::new();
+        if has_text_output {
+            task_families.push("chat".to_string());
+            runtime_features.push("streaming".to_string());
+            runtime_features.push("chat_completions".to_string());
+        }
+        if has_image_input && has_text_output {
+            task_families.push("vision_understanding".to_string());
+        }
+        if has_image_output {
+            task_families.push(if has_image_input {
+                "image_edit".to_string()
+            } else {
+                "image_generation".to_string()
+            });
+            runtime_features.push("images_api".to_string());
+        }
+
+        ApiModelResponse {
+            id: self.model_id,
+            display_name: metadata.model_display_name,
+            provider_name: Some("NEAR AI Cloud".to_string()),
+            family: metadata.owned_by,
+            context_length: metadata.context_length,
+            task_families: Some(serde_json::json!(task_families)),
+            input_modalities: Some(serde_json::json!(architecture.input_modalities)),
+            output_modalities: Some(serde_json::json!(architecture.output_modalities)),
+            modalities: None,
+            runtime_features: Some(serde_json::json!(runtime_features)),
+            vision_supported: None,
+            capabilities: None,
+            supported_parameters: None,
+            reasoning: None,
+            reasoning_effort: None,
+            reasoning_effort_levels: None,
+            reasoning_efforts: None,
+            supported_reasoning_efforts: None,
+        }
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawNearAiModelMetadata {
+    #[serde(default)]
+    context_length: Option<u32>,
+    #[serde(default)]
+    model_display_name: Option<String>,
+    #[serde(default)]
+    owned_by: Option<String>,
+    #[serde(default)]
+    architecture: Option<RawNearAiModelArchitecture>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawNearAiModelArchitecture {
+    #[serde(default)]
+    input_modalities: Vec<String>,
+    #[serde(default)]
+    output_modalities: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -3846,6 +4038,71 @@ mod tests {
             service.convert_api_model(response.into_iter().next().expect("model"), "gateway", 0);
 
         assert!(model.capabilities.reasoning_effort.is_none());
+    }
+
+    #[test]
+    fn test_parse_nearai_models_response_maps_public_catalog_shape() {
+        let (service, _db) = setup_cache_service();
+        let response = ModelRegistryService::parse_nearai_models_response(
+            r#"{
+              "models": [
+                {
+                  "modelId": "zai-org/GLM-5.1-FP8",
+                  "metadata": {
+                    "contextLength": 202752,
+                    "modelDisplayName": "GLM 5.1",
+                    "ownedBy": "zai-org",
+                    "architecture": {
+                      "inputModalities": ["text"],
+                      "outputModalities": ["text"]
+                    }
+                  }
+                },
+                {
+                  "modelId": "Qwen/Qwen3-Embedding-0.6B",
+                  "metadata": {
+                    "contextLength": 32768,
+                    "modelDisplayName": "Qwen Embedding",
+                    "ownedBy": "Qwen",
+                    "architecture": {
+                      "inputModalities": ["text"],
+                      "outputModalities": ["embedding"]
+                    }
+                  }
+                },
+                {
+                  "modelId": "openai/privacy-filter",
+                  "metadata": {
+                    "contextLength": 512,
+                    "modelDisplayName": "Privacy Filter",
+                    "ownedBy": "openai",
+                    "architecture": {
+                      "inputModalities": ["text"],
+                      "outputModalities": ["text"]
+                    }
+                  }
+                }
+              ]
+            }"#,
+        )
+        .expect("parse nearai response");
+
+        assert_eq!(response.len(), 1);
+
+        let model = service.convert_api_model(
+            response.into_iter().next().expect("nearai model"),
+            "nearai",
+            0,
+        );
+        assert_eq!(model.id, "zai-org/GLM-5.1-FP8");
+        assert_eq!(model.display_name, "GLM 5.1");
+        assert_eq!(model.family.as_deref(), Some("zai-org"));
+        assert_eq!(model.limits.context_length, Some(202752));
+        assert!(model.input_modalities.contains(&ModelModality::Text));
+        assert!(model.output_modalities.contains(&ModelModality::Text));
+        assert!(model
+            .runtime_features
+            .contains(&ModelRuntimeFeature::ChatCompletionsApi));
     }
 
     #[test]
@@ -4560,6 +4817,24 @@ mod tests {
     }
 
     #[test]
+    fn test_prepare_model_fetch_request_uses_nearai_public_catalog_endpoint() {
+        let request = ModelRegistryService::prepare_model_fetch_request(
+            "nearai",
+            "https://cloud-api.near.ai/v1",
+            "",
+            Some(ApiProviderType::Openai),
+        )
+        .expect("nearai request should be prepared");
+
+        assert_eq!(request.protocol, ModelFetchProtocol::NearAi);
+        assert_eq!(request.url, "https://cloud-api.near.ai/v1/model/list");
+        assert!(!request
+            .headers
+            .iter()
+            .any(|(name, _)| name == "Authorization"));
+    }
+
+    #[test]
     fn test_requires_api_key_for_model_fetch() {
         assert!(ModelRegistryService::requires_api_key_for_model_fetch(
             "openai",
@@ -4574,6 +4849,11 @@ mod tests {
         assert!(!ModelRegistryService::requires_api_key_for_model_fetch(
             "lmstudio",
             "http://127.0.0.1:1234/v1",
+            ApiProviderType::Openai
+        ));
+        assert!(!ModelRegistryService::requires_api_key_for_model_fetch(
+            "nearai",
+            "https://cloud-api.near.ai/v1",
             ApiProviderType::Openai
         ));
     }
@@ -4603,6 +4883,14 @@ mod tests {
                 Some(ApiProviderType::AzureOpenai)
             ),
             ModelFetchProtocol::Unsupported
+        );
+        assert_eq!(
+            ModelRegistryService::resolve_model_fetch_protocol(
+                "nearai",
+                "https://cloud-api.near.ai/v1",
+                Some(ApiProviderType::Openai)
+            ),
+            ModelFetchProtocol::NearAi
         );
         assert_eq!(
             ModelRegistryService::resolve_model_fetch_protocol(

@@ -6,6 +6,8 @@ const LOCAL_OPENAI_LIKE_PROVIDER_IDS = new Set([
   "ovms",
 ]);
 
+const PUBLIC_MODEL_CATALOG_PROVIDER_IDS = new Set(["nearai"]);
+
 function normalize(value?: string | null): string {
   return (value || "").trim().toLowerCase();
 }
@@ -43,6 +45,19 @@ function isLikelyFalProvider(input: {
   );
 }
 
+function hasPublicModelCatalog(input: {
+  providerId?: string | null;
+  apiHost?: string | null;
+}): boolean {
+  const providerId = normalize(input.providerId);
+  const apiHost = normalize(input.apiHost);
+
+  return (
+    PUBLIC_MODEL_CATALOG_PROVIDER_IDS.has(providerId) ||
+    apiHost.includes("cloud-api.near.ai")
+  );
+}
+
 interface ProviderModelAutoFetchCapability {
   supported: boolean;
   requiresApiKey: boolean;
@@ -76,7 +91,9 @@ export function getProviderModelAutoFetchCapability(input: {
       return {
         supported: true,
         requiresApiKey:
-          !LOCAL_OPENAI_LIKE_PROVIDER_IDS.has(providerId) && !localHost,
+          !LOCAL_OPENAI_LIKE_PROVIDER_IDS.has(providerId) &&
+          !hasPublicModelCatalog(input) &&
+          !localHost,
         requiresLiveModelTruth: true,
       };
     case "anthropic":

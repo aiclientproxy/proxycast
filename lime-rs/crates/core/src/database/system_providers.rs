@@ -755,12 +755,21 @@ pub fn get_system_providers() -> Vec<SystemProviderDef> {
             api_version: None,
         },
         SystemProviderDef {
+            id: "nearai",
+            name: "NEAR AI Cloud",
+            provider_type: ApiProviderType::Openai,
+            api_host: "https://cloud-api.near.ai/v1",
+            group: ProviderGroup::Aggregator,
+            sort_order: 70,
+            api_version: None,
+        },
+        SystemProviderDef {
             id: "airgate-openai-images",
             name: "OpenAI-gpt-images-2",
             provider_type: ApiProviderType::Openai,
             api_host: "https://airgate.k8ray.com/v1",
             group: ProviderGroup::Aggregator,
-            sort_order: 70,
+            sort_order: 71,
             api_version: None,
         },
         // =========================================================================
@@ -934,5 +943,16 @@ mod tests {
         let api_provider = to_api_key_provider(&provider);
 
         assert_eq!(api_provider.custom_models, vec!["gpt-images-2".to_string()]);
+    }
+
+    #[test]
+    fn test_nearai_system_provider_is_registered() {
+        let provider = get_system_providers()
+            .into_iter()
+            .find(|provider| provider.id == "nearai")
+            .expect("nearai system provider should exist");
+
+        assert_eq!(provider.name, "NEAR AI Cloud");
+        assert_eq!(provider.api_host, "https://cloud-api.near.ai/v1");
     }
 }

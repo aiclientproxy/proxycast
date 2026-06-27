@@ -87,6 +87,20 @@ describe("providerModelFetchSupport", () => {
     });
   });
 
+  it("NEAR AI Cloud 应允许通过公开目录免 Key 获取模型", () => {
+    expect(
+      getProviderModelAutoFetchCapability({
+        providerId: "nearai",
+        providerType: "openai",
+        apiHost: "https://cloud-api.near.ai/v1",
+      }),
+    ).toEqual({
+      supported: true,
+      requiresApiKey: false,
+      requiresLiveModelTruth: true,
+    });
+  });
+
   it("Fal-like Host 应通过声明模型确认，不要求 API Key 或 /models 真相源", () => {
     expect(
       getProviderModelAutoFetchCapability({

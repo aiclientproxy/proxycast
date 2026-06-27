@@ -288,6 +288,7 @@ export const providerTypeToIcon: Record<string, string> = {
   lucidquery: "lucidquery",
   morph: "morph",
   "nano-gpt": "nano-gpt",
+  nearai: "custom",
   nebius: "nebius",
   novita: "novita",
   ovhcloud: "ovhcloud",
