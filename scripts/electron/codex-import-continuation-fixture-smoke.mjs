@@ -242,11 +242,20 @@ async function run() {
     logStage("run-imported-and-normal-unified-exec");
     const turns = await runImportedAndNormalTurns(client, {
       importedSessionId: initial.sessionId,
+      importedThreadId: initial.threadId,
       provider: providerFixture.provider,
       runtimeEnv,
       command: providerScript.command,
       options,
     });
+    writeJsonFile(
+      paths.raw,
+      sanitizeJson({ initial, turns, requests: client.requests }),
+    );
+    writeJsonFile(
+      paths.provider,
+      sanitizeJson(providerRequestSummaries(providerFixture.requests)),
+    );
     summary.gateBBridge = sanitizeJson(summarizeAndAssertBridge(client));
     const fixtureSummary = summarizeAndAssertFixture({
       client,
@@ -259,14 +268,6 @@ async function run() {
     });
     summary.fixtureSummary = sanitizeJson(fixtureSummary);
 
-    writeJsonFile(
-      paths.raw,
-      sanitizeJson({ initial, turns, requests: client.requests }),
-    );
-    writeJsonFile(
-      paths.provider,
-      sanitizeJson(providerRequestSummaries(providerFixture.requests)),
-    );
     assert(
       consoleErrors.length === 0,
       `观察到 console error: ${consoleErrors.join(" | ")}`,

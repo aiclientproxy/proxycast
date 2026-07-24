@@ -1,5 +1,6 @@
 use super::{McpConnection, McpConnectionProvenance, McpStepSnapshot};
 use crate::tool_extension::{RuntimeExtensionConfig, RuntimeToolCaller};
+use futures::Stream;
 use rmcp::model::{CallToolResult, ErrorData, ServerNotification, Tool};
 use rmcp::service::ServiceError;
 use std::collections::{HashMap, HashSet};
@@ -8,13 +9,13 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::Mutex;
 
 pub type McpConnectionHandle = Arc<Mutex<Box<dyn McpConnection>>>;
 
 pub struct McpConnectionCall {
     pub response: Pin<Box<dyn Future<Output = Result<CallToolResult, ErrorData>> + Send + 'static>>,
-    pub notifications: mpsc::Receiver<ServerNotification>,
+    pub notifications: Pin<Box<dyn Stream<Item = ServerNotification> + Send + 'static>>,
 }
 
 struct McpConnectionEntry {

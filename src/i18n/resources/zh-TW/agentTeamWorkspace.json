@@ -1,11 +1,4 @@
 {
-  "agentChat.agentUiProjection.chip.artifactCount": "Artifact {{count}}",
-  "agentChat.agentUiProjection.chip.hasExecutionRef": "有執行引用",
-  "agentChat.agentUiProjection.chip.hasResultRef": "有結果引用",
-  "agentChat.agentUiProjection.chip.reassign": "Reassign",
-  "agentChat.agentUiProjection.chip.remoteContent": "遠端内容",
-  "agentChat.agentUiProjection.chip.reviewFix": "Review fix",
-  "agentChat.agentUiProjection.chip.toolCount": "工具 {{count}}",
   "agentChat.agentUiProjection.control.answer": "補充輸入",
   "agentChat.agentUiProjection.control.approve": "批准",
   "agentChat.agentUiProjection.control.assign": "指派",

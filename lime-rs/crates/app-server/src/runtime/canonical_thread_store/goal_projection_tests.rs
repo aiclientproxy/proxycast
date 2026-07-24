@@ -184,6 +184,7 @@ fn token_snapshot(
     TokenUsageSnapshot {
         input_tokens,
         cached_input_tokens,
+        cache_write_input_tokens: 0,
         output_tokens,
         reasoning_output_tokens: 0,
         total_tokens: input_tokens + output_tokens,
@@ -819,6 +820,7 @@ fn goal_created_during_turn_binds_current_baseline_without_charging_prior_usage(
             token_usage: TokenUsageSnapshot {
                 input_tokens: 20,
                 cached_input_tokens: 5,
+                cache_write_input_tokens: 0,
                 output_tokens: 10,
                 reasoning_output_tokens: 0,
                 total_tokens: 30,

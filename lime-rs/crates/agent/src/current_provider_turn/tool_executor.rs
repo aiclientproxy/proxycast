@@ -2,16 +2,18 @@
 
 use super::{is_web_tool, mcp_step_snapshot};
 use crate::agent_tools::execution::{
-    decide_tool_execution, persisted_tool_execution_policy_from_metadata,
+    decide_tool_execution, persisted_tool_execution_policy_from_metadata, ToolExecutionDecision,
     ToolExecutionDecisionInput, ToolExecutionDecisionKind, ToolExecutionResolverInput,
 };
-use crate::protocol::AgentEvent;
+use crate::protocol::{AgentEvent, AgentToolProgressPayload};
 use crate::request_tool_policy::{is_same_tool, RequestToolPolicy};
 use crate::runtime_state::AgentRuntimeState;
-use agent_protocol::action_required::tool_confirmation_action;
+use agent_protocol::action_required::{tool_confirmation_action, ActionRequiredProjection};
 use agent_protocol::ThreadId;
+use agent_runtime::action_required::ActionRequiredRequest;
 use agent_runtime::session_loop::{RuntimeSessionInputHandle, RuntimeSessionResponseKind};
-use rmcp::model::{CallToolRequestParam, CallToolResult, ErrorData};
+use futures::StreamExt;
+use rmcp::model::{CallToolRequestParam, CallToolResult, ErrorData, ServerNotification};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -126,7 +128,7 @@ impl RuntimeToolExecutor for CurrentTurnToolExecutor {
                         request,
                         &self.thread_id,
                         self.pending_input.as_ref(),
-                        decision.reason,
+                        &decision,
                     )
                     .await
                     .map_err(RuntimeToolExecutionError::before_handler)?;
@@ -263,13 +265,104 @@ impl RuntimeToolExecutor for CurrentTurnToolExecutor {
             };
             let mcp_scope =
                 mcp_call_scope(request).map_err(RuntimeToolExecutionError::before_handler)?;
+            let tool_id =
+                mcp_tool_id(request).map_err(RuntimeToolExecutionError::before_handler)?;
+            let mcp_route = self
+                .mcp_snapshot
+                .route_identity(request.tool_name)
+                .ok_or_else(|| mcp_identity_error("route identity"))
+                .map_err(RuntimeToolExecutionError::before_handler)?;
             let call = self
                 .mcp_snapshot
                 .dispatch(mcp_request, mcp_scope, cancel_token)
                 .await
                 .map_err(|error| project_mcp_error(error).before_handler())?;
-            project_call_result(call.response.await)
+            await_mcp_call(&self.event_sender, &tool_id, &mcp_route, call).await
         })
+    }
+}
+
+fn mcp_tool_id(
+    request: RuntimeToolExecutionRequest<'_>,
+) -> Result<String, RuntimeToolExecutionError> {
+    let identity = request
+        .context
+        .tool_identity()
+        .ok_or_else(|| mcp_identity_error("tool identity"))?;
+    mcp_identity_value(identity.call_id(), "call_id")
+}
+
+async fn await_mcp_call(
+    event_sender: &UnboundedSender<AgentEvent>,
+    tool_id: &str,
+    route: &tool_runtime::mcp_connection::McpStepRouteIdentity,
+    mut call: tool_runtime::mcp_connection::McpConnectionCall,
+) -> Result<RuntimeToolExecutionResult, RuntimeToolExecutionError> {
+    let mut notifications_open = true;
+    loop {
+        tokio::select! {
+            biased;
+            notification = call.notifications.next(), if notifications_open => {
+                match notification {
+                    Some(notification) => {
+                        emit_mcp_progress(event_sender, tool_id, route, notification)
+                    }
+                    None => notifications_open = false,
+                }
+            }
+            result = &mut call.response => return project_call_result(result),
+        }
+    }
+}
+
+fn emit_mcp_progress(
+    event_sender: &UnboundedSender<AgentEvent>,
+    tool_id: &str,
+    route: &tool_runtime::mcp_connection::McpStepRouteIdentity,
+    notification: ServerNotification,
+) {
+    if !matches!(notification, ServerNotification::ProgressNotification(_)) {
+        return;
+    }
+    for projection in
+        tool_runtime::mcp_notification::project_mcp_notification(tool_id, notification)
+    {
+        let tool_runtime::mcp_notification::McpNotificationProjection::ToolProgress {
+            tool_id,
+            progress,
+        } = projection
+        else {
+            continue;
+        };
+        let Some(message) = progress
+            .message
+            .map(|message| message.trim().to_string())
+            .filter(|message| !message.is_empty())
+        else {
+            continue;
+        };
+        let mut metadata = progress.metadata.unwrap_or_default();
+        metadata.insert(
+            "server_name".to_string(),
+            Value::String(route.server_name.clone()),
+        );
+        metadata.insert(
+            "tool_name".to_string(),
+            Value::String(route.tool_name.clone()),
+        );
+        metadata.insert(
+            "runtime_tool_name".to_string(),
+            Value::String(route.runtime_tool_name.clone()),
+        );
+        let _ = event_sender.send(AgentEvent::ToolProgress {
+            tool_id,
+            progress: AgentToolProgressPayload {
+                message: Some(message),
+                progress: progress.progress,
+                total: progress.total,
+                metadata: Some(metadata),
+            },
+        });
     }
 }
 
@@ -332,7 +425,7 @@ async fn wait_for_tool_approval(
     request: RuntimeToolExecutionRequest<'_>,
     thread_id: &ThreadId,
     pending_input: Option<&RuntimeSessionInputHandle>,
-    prompt: String,
+    decision: &ToolExecutionDecision,
 ) -> Result<(), RuntimeToolExecutionError> {
     let response_handle = pending_input.cloned().ok_or_else(|| {
         RuntimeToolExecutionError::new(
@@ -345,6 +438,11 @@ async fn wait_for_tool_approval(
     let (scope, tool_call_id) = action_scope(request, thread_id)?;
     let tool_name = request.tool_name.to_string();
     let arguments = request.params.clone();
+    let prompt = decision.reason.clone();
+    let approval = tool_runtime::execution_approval::execution_approval_projection(
+        request.tool_name,
+        &decision.metadata,
+    );
     let response = state
         .action_required_state()
         .request_action_and_wait_with_notification(
@@ -352,7 +450,7 @@ async fn wait_for_tool_approval(
             RuntimeSessionResponseKind::Approval,
             agent_protocol::action_required::TOOL_CONFIRMATION_ACTION_TYPE,
             Some(tool_call_id),
-            tool_approval_decisions(),
+            approval.available_decisions.clone(),
             scope,
             prompt.clone(),
             serde_json::json!({
@@ -366,23 +464,9 @@ async fn wait_for_tool_approval(
             {
                 let event_sender = event_sender.clone();
                 move |queued| {
-                    let mut projection = tool_confirmation_action(
-                        queued.id.clone(),
-                        tool_name,
-                        arguments,
-                        Some(prompt),
-                        queued.scope.clone(),
+                    let projection = materialize_tool_approval_action(
+                        queued, &tool_name, &arguments, &prompt, &approval,
                     );
-                    if let Some(data) = projection.data.as_object_mut() {
-                        data.insert("actionType".to_string(), queued.action_type.clone().into());
-                        data.insert("toolCallId".to_string(), queued.tool_id.clone().into());
-                        data.insert(
-                            "availableDecisions".to_string(),
-                            queued.available_decisions.clone().into(),
-                        );
-                        data.insert("createdAtMs".to_string(), queued.created_at_ms.into());
-                        data.insert("deadlineAtMs".to_string(), queued.deadline_at_ms.into());
-                    }
                     let _ = event_sender.send(AgentEvent::ActionRequired {
                         request_id: projection.id,
                         action_type: projection.action_type,
@@ -413,11 +497,64 @@ async fn wait_for_tool_approval(
     ))
 }
 
-fn tool_approval_decisions() -> Vec<String> {
-    ["allow_once", "decline", "cancel"]
-        .into_iter()
-        .map(str::to_string)
-        .collect()
+fn materialize_tool_approval_action(
+    queued: &ActionRequiredRequest,
+    tool_name: &str,
+    arguments: &Value,
+    prompt: &str,
+    approval: &tool_runtime::execution_approval::ExecutionApprovalProjection,
+) -> ActionRequiredProjection {
+    let mut projection = tool_confirmation_action(
+        queued.id.clone(),
+        tool_name.to_string(),
+        arguments.clone(),
+        Some(prompt.to_string()),
+        queued.scope.clone(),
+    );
+    if let Some(data) = projection.data.as_object_mut() {
+        data.insert("actionType".to_string(), queued.action_type.clone().into());
+        data.insert("toolCallId".to_string(), queued.tool_id.clone().into());
+        data.insert(
+            "availableDecisions".to_string(),
+            queued.available_decisions.clone().into(),
+        );
+        data.insert("createdAtMs".to_string(), queued.created_at_ms.into());
+        data.insert("deadlineAtMs".to_string(), queued.deadline_at_ms.into());
+        data.insert(
+            "actionKind".to_string(),
+            approval.action_kind.clone().into(),
+        );
+        data.insert(
+            "action_kind".to_string(),
+            approval.action_kind.clone().into(),
+        );
+        data.insert(
+            "toolFamily".to_string(),
+            approval.tool_family.clone().into(),
+        );
+        data.insert(
+            "tool_family".to_string(),
+            approval.tool_family.clone().into(),
+        );
+        data.insert(
+            "runtime_contract".to_string(),
+            approval.runtime_contract.clone(),
+        );
+        data.insert(
+            "contractKey".to_string(),
+            approval.contract_key.clone().into(),
+        );
+        data.insert(
+            "contract_key".to_string(),
+            approval.contract_key.clone().into(),
+        );
+        data.insert("approvalScope".to_string(), approval.approval_scope.clone());
+        data.insert(
+            "approval_scope".to_string(),
+            approval.approval_scope.clone(),
+        );
+    }
+    projection
 }
 
 pub(super) fn action_scope(
@@ -557,16 +694,138 @@ fn collect_text_fields(value: &Value, target: &mut Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rmcp::model::{
+        Content, NumberOrString, ProgressNotification, ProgressNotificationMethod,
+        ProgressNotificationParam, ProgressToken,
+    };
 
     #[test]
-    fn tool_approval_exposes_cancel_without_session_grant() {
-        assert_eq!(
-            tool_approval_decisions(),
-            vec![
-                "allow_once".to_string(),
-                "decline".to_string(),
-                "cancel".to_string(),
-            ]
+    fn shell_tool_approval_materializes_current_projection() {
+        let metadata = HashMap::from([
+            (
+                "reasonCode".to_string(),
+                serde_json::json!("shell_command_requires_approval"),
+            ),
+            ("cwd".to_string(), serde_json::json!("/Users/coso/project")),
+        ]);
+        let approval = tool_runtime::execution_approval::execution_approval_projection(
+            "exec_command",
+            &metadata,
         );
+        let queued = ActionRequiredRequest {
+            id: "approval-1".to_string(),
+            action_type: agent_protocol::action_required::TOOL_CONFIRMATION_ACTION_TYPE.to_string(),
+            tool_id: Some("call-1".to_string()),
+            message: "Allow?".to_string(),
+            requested_schema: serde_json::json!({}),
+            available_decisions: approval.available_decisions.clone(),
+            scope: None,
+            created_at_ms: Some(1),
+            deadline_at_ms: Some(2),
+        };
+
+        let projection = materialize_tool_approval_action(
+            &queued,
+            "exec_command",
+            &serde_json::json!({ "cmd": "cargo test" }),
+            "Allow?",
+            &approval,
+        );
+
+        assert_eq!(projection.data["actionKind"], "tool_execution_policy");
+        assert_eq!(projection.data["action_kind"], "tool_execution_policy");
+        assert_eq!(projection.data["toolFamily"], "shell_command");
+        assert_eq!(projection.data["tool_family"], "shell_command");
+        assert_eq!(projection.data["contractKey"], "shell_command");
+        assert_eq!(projection.data["contract_key"], "shell_command");
+        assert_eq!(
+            projection.data["runtime_contract"]["session_cache_supported"],
+            false
+        );
+        assert_eq!(
+            projection.data["availableDecisions"],
+            serde_json::json!(["allow_once", "decline", "cancel"])
+        );
+        assert_eq!(projection.data["arguments"]["cmd"], "cargo test");
+        assert_eq!(projection.data["prompt"], "Allow?");
+        assert!(projection.data["approvalScope"].get("cwd").is_none());
+        assert!(!projection.data["approvalScope"]
+            .to_string()
+            .contains("/Users/coso/project"));
+        assert_eq!(
+            projection.data["approvalScope"],
+            projection.data["approval_scope"]
+        );
+    }
+
+    #[tokio::test]
+    async fn mcp_call_emits_only_non_empty_progress_notifications() {
+        let call = tool_runtime::mcp_connection::McpConnectionCall {
+            response: Box::pin(async {
+                tokio::task::yield_now().await;
+                Ok(CallToolResult::success(vec![Content::text("done")]))
+            }),
+            notifications: Box::pin(futures::stream::iter([
+                progress_notification(Some("   ")),
+                progress_notification(Some("正在检索文档")),
+            ])),
+        };
+        let (event_sender, mut event_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let route = tool_runtime::mcp_connection::McpStepRouteIdentity {
+            server_name: "docs".to_string(),
+            tool_name: "search".to_string(),
+            runtime_tool_name: "mcp__docs__search".to_string(),
+        };
+
+        let result = await_mcp_call(&event_sender, "mcp-call-1", &route, call)
+            .await
+            .expect("MCP result");
+
+        assert_eq!(result.output, "done");
+        let AgentEvent::ToolProgress { tool_id, progress } =
+            event_receiver.try_recv().expect("MCP progress event")
+        else {
+            panic!("expected MCP progress event");
+        };
+        assert_eq!(tool_id, "mcp-call-1");
+        assert_eq!(progress.message.as_deref(), Some("正在检索文档"));
+        assert_eq!(
+            progress
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("notification_kind"))
+                .and_then(Value::as_str),
+            Some("mcp_progress")
+        );
+        assert_eq!(
+            progress
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("server_name"))
+                .and_then(Value::as_str),
+            Some("docs")
+        );
+        assert_eq!(
+            progress
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("tool_name"))
+                .and_then(Value::as_str),
+            Some("search")
+        );
+        assert!(event_receiver.try_recv().is_err());
+    }
+
+    fn progress_notification(message: Option<&str>) -> ServerNotification {
+        ServerNotification::ProgressNotification(ProgressNotification {
+            method: ProgressNotificationMethod,
+            params: ProgressNotificationParam {
+                progress_token: ProgressToken(NumberOrString::Number(1)),
+                progress: 1.0,
+                total: Some(2.0),
+                message: message.map(str::to_string),
+            },
+            extensions: Default::default(),
+        })
     }
 }

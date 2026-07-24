@@ -40,8 +40,6 @@ pub use app_server_protocol::error_codes;
 use app_server_protocol::AgentEvent;
 pub use app_server_protocol::AgentInput;
 pub use app_server_protocol::AgentSession;
-pub use app_server_protocol::AgentSessionActionReplayParams;
-pub use app_server_protocol::AgentSessionActionReplayResponse;
 pub use app_server_protocol::AgentSessionActionRespondParams;
 pub use app_server_protocol::AgentSessionActionRespondResponse;
 pub use app_server_protocol::AgentSessionActionScope;
@@ -85,7 +83,6 @@ pub use app_server_protocol::RequestId;
 pub use app_server_protocol::RuntimeOptions;
 pub use app_server_protocol::WorkflowReadParams;
 pub use app_server_protocol::WorkflowReadResponse;
-pub use app_server_protocol::METHOD_AGENT_SESSION_ACTION_REPLAY;
 pub use app_server_protocol::METHOD_AGENT_SESSION_ACTION_RESPOND;
 pub use app_server_protocol::METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT;
 pub use app_server_protocol::METHOD_AGENT_SESSION_EVENT;
@@ -1058,10 +1055,13 @@ async fn run_transport_events(
                         }
                         TransportEvent::StdioClientInitialized { .. } => {}
                         TransportEvent::ConnectionClosed { connection_id } => {
-                            server
+                            let idle_thread_ids = server
                                 .thread_states
                                 .disconnect_connection(connection_id)
                                 .await;
+                            for thread_id in idle_thread_ids {
+                                server.thread_states.remove_thread(&thread_id).await;
+                            }
                             server.unregister_transport_writer(connection_id);
                             server.server_requests.cancel_owner(
                                 server_request::ServerRequestOwner::Transport(connection_id),
@@ -1254,6 +1254,7 @@ fn thread_token_usage_notification(
             total_tokens: usage.total_tokens,
             input_tokens: usage.input_tokens,
             cached_input_tokens: usage.cached_input_tokens,
+            cache_write_input_tokens: usage.cache_write_input_tokens,
             output_tokens: usage.output_tokens,
             reasoning_output_tokens: usage.reasoning_output_tokens,
         }
@@ -3271,6 +3272,7 @@ mod tests {
                 total_token_usage: runtime::thread_usage::TokenUsageSnapshot {
                     input_tokens: 90,
                     cached_input_tokens: 30,
+                    cache_write_input_tokens: 12,
                     output_tokens: 30,
                     reasoning_output_tokens: 10,
                     total_tokens: 120,
@@ -3278,6 +3280,7 @@ mod tests {
                 last_token_usage: runtime::thread_usage::TokenUsageSnapshot {
                     input_tokens: 45,
                     cached_input_tokens: 15,
+                    cache_write_input_tokens: 6,
                     output_tokens: 15,
                     reasoning_output_tokens: 5,
                     total_tokens: 60,
@@ -3398,6 +3401,15 @@ mod tests {
 
         assert_eq!(first, response);
         assert_eq!(second, usage);
+        let replayed_usage = serde_json::to_value(&second).expect("serialize usage replay");
+        assert_eq!(
+            replayed_usage.pointer("/params/tokenUsage/total/cacheWriteInputTokens"),
+            Some(&json!(12))
+        );
+        assert_eq!(
+            replayed_usage.pointer("/params/tokenUsage/last/cacheWriteInputTokens"),
+            Some(&json!(6))
+        );
         assert_eq!(third, goal);
         assert_eq!(fourth, pending_request);
         assert!(matches!(fifth, JsonRpcMessage::Notification(_)));

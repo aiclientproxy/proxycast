@@ -11,6 +11,10 @@ const DIRECT_V2_NOTIFICATION_METHODS = new Set([
   "item/started",
   "item/completed",
   "item/agentMessage/delta",
+  "item/commandExecution/outputDelta",
+  "item/fileChange/patchUpdated",
+  "item/mcpToolCall/progress",
+  "item/plan/delta",
   "item/reasoning/summaryTextDelta",
   "item/reasoning/summaryPartAdded",
   "item/reasoning/textDelta",
@@ -83,11 +87,40 @@ export function readAppServerV2NotificationRoute(
         ? { itemId, terminal: false, threadId, turnId }
         : null;
     }
-    case "item/agentMessage/delta": {
+    case "item/agentMessage/delta":
+    case "item/plan/delta": {
       const threadId = readString(params, "threadId");
       const turnId = readString(params, "turnId");
       const itemId = readString(params, "itemId");
       return threadId && turnId && itemId && typeof params.delta === "string"
+        ? { itemId, terminal: false, threadId, turnId }
+        : null;
+    }
+    case "item/commandExecution/outputDelta": {
+      const threadId = readString(params, "threadId");
+      const turnId = readString(params, "turnId");
+      const itemId = readString(params, "itemId");
+      return threadId && turnId && itemId && typeof params.delta === "string"
+        ? { itemId, terminal: false, threadId, turnId }
+        : null;
+    }
+    case "item/fileChange/patchUpdated": {
+      const threadId = readString(params, "threadId");
+      const turnId = readString(params, "turnId");
+      const itemId = readString(params, "itemId");
+      return threadId &&
+        turnId &&
+        itemId &&
+        readFileChangePatchUpdatedChanges(params) !== null
+        ? { itemId, terminal: false, threadId, turnId }
+        : null;
+    }
+    case "item/mcpToolCall/progress": {
+      const threadId = readString(params, "threadId");
+      const turnId = readString(params, "turnId");
+      const itemId = readString(params, "itemId");
+      const message = readString(params, "message");
+      return threadId && turnId && itemId && message
         ? { itemId, terminal: false, threadId, turnId }
         : null;
     }
@@ -198,6 +231,86 @@ export function projectAppServerV2NotificationPayload(
         itemId: route.itemId,
         item_id: route.itemId,
       };
+    case "item/commandExecution/outputDelta":
+      return {
+        ...basePayload,
+        type: "tool_output_delta",
+        tool_id: route.itemId,
+        toolId: route.itemId,
+        sourceItemId: route.itemId,
+        source_item_id: route.itemId,
+        delta: params.delta,
+        metadata: {
+          source: "app_server_v2",
+          sourceItemId: route.itemId,
+          source_item_id: route.itemId,
+        },
+      };
+    case "item/fileChange/patchUpdated": {
+      const changes = readFileChangePatchUpdatedChanges(params);
+      if (!changes || !route.itemId || !route.turnId) {
+        return null;
+      }
+      const sequence = Math.max(0, Math.trunc(receivedAtMs));
+      const event: AppServerAgentEvent = {
+        eventId: "direct-v2",
+        payload: params,
+        sequence,
+        sessionId: route.threadId,
+        threadId: route.threadId,
+        timestamp,
+        turnId: route.turnId,
+        type: "item.updated",
+      };
+      const item = readCanonicalThreadItem(
+        {
+          changes,
+          id: route.itemId,
+          status: "inProgress",
+          type: "fileChange",
+        },
+        event,
+      );
+      return item
+        ? {
+            ...basePayload,
+            sequence,
+            type: "item_updated",
+            item,
+          }
+        : null;
+    }
+    case "item/mcpToolCall/progress": {
+      const message = readString(params, "message");
+      if (!route.itemId || !message) {
+        return null;
+      }
+      return {
+        ...basePayload,
+        type: "tool_progress",
+        tool_id: route.itemId,
+        progress: {
+          message,
+          metadata: {
+            notification_kind: "mcp_progress",
+            source: "app_server_v2",
+            source_item_id: route.itemId,
+          },
+        },
+      };
+    }
+    case "item/plan/delta":
+      return {
+        ...basePayload,
+        type: "plan_delta",
+        text: params.delta,
+        delta: params.delta,
+        sourceItemId: route.itemId,
+        source_item_id: route.itemId,
+        revisionId: route.itemId,
+        revision_id: route.itemId,
+        source: "app_server_v2",
+      };
     case "item/reasoning/summaryTextDelta": {
       const summaryIndex = readFiniteNumber(params, "summaryIndex");
       return {
@@ -259,6 +372,10 @@ export function projectAppServerV2NotificationPayload(
           input_tokens: inputTokens,
           output_tokens: outputTokens,
           cached_input_tokens: readFiniteNumber(last, "cachedInputTokens"),
+          cache_creation_input_tokens: readFiniteNumber(
+            last,
+            "cacheWriteInputTokens",
+          ),
         },
       };
     }
@@ -286,6 +403,42 @@ function readReasoningNotificationRoute(
     return null;
   }
   return { itemId, terminal: false, threadId, turnId };
+}
+
+function readFileChangePatchUpdatedChanges(
+  params: Record<string, unknown>,
+): Record<string, unknown>[] | null {
+  if (!Array.isArray(params.changes)) {
+    return null;
+  }
+  const changes: Record<string, unknown>[] = [];
+  for (const value of params.changes) {
+    const change = asRecord(value);
+    const kind = asRecord(change?.kind);
+    const path = readString(change, "path");
+    const kindType = readString(kind, "type");
+    if (
+      !change ||
+      !kind ||
+      !path ||
+      typeof change.diff !== "string" ||
+      (kindType !== "add" && kindType !== "delete" && kindType !== "update")
+    ) {
+      return null;
+    }
+    const movePath = kind.move_path;
+    if (
+      (movePath !== undefined &&
+        (kindType !== "update" ||
+          typeof movePath !== "string" ||
+          movePath.length === 0)) ||
+      (kindType !== "update" && "move_path" in kind)
+    ) {
+      return null;
+    }
+    changes.push(change);
+  }
+  return changes;
 }
 
 function projectTurn(

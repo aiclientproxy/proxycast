@@ -30,7 +30,7 @@ describe("content factory production GUI evidence collector", () => {
     expect(content).toContain('"pluginInstalled/list"');
     expect(content).toContain('"thread/read"');
     expect(content).toContain('"evidence/export"');
-    expect(content).toContain('"agentSession/action/respond"');
+    expect(content).not.toContain('"agentSession/action/respond"');
     expect(content).toContain('"workflow/respond"');
     expect(content).not.toContain('"thread/resume"');
     expect(content).toContain("--thread-id");

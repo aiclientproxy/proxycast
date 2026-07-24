@@ -27,6 +27,82 @@ fn canonical_tool_item(call_id: &str, status: &str) -> Value {
     })
 }
 
+fn canonical_mcp_tool_item(call_id: &str, status: &str) -> Value {
+    json!({
+        "item": {
+            "sessionId": "nested-session",
+            "threadId": "nested-thread",
+            "turnId": "nested-turn",
+            "itemId": format!("item_{call_id}"),
+            "sequence": 1,
+            "ordinal": 1,
+            "createdAtMs": 1,
+            "updatedAtMs": 1,
+            "completedAtMs": (status != "inProgress").then_some(1),
+            "kind": "mcpToolCall",
+            "status": status,
+            "payload": {
+                "type": "mcpToolCall",
+                "call_id": call_id,
+                "server_name": "docs",
+                "tool_name": "search",
+                "arguments": [],
+                "output": (status != "inProgress").then(|| json!({ "text": "ok" })),
+            },
+            "metadata": {},
+        }
+    })
+}
+
+#[tokio::test]
+async fn append_external_runtime_events_accepts_mcp_progress_inside_canonical_lifecycle() {
+    let (core, session_id, turn_id) = runtime_with_active_turn(
+        "sess_canonical_mcp_progress",
+        "thread_canonical_mcp_progress",
+        "turn_canonical_mcp_progress",
+    )
+    .await;
+
+    let events = core
+        .append_external_runtime_events(
+            &session_id,
+            Some(&turn_id),
+            vec![
+                RuntimeEvent::new(
+                    "item.started",
+                    canonical_mcp_tool_item("mcp-call-1", "inProgress"),
+                ),
+                RuntimeEvent::new(
+                    "tool.progress",
+                    json!({
+                        "tool_id": "mcp-call-1",
+                        "serverName": "docs",
+                        "toolName": "search",
+                        "progress": {
+                            "message": "正在检索文档",
+                            "metadata": {"notification_kind": "mcp_progress"}
+                        }
+                    }),
+                ),
+                RuntimeEvent::new(
+                    "item.completed",
+                    canonical_mcp_tool_item("mcp-call-1", "completed"),
+                ),
+            ],
+        )
+        .expect("canonical MCP progress lifecycle should append");
+
+    assert_eq!(events.len(), 3);
+    let progress_item =
+        serde_json::from_value::<agent_protocol::ThreadItem>(events[1].payload["item"].clone())
+            .expect("progress canonical item");
+    assert_eq!(progress_item.item_id.as_str(), "item_mcp-call-1");
+    assert!(matches!(
+        progress_item.payload,
+        agent_protocol::ThreadItemPayload::McpToolCall { .. }
+    ));
+}
+
 #[tokio::test]
 async fn append_external_runtime_events_rejects_canonical_tool_completed_without_start() {
     let (core, session_id, turn_id) = runtime_with_active_turn(

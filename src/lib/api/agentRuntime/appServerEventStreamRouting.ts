@@ -34,15 +34,19 @@ export type AppServerAgentSessionEventRouteParams = {
 };
 
 type AppServerAgentSessionEventRoute = {
+  drainNotificationKeys: Set<string>;
   eventName: string;
   expiresAt: number;
   hasPublishedEvent: boolean;
   registrationKey: string;
   requestedTurnId?: string;
+  responseNotificationKeys: Set<string>;
   seenEventIds: Set<string>;
   sessionId: string;
   turnId?: string;
 };
+
+type AppServerNotificationSource = "drain" | "response";
 
 type AppServerRoutableNotification = {
   eventId?: string;
@@ -76,9 +80,11 @@ export class AppServerAgentSessionEventDrainRouter {
     }
 
     const route = {
+      drainNotificationKeys: new Set<string>(),
       eventName,
       sessionId,
       requestedTurnId: params.turnId?.trim() || undefined,
+      responseNotificationKeys: new Set<string>(),
       turnId: params.turnId?.trim() || undefined,
       seenEventIds: new Set(),
       expiresAt: Date.now() + APP_SERVER_EVENT_ROUTE_TTL_MS,
@@ -95,7 +101,7 @@ export class AppServerAgentSessionEventDrainRouter {
 
     return {
       publish: (notifications) => {
-        this.routeNotifications(notifications, eventName);
+        this.routeNotifications(notifications, eventName, "response");
       },
     };
   }
@@ -103,6 +109,7 @@ export class AppServerAgentSessionEventDrainRouter {
   routeNotifications(
     notifications: AppServerJsonRpcNotification[] | undefined,
     fallbackEventName?: string,
+    source: AppServerNotificationSource = "drain",
   ): void {
     if (!notifications?.length) {
       return;
@@ -111,7 +118,7 @@ export class AppServerAgentSessionEventDrainRouter {
     for (const notification of sortAppServerAgentSessionNotifications(
       notifications,
     )) {
-      this.#routeNotification(notification, fallbackEventName);
+      this.#routeNotification(notification, fallbackEventName, source);
     }
     this.#stopEventBusSubscriptionIfIdle();
   }
@@ -145,6 +152,7 @@ export class AppServerAgentSessionEventDrainRouter {
   #routeNotification(
     notification: AppServerJsonRpcNotification,
     fallbackEventName?: string,
+    source: AppServerNotificationSource = "drain",
   ): void {
     const routable = readRoutableNotification(notification);
     if (!routable) {
@@ -174,6 +182,17 @@ export class AppServerAgentSessionEventDrainRouter {
       }
       if (routable.eventId) {
         route.seenEventIds.add(routable.eventId);
+      } else {
+        const notificationKey = directNotificationMirrorKey(notification);
+        if (
+          notificationKey &&
+          hasNotificationFromOtherSource(route, source, notificationKey)
+        ) {
+          continue;
+        }
+        if (notificationKey) {
+          recordNotificationSource(route, source, notificationKey);
+        }
       }
       route.hasPublishedEvent = true;
       publishAppServerAgentSessionNotifications(route.eventName, [
@@ -289,6 +308,36 @@ export class AppServerAgentSessionEventDrainRouter {
     this.#unsubscribeFromEventBus();
     this.#unsubscribeFromEventBus = null;
   }
+}
+
+function directNotificationMirrorKey(
+  notification: AppServerJsonRpcNotification,
+): string | null {
+  return readAppServerV2NotificationRoute(notification)
+    ? JSON.stringify(notification)
+    : null;
+}
+
+function hasNotificationFromOtherSource(
+  route: AppServerAgentSessionEventRoute,
+  source: AppServerNotificationSource,
+  notificationKey: string,
+): boolean {
+  return source === "drain"
+    ? route.responseNotificationKeys.has(notificationKey)
+    : route.drainNotificationKeys.has(notificationKey);
+}
+
+function recordNotificationSource(
+  route: AppServerAgentSessionEventRoute,
+  source: AppServerNotificationSource,
+  notificationKey: string,
+): void {
+  const keys =
+    source === "drain"
+      ? route.drainNotificationKeys
+      : route.responseNotificationKeys;
+  keys.add(notificationKey);
 }
 
 export function publishAppServerRpcErrorNotifications(

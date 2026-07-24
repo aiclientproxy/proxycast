@@ -12,10 +12,6 @@
   "methods": [
     {
       "kind": "request",
-      "method": "agentSession/action/replay"
-    },
-    {
-      "kind": "request",
       "method": "agentSession/action/respond"
     },
     {
@@ -76,10 +72,6 @@
     },
     {
       "kind": "request",
-      "method": "agentSession/runtimeEvents/append"
-    },
-    {
-      "kind": "request",
       "method": "agentSession/toolInventory/read"
     },
     {
@@ -89,6 +81,10 @@
     {
       "kind": "request",
       "method": "artifact/read"
+    },
+    {
+      "kind": "request",
+      "method": "artifact/write"
     },
     {
       "kind": "request",
@@ -387,6 +383,10 @@
       "method": "item/agentMessage/delta"
     },
     {
+      "kind": "notification",
+      "method": "item/commandExecution/outputDelta"
+    },
+    {
       "kind": "serverRequest",
       "method": "item/commandExecution/requestApproval"
     },
@@ -395,8 +395,20 @@
       "method": "item/completed"
     },
     {
+      "kind": "notification",
+      "method": "item/fileChange/patchUpdated"
+    },
+    {
       "kind": "serverRequest",
       "method": "item/fileChange/requestApproval"
+    },
+    {
+      "kind": "notification",
+      "method": "item/mcpToolCall/progress"
+    },
+    {
+      "kind": "notification",
+      "method": "item/plan/delta"
     },
     {
       "kind": "notification",
@@ -1294,6 +1306,10 @@
       "scope": "thread"
     },
     {
+      "method": "artifact/write",
+      "scope": "thread"
+    },
+    {
       "method": "browserSession/action/execute",
       "scope": "browserSession"
     },
@@ -1449,8 +1465,6 @@
       "AgentEvent",
       "AgentInput",
       "AgentSession",
-      "AgentSessionActionReplayParams",
-      "AgentSessionActionReplayResponse",
       "AgentSessionActionRespondParams",
       "AgentSessionActionRespondResponse",
       "AgentSessionActionScope",
@@ -1486,14 +1500,10 @@
       "AgentSessionReadResponse",
       "AgentSessionReplayCaseExportParams",
       "AgentSessionReplayCaseExportResponse",
-      "AgentSessionReplayedActionRequired",
       "AgentSessionReviewDecision",
       "AgentSessionReviewDecisionSaveParams",
       "AgentSessionReviewDecisionTemplateExportParams",
       "AgentSessionReviewDecisionTemplateExportResponse",
-      "AgentSessionRuntimeEventAppendParams",
-      "AgentSessionRuntimeEventAppendResponse",
-      "AgentSessionRuntimeEventInput",
       "AgentSessionStartParams",
       "AgentSessionStartResponse",
       "AgentSessionStatus",
@@ -2072,6 +2082,10 @@
       "AdditionalContextEntry",
       "AdditionalContextKind",
       "AgentMessageDeltaNotification",
+      "ArtifactSnapshot",
+      "ArtifactWriteParams",
+      "ArtifactWriteResponse",
+      "ArtifactWriteSidecar",
       "ClientRequest",
       "ClientResponse",
       "CollabAgentState",
@@ -2080,6 +2094,7 @@
       "CollabAgentToolCallStatus",
       "CommandAction",
       "CommandExecutionApprovalDecision",
+      "CommandExecutionOutputDeltaNotification",
       "CommandExecutionRequestApprovalParams",
       "CommandExecutionRequestApprovalResponse",
       "CommandExecutionSource",
@@ -2087,6 +2102,7 @@
       "DynamicToolCallOutputContentItem",
       "DynamicToolCallStatus",
       "FileChangeApprovalDecision",
+      "FileChangePatchUpdatedNotification",
       "FileChangeRequestApprovalParams",
       "FileChangeRequestApprovalResponse",
       "FileUpdateChange",
@@ -2100,12 +2116,14 @@
       "McpServerElicitationRequestParams",
       "McpServerElicitationRequestResponse",
       "McpToolCallAppContext",
+      "McpToolCallProgressNotification",
       "McpToolCallStatus",
       "MemoryCitation",
       "MemoryCitationEntry",
       "Method",
       "PatchApplyStatus",
       "PatchChangeKind",
+      "PlanDeltaNotification",
       "ReasoningSummaryPartAddedNotification",
       "ReasoningSummaryTextDeltaNotification",
       "ReasoningTextDeltaNotification",

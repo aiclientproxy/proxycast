@@ -189,8 +189,6 @@ function normalizeSources(sources?: MemorySourcesConfig): MemorySourcesConfig {
       ? sources.project_rule_dirs
       : [".agents/rules"],
     user_memory_path: sources?.user_memory_path ?? undefined,
-    project_local_memory_path:
-      sources?.project_local_memory_path ?? ".lime/AGENTS.local.md",
   };
 }
 

@@ -97,10 +97,23 @@ export function useWorkspaceTopicSwitch({
       }
       resetTopicLocalState();
       try {
-        if (forwardedOptions) {
-          await originalSwitchTopic(topicId, forwardedOptions);
-        } else {
-          await originalSwitchTopic(topicId);
+        const hydrationResult = forwardedOptions
+          ? await originalSwitchTopic(topicId, forwardedOptions)
+          : await originalSwitchTopic(topicId);
+        if (hydrationResult === "error") {
+          logAgentDebug(
+            "AgentChatPage",
+            "runTopicSwitch.error",
+            {
+              allowDetachedSession: options?.allowDetachedSession === true,
+              durationMs: Date.now() - startedAt,
+              forceRefresh: options?.forceRefresh === true,
+              hydrationResult,
+              topicId,
+            },
+            { level: "error" },
+          );
+          return "error" as const;
         }
         logAgentDebug("AgentChatPage", "runTopicSwitch.success", {
           allowDetachedSession: options?.allowDetachedSession === true,
@@ -108,6 +121,7 @@ export function useWorkspaceTopicSwitch({
           forceRefresh: options?.forceRefresh === true,
           topicId,
         });
+        return "success" as const;
       } catch (error) {
         logAgentDebug(
           "AgentChatPage",
@@ -171,12 +185,17 @@ export function useWorkspaceTopicSwitch({
           !currentProjectId &&
           !topicBoundProjectId
         ) {
-          logAgentDebug("AgentChatPage", "switchTopic.detachedSessionFastPath", {
-            topicId,
-          });
+          logAgentDebug(
+            "AgentChatPage",
+            "switchTopic.detachedSessionFastPath",
+            {
+              topicId,
+            },
+          );
           finishResolutionIfNeeded();
-          await runTopicSwitch(topicId, options, { skipBeforeSwitch: true });
-          return "success" as const;
+          return await runTopicSwitch(topicId, options, {
+            skipBeforeSwitch: true,
+          });
         }
 
         if (
@@ -193,8 +212,9 @@ export function useWorkspaceTopicSwitch({
             topicId,
           });
           finishResolutionIfNeeded();
-          await runTopicSwitch(topicId, options, { skipBeforeSwitch: true });
-          return "success" as const;
+          return await runTopicSwitch(topicId, options, {
+            skipBeforeSwitch: true,
+          });
         }
 
         const decision = await resolveTopicSwitchProject({
@@ -238,8 +258,9 @@ export function useWorkspaceTopicSwitch({
 
         rememberProjectId(targetProjectId);
         finishResolutionIfNeeded();
-        await runTopicSwitch(topicId, options, { skipBeforeSwitch: true });
-        return "success" as const;
+        return await runTopicSwitch(topicId, options, {
+          skipBeforeSwitch: true,
+        });
       } catch (error) {
         console.error("[AgentChatPage] 解析任务项目失败:", error);
         logAgentDebug(

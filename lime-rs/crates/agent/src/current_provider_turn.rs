@@ -104,6 +104,7 @@ where
     let mut web_search_tracker = WebSearchExecutionTracker::default();
     let (host_event_sender, mut host_event_receiver) = mpsc::unbounded_channel();
     let (agent_event_sender, mut agent_event_receiver) = mpsc::unbounded_channel();
+    let mcp_tool_routes = mcp_step_snapshot::McpToolRoutes::default();
     let tool_step_snapshot_source = mcp_step_snapshot::current_tool_step_snapshot_source(
         state.clone(),
         policy.clone(),
@@ -113,11 +114,13 @@ where
         ThreadId::new(thread_id.clone()),
         agent_control_gateway,
         pending_input.clone(),
+        mcp_tool_routes.clone(),
     );
-    let lifecycle_emitter = Arc::new(CurrentTurnToolLifecycleEmitter::new(
+    let lifecycle_emitter = Arc::new(CurrentTurnToolLifecycleEmitter::with_mcp_routes(
         host_event_sender.clone(),
         session_id,
         thread_id,
+        mcp_tool_routes,
     ));
 
     let turn_future = run_current_provider_turn(
@@ -466,11 +469,11 @@ fn default_working_directory() -> PathBuf {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use rmcp::model::{CallToolResult, Content, JsonObject, ListToolsResult, ServerNotification};
+    use rmcp::model::{CallToolResult, Content, JsonObject, ListToolsResult};
     use std::sync::Arc;
     use std::time::Duration;
-    use tokio::sync::{mpsc, Mutex};
-    use tool_runtime::mcp_connection::{McpConnection, McpConnectionError};
+    use tokio::sync::Mutex;
+    use tool_runtime::mcp_connection::{McpConnection, McpConnectionCall, McpConnectionError};
     use tool_runtime::tool_call::ToolEnvironment;
     use tool_runtime::tool_executor::{RuntimeToolExecutionRequest, RuntimeToolPolicyErrorKind};
     use tool_runtime::tool_extension::RuntimeExtensionConfig;
@@ -491,19 +494,17 @@ mod tests {
             std::future::pending().await
         }
 
-        async fn call_tool(
+        async fn start_call_tool(
             &self,
             _name: &str,
             _arguments: Option<JsonObject>,
             _scope: &tool_runtime::mcp_connection::McpCallScope,
             _cancel_token: CancellationToken,
-        ) -> Result<CallToolResult, McpConnectionError> {
-            std::future::pending().await
-        }
-
-        async fn subscribe(&self) -> mpsc::Receiver<ServerNotification> {
-            let (_sender, receiver) = mpsc::channel(1);
-            receiver
+        ) -> Result<McpConnectionCall, McpConnectionError> {
+            Ok(McpConnectionCall {
+                response: Box::pin(std::future::pending()),
+                notifications: Box::pin(futures::stream::empty()),
+            })
         }
     }
 

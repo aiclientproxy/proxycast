@@ -49,7 +49,7 @@ diagnostics trace timing 复验已闭环：`.lime/qc/gui-evidence/claw-chat-curr
 
 Recovery / history Gate B 最新闭环：`.lime/cdp-evidence/agent-session-recovery-cdp-gate-summary.json` 证明真实 Electron、preload/IPC、`app_server_handle_json_lines` 与 `thread/start/read/list/resume` 使用同一 canonical identity；resume 为 metadata-only，不含 legacy fields，也不重发 `thread/started`。`.lime/qc/gui-evidence/agent-session-history-electron-fixture/agent-session-history-electron-fixture-canonical-v2-summary.json` 证明 canonical ThreadStore 的 3 Turns / 9 Items、分页 cursor、DOM 顺序与 archive/unarchive 重启读回。旧 `agentSession/update` 前置、`projected_*` history seed、visual replay helper、queue event projection 与 queued composer restore 均为 `dead / deleted / forbidden-to-restore`。loaded resume 已增加 actor-ordered `activeTurnId` snapshot；本轮 listener 汇合骨架已关闭跨 thread 广播、stale connection subscription 和 response/replay/live producer 分裂。raw JSONL 顺序测试、token usage/ThreadGoal replay 与跨 connection reconnect 仍 OPEN；MCP terminal owner migration 已落 current 终态 owner 骨架，但等待共享 App Server 输入类型迁移汇合后的编译/定向测试证据。
 
-Renderer 旧投影清退已完成：1126 行 `appServerEventPayloadProjection.ts`、零消费者 `canonicalApprovalItemProjection.ts` 及其正向测试已物理删除；`appServerEventStreamProjection.ts` 是唯一 projector，只接受 direct v2 lifecycle 与 provider/runtime/image/media raw side-channel，wrapper lifecycle/action/canonicalEvent/typedEvent fail closed。下一刀只补 v2 typed ingress：先让 `queueIfBusy`、`skipPreSubmitResume` 和 provider/search route 离开 `additionalContext`，由 durable thread defaults 与 App Server internal route 合并。`agentSession/runtimeEvents/append`、`agentSession/action/respond` 仍有 artifact/Plugin/approval 生产消费者，当前分类为 `deprecated`；必须先补 typed Item/artifact owner 与 Codex typed server request，再迁生产者并同刀删除，禁止 compat。provider/server latency 继续由 App Server diagnostics trace 提供，不在 Renderer 建第二套计时事实源。
+Renderer 旧投影清退已完成：1126 行 `appServerEventPayloadProjection.ts`、零消费者 `canonicalApprovalItemProjection.ts` 及其正向测试已物理删除；`appServerEventStreamProjection.ts` 是唯一 projector，只接受 direct v2 lifecycle 与 provider/runtime/image/media raw side-channel，wrapper lifecycle/action/canonicalEvent/typedEvent fail closed。`agentSession/runtimeEvents/append` 的生产消费者、package/Renderer wrapper、Rust v0 protocol/handler/schema/fixture 和旧正向测试也已删除，typed `artifact/write` 是唯一 Artifact 保存入口；旧 method 只允许出现在负向回流守卫和历史 evidence。`agentSession/action/respond` 的剩余生产 surface 继续迁到 typed reverse server request，不得与已删除 append 绑定成同一 OPEN_REF。provider/server latency 继续由 App Server diagnostics trace 提供，不在 Renderer 建第二套计时事实源。
 
 删除后复验通过历史 31/31、流式 32/32、fixture guard 76/76，以及 `home-hotpath-regression`、`home-hotpath-greeting-regression` 两条真实 Electron Claw 热路径。聚合 fixture 随后在 Coding Workbench 暴露独立 blocker：旧 fixture 使用调用方 session id 调 `agentSession/update`，没有消费 v2 `thread/start` 的 canonical session identity，后续还向 v2 `turn/start` 传旧 `runtimeOptions`。该路径必须随 typed session/route 迁移直接改写，不增加 alias 或 wrapper；它不撤销本轮 projector/Claw 验证，但阻止把完整 `smoke:agent-runtime-current-fixture` 报为全绿。
 
@@ -344,7 +344,8 @@ approval/MCP/child agent/cold read、live provider 与 Windows cross-platform UD
 结论：当前“思考不断重复”不是 Renderer 创建多个 reasoning 节点，也不是累计全文被重复拼接。
 原始 `Thinking Process` 文本来自当前模型/provider；Lime 将 raw reasoning 默认展示、合并
 summary/raw wire 事件，并在 provider 缺少 terminal 时长期保持 `inProgress`，共同放大成用户可见
-的重复与卡住体验。该项分类为 `current / alignment-open`，不能称为 Codex parity。
+的重复与卡住体验。该项在取证时分类为 `current / alignment-open`；summary/raw typed 投影、默认
+可见性和 EOF-without-completed fail-closed 已由 V1-20 关闭。
 
 证据：
 
@@ -365,7 +366,7 @@ summary/raw wire 事件，并在 provider 缺少 terminal 时长期保持 `inPro
   `stream closed before response.completed`，idle timeout 返回显式 stream error；Lime 当前没有
   等价的 fail-closed 产品终态。
 
-下一刀必须落在 current owner，不在 Renderer 做字符串过滤：
+取证后的收口要求必须落在 current owner，不在 Renderer 做字符串过滤：
 
 1. `model-provider` 保留 summary/raw 两类 typed event，`agent-runtime` 与 canonical
    Thread/Turn/Item 分别持久化 `summary/content`，不再压成单一 `text`。
@@ -471,6 +472,397 @@ App Server v2 current owner，不能通过旧 WebSocket/HTTP agent protocol 旁�
   `86/86`，包含首页首发普通任务与短问候真实 Electron fixture，`liveProviderUsed=false`。
 - `npm run verify:gui-smoke`：通过，真实 Electron Host/preload、App Server `1.109.0`、Claw shell reload、
   Memory settings 与结构化 evidence 均通过。
+
+### V1-17 相同 Prompt 的 canonical Turn hydration 收口（2026-07-23）
+
+目标：修复同一会话连续发送相同文本时，terminal recovery 已拿到第二轮 canonical 完成态，
+但 Renderer 把第二轮 user/assistant 错误合并进第一轮、导致第二轮继续显示“生成中”的问题。
+该刀只收敛 Thread/Turn/Item identity，不修改 Provider 输出、prompt 或终态协议。
+
+根因与改动：
+
+- `agentChatHistoryLocalMergeMatching.ts` 旧逻辑先按 user 文本、assistant 内容签名匹配，最后才检查
+  `runtimeTurnId`。两轮 prompt 都是“你好”时，第二轮 canonical user 会命中第一轮 local user，
+  后续顺序 assistant 也命中第一轮 local assistant，造成第二轮正文覆盖第一轮、真正第二轮
+  `pending-turn:*` 壳未收口。
+- 匹配现在以 canonical `runtimeTurnId` 为第一身份：目标带 canonical turn 时先查 exact turn；文本、
+  签名、顺序和 interrupted fallback 可以承接无 turn / `pending-turn:*` 本地壳，但不得跨到另一个
+  canonical turn。该语义对齐 Codex 的 Thread/Turn/Item identity，不增加文本兼容旁路。
+- 增量 hydration 只覆盖新 turn 时，保留未被 hydrated turn set 覆盖的既有 local canonical 历史；
+  第二轮 canonical user/assistant 替换第二轮 pending 壳，第一轮 canonical user/assistant 原样保留。
+- 新增回归精确覆盖：本地第一轮 completed、第二轮 pending、两轮 prompt 都是“你好”、hydrated
+  仅含第二轮 canonical user/assistant；断言两个 turn 各自保留且第二轮不再残留 generating 状态。
+
+验证：
+
+- 红灯证据：修复前新增回归只返回 2 条消息，第二轮 canonical 结果占用第一轮 local user/assistant
+  ID；修复后 local merge、local tail、missing users、runtime sync 共 `48/48` 通过。
+- `npm run typecheck`、Prettier、窄写集 `git diff --check` 通过。
+  `npm run test:related -- <merge paths>` 被现有 Vitest/Vite 环境以
+  `EISDIR: read .../lime/electron` 阻塞；相同受影响测试已通过显式 Vitest 定向入口，未把该基础设施
+  错误误报为实现失败。
+- `npm run smoke:agent-runtime-current-fixture` 通过：history `31/31`、streaming `32/32`、
+  fixture guard `86/86`，以及首页普通首发/短问候、停止后继续、审批、图片、Skills、MCP、
+  Workbench 等 Electron 聚合场景全部通过，`liveProviderUsed=false`。
+- `npm run smoke:claw-chat-current-fixture` 与 `npm run verify:gui-smoke` 通过；后者证明真实 Electron
+  Host/preload、source-built App Server `1.110.0`、Claw shell reload、Memory settings 与结构化
+  evidence 均为 `result=pass`。
+- 真实 Electron CDP `9231` Gate B 复测使用同一稳定 Host/App Server/Renderer PID，页面确认
+  `window.__LIME_ELECTRON__=true`、preload invoke 可用。首页首轮 probe 仅发生 `home=true -> false`，
+  第二轮全程 `home=false`；没有再次回首页。
+- 当前 read model：session `sess_8079a30ba04f4b48b5bfa783625b69e9`、thread
+  `thread_e9ae39de8e624895ba8af2c4c9c2e887` 有两个独立 turn：
+  `turn_59793ef8aa4043ae9d83c3e558e54d63` 与
+  `turn_15cf1b69dc1d4e79a68c1f2e02bb8ade`，均为 `completed`、各含 1 个 user item 与 1 个
+  assistant item、reasoning item 为 0。GUI 同时保留两个独立消息组，第一轮正文未被改写，第二轮
+  无“生成中/正在生成回复”占位，`thinkingBlocks=0`、invoke error 为 0；开发日志出现
+  `AgentStream.terminalRecoveryPoll.recovered` 后 GUI/read model 一致收口。
+- 首轮 live Provider 从发送到 GUI 完成约 `8.5s`；本刀消除了错误归并与持续生成，但没有把
+  Provider TTFT 伪装成本地完成。上游首事件等待仍按 V1-16 的独立性能项继续测量。
+
+### V1-18 侧边栏 Thread 查询与首页首发 Gate B 复测（2026-07-23）
+
+目标：收口首页发送后的真实 Electron 复测证据，并消除侧边栏 Thread 查询在多项目场景中的重复
+workspace 扫描；本刀不引入 UI 特判，也不把 Provider 延迟伪装成本地完成。
+
+根因与改动：
+
+- App Server 的 `thread/list` / `thread/read` 在做 agent context enrichment 时，为每个 Thread
+  重新打开 SQLite 连接并重复 attach / schema 初始化，形成 N+1。新增复用当前 SQLite 连接的
+  `read_thread_spawn_parent_with_conn`，让同一请求内的 enrichment 复用现有连接。
+- `useAppSidebarSessions` 原先在已有全局查询和 cwd 查询之外，又按 `workspaceId` 做一次全局扫描；
+  该扫描不提供新的分页语义，已删除，保留全局查询与每个 cwd 查询，项目归组断言同步更新。
+- 相关修改集中在 `lime-rs/crates/app-server/src/runtime/canonical_thread_store.rs`、
+  `lime-rs/crates/app-server/src/runtime/canonical_thread_store/agent_graph.rs`、
+  `src/components/app-sidebar/useAppSidebarSessions.ts` 与对应组件测试。
+
+性能证据：
+
+- 真实 Electron 直连 `thread/list`：修复前 limit 11 约 `12ms`、limit 21 约 `21-22ms`；修复后
+  limit 11 约 `4ms`、limit 21 约 `5-6ms`。
+- 真实 Electron CDP `http://127.0.0.1:9231` 确认 `window.__LIME_ELECTRON__ === true`、
+  `window.electronAPI.invoke` 可用。两次从首页发送“你好”均只发生一次 `home=true -> false`，
+  之后保持 Claw 工作台，没有 `FLICKER-DEBUG` / `FLICKER-DEBUG2`、`duplicate_event_id` 或
+  本轮新增控制台 error；`thinking-block=0`，最终只保留一份 assistant 正文。
+- 第一次 live 复测：`submitAccepted=90ms`，Provider 首字 trace `providerWaitMs=862ms`，
+  Renderer `firstTextDelta=2863ms`，`firstTextPaint=2924ms`；第二次从首页复测：
+  `submitAccepted=111ms`，Provider 首字 `providerWaitMs=635ms`，Renderer
+  `firstTextDelta=1164ms`，`firstTextPaint=1197ms`。首字阶段仍受 live Provider TTFT 影响，
+  但 UI 额外渲染延迟约 `33ms`，未发现重复思考或前端重复输出。
+
+Gate B 证据边界：
+
+- 本轮 trace buffer 命中 `transport=electron-ipc`、`command=app_server_handle_json_lines`、
+  `status=success`，现行 JSON-RPC 方法为 `thread/start`、`turn/start`、`thread/read`、
+  `thread/turns/list`、`thread/items/list` 和 `agentSession/update`；没有把旧的
+  `agentSession/turn/start` 名称当作 current 证据。
+- 该证据证明 Electron Desktop Host、preload/IPC、App Server JSON-RPC、read model 与 GUI
+  的同轮闭环；不证明其他 Provider、其他平台或所有 live 网络条件下的普遍 TTFT，也不替代
+  runtime backend/provider fixture 对最终 system prompt 的证据。
+
+验证：
+
+- AppSidebar 组件测试 `51/51`；App Server related Rust `1485/1485`；`npm run typecheck`；
+  `cargo build --manifest-path "lime-rs/Cargo.toml" -p app-server --bin app-server`。
+- `npm run smoke:agent-runtime-current-fixture`、`npm run smoke:claw-chat-current-fixture`、
+  `npm run test:contracts`（296 checks）、`npm run verify:gui-smoke`、
+  `npm run bridge:health -- --timeout-ms 120000` 与窄写集 `git diff --check` 均通过。
+
+### V1-19 EventLog 追加与 Projection schema 热路径收口（2026-07-23）
+
+目标：消除连续 runtime event 追加时重复扫描完整 JSONL，以及每次打开 ProjectionStore 都重复执行
+schema/index/column migration 的本地启动阻塞；保持 durable-before-notify 和冷启动全量校验不变。
+
+根因与改动：
+
+- `EventLogWriter` 为每个 session 缓存文件长度、mtime、最后 sequence 和 event id 集合；文件被外部
+  修改时自动回退到既有全量 append guard，追加成功后只更新缓存，不重复扫描早期事件。
+- `ProjectionStore::open_thread_store()` 只负责打开连接和必要的 attach；完整 schema/index/column
+  migration 收敛到显式初始化路径，避免每次 `thread/read`、`thread/list` 连接都重复执行。
+- 归档/删除 event log 时同步清除 append state，避免旧文件状态污染新 session；冷启动、repair 和
+  tamper detection 仍使用全量扫描 owner。
+
+验证：
+
+- `cargo test -p app-server runtime::event_log`：19/19；
+  `cargo test -p app-server canonical_thread_store`：77/77；`cargo check -p app-server --lib` 通过。
+- `npm run bridge:health -- --timeout-ms 120000` 通过；真实 Electron CDP Gate B 连续 3 轮首页输入
+  “你好”均只发生一次 `home -> Claw`，未回首页，`assistantCount=1`、`thinkingBlocks=0`。
+  首页提交到 `turn/start` 约 `155-313ms`，观测到的 live Provider 首字等待约 `568ms`；剩余首字
+  延迟属于 Provider/运行时事件链，不再归因于 rollout/schema 重复扫描。
+- 临时采样报告和 CDP 探针已移入系统废纸篓，生产源码无 `FLICKER-DEBUG*` 或临时探针残留。
+
+### V1-20 Reasoning 可见性与 Skills 初始化热路径收口（2026-07-23）
+
+目标：完成 V1-04 reasoning summary/raw 的 Codex typed 对齐，并删除首轮初始化中与
+`AgentSkillSnapshot` 重复的全量 Skill registry reload；不在 Renderer 做内容字符串过滤，也不以
+短问候特判掩盖运行时延迟。
+
+根因与改动：
+
+- `model-provider -> runtime-core -> agent-runtime -> agent protocol -> App Server -> Renderer` 现在分别
+  保留 `ReasoningSummaryDelta` 与 `ReasoningContentDelta`。summary 和 raw content 共享 canonical
+  reasoning item identity，但只有 raw content 进入下一次 provider history；Responses stream 在未收到
+  completed 时 EOF 会 fail closed。
+- GUI 的活动流和恢复流默认 `surfaceThinkingDeltas=false`，summary 作为可见过程分段展示，raw content
+  默认隐藏。`thinking` 仅表达本轮推理能力偏好，不再隐式解锁 raw chain-of-thought；Skill 明确保留的
+  process timeline 继续按既有 typed metadata 展示。
+- 首段正文到达时，只有实际收到过隐藏 raw reasoning 才执行对应清理；纯正文不会产生额外消息刷新，
+  summary 也不会被误清。完成态继续由 canonical item snapshot 单次接管，不生成第二份 assistant 正文。
+- `AgentRuntimeState::initialize()` 删除 `reload_skills()`。普通回合的 current owner 是
+  `AgentSkillSnapshot`：只扫描 metadata/locator、按 root 与 `SKILL.md` mtime 自动失效缓存；明确选择后
+  才读取 Skill 正文。workspace runtime enable 仍按精确目录注册，安装/删除后的显式 reload API 保留。
+- 临时 `FLICKER-DEBUG*`、runtime/provider preflight probe 和 `/tmp/lime-runtime-preflight-probe.jsonl`
+  均已删除；执行计划中的旧日志名称只作为历史 evidence 保留。
+
+验证：
+
+- reasoning 前端相关 11 个测试文件 `189/189` 通过，覆盖活动流、恢复流、typed event projection、
+  summary 分段、raw 隐藏、消息持久化与时间线；`npm run typecheck` 通过。
+- `model-provider current_client::stream_tests` `9/9`、`agent-runtime provider_turn::tests` `31/31`
+  通过，覆盖 summary/raw 分型、provider history、EOF fail-closed、可见输出 deadline 与 token usage。
+- `lime-skills agent_snapshot` `6/6`、`skill_loader` `5/5`、`lime-agent runtime_state_support` `5/5`、
+  App Server 主回合初始化 `1/1` 通过，证明 metadata-only snapshot、缓存自动失效、按需 registry 与
+  不带全量 reload 的 runtime 初始化均可用。
+- 最新真实 Electron CDP warm 回归：`home -> Claw=1054ms`、`submitAccepted=64ms`、
+  `firstEvent=199ms`、`firstTextDelta=1261ms`、`firstTextPaint=1318ms`、点击到正文 DOM `2406ms`、
+  点击到终态 `2439ms`；`assistantCount=1`、`thinkingBlocks=0`、invoke error 为 0，页面只发生一次
+  `home -> Claw`。第一次冷启动采样把“正在准备回复”误识别为正文，因此不作为精确 TTFT 证据。
+
+分类：`current = typed reasoning summary/raw + AgentSkillSnapshot + 真实 Electron 主链`；
+`dead / deleted = 深度思考开关解锁 raw 显示、首轮全量 Skills reload、临时性能/闪烁 probe`；本刀未新增
+`compat` 或 `deprecated`。
+
+### V1-21 Reasoning lifecycle 重复分段收口（2026-07-24）
+
+目标：修复同一 Codex reasoning item 在 canonical lifecycle snapshot 前后被重复投影的问题；继续保持
+summary 可见、raw reasoning 默认隐藏，不新增 Renderer 内容特判或第二套事件 owner。
+
+根因与改动：
+
+- `item_started` / `item_updated` / `item_completed` 在 runtime handler 与 lifecycle handler 两层都会清空
+  `streamedReasoningSourceItemId`、`streamedReasoningSummaryIndex` 和当前 segment。于是同一
+  `itemId + summaryIndex` 的下一条 delta 被误判为新段，产生重复 thinking part。
+- canonical item lifecycle 现在只负责 ThreadItem 与消息快照接管，不再拥有 streamed summary reset。
+  segment 只在新 `itemId + summaryIndex`、`reasoning_summary_part_added`、显式过程边界或 turn 终态切换，
+  与 Codex 的 item identity / summary index 语义一致。
+- 回归覆盖 `summary delta -> 同 item_updated -> 同 summary delta -> item_completed`：增量阶段只有一个
+  thinking part，完成态由 canonical reasoning snapshot 单次接管。
+
+验证与清理：
+
+- reasoning/runtime 定向 `28/28`，canonical reader/v2 notification/turn binding/resume binding
+  `67/67`；`npm run typecheck`、Prettier 与窄写集 `git diff --check` 通过。
+- `npm run test:contracts` 通过（759 generated types、296 client checks）；
+  `npm run governance:legacy-report` 为 0 零引用候选、0 分类漂移、0 边界违规。
+- `npm run verify:gui-smoke` 与修改后 `npm run smoke:agent-runtime-current-fixture` 通过；后者覆盖首页首发、
+  短问候、停止续写、审批、Skills/MCP、历史恢复和工作台 Electron 场景。
+- 真实 Electron CDP 确认 Electron/preload 主链；本轮首页短问候 `firstEvent=158ms`、
+  `providerWaitMs=550ms`、`firstTextDelta=1286ms`、`firstTextPaint=1338ms`。该样本未出现 14 秒级
+  Renderer 阻塞；历史 14.5 秒首事件等待继续归 Provider/模型链路诊断。
+- 生产源码无 `FLICKER-DEBUG*`、视频拆帧、临时 Swift/CDP probe 或截图残留；执行计划中的关键词仅为
+  历史 evidence。`current = canonical reasoning lifecycle + streamed summary identity`；被删除的 lifecycle
+  双 reset 为 `dead / deleted / forbidden-to-restore`，无新增 `compat/deprecated`。
+
+### V1-22 Plan typed delta 生命周期收口（2026-07-24）
+
+目标：按 Codex v2 对齐 Plan 的 public typed delta，删除此前把每个内部 `plan.delta` 错误投影成
+`item/started` 的旧 wire 语义，并让 Renderer 复用同一 canonical Plan item identity。
+
+写集与唯一 owner：
+
+- `app-server-protocol` 的 `PlanDeltaNotification`、v2 method/schema/codegen 与 serde 回归；
+- App Server `V2NotificationProjector` 与同 owner 的 `plan.rs`，以及 `runtime_backend/plan_events.rs`；
+- `packages/app-server-client`、Renderer v2 notification route、Plan projection/controller 与定向测试；
+- `internal/refactor/v1` inventory/fixture 与 public JSON-RPC integration test。
+
+当前链路：内部 event log 仍使用 `plan.delta` 作为 App Server canonical event/projection 表达；生产
+public wire 只输出一次 `item/started`，每个增量输出 `item/plan/delta(threadId, turnId, itemId, delta)`，
+最后输出一次 `item/completed`。Plan delta 保留原始换行，不复用会 `trim()` 的通用 payload reader；
+terminal 后的 late delta fail closed。
+
+验证：
+
+- `cargo test -p app-server-protocol plan_delta_notification_round_trips_codex_shape`：通过；
+- `cargo test -p app-server v2_notifications::tests::maps_plan` 与
+  `v2_notifications::tests::rejects_plan_delta`：通过；
+- `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server --test thread_v2_jsonrpc plan_delta_uses_one_typed_item_lifecycle_in_public_jsonrpc_messages`：通过；
+- Renderer Plan projection、`packages/app-server-client`、`packages/agent-runtime-client` 定向测试：分别
+  `35/35`、`78/78`、`23/23` 通过。
+- `npm run typecheck`、`npm run test:contracts`（760 generated types、296 client checks）与
+  `npm run governance:legacy-report`（0 零引用候选、0 分类漂移、0 边界违规）通过；
+  `npm run smoke:agent-runtime-current-fixture` 与 `npm run verify:gui-smoke` 均通过。后两者证明真实
+  Electron Host/preload、App Server、Plan history hydrate 与 GUI 的 current 链路可用，fixture 未使用
+  live Provider。
+
+分类：`current = item/plan/delta + 单一 Plan item lifecycle + canonical itemId`；旧的每 delta
+`item/started` 投影与重复生命周期属于 `dead / deleted / forbidden-to-restore`；未新增
+`compat/deprecated`。生产源码无 `FLICKER-DEBUG*`、视频拆帧、临时 Swift/CDP probe、截图或其他本轮
+调试垃圾残留。下一刀回到 `CommandExecution` typed increment，不在 Plan 上保留第二套 wire。
+
+### V1-23 CommandExecution outputDelta 生命周期收口（2026-07-24）
+
+目标：按 Codex v2 对齐 `item/commandExecution/outputDelta`，让 Runtime 原始输出、App Server
+public notification、Renderer tool item 使用同一个 canonical `itemId`，并清理 metadata-only
+事件伪造增量的风险。
+
+写集与唯一 owner：
+
+- `app-server-protocol` 的 `CommandExecutionOutputDeltaNotification`、v2 method/schema/codegen 与
+  serde 回归；`item/commandExecution/terminalInteraction` 暂不接入，因为当前 Runtime 没有可靠的
+  `stdin` source event，不伪造 terminal interaction。
+- Runtime `coding_events.rs` 的 `command.output` 增加完整原始 `delta`；流式 delta 保留换行，
+  无流式增量的 result fallback 使用完整 `result.output`，metadata-only 事件不写 delta。
+- App Server `V2NotificationProjector` 新增 command owner：只接受已 started 且未 completed 的
+  `commandExecution` item，身份不一致、缺 delta、late delta 均 fail closed。
+- Renderer v2 route、sequence gate 和既有 `tool_output_delta` projection 复用 canonical source
+  item，不新增第二种 GUI item。
+
+当前链路：`command.started -> item/started -> command.output -> item/commandExecution/outputDelta*`
+`-> command.exited -> item/completed`。内部 `command.output` 仍是 event-log/projection 表达，
+public wire 只暴露 Codex typed notification。
+
+验证：
+
+- `cargo check -p app-server-protocol -p app-server` 通过；protocol serde、App Server projector、
+  Runtime coding event 定向测试通过。
+- Renderer v2 notification / sequence gate 定向测试 `35/35` 通过。
+- public JSON-RPC integration 覆盖 started、同 itemId 的 output delta、completed，以及 late output
+  fail-closed；schema fixtures 与 TypeScript generated types 已同步。
+- `npm run test:contracts`、`npm run governance:legacy-report`、
+  `npm run smoke:agent-runtime-current-fixture` 与 `npm run verify:gui-smoke` 通过；其中 Electron fixture
+  覆盖首页短问候、Claw 工作台、App Server current read model 与 GUI 终态，未使用 live Provider。
+- `npm run verify:local` 在既有 `i18n:unused -- --check` 门禁处停止：当前仓库有 `38` 个未引用 key
+  候选，且本轮未改 `src/i18n/**`。该跨域基线问题未通过删除翻译或新增白名单掩盖；本轮其余定向、
+  contract、runtime fixture 与 Electron GUI 门禁均已独立通过。
+
+分类：`current = item/commandExecution/outputDelta + 单一 CommandExecution lifecycle + canonical
+itemId`；未接入的 `terminalInteraction` 为 `gap`，不是兼容实现；旧的 metadata-only 伪造 delta
+属于 `dead / deleted / forbidden-to-restore`。下一刀进入 `item/fileChange/patchUpdated`，不恢复
+Codex 已 deprecated 的 `item/fileChange/outputDelta`。
+
+### V1-24 FileChange patchUpdated 生命周期收口（2026-07-24）
+
+目标：按 Codex v2 对齐 `item/fileChange/patchUpdated`，让 Runtime patch 快照、App Server public
+notification、typed client 与 Renderer patch item 使用同一个 canonical `itemId`；不恢复 Codex 已
+deprecated 且服务端不再发送的 `item/fileChange/outputDelta`。
+
+写集与唯一 owner：
+
+- `app-server-protocol` 新增 `FileChangePatchUpdatedNotification`、method/schema/codegen 与 serde 回归；
+- App Server `V2NotificationProjector` 的 `file_change.rs` 直接投影既有 `patch.started/applied/failed/declined`，
+  不新增第二套 Runtime event；
+- `packages/app-server-client`、`packages/agent-runtime-client`、Renderer v2 route 与 sequence gate 只消费
+  typed `patchUpdated`，并复用现有 patch GUI item；
+- `internal/refactor/v1` inventory 与 public JSON-RPC integration 记录 canonical identity 和禁止回流项。
+
+当前链路：MCP manager 的真实 `ProgressNotification` 由 Runtime 转成带
+`notification_kind=mcp_progress` 与精确 route identity 的 `AgentEvent::ToolProgress`；App Server 只在
+canonical `McpToolCall` 已 started 且未 completed 时输出 `item/mcpToolCall/progress`。typed client 与
+Renderer 继续使用 notification 的 canonical `itemId` 更新同一工具 item，不按工具名推断 MCP 类型。
+
+当前链路：`patch.started -> item/started -> item/fileChange/patchUpdated -> patch terminal ->
+item/completed`。`patchUpdated` 携带完整结构化 `changes[]` 快照，canonical item identity 来自
+Thread/Turn/Item projector，实测 `patch-1` 归一为 `item_patch-1`；空 changes 不发更新。重复 start、
+terminal-before-start、重复 terminal、started 前/terminal 后的 Renderer update 和 item type drift 均
+fail closed。
+
+验证：
+
+- `cargo check -p app-server-protocol -p app-server` 通过；protocol serde 与 App Server projector
+  `21/21` 通过；
+- public JSON-RPC integration 通过，锁定 `item/started -> item/fileChange/patchUpdated ->
+  item/completed` 及同一 canonical `itemId`；
+- Renderer v2 notification / sequence gate 与 inventory `42/42`、`packages/app-server-client` `79/79`、
+  `packages/agent-runtime-client` `23/23` 通过；schema fixture、`npm run check:protocol-types` 与 generated
+  TypeScript 无漂移；`npm run test:contracts` 通过 `296` 项 contract checks；
+- `npm run smoke:agent-runtime-current-fixture` 通过，覆盖真实 Electron 首页首发、Claw 终态、停止后
+  同会话继续、approval、Plan、MCP、Skills 与工作台分支，`liveProviderUsed=false`；
+- `npm run verify:gui-smoke` 通过，真实 Electron Desktop Host、preload/IPC、App Server 初始化、Claw
+  工作台 reload 与记忆设置均完成；Gate B evidence 为
+  `.lime/qc/project-gates/standalone-shell-01-20260724025631-60196/shell-01-electron-smoke/summary.json`；
+- `npm run governance:legacy-report`、`git diff --check` 与生产源码残留扫描通过；无 legacy 分类漂移、
+  边界违规、`FLICKER-DEBUG*`、`console.trace`、`FileChangeOutputDelta`、视频拆帧或临时 probe 残留。
+
+分类：`current = item/fileChange/patchUpdated + 单一 FileChange lifecycle + canonical itemId`；
+`item/fileChange/outputDelta` 为 `deprecated / excluded / forbidden-to-restore`；文本 patch delta、重复
+GUI item 与临时调试路径为 `dead / deleted`，未新增 `compat`。下一刀进入
+`item/mcpToolCall/progress`。
+
+### V1-25 MCP Tool Call progress 生命周期收口（2026-07-24，进行中）
+
+目标：按 Codex v2 对齐 `item/mcpToolCall/progress`，让真实 MCP
+`ProgressNotification`、Runtime `McpToolCall` item、App Server public notification、typed client 与
+Renderer 使用同一个 canonical `itemId`。不允许 Renderer 伪造 progress，也不允许 App Server
+按工具名猜测 MCP 类型。
+
+写集与唯一 owner：
+
+- `tool-runtime::McpStepSnapshot` 暴露已冻结的 server、raw tool 与 model-visible tool route identity；
+- `agent/current_provider_turn` 在同一 sampling step 共享 route map，把 MCP started/completed 投影为
+  `ThreadItemPayload::McpToolCall`，并仅把真实 `ProgressNotification` 转为 `AgentEvent::ToolProgress`；
+- `app-server-protocol`、App Server `V2NotificationProjector`、两个 typed client、Renderer v2 route 与
+  sequence gate 接入 `item/mcpToolCall/progress`；
+- `internal/refactor/v1` inventory 与 public JSON-RPC integration 记录 canonical identity 和禁止回流项。
+
+退出条件：事件顺序固定为 `item/started -> item/mcpToolCall/progress* -> item/completed`，三者复用
+同一个 canonical `itemId`；started 前、terminal 后、generic Tool item、空 message 与非
+`notification_kind=mcp_progress` 的 progress 均 fail closed。验证至少覆盖 Rust related、public
+JSON-RPC、`npm run test:contracts`、`npm run smoke:mcp-current`、
+`npm run smoke:agent-runtime-current-fixture`、`npm run verify:gui-smoke`、治理扫描和残留清理。
+
+当前实现已将 RMCP `RequestHandle.progress_token` 保留到调用级 subscriber，并从
+`McpConnectionCall` 向 Agent executor 传递调用级 notification stream。旧 connection-wide
+subscription、广播 handler 与空订阅测试已退出生产路径；`ProgressToken` 保持 number/string wire
+类型，不再转成 Debug 字符串。当前分类为 `current = request-token correlation + canonical itemId`；
+`dead = connection-wide progress subscription`，未新增 `compat/deprecated`。
+
+已验证：`lime-mcp` 151/151、`lime-agent --lib` 271/271、`tool-runtime` 271/271；Rust related
+扩展到 `agent-runtime`、App Server、Agent、MCP、Scheduler、Server、Tool Runtime 七个 crate 后
+退出码为 0；public JSON-RPC MCP progress 2/2、protocol round-trip 1/1、Renderer sequence/projection
+42/42、App Server client 80/80、Agent Runtime client 23/23 通过。`npm run test:contracts`、
+`npm run smoke:mcp-current`、`npm run governance:legacy-report` 与全树 `git diff --check` 通过；MCP
+smoke 复用已运行的 Desktop Host/DevBridge，没有启动第二套 Electron。
+
+仍未满足退出条件：完整 `lime-agent` 测试会额外编译已脱离生产模块树的
+`tests/legacy_permission_surfaces.rs`，其中两个历史断言与同样已退出编译图的旧权限实现不一致；
+该 surface 已证明为 `dead-candidate`，应在明确删除确认后连同旧守卫/文档改为
+`dead / deleted / forbidden-to-restore`，不得恢复旧 `bash` alias 或虚构默认权限。现有
+`electron:dev` 仍由并行进程持有，本轮没有重复启动 `smoke:agent-runtime-current-fixture` 或
+`verify:gui-smoke`；这两项重跑前 V1-25 继续保持“进行中”。另外，RMCP 官方 subscribe-after-send
+模式仍存在极快首帧在 subscriber 注册前丢失的理论窗口；本切片只声明 token 隔离，不声明严格
+lossless，也不把 elicitation owner gate 下的串行调用写成真正 parallel MCP evidence。
+
+### typed `artifact/write` 与旧 runtime append 删除收口（2026-07-24）
+
+目标：让 Artifact 保存只经过 `Renderer typed gateway -> App Server JSON-RPC v2 -> RuntimeCore ->
+ThreadStore/artifact read`，删除公共任意 RuntimeEvent 注入入口，不保留 compat。
+
+完成结果：
+
+- `artifact/write` protocol、processor、typed package client、Renderer gateway 与 Workspace 保存链已接通；
+  Content Factory current fixture 使用 typed writer，不再追加 arbitrary workflow/error event。
+- `agentSession/runtimeEvents/append` 的 package/Renderer wrapper、Rust v0 method/DTO/catalog/schema/
+  fixture/handler/dispatch 和旧正向测试已物理删除。public JSON-RPC 对旧 method 返回
+  `METHOD_NOT_FOUND`，package export 与 governance catalog 均有禁止回流守卫。
+- generic append 不再按 `"artifact.snapshot"` 字符串放行终态 turn。私有
+  `TerminalTurnAppendPolicy` 只允许 durable recovery 和 typed `append_artifact_snapshot` 显式写入；
+  `artifact/write` processor 不能提交任意 `RuntimeEvent`。
+
+验证：processor 终态 typed 保存 1/1、public `artifact/write -> artifact/read` 1/1、package artifact
+3/3、Renderer/App Server artifact 56/56、fixture guards 91/91、protocol codegen 零漂移、
+`npm run test:contracts` 与治理扫描通过。
+
+独立真实 Electron Gate B 已关闭：`direct-session` backend 不发 `artifact.snapshot`，Turn terminal 后
+由 Renderer current `AppServerClient.writeArtifact` 经 production `safeInvoke` 发出 typed write。
+summary 精确记录 `app_server_handle_json_lines / electron-ipc / artifact/write`，并校验 trace、typed
+response、read model 的 `threadId/turnId/artifactRef` 一致；GUI 完成 hydrate 并打开 Workbench。
+证据为 `.lime/qc/gui-evidence/code-artifact-workbench-electron-fixture/typed-artifact-write-v2-summary.json`、
+`typed-artifact-write-v2-workbench.png` 与 `typed-artifact-write-v2-backend-ledger.json`；`ok=true`、
+backend Artifact 注入为零、console/page error 为零。新增 fixture guard 7/7 通过；最终 contracts 为
+764 protocol types 零漂移 / 296 client checks，scripts governance、legacy report 0/0/0 和全树 diff
+check 通过。分类：typed writer 与领域 artifact append 为 `current`；旧 append 为
+`dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。本切片状态为 `closed`。
 
 ## 完成定义
 

@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 import {
   isAgentMessageDeltaNotification,
+  isCommandExecutionOutputDeltaNotification,
+  isFileChangePatchUpdatedNotification,
   isItemCompletedNotification,
   isItemStartedNotification,
+  isMcpToolCallProgressNotification,
+  isPlanDeltaNotification,
   isReasoningSummaryPartAddedNotification,
   isReasoningSummaryTextDeltaNotification,
   isReasoningTextDeltaNotification,
@@ -61,6 +65,38 @@ test("recognizes native v2 lifecycle and reasoning notifications", () => {
       params: { delta: "done", itemId: "item-1", threadId, turnId },
     },
     {
+      method: "item/commandExecution/outputDelta",
+      params: { delta: "stdout\n", itemId: "command-1", threadId, turnId },
+    },
+    {
+      method: "item/fileChange/patchUpdated",
+      params: {
+        changes: [
+          {
+            diff: "-old\n+new",
+            kind: { type: "update", move_path: "src/main.ts" },
+            path: "src/index.ts",
+          },
+        ],
+        itemId: "item_patch-1",
+        threadId,
+        turnId,
+      },
+    },
+    {
+      method: "item/plan/delta",
+      params: { delta: "- [ ] verify", itemId: "plan-1", threadId, turnId },
+    },
+    {
+      method: "item/mcpToolCall/progress",
+      params: {
+        itemId: "item_mcp-call-1",
+        message: "正在读取文档索引",
+        threadId,
+        turnId,
+      },
+    },
+    {
       method: "item/reasoning/summaryTextDelta",
       params: {
         delta: "summary",
@@ -99,14 +135,21 @@ test("recognizes native v2 lifecycle and reasoning notifications", () => {
   assert.equal(isItemCompletedNotification(notifications[4]), true);
   assert.equal(isAgentMessageDeltaNotification(notifications[5]), true);
   assert.equal(
-    isReasoningSummaryTextDeltaNotification(notifications[6]),
+    isCommandExecutionOutputDeltaNotification(notifications[6]),
+    true,
+  );
+  assert.equal(isFileChangePatchUpdatedNotification(notifications[7]), true);
+  assert.equal(isPlanDeltaNotification(notifications[8]), true);
+  assert.equal(isMcpToolCallProgressNotification(notifications[9]), true);
+  assert.equal(
+    isReasoningSummaryTextDeltaNotification(notifications[10]),
     true,
   );
   assert.equal(
-    isReasoningSummaryPartAddedNotification(notifications[7]),
+    isReasoningSummaryPartAddedNotification(notifications[11]),
     true,
   );
-  assert.equal(isReasoningTextDeltaNotification(notifications[8]), true);
+  assert.equal(isReasoningTextDeltaNotification(notifications[12]), true);
   assert.equal(
     isThreadSettingsUpdatedNotification({
       method: "thread/settings/updated",
@@ -171,5 +214,56 @@ test("fails closed for malformed reasoning notifications", () => {
     },
   ];
 
-  assert.equal(malformed.every((message) => !isServerNotification(message)), true);
+  assert.equal(
+    malformed.every((message) => !isServerNotification(message)),
+    true,
+  );
+});
+
+test("fails closed for malformed file change patch updates", () => {
+  const malformed = [
+    {
+      method: "item/fileChange/patchUpdated",
+      params: { changes: {}, itemId: "item_patch-1", threadId, turnId },
+    },
+    {
+      method: "item/fileChange/patchUpdated",
+      params: {
+        changes: [{ diff: "", kind: { type: "rename" }, path: "a.ts" }],
+        itemId: "item_patch-1",
+        threadId,
+        turnId,
+      },
+    },
+    {
+      method: "item/fileChange/patchUpdated",
+      params: {
+        changes: [
+          { diff: "", kind: { type: "update", move_path: 42 }, path: "a.ts" },
+        ],
+        itemId: "item_patch-1",
+        threadId,
+        turnId,
+      },
+    },
+  ];
+
+  assert.equal(
+    malformed.every((message) => !isServerNotification(message)),
+    true,
+  );
+});
+
+test("fails closed for malformed MCP tool call progress", () => {
+  const malformed = [
+    { itemId: "item_mcp-call-1", message: "progress", threadId, turnId: "" },
+    { itemId: "", message: "progress", threadId, turnId },
+    { itemId: "item_mcp-call-1", message: "", threadId, turnId },
+    { itemId: "item_mcp-call-1", message: "   ", threadId, turnId },
+  ].map((params) => ({ method: "item/mcpToolCall/progress", params }));
+
+  assert.equal(
+    malformed.every((message) => !isServerNotification(message)),
+    true,
+  );
 });

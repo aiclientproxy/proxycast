@@ -29,6 +29,8 @@ const CODE_FIXTURE_RESTORE_BACKUP_PATH =
   ".lime/checkpoints/session-code-runtime-smoke/image-card-live-backup.json";
 const CODE_FIXTURE_TEST_OUTPUT = "PASS ImageCard.test.tsx\n1 test passed";
 const CODE_FIXTURE_APPROVAL_REQUEST_ID = "approval-code-runtime-write";
+const CODE_FIXTURE_APPROVAL_SERVER_REQUEST_ID =
+  "app-server-request:tool-surface:approval";
 const CODE_FIXTURE_APPROVAL_PROMPT = "确认写入图片卡片历史切换回归测试";
 const CODE_FIXTURE_FILE_EVENT_PREVIEW = "新增图片卡片历史切换回归测试";
 const CODE_FIXTURE_UNIFIED_DIFF = [
@@ -72,8 +74,9 @@ const APP_SERVER_METHOD_AGENT_SESSION_UPDATE = "agentSession/update";
 const APP_SERVER_METHOD_THREAD_READ = "thread/read";
 const APP_SERVER_METHOD_THREAD_LIST = "thread/list";
 const APP_SERVER_METHOD_TURN_START = "turn/start";
-const APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND =
-  "agentSession/action/respond";
+const APP_SERVER_METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL =
+  "item/commandExecution/requestApproval";
+const APP_SERVER_METHOD_SERVER_REQUEST_RESOLVED = "serverRequest/resolved";
 const APP_SERVER_METHOD_AGENT_SESSION_TOOL_INVENTORY_READ =
   "agentSession/toolInventory/read";
 const APP_SERVER_METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST =
@@ -776,6 +779,23 @@ function buildAppServerTurnStartNotifications() {
   });
 }
 
+function buildCodeRuntimeApprovalServerRequest() {
+  return {
+    id: CODE_FIXTURE_APPROVAL_SERVER_REQUEST_ID,
+    method: APP_SERVER_METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
+    params: {
+      approvalId: CODE_FIXTURE_APPROVAL_REQUEST_ID,
+      availableDecisions: ["accept", "acceptForSession", "decline", "cancel"],
+      command: "apply_patch src/components/ImageCard.test.tsx",
+      itemId: "item-code-runtime-command",
+      reason: CODE_FIXTURE_APPROVAL_PROMPT,
+      startedAtMs: Date.now(),
+      threadId: CODE_FIXTURE_THREAD_ID,
+      turnId: CODE_FIXTURE_TURN_ID,
+    },
+  };
+}
+
 function parseAppServerJsonRpcLines(lines) {
   if (!Array.isArray(lines)) {
     return [];
@@ -798,6 +818,10 @@ function encodeAppServerJsonRpcMessage(message) {
 
 function buildAppServerJsonRpcResult(id, result) {
   return encodeAppServerJsonRpcMessage({ id, result });
+}
+
+function buildAppServerJsonRpcRequest(id, method, params) {
+  return encodeAppServerJsonRpcMessage({ id, method, params });
 }
 
 function buildAppServerJsonRpcError(id, code, message, data) {
@@ -1224,7 +1248,8 @@ async function installCodeRuntimeDevBridgeFixture(page, options) {
   const appServerRequests = [];
   const createSessionRequests = [];
   const submitTurnRequests = [];
-  const respondActionRequests = [];
+  const serverRequestResponses = [];
+  const pendingAppServerEventLines = [];
   const restoreFileCheckpointRequests = [];
   const eventConnections = [];
   const eventsSent = [];
@@ -1267,6 +1292,40 @@ async function installCodeRuntimeDevBridgeFixture(page, options) {
     });
   };
   const handleAppServerJsonRpcRequest = (message) => {
+    if (
+      !message?.method &&
+      message?.id === CODE_FIXTURE_APPROVAL_SERVER_REQUEST_ID &&
+      message?.result &&
+      typeof message.result === "object" &&
+      !Array.isArray(message.result)
+    ) {
+      serverRequestResponses.push({
+        id: message.id,
+        result: message.result,
+        at: new Date().toISOString(),
+      });
+      if (serverRequestResponses.length > 20) {
+        serverRequestResponses.shift();
+      }
+      fixture = {
+        ...fixture,
+        thread_read: {
+          ...fixture.thread_read,
+          pending_requests: [],
+          updated_at: new Date().toISOString(),
+        },
+      };
+      pendingAppServerEventLines.push(
+        buildAppServerJsonRpcNotification(
+          APP_SERVER_METHOD_SERVER_REQUEST_RESOLVED,
+          {
+            requestId: CODE_FIXTURE_APPROVAL_SERVER_REQUEST_ID,
+            threadId: CODE_FIXTURE_THREAD_ID,
+          },
+        ),
+      );
+      return null;
+    }
     recordAppServerRequest(message);
     if (!Object.prototype.hasOwnProperty.call(message, "id")) {
       return null;
@@ -1445,6 +1504,16 @@ async function installCodeRuntimeDevBridgeFixture(page, options) {
             },
           };
         }
+        if (submitRequest.message === PROMPT_TEXT) {
+          const approvalRequest = buildCodeRuntimeApprovalServerRequest();
+          pendingAppServerEventLines.push(
+            buildAppServerJsonRpcRequest(
+              approvalRequest.id,
+              approvalRequest.method,
+              approvalRequest.params,
+            ),
+          );
+        }
         return [
           buildAppServerJsonRpcResult(message.id, {
             turn: buildAppServerTurnFromFixture(
@@ -1459,31 +1528,6 @@ async function installCodeRuntimeDevBridgeFixture(page, options) {
             ),
           ),
         ];
-      }
-      case APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND: {
-        const respondRequest = {
-          session_id: params.sessionId,
-          request_id: params.requestId,
-          action_type: params.actionType,
-          confirmed: params.confirmed,
-          response: params.response,
-          event_name: params.eventName,
-          action_scope: params.actionScope,
-          appServerParams: params,
-        };
-        respondActionRequests.push(respondRequest);
-        if (respondActionRequests.length > 20) {
-          respondActionRequests.shift();
-        }
-        fixture = {
-          ...fixture,
-          thread_read: {
-            ...fixture.thread_read,
-            pending_requests: [],
-            updated_at: new Date().toISOString(),
-          },
-        };
-        return buildAppServerJsonRpcResult(message.id, {});
       }
       default:
         return buildAppServerJsonRpcError(
@@ -1580,10 +1624,14 @@ async function installCodeRuntimeDevBridgeFixture(page, options) {
       return;
     }
     if (command === APP_SERVER_DRAIN_EVENTS_COMMAND) {
+      const lines = pendingAppServerEventLines.splice(
+        0,
+        pendingAppServerEventLines.length,
+      );
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ result: { lines: [] } }),
+        body: JSON.stringify({ result: { lines } }),
       });
       return;
     }
@@ -1655,7 +1703,7 @@ async function installCodeRuntimeDevBridgeFixture(page, options) {
         appServerRequests: [...appServerRequests],
         createSessionRequests: [...createSessionRequests],
         submitTurnRequests: [...submitTurnRequests],
-        respondActionRequests: [...respondActionRequests],
+        serverRequestResponses: [...serverRequestResponses],
         restoreFileCheckpointRequests: [...restoreFileCheckpointRequests],
         eventsUrl,
         eventConnections: [...eventConnections],
@@ -2473,13 +2521,10 @@ function buildFileCheckpointDialogGoneCheckScript() {
   }))()`;
 }
 
-function isExpectedApprovalResponseRequest(request) {
+function isExpectedApprovalServerRequestResponse(response) {
   return (
-    request?.session_id === CODE_FIXTURE_SESSION_ID &&
-    request?.request_id === CODE_FIXTURE_APPROVAL_REQUEST_ID &&
-    request?.action_type === "tool_confirmation" &&
-    request?.confirmed === true &&
-    request?.response === "approved"
+    response?.id === CODE_FIXTURE_APPROVAL_SERVER_REQUEST_ID &&
+    response?.result?.decision === "accept"
   );
 }
 
@@ -3284,21 +3329,17 @@ async function main() {
     try {
       approvalResponseDiagnostics = await waitForCheck(
         options,
-        "权限确认响应提交到 App Server JSON-RPC",
+        "权限确认通过 typed server request outer JSON-RPC response 提交",
         async () => {
           const diagnostics = fixtureRuntime.getDiagnostics();
-          const latestRequest =
-            diagnostics.respondActionRequests[
-              diagnostics.respondActionRequests.length - 1
+          const latestResponse =
+            diagnostics.serverRequestResponses[
+              diagnostics.serverRequestResponses.length - 1
             ] || null;
           return {
-            ok:
-              hasAppServerMethodCount(
-                diagnostics,
-                APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-              ) && isExpectedApprovalResponseRequest(latestRequest),
+            ok: isExpectedApprovalServerRequestResponse(latestResponse),
             value: {
-              latestRequest,
+              latestResponse,
               diagnostics,
             },
           };
@@ -3317,10 +3358,10 @@ async function main() {
       );
     }
     assert(
-      isExpectedApprovalResponseRequest(
-        approvalResponseDiagnostics?.latestRequest,
+      isExpectedApprovalServerRequestResponse(
+        approvalResponseDiagnostics?.latestResponse,
       ),
-      `权限确认响应 payload 不符合预期: ${JSON.stringify(
+      `权限确认 outer response payload 不符合预期: ${JSON.stringify(
         approvalResponseDiagnostics ?? null,
       )}`,
     );

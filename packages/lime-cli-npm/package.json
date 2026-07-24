@@ -1,6 +1,6 @@
 {
   "name": "@limecloud/lime-cli",
-  "version": "1.110.0",
+  "version": "1.111.0",
   "description": "Lime 官方任务 CLI",
   "bin": {
     "lime": "scripts/run.js"

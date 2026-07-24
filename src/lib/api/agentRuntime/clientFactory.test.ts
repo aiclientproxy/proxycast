@@ -207,28 +207,6 @@ function appServerClientMock(): AgentRuntimeAppServerClient {
     }),
     startTurn: vi.fn().mockResolvedValue({}),
     cancelTurn: vi.fn().mockResolvedValue({}),
-    replayAction: vi.fn().mockResolvedValue({
-      id: 1,
-      result: {
-        action: {
-          type: "action_required",
-          requestId: "request-1",
-          actionType: "ask_user",
-          prompt: "请选择执行模式",
-          scope: {
-            sessionId: "session-1",
-            threadId: "thread-1",
-            turnId: "turn-1",
-          },
-        },
-      },
-      response: {
-        id: 1,
-        result: {},
-      },
-      messages: [],
-      notifications: [],
-    }),
     compactAgentSession: vi.fn().mockResolvedValue({
       id: 1,
       result: {

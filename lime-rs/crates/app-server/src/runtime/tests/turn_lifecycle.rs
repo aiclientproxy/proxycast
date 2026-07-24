@@ -1577,15 +1577,6 @@ async fn cancel_waiting_action_persists_action_canceled_before_turn_terminal() {
         "approval-cancel-waiting"
     );
     assert_eq!(output.events[1].payload["item"]["status"], "cancelled");
-
-    let replay = core
-        .replay_action(AgentSessionActionReplayParams {
-            session_id: session.session_id,
-            request_id: "approval-cancel-waiting".to_string(),
-        })
-        .await
-        .expect("replay canceled action");
-    assert!(replay.response.action.is_none());
 }
 
 #[tokio::test]

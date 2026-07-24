@@ -312,6 +312,51 @@ describe("agentStreamRuntimeHandler storage", () => {
     handleTurnStreamEvent({
       ...baseOptions,
       data: {
+        type: "item_updated",
+        item: {
+          id: "reasoning-v2",
+          thread_id: "session-reasoning-v2",
+          turn_id: "turn-reasoning-v2",
+          sequence: 2,
+          status: "in_progress",
+          started_at: "2026-07-23T02:00:00.000Z",
+          updated_at: "2026-07-23T02:00:00.500Z",
+          type: "reasoning",
+          text: "haha\n\n第二段",
+          summary: ["haha", "第二段"],
+          content: [],
+        },
+      } as AgentEvent,
+    });
+    handleTurnStreamEvent({
+      ...baseOptions,
+      data: {
+        type: "reasoning_summary_delta",
+        itemId: "reasoning-v2",
+        reasoningId: "reasoning-v2",
+        summaryIndex: 1,
+        text: "，继续",
+        delta: "，继续",
+        sequence: 7,
+      } as AgentEvent,
+    });
+
+    expect(
+      messages[0]?.contentParts?.filter((part) => part.type === "thinking"),
+    ).toEqual([
+      expect.objectContaining({
+        type: "thinking",
+        text: "haha\n\n第二段，继续",
+        metadata: expect.objectContaining({
+          threadItemId: "reasoning-v2",
+          summaryIndex: 1,
+        }),
+      }),
+    ]);
+
+    handleTurnStreamEvent({
+      ...baseOptions,
+      data: {
         type: "item_completed",
         item: {
           id: "reasoning-v2",
@@ -323,8 +368,8 @@ describe("agentStreamRuntimeHandler storage", () => {
           completed_at: "2026-07-23T02:00:01.000Z",
           updated_at: "2026-07-23T02:00:01.000Z",
           type: "reasoning",
-          text: "haha\n\n第二段",
-          summary: ["haha", "第二段"],
+          text: "haha\n\n第二段，继续",
+          summary: ["haha", "第二段，继续"],
           content: ["raw chain of thought"],
         },
       } as AgentEvent,
@@ -333,7 +378,7 @@ describe("agentStreamRuntimeHandler storage", () => {
     expect(messages[0]?.contentParts).toEqual([
       expect.objectContaining({
         type: "thinking",
-        text: "haha\n\n第二段",
+        text: "haha\n\n第二段，继续",
         metadata: expect.objectContaining({
           source: "thread_item_reasoning",
           threadItemId: "reasoning-v2",
@@ -345,7 +390,7 @@ describe("agentStreamRuntimeHandler storage", () => {
       expect.objectContaining({
         id: "reasoning-v2",
         status: "completed",
-        text: "haha\n\n第二段",
+        text: "haha\n\n第二段，继续",
       }),
     ]);
   });

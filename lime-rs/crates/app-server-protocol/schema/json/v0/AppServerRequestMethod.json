@@ -1,7 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "enum": [
-    "agentSession/action/replay",
     "agentSession/action/respond",
     "agentSession/analysisHandoff/export",
     "agentSession/compact",
@@ -16,7 +15,6 @@
     "agentSession/replayCase/export",
     "agentSession/reviewDecision/save",
     "agentSession/reviewDecisionTemplate/export",
-    "agentSession/runtimeEvents/append",
     "agentSession/toolInventory/read",
     "agentSession/update",
     "artifact/read",

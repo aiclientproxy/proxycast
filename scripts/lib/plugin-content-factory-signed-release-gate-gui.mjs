@@ -114,9 +114,7 @@ function workflowResumeActionResponseBindingFromObject(value) {
     return null;
   }
   const method = stringField(value, ["method"]);
-  if (
-    !new Set(["agentSession/action/respond", "workflow/respond"]).has(method)
-  ) {
+  if (method !== "workflow/respond") {
     return null;
   }
   const actionId = stringField(value, [

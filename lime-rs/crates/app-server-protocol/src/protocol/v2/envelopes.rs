@@ -1,7 +1,9 @@
 use super::{
-    AgentMessageDeltaNotification, CommandExecutionRequestApprovalParams,
-    FileChangeRequestApprovalParams, ItemCompletedNotification, ItemStartedNotification,
-    McpServerElicitationRequestParams, Method, ReasoningSummaryPartAddedNotification,
+    AgentMessageDeltaNotification, ArtifactWriteParams, ArtifactWriteResponse,
+    CommandExecutionOutputDeltaNotification, CommandExecutionRequestApprovalParams,
+    FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, ItemCompletedNotification,
+    ItemStartedNotification, McpServerElicitationRequestParams, McpToolCallProgressNotification,
+    Method, PlanDeltaNotification, ReasoningSummaryPartAddedNotification,
     ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification,
     ServerRequestResolvedNotification, ThreadArchiveParams, ThreadArchiveResponse,
     ThreadArchivedNotification, ThreadDeleteParams, ThreadDeleteResponse,
@@ -18,11 +20,13 @@ use super::{
     ThreadUnarchivedNotification, ToolRequestUserInputParams, TurnCompletedNotification,
     TurnInterruptParams, TurnInterruptResponse, TurnStartParams, TurnStartResponse,
     TurnStartedNotification, TurnSteerParams, TurnSteerResponse,
+    METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_FILE_CHANGE_PATCH_UPDATED,
     METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL, METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
     METHOD_ITEM_TOOL_REQUEST_USER_INPUT, METHOD_MCP_SERVER_ELICITATION_REQUEST,
-    METHOD_REASONING_SUMMARY_PART_ADDED, METHOD_REASONING_SUMMARY_TEXT_DELTA,
-    METHOD_REASONING_TEXT_DELTA, METHOD_SERVER_REQUEST_RESOLVED, METHOD_THREAD_GOAL_CLEARED,
-    METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_TOKEN_USAGE_UPDATED,
+    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_PLAN_DELTA, METHOD_REASONING_SUMMARY_PART_ADDED,
+    METHOD_REASONING_SUMMARY_TEXT_DELTA, METHOD_REASONING_TEXT_DELTA,
+    METHOD_SERVER_REQUEST_RESOLVED, METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED,
+    METHOD_THREAD_TOKEN_USAGE_UPDATED,
 };
 use crate::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use schemars::JsonSchema;
@@ -122,6 +126,11 @@ pub enum ClientRequest {
         id: RequestId,
         params: ThreadGoalClearParams,
     },
+    #[serde(rename = "artifact/write")]
+    ArtifactWrite {
+        id: RequestId,
+        params: ArtifactWriteParams,
+    },
     #[serde(rename = "turn/start")]
     TurnStart {
         id: RequestId,
@@ -158,6 +167,7 @@ impl ClientRequest {
             | Self::ThreadGoalSet { id, .. }
             | Self::ThreadGoalGet { id, .. }
             | Self::ThreadGoalClear { id, .. }
+            | Self::ArtifactWrite { id, .. }
             | Self::TurnStart { id, .. }
             | Self::TurnSteer { id, .. }
             | Self::TurnInterrupt { id, .. } => id,
@@ -182,6 +192,7 @@ impl ClientRequest {
             Self::ThreadGoalSet { .. } => Method::ThreadGoalSet,
             Self::ThreadGoalGet { .. } => Method::ThreadGoalGet,
             Self::ThreadGoalClear { .. } => Method::ThreadGoalClear,
+            Self::ArtifactWrite { .. } => Method::ArtifactWrite,
             Self::TurnStart { .. } => Method::TurnStart,
             Self::TurnSteer { .. } => Method::TurnSteer,
             Self::TurnInterrupt { .. } => Method::TurnInterrupt,
@@ -218,6 +229,7 @@ pub enum ClientResponsePayload {
     ThreadGoalSet(ThreadGoalSetResponse),
     ThreadGoalGet(ThreadGoalGetResponse),
     ThreadGoalClear(ThreadGoalClearResponse),
+    ArtifactWrite(ArtifactWriteResponse),
     TurnStart(TurnStartResponse),
     TurnSteer(TurnSteerResponse),
     TurnInterrupt(TurnInterruptResponse),
@@ -242,6 +254,7 @@ impl ClientResponsePayload {
             Self::ThreadGoalSet(_) => Method::ThreadGoalSet,
             Self::ThreadGoalGet(_) => Method::ThreadGoalGet,
             Self::ThreadGoalClear(_) => Method::ThreadGoalClear,
+            Self::ArtifactWrite(_) => Method::ArtifactWrite,
             Self::TurnStart(_) => Method::TurnStart,
             Self::TurnSteer(_) => Method::TurnSteer,
             Self::TurnInterrupt(_) => Method::TurnInterrupt,
@@ -266,6 +279,7 @@ impl ClientResponsePayload {
             Self::ThreadGoalSet(response) => serde_json::to_value(response)?,
             Self::ThreadGoalGet(response) => serde_json::to_value(response)?,
             Self::ThreadGoalClear(response) => serde_json::to_value(response)?,
+            Self::ArtifactWrite(response) => serde_json::to_value(response)?,
             Self::TurnStart(response) => serde_json::to_value(response)?,
             Self::TurnSteer(response) => serde_json::to_value(response)?,
             Self::TurnInterrupt(response) => serde_json::to_value(response)?,
@@ -410,6 +424,14 @@ pub enum ServerNotification {
     ItemCompleted(ItemCompletedNotification),
     #[serde(rename = "item/agentMessage/delta")]
     AgentMessageDelta(AgentMessageDeltaNotification),
+    #[serde(rename = "item/commandExecution/outputDelta")]
+    CommandExecutionOutputDelta(CommandExecutionOutputDeltaNotification),
+    #[serde(rename = "item/fileChange/patchUpdated")]
+    FileChangePatchUpdated(FileChangePatchUpdatedNotification),
+    #[serde(rename = "item/plan/delta")]
+    PlanDelta(PlanDeltaNotification),
+    #[serde(rename = "item/mcpToolCall/progress")]
+    McpToolCallProgress(McpToolCallProgressNotification),
     #[serde(rename = "item/reasoning/summaryTextDelta")]
     ReasoningSummaryTextDelta(ReasoningSummaryTextDeltaNotification),
     #[serde(rename = "item/reasoning/summaryPartAdded")]
@@ -440,6 +462,10 @@ impl ServerNotification {
             Self::ItemStarted(_) => "item/started",
             Self::ItemCompleted(_) => "item/completed",
             Self::AgentMessageDelta(_) => "item/agentMessage/delta",
+            Self::CommandExecutionOutputDelta(_) => METHOD_COMMAND_EXECUTION_OUTPUT_DELTA,
+            Self::FileChangePatchUpdated(_) => METHOD_FILE_CHANGE_PATCH_UPDATED,
+            Self::PlanDelta(_) => METHOD_PLAN_DELTA,
+            Self::McpToolCallProgress(_) => METHOD_MCP_TOOL_CALL_PROGRESS,
             Self::ReasoningSummaryTextDelta(_) => METHOD_REASONING_SUMMARY_TEXT_DELTA,
             Self::ReasoningSummaryPartAdded(_) => METHOD_REASONING_SUMMARY_PART_ADDED,
             Self::ReasoningTextDelta(_) => METHOD_REASONING_TEXT_DELTA,
@@ -484,6 +510,18 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             "item/agentMessage/delta" => serde_json::from_value(params)
                 .map(Self::AgentMessageDelta)
+                .map_err(|error| error.to_string()),
+            METHOD_COMMAND_EXECUTION_OUTPUT_DELTA => serde_json::from_value(params)
+                .map(Self::CommandExecutionOutputDelta)
+                .map_err(|error| error.to_string()),
+            METHOD_FILE_CHANGE_PATCH_UPDATED => serde_json::from_value(params)
+                .map(Self::FileChangePatchUpdated)
+                .map_err(|error| error.to_string()),
+            METHOD_PLAN_DELTA => serde_json::from_value(params)
+                .map(Self::PlanDelta)
+                .map_err(|error| error.to_string()),
+            METHOD_MCP_TOOL_CALL_PROGRESS => serde_json::from_value(params)
+                .map(Self::McpToolCallProgress)
                 .map_err(|error| error.to_string()),
             METHOD_REASONING_SUMMARY_TEXT_DELTA => serde_json::from_value(params)
                 .map(Self::ReasoningSummaryTextDelta)
@@ -539,6 +577,18 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::AgentMessageDelta(params) => {
                 jsonrpc_notification("item/agentMessage/delta", params)
+            }
+            ServerNotification::CommandExecutionOutputDelta(params) => {
+                jsonrpc_notification(METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, params)
+            }
+            ServerNotification::FileChangePatchUpdated(params) => {
+                jsonrpc_notification(METHOD_FILE_CHANGE_PATCH_UPDATED, params)
+            }
+            ServerNotification::PlanDelta(params) => {
+                jsonrpc_notification(METHOD_PLAN_DELTA, params)
+            }
+            ServerNotification::McpToolCallProgress(params) => {
+                jsonrpc_notification(METHOD_MCP_TOOL_CALL_PROGRESS, params)
             }
             ServerNotification::ReasoningSummaryTextDelta(params) => {
                 jsonrpc_notification(METHOD_REASONING_SUMMARY_TEXT_DELTA, params)

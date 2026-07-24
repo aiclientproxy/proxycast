@@ -44,6 +44,7 @@ const APP_SERVER_METHOD_THREAD_START = "thread/start";
 const APP_SERVER_METHOD_TURN_START = "turn/start";
 const APP_SERVER_METHOD_THREAD_READ = "thread/read";
 const APP_SERVER_METHOD_THREAD_LIST = "thread/list";
+const APP_SERVER_METHOD_ARTIFACT_WRITE = "artifact/write";
 const APP_SERVER_METHOD_WORKSPACE_DEFAULT_ENSURE = "workspace/default/ensure";
 let SESSION_ID = `pending-code-artifact-workbench-${Date.now()}-${process.pid}`;
 let THREAD_ID = "pending-code-artifact-workbench-thread";
@@ -396,6 +397,8 @@ const inputText = readRuntimeInputText(request);
 const providerPreference = request.providerPreference;
 const modelPreference = request.modelPreference;
 const requestMetadata = readApplicationMetadata(request.metadata);
+const includeBackendArtifact =
+  process.env.CODE_ARTIFACT_WORKBENCH_FIXTURE_SCENARIO !== "direct-session";
 
 function readRuntimeInputText(request) {
   const parts = Array.isArray(request?.input?.parts) ? request.input.parts : [];
@@ -615,25 +618,29 @@ if (input.kind === "turnStart") {
           item: canonicalCommandItem(commandExitCode === 0 ? "completed" : "failed", 7)
         }
       },
-      {
-        type: "artifact.snapshot",
-        payload: {
-          artifact: {
-            artifactId: "${ARTIFACT_ID}",
-            filePath: "${ARTIFACT_PATH}",
-            content: ${JSON.stringify(ARTIFACT_CONTENT)},
-            metadata: {
-              complete: true,
-              artifactKind: "code_file",
-              artifactTitle: "Greeting TypeScript fixture",
-              artifactStatus: "ready",
-              language: "typescript",
-              previewText: "${ARTIFACT_PREVIEW_TEXT}",
-              source: "code-artifact-workbench-electron-fixture"
+      ...(includeBackendArtifact
+        ? [
+            {
+              type: "artifact.snapshot",
+              payload: {
+                artifact: {
+                  artifactId: "${ARTIFACT_ID}",
+                  filePath: "${ARTIFACT_PATH}",
+                  content: ${JSON.stringify(ARTIFACT_CONTENT)},
+                  metadata: {
+                    complete: true,
+                    artifactKind: "code_file",
+                    artifactTitle: "Greeting TypeScript fixture",
+                    artifactStatus: "ready",
+                    language: "typescript",
+                    previewText: "${ARTIFACT_PREVIEW_TEXT}",
+                    source: "code-artifact-workbench-electron-fixture"
+                  }
+                }
+              }
             }
-          }
-        }
-      },
+          ]
+        : []),
       {
         type: "message.completed",
         payload: {
@@ -749,6 +756,36 @@ function collectTraceJsonRpcMessages(traceMessages) {
     .flatMap((entry) =>
       decodeJsonRpcLines(entry?.args_preview?.request?.lines),
     );
+}
+
+function findArtifactWriteElectronIpcTrace(traceMessages) {
+  for (const entry of traceMessages) {
+    if (
+      entry?.command !== APP_SERVER_HANDLE_JSON_LINES_COMMAND ||
+      entry?.transport !== "electron-ipc" ||
+      entry?.status !== "success"
+    ) {
+      continue;
+    }
+    for (const message of decodeJsonRpcLines(
+      entry?.args_preview?.request?.lines,
+    )) {
+      if (message?.method !== APP_SERVER_METHOD_ARTIFACT_WRITE) {
+        continue;
+      }
+      return {
+        command: entry.command,
+        transport: entry.transport,
+        status: entry.status,
+        method: message.method,
+        requestId: message.id ?? null,
+        threadId: message.params?.threadId ?? null,
+        turnId: message.params?.turnId ?? null,
+        artifactRef: message.params?.artifact?.artifactRef ?? null,
+      };
+    }
+  }
+  return null;
 }
 
 function readApplicationContextValue(additionalContext, key) {
@@ -1613,6 +1650,46 @@ async function invokeAppServerFromPage(page, method, params = {}) {
   );
 }
 
+async function writeArtifactFromCurrentRenderer(page, options, params) {
+  assert(
+    options.appUrl,
+    "direct-session typed artifact/write Gate B requires --app-url so the current Renderer client is exercised",
+  );
+  const moduleUrl = new URL("/src/lib/api/appServer.ts", options.appUrl).href;
+  return await page.evaluate(
+    async ({ moduleUrl, params }) => {
+      const module = await import(moduleUrl);
+      if (typeof module.createAppServerClient !== "function") {
+        throw new Error("Renderer current AppServerClient is unavailable");
+      }
+      const response = await module
+        .createAppServerClient()
+        .writeArtifact(params);
+      return response.result;
+    },
+    { moduleUrl, params },
+  );
+}
+
+async function waitForArtifactWriteElectronIpcTrace(page, options) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < Math.min(options.timeoutMs, 15_000)) {
+    const traceRaw = await page.evaluate(() =>
+      window.localStorage.getItem("lime_invoke_trace_buffer_v1"),
+    );
+    const evidence = findArtifactWriteElectronIpcTrace(
+      readTraceMessages(traceRaw),
+    );
+    if (evidence) {
+      return evidence;
+    }
+    await sleep(options.intervalMs);
+  }
+  throw new Error(
+    "未在 Renderer current safeInvoke trace 中观察到 artifact/write Electron IPC",
+  );
+}
+
 async function initializeAppServer(page) {
   const initialize = await invokeAppServerFromPage(page, "initialize", {
     clientInfo: {
@@ -1716,6 +1793,42 @@ async function waitForCodeArtifactReadModel(
   );
 }
 
+async function waitForCodeArtifactTurnTerminal(
+  page,
+  options,
+  { requests = [], timeoutMs = 60_000 } = {},
+) {
+  const startedAt = Date.now();
+  let lastRead = null;
+  while (Date.now() - startedAt < timeoutMs) {
+    const params = {
+      threadId: THREAD_ID,
+      includeTurns: true,
+    };
+    requests.push({ method: APP_SERVER_METHOD_THREAD_READ, params });
+    const read = await invokeAppServerFromPage(
+      page,
+      APP_SERVER_METHOD_THREAD_READ,
+      params,
+    );
+    lastRead = read.result;
+    if (
+      readLatestThreadTurn(read.result)?.status === "completed" &&
+      hasToolTimelineProjection(read.result) &&
+      hasCodingProjection(read.result)
+    ) {
+      return read.result;
+    }
+    await sleep(options.intervalMs);
+  }
+
+  throw new Error(
+    `代码产物会话未在 typed artifact/write 前到达 canonical terminal: ${JSON.stringify(
+      summarizeCodeArtifactRead(lastRead, requests),
+    )}`,
+  );
+}
+
 async function startCodeArtifactSession(page, workspace, requests) {
   async function call(method, params = {}) {
     requests?.push({ method, params });
@@ -1794,6 +1907,61 @@ async function createCodeArtifactSession(page, options, workspace) {
   assert(turnId, "turn/start 未返回 canonical turn.id");
   TURN_ID = turnId;
 
+  await waitForCodeArtifactTurnTerminal(page, options, { requests });
+  const artifactWriteParams = {
+    threadId: THREAD_ID,
+    turnId: TURN_ID,
+    artifact: {
+      artifactRef: ARTIFACT_ID,
+      path: ARTIFACT_PATH,
+      title: "Greeting TypeScript fixture",
+      kind: "code_file",
+      status: "ready",
+      content: ARTIFACT_CONTENT,
+      metadata: {
+        complete: true,
+        artifactKind: "code_file",
+        artifactTitle: "Greeting TypeScript fixture",
+        artifactStatus: "ready",
+        language: "typescript",
+        previewText: ARTIFACT_PREVIEW_TEXT,
+        source: "code-artifact-workbench-electron-fixture",
+      },
+    },
+  };
+  requests.push({
+    method: APP_SERVER_METHOD_ARTIFACT_WRITE,
+    params: artifactWriteParams,
+  });
+  const artifactWrite = await writeArtifactFromCurrentRenderer(
+    page,
+    options,
+    artifactWriteParams,
+  );
+  assert(
+    artifactWrite?.threadId === THREAD_ID &&
+      artifactWrite?.turnId === TURN_ID &&
+      artifactWrite?.artifactRef === ARTIFACT_ID &&
+      typeof artifactWrite?.eventId === "string" &&
+      artifactWrite.eventId.length > 0 &&
+      artifactWrite?.sidecar?.contentStatus === "available",
+    `artifact/write 未返回完整 typed 保存证据: ${JSON.stringify(
+      sanitizeJson(artifactWrite),
+    )}`,
+  );
+  const artifactWriteIpcTrace = await waitForArtifactWriteElectronIpcTrace(
+    page,
+    options,
+  );
+  assert(
+    artifactWriteIpcTrace.threadId === THREAD_ID &&
+      artifactWriteIpcTrace.turnId === TURN_ID &&
+      artifactWriteIpcTrace.artifactRef === ARTIFACT_ID,
+    `artifact/write Electron IPC identity 不一致: ${JSON.stringify(
+      sanitizeJson(artifactWriteIpcTrace),
+    )}`,
+  );
+
   const read = await waitForCodeArtifactReadModel(page, options, { requests });
 
   return {
@@ -1802,6 +1970,8 @@ async function createCodeArtifactSession(page, options, workspace) {
     sessionId: SESSION_ID,
     threadId: THREAD_ID,
     turnId: TURN_ID,
+    artifactWrite,
+    artifactWriteIpcTrace,
     read,
     requests,
   };
@@ -3121,6 +3291,8 @@ async function run() {
       sessionId: sessionCreation.sessionId,
       threadId: sessionCreation.threadId,
       turnId: canonicalTurnId,
+      artifactWrite: sessionCreation.artifactWrite ?? null,
+      artifactWriteIpcTrace: sessionCreation.artifactWriteIpcTrace ?? null,
       guiPromptSubmitted:
         options.scenario === "gui-coding-input"
           ? summary.guiCodingInput?.clicked?.clicked === true &&
@@ -3452,6 +3624,33 @@ async function run() {
       ),
       artifactPersisted:
         summary.sessionCreation?.artifactProjectionPersisted === true,
+      typedArtifactWriteUsed:
+        options.scenario !== "direct-session" ||
+        (summary.sessionCreation?.artifactWrite?.threadId === THREAD_ID &&
+          summary.sessionCreation?.artifactWrite?.turnId === TURN_ID &&
+          summary.sessionCreation?.artifactWrite?.artifactRef === ARTIFACT_ID &&
+          typeof summary.sessionCreation?.artifactWrite?.eventId === "string" &&
+          summary.sessionCreation.artifactWrite.eventId.length > 0 &&
+          summary.sessionCreation?.artifactWrite?.sidecar?.contentStatus ===
+            "available"),
+      typedArtifactWriteElectronIpcTrace:
+        options.scenario !== "direct-session" ||
+        (summary.sessionCreation?.artifactWriteIpcTrace?.command ===
+          APP_SERVER_HANDLE_JSON_LINES_COMMAND &&
+          summary.sessionCreation?.artifactWriteIpcTrace?.transport ===
+            "electron-ipc" &&
+          summary.sessionCreation?.artifactWriteIpcTrace?.status ===
+            "success" &&
+          summary.sessionCreation?.artifactWriteIpcTrace?.method ===
+            APP_SERVER_METHOD_ARTIFACT_WRITE &&
+          summary.sessionCreation?.artifactWriteIpcTrace?.threadId ===
+            THREAD_ID &&
+          summary.sessionCreation?.artifactWriteIpcTrace?.turnId === TURN_ID &&
+          summary.sessionCreation?.artifactWriteIpcTrace?.artifactRef ===
+            ARTIFACT_ID),
+      directSessionBackendDidNotInjectArtifact:
+        options.scenario !== "direct-session" ||
+        !backendEmittedEventTypes.includes("artifact.snapshot"),
       toolTimelinePersisted:
         summary.sessionCreation?.toolTimelineProjectionPersisted === true,
       codingProjectionPersisted:

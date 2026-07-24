@@ -59,6 +59,35 @@ describe("legacySurfaceCatalog", () => {
     expect("legacyHelperSurfaceMonitors" in agentCommandCatalog).toBe(false);
   });
 
+  it("应阻止已删除的 agentSession action replay RPC 回流", () => {
+    const frontendMonitor = legacySurfaceCatalogJson.frontendText.find(
+      (entry) => entry.id === "frontend-retired-agent-session-action-replay",
+    );
+    const monitor = legacySurfaceCatalogJson.rustText.find(
+      (entry) => entry.id === "rust-retired-agent-session-action-replay",
+    );
+
+    expect(frontendMonitor?.classification).toBe("dead");
+    expect(frontendMonitor?.allowedPaths).toEqual([]);
+    expect(frontendMonitor?.patterns).toEqual(
+      expect.arrayContaining([
+        "agentSession/action/replay",
+        "APP_SERVER_METHOD_AGENT_SESSION_ACTION_REPLAY",
+        "replayAction",
+      ]),
+    );
+    expect(monitor?.classification).toBe("dead");
+    expect(monitor?.allowedPaths).toEqual([]);
+    expect(monitor?.patterns).toEqual(
+      expect.arrayContaining([
+        "agentSession/action/replay",
+        "METHOD_AGENT_SESSION_ACTION_REPLAY",
+        "AgentSessionActionReplayParams",
+        "replay_action(",
+      ]),
+    );
+  });
+
   it("应阻止第一批已删除前端空壳和重复 UI surface 回流", () => {
     const expectedTargetsById = {
       "frontend-image-search-retired-facade-surface": [

@@ -40,7 +40,6 @@ export interface MemorySourcesConfig {
   project_memory_paths?: string[];
   project_rule_dirs?: string[];
   user_memory_path?: string | null;
-  project_local_memory_path?: string | null;
 }
 
 export interface MemoryAutoConfig {

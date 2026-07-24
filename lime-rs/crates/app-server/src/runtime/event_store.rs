@@ -23,6 +23,12 @@ use serde_json::Value;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TerminalTurnAppendPolicy {
+    Reject,
+    Allow,
+}
+
 impl RuntimeCoreEventAppender {
     pub fn append_external_runtime_events(
         &self,
@@ -59,6 +65,46 @@ impl RuntimeCoreEventAppender {
             turn_id,
             runtime_events,
             None,
+            TerminalTurnAppendPolicy::Reject,
+        )
+    }
+
+    pub(in crate::runtime) fn append_artifact_snapshot(
+        &self,
+        session_id: &str,
+        turn_id: Option<&str>,
+        payload: Value,
+    ) -> Result<Vec<AgentEvent>, RuntimeCoreError> {
+        let mut state = self
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned");
+        let stored = state
+            .sessions
+            .get_mut(session_id)
+            .ok_or_else(|| RuntimeCoreError::SessionNotFound(session_id.to_string()))?;
+        if let Some(turn_id) = turn_id {
+            if !stored.turns.iter().any(|turn| turn.turn_id == turn_id) {
+                return Err(RuntimeCoreError::TurnNotActive(turn_id.to_string()));
+            }
+        }
+        let thread_id = stored.session.thread_id.clone();
+
+        append_runtime_events_to_stored_session(
+            stored,
+            self.file_checkpoint_snapshot_store.as_ref(),
+            self.output_snapshot_store.as_ref(),
+            self.sidecar_store.as_deref(),
+            self.event_log_writer.as_deref(),
+            self.trace_event_writer.as_deref(),
+            self.projection_store.as_deref(),
+            Some(&self.session_loops),
+            session_id,
+            &thread_id,
+            turn_id,
+            vec![RuntimeEvent::new("artifact.snapshot", payload)],
+            None,
+            TerminalTurnAppendPolicy::Allow,
         )
     }
 }
@@ -212,6 +258,7 @@ impl RuntimeCore {
             Some(turn_id),
             vec![runtime_event],
             None,
+            TerminalTurnAppendPolicy::Allow,
         )?;
         stored.session.status = session_status;
         stored.session.updated_at = session_updated_at;
@@ -306,6 +353,7 @@ pub(in crate::runtime) fn append_runtime_events_to_state(
         turn_id,
         runtime_events,
         None,
+        TerminalTurnAppendPolicy::Reject,
     )
 }
 
@@ -343,6 +391,7 @@ pub(in crate::runtime) fn append_runtime_events_to_state_with_message_lifecycle(
         Some(turn_id),
         runtime_events,
         Some(message_lifecycle),
+        TerminalTurnAppendPolicy::Reject,
     )
 }
 
@@ -360,8 +409,10 @@ fn append_runtime_events_to_stored_session(
     turn_id: Option<&str>,
     runtime_events: Vec<RuntimeEvent>,
     message_lifecycle: Option<&mut CanonicalMessageLifecycleState>,
+    terminal_turn_policy: TerminalTurnAppendPolicy,
 ) -> Result<Vec<AgentEvent>, RuntimeCoreError> {
-    if is_terminal_turn(stored, turn_id) {
+    if terminal_turn_policy == TerminalTurnAppendPolicy::Reject && is_terminal_turn(stored, turn_id)
+    {
         return Ok(Vec::new());
     }
     let runtime_events = deduplicate_mailbox_runtime_events(stored, runtime_events);

@@ -79,7 +79,6 @@ pub use model_request_policy::{
     ModelTruncationPolicySnapshot, MODEL_NATIVE_APPLY_PATCH_TOOL_NAME,
     MODEL_NATIVE_SHELL_TOOL_NAME, MODEL_NATIVE_STDIN_TOOL_NAME,
 };
-pub use prompt::SystemPromptBuilder;
 pub use prompt::{
     budget_limit_prompt, build_runtime_agents_prompt, build_runtime_agents_prompt_for_project,
     continuation_prompt, merge_system_prompt_with_runtime_agents,

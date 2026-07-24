@@ -102,6 +102,51 @@ fn coalesces_repeated_item_snapshots_and_preserves_first_order() {
 }
 
 #[test]
+fn item_first_append_attaches_items_when_turn_arrives() {
+    let mut builder = ThreadHistoryBuilder::new();
+    let first = item(1, 1, "item-a", "first");
+    builder
+        .append_items_at(1, vec![first.clone()])
+        .expect("item-first append");
+    assert!(builder.turns().is_empty());
+
+    let changes = builder
+        .append_turns_at(2, vec![turn("turn-1", TurnStatus::InProgress)])
+        .expect("turn append");
+    assert_eq!(changes.changed_turns[0].items, vec![first.clone()]);
+    assert_eq!(builder.turns()[0].items, vec![first.clone()]);
+    assert_eq!(builder.snapshot().turns[0].items, vec![first]);
+}
+
+#[test]
+fn item_updates_replace_nested_turn_projection_without_duplicates() {
+    let mut builder = ThreadHistoryBuilder::new();
+    builder
+        .append_turns_at(1, vec![turn("turn-1", TurnStatus::InProgress)])
+        .expect("turn append");
+    let first = item(2, 1, "item-a", "first");
+    builder
+        .append_items_at(2, vec![first])
+        .expect("item append");
+
+    let mut update = item(3, 99, "item-a", "second");
+    update.completed_at_ms = Some(3);
+    builder
+        .append_items_at(3, vec![update])
+        .expect("item update");
+
+    let nested = &builder.turns()[0].items;
+    assert_eq!(nested.len(), 1);
+    assert_eq!(nested[0].sequence, 3);
+    assert_eq!(nested[0].ordinal, 1);
+    assert!(matches!(
+        &nested[0].payload,
+        ThreadItemPayload::AgentMessage { text, .. } if text == "firstsecond"
+    ));
+    assert_eq!(builder.snapshot().turns[0].items, nested.to_vec());
+}
+
+#[test]
 fn exact_retry_is_idempotent_and_different_payload_collides() {
     let mut builder = ThreadHistoryBuilder::new();
     let first = item(1, 1, "item-a", "same");

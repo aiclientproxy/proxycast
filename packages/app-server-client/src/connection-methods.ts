@@ -931,6 +931,10 @@ declare module "./connection.js" {
       params: protocol.ArtifactReadParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ArtifactReadResponse>>;
+    writeArtifact(
+      params: protocol.ArtifactWriteParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ArtifactWriteResponse>>;
     listDirectory(
       params: protocol.FileSystemListDirectoryParams,
       options?: AppServerRequestOptions,
@@ -1160,12 +1164,6 @@ declare module "./connection.js" {
       params: protocol.TurnInterruptParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.TurnInterruptResponse>>;
-    replayAction(
-      params: protocol.AgentSessionActionReplayParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.AgentSessionActionReplayResponse>
-    >;
     respondAction(
       params: protocol.AgentSessionActionRespondParams,
       options?: AppServerRequestOptions,
@@ -1177,7 +1175,6 @@ declare module "./connection.js" {
 
 const CONNECTION_CLIENT_METHOD_EXCLUSIONS = new Set<string>([
   "initialize",
-  "appendAgentSessionRuntimeEvents",
   "listBrowserSessionTargets",
   "openBrowserSession",
   "readBrowserSession",

@@ -21,6 +21,9 @@ export const COMMAND_OUTPUT_MARKER = "CODEX_UNIFIED_EXEC_OK";
 export const REQUIRED_METHODS = [
   "initialize",
   "conversationImport/thread/commit",
+  "modelProvider/create",
+  "modelProvider/update",
+  "modelProviderKey/create",
   "thread/read",
   "thread/start",
   "agentSession/update",
@@ -409,8 +412,8 @@ export async function waitForConversationImportJob(
   while (Date.now() - startedAt < timeoutMs) {
     if (job.status === "completed") {
       assert(
-        job.result?.session?.sessionId,
-        "conversation import job completed without session result",
+        job.result?.session?.sessionId && job.result?.session?.threadId,
+        "conversation import job completed without canonical session identity",
       );
       return job;
     }
@@ -450,77 +453,71 @@ export async function initializeAndCommitImport(
   });
   const job = await waitForConversationImportJob(client, commit?.job, options);
   const sessionId = job.result?.session?.sessionId;
+  const threadId = job.result?.session?.threadId;
   assert(sessionId, "conversation import job result did not return sessionId");
+  assert(threadId, "conversation import job result did not return threadId");
   const importedRead = await client.call("thread/read", {
-    sessionId,
-    historyLimit: 100,
+    threadId,
+    includeTurns: true,
   });
-  return { initialize, commit, job, importedRead, sessionId };
+  return { initialize, commit, job, importedRead, sessionId, threadId };
 }
 
-function runtimeOptions(provider, workspaceRoot, eventName) {
-  return {
-    stream: true,
-    eventName,
-    runtimeRequest: {
-      providerPreference: provider.providerPreference,
-      modelPreference: provider.modelPreference,
-      providerConfig: provider.providerConfig,
-      approvalPolicy: "never",
-      sandboxPolicy: "danger-full-access",
-      executionStrategy: "react",
-      workingDir: workspaceRoot,
-      metadata: {
-        harness: {
-          source: "smoke:codex-import-continuation-fixture",
-          access_mode: "full-access",
-          skip_mcp_prewarm: true,
-        },
-      },
-    },
-  };
+function canonicalTurns(read) {
+  return Array.isArray(read?.thread?.turns) ? read.thread.turns : [];
 }
 
-function contentTextFromMessage(message) {
-  return (Array.isArray(message?.content) ? message.content : [])
+function canonicalItems(read) {
+  return canonicalTurns(read).flatMap((turn) =>
+    (Array.isArray(turn?.items) ? turn.items : []).map((item) => ({
+      item,
+      turnId: turn?.id ?? null,
+    })),
+  );
+}
+
+function contentTextFromUserItem(item) {
+  return (Array.isArray(item?.content) ? item.content : [])
     .map((part) => (typeof part?.text === "string" ? part.text : ""))
     .join("")
     .trim();
 }
 
 function findCompletedCommand(read, turnId, expectedCommand) {
-  const items = Array.isArray(read?.detail?.items) ? read.detail.items : [];
-  return items.find(
-    (item) =>
-      item?.type === "command_execution" &&
-      item?.turn_id === turnId &&
+  return canonicalItems(read).find(
+    ({ item, turnId: itemTurnId }) =>
+      item?.type === "commandExecution" &&
+      itemTurnId === turnId &&
       item?.status === "completed" &&
       item?.command === expectedCommand &&
-      item?.exit_code === 0 &&
-      String(item?.aggregated_output || "").includes(COMMAND_OUTPUT_MARKER),
-  );
+      item?.exitCode === 0 &&
+      String(item?.aggregatedOutput || "").includes(COMMAND_OUTPUT_MARKER),
+  )?.item;
 }
 
 async function waitForTurnCompletion(
   client,
-  { sessionId, turnId, expectedCommand, finalText, timeoutMs, intervalMs },
+  { threadId, turnId, expectedCommand, finalText, timeoutMs, intervalMs },
 ) {
   const startedAt = Date.now();
   let latestRead = null;
   while (Date.now() - startedAt < timeoutMs) {
     latestRead = await client.call("thread/read", {
-      sessionId,
-      historyLimit: 100,
+      threadId,
+      includeTurns: true,
     });
-    const messages = Array.isArray(latestRead?.detail?.messages)
-      ? latestRead.detail.messages
-      : [];
+    const items = canonicalItems(latestRead);
+    const turnCompleted = canonicalTurns(latestRead).some(
+      (turn) => turn?.id === turnId && turn?.status === "completed",
+    );
     if (
+      turnCompleted &&
       findCompletedCommand(latestRead, turnId, expectedCommand) &&
-      messages.some(
-        (message) =>
-          message?.role === "assistant" &&
-          contentTextFromMessage(message).includes(finalText),
+      items.some(
+        ({ item, turnId: itemTurnId }) =>
+          itemTurnId === turnId &&
+          item?.type === "agentMessage" &&
+          String(item?.text || "").includes(finalText),
       )
     ) {
       return latestRead;
@@ -528,87 +525,123 @@ async function waitForTurnCompletion(
     await sleep(intervalMs);
   }
   throw new Error(
-    `等待 unified exec turn 完成超时: session=${sessionId} turn=${turnId}`,
+    `等待 unified exec turn 完成超时: thread=${threadId} turn=${turnId}`,
   );
 }
 
-async function updateSessionProvider(client, sessionId, provider) {
+async function createRepositoryProvider(client, provider) {
+  const created = await client.call("modelProvider/create", {
+    name: `Codex import continuation fixture ${Date.now()}`,
+    providerType: provider.providerName,
+    apiHost: provider.providerConfig.baseUrl,
+  });
+  const providerId = String(created?.provider?.id || "").trim();
+  assert(providerId, "modelProvider/create did not return provider.id");
+  await client.call("modelProvider/update", {
+    providerId,
+    enabled: true,
+    sortOrder: 1,
+    customModels: [provider.modelPreference],
+  });
+  const key = await client.call("modelProviderKey/create", {
+    providerId,
+    apiKey: provider.providerConfig.apiKey,
+    alias: "codex-import-continuation-fixture",
+    replaceExisting: true,
+  });
+  assert(key?.key?.id, "modelProviderKey/create did not return key.id");
+  return { providerId, model: provider.modelPreference };
+}
+
+async function updateSessionProvider(client, sessionId, route) {
   return await client.call("agentSession/update", {
     sessionId,
-    providerSelector: provider.providerPreference,
-    providerName: provider.providerName,
-    modelName: provider.modelPreference,
+    providerSelector: route.providerId,
+    providerName: route.providerId,
+    modelName: route.model,
     executionStrategy: "react",
   });
 }
 
 async function startUnifiedExecTurn(
   client,
-  { sessionId, turnId, text, provider, runtimeEnv },
+  { threadId, clientUserMessageId, text, route, runtimeEnv },
 ) {
   return await client.call("turn/start", {
-    sessionId,
-    turnId,
-    input: { text, attachments: [] },
-    runtimeOptions: runtimeOptions(
-      provider,
-      runtimeEnv.workspaceRoot,
-      `codex_unified_exec_${turnId}`,
-    ),
-    queueIfBusy: false,
-    skipPreSubmitResume: true,
+    threadId,
+    clientUserMessageId,
+    input: [{ type: "text", text }],
+    cwd: runtimeEnv.workspaceRoot,
+    runtimeWorkspaceRoots: [runtimeEnv.workspaceRoot],
+    model: route.model,
+    approvalPolicy: "never",
+    sandboxPolicy: "danger-full-access",
+    additionalContext: {
+      metadata: {
+        kind: "application",
+        value: JSON.stringify({
+          harness: {
+            source: "smoke:codex-import-continuation-fixture",
+            access_mode: "full-access",
+            skip_mcp_prewarm: true,
+          },
+        }),
+      },
+    },
   });
 }
 
 export async function runImportedAndNormalTurns(
   client,
-  { importedSessionId, provider, runtimeEnv, command, options },
+  { importedSessionId, importedThreadId, provider, runtimeEnv, command, options },
 ) {
-  await updateSessionProvider(client, importedSessionId, provider);
+  const route = await createRepositoryProvider(client, provider);
+  await updateSessionProvider(client, importedSessionId, route);
   const importedTurn = await startUnifiedExecTurn(client, {
-    sessionId: importedSessionId,
-    turnId: IMPORTED_TURN_ID,
+    threadId: importedThreadId,
+    clientUserMessageId: IMPORTED_TURN_ID,
     text: IMPORTED_CONTINUE_TEXT,
-    provider,
+    route,
     runtimeEnv,
   });
+  const importedTurnId = String(importedTurn?.turn?.id || "").trim();
+  assert(importedTurnId, "imported turn/start did not return canonical turn.id");
   const importedRead = await waitForTurnCompletion(client, {
-    sessionId: importedSessionId,
-    turnId: IMPORTED_TURN_ID,
+    threadId: importedThreadId,
+    turnId: importedTurnId,
     expectedCommand: command,
     finalText: IMPORTED_FINAL_TEXT,
     timeoutMs: options.timeoutMs,
     intervalMs: options.intervalMs,
   });
 
-  const normalSessionId = `codex-normal-unified-exec-${Date.now()}-${process.pid}`;
   const normalStart = await client.call("thread/start", {
-    sessionId: normalSessionId,
-    appId: "desktop",
-    workspaceId: WORKSPACE_ID,
-    businessObjectRef: {
-      kind: "agent.session",
-      id: `agent-session:${WORKSPACE_ID}:${normalSessionId}`,
-      title: "Codex unified exec normal fixture",
-      metadata: {
-        title: "Codex unified exec normal fixture",
-        executionStrategy: "react",
-        runStartHooks: false,
-        harness: { hiddenFromUserRecents: true },
-      },
-    },
+    model: route.model,
+    modelProvider: route.providerId,
+    cwd: runtimeEnv.workspaceRoot,
+    runtimeWorkspaceRoots: [runtimeEnv.workspaceRoot],
+    historyMode: "paginated",
+    serviceName: "Codex unified exec normal fixture",
+    threadSource: "appServer",
   });
-  await updateSessionProvider(client, normalSessionId, provider);
+  const normalSessionId = String(normalStart?.thread?.sessionId || "").trim();
+  const normalThreadId = String(normalStart?.thread?.id || "").trim();
+  assert(
+    normalSessionId && normalThreadId,
+    "thread/start did not return canonical session/thread identity",
+  );
   const normalTurn = await startUnifiedExecTurn(client, {
-    sessionId: normalSessionId,
-    turnId: NORMAL_TURN_ID,
+    threadId: normalThreadId,
+    clientUserMessageId: NORMAL_TURN_ID,
     text: NORMAL_USER_TEXT,
-    provider,
+    route,
     runtimeEnv,
   });
+  const normalTurnId = String(normalTurn?.turn?.id || "").trim();
+  assert(normalTurnId, "normal turn/start did not return canonical turn.id");
   const normalRead = await waitForTurnCompletion(client, {
-    sessionId: normalSessionId,
-    turnId: NORMAL_TURN_ID,
+    threadId: normalThreadId,
+    turnId: normalTurnId,
     expectedCommand: command,
     finalText: NORMAL_FINAL_TEXT,
     timeoutMs: options.timeoutMs,
@@ -616,11 +649,15 @@ export async function runImportedAndNormalTurns(
   });
   return {
     importedTurn,
+    importedTurnId,
     importedRead,
     normalSessionId,
+    normalThreadId,
     normalStart,
     normalTurn,
+    normalTurnId,
     normalRead,
+    route,
   };
 }
 
@@ -656,50 +693,56 @@ function commandShape(item) {
     status: item?.status ?? null,
     command: item?.command ?? null,
     cwd: item?.cwd ?? null,
-    aggregated_output: item?.aggregated_output ?? null,
-    exit_code: item?.exit_code ?? null,
+    aggregatedOutput: item?.aggregatedOutput ?? null,
+    exitCode: item?.exitCode ?? null,
   };
 }
 
-function historicalImportFacts(importedRead, runtimeEnv) {
-  const detail = importedRead?.detail ?? {};
-  const messages = Array.isArray(detail.messages) ? detail.messages : [];
-  const items = Array.isArray(detail.items) ? detail.items : [];
+function historicalImportFacts(importedRead, importJob, runtimeEnv) {
+  const turns = canonicalTurns(importedRead);
+  const items = canonicalItems(importedRead).map(({ item }) => item);
   return {
-    messagesLength: messages.length,
+    turnsLength: turns.length,
     itemsLength: items.length,
-    hasUserMessage: messages.some(
-      (message) =>
-        message?.role === "user" &&
-        contentTextFromMessage(message) === IMPORTED_USER_TEXT,
+    hasUserMessage: items.some(
+      (item) =>
+        item?.type === "userMessage" &&
+        contentTextFromUserItem(item) === IMPORTED_USER_TEXT,
     ),
-    hasAssistantMessage: messages.some(
-      (message) =>
-        message?.role === "assistant" &&
-        contentTextFromMessage(message).includes(IMPORTED_ASSISTANT_TEXT),
+    hasAssistantMessage: items.some(
+      (item) =>
+        item?.type === "agentMessage" &&
+        String(item?.text || "").includes(IMPORTED_ASSISTANT_TEXT),
     ),
     hasReasoningItem: items.some(
       (item) =>
-        item?.type === "reasoning" && item?.text === IMPORTED_REASONING_TEXT,
+        item?.type === "reasoning" &&
+        [...(item?.summary || []), ...(item?.content || [])].includes(
+          IMPORTED_REASONING_TEXT,
+        ),
     ),
     hasCommandItem: items.some(
       (item) =>
-        item?.type === "command_execution" &&
-        item?.command_id === "call_exec" &&
+        item?.type === "commandExecution" &&
+        String(item?.id || "").endsWith("call_exec") &&
         item?.command === "npm test",
     ),
     hasPatchItem: items.some(
       (item) =>
-        item?.type === "file_artifact" &&
-        item?.path === path.join(runtimeEnv.workspaceRoot, "src/lib.rs"),
+        item?.type === "fileChange" &&
+        Array.isArray(item?.changes) &&
+        item.changes.some(
+          (change) =>
+            change?.path === path.join(runtimeEnv.workspaceRoot, "src/lib.rs"),
+        ),
     ),
     hasWebSearchItem: items.some(
-      (item) => item?.type === "web_search" && item?.call_id === "call_search",
-    ),
-    hasApprovalItem: items.some(
       (item) =>
-        item?.type === "approval_request" && item?.request_id === "call_exec",
+        (item?.type === "webSearch" ||
+          (item?.type === "dynamicToolCall" && item?.tool === "web_search")) &&
+        String(item?.id || "").endsWith("call_search"),
     ),
+    hasApprovalFidelity: importJob?.result?.summary?.fidelity?.approvals === 1,
   };
 }
 
@@ -718,17 +761,21 @@ export function summarizeAndAssertFixture({
   const providerSummaries = providerRequestSummaries(providerRequests);
   const importedCommand = findCompletedCommand(
     turns.importedRead,
-    IMPORTED_TURN_ID,
+    turns.importedTurnId,
     command,
   );
   const normalCommand = findCompletedCommand(
     turns.normalRead,
-    NORMAL_TURN_ID,
+    turns.normalTurnId,
     command,
   );
   const importedShape = commandShape(importedCommand);
   const normalShape = commandShape(normalCommand);
-  const historical = historicalImportFacts(initial.importedRead, runtimeEnv);
+  const historical = historicalImportFacts(
+    initial.importedRead,
+    initial.job,
+    runtimeEnv,
+  );
   const retiredTools = ["Bash", "PowerShell", "BashTool", "PowerShellTool"];
 
   assert(providerRequestsAfterCommit === 0, "导入 commit 触发了 provider 请求");
@@ -742,13 +789,13 @@ export function summarizeAndAssertFixture({
     initial.job?.result?.canContinue === true,
     "导入会话未标记 canContinue",
   );
-  assert(historical.hasUserMessage, "导入用户消息未进入 read model");
-  assert(historical.hasAssistantMessage, "导入助手消息未进入 read model");
-  assert(historical.hasReasoningItem, "导入 reasoning 未进入 detail.items");
-  assert(historical.hasCommandItem, "导入 command 未进入 detail.items");
-  assert(historical.hasPatchItem, "导入 patch 未进入 detail.items");
-  assert(historical.hasWebSearchItem, "导入 web_search 未进入 detail.items");
-  assert(historical.hasApprovalItem, "导入 approval 未进入 detail.items");
+  assert(historical.hasUserMessage, "导入用户消息未进入 canonical Thread");
+  assert(historical.hasAssistantMessage, "导入助手消息未进入 canonical Thread");
+  assert(historical.hasReasoningItem, "导入 reasoning 未进入 canonical items");
+  assert(historical.hasCommandItem, "导入 command 未进入 canonical items");
+  assert(historical.hasPatchItem, "导入 patch 未进入 canonical items");
+  assert(historical.hasWebSearchItem, "导入 web_search 未进入 canonical items");
+  assert(historical.hasApprovalFidelity, "导入 approval fidelity 计数丢失");
   assert(importedCommand, "导入续聊未产生 completed Command Item");
   assert(normalCommand, "普通会话未产生 completed Command Item");
   assert(
@@ -774,7 +821,9 @@ export function summarizeAndAssertFixture({
   return {
     requestMethods,
     sessionId: initial.sessionId,
+    threadId: initial.threadId,
     normalSessionId: turns.normalSessionId,
+    normalThreadId: turns.normalThreadId,
     providerRequestsAfterCommit,
     providerRequests: providerSummaries,
     historical,

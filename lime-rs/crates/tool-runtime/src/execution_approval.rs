@@ -26,7 +26,7 @@ pub fn execution_approval_projection(
     let contract_key = runtime_contract_key_for_approval(&tool_family, metadata);
     let runtime_contract = runtime_contract_for_approval(&contract_key, &tool_family, metadata);
     let approval_scope = approval_scope_for_approval(&contract_key, &tool_family, metadata);
-    let available_decisions = available_decisions_for_approval(metadata);
+    let available_decisions = available_decisions_for_approval(metadata, &runtime_contract);
 
     ExecutionApprovalProjection {
         action_kind,
@@ -133,7 +133,14 @@ fn approval_scope_for_approval(
     })
 }
 
-fn available_decisions_for_approval(metadata: &HashMap<String, Value>) -> Vec<String> {
+fn available_decisions_for_approval(
+    metadata: &HashMap<String, Value>,
+    runtime_contract: &Value,
+) -> Vec<String> {
+    let session_cache_supported = runtime_contract
+        .get("session_cache_supported")
+        .and_then(Value::as_bool)
+        == Some(true);
     if let Some(values) = metadata
         .get("availableDecisions")
         .or_else(|| metadata.get("available_decisions"))
@@ -144,7 +151,8 @@ fn available_decisions_for_approval(metadata: &HashMap<String, Value>) -> Vec<St
             if matches!(
                 decision,
                 "allow_once" | "allow_for_session" | "decline" | "cancel"
-            ) && !decisions.iter().any(|existing| existing == decision)
+            ) && (decision != "allow_for_session" || session_cache_supported)
+                && !decisions.iter().any(|existing| existing == decision)
             {
                 decisions.push(decision.to_string());
             }
@@ -306,5 +314,36 @@ mod tests {
             projection.approval_scope.get("networkHost"),
             Some(&json!("https://example.com"))
         );
+    }
+
+    #[test]
+    fn session_decision_fails_closed_without_boolean_cache_support() {
+        for runtime_contract in [
+            json!({
+                "contract_key": "shell_command",
+                "session_cache_supported": false,
+            }),
+            json!({
+                "contract_key": "shell_command",
+                "session_cache_supported": "true",
+            }),
+            json!({ "contract_key": "shell_command" }),
+            json!("invalid"),
+        ] {
+            let metadata = HashMap::from([
+                (
+                    "availableDecisions".to_string(),
+                    json!(["allow_once", "allow_for_session", "decline", "cancel"]),
+                ),
+                ("runtime_contract".to_string(), runtime_contract),
+            ]);
+
+            let projection = execution_approval_projection("exec_command", &metadata);
+
+            assert_eq!(
+                projection.available_decisions,
+                vec!["allow_once", "decline", "cancel"]
+            );
+        }
     }
 }

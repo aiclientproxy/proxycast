@@ -13,18 +13,16 @@ use crate::events::{McpResourceUpdatedPayload, McpResourcesUpdatedPayload};
 use crate::McpRuntimeOwner;
 use lime_core::DynEmitter;
 use rmcp::{
+    handler::client::progress::{ProgressDispatcher, ProgressSubscriber},
     model::{
         ClientCapabilities, ClientInfo, CreateElicitationRequestParam, ElicitationCapability,
-        Implementation, LoggingMessageNotification, LoggingMessageNotificationMethod,
-        LoggingMessageNotificationParam, ProgressNotification, ProgressNotificationMethod,
-        ProgressNotificationParam, ProtocolVersion, ResourceUpdatedNotificationParam,
-        ServerNotification,
+        Implementation, LoggingMessageNotificationParam, ProgressNotificationParam, ProgressToken,
+        ProtocolVersion, ResourceUpdatedNotificationParam,
     },
     service::NotificationContext,
     ClientHandler, RoleClient,
 };
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
 use tool_runtime::mcp_connection::McpCallScope;
 use tracing::{debug, info, warn};
 
@@ -32,7 +30,7 @@ use tracing::{debug, info, warn};
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct McpProgressPayload {
     pub server_name: String,
-    pub progress_token: String,
+    pub progress_token: serde_json::Value,
     pub progress: f64,
     pub total: Option<f64>,
     pub message: Option<String>,
@@ -51,7 +49,7 @@ pub struct McpLogMessagePayload {
 pub struct LimeMcpClient {
     emitter: Option<DynEmitter>,
     server_name: String,
-    notification_handlers: Arc<Mutex<Vec<mpsc::Sender<ServerNotification>>>>,
+    progress_dispatcher: ProgressDispatcher,
     elicitation_router: Option<ElicitationRequestRouter>,
     runtime_owner: Option<McpRuntimeOwner>,
     elicitation_pause_state: ElicitationPauseState,
@@ -94,7 +92,7 @@ impl LimeMcpClient {
         Self {
             emitter,
             server_name,
-            notification_handlers: Arc::new(Mutex::new(Vec::new())),
+            progress_dispatcher: ProgressDispatcher::new(),
             elicitation_router,
             runtime_owner,
             elicitation_pause_state: ElicitationPauseState::new(),
@@ -148,14 +146,11 @@ impl LimeMcpClient {
         self.elicitation_pause_state.clone()
     }
 
-    pub fn notification_handlers(&self) -> Arc<Mutex<Vec<mpsc::Sender<ServerNotification>>>> {
-        self.notification_handlers.clone()
-    }
-
-    pub async fn subscribe(&self) -> mpsc::Receiver<ServerNotification> {
-        let (tx, rx) = mpsc::channel(16);
-        self.notification_handlers.lock().await.push(tx);
-        rx
+    pub(crate) async fn subscribe_progress(
+        &self,
+        progress_token: ProgressToken,
+    ) -> ProgressSubscriber {
+        self.progress_dispatcher.subscribe(progress_token).await
     }
 
     /// 发送事件（通过 DynEmitter）
@@ -203,7 +198,7 @@ impl ClientHandler for LimeMcpClient {
     async fn on_progress(
         &self,
         params: ProgressNotificationParam,
-        context: NotificationContext<RoleClient>,
+        _context: NotificationContext<RoleClient>,
     ) {
         debug!(
             server_name = %self.server_name,
@@ -213,31 +208,25 @@ impl ClientHandler for LimeMcpClient {
             "收到 MCP 进度通知"
         );
 
+        self.progress_dispatcher
+            .handle_notification(params.clone())
+            .await;
+
         let payload = McpProgressPayload {
             server_name: self.server_name.clone(),
-            progress_token: format!("{:?}", params.progress_token),
+            progress_token: serde_json::to_value(&params.progress_token)
+                .unwrap_or(serde_json::Value::Null),
             progress: params.progress,
             total: params.total,
-            message: None,
+            message: params.message.clone(),
         };
         self.emit_event("mcp:progress", &payload);
-
-        let notification = ServerNotification::ProgressNotification(ProgressNotification {
-            params: params.clone(),
-            method: ProgressNotificationMethod,
-            extensions: context.extensions.clone(),
-        });
-
-        let handlers = self.notification_handlers.lock().await;
-        for handler in handlers.iter() {
-            let _ = handler.try_send(notification.clone());
-        }
     }
 
     async fn on_logging_message(
         &self,
         params: LoggingMessageNotificationParam,
-        context: NotificationContext<RoleClient>,
+        _context: NotificationContext<RoleClient>,
     ) {
         let level_str = format!("{:?}", params.level);
         match params.level {
@@ -265,24 +254,12 @@ impl ClientHandler for LimeMcpClient {
             data: params.data.clone(),
         };
         self.emit_event("mcp:log_message", &payload);
-
-        let notification =
-            ServerNotification::LoggingMessageNotification(LoggingMessageNotification {
-                params: params.clone(),
-                method: LoggingMessageNotificationMethod,
-                extensions: context.extensions.clone(),
-            });
-
-        let handlers = self.notification_handlers.lock().await;
-        for handler in handlers.iter() {
-            let _ = handler.try_send(notification.clone());
-        }
     }
 
     async fn on_resource_updated(
         &self,
         params: ResourceUpdatedNotificationParam,
-        context: NotificationContext<RoleClient>,
+        _context: NotificationContext<RoleClient>,
     ) {
         debug!(
             server_name = %self.server_name,
@@ -297,22 +274,9 @@ impl ClientHandler for LimeMcpClient {
                 uri: params.uri.clone(),
             },
         );
-
-        let notification = ServerNotification::ResourceUpdatedNotification(
-            rmcp::model::ResourceUpdatedNotification {
-                params: params.clone(),
-                method: rmcp::model::ResourceUpdatedNotificationMethod,
-                extensions: context.extensions.clone(),
-            },
-        );
-
-        let handlers = self.notification_handlers.lock().await;
-        for handler in handlers.iter() {
-            let _ = handler.try_send(notification.clone());
-        }
     }
 
-    async fn on_resource_list_changed(&self, context: NotificationContext<RoleClient>) {
+    async fn on_resource_list_changed(&self, _context: NotificationContext<RoleClient>) {
         debug!(server_name = %self.server_name, "收到 MCP 资源列表更新通知");
 
         self.emit_event(
@@ -321,18 +285,6 @@ impl ClientHandler for LimeMcpClient {
                 server_name: self.server_name.clone(),
             },
         );
-
-        let notification = ServerNotification::ResourceListChangedNotification(
-            rmcp::model::ResourceListChangedNotification {
-                method: rmcp::model::ResourceListChangedNotificationMethod,
-                extensions: context.extensions.clone(),
-            },
-        );
-
-        let handlers = self.notification_handlers.lock().await;
-        for handler in handlers.iter() {
-            let _ = handler.try_send(notification.clone());
-        }
     }
 }
 
@@ -435,6 +387,9 @@ impl McpClientWrapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::StreamExt;
+    use rmcp::model::NumberOrString;
+    use std::time::Duration;
 
     #[tokio::test]
     async fn active_time_real_handler_pauses_for_the_full_router_wait() {
@@ -564,15 +519,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_notification_subscription() {
+    async fn progress_dispatcher_isolates_subscribers_by_token() {
         let client = LimeMcpClient::new("test-server".to_string(), None);
+        let token_a = ProgressToken(NumberOrString::String("call-a".into()));
+        let token_b = ProgressToken(NumberOrString::String("call-b".into()));
+        let mut progress_a = client.subscribe_progress(token_a.clone()).await;
+        let mut progress_b = client.subscribe_progress(token_b.clone()).await;
 
-        let mut rx = client.subscribe().await;
+        client
+            .progress_dispatcher
+            .handle_notification(ProgressNotificationParam {
+                progress_token: token_b.clone(),
+                progress: 1.0,
+                total: Some(2.0),
+                message: Some("progress-b".to_string()),
+            })
+            .await;
 
-        let handlers = client.notification_handlers.lock().await;
-        assert_eq!(handlers.len(), 1);
-        drop(handlers);
+        let notification_b = progress_b.next().await.expect("progress for token B");
+        assert_eq!(notification_b.progress_token, token_b);
+        assert_eq!(notification_b.message.as_deref(), Some("progress-b"));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), progress_a.next())
+                .await
+                .is_err()
+        );
 
-        assert!(rx.try_recv().is_err());
+        client
+            .progress_dispatcher
+            .handle_notification(ProgressNotificationParam {
+                progress_token: token_a.clone(),
+                progress: 2.0,
+                total: Some(2.0),
+                message: Some("progress-a".to_string()),
+            })
+            .await;
+
+        let notification_a = progress_a.next().await.expect("progress for token A");
+        assert_eq!(notification_a.progress_token, token_a);
+        assert_eq!(notification_a.message.as_deref(), Some("progress-a"));
     }
 }

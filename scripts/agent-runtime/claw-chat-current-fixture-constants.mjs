@@ -99,13 +99,12 @@ export const APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND =
 export const APP_SERVER_METHOD_SESSION_READ = "thread/read";
 export const APP_SERVER_METHOD_SESSION_THREAD_RESUME = "thread/resume";
 export const APP_SERVER_METHOD_SESSION_LIST = "thread/list";
-export const APP_SERVER_METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND =
-  "agentSession/runtimeEvents/append";
 export const APP_SERVER_METHOD_WORKFLOW_READ = "workflow/read";
 export const APP_SERVER_METHOD_WORKFLOW_RESPOND = "workflow/respond";
 export const APP_SERVER_METHOD_WORKFLOW_CANCEL = "workflow/cancel";
 export const APP_SERVER_METHOD_WORKFLOW_RETRY = "workflow/retry";
 export const APP_SERVER_METHOD_ARTIFACT_READ = "artifact/read";
+export const APP_SERVER_METHOD_ARTIFACT_WRITE = "artifact/write";
 export const APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_IMAGE_CREATE =
   "mediaTaskArtifact/image/create";
 export const APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_IMAGE_COMPLETE =
@@ -334,16 +333,6 @@ export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKER_ACTION_KEY =
   "worker_dogfood";
 export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKER_TURN_ID = `${CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_ID}-worker-turn`;
 export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKER_TASK_ID = `${CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKER_TURN_ID}:${CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKER_ACTION_KEY}`;
-export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_RUN_ID = `${CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_ID}:workflow`;
-export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_REVIEW_STEP_ID =
-  "human_review";
-export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_REVIEW_REQUEST_ID = `${CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_ID}:workflow:review`;
-export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_CANCEL_RUN_ID = `${CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_ID}:workflow:cancel`;
-export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_CANCEL_STEP_ID =
-  "cancel_draft";
-export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_RETRY_RUN_ID = `${CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_ID}:workflow:retry`;
-export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_RETRY_STEP_ID =
-  "retry_draft";
 export const CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID =
   "artifact-article-1";
 export const CONTENT_FACTORY_ARTICLE_WORKSPACE_IMAGE_ARTIFACT_ID =
@@ -673,24 +662,18 @@ export const RIGHT_SURFACE_VISUAL_MATRIX_ASSERTION_KEYS = [
   "rightSurfaceVisualMatrixDoesNotUseModelTurn",
 ];
 export const CONTENT_FACTORY_ARTICLE_WORKSPACE_ASSERTION_KEYS = [
-  "contentFactoryArticleWorkspaceRuntimeEventsAppended",
+  "contentFactoryArticleWorkspaceArtifactWritePersisted",
   "contentFactoryArticleWorkspaceRightSurfaceRequested",
   "contentFactoryArticleWorkspaceSessionOpenedFromSidebar",
   "contentFactoryArticleWorkspaceRightSurfaceVisible",
   "contentFactoryArticleWorkspaceFinalArticleFrameVisible",
   "contentFactoryArticleWorkspacePageShowsObjects",
   "contentFactoryArticleWorkspaceReadModelProjected",
-  "contentFactoryArticleWorkspaceWorkflowFactsHidden",
-  "contentFactoryArticleWorkspaceWorkflowReadModelProjected",
-  "contentFactoryArticleWorkspaceWorkflowRespondHiddenWithoutPendingAction",
-  "contentFactoryArticleWorkspaceWorkflowCancelProjected",
-  "contentFactoryArticleWorkspaceWorkflowRetryProjected",
   "contentFactoryArticleWorkspaceArtifactsProjected",
   "contentFactoryArticleWorkspaceRendererArtifactsProjected",
   "contentFactoryArticleWorkspaceArtifactReadContent",
   "contentFactoryArticleWorkspaceArticleCanvasSurfaceVisible",
   "contentFactoryArticleWorkspaceEditedDraftRestored",
-  "contentFactoryArticleWorkspaceWorkerFailureEvidence",
   "contentFactoryArticleWorkspaceWorkerTurnExecuted",
   "contentFactoryArticleWorkspaceWorkerAuditFactsHidden",
   "contentFactoryArticleWorkspaceActionResultPatchProjected",

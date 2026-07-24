@@ -98,6 +98,11 @@ export function useWorkspaceInitialSessionNavigation({
   resolveInitialSessionSwitch,
 }: UseWorkspaceInitialSessionNavigationParams) {
   const appliedInitialSessionIdRef = useRef<string | null>(null);
+  const activeInitialSessionNavigationRef = useRef<{
+    sessionId: string;
+    promise: Promise<unknown>;
+  } | null>(null);
+  const failedInitialSessionIdRef = useRef<string | null>(null);
   const handledExplicitNavigationRequestVersionRef = useRef(0);
   const previousInitialSessionIdRef = useRef<string | null>(null);
   const pausedInitialSessionIdRef = useRef<string | null>(null);
@@ -143,6 +148,7 @@ export function useWorkspaceInitialSessionNavigation({
     if (!normalizedInitialSessionId) {
       appliedInitialSessionIdRef.current = null;
       pausedInitialSessionIdRef.current = null;
+      failedInitialSessionIdRef.current = null;
       return;
     }
 
@@ -157,6 +163,12 @@ export function useWorkspaceInitialSessionNavigation({
     const hasExplicitNavigationRequest =
       explicitNavigationRequestVersion >
       handledExplicitNavigationRequestVersionRef.current;
+    if (
+      previousInitialSessionId &&
+      previousInitialSessionId !== normalizedInitialSessionId
+    ) {
+      failedInitialSessionIdRef.current = null;
+    }
     const shouldPauseForLocalDraftTransition =
       shouldPauseInitialSessionNavigation &&
       !hasExplicitNavigationRequest &&
@@ -254,6 +266,49 @@ export function useWorkspaceInitialSessionNavigation({
       return;
     }
 
+    if (
+      !hasExplicitNavigationRequest &&
+      failedInitialSessionIdRef.current === normalizedInitialSessionId
+    ) {
+      logAgentDebug(
+        "AgentChatPage",
+        "initialSessionNavigation.skipFailedSession",
+        {
+          currentSessionId: normalizedCurrentSessionId,
+          initialSessionId: normalizedInitialSessionId,
+        },
+        {
+          dedupeKey: `initialSessionNavigation.failed:${normalizedInitialSessionId}`,
+          throttleMs: 1000,
+        },
+      );
+      return;
+    }
+
+    const activeInitialNavigation = activeInitialSessionNavigationRef.current;
+    if (activeInitialNavigation?.sessionId === normalizedInitialSessionId) {
+      consumeExplicitNavigationRequest();
+      appliedInitialSessionIdRef.current = appliedNavigationKey;
+      logAgentDebug(
+        "AgentChatPage",
+        "initialSessionNavigation.reuseInFlight",
+        {
+          currentSessionId: normalizedCurrentSessionId,
+          initialSessionId: normalizedInitialSessionId,
+          matchedHydration: shouldHydrateMatchedSession,
+        },
+        {
+          dedupeKey: `initialSessionNavigation.inFlight:${normalizedInitialSessionId}`,
+          throttleMs: 1000,
+        },
+      );
+      return;
+    }
+
+    if (hasExplicitNavigationRequest) {
+      failedInitialSessionIdRef.current = null;
+    }
+
     if (resolvedSwitchOptions?.waitForResolution) {
       logAgentDebug(
         "AgentChatPage",
@@ -343,12 +398,43 @@ export function useWorkspaceInitialSessionNavigation({
     };
     const hasSwitchOptions = Object.keys(switchOptions).length > 0;
 
-    void switchTopic(
+    const switchPromise = switchTopic(
       normalizedInitialSessionId,
       hasSwitchOptions ? switchOptions : undefined,
-    ).catch(
-      (error) => {
-        appliedInitialSessionIdRef.current = null;
+    );
+    activeInitialSessionNavigationRef.current = {
+      sessionId: normalizedInitialSessionId,
+      promise: switchPromise,
+    };
+    void switchPromise
+      .then((result) => {
+        if (
+          activeInitialSessionNavigationRef.current?.promise !== switchPromise
+        ) {
+          return;
+        }
+        if (result === "error") {
+          failedInitialSessionIdRef.current = normalizedInitialSessionId;
+          logAgentDebug(
+            "AgentChatPage",
+            "initialSessionNavigation.error",
+            {
+              initialSessionId: normalizedInitialSessionId,
+              switchResult: result,
+            },
+            { level: "error" },
+          );
+          return;
+        }
+        failedInitialSessionIdRef.current = null;
+      })
+      .catch((error) => {
+        if (
+          activeInitialSessionNavigationRef.current?.promise !== switchPromise
+        ) {
+          return;
+        }
+        failedInitialSessionIdRef.current = normalizedInitialSessionId;
         switchTopicStarts.delete(dedupeKey);
         externalNavigationStartsBySessionId.delete(normalizedInitialSessionId);
         logAgentDebug(
@@ -361,8 +447,14 @@ export function useWorkspaceInitialSessionNavigation({
           { level: "error" },
         );
         console.error("[AgentChatPage] 恢复初始会话失败:", error);
-      },
-    );
+      })
+      .finally(() => {
+        if (
+          activeInitialSessionNavigationRef.current?.promise === switchPromise
+        ) {
+          activeInitialSessionNavigationRef.current = null;
+        }
+      });
   }, [
     normalizedCurrentSessionId,
     normalizedInitialSessionId,

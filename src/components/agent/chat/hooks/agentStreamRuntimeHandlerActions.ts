@@ -171,6 +171,7 @@ export function createAgentStreamRuntimeHandlerActions({
   };
 
   const scheduleFirstTextPaintMetric = (flushStartedAt: number) => {
+    const firstTextPerformanceTrace = requestState.performanceTrace;
     const recordFirstTextPaint = () => {
       const paintedAt = Date.now();
       requestState.firstTextPaintAt = paintedAt;
@@ -181,14 +182,14 @@ export function createAgentStreamRuntimeHandlerActions({
         flushStartedAt,
         paintedAt,
         rendererEventReceivedAt:
-          requestState.performanceTrace?.rendererEventReceivedAt,
+          firstTextPerformanceTrace?.rendererEventReceivedAt,
         requestStartedAt: requestState.requestStartedAt,
         serverEventEmittedAt:
-          requestState.performanceTrace?.serverEventEmittedAt,
+          firstTextPerformanceTrace?.serverEventEmittedAt,
       });
       recordAgentStreamPerformanceMetric(
         "agentStream.firstTextPaint",
-        requestState.performanceTrace,
+        firstTextPerformanceTrace,
         paintContext,
       );
       logAgentDebug("AgentStream", "firstTextPaint", paintContext);

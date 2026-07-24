@@ -5,6 +5,11 @@ use app_server_protocol::{error_codes, AgentEvent, JsonRpcError, JsonRpcNotifica
 use serde_json::Value;
 use std::collections::HashSet;
 
+mod command;
+mod file_change;
+mod mcp;
+mod plan;
+
 enum EventProjection {
     Direct(Vec<JsonRpcNotification>),
     SideChannel,
@@ -14,6 +19,14 @@ enum EventProjection {
 #[derive(Default)]
 pub(crate) struct V2NotificationProjector {
     started_turn_ids: HashSet<String>,
+    started_plan_item_ids: HashSet<String>,
+    completed_plan_item_ids: HashSet<String>,
+    started_command_item_ids: HashSet<String>,
+    completed_command_item_ids: HashSet<String>,
+    started_file_change_item_ids: HashSet<String>,
+    completed_file_change_item_ids: HashSet<String>,
+    started_mcp_item_ids: HashSet<String>,
+    completed_mcp_item_ids: HashSet<String>,
 }
 
 impl V2NotificationProjector {
@@ -48,8 +61,48 @@ impl V2NotificationProjector {
             "provider.usage" => return self.project_token_usage(event),
             "item.started" | "command.started" => self.project_item(event, false),
             "item.completed" | "command.exited" => self.project_item(event, true),
-            "plan.delta" => self.project_item(event, false),
-            "plan.final" => self.project_item(event, true),
+            "command.output" => {
+                return command::project_output_delta(
+                    &self.started_command_item_ids,
+                    &self.completed_command_item_ids,
+                    event,
+                )
+            }
+            "patch.started" => {
+                return file_change::project_started(
+                    &mut self.started_file_change_item_ids,
+                    &self.completed_file_change_item_ids,
+                    event,
+                )
+            }
+            "patch.applied" | "patch.failed" | "patch.declined" => {
+                return file_change::project_final(
+                    &self.started_file_change_item_ids,
+                    &mut self.completed_file_change_item_ids,
+                    event,
+                )
+            }
+            "plan.delta" => {
+                return plan::project_delta(
+                    &mut self.started_plan_item_ids,
+                    &self.completed_plan_item_ids,
+                    event,
+                )
+            }
+            "plan.final" => {
+                return plan::project_final(
+                    &mut self.started_plan_item_ids,
+                    &mut self.completed_plan_item_ids,
+                    event,
+                )
+            }
+            "tool.progress" => {
+                return mcp::project_progress(
+                    &self.started_mcp_item_ids,
+                    &self.completed_mcp_item_ids,
+                    event,
+                )
+            }
             "message.delta" | "message.delta_batch" | "message.batch" => {
                 self.project_agent_message_delta(event)
             }
@@ -114,13 +167,34 @@ impl V2NotificationProjector {
         EventProjection::Direct(notifications)
     }
 
-    fn project_item(&self, event: &AgentEvent, completed: bool) -> Option<ServerNotification> {
+    fn project_item(&mut self, event: &AgentEvent, completed: bool) -> Option<ServerNotification> {
         let thread_id = required_event_id(event.thread_id.as_deref())?;
         let turn_id = required_event_id(event.turn_id.as_deref())?;
         let item = match project_event(event)? {
             ProjectedEvent::Item(item) => item,
             _ => return None,
         };
+        if let v2::ThreadItem::Plan { id, .. } = &item {
+            if completed {
+                self.completed_plan_item_ids.insert(id.clone());
+            } else {
+                self.started_plan_item_ids.insert(id.clone());
+            }
+        }
+        if let v2::ThreadItem::CommandExecution { id, .. } = &item {
+            if completed {
+                self.completed_command_item_ids.insert(id.clone());
+            } else {
+                self.started_command_item_ids.insert(id.clone());
+            }
+        }
+        if let v2::ThreadItem::McpToolCall { id, .. } = &item {
+            if completed {
+                self.completed_mcp_item_ids.insert(id.clone());
+            } else {
+                self.started_mcp_item_ids.insert(id.clone());
+            }
+        }
         let timestamp_ms = timestamp_millis(&event.timestamp)?;
         if completed {
             return Some(ServerNotification::ItemCompleted(
@@ -349,6 +423,10 @@ fn project_token_usage_breakdown(value: &Value) -> Option<v2::TokenUsageBreakdow
         total_tokens: value.get("total_tokens")?.as_i64()?,
         input_tokens: value.get("input_tokens")?.as_i64()?,
         cached_input_tokens: value.get("cached_input_tokens")?.as_i64()?,
+        cache_write_input_tokens: value
+            .get("cache_write_input_tokens")
+            .and_then(Value::as_i64)
+            .unwrap_or_default(),
         output_tokens: value.get("output_tokens")?.as_i64()?,
         reasoning_output_tokens: value.get("reasoning_output_tokens")?.as_i64()?,
     })
@@ -495,6 +573,41 @@ mod tests {
         })
     }
 
+    fn canonical_file_change_item(status: &str) -> Value {
+        let file_status = match status {
+            "inProgress" => "proposed",
+            "completed" => "applied",
+            "declined" => "rejected",
+            "failed" => "failed",
+            _ => status,
+        };
+        json!({
+            "sessionId": "session-1",
+            "threadId": "thread-1",
+            "turnId": "turn-1",
+            "itemId": "item_patch-1",
+            "sequence": 1,
+            "ordinal": 1,
+            "createdAtMs": 1,
+            "updatedAtMs": 2,
+            "completedAtMs": (status != "inProgress").then_some(2),
+            "kind": "file",
+            "status": if status == "inProgress" { "inProgress" } else { "completed" },
+            "payload": {
+                "type": "file",
+                "changes": [
+                    {
+                        "path": "src/lib.rs",
+                        "kind": { "type": "update", "move_path": "src/main.rs" },
+                        "diff": "-old\n+new"
+                    }
+                ],
+                "status": file_status
+            },
+            "metadata": {}
+        })
+    }
+
     fn canonical_thread() -> Value {
         json!({
             "sessionId": "session-1",
@@ -577,16 +690,6 @@ mod tests {
                 json!({"item": canonical_item("completed")}),
                 "item/completed",
             ),
-            (
-                "plan.delta",
-                json!({"item": canonical_plan_item("inProgress")}),
-                "item/started",
-            ),
-            (
-                "plan.final",
-                json!({"item": canonical_plan_item("completed")}),
-                "item/completed",
-            ),
         ];
         for (event_type, payload, method) in cases {
             let mut projector = V2NotificationProjector::default();
@@ -595,6 +698,73 @@ mod tests {
                 .expect("direct lifecycle");
             assert_eq!(notifications[0].method, method);
         }
+    }
+
+    #[test]
+    fn maps_plan_to_one_started_typed_deltas_and_one_completed_notification() {
+        let mut projector = V2NotificationProjector::default();
+        let first = projector
+            .project(event(
+                "plan.delta",
+                json!({
+                    "delta": "- [ ] 读协议",
+                    "item": canonical_plan_item("inProgress")
+                }),
+            ))
+            .expect("first plan delta");
+        let second = projector
+            .project(event(
+                "plan.delta",
+                json!({
+                    "delta": "\n- [ ] 接 GUI",
+                    "item": canonical_plan_item("inProgress")
+                }),
+            ))
+            .expect("second plan delta");
+        let completed = projector
+            .project(event(
+                "plan.final",
+                json!({"item": canonical_plan_item("completed")}),
+            ))
+            .expect("plan completed");
+
+        assert_eq!(
+            first
+                .iter()
+                .map(|notification| notification.method.as_str())
+                .collect::<Vec<_>>(),
+            vec!["item/started", "item/plan/delta"]
+        );
+        assert_eq!(second[0].method, "item/plan/delta");
+        assert_eq!(
+            second[0].params.as_ref().expect("delta params")["delta"],
+            "\n- [ ] 接 GUI"
+        );
+        assert_eq!(completed.len(), 1);
+        assert_eq!(completed[0].method, "item/completed");
+    }
+
+    #[test]
+    fn rejects_plan_delta_after_completed_item() {
+        let mut projector = V2NotificationProjector::default();
+        projector
+            .project(event(
+                "plan.final",
+                json!({"item": canonical_plan_item("completed")}),
+            ))
+            .expect("plan completed");
+
+        let error = projector
+            .project(event(
+                "plan.delta",
+                json!({
+                    "delta": "late",
+                    "item": canonical_plan_item("inProgress")
+                }),
+            ))
+            .expect_err("late plan delta must fail closed");
+        assert_eq!(error.code, error_codes::RUNTIME_ERROR);
+        assert!(error.message.contains("plan.delta"));
     }
 
     #[test]
@@ -655,6 +825,171 @@ mod tests {
             completed[0].params.as_ref().expect("completed params")["item"]["source"],
             "userShell"
         );
+    }
+
+    #[test]
+    fn maps_command_output_to_typed_delta_between_item_lifecycle_events() {
+        let mut projector = V2NotificationProjector::default();
+        assert!(
+            projector
+                .project(event(
+                    "command.output",
+                    json!({
+                        "commandId": "shell-1",
+                        "delta": "stdout\n",
+                        "item": canonical_command_item("inProgress")
+                    }),
+                ))
+                .is_err(),
+            "output before start must fail closed"
+        );
+
+        projector
+            .project(event(
+                "command.started",
+                json!({"item": canonical_command_item("inProgress")}),
+            ))
+            .expect("command started");
+        let output = projector
+            .project(event(
+                "command.output",
+                json!({
+                    "commandId": "shell-1",
+                    "delta": "stdout\n",
+                    "item": canonical_command_item("inProgress")
+                }),
+            ))
+            .expect("command output");
+        assert_eq!(output.len(), 1);
+        assert_eq!(output[0].method, "item/commandExecution/outputDelta");
+        assert_eq!(
+            output[0].params.as_ref().expect("output params"),
+            &json!({
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "itemId": "shell-1",
+                "delta": "stdout\n"
+            })
+        );
+
+        projector
+            .project(event(
+                "command.exited",
+                json!({"item": canonical_command_item("completed")}),
+            ))
+            .expect("command exited");
+        assert!(
+            projector
+                .project(event(
+                    "command.output",
+                    json!({
+                        "commandId": "shell-1",
+                        "delta": "late",
+                        "item": canonical_command_item("inProgress")
+                    }),
+                ))
+                .is_err(),
+            "late command output must fail closed"
+        );
+    }
+
+    #[test]
+    fn maps_file_change_to_started_patch_updated_and_completed() {
+        let mut projector = V2NotificationProjector::default();
+        let started = projector
+            .project(event(
+                "patch.started",
+                json!({
+                    "patchId": "patch-1",
+                    "item": canonical_file_change_item("inProgress")
+                }),
+            ))
+            .expect("file change started");
+        let completed = projector
+            .project(event(
+                "patch.applied",
+                json!({
+                    "patchId": "patch-1",
+                    "item": canonical_file_change_item("completed")
+                }),
+            ))
+            .expect("file change completed");
+
+        assert_eq!(
+            started
+                .iter()
+                .map(|notification| notification.method.as_str())
+                .collect::<Vec<_>>(),
+            vec!["item/started", "item/fileChange/patchUpdated"]
+        );
+        assert_eq!(
+            started[1].params.as_ref().expect("patch params"),
+            &json!({
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "itemId": "item_patch-1",
+                "changes": [{
+                    "path": "src/lib.rs",
+                    "kind": { "type": "update", "move_path": "src/main.rs" },
+                    "diff": "-old\n+new"
+                }]
+            })
+        );
+        assert_eq!(completed.len(), 1);
+        assert_eq!(completed[0].method, "item/completed");
+        assert_eq!(
+            completed[0].params.as_ref().expect("completed params")["item"]["id"],
+            "item_patch-1"
+        );
+    }
+
+    #[test]
+    fn file_change_lifecycle_fails_closed_outside_started_terminal_order() {
+        let mut projector = V2NotificationProjector::default();
+        let terminal_before_start = projector.project(event(
+            "patch.failed",
+            json!({"item": canonical_file_change_item("failed")}),
+        ));
+        assert!(terminal_before_start.is_err());
+
+        projector
+            .project(event(
+                "patch.started",
+                json!({"item": canonical_file_change_item("inProgress")}),
+            ))
+            .expect("file change started");
+        assert!(projector
+            .project(event(
+                "patch.started",
+                json!({"item": canonical_file_change_item("inProgress")}),
+            ))
+            .is_err());
+        projector
+            .project(event(
+                "patch.declined",
+                json!({"item": canonical_file_change_item("declined")}),
+            ))
+            .expect("file change declined");
+        assert!(projector
+            .project(event(
+                "patch.applied",
+                json!({"item": canonical_file_change_item("completed")}),
+            ))
+            .is_err());
+    }
+
+    #[test]
+    fn file_change_with_empty_snapshot_does_not_invent_patch_update() {
+        let mut item = canonical_file_change_item("inProgress");
+        item["payload"]["changes"] = json!([]);
+        let mut projector = V2NotificationProjector::default();
+
+        let notifications = projector
+            .project(event("patch.started", json!({"item": item})))
+            .expect("empty file change snapshot");
+
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0].method, "item/started");
     }
 
     #[test]
@@ -861,6 +1196,7 @@ mod tests {
                             "total_tokens": 31_000,
                             "input_tokens": 31_000,
                             "cached_input_tokens": 0,
+                            "cache_write_input_tokens": 12,
                             "output_tokens": 0,
                             "reasoning_output_tokens": 0
                         },
@@ -868,6 +1204,7 @@ mod tests {
                             "total_tokens": 31_000,
                             "input_tokens": 31_000,
                             "cached_input_tokens": 0,
+                            "cache_write_input_tokens": 12,
                             "output_tokens": 0,
                             "reasoning_output_tokens": 0
                         },
@@ -882,6 +1219,7 @@ mod tests {
         assert_eq!(params["threadId"], "thread-1");
         assert_eq!(params["turnId"], "turn-1");
         assert_eq!(params["tokenUsage"]["last"]["inputTokens"], 31_000);
+        assert_eq!(params["tokenUsage"]["last"]["cacheWriteInputTokens"], 12);
     }
 
     #[test]

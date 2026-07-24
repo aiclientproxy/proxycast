@@ -255,9 +255,8 @@ function inferSessionId(options, traceEntries, readResult) {
     .reverse()
     .find(
       (request) =>
-        ["agentSession/action/respond", "workflow/respond"].includes(
-          request.method,
-        ) && readString(request.params?.sessionId),
+        request.method === "workflow/respond" &&
+        readString(request.params?.sessionId),
     );
   return readString(
     readResult?.thread?.sessionId,

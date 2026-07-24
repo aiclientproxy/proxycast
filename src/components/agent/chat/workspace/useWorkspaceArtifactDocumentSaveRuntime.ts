@@ -60,7 +60,7 @@ export function useWorkspaceArtifactDocumentSaveRuntime({
         artifact,
         document,
       );
-      if (saveResult.status !== "appended") {
+      if (saveResult.status !== "written") {
         return;
       }
 

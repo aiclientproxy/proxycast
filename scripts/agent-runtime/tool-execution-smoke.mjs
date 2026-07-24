@@ -13,7 +13,7 @@ import {
   invokeAppServerMethod,
   readAgentRuntimeThreadCurrent,
   readAgentSessionDetailCurrent,
-  respondAgentSessionActionCurrent,
+  respondAgentServerRequestCurrent,
   sleep,
   startAgentSessionTurnCurrent,
   summarizeEvidencePack,
@@ -1805,17 +1805,6 @@ function pendingRequestsFromThreadRead(threadRead) {
       : [];
 }
 
-function normalizeActionType(requestType) {
-  const normalized = String(requestType || "").toLowerCase();
-  if (normalized.includes("tool") || normalized.includes("approval")) {
-    return "tool_confirmation";
-  }
-  if (normalized.includes("ask") || normalized.includes("user")) {
-    return "ask_user";
-  }
-  return "elicitation";
-}
-
 function buildActionScope(sessionId, request, fallbackTurnId) {
   const scope =
     request?.scope && typeof request.scope === "object" ? request.scope : {};
@@ -1871,7 +1860,6 @@ function buildUserResponseForRequest(request) {
 async function respondPendingRequests(
   options,
   sessionId,
-  eventName,
   turnId,
   threadRead,
   seenRequestIds,
@@ -1887,24 +1875,15 @@ async function respondPendingRequests(
       continue;
     }
     seenRequestIds.add(requestId);
-    const actionType = normalizeActionType(
-      request?.request_type || request?.requestType,
-    );
     const userData = buildUserResponseForRequest(request);
-    await respondAgentSessionActionCurrent(options, {
-      sessionId,
+    await respondAgentServerRequestCurrent(options, {
       requestId,
-      actionType,
       confirmed: true,
-      response: JSON.stringify(userData),
       userData,
-      eventName,
       actionScope: buildActionScope(sessionId, request, turnId),
     });
     respondedCount += 1;
-    console.log(
-      `${LOG_PREFIX} responded_pending_request id=${requestId} type=${actionType}`,
-    );
+    console.log(`${LOG_PREFIX} responded_pending_request id=${requestId}`);
   }
   return respondedCount;
 }
@@ -2037,7 +2016,6 @@ async function waitForRuntimeCompletion(
     const pendingResponseCount = await respondPendingRequests(
       options,
       sessionId,
-      eventName,
       turnId,
       threadRead,
       seenRequestIds,

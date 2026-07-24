@@ -1258,7 +1258,7 @@ async fn step_context_and_usage_are_turn_scoped_and_monotonic() {
             let usage = Arc::clone(&usage_for_task);
             Box::pin(async move {
                 seen.lock().await.push(context.capture_step_context().await);
-                context.record_token_usage(10, 3, 1).await;
+                context.record_token_usage(10, 3, 1, 7).await;
                 seen.lock().await.push(context.capture_step_context().await);
                 assert_eq!(context.advance_context_epoch().await, 1);
                 seen.lock().await.push(context.capture_step_context().await);
@@ -1290,6 +1290,7 @@ async fn step_context_and_usage_are_turn_scoped_and_monotonic() {
             input_tokens: 10,
             output_tokens: 3,
             reasoning_tokens: 1,
+            cache_write_input_tokens: 7,
         }
     );
     registry

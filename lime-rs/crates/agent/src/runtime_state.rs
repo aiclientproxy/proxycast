@@ -80,7 +80,6 @@ impl AgentRuntimeState {
         if !self.initialized.swap(true, Ordering::AcqRel) {
             let definitions = crate::native_tools::current_native_tool_definitions();
             self.reset_native_tool_definitions(definitions).await;
-            crate::runtime_state_support::reload_skills();
         }
         Ok(())
     }

@@ -42,6 +42,7 @@ pub(super) fn chat_completions_request(
         );
     }
     apply_generation_options(&mut object, request, "max_tokens", false);
+    apply_reasoning_effort(&mut object, config, false);
     if let Some(enable_thinking) = request
         .provider_options
         .get("enable_thinking")
@@ -100,6 +101,7 @@ pub(super) fn responses_request(
         );
     }
     apply_generation_options(&mut object, request, "max_output_tokens", false);
+    apply_reasoning_effort(&mut object, config, true);
     Value::Object(object)
 }
 
@@ -167,6 +169,26 @@ fn apply_generation_options(
     }
 }
 
+fn apply_reasoning_effort(
+    object: &mut Map<String, Value>,
+    config: &RuntimeProviderConfig,
+    responses_api: bool,
+) {
+    let Some(effort) = config
+        .reasoning_effort
+        .as_deref()
+        .filter(|effort| !effort.trim().is_empty())
+    else {
+        return;
+    };
+
+    if responses_api {
+        object.insert("reasoning".to_string(), json!({ "effort": effort }));
+    } else {
+        object.insert("reasoning_effort".to_string(), json!(effort));
+    }
+}
+
 fn chat_message(
     message: &runtime_core::CanonicalMessage,
     media_payloads: &BTreeMap<String, String>,
@@ -188,6 +210,7 @@ fn chat_message(
             .collect(),
         CanonicalRole::Assistant => {
             let text = text_from_parts(&message.content);
+            let reasoning = reasoning_from_parts(&message.content);
             let tool_calls = message
                 .content
                 .iter()
@@ -203,6 +226,9 @@ fn chat_message(
                 })
                 .collect::<Vec<_>>();
             let mut value = json!({ "role": "assistant", "content": text });
+            if !reasoning.is_empty() {
+                value["reasoning_content"] = json!(reasoning);
+            }
             if !tool_calls.is_empty() {
                 value["tool_calls"] = Value::Array(tool_calls);
             }
@@ -435,6 +461,17 @@ fn text_from_parts(parts: &[ContentPart]) -> String {
         .join("")
 }
 
+fn reasoning_from_parts(parts: &[ContentPart]) -> String {
+    parts
+        .iter()
+        .filter_map(|part| match part {
+            ContentPart::Reasoning { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("")
+}
+
 fn tool_result_text(result: &ToolResultValue, error: Option<&str>) -> String {
     if let Some(error) = error.filter(|value| !value.trim().is_empty()) {
         return error.to_string();
@@ -534,5 +571,77 @@ mod tests {
         assert_eq!(responses[0]["detail"], "original");
         assert!(anthropic[0]["content"][0].get("detail").is_none());
         assert!(anthropic[0]["content"][0]["source"].get("detail").is_none());
+    }
+
+    fn config(reasoning_effort: Option<&str>) -> RuntimeProviderConfig {
+        RuntimeProviderConfig {
+            provider_name: "openai".to_string(),
+            provider_selector: Some("openai".to_string()),
+            model_name: "gpt-5-codex".to_string(),
+            api_key: Some("test".to_string()),
+            base_url: Some("https://gateway.example.com/v1".to_string()),
+            credential_uuid: "credential-1".to_string(),
+            reasoning_effort: reasoning_effort.map(str::to_string),
+            protocol: Some(crate::runtime_provider::RuntimeProviderProtocol::ChatCompletions),
+            supports_websockets: false,
+            toolshim: false,
+            toolshim_model: None,
+        }
+    }
+
+    #[test]
+    fn openai_reasoning_controls_follow_native_wire_shapes() {
+        let request = CanonicalRequest::text("gpt-5-codex", "hello");
+
+        let chat = chat_completions_request(
+            &config(Some("high")),
+            &request,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        );
+        assert_eq!(chat["reasoning_effort"], "high");
+
+        let responses = responses_request(
+            &config(Some("high")),
+            &request,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        );
+        assert_eq!(responses["reasoning"], json!({ "effort": "high" }));
+    }
+
+    #[test]
+    fn blank_reasoning_effort_is_omitted() {
+        let request = CanonicalRequest::text("gpt-5-codex", "hello");
+        let value = chat_completions_request(
+            &config(Some("  ")),
+            &request,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        );
+
+        assert!(value.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn chat_assistant_history_preserves_reasoning_content() {
+        let message = runtime_core::CanonicalMessage {
+            id: None,
+            role: CanonicalRole::Assistant,
+            content: vec![
+                ContentPart::Reasoning {
+                    text: "先检查输入。".to_string(),
+                    encrypted: Some("opaque-reasoning".to_string()),
+                    metadata: Default::default(),
+                },
+                ContentPart::text("结果"),
+            ],
+            metadata: Default::default(),
+        };
+
+        let lowered = chat_message(&message, &BTreeMap::new());
+
+        assert_eq!(lowered[0]["reasoning_content"], "先检查输入。");
+        assert_eq!(lowered[0]["content"], "结果");
     }
 }

@@ -715,6 +715,196 @@ UserMessage 空内容回填分支。架构图仍为 `Electron Desktop Host -> Ap
 Thread/Turn/Item projection -> GUI`。下一刀回到 provider abort/cancel usage、tool-finish/abort flush、
 idle accounting、自动 continuation 与 GUI structured owner；整体 Codex v1 对齐约 40%。
 
+### 2026-07-23 ThreadHistoryBuilder Turn/Item 投影一致性
+
+目标：在不触碰并行 App Server/protocol 热区的前提下，修复 Codex-first canonical history
+reducer 的 item-first、item update 与 cold snapshot 嵌套投影不一致。raw `ThreadItem` 仍是唯一
+item owner，`Turn.items` 只由 reducer 从 raw items 重建，不新增兼容层或第二份持久化事实源。
+
+完成结果：`append_items_at` 在新增和更新后同步已存在的 `Turn.items`；`append_turns_at` 与
+`apply_change_set` 在 turn 后到时挂回已有 raw items，并在 rollback 后重建剩余 turn 的嵌套投影；
+重复更新不会产生嵌套 item 重复，snapshot 的 `Turn.items` 与 raw item 集合保持一致。新增 item-first
+到 turn、item update 去重两项回归测试。
+
+验证：`thread-store` 全量 35/35；App Server cold-resume raw JSONL 回归 1/1；scoped `cargo fmt
+--check -p thread-store`、`git diff --check`、`npm run governance:legacy-report`（0 零引用候选 / 0
+分类漂移 / 0 边界违规）和 `npm run test:contracts` 全部通过。workspace rustfmt 仍被并行既有的
+`agent-protocol/src/lib.rs`、`app-server/src/runtime/agent_mailbox_delivery.rs`、
+`app-server/tests/session_archive_jsonrpc.rs` 格式漂移阻塞，未夹写这些文件。
+
+分类：ThreadHistoryBuilder raw/Turn projection 为 `current`；无新增 `compat/deprecated`，旧的
+不同步 nested projection 行为为 `dead / deleted / forbidden-to-restore`。架构图未改变，仍为
+`Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI`。
+下一刀回到 provider abort/cancel usage 与 canonical token usage/replay owner；`cache_write_input_tokens`
+仍需等待共享 App Server/protocol 热区释放后一次性贯通，不能半截新增 wire 字段。
+
+### 2026-07-23 agent-runtime cache-write usage 累计
+
+目标：先在不修改 App Server/protocol wire 的前提下，把 provider 已解析的 cache-write token
+贯通到 Codex-first turn-scoped runtime usage，避免 provider 终止、取消和正常完成路径在 runtime
+内部丢失该值。
+
+完成结果：`RuntimeSessionTokenUsage` 新增 `cache_write_input_tokens`；session context/input
+handle 的累计 API 使用饱和加法；`run_current_provider_turn` 将 provider
+`cache_creation_input_tokens` 映射为 Codex 语义的 cache-write usage。旧三字段累计行为没有保留
+第二套兼容 API。
+
+验证：`agent-runtime` 全量 167/167；定向 session usage 与 provider cancellation 回归均通过；
+`cargo fmt --check -p agent-runtime`、`git diff --check` 通过。该字段尚未进入 App Server
+canonical snapshot、v2 JSON-RPC 或 resume replay，避免在并行 `lib.rs`/protocol 热区半截落 wire。
+
+分类：runtime usage 累计为 `current`；provider cache-write 在 runtime 内被静默丢弃的路径为
+`dead / deleted / forbidden-to-restore`；无新增 `compat/deprecated`。下一刀待共享 owner 释放后，
+一次性接入 `thread_usage`、v2 `TokenUsage`、resume projection 与持久化回归。
+
+### 2026-07-23 provider failed/canceled usage flush
+
+目标：补齐 provider step 在 usage 已到达、但随后取消、超时或 provider error 时的 runtime
+usage flush，避免只有正常 `ProviderStep` 才累计 token。
+
+完成结果：`run_current_provider_turn` 使用单一 `record_session_token_usage` helper；取消分支
+会保留当前 usage event 并写入 session runtime，step timeout、stream error、provider error
+也会 flush 已观察到的最新 usage。正常完成路径复用同一 helper，cache-write 与 input/output
+保持一次性累计。
+
+验证：`agent-runtime` 全量 171/171；新增
+`cancellation_flushes_provider_usage_to_the_session_runtime` 与
+`provider_error_flushes_prior_usage_to_the_session_runtime`、
+`provider_step_timeout_flushes_prior_usage_to_the_session_runtime`、
+`stream_error_flushes_prior_usage_to_the_session_runtime` 回归通过；scoped rustfmt、
+`git diff --check` 与 `npm run governance:legacy-report`（0 零引用候选 / 0 分类漂移 / 0 边界违规）
+通过。App Server canonical snapshot/v2 wire 尚未修改，仍等待并行协议 owner 释放。
+
+分类：provider terminal usage flush 为 `current`；失败/取消后静默丢 usage 为
+`dead / deleted / forbidden-to-restore`；无新增 `compat/deprecated`。下一刀仍是共享
+`thread_usage`/v2/resume canonical owner 的一次性贯通。
+
+### 2026-07-23 App Server cold-resume replay 顺序证据（并行车道交接）
+
+并行 App Server 车道在未跟踪测试
+`lime-rs/crates/app-server/tests/thread_resume_replay_jsonrpc.rs` 中补齐 raw JSONL cold-resume
+回归：重启后 `thread/resume` response 必须先于 `thread/tokenUsage/updated`、
+`thread/goal/updated`，再允许 live turn event；同时断言 canonical thread identity、token usage
+快照和不出现重复 `thread/started`。本车道只读取并运行该产物，未修改其文件或 App Server 热区。
+
+验证：`cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server --test
+thread_resume_replay_jsonrpc -- --nocapture` 1/1 通过。该证据仍未覆盖
+`cache_write_input_tokens` 的 v2 wire 字段；生产字段贯通继续等待
+`thread_usage`、protocol v2 和 resume projection 的共享 owner 释放。
+
+### 2026-07-23 并行收口编译门禁
+
+在不抢写隔壁 App Server/protocol 热区的前提下，运行
+`cargo check --manifest-path "lime-rs/Cargo.toml" --workspace --locked`，workspace 全量通过。
+当前唯一输出是既有 `lime-cli/src/video.rs` 未使用 `SharedTaskWriteArgs` warning，不影响编译；
+Electron/App Server 长驻进程继续保留运行。
+
+### 2026-07-24 cache-write usage current projection 收口
+
+目标：在不恢复旧 runtime 或新增 compat 层的前提下，将 Codex canonical
+`cache_write_input_tokens` 从 provider/runtime usage 一次性贯通到 App Server v2、冷恢复、
+`thread/read` 历史投影和 Renderer GUI usage。GUI 既有 `cache_creation_input_tokens` 只作为
+边界显示字段，不成为第二份 token usage 事实源。
+
+完成结果：App Server `TokenUsageBreakdown`/schema/generated client 已消费
+`cacheWriteInputTokens`；Renderer `thread/tokenUsage/updated` projector 与历史 normalizer
+将 canonical 字段映射到既有 GUI prompt-cache 写入展示；`read_model_turn_usage` 的
+`thread/read` turn usage 同步输出 canonical snake_case。未新增调试日志、CDP probe、临时脚本、
+兼容包装或平行 usage 类型。v2 envelope 稳定名单同步纳入现有的 command output、file patch 与
+plan delta 三类 current notification，避免 schema 已扩展但稳定断言仍停留在旧集合。
+
+验证：前端 projection/consumer/history 27/27；App Server `read_model_turn_usage` 2/2；
+App Server cold-resume public JSON-RPC 1/1；protocol v2 round-trip 1/1；`npm run test:contracts`
+通过（762 generated types、296 client checks）；`npm run test:rust:related --
+lime-rs/crates/agent-runtime lime-rs/crates/app-server-protocol lime-rs/crates/app-server` 覆盖 20 个
+受影响及反向依赖 crate 并通过；`npm run verify:gui-smoke` 通过并生成 standalone Electron Gate B
+evidence；`rustfmt --check` 与全树 `git diff --check` 通过。`npm run governance:legacy-report` 报告
+0 零引用候选、0 分类漂移、0 边界违规；
+`npm run smoke:agent-runtime-current-fixture` 聚合 Gate B 已完成，所有 summary 均为
+`ok=true`、错误数为 0，覆盖首页首发/短问候、取消后继续、审批、图片、Skills/MCP、历史恢复和
+coding workbench 场景。
+
+分类：runtime/canonical/v2/resume/read-model/Renderer projection 为 `current`；原先在
+runtime、wire、history 或 GUI 边界静默丢弃 cache-write 的行为为 `dead / deleted /
+forbidden-to-restore`；无新增 `compat/deprecated`。架构图未改变，仍为
+`Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI`。
+下一刀回到 provider abort/cancel 对齐、重复 reasoning terminal 语义及真实 fixture 的 Gate B 收口，
+不要重新引入本轮清除的临时诊断 surface。
+
+### 2026-07-24 V1-25 MCP progress 调用归属与并行协调
+
+目标：关闭 connection-wide progress subscription 导致不同 MCP tool call 串流的缺陷，让
+`RequestHandle.progress_token`、调用级 subscriber、Runtime route identity 与 public
+`item/mcpToolCall/progress` 使用同一调用事实，不保留双轨。
+
+当前实现与验证：RMCP token A/B dispatcher 与真实 duplex 重叠调用隔离通过；MCP 151/151、Agent
+lib 271/271、Tool Runtime 271/271、七个相关/反向依赖 crate 的 Rust related、public JSON-RPC
+2/2、Renderer 42/42、两个 typed client 80/80 与 23/23、contracts、MCP current smoke、治理扫描和
+全树 diff check 均通过。默认 MCP smoke 直接复用隔壁已经运行的 Desktop Host/DevBridge；检测到
+`npm run electron:dev` 和真实 Lime 进程后，没有重复启动 Agent fixture 或 GUI smoke。
+
+并行阻塞：完整 Agent 测试只剩独立 `legacy_permission_surfaces` 25/27；两条失败来自已退出生产编译图
+的旧字符串权限表和 shell 启发式，不属于 MCP 回归。按无兼容口径应物理删除
+`tool_permissions.rs`、`shell_security.rs`、旧 integration fixture，并把当前正向保活 guard/PRD
+改成禁止恢复；文件删除等待明确危险操作确认。V1-25 在删除门禁与 Agent/GUI smoke 补齐前不标记
+完成。typed `artifact/write` 与 `agentSession/runtimeEvents/append` 删除已由下一节闭环；MCP owner
+不得重复实现该切片，后续只处理本节列出的 MCP 并发、首帧与 Gate B 缺口。
+
+### 2026-07-24 typed `artifact/write` 生产链与旧 append 删除闭环
+
+目标：用 `artifact/write` 的 typed snapshot/response 取代 Artifact Workbench 对
+`agentSession/runtimeEvents/append` 和 generic RuntimeEvent response projector 的依赖，保持
+`Renderer typed gateway -> App Server JSON-RPC v2 -> RuntimeCore -> ThreadStore/artifact read`
+单向主链，不新增 compat wrapper。
+
+完成结果：Rust v2 protocol/processor 继续作为唯一 write owner；`packages/app-server-client` 的
+request client 与 `AppServerConnection`、Renderer `AppServerClient` 均新增 typed
+`writeArtifact(ArtifactWriteParams)`。Artifact Workbench 保存请求只提交 canonical `threadId`、
+可选 `turnId` 与 `ArtifactSnapshot`，不再构造客户端任意 `RuntimeEvent`；保存证据直接消费
+`ArtifactWriteResponse.eventId/sequence/persistedAt/sidecar`。`sessionId` 只保留在本地持久化
+scope 和尚未迁移的 `artifact/read` 读回边界，不用于 v2 write 路由。public JSONL integration
+新增 `initialize -> artifact/write -> artifact/read` 回归，证明 sidecar 正文可读且没有
+`agentSession/event` wrapper。
+
+验证：protocol round-trip 1/1、App Server processor artifact write 1/1、public JSON-RPC 1/1；
+package client 82/82；Renderer App Server/Artifact client 57/57，Workspace evidence 2/2；
+`npm run typecheck`、`npm run check:protocol-types`（775 definitions / 767 generated types / 0 漂移）、
+`npm run test:contracts`（296 checks）及 scoped Prettier/rustfmt/diff check 通过。
+
+删除结果：`agentSession/runtimeEvents/append` 的 package/Renderer wrapper、Rust v0
+protocol/handler/catalog/schema/fixture 和旧正向测试已物理删除；公共 JSON-RPC 对旧 method 返回
+`METHOD_NOT_FOUND`，package 不再导出旧常量或 helper，治理 catalog 已增加 Rust dead surface 回流
+守卫。Content Factory fixture 已迁到两次 typed `artifact/write`，不再用 arbitrary runtime event
+伪造 workflow/error 状态。
+
+Runtime terminal policy 同刀收口：generic external/internal append 在终态 turn 上统一 `Reject`；durable
+recovery 与 typed `append_artifact_snapshot` 才可显式 `Allow`。`artifact/write` processor 只能调用该
+领域方法，不能提交任意 `RuntimeEvent`，因此保留终态后编辑器保存 artifact 的产品语义，但关闭了
+公共事件注入后门。processor 精确终态保存测试 1/1、public `artifact/write -> artifact/read` 1/1、
+package artifact 3/3、Renderer/App Server artifact 56/56、fixture guards 91/91、protocol codegen
+零漂移、`npm run test:contracts` 与治理扫描均通过。
+
+分类：typed protocol/client/Renderer writer、领域 artifact append 与 public transport 为 `current`；
+`agentSession/runtimeEvents/append` 为 `dead / deleted / forbidden-to-restore`；无新增
+`compat/deprecated`。本切片未改变仓库架构方向，架构图确认状态为 `confirmed`。
+
+真实 Electron Gate B 已关闭：`direct-session` external backend 只发 message/tool/file/command/turn
+事实，不发 `artifact.snapshot`；canonical Turn 完成后，fixture 经 Renderer current
+`AppServerClient.writeArtifact` 与 production `safeInvoke` 进入
+`app_server_handle_json_lines / electron-ipc / artifact/write`。trace 中的 `threadId`、`turnId`、
+`artifactRef` 与 typed response、read model 完全一致，随后 GUI hydrate 并打开 Workbench。证据为
+`.lime/qc/gui-evidence/code-artifact-workbench-electron-fixture/typed-artifact-write-v2-summary.json`、
+`typed-artifact-write-v2-workbench.png` 与 `typed-artifact-write-v2-backend-ledger.json`；summary
+`ok=true`，`typedArtifactWriteElectronIpcTrace=true`，backend 未注入 Artifact，console/page error 均为
+0。fixture guard 7/7、protocol 764 types 零漂移、contracts 296 checks、scripts governance、
+`governance:legacy-report`（0 零引用候选 / 0 分类漂移 / 0 边界违规）和全树
+`git diff --check` 通过。本切片状态为 `closed`，旧 append 删除不再列为 OPEN_REF。
+
+V1-25 状态校正（隔壁 MCP owner 写集，本车道只读）：request-token 生产链已接通，但现有双调用证据仍受
+`ElicitationOwnerGate` 全调用持锁影响，未证明服务端 `max_in_flight == 2`；请求发送后才注册
+progress subscriber 也保留首帧竞态。V1-25 继续保持“进行中”，退出前必须补真实重叠调用断言、
+消除 send-before-subscribe 竞态，并取得 `RMCP -> Agent -> App Server -> Renderer/GUI` Gate B。
+
 ## 8. 完成定义
 
 本计划完成不等于“所有 Codex 产品面都复制”。完成定义是：

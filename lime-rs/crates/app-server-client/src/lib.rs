@@ -10,8 +10,6 @@ pub use app_server_protocol::protocol::v2::{
     ThreadArchiveParams, ThreadArchiveResponse, ThreadShellCommandParams,
     ThreadShellCommandResponse, ThreadUnarchiveParams, ThreadUnarchiveResponse,
 };
-pub use app_server_protocol::AgentSessionActionReplayParams;
-pub use app_server_protocol::AgentSessionActionRespondParams;
 pub use app_server_protocol::AgentSessionAnalysisHandoffExportParams;
 pub use app_server_protocol::AgentSessionAnalysisHandoffExportResponse;
 pub use app_server_protocol::AgentSessionCompactParams;
@@ -278,8 +276,6 @@ pub use app_server_protocol::WorkspaceRightSurfaceRequestParams;
 pub use app_server_protocol::WorkspaceRightSurfaceRequestResponse;
 pub use app_server_protocol::WorkspaceSkillBindingsListParams;
 pub use app_server_protocol::WorkspaceSkillBindingsListResponse;
-pub use app_server_protocol::METHOD_AGENT_SESSION_ACTION_REPLAY;
-pub use app_server_protocol::METHOD_AGENT_SESSION_ACTION_RESPOND;
 pub use app_server_protocol::METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT;
 pub use app_server_protocol::METHOD_AGENT_SESSION_COMPACT;
 pub use app_server_protocol::METHOD_AGENT_SESSION_EVENT;
@@ -1617,20 +1613,6 @@ impl AppServerClient {
         self.typed_request(typed::cancel_turn(params))
     }
 
-    pub fn replay_action(
-        &mut self,
-        params: AgentSessionActionReplayParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::replay_action(params))
-    }
-
-    pub fn respond_action(
-        &mut self,
-        params: AgentSessionActionRespondParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::respond_action(params))
-    }
-
     pub fn typed_request<P: Serialize>(
         &mut self,
         request: TypedRequest<P>,
@@ -2525,25 +2507,12 @@ pub mod typed {
     ) -> TypedRequest<AgentSessionTurnCancelParams> {
         TypedRequest::new(METHOD_TURN_INTERRUPT, params)
     }
-
-    pub fn replay_action(
-        params: AgentSessionActionReplayParams,
-    ) -> TypedRequest<AgentSessionActionReplayParams> {
-        TypedRequest::new(METHOD_AGENT_SESSION_ACTION_REPLAY, params)
-    }
-
-    pub fn respond_action(
-        params: AgentSessionActionRespondParams,
-    ) -> TypedRequest<AgentSessionActionRespondParams> {
-        TypedRequest::new(METHOD_AGENT_SESSION_ACTION_RESPOND, params)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use app_server_protocol::AgentEvent;
-    use app_server_protocol::AgentSessionActionScope;
     use app_server_protocol::AgentSessionActionType;
     use app_server_protocol::AgentSessionEventParams;
     use app_server_protocol::ClientCapabilities;
@@ -4311,77 +4280,6 @@ mod tests {
                 "regressionRequirements": ["npm run test:contracts"],
                 "notes": "",
                 "locale": "zh-CN",
-            })
-        );
-    }
-
-    #[test]
-    fn respond_action_preserves_action_scope_and_stable_method() {
-        let mut client = AppServerClient::new();
-
-        let request = client
-            .respond_action(AgentSessionActionRespondParams {
-                session_id: "sess_1".to_string(),
-                request_id: "req_confirm_1".to_string(),
-                action_type: AgentSessionActionType::ToolConfirmation,
-                decision: Some(app_server_protocol::AgentSessionApprovalDecision::AllowOnce),
-                confirmed: None,
-                response: Some("allow".to_string()),
-                user_data: Some(json!({ "reason": "approved" })),
-                metadata: Some(json!({ "source": "content-studio" })),
-                event_name: Some("agentSession/event/sess_1".to_string()),
-                action_scope: Some(AgentSessionActionScope {
-                    session_id: Some("sess_1".to_string()),
-                    thread_id: Some("thread_1".to_string()),
-                    turn_id: Some("turn_1".to_string()),
-                }),
-            })
-            .expect("request");
-
-        assert_eq!(request.id, RequestId::Integer(1));
-        assert_eq!(request.method, METHOD_AGENT_SESSION_ACTION_RESPOND);
-        assert_eq!(
-            request.params.expect("params"),
-            json!({
-                "sessionId": "sess_1",
-                "requestId": "req_confirm_1",
-                "actionType": "tool_confirmation",
-                "decision": "allow_once",
-                "response": "allow",
-                "userData": {
-                    "reason": "approved",
-                },
-                "metadata": {
-                    "source": "content-studio",
-                },
-                "eventName": "agentSession/event/sess_1",
-                "actionScope": {
-                    "sessionId": "sess_1",
-                    "threadId": "thread_1",
-                    "turnId": "turn_1",
-                },
-            })
-        );
-    }
-
-    #[test]
-    fn replay_action_preserves_request_scope_and_stable_method() {
-        let mut client = AppServerClient::new();
-
-        let request = client
-            .replay_action(AgentSessionActionReplayParams {
-                session_id: "sess_1".to_string(),
-                request_id: "req_confirm_1".to_string(),
-            })
-            .expect("request");
-
-        assert_eq!(request.id, RequestId::Integer(1));
-        assert_eq!(request.method, METHOD_AGENT_SESSION_ACTION_REPLAY);
-        assert_eq!(
-            request.params.expect("params"),
-            json!({
-                "sessionId": "sess_1",
-                "requestId": "req_confirm_1",
             })
         );
     }

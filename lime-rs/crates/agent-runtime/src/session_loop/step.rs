@@ -14,4 +14,5 @@ pub struct RuntimeSessionTokenUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub reasoning_tokens: u64,
+    pub cache_write_input_tokens: u64,
 }

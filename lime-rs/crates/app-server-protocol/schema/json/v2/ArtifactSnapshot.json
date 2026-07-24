@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "artifactDocumentId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "artifactRef": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "metadata": true,
+    "path": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "status": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "title": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "artifactRef",
+    "content",
+    "kind"
+  ],
+  "title": "ArtifactSnapshot",
+  "type": "object"
+}

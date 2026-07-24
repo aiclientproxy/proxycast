@@ -127,18 +127,6 @@ export function createAppServerThreadClientMock(): AgentRuntimeAppServerClient {
     }),
     startTurn: vi.fn().mockResolvedValue({}),
     cancelTurn: vi.fn().mockResolvedValue({}),
-    replayAction: vi.fn().mockResolvedValue({
-      id: 1,
-      result: {
-        action: null,
-      },
-      response: {
-        id: 1,
-        result: {},
-      },
-      messages: [],
-      notifications: [],
-    }),
     compactAgentSession: vi.fn().mockResolvedValue({
       id: 1,
       result: {

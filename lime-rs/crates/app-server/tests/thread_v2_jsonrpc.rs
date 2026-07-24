@@ -153,6 +153,484 @@ async fn thread_start_requires_an_explicit_model_and_provider() {
 }
 
 #[tokio::test]
+async fn plan_delta_uses_one_typed_item_lifecycle_in_public_jsonrpc_messages() {
+    let (_temp, server) = test_server();
+    initialize_server(&server).await;
+
+    let thread = request(
+        &server,
+        2,
+        METHOD_THREAD_START,
+        json!({
+            "model": "fixture-model",
+            "modelProvider": "fixture-provider"
+        }),
+    )
+    .await;
+    let thread_id = thread
+        .pointer("/result/thread/id")
+        .and_then(Value::as_str)
+        .expect("thread id");
+    let session_id = thread
+        .pointer("/result/thread/sessionId")
+        .and_then(Value::as_str)
+        .expect("session id");
+    let turn = request(
+        &server,
+        3,
+        METHOD_TURN_START,
+        json!({
+            "threadId": thread_id,
+            "input": [{"type": "text", "text": "create a plan"}]
+        }),
+    )
+    .await;
+    let turn_id = turn
+        .pointer("/result/turn/id")
+        .and_then(Value::as_str)
+        .expect("turn id");
+
+    let messages = server
+        .append_external_runtime_events(
+            session_id,
+            Some(turn_id),
+            vec![
+                RuntimeEvent::new(
+                    "plan.delta",
+                    json!({
+                        "text": "- [ ] Read the protocol",
+                        "delta": "- [ ] Read the protocol",
+                        "revisionId": "public-plan:1"
+                    }),
+                ),
+                RuntimeEvent::new(
+                    "plan.delta",
+                    json!({
+                        "text": "- [ ] Read the protocol\n- [ ] Project the GUI",
+                        "delta": "\n- [ ] Project the GUI",
+                        "revisionId": "public-plan:1"
+                    }),
+                ),
+                RuntimeEvent::new(
+                    "plan.final",
+                    json!({
+                        "text": "- [ ] Read the protocol\n- [ ] Project the GUI",
+                        "revisionId": "public-plan:1"
+                    }),
+                ),
+            ],
+        )
+        .await
+        .expect("plan notifications");
+    let notifications = messages
+        .into_iter()
+        .map(|message| serde_json::to_value(message).expect("serialize JSON-RPC message"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        notifications
+            .iter()
+            .map(|message| message["method"].as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            Some("item/started"),
+            Some("item/plan/delta"),
+            Some("item/plan/delta"),
+            Some("item/completed"),
+        ]
+    );
+    let item_id = notifications[0]
+        .pointer("/params/item/id")
+        .and_then(Value::as_str)
+        .expect("plan item id");
+    for notification in &notifications[1..3] {
+        assert_eq!(
+            notification.pointer("/params/itemId"),
+            Some(&json!(item_id))
+        );
+    }
+    assert_eq!(
+        notifications[3].pointer("/params/item/id"),
+        Some(&json!(item_id))
+    );
+    assert_eq!(
+        notifications[2].pointer("/params/delta"),
+        Some(&json!("\n- [ ] Project the GUI"))
+    );
+}
+
+#[tokio::test]
+async fn command_output_delta_uses_one_typed_item_lifecycle_in_public_jsonrpc_messages() {
+    let (_temp, server) = test_server();
+    initialize_server(&server).await;
+
+    let thread = request(
+        &server,
+        2,
+        METHOD_THREAD_START,
+        json!({
+            "model": "fixture-model",
+            "modelProvider": "fixture-provider"
+        }),
+    )
+    .await;
+    let thread_id = thread
+        .pointer("/result/thread/id")
+        .and_then(Value::as_str)
+        .expect("thread id");
+    let session_id = thread
+        .pointer("/result/thread/sessionId")
+        .and_then(Value::as_str)
+        .expect("session id");
+    let turn = request(
+        &server,
+        3,
+        METHOD_TURN_START,
+        json!({
+            "threadId": thread_id,
+            "input": [{"type": "text", "text": "run a command"}]
+        }),
+    )
+    .await;
+    let turn_id = turn
+        .pointer("/result/turn/id")
+        .and_then(Value::as_str)
+        .expect("turn id");
+
+    let messages = server
+        .append_external_runtime_events(
+            session_id,
+            Some(turn_id),
+            vec![
+                RuntimeEvent::new(
+                    "command.started",
+                    json!({
+                        "commandId": "command-1",
+                        "toolCallId": "command-1",
+                        "command": "printf ready",
+                        "cwd": "/workspace"
+                    }),
+                ),
+                RuntimeEvent::new(
+                    "command.output",
+                    json!({
+                        "commandId": "command-1",
+                        "toolCallId": "command-1",
+                        "outputRef": "output://command-1",
+                        "delta": "ready\n"
+                    }),
+                ),
+                RuntimeEvent::new(
+                    "command.exited",
+                    json!({
+                        "commandId": "command-1",
+                        "toolCallId": "command-1",
+                        "command": "printf ready",
+                        "cwd": "/workspace",
+                        "exitCode": 0,
+                        "status": "passed",
+                        "success": true
+                    }),
+                ),
+            ],
+        )
+        .await
+        .expect("command notifications");
+    let notifications = messages
+        .into_iter()
+        .map(|message| serde_json::to_value(message).expect("serialize JSON-RPC message"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        notifications
+            .iter()
+            .map(|message| message["method"].as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            Some("item/started"),
+            Some("item/commandExecution/outputDelta"),
+            Some("item/completed")
+        ]
+    );
+    let item_id = notifications[0]
+        .pointer("/params/item/id")
+        .and_then(Value::as_str)
+        .expect("command item id");
+    assert_eq!(item_id, "item_command-1");
+    assert_eq!(
+        notifications[1].pointer("/params/itemId"),
+        Some(&json!(item_id))
+    );
+    assert_eq!(
+        notifications[1].pointer("/params/delta"),
+        Some(&json!("ready\n"))
+    );
+    assert_eq!(
+        notifications[2].pointer("/params/item/id"),
+        Some(&json!(item_id))
+    );
+}
+
+#[tokio::test]
+async fn file_change_patch_update_uses_one_typed_item_lifecycle_in_public_jsonrpc_messages() {
+    let (_temp, server) = test_server();
+    initialize_server(&server).await;
+
+    let thread = request(
+        &server,
+        2,
+        METHOD_THREAD_START,
+        json!({
+            "model": "fixture-model",
+            "modelProvider": "fixture-provider"
+        }),
+    )
+    .await;
+    let thread_id = thread
+        .pointer("/result/thread/id")
+        .and_then(Value::as_str)
+        .expect("thread id");
+    let session_id = thread
+        .pointer("/result/thread/sessionId")
+        .and_then(Value::as_str)
+        .expect("session id");
+    let turn = request(
+        &server,
+        3,
+        METHOD_TURN_START,
+        json!({
+            "threadId": thread_id,
+            "input": [{"type": "text", "text": "apply a patch"}]
+        }),
+    )
+    .await;
+    let turn_id = turn
+        .pointer("/result/turn/id")
+        .and_then(Value::as_str)
+        .expect("turn id");
+    let changes = json!([{
+        "path": "src/lib.rs",
+        "kind": "update",
+        "movePath": "src/main.rs",
+        "diff": "-old\n+new"
+    }]);
+
+    let messages = server
+        .append_external_runtime_events(
+            session_id,
+            Some(turn_id),
+            vec![
+                RuntimeEvent::new(
+                    "patch.started",
+                    json!({"patchId": "patch-1", "changes": changes}),
+                ),
+                RuntimeEvent::new(
+                    "patch.applied",
+                    json!({"patchId": "patch-1", "changes": changes}),
+                ),
+            ],
+        )
+        .await
+        .expect("file change notifications");
+    let notifications = messages
+        .into_iter()
+        .map(|message| serde_json::to_value(message).expect("serialize JSON-RPC message"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        notifications
+            .iter()
+            .map(|message| message["method"].as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            Some("item/started"),
+            Some("item/fileChange/patchUpdated"),
+            Some("item/completed")
+        ]
+    );
+    let item_id = notifications[0]
+        .pointer("/params/item/id")
+        .and_then(Value::as_str)
+        .expect("file change item id");
+    assert_eq!(item_id, "item_patch-1");
+    assert_eq!(
+        notifications[1].pointer("/params/itemId"),
+        Some(&json!(item_id))
+    );
+    assert_eq!(
+        notifications[1].pointer("/params/changes/0/kind"),
+        Some(&json!({"type": "update", "move_path": "src/main.rs"}))
+    );
+    assert_eq!(
+        notifications[2].pointer("/params/item/id"),
+        Some(&json!(item_id))
+    );
+}
+
+#[tokio::test]
+async fn mcp_progress_uses_one_typed_item_lifecycle_in_public_jsonrpc_messages() {
+    let (_temp, server) = test_server();
+    initialize_server(&server).await;
+    let (session_id, thread_id, turn_id) = start_thread_turn(&server, "call an MCP tool").await;
+
+    let messages = server
+        .append_external_runtime_events(
+            &session_id,
+            Some(&turn_id),
+            vec![
+                RuntimeEvent::new(
+                    "item.started",
+                    canonical_mcp_item("mcp-call-1", "inProgress"),
+                ),
+                RuntimeEvent::new(
+                    "tool.progress",
+                    mcp_progress_payload("mcp-call-1", "正在检索文档", Some("mcp_progress")),
+                ),
+                RuntimeEvent::new(
+                    "item.completed",
+                    canonical_mcp_item("mcp-call-1", "completed"),
+                ),
+            ],
+        )
+        .await
+        .expect("MCP progress notifications");
+    let notifications = messages
+        .into_iter()
+        .map(|message| serde_json::to_value(message).expect("serialize JSON-RPC message"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        notifications
+            .iter()
+            .map(|message| message["method"].as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            Some("item/started"),
+            Some("item/mcpToolCall/progress"),
+            Some("item/completed")
+        ]
+    );
+    let item_id = notifications[0]
+        .pointer("/params/item/id")
+        .and_then(Value::as_str)
+        .expect("MCP item id");
+    assert_eq!(item_id, "item_mcp-call-1");
+    assert_eq!(
+        notifications[1].pointer("/params/itemId"),
+        Some(&json!(item_id))
+    );
+    assert_eq!(
+        notifications[2].pointer("/params/item/id"),
+        Some(&json!(item_id))
+    );
+    assert_eq!(
+        notifications[1].pointer("/params/threadId"),
+        Some(&json!(thread_id))
+    );
+    assert_eq!(
+        notifications[1].pointer("/params/turnId"),
+        Some(&json!(turn_id))
+    );
+}
+
+#[tokio::test]
+async fn mcp_progress_fails_closed_outside_its_typed_lifecycle() {
+    for (scenario, events) in [
+        (
+            "before start",
+            vec![RuntimeEvent::new(
+                "tool.progress",
+                mcp_progress_payload("mcp-call-1", "正在检索文档", Some("mcp_progress")),
+            )],
+        ),
+        (
+            "after completed",
+            vec![
+                RuntimeEvent::new(
+                    "item.started",
+                    canonical_mcp_item("mcp-call-1", "inProgress"),
+                ),
+                RuntimeEvent::new(
+                    "item.completed",
+                    canonical_mcp_item("mcp-call-1", "completed"),
+                ),
+                RuntimeEvent::new(
+                    "tool.progress",
+                    mcp_progress_payload("mcp-call-1", "正在检索文档", Some("mcp_progress")),
+                ),
+            ],
+        ),
+        (
+            "generic tool",
+            vec![
+                RuntimeEvent::new(
+                    "item.started",
+                    canonical_dynamic_tool_item("mcp-call-1", "inProgress"),
+                ),
+                RuntimeEvent::new(
+                    "tool.progress",
+                    mcp_progress_payload("mcp-call-1", "正在检索文档", Some("mcp_progress")),
+                ),
+            ],
+        ),
+        (
+            "empty message",
+            vec![
+                RuntimeEvent::new(
+                    "item.started",
+                    canonical_mcp_item("mcp-call-1", "inProgress"),
+                ),
+                RuntimeEvent::new(
+                    "tool.progress",
+                    mcp_progress_payload("mcp-call-1", "   ", Some("mcp_progress")),
+                ),
+            ],
+        ),
+        (
+            "missing provenance",
+            vec![
+                RuntimeEvent::new(
+                    "item.started",
+                    canonical_mcp_item("mcp-call-1", "inProgress"),
+                ),
+                RuntimeEvent::new(
+                    "tool.progress",
+                    mcp_progress_payload("mcp-call-1", "正在检索文档", None),
+                ),
+            ],
+        ),
+        (
+            "wrong provenance",
+            vec![
+                RuntimeEvent::new(
+                    "item.started",
+                    canonical_mcp_item("mcp-call-1", "inProgress"),
+                ),
+                RuntimeEvent::new(
+                    "tool.progress",
+                    mcp_progress_payload("mcp-call-1", "正在检索文档", Some("mcp_log")),
+                ),
+            ],
+        ),
+    ] {
+        let (_temp, server) = test_server();
+        initialize_server(&server).await;
+        let (session_id, _, turn_id) = start_thread_turn(&server, scenario).await;
+        let error = match server
+            .append_external_runtime_events(&session_id, Some(&turn_id), events)
+            .await
+        {
+            Ok(_) => panic!("{scenario} must fail closed"),
+            Err(error) => error,
+        };
+        assert!(
+            !error.message.trim().is_empty(),
+            "{scenario} must return a diagnostic error"
+        );
+    }
+}
+
+#[tokio::test]
 async fn thread_goal_lifecycle_is_durable_and_emits_ordered_notifications() {
     let temp = TempDir::new().expect("thread goal temp dir");
     let projection_path = temp.path().join("projection.sqlite");
@@ -726,6 +1204,113 @@ async fn retired_agent_session_start_is_not_a_production_method() {
         Some(&json!(error_codes::METHOD_NOT_FOUND))
     );
     assert!(response.get("result").is_none());
+}
+
+async fn start_thread_turn(server: &AppServer, input: &str) -> (String, String, String) {
+    let thread = request(
+        server,
+        2,
+        METHOD_THREAD_START,
+        json!({
+            "model": "fixture-model",
+            "modelProvider": "fixture-provider"
+        }),
+    )
+    .await;
+    let thread_id = thread
+        .pointer("/result/thread/id")
+        .and_then(Value::as_str)
+        .expect("thread id")
+        .to_string();
+    let session_id = thread
+        .pointer("/result/thread/sessionId")
+        .and_then(Value::as_str)
+        .expect("session id")
+        .to_string();
+    let turn = request(
+        server,
+        3,
+        METHOD_TURN_START,
+        json!({
+            "threadId": thread_id,
+            "input": [{"type": "text", "text": input}]
+        }),
+    )
+    .await;
+    let turn_id = turn
+        .pointer("/result/turn/id")
+        .and_then(Value::as_str)
+        .expect("turn id")
+        .to_string();
+    (session_id, thread_id, turn_id)
+}
+
+fn canonical_mcp_item(call_id: &str, status: &str) -> Value {
+    canonical_tool_item(
+        call_id,
+        status,
+        "mcpToolCall",
+        json!({
+            "type": "mcpToolCall",
+            "call_id": call_id,
+            "server_name": "docs",
+            "tool_name": "search",
+            "arguments": [],
+            "output": (status != "inProgress").then(|| json!({"text": "done"}))
+        }),
+    )
+}
+
+fn canonical_dynamic_tool_item(call_id: &str, status: &str) -> Value {
+    canonical_tool_item(
+        call_id,
+        status,
+        "tool",
+        json!({
+            "type": "tool",
+            "call_id": call_id,
+            "name": "search",
+            "arguments": [],
+            "output": (status != "inProgress").then(|| json!({"text": "done"}))
+        }),
+    )
+}
+
+fn canonical_tool_item(call_id: &str, status: &str, kind: &str, payload: Value) -> Value {
+    json!({
+        "item": {
+            "sessionId": "session-fixture",
+            "threadId": "thread-fixture",
+            "turnId": "turn-fixture",
+            "itemId": format!("item_{call_id}"),
+            "sequence": 1,
+            "ordinal": 1,
+            "createdAtMs": 1,
+            "updatedAtMs": 2,
+            "completedAtMs": (status != "inProgress").then_some(2),
+            "kind": kind,
+            "status": status,
+            "payload": payload,
+            "metadata": {}
+        }
+    })
+}
+
+fn mcp_progress_payload(call_id: &str, message: &str, notification_kind: Option<&str>) -> Value {
+    json!({
+        "tool_id": call_id,
+        "serverName": "docs",
+        "toolName": "search",
+        "progress": {
+            "message": message,
+            "metadata": notification_kind.map(|kind| json!({
+                "notification_kind": kind,
+                "server_name": "docs",
+                "tool_name": "search",
+                "runtime_tool_name": "mcp__docs__search"
+            })).unwrap_or_else(|| json!({}))
+        }
+    })
 }
 
 fn test_server() -> (TempDir, AppServer) {

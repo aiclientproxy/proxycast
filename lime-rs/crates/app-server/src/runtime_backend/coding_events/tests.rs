@@ -193,6 +193,10 @@ fn shell_tool_output_delta_preserves_process_lifecycle_metadata() {
         output.after_raw[0].payload["metadata"]["outputBytes"].as_u64(),
         Some(7)
     );
+    assert_eq!(
+        output.after_raw[0].payload["delta"].as_str(),
+        Some("running")
+    );
 }
 
 #[test]
@@ -249,7 +253,9 @@ fn shell_tool_metadata_only_delta_updates_process_lifecycle_without_consuming_ou
         Some(true)
     );
     assert!(process_update.after_raw[0].payload.get("preview").is_none());
+    assert!(process_update.after_raw[0].payload.get("delta").is_none());
     assert_eq!(ended.after_raw[0].event_type, "command.output");
+    assert_eq!(ended.after_raw[0].payload["delta"].as_str(), Some("done"));
     assert_eq!(ended.after_raw[0].payload["preview"].as_str(), Some("done"));
 }
 
@@ -281,6 +287,7 @@ fn shell_tool_result_emits_output_when_stream_delta_was_absent() {
 
     assert_eq!(ended.after_raw[0].event_type, "command.output");
     assert_eq!(ended.after_raw[1].event_type, "command.exited");
+    assert_eq!(ended.after_raw[0].payload["delta"].as_str(), Some("ok"));
     assert!(ended.after_raw[0].payload["outputRef"]
         .as_str()
         .is_some_and(|value| value.starts_with("output:command:")));

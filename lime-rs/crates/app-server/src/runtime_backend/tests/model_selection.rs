@@ -399,6 +399,66 @@ fn direct_host_provider_config_allows_localhost_fixture_without_database_provide
     assert!(direct_config.supports_websockets);
 }
 
+#[tokio::test]
+async fn prepared_direct_route_persists_non_secret_provider_defaults() {
+    let connection = rusqlite::Connection::open_in_memory().expect("open database");
+    lime_core::database::schema::create_tables(&connection).expect("create schema");
+    let db = std::sync::Arc::new(std::sync::Mutex::new(connection));
+    let backend = RuntimeBackend::with_db(db);
+    let request = request_for_test(
+        "hello",
+        Some(app_server_protocol::RuntimeRequest {
+            provider_preference: Some("fixture-openai".to_string()),
+            model_preference: Some("gpt-5.4".to_string()),
+            reasoning_effort: Some("high".to_string()),
+            provider_config: Some(app_server_protocol::RuntimeProviderConfig {
+                provider_id: Some("fixture-openai".to_string()),
+                provider_name: Some("openai".to_string()),
+                model_name: Some("gpt-5.4".to_string()),
+                api_key: Some("fixture-secret".to_string()),
+                base_url: Some("http://127.0.0.1:56599".to_string()),
+                tool_call_strategy: Some(app_server_protocol::RuntimeToolCallStrategy::ToolShim),
+                toolshim_model: Some("fixture-toolshim".to_string()),
+                model_capabilities: Some(json!({
+                    "capabilities": {
+                        "tools": true,
+                        "streaming": true,
+                        "functionCalling": true
+                    },
+                    "taskFamilies": ["chat"],
+                    "inputModalities": ["text"],
+                    "outputModalities": ["text"],
+                    "runtimeFeatures": ["streaming", "tool_calling"]
+                })),
+                supports_websockets: Some(true),
+            }),
+            ..app_server_protocol::RuntimeRequest::default()
+        }),
+        None,
+    );
+
+    let prepared = backend
+        .prepare_turn_route(&request, true)
+        .await
+        .expect("prepare direct route")
+        .expect("direct route options");
+    let provider_config = prepared
+        .runtime_request
+        .as_ref()
+        .and_then(|request| request.metadata.as_ref())
+        .and_then(|metadata| metadata.pointer("/agentControlRoute/providerConfig"))
+        .expect("durable provider config");
+
+    assert_eq!(provider_config["providerId"], "fixture-openai");
+    assert_eq!(provider_config["modelName"], "gpt-5.4");
+    assert_eq!(provider_config["reasoningEffort"], "high");
+    assert_eq!(provider_config["toolshim"], true);
+    assert_eq!(provider_config["toolshimModel"], "fixture-toolshim");
+    assert_eq!(provider_config["supportsWebsockets"], true);
+    assert!(provider_config.get("apiKey").is_none());
+    assert!(provider_config.get("baseUrl").is_none());
+}
+
 #[test]
 fn typed_runtime_reasoning_flows_to_selection_and_turn_context() {
     let request = request_for_test(

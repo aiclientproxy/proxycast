@@ -62,6 +62,12 @@ eventRouter.subscribe((mediaEvent) => {
   mainWindow.webContents.send("agent:media", mediaEvent);
 });
 
+void (async () => {
+  while (!mainWindow.isDestroyed()) {
+    await eventRouter.dispatch(await connection.nextNotification());
+  }
+})();
+
 const session = await connection.startSession({
   serviceName: "host-app",
   threadSource: "desktop",
@@ -73,18 +79,6 @@ const turn = await connection.startTurn({
   input: [{ type: "text", text: "生成草稿" }],
   model: "gpt-5-codex",
 });
-
-for (const result of [session, turn]) {
-  for (const notification of result.notifications) {
-    await eventRouter.dispatch(notification);
-  }
-}
-
-void (async () => {
-  while (!mainWindow.isDestroyed()) {
-    await eventRouter.dispatch(await connection.nextNotification());
-  }
-})();
 ```
 
 Agent runtime SDK facade:

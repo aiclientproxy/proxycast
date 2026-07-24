@@ -12,6 +12,7 @@ use std::collections::HashMap;
 pub(crate) struct TokenUsageSnapshot {
     pub input_tokens: i64,
     pub cached_input_tokens: i64,
+    pub cache_write_input_tokens: i64,
     pub output_tokens: i64,
     pub reasoning_output_tokens: i64,
     pub total_tokens: i64,
@@ -24,6 +25,9 @@ impl TokenUsageSnapshot {
             cached_input_tokens: self
                 .cached_input_tokens
                 .saturating_add(other.cached_input_tokens),
+            cache_write_input_tokens: self
+                .cache_write_input_tokens
+                .saturating_add(other.cache_write_input_tokens),
             output_tokens: self.output_tokens.saturating_add(other.output_tokens),
             reasoning_output_tokens: self
                 .reasoning_output_tokens
@@ -251,6 +255,16 @@ fn parse_flat_runtime_usage(value: &Value) -> Option<TokenUsageSnapshot> {
     let output_tokens = object_i64(object, &["output_tokens", "outputTokens"])?;
     let cached_input_tokens =
         object_i64(object, &["cached_input_tokens", "cachedInputTokens"]).unwrap_or_default();
+    let cache_write_input_tokens = object_i64(
+        object,
+        &[
+            "cache_write_input_tokens",
+            "cacheWriteInputTokens",
+            "cache_creation_input_tokens",
+            "cacheCreationInputTokens",
+        ],
+    )
+    .unwrap_or_default();
     let reasoning_output_tokens = object_i64(
         object,
         &[
@@ -264,6 +278,7 @@ fn parse_flat_runtime_usage(value: &Value) -> Option<TokenUsageSnapshot> {
     Some(TokenUsageSnapshot {
         input_tokens,
         cached_input_tokens,
+        cache_write_input_tokens,
         output_tokens,
         reasoning_output_tokens,
         total_tokens: input_tokens.saturating_add(output_tokens),
@@ -341,6 +356,7 @@ fn usage_json(usage: &TokenUsageSnapshot) -> Value {
     json!({
         "input_tokens": usage.input_tokens,
         "cached_input_tokens": usage.cached_input_tokens,
+        "cache_write_input_tokens": usage.cache_write_input_tokens,
         "output_tokens": usage.output_tokens,
         "reasoning_output_tokens": usage.reasoning_output_tokens,
         "total_tokens": usage.total_tokens,
@@ -353,6 +369,11 @@ fn parse_token_usage(value: &Value) -> Option<TokenUsageSnapshot> {
         input_tokens: object_i64(object, &["input_tokens", "inputTokens"])?,
         cached_input_tokens: object_i64(object, &["cached_input_tokens", "cachedInputTokens"])?,
         output_tokens: object_i64(object, &["output_tokens", "outputTokens"])?,
+        cache_write_input_tokens: object_i64(
+            object,
+            &["cache_write_input_tokens", "cacheWriteInputTokens"],
+        )
+        .unwrap_or_default(),
         reasoning_output_tokens: object_i64(
             object,
             &[
@@ -716,6 +737,7 @@ mod tests {
                     "total_token_usage": {
                         "input_tokens": 100,
                         "cached_input_tokens": 20,
+                        "cache_write_input_tokens": 10,
                         "output_tokens": 40,
                         "reasoning_output_tokens": 0,
                         "total_tokens": 140
@@ -723,6 +745,7 @@ mod tests {
                     "last_token_usage": {
                         "input_tokens": 100,
                         "cached_input_tokens": 20,
+                        "cache_write_input_tokens": 10,
                         "output_tokens": 40,
                         "reasoning_output_tokens": 0,
                         "total_tokens": 140
@@ -739,7 +762,7 @@ mod tests {
                 "backend": "runtime",
                 "attempt": 1,
                 "modelContextWindow": 128000,
-                "usage": {"input_tokens": 10, "cached_input_tokens": 3, "output_tokens": 4}
+                "usage": {"input_tokens": 10, "cached_input_tokens": 3, "cache_creation_input_tokens": 3, "output_tokens": 4}
             }),
         );
         canonicalize_runtime_usage_event(&mut usage_one, std::slice::from_ref(&previous), &[]);
@@ -751,7 +774,7 @@ mod tests {
                 "backend": "runtime",
                 "attempt": 1,
                 "modelContextWindow": 128000,
-                "usage": {"input_tokens": 20, "cached_input_tokens": 5, "output_tokens": 6}
+                "usage": {"input_tokens": 20, "cached_input_tokens": 5, "cache_creation_input_tokens": 5, "output_tokens": 6}
             }),
         );
         canonicalize_runtime_usage_event(
@@ -767,7 +790,7 @@ mod tests {
                 "backend": "runtime",
                 "attempt": 2,
                 "modelContextWindow": 128000,
-                "usage": {"input_tokens": 10, "cached_input_tokens": 3, "output_tokens": 4}
+                "usage": {"input_tokens": 10, "cached_input_tokens": 3, "cache_creation_input_tokens": 3, "output_tokens": 4}
             }),
         );
         canonicalize_runtime_usage_event(
@@ -785,6 +808,10 @@ mod tests {
         .expect("provider usage remains available to a failed terminal");
         assert_eq!(failed_snapshot.total_token_usage.input_tokens, 130);
         assert_eq!(failed_snapshot.total_token_usage.cached_input_tokens, 28);
+        assert_eq!(
+            failed_snapshot.total_token_usage.cache_write_input_tokens,
+            18
+        );
         assert_eq!(failed_snapshot.total_token_usage.output_tokens, 50);
 
         let mut completed = event(
@@ -794,7 +821,7 @@ mod tests {
             json!({
                 "backend": "runtime",
                 "modelContextWindow": 128000,
-                "usage": {"input_tokens": 30, "cached_input_tokens": 8, "output_tokens": 10}
+                "usage": {"input_tokens": 30, "cached_input_tokens": 8, "cache_creation_input_tokens": 8, "output_tokens": 10}
             }),
         );
         canonicalize_runtime_usage_event(
@@ -816,8 +843,18 @@ mod tests {
         .expect("completed usage remains canonical");
         assert_eq!(completed_snapshot.total_token_usage.input_tokens, 130);
         assert_eq!(completed_snapshot.total_token_usage.cached_input_tokens, 28);
+        assert_eq!(
+            completed_snapshot
+                .total_token_usage
+                .cache_write_input_tokens,
+            18
+        );
         assert_eq!(completed_snapshot.total_token_usage.output_tokens, 50);
         assert_eq!(completed_snapshot.last_token_usage.input_tokens, 30);
+        assert_eq!(
+            completed_snapshot.last_token_usage.cache_write_input_tokens,
+            8
+        );
     }
 
     #[test]
@@ -825,6 +862,7 @@ mod tests {
         let baseline = TokenUsageSnapshot {
             input_tokens: 100,
             cached_input_tokens: 30,
+            cache_write_input_tokens: 0,
             output_tokens: 20,
             reasoning_output_tokens: 5,
             total_tokens: 120,
@@ -832,6 +870,7 @@ mod tests {
         let current = TokenUsageSnapshot {
             input_tokens: 160,
             cached_input_tokens: 50,
+            cache_write_input_tokens: 0,
             output_tokens: 35,
             reasoning_output_tokens: 10,
             total_tokens: 195,

@@ -117,6 +117,7 @@ fn agent_control_route_snapshot_for_resolved_route(
         })
         .unwrap_or_else(|| route.selection.provider.clone());
     let auth = &route.resolution.resolved_route.auth;
+    let direct_provider_config = route.direct_provider_config.as_ref();
 
     Ok(json!({
         "schemaVersion": 2,
@@ -125,7 +126,13 @@ fn agent_control_route_snapshot_for_resolved_route(
         "providerConfig": {
             "providerId": route.selection.provider,
             "providerName": provider_name,
-            "modelName": route.selection.model
+            "modelName": route.selection.model,
+            "reasoningEffort": route.selection.reasoning_effort,
+            "toolshim": direct_provider_config.map(|config| config.toolshim),
+            "toolshimModel": direct_provider_config
+                .and_then(|config| config.toolshim_model.as_deref()),
+            "supportsWebsockets": direct_provider_config
+                .map(|config| config.supports_websockets)
         },
         "routeProtocol": route_protocol,
         "authKind": auth.kind,

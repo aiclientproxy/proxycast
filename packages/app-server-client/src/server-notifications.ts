@@ -14,6 +14,10 @@ export type RuntimeServerNotification = Extract<
       | "item/started"
       | "item/completed"
       | "item/agentMessage/delta"
+      | "item/commandExecution/outputDelta"
+      | "item/fileChange/patchUpdated"
+      | "item/mcpToolCall/progress"
+      | "item/plan/delta"
       | "item/reasoning/summaryTextDelta"
       | "item/reasoning/summaryPartAdded"
       | "item/reasoning/textDelta"
@@ -58,8 +62,24 @@ export function serverNotification(
         ? (message as ServerNotificationFor<"item/completed">)
         : undefined;
     case "item/agentMessage/delta":
-      return hasAgentMessageDelta(message.params)
+      return hasItemTextDelta(message.params)
         ? (message as ServerNotificationFor<"item/agentMessage/delta">)
+        : undefined;
+    case "item/commandExecution/outputDelta":
+      return hasItemTextDelta(message.params)
+        ? (message as ServerNotificationFor<"item/commandExecution/outputDelta">)
+        : undefined;
+    case "item/fileChange/patchUpdated":
+      return hasFileChangePatchUpdated(message.params)
+        ? (message as ServerNotificationFor<"item/fileChange/patchUpdated">)
+        : undefined;
+    case "item/mcpToolCall/progress":
+      return hasMcpToolCallProgress(message.params)
+        ? (message as ServerNotificationFor<"item/mcpToolCall/progress">)
+        : undefined;
+    case "item/plan/delta":
+      return hasItemTextDelta(message.params)
+        ? (message as ServerNotificationFor<"item/plan/delta">)
         : undefined;
     case "item/reasoning/summaryTextDelta":
       return hasReasoningDelta(message.params, "summaryIndex")
@@ -124,12 +144,37 @@ export function isAgentMessageDeltaNotification(
   return serverNotification(message)?.method === "item/agentMessage/delta";
 }
 
+export function isCommandExecutionOutputDeltaNotification(
+  message: JsonRpcMessage,
+): message is ServerNotificationFor<"item/commandExecution/outputDelta"> {
+  return (
+    serverNotification(message)?.method === "item/commandExecution/outputDelta"
+  );
+}
+
+export function isFileChangePatchUpdatedNotification(
+  message: JsonRpcMessage,
+): message is ServerNotificationFor<"item/fileChange/patchUpdated"> {
+  return serverNotification(message)?.method === "item/fileChange/patchUpdated";
+}
+
+export function isMcpToolCallProgressNotification(
+  message: JsonRpcMessage,
+): message is ServerNotificationFor<"item/mcpToolCall/progress"> {
+  return serverNotification(message)?.method === "item/mcpToolCall/progress";
+}
+
+export function isPlanDeltaNotification(
+  message: JsonRpcMessage,
+): message is ServerNotificationFor<"item/plan/delta"> {
+  return serverNotification(message)?.method === "item/plan/delta";
+}
+
 export function isReasoningSummaryTextDeltaNotification(
   message: JsonRpcMessage,
 ): message is ServerNotificationFor<"item/reasoning/summaryTextDelta"> {
   return (
-    serverNotification(message)?.method ===
-    "item/reasoning/summaryTextDelta"
+    serverNotification(message)?.method === "item/reasoning/summaryTextDelta"
   );
 }
 
@@ -137,8 +182,7 @@ export function isReasoningSummaryPartAddedNotification(
   message: JsonRpcMessage,
 ): message is ServerNotificationFor<"item/reasoning/summaryPartAdded"> {
   return (
-    serverNotification(message)?.method ===
-    "item/reasoning/summaryPartAdded"
+    serverNotification(message)?.method === "item/reasoning/summaryPartAdded"
   );
 }
 
@@ -179,13 +223,50 @@ function hasItemNotification(
   );
 }
 
-function hasAgentMessageDelta(value: unknown): boolean {
+function hasItemTextDelta(value: unknown): boolean {
   const params = record(value);
   return (
     hasString(params, "threadId") &&
     hasString(params, "turnId") &&
     hasString(params, "itemId") &&
     typeof params?.delta === "string"
+  );
+}
+
+function hasFileChangePatchUpdated(value: unknown): boolean {
+  const params = record(value);
+  return (
+    hasString(params, "threadId") &&
+    hasString(params, "turnId") &&
+    hasString(params, "itemId") &&
+    Array.isArray(params?.changes) &&
+    params.changes.every((change) => {
+      const entry = record(change);
+      const kind = record(entry?.kind);
+      const kindType = readString(kind, "type");
+      const movePath = kind?.move_path;
+      return (
+        hasString(entry, "path") &&
+        typeof entry?.diff === "string" &&
+        (kindType === "add" ||
+          kindType === "delete" ||
+          kindType === "update") &&
+        (movePath === undefined ||
+          (kindType === "update" &&
+            typeof movePath === "string" &&
+            movePath.length > 0))
+      );
+    })
+  );
+}
+
+function hasMcpToolCallProgress(value: unknown): boolean {
+  const params = record(value);
+  return (
+    hasString(params, "threadId") &&
+    hasString(params, "turnId") &&
+    hasString(params, "itemId") &&
+    hasString(params, "message")
   );
 }
 

@@ -41,7 +41,8 @@ const METHOD_PROOF = [
   "thread/start",
   "turn/start",
   "thread/read",
-  "agentSession/action/respond",
+  "item/tool/requestUserInput",
+  "serverRequest/resolved",
   "turn/interrupt",
 ];
 

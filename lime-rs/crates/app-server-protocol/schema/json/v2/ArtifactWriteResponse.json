@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "ArtifactWriteSidecar": {
+      "properties": {
+        "bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contentStatus": {
+          "type": "string"
+        },
+        "relativePath": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "bytes",
+        "contentStatus",
+        "relativePath",
+        "sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "artifactDocumentId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "artifactRef": {
+      "type": "string"
+    },
+    "eventId": {
+      "type": "string"
+    },
+    "persistedAt": {
+      "type": "string"
+    },
+    "sequence": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sidecar": {
+      "$ref": "#/$defs/ArtifactWriteSidecar"
+    },
+    "threadId": {
+      "type": "string"
+    },
+    "turnId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "artifactRef",
+    "eventId",
+    "persistedAt",
+    "sequence",
+    "sidecar",
+    "threadId"
+  ],
+  "title": "ArtifactWriteResponse",
+  "type": "object"
+}

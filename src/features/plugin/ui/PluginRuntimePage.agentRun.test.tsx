@@ -6,8 +6,6 @@ import {
   flush,
   getRuntimeFrame,
   renderPage,
-  appServerClientMocks,
-  runtimeApiMocks,
   unmountLastRenderedPage,
   usePluginRuntimePageTestLifecycle,
 } from "./PluginRuntimePage.testFixtures";
@@ -277,9 +275,6 @@ describe("PluginRuntimePage Host AI run surface", () => {
     });
     await flush();
 
-    expect(
-      runtimeApiMocks.submitPluginRuntimeHostResponse,
-    ).not.toHaveBeenCalled();
     expect(
       container.querySelector(
         '[data-action-id="review-content-batch"][data-action-resolved="true"]',

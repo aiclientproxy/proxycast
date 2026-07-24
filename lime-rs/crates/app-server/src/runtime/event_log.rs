@@ -2,7 +2,6 @@ use app_server_protocol::AgentEvent;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-#[cfg(test)]
 use std::collections::BTreeSet;
 use std::fs;
 use std::io::BufRead;
@@ -10,6 +9,7 @@ use std::io::BufReader;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EventLogRecord {
@@ -86,7 +86,16 @@ pub(crate) struct EventLogScan {
 #[derive(Debug, Clone)]
 pub struct EventLogWriter {
     root: PathBuf,
+    append_states: Arc<Mutex<BTreeMap<PathBuf, EventLogAppendState>>>,
     io_locks: Arc<Mutex<BTreeMap<PathBuf, Arc<Mutex<()>>>>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EventLogAppendState {
+    file_len: u64,
+    modified: Option<SystemTime>,
+    last_sequence: Option<u64>,
+    event_ids: BTreeSet<String>,
 }
 
 impl PartialEq for EventLogWriter {
@@ -121,6 +130,7 @@ impl EventLogWriter {
         })?;
         Ok(Self {
             root,
+            append_states: Arc::new(Mutex::new(BTreeMap::new())),
             io_locks: Arc::new(Mutex::new(BTreeMap::new())),
         })
     }
@@ -154,9 +164,10 @@ impl EventLogWriter {
                 .first()
                 .map(|event| event.session_id.as_str())
                 .ok_or_else(|| "event log append group cannot be empty".to_string())?;
-            let scan = prepare_session_event_log_for_append(&path, session_id)?;
-            validate_appended_events(&scan, &events)?;
+            let append_state = self.prepare_append_state(&path, session_id)?;
+            validate_appended_events(&append_state, &events)?;
             append_events_to_path(&path, &events)?;
+            self.update_append_state(&path, append_state, &events)?;
             paths.push(path);
         }
         Ok(paths)
@@ -502,6 +513,52 @@ impl EventLogWriter {
             .or_insert_with(|| Arc::new(Mutex::new(())))
             .clone())
     }
+
+    fn prepare_append_state(
+        &self,
+        path: &Path,
+        session_id: &str,
+    ) -> Result<EventLogAppendState, String> {
+        let stamp = event_log_file_stamp(path)?;
+        if let Some(state) = self
+            .append_states
+            .lock()
+            .map_err(|_| "event log append state lock poisoned".to_string())?
+            .get(path)
+            .filter(|state| state.matches(stamp.0, stamp.1))
+            .cloned()
+        {
+            return Ok(state);
+        }
+
+        let scan = prepare_session_event_log_for_append(path, session_id)?;
+        let state = EventLogAppendState::from_scan(&scan);
+        self.append_states
+            .lock()
+            .map_err(|_| "event log append state lock poisoned".to_string())?
+            .insert(path.to_path_buf(), state.clone());
+        Ok(state)
+    }
+
+    fn update_append_state(
+        &self,
+        path: &Path,
+        mut state: EventLogAppendState,
+        events: &[&AgentEvent],
+    ) -> Result<(), String> {
+        for event in events {
+            state.last_sequence = Some(event.sequence);
+            state.event_ids.insert(event.event_id.clone());
+        }
+        let (file_len, modified) = event_log_file_stamp(path)?;
+        state.file_len = file_len;
+        state.modified = modified;
+        self.append_states
+            .lock()
+            .map_err(|_| "event log append state lock poisoned".to_string())?
+            .insert(path.to_path_buf(), state);
+        Ok(())
+    }
 }
 
 fn prepare_session_event_log_for_append(
@@ -559,17 +616,48 @@ fn prepare_session_event_log_for_append(
     }
 }
 
-fn validate_appended_events(scan: &EventLogScan, events: &[&AgentEvent]) -> Result<(), String> {
+impl EventLogAppendState {
+    fn from_scan(scan: &EventLogScan) -> Self {
+        Self {
+            file_len: scan.file_len,
+            modified: event_log_file_stamp(&scan.path)
+                .ok()
+                .and_then(|(_, modified)| modified),
+            last_sequence: scan.records.last().map(|record| record.event.sequence),
+            event_ids: scan
+                .records
+                .iter()
+                .map(|record| record.event.event_id.clone())
+                .collect(),
+        }
+    }
+
+    fn matches(&self, file_len: u64, modified: Option<SystemTime>) -> bool {
+        self.file_len == file_len && self.modified == modified
+    }
+}
+
+fn event_log_file_stamp(path: &Path) -> Result<(u64, Option<SystemTime>), String> {
+    match fs::metadata(path) {
+        Ok(metadata) => Ok((metadata.len(), metadata.modified().ok())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok((0, None)),
+        Err(error) => Err(format!(
+            "无法读取 event log metadata {}: {error}",
+            path.display()
+        )),
+    }
+}
+
+fn validate_appended_events(
+    state: &EventLogAppendState,
+    events: &[&AgentEvent],
+) -> Result<(), String> {
     let expected_session_id = events
         .first()
         .map(|event| event.session_id.as_str())
         .unwrap_or_default();
-    let mut previous_sequence = scan.records.last().map(|record| record.event.sequence);
-    let mut event_ids = scan
-        .records
-        .iter()
-        .map(|record| record.event.event_id.as_str())
-        .collect::<std::collections::BTreeSet<_>>();
+    let mut previous_sequence = state.last_sequence;
+    let mut event_ids = state.event_ids.clone();
     for event in events {
         if event.session_id != expected_session_id {
             return Err(format!(
@@ -588,7 +676,7 @@ fn validate_appended_events(scan: &EventLogScan, events: &[&AgentEvent]) -> Resu
                 ));
             }
         }
-        if !event_ids.insert(event.event_id.as_str()) {
+        if !event_ids.insert(event.event_id.clone()) {
             return Err(format!(
                 "event log append duplicate event_id: {}",
                 event.event_id
@@ -852,6 +940,10 @@ impl EventLogWriter {
         for archive_path in workflow_audit_archive_paths {
             remove_event_log_path(&archive_path)?;
         }
+        self.append_states
+            .lock()
+            .map_err(|_| "event log append state lock poisoned".to_string())?
+            .remove(&session_event_path);
         Ok(())
     }
 }

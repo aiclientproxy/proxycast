@@ -4,8 +4,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatNavbar } from "./ChatNavbar";
 
-const { mockProjectSelector } = vi.hoisted(() => ({
+const {
+  mockProjectSelector,
+  mockRequestChatHostOpenPath,
+  mockEnsureProjectWorkspace,
+} = vi.hoisted(() => ({
   mockProjectSelector: vi.fn(),
+  mockRequestChatHostOpenPath: vi.fn(),
+  mockEnsureProjectWorkspace: vi.fn(),
 }));
 
 vi.mock("@/components/projects/ProjectSelector", () => ({
@@ -16,13 +22,7 @@ vi.mock("@/components/projects/ProjectSelector", () => ({
 }));
 
 vi.mock("@/lib/api/project", () => ({
-  ensureProjectWorkspace: vi.fn(
-    async (input: { name: string; rootPath?: string | null }) => ({
-      id: input.rootPath || input.name,
-      name: input.name,
-      rootPath: input.rootPath ?? null,
-    }),
-  ),
+  ensureProjectWorkspace: mockEnsureProjectWorkspace,
   extractErrorMessage: (error: unknown) =>
     error instanceof Error ? error.message : String(error),
   getProject: vi.fn(async (projectId: string) => ({
@@ -48,8 +48,8 @@ vi.mock("@/lib/api/projectGit", () => ({
   })),
 }));
 
-vi.mock("@/lib/desktop-host/plugin-dialog", () => ({
-  open: vi.fn(),
+vi.mock("@/components/agent/chat/host/chatHostCapabilities", () => ({
+  requestChatHostOpenPath: mockRequestChatHostOpenPath,
 }));
 
 vi.mock("sonner", () => ({
@@ -65,8 +65,15 @@ vi.mock("react-i18next", () => ({
       language: "zh-CN",
     },
     t: (key: string, options?: Record<string, unknown>) => {
+      const translations: Record<string, string> = {
+        "agentChat.inputbar.core.projectContext.selectFolderDialogTitle":
+          "选择项目文件夹",
+      };
       const template =
-        typeof options?.defaultValue === "string" ? options.defaultValue : key;
+        translations[key] ??
+        (typeof options?.defaultValue === "string"
+          ? options.defaultValue
+          : key);
 
       return template.replace(/{{\s*([^}]+?)\s*}}/g, (_, name: string) =>
         String(options?.[name.trim()] ?? ""),
@@ -106,6 +113,15 @@ beforeEach(() => {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
     }
   ).IS_REACT_ACT_ENVIRONMENT = true;
+  mockRequestChatHostOpenPath.mockReset();
+  mockEnsureProjectWorkspace.mockReset();
+  mockEnsureProjectWorkspace.mockImplementation(
+    async (input: { name: string; rootPath?: string | null }) => ({
+      id: input.rootPath || input.name,
+      name: input.name,
+      rootPath: input.rootPath ?? null,
+    }),
+  );
 });
 
 afterEach(() => {
@@ -296,6 +312,70 @@ describe("ChatNavbar", () => {
         '[data-testid="inputbar-project-context-add-project"]',
       ),
     ).not.toBeNull();
+  });
+
+  it("任务中心项目菜单应能通过现有文件夹进入项目", async () => {
+    const onProjectChange = vi.fn();
+    mockRequestChatHostOpenPath.mockResolvedValueOnce(
+      "/Users/test/existing-project",
+    );
+    mockEnsureProjectWorkspace.mockResolvedValueOnce({
+      id: "project-existing",
+      name: "existing-project",
+      rootPath: "/Users/test/existing-project",
+    });
+
+    const container = renderChatNavbar({
+      contextVariant: "task-center",
+      projectId: null,
+      openedProjects: [],
+      workspaceType: "general",
+      onProjectChange,
+    });
+
+    const menuTrigger = container.querySelector(
+      'button[aria-label="展开工作区菜单"]',
+    ) as HTMLButtonElement | null;
+
+    await act(async () => {
+      menuTrigger?.click();
+      await Promise.resolve();
+    });
+
+    const addProjectButton = document.body.querySelector(
+      '[data-testid="inputbar-project-context-add-project"]',
+    ) as HTMLButtonElement | null;
+    expect(addProjectButton).not.toBeNull();
+
+    act(() => {
+      addProjectButton?.focus();
+      addProjectButton?.dispatchEvent(
+        new MouseEvent("mouseenter", { bubbles: true }),
+      );
+    });
+
+    const useExistingButton = document.body.querySelector(
+      '[data-testid="inputbar-project-context-use-existing"]',
+    ) as HTMLButtonElement | null;
+    expect(useExistingButton).not.toBeNull();
+
+    await act(async () => {
+      useExistingButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockRequestChatHostOpenPath).toHaveBeenCalledWith({
+      directory: true,
+      multiple: false,
+      title: "选择项目文件夹",
+    });
+    expect(mockEnsureProjectWorkspace).toHaveBeenCalledWith({
+      name: "existing-project",
+      rootPath: "/Users/test/existing-project",
+      workspaceType: "general",
+    });
+    expect(onProjectChange).toHaveBeenCalledWith("project-existing");
   });
 
   it("任务中心顶栏应按已打开项目渲染多个项目 tab 并联动切换", () => {

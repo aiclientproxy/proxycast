@@ -1398,7 +1398,7 @@ describe("AppSidebar conversations", () => {
     });
   });
 
-  it("新任务首页有记忆项目时应按 workspaceId 加载当前项目会话", async () => {
+  it("新任务首页应从全局分页结果归组记忆项目且不重复按 workspaceId 查询", async () => {
     localStorage.setItem("agent_last_project_id", JSON.stringify("project-1"));
     mockListAgentRuntimeSessions.mockImplementation(
       async (options?: {
@@ -1406,7 +1406,7 @@ describe("AppSidebar conversations", () => {
         workspaceId?: string;
         cwd?: string | string[];
       }) =>
-        options?.workspaceId === "project-1"
+        options?.limit === 11 && !options.workspaceId && !options.cwd
           ? [
               {
                 id: "session-workspace-memory",
@@ -1434,10 +1434,13 @@ describe("AppSidebar conversations", () => {
       '[data-testid="app-sidebar-project-conversations"]',
     );
     expect(projectSection?.textContent).toContain("记忆项目会话");
-    expect(mockListAgentRuntimeSessions).toHaveBeenCalledWith({
-      limit: 11,
-      workspaceId: "project-1",
-    });
+    expect(mockListAgentRuntimeSessions).toHaveBeenCalled();
+    expect(mockListAgentRuntimeSessions).toHaveBeenCalledWith({ limit: 11 });
+    expect(
+      mockListAgentRuntimeSessions.mock.calls.every(
+        ([options]) => options?.limit === 11 && !options.workspaceId,
+      ),
+    ).toBe(true);
 
     const openButton = Array.from(
       container.querySelectorAll<HTMLButtonElement>(
@@ -2366,10 +2369,9 @@ describe("AppSidebar conversations", () => {
     expect(mockListAgentRuntimeSessions).toHaveBeenNthCalledWith(1, {
       limit: 11,
     });
-    expect(mockListAgentRuntimeSessions).toHaveBeenCalledWith({
-      limit: 11,
-      workspaceId: "project-1",
-    });
+    expect(mockListAgentRuntimeSessions).not.toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "project-1" }),
+    );
     expect(mockListAgentRuntimeSessions).toHaveBeenCalledWith({
       limit: 11,
       cwd: "/repo/project-1",
@@ -2385,7 +2387,7 @@ describe("AppSidebar conversations", () => {
         cwd?: string | string[];
         workspaceId?: string;
       }) =>
-        options?.workspaceId === "project-1"
+        options?.limit === 11 && !options.workspaceId && !options.cwd
           ? [
               {
                 id: "session-workspace-only",
@@ -2415,10 +2417,9 @@ describe("AppSidebar conversations", () => {
       'button[title="仅工作区会话"]',
     );
     expect(button).not.toBeNull();
-    expect(mockListAgentRuntimeSessions).toHaveBeenCalledWith({
-      limit: 11,
-      workspaceId: "project-1",
-    });
+    expect(mockListAgentRuntimeSessions).not.toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "project-1" }),
+    );
 
     await act(async () => {
       button?.click();

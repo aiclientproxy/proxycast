@@ -488,6 +488,12 @@ Fork provider-history architecture confirmation: root, 2026-07-21. The current o
 `canonical ThreadStore -> RuntimeCore seed -> provider_history`; ProjectionRepair only preserves this
 prefix while applying the target EventLog tail, and no second transcript or Electron owner was added.
 
+工作区 artifact 持久化的 current 写入口是 App Server v2 `artifact/write`：Renderer 只提交
+`threadId + optional turnId + typed ArtifactSnapshot`，App Server 解析 canonical thread identity，
+由 RuntimeCore 追加 `artifact.snapshot` 并返回 event identity、sequence、persisted time 与
+`relativePath/bytes/sha256/contentStatus` sidecar evidence。Electron 只转发 JSON-RPC，禁止直接写
+artifact 正文、伪造 evidence 或恢复 `agentSession/runtimeEvents/append` 通用写入口。
+
 代码/文档 `artifact.snapshot` 在进入 canonical Thread history 时按 completed `FileChange`
 lower：路径来自 artifact sidecar 摘要，正文/preview 进入 typed diff；图片仍使用
 `ImageView`。这让 Workbench cold read 继续消费 Codex v2 Item，而不是恢复
@@ -503,11 +509,11 @@ patch call 只生成一个 Item，完整保留 Add/Delete/Update/Move 的有序 
 `Declined`，取消后由 turn lifecycle 单独终止，禁止把用户拒绝伪装为执行失败或恢复旧单文件
 Update 投影。
 
-direct notification 主链已把六个 Codex v2 lifecycle method 纳入统一 App Server method catalog、schema manifest 和 generated client：`thread/started`、`turn/started`、`turn/completed`、`item/started`、`item/completed`、`item/agentMessage/delta`。App Server 只保留一个 `V2NotificationProjector`，对覆盖事件采用 direct / side-channel / reject 三态；畸形覆盖事件 fail closed，只有未覆盖的 provider/media 等旁路事件保留 `agentSession/event` raw envelope。Rust/TypeScript client、Electron 和 Renderer 已直接消费 v2 lifecycle，delta 不伪造 sequence；`agentSession/event` 的 `typedEvent`、`canonicalEvent`、旧 lifecycle DTO、schema、fixture 和正向测试已物理删除。Renderer event sequence gate 只允许 direct lifecycle 与明确 raw side-channel，wrapper lifecycle/action 一律 fail closed；残留 `canonicalEvent` 字符串只允许作为待删除测试夹具或负向回流守卫，不是生产 contract。真实 Electron Gate B 已证明动态 `turn/start` response、direct delta/Item/Turn terminal 与 `thread/read` Tool Item 共享同一 thread/turn identity；Claw fixture 不再通过 wrapper event 或 deferred assertion 获得成功。`turn/start` response 只由 App Server/RuntimeCore admission owner 产生，Electron Host 必须按 generic JSON-RPC 转发；禁止从 notification、recent buffer、`thread/read` 或 `clientUserMessageId` 猜测并伪造 accepted response。
+direct notification 主链已把 Codex v2 lifecycle 与流式 Item method 纳入统一 App Server method catalog、schema manifest 和 generated client：`thread/started`、`turn/started`、`turn/completed`、`item/started`、`item/completed`、`item/agentMessage/delta`、`item/commandExecution/outputDelta`、`item/fileChange/patchUpdated`、`item/plan/delta`、`item/mcpToolCall/progress`。App Server 只保留一个按 command/file-change/MCP/Plan owner 拆分的 `V2NotificationProjector`，对覆盖事件采用 direct / side-channel / reject 三态；畸形覆盖事件 fail closed，只有未覆盖的 provider/media 等旁路事件保留 `agentSession/event` raw envelope。Rust/TypeScript client、Electron 和 Renderer 已直接消费 v2 lifecycle/stream delta，delta 不伪造 durable sequence；`agentSession/event` 的 `typedEvent`、`canonicalEvent`、旧 lifecycle DTO、`agentSession/runtimeEvents/append` schema、fixture 和正向测试已物理删除。Renderer sequence gate 按 direct method/raw event 与 session 隔离，只允许 direct lifecycle/stream 与明确 raw side-channel，wrapper lifecycle/action 一律 fail closed；残留 `canonicalEvent` 字符串只允许作为待删除测试夹具或负向回流守卫，不是生产 contract。真实 Electron Gate B 必须证明动态 `turn/start` response、direct delta/Item/Turn terminal 与 `thread/read` Item 共享同一 thread/turn identity；Claw fixture 不得通过 wrapper event 或 deferred assertion 获得成功。`turn/start` response 只由 App Server/RuntimeCore admission owner 产生，Electron Host 必须按 generic JSON-RPC 转发；禁止从 notification、recent buffer、`thread/read` 或 `clientUserMessageId` 猜测并伪造 accepted response。
 
 ### 7.1 事件与完成态
 
-- canonical live lifecycle 的 current contract 是 Codex v2 direct notification：`thread/started` 携带完整 `Thread`，`turn/started|completed` 携带 `threadId + Turn`，`item/started|completed` 携带 `threadId + turnId + ThreadItem` 和对应毫秒时间，`item/agentMessage/delta` 携带 `threadId + turnId + itemId + delta`。Rust/TypeScript client、Electron 与 GUI 只能向这些 typed notification + canonical read model 收敛。
+- canonical live lifecycle 的 current contract 是 Codex v2 direct notification：`thread/started` 携带完整 `Thread`，`turn/started|completed` 携带 `threadId + Turn`，`item/started|completed` 携带 `threadId + turnId + ThreadItem` 和对应毫秒时间；AgentMessage/CommandExecution/Plan delta、FileChange patch update 与 MCP progress 都携带同一 canonical `threadId + turnId + itemId`。Rust/TypeScript client、Electron 与 GUI 只能向这些 typed notification + canonical read model 收敛。
 - `typedEvent`、`canonicalEvent` 和 legacy lifecycle DTO 已是 `dead / deleted / forbidden-to-restore`。`agentSession/event` 当前只允许携带显式 allowlist 内的 raw 非 lifecycle side-channel；任何 Thread/Turn/Item 或 action wrapper 都必须拒绝，不能再通过 fixture、Renderer projector 或 client parser恢复。
 - 单一 TypeScript codegen 继续对异构 nested `$defs` fail closed；禁止通过 allowlist、覆盖顺序、`Legacy*` 重命名、namespace compat 或第二套 flat codegen 选择其中一边。删除旧 lifecycle schema 后当前 codegen 为 731 个协议类型、0 生成失败、0 漂移；未来新增冲突必须修 owner，不得放宽生成器。
 - 非 Thread 领域通知只能通过集中 allowlist 绕过 canonical sequence gate。当前允许 provider diagnostic、`runtime.status` 与 `image_task.presentation.generated/created/parameters.required`；它们只承载诊断或媒体任务展示，不得表达或修补 Thread/Turn/Item lifecycle。未知 raw event 与 raw Thread lifecycle 必须继续 fail-closed。

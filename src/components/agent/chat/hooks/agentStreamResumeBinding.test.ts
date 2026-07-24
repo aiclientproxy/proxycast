@@ -412,7 +412,7 @@ describe("agentStreamResumeBinding", () => {
     expect(isSending).toBe(false);
   });
 
-  it("恢复绑定应进入发送态，并在终态事件后清理 active stream", async () => {
+  it("恢复绑定默认只显示 reasoning summary，并在终态事件后清理 active stream", async () => {
     const unlisten = vi.fn();
     let eventHandler: ((event: { payload: unknown }) => void) | null = null;
     const runtime = {
@@ -498,8 +498,32 @@ describe("agentStreamResumeBinding", () => {
 
     eventHandler?.({
       payload: {
+        type: "thinking_delta",
+        text: "不应恢复显示的 raw reasoning",
+        session_id: "session-1",
+        turn_id: "turn-1",
+      },
+    });
+    eventHandler?.({
+      payload: {
+        type: "reasoning_summary_delta",
+        text: "正在整理回答。",
+        delta: "正在整理回答。",
+        item_id: "reasoning-1",
+        summary_index: 0,
+        sequence: 1,
+        session_id: "session-1",
+        turn_id: "turn-1",
+      },
+    });
+    eventHandler?.({
+      payload: {
         type: "text_delta",
         text: "继续输出",
+        delta: "继续输出",
+        item_id: "message-1",
+        phase: "final_answer",
+        sequence: 2,
         session_id: "session-1",
         turn_id: "turn-1",
       },
@@ -528,6 +552,15 @@ describe("agentStreamResumeBinding", () => {
       isThinking: false,
       runtimeTurnId: "turn-1",
     });
+    expect(messages.current[0]?.thinkingContent).toBe("正在整理回答。");
+    expect(messages.current[0]?.contentParts).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "thinking",
+          text: "不应恢复显示的 raw reasoning",
+        }),
+      ]),
+    );
     expect(activeStreamState.current).toBeNull();
     expect(isSending).toBe(false);
     expect(unlisten).toHaveBeenCalledTimes(1);

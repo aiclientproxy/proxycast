@@ -12,11 +12,19 @@ use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 struct McpStepRoute {
+    server_name: String,
     tool_name: String,
     allowed_callers: Option<Vec<String>>,
     provenance: McpConnectionProvenance,
     supports_parallel_tool_calls: bool,
     connection: McpConnectionHandle,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct McpStepRouteIdentity {
+    pub server_name: String,
+    pub tool_name: String,
+    pub runtime_tool_name: String,
 }
 
 #[derive(Clone)]
@@ -61,6 +69,16 @@ impl McpStepSnapshot {
             .map(|route| route.provenance.environment_id())
     }
 
+    pub fn route_identity(&self, runtime_tool_name: &str) -> Option<McpStepRouteIdentity> {
+        self.routes
+            .get(runtime_tool_name)
+            .map(|route| McpStepRouteIdentity {
+                server_name: route.server_name.clone(),
+                tool_name: route.tool_name.clone(),
+                runtime_tool_name: runtime_tool_name.to_string(),
+            })
+    }
+
     pub async fn dispatch(
         &self,
         tool_call: CallToolRequestParam,
@@ -92,21 +110,19 @@ impl McpStepSnapshot {
                     .map(ToOwned::to_owned)
                     .unwrap_or_default(),
             );
-        let notifications = route.connection.lock().await.subscribe().await;
-        let arguments = tool_call.arguments;
-        let response = Box::pin(async move {
-            route
-                .connection
-                .lock()
-                .await
-                .call_tool(&route.tool_name, arguments, &scope, cancellation_token)
-                .await
-                .map_err(service_error_data)
-        });
-        Ok(McpConnectionCall {
-            response,
-            notifications,
-        })
+        let call = route
+            .connection
+            .lock()
+            .await
+            .start_call_tool(
+                &route.tool_name,
+                tool_call.arguments,
+                &scope,
+                cancellation_token,
+            )
+            .await
+            .map_err(service_error_data);
+        call
     }
 
     pub(super) async fn capture(
@@ -214,6 +230,7 @@ async fn capture_connection(
                         meta: tool.meta,
                     },
                     McpStepRoute {
+                        server_name: connection_name.clone(),
                         tool_name,
                         allowed_callers,
                         provenance: provenance.clone(),
@@ -267,9 +284,9 @@ mod tests {
     use super::*;
     use crate::mcp_connection::{McpConnection, McpConnectionError, McpConnectionRegistry};
     use async_trait::async_trait;
-    use rmcp::model::{CallToolResult, Content, JsonObject, ListToolsResult, ServerNotification};
+    use rmcp::model::{CallToolResult, Content, JsonObject, ListToolsResult};
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use tokio::sync::{mpsc, Mutex};
+    use tokio::sync::Mutex;
 
     #[derive(Clone, Copy)]
     enum DiscoveryMode {
@@ -300,26 +317,30 @@ mod tests {
             }
         }
 
-        async fn call_tool(
+        async fn start_call_tool(
             &self,
             name: &str,
             _arguments: Option<JsonObject>,
-            _scope: &McpCallScope,
+            scope: &McpCallScope,
             _cancel_token: CancellationToken,
-        ) -> Result<CallToolResult, McpConnectionError> {
-            if let Some(observed_scope) = &self.observed_scope {
-                *observed_scope.lock().await = Some(_scope.clone());
-            }
-            self.call_count.fetch_add(1, Ordering::SeqCst);
-            Ok(CallToolResult::success(vec![Content::text(format!(
-                "{}:{name}",
-                self.output
-            ))]))
-        }
-
-        async fn subscribe(&self) -> mpsc::Receiver<ServerNotification> {
-            let (_sender, receiver) = mpsc::channel(1);
-            receiver
+        ) -> Result<McpConnectionCall, McpConnectionError> {
+            let observed_scope = self.observed_scope.clone();
+            let scope = scope.clone();
+            let call_count = Arc::clone(&self.call_count);
+            let output = self.output.clone();
+            let name = name.to_string();
+            Ok(McpConnectionCall {
+                response: Box::pin(async move {
+                    if let Some(observed_scope) = observed_scope {
+                        *observed_scope.lock().await = Some(scope);
+                    }
+                    call_count.fetch_add(1, Ordering::SeqCst);
+                    Ok(CallToolResult::success(vec![Content::text(format!(
+                        "{output}:{name}"
+                    ))]))
+                }),
+                notifications: Box::pin(futures::stream::empty()),
+            })
         }
     }
 
@@ -425,6 +446,15 @@ mod tests {
             Some("remote-tools")
         );
         assert_eq!(parallel.environment_id("missing"), None);
+        assert_eq!(
+            parallel.route_identity("docs__search"),
+            Some(McpStepRouteIdentity {
+                server_name: "docs".to_string(),
+                tool_name: "search".to_string(),
+                runtime_tool_name: "docs__search".to_string(),
+            })
+        );
+        assert_eq!(parallel.route_identity("missing"), None);
     }
 
     #[tokio::test]
@@ -619,6 +649,7 @@ mod tests {
         assert_eq!(call_count.load(Ordering::SeqCst), 0);
 
         let denied_route = McpStepRoute {
+            server_name: "mixed".to_string(),
             tool_name: "execute".to_string(),
             allowed_callers: Some(vec!["code_execution".to_string()]),
             provenance: McpConnectionProvenance::default(),

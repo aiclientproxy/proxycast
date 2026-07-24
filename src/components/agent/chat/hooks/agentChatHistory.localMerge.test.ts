@@ -205,6 +205,98 @@ describe("agentChatHistory local merge", () => {
     expect(mergedMessages[3]?.toolCalls?.[0]?.name).toBe("read_file");
   });
 
+  it("相同 prompt 的增量终态 hydration 不应跨 canonical turn 覆盖上一轮", () => {
+    const localMessages = [
+      {
+        id: "local-user-first-greeting",
+        role: "user" as const,
+        content: "你好",
+        timestamp: new Date("2026-07-23T06:49:00.000Z"),
+        runtimeTurnId: "turn-first-greeting",
+      },
+      {
+        id: "local-assistant-first-greeting",
+        role: "assistant" as const,
+        content: "你好，第一轮已经完成。",
+        timestamp: new Date("2026-07-23T06:49:01.000Z"),
+        runtimeTurnId: "turn-first-greeting",
+      },
+      {
+        id: "local-user-second-greeting",
+        role: "user" as const,
+        content: "你好",
+        timestamp: new Date("2026-07-23T06:50:00.000Z"),
+        runtimeTurnId: "pending-turn:second-greeting",
+      },
+      {
+        id: "local-assistant-second-greeting",
+        role: "assistant" as const,
+        content: "生成中",
+        timestamp: new Date("2026-07-23T06:50:00.100Z"),
+        runtimeTurnId: "pending-turn:second-greeting",
+        isThinking: true,
+        runtimeStatus: {
+          phase: "generating" as const,
+          title: "正在输出",
+        },
+      },
+    ];
+    const hydratedMessages = [
+      {
+        id: "history-user-second-greeting",
+        role: "user" as const,
+        content: "你好",
+        timestamp: new Date("2026-07-23T06:50:00.010Z"),
+        runtimeTurnId: "turn-second-greeting",
+      },
+      {
+        id: "history-assistant-second-greeting",
+        role: "assistant" as const,
+        content: "你好，第二轮也已经完成。",
+        timestamp: new Date("2026-07-23T06:50:01.000Z"),
+        runtimeTurnId: "turn-second-greeting",
+        isThinking: false,
+      },
+    ];
+
+    const mergedMessages = mergeHydratedMessagesWithLocalState(
+      localMessages,
+      hydratedMessages,
+      { preferHydratedAssistantOutput: true },
+    );
+
+    expect(
+      mergedMessages.map(({ id, content, runtimeTurnId }) => ({
+        id,
+        content,
+        runtimeTurnId,
+      })),
+    ).toEqual([
+      {
+        id: "local-user-first-greeting",
+        content: "你好",
+        runtimeTurnId: "turn-first-greeting",
+      },
+      {
+        id: "local-assistant-first-greeting",
+        content: "你好，第一轮已经完成。",
+        runtimeTurnId: "turn-first-greeting",
+      },
+      {
+        id: "local-user-second-greeting",
+        content: "你好",
+        runtimeTurnId: "turn-second-greeting",
+      },
+      {
+        id: "local-assistant-second-greeting",
+        content: "你好，第二轮也已经完成。",
+        runtimeTurnId: "turn-second-greeting",
+      },
+    ]);
+    expect(mergedMessages[3]?.isThinking).toBe(false);
+    expect(mergedMessages[3]?.runtimeStatus).toBeUndefined();
+  });
+
   it("刷新会话详情时不应用完成标记覆盖同 turn 本地正文", () => {
     const turnId = "turn-news-fixture";
     const localMessages = [

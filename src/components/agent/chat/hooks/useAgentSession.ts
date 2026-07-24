@@ -491,7 +491,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
   const sessionSwitchRequestVersionRef = useRef(0);
   const activeSessionSwitchRef = useRef<{
     topicId: string;
-    promise: Promise<void>;
+    promise: Promise<"success" | "error">;
   } | null>(null);
   const deferredSessionHydrationCancelRef = useRef<(() => void) | null>(null);
   const pendingSessionMetadataSyncCancelRef = useRef<(() => void) | null>(null);
@@ -2175,10 +2175,12 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         return activeSwitch.promise;
       }
 
-      let resolveActiveSwitch: () => void = () => {};
-      const activeSwitchPromise = new Promise<void>((resolve) => {
-        resolveActiveSwitch = resolve;
-      });
+      let resolveActiveSwitch: (result: "success" | "error") => void = () => {};
+      const activeSwitchPromise = new Promise<"success" | "error">(
+        (resolve) => {
+          resolveActiveSwitch = resolve;
+        },
+      );
       activeSessionSwitchRef.current = {
         topicId,
         promise: activeSwitchPromise,
@@ -2479,11 +2481,13 @@ export function useAgentSession(options: UseAgentSessionOptions) {
           return;
         }
         handleSwitchTopicError(error, topicId);
+        resolveActiveSwitch("error");
+        return "error" as const;
       } finally {
         if (activeSessionSwitchRef.current?.promise === activeSwitchPromise) {
           activeSessionSwitchRef.current = null;
         }
-        resolveActiveSwitch();
+        resolveActiveSwitch("success");
       }
     },
     [

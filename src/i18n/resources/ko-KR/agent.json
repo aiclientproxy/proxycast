@@ -1118,7 +1118,6 @@
   "agentChat.inputbar.runtimeStatus.phase.synthesizing": "정리 중",
   "agentChat.inputbar.runtimeStatus.segment.canStop": "중지 가능",
   "agentChat.inputbar.runtimeStatus.segment.pendingRequests": "확인 대기 {{count}}",
-  "agentChat.inputbar.runtimeStatus.segment.queuedTurns": "대기 {{count}}",
   "agentChat.inputbar.runtimeStatus.segment.subtasks": "작업 {{active}}/{{total}}",
   "agentChat.inputbar.runtimeStatus.segment.tools": "도구 {{countLabel}}",
   "agentChat.inputbar.runtimeStatus.status.aborted": "중단됨",

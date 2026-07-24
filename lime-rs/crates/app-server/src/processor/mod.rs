@@ -1,4 +1,5 @@
 mod agent_session;
+mod artifact;
 mod automation;
 mod browser_session;
 mod config_warning;
@@ -44,7 +45,6 @@ use crate::RuntimeCoreError;
 use crate::RuntimeHostContext;
 use app_server_protocol::error_codes;
 use app_server_protocol::AgentEvent;
-use app_server_protocol::AgentSessionActionReplayParams;
 use app_server_protocol::AgentSessionActionRespondParams;
 use app_server_protocol::AgentSessionAnalysisHandoffExportParams;
 use app_server_protocol::AgentSessionEventParams;
@@ -506,20 +506,6 @@ impl RequestProcessor {
         let output = self
             .runtime
             .respond_action(params, host)
-            .await
-            .map_err(to_jsonrpc_error)?;
-        dispatch_result_with_events(output.response, output.events)
-    }
-
-    async fn handle_action_replay(
-        &self,
-        params: Option<serde_json::Value>,
-    ) -> Result<RpcDispatch, JsonRpcError> {
-        self.ensure_initialized()?;
-        let params: AgentSessionActionReplayParams = parse_params(params)?;
-        let output = self
-            .runtime
-            .replay_action(params)
             .await
             .map_err(to_jsonrpc_error)?;
         dispatch_result_with_events(output.response, output.events)

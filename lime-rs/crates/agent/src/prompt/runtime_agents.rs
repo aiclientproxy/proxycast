@@ -2,7 +2,7 @@
 //!
 //! 仅用于 Lime 应用运行时会话：
 //! - 全局：`app_paths::resolve_user_memory_path()`
-//! - 工作区：从项目根到当前工作目录的 `.lime/AGENTS.md` 与本地私有规则
+//! - 工作区：从项目根到当前工作目录，每层选择 `.lime/AGENTS.override.md` 或 `.lime/AGENTS.md`
 
 use lime_core::app_paths;
 use std::collections::HashSet;
@@ -15,7 +15,6 @@ const RUNTIME_AGENTS_MAX_BYTES: usize = 32 * 1024;
 const PROJECT_ROOT_MARKERS: &[&str] = &[".git"];
 const WORKSPACE_AGENTS_FILE_NAME: &str = "AGENTS.md";
 const WORKSPACE_OVERRIDE_AGENTS_FILE_NAME: &str = "AGENTS.override.md";
-const WORKSPACE_LOCAL_AGENTS_FILE_NAME: &str = "AGENTS.local.md";
 
 pub fn merge_system_prompt_with_runtime_agents(
     base_prompt: Option<String>,
@@ -142,11 +141,11 @@ fn discover_workspace_runtime_agents_paths(
     working_dir: &Path,
     project_root: Option<&Path>,
 ) -> Vec<PathBuf> {
-    let explicit_root = project_root.map(normalize_path);
+    let explicit_root = project_root.map(Path::to_path_buf);
     let Some(root) = explicit_root.or_else(|| discover_project_root(working_dir)) else {
         return workspace_runtime_agents_candidates(working_dir);
     };
-    let working_dir = normalize_path(working_dir);
+    let working_dir = working_dir.to_path_buf();
     if !working_dir.starts_with(&root) {
         return workspace_runtime_agents_candidates(&working_dir);
     }
@@ -170,16 +169,12 @@ fn discover_workspace_runtime_agents_paths(
         .collect()
 }
 
-fn normalize_path(path: &Path) -> PathBuf {
-    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-}
-
 fn discover_project_root(working_dir: &Path) -> Option<PathBuf> {
     working_dir.ancestors().find_map(|ancestor| {
         PROJECT_ROOT_MARKERS
             .iter()
             .any(|marker| ancestor.join(marker).exists())
-            .then(|| normalize_path(ancestor))
+            .then(|| ancestor.to_path_buf())
     })
 }
 
@@ -187,15 +182,9 @@ fn workspace_runtime_agents_candidates(dir: &Path) -> Vec<PathBuf> {
     let runtime_dir = dir.join(".lime");
     let override_path = runtime_dir.join(WORKSPACE_OVERRIDE_AGENTS_FILE_NAME);
     if override_path.is_file() {
-        vec![
-            override_path,
-            runtime_dir.join(WORKSPACE_LOCAL_AGENTS_FILE_NAME),
-        ]
+        vec![override_path]
     } else {
-        vec![
-            runtime_dir.join(WORKSPACE_AGENTS_FILE_NAME),
-            app_paths::resolve_workspace_local_runtime_agents_path(dir),
-        ]
+        vec![runtime_dir.join(WORKSPACE_AGENTS_FILE_NAME)]
     }
 }
 
@@ -216,12 +205,12 @@ fn load_runtime_agents_layer(
     if *remaining == 0 {
         return None;
     }
-    let normalized = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    if !seen.insert(normalized.clone()) || !normalized.is_file() {
+    let dedup_key = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    if !seen.insert(dedup_key) || !path.is_file() {
         return None;
     }
 
-    let mut bytes = std::fs::read(&normalized).ok()?;
+    let mut bytes = std::fs::read(path).ok()?;
     if bytes.len() > *remaining {
         bytes.truncate(*remaining);
     }
@@ -233,7 +222,7 @@ fn load_runtime_agents_layer(
     let consumed = bytes.len();
     *remaining = remaining.saturating_sub(consumed);
 
-    Some((normalized, trimmed.to_string()))
+    Some((path.to_path_buf(), trimmed.to_string()))
 }
 
 #[cfg(test)]
@@ -307,23 +296,15 @@ mod tests {
         fs::create_dir_all(repo.join(".lime")).expect("create root runtime dir");
         fs::create_dir_all(nested.join(".lime")).expect("create nested runtime dir");
         fs::write(repo.join(".lime").join("AGENTS.md"), "root shared").expect("write root shared");
-        fs::write(repo.join(".lime").join("AGENTS.local.md"), "root local")
-            .expect("write root local");
         fs::write(nested.join(".lime").join("AGENTS.md"), "nested shared")
             .expect("write nested shared");
-        fs::write(nested.join(".lime").join("AGENTS.local.md"), "nested local")
-            .expect("write nested local");
 
         let prompt = build_runtime_agents_prompt(Some(&nested)).expect("prompt should exist");
         let root_shared = prompt.find("root shared").expect("root shared");
-        let root_local = prompt.find("root local").expect("root local");
         let nested_shared = prompt.find("nested shared").expect("nested shared");
-        let nested_local = prompt.find("nested local").expect("nested local");
-        let nested_scope = normalize_path(&nested);
+        let nested_scope = nested.clone();
 
-        assert!(root_shared < root_local);
-        assert!(root_local < nested_shared);
-        assert!(nested_shared < nested_local);
+        assert!(root_shared < nested_shared);
         assert!(prompt.contains(&format!(
             "# AGENTS.md instructions for {}",
             nested_scope.display()
@@ -345,8 +326,8 @@ mod tests {
         fs::write(repo.join(".lime").join("AGENTS.md"), "repo shared").expect("write repo shared");
 
         let paths = discover_workspace_runtime_agents_paths(&nested, None);
-        let parent_runtime_agents = normalize_path(&parent.join(".lime").join("AGENTS.md"));
-        let repo_runtime_agents = normalize_path(&repo.join(".lime").join("AGENTS.md"));
+        let parent_runtime_agents = parent.join(".lime").join("AGENTS.md");
+        let repo_runtime_agents = repo.join(".lime").join("AGENTS.md");
 
         assert!(
             paths.contains(&repo_runtime_agents),
@@ -374,17 +355,50 @@ mod tests {
             "override should appear",
         )
         .expect("write override agents");
-        fs::write(
-            nested.join(".lime").join("AGENTS.local.md"),
-            "local still applies",
-        )
-        .expect("write local agents");
 
         let prompt = build_runtime_agents_prompt(Some(&nested)).expect("prompt should exist");
 
         assert!(prompt.contains("override should appear"));
-        assert!(prompt.contains("local still applies"));
         assert!(!prompt.contains("shared should not appear"));
+    }
+
+    #[test]
+    fn empty_override_still_replaces_shared_agents_in_same_scope() {
+        let tmp = TempDir::new().expect("create temp dir");
+        let repo = tmp.path().join("repo");
+        fs::create_dir_all(repo.join(".lime")).expect("create runtime dir");
+        fs::write(
+            repo.join(".lime").join("AGENTS.md"),
+            "shared should not appear",
+        )
+        .expect("write shared agents");
+        fs::write(repo.join(".lime").join("AGENTS.override.md"), "  \n")
+            .expect("write empty override agents");
+
+        assert!(build_runtime_agents_prompt(Some(&repo)).is_none());
+    }
+
+    #[test]
+    fn workspace_discovery_preserves_symlinked_working_directory() {
+        let tmp = TempDir::new().expect("create temp dir");
+        let target = tmp.path().join("target");
+        fs::create_dir_all(target.join(".lime")).expect("create target runtime dir");
+        fs::write(target.join(".lime").join("AGENTS.md"), "symlink rule")
+            .expect("write target agents");
+        let linked = tmp.path().join("linked");
+        if !create_directory_symlink(&target, &linked) {
+            return;
+        }
+
+        let paths = discover_workspace_runtime_agents_paths(&linked, None);
+        assert_eq!(paths, vec![linked.join(".lime").join("AGENTS.md")]);
+
+        let prompt =
+            build_runtime_agents_prompt_with_paths(None, paths.iter().map(PathBuf::as_path))
+                .expect("symlinked agents prompt");
+        assert!(prompt.contains("symlink rule"));
+        assert!(prompt.contains(&linked.display().to_string()));
+        assert!(!prompt.contains(&target.display().to_string()));
     }
 
     #[test]
@@ -468,5 +482,15 @@ mod tests {
         .expect("merged prompt");
 
         assert_eq!(merged.matches(RUNTIME_AGENTS_PROMPT_MARKER).count(), 1);
+    }
+
+    #[cfg(unix)]
+    fn create_directory_symlink(target: &Path, link: &Path) -> bool {
+        std::os::unix::fs::symlink(target, link).is_ok()
+    }
+
+    #[cfg(windows)]
+    fn create_directory_symlink(target: &Path, link: &Path) -> bool {
+        std::os::windows::fs::symlink_dir(target, link).is_ok()
     }
 }

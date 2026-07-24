@@ -236,7 +236,7 @@ function guiEvidence() {
     runtimeActionResponse: {
       actionId: "article-draft-review",
       confirmed: true,
-      method: "agentSession/action/respond",
+      method: "workflow/respond",
       metadata: {
         workflowResume: {
           stepId: "draft",

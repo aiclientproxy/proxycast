@@ -64,7 +64,6 @@ const {
   METHOD_PLUGIN_UI_RUNTIME_START,
   METHOD_PLUGIN_UI_RUNTIME_STATUS,
   METHOD_PLUGIN_UI_RUNTIME_STOP,
-  METHOD_AGENT_SESSION_ACTION_REPLAY,
   METHOD_AGENT_SESSION_ACTION_RESPOND,
   METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT,
   METHOD_AGENT_SESSION_COMPACT,
@@ -81,7 +80,6 @@ const {
   METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT,
   METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE,
   METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT,
-  METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
   METHOD_THREAD_START,
   METHOD_THREAD_FORK,
   METHOD_THREAD_RESUME,
@@ -2268,10 +2266,6 @@ test("builds connect deep link requests with current methods", () => {
   const open = client.resolveConnectOpenDeepLink({
     url: "lime://open?kind=skill&slug=viral-content-breakdown&action=install",
   });
-  const replay = client.replayAction({
-    sessionId: "sess_action",
-    requestId: "req_confirm_1",
-  });
   const save = client.saveConnectRelayApiKey({
     relayId: "relay-one",
     apiKey: "sk-relay-key",
@@ -2308,20 +2302,14 @@ test("builds connect deep link requests with current methods", () => {
   assert.deepEqual(open.params, {
     url: "lime://open?kind=skill&slug=viral-content-breakdown&action=install",
   });
-  assert.equal(replay.id, 3);
-  assert.equal(replay.method, METHOD_AGENT_SESSION_ACTION_REPLAY);
-  assert.deepEqual(replay.params, {
-    sessionId: "sess_action",
-    requestId: "req_confirm_1",
-  });
-  assert.equal(save.id, 4);
+  assert.equal(save.id, 3);
   assert.equal(save.method, METHOD_CONNECT_RELAY_API_KEY_SAVE);
   assert.deepEqual(save.params, {
     relayId: "relay-one",
     apiKey: "sk-relay-key",
     name: "Relay Key",
   });
-  assert.equal(callback.id, 5);
+  assert.equal(callback.id, 4);
   assert.equal(callback.method, METHOD_CONNECT_CALLBACK_SEND);
   assert.deepEqual(callback.params, {
     relayId: "relay-one",
@@ -2329,7 +2317,7 @@ test("builds connect deep link requests with current methods", () => {
     status: "success",
     refCode: "ref-001",
   });
-  assert.equal(importScan.id, 6);
+  assert.equal(importScan.id, 5);
   assert.equal(importScan.method, METHOD_CONVERSATION_IMPORT_SOURCE_SCAN);
   assert.deepEqual(importScan.params, {
     sourceClient: "codex",
@@ -2339,7 +2327,7 @@ test("builds connect deep link requests with current methods", () => {
     includeArchived: true,
     limit: 20,
   });
-  assert.equal(importPreview.id, 7);
+  assert.equal(importPreview.id, 6);
   assert.equal(importPreview.method, METHOD_CONVERSATION_IMPORT_THREAD_PREVIEW);
   assert.deepEqual(importPreview.params, {
     sourceClient: "codex",
@@ -2354,7 +2342,7 @@ test("builds connect deep link requests with current methods", () => {
     workspaceId: "workspace-1",
     confirmed: true,
   });
-  assert.equal(importCommit.id, 8);
+  assert.equal(importCommit.id, 7);
   assert.equal(importCommit.method, METHOD_CONVERSATION_IMPORT_THREAD_COMMIT);
   assert.deepEqual(importCommit.params, {
     sourceClient: "codex",
@@ -2679,7 +2667,7 @@ test("builds typed v2 turn steer requests", async () => {
   assert.equal(result.result.turnId, "turn_external");
 });
 
-test("connection wraps request response flow and keeps async notifications", async () => {
+test("connection separates request responses from async notifications", async () => {
   const sent = [];
   const inbound = [
     {
@@ -2729,9 +2717,10 @@ test("connection wraps request response flow and keeps async notifications", asy
   assert.equal(sent[0].params.threadId, "thread_external");
   assert.deepEqual(sent[0].params.input, [{ type: "text", text: "draft" }]);
   assert.equal(result.result.turn.id, "turn-1");
-  assert.equal(result.notifications.length, 1);
-  assert.equal(result.notifications[0].method, METHOD_AGENT_SESSION_EVENT);
-  assert.equal(result.notifications[0].params.event.payload.text, "delta");
+  assert.equal(result.notifications.length, 0);
+  const notification = await connection.nextNotification(100);
+  assert.equal(notification.method, METHOD_AGENT_SESSION_EVENT);
+  assert.equal(notification.params.event.payload.text, "delta");
 });
 
 test("connection yields transport reads while one request is still pending", async () => {
@@ -2792,6 +2781,129 @@ test("connection yields transport reads while one request is still pending", asy
   assert.equal(sent[1].method, METHOD_THREAD_LIST);
   assert.equal(result.id, 2);
   assert.equal(result.result.sessions[0].sessionId, "sess_external");
+});
+
+test("connection bounds request read slices so event drain is not starved", async () => {
+  const inbound = [];
+  const readTimeouts = [];
+  const connection = new AppServerConnection({
+    send() {},
+    nextMessage(timeoutMs = 30_000) {
+      readTimeouts.push(timeoutMs);
+      const message = inbound.shift();
+      if (message) {
+        return Promise.resolve(message);
+      }
+      return new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(
+            new Error(
+              `timed out waiting for app-server message after ${timeoutMs}ms`,
+            ),
+          );
+        }, 1);
+      });
+    },
+  });
+
+  const turnPromise = connection.startTurn(
+    {
+      threadId: "thread_external",
+      input: [{ type: "text", text: "draft" }],
+    },
+    { timeoutMs: 1_000 },
+  );
+  await waitFor(() => readTimeouts.length > 0);
+  assert.equal(readTimeouts[0], 25);
+
+  inbound.push({
+    method: METHOD_AGENT_SESSION_EVENT,
+    params: {
+      event: {
+        eventId: "evt-fast-drain",
+        sequence: 1,
+        sessionId: "sess_external",
+        turnId: "turn-1",
+        type: "message.delta",
+        timestamp: "2026-06-04T00:00:00Z",
+        payload: { text: "early" },
+      },
+    },
+  });
+  const notification = await connection.nextServerMessage(100);
+  assert.equal(notification.params.event.eventId, "evt-fast-drain");
+
+  inbound.push({
+    id: 1,
+    result: {
+      turn: {
+        id: "turn-1",
+        status: "inProgress",
+      },
+    },
+  });
+  await turnPromise;
+});
+
+test("connection dispatches notifications to event drain without waiting for concurrent requests", async () => {
+  const sent = [];
+  const waiters = [];
+  const connection = new AppServerConnection({
+    send(message) {
+      sent.push(message);
+    },
+    nextMessage() {
+      return new Promise((resolve) => {
+        waiters.push(resolve);
+      });
+    },
+  });
+
+  const firstRequest = connection.request(
+    { id: "request-1", method: "test/first", params: {} },
+    "test/first",
+    { timeoutMs: 1_000 },
+  );
+  const secondRequest = connection.request(
+    { id: "request-2", method: "test/second", params: {} },
+    "test/second",
+    { timeoutMs: 1_000 },
+  );
+  const serverMessage = connection.nextServerMessage(1_000);
+
+  await waitFor(() => sent.length === 2 && waiters.length === 1);
+  waiters.shift()({
+    method: METHOD_AGENT_SESSION_EVENT,
+    params: {
+      event: {
+        eventId: "evt-immediate-drain",
+        sequence: 1,
+        sessionId: "sess_external",
+        turnId: "turn-1",
+        type: "message.delta",
+        timestamp: "2026-06-04T00:00:00Z",
+        payload: { text: "early" },
+      },
+    },
+  });
+
+  assert.equal(
+    await Promise.race([
+      serverMessage.then(() => true),
+      new Promise((resolve) => setTimeout(() => resolve(false), 20)),
+    ]),
+    true,
+  );
+  assert.equal(
+    (await serverMessage).params.event.eventId,
+    "evt-immediate-drain",
+  );
+
+  await waitFor(() => waiters.length === 1);
+  waiters.shift()({ id: "request-1", result: { ok: true } });
+  await waitFor(() => waiters.length === 1);
+  waiters.shift()({ id: "request-2", result: { ok: true } });
+  await Promise.all([firstRequest, secondRequest]);
 });
 
 test("connection detaches streaming request after first notification and drops its late final response", async () => {
@@ -3413,7 +3525,7 @@ test("agentSession event helper keeps side-channels and rejects wrapper lifecycl
   assert.equal(isAgentSessionEventNotification(wrapperLifecycle), false);
 });
 
-test("connection request errors preserve streamed notifications and response context", async () => {
+test("connection keeps streamed notifications independent from request error context", async () => {
   const sent = [];
   const inbound = [
     {
@@ -3478,21 +3590,21 @@ test("connection request errors preserve streamed notifications and response con
       assert.equal(error instanceof AppServerRequestError, true);
       assert.equal(error.method, METHOD_TURN_START);
       assert.equal(error.response.error.code, ERROR_CODES.runtimeError);
-      assert.equal(error.notifications.length, 2);
-      assert.equal(error.notifications[0].params.event.type, "message.delta");
-      assert.equal(error.notifications[1].params.event.type, "turn.failed");
-      assert.match(
-        error.notifications[1].params.event.payload.message,
-        /partial output/,
-      );
-      assert.equal(error.messages.length, 3);
+      assert.equal(error.notifications.length, 0);
+      assert.equal(error.messages.length, 1);
       assert.equal(
-        error.messages[2].error.message,
+        error.messages[0].error.message,
         "external backend crashed after partial output",
       );
       return true;
     },
   );
+
+  const partial = await connection.nextNotification(100);
+  const failed = await connection.nextNotification(100);
+  assert.equal(partial.params.event.type, "message.delta");
+  assert.equal(failed.params.event.type, "turn.failed");
+  assert.match(failed.params.event.payload.message, /partial output/);
 
   assert.equal(sent[0].method, METHOD_TURN_START);
 });
@@ -4442,48 +4554,6 @@ test("connection wraps action respond response", async () => {
   assert.deepEqual(result.result, {});
 });
 
-test("connection wraps action replay response", async () => {
-  const sent = [];
-  const inbound = [
-    {
-      id: 1,
-      result: {
-        action: {
-          type: "action_required",
-          requestId: "req_confirm_1",
-          actionType: "ask_user",
-          prompt: "请选择执行模式",
-        },
-      },
-    },
-  ];
-  const connection = new AppServerConnection({
-    send(message) {
-      sent.push(message);
-    },
-    async nextMessage() {
-      const message = inbound.shift();
-      if (!message) {
-        throw new Error("empty transport");
-      }
-      return message;
-    },
-  });
-
-  const result = await connection.replayAction({
-    sessionId: "sess_external",
-    requestId: "req_confirm_1",
-  });
-
-  assert.equal(sent[0].method, METHOD_AGENT_SESSION_ACTION_REPLAY);
-  assert.deepEqual(sent[0].params, {
-    sessionId: "sess_external",
-    requestId: "req_confirm_1",
-  });
-  assert.equal(result.result.action.requestId, "req_confirm_1");
-  assert.equal(result.result.action.actionType, "ask_user");
-});
-
 test("routes direct lifecycle notifications without wrapper projection", async () => {
   const notification = {
     method: "item/completed",
@@ -4649,7 +4719,7 @@ test("connection server-message drain does not steal client responses", async ()
   assert.deepEqual(response.result.sessions, []);
 });
 
-test("connection mirrors long request notifications for event drain", async () => {
+test("connection routes long request notifications only through event drain", async () => {
   const sent = [];
   const waiters = [];
   const connection = new AppServerConnection({
@@ -4706,7 +4776,7 @@ test("connection mirrors long request notifications for event drain", async () =
 
   const result = await turnPromise;
   assert.equal(result.result.turn.id, "turn-1");
-  assert.equal(result.notifications[0].params.event.eventId, "evt-early");
+  assert.equal(result.notifications.length, 0);
 });
 
 test("connection resolves short concurrent request before long turn response", async () => {

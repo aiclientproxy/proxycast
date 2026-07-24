@@ -46,7 +46,6 @@ import {
   appendTextWithOverlapFallback,
   buildStreamedReasoningSummaryItemId,
   buildStreamedReasoningItem,
-  resetStreamedReasoningSegment,
 } from "./agentStreamReasoningTimeline";
 import {
   buildAgentStreamWarningPlan,
@@ -172,7 +171,7 @@ export function handleTurnStreamEvent({
   activeSessionId,
   resolvedWorkspaceId,
   effectiveExecutionStrategy,
-  surfaceThinkingDeltas = true,
+  surfaceThinkingDeltas = false,
   preserveAssistantContent,
   assistantFallbackContent,
   content,
@@ -627,9 +626,6 @@ export function handleTurnStreamEvent({
     case "item_completed":
       activateStream();
       requestState.currentTurnId = data.item.turn_id;
-      if (data.item.type === "reasoning") {
-        resetStreamedReasoningSegment(requestState);
-      }
       if (data.item.type === "tool_call" || data.item.type === "reasoning") {
         commitRenderedTextBeforeProcessPart();
         noteFinalAnswerRequiredProcessBoundary(sequenceFromAgentEvent(data));
@@ -649,9 +645,6 @@ export function handleTurnStreamEvent({
     case "item_updated":
       activateStream();
       requestState.currentTurnId = data.item.turn_id;
-      if (data.item.type === "reasoning") {
-        resetStreamedReasoningSegment(requestState);
-      }
       if (data.item.type === "tool_call" || data.item.type === "reasoning") {
         commitRenderedTextBeforeProcessPart();
         noteFinalAnswerRequiredProcessBoundary(sequenceFromAgentEvent(data));
@@ -906,8 +899,9 @@ export function handleTurnStreamEvent({
             : null;
         }
         const shouldSurfaceVisibleProcessReasoning =
-          data.type === "reasoning_delta" &&
-          shouldSurfaceReasoningEventAsVisibleProcess(data);
+          isSummaryDelta ||
+          (data.type === "reasoning_delta" &&
+            shouldSurfaceReasoningEventAsVisibleProcess(data));
         if (shouldSurfaceVisibleProcessReasoning) {
           requestState.shouldSurfaceVisibleProcessReasoning = true;
         }
@@ -1057,22 +1051,23 @@ export function handleTurnStreamEvent({
       noteProcessEventSequence(sequenceFromAgentEvent(data));
       commitRenderedTextBeforeProcessPart();
       const now = new Date().toISOString();
-      const planItem = buildAgentStreamPlanThreadItem({
-        activeSessionId,
-        event: data,
-        fallbackTurnId: requestState.currentTurnId,
-        now,
-        pendingItemKey,
-        sequence: sequenceFromAgentEvent(data),
+      setThreadItems((prev) => {
+        const current = removeThreadItemState(prev, pendingItemKey);
+        const previousItem =
+          data.source === "app_server_v2" && data.sourceItemId
+            ? current.find((item) => item.id === data.sourceItemId)
+            : undefined;
+        const planItem = buildAgentStreamPlanThreadItem({
+          activeSessionId,
+          event: data,
+          fallbackTurnId: requestState.currentTurnId,
+          now,
+          pendingItemKey,
+          previousItem,
+          sequence: sequenceFromAgentEvent(data),
+        });
+        return planItem ? upsertThreadItemState(current, planItem) : current;
       });
-      if (planItem) {
-        setThreadItems((prev) =>
-          upsertThreadItemState(
-            removeThreadItemState(prev, pendingItemKey),
-            planItem,
-          ),
-        );
-      }
       break;
     }
 
@@ -1173,6 +1168,7 @@ export function handleTurnStreamEvent({
         if (
           !surfaceThinkingDeltas &&
           !requestState.shouldSurfaceVisibleProcessReasoning &&
+          requestState.firstThinkingDeltaAt &&
           !requestState.hiddenThinkingPartsCleared
         ) {
           requestState.hiddenThinkingPartsCleared = true;

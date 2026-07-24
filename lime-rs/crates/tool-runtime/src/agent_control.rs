@@ -21,7 +21,9 @@ pub const FOLLOWUP_TASK_TOOL_NAME: &str = "followup_task";
 pub const WAIT_AGENT_TOOL_NAME: &str = "wait_agent";
 pub const INTERRUPT_AGENT_TOOL_NAME: &str = "interrupt_agent";
 pub const LIST_AGENTS_TOOL_NAME: &str = "list_agents";
-const MAX_WAIT_TIMEOUT_MS: u64 = 120_000;
+const DEFAULT_WAIT_TIMEOUT_MS: u64 = 30_000;
+const MIN_WAIT_TIMEOUT_MS: u64 = 10_000;
+const MAX_WAIT_TIMEOUT_MS: u64 = 3_600_000;
 
 pub fn is_agent_control_tool_name(name: &str) -> bool {
     matches!(
@@ -44,7 +46,10 @@ pub fn agent_control_tool_definitions() -> Vec<RuntimeToolDefinition> {
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
-                    "task_name": { "type": "string" },
+                    "task_name": {
+                        "type": "string",
+                        "description": "Task name for the new agent. Use lowercase letters, digits, and underscores."
+                    },
                     "message": { "type": "string" },
                     "fork_turns": {
                         "type": "string",
@@ -71,7 +76,11 @@ pub fn agent_control_tool_definitions() -> Vec<RuntimeToolDefinition> {
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
-                    "timeout_ms": { "type": "integer", "minimum": 0, "maximum": MAX_WAIT_TIMEOUT_MS }
+                    "timeout_ms": {
+                        "type": "integer",
+                        "minimum": MIN_WAIT_TIMEOUT_MS,
+                        "maximum": MAX_WAIT_TIMEOUT_MS
+                    }
                 }
             }),
         ),
@@ -343,9 +352,13 @@ fn parse_command(
 fn parse_spawn(params: &Value) -> Result<AgentControlCommand, RuntimeToolExecutionError> {
     let input: SpawnAgentInput = parse_input(params)?;
     let task_name = required_nonempty(input.task_name, "task_name")?;
-    if task_name.contains('/') || matches!(task_name.as_str(), "." | "..") {
+    if matches!(task_name.as_str(), "root" | "." | "..")
+        || !task_name
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+    {
         return Err(agent_control_execution_error(
-            "task_name must be one canonical path segment",
+            "task_name must use only lowercase letters, digits, and underscores",
             "agent_control_invalid_params",
         ));
     }
@@ -403,10 +416,16 @@ fn parse_target(params: &Value) -> Result<TargetInput, RuntimeToolExecutionError
 
 fn parse_wait(params: &Value) -> Result<AgentControlCommand, RuntimeToolExecutionError> {
     let input: WaitAgentInput = parse_input(params)?;
-    let timeout_ms = input.timeout_ms.unwrap_or(30_000);
+    let timeout_ms = input.timeout_ms.unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
+    if timeout_ms < MIN_WAIT_TIMEOUT_MS {
+        return Err(agent_control_execution_error(
+            format!("timeout_ms must be at least {MIN_WAIT_TIMEOUT_MS}"),
+            "agent_control_invalid_params",
+        ));
+    }
     if timeout_ms > MAX_WAIT_TIMEOUT_MS {
         return Err(agent_control_execution_error(
-            format!("timeout_ms must not exceed {MAX_WAIT_TIMEOUT_MS}"),
+            format!("timeout_ms must be at most {MAX_WAIT_TIMEOUT_MS}"),
             "agent_control_invalid_params",
         ));
     }
@@ -687,21 +706,23 @@ mod tests {
     async fn rejects_ambiguous_or_invalid_parameters() {
         let gateway = RecordingGateway::default();
         let context = context();
-        let invalid = json!({ "task_name": "nested/agent", "message": "work" });
-        let error = execute_agent_control_tool(
-            &gateway,
-            "thread-root",
-            request(SPAWN_AGENT_TOOL_NAME, &invalid, &context),
-        )
-        .await
-        .expect("current tool")
-        .expect_err("invalid task name");
-        assert_eq!(
-            error.policy_kind(),
-            Some(&RuntimeToolPolicyErrorKind::ExecutionFailed(
-                "agent_control_invalid_params".to_string()
-            ))
-        );
+        for task_name in ["nested/agent", "Worker", "worker-name", "root", ".", ".."] {
+            let invalid = json!({ "task_name": task_name, "message": "work" });
+            let error = execute_agent_control_tool(
+                &gateway,
+                "thread-root",
+                request(SPAWN_AGENT_TOOL_NAME, &invalid, &context),
+            )
+            .await
+            .expect("current tool")
+            .expect_err("invalid task name");
+            assert_eq!(
+                error.policy_kind(),
+                Some(&RuntimeToolPolicyErrorKind::ExecutionFailed(
+                    "agent_control_invalid_params".to_string()
+                ))
+            );
+        }
 
         let unknown = json!({ "target": "child", "message": "continue", "legacy": true });
         assert!(execute_agent_control_tool(
@@ -712,6 +733,52 @@ mod tests {
         .await
         .expect("current tool")
         .is_err());
+    }
+
+    #[test]
+    fn wait_agent_matches_codex_v2_timeout_contract() {
+        let definition = agent_control_tool_definitions()
+            .into_iter()
+            .find(|definition| definition.name == WAIT_AGENT_TOOL_NAME)
+            .expect("wait_agent definition");
+        assert_eq!(
+            definition.input_schema["properties"]["timeout_ms"]["minimum"],
+            json!(MIN_WAIT_TIMEOUT_MS)
+        );
+        assert_eq!(
+            definition.input_schema["properties"]["timeout_ms"]["maximum"],
+            json!(MAX_WAIT_TIMEOUT_MS)
+        );
+
+        assert_eq!(
+            parse_wait(&json!({})).expect("default timeout"),
+            AgentControlCommand::WaitAgent {
+                timeout_ms: DEFAULT_WAIT_TIMEOUT_MS,
+            }
+        );
+        assert_eq!(
+            parse_wait(&json!({ "timeout_ms": MIN_WAIT_TIMEOUT_MS })).expect("minimum timeout"),
+            AgentControlCommand::WaitAgent {
+                timeout_ms: MIN_WAIT_TIMEOUT_MS,
+            }
+        );
+        assert_eq!(
+            parse_wait(&json!({ "timeout_ms": MAX_WAIT_TIMEOUT_MS })).expect("maximum timeout"),
+            AgentControlCommand::WaitAgent {
+                timeout_ms: MAX_WAIT_TIMEOUT_MS,
+            }
+        );
+
+        for timeout_ms in [MIN_WAIT_TIMEOUT_MS - 1, MAX_WAIT_TIMEOUT_MS + 1] {
+            let error =
+                parse_wait(&json!({ "timeout_ms": timeout_ms })).expect_err("out-of-range timeout");
+            assert_eq!(
+                error.policy_kind(),
+                Some(&RuntimeToolPolicyErrorKind::ExecutionFailed(
+                    "agent_control_invalid_params".to_string()
+                ))
+            );
+        }
     }
 
     #[test]

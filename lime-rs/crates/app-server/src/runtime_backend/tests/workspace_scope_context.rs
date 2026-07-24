@@ -133,15 +133,8 @@ fn session_config_merges_hierarchical_runtime_agents_layers() {
     std::fs::write(repo.join(".git"), "").expect("write project marker");
     std::fs::write(repo.join(".lime").join("AGENTS.md"), "- 根共享规则")
         .expect("write root shared runtime agents");
-    std::fs::write(repo.join(".lime").join("AGENTS.local.md"), "- 根本地规则")
-        .expect("write root local runtime agents");
     std::fs::write(nested.join(".lime").join("AGENTS.md"), "- 子目录共享规则")
         .expect("write nested shared runtime agents");
-    std::fs::write(
-        nested.join(".lime").join("AGENTS.local.md"),
-        "- 子目录本地规则",
-    )
-    .expect("write nested local runtime agents");
     let request = request_for_test(
         "请按项目规则处理",
         Some(RuntimeRequest {
@@ -171,14 +164,10 @@ fn session_config_merges_hierarchical_runtime_agents_layers() {
     );
     let system_prompt = config.system_prompt.expect("system prompt");
     let root_shared = system_prompt.find("根共享规则").expect("root shared");
-    let root_local = system_prompt.find("根本地规则").expect("root local");
     let nested_shared = system_prompt.find("子目录共享规则").expect("nested shared");
-    let nested_local = system_prompt.find("子目录本地规则").expect("nested local");
 
     assert!(system_prompt.contains("请求级系统提示"));
-    assert!(root_shared < root_local);
-    assert!(root_local < nested_shared);
-    assert!(nested_shared < nested_local);
+    assert!(root_shared < nested_shared);
 }
 
 #[test]
@@ -202,11 +191,6 @@ fn session_config_uses_explicit_project_root_for_runtime_agents_boundary() {
         "- 子目录覆盖规则",
     )
     .expect("write nested override runtime agents");
-    std::fs::write(
-        nested.join(".lime").join("AGENTS.local.md"),
-        "- 子目录本地规则",
-    )
-    .expect("write nested local runtime agents");
     let request = request_for_test(
         "请按项目规则处理",
         Some(RuntimeRequest {
@@ -240,9 +224,6 @@ fn session_config_uses_explicit_project_root_for_runtime_agents_boundary() {
     let nested_override = system_prompt
         .find("子目录覆盖规则")
         .expect("nested override rule");
-    let nested_local = system_prompt
-        .find("子目录本地规则")
-        .expect("nested local rule");
     let turn_context = config.turn_context.expect("turn context");
     let runtime_metadata = turn_context
         .metadata
@@ -254,7 +235,6 @@ fn session_config_uses_explicit_project_root_for_runtime_agents_boundary() {
     assert!(system_prompt.contains("# AGENTS.md instructions"));
     assert!(system_prompt.contains("<INSTRUCTIONS>"));
     assert!(root_rule < nested_override);
-    assert!(nested_override < nested_local);
     assert!(!system_prompt.contains("父目录规则不应出现"));
     assert_eq!(turn_context.cwd.as_deref(), Some(nested.as_path()));
     assert_eq!(

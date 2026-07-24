@@ -170,7 +170,6 @@ interface RegisterAgentStreamTurnEventBindingOptions {
   effectiveModel: string;
   effectiveExecutionStrategy: AgentExecutionStrategy;
   systemPrompt?: string;
-  thinking?: boolean;
   content: string;
   webSearch?: boolean;
   autoContinue?: AutoContinueRequestPayload;
@@ -234,7 +233,6 @@ export async function registerAgentStreamTurnEventBinding(
     effectiveModel,
     effectiveExecutionStrategy,
     systemPrompt,
-    thinking,
     content,
     webSearch,
     autoContinue,
@@ -284,7 +282,7 @@ export async function registerAgentStreamTurnEventBinding(
   let lastEventReceivedAt = 0;
   let lastRuntimeEventType: string | null = null;
   const warnedUnknownEventTypes = new Set<string>();
-  const surfaceThinkingDeltas = thinking === true;
+  const surfaceThinkingDeltas = false;
   let terminalRecoveryPollStarted = false;
   const markFirstEventReceived = (params: {
     eventReceivedAt: number;

@@ -1118,7 +1118,6 @@
   "agentChat.inputbar.runtimeStatus.phase.synthesizing": "整理中",
   "agentChat.inputbar.runtimeStatus.segment.canStop": "停止可能",
   "agentChat.inputbar.runtimeStatus.segment.pendingRequests": "確認待ち {{count}}",
-  "agentChat.inputbar.runtimeStatus.segment.queuedTurns": "待機 {{count}}",
   "agentChat.inputbar.runtimeStatus.segment.subtasks": "タスク {{active}}/{{total}}",
   "agentChat.inputbar.runtimeStatus.segment.tools": "ツール {{countLabel}}",
   "agentChat.inputbar.runtimeStatus.status.aborted": "中止済み",

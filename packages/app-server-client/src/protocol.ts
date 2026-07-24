@@ -728,28 +728,6 @@ export type AgentSessionActionScope = {
   turnId?: string;
 };
 
-export type AgentSessionActionReplayParams = {
-  sessionId: string;
-  requestId: string;
-};
-
-export type AgentSessionReplayedActionRequired = {
-  type: "action_required";
-  requestId: string;
-  actionType: AgentSessionActionType;
-  toolName?: string;
-  arguments?: unknown;
-  prompt?: string;
-  questions?: unknown;
-  requestedSchema?: unknown;
-  availableDecisions?: AgentSessionApprovalDecision[];
-  scope?: AgentSessionActionScope;
-};
-
-export type AgentSessionActionReplayResponse = {
-  action?: AgentSessionReplayedActionRequired;
-};
-
 export type AgentSessionActionRespondParams = {
   sessionId: string;
   requestId: string;

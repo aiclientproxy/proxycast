@@ -73,7 +73,7 @@
 - 有架构图
 - 有时序图
 - 有流程图
-- 有 current / compat / dead-candidate 分类
+- 有 current / compat / dead 分类
 - 有 Codex / Agent / Lime 对照
 
 ---
@@ -87,7 +87,7 @@
 - [x] 补齐 provider 层对 `x-lime` / `x_lime` alias 与去重行为测试
 - [x] 补齐前端 `agentRuntime.ts` inventory helper 默认参数测试
 - [x] 新增 `lime-agent` 轻量测试载体，复用 `catalog.rs` / `inventory.rs` 纯逻辑模块，绕开主包 Tauri 大链接
-- [x] 把 `tool_permissions.rs` / `shell_security.rs` 迁出 `lime-agent` 的 `lib.rs` 编译图，改为独立 integration test 夹具加载，并补治理守卫与 Vitest 护栏
+- [x] 删除 `tool_permissions.rs` / `shell_security.rs` 及其正向 integration test 夹具，并补 forbidden-to-restore 治理守卫
 
 ## Phase F：执行权限事实源收口（本轮完成）
 
@@ -150,18 +150,14 @@ npm run governance:legacy-report
 
 ## 3. 下一刀建议
 
-## 3.1 优先级 P1：删除旧权限系统前先做守卫
+## 3.1 优先级 P1：删除旧权限系统并封住回流（已完成）
 
 本轮已完成：
 
-- `tool_permissions.rs` / `shell_security.rs` 已明确标为 dead-candidate
-- 已从 `lime-agent` crate 根移除公开表面
-- 已退出 `lime-agent` 的 `lib.rs` 编译图，仅通过 `tests/legacy_permission_surfaces.rs` 测试夹具加载
-- 已在治理脚本与 Vitest 护栏中禁止新引用回流
-
-剩余原因：
-
-- 这两套逻辑虽然已不在主链路，但文件级删除仍属于高风险动作，需要单独确认
+- `tool_permissions.rs` / `shell_security.rs` 已按 `dead / deleted / forbidden-to-restore` 物理删除
+- `tests/legacy_permission_surfaces.rs` 正向测试夹具已同步删除
+- 已从 `lime-agent` crate 根和正常编译图移除旧公开表面
+- 已在治理脚本与 Vitest 护栏中禁止文件、模块出口和类型引用回流
 
 ---
 
@@ -208,7 +204,7 @@ npm run governance:legacy-report
 | catalog 与 runtime 再次漂移 | 新增工具时只改注册不改目录                          | 以 inventory + command catalog 作为守卫    |
 | MCP caller 语义再次分裂     | MCP tool schema / extension allowed_caller 各自解释 | 一律先过 `tool_calling.rs`                 |
 | 权限语义再次混写            | catalog、allowlist、sandbox、approval 又掺在一起    | 强制按目录层 / 上下文层 / 执行层汇报与设计 |
-| 旧权限系统回流              | 新代码重新引用 `tool_permissions.rs`                | 标记 dead-candidate，并增加仓库级扫描守卫  |
+| 旧权限系统回流              | 新代码恢复或重新引用 `tool_permissions.rs`          | 按 forbidden-to-restore 执行仓库级扫描守卫 |
 
 ---
 

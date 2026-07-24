@@ -14,6 +14,10 @@ import {
   DEFERRED_MCP_TOOL_SEARCH_FINAL_TEXT,
   DEFERRED_MCP_TOOL_SEARCH_CALL_ID,
 } from "./deferred-mcp-tool-search-gate-b.mjs";
+import {
+  buildAppServerRequestResponse,
+  findPendingAppServerRequest,
+} from "../lib/agent-runtime-smoke-core.mjs";
 
 function readDeferredGateBSources() {
   return [
@@ -38,6 +42,67 @@ function readAgentControlGateBSources() {
 }
 
 describe("agent runtime tool execution smoke guard", () => {
+  it("通过 typed server request outer response 处理 pending approval", () => {
+    const request = findPendingAppServerRequest(
+      [
+        {
+          id: "outer-stale",
+          method: "item/commandExecution/requestApproval",
+          params: { approvalId: "approval-stale" },
+        },
+        {
+          id: "outer-current",
+          method: "item/commandExecution/requestApproval",
+          params: { approvalId: "approval-current" },
+        },
+      ],
+      { requestId: "approval-current" },
+    );
+
+    expect(request).toMatchObject({ id: "outer-current" });
+    expect(buildAppServerRequestResponse(request, { confirmed: true })).toEqual(
+      { decision: "accept" },
+    );
+  });
+
+  it("没有语义 request id 的 elicitation 以 current scope 匹配", () => {
+    const request = findPendingAppServerRequest(
+      [
+        {
+          id: "outer-elicitation",
+          method: "mcpServer/elicitation/request",
+          params: { threadId: "thread-1", turnId: "turn-1" },
+        },
+      ],
+      {
+        requestId: "legacy-pending-id",
+        actionScope: { thread_id: "thread-1", turn_id: "turn-1" },
+      },
+    );
+
+    expect(request).toMatchObject({ id: "outer-elicitation" });
+    expect(
+      buildAppServerRequestResponse(request, {
+        confirmed: false,
+        userData: { ignored: true },
+      }),
+    ).toEqual({ action: "decline" });
+  });
+
+  it("不再通过已退役 action/respond 提交 pending request", () => {
+    const content = [
+      "scripts/lib/agent-runtime-smoke-core.mjs",
+      "scripts/agent-runtime/tool-execution-smoke.mjs",
+      "scripts/agent-runtime/approval-sandbox-smoke.mjs",
+    ]
+      .map((filePath) => fs.readFileSync(filePath, "utf8"))
+      .join("\n");
+
+    expect(content).toContain("respondAgentServerRequestCurrent");
+    expect(content).toContain('"app_server_drain_events"');
+    expect(content).not.toContain("agentSession/action/respond");
+  });
+
   it("keeps multi-agent execution on the six per-turn AgentControl tools", () => {
     const content = fs.readFileSync(
       "scripts/agent-runtime/tool-execution-smoke.mjs",

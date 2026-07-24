@@ -14,7 +14,7 @@ use agent_runtime::session_loop::RuntimeSessionInputHandle;
 use rmcp::model::CallToolResult;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
 use tool_runtime::tool_definition::RuntimeToolDefinition;
@@ -29,6 +29,45 @@ const MCP_TOOL_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Default)]
 pub(super) struct DeferredToolSelections(Arc<Mutex<HashSet<String>>>);
+
+#[derive(Clone, Default)]
+pub(super) struct McpToolRoutes(
+    Arc<RwLock<HashMap<String, tool_runtime::mcp_connection::McpStepRouteIdentity>>>,
+);
+
+impl McpToolRoutes {
+    fn replace_from_snapshot(&self, snapshot: &tool_runtime::mcp_connection::McpStepSnapshot) {
+        let routes = snapshot
+            .tools()
+            .iter()
+            .filter_map(|tool| snapshot.route_identity(tool.name.as_ref()))
+            .map(|route| (route.runtime_tool_name.clone(), route))
+            .collect();
+        *self.0.write().expect("MCP tool routes lock poisoned") = routes;
+    }
+
+    pub(super) fn get(
+        &self,
+        runtime_tool_name: &str,
+    ) -> Option<tool_runtime::mcp_connection::McpStepRouteIdentity> {
+        self.0
+            .read()
+            .expect("MCP tool routes lock poisoned")
+            .get(runtime_tool_name)
+            .cloned()
+    }
+
+    #[cfg(test)]
+    pub(super) fn replace_for_test(
+        &self,
+        routes: impl IntoIterator<Item = tool_runtime::mcp_connection::McpStepRouteIdentity>,
+    ) {
+        *self.0.write().expect("MCP tool routes lock poisoned") = routes
+            .into_iter()
+            .map(|route| (route.runtime_tool_name.clone(), route))
+            .collect();
+    }
+}
 
 impl DeferredToolSelections {
     async fn snapshot(&self) -> HashSet<String> {
@@ -72,6 +111,7 @@ pub(super) fn current_tool_step_snapshot_source(
     thread_id: ThreadId,
     agent_control_gateway: Option<tool_runtime::agent_control::AgentControlGatewayHandle>,
     pending_input: Option<RuntimeSessionInputHandle>,
+    mcp_tool_routes: McpToolRoutes,
 ) -> RuntimeToolStepSnapshotSourceHandle {
     let deferred_tools = DeferredToolSelections::default();
     RuntimeToolStepSnapshotSourceHandle::new(Arc::new(CurrentTurnToolStepSnapshotSource {
@@ -84,6 +124,7 @@ pub(super) fn current_tool_step_snapshot_source(
         agent_control_gateway,
         pending_input,
         deferred_tools,
+        mcp_tool_routes,
     }))
 }
 
@@ -190,6 +231,7 @@ struct CurrentTurnToolStepSnapshotSource {
     agent_control_gateway: Option<tool_runtime::agent_control::AgentControlGatewayHandle>,
     pending_input: Option<RuntimeSessionInputHandle>,
     deferred_tools: DeferredToolSelections,
+    mcp_tool_routes: McpToolRoutes,
 }
 
 impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
@@ -203,6 +245,7 @@ impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
                 &self.deferred_tools,
             )
             .await;
+            self.mcp_tool_routes.replace_from_snapshot(&mcp_snapshot);
             let definitions = tool_definitions(
                 &self.state,
                 &self.policy,

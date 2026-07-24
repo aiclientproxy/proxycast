@@ -592,12 +592,8 @@ pub enum AppServerRequestMethod {
     ConversationImportJobRead,
     #[serde(rename = "agentSession/media/read")]
     AgentSessionMediaRead,
-    #[serde(rename = "agentSession/action/replay")]
-    AgentSessionActionReplay,
     #[serde(rename = "agentSession/action/respond")]
     AgentSessionActionRespond,
-    #[serde(rename = "agentSession/runtimeEvents/append")]
-    AgentSessionRuntimeEventsAppend,
     #[serde(rename = "workflow/read")]
     WorkflowRead,
     #[serde(rename = "workflow/cancel")]
@@ -888,9 +884,7 @@ impl AppServerRequestMethod {
             Self::ConversationImportThreadCommit => METHOD_CONVERSATION_IMPORT_THREAD_COMMIT,
             Self::ConversationImportJobRead => METHOD_CONVERSATION_IMPORT_JOB_READ,
             Self::AgentSessionMediaRead => METHOD_AGENT_SESSION_MEDIA_READ,
-            Self::AgentSessionActionReplay => METHOD_AGENT_SESSION_ACTION_REPLAY,
             Self::AgentSessionActionRespond => METHOD_AGENT_SESSION_ACTION_RESPOND,
-            Self::AgentSessionRuntimeEventsAppend => METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
             Self::WorkflowRead => METHOD_WORKFLOW_READ,
             Self::WorkflowCancel => METHOD_WORKFLOW_CANCEL,
             Self::WorkflowRetry => METHOD_WORKFLOW_RETRY,
@@ -1195,11 +1189,7 @@ impl AppServerRequestMethod {
             METHOD_CONVERSATION_IMPORT_THREAD_COMMIT => Some(Self::ConversationImportThreadCommit),
             METHOD_CONVERSATION_IMPORT_JOB_READ => Some(Self::ConversationImportJobRead),
             METHOD_AGENT_SESSION_MEDIA_READ => Some(Self::AgentSessionMediaRead),
-            METHOD_AGENT_SESSION_ACTION_REPLAY => Some(Self::AgentSessionActionReplay),
             METHOD_AGENT_SESSION_ACTION_RESPOND => Some(Self::AgentSessionActionRespond),
-            METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND => {
-                Some(Self::AgentSessionRuntimeEventsAppend)
-            }
             METHOD_WORKFLOW_READ => Some(Self::WorkflowRead),
             METHOD_WORKFLOW_CANCEL => Some(Self::WorkflowCancel),
             METHOD_WORKFLOW_RETRY => Some(Self::WorkflowRetry),
@@ -2328,15 +2318,7 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
-        method: METHOD_AGENT_SESSION_ACTION_REPLAY,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
         method: METHOD_AGENT_SESSION_ACTION_RESPOND,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
@@ -2408,6 +2390,10 @@ pub const APP_SERVER_REQUEST_SERIALIZATION_SCOPES: &[AppServerRequestSerializati
     },
     AppServerRequestSerializationScopeSpec {
         method: crate::protocol::v2::METHOD_THREAD_GOAL_CLEAR,
+        scope: AppServerRequestSerializationScope::Thread,
+    },
+    AppServerRequestSerializationScopeSpec {
+        method: crate::protocol::v2::METHOD_ARTIFACT_WRITE,
         scope: AppServerRequestSerializationScope::Thread,
     },
     AppServerRequestSerializationScopeSpec {

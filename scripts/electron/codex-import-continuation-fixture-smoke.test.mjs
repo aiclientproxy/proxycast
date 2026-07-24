@@ -54,6 +54,9 @@ describe("codex import continuation Electron fixture smoke guard", () => {
     const content = readSmokeSources();
 
     expect(content).toContain('"conversationImport/thread/commit"');
+    expect(content).toContain('"modelProvider/create"');
+    expect(content).toContain('"modelProvider/update"');
+    expect(content).toContain('"modelProviderKey/create"');
     expect(content).toContain('"thread/read"');
     expect(content).toContain('"thread/start"');
     expect(content).toContain('"agentSession/update"');
@@ -68,7 +71,13 @@ describe("codex import continuation Electron fixture smoke guard", () => {
     expect(content).toContain("historical.hasCommandItem");
     expect(content).toContain("historical.hasPatchItem");
     expect(content).toContain("historical.hasWebSearchItem");
-    expect(content).toContain("historical.hasApprovalItem");
+    expect(content).toContain("historical.hasApprovalFidelity");
+    expect(content).toContain("job.result?.session?.threadId");
+    expect(content).toContain("threadId,");
+    expect(content).toContain("includeTurns: true");
+    expect(content).toContain('input: [{ type: "text", text }]');
+    expect(content).toContain("const importedTurnId = String(importedTurn?.turn?.id");
+    expect(content).not.toContain("runtimeOptions(");
   });
 
   it("keeps retired shell names negative-only and excludes production mock fallback", () => {

@@ -45,6 +45,8 @@ export type AppServerArtifactReadParams = protocol.ArtifactReadParams;
 export type AppServerArtifactContentStatus = protocol.ArtifactContentStatus;
 export type AppServerArtifactSummary = protocol.ArtifactSummary;
 export type AppServerArtifactReadResponse = protocol.ArtifactReadResponse;
+export type AppServerArtifactWriteParams = protocol.ArtifactWriteParams;
+export type AppServerArtifactWriteResponse = protocol.ArtifactWriteResponse;
 export type AppServerFileSystemListDirectoryParams =
   protocol.FileSystemListDirectoryParams;
 export type AppServerFileSystemReadFilePreviewParams =
@@ -133,12 +135,6 @@ export type AppServerAgentSessionTurnCancelParams =
   protocol.AgentSessionTurnCancelParams;
 export type AppServerTurnSteerParams = protocol.TurnSteerParams;
 export type AppServerTurnSteerResponse = protocol.TurnSteerResponse;
-export type AppServerAgentSessionRuntimeEventInput =
-  protocol.AgentSessionRuntimeEventInput;
-export type AppServerAgentSessionRuntimeEventAppendParams =
-  protocol.AgentSessionRuntimeEventAppendParams;
-export type AppServerAgentSessionRuntimeEventAppendResponse =
-  protocol.AgentSessionRuntimeEventAppendResponse;
 export type AppServerAgentSessionActionType = protocol.AgentSessionActionType;
 export type AppServerAgentSessionActionScope = protocol.AgentSessionActionScope;
 export type AppServerAgentSessionActionRespondParams =
@@ -251,10 +247,6 @@ export type AppServerAgentSessionTurnStartResponse =
   protocol.AgentSessionTurnStartResponse;
 export type AppServerAgentSessionTurnCancelResponse =
   protocol.AgentSessionTurnCancelResponse;
-export type AppServerAgentSessionActionReplayParams =
-  protocol.AgentSessionActionReplayParams;
-export type AppServerAgentSessionActionReplayResponse =
-  protocol.AgentSessionActionReplayResponse;
 export type AppServerAgentSessionActionRespondResponse =
   protocol.AgentSessionActionRespondResponse;
 export type AppServerWorkflowReadParams = protocol.WorkflowReadParams;

@@ -425,9 +425,15 @@ impl RuntimeSessionTaskContext {
         self.input_handle().advance_context_epoch().await
     }
 
-    pub async fn record_token_usage(&self, input: u64, output: u64, reasoning: u64) {
+    pub async fn record_token_usage(
+        &self,
+        input: u64,
+        output: u64,
+        reasoning: u64,
+        cache_write_input: u64,
+    ) {
         self.input_handle()
-            .record_token_usage(input, output, reasoning)
+            .record_token_usage(input, output, reasoning, cache_write_input)
             .await;
     }
 
@@ -627,12 +633,22 @@ impl RuntimeSessionInputHandle {
         step.context_epoch
     }
 
-    pub async fn record_token_usage(&self, input: u64, output: u64, reasoning: u64) {
+    pub async fn record_token_usage(
+        &self,
+        input: u64,
+        output: u64,
+        reasoning: u64,
+        cache_write_input: u64,
+    ) {
         let mut step = self.state.step.lock().await;
         step.token_usage.input_tokens = step.token_usage.input_tokens.saturating_add(input);
         step.token_usage.output_tokens = step.token_usage.output_tokens.saturating_add(output);
         step.token_usage.reasoning_tokens =
             step.token_usage.reasoning_tokens.saturating_add(reasoning);
+        step.token_usage.cache_write_input_tokens = step
+            .token_usage
+            .cache_write_input_tokens
+            .saturating_add(cache_write_input);
     }
 
     pub async fn token_usage(&self) -> RuntimeSessionTokenUsage {

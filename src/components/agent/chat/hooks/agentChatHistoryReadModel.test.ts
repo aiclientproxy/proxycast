@@ -18,6 +18,7 @@ describe("agentChatHistoryReadModel", () => {
               inputTokens: 31_000,
               outputTokens: 119,
               cachedInputTokens: 0,
+              cache_write_input_tokens: 1_200,
             },
           },
         ],
@@ -47,7 +48,7 @@ describe("agentChatHistoryReadModel", () => {
       input_tokens: 31_000,
       output_tokens: 119,
       cached_input_tokens: 0,
-      cache_creation_input_tokens: undefined,
+      cache_creation_input_tokens: 1_200,
     });
   });
 

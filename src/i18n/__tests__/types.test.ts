@@ -664,7 +664,7 @@ function assertI18nKeyTypes() {
   i18n.t("agentChat.sessionOverview.panel.title", { ns: "agent" });
   i18n.t("agentChat.sessionOverview.status.turn.running", { ns: "agent" });
   i18n.t("agentChat.sessionOverview.timeline.empty", { ns: "agent" });
-  i18n.t("agentChat.sessionOverview.queue.imageCount", {
+  i18n.t("agentChat.sessionOverview.metrics.inProgress", {
     ns: "agent",
     countLabel: "2",
   });

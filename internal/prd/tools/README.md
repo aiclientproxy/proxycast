@@ -70,20 +70,20 @@ Lime 实际已经具备这些能力：
 
 ### 2.3 当前 / 兼容 / 待清理分类
 
-| 分类           | 路径 / 对象                                                       | 说明                                                                                                                   |
-| -------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| current        | `lime_core::tool_calling`                                         | 统一 metadata 读取与打分                                                                                               |
-| current        | `lime-rs/crates/agent/src/agent_tools/catalog.rs`                 | 完整 native tool 目录与默认授权子集                                                                                    |
-| current        | `lime-rs/crates/agent/src/agent_tools/execution.rs`               | 统一 execution 层的 warning / sandbox / 参数限制事实源                                                                 |
-| current        | `lime-rs/crates/mcp/src/manager.rs`                               | MCP tools runtime registry                                                                                             |
-| current        | `lime-rs/crates/app-server/src/runtime_backend/tool_inventory.rs` | App Server `agentSession/toolInventory/read` 到 runtime inventory builder 的桥接                                       |
-| current        | `lime-rs/crates/agent/src/agent_tools/inventory.rs`               | runtime 工具库存快照                                                                                                   |
-| compat         | `workspace_allowed_tool_names(...)`                               | 当前保留为旧调用入口别名，实际委托默认授权目录                                                                         |
-| dead           | `agent_runtime_get_tool_inventory`                                | 旧 Desktop / Tauri facade 已退出现役入口；不得回到 Electron Host、DevBridge truth、desktop-host mock 或前端 gateway    |
-| dead-candidate | `lime-rs/crates/agent/src/tool_permissions.rs`                    | 已退出 `lime-agent` 的 `lib.rs` 编译图，仅通过 `lime-rs/crates/agent/tests/legacy_permission_surfaces.rs` 测试夹具加载 |
-| dead-candidate | `lime-rs/crates/agent/src/shell_security.rs`                      | 已退出 `lime-agent` 的 `lib.rs` 编译图，仅通过 `lime-rs/crates/agent/tests/legacy_permission_surfaces.rs` 测试夹具加载 |
+| 分类           | 路径 / 对象                                                       | 说明                                                                                                                |
+| -------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| current        | `lime_core::tool_calling`                                         | 统一 metadata 读取与打分                                                                                            |
+| current        | `lime-rs/crates/agent/src/agent_tools/catalog.rs`                 | 完整 native tool 目录与默认授权子集                                                                                 |
+| current        | `lime-rs/crates/agent/src/agent_tools/execution.rs`               | 统一 execution 层的 warning / sandbox / 参数限制事实源                                                              |
+| current        | `lime-rs/crates/mcp/src/manager.rs`                               | MCP tools runtime registry                                                                                          |
+| current        | `lime-rs/crates/app-server/src/runtime_backend/tool_inventory.rs` | App Server `agentSession/toolInventory/read` 到 runtime inventory builder 的桥接                                    |
+| current        | `lime-rs/crates/agent/src/agent_tools/inventory.rs`               | runtime 工具库存快照                                                                                                |
+| compat         | `workspace_allowed_tool_names(...)`                               | 当前保留为旧调用入口别名，实际委托默认授权目录                                                                      |
+| dead           | `agent_runtime_get_tool_inventory`                                | 旧 Desktop / Tauri facade 已退出现役入口；不得回到 Electron Host、DevBridge truth、desktop-host mock 或前端 gateway |
+| dead / deleted | `lime-rs/crates/agent/src/tool_permissions.rs`                    | 已由 current execution owner 取代并物理删除；forbidden-to-restore                                                   |
+| dead / deleted | `lime-rs/crates/agent/src/shell_security.rs`                      | 已由 current execution owner 取代并物理删除；forbidden-to-restore                                                   |
 
-> 注意：`dead-candidate` 本轮只做标记，不直接删除。删除属于高风险操作，需要单独确认。
+> 旧权限实现及其正向测试夹具已删除；后续只能扩展 current execution owner，不得恢复平行权限系统。
 
 ---
 
@@ -203,25 +203,25 @@ Lime 实际已经具备这些能力：
 - **测试入口新增了一条更轻的执行面**
 - `ToolSearch` 与 inventory 的 extension 状态判定也已继续收口到共享 helper，避免主包再次长出重复逻辑
 
-### 3.7 旧权限表面下沉
+### 3.7 旧权限表面删除
 
 本轮继续做了一刀减法：
 
 - `lime-rs/crates/agent/src/tool_permissions.rs`
 - `lime-rs/crates/agent/src/shell_security.rs`
 
-现在文件仍保留在仓库中，但编译边界已经：
+上述文件及 `lime-rs/crates/agent/tests/legacy_permission_surfaces.rs` 已物理删除。当前边界为：
 
 - 不再通过 `lime-agent` crate 根对外 `pub mod`
 - 不再通过 `lime-agent` crate 根对外 `pub use`
 - 不再进入 `lime-agent` 的 `lib.rs` 编译图
 - 不再进入正常 `cargo check` / 运行时编译图
-- 只通过 `lime-rs/crates/agent/tests/legacy_permission_surfaces.rs` 测试夹具加载，并继续复用文件内自测
+- 不再通过测试夹具恢复或正向验证旧权限语义
 
 同时新增了两层守卫：
 
 - `scripts/report-legacy-surfaces.mjs`：防止旧权限模块重新公开、重新挂回 `lib.rs` 编译图，或被上层重新依赖
-- `src/lib/governance/legacyToolPermissionGuard.test.ts`：防止 `lime-agent` 再次把这两套旧权限逻辑挂回 `lib.rs`，并约束测试夹具边界
+- `src/lib/governance/legacyToolPermissionGuard.test.ts`：防止旧文件、正向测试夹具、模块出口和上层类型引用恢复
 
 ---
 

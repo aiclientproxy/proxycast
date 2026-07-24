@@ -4,6 +4,7 @@ fn usage(input: i64, cached: i64, output: i64) -> TokenUsageSnapshot {
     TokenUsageSnapshot {
         input_tokens: input,
         cached_input_tokens: cached,
+        cache_write_input_tokens: 0,
         output_tokens: output,
         reasoning_output_tokens: 0,
         total_tokens: input.saturating_add(output),

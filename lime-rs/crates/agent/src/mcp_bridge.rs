@@ -2,18 +2,22 @@
 //!
 //! 将 Agent reply-loop 的 MCP 调用绑定到其 Session-owned connection generation。
 
+use futures::StreamExt;
 use lime_mcp::{
     build_runtime_extension_surface, runtime_extension_name,
     McpBridgeClient as RuntimeMcpBridgeClient, McpBridgeSnapshot,
 };
-use rmcp::model::{CallToolResult, Extensions, JsonObject, ListToolsResult, ServerNotification};
+use rmcp::model::{
+    ErrorCode, ErrorData, Extensions, JsonObject, ListToolsResult, ProgressNotification,
+    ProgressNotificationMethod, ServerNotification,
+};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tool_runtime::mcp_connection::McpConnectionRegistry;
 use tool_runtime::mcp_connection::{
-    McpCallScope, McpConnection, McpConnectionError, McpConnectionProvenance,
+    McpCallScope, McpConnection, McpConnectionCall, McpConnectionError, McpConnectionProvenance,
 };
 use tool_runtime::tool_extension::{RuntimeExtensionRegistration, RuntimeExtensionSyncPlan};
 
@@ -130,6 +134,13 @@ fn map_mcp_result<T>(
     result
 }
 
+fn service_error_data(error: rmcp::service::ServiceError) -> ErrorData {
+    match error {
+        rmcp::service::ServiceError::McpError(error) => error,
+        error => ErrorData::new(ErrorCode::INTERNAL_ERROR, error.to_string(), None),
+    }
+}
+
 #[async_trait::async_trait]
 impl McpConnection for McpBridgeClient {
     async fn list_tools(
@@ -144,27 +155,34 @@ impl McpConnection for McpBridgeClient {
         )
     }
 
-    async fn call_tool(
+    async fn start_call_tool(
         &self,
         name: &str,
         arguments: Option<JsonObject>,
         scope: &McpCallScope,
         cancel_token: CancellationToken,
-    ) -> Result<CallToolResult, McpConnectionError> {
-        map_mcp_result(
-            self.inner
-                .call_tool(
-                    name,
-                    arguments,
-                    self.request_extensions(),
-                    Some(scope),
-                    cancel_token,
-                )
-                .await,
-        )
-    }
-
-    async fn subscribe(&self) -> mpsc::Receiver<ServerNotification> {
-        self.inner.subscribe().await
+    ) -> Result<McpConnectionCall, McpConnectionError> {
+        let call = self
+            .inner
+            .start_tool_call(
+                name,
+                arguments,
+                self.request_extensions(),
+                Some(scope),
+                cancel_token,
+            )
+            .await?;
+        let response = call.response;
+        let notifications = call.progress.map(|params| {
+            ServerNotification::ProgressNotification(ProgressNotification {
+                params,
+                method: ProgressNotificationMethod,
+                extensions: Default::default(),
+            })
+        });
+        Ok(McpConnectionCall {
+            response: Box::pin(async move { response.await.map_err(service_error_data) }),
+            notifications: Box::pin(notifications),
+        })
     }
 }

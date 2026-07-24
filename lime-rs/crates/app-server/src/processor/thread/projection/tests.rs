@@ -138,6 +138,63 @@ fn user_shell_command_metadata_projects_to_the_v2_item() {
 }
 
 #[test]
+fn canonical_mcp_output_projects_codex_result_shape_when_only_truncation_remains() {
+    let mut thread = canonical_thread(false);
+    thread.turns[0].items[0] = canonical::ThreadItem {
+        session_id: canonical::SessionId::new("session-1"),
+        thread_id: canonical::ThreadId::new("thread-1"),
+        turn_id: canonical::TurnId::new("turn-1"),
+        item_id: canonical::ItemId::new("mcp-1"),
+        sequence: 1,
+        ordinal: 1,
+        created_at_ms: 1_700_000_000_500,
+        updated_at_ms: 1_700_000_001_000,
+        completed_at_ms: Some(1_700_000_001_000),
+        kind: canonical::ItemKind::McpToolCall,
+        status: canonical::ItemStatus::Failed,
+        payload: canonical::ThreadItemPayload::McpToolCall {
+            call_id: "mcp-1".to_string(),
+            server_name: "node_repl".to_string(),
+            tool_name: "exec".to_string(),
+            arguments: Vec::new(),
+            output: Some(canonical::ToolOutput {
+                error: Some("tool output unavailable".to_string()),
+                truncated: true,
+                output_ref: Some("output-1".to_string()),
+                ..Default::default()
+            }),
+        },
+        metadata: json!({}),
+    };
+
+    let projected = project_thread(thread).expect("project MCP result");
+    let v2::ThreadItem::McpToolCall {
+        result,
+        error,
+        status,
+        ..
+    } = &projected.turns[0].items[0]
+    else {
+        panic!("MCP item");
+    };
+    assert_eq!(*status, v2::McpToolCallStatus::Failed);
+    assert_eq!(
+        result,
+        &Some(json!({
+            "content": [],
+            "_meta": {
+                "truncated": true,
+                "outputRef": "output-1"
+            }
+        }))
+    );
+    assert_eq!(
+        error,
+        &Some(json!({ "message": "tool output unavailable" }))
+    );
+}
+
+#[test]
 fn file_change_projects_complete_batch_and_move_identity() {
     let mut thread = canonical_thread(false);
     thread.turns[0].items[0] = canonical::ThreadItem {

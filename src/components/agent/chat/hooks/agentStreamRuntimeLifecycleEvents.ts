@@ -226,9 +226,6 @@ export function handleAgentStreamThreadItemLifecycleEvent(params: {
   setters: RuntimeHandlerStateSetters;
 }): void {
   params.requestState.currentTurnId = params.event.item.turn_id;
-  if (params.event.item.type === "reasoning") {
-    resetStreamedReasoningSegment(params.requestState);
-  }
   bindAssistantMessageToRuntimeTurn(
     params.setters.setMessages,
     params.assistantMsgId,

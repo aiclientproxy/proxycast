@@ -3,9 +3,7 @@ import {
   AGENT_RUNTIME_SESSIONS_CHANGED_EVENT,
   listAgentRuntimeSessions,
 } from "@/lib/api/agentRuntime/sessionClient";
-import type {
-  AgentRuntimeSessionsChangedDetail,
-} from "@/lib/api/agentRuntime/sessionClient";
+import type { AgentRuntimeSessionsChangedDetail } from "@/lib/api/agentRuntime/sessionClient";
 import type { AgentSessionInfo } from "@/lib/api/agentRuntime/sessionTypes";
 import {
   recordAgentUiPerformanceMetric,
@@ -73,24 +71,14 @@ function normalizeSessionProjectValue(value?: string | null): string | null {
 
 function buildSidebarSessionLoadRequests(params: {
   limit: number;
-  projectIds: string[];
   projectCwds: string[];
 }): Array<Promise<AgentSessionInfo[]>> {
-  const { limit, projectIds, projectCwds } = params;
+  const { limit, projectCwds } = params;
   const requests: Array<Promise<AgentSessionInfo[]>> = [
     listAgentRuntimeSessions({
       limit,
     }),
   ];
-
-  for (const projectId of projectIds) {
-    requests.push(
-      listAgentRuntimeSessions({
-        limit,
-        workspaceId: projectId,
-      }),
-    );
-  }
 
   for (const cwd of projectCwds) {
     requests.push(
@@ -232,52 +220,55 @@ export function useAppSidebarSessions({
     );
   }, [recentSessionsVisibleCount]);
 
-  const scheduleRecentSidebarReload = useCallback((minimumDelayMs: number) => {
-    const hotPathRemainingMs = Math.max(
-      0,
-      agentSendHotPathDeferUntilRef.current - Date.now(),
-    );
-    const effectiveMinimumDelayMs = Math.max(
-      minimumDelayMs,
-      hotPathRemainingMs,
-    );
+  const scheduleRecentSidebarReload = useCallback(
+    (minimumDelayMs: number) => {
+      const hotPathRemainingMs = Math.max(
+        0,
+        agentSendHotPathDeferUntilRef.current - Date.now(),
+      );
+      const effectiveMinimumDelayMs = Math.max(
+        minimumDelayMs,
+        hotPathRemainingMs,
+      );
 
-    if (
-      activeAgentStreamingRef.current &&
-      sidebarSessionsRef.current.length > 0
-    ) {
-      recentSidebarReloadPendingRef.current = true;
-      logAgentDebug(
-        "AppSidebar",
-        "recentConversations.load.deferredForActiveStream",
-        {
-          currentSessionId,
-          minimumDelayMs: effectiveMinimumDelayMs,
+      if (
+        activeAgentStreamingRef.current &&
+        sidebarSessionsRef.current.length > 0
+      ) {
+        recentSidebarReloadPendingRef.current = true;
+        logAgentDebug(
+          "AppSidebar",
+          "recentConversations.load.deferredForActiveStream",
+          {
+            currentSessionId,
+            minimumDelayMs: effectiveMinimumDelayMs,
+          },
+          {
+            dedupeKey: `appSidebar.recentConversations.load.deferredForActiveStream:${currentSessionId ?? "none"}`,
+            throttleMs: 1000,
+          },
+        );
+        return;
+      }
+
+      recentSidebarReloadCancelRef.current?.();
+      recentSidebarReloadCancelRef.current = scheduleMinimumDelayIdleTask(
+        () => {
+          recentSidebarReloadCancelRef.current = null;
+          recentSidebarReloadPendingRef.current = false;
+          void loadRecentSidebarSessionsRef.current();
         },
         {
-          dedupeKey: `appSidebar.recentConversations.load.deferredForActiveStream:${currentSessionId ?? "none"}`,
-          throttleMs: 1000,
+          minimumDelayMs: effectiveMinimumDelayMs,
+          idleTimeoutMs: Math.max(
+            effectiveMinimumDelayMs,
+            SIDEBAR_SESSION_LOAD_RESTART_DEFER_MS,
+          ),
         },
       );
-      return;
-    }
-
-    recentSidebarReloadCancelRef.current?.();
-    recentSidebarReloadCancelRef.current = scheduleMinimumDelayIdleTask(
-      () => {
-        recentSidebarReloadCancelRef.current = null;
-        recentSidebarReloadPendingRef.current = false;
-        void loadRecentSidebarSessionsRef.current();
-      },
-      {
-        minimumDelayMs: effectiveMinimumDelayMs,
-        idleTimeoutMs: Math.max(
-          effectiveMinimumDelayMs,
-          SIDEBAR_SESSION_LOAD_RESTART_DEFER_MS,
-        ),
-      },
-    );
-  }, [currentSessionId]);
+    },
+    [currentSessionId],
+  );
 
   useEffect(() => {
     activeAgentStreamingRef.current = activeAgentStreaming;
@@ -417,7 +408,6 @@ export function useAppSidebarSessions({
       const sessionGroups = await Promise.all(
         buildSidebarSessionLoadRequests({
           limit: recentSessionRequestLimit,
-          projectIds: normalizedActiveProjectIds,
           projectCwds: normalizedOpenedProjectCwds,
         }),
       );

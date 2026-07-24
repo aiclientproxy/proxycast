@@ -1,11 +1,4 @@
 {
-  "agentChat.agentUiProjection.chip.artifactCount": "Artifact {{count}}",
-  "agentChat.agentUiProjection.chip.hasExecutionRef": "Has execution ref",
-  "agentChat.agentUiProjection.chip.hasResultRef": "Has result ref",
-  "agentChat.agentUiProjection.chip.reassign": "Reassign",
-  "agentChat.agentUiProjection.chip.remoteContent": "Remote content",
-  "agentChat.agentUiProjection.chip.reviewFix": "Review fix",
-  "agentChat.agentUiProjection.chip.toolCount": "Tools {{count}}",
   "agentChat.agentUiProjection.control.answer": "Answer",
   "agentChat.agentUiProjection.control.approve": "Approve",
   "agentChat.agentUiProjection.control.assign": "Assign",

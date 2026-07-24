@@ -12,7 +12,7 @@ import {
 import {
   createAgentSessionCurrent,
   readAgentRuntimeThreadCurrent,
-  respondAgentSessionActionCurrent,
+  respondAgentServerRequestCurrent,
   startAgentSessionTurnCurrent,
 } from "../lib/agent-runtime-smoke-core.mjs";
 import {
@@ -594,18 +594,13 @@ async function runPermissionDecisionFlow(
   const requestId = requested.summary.confirmationRequestId;
   assert(requestId, `${decision} flow 缺少 confirmationRequestId`);
 
-  await respondAgentSessionActionCurrent(options, {
-    sessionId,
+  await respondAgentServerRequestCurrent(options, {
     requestId,
-    actionType: "elicitation",
     confirmed,
-    response: JSON.stringify({ answer: responseLabel }),
     userData: { answer: responseLabel },
-    eventName,
     actionScope: {
-      session_id: sessionId,
-      thread_id: sessionId,
-      turn_id: turnId,
+      threadId: sessionId,
+      turnId,
     },
   });
 

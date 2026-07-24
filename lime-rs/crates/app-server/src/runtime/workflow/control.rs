@@ -251,8 +251,8 @@ impl RuntimeCore {
                     "workflow/respond requires requestId from params or waiting step".to_string(),
                 )
             })?;
-        let replayed_action =
-            read_model::replayed_action_required_from_stored_session(&context.stored, &request_id);
+        let pending_action =
+            read_model::pending_action_from_stored_session(&context.stored, &request_id);
         let action_type = target
             .action_type
             .or_else(|| {
@@ -260,14 +260,14 @@ impl RuntimeCore {
                     .as_deref()
                     .and_then(agent_action_type_from_str)
             })
-            .or_else(|| replayed_action.as_ref().map(|action| action.action_type))
+            .or_else(|| pending_action.as_ref().map(|action| action.action_type))
             .ok_or_else(|| {
                 RuntimeCoreError::Backend(
                     "workflow/respond requires actionType from params, waiting step, or action replay"
                         .to_string(),
                 )
             })?;
-        let action_scope = replayed_action
+        let action_scope = pending_action
             .and_then(|action| action.scope)
             .or_else(|| workflow_action_scope(&context.stored.session.thread_id, &run, &target));
         let decision = match action_type {

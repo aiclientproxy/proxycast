@@ -255,135 +255,6 @@
       "title": "AgentSession",
       "type": "object"
     },
-    "AgentSessionActionReplayParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "requestId": {
-          "type": "string"
-        },
-        "sessionId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "requestId",
-        "sessionId"
-      ],
-      "title": "AgentSessionActionReplayParams",
-      "type": "object"
-    },
-    "AgentSessionActionReplayResponse": {
-      "$defs": {
-        "AgentSessionActionScope": {
-          "properties": {
-            "sessionId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "threadId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "turnId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            }
-          },
-          "type": "object"
-        },
-        "AgentSessionActionType": {
-          "enum": [
-            "ask_user",
-            "elicitation",
-            "tool_confirmation"
-          ],
-          "type": "string"
-        },
-        "AgentSessionApprovalDecision": {
-          "enum": [
-            "allow_for_session",
-            "allow_once",
-            "cancel",
-            "decline"
-          ],
-          "type": "string"
-        },
-        "AgentSessionReplayedActionRequired": {
-          "properties": {
-            "actionType": {
-              "$ref": "#/$defs/AgentSessionActionType"
-            },
-            "arguments": true,
-            "availableDecisions": {
-              "items": {
-                "$ref": "#/$defs/AgentSessionApprovalDecision"
-              },
-              "type": [
-                "array",
-                "null"
-              ]
-            },
-            "prompt": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "questions": true,
-            "requestId": {
-              "type": "string"
-            },
-            "requestedSchema": true,
-            "scope": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/AgentSessionActionScope"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "toolName": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "type": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "actionType",
-            "requestId",
-            "type"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "action": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AgentSessionReplayedActionRequired"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "title": "AgentSessionActionReplayResponse",
-      "type": "object"
-    },
     "AgentSessionActionRespondParams": {
       "$defs": {
         "AgentSessionActionScope": {
@@ -2910,103 +2781,6 @@
       "title": "AgentSessionReplayCaseExportResponse",
       "type": "object"
     },
-    "AgentSessionReplayedActionRequired": {
-      "$defs": {
-        "AgentSessionActionScope": {
-          "properties": {
-            "sessionId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "threadId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "turnId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            }
-          },
-          "type": "object"
-        },
-        "AgentSessionActionType": {
-          "enum": [
-            "ask_user",
-            "elicitation",
-            "tool_confirmation"
-          ],
-          "type": "string"
-        },
-        "AgentSessionApprovalDecision": {
-          "enum": [
-            "allow_for_session",
-            "allow_once",
-            "cancel",
-            "decline"
-          ],
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "actionType": {
-          "$ref": "#/$defs/AgentSessionActionType"
-        },
-        "arguments": true,
-        "availableDecisions": {
-          "items": {
-            "$ref": "#/$defs/AgentSessionApprovalDecision"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "prompt": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "questions": true,
-        "requestId": {
-          "type": "string"
-        },
-        "requestedSchema": true,
-        "scope": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AgentSessionActionScope"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "toolName": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "type": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "actionType",
-        "requestId",
-        "type"
-      ],
-      "title": "AgentSessionReplayedActionRequired",
-      "type": "object"
-    },
     "AgentSessionReviewDecision": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3353,121 +3127,6 @@
         "workspaceRoot"
       ],
       "title": "AgentSessionReviewDecisionTemplateExportResponse",
-      "type": "object"
-    },
-    "AgentSessionRuntimeEventAppendParams": {
-      "$defs": {
-        "AgentSessionRuntimeEventInput": {
-          "properties": {
-            "payload": true,
-            "type": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "payload",
-            "type"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "runtimeEvents": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/AgentSessionRuntimeEventInput"
-          },
-          "type": "array"
-        },
-        "sessionId": {
-          "type": "string"
-        },
-        "turnId": {
-          "type": [
-            "null",
-            "string"
-          ]
-        }
-      },
-      "required": [
-        "sessionId"
-      ],
-      "title": "AgentSessionRuntimeEventAppendParams",
-      "type": "object"
-    },
-    "AgentSessionRuntimeEventAppendResponse": {
-      "$defs": {
-        "AgentEvent": {
-          "properties": {
-            "eventId": {
-              "type": "string"
-            },
-            "payload": true,
-            "sequence": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "sessionId": {
-              "type": "string"
-            },
-            "threadId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "timestamp": {
-              "type": "string"
-            },
-            "turnId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "type": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "eventId",
-            "payload",
-            "sequence",
-            "sessionId",
-            "timestamp",
-            "type"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "events": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/AgentEvent"
-          },
-          "type": "array"
-        }
-      },
-      "title": "AgentSessionRuntimeEventAppendResponse",
-      "type": "object"
-    },
-    "AgentSessionRuntimeEventInput": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "payload": true,
-        "type": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "payload",
-        "type"
-      ],
-      "title": "AgentSessionRuntimeEventInput",
       "type": "object"
     },
     "AgentSessionStartParams": {
@@ -9657,45 +9316,7 @@
               "$ref": "#/$defs/RequestId"
             },
             "method": {
-              "const": "agentSession/action/replay",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
               "const": "agentSession/action/respond",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "agentSession/runtimeEvents/append",
               "type": "string"
             },
             "params": {
@@ -9873,7 +9494,6 @@
     "AppServerRequestMethod": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
-        "agentSession/action/replay",
         "agentSession/action/respond",
         "agentSession/analysisHandoff/export",
         "agentSession/compact",
@@ -9888,7 +9508,6 @@
         "agentSession/replayCase/export",
         "agentSession/reviewDecision/save",
         "agentSession/reviewDecisionTemplate/export",
-        "agentSession/runtimeEvents/append",
         "agentSession/toolInventory/read",
         "agentSession/update",
         "artifact/read",
@@ -10349,6 +9968,52 @@
       "title": "ArtifactReadResponse",
       "type": "object"
     },
+    "ArtifactSnapshot": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "artifactDocumentId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "artifactRef": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "metadata": true,
+        "path": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "status": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "artifactRef",
+        "content",
+        "kind"
+      ],
+      "title": "ArtifactSnapshot",
+      "type": "object"
+    },
     "ArtifactSummary": {
       "$defs": {
         "ArtifactContentStatus": {
@@ -10427,6 +10092,176 @@
         "sequence"
       ],
       "title": "ArtifactSummary",
+      "type": "object"
+    },
+    "ArtifactWriteParams": {
+      "$defs": {
+        "ArtifactSnapshot": {
+          "properties": {
+            "artifactDocumentId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "artifactRef": {
+              "type": "string"
+            },
+            "content": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "metadata": true,
+            "path": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "title": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "artifactRef",
+            "content",
+            "kind"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactSnapshot"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "artifact",
+        "threadId"
+      ],
+      "title": "ArtifactWriteParams",
+      "type": "object"
+    },
+    "ArtifactWriteResponse": {
+      "$defs": {
+        "ArtifactWriteSidecar": {
+          "properties": {
+            "bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "contentStatus": {
+              "type": "string"
+            },
+            "relativePath": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "bytes",
+            "contentStatus",
+            "relativePath",
+            "sha256"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "artifactDocumentId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "artifactRef": {
+          "type": "string"
+        },
+        "eventId": {
+          "type": "string"
+        },
+        "persistedAt": {
+          "type": "string"
+        },
+        "sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sidecar": {
+          "$ref": "#/$defs/ArtifactWriteSidecar"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "artifactRef",
+        "eventId",
+        "persistedAt",
+        "sequence",
+        "sidecar",
+        "threadId"
+      ],
+      "title": "ArtifactWriteResponse",
+      "type": "object"
+    },
+    "ArtifactWriteSidecar": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contentStatus": {
+          "type": "string"
+        },
+        "relativePath": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "bytes",
+        "contentStatus",
+        "relativePath",
+        "sha256"
+      ],
+      "title": "ArtifactWriteSidecar",
       "type": "object"
     },
     "AuthKind": {
@@ -12007,6 +11842,71 @@
           ],
           "type": "string"
         },
+        "ArtifactSnapshot": {
+          "properties": {
+            "artifactDocumentId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "artifactRef": {
+              "type": "string"
+            },
+            "content": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "metadata": true,
+            "path": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "title": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "artifactRef",
+            "content",
+            "kind"
+          ],
+          "type": "object"
+        },
+        "ArtifactWriteParams": {
+          "properties": {
+            "artifact": {
+              "$ref": "#/$defs/ArtifactSnapshot"
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "artifact",
+            "threadId"
+          ],
+          "type": "object"
+        },
         "ByteRange": {
           "properties": {
             "end": {
@@ -13586,6 +13486,26 @@
               "$ref": "#/$defs/RequestId"
             },
             "method": {
+              "const": "artifact/write",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ArtifactWriteParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
               "const": "turn/start",
               "type": "string"
             },
@@ -13847,6 +13767,31 @@
       ],
       "title": "CommandExecutionApprovalDecision",
       "type": "string"
+    },
+    "CommandExecutionOutputDeltaNotification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "delta": {
+          "type": "string"
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "delta",
+        "itemId",
+        "threadId",
+        "turnId"
+      ],
+      "title": "CommandExecutionOutputDeltaNotification",
+      "type": "object"
     },
     "CommandExecutionRequestApprovalParams": {
       "$defs": {
@@ -20409,6 +20354,101 @@
       ],
       "title": "FileChangeApprovalDecision",
       "type": "string"
+    },
+    "FileChangePatchUpdatedNotification": {
+      "$defs": {
+        "FileUpdateChange": {
+          "properties": {
+            "diff": {
+              "type": "string"
+            },
+            "kind": {
+              "$ref": "#/$defs/PatchChangeKind"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "diff",
+            "kind",
+            "path"
+          ],
+          "type": "object"
+        },
+        "PatchChangeKind": {
+          "oneOf": [
+            {
+              "properties": {
+                "type": {
+                  "const": "add",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "delete",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "move_path": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "update",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/FileUpdateChange"
+          },
+          "type": "array"
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changes",
+        "itemId",
+        "threadId",
+        "turnId"
+      ],
+      "title": "FileChangePatchUpdatedNotification",
+      "type": "object"
     },
     "FileChangeRequestApprovalParams": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -27002,6 +27042,31 @@
       "title": "McpToolCallParams",
       "type": "object"
     },
+    "McpToolCallProgressNotification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "itemId": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "itemId",
+        "message",
+        "threadId",
+        "turnId"
+      ],
+      "title": "McpToolCallProgressNotification",
+      "type": "object"
+    },
     "McpToolCallResponse": {
       "$defs": {
         "McpContent": {
@@ -29640,6 +29705,7 @@
     "Method": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
+        "artifact/write",
         "thread/archive",
         "thread/delete",
         "thread/fork",
@@ -32411,6 +32477,32 @@
         }
       ],
       "title": "PatchChangeKind"
+    },
+    "PlanDeltaNotification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "EXPERIMENTAL - proposed plan streaming deltas for plan items. Clients should\nnot assume concatenated deltas match the completed plan item content.",
+      "properties": {
+        "delta": {
+          "type": "string"
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "delta",
+        "itemId",
+        "threadId",
+        "turnId"
+      ],
+      "title": "PlanDeltaNotification",
+      "type": "object"
     },
     "PlatformInfo": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -38709,6 +38801,29 @@
             }
           ]
         },
+        "CommandExecutionOutputDeltaNotification": {
+          "properties": {
+            "delta": {
+              "type": "string"
+            },
+            "itemId": {
+              "type": "string"
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "delta",
+            "itemId",
+            "threadId",
+            "turnId"
+          ],
+          "type": "object"
+        },
         "CommandExecutionSource": {
           "enum": [
             "agent",
@@ -38778,6 +38893,32 @@
             "inProgress"
           ],
           "type": "string"
+        },
+        "FileChangePatchUpdatedNotification": {
+          "properties": {
+            "changes": {
+              "items": {
+                "$ref": "#/$defs/FileUpdateChange"
+              },
+              "type": "array"
+            },
+            "itemId": {
+              "type": "string"
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "changes",
+            "itemId",
+            "threadId",
+            "turnId"
+          ],
+          "type": "object"
         },
         "FileUpdateChange": {
           "properties": {
@@ -38952,6 +39093,29 @@
           ],
           "type": "object"
         },
+        "McpToolCallProgressNotification": {
+          "properties": {
+            "itemId": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "itemId",
+            "message",
+            "threadId",
+            "turnId"
+          ],
+          "type": "object"
+        },
         "McpToolCallStatus": {
           "enum": [
             "completed",
@@ -39070,6 +39234,30 @@
               "type": "object"
             }
           ]
+        },
+        "PlanDeltaNotification": {
+          "description": "EXPERIMENTAL - proposed plan streaming deltas for plan items. Clients should\nnot assume concatenated deltas match the completed plan item content.",
+          "properties": {
+            "delta": {
+              "type": "string"
+            },
+            "itemId": {
+              "type": "string"
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "delta",
+            "itemId",
+            "threadId",
+            "turnId"
+          ],
+          "type": "object"
         },
         "ReasoningSummaryPartAddedNotification": {
           "properties": {
@@ -40213,6 +40401,11 @@
         },
         "TokenUsageBreakdown": {
           "properties": {
+            "cacheWriteInputTokens": {
+              "default": 0,
+              "format": "int64",
+              "type": "integer"
+            },
             "cachedInputTokens": {
               "format": "int64",
               "type": "integer"
@@ -40643,6 +40836,70 @@
             },
             "params": {
               "$ref": "#/$defs/AgentMessageDeltaNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "item/commandExecution/outputDelta",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CommandExecutionOutputDeltaNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "item/fileChange/patchUpdated",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FileChangePatchUpdatedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "item/plan/delta",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PlanDeltaNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "item/mcpToolCall/progress",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/McpToolCallProgressNotification"
             }
           },
           "required": [
@@ -59948,6 +60205,11 @@
       "$defs": {
         "TokenUsageBreakdown": {
           "properties": {
+            "cacheWriteInputTokens": {
+              "default": 0,
+              "format": "int64",
+              "type": "integer"
+            },
             "cachedInputTokens": {
               "format": "int64",
               "type": "integer"
@@ -60028,6 +60290,11 @@
         },
         "TokenUsageBreakdown": {
           "properties": {
+            "cacheWriteInputTokens": {
+              "default": 0,
+              "format": "int64",
+              "type": "integer"
+            },
             "cachedInputTokens": {
               "format": "int64",
               "type": "integer"
@@ -62984,6 +63251,11 @@
     "TokenUsageBreakdown": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "cacheWriteInputTokens": {
+          "default": 0,
+          "format": "int64",
+          "type": "integer"
+        },
         "cachedInputTokens": {
           "format": "int64",
           "type": "integer"
@@ -74430,7 +74702,11 @@
               "configWarning",
               "initialized",
               "item/agentMessage/delta",
+              "item/commandExecution/outputDelta",
               "item/completed",
+              "item/fileChange/patchUpdated",
+              "item/mcpToolCall/progress",
+              "item/plan/delta",
               "item/reasoning/summaryPartAdded",
               "item/reasoning/summaryTextDelta",
               "item/reasoning/textDelta",
@@ -74454,7 +74730,6 @@
         "requests": {
           "items": {
             "enum": [
-              "agentSession/action/replay",
               "agentSession/action/respond",
               "agentSession/analysisHandoff/export",
               "agentSession/compact",
@@ -74469,10 +74744,10 @@
               "agentSession/replayCase/export",
               "agentSession/reviewDecision/save",
               "agentSession/reviewDecisionTemplate/export",
-              "agentSession/runtimeEvents/append",
               "agentSession/toolInventory/read",
               "agentSession/update",
               "artifact/read",
+              "artifact/write",
               "automationJob/create",
               "automationJob/delete",
               "automationJob/health",

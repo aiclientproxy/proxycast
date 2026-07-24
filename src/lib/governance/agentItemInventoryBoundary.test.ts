@@ -11,6 +11,10 @@ const EVENT_VERIFIER_PATH =
   "packages/agent-runtime-client/src/eventVerifier.ts";
 const THREAD_ITEM_SCHEMA_PATH =
   "lime-rs/crates/app-server-protocol/schema/json/v2/ThreadItem.json";
+const SERVER_NOTIFICATION_SCHEMA_PATH =
+  "lime-rs/crates/app-server-protocol/schema/json/v2/ServerNotification.json";
+const SERVER_REQUEST_SCHEMA_PATH =
+  "lime-rs/crates/app-server-protocol/schema/json/v2/ServerRequest.json";
 
 interface ItemInventoryEntry {
   type: string;
@@ -18,14 +22,24 @@ interface ItemInventoryEntry {
   limeFields: string[];
   statusful: boolean;
   codexStreamMethods: string[];
+  codexDeprecatedMethods?: string[];
   limeStreamMethods: string[];
   shape: "aligned" | "gap";
+  fieldNotes?: string[];
+}
+
+interface ItemAdjacentMethod {
+  method: string;
+  kind: "notification" | "serverRequest";
+  codex: "current" | "experimental" | "deprecated" | "internal";
+  lime: "current" | "gap" | "excluded";
 }
 
 interface ItemInventoryFixture {
   lime: {
     lifecycle: string[];
   };
+  itemAdjacentMethods: ItemAdjacentMethod[];
   items: ItemInventoryEntry[];
 }
 
@@ -131,6 +145,33 @@ function resolveLocalDefinition(
   return definition;
 }
 
+function schemaConstStrings(relativePath: string): Set<string> {
+  const schema = JSON.parse(
+    readFileSync(join(REPO_ROOT, relativePath), "utf8"),
+  ) as unknown;
+  const constants = new Set<string>();
+
+  function visit(value: unknown): void {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (!value || typeof value !== "object") {
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "const" && typeof child === "string") {
+        constants.add(child);
+      } else {
+        visit(child);
+      }
+    }
+  }
+
+  visit(schema);
+  return constants;
+}
+
 describe("Codex v2 Item inventory boundary", () => {
   it("inventory 顶层 variant 必须与 runtime client canonical 列表一致", () => {
     const inventory = readInventory();
@@ -178,11 +219,46 @@ describe("Codex v2 Item inventory boundary", () => {
       expect(Array.isArray(item.codexStreamMethods)).toBe(true);
       expect(Array.isArray(item.limeStreamMethods)).toBe(true);
       expect(["aligned", "gap"]).toContain(item.shape);
+      if (item.shape === "gap") {
+        expect(item.fieldNotes?.length ?? 0).toBeGreaterThan(0);
+      }
       expect(
         item.limeStreamMethods.every((method) =>
           item.codexStreamMethods.includes(method),
         ),
       ).toBe(true);
+    }
+  });
+
+  it("item 邻接方法分类必须与 Lime 生成 Schema 一致", () => {
+    const inventory = readInventory();
+    const notificationMethods = schemaConstStrings(
+      SERVER_NOTIFICATION_SCHEMA_PATH,
+    );
+    const serverRequestMethods = schemaConstStrings(SERVER_REQUEST_SCHEMA_PATH);
+    const classifiedMethods = new Set<string>();
+
+    for (const entry of inventory.itemAdjacentMethods) {
+      expect(classifiedMethods.has(entry.method)).toBe(false);
+      classifiedMethods.add(entry.method);
+
+      const limeMethods =
+        entry.kind === "notification"
+          ? notificationMethods
+          : serverRequestMethods;
+      expect(limeMethods.has(entry.method)).toBe(entry.lime === "current");
+      if (entry.codex === "deprecated" || entry.codex === "internal") {
+        expect(entry.lime).toBe("excluded");
+      }
+    }
+
+    for (const item of inventory.items) {
+      for (const method of item.codexStreamMethods) {
+        expect(classifiedMethods.has(method)).toBe(true);
+      }
+      for (const method of item.codexDeprecatedMethods ?? []) {
+        expect(classifiedMethods.has(method)).toBe(true);
+      }
     }
   });
 });

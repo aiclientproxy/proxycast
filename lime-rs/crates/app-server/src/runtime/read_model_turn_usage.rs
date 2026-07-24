@@ -55,6 +55,7 @@ fn canonical_usage_for_turn(events: &[AgentEvent], turn_id: Option<&str>) -> Opt
     Some(json!({
         "input_tokens": snapshot.last_token_usage.input_tokens,
         "cached_input_tokens": snapshot.last_token_usage.cached_input_tokens,
+        "cache_write_input_tokens": snapshot.last_token_usage.cache_write_input_tokens,
         "output_tokens": snapshot.last_token_usage.output_tokens,
         "reasoning_output_tokens": snapshot.last_token_usage.reasoning_output_tokens,
         "total_tokens": snapshot.last_token_usage.total_tokens,
@@ -93,7 +94,13 @@ mod tests {
         }
     }
 
-    fn provider_usage(sequence: u64, turn_id: &str, input: i64, output: i64) -> AgentEvent {
+    fn provider_usage(
+        sequence: u64,
+        turn_id: &str,
+        input: i64,
+        cache_write: i64,
+        output: i64,
+    ) -> AgentEvent {
         event(
             sequence,
             turn_id,
@@ -105,11 +112,13 @@ mod tests {
                     "input_tokens": input,
                     "output_tokens": output,
                     "cached_input_tokens": 0,
+                    "cache_write_input_tokens": cache_write,
                     "reasoning_output_tokens": 0,
                     "total_tokens": input + output,
                     "total_token_usage": {
                         "input_tokens": input,
                         "cached_input_tokens": 0,
+                        "cache_write_input_tokens": cache_write,
                         "output_tokens": output,
                         "reasoning_output_tokens": 0,
                         "total_tokens": input + output
@@ -117,6 +126,7 @@ mod tests {
                     "last_token_usage": {
                         "input_tokens": input,
                         "cached_input_tokens": 0,
+                        "cache_write_input_tokens": cache_write,
                         "output_tokens": output,
                         "reasoning_output_tokens": 0,
                         "total_tokens": input + output
@@ -130,7 +140,7 @@ mod tests {
     #[test]
     fn provider_usage_survives_terminal_without_usage() {
         let events = vec![
-            provider_usage(1, "turn-image", 31_000, 0),
+            provider_usage(1, "turn-image", 31_000, 1_200, 0),
             event(2, "turn-image", "turn.completed", json!({})),
         ];
 
@@ -139,6 +149,7 @@ mod tests {
             Some(json!({
                 "input_tokens": 31_000,
                 "cached_input_tokens": 0,
+                "cache_write_input_tokens": 1_200,
                 "output_tokens": 0,
                 "reasoning_output_tokens": 0,
                 "total_tokens": 31_000
@@ -149,8 +160,8 @@ mod tests {
     #[test]
     fn usage_is_scoped_to_the_requested_turn() {
         let events = vec![
-            provider_usage(1, "turn-first", 10, 2),
-            provider_usage(2, "turn-second", 20, 3),
+            provider_usage(1, "turn-first", 10, 1, 2),
+            provider_usage(2, "turn-second", 20, 2, 3),
         ];
 
         assert_eq!(

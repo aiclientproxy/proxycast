@@ -919,10 +919,10 @@ describe("useAgentRuntimeSyncEffects", () => {
     }
   });
 
-  it("浏览器 DevBridge 已绑定当前 turn event 时，不应再走轮询刷新", async () => {
+  it("事件桥已绑定当前 turn event 时，不应再走轮询刷新", async () => {
     mockIsAppServerBridgeAvailable.mockReturnValue(true);
     mockHasDesktopHostEventListenerCapability.mockReturnValue(false);
-    mockHasDevBridgeEventListenerCapability.mockReturnValue(false);
+    mockHasDevBridgeEventListenerCapability.mockReturnValue(true);
 
     const refreshSessionDetail = vi.fn(async () => true);
     const harness = await mountHook({
@@ -962,7 +962,7 @@ describe("useAgentRuntimeSyncEffects", () => {
     }
   });
 
-  it("事件桥可用但当前 turn event 未恢复时，发送态仍应轮询刷新当前会话详情", async () => {
+  it("事件桥可用但当前 turn event 未恢复时，应在绑定宽限期后轮询刷新", async () => {
     mockIsAppServerBridgeAvailable.mockReturnValue(true);
     mockHasDesktopHostEventListenerCapability.mockReturnValue(false);
     mockHasDevBridgeEventListenerCapability.mockReturnValue(true);
@@ -974,6 +974,20 @@ describe("useAgentRuntimeSyncEffects", () => {
     });
 
     try {
+      expect(refreshSessionDetail).not.toHaveBeenCalled();
+
+      await act(async () => {
+        vi.advanceTimersByTime(249);
+        await Promise.resolve();
+      });
+
+      expect(refreshSessionDetail).not.toHaveBeenCalled();
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+        await Promise.resolve();
+      });
+
       expect(refreshSessionDetail).toHaveBeenCalledTimes(1);
       expect(refreshSessionDetail).toHaveBeenLastCalledWith(
         "session-1",
@@ -996,6 +1010,39 @@ describe("useAgentRuntimeSyncEffects", () => {
         "session-1",
         runtimeSyncRefreshRequest("runtimeSync.sendSettled"),
       );
+    } finally {
+      harness.unmount();
+    }
+  });
+
+  it("事件桥在宽限期内绑定当前 turn event 时，不应启动 fallback poll", async () => {
+    mockIsAppServerBridgeAvailable.mockReturnValue(true);
+    mockHasDesktopHostEventListenerCapability.mockReturnValue(false);
+    mockHasDevBridgeEventListenerCapability.mockReturnValue(true);
+
+    const refreshSessionDetail = vi.fn(async () => true);
+    const harness = await mountHook({
+      isSending: true,
+      refreshSessionDetail,
+    });
+
+    try {
+      await act(async () => {
+        vi.advanceTimersByTime(200);
+        await Promise.resolve();
+      });
+
+      await harness.render({
+        currentTurnEventName: "agent_stream_bound-in-grace",
+        isSending: true,
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(3000);
+        await Promise.resolve();
+      });
+
+      expect(refreshSessionDetail).not.toHaveBeenCalled();
     } finally {
       harness.unmount();
     }

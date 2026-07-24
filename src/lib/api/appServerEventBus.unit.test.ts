@@ -3,11 +3,43 @@ import {
   METHOD_SERVER_REQUEST_RESOLVED,
   type JsonRpcRequest,
 } from "../../../packages/app-server-client/src/protocol";
-import { AppServerEventBus } from "./appServerEventBus";
+import {
+  AppServerEventBus,
+  getDefaultAppServerEventBus,
+  resetDefaultAppServerEventBusForTests,
+} from "./appServerEventBus";
 
 describe("AppServerEventBus", () => {
   afterEach(() => {
+    resetDefaultAppServerEventBusForTests();
     vi.useRealTimers();
+  });
+
+  it("重置默认 event bus 后旧 drain loop 应退出", async () => {
+    vi.useFakeTimers();
+    const oldDrainEvents = vi.fn().mockResolvedValue([]);
+    const oldEventBus = getDefaultAppServerEventBus({
+      drainEvents: oldDrainEvents,
+    });
+    oldEventBus.subscribe({ onNotifications: vi.fn() });
+    await Promise.resolve();
+
+    expect(oldDrainEvents).toHaveBeenCalledTimes(1);
+
+    resetDefaultAppServerEventBusForTests();
+    const nextDrainEvents = vi.fn().mockResolvedValue([]);
+    const nextEventBus = getDefaultAppServerEventBus({
+      drainEvents: nextDrainEvents,
+    });
+    const unsubscribe = nextEventBus.subscribe({ onNotifications: vi.fn() });
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(oldDrainEvents).toHaveBeenCalledTimes(1);
+    expect(nextDrainEvents.mock.calls.length).toBeGreaterThan(1);
+
+    unsubscribe();
+    await vi.runOnlyPendingTimersAsync();
   });
 
   it("includeRecent subscription 应以对象参数 drain 最近镜像事件", async () => {

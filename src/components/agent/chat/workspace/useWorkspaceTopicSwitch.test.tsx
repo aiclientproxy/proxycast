@@ -12,11 +12,12 @@ const toastMock = vi.hoisted(() => ({
   error: vi.fn(),
   info: vi.fn(),
 }));
-
-vi.mock("@/lib/api/project", () => projectApiMock);
-vi.mock("@/lib/agentDebug", () => ({
+const agentDebugMock = vi.hoisted(() => ({
   logAgentDebug: vi.fn(),
 }));
+
+vi.mock("@/lib/api/project", () => projectApiMock);
+vi.mock("@/lib/agentDebug", () => agentDebugMock);
 vi.mock("sonner", () => ({
   toast: toastMock,
 }));
@@ -76,6 +77,7 @@ describe("useWorkspaceTopicSwitch", () => {
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     projectApiMock.getProject.mockReset();
+    agentDebugMock.logAgentDebug.mockReset();
     toastMock.error.mockReset();
     toastMock.info.mockReset();
   });
@@ -119,6 +121,32 @@ describe("useWorkspaceTopicSwitch", () => {
     );
   });
 
+  it("底层水合失败时应返回 error 且不得误记切换成功", async () => {
+    const originalSwitchTopic = vi.fn(async () => "error" as const);
+    const mounted = renderHook(createBaseProps({ originalSwitchTopic }));
+
+    let result: Awaited<ReturnType<HookValue["switchTopic"]>> | undefined;
+    await act(async () => {
+      result = await mounted.getValue().switchTopic("session-invalid-import");
+    });
+
+    expect(result).toBe("error");
+    expect(agentDebugMock.logAgentDebug).toHaveBeenCalledWith(
+      "AgentChatPage",
+      "runTopicSwitch.error",
+      expect.objectContaining({
+        hydrationResult: "error",
+        topicId: "session-invalid-import",
+      }),
+      { level: "error" },
+    );
+    expect(
+      agentDebugMock.logAgentDebug.mock.calls.some(
+        (call) => call[1] === "runTopicSwitch.success",
+      ),
+    ).toBe(false);
+  });
+
   it("没有明确项目时应返回 missing，不再回退默认项目", async () => {
     const originalSwitchTopic = vi.fn(async () => undefined);
     const onBeforeTopicSwitch = vi.fn();
@@ -139,7 +167,9 @@ describe("useWorkspaceTopicSwitch", () => {
     expect(onBeforeTopicSwitch).toHaveBeenCalledTimes(1);
     expect(projectApiMock.getProject).not.toHaveBeenCalled();
     expect(props.deferTopicSwitch).not.toHaveBeenCalled();
-    expect(toastMock.error).toHaveBeenCalledWith("未找到可用项目，请先创建项目");
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "未找到可用项目，请先创建项目",
+    );
     expect(originalSwitchTopic).not.toHaveBeenCalled();
   });
 

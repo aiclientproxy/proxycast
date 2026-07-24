@@ -29,8 +29,6 @@ const clientDistPath = path.join(
 );
 
 const {
-  AppServerRequestError,
-  METHOD_AGENT_SESSION_EVENT,
   PROTOCOL_VERSION,
   defaultReleaseManifestPath,
   platformKey,
@@ -40,12 +38,6 @@ const {
 } = await import(pathToFileURL(clientDistPath).href);
 
 async function main() {
-  if (typeof AppServerRequestError !== "function") {
-    throw new Error(
-      'packages/app-server-client/dist is stale; run npm --prefix "packages/app-server-client" run build',
-    );
-  }
-
   const sourceBinaryPath = await resolveSourceBinaryPath();
   const tempDir = await mkdtemp(
     path.join(tmpdir(), "app-server-packaged-failure-smoke-"),
@@ -96,9 +88,7 @@ async function main() {
           name: "content_studio_failure_smoke",
           version: manifestVersion,
         },
-        capabilities: {
-          eventMethods: [METHOD_AGENT_SESSION_EVENT],
-        },
+        capabilities: {},
       },
       {
         resourcesPath,
@@ -123,78 +113,75 @@ async function main() {
       "packaged binary path",
     );
     const connection = started.connected.connection;
-    const sessionId = "appserver_packaged_failure_smoke_session";
-    const threadId = "appserver_packaged_failure_smoke_thread";
-    const turnId = "appserver_packaged_failure_smoke_turn";
-
-    await connection.startSession(
+    const threadStart = await connection.startSession(
       {
-        sessionId,
-        threadId,
-        appId: "content-studio",
-        workspaceId: "smoke",
+        historyMode: "paginated",
+        model: "fixture-model",
+        modelProvider: "fixture-provider",
+        serviceName: "content-studio",
+        threadSource: "appServer",
       },
       { timeoutMs: 5_000 },
     );
+    const threadId = requireNonEmptyString(
+      threadStart.result.thread?.id,
+      "thread/start thread id",
+    );
+    const sessionId = requireNonEmptyString(
+      threadStart.result.thread?.sessionId,
+      "thread/start session id",
+    );
 
-    const turnResult = await connection
-      .startTurn(
-        {
-          sessionId,
-          turnId,
-          input: {
+    const turnResult = await connection.startTurn(
+      {
+        threadId,
+        input: [
+          {
+            type: "text",
             text: "packaged external backend failure smoke",
           },
-          runtimeOptions: {
-            stream: true,
-          },
-        },
-        { timeoutMs: 5_000 },
-      )
-      .then(
-        (value) => ({ ok: true, value }),
-        (error) => ({ ok: false, error }),
-      );
-
-    if (turnResult.ok) {
-      throw new Error(
-        "expected failed turn response from packaged external backend",
-      );
-    }
-    if (!(turnResult.error instanceof AppServerRequestError)) {
-      throw new Error(
-        `expected AppServerRequestError, got ${turnResult.error?.constructor?.name ?? typeof turnResult.error}`,
-      );
-    }
-
-    const clientEvents = agentEventsFromNotifications(
-      turnResult.error.notifications,
+        ],
+      },
+      { timeoutMs: 5_000 },
     );
-    const clientFailure = assertFailureEvents(
-      clientEvents,
-      "client streamed events",
+    const turnId = requireNonEmptyString(
+      turnResult.result.turn?.id,
+      "turn/start turn id",
+    );
+    assertEqual(
+      turnResult.result.turn.status,
+      "inProgress",
+      "turn/start status",
     );
 
-    const readResult = await connection.readSession(
-      { sessionId },
+    const clientNotifications = await collectRuntimeNotificationsUntilFailure(
+      connection,
+      5_000,
+      { threadId, turnId },
+    );
+    const clientFailure = assertDirectFailureNotifications(
+      clientNotifications,
+      { threadId, turnId },
+    );
+
+    const readResult = await connection.readThread(
+      { threadId, includeTurns: true },
       { timeoutMs: 5_000 },
     );
     assertEqual(
-      readResult.result.session.sessionId,
+      readResult.result.thread.sessionId,
       sessionId,
-      "read session id",
+      "read thread session id",
     );
-    assertEqual(readResult.result.session.threadId, threadId, "read thread id");
-    const readTurns = Array.isArray(readResult.result.turns)
-      ? readResult.result.turns
+    assertEqual(readResult.result.thread.id, threadId, "read thread id");
+    const readTurns = Array.isArray(readResult.result.thread.turns)
+      ? readResult.result.thread.turns
       : [];
     assertEqual(readTurns.length, 1, "read failed turn count");
-    const readTurn = readTurns.find((turn) => turn?.turnId === turnId);
+    const readTurn = readTurns.find((turn) => turn?.id === turnId);
     if (!readTurn) {
-      throw new Error(`read session is missing failed turn ${turnId}`);
+      throw new Error(`read thread is missing failed turn ${turnId}`);
     }
-    assertEqual(readTurn.sessionId, sessionId, "read failed turn session id");
-    assertEqual(readTurn.threadId, threadId, "read failed turn thread id");
     assertEqual(readTurn.status, "failed", "read failed turn status");
     if (!readTurn.completedAt) {
       throw new Error(`read failed turn ${turnId} is missing completedAt`);
@@ -210,7 +197,7 @@ async function main() {
       { timeoutMs: 5_000 },
     );
     const evidenceEvents = evidenceResult.result.events;
-    const evidenceFailure = assertFailureEvents(
+    const evidenceFailure = assertEvidenceFailureEvents(
       evidenceEvents,
       "evidence events",
     );
@@ -228,12 +215,14 @@ async function main() {
         `source=${sourceBinaryPath}`,
         `packaged=${packagedBinaryPath}`,
         `protocol=${started.connected.initializeResponse.serverInfo.protocolVersion}`,
-        `clientEvents=${clientEvents.map((event) => event.type).join(",")}`,
+        `clientNotifications=${clientNotifications.map((notification) => notification.method).join(",")}`,
         `evidenceEvents=${evidenceEvents.map((event) => event.type).join(",")}`,
+        `threadId=${threadId}`,
+        `turnId=${turnId}`,
         `readTurns=${readTurns.length}`,
         `readTurnStatus=${readTurn.status}`,
         `runtimeLibraries=${runtimeLibraries.length}`,
-        `clientFailure=${JSON.stringify(clientFailure.payload.message)}`,
+        `clientFailure=${JSON.stringify(clientFailure.params.turn.error.message)}`,
         `evidenceFailure=${JSON.stringify(evidenceFailure.payload.message)}`,
       ].join(" "),
     );
@@ -284,15 +273,76 @@ process.exit(7);
   );
 }
 
-function agentEventsFromNotifications(notifications) {
-  return notifications
-    .filter(
-      (notification) => notification.method === METHOD_AGENT_SESSION_EVENT,
+async function collectRuntimeNotificationsUntilFailure(
+  connection,
+  timeoutMs,
+  identity,
+) {
+  const deadline = Date.now() + timeoutMs;
+  const notifications = [];
+  while (
+    !notifications.some(
+      (notification) =>
+        notification.method === "turn/completed" &&
+        notification.params?.threadId === identity.threadId &&
+        notification.params?.turn?.id === identity.turnId &&
+        notification.params?.turn?.status === "failed",
     )
-    .map((notification) => notification.params.event);
+  ) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new Error(
+        `timed out waiting for streamed failure notifications: ${JSON.stringify(notifications)}`,
+      );
+    }
+    const notification = await connection.nextNotification(remainingMs);
+    notifications.push(notification);
+  }
+  return notifications;
 }
 
-function assertFailureEvents(events, label) {
+function assertDirectFailureNotifications(notifications, identity) {
+  const delta = notifications.find(
+    (notification) =>
+      notification.method === "item/agentMessage/delta" &&
+      notification.params?.threadId === identity.threadId &&
+      notification.params?.turnId === identity.turnId,
+  );
+  if (!delta) {
+    throw new Error(
+      `client notifications missing item/agentMessage/delta: ${JSON.stringify(notifications)}`,
+    );
+  }
+  if (!String(delta.params?.delta ?? "").includes("partial packaged failure")) {
+    throw new Error(
+      `client delta missing partial output: ${JSON.stringify(delta)}`,
+    );
+  }
+
+  const failed = notifications.find(
+    (notification) =>
+      notification.method === "turn/completed" &&
+      notification.params?.threadId === identity.threadId &&
+      notification.params?.turn?.id === identity.turnId &&
+      notification.params?.turn?.status === "failed",
+  );
+  if (!failed) {
+    throw new Error(
+      `client notifications missing failed turn/completed: ${JSON.stringify(notifications)}`,
+    );
+  }
+  const message = String(failed.params?.turn?.error?.message ?? "");
+  if (
+    !message.includes("packaged external backend crashed after partial output")
+  ) {
+    throw new Error(
+      `client turn/completed missing stderr summary: ${JSON.stringify(failed)}`,
+    );
+  }
+  return failed;
+}
+
+function assertEvidenceFailureEvents(events, label) {
   if (!events.some((event) => event.type === "message.delta")) {
     throw new Error(
       `${label} missing message.delta: ${JSON.stringify(events)}`,
@@ -317,6 +367,13 @@ function assertEqual(actual, expected, label) {
   if (actual !== expected) {
     throw new Error(`unexpected ${label}: expected ${expected}, got ${actual}`);
   }
+}
+
+function requireNonEmptyString(value, label) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`missing ${label}: ${JSON.stringify(value)}`);
+  }
+  return value.trim();
 }
 
 main().catch((error) => {

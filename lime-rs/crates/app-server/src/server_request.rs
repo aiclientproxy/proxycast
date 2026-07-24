@@ -36,12 +36,34 @@ pub(crate) enum ServerRequestOwner {
 }
 
 struct PendingRoute {
-    owner: Option<ServerRequestOwner>,
+    owners: Vec<ServerRequestOwner>,
     request: JsonRpcRequest,
     thread_id: Option<String>,
     turn_id: Option<String>,
     request_order: u64,
     sender: oneshot::Sender<ServerRequestResolution>,
+}
+
+impl PendingRoute {
+    fn current_owner(&self) -> Option<ServerRequestOwner> {
+        self.owners.last().copied()
+    }
+
+    fn has_owner(&self, owner: ServerRequestOwner) -> bool {
+        self.owners.contains(&owner)
+    }
+
+    fn add_owner(&mut self, owner: ServerRequestOwner) -> bool {
+        if self.has_owner(owner) {
+            return false;
+        }
+        self.owners.push(owner);
+        true
+    }
+
+    fn remove_owner(&mut self, owner: ServerRequestOwner) {
+        self.owners.retain(|candidate| *candidate != owner);
+    }
 }
 
 #[derive(Clone, Default)]
@@ -127,7 +149,7 @@ impl ServerRequestRouter {
             .insert(
                 id.clone(),
                 PendingRoute {
-                    owner: Some(owner),
+                    owners: vec![owner],
                     request: request.clone(),
                     thread_id,
                     turn_id,
@@ -202,8 +224,9 @@ impl ServerRequestRouter {
             .collect::<Vec<_>>();
         let count = pending.len();
         for (_, route) in pending {
+            let owner = route.current_owner();
             let _ = route.sender.send(ServerRequestResolution {
-                owner: route.owner,
+                owner,
                 result: Err(error.clone()),
                 resolved_before_transition: false,
             });
@@ -225,13 +248,12 @@ impl ServerRequestRouter {
         let request_ids = pending
             .iter()
             .filter_map(|(request_id, route)| {
-                (route.owner == Some(owner) && route.thread_id.is_none())
-                    .then_some(request_id.clone())
+                (route.has_owner(owner) && route.thread_id.is_none()).then_some(request_id.clone())
             })
             .collect::<Vec<_>>();
         for route in pending.values_mut() {
-            if route.owner == Some(owner) && route.thread_id.is_some() {
-                route.owner = None;
+            if route.thread_id.is_some() {
+                route.remove_owner(owner);
             }
         }
         let routes = request_ids
@@ -241,8 +263,9 @@ impl ServerRequestRouter {
         drop(pending);
         let count = routes.len();
         for route in routes {
+            let owner = route.current_owner();
             let _ = route.sender.send(ServerRequestResolution {
-                owner: route.owner,
+                owner,
                 result: Err(error.clone()),
                 resolved_before_transition: false,
             });
@@ -265,13 +288,10 @@ impl ServerRequestRouter {
 
         let count = routes.len();
         for route in routes {
-            if let Err(error) = publish_server_request_resolved(
-                bridge,
-                thread_id,
-                route.request.id.clone(),
-                route.owner,
-            )
-            .await
+            let owner = route.current_owner();
+            if let Err(error) =
+                publish_server_request_resolved(bridge, thread_id, route.request.id.clone(), owner)
+                    .await
             {
                 tracing::warn!(
                     %thread_id,
@@ -282,7 +302,7 @@ impl ServerRequestRouter {
                 );
             }
             let _ = route.sender.send(ServerRequestResolution {
-                owner: route.owner,
+                owner,
                 result: Err(error.clone()),
                 resolved_before_transition: true,
             });
@@ -306,17 +326,14 @@ impl ServerRequestRouter {
 
         let count = routes.len();
         for route in routes {
+            let owner = route.current_owner();
             let thread_id = route
                 .thread_id
                 .as_deref()
                 .expect("thread delete route must have a thread id");
-            if let Err(error) = publish_server_request_resolved(
-                bridge,
-                thread_id,
-                route.request.id.clone(),
-                route.owner,
-            )
-            .await
+            if let Err(error) =
+                publish_server_request_resolved(bridge, thread_id, route.request.id.clone(), owner)
+                    .await
             {
                 tracing::warn!(
                     %thread_id,
@@ -326,7 +343,7 @@ impl ServerRequestRouter {
                 );
             }
             let _ = route.sender.send(ServerRequestResolution {
-                owner: route.owner,
+                owner,
                 result: Err(error.clone()),
                 resolved_before_transition: true,
             });
@@ -347,12 +364,8 @@ impl ServerRequestRouter {
         let mut requests = pending
             .values_mut()
             .filter_map(|route| {
-                (route.owner.is_none() && route.thread_id.as_deref() == Some(thread_id)).then(
-                    || {
-                        route.owner = Some(owner);
-                        (route.request_order, route.request.clone())
-                    },
-                )
+                (route.thread_id.as_deref() == Some(thread_id) && route.add_owner(owner))
+                    .then(|| (route.request_order, route.request.clone()))
             })
             .collect::<Vec<_>>();
         drop(pending);
@@ -367,7 +380,7 @@ impl ServerRequestRouter {
             .lock()
             .expect("server request router mutex poisoned")
             .get(id)
-            .and_then(|route| route.owner)
+            .and_then(PendingRoute::current_owner)
     }
 
     pub(crate) fn snapshot_for_owner_thread(
@@ -383,7 +396,7 @@ impl ServerRequestRouter {
         let mut requests = pending
             .values()
             .filter_map(|route| {
-                (route.owner == Some(owner) && route.thread_id.as_deref() == Some(thread_id))
+                (route.has_owner(owner) && route.thread_id.as_deref() == Some(thread_id))
                     .then_some((route.request_order, route.request.clone()))
             })
             .collect::<Vec<_>>();
@@ -406,7 +419,7 @@ impl ServerRequestRouter {
         let route = pending
             .get(&id)
             .ok_or_else(|| ServerRequestError::RequestNotFound { id: id.clone() })?;
-        if route.owner != Some(owner) {
+        if !route.has_owner(owner) {
             return Err(ServerRequestError::ClientMismatch { id });
         }
         let route = pending
@@ -451,7 +464,7 @@ impl ServerRequestRouter {
             .lock()
             .expect("server request router mutex poisoned")
             .remove(id)
-            .and_then(|route| route.owner)
+            .and_then(|route| route.current_owner())
     }
 
     #[cfg(test)]
@@ -1209,7 +1222,7 @@ mod tests {
     }
 
     #[test]
-    fn claim_owner_thread_does_not_steal_an_active_route() {
+    fn claim_owner_thread_replays_active_route_for_each_new_owner() {
         let router = ServerRequestRouter::default();
         let first_owner = ServerRequestOwner::Transport(ConnectionId(1));
         let second_owner = ServerRequestOwner::Transport(ConnectionId(2));
@@ -1219,13 +1232,91 @@ mod tests {
             Some(json!({ "threadId": "thread-1" })),
         );
 
-        assert!(router
-            .claim_owner_thread(second_owner, "thread-1")
-            .is_empty());
-        assert_eq!(router.current_owner(pending.id()), Some(first_owner));
+        assert_eq!(
+            router.claim_owner_thread(second_owner, "thread-1"),
+            vec![pending.request().clone()]
+        );
+        assert_eq!(router.current_owner(pending.id()), Some(second_owner));
         assert_eq!(
             router.snapshot_for_owner_thread(first_owner, "thread-1"),
             vec![pending.request().clone()]
+        );
+        assert_eq!(
+            router.snapshot_for_owner_thread(second_owner, "thread-1"),
+            vec![pending.request().clone()]
+        );
+        assert!(router
+            .claim_owner_thread(second_owner, "thread-1")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn first_terminal_response_wins_across_claimed_thread_route_owners() {
+        let router = ServerRequestRouter::default();
+        let first_owner = ServerRequestOwner::Transport(ConnectionId(1));
+        let second_owner = ServerRequestOwner::Transport(ConnectionId(2));
+        let pending = router.register_for_owner(
+            first_owner,
+            "thread/request",
+            Some(json!({ "threadId": "thread-1" })),
+        );
+        let request_id = pending.id().clone();
+        router.claim_owner_thread(second_owner, "thread-1");
+
+        router
+            .resolve_transport_response(
+                ConnectionId(2),
+                request_id.clone(),
+                json!({ "acceptedBy": 2 }),
+            )
+            .expect("claimed owner resolves request");
+        assert!(matches!(
+            router.resolve_transport_response(ConnectionId(1), request_id.clone(), json!(null)),
+            Err(ServerRequestError::RequestNotFound { id }) if id == request_id
+        ));
+
+        let mut pending = pending;
+        let terminal = pending.wait_terminal().await;
+        assert_eq!(terminal.owner, Some(second_owner));
+        assert_eq!(
+            terminal.result.expect("terminal result"),
+            json!({ "acceptedBy": 2 })
+        );
+    }
+
+    #[tokio::test]
+    async fn disconnect_removes_only_the_matching_thread_route_owner() {
+        let router = ServerRequestRouter::default();
+        let first_owner = ServerRequestOwner::Transport(ConnectionId(1));
+        let second_owner = ServerRequestOwner::Transport(ConnectionId(2));
+        let pending = router.register_for_owner(
+            first_owner,
+            "thread/request",
+            Some(json!({ "threadId": "thread-1" })),
+        );
+        let request_id = pending.id().clone();
+        router.claim_owner_thread(second_owner, "thread-1");
+
+        assert_eq!(router.cancel_owner(first_owner, "first disconnected"), 0);
+        assert!(router
+            .snapshot_for_owner_thread(first_owner, "thread-1")
+            .is_empty());
+        assert_eq!(
+            router.snapshot_for_owner_thread(second_owner, "thread-1"),
+            vec![pending.request().clone()]
+        );
+        assert_eq!(router.current_owner(&request_id), Some(second_owner));
+        assert!(matches!(
+            router.resolve_transport_response(ConnectionId(1), request_id.clone(), json!(null)),
+            Err(ServerRequestError::ClientMismatch { id }) if id == request_id
+        ));
+
+        router
+            .resolve_transport_response(ConnectionId(2), request_id, json!({ "acceptedBy": 2 }))
+            .expect("remaining owner resolves request");
+        assert_eq!(
+            pending.wait().await.expect("remaining owner result"),
+            json!({ "acceptedBy": 2 })
         );
     }
 

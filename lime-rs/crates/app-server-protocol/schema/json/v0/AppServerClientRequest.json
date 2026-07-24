@@ -5093,45 +5093,7 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
-          "const": "agentSession/action/replay",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
           "const": "agentSession/action/respond",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
-          "const": "agentSession/runtimeEvents/append",
           "type": "string"
         },
         "params": {

@@ -1,26 +1,18 @@
-import {
-  startContentFactoryHostGenerationFixture,
-} from "../lib/content-factory-host-generation-fixture.mjs";
+import { startContentFactoryHostGenerationFixture } from "../lib/content-factory-host-generation-fixture.mjs";
 import {
   DEFAULT_FIXTURE_API_KEY,
   DEFAULT_FIXTURE_MODEL,
 } from "../lib/openai-compatible-fixture-server.mjs";
 import {
-  APP_SERVER_METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
   APP_SERVER_METHOD_ARTIFACT_READ,
+  APP_SERVER_METHOD_ARTIFACT_WRITE,
   APP_SERVER_METHOD_SESSION_READ,
   APP_SERVER_METHOD_SESSION_START,
   APP_SERVER_METHOD_SESSION_UPDATE,
-  APP_SERVER_METHOD_WORKFLOW_CANCEL,
-  APP_SERVER_METHOD_WORKFLOW_READ,
-  APP_SERVER_METHOD_WORKFLOW_RETRY,
   APP_SERVER_METHOD_WORKSPACE_RIGHT_SURFACE_REQUEST,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_IMAGE_ARTIFACT_ID,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_TITLE,
-  CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_REVIEW_STEP_ID,
-  CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_CANCEL_STEP_ID,
-  CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_RETRY_STEP_ID,
 } from "./claw-chat-current-fixture-constants.mjs";
 import {
   runWorkspacePatchWorkerDogfoodTurn,
@@ -126,14 +118,14 @@ export async function runContentFactoryArticleWorkspaceScenario({
       sessionCreation.identity,
       workerTurnStart,
     );
-    const runtimeEventsAppend = await appendContentFactoryRuntimeEvents(
+    const artifactWrite = await writeContentFactoryWorkspacePatchArtifact(
       page,
       workspace,
       appServerRequests,
       identity,
     );
-    const actionResultRuntimeEventsAppend =
-      await appendContentFactoryArticleWorkspaceActionResultRuntimeEvents(
+    const actionResultArtifactWrite =
+      await writeContentFactoryArticleWorkspaceActionResultArtifact(
         page,
         workspace,
         appServerRequests,
@@ -269,68 +261,20 @@ export async function runContentFactoryArticleWorkspaceScenario({
     const artifactReadSummary = summarizeContentFactoryArtifactRead(
       artifactRead.result,
     );
-    const workflowRead = await invokeAppServerFromPage(
-      page,
-      APP_SERVER_METHOD_WORKFLOW_READ,
-      {
-        sessionId: identity.sessionId,
-      },
-      appServerRequests,
-    );
-    const workflowReadSummary = summarizeContentFactoryWorkflowRead(
-      workflowRead.result,
-      identity,
-    );
-    const workflowCancel = await invokeAppServerFromPage(
-      page,
-      APP_SERVER_METHOD_WORKFLOW_CANCEL,
-      {
-        sessionId: identity.sessionId,
-        workflowRunId: identity.workflowCancelRunId,
-        reasonCode: "fixture_cancel_requested",
-        reason: "Electron workflow control fixture",
-      },
-      appServerRequests,
-    );
-    const workflowCancelSummary = summarizeContentFactoryWorkflowControl(
-      workflowCancel.result,
-      {
-        workflowRunId: identity.workflowCancelRunId,
-        stepId: CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_CANCEL_STEP_ID,
-      },
-    );
-    const workflowRetry = await invokeAppServerFromPage(
-      page,
-      APP_SERVER_METHOD_WORKFLOW_RETRY,
-      {
-        sessionId: identity.sessionId,
-        workflowRunId: identity.workflowRetryRunId,
-        stepId: CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_RETRY_STEP_ID,
-        reasonCode: "fixture_retry_requested",
-        reason: "Electron workflow control fixture",
-      },
-      appServerRequests,
-    );
-    const workflowRetrySummary = summarizeContentFactoryWorkflowControl(
-      workflowRetry.result,
-      {
-        workflowRunId: identity.workflowRetryRunId,
-        stepId: CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_RETRY_STEP_ID,
-      },
-    );
     return sanitizeJson({
       contentFactoryArticleWorkspaceSessionCreation: {
         ...sessionCreation,
         identity,
       },
       contentFactoryArticleWorkspaceInstalledStateSave: installedStateSave,
-      contentFactoryArticleWorkspaceRuntimeEventsAppend:
-        summarizeRuntimeEventsAppend(runtimeEventsAppend.result),
+      contentFactoryArticleWorkspaceArtifactWrite: summarizeArtifactWrite(
+        artifactWrite.result,
+      ),
       contentFactoryArticleWorkspaceWorkerTurnStart: workerTurnStart,
       contentFactoryArticleWorkspaceWorkerHostGenerationFixture:
         hostGenerationFixture.summary(),
-      contentFactoryArticleWorkspaceActionResultRuntimeEventsAppend:
-        summarizeRuntimeEventsAppend(actionResultRuntimeEventsAppend.result),
+      contentFactoryArticleWorkspaceActionResultArtifactWrite:
+        summarizeArtifactWrite(actionResultArtifactWrite.result),
       contentFactoryArticleWorkspaceRightSurfaceRequest:
         summarizeRightSurfaceRequest(rightSurfaceRequest.result),
       guiContentFactoryArticleWorkspaceSessionVisible: guiSessionVisible,
@@ -358,9 +302,6 @@ export async function runContentFactoryArticleWorkspaceScenario({
       contentFactoryArticleWorkspaceGui: gui,
       contentFactoryArticleWorkspaceReadModel: readModelSummary,
       contentFactoryArticleWorkspaceArtifactRead: artifactReadSummary,
-      contentFactoryArticleWorkspaceWorkflowRead: workflowReadSummary,
-      contentFactoryArticleWorkspaceWorkflowCancel: workflowCancelSummary,
-      contentFactoryArticleWorkspaceWorkflowRetry: workflowRetrySummary,
     });
   } finally {
     await hostGenerationFixture.close();
@@ -873,8 +814,10 @@ async function requestContentFactoryArticleWorkspaceSurface(
       ttlMs: 120_000,
       metadata: {
         fixtureOrigin: "content-factory-article-workspace",
-        contentFactoryWorkspacePatch:
-          buildContentFactoryWorkspacePatch(workspace, identity),
+        contentFactoryWorkspacePatch: buildContentFactoryWorkspacePatch(
+          workspace,
+          identity,
+        ),
       },
     },
     requestLog,
@@ -927,317 +870,100 @@ async function createContentFactoryArticleWorkspaceSession(
   });
 }
 
-function createContentFactoryScenarioIdentity(sessionIdentity, workerTurnStart) {
+function createContentFactoryScenarioIdentity(
+  sessionIdentity,
+  workerTurnStart,
+) {
   const sessionId = String(sessionIdentity?.sessionId ?? "").trim();
   const threadId = String(sessionIdentity?.threadId ?? "").trim();
   const workerTurnId = String(workerTurnStart?.turnId ?? "").trim();
   const workerTaskId = String(workerTurnStart?.taskId ?? "").trim();
   assert(sessionId && threadId, "内容工厂场景缺少 canonical thread identity");
-  assert(workerTurnId && workerTaskId, "内容工厂场景缺少 canonical worker turn identity");
+  assert(
+    workerTurnId && workerTaskId,
+    "内容工厂场景缺少 canonical worker turn identity",
+  );
 
   return {
     sessionId,
     threadId,
     workerTurnId,
     workerTaskId,
-    workflowRunId: `${sessionId}:workflow`,
-    workflowReviewRequestId: `${sessionId}:workflow:review`,
-    workflowCancelRunId: `${sessionId}:workflow:cancel`,
-    workflowRetryRunId: `${sessionId}:workflow:retry`,
   };
 }
 
-async function appendContentFactoryRuntimeEvents(
+async function writeContentFactoryWorkspacePatchArtifact(
   page,
   workspace,
   requestLog,
   identity,
 ) {
+  const workspacePatch = buildContentFactoryWorkspacePatch(workspace, identity);
   return await invokeAppServerFromPage(
     page,
-    APP_SERVER_METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
+    APP_SERVER_METHOD_ARTIFACT_WRITE,
     {
-      sessionId: identity.sessionId,
-      turnId: null,
-      runtimeEvents: [
-        {
-          type: "workflow.run.started",
-          payload: {
-            workflowRunId: identity.workflowRunId,
-            workflowKey: "content_article_workflow",
-            workflowTitle: "内容工厂文章生产",
+      threadId: identity.threadId,
+      artifact: {
+        artifactRef: "artifact-workspace-patch-1",
+        path: ".lime/artifacts/content-factory-workspace-patch.json",
+        title: "内容工厂工作区补丁",
+        kind: "content_factory.workspace_patch",
+        status: "ready",
+        content: JSON.stringify(workspacePatch),
+        metadata: {
+          pluginWorker: {
             appId: CONTENT_FACTORY_APP_ID,
-            sessionId: identity.sessionId,
-            workspaceId: workspace.workspaceId,
-            turnId: identity.workerTurnId,
             taskId: identity.workerTaskId,
             taskKind: "content.article.generate",
-            status: "running",
-            sourceKind: "plugin_worker",
-            artifactRefs: [
-              CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID,
-            ],
-            steps: [
-              {
-                stepId: "research",
-                stepTitle: "资料检索",
-                stepIndex: 0,
-                stepCount: 3,
-                status: "completed",
-                artifactRefs: [
-                  CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID,
-                ],
-              },
-              {
-                stepId: "draft",
-                stepTitle: "正文写作",
-                stepIndex: 1,
-                stepCount: 3,
-                status: "completed",
-                artifactRefs: [
-                  CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID,
-                ],
-              },
-              {
-                stepId:
-                  CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_REVIEW_STEP_ID,
-                stepTitle: "人工复核",
-                stepIndex: 2,
-                stepCount: 3,
-                status: "waiting",
-                requestId:
-                  identity.workflowReviewRequestId,
-                actionType: "ask_user",
-                progressMessage: "等待用户确认文章可进入交付检查",
-              },
-            ],
-          },
-        },
-        {
-          type: "workflow.step.waiting",
-          payload: {
-            workflowRunId: identity.workflowRunId,
-            workflowKey: "content_article_workflow",
-            stepId: CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_REVIEW_STEP_ID,
-            stepTitle: "人工复核",
-            stepIndex: 2,
-            stepCount: 3,
-            status: "waiting",
-            requestId:
-              identity.workflowReviewRequestId,
-            actionType: "ask_user",
-            progressMessage: "等待用户确认文章可进入交付检查",
-          },
-        },
-        {
-          type: "workflow.run.started",
-          payload: {
-            workflowRunId:
-              identity.workflowCancelRunId,
-            workflowKey: "content_article_workflow",
-            workflowTitle: "内容工厂取消控制验证",
-            appId: CONTENT_FACTORY_APP_ID,
-            sessionId: identity.sessionId,
-            workspaceId: workspace.workspaceId,
-            taskId: "article_cancel_job_1",
-            taskKind: "content.article.generate",
-            status: "running",
-            sourceKind: "plugin_worker",
-            steps: [
-              {
-                stepId:
-                  CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_CANCEL_STEP_ID,
-                stepTitle: "取消草稿生成",
-                stepIndex: 0,
-                stepCount: 1,
-                status: "running",
-                progressMessage: "等待取消控制验证",
-              },
-            ],
-          },
-        },
-        {
-          type: "workflow.run.started",
-          payload: {
-            workflowRunId:
-              identity.workflowRetryRunId,
-            workflowKey: "content_article_workflow",
-            workflowTitle: "内容工厂重试控制验证",
-            appId: CONTENT_FACTORY_APP_ID,
-            sessionId: identity.sessionId,
-            workspaceId: workspace.workspaceId,
             turnId: identity.workerTurnId,
-            taskId: "article_retry_job_1",
-            taskKind: "content.article.generate",
-            status: "running",
-            sourceKind: "plugin_worker",
-            steps: [
-              {
-                stepId:
-                  CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_RETRY_STEP_ID,
-                stepTitle: "重试草稿生成",
-                stepIndex: 0,
-                stepCount: 1,
-                status: "failed",
-                attempt: 1,
-                failure: {
-                  source: "fixture",
-                  reasonCode: "fixture_retry_source_failed",
-                  message: "Electron workflow retry source failed",
-                },
-                progressMessage: "等待 workflow/retry 重新调度",
-              },
-            ],
           },
+          contentFactoryWorkspacePatch: workspacePatch,
         },
-        {
-          type: "workflow.step.failed",
-          payload: {
-            workflowRunId:
-              identity.workflowRetryRunId,
-            workflowKey: "content_article_workflow",
-            stepId: CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_RETRY_STEP_ID,
-            stepTitle: "重试草稿生成",
-            stepIndex: 0,
-            stepCount: 1,
-            turnId: identity.workerTurnId,
-            attempt: 1,
-            status: "failed",
-            failure: {
-              source: "fixture",
-              reasonCode: "fixture_retry_source_failed",
-              message: "Electron workflow retry source failed",
-            },
-          },
-        },
-        {
-          type: "workflow.run.failed",
-          payload: {
-            workflowRunId:
-              identity.workflowRetryRunId,
-            workflowKey: "content_article_workflow",
-            workflowTitle: "内容工厂重试控制验证",
-            appId: CONTENT_FACTORY_APP_ID,
-            sessionId: identity.sessionId,
-            workspaceId: workspace.workspaceId,
-            turnId: identity.workerTurnId,
-            taskId: "article_retry_job_1",
-            taskKind: "content.article.generate",
-            status: "failed",
-            sourceKind: "plugin_worker",
-            failure: {
-              source: "fixture",
-              reasonCode: "fixture_retry_source_failed",
-              message: "Electron workflow retry source failed",
-            },
-          },
-        },
-        {
-          type: "artifact.snapshot",
-          payload: {
-            artifact: {
-              artifactId: "artifact-workspace-patch-1",
-              path: ".lime/artifacts/content-factory-workspace-patch.json",
-              title: "内容工厂工作区补丁",
-              kind: "content_factory.workspace_patch",
-              status: "ready",
-              metadata: {
-                pluginWorker: {
-                  appId: CONTENT_FACTORY_APP_ID,
-                  taskId: identity.workerTaskId,
-                  taskKind: "content.article.generate",
-                  turnId: identity.workerTurnId,
-                },
-                contentFactoryWorkspacePatch:
-                  buildContentFactoryWorkspacePatch(workspace, identity),
-              },
-            },
-          },
-        },
-        {
-          type: "runtime.error",
-          payload: {
-            source: "plugin_task_worker",
-            appId: CONTENT_FACTORY_APP_ID,
-            taskId: "image_job_1",
-            taskKind: "content.image.generate",
-            turnId: identity.workerTurnId,
-            status: "failed",
-            errorCode: "worker_invalid_json_output",
-            errorMessage: "Plugin worker returned invalid JSON",
-            failureCategory: "worker_output",
-            retryable: false,
-            retryAdvice: "inspect_worker_output",
-            retryAttempt: 0,
-            retryMaxAttempts: 0,
-            message:
-              "Plugin task worker failed: Plugin worker returned invalid JSON",
-            metadata: {
-              pluginWorker: {
-                appId: CONTENT_FACTORY_APP_ID,
-                taskId: "image_job_1",
-                taskKind: "content.image.generate",
-                turnId: identity.workerTurnId,
-                status: "failed",
-                errorCode: "worker_invalid_json_output",
-                failureCategory: "worker_output",
-                retryable: false,
-                retryAdvice: "inspect_worker_output",
-                retryAttempt: 0,
-                retryMaxAttempts: 0,
-              },
-            },
-          },
-        },
-      ],
+      },
     },
     requestLog,
   );
 }
 
-async function appendContentFactoryArticleWorkspaceActionResultRuntimeEvents(
+async function writeContentFactoryArticleWorkspaceActionResultArtifact(
   page,
   workspace,
   requestLog,
   identity,
 ) {
+  const workspacePatch = buildContentFactoryActionResultWorkspacePatch(
+    workspace,
+    identity,
+  );
   return await invokeAppServerFromPage(
     page,
-    APP_SERVER_METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
+    APP_SERVER_METHOD_ARTIFACT_WRITE,
     {
-      sessionId: identity.sessionId,
-      turnId: null,
-      runtimeEvents: [
-        {
-          type: "artifact.snapshot",
-          payload: {
-            artifact: {
-              artifactId: "artifact-image-regenerate-workspace-patch",
-              artifactRef: "artifact-image-regenerate-workspace-patch",
-              path: ".lime/artifacts/article-workspace/image-regenerate-workspace-patch.json",
-              title: "配图组重新生成结果",
-              kind: "content_factory.workspace_patch",
-              status: "ready",
-              metadata: {
-                pluginWorker: {
-                  appId: CONTENT_FACTORY_APP_ID,
-                  taskId: "image_regenerate_job_1",
-                  taskKind: "content.image.generate",
-                  turnId: identity.workerTurnId,
-                  workerEntrypoint: "./runtime/content-factory-worker.mjs",
-                  status: "completed",
-                  inputSummary: "action=regenerate; object=image-set-1",
-                  outputSummary: "1 object: 配图组重新生成结果",
-                  outputObjectCount: 1,
-                  outputArtifactKind: "content_factory.workspace_patch",
-                },
-                contentFactoryWorkspacePatch:
-                  buildContentFactoryActionResultWorkspacePatch(workspace, identity),
-              },
-            },
+      threadId: identity.threadId,
+      artifact: {
+        artifactRef: "artifact-image-regenerate-workspace-patch",
+        path: ".lime/artifacts/article-workspace/image-regenerate-workspace-patch.json",
+        title: "配图组重新生成结果",
+        kind: "content_factory.workspace_patch",
+        status: "ready",
+        content: JSON.stringify(workspacePatch),
+        metadata: {
+          pluginWorker: {
+            appId: CONTENT_FACTORY_APP_ID,
+            taskId: "image_regenerate_job_1",
+            taskKind: "content.image.generate",
+            turnId: identity.workerTurnId,
+            workerEntrypoint: "./runtime/content-factory-worker.mjs",
+            status: "completed",
+            inputSummary: "action=regenerate; object=image-set-1",
+            outputSummary: "1 object: 配图组重新生成结果",
+            outputObjectCount: 1,
+            outputArtifactKind: "content_factory.workspace_patch",
           },
+          contentFactoryWorkspacePatch: workspacePatch,
         },
-      ],
+      },
     },
     requestLog,
   );
@@ -1726,23 +1452,22 @@ async function selectContentFactoryArticleWorkspaceObject(
   );
 }
 
-function summarizeRuntimeEventsAppend(result) {
-  const events = Array.isArray(result?.events) ? result.events : [];
+function summarizeArtifactWrite(result) {
+  const sidecar = asRecord(result?.sidecar) ?? {};
   return sanitizeJson({
-    eventCount: events.length,
-    eventTypes: events
-      .map((event) => event?.type ?? event?.eventType ?? event?.event_type)
-      .filter(Boolean),
-    turnIds: events
-      .map((event) => event?.turnId ?? event?.turn_id ?? null)
-      .filter(Boolean),
-    sessionIds: Array.from(
-      new Set(
-        events
-          .map((event) => event?.sessionId ?? event?.session_id ?? null)
-          .filter(Boolean),
-      ),
+    threadId: readString(result?.threadId, result?.thread_id),
+    turnId: readString(result?.turnId, result?.turn_id),
+    artifactRef: readString(result?.artifactRef, result?.artifact_ref),
+    eventId: readString(result?.eventId, result?.event_id),
+    sequence: readNumber(result?.sequence),
+    persistedAt: readString(result?.persistedAt, result?.persisted_at),
+    sidecarRelativePath: readString(
+      sidecar.relativePath,
+      sidecar.relative_path,
     ),
+    contentStatus: readString(sidecar.contentStatus, sidecar.content_status),
+    contentBytes: readNumber(sidecar.bytes),
+    contentSha256: readString(sidecar.sha256),
   });
 }
 
@@ -1760,8 +1485,7 @@ function summarizeRightSurfaceRequest(result) {
 function selectContentFactoryWorkerDogfoodEvidence(workerEvidence, identity) {
   const taskEvidenceItems = workerEvidence.filter(
     (evidence) =>
-      readString(evidence?.taskId, evidence?.task_id) ===
-      identity.workerTaskId,
+      readString(evidence?.taskId, evidence?.task_id) === identity.workerTaskId,
   );
   const completedTaskEvidence = taskEvidenceItems.find((evidence) =>
     isCompletedContentFactoryWorkerEvidence(evidence),
@@ -1885,17 +1609,16 @@ function summarizeContentFactoryArticleWorkspaceReadModel(result, identity) {
       readString(evidence?.taskId, evidence?.task_id) ===
       "image_regenerate_job_1",
   );
-  const workerDogfoodEvidence =
-    selectContentFactoryWorkerDogfoodEvidence(workerEvidence, identity);
+  const workerDogfoodEvidence = selectContentFactoryWorkerDogfoodEvidence(
+    workerEvidence,
+    identity,
+  );
   const workerArticleObject = objects.find((object) => {
     if (productObjectKind(object) !== "articleDraft") {
       return false;
     }
     const source = asRecord(object?.source) ?? {};
-    return (
-      readString(source.taskId, source.task_id) ===
-      identity.workerTaskId
-    );
+    return readString(source.taskId, source.task_id) === identity.workerTaskId;
   });
   const workerArticleSource = asRecord(workerArticleObject?.source) ?? {};
   const workerArticleHostManagedGeneration =
@@ -2287,199 +2010,6 @@ function summarizeArticleRefRecord(ref) {
     sourceTurnId: readString(ref.sourceTurnId, ref.source_turn_id),
     sourceTaskId: readString(ref.sourceTaskId, ref.source_task_id),
     version: readString(ref.version),
-  });
-}
-
-function summarizeContentFactoryWorkflowRead(result, identity) {
-  const workflow = asRecord(result?.workflow) ?? {};
-  const workflowRuns = readArray(
-    result?.workflowRuns,
-    result?.workflow_runs,
-    workflow.workflowRuns,
-    workflow.workflow_runs,
-  );
-  const workflowSteps = readArray(
-    result?.workflowSteps,
-    result?.workflow_steps,
-    workflow.workflowSteps,
-    workflow.workflow_steps,
-  );
-  const actions = readArray(workflow.actions);
-  const run =
-    workflowRuns.find(
-      (item) =>
-        readString(item?.workflowRunId, item?.workflow_run_id) ===
-        identity.workflowRunId,
-    ) ?? workflowRuns[0];
-  const waitingStep =
-    workflowSteps.find(
-      (item) =>
-        readString(item?.stepId, item?.step_id) ===
-        CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_REVIEW_STEP_ID,
-    ) ?? workflowSteps.find((item) => readString(item?.status) === "waiting");
-  const respondAction = actions.find(
-    (item) =>
-      readString(item?.actionType, item?.action_type) === "respond" &&
-      readString(item?.requestId, item?.request_id) ===
-        identity.workflowReviewRequestId,
-  );
-
-  return sanitizeJson({
-    sessionId: readString(result?.sessionId, result?.session_id),
-    threadId: readString(workflow.threadId, workflow.thread_id),
-    activeWorkflowRunId: readString(
-      workflow.activeWorkflowRunId,
-      workflow.active_workflow_run_id,
-    ),
-    runCount: workflowRuns.length,
-    stepCount: workflowSteps.length,
-    actionCount: actions.length,
-    run: run
-      ? {
-          workflowRunId: readString(run.workflowRunId, run.workflow_run_id),
-          workflowKey: readString(run.workflowKey, run.workflow_key),
-          title: readString(run.title),
-          status: readString(run.status),
-          appId: readString(run.appId, run.app_id),
-          taskId: readString(run.taskId, run.task_id),
-          turnId: readString(run.turnId, run.turn_id),
-          stepCounts: asRecord(run.stepCounts) ?? asRecord(run.step_counts),
-        }
-      : null,
-    waitingStep: waitingStep
-      ? {
-          stepId: readString(waitingStep.stepId, waitingStep.step_id),
-          title: readString(waitingStep.title, waitingStep.stepTitle),
-          status: readString(waitingStep.status),
-          requestId: readString(waitingStep.requestId, waitingStep.request_id),
-          agentActionType: readString(
-            waitingStep.agentActionType,
-            waitingStep.agent_action_type,
-          ),
-          progressMessage: readString(
-            waitingStep.progressMessage,
-            waitingStep.progress_message,
-          ),
-        }
-      : null,
-    respondAction: respondAction
-      ? {
-          workflowRunId: readString(
-            respondAction.workflowRunId,
-            respondAction.workflow_run_id,
-          ),
-          actionType: readString(
-            respondAction.actionType,
-            respondAction.action_type,
-          ),
-          stepId: readString(respondAction.stepId, respondAction.step_id),
-          requestId: readString(
-            respondAction.requestId,
-            respondAction.request_id,
-          ),
-          agentActionType: readString(
-            respondAction.agentActionType,
-            respondAction.agent_action_type,
-          ),
-        }
-      : null,
-  });
-}
-
-function summarizeContentFactoryWorkflowControl(
-  result,
-  { requestId, stepId, workflowRunId },
-) {
-  const workflow = asRecord(result?.workflow) ?? {};
-  const workflowRuns = readArray(
-    result?.workflowRuns,
-    result?.workflow_runs,
-    workflow.workflowRuns,
-    workflow.workflow_runs,
-  );
-  const workflowSteps = readArray(
-    result?.workflowSteps,
-    result?.workflow_steps,
-    workflow.workflowSteps,
-    workflow.workflow_steps,
-  );
-  const run =
-    workflowRuns.find(
-      (item) =>
-        readString(item?.workflowRunId, item?.workflow_run_id) ===
-        workflowRunId,
-    ) ?? null;
-  const step =
-    workflowSteps.find(
-      (item) =>
-        readString(item?.workflowRunId, item?.workflow_run_id) ===
-          workflowRunId && readString(item?.stepId, item?.step_id) === stepId,
-    ) ?? null;
-  const response = asRecord(step?.response) ?? {};
-  const cancellation = asRecord(run?.cancellation) ?? {};
-  const retry = asRecord(step?.retry) ?? asRecord(run?.retry) ?? {};
-
-  return sanitizeJson({
-    sessionId: readString(result?.sessionId, result?.session_id),
-    rescheduledTurnId: readString(
-      result?.rescheduledTurnId,
-      result?.rescheduled_turn_id,
-    ),
-    run: run
-      ? {
-          workflowRunId: readString(run.workflowRunId, run.workflow_run_id),
-          status: readString(run.status),
-          stepCounts: asRecord(run.stepCounts) ?? asRecord(run.step_counts),
-          cancellationReasonCode: readString(
-            cancellation.reasonCode,
-            cancellation.reason_code,
-          ),
-          retrySource: readString(retry.source),
-          retryReasonCode: readString(retry.reasonCode, retry.reason_code),
-          retrySourceTurnId: readString(
-            retry.sourceTurnId,
-            retry.source_turn_id,
-          ),
-          retryRescheduledTurnId: readString(
-            retry.rescheduledTurnId,
-            retry.rescheduled_turn_id,
-          ),
-        }
-      : null,
-    step: step
-      ? {
-          workflowRunId: readString(step.workflowRunId, step.workflow_run_id),
-          stepId: readString(step.stepId, step.step_id),
-          status: readString(step.status),
-          attempt: readNumber(step.attempt),
-          requestId: readString(step.requestId, step.request_id),
-          agentActionType: readString(
-            step.agentActionType,
-            step.agent_action_type,
-          ),
-          responseSource: readString(response.source),
-          responseRequestId: readString(
-            response.requestId,
-            response.request_id,
-          ),
-          responseConfirmed: readBoolean(response.confirmed),
-          cancellationReasonCode: readString(
-            asRecord(step.cancellation)?.reasonCode,
-            asRecord(step.cancellation)?.reason_code,
-          ),
-          retrySource: readString(retry.source),
-          retryReasonCode: readString(retry.reasonCode, retry.reason_code),
-          retrySourceTurnId: readString(
-            retry.sourceTurnId,
-            retry.source_turn_id,
-          ),
-          retryRescheduledTurnId: readString(
-            retry.rescheduledTurnId,
-            retry.rescheduled_turn_id,
-          ),
-        }
-      : null,
-    requestId,
   });
 }
 

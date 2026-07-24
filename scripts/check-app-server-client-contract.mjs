@@ -855,20 +855,6 @@ const checks = [
     ],
   },
   {
-    name: "Rust protocol exposes agentSession/action/replay DTOs and method catalog",
-    files: rustProtocolFiles,
-    snippets: [
-      'pub const METHOD_AGENT_SESSION_ACTION_REPLAY: &str = "agentSession/action/replay"',
-      "pub struct AgentSessionActionReplayParams",
-      "pub request_id: String",
-      "pub struct AgentSessionReplayedActionRequired",
-      "pub struct AgentSessionActionReplayResponse",
-      "pub action: Option<AgentSessionReplayedActionRequired>",
-      "method: METHOD_AGENT_SESSION_ACTION_REPLAY,",
-      "agent_session_action_replay_request_matches_protocol_fixture_shape",
-    ],
-  },
-  {
     name: "Rust protocol exposes artifact/read DTOs and method catalog",
     files: rustProtocolFiles,
     snippets: [
@@ -970,16 +956,6 @@ const checks = [
       "METHOD_AGENT_SESSION_ACTION_RESPOND => self.handle_action_respond(params).await",
       "let params: AgentSessionActionRespondParams = parse_params(params)?",
       ".respond_action(params, host)",
-      "dispatch_result_with_events(output.response, output.events)",
-    ],
-  },
-  {
-    name: "Rust JSON-RPC router dispatches agentSession/action/replay into RuntimeCore",
-    files: appServerProcessorFiles,
-    snippets: [
-      "METHOD_AGENT_SESSION_ACTION_REPLAY => self.handle_action_replay(params).await",
-      "let params: AgentSessionActionReplayParams = parse_params(params)?",
-      ".replay_action(params)",
       "dispatch_result_with_events(output.response, output.events)",
     ],
   },
@@ -1091,18 +1067,6 @@ const checks = [
       "RuntimeCoreError::TurnNotActive",
       "ActionRespondRequest {",
       "action_scope: params.action_scope",
-    ],
-  },
-  {
-    name: "Rust runtime replays pending action from RuntimeCore current session projection",
-    files: appServerRuntimeFiles,
-    snippets: [
-      "pub async fn replay_action(",
-      "params: AgentSessionActionReplayParams",
-      "AgentSessionActionReplayResponse",
-      "ensure_current_session_hydrated(&params.session_id)",
-      "replayed_action_required_from_stored_session(stored, &params.request_id)",
-      "response: AgentSessionActionReplayResponse { action }",
     ],
   },
   {
@@ -4045,32 +4009,6 @@ const checks = [
     ],
   },
   {
-    name: "Rust client exposes typed agentSession/action/respond helper",
-    file: "lime-rs/crates/app-server-client/src/lib.rs",
-    snippets: [
-      "pub use app_server_protocol::AgentSessionActionRespondParams",
-      "pub use app_server_protocol::METHOD_AGENT_SESSION_ACTION_RESPOND",
-      "pub fn respond_action(",
-      "typed::respond_action(params)",
-      "TypedRequest<AgentSessionActionRespondParams>",
-      "TypedRequest::new(METHOD_AGENT_SESSION_ACTION_RESPOND, params)",
-      "respond_action_preserves_action_scope_and_stable_method",
-    ],
-  },
-  {
-    name: "Rust client exposes typed agentSession/action/replay helper",
-    file: "lime-rs/crates/app-server-client/src/lib.rs",
-    snippets: [
-      "pub use app_server_protocol::AgentSessionActionReplayParams",
-      "pub use app_server_protocol::METHOD_AGENT_SESSION_ACTION_REPLAY",
-      "pub fn replay_action(",
-      "typed::replay_action(params)",
-      "TypedRequest<AgentSessionActionReplayParams>",
-      "TypedRequest::new(METHOD_AGENT_SESSION_ACTION_REPLAY, params)",
-      "replay_action_preserves_request_scope_and_stable_method",
-    ],
-  },
-  {
     name: "Rust client exposes typed artifact/read helper",
     file: "lime-rs/crates/app-server-client/src/lib.rs",
     snippets: [
@@ -4216,7 +4154,7 @@ const checks = [
     ],
   },
   {
-    name: "TypeScript client wraps typed capability/list helper without redefining protocol",
+    name: "TypeScript client wraps typed capability/list helper with single-pump response routing",
     file: "packages/app-server-client/src/index.ts",
     snippets: [
       'export * from "./protocol.js"',
@@ -4227,9 +4165,12 @@ const checks = [
       "readonly response: JsonRpcErrorResponse",
       "readonly notifications: JsonRpcNotification[]",
       "readonly messages: JsonRpcMessage[]",
-      "throw new AppServerRequestError(",
+      "new AppServerRequestError(",
       "method,",
-      "[...notifications],",
+      "#readPump: Promise<void> | null = null",
+      "#pendingRequests = new Map<protocol.RequestId, PendingRequestRead>()",
+      "notifications: [],",
+      "messages: [message],",
       "listCapabilities(params: CapabilityListParams = {}): JsonRpcRequest",
       "this.client.listCapabilities(params)",
       "Promise<AppServerRequestResult<CapabilityListResponse>>",
@@ -4293,19 +4234,6 @@ const checks = [
     ],
   },
   {
-    name: "TypeScript protocol exposes typed agentSession/action/replay contract",
-    file: "packages/app-server-client/src/protocol.ts",
-    snippets: [
-      "export const METHOD_AGENT_SESSION_ACTION_REPLAY =",
-      '"agentSession/action/replay"',
-      "export type AgentSessionActionReplayParams = {",
-      "export type AgentSessionReplayedActionRequired = {",
-      'type: "action_required"',
-      "export type AgentSessionActionReplayResponse = {",
-      "action?: AgentSessionReplayedActionRequired",
-    ],
-  },
-  {
     name: "TypeScript client wraps typed agentSession/action/respond helper",
     file: "packages/app-server-client/src/index.ts",
     snippets: [
@@ -4313,16 +4241,6 @@ const checks = [
       "respondAction(params: AgentSessionActionRespondParams): JsonRpcRequest",
       "this.client.respondAction(params)",
       "Promise<AppServerRequestResult<AgentSessionActionRespondResponse>>",
-    ],
-  },
-  {
-    name: "TypeScript client wraps typed agentSession/action/replay helper",
-    file: "packages/app-server-client/src/index.ts",
-    snippets: [
-      "METHOD_AGENT_SESSION_ACTION_REPLAY",
-      "replayAction(params: AgentSessionActionReplayParams): JsonRpcRequest",
-      "this.client.replayAction(params)",
-      "Promise<AppServerRequestResult<AgentSessionActionReplayResponse>>",
     ],
   },
   {
@@ -4691,10 +4609,11 @@ const checks = [
       "isAppServerRequestMethod(METHOD_TURN_START)",
       "isAppServerNotificationMethod(METHOD_AGENT_SESSION_EVENT)",
       "connection wraps capability list response",
-      "connection request errors preserve streamed notifications and response context",
+      "connection keeps streamed notifications independent from request error context",
       "error instanceof AppServerRequestError",
-      'assert.equal(error.notifications[0].params.event.type, "message.delta")',
-      'assert.equal(error.notifications[1].params.event.type, "turn.failed")',
+      "assert.equal(error.notifications.length, 0)",
+      'assert.equal(partial.params.event.type, "message.delta")',
+      'assert.equal(failed.params.event.type, "turn.failed")',
       "assert.deepEqual(capabilities.params, {})",
       "assert.deepEqual(scopedCapabilities.params, {",
       'appId: "content-studio"',
@@ -4716,19 +4635,6 @@ const checks = [
       "assert.equal(response.method, METHOD_AGENT_SESSION_ACTION_RESPOND)",
       "assert.equal(sent[0].method, METHOD_AGENT_SESSION_ACTION_RESPOND)",
       'assert.equal(sent[0].params.actionScope.turnId, "turn_external")',
-    ],
-  },
-  {
-    name: "TypeScript action replay tests lock helper and connection shape",
-    file: "packages/app-server-client/tests/client.test.mjs",
-    snippets: [
-      "METHOD_AGENT_SESSION_ACTION_REPLAY",
-      "client.replayAction({",
-      "connection wraps action replay response",
-      'actionType: "ask_user"',
-      "assert.equal(replay.method, METHOD_AGENT_SESSION_ACTION_REPLAY)",
-      "assert.equal(sent[0].method, METHOD_AGENT_SESSION_ACTION_REPLAY)",
-      'assert.equal(result.result.action.requestId, "req_confirm_1")',
     ],
   },
   {
@@ -4890,18 +4796,6 @@ const checks = [
       "export type AppServerAgentSessionActionRespondResponse =\n  protocol.AgentSessionActionRespondResponse;",
       "respondAction(params: appServer.AppServerAgentSessionActionRespondParams)",
       '{ name: "respondAction", method: constants.APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND',
-    ],
-  },
-  {
-    name: "Renderer-safe App Server helper aliases action replay protocol types",
-    file: "src/lib/api/appServer.ts",
-    snippets: [
-      "export const APP_SERVER_METHOD_AGENT_SESSION_ACTION_REPLAY =",
-      "protocol.METHOD_AGENT_SESSION_ACTION_REPLAY;",
-      "export type AppServerAgentSessionActionReplayParams =\n  protocol.AgentSessionActionReplayParams;",
-      "export type AppServerAgentSessionActionReplayResponse =\n  protocol.AgentSessionActionReplayResponse;",
-      "replayAction(params: appServer.AppServerAgentSessionActionReplayParams)",
-      '{ name: "replayAction", method: constants.APP_SERVER_METHOD_AGENT_SESSION_ACTION_REPLAY',
     ],
   },
   {
@@ -6738,7 +6632,6 @@ const checks = [
   {
     name: "Plugin runtime startTask exposes and forwards typed RuntimeRequest parity",
     files: [
-      "src/lib/api/pluginRuntime.ts",
       "src/features/plugin/types.ts",
       "src/features/plugin/runtime/agentRuntimeCapabilityHost.ts",
       "src/features/plugin/runtime/agentRuntimeCapabilityHost.test.ts",
@@ -6944,8 +6837,6 @@ const checks = [
       "appServerClientMocks.readThread",
       "Typed server request responses must use their JSON-RPC outer id; generic agentSession/action/respond is retired.",
       "Typed server request is no longer pending; generic agentSession/action/respond is retired.",
-      "runtimeApiMocks.startPluginRuntimeTask).not.toHaveBeenCalled()",
-      "runtimeApiMocks.getPluginRuntimeTask).not.toHaveBeenCalled()",
       "通过 thread/start 为 Plugin 默认宿主创建 current session",
       "默认 Host options 同时提供 runtime client 与 session resolver，且 session 失败时 fail closed",
     ],
@@ -6961,6 +6852,8 @@ const checks = [
       "mockPriorityCommands",
       "defaultMocks",
       "invokeMockOnly",
+      "@/lib/api/pluginRuntime",
+      "runtimeApiMocks",
     ],
   },
   {
@@ -7424,8 +7317,9 @@ const checks = [
       'const APP_SERVER_METHOD_THREAD_LIST = "thread/list"',
       "const APP_SERVER_METHOD_TURN_START =",
       '"turn/start"',
-      "const APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND =",
-      '"agentSession/action/respond"',
+      "const APP_SERVER_METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL =",
+      '"item/commandExecution/requestApproval"',
+      'const APP_SERVER_METHOD_SERVER_REQUEST_RESOLVED = "serverRequest/resolved"',
       "const APP_SERVER_METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST =",
       '"agentSession/fileCheckpoint/list"',
       "const APP_SERVER_METHOD_AGENT_SESSION_FILE_CHECKPOINT_GET =",
@@ -7438,7 +7332,10 @@ const checks = [
       "legacy_agent_runtime_current_method_command",
       "hasAppServerMethodCount(",
       "APP_SERVER_METHOD_TURN_START",
-      "APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND",
+      "APP_SERVER_METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL",
+      "APP_SERVER_METHOD_SERVER_REQUEST_RESOLVED",
+      "buildCodeRuntimeApprovalServerRequest()",
+      "isExpectedApprovalServerRequestResponse(",
       "APP_SERVER_METHOD_AGENT_SESSION_TOOL_INVENTORY_READ",
       "APP_SERVER_METHOD_AGENT_SESSION_FILE_CHECKPOINT_RESTORE",
       "findForbiddenAgentRuntimeCurrentMethodCommands(finalDiagnostics)",
@@ -7447,6 +7344,7 @@ const checks = [
       'command === "agent_runtime_get_thread_read"',
       'command === "agent_runtime_submit_turn"',
       'command === "agent_runtime_respond_action"',
+      '"agentSession/action/respond"',
       'command === "agent_runtime_create_session"',
       'command === "agent_runtime_update_session"',
       'command === "agent_runtime_list_file_checkpoints"',
@@ -7693,7 +7591,7 @@ const checks = [
     file: "src/components/agent/chat/hooks/useAgentChat.ts",
     snippets: [
       "const currentStreamingEventNameRef = useRef<string | null>(null)",
-      "currentTurnEventName: currentStreamingEventNameRef.current",
+      "currentTurnEventName: stream.activeStreamEventName",
       "refreshSessionDetail: session.refreshSessionDetail",
       "getThreadItems: () => session.threadItems",
     ],
@@ -7836,16 +7734,6 @@ const checks = [
       "method: APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND",
       'actionType: "tool_confirmation"',
       'eventName: "agentSession/event/session-1"',
-    ],
-  },
-  {
-    name: "Renderer-safe App Server tests lock action replay JSON-RPC path",
-    file: "src/lib/api/appServer.test.ts",
-    snippets: [
-      "APP_SERVER_METHOD_AGENT_SESSION_ACTION_REPLAY",
-      "replayAction 应通过 App Server JSON-RPC 重放 pending action",
-      "method: APP_SERVER_METHOD_AGENT_SESSION_ACTION_REPLAY",
-      'actionType: "ask_user"',
     ],
   },
   {
@@ -8316,12 +8204,11 @@ const checks = [
     ],
   },
   {
-    name: "Packaged sidecar failure smoke preserves streamed failure evidence",
+    name: "Packaged sidecar failure smoke drains streamed failure evidence independently",
     file: "scripts/app-server/packaged-external-backend-failure-smoke.mjs",
     snippets: [
       "[smoke:app-server-packaged-external-backend-failure] ok",
       "startPackagedAppServerSidecar",
-      "AppServerRequestError",
       'backendMode: "external"',
       "backendCommand: process.execPath",
       "backendArgs: [backendPath]",
@@ -8329,23 +8216,34 @@ const checks = [
       "copyElectronAppServerRuntimeLibraries",
       "writeFailingExternalBackend(backendPath)",
       "packaged external backend crashed after partial output",
-      "agentEventsFromNotifications(",
-      "turnResult.error.notifications",
-      "const clientFailure = assertFailureEvents(",
-      '"client streamed events"',
-      "connection.readSession",
+      'historyMode: "paginated"',
+      'model: "fixture-model"',
+      'modelProvider: "fixture-provider"',
+      "collectRuntimeNotificationsUntilFailure(",
+      "connection.nextNotification(remainingMs)",
+      'notification.method === "item/agentMessage/delta"',
+      'notification.method === "turn/completed"',
+      "const clientFailure = assertDirectFailureNotifications(",
+      "connection.readThread",
+      "{ threadId, includeTurns: true }",
+      "readResult.result.thread.turns",
       'assertEqual(readTurns.length, 1, "read failed turn count")',
       'assertEqual(readTurn.status, "failed", "read failed turn status")',
       "read failed turn ${turnId} is missing completedAt",
       "connection.exportEvidence",
-      "const evidenceFailure = assertFailureEvents(",
+      "const evidenceFailure = assertEvidenceFailureEvents(",
       "evidenceEvents",
       '"evidence events"',
-      'clientEvents=${clientEvents.map((event) => event.type).join(",")}',
+      'clientNotifications=${clientNotifications.map((notification) => notification.method).join(",")}',
       'evidenceEvents=${evidenceEvents.map((event) => event.type).join(",")}',
       "readTurnStatus=${readTurn.status}",
     ],
-    absentSnippets: ['backendMode: "mock"'],
+    absentSnippets: [
+      'backendMode: "mock"',
+      "AppServerRequestError",
+      "METHOD_AGENT_SESSION_EVENT",
+      "connection.readSession",
+    ],
   },
   {
     name: "Root package gate runs packaged external backend failure smoke",
@@ -8602,6 +8500,7 @@ for (const check of checks) {
 checkRetiredAgentRuntimeSessionFacadeSurface();
 checkAgentRuntimeThinGatewayContracts();
 checkPluginUiRuntimeLifecycleContracts();
+checkRetiredPluginRuntimeRendererFacade();
 checkRetiredAgentRuntimeMockFiles();
 checkRetiredAgentRuntimeCommandManifestFiles();
 checkRetiredAgentRuntimeAdapterFiles();
@@ -9113,6 +9012,15 @@ function checkRetiredAgentRuntimeClientShells() {
         `retired Agent Runtime client shell or root barrel must stay deleted: ${relativePath}`,
       );
     }
+  }
+}
+
+function checkRetiredPluginRuntimeRendererFacade() {
+  const relativePath = "src/lib/api/pluginRuntime.ts";
+  if (fs.existsSync(path.join(repoRoot, relativePath))) {
+    failures.push(
+      `retired Plugin runtime Renderer facade must stay deleted: ${relativePath}`,
+    );
   }
 }
 

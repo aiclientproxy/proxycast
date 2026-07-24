@@ -78,6 +78,7 @@ interface BindRecoveredAgentStreamThreadOptions {
   setThreadTurns: Dispatch<SetStateAction<AgentThreadTurn[]>>;
   setIsSending: Dispatch<SetStateAction<boolean>>;
   soulCopy?: SoulInteractionCopy;
+  surfaceThinkingDeltas?: boolean;
   target: AgentStreamResumeBindingTarget;
   warnedKeysRef: MutableRefObject<Set<string>>;
 }
@@ -498,6 +499,7 @@ export async function bindRecoveredAgentStreamThread(
     setThreadItems,
     setThreadTurns,
     soulCopy,
+    surfaceThinkingDeltas = false,
     target,
     warnedKeysRef,
   } = options;
@@ -613,7 +615,7 @@ export async function bindRecoveredAgentStreamThread(
         activeSessionId: target.sessionId,
         resolvedWorkspaceId: "",
         effectiveExecutionStrategy: executionStrategy,
-        surfaceThinkingDeltas: true,
+        surfaceThinkingDeltas,
         content: "",
         runtime: runtime as AgentRuntimeAdapter,
         warnedKeysRef,

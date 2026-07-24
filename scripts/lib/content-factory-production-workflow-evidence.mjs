@@ -115,11 +115,7 @@ function workflowResumeBindingFromRequest(request) {
 export function workflowResumeBindingsFromTrace(traceEntries) {
   return traceEntries
     .flatMap((entry) => entry.appServerRequests || [])
-    .filter((request) =>
-      ["agentSession/action/respond", "workflow/respond"].includes(
-        request.method,
-      ),
-    )
+    .filter((request) => request.method === "workflow/respond")
     .map(workflowResumeBindingFromRequest)
     .filter(Boolean);
 }

@@ -22,6 +22,7 @@ function tokenUsageNotification(
           totalTokens: 31_000,
           inputTokens: 31_000,
           cachedInputTokens: 0,
+          cacheWriteInputTokens: 1_200,
           outputTokens: 0,
           reasoningOutputTokens: 0,
         },
@@ -29,6 +30,7 @@ function tokenUsageNotification(
           totalTokens: 31_000,
           inputTokens: 31_000,
           cachedInputTokens: 0,
+          cacheWriteInputTokens: 1_200,
           outputTokens: 0,
           reasoningOutputTokens: 0,
         },
@@ -63,6 +65,7 @@ describe("useAgentSessionTokenUsage", () => {
         input_tokens: 31_000,
         output_tokens: 0,
         cached_input_tokens: 0,
+        cache_creation_input_tokens: 1_200,
       },
     });
   });

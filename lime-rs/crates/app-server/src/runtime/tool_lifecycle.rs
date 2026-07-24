@@ -744,14 +744,21 @@ fn canonical_tool_item(event: &AgentEvent) -> Option<CanonicalToolItem> {
         return None;
     }
     let item = serde_json::from_value::<ThreadItem>(event.payload.get("item")?.clone()).ok()?;
-    let ThreadItemPayload::Tool {
-        call_id,
-        name,
-        arguments,
-        output,
-    } = item.payload
-    else {
-        return None;
+    let (call_id, name, arguments, output) = match item.payload {
+        ThreadItemPayload::Tool {
+            call_id,
+            name,
+            arguments,
+            output,
+        } => (call_id, name, arguments, output),
+        ThreadItemPayload::McpToolCall {
+            call_id,
+            tool_name,
+            arguments,
+            output,
+            ..
+        } => (call_id, tool_name, arguments, output),
+        _ => return None,
     };
     let arguments = arguments
         .into_iter()

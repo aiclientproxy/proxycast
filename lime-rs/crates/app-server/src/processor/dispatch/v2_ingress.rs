@@ -49,6 +49,7 @@ pub(super) fn into_parts(
         ClientRequest::ThreadGoalSet { id, params } => parts(id, Method::ThreadGoalSet, params),
         ClientRequest::ThreadGoalGet { id, params } => parts(id, Method::ThreadGoalGet, params),
         ClientRequest::ThreadGoalClear { id, params } => parts(id, Method::ThreadGoalClear, params),
+        ClientRequest::ArtifactWrite { id, params } => parts(id, Method::ArtifactWrite, params),
         ClientRequest::ThreadSettingsUpdate { id, params } => {
             parts(id, Method::ThreadSettingsUpdate, params)
         }

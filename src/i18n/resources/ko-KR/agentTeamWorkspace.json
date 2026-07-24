@@ -1,11 +1,4 @@
 {
-  "agentChat.agentUiProjection.chip.artifactCount": "Artifact {{count}}",
-  "agentChat.agentUiProjection.chip.hasExecutionRef": "Has execution ref",
-  "agentChat.agentUiProjection.chip.hasResultRef": "Has result ref",
-  "agentChat.agentUiProjection.chip.reassign": "Reassign",
-  "agentChat.agentUiProjection.chip.remoteContent": "Remote content",
-  "agentChat.agentUiProjection.chip.reviewFix": "Review fix",
-  "agentChat.agentUiProjection.chip.toolCount": "Tools {{count}}",
   "agentChat.agentUiProjection.control.answer": "입력 보완",
   "agentChat.agentUiProjection.control.approve": "승인",
   "agentChat.agentUiProjection.control.assign": "할당",

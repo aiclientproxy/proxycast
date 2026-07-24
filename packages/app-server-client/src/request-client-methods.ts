@@ -104,12 +104,6 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "required",
     },
     {
-      name: "appendAgentSessionRuntimeEvents",
-      method: protocol.METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
-      kind: "request",
-      params: "required",
-    },
-    {
       name: "compactAgentSession",
       method: protocol.METHOD_AGENT_SESSION_COMPACT,
       kind: "request",
@@ -1310,6 +1304,12 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "required",
     },
     {
+      name: "writeArtifact",
+      method: protocol.METHOD_ARTIFACT_WRITE,
+      kind: "request",
+      params: "required",
+    },
+    {
       name: "listDirectory",
       method: protocol.METHOD_FILE_SYSTEM_LIST_DIRECTORY,
       kind: "request",
@@ -1732,12 +1732,6 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
     {
       name: "cancelTurn",
       method: protocol.METHOD_TURN_INTERRUPT,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "replayAction",
-      method: protocol.METHOD_AGENT_SESSION_ACTION_REPLAY,
       kind: "request",
       params: "required",
     },

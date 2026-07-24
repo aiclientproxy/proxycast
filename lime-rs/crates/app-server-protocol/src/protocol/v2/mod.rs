@@ -1,4 +1,5 @@
 mod approval;
+mod artifact;
 mod common;
 mod envelopes;
 mod item;
@@ -12,6 +13,7 @@ mod turn;
 mod user_input;
 
 pub use approval::*;
+pub use artifact::*;
 pub use common::*;
 pub use envelopes::*;
 pub use item::*;

@@ -65,8 +65,10 @@ struct CursorValue {
 
 impl ProjectionStore {
     pub(super) fn ensure_canonical_thread_store(&self) -> Result<(), String> {
-        self.open_thread_store()
-            .map(|_| ())
+        let conn = self
+            .open_thread_store()
+            .map_err(|error| error.to_string())?;
+        create_thread_store_schema(&conn, self.state_path() != self.thread_history_path())
             .map_err(|error| error.to_string())
     }
 
@@ -385,7 +387,6 @@ impl ProjectionStore {
             )
             .map_err(store_error)?;
         }
-        create_thread_store_schema(&conn, self.state_path() != self.thread_history_path())?;
         Ok(conn)
     }
 
@@ -433,7 +434,7 @@ impl ProjectionStore {
             return Ok(None);
         }
         hydrate_thread(&conn, &mut thread, params.turns_view)?;
-        self.enrich_thread_agent_context(&mut thread)?;
+        self.enrich_thread_agent_context(&conn, &mut thread)?;
         Ok(Some(thread))
     }
 
@@ -464,7 +465,7 @@ impl ProjectionStore {
             .map(|(_, position, id)| encode_cursor(CursorKind::Threads, *position, id))
             .transpose()?;
         for (thread, _, _) in &mut rows {
-            self.enrich_thread_agent_context(thread)?;
+            self.enrich_thread_agent_context(&conn, thread)?;
         }
         Ok(ThreadPage {
             data: rows.into_iter().map(|(thread, _, _)| thread).collect(),
@@ -473,14 +474,18 @@ impl ProjectionStore {
         })
     }
 
-    fn enrich_thread_agent_context(&self, thread: &mut Thread) -> ThreadStoreResult<()> {
+    fn enrich_thread_agent_context(
+        &self,
+        conn: &Connection,
+        thread: &mut Thread,
+    ) -> ThreadStoreResult<()> {
         thread.parent_thread_id = None;
         thread.agent_path = None;
         thread.agent_nickname = None;
         thread.agent_role = None;
         thread.last_task_message = None;
         thread.agent_state = None;
-        let Some(parent) = self.read_thread_spawn_parent_sync(thread.thread_id.clone())? else {
+        let Some(parent) = self.read_thread_spawn_parent_with_conn(conn, &thread.thread_id)? else {
             return Ok(());
         };
         thread.parent_thread_id = Some(parent.parent_thread_id.clone());

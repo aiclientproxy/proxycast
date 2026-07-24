@@ -2521,11 +2521,6 @@ pub struct MemorySourcesConfig {
     /// 用户级记忆文件（可选）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_memory_path: Option<String>,
-    /// 项目本地私有记忆文件（可选）
-    ///
-    /// 默认使用 `.lime/AGENTS.local.md`，仅解析当前 workspace 根目录。
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub project_local_memory_path: Option<String>,
 }
 
 impl Default for MemorySourcesConfig {
@@ -2535,7 +2530,6 @@ impl Default for MemorySourcesConfig {
             project_memory_paths: vec![".lime/AGENTS.md".to_string()],
             project_rule_dirs: vec![".agents/rules".to_string()],
             user_memory_path: None,
-            project_local_memory_path: Some(".lime/AGENTS.local.md".to_string()),
         }
     }
 }

@@ -2,9 +2,11 @@ use app_server::AppServer;
 use app_server::EventLogWriter;
 use app_server::LocalAppDataSource;
 use app_server::MockBackend;
+use app_server::ProjectionStore;
 use app_server::RuntimeBackend;
 use app_server::RuntimeCore;
 use app_server::SidecarStore;
+use app_server_protocol::protocol::v2::{METHOD_ITEM_COMPLETED, METHOD_TURN_COMPLETED};
 use app_server_protocol::*;
 use chrono::Utc;
 use lime_core::database::dao::api_key_provider::{
@@ -12,11 +14,14 @@ use lime_core::database::dao::api_key_provider::{
 };
 use lime_core::database::schema::create_tables;
 use lime_core::database::{lock_db, DbConnection};
+use lime_services::api_key_provider_service::ApiKeyProviderService;
 use rusqlite::Connection;
 use serde_json::json;
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
+use tokio::sync::broadcast;
+use tokio::time::{timeout, Duration};
 
 struct MediaTaskAppServer {
     _temp: TempDir,
@@ -326,41 +331,55 @@ async fn image_command_turn_start_creates_task_from_jsonrpc_metadata() {
     let app = image_command_app_server().await;
     initialize_server(&app.server, 1, "image-command-jsonrpc-test").await;
 
-    request(
+    let started = request_allowing_notifications(
         &app.server,
         2,
         METHOD_THREAD_START,
         json!({
-            "sessionId": "sess-image-command-jsonrpc",
-            "threadId": "thread-image-command-jsonrpc",
-            "appId": "agent-runtime",
-            "workspaceId": "workspace-image-command-jsonrpc"
+            "cwd": app.workspace_root,
+            "model": "gpt-image-test",
+            "modelProvider": "provider-image"
         }),
     )
     .await;
+    let thread_id = started
+        .pointer("/result/thread/id")
+        .and_then(Value::as_str)
+        .expect("started thread id")
+        .to_string();
+    let session_id = started
+        .pointer("/result/thread/sessionId")
+        .and_then(Value::as_str)
+        .expect("started session id")
+        .to_string();
 
-    let messages = request_with_notifications(
+    let application_metadata = image_command_metadata(
+        &app.workspace_root,
+        "E2E 图片命令路由测试，请生成一张青柠插画",
+        "@配图 E2E 图片命令路由测试，请生成一张青柠插画",
+        "provider-image",
+        "gpt-image-test",
+    );
+    let mut outbound = app.server.subscribe_outbound_messages();
+    let messages = request_turn_with_notifications(
         &app.server,
+        &mut outbound,
         3,
-        METHOD_TURN_START,
+        &thread_id,
         json!({
-            "sessionId": "sess-image-command-jsonrpc",
-            "turnId": "turn-image-command-jsonrpc",
-            "input": {
-                "text": "@配图 E2E 图片命令路由测试，请生成一张青柠插画",
-                "attachments": []
+            "threadId": thread_id,
+            "input": [{
+                "type": "text",
+                "text": "@配图 E2E 图片命令路由测试，请生成一张青柠插画"
+            }],
+            "additionalContext": {
+                "metadata": {
+                    "kind": "application",
+                    "value": application_metadata.to_string()
+                }
             },
-            "runtimeOptions": {
-                "stream": true,
-                "metadata": image_command_metadata(
-                    &app.workspace_root,
-                    "E2E 图片命令路由测试，请生成一张青柠插画",
-                    "@配图 E2E 图片命令路由测试，请生成一张青柠插画",
-                    "provider-image",
-                    "gpt-image-test",
-                )
-            },
-            "queueIfBusy": true
+            "cwd": app.workspace_root,
+            "model": "gpt-image-test"
         }),
     )
     .await;
@@ -378,10 +397,7 @@ async fn image_command_turn_start_creates_task_from_jsonrpc_metadata() {
         event_types.contains(&"image_task.created"),
         "image command should create task: {event_types:?}"
     );
-    assert!(
-        event_types.contains(&"tool.result"),
-        "image command should expose tool result: {event_types:?}"
-    );
+    assert_dynamic_tool_completed(&messages, "completed", true);
     assert!(
         !event_types.contains(&"routing.decision.made"),
         "image command must not fall through to ordinary chat routing: {event_types:?}"
@@ -394,7 +410,7 @@ async fn image_command_turn_start_creates_task_from_jsonrpc_metadata() {
     );
     let workflow_events = app
         .event_log_writer
-        .read_session_workflow_audit_events("sess-image-command-jsonrpc")
+        .read_session_workflow_audit_events(&session_id)
         .expect("workflow audit events");
     let workflow_event_types = workflow_events
         .iter()
@@ -439,18 +455,22 @@ async fn image_command_turn_start_rejects_missing_explicit_provider_before_task_
     let app = image_command_app_server().await;
     initialize_server(&app.server, 1, "image-command-jsonrpc-stale-provider-test").await;
 
-    request(
+    let started = request_allowing_notifications(
         &app.server,
         2,
         METHOD_THREAD_START,
         json!({
-            "sessionId": "sess-image-command-stale-provider",
-            "threadId": "thread-image-command-stale-provider",
-            "appId": "agent-runtime",
-            "workspaceId": "workspace-image-command-stale-provider"
+            "cwd": app.workspace_root,
+            "model": "gpt-image-test",
+            "modelProvider": "provider-image"
         }),
     )
     .await;
+    let thread_id = started
+        .pointer("/result/thread/id")
+        .and_then(Value::as_str)
+        .expect("started thread id")
+        .to_string();
 
     let raw_text = "@配图 stale provider 回归，请生成一张青柠插画";
     let prompt = "stale provider 回归，请生成一张青柠插画";
@@ -461,22 +481,26 @@ async fn image_command_turn_start_rejects_missing_explicit_provider_before_task_
         "deleted-provider",
         "gpt-image-test",
     );
-    let messages = request_with_notifications(
+    let mut outbound = app.server.subscribe_outbound_messages();
+    let messages = request_turn_with_notifications(
         &app.server,
+        &mut outbound,
         3,
-        METHOD_TURN_START,
+        &thread_id,
         json!({
-            "sessionId": "sess-image-command-stale-provider",
-            "turnId": "turn-image-command-stale-provider",
-            "input": {
-                "text": raw_text,
-                "attachments": []
+            "threadId": thread_id,
+            "input": [{
+                "type": "text",
+                "text": raw_text
+            }],
+            "additionalContext": {
+                "metadata": {
+                    "kind": "application",
+                    "value": metadata.to_string()
+                }
             },
-            "runtimeOptions": {
-                "stream": true,
-                "metadata": metadata
-            },
-            "queueIfBusy": true
+            "cwd": app.workspace_root,
+            "model": "gpt-image-test"
         }),
     )
     .await;
@@ -486,10 +510,7 @@ async fn image_command_turn_start_rejects_missing_explicit_provider_before_task_
         event_types.contains(&"image_task.create_failed"),
         "stale provider should fail during task creation: {event_types:?}"
     );
-    assert!(
-        event_types.contains(&"tool.failed"),
-        "stale provider should surface as tool failure: {event_types:?}"
-    );
+    assert_dynamic_tool_completed(&messages, "failed", false);
     assert!(
         !event_types.contains(&"image_task.created"),
         "stale provider must not create a task: {event_types:?}"
@@ -588,6 +609,10 @@ async fn image_command_app_server() -> MediaTaskAppServer {
             .await
             .expect("local app data source");
     let runtime = RuntimeCore::with_backend(Arc::new(RuntimeBackend::with_db(db)))
+        .with_projection_store(Arc::new(
+            ProjectionStore::initialize(temp.path().join("projection.sqlite"))
+                .expect("image command projection store"),
+        ))
         .with_app_data_source(Arc::new(app_data_source))
         .with_event_log_writer(event_log_writer.clone())
         .with_sidecar_store(sidecar_store.clone());
@@ -624,7 +649,7 @@ fn insert_image_provider_with_key(db: &DbConnection, provider_id: &str, model: &
     let key = ApiKeyEntry {
         id: format!("{provider_id}-key"),
         provider_id: provider_id.to_string(),
-        api_key_encrypted: "encrypted-test-key".to_string(),
+        api_key_encrypted: ApiKeyProviderService::new().encrypt_api_key("test-key"),
         alias: None,
         enabled: true,
         usage_count: 0,
@@ -663,12 +688,12 @@ async fn request(server: &AppServer, id: u64, method: &str, params: Value) -> Va
     response
 }
 
-async fn request_with_notifications(
+async fn request_allowing_notifications(
     server: &AppServer,
     id: u64,
     method: &str,
     params: Value,
-) -> Vec<Value> {
+) -> Value {
     let lines = server
         .handle_json_line(
             &json!({
@@ -681,19 +706,62 @@ async fn request_with_notifications(
         )
         .await
         .expect("handle JSON-RPC request");
-    assert!(!lines.is_empty(), "{method} should return a response");
-    let messages = lines
+    let response = lines
         .iter()
         .map(|line| serde_json::from_str::<Value>(line).expect("decode JSON-RPC message"))
-        .collect::<Vec<_>>();
-    let response = messages
-        .iter()
         .find(|message| message.get("id") == Some(&json!(id)))
         .unwrap_or_else(|| panic!("{method} should include response id {id}"));
     if let Some(error) = response.get("error") {
         panic!("{method} failed: {error}");
     }
-    messages
+    response
+}
+
+async fn request_turn_with_notifications(
+    server: &AppServer,
+    outbound: &mut broadcast::Receiver<JsonRpcMessage>,
+    id: u64,
+    thread_id: &str,
+    params: Value,
+) -> Vec<Value> {
+    let response = request(server, id, METHOD_TURN_START, params).await;
+    let turn_id = response
+        .pointer("/result/turn/id")
+        .and_then(Value::as_str)
+        .expect("turn/start response turn id")
+        .to_string();
+
+    timeout(Duration::from_secs(5), async {
+        let mut messages = Vec::new();
+        loop {
+            let message = outbound.recv().await.expect("outbound turn notification");
+            let JsonRpcMessage::Notification(notification) = message else {
+                continue;
+            };
+            let completed = notification.method == METHOD_TURN_COMPLETED
+                && notification
+                    .params
+                    .as_ref()
+                    .and_then(|params| params.pointer("/threadId"))
+                    .and_then(Value::as_str)
+                    == Some(thread_id)
+                && notification
+                    .params
+                    .as_ref()
+                    .and_then(|params| params.pointer("/turn/id"))
+                    .and_then(Value::as_str)
+                    == Some(turn_id.as_str());
+            messages.push(
+                serde_json::to_value(JsonRpcMessage::Notification(notification))
+                    .expect("encode outbound turn notification"),
+            );
+            if completed {
+                return messages;
+            }
+        }
+    })
+    .await
+    .expect("timed out waiting for turn/completed")
 }
 
 fn notification_event_types(messages: &[Value]) -> Vec<&str> {
@@ -706,6 +774,20 @@ fn notification_event_types(messages: &[Value]) -> Vec<&str> {
                 .and_then(Value::as_str)
         })
         .collect()
+}
+
+fn assert_dynamic_tool_completed(messages: &[Value], status: &str, success: bool) {
+    assert!(
+        messages.iter().any(|message| {
+            message.get("method") == Some(&json!(METHOD_ITEM_COMPLETED))
+                && message.pointer("/params/item/type") == Some(&json!("dynamicToolCall"))
+                && message.pointer("/params/item/tool")
+                    == Some(&json!("lime_create_image_generation_task"))
+                && message.pointer("/params/item/status") == Some(&json!(status))
+                && message.pointer("/params/item/success") == Some(&json!(success))
+        }),
+        "image command should expose a {status} dynamic tool terminal: {messages:#?}"
+    );
 }
 
 async fn request_error(server: &AppServer, id: u64, method: &str, params: Value) -> Value {

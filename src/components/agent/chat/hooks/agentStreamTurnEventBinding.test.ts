@@ -105,6 +105,122 @@ describe("agentStreamTurnEventBinding", () => {
     expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
+  it("活动流默认隐藏 raw reasoning，仅显示 reasoning summary", async () => {
+    let messages: Message[] = [
+      {
+        id: "assistant-reasoning-visibility",
+        role: "assistant",
+        content: "",
+        timestamp: new Date("2026-07-23T08:00:00.000Z"),
+        isThinking: true,
+        contentParts: [],
+      },
+    ];
+    let streamHandler: ((event: { payload: unknown }) => void) | null = null;
+    const runtime = {
+      listenToTurnEvents: vi.fn(async (_eventName, handler) => {
+        streamHandler = handler;
+        return vi.fn();
+      }),
+    } as unknown as AgentRuntimeAdapter;
+    const requestState: StreamRequestState = {
+      accumulatedContent: "",
+      currentTurnId: "turn-reasoning-visibility",
+      requestLogId: null,
+      requestStartedAt: 0,
+      requestFinished: false,
+    };
+    const setMessages = vi.fn(
+      (value: Message[] | ((prev: Message[]) => Message[])) => {
+        messages = typeof value === "function" ? value(messages) : value;
+      },
+    );
+
+    await registerAgentStreamTurnEventBinding({
+      runtime,
+      eventName: "event-reasoning-visibility",
+      requestState,
+      skipUserMessage: false,
+      effectiveProviderType: "openai",
+      effectiveModel: "gpt-5.4",
+      effectiveExecutionStrategy: "react",
+      content: "你好",
+      activeSessionId: "session-reasoning-visibility",
+      resolvedWorkspaceId: "workspace-reasoning-visibility",
+      assistantMsgId: "assistant-reasoning-visibility",
+      pendingTurnKey: "pending-turn-reasoning-visibility",
+      pendingItemKey: "pending-item-reasoning-visibility",
+      effectiveWaitingRuntimeStatus: {
+        phase: "preparing",
+        title: "处理中",
+        detail: "正在准备执行上下文",
+      },
+      warnedKeysRef: { current: new Set<string>() },
+      actionLoggedKeys: new Set<string>(),
+      toolLogIdByToolId: new Map<string, string>(),
+      toolStartedAtByToolId: new Map<string, number>(),
+      toolNameByToolId: new Map<string, string>(),
+      callbacks: {
+        activateStream: () => {},
+        isStreamActivated: () => true,
+        clearOptimisticItem: () => {},
+        clearOptimisticTurn: () => {},
+        disposeListener: () => {},
+        clearActiveStreamIfMatch: () => false,
+      },
+      appendThinkingToParts: (parts, textDelta) => [
+        ...parts,
+        { type: "thinking", text: textDelta },
+      ],
+      setMessages: setMessages as never,
+      setPendingActions: noopDispatch<ActionRequired[]>(),
+      setThreadItems: noopDispatch<AgentThreadItem[]>(),
+      setThreadTurns: noopDispatch<AgentThreadTurn[]>(),
+      setCurrentTurnId: noopDispatch<string | null>(),
+      setExecutionRuntime: noopDispatch<AgentSessionExecutionRuntime | null>(),
+      setIsSending: noopDispatch<boolean>(),
+    });
+
+    if (!streamHandler) {
+      throw new Error("expected stream handler to be registered");
+    }
+    const activeStreamHandler = streamHandler as (event: {
+      payload: unknown;
+    }) => void;
+
+    activeStreamHandler({
+      payload: {
+        type: "thinking_delta",
+        text: "不应显示的 raw chain of thought",
+        session_id: "session-reasoning-visibility",
+        turn_id: "turn-reasoning-visibility",
+      },
+    });
+    activeStreamHandler({
+      payload: {
+        type: "reasoning_summary_delta",
+        text: "正在整理回答。",
+        delta: "正在整理回答。",
+        item_id: "reasoning-visibility",
+        summary_index: 0,
+        sequence: 1,
+        session_id: "session-reasoning-visibility",
+        turn_id: "turn-reasoning-visibility",
+      },
+    });
+
+    expect(messages[0]?.thinkingContent).toBe("正在整理回答。");
+    expect(messages[0]?.contentParts).toEqual([
+      expect.objectContaining({
+        type: "thinking",
+        text: "正在整理回答。",
+        metadata: expect.objectContaining({
+          source: "streamed_reasoning_summary",
+        }),
+      }),
+    ]);
+  });
+
   it("首个运行时事件超时未到达时，应把助手消息收口为失败态", async () => {
     vi.useFakeTimers();
 

@@ -138,7 +138,7 @@ Codex `~/.codex` 与 Lime 的语义分组见 [02-codex-lime-storage-matrix.md](0
 | Electron profile/config            | 同上，按 owner 分区                            | `%APPDATA%\\lime` 仅放小型 roaming 配置                                           | Preferences、窗口状态；不能承载 Agent DB/history/模型                             |
 | Electron sessionData               | 与现有 host profile 一起治理                   | `%LOCALAPPDATA%\\LimeCloud\\lime\\host-session`                                   | cookies、storage、network state 与 cache；不能整体标成可重建                      |
 | 用户主动管理的 home                | `~/.lime`                                      | `%USERPROFILE%\\.lime`                                                            | `AGENTS.md`、用户 skills、少量用户配置；可备份/迁移，不放 DB、session、日志、模型 |
-| 工作区本地配置                     | `<project>/.lime`                              | `<project>\\.lime`                                                                | `AGENTS.local.md`、项目级 metadata；应进入项目自己的忽略/权限策略                 |
+| 工作区配置                         | `<project>/.lime`                              | `<project>\\.lime`                                                                | `AGENTS.md`、`AGENTS.override.md` 与项目级 metadata；按 Codex precedence 选择     |
 | OS cache/log（可选）               | `~/Library/Caches/lime`、`~/Library/Logs/lime` | `%LOCALAPPDATA%\\LimeCloud\\lime\\Cache`、`%LOCALAPPDATA%\\LimeCloud\\lime\\Logs` | 仅可重建 cache、诊断日志；不作为 Thread/Turn/Item 事实源                          |
 
 这样分开的原因不是“目录更整齐”，而是生命周期和安全边界不同：

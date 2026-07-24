@@ -15,7 +15,6 @@ import {
   flush,
   getRuntimeFrame,
   renderPage,
-  runtimeApiMocks,
   usePluginRuntimePageTestLifecycle,
 } from "./PluginRuntimePage.testFixtures";
 
@@ -433,7 +432,6 @@ describe("PluginRuntimePage", () => {
         }),
       }),
     );
-    expect(runtimeApiMocks.startPluginRuntimeTask).not.toHaveBeenCalled();
     expect(postMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({
         type: "host:error",

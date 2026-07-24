@@ -2,7 +2,6 @@
 // Source: lime-rs/crates/app-server-protocol/schema/json/app_server_protocol.schemas.json
 // Run `npm run generate:protocol-types` to regenerate.
 
-export const METHOD_AGENT_SESSION_ACTION_REPLAY = "agentSession/action/replay";
 export const METHOD_AGENT_SESSION_ACTION_RESPOND =
   "agentSession/action/respond";
 export const METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT =
@@ -30,12 +29,11 @@ export const METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE =
   "agentSession/reviewDecision/save";
 export const METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT =
   "agentSession/reviewDecisionTemplate/export";
-export const METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND =
-  "agentSession/runtimeEvents/append";
 export const METHOD_AGENT_SESSION_TOOL_INVENTORY_READ =
   "agentSession/toolInventory/read";
 export const METHOD_AGENT_SESSION_UPDATE = "agentSession/update";
 export const METHOD_ARTIFACT_READ = "artifact/read";
+export const METHOD_ARTIFACT_WRITE = "artifact/write";
 export const METHOD_AUTOMATION_JOB_CREATE = "automationJob/create";
 export const METHOD_AUTOMATION_JOB_DELETE = "automationJob/delete";
 export const METHOD_AUTOMATION_JOB_HEALTH = "automationJob/health";
@@ -135,11 +133,16 @@ export const METHOD_GATEWAY_TUNNEL_SYNC_WEBHOOK_URL =
 export const METHOD_INITIALIZE = "initialize";
 export const METHOD_INITIALIZED = "initialized";
 export const METHOD_AGENT_MESSAGE_DELTA = "item/agentMessage/delta";
+export const METHOD_COMMAND_EXECUTION_OUTPUT_DELTA =
+  "item/commandExecution/outputDelta";
 export const METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL =
   "item/commandExecution/requestApproval";
 export const METHOD_ITEM_COMPLETED = "item/completed";
+export const METHOD_FILE_CHANGE_PATCH_UPDATED = "item/fileChange/patchUpdated";
 export const METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL =
   "item/fileChange/requestApproval";
+export const METHOD_MCP_TOOL_CALL_PROGRESS = "item/mcpToolCall/progress";
+export const METHOD_PLAN_DELTA = "item/plan/delta";
 export const METHOD_REASONING_SUMMARY_PART_ADDED =
   "item/reasoning/summaryPartAdded";
 export const METHOD_REASONING_SUMMARY_TEXT_DELTA =
@@ -403,10 +406,6 @@ export const METHOD_WORKSPACE_SKILL_BINDINGS_LIST =
 export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
-    method: "agentSession/action/replay",
-  },
-  {
-    kind: "request",
     method: "agentSession/action/respond",
   },
   {
@@ -467,10 +466,6 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
-    method: "agentSession/runtimeEvents/append",
-  },
-  {
-    kind: "request",
     method: "agentSession/toolInventory/read",
   },
   {
@@ -480,6 +475,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "artifact/read",
+  },
+  {
+    kind: "request",
+    method: "artifact/write",
   },
   {
     kind: "request",
@@ -778,6 +777,10 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "item/agentMessage/delta",
   },
   {
+    kind: "notification",
+    method: "item/commandExecution/outputDelta",
+  },
+  {
     kind: "serverRequest",
     method: "item/commandExecution/requestApproval",
   },
@@ -786,8 +789,20 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "item/completed",
   },
   {
+    kind: "notification",
+    method: "item/fileChange/patchUpdated",
+  },
+  {
     kind: "serverRequest",
     method: "item/fileChange/requestApproval",
+  },
+  {
+    kind: "notification",
+    method: "item/mcpToolCall/progress",
+  },
+  {
+    kind: "notification",
+    method: "item/plan/delta",
   },
   {
     kind: "notification",
@@ -1690,6 +1705,10 @@ export const GENERATED_APP_SERVER_REQUEST_SERIALIZATION_SCOPES = [
     scope: "thread",
   },
   {
+    method: "artifact/write",
+    scope: "thread",
+  },
+  {
     method: "browserSession/action/execute",
     scope: "browserSession",
   },
@@ -1882,15 +1901,6 @@ export interface AgentSession {
   threadId: string;
   updatedAt: string;
   workspaceId?: null | string;
-}
-
-export interface AgentSessionActionReplayParams {
-  requestId: string;
-  sessionId: string;
-}
-
-export interface AgentSessionActionReplayResponse {
-  action?: AgentSessionReplayedActionRequired | null;
 }
 
 export interface AgentSessionActionRespondParams {
@@ -2195,19 +2205,6 @@ export interface AgentSessionReplayCaseExportResponse {
   workspaceRoot: string;
 }
 
-export interface AgentSessionReplayedActionRequired {
-  actionType: AgentSessionActionType;
-  arguments?: unknown;
-  availableDecisions?: AgentSessionApprovalDecision[] | null;
-  prompt?: null | string;
-  questions?: unknown;
-  requestId: string;
-  requestedSchema?: unknown;
-  scope?: AgentSessionActionScope | null;
-  toolName?: null | string;
-  type: string;
-}
-
 export interface AgentSessionReviewDecision {
   chosenFixStrategy?: string;
   decisionStatus: string;
@@ -2264,21 +2261,6 @@ export interface AgentSessionReviewDecisionTemplateExportResponse {
   title: string;
   workspaceId?: null | string;
   workspaceRoot: string;
-}
-
-export interface AgentSessionRuntimeEventAppendParams {
-  runtimeEvents?: AgentSessionRuntimeEventInput[];
-  sessionId: string;
-  turnId?: null | string;
-}
-
-export interface AgentSessionRuntimeEventAppendResponse {
-  events?: AgentEvent[];
-}
-
-export interface AgentSessionRuntimeEventInput {
-  payload: unknown;
-  type: string;
 }
 
 export interface AgentSessionStartParams {
@@ -3730,17 +3712,7 @@ export type AppServerClientRequest =
     }
   | {
       id: number | string;
-      method: "agentSession/action/replay";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
       method: "agentSession/action/respond";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "agentSession/runtimeEvents/append";
       params?: unknown;
     }
   | {
@@ -3785,7 +3757,6 @@ export interface AppServerRequestAccessSpec {
 }
 
 export type AppServerRequestMethod =
-  | "agentSession/action/replay"
   | "agentSession/action/respond"
   | "agentSession/analysisHandoff/export"
   | "agentSession/compact"
@@ -3800,7 +3771,6 @@ export type AppServerRequestMethod =
   | "agentSession/replayCase/export"
   | "agentSession/reviewDecision/save"
   | "agentSession/reviewDecisionTemplate/export"
-  | "agentSession/runtimeEvents/append"
   | "agentSession/toolInventory/read"
   | "agentSession/update"
   | "artifact/read"
@@ -4093,6 +4063,17 @@ export interface ArtifactReadResponse {
   nextCursor?: null | string;
 }
 
+export interface ArtifactSnapshot {
+  artifactDocumentId?: null | string;
+  artifactRef: string;
+  content: string;
+  kind: string;
+  metadata?: unknown;
+  path?: null | string;
+  status?: null | string;
+  title?: null | string;
+}
+
 export interface ArtifactSummary {
   artifactId?: null | string;
   artifactRef: string;
@@ -4106,6 +4087,30 @@ export interface ArtifactSummary {
   status?: null | string;
   title?: null | string;
   turnId?: null | string;
+}
+
+export interface ArtifactWriteParams {
+  artifact: ArtifactSnapshot;
+  threadId: string;
+  turnId?: null | string;
+}
+
+export interface ArtifactWriteResponse {
+  artifactDocumentId?: null | string;
+  artifactRef: string;
+  eventId: string;
+  persistedAt: string;
+  sequence: number;
+  sidecar: ArtifactWriteSidecar;
+  threadId: string;
+  turnId?: null | string;
+}
+
+export interface ArtifactWriteSidecar {
+  bytes: number;
+  contentStatus: string;
+  relativePath: string;
+  sha256: string;
 }
 
 export type AuthKind =
@@ -4460,6 +4465,11 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "artifact/write";
+      params: ArtifactWriteParams;
+    }
+  | {
+      id: number | string;
       method: "turn/start";
       params: TurnStartParams;
     }
@@ -4530,6 +4540,13 @@ export type CommandExecutionApprovalDecision =
   | "acceptForSession"
   | "cancel"
   | "decline";
+
+export interface CommandExecutionOutputDeltaNotification {
+  delta: string;
+  itemId: string;
+  threadId: string;
+  turnId: string;
+}
 
 export interface CommandExecutionRequestApprovalParams {
   approvalId?: null | string;
@@ -5097,6 +5114,13 @@ export type FileChangeApprovalDecision =
   | "acceptForSession"
   | "cancel"
   | "decline";
+
+export interface FileChangePatchUpdatedNotification {
+  changes: FileUpdateChange[];
+  itemId: string;
+  threadId: string;
+  turnId: string;
+}
 
 export interface FileChangeRequestApprovalParams {
   grantRoot?: null | string;
@@ -5754,6 +5778,13 @@ export interface McpToolCallParams {
   toolName: string;
 }
 
+export interface McpToolCallProgressNotification {
+  itemId: string;
+  message: string;
+  threadId: string;
+  turnId: string;
+}
+
 export interface McpToolCallResponse {
   content?: McpContent[];
   is_error: boolean;
@@ -6180,6 +6211,7 @@ export interface MemoryStoreSearchResponse {
 }
 
 export type Method =
+  | "artifact/write"
   | "thread/archive"
   | "thread/delete"
   | "thread/fork"
@@ -6530,6 +6562,13 @@ export type PatchChangeKind =
       move_path?: null | string;
       type: "update";
     };
+
+export interface PlanDeltaNotification {
+  delta: string;
+  itemId: string;
+  threadId: string;
+  turnId: string;
+}
 
 export interface PlatformInfo {
   family: string;
@@ -7322,6 +7361,22 @@ export type ServerNotification =
   | {
       method: "item/agentMessage/delta";
       params: AgentMessageDeltaNotification;
+    }
+  | {
+      method: "item/commandExecution/outputDelta";
+      params: CommandExecutionOutputDeltaNotification;
+    }
+  | {
+      method: "item/fileChange/patchUpdated";
+      params: FileChangePatchUpdatedNotification;
+    }
+  | {
+      method: "item/plan/delta";
+      params: PlanDeltaNotification;
+    }
+  | {
+      method: "item/mcpToolCall/progress";
+      params: McpToolCallProgressNotification;
     }
   | {
       method: "item/reasoning/summaryTextDelta";
@@ -8344,6 +8399,7 @@ export interface ThreadUnarchivedNotification {
 }
 
 export interface TokenUsageBreakdown {
+  cacheWriteInputTokens?: number;
   cachedInputTokens: number;
   inputTokens: number;
   outputTokens: number;

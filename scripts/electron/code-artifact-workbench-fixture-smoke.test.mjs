@@ -199,6 +199,43 @@ describe("code artifact workbench Electron fixture smoke guard", () => {
     );
     expect(content).toContain('type: "artifact.snapshot"');
     expect(content).toContain('type: "turn.completed"');
+    expect(content).toContain(
+      'const APP_SERVER_METHOD_ARTIFACT_WRITE = "artifact/write"',
+    );
+    expect(content).toContain("waitForCodeArtifactTurnTerminal");
+    expect(content).toContain("writeArtifactFromCurrentRenderer");
+    expect(content).toContain('"/src/lib/api/appServer.ts"');
+    expect(content).toContain(".createAppServerClient()");
+    expect(content).toContain(".writeArtifact(params)");
+    expect(content).toContain("findArtifactWriteElectronIpcTrace");
+    expect(content).toContain("waitForArtifactWriteElectronIpcTrace");
+    expect(content).toContain(
+      "entry?.command !== APP_SERVER_HANDLE_JSON_LINES_COMMAND",
+    );
+    expect(content).toContain('entry?.transport !== "electron-ipc"');
+    expect(content).toContain(
+      "message?.method !== APP_SERVER_METHOD_ARTIFACT_WRITE",
+    );
+    expect(content).toContain("typedArtifactWriteUsed:");
+    expect(content).toContain("typedArtifactWriteElectronIpcTrace:");
+    expect(content).toContain(
+      "summary.sessionCreation?.artifactWriteIpcTrace?.threadId ===",
+    );
+    expect(content).toContain(
+      "summary.sessionCreation?.artifactWriteIpcTrace?.turnId === TURN_ID",
+    );
+    expect(content).toContain(
+      "summary.sessionCreation?.artifactWriteIpcTrace?.artifactRef ===",
+    );
+    expect(content).toContain("directSessionBackendDidNotInjectArtifact:");
+    expect(content).toContain(
+      'process.env.CODE_ARTIFACT_WORKBENCH_FIXTURE_SCENARIO !== "direct-session"',
+    );
+    expect(content.indexOf("waitForCodeArtifactTurnTerminal")).toBeLessThan(
+      content.indexOf(
+        "const artifactWrite = await writeArtifactFromCurrentRenderer(",
+      ),
+    );
     expect(content).not.toContain('type: "turn.final_done"');
     expect(content).toContain('kind: "backendEvents"');
     expect(content).toContain("backendEmittedEventTypes");

@@ -163,6 +163,11 @@ impl ThreadStateManager {
             .clone()
     }
 
+    #[cfg(test)]
+    pub(crate) async fn contains_thread(&self, thread_id: &ThreadId) -> bool {
+        self.inner.lock().await.threads.contains_key(thread_id)
+    }
+
     pub(crate) async fn thread_state_for_listener(
         &self,
         thread_id: ThreadId,

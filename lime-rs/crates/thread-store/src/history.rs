@@ -469,7 +469,9 @@ impl ThreadHistoryBuilder {
         }
 
         let mut changes = ChangeAccumulator::default();
+        let mut affected_turn_ids = HashSet::new();
         for item in items {
+            affected_turn_ids.insert(item.turn_id.clone());
             let key = ItemKey {
                 turn_id: item.turn_id.clone(),
                 item_id: item.item_id.clone(),
@@ -497,6 +499,9 @@ impl ThreadHistoryBuilder {
             {
                 self.active_turn_id = Some(item.turn_id.clone());
             }
+        }
+        for turn_id in affected_turn_ids {
+            self.sync_turn_items(&turn_id);
         }
 
         if !items.is_empty() {
@@ -537,28 +542,33 @@ impl ThreadHistoryBuilder {
 
         let mut changes = ChangeAccumulator::default();
         for turn in turns {
-            let snapshot = if let Some(index) = self.turn_indexes.get(&turn.turn_id).copied() {
+            let turn_id = turn.turn_id.clone();
+            let index = if let Some(index) = self.turn_indexes.get(&turn_id).copied() {
                 let previous = self.turns[index].clone();
                 let merged = merge_turn_snapshot(previous.clone(), turn.clone());
                 if merged == previous {
+                    self.turn_sequences.insert(turn_id.clone(), sequence);
+                    self.sync_turn_items(&turn_id);
                     continue;
                 }
                 self.turns[index] = merged.clone();
-                merged
+                index
             } else {
                 let index = self.turns.len();
-                self.turn_indexes.insert(turn.turn_id.clone(), index);
+                self.turn_indexes.insert(turn_id.clone(), index);
                 self.turns.push(turn.clone());
-                turn.clone()
+                index
             };
-            self.turn_sequences.insert(turn.turn_id.clone(), sequence);
+            self.turn_sequences.insert(turn_id.clone(), sequence);
+            self.sync_turn_items(&turn_id);
+            let snapshot = self.turns[index].clone();
             changes.push_turn(snapshot);
-            if turn.status.is_terminal() {
-                if self.active_turn_id.as_ref() == Some(&turn.turn_id) {
+            if self.turns[index].status.is_terminal() {
+                if self.active_turn_id.as_ref() == Some(&turn_id) {
                     self.active_turn_id = None;
                 }
             } else {
-                self.active_turn_id = Some(turn.turn_id.clone());
+                self.active_turn_id = Some(turn_id);
             }
         }
 
@@ -637,6 +647,14 @@ impl ThreadHistoryBuilder {
         self.turn_indexes.clear();
         for (index, turn) in self.turns.iter().enumerate() {
             self.turn_indexes.insert(turn.turn_id.clone(), index);
+        }
+        let remaining_turn_ids = self
+            .turns
+            .iter()
+            .map(|turn| turn.turn_id.clone())
+            .collect::<Vec<_>>();
+        for turn_id in remaining_turn_ids {
+            self.sync_turn_items(&turn_id);
         }
 
         if self
@@ -749,10 +767,15 @@ impl ThreadHistoryBuilder {
             if merged == self.turns[index] {
                 self.turn_sequences
                     .insert(self.turns[index].turn_id.clone(), sequence);
+                let turn_id = self.turns[index].turn_id.clone();
+                self.sync_turn_items(&turn_id);
                 return Ok(None);
             }
             self.turns[index] = merged.clone();
             self.turn_sequences.insert(merged.turn_id.clone(), sequence);
+            let turn_id = merged.turn_id.clone();
+            self.sync_turn_items(&turn_id);
+            let merged = self.turns[index].clone();
             if merged.status.is_terminal() {
                 if self.active_turn_id.as_ref() == Some(&merged.turn_id) {
                     self.active_turn_id = None;
@@ -766,12 +789,27 @@ impl ThreadHistoryBuilder {
             let index = self.turns.len();
             self.turn_indexes.insert(turn.turn_id.clone(), index);
             self.turn_sequences.insert(turn.turn_id.clone(), sequence);
-            if !turn.status.is_terminal() {
-                self.active_turn_id = Some(turn.turn_id.clone());
+            self.turns.push(turn);
+            let turn_id = self.turns[index].turn_id.clone();
+            self.sync_turn_items(&turn_id);
+            let snapshot = self.turns[index].clone();
+            if !snapshot.status.is_terminal() {
+                self.active_turn_id = Some(turn_id);
             }
-            self.turns.push(turn.clone());
-            Ok(Some(turn))
+            Ok(Some(snapshot))
         }
+    }
+
+    fn sync_turn_items(&mut self, turn_id: &TurnId) {
+        let Some(turn_index) = self.turn_indexes.get(turn_id).copied() else {
+            return;
+        };
+        self.turns[turn_index].items = self
+            .items
+            .iter()
+            .filter(|item| &item.turn_id == turn_id)
+            .cloned()
+            .collect();
     }
 
     fn upsert_item(

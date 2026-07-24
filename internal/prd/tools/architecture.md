@@ -328,15 +328,16 @@ MCP 不是 native tools 的附属物，也不是另起一套 Agent。
 
 ---
 
-## 9. dead-candidate 说明
+## 9. dead / deleted 说明
 
-以下路径当前不在主链路：
+以下路径已退出主链路并物理删除：
 
 - `lime-rs/crates/agent/src/tool_permissions.rs`
 - `lime-rs/crates/agent/src/shell_security.rs`
+- `lime-rs/crates/agent/tests/legacy_permission_surfaces.rs`
 
-状态建议：
+状态：
 
-- 当前标记为 `dead-candidate`
-- 暂不删除
-- 如果后续确认完全无运行时回流，再单独发起一次“删除旧权限系统”的治理变更
+- `dead / deleted / forbidden-to-restore`
+- current 权限执行只归 `agent_tools/execution.rs` 与 `tool-runtime` 对应 owner
+- 不得恢复旧文件、测试夹具、crate 出口或兼容包装

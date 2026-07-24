@@ -56,6 +56,11 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerArtifactReadResponse>
     >;
+    writeArtifact(
+      params: appServer.AppServerArtifactWriteParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerArtifactWriteResponse>
+    >;
     listDirectory(
       params: appServer.AppServerFileSystemListDirectoryParams,
     ): Promise<
@@ -327,11 +332,6 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerTurnSteerResponse>
     >;
-    appendAgentSessionRuntimeEvents(
-      params: appServer.AppServerAgentSessionRuntimeEventAppendParams,
-    ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerAgentSessionRuntimeEventAppendResponse>
-    >;
     respondAction(
       params: appServer.AppServerAgentSessionActionRespondParams,
     ): Promise<
@@ -356,11 +356,6 @@ declare module "./appServerClient" {
       params: appServer.AppServerWorkflowRespondParams,
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerWorkflowRespondResponse>
-    >;
-    replayAction(
-      params: appServer.AppServerAgentSessionActionReplayParams,
-    ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerAgentSessionActionReplayResponse>
     >;
     listLogs(): Promise<
       appServer.AppServerRequestResult<appServer.AppServerLogListResponse>

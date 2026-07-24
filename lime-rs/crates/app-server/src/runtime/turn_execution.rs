@@ -2133,30 +2133,6 @@ impl RuntimeCore {
         })
     }
 
-    pub async fn replay_action(
-        &self,
-        params: AgentSessionActionReplayParams,
-    ) -> Result<RuntimeCoreOutput<AgentSessionActionReplayResponse>, RuntimeCoreError> {
-        self.ensure_current_session_hydrated(&params.session_id)
-            .await?;
-        let action = {
-            let state = self
-                .state
-                .lock()
-                .expect("runtime core state mutex poisoned");
-            let stored = state
-                .sessions
-                .get(&params.session_id)
-                .ok_or_else(|| RuntimeCoreError::SessionNotFound(params.session_id.clone()))?;
-            read_model::replayed_action_required_from_stored_session(stored, &params.request_id)
-        };
-
-        Ok(RuntimeCoreOutput {
-            response: AgentSessionActionReplayResponse { action },
-            events: Vec::new(),
-        })
-    }
-
     pub async fn respond_action(
         &self,
         params: AgentSessionActionRespondParams,
@@ -2539,6 +2515,16 @@ impl RuntimeCore {
     ) -> Result<Vec<AgentEvent>, RuntimeCoreError> {
         self.event_appender()
             .append_external_runtime_events(session_id, turn_id, runtime_events)
+    }
+
+    pub(crate) fn append_artifact_snapshot(
+        &self,
+        session_id: &str,
+        turn_id: Option<&str>,
+        payload: Value,
+    ) -> Result<Vec<AgentEvent>, RuntimeCoreError> {
+        self.event_appender()
+            .append_artifact_snapshot(session_id, turn_id, payload)
     }
 
     pub(in crate::runtime) fn append_runtime_events(

@@ -16,12 +16,41 @@ type GateResult =
   | { kind: "blocked"; codes: string[] };
 
 const gates = new Map<string, AgentRuntimeEventPipeline>();
+const directItemStates = new Map<
+  string,
+  Map<string, { completed: boolean; type: string }>
+>();
+const DIRECT_ITEM_STREAM_GUARDS = new Map<
+  string,
+  { codePrefix: string; expectedItemType: string }
+>([
+  [
+    "item/commandExecution/outputDelta",
+    {
+      codePrefix: "command_output_delta",
+      expectedItemType: "commandExecution",
+    },
+  ],
+  [
+    "item/fileChange/patchUpdated",
+    {
+      codePrefix: "file_change_patch_updated",
+      expectedItemType: "fileChange",
+    },
+  ],
+  [
+    "item/mcpToolCall/progress",
+    { codePrefix: "mcp_tool_call_progress", expectedItemType: "mcpToolCall" },
+  ],
+  ["item/plan/delta", { codePrefix: "plan_delta", expectedItemType: "plan" }],
+]);
 type SequenceGateNotification = Parameters<
   AgentRuntimeEventPipeline["processSync"]
 >[0];
 
 export function resetAgentRuntimeEventSequenceGatesForTests(): void {
   gates.clear();
+  directItemStates.clear();
 }
 
 export function agentRuntimeSequenceGateAllowsNotification(
@@ -91,6 +120,18 @@ function processNotification(
   const directRoute = readAppServerV2NotificationRoute(notification);
   if (directRoute) {
     if (isDirectStreamingNotification(notification.method)) {
+      const guard = DIRECT_ITEM_STREAM_GUARDS.get(notification.method);
+      if (guard) {
+        return processDirectItemStreamingNotification(
+          eventName,
+          notification,
+          directRoute.threadId,
+          directRoute.itemId,
+          guard,
+          mode,
+          gateScope,
+        );
+      }
       return { kind: "accepted", notifications: [notification] };
     }
     return processDirectLifecycleNotification(
@@ -114,6 +155,10 @@ function processNotification(
 function isDirectStreamingNotification(method: string): boolean {
   return (
     method === "item/agentMessage/delta" ||
+    method === "item/commandExecution/outputDelta" ||
+    method === "item/fileChange/patchUpdated" ||
+    method === "item/mcpToolCall/progress" ||
+    method === "item/plan/delta" ||
     method === "item/reasoning/summaryTextDelta" ||
     method === "item/reasoning/summaryPartAdded" ||
     method === "item/reasoning/textDelta" ||
@@ -138,6 +183,17 @@ function processDirectLifecycleNotification(
     return { kind: "blocked", codes: ["invalid_lifecycle_notification"] };
   }
   if (result.accepted) {
+    if (
+      notification.method === "item/started" ||
+      notification.method === "item/completed"
+    ) {
+      observeDirectItemLifecycle(
+        directItemStateFor(gateScope, eventName, threadId, mode),
+        notification,
+      );
+    } else if (notification.method === "turn/completed") {
+      directItemStates.delete(gateKey(gateScope, eventName, threadId, mode));
+    }
     return {
       kind: "accepted",
       notifications:
@@ -151,6 +207,83 @@ function processDirectLifecycleNotification(
     kind: "blocked",
     codes: gate.getViolations().map((violation) => violation.code),
   };
+}
+
+function processDirectItemStreamingNotification(
+  eventName: string,
+  notification: AppServerJsonRpcNotification,
+  threadId: string,
+  itemId: string | undefined,
+  guard: { codePrefix: string; expectedItemType: string },
+  mode: AgentRuntimeSequenceVerifierMode,
+  gateScope: string,
+): GateResult {
+  if (!itemId) {
+    return {
+      kind: "blocked",
+      codes: [`${guard.codePrefix}_missing_item`],
+    };
+  }
+  const state = directItemStateFor(gateScope, eventName, threadId, mode).get(
+    itemId,
+  );
+  if (!state) {
+    return {
+      kind: "blocked",
+      codes: [`${guard.codePrefix}_without_started`],
+    };
+  }
+  if (state.type !== guard.expectedItemType) {
+    return {
+      kind: "blocked",
+      codes: [`${guard.codePrefix}_item_type_mismatch`],
+    };
+  }
+  if (state.completed) {
+    return {
+      kind: "blocked",
+      codes: [`${guard.codePrefix}_after_completed`],
+    };
+  }
+  return { kind: "accepted", notifications: [notification] };
+}
+
+function observeDirectItemLifecycle(
+  states: Map<string, { completed: boolean; type: string }>,
+  notification: AppServerJsonRpcNotification,
+): void {
+  if (
+    notification.method !== "item/started" &&
+    notification.method !== "item/completed"
+  ) {
+    return;
+  }
+  const params = normalizeRecord(notification.params);
+  const item = normalizeRecord(params?.item);
+  const itemId = item ? readString(item, "id") : undefined;
+  const itemType = item ? readString(item, "type") : undefined;
+  if (!itemId || !itemType) {
+    return;
+  }
+  states.set(itemId, {
+    completed: notification.method === "item/completed",
+    type: itemType,
+  });
+}
+
+function directItemStateFor(
+  gateScope: string,
+  eventName: string,
+  sessionId: string,
+  mode: AgentRuntimeSequenceVerifierMode,
+): Map<string, { completed: boolean; type: string }> {
+  const key = gateKey(gateScope, eventName, sessionId, mode);
+  let states = directItemStates.get(key);
+  if (!states) {
+    states = new Map();
+    directItemStates.set(key, states);
+  }
+  return states;
 }
 
 function isCurrentNonThreadSideChannelEvent(eventType: string): boolean {
@@ -172,7 +305,7 @@ function gateFor(
   sessionId: string,
   mode: AgentRuntimeSequenceVerifierMode,
 ): AgentRuntimeEventPipeline {
-  const key = `${gateScope}\u0000${eventName}\u0000${sessionId}\u0000${mode}`;
+  const key = gateKey(gateScope, eventName, sessionId, mode);
   let gate = gates.get(key);
   if (!gate) {
     gate = new AgentRuntimeEventPipeline({
@@ -181,6 +314,15 @@ function gateFor(
     gates.set(key, gate);
   }
   return gate;
+}
+
+function gateKey(
+  gateScope: string,
+  eventName: string,
+  sessionId: string,
+  mode: AgentRuntimeSequenceVerifierMode,
+): string {
+  return `${gateScope}\u0000${eventName}\u0000${sessionId}\u0000${mode}`;
 }
 
 function notificationFromPublishedPayload(

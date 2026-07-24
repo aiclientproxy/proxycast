@@ -1,7 +1,8 @@
 use super::*;
+use crate::session_loop::{RuntimeSessionClosureTask, RuntimeSessionRegistry};
 use agent_protocol::provider_trace::ProviderTraceStage;
 use futures::future::BoxFuture;
-use futures::stream;
+use futures::{stream, StreamExt};
 use model_provider::current_client::CurrentProviderRole;
 use model_provider::current_client::FinishReason;
 use model_provider::current_client::{CurrentProviderError, CurrentProviderStream};
@@ -243,10 +244,89 @@ impl CurrentProvider for CancelOnFirstUsageProvider {
                     usage: Usage {
                         input_tokens: Some(17),
                         output_tokens: Some(5),
+                        cache_write_input_tokens: Some(6),
                         ..Usage::default()
                     },
                 })
             }));
+            Ok(stream)
+        })
+    }
+}
+
+struct UsageThenProviderError;
+
+impl CurrentProvider for UsageThenProviderError {
+    fn stream<'a>(
+        &'a self,
+        _request: CurrentProviderRequest,
+    ) -> BoxFuture<'a, Result<CurrentProviderStream, CurrentProviderError>> {
+        Box::pin(async move {
+            let stream: CurrentProviderStream = Box::pin(stream::iter(vec![
+                Ok(CanonicalLlmEvent::Usage {
+                    usage: Usage {
+                        input_tokens: Some(19),
+                        output_tokens: Some(7),
+                        cache_write_input_tokens: Some(8),
+                        ..Usage::default()
+                    },
+                }),
+                Ok(CanonicalLlmEvent::ProviderError {
+                    message: "provider stopped after usage".to_string(),
+                    classification: None,
+                    retryable: Some(false),
+                }),
+            ]));
+            Ok(stream)
+        })
+    }
+}
+
+struct UsageThenHangingStream;
+
+impl CurrentProvider for UsageThenHangingStream {
+    fn stream<'a>(
+        &'a self,
+        _request: CurrentProviderRequest,
+    ) -> BoxFuture<'a, Result<CurrentProviderStream, CurrentProviderError>> {
+        Box::pin(async move {
+            let stream: CurrentProviderStream = Box::pin(
+                stream::iter(vec![Ok(CanonicalLlmEvent::Usage {
+                    usage: Usage {
+                        input_tokens: Some(23),
+                        output_tokens: Some(11),
+                        cache_write_input_tokens: Some(13),
+                        ..Usage::default()
+                    },
+                })])
+                .chain(stream::pending()),
+            );
+            Ok(stream)
+        })
+    }
+}
+
+struct UsageThenStreamError;
+
+impl CurrentProvider for UsageThenStreamError {
+    fn stream<'a>(
+        &'a self,
+        _request: CurrentProviderRequest,
+    ) -> BoxFuture<'a, Result<CurrentProviderStream, CurrentProviderError>> {
+        Box::pin(async move {
+            let stream: CurrentProviderStream = Box::pin(stream::iter(vec![
+                Ok(CanonicalLlmEvent::Usage {
+                    usage: Usage {
+                        input_tokens: Some(29),
+                        output_tokens: Some(17),
+                        cache_write_input_tokens: Some(21),
+                        ..Usage::default()
+                    },
+                }),
+                Err(CurrentProviderError::new(
+                    "provider stream failed after usage",
+                )),
+            ]));
             Ok(stream)
         })
     }
@@ -1717,6 +1797,265 @@ async fn cancellation_preserves_usage_returned_by_the_same_provider_poll() {
     assert!(!events
         .iter()
         .any(|event| matches!(event, CurrentProviderTurnEvent::ProviderStep { .. })));
+}
+
+#[tokio::test]
+async fn cancellation_flushes_provider_usage_to_the_session_runtime() {
+    let registry = RuntimeSessionRegistry::default();
+    let session = registry.get_or_create("session-cancel-usage").await;
+    let cancel_token = CancellationToken::new();
+    let provider = Arc::new(CancelOnFirstUsageProvider {
+        cancel_token: cancel_token.clone(),
+    });
+    let task = RuntimeSessionClosureTask::new(
+        "turn-cancel-usage",
+        Vec::new(),
+        move |context, _input, _task_cancel| {
+            let provider = Arc::clone(&provider);
+            let cancel_token = cancel_token.clone();
+            Box::pin(async move {
+                let execution = run_current_provider_turn(
+                    CurrentProviderTurnInput {
+                        provider,
+                        provider_trace_metadata: None,
+                        session_config: crate::session_config::SessionConfigBuilder::new(
+                            "session-cancel-usage",
+                        )
+                        .turn_id("turn-cancel-usage")
+                        .build(),
+                        initial_messages: vec![CurrentProviderMessage::user(vec![
+                            CurrentProviderContent::Text("hello".to_string()),
+                        ])],
+                        tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                            RuntimeToolStepSnapshot::new(
+                                Vec::new(),
+                                RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                            ),
+                        ),
+                        model_request_policy: None,
+                        tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+                        working_directory: PathBuf::from("."),
+                        cancel_token: Some(cancel_token),
+                        pending_input: Some(context.input_handle()),
+                    },
+                    |_| {},
+                )
+                .await
+                .expect("canceled provider turn should resolve");
+                assert!(execution.cancelled);
+                assert_eq!(context.token_usage().await.cache_write_input_tokens, 6);
+                Ok(())
+            })
+        },
+    );
+    let submission = session
+        .submit(Arc::new(task), false)
+        .await
+        .expect("submit canceled usage task");
+    assert_eq!(
+        submission.completion.await.expect("task completion"),
+        Ok(crate::session_loop::RuntimeSessionTaskOutcome::Completed)
+    );
+    registry
+        .shutdown("session-cancel-usage")
+        .await
+        .expect("shutdown");
+}
+
+#[tokio::test]
+async fn provider_error_flushes_prior_usage_to_the_session_runtime() {
+    let registry = RuntimeSessionRegistry::default();
+    let session = registry.get_or_create("session-error-usage").await;
+    let task = RuntimeSessionClosureTask::new(
+        "turn-error-usage",
+        Vec::new(),
+        move |context, _input, _task_cancel| {
+            Box::pin(async move {
+                let error = run_current_provider_turn(
+                    CurrentProviderTurnInput {
+                        provider: Arc::new(UsageThenProviderError),
+                        provider_trace_metadata: None,
+                        session_config: crate::session_config::SessionConfigBuilder::new(
+                            "session-error-usage",
+                        )
+                        .turn_id("turn-error-usage")
+                        .build(),
+                        initial_messages: vec![CurrentProviderMessage::user(vec![
+                            CurrentProviderContent::Text("hello".to_string()),
+                        ])],
+                        tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                            RuntimeToolStepSnapshot::new(
+                                Vec::new(),
+                                RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                            ),
+                        ),
+                        model_request_policy: None,
+                        tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+                        working_directory: PathBuf::from("."),
+                        cancel_token: None,
+                        pending_input: Some(context.input_handle()),
+                    },
+                    |_| {},
+                )
+                .await
+                .expect_err("provider error should fail the turn");
+                assert_eq!(error.message, "provider stopped after usage");
+                let usage = context.token_usage().await;
+                assert_eq!(usage.input_tokens, 19);
+                assert_eq!(usage.output_tokens, 7);
+                assert_eq!(usage.cache_write_input_tokens, 8);
+                Ok(())
+            })
+        },
+    );
+    let submission = session
+        .submit(Arc::new(task), false)
+        .await
+        .expect("submit error usage task");
+    assert_eq!(
+        submission.completion.await.expect("task completion"),
+        Ok(crate::session_loop::RuntimeSessionTaskOutcome::Completed)
+    );
+    registry
+        .shutdown("session-error-usage")
+        .await
+        .expect("shutdown");
+}
+
+#[tokio::test]
+async fn stream_error_flushes_prior_usage_to_the_session_runtime() {
+    let registry = RuntimeSessionRegistry::default();
+    let session = registry.get_or_create("session-stream-error-usage").await;
+    let task = RuntimeSessionClosureTask::new(
+        "turn-stream-error-usage",
+        Vec::new(),
+        move |context, _input, _task_cancel| {
+            Box::pin(async move {
+                let error = run_current_provider_turn(
+                    CurrentProviderTurnInput {
+                        provider: Arc::new(UsageThenStreamError),
+                        provider_trace_metadata: None,
+                        session_config: crate::session_config::SessionConfigBuilder::new(
+                            "session-stream-error-usage",
+                        )
+                        .turn_id("turn-stream-error-usage")
+                        .build(),
+                        initial_messages: vec![CurrentProviderMessage::user(vec![
+                            CurrentProviderContent::Text("hello".to_string()),
+                        ])],
+                        tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                            RuntimeToolStepSnapshot::new(
+                                Vec::new(),
+                                RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                            ),
+                        ),
+                        model_request_policy: None,
+                        tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+                        working_directory: PathBuf::from("."),
+                        cancel_token: None,
+                        pending_input: Some(context.input_handle()),
+                    },
+                    |_| {},
+                )
+                .await
+                .expect_err("stream error should fail the turn");
+                assert_eq!(error.message, "provider stream failed after usage");
+                let usage = context.token_usage().await;
+                assert_eq!(usage.input_tokens, 29);
+                assert_eq!(usage.output_tokens, 17);
+                assert_eq!(usage.cache_write_input_tokens, 21);
+                Ok(())
+            })
+        },
+    );
+    let submission = session
+        .submit(Arc::new(task), false)
+        .await
+        .expect("submit stream error usage task");
+    assert_eq!(
+        submission.completion.await.expect("task completion"),
+        Ok(crate::session_loop::RuntimeSessionTaskOutcome::Completed)
+    );
+    registry
+        .shutdown("session-stream-error-usage")
+        .await
+        .expect("shutdown");
+}
+
+#[tokio::test]
+async fn provider_step_timeout_flushes_prior_usage_to_the_session_runtime() {
+    let registry = RuntimeSessionRegistry::default();
+    let session = registry.get_or_create("session-timeout-usage").await;
+    let task = RuntimeSessionClosureTask::new(
+        "turn-timeout-usage",
+        Vec::new(),
+        move |context, _input, _task_cancel| {
+            Box::pin(async move {
+                let mut turn_context = agent_protocol::turn_context::TurnContextOverride::default();
+                turn_context.metadata.insert(
+                    "runtime_request".to_string(),
+                    serde_json::json!({
+                        "harness": {
+                            "generation": {
+                                "first_visible_output_timeout_ms": 1_000,
+                                "provider_step_timeout_ms": 20
+                            }
+                        }
+                    }),
+                );
+                let error = run_current_provider_turn(
+                    CurrentProviderTurnInput {
+                        provider: Arc::new(UsageThenHangingStream),
+                        provider_trace_metadata: None,
+                        session_config: crate::session_config::SessionConfigBuilder::new(
+                            "session-timeout-usage",
+                        )
+                        .turn_id("turn-timeout-usage")
+                        .turn_context(turn_context)
+                        .build(),
+                        initial_messages: vec![CurrentProviderMessage::user(vec![
+                            CurrentProviderContent::Text("hello".to_string()),
+                        ])],
+                        tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                            RuntimeToolStepSnapshot::new(
+                                Vec::new(),
+                                RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                            ),
+                        ),
+                        model_request_policy: None,
+                        tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+                        working_directory: PathBuf::from("."),
+                        cancel_token: None,
+                        pending_input: Some(context.input_handle()),
+                    },
+                    |_| {},
+                )
+                .await
+                .expect_err("provider step deadline should fail the turn");
+                assert_eq!(
+                    error.message,
+                    "Provider step exceeded the absolute deadline of 20ms"
+                );
+                let usage = context.token_usage().await;
+                assert_eq!(usage.input_tokens, 23);
+                assert_eq!(usage.output_tokens, 11);
+                assert_eq!(usage.cache_write_input_tokens, 13);
+                Ok(())
+            })
+        },
+    );
+    let submission = session
+        .submit(Arc::new(task), false)
+        .await
+        .expect("submit timeout usage task");
+    assert_eq!(
+        submission.completion.await.expect("task completion"),
+        Ok(crate::session_loop::RuntimeSessionTaskOutcome::Completed)
+    );
+    registry
+        .shutdown("session-timeout-usage")
+        .await
+        .expect("shutdown");
 }
 
 #[tokio::test]

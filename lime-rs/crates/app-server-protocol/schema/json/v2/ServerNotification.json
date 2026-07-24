@@ -225,6 +225,29 @@
         }
       ]
     },
+    "CommandExecutionOutputDeltaNotification": {
+      "properties": {
+        "delta": {
+          "type": "string"
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "delta",
+        "itemId",
+        "threadId",
+        "turnId"
+      ],
+      "type": "object"
+    },
     "CommandExecutionSource": {
       "enum": [
         "agent",
@@ -294,6 +317,32 @@
         "inProgress"
       ],
       "type": "string"
+    },
+    "FileChangePatchUpdatedNotification": {
+      "properties": {
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/FileUpdateChange"
+          },
+          "type": "array"
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changes",
+        "itemId",
+        "threadId",
+        "turnId"
+      ],
+      "type": "object"
     },
     "FileUpdateChange": {
       "properties": {
@@ -468,6 +517,29 @@
       ],
       "type": "object"
     },
+    "McpToolCallProgressNotification": {
+      "properties": {
+        "itemId": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "itemId",
+        "message",
+        "threadId",
+        "turnId"
+      ],
+      "type": "object"
+    },
     "McpToolCallStatus": {
       "enum": [
         "completed",
@@ -586,6 +658,30 @@
           "type": "object"
         }
       ]
+    },
+    "PlanDeltaNotification": {
+      "description": "EXPERIMENTAL - proposed plan streaming deltas for plan items. Clients should\nnot assume concatenated deltas match the completed plan item content.",
+      "properties": {
+        "delta": {
+          "type": "string"
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "delta",
+        "itemId",
+        "threadId",
+        "turnId"
+      ],
+      "type": "object"
     },
     "ReasoningSummaryPartAddedNotification": {
       "properties": {
@@ -1729,6 +1825,11 @@
     },
     "TokenUsageBreakdown": {
       "properties": {
+        "cacheWriteInputTokens": {
+          "default": 0,
+          "format": "int64",
+          "type": "integer"
+        },
         "cachedInputTokens": {
           "format": "int64",
           "type": "integer"
@@ -2159,6 +2260,70 @@
         },
         "params": {
           "$ref": "#/$defs/AgentMessageDeltaNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "item/commandExecution/outputDelta",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/CommandExecutionOutputDeltaNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "item/fileChange/patchUpdated",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FileChangePatchUpdatedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "item/plan/delta",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PlanDeltaNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "item/mcpToolCall/progress",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/McpToolCallProgressNotification"
         }
       },
       "required": [

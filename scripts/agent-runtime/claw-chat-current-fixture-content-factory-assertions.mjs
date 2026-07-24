@@ -1,19 +1,12 @@
 import {
   APP_SERVER_METHOD_PLUGIN_INSTALLED_SAVE,
-  APP_SERVER_METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
   APP_SERVER_METHOD_ARTIFACT_READ,
+  APP_SERVER_METHOD_ARTIFACT_WRITE,
   APP_SERVER_METHOD_SESSION_UPDATE,
   APP_SERVER_METHOD_SESSION_TURN_START,
-  APP_SERVER_METHOD_WORKFLOW_CANCEL,
-  APP_SERVER_METHOD_WORKFLOW_READ,
-  APP_SERVER_METHOD_WORKFLOW_RESPOND,
-  APP_SERVER_METHOD_WORKFLOW_RETRY,
   APP_SERVER_METHOD_WORKSPACE_RIGHT_SURFACE_REQUEST,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_TITLE,
-  CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_CANCEL_STEP_ID,
-  CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_REVIEW_STEP_ID,
-  CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_RETRY_STEP_ID,
 } from "./claw-chat-current-fixture-constants.mjs";
 
 export function buildContentFactoryArticleWorkspaceScenarioAssertions({
@@ -25,26 +18,25 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
   const gui = summary.contentFactoryArticleWorkspaceGui ?? {};
   const readModel = summary.contentFactoryArticleWorkspaceReadModel ?? {};
   const artifactRead = summary.contentFactoryArticleWorkspaceArtifactRead ?? {};
-  const workflowRead = summary.contentFactoryArticleWorkspaceWorkflowRead ?? {};
-  const workflowCancel =
-    summary.contentFactoryArticleWorkspaceWorkflowCancel ?? {};
-  const workflowRetry =
-    summary.contentFactoryArticleWorkspaceWorkflowRetry ?? {};
   const identity =
     summary.contentFactoryArticleWorkspaceSessionCreation?.identity ?? {};
   const storyboardRendererContract =
     readModel.storyboardArtifact?.rendererContract ?? {};
   return {
-    contentFactoryArticleWorkspaceRuntimeEventsAppended:
-      appServerRequestMethods.includes(
-        APP_SERVER_METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
-      ) &&
-      summary.contentFactoryArticleWorkspaceRuntimeEventsAppend?.eventTypes?.includes(
-        "artifact.snapshot",
-      ) === true &&
-      summary.contentFactoryArticleWorkspaceRuntimeEventsAppend?.eventTypes?.includes(
-        "runtime.error",
-      ) === true,
+    contentFactoryArticleWorkspaceArtifactWritePersisted:
+      appServerRequestMethods.includes(APP_SERVER_METHOD_ARTIFACT_WRITE) &&
+      summary.contentFactoryArticleWorkspaceArtifactWrite?.threadId ===
+        identity.threadId &&
+      summary.contentFactoryArticleWorkspaceArtifactWrite?.artifactRef ===
+        "artifact-workspace-patch-1" &&
+      Boolean(summary.contentFactoryArticleWorkspaceArtifactWrite?.eventId) &&
+      summary.contentFactoryArticleWorkspaceArtifactWrite?.sequence > 0 &&
+      summary.contentFactoryArticleWorkspaceArtifactWrite?.contentStatus ===
+        "available" &&
+      Boolean(
+        summary.contentFactoryArticleWorkspaceArtifactWrite
+          ?.sidecarRelativePath,
+      ),
     contentFactoryArticleWorkspaceRightSurfaceRequested:
       appServerRequestMethods.includes(
         APP_SERVER_METHOD_WORKSPACE_RIGHT_SURFACE_REQUEST,
@@ -94,74 +86,6 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
       readModel.hasImageSetObject === true &&
       readModel.hasStoryboardObject === true &&
       readModel.hasChecklistObject === true,
-    contentFactoryArticleWorkspaceWorkflowFactsHidden:
-      readModel.workflowUiFactsHidden === true &&
-      readModel.workflowRunCount === 0 &&
-      readModel.workflowStepCount === 0,
-    contentFactoryArticleWorkspaceWorkflowReadModelProjected:
-      appServerRequestMethods.includes(APP_SERVER_METHOD_WORKFLOW_READ) &&
-      workflowRead.sessionId === identity.sessionId &&
-      workflowRead.runCount >= 1 &&
-      workflowRead.stepCount >= 3 &&
-      workflowRead.actionCount >= 1 &&
-      workflowRead.run?.workflowRunId ===
-        identity.workflowRunId &&
-      workflowRead.run?.workflowKey === "content_article_workflow" &&
-      workflowRead.run?.status === "running" &&
-      workflowRead.run?.appId === "content-factory-app" &&
-      workflowRead.run?.taskId === identity.workerTaskId &&
-      workflowRead.run?.turnId === identity.workerTurnId &&
-      workflowRead.run?.stepCounts?.total === 3 &&
-      workflowRead.run?.stepCounts?.completed === 2 &&
-      workflowRead.run?.stepCounts?.waiting === 1 &&
-      workflowRead.waitingStep?.stepId ===
-        CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_REVIEW_STEP_ID &&
-      workflowRead.waitingStep?.status === "waiting" &&
-      workflowRead.waitingStep?.requestId ===
-        identity.workflowReviewRequestId &&
-      workflowRead.waitingStep?.agentActionType === "ask_user" &&
-      workflowRead.respondAction == null,
-    contentFactoryArticleWorkspaceWorkflowRespondHiddenWithoutPendingAction:
-      !appServerRequestMethods.includes(APP_SERVER_METHOD_WORKFLOW_RESPOND) &&
-      workflowRead.respondAction == null,
-    contentFactoryArticleWorkspaceWorkflowCancelProjected:
-      appServerRequestMethods.includes(APP_SERVER_METHOD_WORKFLOW_CANCEL) &&
-      workflowCancel.sessionId ===
-        identity.sessionId &&
-      workflowCancel.run?.workflowRunId ===
-        identity.workflowCancelRunId &&
-      workflowCancel.run?.status === "canceled" &&
-      workflowCancel.run?.stepCounts?.canceled === 1 &&
-      workflowCancel.step?.stepId ===
-        CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_CANCEL_STEP_ID &&
-      workflowCancel.step?.status === "canceled",
-    contentFactoryArticleWorkspaceWorkflowRetryProjected:
-      appServerRequestMethods.includes(APP_SERVER_METHOD_WORKFLOW_RETRY) &&
-      workflowRetry.sessionId ===
-        identity.sessionId &&
-      Boolean(workflowRetry.rescheduledTurnId) &&
-      workflowRetry.run?.workflowRunId ===
-        identity.workflowRetryRunId &&
-      workflowRetry.run?.status === "retrying" &&
-      workflowRetry.run?.stepCounts?.retrying === 1 &&
-      workflowRetry.run?.retrySource === "workflow/retry" &&
-      workflowRetry.run?.retryReasonCode === "fixture_retry_requested" &&
-      workflowRetry.run?.retrySourceTurnId ===
-        identity.workerTurnId &&
-      workflowRetry.run?.retryRescheduledTurnId ===
-        workflowRetry.rescheduledTurnId &&
-      workflowRetry.step?.stepId ===
-        CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKFLOW_RETRY_STEP_ID &&
-      workflowRetry.step?.status === "retrying" &&
-      workflowRetry.step?.attempt === 2 &&
-      workflowRetry.step?.retrySource === "workflow/retry" &&
-      workflowRetry.step?.retryReasonCode === "fixture_retry_requested" &&
-      workflowRetry.step?.retrySourceTurnId ===
-        identity.workerTurnId &&
-      workflowRetry.step?.retryRescheduledTurnId ===
-        workflowRetry.rescheduledTurnId &&
-      summary.contentFactoryArticleWorkspaceWorkerHostGenerationFixture
-        ?.requestCount >= 2,
     contentFactoryArticleWorkspaceArtifactsProjected:
       readModel.articleArtifact?.artifactRef ===
         CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID &&
@@ -267,8 +191,7 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
       summary.contentFactoryArticleWorkspaceEditedDraftReload?.sessionVisible
         ?.hasSessionTitle === true &&
       summary.contentFactoryArticleWorkspaceEditedDraftSessionReopened
-        ?.readModel?.sessionId ===
-        identity.sessionId &&
+        ?.readModel?.sessionId === identity.sessionId &&
       summary.contentFactoryArticleWorkspaceEditedDraftArtifactFrame
         ?.visible === true &&
       summary.contentFactoryArticleWorkspaceEditedDraftArtifactFrame
@@ -284,16 +207,6 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
       readModel.workerArticleObject?.markdownIncludesEditedDraftMarker ===
         true &&
       readModel.workerArticleObject?.sourceEdited === true,
-    contentFactoryArticleWorkspaceWorkerFailureEvidence:
-      readModel.failedWorkerEvidence?.taskId === "image_job_1" &&
-      readModel.failedWorkerEvidence?.status === "failed" &&
-      readModel.failedWorkerEvidence?.errorCode ===
-        "worker_invalid_json_output" &&
-      readModel.failedWorkerEvidence?.failureCategory === "worker_output" &&
-      readModel.failedWorkerEvidence?.retryable === false &&
-      readModel.failedWorkerEvidence?.retryAdvice === "inspect_worker_output" &&
-      readModel.failedWorkerEvidence?.retryAttempt === 0 &&
-      readModel.failedWorkerEvidence?.retryMaxAttempts === 0,
     contentFactoryArticleWorkspaceWorkerTurnExecuted:
       appServerRequestMethods.includes(
         APP_SERVER_METHOD_PLUGIN_INSTALLED_SAVE,
@@ -309,15 +222,13 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
         ?.workerTurnStatus === "completed" &&
       summary.contentFactoryArticleWorkspaceWorkerTurnStart?.readModel
         ?.workerTurnId === identity.workerTurnId &&
-      readModel.workerDogfoodEvidence?.taskId ===
-        identity.workerTaskId &&
+      readModel.workerDogfoodEvidence?.taskId === identity.workerTaskId &&
       readModel.workerDogfoodEvidence?.taskKind ===
         "content.article.generate" &&
       readModel.workerDogfoodEvidence?.status === "completed" &&
       readModel.workerDogfoodEvidence?.artifactKind ===
         "content_factory.workspace_patch" &&
-      readModel.workerArticleObject?.sourceTaskId ===
-        identity.workerTaskId &&
+      readModel.workerArticleObject?.sourceTaskId === identity.workerTaskId &&
       readModel.workerArticleObject?.markdownIncludesResearch === true &&
       readModel.workerArticleObject?.markdownIncludesDraft === true &&
       readModel.workerArticleObject?.hostManagedGenerationStatus ===
@@ -339,8 +250,14 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
       (readModel.workerDogfoodEvidence?.hookRefs?.length ?? 0) === 0 &&
       (readModel.workerDogfoodEvidence?.orchestrationStepCount ?? 0) === 0,
     contentFactoryArticleWorkspaceActionResultPatchProjected:
-      summary.contentFactoryArticleWorkspaceActionResultRuntimeEventsAppend
-        ?.eventTypes?.[0] === "artifact.snapshot" &&
+      summary.contentFactoryArticleWorkspaceActionResultArtifactWrite
+        ?.threadId === identity.threadId &&
+      summary.contentFactoryArticleWorkspaceActionResultArtifactWrite
+        ?.artifactRef === "artifact-image-regenerate-workspace-patch" &&
+      Boolean(
+        summary.contentFactoryArticleWorkspaceActionResultArtifactWrite
+          ?.eventId,
+      ) &&
       readModel.completedActionWorkerEvidence?.taskId ===
         "image_regenerate_job_1" &&
       readModel.completedActionWorkerEvidence?.status === "completed" &&

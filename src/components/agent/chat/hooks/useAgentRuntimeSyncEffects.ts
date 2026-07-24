@@ -10,6 +10,7 @@ import type { AgentSessionDetailRefreshRequest } from "./agentSessionRefresh";
 import { hasRunningThreadReadActivity } from "../projection/threadReadActivity";
 
 const APP_SERVER_BRIDGE_RUNTIME_POLL_MS = 1000;
+const APP_SERVER_RUNTIME_EVENT_BIND_GRACE_MS = 250;
 const RECOVERED_RUNTIME_POLL_ACTIVE_WINDOW_MS = 30 * 60 * 1000;
 const RUNTIME_DETAIL_REFRESH_COALESCE_MS = 120;
 
@@ -712,16 +713,36 @@ export function useAgentRuntimeSyncEffects(
       return;
     }
 
-    refreshSessionDetailOnce(sessionId, RUNTIME_SYNC_REFRESH_REQUESTS.poll);
+    let graceTimer: number | null = null;
+    let pollTimer: number | null = null;
 
-    const timer = window.setInterval(() => {
+    const startPolling = () => {
       refreshSessionDetailOnce(sessionId, RUNTIME_SYNC_REFRESH_REQUESTS.poll);
-    }, APP_SERVER_BRIDGE_RUNTIME_POLL_MS);
+
+      pollTimer = window.setInterval(() => {
+        refreshSessionDetailOnce(sessionId, RUNTIME_SYNC_REFRESH_REQUESTS.poll);
+      }, APP_SERVER_BRIDGE_RUNTIME_POLL_MS);
+    };
+
+    if (hasRuntimeEventListenerCapability) {
+      graceTimer = window.setTimeout(
+        startPolling,
+        APP_SERVER_RUNTIME_EVENT_BIND_GRACE_MS,
+      );
+    } else {
+      startPolling();
+    }
 
     return () => {
-      window.clearInterval(timer);
+      if (graceTimer !== null) {
+        window.clearTimeout(graceTimer);
+      }
+      if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+      }
     };
   }, [
+    hasRuntimeEventListenerCapability,
     refreshSessionDetailOnce,
     sessionId,
     shouldUseAppServerBridgeRuntimePolling,

@@ -50,6 +50,8 @@ export function normalizeHistoryUsage(
       "cachedInputTokens",
     ]),
     cache_creation_input_tokens: readNonNegativeNumber(record, [
+      "cache_write_input_tokens",
+      "cacheWriteInputTokens",
       "cache_creation_input_tokens",
       "cacheCreationInputTokens",
     ]),

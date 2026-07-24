@@ -183,7 +183,7 @@ function readyGuiEvidence() {
     runtimeActionResponse: {
       actionId: "approve-1",
       decision: "approved",
-      method: "agentSession/action/respond",
+      method: "workflow/respond",
       metadata: {
         workflowResume: {
           stepId: "review",

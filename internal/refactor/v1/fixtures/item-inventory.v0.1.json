@@ -10,6 +10,30 @@
     "source": "lime-rs/crates/app-server-protocol/src/protocol/v2/item.rs",
     "lifecycle": ["item/started", "item/completed"]
   },
+  "itemAdjacentMethods": [
+    { "method": "item/started", "kind": "notification", "codex": "current", "lime": "current" },
+    { "method": "item/completed", "kind": "notification", "codex": "current", "lime": "current" },
+    { "method": "item/autoApprovalReview/started", "kind": "notification", "codex": "experimental", "lime": "gap" },
+    { "method": "item/autoApprovalReview/completed", "kind": "notification", "codex": "experimental", "lime": "gap" },
+    { "method": "rawResponseItem/completed", "kind": "notification", "codex": "internal", "lime": "excluded" },
+    { "method": "item/agentMessage/delta", "kind": "notification", "codex": "current", "lime": "current" },
+    { "method": "item/plan/delta", "kind": "notification", "codex": "experimental", "lime": "current" },
+    { "method": "item/commandExecution/outputDelta", "kind": "notification", "codex": "current", "lime": "current" },
+    { "method": "item/commandExecution/terminalInteraction", "kind": "notification", "codex": "current", "lime": "gap" },
+    { "method": "item/fileChange/outputDelta", "kind": "notification", "codex": "deprecated", "lime": "excluded" },
+    { "method": "item/fileChange/patchUpdated", "kind": "notification", "codex": "current", "lime": "current" },
+    { "method": "item/mcpToolCall/progress", "kind": "notification", "codex": "current", "lime": "current" },
+    { "method": "item/reasoning/summaryTextDelta", "kind": "notification", "codex": "current", "lime": "current" },
+    { "method": "item/reasoning/summaryPartAdded", "kind": "notification", "codex": "current", "lime": "current" },
+    { "method": "item/reasoning/textDelta", "kind": "notification", "codex": "current", "lime": "current" },
+    { "method": "serverRequest/resolved", "kind": "notification", "codex": "current", "lime": "current" },
+    { "method": "item/commandExecution/requestApproval", "kind": "serverRequest", "codex": "current", "lime": "current" },
+    { "method": "item/fileChange/requestApproval", "kind": "serverRequest", "codex": "current", "lime": "current" },
+    { "method": "item/tool/requestUserInput", "kind": "serverRequest", "codex": "experimental", "lime": "current" },
+    { "method": "mcpServer/elicitation/request", "kind": "serverRequest", "codex": "current", "lime": "current" },
+    { "method": "item/permissions/requestApproval", "kind": "serverRequest", "codex": "current", "lime": "gap" },
+    { "method": "item/tool/call", "kind": "serverRequest", "codex": "current", "lime": "gap" }
+  ],
   "items": [
     {
       "type": "userMessage",
@@ -18,7 +42,8 @@
       "statusful": false,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
-      "shape": "aligned"
+      "shape": "gap",
+      "fieldNotes": ["Lime UserInput 缺少 Codex Audio/LocalAudio variant，本地路径仍是 plain string"]
     },
     {
       "type": "hookPrompt",
@@ -45,9 +70,9 @@
       "limeFields": ["id", "text"],
       "statusful": false,
       "codexStreamMethods": ["item/plan/delta"],
-      "limeStreamMethods": [],
-      "shape": "gap",
-      "fieldNotes": ["缺少 typed plan delta notification 与 revision identity"]
+      "limeStreamMethods": ["item/plan/delta"],
+      "shape": "aligned",
+      "fieldNotes": ["每个 Plan item 以 canonical itemId 贯穿 started、delta 与 completed；内部 plan.delta 仅为 App Server event-log 表达"]
     },
     {
       "type": "reasoning",
@@ -97,19 +122,20 @@
         "item/commandExecution/outputDelta",
         "item/commandExecution/terminalInteraction"
       ],
-      "limeStreamMethods": [],
+      "limeStreamMethods": ["item/commandExecution/outputDelta"],
       "shape": "gap",
-      "fieldNotes": ["cwd 当前 Lime wire 类型为 string，Codex 使用路径 URI 类型", "缺少 outputDelta/terminalInteraction"]
+      "fieldNotes": ["cwd 当前 Lime wire 类型为 string，Codex 使用路径 URI 类型", "terminalInteraction 尚无 Runtime source event，保持 gap；outputDelta 已接入并复用 canonical itemId"]
     },
     {
       "type": "fileChange",
       "codexFields": ["id", "changes", "status"],
       "limeFields": ["id", "changes", "status"],
       "statusful": true,
-      "codexStreamMethods": ["item/fileChange/outputDelta", "item/fileChange/patchUpdated"],
-      "limeStreamMethods": [],
-      "shape": "gap",
-      "fieldNotes": ["缺少 patchUpdated 与输出增量通知"]
+      "codexStreamMethods": ["item/fileChange/patchUpdated"],
+      "limeStreamMethods": ["item/fileChange/patchUpdated"],
+      "shape": "aligned",
+      "codexDeprecatedMethods": ["item/fileChange/outputDelta"],
+      "fieldNotes": ["patchUpdated 复用 canonical itemId 与完整结构化 changes 快照；Codex 已停止发送 outputDelta，Lime 不实现该旧通知"]
     },
     {
       "type": "mcpToolCall",
@@ -141,9 +167,9 @@
       ],
       "statusful": true,
       "codexStreamMethods": ["item/mcpToolCall/progress"],
-      "limeStreamMethods": [],
+      "limeStreamMethods": ["item/mcpToolCall/progress"],
       "shape": "gap",
-      "fieldNotes": ["result/error 当前 Lime 为 opaque Value，Codex 已有 typed MCP result/error", "缺少 progress 通知"]
+      "fieldNotes": ["result/error 当前 Lime 为 opaque Value，Codex 已有 typed MCP result/error；progress 已复用 canonical itemId"]
     },
     {
       "type": "dynamicToolCall",
@@ -152,7 +178,8 @@
       "statusful": true,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
-      "shape": "aligned"
+      "shape": "gap",
+      "fieldNotes": ["Lime contentItems 缺少 Codex InputAudio，且当前 enum wire shape 不是 type-tagged"]
     },
     {
       "type": "collabAgentToolCall",

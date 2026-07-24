@@ -52,6 +52,8 @@ pub(super) fn explicit_item_id(payload: &Map<String, Value>) -> Option<String> {
             "message_id",
             "toolCallId",
             "tool_call_id",
+            "toolId",
+            "tool_id",
             "commandId",
             "command_id",
             "patchId",

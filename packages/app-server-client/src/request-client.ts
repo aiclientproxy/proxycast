@@ -565,6 +565,7 @@ export interface AppServerClient {
     params: protocol.UsageStatsRangeParams,
   ): protocol.JsonRpcRequest;
   readArtifacts(params: protocol.ArtifactReadParams): protocol.JsonRpcRequest;
+  writeArtifact(params: protocol.ArtifactWriteParams): protocol.JsonRpcRequest;
   listDirectory(
     params: protocol.FileSystemListDirectoryParams,
   ): protocol.JsonRpcRequest;
@@ -750,9 +751,6 @@ export interface AppServerClient {
   startTurn(params: protocol.TurnStartParams): protocol.JsonRpcRequest;
   steerTurn(params: protocol.TurnSteerParams): protocol.JsonRpcRequest;
   cancelTurn(params: protocol.TurnInterruptParams): protocol.JsonRpcRequest;
-  replayAction(
-    params: protocol.AgentSessionActionReplayParams,
-  ): protocol.JsonRpcRequest;
   respondAction(
     params: protocol.AgentSessionActionRespondParams,
   ): protocol.JsonRpcRequest;

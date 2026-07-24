@@ -175,7 +175,7 @@ export function registerImageContentSmokeGuards({
     ]);
   });
 
-  it("covers content factory Article Workspace through runtime event append and artifact read", () => {
+  it("covers content factory Article Workspace through typed artifact write and read", () => {
     const content = readSmokeScript();
     const contentFactoryScenario = readContentFactoryArticleWorkspaceScript();
 
@@ -186,11 +186,7 @@ export function registerImageContentSmokeGuards({
       "runContentFactoryInlineImageArticleWorkspaceScenario",
       "pluginInstalled/save",
       "turn/start",
-      "agentSession/runtimeEvents/append",
-      "workflow/read",
-      "workflow/respond",
-      "workflow/cancel",
-      "workflow/retry",
+      "artifact/write",
       "artifact/read",
       "content_factory.workspace_patch",
       "contentFactoryWorkspacePatch",
@@ -215,11 +211,6 @@ export function registerImageContentSmokeGuards({
       "article-draft-document",
       "contentFactoryArticleWorkspaceWorkerTurnExecuted",
       "contentFactoryArticleWorkspaceWorkerAuditFactsHidden",
-      "contentFactoryArticleWorkspaceWorkflowRead",
-      "contentFactoryArticleWorkspaceWorkflowReadModelProjected",
-      "contentFactoryArticleWorkspaceWorkflowRespondHiddenWithoutPendingAction",
-      "contentFactoryArticleWorkspaceWorkflowCancelProjected",
-      "contentFactoryArticleWorkspaceWorkflowRetryProjected",
       "content.article.generate",
       "options.scenario === CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO",
       "options.scenario !== CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO",
@@ -270,18 +261,14 @@ export function registerImageContentSmokeGuards({
       "workspace-article-editor-surface",
       "workspace-right-surface-host",
       "artifact_document.v1",
-      "worker_invalid_json_output",
-      "failureCategory",
-      "retryAdvice",
-      "inspect_worker_output",
       "contentFactoryArticleWorkspaceDoesNotUseModelTurn",
       "contentFactoryArticleWorkspaceActionResultPatchProjected",
     ]);
     expectAllToContain(expect, contentFactoryScenario, [
-      "workflow.run.started",
-      "workflow.step.waiting",
-      "summarizeContentFactoryWorkflowRead",
-      "summarizeContentFactoryWorkflowControl",
+      "APP_SERVER_METHOD_ARTIFACT_WRITE",
+      "writeContentFactoryWorkspacePatchArtifact",
+      "writeContentFactoryArticleWorkspaceActionResultArtifact",
+      "summarizeArtifactWrite",
       "articleCanvasHasForbiddenTemplate",
       "reloadContentFactoryArticleWorkspaceSession",
       "reloadRendererDocument",
@@ -304,6 +291,10 @@ export function registerImageContentSmokeGuards({
       "内容工厂插件化写作：让文章生产可审计",
     ]);
     expectAllNotToContain(expect, contentFactoryScenario, [
+      "agentSession/runtimeEvents/append",
+      "APP_SERVER_METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND",
+      'type: "workflow.run.started"',
+      'type: "runtime.error"',
       'toggleTestId: "task-center-object-canvas-toggle"',
       "researchText.includes",
       "takeawaysText.length",
@@ -320,5 +311,4 @@ export function registerImageContentSmokeGuards({
       "BrowserView",
     ]);
   });
-
 }

@@ -30,9 +30,7 @@ use agent_protocol::SortDirection;
 use app_server_protocol::AgentEvent;
 use app_server_protocol::AgentSessionActionScope;
 use app_server_protocol::AgentSessionActionType;
-use app_server_protocol::AgentSessionApprovalDecision;
 use app_server_protocol::AgentSessionReadParams;
-use app_server_protocol::AgentSessionReplayedActionRequired;
 use model_routing::{
     latest_model_routing_from_events, latest_provider_safety_buffering_from_events,
 };
@@ -49,6 +47,11 @@ use thread_store::{ListItemsParams, PageRequest, ThreadStore, ThreadStoreResult}
 
 pub(super) use canonical_items::canonical_item_to_agent_detail;
 pub(super) use messages::runtime_session_messages;
+
+pub(super) struct PendingAction {
+    pub(super) action_type: AgentSessionActionType,
+    pub(super) scope: Option<AgentSessionActionScope>,
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct ReadDetailOptions {
@@ -619,10 +622,10 @@ pub(in crate::runtime) fn workflow_read_model_from_stored_session(
     read_model
 }
 
-pub(super) fn replayed_action_required_from_stored_session(
+pub(super) fn pending_action_from_stored_session(
     stored: &StoredSession,
     request_id: &str,
-) -> Option<AgentSessionReplayedActionRequired> {
+) -> Option<PendingAction> {
     let request_id = request_id.trim();
     if request_id.is_empty() {
         return None;
@@ -638,7 +641,7 @@ pub(super) fn replayed_action_required_from_stored_session(
                 resolved = true;
             }
             "action.required" if !resolved => {
-                return replayed_action_required_from_event(stored, event, request_id);
+                return pending_action_from_event(stored, event);
             }
             _ => {}
         }
@@ -646,66 +649,15 @@ pub(super) fn replayed_action_required_from_stored_session(
     None
 }
 
-fn replayed_action_required_from_event(
-    stored: &StoredSession,
-    event: &AgentEvent,
-    request_id: &str,
-) -> Option<AgentSessionReplayedActionRequired> {
+fn pending_action_from_event(stored: &StoredSession, event: &AgentEvent) -> Option<PendingAction> {
     let action_type = event_action_type(&event.payload)?;
-    let data = event.payload.get("data").unwrap_or(&event.payload);
-    let prompt = string_field(data, &["prompt", "message"])
-        .or_else(|| string_field(&event.payload, &["prompt", "message"]));
-    Some(AgentSessionReplayedActionRequired {
-        event_type: "action_required".to_string(),
-        request_id: request_id.to_string(),
+    Some(PendingAction {
         action_type,
-        tool_name: string_field(data, &["toolName", "tool_name"])
-            .or_else(|| string_field(&event.payload, &["toolName", "tool_name"])),
-        arguments: data
-            .get("arguments")
-            .cloned()
-            .or_else(|| event.payload.get("arguments").cloned()),
-        prompt,
-        questions: data
-            .get("questions")
-            .cloned()
-            .or_else(|| event.payload.get("questions").cloned()),
-        requested_schema: data
-            .get("requestedSchema")
-            .cloned()
-            .or_else(|| data.get("requested_schema").cloned())
-            .or_else(|| event.payload.get("requestedSchema").cloned())
-            .or_else(|| event.payload.get("requested_schema").cloned()),
-        available_decisions: replayed_action_available_decisions(data, &event.payload),
-        scope: replayed_action_scope(stored, event),
+        scope: pending_action_scope(stored, event),
     })
 }
 
-fn replayed_action_available_decisions(
-    data: &serde_json::Value,
-    payload: &serde_json::Value,
-) -> Option<Vec<AgentSessionApprovalDecision>> {
-    let values = data
-        .get("availableDecisions")
-        .or_else(|| data.get("available_decisions"))
-        .or_else(|| payload.get("availableDecisions"))
-        .or_else(|| payload.get("available_decisions"))?;
-    let decisions = values
-        .as_array()?
-        .iter()
-        .filter_map(|value| value.as_str())
-        .filter_map(|value| match value {
-            "allow_once" => Some(AgentSessionApprovalDecision::AllowOnce),
-            "allow_for_session" => Some(AgentSessionApprovalDecision::AllowForSession),
-            "decline" => Some(AgentSessionApprovalDecision::Decline),
-            "cancel" => Some(AgentSessionApprovalDecision::Cancel),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    (!decisions.is_empty()).then_some(decisions)
-}
-
-fn replayed_action_scope(
+fn pending_action_scope(
     stored: &StoredSession,
     event: &AgentEvent,
 ) -> Option<AgentSessionActionScope> {

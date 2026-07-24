@@ -44,7 +44,9 @@ describe("plugin runtime Electron fixture smoke guard", () => {
     expect(content).toContain('"thread/start"');
     expect(content).toContain('"turn/start"');
     expect(content).toContain('"thread/read"');
-    expect(content).toContain('"agentSession/action/respond"');
+    expect(content).toContain('"item/tool/requestUserInput"');
+    expect(content).toContain('"serverRequest/resolved"');
+    expect(content).not.toContain('"agentSession/action/respond"');
     expect(content).toContain('"turn/interrupt"');
   });
 

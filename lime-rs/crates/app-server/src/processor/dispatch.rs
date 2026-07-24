@@ -74,6 +74,9 @@ impl RequestProcessor {
             METHOD_INITIALIZE => ready(self.handle_initialize(params)).boxed(),
             METHOD_CAPABILITY_LIST => ready(self.handle_capability_list(params)).boxed(),
             METHOD_ARTIFACT_READ => ready(self.handle_artifact_read(params)).boxed(),
+            app_server_protocol::protocol::v2::METHOD_ARTIFACT_WRITE => {
+                self.handle_artifact_write_v2_impl(params).boxed()
+            }
             METHOD_FILE_SYSTEM_LIST_DIRECTORY => {
                 self.handle_file_system_list_directory_impl(params).boxed()
             }
@@ -726,11 +729,7 @@ impl RequestProcessor {
                 self.handle_turn_steer_impl(params, event_callback).boxed()
             }
             METHOD_TURN_INTERRUPT => self.handle_turn_interrupt_v2_impl(params).boxed(),
-            METHOD_AGENT_SESSION_ACTION_REPLAY => self.handle_action_replay(params).boxed(),
             METHOD_AGENT_SESSION_ACTION_RESPOND => self.handle_action_respond(params).boxed(),
-            METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND => {
-                self.handle_runtime_events_append_impl(params).boxed()
-            }
             METHOD_AGENT_SESSION_TOOL_INVENTORY_READ => {
                 self.handle_tool_inventory_read_impl(params).boxed()
             }

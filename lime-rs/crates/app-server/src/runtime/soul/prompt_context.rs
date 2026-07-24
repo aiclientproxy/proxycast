@@ -409,6 +409,9 @@ mod tests {
             .expect("rendered soul prompt");
 
         assert!(prompt.contains("Answer simple greetings directly"));
+        assert!(prompt.contains("Treat style profile ids, style pack ids, schemas"));
+        assert!(prompt.contains("do not repeat or imitate prior assistant wording"));
+        assert!(prompt.contains("必须静默应用"));
         assert!(prompt.contains("examples are design-time fixtures"));
         assert!(!prompt.contains("资料回来了"));
         assert!(!prompt.contains("我先把证据抓回来"));

@@ -11,6 +11,49 @@ export interface CollectRetainedLocalTailOptions {
   matchedLocalMessageIds: Set<string>;
 }
 
+export interface CollectRetainedLocalCanonicalHistoryOptions {
+  hydratedMessageIds: Set<string>;
+  hydratedRuntimeTurnIds: Set<string>;
+  lastMatchedLocalIndex: number;
+  localMessages: Message[];
+  matchedLocalMessageIds: Set<string>;
+}
+
+function readCanonicalRuntimeTurnId(message: Message): string | null {
+  const runtimeTurnId = message.runtimeTurnId?.trim();
+  if (!runtimeTurnId || runtimeTurnId.startsWith("pending-turn:")) {
+    return null;
+  }
+
+  return runtimeTurnId;
+}
+
+export function collectRetainedLocalCanonicalHistory(
+  options: CollectRetainedLocalCanonicalHistoryOptions,
+): Message[] {
+  if (options.lastMatchedLocalIndex < 0) {
+    return [];
+  }
+
+  return options.localMessages.filter((message, index) => {
+    if (index > options.lastMatchedLocalIndex) {
+      return false;
+    }
+    if (
+      options.hydratedMessageIds.has(message.id) ||
+      options.matchedLocalMessageIds.has(message.id) ||
+      !hasRetainableLocalMessageState(message)
+    ) {
+      return false;
+    }
+
+    const runtimeTurnId = readCanonicalRuntimeTurnId(message);
+    return Boolean(
+      runtimeTurnId && !options.hydratedRuntimeTurnIds.has(runtimeTurnId),
+    );
+  });
+}
+
 export function collectRetainedLocalTail(
   options: CollectRetainedLocalTailOptions,
 ): Message[] {

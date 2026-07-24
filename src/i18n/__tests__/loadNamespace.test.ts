@@ -689,7 +689,7 @@ describe("i18n namespace loader", () => {
         "agentChat.sessionOverview.timeline.empty",
       );
       expect(resources[locale].agent).toHaveProperty(
-        "agentChat.sessionOverview.queue.imageCount",
+        "agentChat.sessionOverview.metrics.inProgress",
       );
       expect(resources[locale].agent).toHaveProperty(
         "agentChat.imageWorkbenchPreview.media.alt",

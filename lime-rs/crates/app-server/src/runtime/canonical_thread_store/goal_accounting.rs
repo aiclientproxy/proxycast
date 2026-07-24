@@ -607,6 +607,7 @@ fn read_turn_accounting(
                 TokenUsageSnapshot {
                     input_tokens: row.get(4)?,
                     cached_input_tokens: row.get(5)?,
+                    cache_write_input_tokens: 0,
                     output_tokens: row.get(6)?,
                     reasoning_output_tokens: row.get(7)?,
                     total_tokens: row.get(8)?,

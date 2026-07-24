@@ -22,6 +22,71 @@
       ],
       "type": "string"
     },
+    "ArtifactSnapshot": {
+      "properties": {
+        "artifactDocumentId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "artifactRef": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "metadata": true,
+        "path": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "status": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "artifactRef",
+        "content",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "ArtifactWriteParams": {
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactSnapshot"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "artifact",
+        "threadId"
+      ],
+      "type": "object"
+    },
     "ByteRange": {
       "properties": {
         "end": {
@@ -1586,6 +1651,26 @@
         },
         "params": {
           "$ref": "#/$defs/ThreadGoalClearParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "artifact/write",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ArtifactWriteParams"
         }
       },
       "required": [

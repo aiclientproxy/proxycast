@@ -8,6 +8,48 @@ import {
 const CREATED_AT_SECONDS = 1_780_704_000;
 
 describe("appServerCanonicalThreadProjection", () => {
+  it("截断的 Codex MCP 结果仅保留空 content 时仍应恢复完整会话", () => {
+    const detail = readCanonicalThreadDetail({
+      thread: {
+        id: "thread-codex-import-truncated-mcp",
+        sessionId: "session-codex-import-truncated-mcp",
+        status: { type: "idle" },
+        createdAt: 1_700_000_000,
+        updatedAt: 1_700_000_001,
+        turns: [
+          {
+            id: "turn-codex-import-truncated-mcp",
+            status: "completed",
+            items: [
+              {
+                id: "mcp-codex-import-truncated",
+                type: "mcpToolCall",
+                server: "node_repl",
+                tool: "exec",
+                arguments: {},
+                status: "failed",
+                result: {
+                  content: [],
+                  _meta: { truncated: true },
+                },
+                error: { message: "tool output unavailable" },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(detail).not.toBeNull();
+    expect(detail?.items).toEqual([
+      expect.objectContaining({
+        id: "mcp-codex-import-truncated",
+        status: "failed",
+        type: "tool_call",
+      }),
+    ]);
+  });
+
   it("按 Codex Unix 秒投影时间，并保留未加载状态", () => {
     const result = readCanonicalThreadListResponse({
       data: [

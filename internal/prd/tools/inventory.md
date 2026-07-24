@@ -227,10 +227,11 @@ const snapshot = await getAgentRuntimeToolInventory({
 
 当前目录层没有新增 deprecated 工具；建议不要提前扩充 deprecated 层。
 
-## 5.4 dead-candidate
+## 5.4 dead / deleted
 
-- `lime-rs/crates/agent/src/tool_permissions.rs`
-- `lime-rs/crates/agent/src/shell_security.rs`
+- `lime-rs/crates/agent/src/tool_permissions.rs`：已物理删除，forbidden-to-restore
+- `lime-rs/crates/agent/src/shell_security.rs`：已物理删除，forbidden-to-restore
+- `lime-rs/crates/agent/tests/legacy_permission_surfaces.rs`：旧语义正向测试夹具已物理删除，forbidden-to-restore
 
 ---
 

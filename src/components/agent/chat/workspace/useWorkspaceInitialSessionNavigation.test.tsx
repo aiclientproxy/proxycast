@@ -176,8 +176,14 @@ describe("useWorkspaceInitialSessionNavigation", () => {
     expect(switchTopic).not.toHaveBeenCalled();
   });
 
-  it("初始导航进入同一会话恢复壳后仍应允许一次 matched hydrate", async () => {
-    const switchTopic = vi.fn(async () => undefined);
+  it("初始导航进入同一会话恢复壳后应复用在途 hydrate", async () => {
+    let resolveSwitch: (result: unknown) => void = () => {};
+    const switchTopic = vi.fn(
+      () =>
+        new Promise<unknown>((resolve) => {
+          resolveSwitch = resolve;
+        }),
+    );
     const mounted = renderHook({
       initialSessionId: "session-42",
       currentSessionId: null,
@@ -201,14 +207,50 @@ describe("useWorkspaceInitialSessionNavigation", () => {
     });
     await flushEffects();
 
-    expect(switchTopic).toHaveBeenCalledTimes(2);
+    expect(switchTopic).toHaveBeenCalledTimes(1);
     expect(switchTopic).toHaveBeenNthCalledWith(1, "session-42", {
       allowDetachedSession: true,
     });
-    expect(switchTopic).toHaveBeenNthCalledWith(2, "session-42", {
-      allowDetachedSession: true,
-      forceRefresh: true,
+    await act(async () => {
+      resolveSwitch("success");
     });
+  });
+
+  it("初始会话水合失败后不应自动重复恢复", async () => {
+    let resolveSwitch: (result: unknown) => void = () => {};
+    const switchTopic = vi.fn(
+      () =>
+        new Promise<unknown>((resolve) => {
+          resolveSwitch = resolve;
+        }),
+    );
+    const mounted = renderHook({
+      initialSessionId: "session-invalid-import",
+      currentSessionId: null,
+      switchTopic,
+    });
+
+    await flushEffects();
+    mounted.rerender({
+      initialSessionId: "session-invalid-import",
+      currentSessionId: "session-invalid-import",
+      shouldHydrateMatchedInitialSession: true,
+      switchTopic,
+    });
+    await flushEffects();
+    expect(switchTopic).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveSwitch("error");
+    });
+    mounted.rerender({
+      initialSessionId: "session-invalid-import",
+      currentSessionId: null,
+      switchTopic,
+    });
+    await flushEffects();
+
+    expect(switchTopic).toHaveBeenCalledTimes(1);
   });
 
   it("切换到新的初始会话时应重新触发恢复", async () => {
@@ -513,13 +555,7 @@ describe("useWorkspaceInitialSessionNavigation", () => {
     });
     await flushEffects();
 
-    expect(firstSwitchTopic).toHaveBeenCalledWith(
-      "session-shared",
-      undefined,
-    );
-    expect(secondSwitchTopic).toHaveBeenCalledWith(
-      "session-shared",
-      undefined,
-    );
+    expect(firstSwitchTopic).toHaveBeenCalledWith("session-shared", undefined);
+    expect(secondSwitchTopic).toHaveBeenCalledWith("session-shared", undefined);
   });
 });

@@ -18,7 +18,10 @@ import {
 import { invokeAppServerFromPage } from "./claw-chat-current-fixture-rpc.mjs";
 import { sanitizeJson, sleep } from "./claw-chat-current-fixture-utils.mjs";
 
-const APP_SERVER_METHOD_ACTION_REPLAY = "agentSession/action/replay";
+const METHOD_COMMAND_EXECUTION_REQUEST_APPROVAL =
+  "item/commandExecution/requestApproval";
+const SERVER_REQUEST_LIFECYCLE_TRACE_KEY =
+  "lime:debug:app-server-server-request-lifecycle:v1";
 
 function collectPendingRequests(readModel) {
   const detail = readModel?.detail ?? readModel ?? {};
@@ -72,50 +75,61 @@ function readLatestTurnStatus(readModel) {
   );
 }
 
-function findApprovalPendingRequest(readModel) {
-  return collectPendingRequests(readModel).find((request) => {
-    const requestId = String(
-      request?.id ??
-        request?.request_id ??
-        request?.requestId ??
-        request?.payload?.requestId ??
-        request?.payload?.request_id ??
-        "",
-    );
-    return requestId === APPROVAL_REQUEST_RESUME_REQUEST_ID;
-  });
+function findPendingApprovalServerRequest(lifecycleEntries) {
+  const entries = Array.isArray(lifecycleEntries) ? lifecycleEntries : [];
+  const requestIndex = entries.findLastIndex(
+    (entry) =>
+      entry?.kind === "request" &&
+      entry?.method === METHOD_COMMAND_EXECUTION_REQUEST_APPROVAL &&
+      entry?.approvalId === APPROVAL_REQUEST_RESUME_REQUEST_ID,
+  );
+  if (requestIndex < 0) {
+    return null;
+  }
+  const request = entries[requestIndex];
+  const settled = entries.slice(requestIndex + 1).some(
+    (entry) =>
+      entry?.id === request.id &&
+      (entry?.kind === "response" || entry?.kind === "resolved"),
+  );
+  return settled ? null : request;
 }
 
-function summarizeApprovalPendingReadModel(readModel) {
-  const pendingRequests = collectPendingRequests(readModel);
-  const request = findApprovalPendingRequest(readModel);
-  const serialized = JSON.stringify(readModel || {});
-  const payload = request?.payload ?? request ?? {};
+export function summarizeApprovalPendingReadModel(
+  readModel,
+  lifecycleEntries,
+) {
+  const readModelPendingRequests = collectPendingRequests(readModel);
+  const request = findPendingApprovalServerRequest(lifecycleEntries);
+  const readModelSerialized = JSON.stringify(readModel || {});
   return sanitizeJson({
-    pendingRequestCount: pendingRequests.length,
+    pendingRequestCount: request ? 1 : 0,
+    readModelPendingRequestCount: readModelPendingRequests.length,
     latestTurnStatus: readLatestTurnStatus(readModel),
     hasPendingRequest: Boolean(request),
-    requestId:
-      request?.id ??
-      request?.request_id ??
-      request?.requestId ??
-      payload?.requestId ??
-      payload?.request_id ??
-      null,
-    requestType: request?.request_type ?? request?.requestType ?? null,
-    requestStatus: request?.status ?? null,
-    title: request?.title ?? null,
-    payloadActionType: payload?.actionType ?? payload?.action_type ?? null,
-    payloadToolName: payload?.toolName ?? payload?.tool_name ?? null,
-    includesPrompt: serialized.includes(APPROVAL_REQUEST_RESUME_PROMPT),
-    includesApprovalPrompt: serialized.includes(
+    outerRequestId: request?.id ?? null,
+    requestId: request?.approvalId ?? null,
+    requestType: request?.method ?? null,
+    requestStatus: request ? "pending" : null,
+    threadId: request?.threadId ?? null,
+    turnId: request?.turnId ?? null,
+    itemId: request?.itemId ?? null,
+    payloadActionType: request ? "tool_confirmation" : null,
+    payloadToolName: request ? "exec_command" : null,
+    includesPrompt: readModelSerialized.includes(
+      APPROVAL_REQUEST_RESUME_PROMPT,
+    ),
+    includesApprovalPrompt: readModelSerialized.includes(
       APPROVAL_REQUEST_RESUME_APPROVAL_PROMPT,
     ),
-    includesCommand: serialized.includes(APPROVAL_REQUEST_RESUME_COMMAND),
-    includesRequestId: serialized.includes(APPROVAL_REQUEST_RESUME_REQUEST_ID),
-    includesToolCallId: serialized.includes(
-      APPROVAL_REQUEST_RESUME_TOOL_CALL_ID,
+    includesCommand: readModelSerialized.includes(
+      APPROVAL_REQUEST_RESUME_COMMAND,
     ),
+    includesRequestId:
+      request?.approvalId === APPROVAL_REQUEST_RESUME_REQUEST_ID,
+    includesToolCallId:
+      readModelSerialized.includes(APPROVAL_REQUEST_RESUME_TOOL_CALL_ID) &&
+      request?.itemId === APPROVAL_REQUEST_RESUME_TOOL_CALL_ID,
   });
 }
 
@@ -404,25 +418,29 @@ export async function waitForApprovalPendingReadModel(
       },
       requestLog,
     );
-    const replay = await invokeAppServerFromPage(
-      page,
-      APP_SERVER_METHOD_ACTION_REPLAY,
-      {
-        sessionId: options.sessionId,
-        requestId: APPROVAL_REQUEST_RESUME_REQUEST_ID,
-      },
-      requestLog,
+    const lifecycleEntries = await page.evaluate((key) => {
+      try {
+        const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }, SERVER_REQUEST_LIFECYCLE_TRACE_KEY);
+    lastSummary = summarizeApprovalPendingReadModel(
+      read.result,
+      lifecycleEntries,
     );
-    const pendingAction = replay.result?.action ?? null;
-    lastSummary = summarizeApprovalPendingReadModel({
-      ...read.result,
-      pending_requests: pendingAction ? [pendingAction] : [],
-    });
     if (
       lastSummary.hasPendingRequest === true &&
+      lastSummary.readModelPendingRequestCount === 0 &&
       lastSummary.payloadActionType === "tool_confirmation" &&
-      lastSummary.includesApprovalPrompt === true &&
-      lastSummary.includesCommand === true
+      lastSummary.includesCommand === true &&
+      lastSummary.threadId === options.threadId &&
+      typeof lastSummary.turnId === "string" &&
+      lastSummary.turnId.length > 0 &&
+      lastSummary.itemId === APPROVAL_REQUEST_RESUME_TOOL_CALL_ID &&
+      (typeof lastSummary.outerRequestId === "string" ||
+        typeof lastSummary.outerRequestId === "number")
     ) {
       return lastSummary;
     }

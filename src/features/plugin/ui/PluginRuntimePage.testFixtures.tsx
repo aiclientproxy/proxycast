@@ -74,12 +74,6 @@ const hoisted = vi.hoisted(() => ({
     listInstalledPlugins: vi.fn(),
     startPluginUiRuntime: vi.fn(),
   },
-  runtimeApiMocks: {
-    startPluginRuntimeTask: vi.fn(),
-    getPluginRuntimeTask: vi.fn(),
-    cancelPluginRuntimeTask: vi.fn(),
-    submitPluginRuntimeHostResponse: vi.fn(),
-  },
   appServerClientMocks: {
     createAppServerClient: vi.fn(),
     startSession: vi.fn(),
@@ -178,7 +172,6 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 export const apiMocks = hoisted.apiMocks;
-export const runtimeApiMocks = hoisted.runtimeApiMocks;
 export const appServerClientMocks = hoisted.appServerClientMocks;
 
 vi.mock("@/lib/api/plugins", () => ({
@@ -186,14 +179,6 @@ vi.mock("@/lib/api/plugins", () => ({
   getPluginCloudCatalog: hoisted.apiMocks.getPluginCloudCatalog,
   listInstalledPlugins: hoisted.apiMocks.listInstalledPlugins,
   startPluginUiRuntime: hoisted.apiMocks.startPluginUiRuntime,
-}));
-
-vi.mock("@/lib/api/pluginRuntime", () => ({
-  startPluginRuntimeTask: hoisted.runtimeApiMocks.startPluginRuntimeTask,
-  getPluginRuntimeTask: hoisted.runtimeApiMocks.getPluginRuntimeTask,
-  cancelPluginRuntimeTask: hoisted.runtimeApiMocks.cancelPluginRuntimeTask,
-  submitPluginRuntimeHostResponse:
-    hoisted.runtimeApiMocks.submitPluginRuntimeHostResponse,
 }));
 
 vi.mock("@/lib/api/appServer", () => ({

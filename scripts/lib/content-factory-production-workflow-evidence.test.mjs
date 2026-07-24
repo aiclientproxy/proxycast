@@ -29,7 +29,7 @@ describe("content factory production workflow evidence", () => {
     ).toEqual([]);
   });
 
-  it("从 action/respond trace 和 workflow JSONL 匹配 resume lifecycle", () => {
+  it("从 workflow/respond trace 和 workflow JSONL 匹配 resume lifecycle", () => {
     const workflowJsonl = path.join(
       fs.mkdtempSync(path.join(os.tmpdir(), "content-factory-workflow-")),
       "workflow-events.jsonl",
@@ -63,7 +63,7 @@ describe("content factory production workflow evidence", () => {
       {
         appServerRequests: [
           {
-            method: "agentSession/action/respond",
+            method: "workflow/respond",
             params: {
               confirmed: true,
               request_id: "article-draft-review",
@@ -98,12 +98,12 @@ describe("content factory production workflow evidence", () => {
     );
   });
 
-  it("从 workflow/respond typed action metadata 匹配 resume lifecycle", () => {
+  it("拒绝已退役的 agentSession/action/respond trace", () => {
     const traceBindings = workflowResumeBindingsFromTrace([
       {
         appServerRequests: [
           {
-            method: "workflow/respond",
+            method: "agentSession/action/respond",
             params: {
               confirmed: true,
               requestId: "article-draft-review",
@@ -120,14 +120,7 @@ describe("content factory production workflow evidence", () => {
       },
     ]);
 
-    expect(traceBindings).toEqual([
-      expect.objectContaining({
-        actionId: "article-draft-review",
-        decision: "approved",
-        method: "workflow/respond",
-        workflowRunId: "turn_prod:content-article",
-      }),
-    ]);
+    expect(traceBindings).toEqual([]);
   });
 
   it("拒绝非 canonical workflowResume metadata", () => {
@@ -136,7 +129,7 @@ describe("content factory production workflow evidence", () => {
         {
           appServerRequests: [
             {
-              method: "agentSession/action/respond",
+              method: "workflow/respond",
               params: {
                 confirmed: true,
                 requestId: "article-draft-review",

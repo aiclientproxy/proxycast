@@ -24,6 +24,41 @@ fn thread_start_uses_v2_camel_case_fields() {
 }
 
 #[test]
+fn artifact_write_round_trips_typed_snapshot_shape() {
+    let expected = json!({
+        "id": 4,
+        "method": "artifact/write",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "artifact": {
+                "artifactRef": "artifact_doc_3",
+                "artifactDocumentId": "doc_3",
+                "path": "drafts/article.json",
+                "title": "Draft",
+                "kind": "artifact_document",
+                "status": "ready",
+                "content": "{\"schemaVersion\":\"artifact-document/v1\"}",
+                "metadata": {"versionNo": 2}
+            }
+        }
+    });
+
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode artifact/write request");
+    assert_eq!(request.method(), Method::ArtifactWrite);
+    assert_eq!(
+        serde_json::to_value(request).expect("encode artifact/write request"),
+        expected
+    );
+    assert_eq!(
+        Method::parse(METHOD_ARTIFACT_WRITE),
+        Some(Method::ArtifactWrite)
+    );
+    assert!(METHODS.contains(&METHOD_ARTIFACT_WRITE));
+}
+
+#[test]
 fn thread_fork_round_trips_codex_goal_deferral_fields() {
     let expected = json!({
         "id": 2,
@@ -81,6 +116,7 @@ fn thread_token_usage_notification_round_trips_codex_shape() {
                     "totalTokens": 120,
                     "inputTokens": 90,
                     "cachedInputTokens": 30,
+                    "cacheWriteInputTokens": 12,
                     "outputTokens": 30,
                     "reasoningOutputTokens": 10
                 },
@@ -88,6 +124,7 @@ fn thread_token_usage_notification_round_trips_codex_shape() {
                     "totalTokens": 60,
                     "inputTokens": 45,
                     "cachedInputTokens": 15,
+                    "cacheWriteInputTokens": 6,
                     "outputTokens": 15,
                     "reasoningOutputTokens": 5
                 },
@@ -110,6 +147,124 @@ fn thread_token_usage_notification_round_trips_codex_shape() {
         serde_json::to_value(notification).expect("encode token usage notification"),
         expected
     );
+}
+
+#[test]
+fn plan_delta_notification_round_trips_codex_shape() {
+    let expected = json!({
+        "method": "item/plan/delta",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "itemId": "plan_3",
+            "delta": "- [ ] verify typed plan delta"
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode plan delta notification");
+    assert_eq!(notification.method(), METHOD_PLAN_DELTA);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_PLAN_DELTA);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC plan delta notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode plan delta notification"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_PLAN_DELTA));
+}
+
+#[test]
+fn command_execution_output_delta_notification_round_trips_codex_shape() {
+    let expected = json!({
+        "method": "item/commandExecution/outputDelta",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "itemId": "command_3",
+            "delta": "stdout\n"
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode command output delta");
+    assert_eq!(notification.method(), METHOD_COMMAND_EXECUTION_OUTPUT_DELTA);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_COMMAND_EXECUTION_OUTPUT_DELTA);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC command output delta"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode command output delta"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_COMMAND_EXECUTION_OUTPUT_DELTA));
+}
+
+#[test]
+fn file_change_patch_updated_notification_round_trips_codex_shape() {
+    let expected = json!({
+        "method": "item/fileChange/patchUpdated",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "itemId": "patch_3",
+            "changes": [
+                {
+                    "path": "src/lib.rs",
+                    "kind": { "type": "update", "move_path": "src/main.rs" },
+                    "diff": "-old\n+new"
+                }
+            ]
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode file change patch update");
+    assert_eq!(notification.method(), METHOD_FILE_CHANGE_PATCH_UPDATED);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_FILE_CHANGE_PATCH_UPDATED);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC file change patch update"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode file change patch update"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_FILE_CHANGE_PATCH_UPDATED));
+}
+
+#[test]
+fn mcp_tool_call_progress_notification_round_trips_codex_shape() {
+    let expected = json!({
+        "method": "item/mcpToolCall/progress",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "itemId": "item_mcp-call-3",
+            "message": "正在检索文档"
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode MCP tool call progress");
+    assert_eq!(notification.method(), METHOD_MCP_TOOL_CALL_PROGRESS);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_MCP_TOOL_CALL_PROGRESS);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC MCP tool call progress"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode MCP tool call progress"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_MCP_TOOL_CALL_PROGRESS));
 }
 
 #[test]
@@ -852,6 +1007,10 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "item/started",
             "item/completed",
             "item/agentMessage/delta",
+            "item/commandExecution/outputDelta",
+            "item/fileChange/patchUpdated",
+            "item/plan/delta",
+            "item/mcpToolCall/progress",
             "item/reasoning/summaryTextDelta",
             "item/reasoning/summaryPartAdded",
             "item/reasoning/textDelta",

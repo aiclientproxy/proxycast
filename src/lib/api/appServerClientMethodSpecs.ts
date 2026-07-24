@@ -57,6 +57,11 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
+    name: "writeArtifact",
+    method: constants.APP_SERVER_METHOD_ARTIFACT_WRITE,
+    params: "required",
+  },
+  {
     name: "listDirectory",
     method: constants.APP_SERVER_METHOD_FILE_SYSTEM_LIST_DIRECTORY,
     params: "required",
@@ -328,11 +333,6 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
-    name: "appendAgentSessionRuntimeEvents",
-    method: constants.APP_SERVER_METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
-    params: "required",
-  },
-  {
     name: "respondAction",
     method: constants.APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
     params: "required",
@@ -355,11 +355,6 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
   {
     name: "respondWorkflow",
     method: constants.APP_SERVER_METHOD_WORKFLOW_RESPOND,
-    params: "required",
-  },
-  {
-    name: "replayAction",
-    method: constants.APP_SERVER_METHOD_AGENT_SESSION_ACTION_REPLAY,
     params: "required",
   },
   {

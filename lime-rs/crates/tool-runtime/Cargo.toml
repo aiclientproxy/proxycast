@@ -19,6 +19,7 @@ chrono.workspace = true
 dirs.workspace = true
 document-preview.workspace = true
 encoding_rs = "0.8"
+futures.workspace = true
 glob.workspace = true
 lime-core.workspace = true
 lime-skills.workspace = true

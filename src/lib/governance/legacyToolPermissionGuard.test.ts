@@ -1,19 +1,16 @@
 /* global process */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = process.cwd();
 const AGENT_LIB_RS = join(REPO_ROOT, "lime-rs/crates/agent/src/lib.rs");
-const LEGACY_PERMISSION_FIXTURE_RS = join(
-  REPO_ROOT,
-  "lime-rs/crates/agent/tests/legacy_permission_surfaces.rs",
-);
 const RUST_SCAN_ROOTS = [join(REPO_ROOT, "lime-rs/crates")];
-const EXCLUDED_RUST_FILES = new Set([
+const FORBIDDEN_PERMISSION_PATHS = [
   "lime-rs/crates/agent/src/tool_permissions.rs",
   "lime-rs/crates/agent/src/shell_security.rs",
-]);
+  "lime-rs/crates/agent/tests/legacy_permission_surfaces.rs",
+];
 const EXCLUDED_RUST_DIRS = new Set(["target", "agent-rust"]);
 
 function collectRustFiles(dir: string): string[] {
@@ -53,16 +50,15 @@ describe("legacy tool permission guard", () => {
     expect(content).not.toContain("mod tool_permissions;");
   });
 
-  it("旧权限模块只允许通过独立测试夹具加载", () => {
-    const content = readFileSync(LEGACY_PERMISSION_FIXTURE_RS, "utf8");
+  it("旧权限模块及其正向测试夹具不得恢复", () => {
+    const restoredPaths = FORBIDDEN_PERMISSION_PATHS.filter((path) =>
+      existsSync(join(REPO_ROOT, path)),
+    );
 
-    expect(content).toContain('#[path = "../src/tool_permissions.rs"]');
-    expect(content).toContain("mod tool_permissions;");
-    expect(content).toContain('#[path = "../src/shell_security.rs"]');
-    expect(content).toContain("mod shell_security;");
+    expect(restoredPaths).toEqual([]);
   });
 
-  it("上层 Rust 模块不应依赖 dead-candidate 旧权限表面", () => {
+  it("Rust 模块不应依赖已删除的旧权限表面", () => {
     const offenders: string[] = [];
     const patterns = [
       "lime_agent::shell_security::",
@@ -76,14 +72,9 @@ describe("legacy tool permission guard", () => {
       const files = collectRustFiles(root);
 
       for (const filePath of files) {
-        const relativePath = relative(REPO_ROOT, filePath).replace(/\\/g, "/");
-        if (EXCLUDED_RUST_FILES.has(relativePath)) {
-          continue;
-        }
-
         const content = readFileSync(filePath, "utf8");
         if (patterns.some((pattern) => content.includes(pattern))) {
-          offenders.push(relativePath);
+          offenders.push(relative(REPO_ROOT, filePath).replace(/\\/g, "/"));
         }
       }
     }

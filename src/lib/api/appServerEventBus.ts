@@ -274,6 +274,11 @@ function rememberBoundedTombstone(
 
 let defaultAppServerEventBus: AppServerEventBus | null = null;
 
+function resetDefaultAppServerEventBus(): void {
+  defaultAppServerEventBus?.reset();
+  defaultAppServerEventBus = null;
+}
+
 export function getDefaultAppServerEventBus(
   appServerClient?: AppServerEventDrainClient,
 ): AppServerEventBus {
@@ -298,8 +303,12 @@ export function subscribeAppServerNotifications(
 }
 
 export function resetDefaultAppServerEventBusForTests(): void {
-  defaultAppServerEventBus?.reset();
-  defaultAppServerEventBus = null;
+  resetDefaultAppServerEventBus();
+}
+
+if (import.meta.hot) {
+  // Prevent a replaced module instance from consuming events without active subscribers.
+  import.meta.hot.dispose(resetDefaultAppServerEventBus);
 }
 
 function resolveDrainOptions(

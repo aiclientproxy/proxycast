@@ -314,6 +314,95 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
     expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
   });
 
+  it("首字绘制指标不应被后续事件的 trace 覆盖", () => {
+    const pendingFrames: Array<(timestamp: number) => void> = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      pendingFrames.push(callback);
+      return pendingFrames.length;
+    });
+    const requestState = {
+      accumulatedContent: "",
+      firstEventReceivedAt: 170,
+      performanceTrace: {
+        rendererEventReceivedAt: 200,
+        serverEventEmittedAt: 180,
+        sessionId: "session-1",
+      },
+      requestLogId: null,
+      requestStartedAt: 100,
+      requestFinished: false,
+    };
+
+    handleTurnStreamEvent({
+      data: {
+        type: "item_updated",
+        item: {
+          id: "agent-message-final",
+          thread_id: "thread-1",
+          turn_id: "turn-1",
+          type: "agent_message",
+          status: "in_progress",
+          ordinal: 1,
+          sequence: 1,
+          text: "你好。",
+          phase: "final_answer",
+          started_at: "2026-07-23T00:00:00.000Z",
+          updated_at: "2026-07-23T00:00:00.100Z",
+        },
+      },
+      requestState,
+      callbacks: {
+        activateStream: vi.fn(),
+        isStreamActivated: () => true,
+        clearOptimisticItem: vi.fn(),
+        clearOptimisticTurn: vi.fn(),
+        disposeListener: vi.fn(),
+        clearActiveStreamIfMatch: () => true,
+        appendThinkingToParts: (parts) => parts,
+      },
+      eventName: "agent-stream-first-text-trace",
+      pendingTurnKey: "pending-turn",
+      pendingItemKey: "pending-item",
+      assistantMsgId: "assistant-1",
+      activeSessionId: "session-1",
+      resolvedWorkspaceId: "workspace-1",
+      effectiveExecutionStrategy: "react",
+      content: "你好",
+      runtime: {} as never,
+      warnedKeysRef: { current: new Set() },
+      actionLoggedKeys: new Set(),
+      toolLogIdByToolId: new Map(),
+      toolStartedAtByToolId: new Map(),
+      toolNameByToolId: new Map(),
+      getThreadItems: () => [],
+      setMessages: vi.fn() as never,
+      setPendingActions: vi.fn() as never,
+      setThreadItems: vi.fn() as never,
+      setThreadTurns: vi.fn() as never,
+      setCurrentTurnId: vi.fn() as never,
+      setExecutionRuntime: vi.fn() as never,
+      setIsSending: vi.fn() as never,
+    });
+
+    requestState.performanceTrace = {
+      rendererEventReceivedAt: 900,
+      serverEventEmittedAt: 900,
+      sessionId: "session-1",
+    };
+    pendingFrames.shift()?.(performance.now());
+    pendingFrames.shift()?.(performance.now());
+
+    expect(
+      getAgentUiPerformanceMetrics().find(
+        (entry) => entry.phase === "agentStream.firstTextPaint",
+      )?.metrics,
+    ).toMatchObject({
+      serverEventEmittedAt: 180,
+      rendererEventReceivedAt: 200,
+      serverToRendererDeltaMs: 20,
+    });
+  });
+
   it("晚到的较短 final snapshot 不应截断已累计的连续 delta", () => {
     const firstText = "以下是今日国际新闻简要整理：";
     const secondText =

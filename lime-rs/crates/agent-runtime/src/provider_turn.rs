@@ -447,6 +447,7 @@ where
                             trace.failed(first_visible_output_timeout_trace_failure()),
                         );
                     }
+                    record_session_token_usage(pending_input.as_ref(), step_usage.as_ref()).await;
                     return Err(first_visible_output_timeout_error(
                         first_visible_output_timeout,
                         emitted_any,
@@ -472,6 +473,7 @@ where
                             trace.failed(provider_step_timeout_trace_failure()),
                         );
                     }
+                    record_session_token_usage(pending_input.as_ref(), step_usage.as_ref()).await;
                     return Err(provider_step_timeout_error(
                         provider_step_timeout,
                         emitted_any,
@@ -481,9 +483,14 @@ where
             if is_cancelled(&cancel_token) {
                 if let Some(Ok(event)) = event.as_ref() {
                     if let Some(usage) = provider_usage_from_event(event) {
-                        on_event(CurrentProviderTurnEvent::Usage { attempt, usage });
+                        on_event(CurrentProviderTurnEvent::Usage {
+                            attempt,
+                            usage: usage.clone(),
+                        });
+                        step_usage = Some(usage);
                     }
                 }
+                record_session_token_usage(pending_input.as_ref(), step_usage.as_ref()).await;
                 if let Some(trace) = provider_trace_attempt.as_ref() {
                     emit_provider_trace(
                         &mut on_event,
@@ -505,6 +512,7 @@ where
             let event = match event {
                 Ok(event) => event,
                 Err(error) => {
+                    record_session_token_usage(pending_input.as_ref(), step_usage.as_ref()).await;
                     if let Some(trace) = provider_trace_attempt.as_ref() {
                         emit_provider_trace(
                             &mut on_event,
@@ -722,6 +730,7 @@ where
                     classification,
                     retryable,
                 } => {
+                    record_session_token_usage(pending_input.as_ref(), step_usage.as_ref()).await;
                     if let Some(trace) = provider_trace_attempt.as_ref() {
                         emit_provider_trace(
                             &mut on_event,
@@ -775,15 +784,7 @@ where
             tool_call_count: calls.len().min(u32::MAX as usize) as u32,
             usage: step_usage.clone(),
         });
-        if let (Some(input), Some(usage)) = (pending_input.as_ref(), step_usage.as_ref()) {
-            input
-                .record_token_usage(
-                    u64::from(usage.input_tokens),
-                    u64::from(usage.output_tokens),
-                    0,
-                )
-                .await;
-        }
+        record_session_token_usage(pending_input.as_ref(), step_usage.as_ref()).await;
         provider_budget_tokens_used = provider_budget_tokens_used.saturating_add(
             step_usage
                 .as_ref()
@@ -1239,6 +1240,23 @@ fn provider_budget_tokens(usage: &CurrentProviderUsage) -> u64 {
             .saturating_sub(usage.cached_input_tokens.unwrap_or_default()),
     )
     .saturating_add(u64::from(usage.output_tokens))
+}
+
+async fn record_session_token_usage(
+    pending_input: Option<&RuntimeSessionInputHandle>,
+    usage: Option<&CurrentProviderUsage>,
+) {
+    let (Some(input), Some(usage)) = (pending_input, usage) else {
+        return;
+    };
+    input
+        .record_token_usage(
+            u64::from(usage.input_tokens),
+            u64::from(usage.output_tokens),
+            0,
+            u64::from(usage.cache_creation_input_tokens.unwrap_or_default()),
+        )
+        .await;
 }
 
 fn finish_reason_name(reason: FinishReason) -> &'static str {

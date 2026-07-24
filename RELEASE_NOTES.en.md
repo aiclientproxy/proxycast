@@ -1,37 +1,37 @@
-## Lime v1.110.0
+## Lime v1.111.0
 
 <sub>The Simplified Chinese release notes are the primary version. This English page is a companion for international readers.</sub>
 
 ### New Features
 
-- Improved current Agent runtime Thread/Turn/Item projection, history recovery, fork handling, and tool-turn snapshots around one canonical history and read model.
-- Added App Server v2 reasoning summary/text-delta notifications with schema and frontend projection support.
-- Extended image/video task routing and provider lowering for credential-aware, protocol-explicit, multimodal requests and events.
+- Added App Server v2 `artifact/write`, moving workspace document saves onto typed JSON-RPC, canonical artifact snapshots, and verifiable sidecar evidence.
+- Added direct v2 notifications for command output, file patches, Plan deltas, and MCP progress across Rust/TypeScript clients, Renderer projection, and GUI updates.
+- Extended token usage and read models with cache-write input tokens while keeping Goal accounting, history recovery, and frontend statistics aligned.
 
 ### Fixes
 
-- Fixed duplicate, missing, and out-of-order provider stream, reasoning, MCP, and tool events across runtime, read model, and GUI projections.
-- Fixed lost credential and protocol context between scoped model metadata, route resolution, media workers, and plugin workers.
-- Fixed Electron/App Server boundary, history merge, projection rebuild, and cold-start inconsistencies, and removed temporary production logging.
+- Fixed stale Turn item lists after thread resume/replay, incorrect local-history matches, and topic/sidebar navigation drift.
+- Isolated sequence gates for direct notifications and raw side channels to prevent dropped, duplicated, or prematurely terminal streaming events.
+- Fixed lifecycle inconsistencies across tool approvals, MCP snapshots, provider turns, recovery, and multi-turn terminal projection.
+- Aligned `AGENTS.override.md` precedence with Codex while preserving symlinked working-directory identity and instruction scope.
 
 ### Improvements and Refactors
 
-- Removed managed-objective, retired media-task, and legacy session/objective production protocols, schemas, services, and test entrypoints in favor of current owners.
-- Moved App Server, Agent runtime, and plugin-runtime server-request/approval responses to typed contracts, reducing metadata waiter and compatibility branches.
-- Centralized MCP environment identity, auth scopes, step snapshots, and elicitation provenance under one stdio launcher/process owner.
-- Cleaned legacy catalogs, scripts, and documentation entrypoints while updating governance baselines, generated protocol artifacts, and five-language GUI contracts.
+- Removed the legacy `agentSession/runtimeEvents/append` protocol and schemas, plugin runtime gateway, prompt builders, and parallel permission implementation, with restoration guards.
+- Split App Server v2 notification projection into command, file-change, MCP, and Plan owners while synchronizing catalogs, schemas, and generated clients.
+- Normalized MCP tool result content, structured content, errors, and sidecar metadata across provider history and GUI consumers.
 
 ### Tests and Quality
 
-- Expanded unit, integration, and smoke coverage for Agent runtime, App Server JSON-RPC, provider/media routes, MCP lifecycle, projections, and plugin contracts.
-- Updated v2 schemas, generated types, client gateways, Electron boundaries, and legacy/governance guards for reasoning, snapshots, credentials, and multimodal events.
+- Added Rust and TypeScript regression coverage for artifact write/replay JSON-RPC, direct v2 notifications, thread history, approvals, MCP, and cache usage.
+- Expanded App Server client, Agent current fixture, plugin/workspace GUI smoke, and forbidden-to-restore governance coverage.
 
 ### Documentation
 
-- Updated architecture, runtime convergence, protocol boundaries, governance, and execution plans with current/compat/dead owner changes.
+- Updated runtime instruction, tool owner, storage alignment, protocol convergence, and Refactor v1 execution documentation.
 
 ### Other
 
-- Bumped version facts to `1.110.0` across the root app, CLI npm package, Rust workspace, `lime-rs/Cargo.lock`, and release notes.
+- Bumped version facts to `1.111.0` across the root app, CLI npm package, Rust workspace, `lime-rs/Cargo.lock`, and release notes.
 
-**Full changes**: `v1.109.0` -> `v1.110.0`
+**Full changes**: `v1.110.0` -> `v1.111.0`

@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agent-protocol"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "schemars",
  "serde",
@@ -30,7 +30,7 @@ dependencies = [
 
 [[package]]
 name = "agent-runtime"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "agent-protocol",
  "anyhow",
@@ -180,7 +180,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "app-server"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "agent-protocol",
  "agent-runtime",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "app-server-client"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "app-server-protocol",
  "app-server-transport",
@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "app-server-daemon"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "app-server-protocol",
  "app-server-transport",
@@ -262,7 +262,7 @@ dependencies = [
 
 [[package]]
 name = "app-server-protocol"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "agent-protocol",
  "schemars",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "app-server-test-client"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "anyhow",
  "app-server-client",
@@ -283,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "app-server-transport"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "app-server-protocol",
  "axum",
@@ -1353,7 +1353,7 @@ dependencies = [
 
 [[package]]
 name = "document-preview"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "flate2",
  "tempfile",
@@ -2616,7 +2616,7 @@ dependencies = [
 
 [[package]]
 name = "lime-agent"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "agent-protocol",
  "agent-runtime",
@@ -2649,7 +2649,7 @@ dependencies = [
 
 [[package]]
 name = "lime-browser-runtime"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "chrono",
  "futures",
@@ -2666,7 +2666,7 @@ dependencies = [
 
 [[package]]
 name = "lime-cli"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "clap",
  "lime-core",
@@ -2678,7 +2678,7 @@ dependencies = [
 
 [[package]]
 name = "lime-config"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "async-trait",
  "lime-core",
@@ -2694,7 +2694,7 @@ dependencies = [
 
 [[package]]
 name = "lime-core"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "agent-protocol",
  "async-trait",
@@ -2750,7 +2750,7 @@ dependencies = [
 
 [[package]]
 name = "lime-gateway"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "aes",
  "async-trait",
@@ -2778,7 +2778,7 @@ dependencies = [
 
 [[package]]
 name = "lime-infra"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "chrono",
  "dashmap",
@@ -2800,7 +2800,7 @@ dependencies = [
 
 [[package]]
 name = "lime-knowledge"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "chrono",
  "hex",
@@ -2813,13 +2813,14 @@ dependencies = [
 
 [[package]]
 name = "lime-mcp"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "async-trait",
  "axum",
  "chrono",
  "dirs 5.0.1",
  "email_address",
+ "futures",
  "glob",
  "libc",
  "lime-core",
@@ -2838,7 +2839,7 @@ dependencies = [
 
 [[package]]
 name = "lime-media-runtime"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -2857,7 +2858,7 @@ dependencies = [
 
 [[package]]
 name = "lime-processor"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "async-trait",
  "lime-core",
@@ -2897,7 +2898,7 @@ dependencies = [
 
 [[package]]
 name = "lime-server"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "agent-protocol",
  "async-stream",
@@ -2940,7 +2941,7 @@ dependencies = [
 
 [[package]]
 name = "lime-server-utils"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "axum",
  "futures",
@@ -2955,7 +2956,7 @@ dependencies = [
 
 [[package]]
 name = "lime-services"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2998,7 +2999,7 @@ dependencies = [
 
 [[package]]
 name = "lime-skills"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "async-trait",
  "dirs 5.0.1",
@@ -3019,7 +3020,7 @@ dependencies = [
 
 [[package]]
 name = "lime-websocket"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "axum",
  "chrono",
@@ -3228,7 +3229,7 @@ dependencies = [
 
 [[package]]
 name = "model-provider"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "agent-protocol",
  "anyhow",
@@ -3895,7 +3896,7 @@ checksum = "b867cad97c0791bbd3aaa6472142568c6c9e8f71937e98379f584cfb0cf35bec"
 
 [[package]]
 name = "patch-apply"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "tempfile",
  "thiserror 1.0.69",
@@ -4643,7 +4644,7 @@ dependencies = [
 
 [[package]]
 name = "runtime-core"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "agent-protocol",
  "app-server-protocol",
@@ -5391,7 +5392,7 @@ dependencies = [
 
 [[package]]
 name = "thread-store"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "agent-protocol",
  "chrono",
@@ -5669,7 +5670,7 @@ dependencies = [
 
 [[package]]
 name = "tool-runtime"
-version = "1.110.0"
+version = "1.111.0"
 dependencies = [
  "agent-protocol",
  "app-server-protocol",
@@ -5679,6 +5680,7 @@ dependencies = [
  "dirs 5.0.1",
  "document-preview",
  "encoding_rs",
+ "futures",
  "glob",
  "lime-core",
  "lime-skills",

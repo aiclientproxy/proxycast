@@ -31,14 +31,11 @@ const LEGACY_PRODUCT_DATABASE_FILE_NAME: &str = "app.db";
 const USER_MEMORY_FILE_NAME: &str = "AGENTS.md";
 const CODEX_HOME_ENV: &str = "CODEX_HOME";
 const CODEX_HOME_DIR_NAME: &str = ".codex";
-const LEGACY_USER_MEMORY_FILE_NAMES: &[&str] = &["AGENTS.md", "AGENT.md", "instructions.md"];
 const WORKSPACE_RUNTIME_DIR_NAME: &str = ".lime";
-const WORKSPACE_LOCAL_RUNTIME_AGENTS_FILE_NAME: &str = "AGENTS.local.md";
 const SKILL_PROVIDER_DIRS: &[&str] = &[
     ".agents", ".warp", ".claude", ".codex", ".cursor", ".gemini", ".copilot", ".factory",
     ".github",
 ];
-pub const WORKSPACE_LOCAL_RUNTIME_AGENTS_GITIGNORE_ENTRY: &str = ".lime/AGENTS.local.md";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DatabasePathResolution {
@@ -199,28 +196,8 @@ pub fn resolve_workspace_runtime_agents_path(working_dir: &Path) -> PathBuf {
         .join(USER_MEMORY_FILE_NAME)
 }
 
-pub fn resolve_workspace_local_runtime_agents_path(working_dir: &Path) -> PathBuf {
-    working_dir
-        .join(WORKSPACE_RUNTIME_DIR_NAME)
-        .join(WORKSPACE_LOCAL_RUNTIME_AGENTS_FILE_NAME)
-}
-
 pub fn resolve_user_memory_path() -> Result<PathBuf, String> {
-    let preferred_root = user_home_dir()?;
-    let mut legacy_roots = Vec::new();
-
-    #[cfg(target_os = "windows")]
-    push_unique_root(&mut legacy_roots, legacy_windows_roaming_app_data_dir()?);
-
-    push_unique_root(&mut legacy_roots, preferred_data_dir()?);
-    push_unique_root(&mut legacy_roots, legacy_app_data_dir()?);
-    push_unique_root(&mut legacy_roots, legacy_home_dir()?);
-
-    resolve_user_memory_path_from_source_roots(&preferred_root, &legacy_roots)
-}
-
-pub fn best_effort_user_memory_path() -> PathBuf {
-    resolve_user_memory_path().unwrap_or_else(|_| fallback_user_memory_path())
+    Ok(user_home_dir()?.join(USER_MEMORY_FILE_NAME))
 }
 
 pub fn resolve_default_project_dir() -> Result<PathBuf, String> {
@@ -264,10 +241,6 @@ pub fn migrate_legacy_install_data() -> Result<(), String> {
         (
             "skills",
             resolve_skills_dir as fn() -> Result<PathBuf, String>,
-        ),
-        (
-            "user_memory",
-            resolve_user_memory_path as fn() -> Result<PathBuf, String>,
         ),
     ] {
         if let Err(error) = action() {
@@ -361,13 +334,6 @@ fn resolve_agent_root_from_app_data_root(
     override_root: Option<PathBuf>,
 ) -> PathBuf {
     override_root.unwrap_or_else(|| app_data_root.join(APP_SERVER_DATA_DIR_NAME))
-}
-
-fn fallback_user_memory_path() -> PathBuf {
-    dirs::home_dir()
-        .map(|home| home.join(USER_HOME_DIR_NAME))
-        .unwrap_or_else(|| fallback_app_data_dir().join(USER_HOME_DIR_NAME))
-        .join(USER_MEMORY_FILE_NAME)
 }
 
 fn resolve_project_skills_dir_from_cwd(cwd: &Path) -> PathBuf {
@@ -553,49 +519,6 @@ fn resolve_default_project_dir_from_roots(
     legacy_root: &Path,
 ) -> Result<PathBuf, String> {
     resolve_default_project_dir_from_source_roots(preferred_root, &[legacy_root.to_path_buf()])
-}
-
-fn resolve_user_memory_path_from_source_roots(
-    preferred_root: &Path,
-    legacy_roots: &[PathBuf],
-) -> Result<PathBuf, String> {
-    let preferred_path = preferred_root.join(USER_MEMORY_FILE_NAME);
-    if preferred_path.exists() {
-        return Ok(preferred_path);
-    }
-
-    let legacy_path = LEGACY_USER_MEMORY_FILE_NAMES
-        .iter()
-        .flat_map(|file_name| legacy_roots.iter().map(move |root| root.join(file_name)))
-        .find(|path| path.exists());
-    let Some(legacy_path) = legacy_path else {
-        return Ok(preferred_path);
-    };
-
-    if let Some(parent) = preferred_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("无法创建用户记忆目录 {}: {e}", parent.display()))?;
-    }
-
-    match fs::copy(&legacy_path, &preferred_path) {
-        Ok(_) => Ok(preferred_path),
-        Err(error) => {
-            tracing::warn!(
-                "[路径迁移] 用户记忆文件迁移失败，回退旧路径 {}: {}",
-                legacy_path.display(),
-                error
-            );
-            Ok(legacy_path)
-        }
-    }
-}
-
-#[cfg(test)]
-fn resolve_user_memory_path_from_roots(
-    preferred_root: &Path,
-    legacy_root: &Path,
-) -> Result<PathBuf, String> {
-    resolve_user_memory_path_from_source_roots(preferred_root, &[legacy_root.to_path_buf()])
 }
 
 fn resolve_database_path_from_source_roots(
@@ -1369,48 +1292,6 @@ mod tests {
                 .join(WORKSPACE_RUNTIME_DIR_NAME)
                 .join(USER_MEMORY_FILE_NAME)
         );
-    }
-
-    #[test]
-    fn resolve_workspace_local_runtime_agents_path_builds_workspace_local_file_path() {
-        let workspace_root = Path::new("/tmp/workspace");
-        let resolved = resolve_workspace_local_runtime_agents_path(workspace_root);
-        assert_eq!(
-            resolved,
-            workspace_root
-                .join(WORKSPACE_RUNTIME_DIR_NAME)
-                .join(WORKSPACE_LOCAL_RUNTIME_AGENTS_FILE_NAME)
-        );
-    }
-
-    #[test]
-    fn resolve_user_memory_path_copies_legacy_agents_file() {
-        let temp = tempdir().unwrap();
-        let preferred_root = temp.path().join("home").join(".lime");
-        let legacy_root = temp.path().join("appdata").join("lime");
-        fs::create_dir_all(&legacy_root).unwrap();
-        fs::write(legacy_root.join("AGENTS.md"), "legacy agents").unwrap();
-
-        let resolved = resolve_user_memory_path_from_roots(&preferred_root, &legacy_root).unwrap();
-
-        let expected = preferred_root.join("AGENTS.md");
-        assert_eq!(resolved, expected);
-        assert_eq!(fs::read_to_string(expected).unwrap(), "legacy agents");
-    }
-
-    #[test]
-    fn resolve_user_memory_path_copies_legacy_agent_file() {
-        let temp = tempdir().unwrap();
-        let preferred_root = temp.path().join("home").join(".lime");
-        let legacy_root = temp.path().join("appdata").join("lime");
-        fs::create_dir_all(&legacy_root).unwrap();
-        fs::write(legacy_root.join("AGENT.md"), "legacy agent").unwrap();
-
-        let resolved = resolve_user_memory_path_from_roots(&preferred_root, &legacy_root).unwrap();
-
-        let expected = preferred_root.join("AGENTS.md");
-        assert_eq!(resolved, expected);
-        assert_eq!(fs::read_to_string(expected).unwrap(), "legacy agent");
     }
 
     #[test]

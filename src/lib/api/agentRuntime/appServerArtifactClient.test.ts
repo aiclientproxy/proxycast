@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ArtifactDocumentV1 } from "@/lib/artifact-document";
 import type { Artifact } from "@/lib/artifact/types";
 import {
-  appServerArtifactSnapshotAppendParamsFromArtifactDocument,
+  appServerArtifactWriteParamsFromArtifactDocument,
   appServerArtifactReadParamsFromArtifactPreview,
   appServerArtifactReadParamsFromTimelineItem,
   createAppServerArtifactClient,
@@ -195,6 +195,7 @@ describe("appServerArtifactClient", () => {
 
   it("应通过 App Server artifact/read 读取 timeline artifact 正文", async () => {
     const appServerClient = {
+      writeArtifact: vi.fn(),
       readArtifacts: vi.fn().mockResolvedValue({
         id: 1,
         result: {
@@ -251,6 +252,7 @@ describe("appServerArtifactClient", () => {
 
   it("应通过 App Server artifact/read 读取 Workbench artifact preview 正文", async () => {
     const appServerClient = {
+      writeArtifact: vi.fn(),
       readArtifacts: vi.fn().mockResolvedValue({
         id: 1,
         result: {
@@ -310,6 +312,7 @@ describe("appServerArtifactClient", () => {
 
   it("App Server artifact/read 返回假成功 envelope 时应 fail closed", async () => {
     const appServerClient = {
+      writeArtifact: vi.fn(),
       readArtifacts: vi.fn().mockResolvedValue({
         id: 1,
         result: {
@@ -332,6 +335,7 @@ describe("appServerArtifactClient", () => {
 
   it("App Server artifact/read 返回半截 artifact summary 时应 fail closed", async () => {
     const appServerClient = {
+      writeArtifact: vi.fn(),
       readArtifacts: vi.fn().mockResolvedValue({
         id: 1,
         result: {
@@ -407,61 +411,48 @@ describe("appServerArtifactClient", () => {
     ).toBeNull();
   });
 
-  it("应从 Workbench ArtifactDocument 构造 artifact.snapshot append 请求", () => {
-    const params = appServerArtifactSnapshotAppendParamsFromArtifactDocument(
+  it("应从 Workbench ArtifactDocument 构造 artifact/write 请求", () => {
+    const params = appServerArtifactWriteParamsFromArtifactDocument(
       createArtifact(),
       createDocument(),
     );
 
     expect(params).toMatchObject({
-      sessionId: "session-1",
+      threadId: "thread-1",
       turnId: "turn-1",
-      runtimeEvents: [
-        {
-          type: "artifact.snapshot",
-          payload: {
-            artifact: {
-              artifactId: "artifact-report",
-              artifactRef: "artifact-report",
-              artifactDocumentId: "artifact-document:report",
-              filePath: ".app-server/artifacts/report.md",
-              path: ".app-server/artifacts/report.md",
-              title: "Report",
-              kind: "artifact_document",
-              status: "ready",
-              metadata: {
-                artifactSchema: "artifact_document.v1",
-                artifactKind: "report",
-                artifactTitle: "Report",
-                artifactDocumentId: "artifact-document:report",
-                artifactVersionId: "artifact-document:report:v2",
-                artifactVersionNo: 2,
-                artifactRef: "artifact-report",
-              },
-            },
-          },
-        },
-      ],
+      artifact: {
+        artifactRef: "artifact-report",
+        artifactDocumentId: "artifact-document:report",
+        path: ".app-server/artifacts/report.md",
+        title: "Report",
+        kind: "artifact_document",
+        status: "ready",
+        content: expect.any(String),
+        metadata: expect.objectContaining({
+          artifactSchema: "artifact_document.v1",
+          artifactKind: "report",
+          artifactTitle: "Report",
+          artifactDocumentId: "artifact-document:report",
+          artifactVersionId: "artifact-document:report:v2",
+          artifactVersionNo: 2,
+          artifactRef: "artifact-report",
+        }),
+      },
     });
 
-    const event = params?.runtimeEvents?.[0];
-    const payload = event?.payload as {
-      artifact?: {
-        content?: string;
-        metadata?: { artifactDocument?: unknown };
-      };
-    };
-    expect(payload.artifact?.content).toContain('"artifactId"');
-    expect(payload.artifact?.metadata?.artifactDocument).toMatchObject({
-      artifactId: "artifact-document:report",
-      metadata: {
-        currentVersionNo: 2,
+    expect(params?.artifact.content).toContain('"artifactId"');
+    expect(params?.artifact.metadata).toMatchObject({
+      artifactDocument: {
+        artifactId: "artifact-document:report",
+        metadata: {
+          currentVersionNo: 2,
+        },
       },
     });
   });
 
-  it("Article Workspace preview 应从嵌套 metadata 读取 session 与稳定 artifactRef", () => {
-    const params = appServerArtifactSnapshotAppendParamsFromArtifactDocument(
+  it("Article Workspace preview 应从嵌套 metadata 读取 thread 与稳定 artifactRef", () => {
+    const params = appServerArtifactWriteParamsFromArtifactDocument(
       createArtifact({
         id: "preview-artifact-id",
         meta: {
@@ -489,64 +480,43 @@ describe("appServerArtifactClient", () => {
     );
 
     expect(params).toMatchObject({
-      sessionId: "session-article-workspace",
+      threadId: "thread-1",
       turnId: "turn-article-workspace",
-      runtimeEvents: [
-        {
-          payload: {
-            artifact: {
-              artifactId: "artifact-image-1",
-              artifactRef: "artifact-image-1",
-              artifactDocumentId:
-                "artifact-document:content-factory-app:artifact-image-1",
-              metadata: {
-                articleWorkspace: {
-                  appId: "content-factory-app",
-                  sessionId: "session-article-workspace",
-                  artifactIds: ["artifact-image-1"],
-                },
-              },
-            },
+      artifact: expect.objectContaining({
+        artifactRef: "artifact-image-1",
+        artifactDocumentId:
+          "artifact-document:content-factory-app:artifact-image-1",
+        metadata: expect.objectContaining({
+          articleWorkspace: {
+            appId: "content-factory-app",
+            sessionId: "session-article-workspace",
+            artifactIds: ["artifact-image-1"],
           },
-        },
-      ],
+        }),
+      }),
     });
   });
 
-  it("保存 ArtifactDocument 快照应通过 App Server current append method", async () => {
+  it("保存 ArtifactDocument 快照应通过 App Server artifact/write", async () => {
     const appServerClient = {
       readArtifacts: vi.fn(),
-      appendAgentSessionRuntimeEvents: vi.fn().mockResolvedValue({
+      writeArtifact: vi.fn().mockResolvedValue({
         id: 1,
         result: {
-          events: [
-            {
-              eventId: "evt-artifact-save-1",
-              payload: {
-                artifact: {
-                  artifactRef: "artifact-report",
-                  filePath: ".app-server/artifacts/report.md",
-                  contentStatus: "available",
-                  contentBytes: 2048,
-                  contentSha256: "sha256:artifact-content",
-                  sidecarRef: {
-                    relativePath:
-                      "sessions/session-1/runtime-artifacts/artifact-report.json",
-                  },
-                  metadata: {
-                    artifactDocumentId: "artifact-document:report",
-                    artifactVersionId: "artifact-document:report:v2",
-                    artifactVersionNo: 2,
-                  },
-                },
-              },
-              sequence: 7,
-              sessionId: "session-1",
-              timestamp: "2026-06-25T00:00:00.000Z",
-              turnId: "turn-1",
-              type: "artifact.snapshot",
-            },
-          ],
+          threadId: "thread-1",
+          turnId: "turn-1",
+          artifactRef: "artifact-report",
+          artifactDocumentId: "artifact-document:report",
+          eventId: "evt-artifact-save-1",
+          sequence: 7,
+          persistedAt: "2026-06-25T00:00:00.000Z",
+          sidecar: {
+            relativePath:
+              "sessions/session-1/runtime-artifacts/artifact-report.json",
+            bytes: 2048,
+            sha256: "sha256:artifact-content",
+            contentStatus: "available",
+          },
         },
         response: {
           id: 1,
@@ -564,8 +534,7 @@ describe("appServerArtifactClient", () => {
         createDocument(),
       ),
     ).resolves.toEqual({
-      status: "appended",
-      eventCount: 1,
+      status: "written",
       evidence: {
         artifactDocumentId: "artifact-document:report",
         artifactRef: "artifact-report",
@@ -578,30 +547,27 @@ describe("appServerArtifactClient", () => {
         sessionId: "session-1",
         sidecarRelativePath:
           "sessions/session-1/runtime-artifacts/artifact-report.json",
+        threadId: "thread-1",
         turnId: "turn-1",
         versionId: "artifact-document:report:v2",
         versionNo: 2,
       },
     });
 
-    expect(
-      appServerClient.appendAgentSessionRuntimeEvents,
-    ).toHaveBeenCalledWith(
+    expect(appServerClient.writeArtifact).toHaveBeenCalledWith(
       expect.objectContaining({
-        sessionId: "session-1",
+        threadId: "thread-1",
         turnId: "turn-1",
-        runtimeEvents: [
-          expect.objectContaining({
-            type: "artifact.snapshot",
-          }),
-        ],
+        artifact: expect.objectContaining({
+          artifactRef: "artifact-report",
+        }),
       }),
     );
   });
 
-  it("保存证据在 App Server 只返回事件外壳时仍保留稳定文档范围", () => {
+  it("保存证据直接消费 artifact/write 响应并保留稳定文档范围", () => {
     const document = createDocument();
-    const params = appServerArtifactSnapshotAppendParamsFromArtifactDocument(
+    const params = appServerArtifactWriteParamsFromArtifactDocument(
       createArtifact(),
       document,
     );
@@ -612,24 +578,32 @@ describe("appServerArtifactClient", () => {
         document,
         params: params!,
         response: {
-          events: [
-            {
-              eventId: "evt-minimal",
-              payload: {},
-              sequence: 1,
-              sessionId: "session-1",
-              timestamp: "2026-06-25T00:00:00.000Z",
-              type: "artifact.snapshot",
-            },
-          ],
+          threadId: "thread-1",
+          artifactRef: "artifact-report",
+          eventId: "evt-minimal",
+          sequence: 1,
+          persistedAt: "2026-06-25T00:00:00.000Z",
+          sidecar: {
+            relativePath: "artifact-report.json",
+            bytes: 1,
+            sha256: "sha256:artifact",
+            contentStatus: "available",
+          },
         },
+        sessionId: "session-1",
       }),
     ).toEqual({
       artifactDocumentId: "artifact-document:report",
-      artifactRef: "artifact-document:report",
+      artifactRef: "artifact-report",
+      contentBytes: 1,
+      contentSha256: "sha256:artifact",
+      contentStatus: "available",
       eventId: "evt-minimal",
+      filePath: ".app-server/artifacts/report.md",
       lastPersistedAt: "2026-06-25T00:00:00.000Z",
       sessionId: "session-1",
+      sidecarRelativePath: "artifact-report.json",
+      threadId: "thread-1",
       turnId: "turn-1",
       versionId: "artifact-document:report:v2",
       versionNo: 2,
@@ -639,7 +613,7 @@ describe("appServerArtifactClient", () => {
   it("缺少 session scope 时保存 ArtifactDocument 快照应 fail closed", async () => {
     const appServerClient = {
       readArtifacts: vi.fn(),
-      appendAgentSessionRuntimeEvents: vi.fn(),
+      writeArtifact: vi.fn(),
     };
     const client = createAppServerArtifactClient({ appServerClient });
 
@@ -659,9 +633,7 @@ describe("appServerArtifactClient", () => {
       reason: "missing_scope",
     });
 
-    expect(
-      appServerClient.appendAgentSessionRuntimeEvents,
-    ).not.toHaveBeenCalled();
+    expect(appServerClient.writeArtifact).not.toHaveBeenCalled();
   });
 
   it("保存后的 ArtifactDocument scope 应作为跨会话继续保存的稳定范围", () => {
@@ -675,6 +647,7 @@ describe("appServerArtifactClient", () => {
           artifactRef: "artifact-report",
           lastPersistedAt: "2026-06-25T00:00:00.000Z",
           sessionId: "session-saved",
+          threadId: "thread-saved",
           sidecarRelativePath:
             "sessions/session-saved/runtime-artifacts/artifact-report.json",
           turnId: "turn-saved",
@@ -689,6 +662,7 @@ describe("appServerArtifactClient", () => {
       artifactRef: "artifact-report",
       lastPersistedAt: "2026-06-25T00:00:00.000Z",
       sessionId: "session-saved",
+      threadId: "thread-saved",
       sidecarRelativePath:
         "sessions/session-saved/runtime-artifacts/artifact-report.json",
       turnId: "turn-saved",
@@ -696,7 +670,7 @@ describe("appServerArtifactClient", () => {
       versionNo: 3,
     });
     expect(
-      appServerArtifactSnapshotAppendParamsFromArtifactDocument(
+      appServerArtifactWriteParamsFromArtifactDocument(
         artifact,
         createDocument({
           turnId: "turn-document",
@@ -709,29 +683,23 @@ describe("appServerArtifactClient", () => {
         }),
       ),
     ).toMatchObject({
-      sessionId: "session-saved",
+      threadId: "thread-saved",
       turnId: "turn-saved",
-      runtimeEvents: [
-        {
-          payload: {
-            artifact: {
-              artifactId: "artifact-report",
-              artifactRef: "artifact-report",
-              artifactDocumentId: "artifact-document:report",
-              metadata: {
-                artifactDocumentPersistence: {
-                  artifactDocumentId: "artifact-document:report",
-                  artifactRef: "artifact-report",
-                  sessionId: "session-saved",
-                  turnId: "turn-saved",
-                  versionId: "artifact-document:report:v3",
-                  versionNo: 3,
-                },
-              },
-            },
-          },
-        },
-      ],
+      artifact: expect.objectContaining({
+        artifactRef: "artifact-report",
+        artifactDocumentId: "artifact-document:report",
+        metadata: expect.objectContaining({
+          artifactDocumentPersistence: expect.objectContaining({
+            artifactDocumentId: "artifact-document:report",
+            artifactRef: "artifact-report",
+            sessionId: "session-saved",
+            threadId: "thread-saved",
+            turnId: "turn-saved",
+            versionId: "artifact-document:report:v3",
+            versionNo: 3,
+          }),
+        }),
+      }),
     });
   });
 
@@ -743,6 +711,7 @@ describe("appServerArtifactClient", () => {
         eventId: "evt-save",
         lastPersistedAt: "2026-06-25T00:00:00.000Z",
         sessionId: "session-1",
+        threadId: "thread-1",
         sidecarRelativePath:
           "sessions/session-1/runtime-artifacts/artifact-report.json",
         sourceArtifactRef: "source-artifact-report",
@@ -758,6 +727,7 @@ describe("appServerArtifactClient", () => {
       sidecarRelativePath:
         "sessions/session-1/runtime-artifacts/artifact-report.json",
       sourceArtifactRef: "source-artifact-report",
+      threadId: "thread-1",
       turnId: "turn-1",
       versionId: "artifact-document:report:v2",
       versionNo: 2,

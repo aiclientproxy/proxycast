@@ -198,6 +198,7 @@ describe("App Server v2 direct notifications", () => {
           totalTokens: 31_000,
           inputTokens: 31_000,
           cachedInputTokens: 0,
+          cacheWriteInputTokens: 1_200,
           outputTokens: 0,
           reasoningOutputTokens: 0,
         },
@@ -205,6 +206,7 @@ describe("App Server v2 direct notifications", () => {
           totalTokens: 31_000,
           inputTokens: 31_000,
           cachedInputTokens: 0,
+          cacheWriteInputTokens: 1_200,
           outputTokens: 0,
           reasoningOutputTokens: 0,
         },
@@ -220,6 +222,7 @@ describe("App Server v2 direct notifications", () => {
         input_tokens: 31_000,
         output_tokens: 0,
         cached_input_tokens: 0,
+        cache_creation_input_tokens: 1_200,
       },
     });
     expect(
@@ -322,6 +325,128 @@ describe("App Server v2 direct notifications", () => {
     });
   });
 
+  it("projects typed plan delta with canonical item identity", () => {
+    const notification = directNotification("item/plan/delta", {
+      delta: "\n- [ ] 接 GUI",
+      itemId: "plan_turn-v2_proposed_plan:1",
+      threadId,
+      turnId,
+    });
+
+    expect(readAppServerV2NotificationRoute(notification)).toEqual({
+      itemId: "plan_turn-v2_proposed_plan:1",
+      terminal: false,
+      threadId,
+      turnId,
+    });
+    expect(projectAppServerV2NotificationPayload(notification)).toMatchObject({
+      type: "plan_delta",
+      text: "\n- [ ] 接 GUI",
+      delta: "\n- [ ] 接 GUI",
+      sourceItemId: "plan_turn-v2_proposed_plan:1",
+      revisionId: "plan_turn-v2_proposed_plan:1",
+      source: "app_server_v2",
+      thread_id: threadId,
+      turn_id: turnId,
+    });
+  });
+
+  it("projects command execution output delta into the existing tool item shape", () => {
+    const notification = directNotification(
+      "item/commandExecution/outputDelta",
+      {
+        delta: "stdout\n",
+        itemId: "command-v2",
+        threadId,
+        turnId,
+      },
+    );
+
+    expect(readAppServerV2NotificationRoute(notification)).toEqual({
+      itemId: "command-v2",
+      terminal: false,
+      threadId,
+      turnId,
+    });
+    expect(projectAppServerV2NotificationPayload(notification)).toMatchObject({
+      type: "tool_output_delta",
+      tool_id: "command-v2",
+      sourceItemId: "command-v2",
+      source_item_id: "command-v2",
+      delta: "stdout\n",
+      thread_id: threadId,
+      turn_id: turnId,
+    });
+  });
+
+  it("projects file change patch updates into the existing patch item", () => {
+    const changes = [
+      {
+        diff: "-old\n+new",
+        kind: { type: "update", move_path: "src/main.ts" },
+        path: "src/index.ts",
+      },
+    ];
+    const notification = directNotification("item/fileChange/patchUpdated", {
+      changes,
+      itemId: "item_patch-1",
+      threadId,
+      turnId,
+    });
+
+    expect(readAppServerV2NotificationRoute(notification)).toEqual({
+      itemId: "item_patch-1",
+      terminal: false,
+      threadId,
+      turnId,
+    });
+    expect(projectAppServerV2NotificationPayload(notification)).toMatchObject({
+      type: "item_updated",
+      item: {
+        changes,
+        file_status: "inProgress",
+        id: "item_patch-1",
+        paths: ["src/index.ts"],
+        status: "in_progress",
+        success: false,
+        text: JSON.stringify(changes),
+        type: "patch",
+      },
+      thread_id: threadId,
+      turn_id: turnId,
+    });
+  });
+
+  it("projects MCP progress onto the canonical MCP tool item identity", () => {
+    const notification = directNotification("item/mcpToolCall/progress", {
+      itemId: "item_mcp-call-1",
+      message: "正在读取文档索引",
+      threadId,
+      turnId,
+    });
+
+    expect(readAppServerV2NotificationRoute(notification)).toEqual({
+      itemId: "item_mcp-call-1",
+      terminal: false,
+      threadId,
+      turnId,
+    });
+    expect(projectAppServerV2NotificationPayload(notification)).toMatchObject({
+      type: "tool_progress",
+      tool_id: "item_mcp-call-1",
+      thread_id: threadId,
+      turn_id: turnId,
+      progress: {
+        message: "正在读取文档索引",
+        metadata: {
+          notification_kind: "mcp_progress",
+          source: "app_server_v2",
+          source_item_id: "item_mcp-call-1",
+        },
+      },
+    });
+  });
+
   it.each([
     [
       "item/reasoning/summaryTextDelta",
@@ -334,6 +459,26 @@ describe("App Server v2 direct notifications", () => {
     [
       "item/reasoning/textDelta",
       { contentIndex: 0, itemId: "reasoning-v2", threadId, turnId },
+    ],
+    ["item/plan/delta", { itemId: "plan-v2", threadId, turnId }],
+    [
+      "item/commandExecution/outputDelta",
+      { itemId: "command-v2", threadId, turnId },
+    ],
+    [
+      "item/fileChange/patchUpdated",
+      {
+        changes: [
+          { diff: "", kind: { type: "update", move_path: 42 }, path: "a.ts" },
+        ],
+        itemId: "item_patch-1",
+        threadId,
+        turnId,
+      },
+    ],
+    [
+      "item/mcpToolCall/progress",
+      { itemId: "item_mcp-call-1", message: "   ", threadId, turnId },
     ],
   ])("fails closed for malformed %s", (method, params) => {
     const notification = directNotification(method, params);
@@ -437,6 +582,91 @@ describe("App Server v2 direct notifications", () => {
       },
       { type: "turn_completed" },
     ]);
+    unlisten();
+  });
+
+  it.each([
+    ["response 先到", true],
+    ["drain 先到", false],
+  ])(
+    "同一 direct delta 经 %s 时只应投影一次",
+    async (_label, responseFirst) => {
+      let subscription: AppServerEventBusSubscription | undefined;
+      const eventBus = {
+        subscribe(next: AppServerEventBusSubscription) {
+          subscription = next;
+          return vi.fn();
+        },
+      };
+      const router = new AppServerAgentSessionEventDrainRouter(
+        { drainEvents: () => [] },
+        eventBus,
+      );
+      const received: unknown[] = [];
+      const eventName = `agent_stream_direct_v2_mirror_${responseFirst}`;
+      const listen = createAgentRuntimeEventListener({
+        listen: vi.fn().mockResolvedValue(vi.fn()),
+      });
+      const unlisten = await listen(eventName, (event) => {
+        received.push(event.payload);
+      });
+      const route = router.register({ eventName, sessionId: threadId });
+      const notification = directNotification("item/agentMessage/delta", {
+        delta: "唯一首字",
+        itemId: "item-mirrored",
+        threadId,
+        turnId,
+      });
+
+      if (responseFirst) {
+        route?.publish([notification]);
+        subscription?.onNotifications?.([notification]);
+      } else {
+        subscription?.onNotifications?.([notification]);
+        route?.publish([notification]);
+      }
+
+      expect(received).toEqual([
+        expect.objectContaining({
+          text: "唯一首字",
+          thread_id: threadId,
+          turn_id: turnId,
+          type: "text_delta",
+        }),
+      ]);
+      unlisten();
+    },
+  );
+
+  it("同一来源的相同 direct delta 不应被跨来源去重误删", async () => {
+    const eventBus = {
+      subscribe() {
+        return vi.fn();
+      },
+    };
+    const router = new AppServerAgentSessionEventDrainRouter(
+      { drainEvents: () => [] },
+      eventBus,
+    );
+    const received: unknown[] = [];
+    const eventName = "agent_stream_direct_v2_same_source";
+    const listen = createAgentRuntimeEventListener({
+      listen: vi.fn().mockResolvedValue(vi.fn()),
+    });
+    const unlisten = await listen(eventName, (event) => {
+      received.push(event.payload);
+    });
+    const route = router.register({ eventName, sessionId: threadId });
+    const notification = directNotification("item/agentMessage/delta", {
+      delta: "哈",
+      itemId: "item-same-source",
+      threadId,
+      turnId,
+    });
+
+    route?.publish([notification, notification]);
+
+    expect(received).toHaveLength(2);
     unlisten();
   });
 

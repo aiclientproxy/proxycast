@@ -5,10 +5,12 @@ use std::collections::HashMap;
 const UPDATE_PLAN_ACK: &str = "Plan updated";
 
 pub fn plan_delta_event(text: impl Into<String>, revision_id: impl Into<String>) -> RuntimeEvent {
+    let text = text.into();
     RuntimeEvent::new(
         "plan.delta",
         json!({
-            "text": text.into(),
+            "text": text,
+            "delta": text,
             "revisionId": revision_id.into(),
         }),
     )
@@ -172,6 +174,7 @@ mod tests {
 
         assert_eq!(event.event_type, "plan.delta");
         assert_eq!(event.payload["text"], "整理计划");
+        assert_eq!(event.payload["delta"], "整理计划");
         assert_eq!(event.payload["revisionId"], "rev-1");
     }
 

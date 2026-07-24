@@ -408,6 +408,8 @@ pub struct TokenUsageBreakdown {
     pub total_tokens: i64,
     pub input_tokens: i64,
     pub cached_input_tokens: i64,
+    #[serde(default)]
+    pub cache_write_input_tokens: i64,
     pub output_tokens: i64,
     pub reasoning_output_tokens: i64,
 }

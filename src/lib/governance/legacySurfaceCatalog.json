@@ -4720,9 +4720,66 @@
       "allowedPaths": [
         "src/components/agent/chat/AgentChatWorkspace.teamRuntimeBoundaryGuard.test.ts"
       ]
+    },
+    {
+      "id": "frontend-retired-agent-session-action-replay",
+      "classification": "dead",
+      "description": "Renderer 与 TypeScript clients 不得恢复 agentSession/action/replay facade；pending server request 由 thread/read hydrate 并按 outer JSON-RPC id 回包",
+      "patterns": [
+        "agentSession/action/replay",
+        "METHOD_AGENT_SESSION_ACTION_REPLAY",
+        "APP_SERVER_METHOD_AGENT_SESSION_ACTION_REPLAY",
+        "AgentSessionActionReplayParams",
+        "AgentSessionActionReplayResponse",
+        "replayAction"
+      ],
+      "includePathPrefixes": [
+        "packages/app-server-client/src",
+        "packages/agent-runtime-client/src",
+        "src/lib/api"
+      ],
+      "allowedPaths": []
     }
   ],
   "rustText": [
+    {
+      "id": "rust-retired-agent-session-runtime-events-append",
+      "classification": "dead",
+      "description": "generic agentSession runtime event append 已由 typed artifact/write 与领域 owner 取代；不得恢复任意 RuntimeEvent 公共写入口、协议 DTO、catalog 或 handler",
+      "patterns": [
+        "agentSession/runtimeEvents/append",
+        "METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND",
+        "AgentSessionRuntimeEventAppendParams",
+        "AgentSessionRuntimeEventAppendResponse",
+        "AgentSessionRuntimeEventInput",
+        "handle_runtime_events_append_impl"
+      ],
+      "includePathPrefixes": [
+        "lime-rs/crates/app-server-protocol/src",
+        "lime-rs/crates/app-server/src"
+      ],
+      "allowedPaths": []
+    },
+    {
+      "id": "rust-retired-agent-session-action-replay",
+      "classification": "dead",
+      "description": "pending server request 恢复已归 thread/read 与 typed reverse JSON-RPC；不得恢复 agentSession/action/replay method、DTO、handler、runtime helper 或 client facade",
+      "patterns": [
+        "agentSession/action/replay",
+        "METHOD_AGENT_SESSION_ACTION_REPLAY",
+        "AgentSessionActionReplayParams",
+        "AgentSessionActionReplayResponse",
+        "AgentSessionReplayedActionRequired",
+        "handle_action_replay",
+        "replay_action("
+      ],
+      "includePathPrefixes": [
+        "lime-rs/crates/app-server-protocol/src",
+        "lime-rs/crates/app-server/src",
+        "lime-rs/crates/app-server-client/src"
+      ],
+      "allowedPaths": []
+    },
     {
       "id": "rust-retired-video-generation-database-surface",
       "classification": "dead",
@@ -6074,7 +6131,7 @@
     },
     {
       "id": "rust-agent-tool-permission-public-module-leak",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "lime-agent 重新对 crate 外暴露旧 tool_permissions 模块",
       "patterns": ["pub mod tool_permissions;"],
       "includePathPrefixes": ["lime-rs/crates/agent/src/lib.rs"],
@@ -6082,7 +6139,7 @@
     },
     {
       "id": "rust-agent-shell-security-public-module-leak",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "lime-agent 重新对 crate 外暴露旧 shell_security 模块",
       "patterns": ["pub mod shell_security;"],
       "includePathPrefixes": ["lime-rs/crates/agent/src/lib.rs"],
@@ -6090,7 +6147,7 @@
     },
     {
       "id": "rust-agent-tool-permission-module-compiled-leak",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "旧 tool_permissions 模块重新回到 lime-agent lib.rs 编译图",
       "patterns": ["mod tool_permissions;"],
       "includePathPrefixes": ["lime-rs/crates/agent/src/lib.rs"],
@@ -6098,7 +6155,7 @@
     },
     {
       "id": "rust-agent-shell-security-module-compiled-leak",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "旧 shell_security 模块重新回到 lime-agent lib.rs 编译图",
       "patterns": ["mod shell_security;"],
       "includePathPrefixes": ["lime-rs/crates/agent/src/lib.rs"],
@@ -6106,7 +6163,7 @@
     },
     {
       "id": "rust-agent-tool-permission-root-export-leak",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "lime-agent crate 根重新暴露旧 tool_permissions 类型出口",
       "patterns": ["pub use tool_permissions::"],
       "includePathPrefixes": ["lime-rs/crates/agent/src/lib.rs"],
@@ -6114,7 +6171,7 @@
     },
     {
       "id": "rust-agent-shell-security-root-export-leak",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "lime-agent crate 根重新暴露旧 shell_security 类型出口",
       "patterns": ["pub use shell_security::"],
       "includePathPrefixes": ["lime-rs/crates/agent/src/lib.rs"],
@@ -6122,7 +6179,7 @@
     },
     {
       "id": "rust-agent-tool-permission-direct-module-usage",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "上层模块重新 direct 依赖 lime_agent::tool_permissions 模块路径",
       "patterns": ["lime_agent::tool_permissions::"],
       "includePathPrefixes": ["lime-rs/src", "lime-rs/crates"],
@@ -6130,7 +6187,7 @@
     },
     {
       "id": "rust-agent-shell-security-direct-module-usage",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "上层模块重新 direct 依赖 lime_agent::shell_security 模块路径",
       "patterns": ["lime_agent::shell_security::"],
       "includePathPrefixes": ["lime-rs/src", "lime-rs/crates"],
@@ -6138,7 +6195,7 @@
     },
     {
       "id": "rust-agent-tool-permission-root-type-usage",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "上层模块重新 direct 依赖 lime_agent 根导出的旧权限类型",
       "patterns": [
         "lime_agent::DynamicPermissionCheck",
@@ -6150,11 +6207,11 @@
     },
     {
       "id": "rust-agent-tool-permission-internal-module-usage",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "lime-agent 内部除兼容壳外重新扩散 crate::tool_permissions 模块依赖",
       "patterns": ["crate::tool_permissions::"],
       "includePathPrefixes": ["lime-rs/crates/agent/src"],
-      "allowedPaths": ["lime-rs/crates/agent/src/shell_security.rs"]
+      "allowedPaths": []
     },
     {
       "id": "rust-agent-integration-public-module-leak",

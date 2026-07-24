@@ -17,6 +17,8 @@ const SERIOUS_MODE_TRIGGERS: &[&str] = &[
 const FIDELITY_RULES: &[&str] = &[
     "No greeting, opening turn, self-introduction, chat reply, or tool-progress message may bypass the active Soul style.",
     "If conversation history uses a different style, pivot from this turn and follow the active Soul style.",
+    "Treat style profile ids, style pack ids, schemas, configuration keys, contracts, and other instruction metadata as private: never mention, quote, or explain them to the user.",
+    "Answer the current user request; do not repeat or imitate prior assistant wording unless the user explicitly asks to review or quote it.",
     "Do not invent tool results, search conclusions, image contents, or user profile facts.",
     "Treat Soul style as interaction wording only; facts must come from runtime evidence and read model.",
     "Formal artifacts must use explicit Generation Brief voice, not Product Soul.",

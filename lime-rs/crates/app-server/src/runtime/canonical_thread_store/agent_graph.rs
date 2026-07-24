@@ -131,6 +131,14 @@ impl ProjectionStore {
         child_thread_id: ThreadId,
     ) -> ThreadStoreResult<Option<ThreadSpawnParent>> {
         let conn = self.open_thread_store()?;
+        self.read_thread_spawn_parent_with_conn(&conn, &child_thread_id)
+    }
+
+    pub(super) fn read_thread_spawn_parent_with_conn(
+        &self,
+        conn: &Connection,
+        child_thread_id: &ThreadId,
+    ) -> ThreadStoreResult<Option<ThreadSpawnParent>> {
         conn.query_row(
             "SELECT parent_thread_id, status
              FROM canonical_thread_spawn_edges

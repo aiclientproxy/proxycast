@@ -307,6 +307,11 @@ test("session gateway dispatches direct lifecycle and rejects wrapper lifecycle"
     await runtime.dispatchEvent(agentMessageDeltaNotification()),
     true,
   );
+  assert.equal(await runtime.dispatchEvent(planDeltaNotification()), true);
+  assert.equal(
+    await runtime.dispatchEvent(mcpToolCallProgressNotification()),
+    true,
+  );
   assert.equal(
     await runtime.dispatchEvent(rawNotification("turn.started")),
     false,
@@ -314,7 +319,12 @@ test("session gateway dispatches direct lifecycle and rejects wrapper lifecycle"
 
   assert.deepEqual(
     lifecycle.map((event) => event.method),
-    ["turn/started", "item/agentMessage/delta"],
+    [
+      "turn/started",
+      "item/agentMessage/delta",
+      "item/plan/delta",
+      "item/mcpToolCall/progress",
+    ],
   );
   assert.deepEqual(raw, []);
 });
@@ -397,7 +407,10 @@ test("nextEvent consumes direct notifications from gateway sources", async () =>
 });
 
 test("sequence verifier fails closed for orphan direct tool completion", async () => {
-  const notification = itemNotification({ method: "item/completed", status: "completed" });
+  const notification = itemNotification({
+    method: "item/completed",
+    status: "completed",
+  });
   const runtime = createRuntimeClient();
 
   assert.equal(await runtime.dispatchEvent(notification), false);
@@ -462,7 +475,10 @@ test("direct lifecycle adapters run before verification and may fan out", async 
 
 test("nextEvent returns direct adapter fanout before another transport read", async () => {
   let reads = 0;
-  const source = itemNotification({ method: "item/started", status: "inProgress" });
+  const source = itemNotification({
+    method: "item/started",
+    status: "inProgress",
+  });
   const runtime = createAgentRuntimeClient(
     new AppServerConnection({
       send() {},
@@ -528,15 +544,9 @@ test("pipeline flush verifies buffered direct notifications", async () => {
   const flushed = await pipeline.flush();
 
   assert.equal(processed.accepted, true);
-  assert.equal(
-    processed.notifications[0].method,
-    "item/started",
-  );
+  assert.equal(processed.notifications[0].method, "item/started");
   assert.equal(flushed.accepted, true);
-  assert.equal(
-    flushed.notifications[0].method,
-    "item/completed",
-  );
+  assert.equal(flushed.notifications[0].method, "item/completed");
 });
 
 test("item streaming notifications cross the pipeline without synthesizing verifier sequence", async () => {
@@ -555,6 +565,10 @@ test("item streaming notifications cross the pipeline without synthesizing verif
 
   const notifications = [
     agentMessageDeltaNotification(),
+    commandOutputDeltaNotification(),
+    fileChangePatchUpdatedNotification(),
+    mcpToolCallProgressNotification(),
+    planDeltaNotification(),
     reasoningNotification("item/reasoning/summaryTextDelta", {
       delta: "summary",
       summaryIndex: 0,
@@ -574,7 +588,7 @@ test("item streaming notifications cross the pipeline without synthesizing verif
 
   assert.deepEqual(
     processed.map((result) => result.accepted),
-    [true, true, true, true],
+    [true, true, true, true, true, true, true, true],
   );
   assert.deepEqual(
     processed.map((result) => result.notification.method),
@@ -802,6 +816,64 @@ function agentMessageDeltaNotification(overrides = {}) {
     params: {
       delta: "hello",
       itemId: "msg_1",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      ...overrides,
+    },
+  };
+}
+
+function commandOutputDeltaNotification(overrides = {}) {
+  return {
+    method: "item/commandExecution/outputDelta",
+    params: {
+      delta: "stdout\n",
+      itemId: "command-1",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      ...overrides,
+    },
+  };
+}
+
+function fileChangePatchUpdatedNotification(overrides = {}) {
+  return {
+    method: "item/fileChange/patchUpdated",
+    params: {
+      changes: [
+        {
+          diff: "-old\n+new",
+          kind: { type: "update" },
+          path: "src/index.ts",
+        },
+      ],
+      itemId: "item_patch-1",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      ...overrides,
+    },
+  };
+}
+
+function mcpToolCallProgressNotification(overrides = {}) {
+  return {
+    method: "item/mcpToolCall/progress",
+    params: {
+      itemId: "tool_call_1",
+      message: "正在读取文档索引",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      ...overrides,
+    },
+  };
+}
+
+function planDeltaNotification(overrides = {}) {
+  return {
+    method: "item/plan/delta",
+    params: {
+      delta: "- [ ] verify",
+      itemId: "plan-1",
       threadId: "thread-1",
       turnId: "turn-1",
       ...overrides,

@@ -1118,7 +1118,6 @@
   "agentChat.inputbar.runtimeStatus.phase.synthesizing": "Synthesizing",
   "agentChat.inputbar.runtimeStatus.segment.canStop": "Can stop",
   "agentChat.inputbar.runtimeStatus.segment.pendingRequests": "Requests {{count}}",
-  "agentChat.inputbar.runtimeStatus.segment.queuedTurns": "Queued {{count}}",
   "agentChat.inputbar.runtimeStatus.segment.subtasks": "Tasks {{active}}/{{total}}",
   "agentChat.inputbar.runtimeStatus.segment.tools": "Tools {{countLabel}}",
   "agentChat.inputbar.runtimeStatus.status.aborted": "Stopped",

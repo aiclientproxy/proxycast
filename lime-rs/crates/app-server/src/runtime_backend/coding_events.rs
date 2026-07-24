@@ -168,20 +168,19 @@ impl CodingEventMirror {
         let Some(tool) = self.tools.get_mut(tool_id) else {
             return Vec::new();
         };
-        let has_visible_output = !delta.trim().is_empty();
+        let has_delta = !delta.is_empty();
         let has_process_metadata = metadata_has_process_lifecycle(metadata);
-        if !is_shell_tool(&tool.name) || (!has_visible_output && !has_process_metadata) {
+        if !is_shell_tool(&tool.name) || (!has_delta && !has_process_metadata) {
             return Vec::new();
         }
 
-        if has_visible_output {
+        if has_delta {
             tool.emitted_output = true;
         }
         let output_ref = output_ref_from_metadata(metadata, "command")
             .unwrap_or_else(|| command_output_ref(tool_id));
         let ref_ids = output_ref_ids(metadata, &output_ref);
-        let preview =
-            has_visible_output.then(|| truncate_chars(delta, COMMAND_OUTPUT_PREVIEW_CHARS));
+        let preview = has_delta.then(|| truncate_chars(delta, COMMAND_OUTPUT_PREVIEW_CHARS));
         vec![RuntimeEvent::new(
             "command.output",
             compact_object(json!({
@@ -190,6 +189,7 @@ impl CodingEventMirror {
                 "outputRef": output_ref,
                 "refIds": ref_ids,
                 "kind": output_kind,
+                "delta": has_delta.then(|| delta.to_string()),
                 "preview": preview,
                 "source": "runtime_tool_stream",
                 "metadata": metadata.cloned(),
@@ -234,7 +234,7 @@ impl CodingEventMirror {
         let process_metadata = shell_process_lifecycle_metadata(tool_id, metadata, status);
         let mut events = Vec::new();
 
-        if !tool.emitted_output && !result.output.trim().is_empty() {
+        if !tool.emitted_output && !result.output.is_empty() {
             let output_ref = output_ref_from_metadata(metadata, "command")
                 .unwrap_or_else(|| command_output_ref(tool_id));
             let ref_ids = output_ref_ids(metadata, &output_ref);
@@ -246,6 +246,7 @@ impl CodingEventMirror {
                         "toolCallId": tool_id,
                         "outputRef": output_ref,
                         "refIds": ref_ids,
+                        "delta": result.output,
                         "preview": truncate_chars(&result.output, COMMAND_OUTPUT_PREVIEW_CHARS),
                         "source": "runtime_tool_result",
                         "metadata": process_metadata.clone(),

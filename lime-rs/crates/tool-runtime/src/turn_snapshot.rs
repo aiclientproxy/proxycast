@@ -255,6 +255,14 @@ pub enum RuntimeTurnSnapshotError {
     DuplicateToolIdentity(RuntimeToolIdentity),
     HiddenToolCannotSupportParallel(RuntimeToolIdentity),
     EmptyHookKey,
+    UnsupportedHookHandlerType {
+        key: String,
+        handler_type: RuntimeHookHandlerType,
+    },
+    UnsupportedHookExecutionMode {
+        key: String,
+        execution_mode: RuntimeHookExecutionMode,
+    },
     DuplicateHookKey(String),
     DuplicateHookDisplayOrder(i64),
     RelativeHookSourcePath(PathBuf),
@@ -299,6 +307,18 @@ fn validate_hook_snapshots(hooks: &[RuntimeHookSnapshot]) -> Result<(), RuntimeT
     for hook in hooks {
         if hook.key.trim().is_empty() {
             return Err(RuntimeTurnSnapshotError::EmptyHookKey);
+        }
+        if hook.handler_type != RuntimeHookHandlerType::Command {
+            return Err(RuntimeTurnSnapshotError::UnsupportedHookHandlerType {
+                key: hook.key.clone(),
+                handler_type: hook.handler_type,
+            });
+        }
+        if hook.execution_mode != RuntimeHookExecutionMode::Sync {
+            return Err(RuntimeTurnSnapshotError::UnsupportedHookExecutionMode {
+                key: hook.key.clone(),
+                execution_mode: hook.execution_mode,
+            });
         }
         if !hook.source_path.is_absolute() {
             return Err(RuntimeTurnSnapshotError::RelativeHookSourcePath(
@@ -558,6 +578,45 @@ mod tests {
         assert_eq!(
             error,
             RuntimeTurnSnapshotError::DuplicateHookKey("project:stop:0:0".to_string())
+        );
+    }
+
+    #[test]
+    fn turn_snapshot_rejects_unexecutable_hook_kinds() {
+        for handler_type in [
+            RuntimeHookHandlerType::Prompt,
+            RuntimeHookHandlerType::Agent,
+        ] {
+            let mut unsupported = hook(
+                "project:user_prompt_submit:0:0",
+                RuntimeHookEventName::UserPromptSubmit,
+                1,
+            );
+            unsupported.handler_type = handler_type;
+
+            assert_eq!(
+                RuntimeTurnSnapshot::try_new(Vec::new(), vec![unsupported])
+                    .expect_err("unsupported hook handler must fail closed"),
+                RuntimeTurnSnapshotError::UnsupportedHookHandlerType {
+                    key: "project:user_prompt_submit:0:0".to_string(),
+                    handler_type,
+                }
+            );
+        }
+
+        let mut asynchronous = hook(
+            "project:session_end:0:0",
+            RuntimeHookEventName::SessionEnd,
+            1,
+        );
+        asynchronous.execution_mode = RuntimeHookExecutionMode::Async;
+        assert_eq!(
+            RuntimeTurnSnapshot::try_new(Vec::new(), vec![asynchronous])
+                .expect_err("async hook snapshot must fail closed"),
+            RuntimeTurnSnapshotError::UnsupportedHookExecutionMode {
+                key: "project:session_end:0:0".to_string(),
+                execution_mode: RuntimeHookExecutionMode::Async,
+            }
         );
     }
 

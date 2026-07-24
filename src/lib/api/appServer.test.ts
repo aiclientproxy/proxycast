@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { safeInvoke } from "@/lib/dev-bridge";
 import {
-  APP_SERVER_METHOD_AGENT_SESSION_ACTION_REPLAY,
   APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
   APP_SERVER_METHOD_AGENT_SESSION_COMPACT,
   APP_SERVER_METHOD_AGENT_SESSION_EVENT,
@@ -11,7 +10,6 @@ import {
   APP_SERVER_METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE,
   APP_SERVER_METHOD_THREAD_RESUME,
   APP_SERVER_METHOD_AGENT_SESSION_UPDATE,
-  APP_SERVER_METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
   APP_SERVER_METHOD_TURN_INTERRUPT,
   APP_SERVER_METHOD_TURN_START,
   APP_SERVER_METHOD_TURN_STEER,
@@ -881,75 +879,6 @@ describe("App Server API", () => {
     await Promise.resolve();
   });
 
-  it("appendAgentSessionRuntimeEvents 应通过 App Server current method 写入 runtime event", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({
-      lines: [
-        line({
-          id: 6,
-          result: {
-            events: [
-              {
-                eventId: "evt-runtime-1",
-                sessionId: "session-1",
-                turnId: "turn-1",
-                sequence: 8,
-                type: "artifact.snapshot",
-                payload: {
-                  artifact: {
-                    artifactId: "artifact-document-1",
-                  },
-                },
-                timestamp: "2026-06-24T00:00:00.000Z",
-              },
-            ],
-          },
-        }),
-      ],
-    });
-
-    const client = new AppServerClient({ initialRequestId: 6 });
-    const result = await client.appendAgentSessionRuntimeEvents({
-      sessionId: "session-1",
-      turnId: "turn-1",
-      runtimeEvents: [
-        {
-          type: "artifact.snapshot",
-          payload: {
-            artifact: {
-              artifactId: "artifact-document-1",
-            },
-          },
-        },
-      ],
-    });
-
-    expect(result.result.events?.[0]?.eventId).toBe("evt-runtime-1");
-    expect(safeInvoke).toHaveBeenCalledWith("app_server_handle_json_lines", {
-      request: {
-        lines: [
-          line({
-            id: 6,
-            method: APP_SERVER_METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND,
-            params: {
-              sessionId: "session-1",
-              turnId: "turn-1",
-              runtimeEvents: [
-                {
-                  type: "artifact.snapshot",
-                  payload: {
-                    artifact: {
-                      artifactId: "artifact-document-1",
-                    },
-                  },
-                },
-              ],
-            },
-          }),
-        ],
-      },
-    });
-  });
-
   it("listDirectory/readFilePreview 应通过 App Server JSON-RPC 读取文件浏览数据", async () => {
     vi.mocked(safeInvoke)
       .mockResolvedValueOnce({
@@ -1806,47 +1735,6 @@ describe("App Server API", () => {
             params: {
               threadId: "thread-1",
               command: "printf ready",
-            },
-          }),
-        ],
-      },
-    });
-  });
-
-  it("replayAction 应通过 App Server JSON-RPC 重放 pending action", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({
-      lines: [
-        line({
-          id: 9,
-          result: {
-            action: {
-              type: "action_required",
-              requestId: "req-confirm-1",
-              actionType: "ask_user",
-              prompt: "请选择执行模式",
-            },
-          },
-        }),
-      ],
-    });
-
-    const client = new AppServerClient({ initialRequestId: 9 });
-    const result = await client.replayAction({
-      sessionId: "session-1",
-      requestId: "req-confirm-1",
-    });
-
-    expect(result.result.action?.requestId).toBe("req-confirm-1");
-    expect(result.result.action?.actionType).toBe("ask_user");
-    expect(safeInvoke).toHaveBeenCalledWith("app_server_handle_json_lines", {
-      request: {
-        lines: [
-          line({
-            id: 9,
-            method: APP_SERVER_METHOD_AGENT_SESSION_ACTION_REPLAY,
-            params: {
-              sessionId: "session-1",
-              requestId: "req-confirm-1",
             },
           }),
         ],

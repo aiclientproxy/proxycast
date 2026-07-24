@@ -19,6 +19,46 @@ function isPendingRuntimeTurnId(value?: string | null): boolean {
   return Boolean(value?.trim().startsWith("pending-turn:"));
 }
 
+function readCanonicalRuntimeTurnId(message: Message): string | null {
+  const runtimeTurnId = message.runtimeTurnId?.trim();
+  if (!runtimeTurnId || isPendingRuntimeTurnId(runtimeTurnId)) {
+    return null;
+  }
+
+  return runtimeTurnId;
+}
+
+function canFallbackMatchCanonicalTurn(
+  candidate: Message,
+  targetCanonicalTurnId: string | null,
+): boolean {
+  if (!targetCanonicalTurnId) {
+    return true;
+  }
+
+  const candidateCanonicalTurnId = readCanonicalRuntimeTurnId(candidate);
+  return (
+    !candidateCanonicalTurnId ||
+    candidateCanonicalTurnId === targetCanonicalTurnId
+  );
+}
+
+function findCanonicalTurnMatchIndex(
+  messages: Message[],
+  targetCanonicalTurnId: string | null,
+  startIndex: number,
+): number {
+  if (!targetCanonicalTurnId) {
+    return -1;
+  }
+
+  return messages.findIndex(
+    (candidate, index) =>
+      index >= startIndex &&
+      readCanonicalRuntimeTurnId(candidate) === targetCanonicalTurnId,
+  );
+}
+
 function canMatchLocalProcessAssistantToTarget(
   candidate: Message,
   targetRuntimeTurnId?: string,
@@ -44,6 +84,7 @@ export const findMatchingLocalUserMessageIndex = (
   startIndex: number,
 ): number => {
   const targetContent = normalizeSignatureText(targetMessage.content || "");
+  const targetCanonicalTurnId = readCanonicalRuntimeTurnId(targetMessage);
   const hasLooseContentMatch = (candidateContent: string): boolean => {
     const minLength = Math.min(candidateContent.length, targetContent.length);
     return (
@@ -53,9 +94,21 @@ export const findMatchingLocalUserMessageIndex = (
     );
   };
 
+  const canonicalTurnMatchIndex = findCanonicalTurnMatchIndex(
+    localUserMessages,
+    targetCanonicalTurnId,
+    startIndex,
+  );
+  if (canonicalTurnMatchIndex >= 0) {
+    return canonicalTurnMatchIndex;
+  }
+
   for (let index = startIndex; index < localUserMessages.length; index += 1) {
     const candidate = localUserMessages[index];
-    if (!candidate) {
+    if (
+      !candidate ||
+      !canFallbackMatchCanonicalTurn(candidate, targetCanonicalTurnId)
+    ) {
       continue;
     }
 
@@ -76,6 +129,16 @@ export const findMatchingLocalAssistantMessageIndex = (
   targetMessage: Message,
   startIndex: number,
 ): number => {
+  const targetCanonicalTurnId = readCanonicalRuntimeTurnId(targetMessage);
+  const canonicalTurnMatchIndex = findCanonicalTurnMatchIndex(
+    localAssistantMessages,
+    targetCanonicalTurnId,
+    startIndex,
+  );
+  if (canonicalTurnMatchIndex >= 0) {
+    return canonicalTurnMatchIndex;
+  }
+
   const targetSignature = buildHistoryMessageSignature({
     ...targetMessage,
     usage: undefined,
@@ -87,7 +150,10 @@ export const findMatchingLocalAssistantMessageIndex = (
     index += 1
   ) {
     const candidate = localAssistantMessages[index];
-    if (!candidate) {
+    if (
+      !candidate ||
+      !canFallbackMatchCanonicalTurn(candidate, targetCanonicalTurnId)
+    ) {
       continue;
     }
 
@@ -111,30 +177,16 @@ export const findMatchingLocalAssistantMessageIndex = (
     index += 1
   ) {
     const candidate = localAssistantMessages[index];
-    if (!candidate) {
+    if (
+      !candidate ||
+      !canFallbackMatchCanonicalTurn(candidate, targetCanonicalTurnId)
+    ) {
       continue;
     }
 
     const candidateSignature = buildAssistantHydrationSignature(candidate);
     if (candidateSignature === fallbackSignature) {
       return index;
-    }
-  }
-
-  const targetRuntimeTurnId = targetMessage.runtimeTurnId?.trim();
-  if (targetRuntimeTurnId) {
-    for (
-      let index = startIndex;
-      index < localAssistantMessages.length;
-      index += 1
-    ) {
-      const candidate = localAssistantMessages[index];
-      if (!candidate) {
-        continue;
-      }
-      if (candidate.runtimeTurnId?.trim() === targetRuntimeTurnId) {
-        return index;
-      }
     }
   }
 
@@ -146,10 +198,12 @@ export function findNextLocalAssistantAfterUser(
   localAssistantIndexById: Map<string, number>,
   matchedLocalMessageIds: Set<string>,
   userMessageIndex: number | null,
+  targetMessage: Message,
 ): number {
   if (userMessageIndex === null || userMessageIndex < 0) {
     return -1;
   }
+  const targetCanonicalTurnId = readCanonicalRuntimeTurnId(targetMessage);
 
   for (
     let index = userMessageIndex + 1;
@@ -168,6 +222,9 @@ export function findNextLocalAssistantAfterUser(
     }
     if (candidate.id && matchedLocalMessageIds.has(candidate.id)) {
       continue;
+    }
+    if (!canFallbackMatchCanonicalTurn(candidate, targetCanonicalTurnId)) {
+      return -1;
     }
 
     return candidate.id
@@ -217,7 +274,9 @@ export function findNextLocalInterruptedAssistantIndex(
   localAssistantMessages: Message[],
   startIndex: number,
   matchedLocalMessageIds: Set<string>,
+  targetMessage: Message,
 ): number {
+  const targetCanonicalTurnId = readCanonicalRuntimeTurnId(targetMessage);
   for (
     let index = Math.max(0, startIndex);
     index < localAssistantMessages.length;
@@ -228,6 +287,9 @@ export function findNextLocalInterruptedAssistantIndex(
       continue;
     }
     if (candidate.id && matchedLocalMessageIds.has(candidate.id)) {
+      continue;
+    }
+    if (!canFallbackMatchCanonicalTurn(candidate, targetCanonicalTurnId)) {
       continue;
     }
     if (messageHasInterruptedPlaceholder(candidate)) {

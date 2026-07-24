@@ -285,9 +285,12 @@ describe("agent runtime current fixture regression smoke guard", () => {
     expect(assertions).not.toContain(
       "contentFactoryArticleWorkspaceRuntimeContractFailClosed",
     );
-    expect(assertions).toContain(
-      "contentFactoryArticleWorkspaceWorkflowRespondHiddenWithoutPendingAction",
+    expect(content).toContain("APP_SERVER_METHOD_ARTIFACT_WRITE");
+    expect(content).not.toContain(
+      "APP_SERVER_METHOD_AGENT_SESSION_RUNTIME_EVENTS_APPEND",
     );
+    expect(content).not.toContain('type: "workflow.run.started"');
+    expect(content).not.toContain('type: "runtime.error"');
   });
 
   it("runs the media item reference Claw fixture in the current regression set", () => {

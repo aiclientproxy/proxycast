@@ -604,7 +604,7 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
     runtime,
     sessionIdRef,
     sessionId: session.sessionId,
-    currentTurnEventName: currentStreamingEventNameRef.current,
+    currentTurnEventName: stream.activeStreamEventName,
     currentStreamTurnId: stream.activeStreamTurnId,
     isSending: stream.isSending,
     threadRead: session.threadRead,

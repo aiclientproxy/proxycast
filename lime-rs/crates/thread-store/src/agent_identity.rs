@@ -106,31 +106,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn derives_task_name_from_canonical_path() {
-        assert_eq!(
-            canonical_agent_path_task_name("/root/research/refactor_v2").expect("task name"),
-            "refactor_v2"
-        );
-        assert_eq!(
-            canonical_agent_path_task_name("/root").expect("root task name"),
-            "root"
-        );
-        assert_eq!(
-            canonical_agent_path_task_name("/morpheus").expect("morpheus task name"),
-            "morpheus"
-        );
+    fn accepts_codex_agent_paths_and_derives_task_name() {
+        for (path, expected_task_name) in [
+            ("/root", "root"),
+            ("/morpheus", "morpheus"),
+            ("/root/researcher", "researcher"),
+            ("/root/worker_2", "worker_2"),
+            ("/root/research/refactor_v2", "refactor_v2"),
+        ] {
+            assert_eq!(
+                canonical_agent_path_task_name(path).expect("canonical agent path"),
+                expected_task_name,
+                "{path}"
+            );
+        }
     }
 
     #[test]
-    fn rejects_ambiguous_agent_paths() {
+    fn rejects_non_codex_agent_paths() {
         for path in [
+            "",
+            "/",
             "root/worker",
             "/other/worker",
             "/root/",
             "/root//worker",
+            "/root/./worker",
             "/root/../worker",
             "/root/Worker",
             "/root/worker-name",
+            "/root/worker name",
+            "/root/工作者",
             "/root/root",
             "/morpheus/worker",
         ] {

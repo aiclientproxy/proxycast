@@ -17,6 +17,7 @@ pub const METHOD_THREAD_SHELL_COMMAND: &str = "thread/shellCommand";
 pub const METHOD_THREAD_GOAL_SET: &str = "thread/goal/set";
 pub const METHOD_THREAD_GOAL_GET: &str = "thread/goal/get";
 pub const METHOD_THREAD_GOAL_CLEAR: &str = "thread/goal/clear";
+pub const METHOD_ARTIFACT_WRITE: &str = "artifact/write";
 pub const METHOD_TURN_START: &str = "turn/start";
 pub const METHOD_TURN_STEER: &str = "turn/steer";
 pub const METHOD_TURN_INTERRUPT: &str = "turn/interrupt";
@@ -29,6 +30,10 @@ pub const METHOD_TURN_COMPLETED: &str = "turn/completed";
 pub const METHOD_ITEM_STARTED: &str = "item/started";
 pub const METHOD_ITEM_COMPLETED: &str = "item/completed";
 pub const METHOD_AGENT_MESSAGE_DELTA: &str = "item/agentMessage/delta";
+pub const METHOD_COMMAND_EXECUTION_OUTPUT_DELTA: &str = "item/commandExecution/outputDelta";
+pub const METHOD_FILE_CHANGE_PATCH_UPDATED: &str = "item/fileChange/patchUpdated";
+pub const METHOD_PLAN_DELTA: &str = "item/plan/delta";
+pub const METHOD_MCP_TOOL_CALL_PROGRESS: &str = "item/mcpToolCall/progress";
 pub const METHOD_REASONING_SUMMARY_TEXT_DELTA: &str = "item/reasoning/summaryTextDelta";
 pub const METHOD_REASONING_SUMMARY_PART_ADDED: &str = "item/reasoning/summaryPartAdded";
 pub const METHOD_REASONING_TEXT_DELTA: &str = "item/reasoning/textDelta";
@@ -78,6 +83,8 @@ pub enum Method {
     ThreadGoalGet,
     #[serde(rename = "thread/goal/clear")]
     ThreadGoalClear,
+    #[serde(rename = "artifact/write")]
+    ArtifactWrite,
     #[serde(rename = "turn/start")]
     TurnStart,
     #[serde(rename = "turn/steer")]
@@ -105,6 +112,7 @@ impl Method {
             Self::ThreadGoalSet => METHOD_THREAD_GOAL_SET,
             Self::ThreadGoalGet => METHOD_THREAD_GOAL_GET,
             Self::ThreadGoalClear => METHOD_THREAD_GOAL_CLEAR,
+            Self::ArtifactWrite => METHOD_ARTIFACT_WRITE,
             Self::TurnStart => METHOD_TURN_START,
             Self::TurnSteer => METHOD_TURN_STEER,
             Self::TurnInterrupt => METHOD_TURN_INTERRUPT,
@@ -129,6 +137,7 @@ impl Method {
             METHOD_THREAD_GOAL_SET => Some(Self::ThreadGoalSet),
             METHOD_THREAD_GOAL_GET => Some(Self::ThreadGoalGet),
             METHOD_THREAD_GOAL_CLEAR => Some(Self::ThreadGoalClear),
+            METHOD_ARTIFACT_WRITE => Some(Self::ArtifactWrite),
             METHOD_TURN_START => Some(Self::TurnStart),
             METHOD_TURN_STEER => Some(Self::TurnSteer),
             METHOD_TURN_INTERRUPT => Some(Self::TurnInterrupt),
@@ -154,6 +163,7 @@ pub const METHODS: &[&str] = &[
     METHOD_THREAD_GOAL_SET,
     METHOD_THREAD_GOAL_GET,
     METHOD_THREAD_GOAL_CLEAR,
+    METHOD_ARTIFACT_WRITE,
     METHOD_TURN_START,
     METHOD_TURN_STEER,
     METHOD_TURN_INTERRUPT,
@@ -169,6 +179,10 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_ITEM_STARTED,
     METHOD_ITEM_COMPLETED,
     METHOD_AGENT_MESSAGE_DELTA,
+    METHOD_COMMAND_EXECUTION_OUTPUT_DELTA,
+    METHOD_FILE_CHANGE_PATCH_UPDATED,
+    METHOD_PLAN_DELTA,
+    METHOD_MCP_TOOL_CALL_PROGRESS,
     METHOD_REASONING_SUMMARY_TEXT_DELTA,
     METHOD_REASONING_SUMMARY_PART_ADDED,
     METHOD_REASONING_TEXT_DELTA,

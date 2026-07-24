@@ -44,7 +44,10 @@ import {
   shouldMergeLocalAssistantProcessState,
   shouldPreserveLocalAssistantVisibleOutput,
 } from "./agentChatHistoryLocalMergeState";
-import { collectRetainedLocalTail } from "./agentChatHistoryLocalMergeTail";
+import {
+  collectRetainedLocalCanonicalHistory,
+  collectRetainedLocalTail,
+} from "./agentChatHistoryLocalMergeTail";
 
 export const mergeHydratedMessagesWithLocalState = (
   localMessages: Message[],
@@ -73,6 +76,7 @@ export const mergeHydratedMessagesWithLocalState = (
   const localImageAssistantMessageByTaskId = new Map<string, Message>();
   const localTaskPreviewByTaskId = new Map<string, MessageTaskPreview>();
   const hydratedMessageIds = new Set<string>();
+  const hydratedRuntimeTurnIds = new Set<string>();
 
   localUserMessages.forEach((message, index) => {
     if (message.id) {
@@ -92,6 +96,10 @@ export const mergeHydratedMessagesWithLocalState = (
   hydratedMessages.forEach((message) => {
     if (message.id) {
       hydratedMessageIds.add(message.id);
+    }
+    const runtimeTurnId = message.runtimeTurnId?.trim();
+    if (runtimeTurnId && !runtimeTurnId.startsWith("pending-turn:")) {
+      hydratedRuntimeTurnIds.add(runtimeTurnId);
     }
   });
 
@@ -154,6 +162,7 @@ export const mergeHydratedMessagesWithLocalState = (
               localAssistantMessageIndexById,
               matchedLocalMessageIds,
               lastMatchedLocalUserMessageIndex,
+              message,
             );
       const shouldSearchProcessAssistantByRuntimeTurn = Boolean(
         message.runtimeTurnId?.trim(),
@@ -179,6 +188,7 @@ export const mergeHydratedMessagesWithLocalState = (
               localAssistantMessages,
               localAssistantCursor,
               matchedLocalMessageIds,
+              message,
             );
       const resolvedMatchedAssistantIndex =
         matchedAssistantIndex >= 0
@@ -508,6 +518,14 @@ export const mergeHydratedMessagesWithLocalState = (
       matchedLocalMessageIds,
     });
 
+  const retainedLocalCanonicalHistory = collectRetainedLocalCanonicalHistory({
+    hydratedMessageIds,
+    hydratedRuntimeTurnIds,
+    lastMatchedLocalIndex,
+    localMessages,
+    matchedLocalMessageIds,
+  });
+
   const retainedLocalTail = collectRetainedLocalTail({
     hydratedMessageIds,
     lastHydratedMessage,
@@ -517,9 +535,9 @@ export const mergeHydratedMessagesWithLocalState = (
     matchedLocalMessageIds,
   });
 
-  return projectConversationMessagesByRuntimeTurn(
-    retainedLocalTail.length > 0
-      ? [...mergedMessagesWithRecoveredLocalUsers, ...retainedLocalTail]
-      : mergedMessagesWithRecoveredLocalUsers,
-  );
+  return projectConversationMessagesByRuntimeTurn([
+    ...retainedLocalCanonicalHistory,
+    ...mergedMessagesWithRecoveredLocalUsers,
+    ...retainedLocalTail,
+  ]);
 };

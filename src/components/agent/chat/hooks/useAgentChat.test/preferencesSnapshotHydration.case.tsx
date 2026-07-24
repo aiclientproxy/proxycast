@@ -1,9 +1,5 @@
 import { act } from "react";
-import {
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   createDeferred,
   flushEffects,
@@ -16,6 +12,37 @@ import {
 } from "../useAgentChat.testUtils";
 
 describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
+  it("直接会话水合失败时应向导航层返回错误结果", async () => {
+    const workspaceId = "ws-topic-hydration-error";
+    const hydrationError = new Error(
+      "thread/read did not return canonical session detail",
+    );
+    mockListAgentRuntimeSessions.mockResolvedValue([
+      {
+        id: "topic-invalid-import",
+        name: "损坏的导入会话",
+        created_at: Math.floor(Date.now() / 1000),
+        messages_count: 1,
+        workspace_id: workspaceId,
+      },
+    ]);
+    mockGetAgentRuntimeSession.mockRejectedValue(hydrationError);
+    const harness = mountHook(workspaceId);
+
+    try {
+      await flushEffects();
+      let result: unknown;
+      await act(async () => {
+        result = await harness.getValue().switchTopic("topic-invalid-import", {
+          forceRefresh: true,
+        });
+      });
+      expect(result).toBe("error");
+    } finally {
+      harness.unmount();
+    }
+  });
+
   it("切换到命中过往快照的话题时应先立即回放本地 tail，并立即后台拉取远端详情", async () => {
     const workspaceId = "ws-topic-history-warm-restore";
     const createdAt = Math.floor(Date.now() / 1000);
@@ -235,7 +262,10 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
         error: null,
       });
       expect(mockScheduleMinimumDelayIdleTask).not.toHaveBeenCalled();
-      expect(mockGetAgentRuntimeSession).toHaveBeenCalledWith("topic-stale", expect.objectContaining({ historyLimit: 40 }));
+      expect(mockGetAgentRuntimeSession).toHaveBeenCalledWith(
+        "topic-stale",
+        expect.objectContaining({ historyLimit: 40 }),
+      );
 
       await act(async () => {
         deferredTopicDetail.resolve({
@@ -329,7 +359,10 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
       expect(harness.getValue().sessionId).toBe(topicId);
       expect(harness.getValue().messages).toEqual([]);
       expect(harness.getValue().isSessionHydrating).toBe(true);
-      expect(mockGetAgentRuntimeSession).toHaveBeenCalledWith(topicId, expect.objectContaining({ historyLimit: 40 }));
+      expect(mockGetAgentRuntimeSession).toHaveBeenCalledWith(
+        topicId,
+        expect.objectContaining({ historyLimit: 40 }),
+      );
 
       await act(async () => {
         deferredTopicDetail.resolve({

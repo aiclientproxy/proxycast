@@ -26,4 +26,5 @@ url.workspace = true
 libc = "0.2"
 
 [dev-dependencies]
+futures.workspace = true
 tempfile.workspace = true

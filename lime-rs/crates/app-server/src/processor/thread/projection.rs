@@ -304,15 +304,11 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             output,
             ..
         } => {
-            let result = output
-                .as_ref()
-                .map(serde_json::to_value)
-                .transpose()
-                .map_err(|error| projection_error(format!("MCP output: {error}")))?;
+            let result = output.as_ref().map(project_mcp_tool_result);
             let error = output
                 .as_ref()
                 .and_then(|value| value.error.clone())
-                .map(Value::String);
+                .map(|message| serde_json::json!({ "message": message }));
             Ok(v2::ThreadItem::McpToolCall {
                 id,
                 server: server_name,
@@ -646,6 +642,31 @@ fn project_mcp_status(status: canonical::ItemStatus) -> v2::McpToolCallStatus {
         | canonical::ItemStatus::Interrupted
         | canonical::ItemStatus::Cancelled => v2::McpToolCallStatus::Failed,
     }
+}
+
+fn project_mcp_tool_result(output: &canonical::ToolOutput) -> Value {
+    let content = output
+        .text
+        .as_ref()
+        .filter(|text| !text.is_empty())
+        .map(|text| vec![serde_json::json!({ "type": "text", "text": text })])
+        .unwrap_or_default();
+    let mut result = serde_json::Map::from_iter([("content".to_string(), Value::Array(content))]);
+    if let Some(structured_content) = &output.structured_content {
+        result.insert("structuredContent".to_string(), structured_content.clone());
+    }
+
+    let mut metadata = serde_json::Map::new();
+    if output.truncated {
+        metadata.insert("truncated".to_string(), Value::Bool(true));
+    }
+    if let Some(output_ref) = &output.output_ref {
+        metadata.insert("outputRef".to_string(), Value::String(output_ref.clone()));
+    }
+    if !metadata.is_empty() {
+        result.insert("_meta".to_string(), Value::Object(metadata));
+    }
+    Value::Object(result)
 }
 
 fn project_collab_status(status: canonical::ItemStatus) -> v2::CollabAgentToolCallStatus {

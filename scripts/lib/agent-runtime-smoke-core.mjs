@@ -8,6 +8,7 @@ const TERMINAL_THREAD_STATUSES = new Set([
 ]);
 const RUNNING_THREAD_STATUSES = new Set(["running", "queued", "interrupting"]);
 const APP_SERVER_HANDLE_JSON_LINES_COMMAND = "app_server_handle_json_lines";
+const APP_SERVER_DRAIN_EVENTS_COMMAND = "app_server_drain_events";
 const APP_SERVER_METHOD_MODEL_PROVIDER_LIST = "modelProvider/list";
 const APP_SERVER_METHOD_MODEL_PROVIDER_READ = "modelProvider/read";
 const APP_SERVER_METHOD_THREAD_START = "thread/start";
@@ -15,9 +16,13 @@ const APP_SERVER_METHOD_AGENT_SESSION_UPDATE = "agentSession/update";
 const APP_SERVER_METHOD_THREAD_READ = "thread/read";
 const APP_SERVER_METHOD_TURN_START = "turn/start";
 const APP_SERVER_METHOD_TURN_INTERRUPT = "turn/interrupt";
-const APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND =
-  "agentSession/action/respond";
 const APP_SERVER_METHOD_EVIDENCE_EXPORT = "evidence/export";
+const APP_SERVER_REQUEST_METHODS = new Set([
+  "item/commandExecution/requestApproval",
+  "item/fileChange/requestApproval",
+  "item/tool/requestUserInput",
+  "mcpServer/elicitation/request",
+]);
 
 export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -216,6 +221,142 @@ export async function invokeAppServerMethod(
   return response.result;
 }
 
+function decodeAppServerLines(result) {
+  const lines = result?.result?.lines ?? result?.lines;
+  return (Array.isArray(lines) ? lines : [])
+    .map((line) => {
+      try {
+        return JSON.parse(String(line));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function normalizedScope(actionScope) {
+  const scope =
+    actionScope &&
+    typeof actionScope === "object" &&
+    !Array.isArray(actionScope)
+      ? actionScope
+      : {};
+  return {
+    threadId: String(scope.threadId ?? scope.thread_id ?? "").trim(),
+    turnId: String(scope.turnId ?? scope.turn_id ?? "").trim(),
+  };
+}
+
+export function findPendingAppServerRequest(messages, request) {
+  const requestId = String(request?.requestId ?? "").trim();
+  const scope = normalizedScope(request?.actionScope);
+  return (
+    [...messages].reverse().find((message) => {
+      if (
+        !APP_SERVER_REQUEST_METHODS.has(message?.method) ||
+        (typeof message?.id !== "string" && typeof message?.id !== "number")
+      ) {
+        return false;
+      }
+      const params =
+        message.params &&
+        typeof message.params === "object" &&
+        !Array.isArray(message.params)
+          ? message.params
+          : {};
+      const semanticIds = [
+        params.approvalId,
+        params.approval_id,
+        params.itemId,
+        params.item_id,
+        params.requestId,
+        params.request_id,
+      ]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean);
+      if (requestId && semanticIds.includes(requestId)) {
+        return true;
+      }
+      if (semanticIds.length > 0) {
+        return false;
+      }
+      const threadId = String(params.threadId ?? params.thread_id ?? "").trim();
+      const turnId = String(params.turnId ?? params.turn_id ?? "").trim();
+      return (
+        Boolean(scope.threadId) &&
+        threadId === scope.threadId &&
+        (!scope.turnId || !turnId || turnId === scope.turnId)
+      );
+    }) ?? null
+  );
+}
+
+export function buildAppServerRequestResponse(serverRequest, request) {
+  const decision = request?.decision;
+  switch (serverRequest.method) {
+    case "item/commandExecution/requestApproval":
+    case "item/fileChange/requestApproval":
+      return {
+        decision:
+          decision === "allow_for_session"
+            ? "acceptForSession"
+            : decision === "cancel"
+              ? "cancel"
+              : decision === "decline" || request?.confirmed === false
+                ? "decline"
+                : "accept",
+      };
+    case "item/tool/requestUserInput":
+      return {
+        answers:
+          request?.userData?.answers &&
+          typeof request.userData.answers === "object"
+            ? request.userData.answers
+            : (request?.userData ?? {}),
+      };
+    case "mcpServer/elicitation/request":
+      return {
+        action:
+          decision === "cancel"
+            ? "cancel"
+            : decision === "decline" || request?.confirmed === false
+              ? "decline"
+              : "accept",
+        ...(request?.confirmed === false
+          ? {}
+          : { content: request?.userData ?? request?.response ?? {} }),
+      };
+    default:
+      throw new Error(
+        `unsupported App Server server request: ${serverRequest.method}`,
+      );
+  }
+}
+
+async function waitForPendingAppServerRequest(options, request) {
+  const startedAt = Date.now();
+  const timeoutMs = Math.min(options.timeoutMs, 30_000);
+  while (Date.now() - startedAt < timeoutMs) {
+    const result = await invokeDevBridge(
+      options,
+      APP_SERVER_DRAIN_EVENTS_COMMAND,
+      { request: { includeRecent: true, limit: 500 } },
+      timeoutMs,
+    );
+    const pending = findPendingAppServerRequest(
+      decodeAppServerLines(result),
+      request,
+    );
+    if (pending) {
+      return pending;
+    }
+    await sleep(Math.min(options.intervalMs ?? 250, 250));
+  }
+  throw new Error(
+    `typed App Server server request not found: ${request?.requestId ?? "unknown"}`,
+  );
+}
+
 export async function createAgentSessionCurrent(
   options,
   { workspaceId, title, executionStrategy = "react", metadata = {} },
@@ -381,45 +522,14 @@ export async function cancelAgentSessionTurnCurrent(
   });
 }
 
-export async function respondAgentSessionActionCurrent(
-  options,
-  {
-    sessionId,
-    requestId,
-    actionType,
-    confirmed,
-    response,
-    userData,
-    metadata,
-    eventName,
-    actionScope,
-  },
-) {
-  const normalizedScope =
-    actionScope &&
-    typeof actionScope === "object" &&
-    !Array.isArray(actionScope)
-      ? {
-          sessionId: actionScope.sessionId ?? actionScope.session_id,
-          threadId: actionScope.threadId ?? actionScope.thread_id,
-          turnId: actionScope.turnId ?? actionScope.turn_id,
-        }
-      : undefined;
-  return invokeAppServerMethod(
-    options,
-    APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-    compactRecord({
-      sessionId,
-      requestId,
-      actionType,
-      confirmed,
-      response,
-      userData,
-      metadata,
-      eventName,
-      actionScope: normalizedScope ? compactRecord(normalizedScope) : undefined,
-    }),
-  );
+export async function respondAgentServerRequestCurrent(options, request) {
+  const serverRequest = await waitForPendingAppServerRequest(options, request);
+  const result = buildAppServerRequestResponse(serverRequest, request);
+  return invokeDevBridge(options, APP_SERVER_HANDLE_JSON_LINES_COMMAND, {
+    request: {
+      lines: [`${JSON.stringify({ id: serverRequest.id, result })}\n`],
+    },
+  });
 }
 
 export async function readAgentRuntimeThreadCurrent(

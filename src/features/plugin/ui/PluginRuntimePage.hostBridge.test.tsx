@@ -12,7 +12,6 @@ import {
   flush,
   getRuntimeFrame,
   renderPage,
-  runtimeApiMocks,
   usePluginRuntimePageTestLifecycle,
 } from "./PluginRuntimePage.testFixtures";
 
@@ -569,12 +568,6 @@ describe("PluginRuntimePage Host Bridge", () => {
       threadId: "plugin-thread-1",
       turnId: "plugin-turn-1",
     });
-    expect(runtimeApiMocks.startPluginRuntimeTask).not.toHaveBeenCalled();
-    expect(runtimeApiMocks.getPluginRuntimeTask).not.toHaveBeenCalled();
-    expect(runtimeApiMocks.cancelPluginRuntimeTask).not.toHaveBeenCalled();
-    expect(
-      runtimeApiMocks.submitPluginRuntimeHostResponse,
-    ).not.toHaveBeenCalled();
   });
 
   it("Host Bridge 能把 App Server workflow/read 只读投影给 iframe", async () => {
