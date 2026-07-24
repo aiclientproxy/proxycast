@@ -195,7 +195,7 @@ describe("workspaceSendHelpers", () => {
     expect(metadata.harness).not.toHaveProperty("generationBrief");
   });
 
-  it("输入框 plan / goal mode 应进入工作区 harness metadata", () => {
+  it("plan mode 不得恢复 Renderer goal 状态 metadata", () => {
     const metadata = buildWorkspaceRequestMetadata({
       sendOptions: {
         collaborationMode: "plan",
@@ -234,28 +234,16 @@ describe("workspaceSendHelpers", () => {
       contentId: "content-goal-mode",
     });
 
-    expect(metadata).toMatchObject({
-      harness: {
-        preferences: {
-          task: true,
-          subagent: false,
-          goal: true,
-          objective: true,
-        },
-        goal_mode_enabled: true,
-        thread_goal: {
-          enabled: true,
-          source: "inputbar",
-          status: "active",
-          set: {
-            threadId: "thread-workspace-plan-goal",
-            objective: null,
-            status: "active",
-            tokenBudget: null,
-          },
-        },
+    expect(metadata.harness).toMatchObject({
+      preferences: {
+        task: true,
+        subagent: false,
       },
     });
+    expect(metadata.harness).not.toHaveProperty("goal_mode_enabled");
+    expect(metadata.harness).not.toHaveProperty("thread_goal");
+    expect(metadata.harness.preferences).not.toHaveProperty("goal");
+    expect(metadata.harness.preferences).not.toHaveProperty("objective");
   });
 
   it("应把显式 Generation Brief voice metadata 收敛到 artifact.generation_brief", () => {

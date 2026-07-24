@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  AGENT_STREAM_QUEUED_DRAFT_CLEANUP_GRACE_MS,
   AGENT_STREAM_TEXT_DELTA_BACKLOG_FLUSH_CHARS,
   AGENT_STREAM_TEXT_DELTA_RENDER_FLUSH_MS,
-  buildAgentStreamQueuedDraftCleanupTimerFirePlan,
-  buildAgentStreamQueuedDraftCleanupTimerSchedulePlan,
   buildAgentStreamTextRenderTimerSchedulePlan,
   buildAgentStreamTimerClearPlan,
 } from "./agentStreamTimerController";
@@ -97,63 +94,5 @@ describe("agentStreamTimerController", () => {
       action: "skip",
       delayMs: null,
     });
-  });
-
-  it("queued draft cleanup 调度前应清理旧 timer，并只在当前请求仍需观察且流未激活时调度", () => {
-    expect(
-      buildAgentStreamQueuedDraftCleanupTimerSchedulePlan({
-        shouldWatchCurrentRequest: false,
-        streamActivated: false,
-      }),
-    ).toEqual({
-      shouldClearExistingTimer: true,
-      shouldScheduleTimer: false,
-      delayMs: null,
-    });
-
-    expect(
-      buildAgentStreamQueuedDraftCleanupTimerSchedulePlan({
-        shouldWatchCurrentRequest: true,
-        streamActivated: true,
-      }),
-    ).toEqual({
-      shouldClearExistingTimer: true,
-      shouldScheduleTimer: false,
-      delayMs: null,
-    });
-
-    expect(
-      buildAgentStreamQueuedDraftCleanupTimerSchedulePlan({
-        shouldWatchCurrentRequest: true,
-        streamActivated: false,
-      }),
-    ).toEqual({
-      shouldClearExistingTimer: true,
-      shouldScheduleTimer: true,
-      delayMs: AGENT_STREAM_QUEUED_DRAFT_CLEANUP_GRACE_MS,
-    });
-  });
-
-  it("queued draft cleanup timer 触发时应跳过已完成或已激活的请求", () => {
-    expect(
-      buildAgentStreamQueuedDraftCleanupTimerFirePlan({
-        requestFinished: true,
-        streamActivated: false,
-      }),
-    ).toEqual({ shouldCleanup: false });
-
-    expect(
-      buildAgentStreamQueuedDraftCleanupTimerFirePlan({
-        requestFinished: false,
-        streamActivated: true,
-      }),
-    ).toEqual({ shouldCleanup: false });
-
-    expect(
-      buildAgentStreamQueuedDraftCleanupTimerFirePlan({
-        requestFinished: false,
-        streamActivated: false,
-      }),
-    ).toEqual({ shouldCleanup: true });
   });
 });

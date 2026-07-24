@@ -1,15 +1,12 @@
 import { act } from "react";
-import {
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   captureTurnStream,
   flushEffects,
   mockReplayAgentRuntimeRequest,
   mockRespondAgentRuntimeAction,
   mockToast,
+  mockTypedActionResponseHandled,
   mountHook,
   seedSession,
 } from "../useAgentChat.testUtils";
@@ -18,6 +15,7 @@ describe("useAgentChat action_required 渲染链路 - reply / replay", () => {
   it("replayPendingAction 应调用 replay request 命令并恢复 pendingActions", async () => {
     const workspaceId = "ws-replay-action-required";
     seedSession(workspaceId, "session-replay-action-required");
+    const respond = mockTypedActionResponseHandled("ask_user");
     const harness = mountHook(workspaceId);
     const stream = captureTurnStream();
 
@@ -130,11 +128,12 @@ describe("useAgentChat action_required 渲染链路 - reply / replay", () => {
       ).toBe(true);
       expect(mockToast.success).toHaveBeenCalledWith("已重新拉起待处理请求");
     } finally {
+      respond.mockRestore();
       harness.unmount();
     }
   });
 
-  it("fallback ask 在真实 request_id 未就绪前应先记录答案，并在真实 request_id 到达后自动提交", async () => {
+  it("fallback ask 缺少 typed server request 时应 fail closed", async () => {
     const workspaceId = "ws-ask-fallback-pending";
     seedSession(workspaceId, "session-ask-fallback-pending");
     const harness = mountHook(workspaceId);
@@ -170,163 +169,18 @@ describe("useAgentChat action_required 渲染链路 - reply / replay", () => {
         });
       });
 
-      let assistantMessage = [...harness.getValue().messages]
+      const assistantMessage = [...harness.getValue().messages]
         .reverse()
         .find((msg) => msg.role === "assistant");
 
       expect(mockRespondAgentRuntimeAction).not.toHaveBeenCalled();
-      expect(mockToast.info).toHaveBeenCalledWith(
-        "已记录你的回答，等待系统请求就绪后自动提交",
+      expect(mockToast.error).toHaveBeenCalledWith(
+        "用户输入请求已失效，请等待当前 typed request",
       );
       expect(assistantMessage?.actionRequests?.[0]).toMatchObject({
         requestId: "fallback:tool-fallback-only",
-        status: "queued",
-        submittedResponse: '{"answer":"网络矩阵"}',
-        submittedUserData: { answer: "网络矩阵" },
+        status: "pending",
       });
-
-      act(() => {
-        stream.emit({
-          type: "action_required",
-          request_id: "req-ask-real-1",
-          action_type: "ask_user",
-          prompt: "请选择您喜欢的科技风格类型",
-          questions: [
-            {
-              question: "请选择您喜欢的科技风格类型",
-              options: ["网络矩阵", "极简未来"],
-            },
-          ],
-        });
-      });
-
-      await flushEffects();
-
-      assistantMessage = [...harness.getValue().messages]
-        .reverse()
-        .find((msg) => msg.role === "assistant");
-
-      expect(mockRespondAgentRuntimeAction).toHaveBeenCalledWith({
-        session_id: "session-ask-fallback-pending",
-        request_id: "req-ask-real-1",
-        action_type: "ask_user",
-        confirmed: true,
-        response: '{"answer":"网络矩阵"}',
-        user_data: { answer: "网络矩阵" },
-        metadata: {
-          elicitation_context: {
-            source: "action_required",
-            mode: "runtime_protocol",
-            form_id: "req-ask-real-1",
-            action_type: "ask_user",
-            field_count: 1,
-            prompt: "请选择您喜欢的科技风格类型",
-            entries: [
-              {
-                fieldId: "req-ask-real-1_answer",
-                fieldKey: "answer",
-                label: "请选择您喜欢的科技风格类型",
-                value: "网络矩阵",
-                summary: "网络矩阵",
-              },
-            ],
-          },
-        },
-        event_name: expect.stringMatching(/^agent_stream_/),
-      });
-      expect(
-        assistantMessage?.actionRequests?.some(
-          (item) =>
-            item.requestId === "req-ask-real-1" && item.status === "submitted",
-        ),
-      ).toBe(true);
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("fallback ask 的暂存答案不应跨 assistant 轮次自动提交到同文案新请求", async () => {
-    const workspaceId = "ws-ask-fallback-current-turn";
-    seedSession(workspaceId, "session-ask-fallback-current-turn");
-    const harness = mountHook(workspaceId);
-    const stream = captureTurnStream();
-
-    try {
-      await flushEffects();
-
-      await act(async () => {
-        await harness
-          .getValue()
-          .sendMessage("第一轮", [], false, false, false, "react");
-      });
-
-      act(() => {
-        stream.emit({
-          type: "tool_start",
-          tool_id: "tool-fallback-old-turn",
-          tool_name: "Ask",
-          arguments: JSON.stringify({
-            question: "请选择您喜欢的科技风格类型",
-            options: ["网络矩阵", "极简未来"],
-          }),
-        });
-      });
-
-      await act(async () => {
-        await harness.getValue().confirmAction({
-          requestId: "fallback:tool-fallback-old-turn",
-          confirmed: true,
-          actionType: "ask_user",
-          response: '{"answer":"网络矩阵"}',
-        });
-      });
-
-      expect(mockRespondAgentRuntimeAction).not.toHaveBeenCalled();
-
-      act(() => {
-        stream.emit({
-          type: "error",
-          message: "第一轮执行失败",
-        });
-      });
-      await flushEffects();
-
-      await act(async () => {
-        await harness
-          .getValue()
-          .sendMessage("第二轮", [], false, false, false, "react");
-      });
-
-      act(() => {
-        stream.emit({
-          type: "action_required",
-          request_id: "req-ask-real-new-turn",
-          action_type: "ask_user",
-          prompt: "请选择您喜欢的科技风格类型",
-          questions: [
-            {
-              question: "请选择您喜欢的科技风格类型",
-              options: ["网络矩阵", "极简未来"],
-            },
-          ],
-        });
-      });
-
-      await flushEffects();
-
-      expect(mockRespondAgentRuntimeAction).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          request_id: "req-ask-real-new-turn",
-        }),
-      );
-      expect(harness.getValue().pendingActions).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            requestId: "req-ask-real-new-turn",
-            status: "pending",
-          }),
-        ]),
-      );
     } finally {
       harness.unmount();
     }

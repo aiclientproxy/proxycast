@@ -21,15 +21,19 @@ function thread(
   status: AppServerThread["status"] = { type: "idle" },
 ): AppServerThread {
   return {
-    archived: false,
-    createdAtMs: 100,
+    cliVersion: "1.111.0",
+    createdAt: 100,
+    cwd: "/workspace",
+    ephemeral: false,
+    id: threadId,
+    modelProvider: "openai",
     parentThreadId: "root-1",
+    preview: "",
     sessionId: `session-${threadId}`,
+    source: "app_server",
     status,
-    threadId,
     turns: [],
-    turnsView: "summary",
-    updatedAtMs: 200,
+    updatedAt: 200,
   };
 }
 
@@ -135,12 +139,11 @@ describe("workspace canonical SubAgent runtime", () => {
               ...thread("child-1"),
               turns: [
                 {
-                  createdAtMs: 100,
-                  sessionId: "session-child-1",
+                  completedAt: 300,
+                  items: [],
                   status: "completed",
-                  threadId: "child-1",
-                  turnId: "turn-1",
-                  updatedAtMs: 300,
+                  id: "turn-1",
+                  startedAt: 100,
                 },
               ],
             },

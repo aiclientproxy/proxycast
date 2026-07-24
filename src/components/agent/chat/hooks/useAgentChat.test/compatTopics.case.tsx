@@ -1,9 +1,5 @@
 import { act } from "react";
-import {
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   captureTurnStream,
   completedTurn,
@@ -58,8 +54,8 @@ describe("useAgentChat 兼容接口 - topics", () => {
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.executionStrategy,
+        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
+          ?.runtimeRequest?.executionStrategy,
       ).toBeUndefined();
     } finally {
       harness.unmount();
@@ -110,8 +106,8 @@ describe("useAgentChat 兼容接口 - topics", () => {
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.executionStrategy,
+        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
+          ?.runtimeRequest?.executionStrategy,
       ).toBeUndefined();
     } finally {
       (resolveStrategySync as (() => void) | null)?.();
@@ -163,13 +159,11 @@ describe("useAgentChat 兼容接口 - topics", () => {
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.approvalPolicy,
+        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.approvalPolicy,
       ).toBe("on-request");
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.sandboxPolicy,
-      ).toBe("read-only");
+      expect(mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.sandboxPolicy).toBe(
+        "read-only",
+      );
     } finally {
       harness.unmount();
     }

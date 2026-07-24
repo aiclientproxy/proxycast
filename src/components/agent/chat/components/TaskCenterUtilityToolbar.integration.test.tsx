@@ -125,6 +125,10 @@ vi.mock("sonner", () => ({
   },
 }));
 
+vi.mock("@/i18n/createI18n", () => ({
+  changeLimeLocale: vi.fn(async () => "zh-CN"),
+}));
+
 vi.mock("react-i18next", () => {
   const t = (key: string, options?: Record<string, unknown>) => {
     const template =

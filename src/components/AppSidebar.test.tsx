@@ -95,7 +95,6 @@ describe("AppSidebar navigation", () => {
 
     expect(mockListAgentRuntimeSessions).toHaveBeenCalledWith({
       limit: 11,
-      workspaceId: "project-1",
     });
   });
 
@@ -222,12 +221,7 @@ describe("AppSidebar navigation", () => {
       '[data-testid="app-sidebar-footer-area"]',
     );
 
-    expect(mainNavButtons).toEqual([
-      "新建任务",
-      "专家",
-      "Skills",
-      "插件",
-    ]);
+    expect(mainNavButtons).toEqual(["新建任务", "专家", "Skills", "插件"]);
     expect(
       container.querySelector('[data-testid="app-sidebar-footer-nav"]'),
     ).toBeNull();

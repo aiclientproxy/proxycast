@@ -65,7 +65,6 @@ const SKILL_THREAD_FIRST_SURFACE_FILES = [
   "src/components/skills/SkillsWorkspacePage.tsx",
   "src/components/skills/workspaceSkillRuntimeLaunch.ts",
   "src/components/agent/chat/workspace/useInitialPendingServiceSkillLaunchRuntime.ts",
-  "src/components/agent/chat/hooks/agentStreamSlashSkillPreflight.ts",
   "src/lib/api/skill-execution.ts",
 ];
 
@@ -305,7 +304,15 @@ describe("Project / Thread-first boundary", () => {
 
   it("Thread 内 service skill automation 创建链必须写入当前 session / thread lineage", () => {
     const workspaceSource = readFileSync(
-      repoPath("src/components/agent/chat/AgentChatWorkspace.tsx"),
+      repoPath(
+        "src/components/agent/chat/workspace/useAgentChatWorkspaceSetupRuntime.ts",
+      ),
+      "utf8",
+    );
+    const sceneSource = readFileSync(
+      repoPath(
+        "src/components/agent/chat/workspace/useAgentChatWorkspaceSceneRuntime.tsx",
+      ),
       "utf8",
     );
     const actionSource = readFileSync(
@@ -324,7 +331,7 @@ describe("Project / Thread-first boundary", () => {
     expect(workspaceSource).toContain(
       "threadId: threadRead?.thread_id ?? sessionId",
     );
-    expect(workspaceSource).toContain("threadLineage={");
+    expect(sceneSource).toContain("threadLineage={");
     expect(actionSource).toContain("ensureSessionForThreadLineage");
     expect(actionSource).toContain("normalizeAutomationThreadLineage");
     expect(viewModelSource).toContain(
@@ -362,7 +369,9 @@ describe("Project / Thread-first boundary", () => {
       "utf8",
     );
     const workspaceSource = readFileSync(
-      repoPath("src/components/agent/chat/AgentChatWorkspace.tsx"),
+      repoPath(
+        "src/components/agent/chat/workspace/useAgentChatWorkspaceSetupRuntime.ts",
+      ),
       "utf8",
     );
     const canonicalReaderSource = readFileSync(
@@ -406,14 +415,15 @@ describe("Project / Thread-first boundary", () => {
     expect(workspaceSource).toContain(
       "useWorkspaceSubagentNavigationRuntime({",
     );
-    expect(canonicalReaderSource).toContain('case "subAgent"');
+    expect(canonicalReaderSource).toContain('case "subAgentActivity"');
     expect(canonicalReaderSource).toContain(
-      'readString(payload, "child_thread_id", "childThreadId")',
+      'readString(item, "agentThreadId")',
     );
+    expect(canonicalReaderSource).toContain('type: "subagent_activity"');
     expect(threadClientSource).toContain(
       "async function readThreadSessionId(threadId: string)",
     );
-    expect(threadClientSource).toContain('turnsView: "notLoaded"');
+    expect(threadClientSource).toContain("includeTurns: false");
     expect(threadClientSource).toContain("mismatched threadId");
     expect(navigationSource).toContain("const canonicalSessionId");
     expect(navigationSource).toContain(

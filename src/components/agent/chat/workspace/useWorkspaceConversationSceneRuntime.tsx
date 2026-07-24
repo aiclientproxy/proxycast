@@ -492,6 +492,7 @@ export function useWorkspaceConversationSceneRuntime({
       projectedCurrentTurnId,
       projectedPendingActions,
       projectedSubmittedActionsInFlight,
+      projectedThreadItems,
       projectedThreadRead,
       projectedTurns,
       t,

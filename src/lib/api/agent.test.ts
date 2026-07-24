@@ -46,6 +46,10 @@ import {
   generateAgentRuntimeSessionTitle,
 } from "./agentRuntime/agentClient";
 import {
+  AGENT_RUNTIME_RENDERER_EVENT_NAME_CONTEXT_KEY,
+  createApplicationAdditionalContext,
+} from "./agentProtocolOps";
+import {
   exportAgentRuntimeAnalysisHandoff,
   exportAgentRuntimeEvidencePack,
   exportAgentRuntimeHandoffBundle,
@@ -71,6 +75,26 @@ import {
 
 function line(value: unknown): string {
   return `${JSON.stringify(value)}\n`;
+}
+
+function canonicalThread(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    cliVersion: "1.111.0",
+    cwd: "/tmp/workspace",
+    modelProvider: "openai",
+    source: "appServer",
+    id: "thread-runtime",
+    sessionId: "session-runtime",
+    preview: "Runtime Session",
+    ephemeral: false,
+    createdAt: 1710000000,
+    updatedAt: 1710000123,
+    status: { type: "idle" },
+    turns: [],
+    ...overrides,
+  };
 }
 
 type AppServerMockEnvelope =
@@ -141,187 +165,142 @@ describe("Agent API 治理护栏", () => {
     mockSafeListen.mockResolvedValue(vi.fn());
   });
 
-  it("createAgentRuntimeSession 应经 Electron IPC 调 App Server session/start", async () => {
+  it("createAgentRuntimeSession 应经 Electron IPC 调 App Server thread/start", async () => {
     mockAppServerResponse({
-      session: {
+      thread: canonicalThread({
+        cwd: "/tmp/workspace-2",
+        id: "thread-created",
         sessionId: "session-created",
-        threadId: "thread-created",
-        appId: "desktop",
-        workspaceId: "workspace-2",
-        status: "idle",
-        createdAt: "2026-06-06T00:00:00.000Z",
-        updatedAt: "2026-06-06T00:00:00.000Z",
-      },
+        preview: "新会话",
+      }),
     });
 
     await expect(
       createAgentRuntimeSession("workspace-2", "新会话", "react", {
         runStartHooks: false,
+        workingDir: "/tmp/workspace-2",
+        metadata: {
+          providerSelector: "provider-runtime",
+          modelName: "model-runtime",
+        },
       }),
     ).resolves.toBe("session-created");
 
     expectAppServerRequest(1, APP_SERVER_METHOD_THREAD_START, {
-      appId: "desktop",
-      workspaceId: "workspace-2",
-      businessObjectRef: {
-        kind: "agent.session",
-        id: expect.stringMatching(/^agent-session:workspace-2:\d+$/),
-        title: "新会话",
-        metadata: {
-          title: "新会话",
-          executionStrategy: "react",
-          runStartHooks: false,
-        },
-      },
+      cwd: "/tmp/workspace-2",
+      model: "model-runtime",
+      modelProvider: "provider-runtime",
+      serviceName: "新会话",
+      threadSource: "appServer",
+      historyMode: "paginated",
     });
   });
 
   it("submitAgentRuntimeTurn 应经 Electron IPC 调 App Server turn/start", async () => {
     mockAppServerResponse({
       turn: {
-        turnId: "turn-runtime",
-        sessionId: "session-runtime",
-        threadId: "thread-runtime",
-        status: "accepted",
+        id: "turn-runtime",
+        status: "inProgress",
+        items: [],
       },
     });
 
     await submitAgentRuntimeTurn({
-      sessionId: "session-runtime",
-      input: { text: "runtime hello" },
-      runtimeOptions: {
-        stream: true,
-        eventName: "event-runtime",
-        runtimeRequest: {
-          workspaceId: "workspace-runtime",
-          executionStrategy: "react",
-          providerConfig: {
-            providerId: "provider-runtime",
-            providerName: "Provider Runtime",
-            modelName: "model-runtime",
-          },
-          metadata: {
-            source: "hook-facade",
-          },
-        },
-      },
+      threadId: "thread-runtime",
+      input: [{ type: "text", text: "runtime hello" }],
+      additionalContext: createApplicationAdditionalContext({
+        [AGENT_RUNTIME_RENDERER_EVENT_NAME_CONTEXT_KEY]: "event-runtime",
+        metadata: { source: "hook-facade" },
+      }),
     });
 
     expectAppServerRequest(1, APP_SERVER_METHOD_TURN_START, {
-      sessionId: "session-runtime",
-      input: {
-        text: "runtime hello",
-      },
-      runtimeOptions: {
-        stream: true,
-        eventName: "event-runtime",
-        runtimeRequest: {
-          workspaceId: "workspace-runtime",
-          executionStrategy: "react",
-          providerConfig: {
-            providerId: "provider-runtime",
-            providerName: "Provider Runtime",
-            modelName: "model-runtime",
-          },
-          metadata: {
-            source: "hook-facade",
-          },
-        },
-      },
+      threadId: "thread-runtime",
+      input: [{ type: "text", text: "runtime hello" }],
+      additionalContext: createApplicationAdditionalContext({
+        metadata: { source: "hook-facade" },
+      }),
     });
   });
 
-  it("submitAgentRuntimeTurn 应通过 App Server runtimeOptions 保留 web_search 与 queue_if_busy", async () => {
+  it("submitAgentRuntimeTurn 应通过 additionalContext 保留工具与排队元数据", async () => {
     mockAppServerResponse({
       turn: {
-        turnId: "queued-turn-1",
-        sessionId: "session-runtime-search",
-        threadId: "thread-runtime-search",
-        status: "queued",
+        id: "queued-turn-1",
+        status: "inProgress",
+        items: [],
       },
     });
 
     await submitAgentRuntimeTurn({
-      sessionId: "session-runtime-search",
-      input: { text: "查一下今天的汇率" },
-      runtimeOptions: {
-        stream: true,
-        eventName: "event-runtime-search",
-        queuedTurnId: "queued-turn-1",
-        runtimeRequest: {
+      threadId: "thread-runtime-search",
+      input: [{ type: "text", text: "查一下今天的汇率" }],
+      additionalContext: createApplicationAdditionalContext({
+        [AGENT_RUNTIME_RENDERER_EVENT_NAME_CONTEXT_KEY]: "event-runtime-search",
+        metadata: {
           workspaceId: "workspace-runtime-search",
           executionStrategy: "react",
           webSearch: true,
+          queueIfBusy: true,
+          queuedTurnId: "queued-turn-1",
         },
-      },
-      queueIfBusy: true,
-      skipPreSubmitResume: true,
+      }),
     });
 
     expectAppServerRequest(1, APP_SERVER_METHOD_TURN_START, {
-      sessionId: "session-runtime-search",
-      input: {
-        text: "查一下今天的汇率",
-      },
-      runtimeOptions: {
-        stream: true,
-        eventName: "event-runtime-search",
-        queuedTurnId: "queued-turn-1",
-        runtimeRequest: {
+      threadId: "thread-runtime-search",
+      input: [{ type: "text", text: "查一下今天的汇率" }],
+      additionalContext: createApplicationAdditionalContext({
+        metadata: {
           workspaceId: "workspace-runtime-search",
           executionStrategy: "react",
           webSearch: true,
+          queueIfBusy: true,
+          queuedTurnId: "queued-turn-1",
         },
-      },
-      queueIfBusy: true,
-      skipPreSubmitResume: true,
+      }),
     });
   });
 
-  it("submitAgentRuntimeTurn 应通过 App Server runtimeOptions 支持 provider/model 偏好字段", async () => {
+  it("submitAgentRuntimeTurn 应通过 canonical turn/start 支持模型与策略字段", async () => {
     mockAppServerResponse({
       turn: {
-        turnId: "turn-runtime-preference",
-        sessionId: "session-runtime-preference",
-        threadId: "thread-runtime-preference",
-        status: "accepted",
+        id: "turn-runtime-preference",
+        status: "inProgress",
+        items: [],
       },
     });
 
     await submitAgentRuntimeTurn({
-      sessionId: "session-runtime-preference",
-      input: { text: "请继续" },
-      runtimeOptions: {
-        stream: true,
-        eventName: "event-runtime-preference",
-        runtimeRequest: {
+      threadId: "thread-runtime-preference",
+      input: [{ type: "text", text: "请继续" }],
+      model: "gpt-5.3-codex",
+      effort: "high",
+      approvalPolicy: "on-request",
+      sandboxPolicy: "workspace-write",
+      additionalContext: createApplicationAdditionalContext({
+        [AGENT_RUNTIME_RENDERER_EVENT_NAME_CONTEXT_KEY]:
+          "event-runtime-preference",
+        metadata: {
           workspaceId: "workspace-runtime-preference",
-          providerPreference: "custom-provider",
-          modelPreference: "gpt-5.3-codex",
-          thinkingEnabled: true,
-          approvalPolicy: "on-request",
-          sandboxPolicy: "workspace-write",
+          providerSelector: "custom-provider",
         },
-      },
+      }),
     });
 
     expectAppServerRequest(1, APP_SERVER_METHOD_TURN_START, {
-      sessionId: "session-runtime-preference",
-      input: {
-        text: "请继续",
-      },
-      runtimeOptions: {
-        stream: true,
-        eventName: "event-runtime-preference",
-        runtimeRequest: {
+      threadId: "thread-runtime-preference",
+      input: [{ type: "text", text: "请继续" }],
+      model: "gpt-5.3-codex",
+      effort: "high",
+      approvalPolicy: "on-request",
+      sandboxPolicy: "workspace-write",
+      additionalContext: createApplicationAdditionalContext({
+        metadata: {
           workspaceId: "workspace-runtime-preference",
-          providerPreference: "custom-provider",
-          modelPreference: "gpt-5.3-codex",
-          thinkingEnabled: true,
-          approvalPolicy: "on-request",
-          sandboxPolicy: "workspace-write",
+          providerSelector: "custom-provider",
         },
-      },
+      }),
     });
   });
 
@@ -395,11 +374,10 @@ describe("Agent API 治理护栏", () => {
 
   it("resumeThread 应经 Electron IPC 调 App Server thread/resume", async () => {
     mockAppServerResponse({
-      thread: {
+      thread: canonicalThread({
         id: "thread-runtime-resume",
         sessionId: "session-runtime-resume",
-        turns: [],
-      },
+      }),
       model: "gpt-5.4",
       modelProvider: "openai",
       cwd: "/tmp/workspace",
@@ -407,9 +385,15 @@ describe("Agent API 治理护栏", () => {
 
     await expect(
       resumeThread({
-        thread_id: "thread-runtime-resume",
+        threadId: "thread-runtime-resume",
       }),
-    ).resolves.toBe(true);
+    ).resolves.toMatchObject({
+      result: {
+        thread: {
+          id: "thread-runtime-resume",
+        },
+      },
+    });
 
     expectAppServerRequest(1, APP_SERVER_METHOD_THREAD_RESUME, {
       threadId: "thread-runtime-resume",
@@ -426,46 +410,38 @@ describe("Agent API 治理护栏", () => {
     ).resolves.toBeNull();
   });
 
-  it("getAgentRuntimeThreadRead 应经 Electron IPC 调 App Server session/read 并归一化 queued_turns", async () => {
+  it("getAgentRuntimeThreadRead 应经 Electron IPC 调 canonical thread/read 并归一化 queued_turns", async () => {
     mockAppServerResponse({
-      session: {
-        sessionId: "session-runtime",
-        threadId: "thread-runtime",
-        appId: "agent-chat",
-        status: "waitingAction",
-        createdAt: "2026-06-06T00:00:00.000Z",
-        updatedAt: "2026-06-06T00:00:03.000Z",
-      },
-      turns: [
-        {
-          turnId: "turn-runtime",
-          sessionId: "session-runtime",
-          threadId: "thread-runtime",
-          status: "running",
-        },
-      ],
-      detail: {
-        thread_read: {
-          thread_id: "thread-runtime",
-          status: "blocked",
-          active_turn_id: "turn-runtime",
-          queued_turns: [
-            {
-              queued_turn_id: "queued-turn-1",
-              message_preview: "继续执行",
-              created_at: 1711184400,
-              position: 1,
-            },
-          ],
-        },
-      },
+      thread: canonicalThread({
+        status: { type: "active", activeFlags: ["waitingOnUserInput"] },
+        turns: [
+          {
+            id: "turn-runtime",
+            status: "inProgress",
+            items: [],
+          },
+          {
+            id: "queued-turn-1",
+            status: "inProgress",
+            startedAt: 1711184400,
+            queue: { state: "queued", position: 1 },
+            items: [
+              {
+                id: "queued-user-1",
+                type: "userMessage",
+                content: [{ type: "text", text: "继续执行" }],
+              },
+            ],
+          },
+        ],
+      }),
     });
 
     await expect(
       getAgentRuntimeThreadRead("session-runtime"),
     ).resolves.toMatchObject({
       thread_id: "thread-runtime",
-      status: "blocked",
+      status: "waitingAction",
       profile_status: "blocked",
       active_turn_id: "turn-runtime",
       queued_turns: [
@@ -477,7 +453,8 @@ describe("Agent API 治理护栏", () => {
     });
 
     expectAppServerRequest(1, APP_SERVER_METHOD_THREAD_READ, {
-      sessionId: "session-runtime",
+      threadId: "session-runtime",
+      includeTurns: true,
     });
   });
 
@@ -549,19 +526,17 @@ describe("Agent API 治理护栏", () => {
 
   it("listAgentRuntimeSessions 应返回现役 runtime 会话列表", async () => {
     mockAppServerResponse({
-      sessions: [
-        {
+      data: [
+        canonicalThread({
+          id: "thread-runtime-1",
           sessionId: "session-runtime-1",
-          threadId: "thread-runtime-1",
-          title: "Runtime Session",
-          model: "claude-sonnet-4-20250514",
-          createdAt: "2024-03-09T16:00:00.000Z",
-          updatedAt: "2024-03-09T16:02:03.000Z",
-          messagesCount: 3,
-          executionStrategy: "react",
-          workspaceId: "workspace-1",
-          workingDir: "/tmp/workspace-1",
-          businessObjectRefMetadata: {
+          preview: "Runtime Session",
+          modelProvider: "claude-sonnet-4-20250514",
+          metadata: {
+            messagesCount: 3,
+            workspaceId: "workspace-1",
+            workingDir: "/tmp/workspace-1",
+            executionStrategy: "react",
             harness: {
               plugin_history_restore: {
                 session_id: "session-runtime-1",
@@ -569,8 +544,11 @@ describe("Agent API 治理护栏", () => {
               },
             },
           },
-        },
+          cwd: "/tmp/workspace-1",
+        }),
       ],
+      nextCursor: null,
+      backwardsCursor: null,
     });
 
     await expect(listAgentRuntimeSessions()).resolves.toEqual([
@@ -581,11 +559,16 @@ describe("Agent API 治理护栏", () => {
         model: "claude-sonnet-4-20250514",
         created_at: 1710000000000,
         updated_at: 1710000123000,
+        archived_at: null,
         messages_count: 3,
         workspace_id: "workspace-1",
         working_dir: "/tmp/workspace-1",
         execution_strategy: "react",
         session_business_object_ref_metadata: {
+          messagesCount: 3,
+          workspaceId: "workspace-1",
+          workingDir: "/tmp/workspace-1",
+          executionStrategy: "react",
           harness: {
             plugin_history_restore: {
               session_id: "session-runtime-1",
@@ -593,24 +576,35 @@ describe("Agent API 治理护栏", () => {
             },
           },
         },
+        thread_status: "idle",
+        queued_turn_count: 0,
       },
     ]);
-    expectAppServerRequest(1, "thread/list", {});
+    expectAppServerRequest(1, "thread/list", {
+      archived: false,
+      limit: 100,
+    });
   });
 
   it("listAgentRuntimeSessions 应支持请求包含归档会话", async () => {
     mockAppServerResponse({
-      sessions: [
-        {
+      data: [],
+      nextCursor: null,
+      backwardsCursor: null,
+    });
+    mockAppServerResponse({
+      data: [
+        canonicalThread({
+          id: "thread-runtime-archived",
           sessionId: "session-runtime-archived",
-          title: "Archived Runtime Session",
-          createdAt: "2024-03-09T16:00:00.000Z",
-          updatedAt: "2024-03-09T16:02:03.000Z",
-          archivedAt: "2024-03-09T16:05:00.000Z",
-          model: "gpt-5.4",
-          messagesCount: 0,
-        },
+          preview: "Archived Runtime Session",
+          modelProvider: "gpt-5.4",
+          updatedAt: 1710000300,
+          archived: true,
+        }),
       ],
+      nextCursor: null,
+      backwardsCursor: null,
     });
 
     await expect(
@@ -618,35 +612,44 @@ describe("Agent API 治理护栏", () => {
     ).resolves.toEqual([
       {
         id: "session-runtime-archived",
-        thread_id: "session-runtime-archived",
+        thread_id: "thread-runtime-archived",
         name: "Archived Runtime Session",
         model: "gpt-5.4",
         created_at: 1710000000000,
-        updated_at: 1710000123000,
+        updated_at: 1710000300000,
         archived_at: 1710000300000,
         messages_count: 0,
+        working_dir: "/tmp/workspace",
+        thread_status: "idle",
+        queued_turn_count: 0,
       },
     ]);
 
     expectAppServerRequest(1, "thread/list", {
-      includeArchived: true,
+      archived: false,
+      limit: 100,
+    });
+    expectAppServerRequest(2, "thread/list", {
+      archived: true,
+      limit: 100,
     });
   });
 
   it("listAgentRuntimeSessions 应支持工作区限流与仅归档过滤", async () => {
     mockAppServerResponse({
-      sessions: [
-        {
+      data: [
+        canonicalThread({
+          id: "thread-runtime-archived",
           sessionId: "session-runtime-archived",
-          title: "Archived Runtime Session",
-          createdAt: "2024-03-09T16:00:00.000Z",
-          updatedAt: "2024-03-09T16:02:03.000Z",
-          archivedAt: "2024-03-09T16:05:00.000Z",
-          workspaceId: "workspace-1",
-          model: "gpt-5.4",
-          messagesCount: 0,
-        },
+          preview: "Archived Runtime Session",
+          modelProvider: "gpt-5.4",
+          updatedAt: 1710000300,
+          archived: true,
+          metadata: { workspaceId: "workspace-1" },
+        }),
       ],
+      nextCursor: null,
+      backwardsCursor: null,
     });
 
     await expect(
@@ -658,187 +661,141 @@ describe("Agent API 治理护栏", () => {
     ).resolves.toEqual([
       {
         id: "session-runtime-archived",
-        thread_id: "session-runtime-archived",
+        thread_id: "thread-runtime-archived",
         name: "Archived Runtime Session",
         model: "gpt-5.4",
         created_at: 1710000000000,
-        updated_at: 1710000123000,
+        updated_at: 1710000300000,
         archived_at: 1710000300000,
         workspace_id: "workspace-1",
+        working_dir: "/tmp/workspace",
         messages_count: 0,
+        session_business_object_ref_metadata: {
+          workspaceId: "workspace-1",
+        },
+        thread_status: "idle",
+        queued_turn_count: 0,
       },
     ]);
 
     expectAppServerRequest(1, "thread/list", {
-      archivedOnly: true,
-      workspaceId: "workspace-1",
+      archived: true,
       limit: 12,
     });
   });
 
   it("getAgentRuntimeSession 应返回现役 runtime 详情并归一 queued_turns", async () => {
     mockAppServerResponse({
-      session: {
+      thread: canonicalThread({
+        id: "thread-runtime-2",
         sessionId: "session-runtime-2",
-        threadId: "thread-runtime-2",
-        appId: "desktop",
-        workspaceId: "workspace-2",
-        status: "running",
-        createdAt: "2026-06-06T00:00:00.000Z",
-        updatedAt: "2026-06-06T00:00:02.000Z",
-      },
-      turns: [],
-      detail: {
-        id: "session-runtime-2",
-        name: "Runtime Detail",
-        model: "gpt-5.4",
-        created_at: 1710001000,
-        updated_at: 1710002000,
-        workspace_id: "workspace-2",
-        working_dir: "/tmp/workspace-2",
-        execution_strategy: "react",
-        queued_turns: [
-          {
-            queued_turn_id: "queued-1",
-            message_text: "排队中的任务",
-            message_preview: "排队中的任务",
-            created_at: 1710001500,
-            image_count: 0,
-            position: 2,
-          },
-        ],
-        thread_read: {
-          thread_id: "thread-runtime-2",
-          status: "running",
-          queued_turns: [
-            {
-              queued_turn_id: "queued-2",
-              message_text: "线程读模型中的排队任务",
-              message_preview: "线程读模型中的排队任务",
-              created_at: 1710001510,
-              image_count: 0,
-              position: 1,
-            },
-          ],
+        preview: "Runtime Detail",
+        modelProvider: "gpt-5.4",
+        cwd: "/tmp/workspace-2",
+        createdAt: 1710001000,
+        updatedAt: 1710002000,
+        status: { type: "active", activeFlags: [] },
+        metadata: {
+          workspaceId: "workspace-2",
+          workingDir: "/tmp/workspace-2",
+          executionStrategy: "react",
         },
-        messages: [
+        turns: [
           {
-            role: "user",
-            content: [{ type: "text", text: "hello" }],
-            timestamp: 1710001000,
-          },
-          {
-            role: "assistant",
-            content: [{ type: "text", text: "world" }],
-            timestamp: 1710002000,
-          },
-        ],
-        items: [
-          {
-            id: "turn-summary-1",
-            thread_id: "thread-runtime-2",
-            turn_id: "turn-runtime-2",
-            sequence: 1,
+            id: "turn-runtime-2",
             status: "completed",
-            started_at: "2026-03-29T10:00:00Z",
-            completed_at: "2026-03-29T10:00:02Z",
-            updated_at: "2026-03-29T10:00:02Z",
-            type: "turn_summary",
-            text: "已决定：直接回答优先\n当前请求无需默认升级为搜索或任务。",
+            startedAt: 1710001000,
+            completedAt: 1710002000,
+            items: [
+              {
+                id: "item-user-2",
+                type: "userMessage",
+                content: [{ type: "text", text: "hello" }],
+              },
+              {
+                id: "item-agent-2",
+                type: "agentMessage",
+                text: "world",
+                phase: "final_answer",
+              },
+            ],
+          },
+          {
+            id: "queued-2",
+            status: "inProgress",
+            startedAt: 1710001510,
+            queue: { state: "queued", position: 1 },
+            items: [
+              {
+                id: "item-queued-user-2",
+                type: "userMessage",
+                content: [
+                  {
+                    type: "text",
+                    text: "线程读模型中的排队任务",
+                  },
+                ],
+              },
+            ],
           },
         ],
-      },
+      }),
     });
 
-    await expect(getAgentRuntimeSession("session-runtime-2")).resolves.toEqual({
+    await expect(
+      getAgentRuntimeSession("session-runtime-2"),
+    ).resolves.toMatchObject({
       id: "session-runtime-2",
       thread_id: "thread-runtime-2",
       name: "Runtime Detail",
       model: "gpt-5.4",
-      created_at: 1710001000,
-      updated_at: 1710002000,
+      created_at: 1710001000000,
+      updated_at: 1710002000000,
       workspace_id: "workspace-2",
       working_dir: "/tmp/workspace-2",
       execution_strategy: "react",
       queued_turns: [
-        {
-          queued_turn_id: "queued-1",
-          message_text: "排队中的任务",
-          message_preview: "排队中的任务",
-          created_at: 1710001500,
-          image_count: 0,
-          position: 2,
-        },
+        expect.objectContaining({
+          queued_turn_id: "queued-2",
+          message_text: "线程读模型中的排队任务",
+          position: 1,
+        }),
       ],
       thread_read: {
         thread_id: "thread-runtime-2",
         status: "running",
         profile_status: "running",
-        active_turn_id: undefined,
-        turns: [],
-        pending_requests: [],
-        incidents: [],
-        queued_turns: [
-          {
-            queued_turn_id: "queued-2",
-            message_text: "线程读模型中的排队任务",
-            message_preview: "线程读模型中的排队任务",
-            created_at: 1710001510,
-            image_count: 0,
-            position: 1,
-          },
-        ],
-        updated_at: "2026-06-06T00:00:02.000Z",
       },
       messages: [
         {
           role: "user",
           content: [{ type: "text", text: "hello" }],
-          timestamp: 1710001000,
         },
         {
           role: "assistant",
           content: [{ type: "text", text: "world" }],
-          timestamp: 1710002000,
         },
       ],
-      items: [
-        {
-          id: "turn-summary-1",
-          thread_id: "thread-runtime-2",
-          turn_id: "turn-runtime-2",
-          sequence: 1,
+      turns: [
+        expect.objectContaining({
+          id: "turn-runtime-2",
           status: "completed",
-          started_at: "2026-03-29T10:00:00Z",
-          completed_at: "2026-03-29T10:00:02Z",
-          updated_at: "2026-03-29T10:00:02Z",
-          type: "turn_summary",
-          text: "直接回答优先\n当前请求无需默认升级为搜索或任务。",
-        },
+        }),
       ],
-      todo_items: [],
-      turns: [],
     });
     expectAppServerRequest(1, APP_SERVER_METHOD_THREAD_READ, {
-      sessionId: "session-runtime-2",
+      threadId: "session-runtime-2",
+      includeTurns: false,
     });
   });
 
-  it("getAgentRuntimeSession 应支持透传 resume hooks 标记", async () => {
+  it("getAgentRuntimeSession 不应把 renderer resume hooks 标记泄漏到 thread/read", async () => {
     mockAppServerResponse({
-      session: {
+      thread: canonicalThread({
+        id: "thread-runtime-resume",
         sessionId: "session-runtime-resume",
-        threadId: "thread-runtime-resume",
-        appId: "desktop",
-        status: "idle",
-        createdAt: "2026-06-06T00:00:00.000Z",
-        updatedAt: "2026-06-06T00:00:00.000Z",
-      },
-      turns: [],
-      detail: {
-        id: "session-runtime-resume",
-        messages: [],
-      },
+        turns: [{ id: "turn-resume", status: "completed", items: [] }],
+      }),
     });
 
     await expect(
@@ -851,25 +808,18 @@ describe("Agent API 治理护栏", () => {
     });
 
     expectAppServerRequest(1, APP_SERVER_METHOD_THREAD_READ, {
-      sessionId: "session-runtime-resume",
+      threadId: "session-runtime-resume",
+      includeTurns: false,
     });
   });
 
-  it("getAgentRuntimeSession 应支持透传历史 tail 限制", async () => {
+  it("getAgentRuntimeSession 不应把 renderer history tail 限制泄漏到 thread/read", async () => {
     mockAppServerResponse({
-      session: {
+      thread: canonicalThread({
+        id: "thread-runtime-tail",
         sessionId: "session-runtime-tail",
-        threadId: "thread-runtime-tail",
-        appId: "desktop",
-        status: "idle",
-        createdAt: "2026-06-06T00:00:00.000Z",
-        updatedAt: "2026-06-06T00:00:00.000Z",
-      },
-      turns: [],
-      detail: {
-        id: "session-runtime-tail",
-        messages: [],
-      },
+        turns: [{ id: "turn-tail", status: "completed", items: [] }],
+      }),
     });
 
     await expect(
@@ -882,13 +832,13 @@ describe("Agent API 治理护栏", () => {
     });
 
     expectAppServerRequest(1, APP_SERVER_METHOD_THREAD_READ, {
-      sessionId: "session-runtime-tail",
-      historyLimit: 120,
+      threadId: "session-runtime-tail",
+      includeTurns: false,
     });
   });
 
   it("getAgentRuntimeSession 遇到 transient DevBridge 读失败时只输出 warn 调试日志", async () => {
-    mockSafeInvoke.mockRejectedValueOnce(
+    mockSafeInvoke.mockRejectedValue(
       new Error(
         '[DevBridge] 浏览器模式无法连接后端桥接，命令 "app_server_handle_json_lines" 执行失败。原始错误: Failed to fetch (timeout after 20000ms)',
       ),

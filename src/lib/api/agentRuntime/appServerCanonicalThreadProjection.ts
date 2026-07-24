@@ -230,6 +230,7 @@ export function readCanonicalThreadDetail(
         status: canonicalProfileStatus(turn.status),
         native_status: turn.status,
       })),
+      queued_turns: queuedTurns,
       session_business_object_ref_metadata: metadata,
       article_workspace: articleWorkspace,
       articleWorkspace,

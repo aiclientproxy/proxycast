@@ -1,6 +1,7 @@
 //! JSON-RPC method dispatch for the App Server processor.
 
 mod v2_ingress;
+use super::thread_resume_context::request_id_for_thread_resume;
 
 use super::{
     event_notifications, v2_notifications::V2NotificationProjector, ConnectionRequestId,
@@ -59,7 +60,7 @@ impl RequestProcessor {
         let method = method.as_str();
         let is_transport_request = connection_request_id.is_some();
         let thread_resume_request_id =
-            thread_resume_connection_request_id(method, connection_request_id.as_ref());
+            request_id_for_thread_resume(method, connection_request_id.as_ref());
         if self.is_request_canceled(&id) {
             self.clear_request_cancel_state(&id);
             return Ok(vec![JsonRpcMessage::Error(JsonRpcErrorResponse {
@@ -764,52 +765,5 @@ impl RequestProcessor {
                 error,
             })]),
         }
-    }
-}
-
-fn thread_resume_connection_request_id(
-    method: &str,
-    connection_request_id: Option<&ConnectionRequestId>,
-) -> Option<ConnectionRequestId> {
-    (method == METHOD_THREAD_RESUME)
-        .then(|| connection_request_id.cloned())
-        .flatten()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use app_server_protocol::RequestId;
-    use app_server_transport::ConnectionId;
-
-    #[test]
-    fn direct_request_has_no_thread_resume_connection_context() {
-        assert_eq!(
-            thread_resume_connection_request_id(METHOD_THREAD_RESUME, None),
-            None
-        );
-    }
-
-    #[test]
-    fn transport_thread_resume_keeps_exact_connection_and_request_ids() {
-        let context = ConnectionRequestId {
-            connection_id: ConnectionId(42),
-            request_id: RequestId::String("resume-7".to_string()),
-        };
-
-        assert_eq!(
-            thread_resume_connection_request_id(METHOD_THREAD_RESUME, Some(&context)),
-            Some(context)
-        );
-        assert_eq!(
-            thread_resume_connection_request_id(
-                METHOD_THREAD_READ,
-                Some(&ConnectionRequestId {
-                    connection_id: ConnectionId(42),
-                    request_id: RequestId::String("read-8".to_string()),
-                }),
-            ),
-            None
-        );
     }
 }

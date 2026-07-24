@@ -98,44 +98,53 @@ export function useAgentSessionTokenUsage(params: {
   usageByRuntimeTurnIdRef: MutableRefObject<Map<string, AssistantUsage>>;
   setMessages: Dispatch<SetStateAction<Message[]>>;
 }): void {
+  const {
+    messagesRef,
+    sessionId,
+    sessionIdRef,
+    setMessages,
+    threadReadRef,
+    threadTurnsRef,
+    usageByRuntimeTurnIdRef,
+  } = params;
   useEffect(() => {
-    const activeSessionId = params.sessionId?.trim();
+    const activeSessionId = sessionId?.trim();
     if (!activeSessionId) {
-      params.usageByRuntimeTurnIdRef.current.clear();
+      usageByRuntimeTurnIdRef.current.clear();
       return;
     }
 
-    params.usageByRuntimeTurnIdRef.current.clear();
+    usageByRuntimeTurnIdRef.current.clear();
     return subscribeAppServerNotifications({
       getDrainOptions: () => ({
         activeIntervalMs: APP_SERVER_EVENT_DRAIN_ACTIVE_INTERVAL_MS,
         includeRecent: shouldReplayRecentAssistantTurnUsage(
-          params.messagesRef.current,
+          messagesRef.current,
         ),
         intervalMs: APP_SERVER_EVENT_DRAIN_INTERVAL_MS,
         limit: APP_SERVER_EVENT_DRAIN_LIMIT,
       }),
       onNotifications: (notifications) => {
-        if (params.sessionIdRef.current !== activeSessionId) {
+        if (sessionIdRef.current !== activeSessionId) {
           return;
         }
 
         for (const notification of notifications) {
           const projected = readScopedAssistantTurnUsage({
             notification,
-            currentThreadId: params.threadReadRef.current?.thread_id,
-            messages: params.messagesRef.current,
-            threadTurns: params.threadTurnsRef.current,
+            currentThreadId: threadReadRef.current?.thread_id,
+            messages: messagesRef.current,
+            threadTurns: threadTurnsRef.current,
           });
           if (!projected) {
             continue;
           }
           rememberBoundedAssistantTurnUsage(
-            params.usageByRuntimeTurnIdRef.current,
+            usageByRuntimeTurnIdRef.current,
             projected.runtimeTurnId,
             projected.usage,
           );
-          params.setMessages((previous) =>
+          setMessages((previous) =>
             applyAssistantTurnUsage(
               previous,
               projected.runtimeTurnId,
@@ -146,12 +155,12 @@ export function useAgentSessionTokenUsage(params: {
       },
     });
   }, [
-    params.messagesRef,
-    params.sessionId,
-    params.sessionIdRef,
-    params.setMessages,
-    params.threadReadRef,
-    params.threadTurnsRef,
-    params.usageByRuntimeTurnIdRef,
+    messagesRef,
+    sessionId,
+    sessionIdRef,
+    setMessages,
+    threadReadRef,
+    threadTurnsRef,
+    usageByRuntimeTurnIdRef,
   ]);
 }

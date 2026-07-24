@@ -11,7 +11,7 @@ import type {
   ActionRequired,
   ApprovalDecision,
   ConfirmResponse,
-} from "@/components/agent/chat/types";
+} from "./agentActionTypes";
 import {
   getDefaultAppServerServerRequestDispatcher,
   type AppServerServerRequestDispatcher,

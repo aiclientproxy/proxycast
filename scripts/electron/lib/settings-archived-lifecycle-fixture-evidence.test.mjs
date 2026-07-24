@@ -104,11 +104,7 @@ describe("Settings archived lifecycle Gate B evidence", () => {
       summarizeSettingsArchivedLifecycleTrace(rawEvidence()),
     ).toMatchObject({
       appServerIpcHitCount: 3,
-      methods: [
-        "thread/list",
-        "thread/read",
-        "agentSession/update",
-      ],
+      methods: ["agentSession/update", "thread/list", "thread/read"],
       missingMethods: [],
       invokeErrorCount: 0,
       legacyCommands: [],

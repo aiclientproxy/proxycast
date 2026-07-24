@@ -7,7 +7,7 @@ import type {
   ActionRequired,
   ConfirmResponse,
   Question,
-} from "@/components/agent/chat/types";
+} from "./agentActionTypes";
 import {
   getDefaultAppServerServerRequestDispatcher,
   type AppServerServerRequestDispatcher,

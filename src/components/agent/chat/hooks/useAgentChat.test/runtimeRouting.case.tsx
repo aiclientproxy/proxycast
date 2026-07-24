@@ -41,24 +41,23 @@ describe("useAgentChat runtime routing", () => {
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledWith(
         expect.objectContaining({
-          input: expect.objectContaining({
-            text: "帮我看看今天的黄金价格",
-          }),
-          runtimeOptions: expect.objectContaining({
-            runtimeRequest: expect.any(Object),
-          }),
+          input: [
+            {
+              type: "text",
+              text: "帮我看看今天的黄金价格",
+            },
+          ],
         }),
       );
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-          ?.runtimeRequest?.searchMode,
-      ).toBeUndefined();
+      expect(mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]).not.toHaveProperty(
+        "searchMode",
+      );
     } finally {
       harness.unmount();
     }
   });
 
-  it("runtime_status 与 thinking_delta 应在 turn_completed 前持续保留", async () => {
+  it("runtime_status 与 reasoning_summary_delta 应在 turn_completed 前持续保留", async () => {
     const workspaceId = "ws-runtime-status-stream";
     seedSession(workspaceId, "session-runtime-status-stream");
     const harness = mountHook(workspaceId);
@@ -105,11 +104,17 @@ describe("useAgentChat runtime routing", () => {
 
       act(() => {
         stream.emit({
-          type: "thinking_delta",
+          type: "reasoning_summary_delta",
           text: "先判断任务是直接回答还是需要联网。",
+          delta: "先判断任务是直接回答还是需要联网。",
+          item_id: "reasoning-runtime-status-stream",
+          summary_index: 0,
+          sequence: 1,
         });
         stream.emit({
           type: "text_delta",
+          itemId: "agent-message-final-runtime-status-stream",
+          phase: "final_answer",
           text: "我会先分析你的诉求。",
         });
       });
@@ -130,7 +135,9 @@ describe("useAgentChat runtime routing", () => {
         ),
       ).toBe(true);
       expect(
-        getAgentStreamTextOverlay(assistantMessage?.id)?.content,
+        `${assistantMessage?.content ?? ""}${
+          getAgentStreamTextOverlay(assistantMessage?.id)?.content ?? ""
+        }`,
       ).toContain("我会先分析你的诉求。");
 
       act(() => {
@@ -318,7 +325,7 @@ describe("useAgentChat runtime routing", () => {
     seedSession(workspaceId, sessionId);
     const harness = mountHook(workspaceId);
     const stream = captureTurnStream();
-    mockGetAgentRuntimeSession.mockResolvedValueOnce({
+    mockGetAgentRuntimeSession.mockResolvedValue({
       id: sessionId,
       messages: [
         {
@@ -416,9 +423,7 @@ describe("useAgentChat runtime routing", () => {
     const workspaceId = "ws-final-done-refresh";
     const sessionId = "session-final-done-refresh";
     seedSession(workspaceId, sessionId);
-    const harness = mountHook(workspaceId);
-    const stream = captureTurnStream();
-    mockGetAgentRuntimeSession.mockResolvedValueOnce({
+    mockGetAgentRuntimeSession.mockResolvedValue({
       id: sessionId,
       messages: [
         {
@@ -474,6 +479,8 @@ describe("useAgentChat runtime routing", () => {
         },
       ],
     });
+    const harness = mountHook(workspaceId);
+    const stream = captureTurnStream();
 
     try {
       await flushEffects();

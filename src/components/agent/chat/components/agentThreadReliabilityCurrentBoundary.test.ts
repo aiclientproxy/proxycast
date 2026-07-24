@@ -54,11 +54,6 @@ describe("agent thread reliability current owner boundary", () => {
     ).toContain('from "@/lib/api/agentRuntime/sessionTypes"');
     expect(
       readSource(
-        "src/components/agent/chat/components/AgentThreadReliabilityPanel.tsx",
-      ),
-    ).toContain('from "@/lib/api/queuedTurn"');
-    expect(
-      readSource(
         "src/components/agent/chat/components/AgentThreadFileCheckpointDialog.tsx",
       ),
     ).toContain('from "@/lib/api/agentRuntime/threadClient"');

@@ -1,6 +1,6 @@
 # Lime v1.111.0 发布执行计划
 
-状态：validated-awaiting-git-confirmation
+状态：post-release-fix-validated-awaiting-commit
 日期：2026-07-24
 目标版本：`1.111.0`
 目标 tag：`v1.111.0`
@@ -12,7 +12,7 @@
 ## 当前阶段与下一刀
 
 - 当前阶段：release candidate 已完成版本事实源、双语 release notes、current contract 迁移、i18n dead key 清理与全部发布前只读门禁。
-- 下一刀：复核最终候选集，取得 Git 写操作确认后创建 release commit/tag 并推送 `main` 与 `v1.111.0`。
+- 下一刀：复核补丁候选集，取得 Git 写操作确认后创建修复提交并推送 `main`；不重打、不覆盖已发布的 `v1.111.0`。
 
 ## Release Candidate
 
@@ -71,4 +71,15 @@
 - `dead / deleted / forbidden-to-restore`：`agentSession/runtimeEvents/append`、legacy plugin runtime gateway、旧 prompt builder、旧 tool permission/shell security 实现与正向测试夹具，以及本次清理的 38 个未引用 i18n key。
 - 平台限制：macOS 真实 Electron Gate B 已通过；未执行 Windows 真机与正式 packaged artifact 验证，不将其写成通过。
 
-当前 release candidate 完成度：`95%`；版本、候选、验证与架构确认完成，仅剩危险操作确认后的 Git commit/tag/push 与远端复核。
+当前 release candidate 完成度：`100%`；提交 `94b784718`、`main` 与 `v1.111.0` 已推送并完成远端一致性复核。
+
+## 发布后故障修复（2026-07-25）
+
+- GitHub Actions 失败证据：Release attempt 1 的 macOS x64 sherpa 下载、Windows sccache 下载与 macOS arm64 Electron 下载均返回 GitHub `504`；Docs 因工作流与根 `packageManager` 重复声明 pnpm 版本失败；Quality 因 13 个 lint error 与 2 个 warning 失败。
+- Release 处理：已重跑失败作业，attempt 2 越过原始 sherpa 与 sccache 失败点；同时把 Electron Forge `504 Gateway Time-out` 纳入现有 macOS 瞬时错误重试守卫。
+- 首轮修复写集：`.github/workflows/{release,deploy-docs}.yml`、release workflow guard、CI 报出的 lint 文件，以及共享 action 类型 owner `src/lib/api/agentActionTypes.ts`。
+- 本轮新增修复写集：`src/components/agent/chat/workspace/workspaceSendHelpers.test.ts` 将 plan mode 的旧 Renderer goal metadata 正向断言改为负向回流守卫；`src/components/agent/chat/utils/executionStrategyCurrentBoundary.test.ts` 删除已删除 queue controller 和已不消费 execution runtime 类型的旧清单项。
+- 版本与远端事实：`v1.111.0` 已发布，现有 release commit `94b784718`、`main` 与 tag 不重写；本轮只创建 post-release fix commit 推送 `main`。
+- 验证结果：定向 workspace/helper 与 boundary 测试通过；`npm test -- --resume` 完成 `112/112`；`npm run lint`、`npm run typecheck`、`npm run verify:app-version`、`npm run test:contracts`、`npm run governance:legacy-report`、`npm run governance:scripts`、`npm run governance:electron-release-workflow`、`git diff --check`、`cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server`、`npm run smoke:agent-runtime-current-fixture` 与 `npm run verify:gui-smoke` 均通过。
+- `npm run verify:local`：未通过；smart 全量从第 1 批执行至第 4 批时，既有 `src/components/agent/chat/index.projectRestore.test.tsx` 出现漂移的异步超时 / workspace 断言失败，单文件复现同样会在不同测试间漂移。本轮未修改该无关业务/测试基础设施，也未将其写成通过。
+- 退出条件：上述定向与跨层门禁通过，`verify:local` 的基线异步失败已记录；剩余动作仅为显式暂存候选、创建修复提交、推送 `main` 与远端复核。

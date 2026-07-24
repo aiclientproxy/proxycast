@@ -336,7 +336,8 @@ impl RuntimeCore {
     ) -> Result<Vec<AgentMailboxMessage>, RuntimeCoreError> {
         self.ensure_current_session_hydrated(session_id).await?;
         let (session, turns) = self.session_snapshot(session_id)?;
-        self.recover_direct_child_terminal_activity(&session).await?;
+        self.recover_direct_child_terminal_activity(&session)
+            .await?;
         let turn = turns
             .into_iter()
             .find(|turn| turn.turn_id == turn_id)

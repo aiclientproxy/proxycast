@@ -1,10 +1,5 @@
 import { act } from "react";
-import {
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   flushEffects,
   mockGetAgentRuntimeSession,
@@ -39,7 +34,10 @@ describe("useAgentChat 偏好持久化 - session restore", () => {
       await flushEffects();
       await flushEffects();
 
-      expect(mockGetAgentRuntimeSession).toHaveBeenCalledWith(sessionId, expect.objectContaining({ historyLimit: 40 }));
+      expect(mockGetAgentRuntimeSession).toHaveBeenCalledWith(
+        sessionId,
+        expect.objectContaining({ historyLimit: 40 }),
+      );
       expect(harness.getValue().sessionId).toBeNull();
       expect(
         sessionStorage.getItem(`agent_curr_sessionId_${workspaceId}`),
@@ -171,8 +169,14 @@ describe("useAgentChat 偏好持久化 - session restore", () => {
     const threadId = "thread-global-running-in-project";
     const now = Math.floor(Date.now() / 1000);
 
-    sessionStorage.setItem("agent_curr_sessionId_global", JSON.stringify(sessionId));
-    localStorage.setItem("agent_last_sessionId_global", JSON.stringify(sessionId));
+    sessionStorage.setItem(
+      "agent_curr_sessionId_global",
+      JSON.stringify(sessionId),
+    );
+    localStorage.setItem(
+      "agent_last_sessionId_global",
+      JSON.stringify(sessionId),
+    );
     mockListAgentRuntimeSessions.mockResolvedValue([
       {
         id: "session-other-project",
@@ -243,8 +247,7 @@ describe("useAgentChat 偏好持久化 - session restore", () => {
         expect.any(Function),
       );
       expect(mockResumeAgentRuntimeThread).toHaveBeenCalledWith({
-        session_id: sessionId,
-        turn_id: turnId,
+        threadId,
       });
     } finally {
       harness.unmount();

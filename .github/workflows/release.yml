@@ -307,7 +307,7 @@ jobs:
           }
           is_transient_macos_package_error() {
             [ "${{ matrix.host_platform }}" = "darwin" ] || return 1
-            grep -Eq "NSURLErrorDomain|The Internet connection appears to be offline|No network route|HTTPError\\(statusCode: nil|_NSURLErrorNWPathKey=unsatisfied|Response code 502 \\(Bad Gateway\\)" "$FORGE_PACKAGE_LOG"
+            grep -Eq "NSURLErrorDomain|The Internet connection appears to be offline|No network route|HTTPError\\(statusCode: nil|_NSURLErrorNWPathKey=unsatisfied|Response code 502 \\(Bad Gateway\\)|Response code 504 \\(Gateway Time-out\\)" "$FORGE_PACKAGE_LOG"
           }
           package_attempt=1
           run_forge_package

@@ -1,11 +1,8 @@
 import { act } from "react";
-import {
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   flushEffects,
+  getSubmittedTurnStart,
   mockGetAgentRuntimeSession,
   mockScheduleMinimumDelayIdleTask,
   mockSubmitAgentRuntimeTurn,
@@ -65,14 +62,8 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.providerPreference,
-      ).toBeUndefined();
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.modelPreference,
-      ).toBeUndefined();
+      expect(getSubmittedTurnStart()).not.toHaveProperty("provider");
+      expect(getSubmittedTurnStart()).not.toHaveProperty("model");
     } finally {
       harness.unmount();
     }
@@ -137,14 +128,8 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.providerPreference,
-      ).toBeUndefined();
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.modelPreference,
-      ).toBeUndefined();
+      expect(getSubmittedTurnStart()).not.toHaveProperty("provider");
+      expect(getSubmittedTurnStart()).not.toHaveProperty("model");
     } finally {
       harness.unmount();
     }
@@ -218,14 +203,8 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.providerPreference,
-      ).toBeUndefined();
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.modelPreference,
-      ).toBe(nextModel);
+      expect(getSubmittedTurnStart()).not.toHaveProperty("provider");
+      expect(getSubmittedTurnStart()?.model).toBe(nextModel);
     } finally {
       (resolveProviderSync as (() => void) | null)?.();
       harness.unmount();
@@ -273,14 +252,8 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.providerPreference,
-      ).toBeUndefined();
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.modelPreference,
-      ).toBeUndefined();
+      expect(getSubmittedTurnStart()).not.toHaveProperty("provider");
+      expect(getSubmittedTurnStart()).not.toHaveProperty("model");
     } finally {
       harness.unmount();
     }
@@ -335,14 +308,8 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.providerPreference,
-      ).toBe(selectedProvider);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.modelPreference,
-      ).toBe(selectedModel);
+      expect(harness.getValue().providerType).toBe(selectedProvider);
+      expect(getSubmittedTurnStart()?.model).toBe(selectedModel);
     } finally {
       harness.unmount();
     }
@@ -402,14 +369,8 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.providerPreference,
-      ).toBe(selectedProvider);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.modelPreference,
-      ).toBe(selectedModel);
+      expect(harness.getValue().providerType).toBe(selectedProvider);
+      expect(getSubmittedTurnStart()?.model).toBe(selectedModel);
     } finally {
       harness.unmount();
     }

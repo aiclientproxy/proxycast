@@ -19,7 +19,8 @@ const CODEX_HISTORY_SOURCE =
 const CODEX_NORMALIZE_SOURCE =
   env.CODEX_NORMALIZE_SOURCE ?? DEFAULT_CODEX_NORMALIZE_SOURCE;
 
-const CODEX_INPUT_MODALITY_VALUES = ["text", "image"];
+const CODEX_INPUT_MODALITY_VALUES = ["text", "image", "audio"];
+const CODEX_DEFAULT_INPUT_MODALITY_VALUES = ["text", "image"];
 const CODEX_MODEL_INFO_INPUT_FIELDS = ["input_modalities"];
 
 function readRepoFile(path: string): string {
@@ -83,7 +84,7 @@ describe("Codex model input modality policy origin", () => {
 
     expect(
       extractConstStringArray(limeSource, "CODEX_DEFAULT_INPUT_MODALITIES"),
-    ).toEqual(CODEX_INPUT_MODALITY_VALUES);
+    ).toEqual(CODEX_DEFAULT_INPUT_MODALITY_VALUES);
 
     const codexSource = readIfExists(CODEX_OPENAI_MODELS_SOURCE);
     if (!codexSource) {
@@ -131,9 +132,7 @@ describe("Codex model input modality policy origin", () => {
     expect(historySource).toContain(
       "for_prompt(mut self, input_modalities: &[InputModality])",
     );
-    expect(historySource).toContain(
-      "self.normalize_history(input_modalities)",
-    );
+    expect(historySource).toContain("self.normalize_history(input_modalities)");
     expect(normalizeSource).toMatch(
       /fn strip_images_when_unsupported\(\s*input_modalities:/u,
     );

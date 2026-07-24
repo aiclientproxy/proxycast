@@ -4,6 +4,7 @@ import type {
   AgentToolCallState as ToolCallState,
   AgentTokenUsage as TokenUsage,
 } from "@/lib/api/agentProtocol";
+import type { ActionRequired } from "@/lib/api/agentActionTypes";
 import type { Artifact, ArtifactStatus } from "@/lib/artifact/types";
 import type { AgentUiProjectionEvent } from "./projection/agentUiEventProjection";
 import type { InputCapabilitySendRoute } from "./skill-selection/inputCapabilitySelection";
@@ -13,6 +14,15 @@ export type {
   AgentThreadItemStatus,
   AgentThreadTurn,
 } from "@/lib/api/agentProtocol";
+export type {
+  ActionRequestGovernanceMeta,
+  ActionRequired,
+  ActionRequiredScope,
+  ApprovalDecision,
+  ConfirmResponse,
+  Question,
+  QuestionOption,
+} from "@/lib/api/agentActionTypes";
 
 export interface MessageImage {
   data: string;
@@ -371,101 +381,6 @@ export type PendingA2UISource =
       requestKey: string;
       messageId?: undefined;
     };
-
-// ============ 权限确认相关类型 ============
-
-export type ApprovalDecision =
-  | "allow_once"
-  | "allow_for_session"
-  | "decline"
-  | "cancel";
-
-export interface ActionRequiredScope {
-  sessionId?: string;
-  threadId?: string;
-  turnId?: string;
-}
-
-export interface ActionRequestGovernanceMeta {
-  strategy: "single_turn_single_question";
-  source: "runtime_action_required";
-  originalQuestionCount?: number;
-  originalFieldCount?: number;
-  originalSectionCount?: number;
-  retainedQuestionIndex?: number;
-  retainedFieldKey?: string;
-  retainedSectionIndex?: number;
-  deferredQuestionCount?: number;
-  deferredFieldCount?: number;
-}
-
-/** 权限确认请求类型 */
-export interface ActionRequired {
-  /** 请求 ID */
-  requestId: string;
-  /** 操作类型 */
-  actionType: "tool_confirmation" | "ask_user" | "elicitation";
-  /** 工具名称（tool_confirmation 类型） */
-  toolName?: string;
-  /** 工具参数（tool_confirmation 类型） */
-  arguments?: Record<string, unknown>;
-  /** 提示信息 */
-  prompt?: string;
-  /** 问题列表（ask_user 类型） */
-  questions?: Question[];
-  /** 请求的数据结构（elicitation 类型） */
-  requestedSchema?: any;
-  /** 运行时作用域（用于与 ask / elicitation 原始请求精确匹配） */
-  scope?: ActionRequiredScope;
-  /** 来源运行时事件名（用于提交确认后恢复当前执行流） */
-  eventName?: string;
-  /** 来源 assistant 消息 ID（用于将全局待确认队列收敛到当前轮） */
-  sourceMessageId?: string;
-  /** 前端交互状态（用于保留已提交的 ask/elicitation 面板） */
-  status?: "pending" | "queued" | "submitted";
-  /** 是否为前端根据 Ask 工具调用生成的临时请求（尚未拿到真实 requestId） */
-  isFallback?: boolean;
-  /** 已提交的响应文本（用于展示回显） */
-  submittedResponse?: string;
-  /** 已提交的原始用户数据 */
-  submittedUserData?: unknown;
-  /** 附加说明 */
-  detail?: string;
-  /** 后端声明可用的授权动作；未声明时前端只展示一次允许/拒绝 */
-  availableDecisions?: ApprovalDecision[];
-  /** 单轮澄清治理元数据 */
-  governance?: ActionRequestGovernanceMeta;
-}
-
-/** 问题定义（用于 ask_user 类型） */
-export interface Question {
-  question: string;
-  header?: string;
-  options?: QuestionOption[];
-  multiSelect?: boolean;
-}
-
-/** 问题选项 */
-export interface QuestionOption {
-  label: string;
-  description?: string;
-}
-
-/** 权限确认响应 */
-export interface ConfirmResponse {
-  /** 请求 ID */
-  requestId: string;
-  /** 非 approval 业务确认布尔；tool_confirmation 必须使用 decision */
-  confirmed?: boolean;
-  /** 授权决策语义 */
-  decision?: ApprovalDecision;
-  /** 响应内容（用户输入或选择的答案） */
-  response?: string;
-  /** 操作类型（用于前端分流） */
-  actionType?: ActionRequired["actionType"];
-  /** 原始用户数据（用于 elicitation） */
-  userData?: unknown;
-}
 
 export type ArtifactWriteSource =
   | "tool_start"

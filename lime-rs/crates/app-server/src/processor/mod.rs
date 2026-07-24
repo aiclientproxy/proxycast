@@ -30,6 +30,7 @@ mod soul;
 mod thread;
 mod thread_fork;
 mod thread_goal;
+mod thread_resume_context;
 mod turn;
 pub(crate) mod v2_notifications;
 mod voice;

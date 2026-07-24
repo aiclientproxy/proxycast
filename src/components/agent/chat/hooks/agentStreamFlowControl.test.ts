@@ -7,7 +7,6 @@ import {
   settleInterruptedMessageProcess,
   stopActiveAgentStream,
 } from "./agentStreamFlowControl";
-import { hasLocallyInterruptedAgentStreamBinding } from "./agentStreamResumeBinding";
 import {
   clearAllAgentStreamTextOverlays,
   getAgentStreamTextOverlay,

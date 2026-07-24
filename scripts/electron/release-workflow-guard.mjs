@@ -338,6 +338,7 @@ function assertBuildSteps(buildJob) {
     "HTTPError\\\\(statusCode: nil",
     "_NSURLErrorNWPathKey=unsatisfied",
     "Response code 502 \\\\(Bad Gateway\\\\)",
+    "Response code 504 \\\\(Gateway Time-out\\\\)",
     "retrying package attempt",
     "npx electron-forge make",
     "FORGE_MAKE_LOG",

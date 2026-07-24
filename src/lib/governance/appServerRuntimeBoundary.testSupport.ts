@@ -54,6 +54,7 @@ export const IMAGE_COMMAND_SPLIT_MODULES = [
 ];
 export const RUNTIME_CORE_MAIN = "lime-rs/crates/app-server/src/runtime.rs";
 export const RUNTIME_CORE_OWNER_MODULES = [
+  "lime-rs/crates/app-server/src/runtime/error.rs",
   "lime-rs/crates/app-server/src/runtime/context_compaction.rs",
   "lime-rs/crates/app-server/src/runtime/execution_request.rs",
   "lime-rs/crates/app-server/src/runtime/model_providers.rs",
@@ -114,6 +115,7 @@ export const PROCESSOR_TESTS_MAIN =
   "lime-rs/crates/app-server/src/processor/tests.rs";
 export const PROCESSOR_SPLIT_MODULES = [
   "lime-rs/crates/app-server/src/processor/dispatch.rs",
+  "lime-rs/crates/app-server/src/processor/thread_resume_context.rs",
   "lime-rs/crates/app-server/src/processor/tests/artifact.rs",
   "lime-rs/crates/app-server/src/processor/tests/capability.rs",
   "lime-rs/crates/app-server/src/processor/tests/evidence.rs",

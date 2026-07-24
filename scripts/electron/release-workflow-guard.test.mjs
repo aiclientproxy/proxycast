@@ -179,6 +179,25 @@ describe("Electron release workflow guard", () => {
     }
   });
 
+  it("rejects missing macOS 504 retry classification in Forge package step", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        "Response code 504 \\\\(Gateway Time-out\\\\)",
+        "Response code 500 \\\\(Internal Server Error\\\\)",
+      ),
+    );
+
+    try {
+      validateReleaseWorkflow({ workflowPath });
+      throw new Error("expected validateReleaseWorkflow to throw");
+    } catch (error) {
+      expect(String(error)).toContain(
+        "Electron Forge make step must include Response code 504 \\\\(Gateway Time-out\\\\)",
+      );
+    }
+  });
+
   it("rejects Forge make without the existing package output", () => {
     const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
     const workflowPath = tempWorkflowPath(

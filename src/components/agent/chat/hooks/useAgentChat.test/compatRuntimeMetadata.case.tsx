@@ -2,19 +2,11 @@ import { act } from "react";
 import { describe, expect, it } from "vitest";
 import {
   flushEffects,
+  getSubmittedTurnMetadata,
   mockGetAgentRuntimeSession,
   mockSubmitAgentRuntimeTurn,
   mountHook,
 } from "../useAgentChat.testUtils";
-
-const getSubmittedTurnMetadata = () =>
-  mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-    ?.metadata as
-    | {
-        agentUiPerformanceTrace?: unknown;
-        harness?: Record<string, unknown>;
-      }
-    | undefined;
 
 const expectHarnessMetadataRemoved = () => {
   const metadata = getSubmittedTurnMetadata();
@@ -207,8 +199,7 @@ describe("useAgentChat 兼容接口 - runtime metadata", () => {
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-            ?.runtimeRequest?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: { content_id?: string };
           } | null
         )?.harness?.content_id,
@@ -332,8 +323,7 @@ describe("useAgentChat 兼容接口 - runtime metadata", () => {
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-            ?.runtimeRequest?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: { theme?: string; session_mode?: string };
           } | null
         )?.harness,
@@ -459,8 +449,7 @@ describe("useAgentChat 兼容接口 - runtime metadata", () => {
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-            ?.runtimeRequest?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: { gate_key?: string; run_title?: string };
           } | null
         )?.harness,

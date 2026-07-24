@@ -196,7 +196,6 @@ describe("agentStreamErrorController", () => {
       }),
     ).toEqual({
       errorMessage: "provider failed",
-      queuedTurnIds: ["queued-1"],
       requestLogPayload: {
         eventType: "chat_request_error",
         status: "error",
@@ -215,7 +214,6 @@ describe("agentStreamErrorController", () => {
         errorMessage: "HTTP 429 rate limit",
       }),
     ).toMatchObject({
-      queuedTurnIds: [],
       toast: {
         level: "warning",
         message: "请求过于频繁，请稍后重试",

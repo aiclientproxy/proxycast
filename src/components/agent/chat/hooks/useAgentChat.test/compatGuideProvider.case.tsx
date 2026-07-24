@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createDeferred,
   flushEffects,
+  getSubmittedTurnStart,
   mockGetDefaultProvider,
   mockGetRuntimeProviderSelection,
   mockResolveClawWorkspaceProviderSelection,
@@ -26,7 +27,7 @@ describe("useAgentChat 兼容接口 - guide / provider", () => {
       expect(value.messages[0]?.role).toBe("assistant");
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]).toMatchObject({
-        input: { text: "" },
+        input: [{ type: "text", text: "" }],
       });
     } finally {
       harness.unmount();
@@ -48,7 +49,7 @@ describe("useAgentChat 兼容接口 - guide / provider", () => {
       expect(value.messages[0]?.role).toBe("assistant");
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]).toMatchObject({
-        input: { text: prompt },
+        input: [{ type: "text", text: prompt }],
       });
     } finally {
       harness.unmount();
@@ -73,14 +74,8 @@ describe("useAgentChat 兼容接口 - guide / provider", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-          ?.runtimeRequest?.providerPreference,
-      ).toBe(providerId);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-          ?.runtimeRequest?.modelPreference,
-      ).toBe(model);
+      expect(harness.getValue().providerType).toBe(providerId);
+      expect(getSubmittedTurnStart()?.model).toBe(model);
     } finally {
       harness.unmount();
     }
@@ -108,14 +103,8 @@ describe("useAgentChat 兼容接口 - guide / provider", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-          ?.runtimeRequest?.providerPreference,
-      ).toBe(selectedProvider);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-          ?.runtimeRequest?.modelPreference,
-      ).toBe(selectedModel);
+      expect(harness.getValue().providerType).toBe(selectedProvider);
+      expect(getSubmittedTurnStart()?.model).toBe(selectedModel);
     } finally {
       harness.unmount();
     }
@@ -165,14 +154,8 @@ describe("useAgentChat 兼容接口 - guide / provider", () => {
 
       expect(mockGetRuntimeProviderSelection).toHaveBeenCalledTimes(1);
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-          ?.runtimeRequest?.providerPreference,
-      ).toBe(selectedProvider);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-          ?.runtimeRequest?.modelPreference,
-      ).toBe(selectedModel);
+      expect(harness.getValue().providerType).toBe(selectedProvider);
+      expect(getSubmittedTurnStart()?.model).toBe(selectedModel);
 
       await act(async () => {
         runtimeSelection.resolve({
@@ -230,14 +213,8 @@ describe("useAgentChat 兼容接口 - guide / provider", () => {
 
       expect(mockGetRuntimeProviderSelection).toHaveBeenCalledTimes(1);
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-          ?.runtimeRequest?.providerPreference,
-      ).toBe(selectedProvider);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-          ?.runtimeRequest?.modelPreference,
-      ).toBe(selectedModel);
+      expect(harness.getValue().providerType).toBe(selectedProvider);
+      expect(getSubmittedTurnStart()?.model).toBe(selectedModel);
     } finally {
       harness.unmount();
     }
@@ -286,14 +263,8 @@ describe("useAgentChat 兼容接口 - guide / provider", () => {
         theme: "general",
       });
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-          ?.runtimeRequest?.providerPreference,
-      ).toBe(selectedProvider);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
-          ?.runtimeRequest?.modelPreference,
-      ).toBe(selectedModel);
+      expect(harness.getValue().providerType).toBe(selectedProvider);
+      expect(getSubmittedTurnStart()?.model).toBe(selectedModel);
 
       await act(async () => {
         scheduledTasks.forEach((task) => task());

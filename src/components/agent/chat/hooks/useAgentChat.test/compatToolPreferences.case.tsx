@@ -1,11 +1,9 @@
 import { act } from "react";
-import {
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   flushEffects,
+  getSubmittedTurnMetadata,
+  getSubmittedTurnStart,
   mockGetAgentRuntimeSession,
   mockSubmitAgentRuntimeTurn,
   mountHook,
@@ -52,14 +50,10 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.thinkingEnabled,
-      ).toBeUndefined();
+      expect(getSubmittedTurnStart()).not.toHaveProperty("thinkingEnabled");
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-            ?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: { preferences?: { thinking?: boolean } };
           } | null
         )?.harness?.preferences?.thinking,
@@ -115,14 +109,10 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.thinkingEnabled,
-      ).toBeUndefined();
+      expect(getSubmittedTurnStart()).not.toHaveProperty("thinkingEnabled");
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-            ?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: { preferences?: { thinking?: boolean } };
           } | null
         )?.harness?.preferences?.thinking,
@@ -179,10 +169,7 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.thinkingEnabled,
-      ).toBeUndefined();
+      expect(getSubmittedTurnStart()).not.toHaveProperty("thinkingEnabled");
     } finally {
       harness.unmount();
     }
@@ -248,8 +235,7 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-            ?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: { preferences?: { thinking?: boolean } };
           } | null
         )?.harness?.preferences?.thinking,
@@ -259,7 +245,7 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
     }
   });
 
-  it("thinking 已变更且 metadata 显式携带时应迁移到 RuntimeRequest 并裁掉旧 metadata 偏好", async () => {
+  it("thinking 已变更且 metadata 显式携带时也应裁掉 retired turn 偏好", async () => {
     const workspaceId = "ws-runtime-thinking-metadata-pending-sync";
     const topicId = "topic-runtime-thinking-metadata-pending-sync";
     mockGetAgentRuntimeSession.mockResolvedValue({
@@ -317,14 +303,10 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.thinkingEnabled,
-      ).toBe(true);
+      expect(getSubmittedTurnStart()).not.toHaveProperty("thinkingEnabled");
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-            ?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: { preferences?: { thinking?: boolean } };
           } | null
         )?.harness?.preferences?.thinking,
@@ -381,16 +363,11 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest?.webSearch,
-      ).toBeUndefined();
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest?.searchMode,
-      ).toBeUndefined();
+      expect(getSubmittedTurnStart()).not.toHaveProperty("webSearch");
+      expect(getSubmittedTurnStart()).not.toHaveProperty("searchMode");
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-            ?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: { preferences?: { web_search?: boolean } };
           } | null
         )?.harness?.preferences?.web_search,
@@ -446,13 +423,10 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest?.webSearch,
-      ).toBeUndefined();
+      expect(getSubmittedTurnStart()).not.toHaveProperty("webSearch");
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-            ?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: { preferences?: { web_search?: boolean } };
           } | null
         )?.harness?.preferences?.web_search,
@@ -509,15 +483,13 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest?.webSearch,
-      ).toBeUndefined();
+      expect(getSubmittedTurnStart()).not.toHaveProperty("webSearch");
     } finally {
       harness.unmount();
     }
   });
 
-  it("webSearch 已变更且 metadata 显式携带时应迁移到 RuntimeRequest 并裁掉旧 metadata 偏好", async () => {
+  it("webSearch 已变更且 metadata 显式携带时也应裁掉 retired turn 偏好", async () => {
     const workspaceId = "ws-runtime-websearch-metadata-pending-sync";
     const topicId = "topic-runtime-websearch-metadata-pending-sync";
     mockGetAgentRuntimeSession.mockResolvedValue({
@@ -575,13 +547,10 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest?.webSearch,
-      ).toBe(true);
+      expect(getSubmittedTurnStart()).not.toHaveProperty("webSearch");
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-            ?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: { preferences?: { web_search?: boolean } };
           } | null
         )?.harness?.preferences?.web_search,
@@ -652,8 +621,7 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-            ?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: {
               preferences?: { task?: boolean; subagent?: boolean };
             };
@@ -662,8 +630,7 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       ).toBeUndefined();
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-            ?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: {
               preferences?: { task?: boolean; subagent?: boolean };
             };
@@ -736,8 +703,7 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-            ?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: {
               preferences?: { task?: boolean; subagent?: boolean };
             };
@@ -746,8 +712,7 @@ describe("useAgentChat 兼容接口 - tool preferences", () => {
       ).toBe(true);
       expect(
         (
-          mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-            ?.metadata as {
+          getSubmittedTurnMetadata() as {
             harness?: {
               preferences?: { task?: boolean; subagent?: boolean };
             };

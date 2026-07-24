@@ -19,22 +19,6 @@ describe("shouldApplyAgentStreamTerminalEvent", () => {
     ).toBe(false);
   });
 
-  it("只有 queuedTurnId 时终态必须命中 queuedTurnId", () => {
-    expect(
-      shouldApplyAgentStreamTerminalEvent({
-        terminalTurnId: "queued-canceled",
-      }),
-    ).toBe(true);
-  });
-
-  it("只有 queuedTurnId 时拒绝不匹配的终态", () => {
-    expect(
-      shouldApplyAgentStreamTerminalEvent({
-        terminalTurnId: "turn-canceled",
-      }),
-    ).toBe(false);
-  });
-
   it("终态 turn 命中当前 active text turn 时允许应用", () => {
     expect(
       shouldApplyAgentStreamTerminalEvent({
@@ -65,7 +49,7 @@ describe("shouldApplyAgentStreamTerminalEvent", () => {
     ).toBe(true);
   });
 
-  it("存在当前 turn 时不允许 queuedTurnId 放行旧终态", () => {
+  it("存在当前 turn 时不允许其他 turn 的终态放行", () => {
     expect(
       shouldApplyAgentStreamTerminalEvent({
         currentTurnId: "turn-current",

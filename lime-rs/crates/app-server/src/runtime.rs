@@ -31,6 +31,7 @@ mod context_media;
 mod context_packet;
 mod conversation_import;
 mod diagnostics;
+mod error;
 mod event_log;
 mod event_store;
 mod evidence_provider;
@@ -154,6 +155,7 @@ pub use artifact_content::FilesystemArtifactContentProvider;
 pub use artifact_content::InlineArtifactContentProvider;
 pub use backend::MockBackend;
 pub use backend::UnavailableBackend;
+pub use error::RuntimeCoreError;
 pub use event_log::EventLogRecord;
 pub use event_log::EventLogWriter;
 pub use evidence_provider::BasicEvidenceExportProvider;
@@ -187,7 +189,6 @@ use crate::KnowledgeBuilderRuntimeExecutor;
 use crate::NativeKnowledgeBuilderRuntimeExecutor;
 use agent_protocol::AgentInput;
 use agent_runtime::session_loop::RuntimeSessionInputHandle;
-use app_server_protocol::error_codes;
 use app_server_protocol::AgentEvent;
 use app_server_protocol::AgentSession;
 use app_server_protocol::AgentSessionActionScope;
@@ -197,7 +198,6 @@ use app_server_protocol::AgentTurn;
 use app_server_protocol::ArtifactSummary;
 use app_server_protocol::ClientInfo;
 use app_server_protocol::EvidencePackSummary;
-use app_server_protocol::JsonRpcError;
 use app_server_protocol::RuntimeOptions;
 use async_trait::async_trait;
 use lime_browser_runtime::{BrowserProfileScope, BrowserRuntimeManager};
@@ -209,186 +209,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
-use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use value_fields::{
     json_string, metadata_string, new_id, optional_id_or_new, raw_string_field, string_array_field,
     string_field, timestamp, timestamp_seconds,
 };
-
-#[derive(Debug, Error)]
-pub enum RuntimeCoreError {
-    #[error("invalid request: {0}")]
-    InvalidRequest(String),
-    #[error("session not found: {0}")]
-    SessionNotFound(String),
-    #[error("turn not active: {0}")]
-    TurnNotActive(String),
-    #[error("session already exists: {0}")]
-    SessionAlreadyExists(String),
-    #[error("turn already active: {0}")]
-    TurnAlreadyActive(String),
-    #[error("capability denied: {0}")]
-    CapabilityDenied(String),
-    #[error("request canceled")]
-    RequestCanceled,
-    #[error("{0}")]
-    UsageLimitExceeded(String),
-    #[error("pending route for session {session_id}: {reason_code}")]
-    PendingRoute {
-        session_id: String,
-        provider: Option<String>,
-        model: Option<String>,
-        reason_code: String,
-    },
-    #[error("route rejected for session {session_id}: {reason_code}")]
-    RouteRejected {
-        session_id: String,
-        provider: Option<String>,
-        model: Option<String>,
-        category: app_server_protocol::RouteFailureCategory,
-        reason_code: String,
-    },
-    #[error("execution backend error: {0}")]
-    Backend(String),
-    #[error("action response error ({code}): {request_id}")]
-    ActionResponse { code: String, request_id: String },
-}
-
-impl RuntimeCoreError {
-    pub fn is_provider_selection_required(&self) -> bool {
-        matches!(self, Self::PendingRoute { .. })
-    }
-
-    pub fn pending_route_for_session(
-        session_id: impl Into<String>,
-        runtime_options: Option<&RuntimeOptions>,
-    ) -> Self {
-        let request = runtime_options.and_then(|options| options.runtime_request.as_ref());
-        let provider = request.and_then(|request| {
-            non_empty_route_hint(request.provider_preference.as_deref()).or_else(|| {
-                request.provider_config.as_ref().and_then(|config| {
-                    non_empty_route_hint(config.provider_id.as_deref())
-                        .or_else(|| non_empty_route_hint(config.provider_name.as_deref()))
-                })
-            })
-        });
-        let model = request.and_then(|request| {
-            non_empty_route_hint(request.model_preference.as_deref()).or_else(|| {
-                request
-                    .provider_config
-                    .as_ref()
-                    .and_then(|config| non_empty_route_hint(config.model_name.as_deref()))
-            })
-        });
-        let reason_code = match (provider.is_some(), model.is_some()) {
-            (false, false) => "provider_and_model_missing",
-            (false, true) => "provider_missing",
-            (true, false) => "model_missing",
-            (true, true) => "route_unavailable",
-        };
-        Self::PendingRoute {
-            session_id: session_id.into(),
-            provider,
-            model,
-            reason_code: reason_code.to_string(),
-        }
-    }
-
-    pub fn into_jsonrpc_error(self) -> JsonRpcError {
-        match self {
-            Self::InvalidRequest(message) => {
-                JsonRpcError::new(error_codes::INVALID_PARAMS, message)
-            }
-            Self::SessionNotFound(session_id) => JsonRpcError::new(
-                error_codes::SESSION_NOT_FOUND,
-                format!("session not found: {session_id}"),
-            ),
-            Self::TurnNotActive(turn_id) => JsonRpcError::new(
-                error_codes::TURN_NOT_ACTIVE,
-                format!("turn not active: {turn_id}"),
-            ),
-            Self::SessionAlreadyExists(session_id) => JsonRpcError::new(
-                error_codes::SESSION_ALREADY_EXISTS,
-                format!("session already exists: {session_id}"),
-            ),
-            Self::TurnAlreadyActive(turn_id) => JsonRpcError::new(
-                error_codes::TURN_ALREADY_ACTIVE,
-                format!("turn already active: {turn_id}"),
-            ),
-            Self::CapabilityDenied(capability_id) => JsonRpcError::new(
-                error_codes::CAPABILITY_DENIED,
-                format!("capability denied: {capability_id}"),
-            ),
-            Self::PendingRoute {
-                session_id,
-                provider,
-                model,
-                reason_code,
-            } => JsonRpcError {
-                code: error_codes::RUNTIME_ERROR,
-                message: "App Server runtime backend requires provider/model selection. Start or resume the canonical thread with a complete modelProvider/model route before starting a turn.".to_string(),
-                data: Some(serde_json::json!({
-                    "type": "PendingRoute",
-                    "sessionId": session_id,
-                    "provider": provider,
-                    "model": model,
-                    "reasonCode": reason_code,
-                    "retryable": true,
-                })),
-            },
-            Self::RouteRejected {
-                session_id,
-                provider,
-                model,
-                category,
-                reason_code,
-            } => JsonRpcError {
-                code: error_codes::RUNTIME_ERROR,
-                message: "runtime model route is not executable".to_string(),
-                data: Some(serde_json::json!({
-                    "type": "RouteRejected",
-                    "sessionId": session_id,
-                    "provider": provider,
-                    "model": model,
-                    "category": category,
-                    "reasonCode": reason_code,
-                    "retryable": false,
-                })),
-            },
-            Self::RequestCanceled => {
-                JsonRpcError::new(error_codes::REQUEST_CANCELLED, "request canceled")
-            }
-            Self::UsageLimitExceeded(message) => {
-                JsonRpcError::new(error_codes::RUNTIME_ERROR, message)
-            }
-            Self::Backend(message) => JsonRpcError::new(error_codes::RUNTIME_ERROR, message),
-            Self::ActionResponse { code, request_id } => JsonRpcError {
-                code: error_codes::RUNTIME_ERROR,
-                message: format!("action response failed: {code}"),
-                data: Some(serde_json::json!({
-                    "code": code,
-                    "requestId": request_id,
-                })),
-            },
-        }
-    }
-
-    pub(crate) fn turn_failure_reason(&self) -> &'static str {
-        match self {
-            Self::UsageLimitExceeded(_) => "usage_limit_exceeded",
-            _ => "turn_error",
-        }
-    }
-}
-
-fn non_empty_route_hint(value: Option<&str>) -> Option<String> {
-    value
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RuntimeHostContext {

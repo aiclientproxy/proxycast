@@ -4,6 +4,7 @@ import {
   captureTurnStream,
   completedTurn,
   flushEffects,
+  getSubmittedTurnStart,
   mockCreateAgentRuntimeSession,
   mockGetAgentRuntimeSession,
   mockGetDefaultProvider,
@@ -280,8 +281,8 @@ describe("useAgentChat 首页新会话", () => {
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       const request = mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0];
       expect(request?.workspace_id).toBeUndefined();
-      expect(request?.runtimeOptions?.runtimeRequest?.providerPreference).toBeUndefined();
-      expect(request?.runtimeOptions?.runtimeRequest?.modelPreference).toBeUndefined();
+      expect(request).not.toHaveProperty("provider");
+      expect(request).not.toHaveProperty("model");
     } finally {
       harness.unmount();
     }
@@ -373,8 +374,8 @@ describe("useAgentChat 首页新会话", () => {
       );
       const request = mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0];
       expect(request?.workspace_id).toBeUndefined();
-      expect(request?.runtimeOptions?.runtimeRequest?.providerPreference).toBeUndefined();
-      expect(request?.runtimeOptions?.runtimeRequest?.modelPreference).toBeUndefined();
+      expect(request).not.toHaveProperty("provider");
+      expect(request).not.toHaveProperty("model");
     } finally {
       harness.unmount();
     }
@@ -738,14 +739,8 @@ describe("useAgentChat 首页新会话", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.providerPreference,
-      ).toBe(selectedProvider);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.modelPreference,
-      ).toBe(selectedModel);
+      expect(harness.getValue().providerType).toBe(selectedProvider);
+      expect(getSubmittedTurnStart()?.model).toBe(selectedModel);
     } finally {
       harness.unmount();
     }
@@ -908,14 +903,8 @@ describe("useAgentChat 首页新会话", () => {
       });
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.providerPreference,
-      ).toBe("lime-hub");
-      expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.modelPreference,
-      ).toBe("agnes-2.0-flash");
+      expect(harness.getValue().providerType).toBe("lime-hub");
+      expect(getSubmittedTurnStart()?.model).toBe("agnes-2.0-flash");
     } finally {
       harness.unmount();
     }
@@ -1123,6 +1112,7 @@ describe("useAgentChat 首页新会话", () => {
     const missingSessionId = "session-live-gone";
     const activeSessionId = "session-existing";
     const stream = captureTurnStream();
+    let missingSessionShouldFail = false;
 
     mockCreateAgentRuntimeSession.mockResolvedValue(missingSessionId);
     mockListAgentRuntimeSessions
@@ -1148,12 +1138,12 @@ describe("useAgentChat 首页新会话", () => {
         },
       ]);
     mockGetAgentRuntimeSession.mockImplementation(async (sessionId: string) => {
-      if (sessionId === missingSessionId) {
+      if (sessionId === missingSessionId && missingSessionShouldFail) {
         throw new Error(`Session not found: ${missingSessionId}`);
       }
 
       return {
-        id: activeSessionId,
+        id: sessionId,
         name: "既有任务",
         created_at: 1700000100,
         updated_at: 1700000101,
@@ -1203,6 +1193,7 @@ describe("useAgentChat 首页新会话", () => {
           turn: completedTurn("turn-live-gone"),
         });
       });
+      missingSessionShouldFail = true;
       await flushEffects();
 
       await act(async () => {

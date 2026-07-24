@@ -42,7 +42,7 @@ describe("AppSidebar conversation projects", () => {
 
   afterEach(cleanupAppSidebarTest);
 
-  it("进入项目对话后仍展示全部已打开项目，但最近对话查询只收窄到当前项目", async () => {
+  it("进入项目对话后仍展示全部已打开项目，并查询全局与当前项目会话", async () => {
     mockListAgentRuntimeSessions.mockImplementation(
       async (options?: { limit?: number; cwd?: string | string[] }) =>
         options?.cwd === "/repo/project-1"
@@ -77,15 +77,10 @@ describe("AppSidebar conversation projects", () => {
     expect(projectGroups[1]?.textContent).not.toContain("项目一会话");
     expect(mockListAgentRuntimeSessions).toHaveBeenCalledWith({
       limit: 11,
-      workspaceId: "project-1",
     });
     expect(mockListAgentRuntimeSessions).toHaveBeenCalledWith({
       limit: 11,
       cwd: "/repo/project-1",
-    });
-    expect(mockListAgentRuntimeSessions).not.toHaveBeenCalledWith({
-      limit: 11,
-      workspaceId: "project-2",
     });
     expect(mockListAgentRuntimeSessions).not.toHaveBeenCalledWith({
       limit: 11,

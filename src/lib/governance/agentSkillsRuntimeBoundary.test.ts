@@ -136,7 +136,9 @@ describe("agent skills runtime boundary", () => {
     expect(source).toContain("build_agent_skill_snapshot_from_workspace");
     expect(source).not.toContain("read_agent_skill_body");
     expect(source).not.toContain("set_skill_tool_session_allowed_skills");
-    expect(source).not.toContain("set_skill_tool_session_allowed_skill_sources");
+    expect(source).not.toContain(
+      "set_skill_tool_session_allowed_skill_sources",
+    );
   });
 
   it("runtime backend 不应新增硬编码 Skill(name) 首刀绕过 selector", () => {
@@ -172,7 +174,9 @@ describe("agent skills runtime boundary", () => {
     );
 
     expect(contextSource).toContain("select_expert_bound_agent_skills");
-    expect(contextSource).toContain("AgentSkillSelectionTrigger::ExpertBinding");
+    expect(contextSource).toContain(
+      "AgentSkillSelectionTrigger::ExpertBinding",
+    );
     expect(contextSource).toContain("expert_bound_skill_candidates");
     expect(telemetrySource).toContain("runtime_status_events_for_agent_skills");
     expect(telemetrySource).toContain("selection.trigger");

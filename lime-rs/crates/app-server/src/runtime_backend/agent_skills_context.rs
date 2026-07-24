@@ -60,24 +60,6 @@ pub(super) fn agent_skills_context_for_turn(
     }
 }
 
-#[cfg(test)]
-fn append_agent_skills_context_to_system_prompt(
-    system_prompt: Option<String>,
-    user_input: &str,
-    metadata_values: &[&Value],
-    working_dir: Option<&Path>,
-    project_root: Option<&Path>,
-) -> Option<String> {
-    agent_skills_context_for_turn(
-        system_prompt,
-        user_input,
-        metadata_values,
-        working_dir,
-        project_root,
-    )
-    .system_prompt
-}
-
 pub(super) fn selected_agent_skill_names_for_turn(
     user_input: &str,
     metadata_values: &[&Value],
@@ -504,6 +486,24 @@ fn append_context_block(system_prompt: Option<String>, context: String) -> Optio
     }
     prompt.push_str(&context);
     Some(prompt)
+}
+
+#[cfg(test)]
+fn append_agent_skills_context_to_system_prompt(
+    system_prompt: Option<String>,
+    user_input: &str,
+    metadata_values: &[&Value],
+    working_dir: Option<&Path>,
+    project_root: Option<&Path>,
+) -> Option<String> {
+    agent_skills_context_for_turn(
+        system_prompt,
+        user_input,
+        metadata_values,
+        working_dir,
+        project_root,
+    )
+    .system_prompt
 }
 
 #[cfg(test)]

@@ -67,6 +67,7 @@ const DELETED_AGENT_PATHS = [
   "lime-rs/crates/agent/src/subagent_control.rs",
   "lime-rs/crates/agent/src/subagent_profiles.rs",
   "lime-rs/crates/agent/src/subagent_runtime_adapter.rs",
+  "lime-rs/crates/agent/src/runtime_support.rs",
   "lime-rs/crates/agent/src/tools/skill_tool_gate.rs",
   "lime-rs/crates/agent/src/turn_context_configuration/agent_adapter.rs",
 ];
@@ -80,6 +81,10 @@ const DELETED_THREAD_STORE_PATHS = [
   "lime-rs/crates/thread-store/src/runtime_store.rs",
   "lime-rs/crates/thread-store/src/session_insights.rs",
   "lime-rs/crates/thread-store/src/sqlite_runtime_store.rs",
+];
+
+const DELETED_RUNTIME_QUEUE_PATHS = [
+  "lime-rs/crates/agent-runtime/src/runtime_queue/sqlite.rs",
 ];
 
 const DELETED_DEAD_SURFACE_PATHS = [
@@ -177,9 +182,7 @@ describe("Agent migration boundary", () => {
   it("Runtime session 不得恢复 app-data fallback 或 hydration helper", () => {
     expect(
       existsSync(
-        repoPath(
-          "lime-rs/crates/app-server/src/runtime/session_hydration.rs",
-        ),
+        repoPath("lime-rs/crates/app-server/src/runtime/session_hydration.rs"),
       ),
     ).toBe(false);
 
@@ -240,7 +243,7 @@ describe("Agent migration boundary", () => {
     );
     expect(source).toContain("pub struct ActionRequiredState");
     expect(source).toContain("pending");
-    expect(source).toContain("submit_response");
+    expect(source).toContain("resolve_action");
     expect(source).not.toContain("static ACTION_REQUIRED");
     expect(turnSnapshotSource).toContain("request_user_input_tool_definition");
     expect(turnExecutorSource).toContain("execute_request_user_input");
@@ -250,28 +253,24 @@ describe("Agent migration boundary", () => {
   });
 
   it("ProjectionStore 必须是唯一 Thread/Turn/Item truth，queue payload 单独持久化", () => {
-    const support = read("lime-rs/crates/agent/src/runtime_support.rs");
     const projectionStore = read(
       "lime-rs/crates/app-server/src/runtime/projection_store.rs",
     );
-    const queueStore = read(
-      "lime-rs/crates/agent-runtime/src/runtime_queue/sqlite.rs",
+    const queueIntent = read(
+      "lime-rs/crates/app-server/src/runtime/queued_turn_intent.rs",
     );
-    expect(support).toContain("SqliteRuntimeQueueStore");
-    expect(support).toContain("RuntimeQueueService");
-    expect(support).not.toContain("InMemoryRuntimeStore");
-    expect(support).not.toContain("InMemoryRuntimeQueueStore");
-    expect(support).not.toContain("SqliteRuntimeStore");
-    expect(support).not.toContain("runtime_store_agent_adapter");
     for (const path of DELETED_THREAD_STORE_PATHS) {
+      expect(existsSync(repoPath(path)), path).toBe(false);
+    }
+    for (const path of DELETED_RUNTIME_QUEUE_PATHS) {
       expect(existsSync(repoPath(path)), path).toBe(false);
     }
     expect(projectionStore).toContain("pub struct ProjectionStore");
     expect(projectionStore).toContain("pub fn apply_events");
     expect(projectionStore).toContain("pub fn read_session_projection");
-    expect(queueStore).toContain(
-      "CREATE TABLE IF NOT EXISTS runtime_queued_turns",
-    );
+    expect(queueIntent).toContain("queue.added");
+    expect(queueIntent).toContain("snapshot_value");
+    expect(queueIntent).toContain("runtime_options_from_events");
   });
 
   it("架构文档必须明确 Codex 与 OpenCode 的裁决边界", () => {

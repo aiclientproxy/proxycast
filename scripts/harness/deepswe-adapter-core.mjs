@@ -1263,7 +1263,9 @@ export function classifyFailure(stage, error) {
   } else if (/tool|sandbox|approval/i.test(message)) {
     owner = "tool-runtime";
   } else if (
-    /app server|agentSession|workspace\/ensure|DevBridge/i.test(message)
+    /app server|agentSession|thread\/(?:start|read)|turn\/(?:start|interrupt)|workspace\/ensure|evidence\/export|DevBridge/i.test(
+      message,
+    )
   ) {
     owner = "app-server";
   } else if (/Pier|verifier|reward\.json|ctrf\.json/i.test(message)) {

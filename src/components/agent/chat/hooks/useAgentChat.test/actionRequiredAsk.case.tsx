@@ -5,6 +5,7 @@ import {
   flushEffects,
   mockRespondAgentRuntimeAction,
   mockResolveClawWorkspaceProviderSelection,
+  mockTypedActionResponseHandled,
   mountHook,
   seedSession,
 } from "../useAgentChat.testUtils";
@@ -220,6 +221,7 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
   it("收到带 scope 的 action_required 后应保留作用域，并在提交时透传 action_scope", async () => {
     const workspaceId = "ws-action-required-scope";
     seedSession(workspaceId, "session-action-required-scope");
+    const respond = mockTypedActionResponseHandled("ask_user");
     const harness = mountHook(workspaceId);
     const stream = captureTurnStream();
 
@@ -275,39 +277,15 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
         .reverse()
         .find((msg) => msg.role === "assistant");
 
-      expect(mockRespondAgentRuntimeAction).toHaveBeenCalledWith({
-        session_id: "session-action-required-scope",
-        request_id: "req-ar-scope-1",
-        action_type: "ask_user",
+      expect(respond).toHaveBeenCalledWith({
+        requestId: "req-ar-scope-1",
+        actionType: "ask_user",
         confirmed: true,
+        decision: undefined,
         response: '{"answer":"自动执行"}',
-        user_data: { answer: "自动执行" },
-        metadata: {
-          elicitation_context: {
-            source: "action_required",
-            mode: "runtime_protocol",
-            form_id: "req-ar-scope-1",
-            action_type: "ask_user",
-            field_count: 1,
-            prompt: "请选择执行模式",
-            entries: [
-              {
-                fieldId: "req-ar-scope-1_answer",
-                fieldKey: "answer",
-                label: "请选择执行模式",
-                value: "自动执行",
-                summary: "自动执行",
-              },
-            ],
-          },
-        },
-        event_name: stream.getEventName(),
-        action_scope: {
-          session_id: "session-action-required-scope",
-          thread_id: "thread-action-required-scope",
-          turn_id: "turn-action-required-scope",
-        },
+        userData: { answer: "自动执行" },
       });
+      expect(mockRespondAgentRuntimeAction).not.toHaveBeenCalled();
       expect(assistantMessage?.actionRequests?.[0]).toMatchObject({
         requestId: "req-ar-scope-1",
         status: "submitted",
@@ -318,6 +296,7 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
         },
       });
     } finally {
+      respond.mockRestore();
       harness.unmount();
     }
   });
@@ -329,6 +308,7 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
       providerType: "openai",
       model: "gpt-5.4-mini",
     });
+    const respond = mockTypedActionResponseHandled("tool_confirmation");
     const harness = mountHook(workspaceId);
     const stream = captureTurnStream();
 
@@ -379,22 +359,16 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
         });
       });
 
-      expect(mockRespondAgentRuntimeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          session_id: "session-tool-confirmation-scope",
-          request_id: "req-tool-confirm-scope-1",
-          action_type: "tool_confirmation",
-          confirmed: true,
-          response: "允许",
-          event_name: sourceEventName,
-          action_scope: {
-            session_id: "session-tool-confirmation-scope",
-            thread_id: "thread-tool-confirmation-scope",
-            turn_id: "turn-tool-confirmation-scope",
-          },
-        }),
-      );
+      expect(respond).toHaveBeenCalledWith({
+        requestId: "req-tool-confirm-scope-1",
+        confirmed: true,
+        actionType: "tool_confirmation",
+        response: "允许",
+      });
+      expect(mockRespondAgentRuntimeAction).not.toHaveBeenCalled();
+      expect(sourceEventName).toMatch(/^agent_stream_/);
     } finally {
+      respond.mockRestore();
       harness.unmount();
     }
   });
@@ -767,6 +741,7 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
   it("ask_user 提交后应保留只读回显，避免面板消失", async () => {
     const workspaceId = "ws-ask-submit-keep";
     seedSession(workspaceId, "session-ask-submit-keep");
+    const respond = mockTypedActionResponseHandled("ask_user");
     const harness = mountHook(workspaceId);
     const stream = captureTurnStream();
 
@@ -802,34 +777,15 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
         .reverse()
         .find((msg) => msg.role === "assistant");
 
-      expect(mockRespondAgentRuntimeAction).toHaveBeenCalledWith({
-        session_id: "session-ask-submit-keep",
-        request_id: "req-ask-submit-1",
-        action_type: "ask_user",
+      expect(respond).toHaveBeenCalledWith({
+        requestId: "req-ask-submit-1",
+        actionType: "ask_user",
         confirmed: true,
+        decision: undefined,
         response: '{"answer":"自动执行（Auto）"}',
-        user_data: { answer: "自动执行（Auto）" },
-        metadata: {
-          elicitation_context: {
-            source: "action_required",
-            mode: "runtime_protocol",
-            form_id: "req-ask-submit-1",
-            action_type: "ask_user",
-            field_count: 1,
-            prompt: "请选择执行模式",
-            entries: [
-              {
-                fieldId: "req-ask-submit-1_answer",
-                fieldKey: "answer",
-                label: "你希望如何执行？",
-                value: "自动执行（Auto）",
-                summary: "自动执行（Auto）",
-              },
-            ],
-          },
-        },
-        event_name: stream.getEventName(),
+        userData: { answer: "自动执行（Auto）" },
       });
+      expect(mockRespondAgentRuntimeAction).not.toHaveBeenCalled();
       expect(assistantMessage?.actionRequests?.[0]).toMatchObject({
         requestId: "req-ask-submit-1",
         actionType: "ask_user",
@@ -850,6 +806,7 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
         ),
       ).toBe(true);
     } finally {
+      respond.mockRestore();
       harness.unmount();
     }
   });

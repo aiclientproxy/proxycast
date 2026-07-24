@@ -1,7 +1,4 @@
-import type {
-  ActionRequired,
-  ConfirmResponse,
-} from "@/components/agent/chat/types";
+import type { ActionRequired, ConfirmResponse } from "../agentActionTypes";
 import { getDefaultAgentApprovalServerRequestController } from "../agentApprovalServerRequest";
 import { getDefaultAgentUserInputServerRequestController } from "../agentUserInputServerRequest";
 import type {

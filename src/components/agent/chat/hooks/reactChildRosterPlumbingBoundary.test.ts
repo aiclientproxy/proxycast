@@ -8,7 +8,8 @@ const SESSION_STATE_SOURCE =
 const SESSION_HOOK_SOURCE =
   "src/components/agent/chat/hooks/useAgentSession.ts";
 const CHAT_HOOK_SOURCE = "src/components/agent/chat/hooks/useAgentChat.ts";
-const WORKSPACE_SOURCE = "src/components/agent/chat/AgentChatWorkspace.tsx";
+const WORKSPACE_SOURCE =
+  "src/components/agent/chat/workspace/useAgentChatWorkspaceSceneRuntime.tsx";
 const WORKSPACE_SHARED_SOURCE =
   "src/components/agent/chat/agentChatWorkspaceShared.ts";
 

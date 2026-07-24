@@ -1,10 +1,5 @@
 import { act } from "react";
-import {
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   flushEffects,
   mockCreateAgentRuntimeSession,
@@ -284,7 +279,10 @@ describe("useAgentChat 偏好持久化 - storage cleanup", () => {
     try {
       await flushEffects();
       await flushEffects();
-      expect(mockGetAgentRuntimeSession).toHaveBeenCalledWith(sessionId, expect.objectContaining({ historyLimit: 40 }));
+      expect(mockGetAgentRuntimeSession).toHaveBeenCalledWith(
+        sessionId,
+        expect.objectContaining({ historyLimit: 40 }),
+      );
       expect(
         JSON.parse(
           localStorage.getItem(`agent_session_workspace_${sessionId}`) ||
@@ -383,8 +381,8 @@ describe("useAgentChat 偏好持久化 - storage cleanup", () => {
       );
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledWith(
         expect.objectContaining({
-          input: { text: "继续处理这个任务" },
-          sessionId: freshSessionId,
+          input: [{ type: "text", text: "继续处理这个任务" }],
+          threadId: freshSessionId,
         }),
       );
       expect(harness.getValue().sessionId).toBe(freshSessionId);

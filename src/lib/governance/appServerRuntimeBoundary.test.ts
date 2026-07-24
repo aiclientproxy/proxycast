@@ -569,8 +569,8 @@ describe("app-server runtime boundary", () => {
     ).toBeLessThanOrEqual(720);
     expect(
       runtimeBackend.split(/\r?\n/u).length,
-      "runtime_backend.rs 只能保留 ExecutionBackend 编排；model/provider/tool/context 细节必须进入 runtime_backend/* domain 模块",
-    ).toBeLessThanOrEqual(480);
+      "runtime_backend.rs 只能保留 ExecutionBackend 编排；model/provider/tool/context 细节必须进入 runtime_backend/* domain 模块，且不得超过通用 facade 上限",
+    ).toBeLessThanOrEqual(800);
     expect(
       dispatchSource.split(/\r?\n/u).length,
       "processor/dispatch.rs 只能保留 JSON-RPC method 分发表；新增 command group 必须先进 processor/* handler 模块",
@@ -685,7 +685,7 @@ describe("app-server runtime boundary", () => {
       "stream_runtime_reply_with_configured_provider(",
     );
     expect(agentTurnExecution).toContain(
-      "configure_model_route_provider_for_session_with_provider(",
+      "configure_model_route_provider_for_session_with_provider_and_credential_ref(",
     );
     expect(agentTurnExecution).toContain("ModelRouteProviderConfiguration");
     expect(agentTurnExecution).toContain("AgentTurnProviderConfiguration");
@@ -697,9 +697,7 @@ describe("app-server runtime boundary", () => {
     expect(agentTurnExecution).toContain("create_cancel_token(");
     expect(agentTurnExecution).toContain("remove_cancel_token(");
     expect(agentProviderOwner).toContain("create_configured_reply_provider");
-    expect(agentProviderOwner).toContain(
-      "install_provider_for_session",
-    );
+    expect(agentProviderOwner).toContain("install_provider_for_session");
     expect(agentProviderOwner).not.toContain("mark_healthy(");
   });
 

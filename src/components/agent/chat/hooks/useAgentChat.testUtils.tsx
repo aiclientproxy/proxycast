@@ -1,6 +1,9 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, vi } from "vitest";
+import type { TurnStartParams } from "@limecloud/app-server-client";
+import { getDefaultAgentApprovalServerRequestController } from "@/lib/api/agentApprovalServerRequest";
+import { getDefaultAgentUserInputServerRequestController } from "@/lib/api/agentUserInputServerRequest";
 import type { WriteArtifactContext } from "../types";
 import type { ChatToolPreferences } from "../utils/chatToolPreferences";
 
@@ -27,38 +30,63 @@ const {
   mockGetDefaultProvider,
   mockResolveClawWorkspaceProviderSelection,
   mockScheduleMinimumDelayIdleTask,
-} = vi.hoisted(() => ({
-  mockGetRuntimeProviderSelection: vi.fn(),
-  mockSubmitAgentRuntimeTurn: vi.fn(),
-  mockCreateAgentRuntimeSession: vi.fn(),
-  mockListAgentRuntimeSessions: vi.fn(),
-  mockGetAgentRuntimeSession: vi.fn(),
-  mockGetAgentRuntimeThreadRead: vi.fn(),
-  mockReadAgentRuntimeThread: vi.fn(),
-  mockGenerateAgentRuntimeSessionTitle: vi.fn(),
-  mockUpdateAgentRuntimeSession: vi.fn(),
-  mockDeleteAgentRuntimeSession: vi.fn(),
-  mockCompactAgentRuntimeSession: vi.fn(),
-  mockInterruptAgentRuntimeTurn: vi.fn(),
-  mockResumeAgentRuntimeThread: vi.fn(),
-  mockReplayAgentRuntimeRequest: vi.fn(),
-  mockRespondAgentRuntimeAction: vi.fn(),
-  mockParseAgentEvent: vi.fn((payload: unknown) => payload),
-  mockSafeListen: vi.fn(),
-  mockToast: {
-    success: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warning: vi.fn(),
-  },
-  mockWechatChannelSetRuntimeModel: vi.fn(async () => undefined),
-  mockGetDefaultProvider: vi.fn(),
-  mockResolveClawWorkspaceProviderSelection: vi.fn(),
-  mockScheduleMinimumDelayIdleTask: vi.fn((task: () => void) => {
-    task();
-    return () => undefined;
-  }),
-}));
+  mockAgentSessionDetailByThreadId,
+  resolveMockAgentRuntimeSession,
+} = vi.hoisted(() => {
+  const mockGetAgentRuntimeSession = vi.fn();
+  const mockAgentSessionDetailByThreadId = new Map<
+    string,
+    { thread_read?: unknown }
+  >();
+  const resolveMockAgentRuntimeSession = async (
+    sessionId: string,
+    ...args: unknown[]
+  ) => {
+    const detail = await mockGetAgentRuntimeSession(sessionId, ...args);
+    const threadId =
+      detail.thread_id?.trim() ||
+      detail.thread_read?.thread_id?.trim() ||
+      sessionId;
+    const normalizedDetail = { ...detail, thread_id: threadId };
+    mockAgentSessionDetailByThreadId.set(threadId, normalizedDetail);
+    return normalizedDetail;
+  };
+
+  return {
+    mockGetRuntimeProviderSelection: vi.fn(),
+    mockSubmitAgentRuntimeTurn: vi.fn(),
+    mockCreateAgentRuntimeSession: vi.fn(),
+    mockListAgentRuntimeSessions: vi.fn(),
+    mockGetAgentRuntimeSession,
+    mockGetAgentRuntimeThreadRead: vi.fn(),
+    mockReadAgentRuntimeThread: vi.fn(),
+    mockGenerateAgentRuntimeSessionTitle: vi.fn(),
+    mockUpdateAgentRuntimeSession: vi.fn(),
+    mockDeleteAgentRuntimeSession: vi.fn(),
+    mockCompactAgentRuntimeSession: vi.fn(),
+    mockInterruptAgentRuntimeTurn: vi.fn(),
+    mockResumeAgentRuntimeThread: vi.fn(),
+    mockReplayAgentRuntimeRequest: vi.fn(),
+    mockRespondAgentRuntimeAction: vi.fn(),
+    mockParseAgentEvent: vi.fn((payload: unknown) => payload),
+    mockSafeListen: vi.fn(),
+    mockToast: {
+      success: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      warning: vi.fn(),
+    },
+    mockWechatChannelSetRuntimeModel: vi.fn(async () => undefined),
+    mockGetDefaultProvider: vi.fn(),
+    mockResolveClawWorkspaceProviderSelection: vi.fn(),
+    mockScheduleMinimumDelayIdleTask: vi.fn((task: () => void) => {
+      task();
+      return () => undefined;
+    }),
+    mockAgentSessionDetailByThreadId,
+    resolveMockAgentRuntimeSession,
+  };
+});
 
 export {
   mockGetRuntimeProviderSelection,
@@ -91,7 +119,7 @@ vi.mock("@/lib/api/agentRuntime/clientFactory", () => ({
     submitAgentRuntimeTurn: mockSubmitAgentRuntimeTurn,
     createAgentRuntimeSession: mockCreateAgentRuntimeSession,
     listAgentRuntimeSessions: mockListAgentRuntimeSessions,
-    getAgentRuntimeSession: mockGetAgentRuntimeSession,
+    getAgentRuntimeSession: resolveMockAgentRuntimeSession,
     getAgentRuntimeThreadRead: mockGetAgentRuntimeThreadRead,
     readAgentRuntimeThread: mockReadAgentRuntimeThread,
     generateAgentRuntimeSessionTitle: mockGenerateAgentRuntimeSessionTitle,
@@ -107,7 +135,7 @@ vi.mock("@/lib/api/agentRuntime/clientFactory", () => ({
   submitAgentRuntimeTurn: mockSubmitAgentRuntimeTurn,
   createAgentRuntimeSession: mockCreateAgentRuntimeSession,
   listAgentRuntimeSessions: mockListAgentRuntimeSessions,
-  getAgentRuntimeSession: mockGetAgentRuntimeSession,
+  getAgentRuntimeSession: resolveMockAgentRuntimeSession,
   getAgentRuntimeThreadRead: mockGetAgentRuntimeThreadRead,
   generateAgentRuntimeSessionTitle: mockGenerateAgentRuntimeSessionTitle,
   updateAgentRuntimeSession: mockUpdateAgentRuntimeSession,
@@ -186,6 +214,37 @@ export function createDeferred<T>() {
     reject = nextReject;
   });
   return { promise, resolve, reject };
+}
+
+export function getSubmittedTurnStart(
+  callIndex = 0,
+): TurnStartParams | undefined {
+  return mockSubmitAgentRuntimeTurn.mock.calls[callIndex]?.[0] as
+    | TurnStartParams
+    | undefined;
+}
+
+export function getSubmittedTurnMetadata(
+  callIndex = 0,
+): Record<string, unknown> | undefined {
+  const entry = getSubmittedTurnStart(callIndex)?.additionalContext?.metadata;
+  if (entry?.kind !== "application" || typeof entry.value !== "string") {
+    return undefined;
+  }
+  const parsed = JSON.parse(entry.value) as unknown;
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : undefined;
+}
+
+export function mockTypedActionResponseHandled(
+  actionType: "ask_user" | "tool_confirmation",
+) {
+  const controller =
+    actionType === "ask_user"
+      ? getDefaultAgentUserInputServerRequestController()
+      : getDefaultAgentApprovalServerRequestController();
+  return vi.spyOn(controller, "respond").mockReturnValue(true);
 }
 
 export function mountHook(
@@ -461,6 +520,7 @@ beforeEach(async () => {
   mockToast.warning.mockReset();
   localStorage.clear();
   sessionStorage.clear();
+  mockAgentSessionDetailByThreadId.clear();
 
   mockGetRuntimeProviderSelection.mockResolvedValue({
     provider_configured: false,
@@ -468,29 +528,40 @@ beforeEach(async () => {
   mockSubmitAgentRuntimeTurn.mockResolvedValue(undefined);
   mockCreateAgentRuntimeSession.mockResolvedValue("created-session");
   mockListAgentRuntimeSessions.mockResolvedValue([]);
-  mockGetAgentRuntimeSession.mockResolvedValue({
-    id: "session-from-api",
+  mockGetAgentRuntimeSession.mockImplementation(async (sessionId: string) => ({
+    id: sessionId,
+    thread_id: sessionId,
     messages: [],
+  }));
+  mockGetAgentRuntimeThreadRead.mockImplementation(async (threadId: string) => {
+    const threadRead =
+      mockAgentSessionDetailByThreadId.get(threadId)?.thread_read;
+    return threadRead &&
+      typeof threadRead === "object" &&
+      !Array.isArray(threadRead)
+      ? { ...threadRead, thread_id: threadId }
+      : { thread_id: threadId, status: "idle" };
   });
-  mockGetAgentRuntimeThreadRead.mockResolvedValue(undefined);
-  mockReadAgentRuntimeThread.mockResolvedValue({
+  mockReadAgentRuntimeThread.mockImplementation(async (threadId: string) => ({
     thread: {
-      archived: false,
-      createdAtMs: 1,
-      sessionId: "session-from-api",
+      createdAt: 0.001,
+      id: threadId,
+      sessionId: threadId,
       status: { type: "idle" },
-      threadId: "session-from-api",
       turns: [],
-      turnsView: "full",
-      updatedAtMs: 1,
+      updatedAt: 0.001,
     },
-  });
+  }));
   mockGenerateAgentRuntimeSessionTitle.mockResolvedValue("");
   mockUpdateAgentRuntimeSession.mockResolvedValue(undefined);
   mockDeleteAgentRuntimeSession.mockResolvedValue(undefined);
   mockCompactAgentRuntimeSession.mockResolvedValue(undefined);
   mockInterruptAgentRuntimeTurn.mockResolvedValue(undefined);
-  mockResumeAgentRuntimeThread.mockResolvedValue(false);
+  mockResumeAgentRuntimeThread.mockImplementation(
+    async ({ threadId }: { threadId: string }) => ({
+      result: { thread: { id: threadId } },
+    }),
+  );
   mockReplayAgentRuntimeRequest.mockResolvedValue(null);
   mockRespondAgentRuntimeAction.mockResolvedValue(undefined);
   mockParseAgentEvent.mockImplementation((payload: unknown) => payload);

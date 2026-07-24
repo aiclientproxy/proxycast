@@ -12,6 +12,20 @@ describe("AgentChatWorkspace right surface state boundary", () => {
       ),
       "utf8",
     );
+    const setupRuntimeSource = readFileSync(
+      join(
+        process.cwd(),
+        "src/components/agent/chat/workspace/useAgentChatWorkspaceSetupRuntime.ts",
+      ),
+      "utf8",
+    );
+    const commandRuntimeSource = readFileSync(
+      join(
+        process.cwd(),
+        "src/components/agent/chat/workspace/useAgentChatWorkspaceCommandRuntime.ts",
+      ),
+      "utf8",
+    );
     const ownerSource = readFileSync(
       join(
         process.cwd(),
@@ -48,8 +62,8 @@ describe("AgentChatWorkspace right surface state boundary", () => {
       "utf8",
     );
 
-    expect(workspaceSource).toContain("useWorkspaceContextSurfaceRuntime({");
-    expect(workspaceSource).toContain(
+    expect(setupRuntimeSource).toContain("useWorkspaceContextSurfaceRuntime({");
+    expect(commandRuntimeSource).toContain(
       "useAgentChatWorkspaceArtifactInteractionRuntime({",
     );
     expect(workspaceSource).not.toContain(
@@ -93,6 +107,13 @@ describe("AgentChatWorkspace right surface state boundary", () => {
       ),
       "utf8",
     );
+    const commandRuntimeSource = readFileSync(
+      join(
+        process.cwd(),
+        "src/components/agent/chat/workspace/useAgentChatWorkspaceCommandRuntime.ts",
+      ),
+      "utf8",
+    );
     const artifactOpenRuntimeSource = readFileSync(
       join(
         process.cwd(),
@@ -123,7 +144,7 @@ describe("AgentChatWorkspace right surface state boundary", () => {
       "utf8",
     );
 
-    expect(workspaceSource).toContain(
+    expect(commandRuntimeSource).toContain(
       "useAgentChatWorkspaceArtifactInteractionRuntime({",
     );
     expect(workspaceSource).not.toContain(
@@ -215,6 +236,13 @@ describe("AgentChatWorkspace right surface state boundary", () => {
       ),
       "utf8",
     );
+    const sceneRuntimeSource = readFileSync(
+      join(
+        process.cwd(),
+        "src/components/agent/chat/workspace/useAgentChatWorkspaceSceneRuntime.tsx",
+      ),
+      "utf8",
+    );
     const ownerSource = readFileSync(
       join(
         process.cwd(),
@@ -244,7 +272,7 @@ describe("AgentChatWorkspace right surface state boundary", () => {
       "utf8",
     );
 
-    expect(workspaceSource).toContain(
+    expect(sceneRuntimeSource).toContain(
       "useAgentChatWorkspaceSceneComposition({",
     );
     expect(workspaceSource).not.toContain(
@@ -408,6 +436,13 @@ describe("AgentChatWorkspace right surface state boundary", () => {
       ),
       "utf8",
     );
+    const sceneRuntimeSource = readFileSync(
+      join(
+        process.cwd(),
+        "src/components/agent/chat/workspace/useAgentChatWorkspaceSceneRuntime.tsx",
+      ),
+      "utf8",
+    );
     const ownerSource = readFileSync(
       join(
         process.cwd(),
@@ -430,7 +465,7 @@ describe("AgentChatWorkspace right surface state boundary", () => {
       "utf8",
     );
 
-    expect(workspaceSource).toContain(
+    expect(sceneRuntimeSource).toContain(
       "useAgentChatWorkspaceSceneComposition({",
     );
     expect(workspaceSource).not.toContain(
@@ -464,6 +499,13 @@ describe("AgentChatWorkspace conversation right surface boundary", () => {
       join(
         process.cwd(),
         "src/components/agent/chat/useAgentChatWorkspaceRuntime.tsx",
+      ),
+      "utf8",
+    );
+    const sceneRuntimeSource = readFileSync(
+      join(
+        process.cwd(),
+        "src/components/agent/chat/workspace/useAgentChatWorkspaceSceneRuntime.tsx",
       ),
       "utf8",
     );
@@ -521,7 +563,7 @@ describe("AgentChatWorkspace conversation right surface boundary", () => {
       sceneCallEnd,
     );
 
-    expect(workspaceSource).toContain(
+    expect(sceneRuntimeSource).toContain(
       "useAgentChatWorkspaceSceneComposition({",
     );
     expect(workspaceSource).not.toContain(

@@ -2,10 +2,7 @@ import type { LimeAppSdk } from "../sdk/CapabilityHost";
 import type { PluginTaskRecord } from "../types";
 import type { PluginHostBridgeCapabilityRequest } from "./hostBridge";
 import { sanitizeExecutionRequestInput } from "./capabilityDispatcherExecutionInput";
-import {
-  isRecord,
-  readString,
-} from "./capabilityDispatcherRecord";
+import { isRecord, readString } from "./capabilityDispatcherRecord";
 import type {
   ConnectorAuthorizationAgentTaskRequest,
   ConnectorAuthorizationHandoffProjection,
@@ -101,7 +98,6 @@ function buildConnectorAuthorizationHandoffTaskRequest(
       `connector:${authorizationRequest.connectorId}`,
     ],
     humanReview: true,
-    sessionId: authorizationRequest.sessionId,
     queueIfBusy: true,
     metadata: {
       plugin_connector_authorization: {

@@ -37,7 +37,7 @@ function appServerClientMock() {
     messages: [],
   });
 
-  client.startTurn.mockImplementation(async (params) => ({
+  client.startTurn.mockImplementation(async () => ({
     id: 2,
     result: {
       turn: {
@@ -179,7 +179,7 @@ describe("themeContextSearch API", () => {
       notifications: [],
       messages: [],
     });
-    appServerClient.startTurn.mockImplementation(async (params) => ({
+    appServerClient.startTurn.mockImplementation(async () => ({
       id: 2,
       result: {
         turn: {

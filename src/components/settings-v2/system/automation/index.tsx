@@ -594,15 +594,6 @@ export function AutomationSettings({
     });
     return mapping;
   }, [workspaces]);
-  const workspaceRootMap = useMemo(() => {
-    const mapping = new Map<string, string>();
-    workspaces.forEach((workspace) => {
-      if (workspace.rootPath) {
-        mapping.set(workspace.id, workspace.rootPath);
-      }
-    });
-    return mapping;
-  }, [workspaces]);
   const refreshAll = useCallback(
     async (silent: boolean = false) => {
       const requestId = refreshRequestIdRef.current + 1;

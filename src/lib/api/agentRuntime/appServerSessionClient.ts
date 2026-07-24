@@ -120,7 +120,7 @@ export function createAppServerSessionClient({
 
   async function getAgentRuntimeSession(
     sessionId: string,
-    options?: AgentRuntimeGetSessionOptions,
+    _options?: AgentRuntimeGetSessionOptions,
   ): Promise<AgentSessionDetail> {
     const normalizedSessionId = sessionId.trim();
     if (!normalizedSessionId) {

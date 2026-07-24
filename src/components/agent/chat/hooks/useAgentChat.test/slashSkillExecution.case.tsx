@@ -1,9 +1,5 @@
 import { act } from "react";
-import {
-  describe,
-  expect,
-  it
-} from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   captureContextCompactionStream,
   captureTurnStream,
@@ -20,7 +16,7 @@ import {
   mockToast,
   mockUpdateAgentRuntimeSession,
   mountHook,
-  seedSession
+  seedSession,
 } from "../useAgentChat.testUtils";
 
 describe("useAgentChat slash skill 执行链路", () => {
@@ -46,9 +42,12 @@ describe("useAgentChat slash skill 执行链路", () => {
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
-          input: {
-            text: "/content_post_with_cover 写一篇春季新品文案",
-          },
+          input: [
+            {
+              type: "text",
+              text: "/content_post_with_cover 写一篇春季新品文案",
+            },
+          ],
         }),
       );
     } finally {
@@ -105,8 +104,8 @@ describe("useAgentChat slash skill 执行链路", () => {
       );
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledWith(
         expect.objectContaining({
-          input: { text: "你好" },
-          sessionId: "session-detached-chat",
+          input: [{ type: "text", text: "你好" }],
+          threadId: "session-detached-chat",
         }),
       );
       expect(mockToast.error).not.toHaveBeenCalledWith(
@@ -325,12 +324,12 @@ describe("useAgentChat slash skill 执行链路", () => {
       );
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.providerPreference,
+        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
+          ?.runtimeRequest?.providerPreference,
       ).toBeUndefined();
       expect(
-        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions?.runtimeRequest
-          ?.modelPreference,
+        mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
+          ?.runtimeRequest?.modelPreference,
       ).toBeUndefined();
       expect(mockUpdateAgentRuntimeSession).not.toHaveBeenCalledWith({
         session_id: "session-first-send",
@@ -488,8 +487,8 @@ describe("useAgentChat slash skill 执行链路", () => {
 
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledWith(
         expect.objectContaining({
-          input: { text: "继续发送，必须留在新会话" },
-          sessionId: createdSessionId,
+          input: [{ type: "text", text: "继续发送，必须留在新会话" }],
+          threadId: createdSessionId,
         }),
       );
     } finally {
@@ -809,14 +808,22 @@ describe("useAgentChat slash skill 执行链路", () => {
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
-          input: {
-            text: expect.stringContaining("请对以下对象进行代码审查"),
-          },
+          input: [
+            expect.objectContaining({
+              type: "text",
+              text: expect.stringContaining("请对以下对象进行代码审查"),
+            }),
+          ],
         }),
       );
       expect(mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
-          input: { text: expect.stringContaining("lime-rs") },
+          input: [
+            expect.objectContaining({
+              type: "text",
+              text: expect.stringContaining("lime-rs"),
+            }),
+          ],
         }),
       );
     } finally {

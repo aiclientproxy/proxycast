@@ -1,4 +1,3 @@
-/* global process */
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -314,7 +313,7 @@ describe("storage root boundary", () => {
     ).toEqual([]);
   });
 
-  it("production canonical ThreadStore 必须注入 AgentRoot rollout owner", () => {
+  it("production canonical ThreadStore 必须注入 StorageRoots 与 AgentRoot rollout owner", () => {
     const mainProductionSource = readFileSync(APP_SERVER_MAIN, "utf8").split(
       "\n#[cfg(test)]\nmod tests",
       1,
@@ -322,11 +321,17 @@ describe("storage root boundary", () => {
     const projectionStore = readFileSync(APP_SERVER_PROJECTION_STORE, "utf8");
 
     expect(mainProductionSource).toContain(
-      "ProjectionStore::initialize_with_agent_root(",
+      "ProjectionStore::initialize_with_storage_paths(",
     );
+    expect(mainProductionSource).toContain("&storage_roots.projection_db_path");
+    expect(mainProductionSource).toContain("&storage_roots.state_db_path");
+    expect(mainProductionSource).toContain(
+      "&storage_roots.thread_history_db_path",
+    );
+    expect(mainProductionSource).toContain("&storage_roots.data_root");
     expect(mainProductionSource).not.toContain("ProjectionStore::initialize(");
     expect(projectionStore).toContain("rollout_store: Option<RolloutStore>");
-    expect(projectionStore).toContain("pub fn initialize_with_agent_root(");
+    expect(projectionStore).toContain("pub fn initialize_with_storage_paths(");
   });
 
   it("sessionFile current writer 只能使用注入的 AgentRoot artifact 目录", () => {

@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,7 +46,7 @@ function createGoal(status: ThreadGoal["status"] = "active"): ThreadGoal {
 }
 
 function renderPanel(
-  props: Partial<React.ComponentProps<typeof ThreadGoalPanel>> = {},
+  props: Partial<ComponentProps<typeof ThreadGoalPanel>> = {},
 ) {
   const container = document.createElement("div");
   document.body.appendChild(container);

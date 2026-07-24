@@ -88,6 +88,7 @@ describe("codex import fidelity acceptance matrix guard", () => {
     expect(matrix).toContain(
       "旧 Tauri / `lime-rs/src/**` / 旧 `agent_runtime_*` 不作为新增能力落点",
     );
+    expect(matrix).not.toContain("agentSession/");
     expect(matrix).not.toContain("WebviewWindow");
   });
 
@@ -307,8 +308,9 @@ describe("codex import fidelity acceptance matrix guard", () => {
 
     expect(matrix).toContain("session delete / retention boundary");
     expect(matrix).toContain(
-      "`agentSession/delete` 清理 Lime memory / projection / event log / session-scoped sidecar",
+      "`thread/delete` 清理 Lime memory / projection / event log / session-scoped sidecar",
     );
+    expect(matrix).toContain("`thread/archive` / `thread/unarchive`");
     expect(matrix).toContain("不删除外部来源目录");
     expect(matrix).toContain(
       "导出后删除、删除前导出确认和保留期限策略还需要独立产品规则",
@@ -318,11 +320,13 @@ describe("codex import fidelity acceptance matrix guard", () => {
       "appServerSessionClient.deleteAgentRuntimeSession(sessionId)",
     );
     expect(sessionClientBoundary).toContain(
-      "session archive / restore use agentSession/update and delete uses agentSession/delete",
+      "archive projection must use thread/archive instead of session update",
     );
-    expect(sessionClientBoundary).toContain("archived: true");
     expect(sessionClientBoundary).toContain(
-      "delete projection must use typed agentSession/delete helper",
+      "unarchive projection must use thread/unarchive",
+    );
+    expect(sessionClientBoundary).toContain(
+      "delete projection must resolve canonical id and use thread/delete",
     );
   });
 
