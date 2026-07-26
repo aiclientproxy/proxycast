@@ -198,6 +198,20 @@ describe("Electron release workflow guard", () => {
     }
   });
 
+  it("rejects missing macOS timestamp retry classification in Forge package step", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        "A timestamp was expected but was not found",
+        "A timestamp was unexpectedly absent",
+      ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /Electron Forge make step must include A timestamp was expected but was not found/,
+    );
+  });
+
   it("rejects Forge make without the existing package output", () => {
     const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
     const workflowPath = tempWorkflowPath(

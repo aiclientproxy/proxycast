@@ -1,6 +1,6 @@
 # Lime v1.112.0 发布执行计划
 
-状态：ready-for-git-confirmation
+状态：ready-for-recovery-git-confirmation
 日期：2026-07-26
 目标版本：`1.112.0`
 目标 tag：`v1.112.0`
@@ -11,8 +11,8 @@
 
 ## 当前阶段与下一刀
 
-- 当前阶段：版本事实源、双语 release notes、架构事实源与发布前门禁已完成，正在建立最终候选稳定窗口并汇总 Git 写操作确认信息。
-- 下一刀：获得明确确认后统一暂存完整 release candidate，复核 staged 摘要，再连续完成 release commit、tag、`main`/tag 推送与远端复核。
+- 当前阶段：release commit、`v1.112.0` tag、`main`/tag 推送与 GitHub Release 已完成；远端 macOS x64 packaging 因 Apple timestamp 响应缺失失败，正在修复可重试分类。
+- 下一刀：验证 workflow recovery guard 后，将修复提交推送至 `main`，以 `workflow_dispatch` 从 `v1.112.0` source ref 重跑发布 workflow，不重写已发布 tag。
 
 ## Release Candidate
 
@@ -50,6 +50,14 @@
 - Git 写操作确认前最终复核：`npm run typecheck`、`npm run verify:app-version`、`git diff --check` 与 `git diff --cached --check` 再次通过；根应用版本仍为 `1.112.0`。
 - `npm run test:related`：未通过；smart runner 将目录路径 `electron` 当文件读取，报 `EISDIR`。定向 Vitest、changed tests、contracts、current fixture 与 GUI smoke 已独立通过；该 runner 基础设施问题不写成产品门禁通过。
 
+## 发布后恢复
+
+- `Release v1.112.0` 已提交为 `00de4eb436573707220d99b5f3bcfe890b85562c`；本地 `main`、`origin/main`、本地 tag 与远端 `v1.112.0` 指向同一提交，GitHub Release 已创建。
+- 首次 Release workflow `30192808153` 仅 `Build Electron macOS-x64` 失败。失败命令为对 Electron Framework `locale.pak` 的 `codesign --timestamp`，错误为 `A timestamp was expected but was not found`；macOS arm64、Windows x64 和 Windows Squirrel installed-candidate smoke 均成功。
+- 根因分类：Apple timestamp 服务瞬态失败，而非应用代码、签名身份或 notarization 配置失效。修复将该稳定错误文本纳入既有 macOS package 三次重试规则，并由 release workflow guard 回归守护。
+- 恢复写集：`.github/workflows/release.yml`、`scripts/electron/release-workflow-guard.mjs`、其测试与本计划。当前并发的 Rust/文档改动明确排除，不进入 workflow recovery commit。
+- 恢复验证：定向 release workflow guard Vitest `27/27`、`npm run test:contracts`、`npm run governance:electron-release-workflow`、`npm run typecheck`、`npm run verify:app-version` 与 `git diff --check` 通过。
+
 ## 架构确认与治理分类
 
 - 架构影响：重大。候选涉及 App Server v2 Thread search/metadata/control、background terminal、elicitation/Guardian continuation、Model catalog、RuntimeCore、Provider 与 canonical read model 边界。
@@ -63,4 +71,4 @@
 
 平台限制：macOS arm64 真实 Electron Gate B 已通过；未执行 Windows 真机与正式 packaged artifact 安装验证，不将其写成通过。
 
-当前 release candidate 完成度：`90%`；版本、说明、架构确认与发布前门禁已完成，剩余为危险操作确认后的 stage/commit/tag/push 和远端一致性复核。
+当前发布恢复完成度：`95%`；原 release commit、tag、推送与 GitHub Release 已完成，剩余为危险操作确认后的 workflow recovery commit/push、从 `v1.112.0` source ref 重新 dispatch，并监控远端资产发布结果。
