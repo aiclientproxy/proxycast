@@ -29,7 +29,9 @@ use model_provider::current_client::{
     CanonicalLlmEvent, CurrentProviderClient, CurrentProviderContent, CurrentProviderMessage,
     CurrentProviderRequest,
 };
-use model_provider::runtime_provider::{RuntimeProviderConfig, RuntimeProviderProtocol};
+use model_provider::runtime_provider::{
+    RuntimeProviderAuth, RuntimeProviderConfig, RuntimeProviderProtocol,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -837,6 +839,70 @@ mod tests {
             .is_none());
     }
 
+    #[tokio::test]
+    async fn unsupported_provider_tests_fail_before_network() {
+        let db = init_test_database();
+        let service = ApiKeyProviderService::new();
+
+        for provider_type in [
+            ApiProviderType::Gemini,
+            ApiProviderType::AzureOpenai,
+            ApiProviderType::Vertexai,
+            ApiProviderType::AwsBedrock,
+            ApiProviderType::Ollama,
+            ApiProviderType::Fal,
+        ] {
+            let provider = service
+                .add_custom_provider(
+                    &db,
+                    format!("Unsupported {provider_type}"),
+                    provider_type,
+                    "http://127.0.0.1:9".to_string(),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("create unsupported provider");
+            service
+                .add_api_key(&db, &provider.id, "test-key", None, true)
+                .expect("add provider key");
+
+            let chat = service
+                .test_chat(
+                    &db,
+                    &provider.id,
+                    Some("test-model".to_string()),
+                    "hello".to_string(),
+                )
+                .await
+                .expect("chat test result");
+            assert!(!chat.success, "provider_type={provider_type}");
+            assert!(
+                chat.error
+                    .as_deref()
+                    .is_some_and(|error| error.starts_with("unsupported_protocol:")),
+                "provider_type={provider_type}, error={:?}",
+                chat.error
+            );
+
+            let connection = service
+                .test_connection(&db, &provider.id, Some("test-model".to_string()))
+                .await
+                .expect("connection test result");
+            assert!(!connection.success, "provider_type={provider_type}");
+            assert!(
+                connection
+                    .error
+                    .as_deref()
+                    .is_some_and(|error| error.starts_with("unsupported_protocol:")),
+                "provider_type={provider_type}, error={:?}",
+                connection.error
+            );
+        }
+    }
+
     async fn spawn_single_response_server(
         response_body: serde_json::Value,
     ) -> (String, tokio::task::JoinHandle<(String, String)>) {
@@ -1441,6 +1507,16 @@ impl ApiKeyProviderService {
             .await
     }
 
+    fn current_chat_adapter_error(provider_type: ApiProviderType) -> Option<String> {
+        RuntimeProviderProtocol::from_provider_type(&provider_type.to_string())
+            .is_none()
+            .then(|| {
+                format!(
+                    "unsupported_protocol: 当前 model-provider 没有 {provider_type} chat adapter"
+                )
+            })
+    }
+
     pub async fn test_chat_with_fallback_models(
         &self,
         db: &DbConnection,
@@ -1457,6 +1533,16 @@ impl ApiKeyProviderService {
 
         let provider = &provider_with_keys.provider;
         let effective_provider_type = provider.effective_provider_type();
+
+        if let Some(error) = Self::current_chat_adapter_error(effective_provider_type) {
+            return Ok(ChatTestResult {
+                success: false,
+                latency_ms: None,
+                error: Some(error),
+                content: None,
+                raw: None,
+            });
+        }
 
         let api_key = self
             .get_next_api_key(db, provider_id)?
@@ -1737,6 +1823,7 @@ impl ApiKeyProviderService {
             provider_selector: Some(provider_type.to_string()),
             model_name: model.to_string(),
             api_key: Some(api_key.to_string()),
+            auth: RuntimeProviderAuth::ApiKey,
             base_url: Some(api_host.to_string()),
             credential_uuid: format!("api-key-provider:{provider_type}"),
             reasoning_effort: None,
@@ -3153,6 +3240,15 @@ impl ApiKeyProviderService {
         let provider = &provider_with_keys.provider;
         let effective_provider_type = provider.effective_provider_type();
 
+        if let Some(error) = Self::current_chat_adapter_error(effective_provider_type) {
+            return Ok(ConnectionTestResult {
+                success: false,
+                latency_ms: None,
+                error: Some(error),
+                models: None,
+            });
+        }
+
         // 获取一个可用的 API Key
         let api_key = self
             .get_next_api_key(db, provider_id)?
@@ -3192,7 +3288,6 @@ impl ApiKeyProviderService {
                     Err(e) => Err(e),
                 }
             }
-            ApiProviderType::Gemini => Err("当前 model-provider 不支持 Gemini 协议".to_string()),
             ApiProviderType::Codex => {
                 let test_model = Self::pick_test_model(
                     model_name.clone(),

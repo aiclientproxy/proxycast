@@ -7,8 +7,6 @@ use chrono::DateTime;
 use chrono::NaiveDateTime;
 use chrono::Utc;
 use flate2::read::GzDecoder;
-use lime_core::app_paths;
-use lime_core::database;
 use std::fs;
 use std::io::Read;
 use std::io::Write;
@@ -277,11 +275,15 @@ fn ensure_dir_writable(path: &Path) -> Result<(), String> {
         .map_err(|error| format!("删除探测文件失败 {}: {error}", probe_path.display()))
 }
 
-pub(crate) fn read_windows_startup_diagnostics() -> Result<WindowsStartupDiagnosticsResponse, String>
-{
-    let app_data_dir = app_paths::preferred_data_dir().ok();
+pub(crate) fn read_windows_startup_diagnostics(
+    app_data_root: &Path,
+    database_path: &Path,
+) -> Result<WindowsStartupDiagnosticsResponse, String> {
+    // 两者都由组合根注入：诊断必须报告实际生效的根与实际打开的库，
+    // 而不是重新猜出来的平台默认值。
+    let app_data_dir = Some(app_data_root.to_path_buf());
     let legacy_data_dir = legacy_data_dir_guess();
-    let db_path = database::get_db_path().ok();
+    let db_path = Some(database_path.to_path_buf());
     let current_exe = std::env::current_exe().ok();
     let current_dir = std::env::current_dir().ok();
     let home_dir = dirs::home_dir();
@@ -442,6 +444,36 @@ pub(super) fn clear_persisted_log_artifacts_from_path(
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn startup_diagnostics_reports_injected_storage_roots() {
+        let temp = TempDir::new().expect("temp dir");
+        let app_data_root = temp.path().join("machine-data");
+        let database_path = temp.path().join("portable-agent").join("lime.db");
+        fs::create_dir_all(database_path.parent().expect("database parent"))
+            .expect("create database parent");
+        fs::write(&database_path, []).expect("create database file");
+
+        let diagnostics = read_windows_startup_diagnostics(&app_data_root, &database_path)
+            .expect("startup diagnostics");
+
+        assert_eq!(
+            diagnostics.app_data_dir.as_deref(),
+            Some(app_data_root.to_string_lossy().as_ref())
+        );
+        assert_eq!(
+            diagnostics.db_path.as_deref(),
+            Some(database_path.to_string_lossy().as_ref())
+        );
+        assert!(diagnostics
+            .checks
+            .iter()
+            .any(|check| check.key == "app_data_dir" && check.status == "ok"));
+        assert!(diagnostics
+            .checks
+            .iter()
+            .any(|check| check.key == "db_path" && check.status == "ok"));
+    }
 
     #[test]
     fn log_helpers_read_tail_and_clear_persisted_artifacts() {

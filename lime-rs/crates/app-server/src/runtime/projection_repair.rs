@@ -251,7 +251,8 @@ mod tests {
     #[test]
     fn repair_session_rebuilds_projection_from_jsonl_event_log() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+        let roots =
+            StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
         let event_log_writer = EventLogWriter::new(&roots.event_log_root).expect("writer");
         let projection_store =
             ProjectionStore::initialize(&roots.projection_db_path).expect("projection");
@@ -286,7 +287,8 @@ mod tests {
     #[test]
     fn read_repaired_session_repairs_missing_projection_before_read() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+        let roots =
+            StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
         let event_log_writer = EventLogWriter::new(&roots.event_log_root).expect("writer");
         let projection_store =
             ProjectionStore::initialize(&roots.projection_db_path).expect("projection");
@@ -325,7 +327,8 @@ mod tests {
     #[test]
     fn read_repaired_session_rebuilds_partial_canonical_message_history() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+        let roots =
+            StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
         let event_log_writer = EventLogWriter::new(&roots.event_log_root).expect("writer");
         let projection_store =
             ProjectionStore::initialize(&roots.projection_db_path).expect("projection");

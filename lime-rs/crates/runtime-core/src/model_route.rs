@@ -214,6 +214,9 @@ fn safe_route_evidence_value(resolved_route: &ResolvedModelRoute) -> Value {
         // detail, so retain its kind and non-sensitive routing hints but never persist its URL.
         endpoint.remove("baseUrl");
     }
+    if let Some(auth) = value.get_mut("auth").and_then(Value::as_object_mut) {
+        auth.remove("credentialRef");
+    }
     value
 }
 
@@ -294,7 +297,7 @@ fn normalize_token(value: &str) -> Option<String> {
     }
 }
 
-fn protocol_from_provider_name(provider: &str) -> ProtocolKind {
+pub fn protocol_from_provider_name(provider: &str) -> ProtocolKind {
     match normalize_token(provider).as_deref() {
         Some("openai_response") | Some("openai_responses") | Some("responses") => {
             ProtocolKind::OpenaiResponses
@@ -1316,11 +1319,11 @@ mod tests {
                 region: None,
             },
             auth: AuthMaterialRef {
-                kind: app_server_protocol::AuthKind::NoAuth,
+                kind: app_server_protocol::AuthKind::ApiKeyRef,
                 provider_id: Some("openai".to_string()),
-                credential_ref: None,
-                header_name: None,
-                header_prefix: None,
+                credential_ref: Some("credential-secret-ref".to_string()),
+                header_name: Some("Authorization".to_string()),
+                header_prefix: Some("Bearer".to_string()),
             },
             transport: TransportKind::Http,
             framing: FramingKind::Sse,
@@ -1370,7 +1373,11 @@ mod tests {
             Some("openai_chat")
         );
         assert!(payload.pointer("/resolvedRoute/endpoint/baseUrl").is_none());
+        assert!(payload
+            .pointer("/resolvedRoute/auth/credentialRef")
+            .is_none());
         assert!(!payload.to_string().contains("https://example.com"));
+        assert!(!payload.to_string().contains("credential-secret-ref"));
         assert_eq!(
             payload
                 .pointer("/routeFailure/reasonCode")
@@ -1428,6 +1435,7 @@ mod tests {
                         0,
                         1,
                     ),
+                    runtime_failure: None,
                 },
                 crate::model_routing::RoutingAttempt {
                     slot: "base".to_string(),
@@ -1439,6 +1447,7 @@ mod tests {
                         1,
                         1,
                     ),
+                    runtime_failure: None,
                 },
             ],
         };

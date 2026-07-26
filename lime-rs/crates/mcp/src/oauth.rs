@@ -11,7 +11,6 @@ use lime_core::DynEmitter;
 use rmcp::transport::auth::{AuthorizationManager, CredentialStore, OAuthState, StoredCredentials};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-#[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -36,9 +35,10 @@ pub struct McpOAuthLoginResponse {
     pub state: String,
 }
 
+/// OAuth 凭据根只能由组合根注入。未注入时所有凭据操作 fail closed，
+/// 不回退平台默认目录——旧的平台根旁路已删除。
 #[derive(Debug, Clone, Default)]
 pub struct McpOAuthRegistry {
-    #[cfg(test)]
     store_root: Option<PathBuf>,
 }
 
@@ -47,8 +47,7 @@ impl McpOAuthRegistry {
         Self::default()
     }
 
-    #[cfg(test)]
-    fn new_in(root_dir: impl Into<PathBuf>) -> Self {
+    pub fn new_in(root_dir: impl Into<PathBuf>) -> Self {
         Self {
             store_root: Some(root_dir.into()),
         }
@@ -110,7 +109,7 @@ impl McpOAuthRegistry {
         } else {
             None
         };
-        let store = self.store_for(server_name, url.as_str());
+        let store = self.store_for(server_name, url.as_str())?;
         let mut auth_state = OAuthState::new(url.as_str(), Some(client))
             .await
             .map_err(oauth_error)?;
@@ -189,7 +188,7 @@ impl McpOAuthRegistry {
             return Ok(None);
         };
 
-        let store = self.store_for(server_name, url.as_str());
+        let store = self.store_for(server_name, url.as_str())?;
         let client = oauth_http_client(
             Some(url.as_str()),
             None,
@@ -221,18 +220,28 @@ impl McpOAuthRegistry {
             McpServerTransport::StreamableHttp { url, .. } => url,
             McpServerTransport::Stdio { .. } => return Ok(false),
         };
-        self.store_for(server_name, url.as_str())
+        self.store_for(server_name, url.as_str())?
             .has_credentials()
             .await
             .map_err(oauth_error)
     }
 
-    fn store_for(&self, server_name: &str, server_url: &str) -> PersistentCredentialStore {
-        #[cfg(test)]
-        if let Some(root_dir) = &self.store_root {
-            return PersistentCredentialStore::new_in(root_dir, server_name, server_url);
-        }
-        PersistentCredentialStore::new(server_name, server_url)
+    fn store_for(
+        &self,
+        server_name: &str,
+        server_url: &str,
+    ) -> Result<PersistentCredentialStore, McpError> {
+        let root_dir = self.store_root.as_ref().ok_or_else(|| {
+            McpError::ConfigError(
+                "MCP OAuth credential root is not injected; refusing to guess a platform directory"
+                    .to_string(),
+            )
+        })?;
+        Ok(PersistentCredentialStore::new_in(
+            root_dir,
+            server_name,
+            server_url,
+        ))
     }
 }
 

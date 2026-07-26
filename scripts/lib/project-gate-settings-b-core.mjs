@@ -17,11 +17,6 @@ export const SETTINGS_GATE_B_SCENARIOS = Object.freeze([
     owner: "settings/app-server",
   },
   {
-    id: "provider-migration-recovery",
-    tab: "providers",
-    owner: "settings/model-provider",
-  },
-  {
     id: "provider-crud-model-auth",
     tab: "providers",
     owner: "settings/model-provider",
@@ -97,12 +92,6 @@ function arrayEmpty(value) {
   return Array.isArray(value) && value.length === 0;
 }
 
-function includesAll(values, required) {
-  return (
-    Array.isArray(values) && required.every((value) => values.includes(value))
-  );
-}
-
 function assertCommonSource(summary, candidateRunId, label) {
   if (summary?.schemaVersion !== 1) {
     throw new Error(`${label}: schemaVersion must be 1`);
@@ -164,69 +153,6 @@ function adaptShellMemory(summary, candidateRunId) {
   };
 }
 
-function adaptProviderMigration(summary, candidateRunId) {
-  const label = "provider-migration";
-  assertCommonSource(summary, candidateRunId, label);
-  const valid =
-    summary.surfaceProof?.surfaceId === "SHELL-02" &&
-    summary.surfaceProof?.proof === "gate-b-f" &&
-    summary.surfaceProof?.complete === true &&
-    summary.claimScope === "shell-02-config-path-migration-isolation" &&
-    arrayEmpty(summary.missingScenarios) &&
-    summary.electronRenderer === true &&
-    summary.electronPreloadBridge === true &&
-    summary.electronIpcSeen === true &&
-    summary.appServerHandleJsonLinesSeen === true &&
-    includesAll(summary.electronRequestMethods, [
-      "modelProvider/list",
-      "modelProviderUiState/read",
-      "modelProviderUiState/write",
-    ]) &&
-    summary.providerVisibleInGui === true &&
-    summary.restartVerified === true &&
-    summary.restartElectronRenderer === true &&
-    summary.restartElectronPreloadBridge === true &&
-    summary.restartElectronIpcSeen === true &&
-    summary.restartAppServerHandleJsonLinesSeen === true &&
-    summary.restartProviderVisibleInGui === true &&
-    includesAll(summary.restartElectronRequestMethods, [
-      "modelProvider/list",
-      "modelProviderUiState/read",
-    ]) &&
-    summary.permissionFailureVerified === true &&
-    summary.permissionElectronRenderer === true &&
-    summary.permissionElectronPreloadBridge === true &&
-    summary.permissionElectronIpcSeen === true &&
-    summary.permissionAppServerHandleJsonLinesSeen === true &&
-    summary.permissionFailureCauseSeen === true &&
-    summary.permissionUserVisible === true &&
-    summary.permissionSourceUnchanged === true &&
-    summary.permissionMigrationManifestExists === false &&
-    summary.permissionMigratedProductDbExists === false &&
-    summary.permissionPageErrorCount === 0 &&
-    summary.permissionRendererCrashCount === 0 &&
-    arrayEmpty(summary.legacyProviderCommandsSeen) &&
-    arrayEmpty(summary.restartLegacyProviderCommandsSeen) &&
-    arrayEmpty(summary.consoleErrors) &&
-    arrayEmpty(summary.pageErrors) &&
-    arrayEmpty(summary.invokeErrors) &&
-    summary.rendererCrashCount === 0;
-  if (!valid) {
-    throw new Error(`${label}: incomplete Provider migration evidence`);
-  }
-  return {
-    scenarioId: "provider-migration-recovery",
-    sourceKind: label,
-    methods: Array.from(
-      new Set([
-        ...summary.electronRequestMethods,
-        ...summary.restartElectronRequestMethods,
-        ...summary.permissionFailedRequestMethods,
-      ]),
-    ).sort(),
-  };
-}
-
 function adaptSettingsScenario(summary, candidateRunId) {
   const label = "settings-scenario";
   assertCommonSource(summary, candidateRunId, label);
@@ -269,9 +195,6 @@ export function adaptSettingsGateBSource(record, candidateRunId) {
   }
   if (record.kind === "shell-memory") {
     return adaptShellMemory(record.value, runId);
-  }
-  if (record.kind === "provider-migration") {
-    return adaptProviderMigration(record.value, runId);
   }
   if (record.kind === "settings-scenario") {
     return adaptSettingsScenario(record.value, runId);

@@ -72,7 +72,7 @@ async fn thread_inject_items_validates_and_persists_raw_response_items() {
 #[tokio::test]
 async fn thread_inject_items_resumes_cold_history_and_rejects_archived_thread() {
     let temp = TempDir::new().expect("inject-items restart JSON-RPC temp dir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server"))
+    let roots = StorageRoots::initialize(temp.path(), temp.path().join("app-server"))
         .expect("inject-items restart storage roots");
     let thread_id = {
         let projection = Arc::new(

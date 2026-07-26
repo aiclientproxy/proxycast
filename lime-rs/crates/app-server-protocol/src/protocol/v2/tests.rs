@@ -702,6 +702,33 @@ fn model_safety_buffering_notification_round_trips_codex_shape() {
 }
 
 #[test]
+fn model_verification_notification_round_trips_codex_shape() {
+    let expected = json!({
+        "method": "model/verification",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "verifications": ["trustedAccessForCyber"]
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode model verification notification");
+    assert_eq!(notification.method(), METHOD_MODEL_VERIFICATION);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_MODEL_VERIFICATION);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC model verification notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode model verification notification"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_MODEL_VERIFICATION));
+}
+
+#[test]
 fn thread_status_changed_notification_round_trips_codex_shape() {
     let expected = json!({
         "method": "thread/status/changed",
@@ -1076,6 +1103,32 @@ fn turn_start_and_steer_preserve_canonical_metadata_fields() {
     }))
     .expect("deserialize turn/steer params");
     assert_eq!(steer.expected_turn_id, "turn_1");
+}
+
+#[test]
+fn multi_agent_mode_uses_typed_codex_wire_and_rejects_arbitrary_json() {
+    let params: TurnStartParams = serde_json::from_value(json!({
+        "threadId": "thread_1",
+        "input": [{"type": "text", "text": "delegate work"}],
+        "multiAgentMode": "proactive"
+    }))
+    .expect("typed proactive mode");
+    assert_eq!(
+        params.multi_agent_mode,
+        Some(agent_protocol::MultiAgentMode::Proactive)
+    );
+    assert_eq!(
+        serde_json::to_value(params).expect("serialize params")["multiAgentMode"],
+        "proactive"
+    );
+
+    let error = serde_json::from_value::<TurnStartParams>(json!({
+        "threadId": "thread_1",
+        "input": [{"type": "text", "text": "delegate work"}],
+        "multiAgentMode": {"enabled": true}
+    }))
+    .expect_err("arbitrary multi-agent JSON must fail closed");
+    assert!(error.to_string().contains("unknown variant"));
 }
 
 #[test]
@@ -1599,6 +1652,7 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "item/reasoning/summaryTextDelta",
             "item/reasoning/summaryPartAdded",
             "item/reasoning/textDelta",
+            "model/verification",
             "model/safetyBuffering/updated",
             "thread/settings/updated",
             "thread/tokenUsage/updated",

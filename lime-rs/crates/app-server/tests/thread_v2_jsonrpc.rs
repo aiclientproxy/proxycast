@@ -70,7 +70,8 @@ async fn thread_start_returns_the_v2_thread_envelope() {
             "model": "gpt-5.4",
             "modelProvider": "openai",
             "cwd": "/tmp/lime-thread-v2",
-            "historyMode": "paginated"
+            "historyMode": "paginated",
+            "multiAgentMode": "proactive"
         }),
     )
     .await;
@@ -105,6 +106,10 @@ async fn thread_start_returns_the_v2_thread_envelope() {
         response.pointer("/result/thread/cwd"),
         Some(&json!("/tmp/lime-thread-v2"))
     );
+    assert_eq!(
+        response.pointer("/result/multiAgentMode"),
+        Some(&json!("explicitRequestOnly"))
+    );
     assert!(response.pointer("/result/session").is_none());
 
     let read = request(
@@ -127,6 +132,9 @@ async fn thread_start_returns_the_v2_thread_envelope() {
         read.pointer("/result/thread/extra/workingDir"),
         Some(&json!("/tmp/lime-thread-v2"))
     );
+    assert!(read
+        .pointer("/result/thread/extra/multiAgentMode")
+        .is_none());
     assert_eq!(
         read.pointer("/result/thread/extra/historyMode"),
         Some(&json!("paginated"))

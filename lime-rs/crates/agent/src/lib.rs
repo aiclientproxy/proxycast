@@ -17,7 +17,6 @@ mod current_provider_turn;
 mod direct_text_generation;
 pub mod durable_memory_fs;
 pub mod filesystem_event_protocol;
-pub mod hooks;
 mod host_managed_generation;
 mod knowledge_builder_skill;
 pub mod lime_session_repository;

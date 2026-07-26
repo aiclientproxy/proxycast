@@ -35,6 +35,8 @@ use tempfile::TempDir;
 const WORKSPACE_ID: &str = "workspace-current";
 const WORKSPACE_ROOT: &str = "/tmp/lime-current-workspace";
 fn setup_data_source() -> LocalAppDataSource {
+    let app_data_root = std::env::temp_dir().join("app-server-local-data-source-test");
+    let agent_root = app_data_root.join("agent");
     let conn = Connection::open_in_memory().expect("open in-memory db");
     create_tables(&conn).expect("create schema");
     conn.execute(
@@ -50,15 +52,11 @@ fn setup_data_source() -> LocalAppDataSource {
     .expect("insert workspace");
     LocalAppDataSource {
         db: Arc::new(Mutex::new(conn)),
-        plugin_data_root: std::env::temp_dir()
-            .join("app-server-local-data-source-test")
-            .join("plugins"),
-        session_files_root: std::env::temp_dir()
-            .join("app-server-local-data-source-test")
-            .join("artifacts")
-            .join("sessions"),
-        connect_registry_cache_path: std::env::temp_dir()
-            .join("app-server-local-data-source-test")
+        app_data_root,
+        product_db_path: crate::runtime::product_db_path_for_agent_root(&agent_root),
+        plugin_data_root: agent_root.join("plugins"),
+        session_files_root: agent_root.join("artifacts").join("sessions"),
+        connect_registry_cache_path: agent_root
             .join("cache")
             .join("connect")
             .join("registry.json"),

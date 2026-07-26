@@ -332,6 +332,22 @@ fn emit_oauth_error_sends_server_error_event() {
 }
 
 #[tokio::test]
+async fn credential_lookup_fails_closed_without_injected_store_root() {
+    let registry = McpOAuthRegistry::new();
+    let config = dynamic_oauth_config("https://example.com/mcp".to_string());
+
+    let error = registry
+        .has_credentials("remote-docs", &config)
+        .await
+        .expect_err("credential lookup without an injected root must fail closed");
+
+    assert!(matches!(error, McpError::ConfigError(_)));
+    assert!(error
+        .to_string()
+        .contains("MCP OAuth credential root is not injected"));
+}
+
+#[tokio::test]
 async fn start_login_completes_against_local_oauth_provider_and_persists_token() {
     let provider = spawn_test_oauth_provider().await;
     let server_url = format!("{}/mcp", provider.base_url);

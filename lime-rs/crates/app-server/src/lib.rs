@@ -137,6 +137,7 @@ pub use otel_trace::init_app_server_otel_from_env;
 pub use otel_trace::AppServerOtelGuard;
 use processor::RequestProcessor;
 pub(crate) use runtime::export_trace_events_from_store_to_path;
+pub use runtime::install_style_pack_data_root;
 pub(crate) use runtime::summarize_trace_event_store;
 pub use runtime::ActionRespondRequest;
 pub use runtime::AppDataSource;

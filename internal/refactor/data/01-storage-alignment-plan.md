@@ -47,7 +47,7 @@ Codex `~/.codex` 与 Lime 的语义分组见 [02-codex-lime-storage-matrix.md](0
 <electronUserData>/app-server/runtime/telemetry_1.sqlite
 ```
 
-但 [app_paths.rs](../../../lime-rs/crates/core/src/app_paths.rs) 仍把 `logs`、`request_logs`、`projects`、`sessions`、`agent` 等解析到 `<electronUserData>/runtime/<name>`（约 103-130、298-316 行）。这产生了两个物理 runtime root：
+本次快照对应的旧 [app_paths.rs](../../../lime-rs/crates/core/src/app_paths.rs) 曾把 `logs`、`request_logs`、`projects`、`sessions`、`agent` 等解析到 `<electronUserData>/runtime/<name>`，因此磁盘上形成了两个物理 runtime root。current 源码已停止非模型目录复制，并把 App Server writer 收敛到显式 `AgentRoot`；下表中的旧根仍是待停写核验和 exact-path cleanup 的物理证据，不能因 current resolver 已收口而忽略。
 
 | root                                          |                               文件数/占用 | 关键证据                         |
 | --------------------------------------------- | ----------------------------------------: | -------------------------------- |

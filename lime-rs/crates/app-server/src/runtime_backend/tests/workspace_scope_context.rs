@@ -62,6 +62,108 @@ fn request_workspace_scope_keeps_project_root_and_working_dir_distinct() {
 }
 
 #[test]
+fn turn_context_projects_typed_world_state_without_unowned_sections() {
+    let workspace = TempDir::new().expect("create workspace");
+    let repo = workspace.path().join("repo");
+    let nested = repo.join("apps").join("writer");
+    std::fs::create_dir_all(&nested).expect("create nested workspace");
+    let request = request_for_test(
+        "plan the change",
+        Some(RuntimeRequest {
+            provider_preference: Some("openai".to_string()),
+            model_preference: Some("gpt-4.1".to_string()),
+            collaboration_mode: Some(agent_protocol::CollaborationMode {
+                mode: agent_protocol::ModeKind::Plan,
+                settings: agent_protocol::CollaborationModeSettings {
+                    model: "gpt-4.1".to_string(),
+                    reasoning_effort: Some("high".to_string()),
+                    developer_instructions: None,
+                },
+            }),
+            reasoning_effort: Some("high".to_string()),
+            approval_policy: Some("on-request".to_string()),
+            sandbox_policy: Some("workspace-write".to_string()),
+            project_root: Some(repo.to_string_lossy().into_owned()),
+            working_dir: Some(nested.to_string_lossy().into_owned()),
+            web_search: Some(true),
+            search_mode: Some(RuntimeSearchMode::Required),
+            ..RuntimeRequest::default()
+        }),
+        None,
+    );
+    let host_request = runtime_request_from_request(&request).expect("host request");
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("model selection");
+
+    let turn_context =
+        turn_context_from_request(&request, Some(&host_request), &scope, &selection, None)
+            .expect("turn context");
+    let world_state = turn_context
+        .metadata
+        .get(agent_protocol::world_state::WORLD_STATE_TURN_METADATA_KEY)
+        .expect("world state metadata");
+
+    assert_eq!(
+        world_state
+            .pointer("/environment/cwd")
+            .and_then(Value::as_str),
+        Some(nested.to_string_lossy().as_ref()),
+    );
+    assert_eq!(
+        world_state
+            .pointer("/environment/projectRoot")
+            .and_then(Value::as_str),
+        Some(repo.to_string_lossy().as_ref()),
+    );
+    assert_eq!(world_state["environment"]["workspaceId"], "workspace-main");
+    assert_eq!(world_state["environment"]["threadId"], "thread-1");
+    assert_eq!(world_state["environment"]["turnId"], "turn-1");
+    assert_eq!(world_state["environment"]["provider"], "openai");
+    assert_eq!(world_state["environment"]["model"], "gpt-4.1");
+    assert_eq!(world_state["environment"]["reasoningEffort"], "high");
+    assert_eq!(world_state["permissions"]["approvalPolicy"], "on-request");
+    assert_eq!(
+        world_state["permissions"]["sandboxPolicy"],
+        "workspace-write"
+    );
+    assert_eq!(world_state["permissions"]["webSearch"], true);
+    assert_eq!(world_state["collaboration"]["mode"], "plan");
+    assert_eq!(world_state["collaboration"]["source"], "runtime_request");
+    assert_eq!(world_state["multiAgent"], "explicitRequestOnly");
+    assert_eq!(world_state["source"], "app_server_world_state");
+    assert!(world_state.get("instructionSections").is_none());
+}
+
+#[test]
+fn turn_context_derives_proactive_multi_agent_mode_from_ultra_effort() {
+    let workspace = TempDir::new().expect("create workspace");
+    let request = request_for_test(
+        "delegate independent work",
+        Some(RuntimeRequest {
+            provider_preference: Some("openai".to_string()),
+            model_preference: Some("gpt-5.4".to_string()),
+            reasoning_effort: Some("ultra".to_string()),
+            working_dir: Some(workspace.path().to_string_lossy().into_owned()),
+            ..RuntimeRequest::default()
+        }),
+        None,
+    );
+    let host_request = runtime_request_from_request(&request).expect("host request");
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("model selection");
+
+    let turn_context =
+        turn_context_from_request(&request, Some(&host_request), &scope, &selection, None)
+            .expect("turn context");
+    let world_state = turn_context
+        .metadata
+        .get(agent_protocol::world_state::WORLD_STATE_TURN_METADATA_KEY)
+        .expect("world state metadata");
+
+    assert_eq!(world_state["multiAgent"], "proactive");
+}
+
+#[test]
 fn request_workspace_scope_falls_back_to_typed_project_root_when_working_dir_missing() {
     let workspace = TempDir::new().expect("create workspace");
     let request = request_for_test(

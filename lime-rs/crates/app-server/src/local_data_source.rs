@@ -326,9 +326,7 @@ use app_server_protocol::WorkspaceSkillBindingsListParams;
 use app_server_protocol::WorkspaceSkillBindingsListResponse;
 use app_server_protocol::WorkspaceUpdateParams;
 use app_server_protocol::WorkspaceUpdateResponse;
-use lime_core::app_paths;
 use lime_core::config::load_config;
-use lime_core::database;
 use lime_core::database::DbConnection;
 use lime_core::logger;
 use lime_core::session_files::SessionFileStorage;
@@ -349,6 +347,10 @@ use tokio::sync::Mutex as TokioMutex;
 
 pub struct LocalAppDataSource {
     db: DbConnection,
+    /// 由组合根注入的机器数据根。诊断与产品资产 owner 只能消费它，不得自行解析平台根。
+    app_data_root: std::path::PathBuf,
+    /// 实际打开的 Product DB 路径。诊断只报告它，不重新解析。
+    product_db_path: std::path::PathBuf,
     plugin_data_root: std::path::PathBuf,
     session_files_root: std::path::PathBuf,
     connect_registry_cache_path: std::path::PathBuf,
@@ -368,20 +370,16 @@ pub struct LocalAppDataSource {
 }
 
 impl LocalAppDataSource {
-    pub async fn initialize() -> Result<Self, String> {
-        let db = database::init_database()?;
-        Self::initialize_with_db_and_data_root(db, app_paths::preferred_agent_root()?).await
-    }
-
-    pub async fn initialize_with_db(db: DbConnection) -> Result<Self, String> {
-        Self::initialize_with_db_and_data_root(db, app_paths::preferred_agent_root()?).await
-    }
-
-    pub async fn initialize_with_db_and_data_root(
+    /// AppDataRoot 与 AgentRoot 都必须由组合根显式注入。
+    /// 这里不解析平台默认根，也不从 AgentRoot 反推 AppDataRoot。
+    pub async fn initialize_with_roots(
         db: DbConnection,
+        app_data_root: impl Into<std::path::PathBuf>,
         data_root: impl Into<std::path::PathBuf>,
     ) -> Result<Self, String> {
+        let app_data_root = app_data_root.into();
         let data_root = data_root.into();
+        let product_db_path = crate::runtime::product_db_path_for_agent_root(&data_root);
         let plugin_data_root = plugin_packages::plugin_data_dir_for_agent_root(&data_root);
         let session_files_root = SessionFileStorage::base_dir_for_agent_root(&data_root);
         let connect_registry_cache_path =
@@ -396,15 +394,21 @@ impl LocalAppDataSource {
         let gateway_tunnel_state = GatewayTunnelState::default();
         gateway_tunnel::spawn_gateway_tunnel_daemon(gateway_tunnel_state.clone(), logs.clone());
         let memory_backend = Arc::new(LocalMemoryBackend::new(data_root));
+        let mcp_oauth_store_root =
+            lime_mcp::oauth_store::oauth_store_root_for_app_data_root(&app_data_root);
         Ok(Self {
             db,
+            app_data_root,
+            product_db_path,
             plugin_data_root,
             session_files_root,
             connect_registry_cache_path,
             logs,
             api_key_provider_service,
             model_registry_service,
-            mcp_manager: Arc::new(TokioMutex::new(McpClientManager::new(None))),
+            mcp_manager: Arc::new(TokioMutex::new(
+                McpClientManager::new(None).with_oauth_store_root(mcp_oauth_store_root),
+            )),
             mcp_elicitation_router: lime_mcp::ElicitationRequestRouter::default(),
             telegram_gateway_state: TelegramGatewayState::default(),
             feishu_gateway_state: FeishuGatewayState::default(),
@@ -420,6 +424,14 @@ impl LocalAppDataSource {
     pub fn with_sidecar_store(mut self, sidecar_store: Arc<crate::runtime::SidecarStore>) -> Self {
         self.sidecar_store = Some(sidecar_store);
         self
+    }
+
+    pub(crate) fn app_data_root(&self) -> &std::path::Path {
+        &self.app_data_root
+    }
+
+    pub(crate) fn product_db_path(&self) -> &std::path::Path {
+        &self.product_db_path
     }
 
     pub fn mcp_elicitation_router(&self) -> lime_mcp::ElicitationRequestRouter {

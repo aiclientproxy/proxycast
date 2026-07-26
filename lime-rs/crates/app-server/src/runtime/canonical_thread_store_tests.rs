@@ -60,7 +60,8 @@ fn user_tables(path: &Path) -> Vec<String> {
 #[test]
 fn production_storage_paths_keep_physical_table_owners_separate() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("agent-root")).expect("storage roots");
+    let roots = StorageRoots::initialize(temp.path(), temp.path().join("agent-root"))
+        .expect("storage roots");
     let store = ProjectionStore::initialize_with_storage_paths(
         &roots.projection_db_path,
         &roots.state_db_path,
@@ -103,7 +104,8 @@ fn production_storage_paths_keep_physical_table_owners_separate() {
 #[test]
 fn queued_recovery_requires_a_current_canonical_thread_owner() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("agent-root")).expect("storage roots");
+    let roots = StorageRoots::initialize(temp.path(), temp.path().join("agent-root"))
+        .expect("storage roots");
     let store = ProjectionStore::initialize_with_storage_paths(
         &roots.projection_db_path,
         &roots.state_db_path,
@@ -166,7 +168,8 @@ fn queued_recovery_requires_a_current_canonical_thread_owner() {
 #[test]
 fn empty_projection_rebuilds_from_existing_split_state_and_history() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("agent-root")).expect("storage roots");
+    let roots = StorageRoots::initialize(temp.path(), temp.path().join("agent-root"))
+        .expect("storage roots");
     let store = ProjectionStore::initialize_with_storage_paths(
         &roots.projection_db_path,
         &roots.state_db_path,

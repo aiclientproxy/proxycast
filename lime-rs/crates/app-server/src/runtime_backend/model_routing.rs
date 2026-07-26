@@ -2,17 +2,16 @@ use super::model_registry_metadata::RuntimeModelRegistryMetadata;
 use super::request_context::RuntimeModelSelection;
 use crate::ExecutionRequest;
 use lime_agent::SessionProviderConfig;
-use lime_core::database::dao::api_key_provider::{ApiProviderType, ProviderWithKeys};
+use lime_core::database::dao::api_key_provider::ProviderWithKeys;
 use lime_core::database::DbConnection;
-use lime_core::models::provider_type::is_custom_provider_id;
-use lime_core::models::RuntimeProviderType;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
 use lime_services::model_registry_service::ModelRegistryService;
+use model_provider::runtime_provider::RuntimeProviderProtocol;
 use runtime_core::{
-    resolve_ready_model_routing, ModelRoutingDecision, ProviderReadiness, RoutingResolution,
+    resolve_ready_model_routing_with_exclusions, ModelRouteExclusion, ModelRoutingDecision,
+    ProviderReadiness, RoutingAttempt, RoutingResolution,
 };
 use serde_json::Value;
-use std::str::FromStr;
 
 #[cfg(test)]
 pub(super) fn selection_from_profile_model_slot(
@@ -32,11 +31,42 @@ pub(super) fn resolve_ready_routing(
     request: &ExecutionRequest,
     selection: &RuntimeModelSelection,
     direct_provider_config: Option<&SessionProviderConfig>,
+    excluded_routes: &[ModelRouteExclusion],
 ) -> Result<RoutingResolution, String> {
     let metadata_values = metadata_candidates(request);
-    resolve_ready_model_routing(&metadata_values, selection, |candidate| {
-        resolve_provider_readiness(db, service, candidate, direct_provider_config)
-    })
+    if let Some(config) = direct_provider_config {
+        return Ok(resolve_direct_routing(&metadata_values, selection, config));
+    }
+    resolve_ready_model_routing_with_exclusions(
+        &metadata_values,
+        selection,
+        excluded_routes,
+        |candidate| resolve_provider_readiness(db, service, candidate, None),
+    )
+}
+
+fn resolve_direct_routing(
+    metadata_values: &[&Value],
+    selection: &RuntimeModelSelection,
+    config: &SessionProviderConfig,
+) -> RoutingResolution {
+    let mut routing = runtime_core::resolve_model_routing_for_candidate(metadata_values, selection);
+    let readiness = direct_provider_readiness(config);
+    let attempt = RoutingAttempt {
+        slot: routing.service_model_slot.clone(),
+        provider: selection.provider.clone(),
+        model: selection.model.clone(),
+        source: selection.source.to_string(),
+        readiness: readiness.clone(),
+        runtime_failure: None,
+    };
+    routing.fallback_chain = vec![format!("{}/{}", selection.provider, selection.model)];
+    RoutingResolution {
+        selection: selection.clone(),
+        routing,
+        readiness,
+        attempted: vec![attempt],
+    }
 }
 
 pub(super) fn resolve_provider_readiness(
@@ -45,8 +75,8 @@ pub(super) fn resolve_provider_readiness(
     selection: &RuntimeModelSelection,
     direct_provider_config: Option<&SessionProviderConfig>,
 ) -> Result<ProviderReadiness, String> {
-    if direct_provider_config.is_some() {
-        return Ok(ProviderReadiness::direct_request_ready());
+    if let Some(config) = direct_provider_config {
+        return Ok(direct_provider_readiness(config));
     }
 
     let providers = service.get_all_providers(db)?;
@@ -55,12 +85,6 @@ pub(super) fn resolve_provider_readiness(
         .find(|provider| provider.provider.id == selection.provider)
     {
         return Ok(configured_provider_readiness(provider));
-    }
-
-    if is_supported_builtin_runtime_provider(&selection.provider) {
-        return Ok(ProviderReadiness::builtin_provider_ready(
-            selection.provider.clone(),
-        ));
     }
 
     Ok(ProviderReadiness::provider_not_configured())
@@ -78,10 +102,11 @@ pub(super) fn routing_decision_payload(
 pub(crate) fn configured_provider_readiness(provider: &ProviderWithKeys) -> ProviderReadiness {
     let enabled_key_count = provider.api_keys.iter().filter(|key| key.enabled).count();
     let total_key_count = provider.api_keys.len();
-    let provider_type = Some(provider.provider.provider_type.to_string());
-    if provider_looks_non_chat_candidate(provider) {
+    let effective_provider_type = provider.provider.effective_provider_type().to_string();
+    let provider_type = Some(effective_provider_type.clone());
+    if RuntimeProviderProtocol::from_provider_type(&effective_provider_type).is_none() {
         return ProviderReadiness::provider_store_blocked(
-            "provider_not_chat_capable",
+            "unsupported_protocol",
             provider_type,
             Some(provider.provider.enabled),
             enabled_key_count,
@@ -122,12 +147,16 @@ fn metadata_candidates(request: &ExecutionRequest) -> Vec<&Value> {
     request.runtime_metadata().into_iter().collect()
 }
 
-fn is_supported_builtin_runtime_provider(provider: &str) -> bool {
-    !is_custom_provider_id(provider) && RuntimeProviderType::from_str(provider).is_ok()
-}
-
-fn provider_looks_non_chat_candidate(provider: &ProviderWithKeys) -> bool {
-    matches!(provider.provider.provider_type, ApiProviderType::Fal)
+fn direct_provider_readiness(config: &SessionProviderConfig) -> ProviderReadiness {
+    let protocol = config
+        .route_protocol
+        .clone()
+        .unwrap_or_else(|| runtime_core::protocol_from_provider_name(&config.provider_name));
+    if RuntimeProviderProtocol::from_direct_route(&config.provider_name, &protocol).is_some() {
+        ProviderReadiness::direct_request_ready()
+    } else {
+        ProviderReadiness::direct_request_blocked("unsupported_protocol")
+    }
 }
 
 #[cfg(test)]
@@ -325,7 +354,7 @@ mod tests {
         );
         let requested = selection_from_profile_model_slot(&request).expect("requested selection");
 
-        let resolution = resolve_ready_routing(&db, &service, &request, &requested, None)
+        let resolution = resolve_ready_routing(&db, &service, &request, &requested, None, &[])
             .expect("routing resolution");
 
         assert_eq!(requested.provider, custom.id);
@@ -347,6 +376,65 @@ mod tests {
                 "openai/gpt-4.1-mini".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn ready_routing_skips_configured_provider_without_current_adapter() {
+        let db = test_db();
+        let service = ApiKeyProviderService::new();
+        let unsupported = service
+            .add_custom_provider(
+                &db,
+                "Gemini without adapter".to_string(),
+                ApiProviderType::Gemini,
+                "https://generativelanguage.googleapis.com".to_string(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("custom Gemini provider");
+        service
+            .add_api_key(&db, &unsupported.id, "gemini-test", None, true)
+            .expect("Gemini API key");
+        service
+            .initialize_system_providers(&db)
+            .expect("system providers");
+        service
+            .add_api_key(&db, "openai", "sk-test", None, true)
+            .expect("OpenAI API key");
+        let request = request_for_test(
+            "hello",
+            None,
+            Some(json!({
+                "harness": {
+                    "coding_model_slots": {
+                        "coding": {
+                            "provider": unsupported.id,
+                            "model": "gemini-2.5-pro"
+                        },
+                        "base": {
+                            "provider": "openai",
+                            "model": "gpt-4.1-mini"
+                        }
+                    }
+                }
+            })),
+        );
+        let requested = selection_from_profile_model_slot(&request).expect("requested selection");
+
+        let resolution = resolve_ready_routing(&db, &service, &request, &requested, None, &[])
+            .expect("routing resolution");
+
+        assert_eq!(resolution.selection.provider, "openai");
+        assert_eq!(resolution.routing.service_model_slot, "base");
+        assert_eq!(resolution.attempted.len(), 2);
+        assert_eq!(
+            resolution.attempted[0].readiness.reason_code,
+            Some("unsupported_protocol")
+        );
+        assert!(resolution.readiness.ready);
     }
 
     #[test]
@@ -402,6 +490,137 @@ mod tests {
     }
 
     #[test]
+    fn direct_readiness_rejects_protocols_without_current_adapters() {
+        let direct = SessionProviderConfig {
+            provider_name: "ollama".to_string(),
+            provider_selector: Some("local-ollama".to_string()),
+            model_name: "qwen3:14b".to_string(),
+            api_key: None,
+            base_url: Some("http://127.0.0.1:11434".to_string()),
+            credential_uuid: None,
+            reasoning_effort: None,
+            service_tier: None,
+            route_protocol: Some(app_server_protocol::ProtocolKind::OllamaChat),
+            toolshim: false,
+            toolshim_model: None,
+            model_capabilities: Some(json!({
+                "capabilities": { "streaming": true },
+                "taskFamilies": ["chat"],
+                "runtimeFeatures": ["streaming"]
+            })),
+            supports_websockets: false,
+        };
+
+        let direct_readiness = direct_provider_readiness(&direct);
+        assert!(!direct_readiness.ready);
+        assert_eq!(direct_readiness.source, "direct_provider_config");
+        assert_eq!(direct_readiness.reason_code, Some("unsupported_protocol"));
+        assert!(direct_readiness.direct_request_config);
+    }
+
+    #[test]
+    fn unsupported_direct_route_does_not_reuse_config_for_profile_fallbacks() {
+        let db = test_db();
+        let service = ApiKeyProviderService::new();
+        let request = request_for_test(
+            "hello",
+            None,
+            Some(json!({
+                "harness": {
+                    "coding_model_slots": {
+                        "coding": {
+                            "provider": "local-ollama",
+                            "model": "qwen3:14b"
+                        },
+                        "base": {
+                            "provider": "openai",
+                            "model": "gpt-4.1-mini"
+                        }
+                    }
+                }
+            })),
+        );
+        let selection = selection_from_profile_model_slot(&request).expect("direct selection");
+        let direct = SessionProviderConfig {
+            provider_name: "ollama".to_string(),
+            provider_selector: Some("local-ollama".to_string()),
+            model_name: "qwen3:14b".to_string(),
+            api_key: None,
+            base_url: Some("http://127.0.0.1:11434".to_string()),
+            credential_uuid: None,
+            reasoning_effort: None,
+            service_tier: None,
+            route_protocol: Some(app_server_protocol::ProtocolKind::OllamaChat),
+            toolshim: false,
+            toolshim_model: None,
+            model_capabilities: Some(json!({
+                "capabilities": { "streaming": true },
+                "taskFamilies": ["chat"],
+                "runtimeFeatures": ["streaming"]
+            })),
+            supports_websockets: false,
+        };
+
+        let resolution =
+            resolve_ready_routing(&db, &service, &request, &selection, Some(&direct), &[])
+                .expect("direct routing resolution");
+
+        assert_eq!(resolution.selection, selection);
+        assert!(!resolution.readiness.ready);
+        assert_eq!(
+            resolution.readiness.reason_code,
+            Some("unsupported_protocol")
+        );
+        assert_eq!(resolution.attempted.len(), 1);
+        assert_eq!(resolution.attempted[0].provider, "local-ollama");
+        assert_eq!(
+            resolution.routing.fallback_chain,
+            vec!["local-ollama/qwen3:14b"]
+        );
+    }
+
+    #[test]
+    fn configured_provider_readiness_rejects_protocols_without_current_adapters() {
+        let db = test_db();
+        let service = ApiKeyProviderService::new();
+
+        for (provider_type, label) in [
+            (ApiProviderType::Gemini, "Gemini"),
+            (ApiProviderType::AzureOpenai, "Azure OpenAI"),
+            (ApiProviderType::Vertexai, "Vertex"),
+            (ApiProviderType::AwsBedrock, "Bedrock"),
+            (ApiProviderType::Ollama, "Ollama"),
+            (ApiProviderType::Fal, "Fal"),
+        ] {
+            let provider = service
+                .add_custom_provider(
+                    &db,
+                    format!("{label} route"),
+                    provider_type,
+                    provider_type.runtime_spec().default_api_host.to_string(),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("create unsupported provider route");
+            let provider = service
+                .get_provider(&db, &provider.id)
+                .expect("read provider")
+                .expect("stored provider");
+
+            let readiness = configured_provider_readiness(&provider);
+            assert!(!readiness.ready, "provider_type={provider_type}");
+            assert_eq!(
+                readiness.reason_code,
+                Some("unsupported_protocol"),
+                "provider_type={provider_type}"
+            );
+        }
+    }
+
+    #[test]
     fn unknown_stored_provider_type_is_not_runtime_ready() {
         let db = test_db();
         {
@@ -438,5 +657,42 @@ mod tests {
 
         assert!(!readiness.ready);
         assert_eq!(readiness.reason_code, Some("provider_not_configured"));
+    }
+
+    #[test]
+    fn known_provider_names_without_store_records_are_not_runtime_ready() {
+        let db = test_db();
+        let service = ApiKeyProviderService::new();
+        let providers = service
+            .get_all_providers(&db)
+            .expect("read provider fixture");
+
+        for provider in ["claude", "gemini_api_key"] {
+            assert!(
+                providers
+                    .iter()
+                    .all(|stored| stored.provider.id != provider),
+                "fixture must not contain provider={provider}"
+            );
+            let readiness = resolve_provider_readiness(
+                &db,
+                &service,
+                &RuntimeModelSelection {
+                    provider: provider.to_string(),
+                    model: "test-model".to_string(),
+                    source: "runtime_request",
+                    reasoning_effort: None,
+                },
+                None,
+            )
+            .expect("resolve provider readiness");
+
+            assert!(!readiness.ready, "provider={provider}");
+            assert_eq!(
+                readiness.reason_code,
+                Some("provider_not_configured"),
+                "provider={provider}"
+            );
+        }
     }
 }

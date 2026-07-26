@@ -1,6 +1,6 @@
 use lime_core::database::dao::api_key_provider::ApiProviderType;
 use lime_core::models::{RuntimeCredentialData, RuntimeProviderCredential};
-use model_provider::runtime_provider::RuntimeProviderConfig;
+use model_provider::runtime_provider::{RuntimeProviderAuth, RuntimeProviderConfig};
 
 use super::provider_mapping::{normalize_provider_selector, resolve_runtime_provider_name};
 
@@ -52,6 +52,7 @@ pub(super) fn runtime_provider_config_from_credential(
         provider_selector: normalize_provider_selector(Some(provider_type_hint)),
         model_name: model.to_string(),
         api_key,
+        auth: RuntimeProviderAuth::ApiKey,
         base_url,
         credential_uuid: credential.uuid.clone(),
         reasoning_effort: None,

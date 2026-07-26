@@ -20,8 +20,9 @@ async fn voice_model_app_server() -> VoiceModelAppServer {
     let temp = TempDir::new().expect("create voice model fixture temp dir");
     let conn = Connection::open_in_memory().expect("open in-memory product db");
     create_tables(&conn).expect("create product schema");
-    let app_data_source = LocalAppDataSource::initialize_with_db_and_data_root(
+    let app_data_source = LocalAppDataSource::initialize_with_roots(
         Arc::new(Mutex::new(conn)),
+        temp.path(),
         temp.path().join("app-server"),
     )
     .await

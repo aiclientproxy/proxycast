@@ -27,6 +27,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 const APP_SERVER_DATA_DIR_ENV: &str = "APP_SERVER_DATA_DIR";
+const APP_SERVER_APP_DATA_DIR_ENV: &str = "APP_SERVER_APP_DATA_DIR";
 
 struct InitializedDatabase {
     db: DbConnection,
@@ -65,6 +66,7 @@ struct CliConfig {
     backend_args: Vec<String>,
     backend_timeout_ms: u64,
     data_dir: Option<PathBuf>,
+    app_data_dir: Option<PathBuf>,
     model_control_source: Option<PathBuf>,
 }
 
@@ -83,6 +85,7 @@ fn parse_args() -> anyhow::Result<CliConfig> {
     parse_args_from_with_env(
         std::env::args().skip(1),
         std::env::var_os(APP_SERVER_DATA_DIR_ENV),
+        std::env::var_os(APP_SERVER_APP_DATA_DIR_ENV),
     )
 }
 
@@ -100,17 +103,26 @@ async fn build_app_server(config: &CliConfig) -> anyhow::Result<AppServer> {
         .transpose()?;
     let _image_task_worker_scheduler =
         app_server::spawn_image_task_worker_scheduler(db.clone(), sidecar_store.clone());
-    let data_root = initialized
-        .storage_roots
-        .as_ref()
-        .map(|storage_roots| storage_roots.data_root.clone());
-    let mut app_data_source = match data_root {
-        Some(data_root) => {
-            LocalAppDataSource::initialize_with_db_and_data_root(db.clone(), data_root).await
-        }
-        None => LocalAppDataSource::initialize_with_db(db.clone()).await,
-    }
-    .map_err(|error| anyhow::anyhow!("failed to initialize local app data source: {error}"))?;
+    let (app_data_root, data_root) = match initialized.storage_roots.as_ref() {
+        Some(storage_roots) => (
+            storage_roots.app_data_root.clone(),
+            storage_roots.data_root.clone(),
+        ),
+        None => (
+            resolve_app_data_root(config)?,
+            app_paths::preferred_agent_root()
+                .map_err(|error| anyhow::anyhow!("failed to resolve AgentRoot: {error}"))?,
+        ),
+    };
+    // 组合根一次性注入产品资产根，soul style pack 消费链不再解析平台默认目录。
+    app_server::install_style_pack_data_root(&app_data_root)
+        .map_err(|error| anyhow::anyhow!("failed to install style pack data root: {error}"))?;
+    let mut app_data_source =
+        LocalAppDataSource::initialize_with_roots(db.clone(), app_data_root, data_root)
+            .await
+            .map_err(|error| {
+                anyhow::anyhow!("failed to initialize local app data source: {error}")
+            })?;
     if let Some(sidecar_store) = sidecar_store.clone() {
         app_data_source = app_data_source.with_sidecar_store(sidecar_store);
     }
@@ -210,10 +222,21 @@ async fn build_app_server(config: &CliConfig) -> anyhow::Result<AppServer> {
         .map_err(|error| anyhow::anyhow!("failed to attach MCP elicitation router: {error}"))
 }
 
+/// 组合根：唯一允许解析平台默认 AppDataRoot 的位置。
+/// 叶子 writer 一律通过构造注入拿到已解析的根，不得自行解析。
+fn resolve_app_data_root(config: &CliConfig) -> anyhow::Result<PathBuf> {
+    match config.app_data_dir.as_ref() {
+        Some(app_data_dir) => Ok(app_data_dir.clone()),
+        None => app_paths::preferred_data_dir()
+            .map_err(|error| anyhow::anyhow!("failed to resolve AppDataRoot: {error}")),
+    }
+}
+
 fn initialize_database(config: &CliConfig) -> anyhow::Result<InitializedDatabase> {
+    let app_data_root = resolve_app_data_root(config)?;
     match config.data_dir.as_ref() {
         Some(data_dir) => {
-            let storage_roots = StorageRoots::initialize(data_dir)
+            let storage_roots = StorageRoots::initialize(&app_data_root, data_dir)
                 .map_err(|error| anyhow::anyhow!("failed to initialize storage roots: {error}"))?;
             let db = database::init_database_at_path(&storage_roots.product_db_path).map_err(
                 |error| {
@@ -236,7 +259,7 @@ fn initialize_database(config: &CliConfig) -> anyhow::Result<InitializedDatabase
         None => {
             let data_root = app_paths::preferred_agent_root()
                 .map_err(|error| anyhow::anyhow!("failed to resolve AgentRoot: {error}"))?;
-            let storage_roots = StorageRoots::initialize(&data_root)
+            let storage_roots = StorageRoots::initialize(&app_data_root, &data_root)
                 .map_err(|error| anyhow::anyhow!("failed to initialize storage roots: {error}"))?;
             let db = database::init_database_at_path(&storage_roots.product_db_path).map_err(
                 |error| {
@@ -420,12 +443,13 @@ fn select_model_control_source(
 
 #[cfg(test)]
 fn parse_args_from(args: impl IntoIterator<Item = String>) -> anyhow::Result<CliConfig> {
-    parse_args_from_with_env(args, None)
+    parse_args_from_with_env(args, None, None)
 }
 
 fn parse_args_from_with_env(
     args: impl IntoIterator<Item = String>,
     data_dir_env: Option<OsString>,
+    app_data_dir_env: Option<OsString>,
 ) -> anyhow::Result<CliConfig> {
     let mut args = args.into_iter();
     let mut listen = DEFAULT_LISTEN_URL.to_string();
@@ -438,6 +462,9 @@ fn parse_args_from_with_env(
     let mut data_dir = data_dir_env
         .filter(|value| !value.is_empty())
         .map(PathBuf::from);
+    let mut app_data_dir = app_data_dir_env
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from);
     let mut model_control_source = None;
 
     while let Some(arg) = args.next() {
@@ -447,6 +474,13 @@ fn parse_args_from_with_env(
             }
             data_dir = Some(PathBuf::from(value));
             data_dir_from_cli = true;
+            continue;
+        }
+        if let Some(value) = arg.strip_prefix("--app-data-dir=") {
+            if value.is_empty() {
+                anyhow::bail!("--app-data-dir requires a path");
+            }
+            app_data_dir = Some(PathBuf::from(value));
             continue;
         }
         if let Some(value) = arg.strip_prefix("--model-control-source=") {
@@ -502,6 +536,12 @@ fn parse_args_from_with_env(
                     })?));
                 data_dir_from_cli = true;
             }
+            "--app-data-dir" => {
+                app_data_dir =
+                    Some(PathBuf::from(args.next().ok_or_else(|| {
+                        anyhow::anyhow!("--app-data-dir requires a path")
+                    })?));
+            }
             "--model-control-source" => {
                 model_control_source =
                     Some(PathBuf::from(args.next().ok_or_else(|| {
@@ -510,7 +550,7 @@ fn parse_args_from_with_env(
             }
             "--help" | "-h" => {
                 println!(
-                    "Usage: app-server [--stdio] [--listen stdio://|unix://PATH|ws://127.0.0.1:PORT|off] [--backend external|runtime|mock|unavailable] [--backend-command path] [--backend-arg value] [--backend-timeout-ms ms] [--app-policy path] [--data-dir path] [--model-control-source path]"
+                    "Usage: app-server [--stdio] [--listen stdio://|unix://PATH|ws://127.0.0.1:PORT|off] [--backend external|runtime|mock|unavailable] [--backend-command path] [--backend-arg value] [--backend-timeout-ms ms] [--app-policy path] [--data-dir path] [--app-data-dir path] [--model-control-source path]"
                 );
                 std::process::exit(0);
             }
@@ -530,6 +570,7 @@ fn parse_args_from_with_env(
         backend_args,
         backend_timeout_ms,
         data_dir,
+        app_data_dir,
         model_control_source,
     })
 }
@@ -623,6 +664,57 @@ mod tests {
     }
 
     #[test]
+    fn parse_args_accepts_app_data_dir_both_forms() {
+        let spaced =
+            parse_args_from(["--app-data-dir", "/tmp/platform-app-data"].map(str::to_string))
+                .expect("config");
+        let equals = parse_args_from(["--app-data-dir=/tmp/platform-app-data"].map(str::to_string))
+            .expect("config");
+
+        let expected = Some(PathBuf::from("/tmp/platform-app-data"));
+        assert_eq!(spaced.app_data_dir, expected);
+        assert_eq!(equals.app_data_dir, expected);
+    }
+
+    #[test]
+    fn parse_args_app_data_dir_cli_wins_over_env() {
+        let config = parse_args_from_with_env(
+            ["--app-data-dir", "/tmp/cli-app-data"].map(str::to_string),
+            None,
+            Some(OsString::from("/tmp/env-app-data")),
+        )
+        .expect("config");
+
+        assert_eq!(
+            config.app_data_dir,
+            Some(PathBuf::from("/tmp/cli-app-data"))
+        );
+    }
+
+    #[test]
+    fn parse_args_accepts_app_data_dir_env_fallback() {
+        let config = parse_args_from_with_env(
+            ["--stdio"].map(str::to_string),
+            None,
+            Some(OsString::from("/tmp/env-app-data")),
+        )
+        .expect("config");
+
+        assert_eq!(
+            config.app_data_dir,
+            Some(PathBuf::from("/tmp/env-app-data"))
+        );
+    }
+
+    #[test]
+    fn parse_args_rejects_empty_app_data_dir() {
+        let error = parse_args_from(["--app-data-dir="].map(str::to_string))
+            .expect_err("empty --app-data-dir must fail closed");
+
+        assert!(error.to_string().contains("--app-data-dir requires a path"));
+    }
+
+    #[test]
     fn parse_args_accepts_explicit_model_control_source_with_data_dir() {
         let config = parse_args_from(
             [
@@ -644,6 +736,7 @@ mod tests {
         let error = parse_args_from_with_env(
             ["--model-control-source", "/tmp/lime-legacy/app.db"].map(str::to_string),
             Some(OsString::from("/tmp/env-app-server")),
+            None,
         )
         .expect_err("model source must not target an ambient data dir");
 
@@ -657,6 +750,7 @@ mod tests {
         let config = parse_args_from_with_env(
             ["--data-dir", "/tmp/cli-app-server"].map(str::to_string),
             Some(OsString::from("/tmp/env-app-server")),
+            None,
         )
         .expect("config");
 
@@ -665,9 +759,12 @@ mod tests {
 
     #[test]
     fn parse_args_accepts_data_dir_env_fallback() {
-        let config =
-            parse_args_from_with_env(Vec::new(), Some(OsString::from("/tmp/env-app-server")))
-                .expect("config");
+        let config = parse_args_from_with_env(
+            Vec::new(),
+            Some(OsString::from("/tmp/env-app-server")),
+            None,
+        )
+        .expect("config");
 
         assert_eq!(config.data_dir, Some(PathBuf::from("/tmp/env-app-server")));
     }
@@ -689,7 +786,8 @@ mod tests {
     #[test]
     fn initialize_database_uses_configured_data_dir() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
-        let data_dir = temp_dir.path().join("desktop-platform").join("app-server");
+        let app_data_dir = temp_dir.path().join("desktop-platform");
+        let data_dir = app_data_dir.join("app-server");
         let config = CliConfig {
             listen: DEFAULT_LISTEN_URL.to_string(),
             backend_mode: AppServerBackendMode::Unavailable,
@@ -698,6 +796,7 @@ mod tests {
             backend_args: Vec::new(),
             backend_timeout_ms: DEFAULT_EXTERNAL_BACKEND_TIMEOUT_MS,
             data_dir: Some(data_dir.clone()),
+            app_data_dir: Some(app_data_dir.clone()),
             model_control_source: None,
         };
 
@@ -705,7 +804,9 @@ mod tests {
         drop(db);
 
         assert!(data_dir.join("lime.db").is_file());
-        let storage_roots = StorageRoots::initialize(&data_dir).expect("storage roots");
+        let storage_roots =
+            StorageRoots::initialize(&app_data_dir, &data_dir).expect("storage roots");
+        assert_eq!(storage_roots.app_data_root, app_data_dir);
         assert_eq!(
             storage_roots.projection_db_path,
             data_dir.join("runtime").join("projection_1.sqlite")
@@ -779,6 +880,7 @@ mod tests {
             backend_args: Vec::new(),
             backend_timeout_ms: DEFAULT_EXTERNAL_BACKEND_TIMEOUT_MS,
             data_dir: Some(app_server_data_dir.clone()),
+            app_data_dir: Some(user_data_root.clone()),
             model_control_source: Some(previous_db.clone()),
         };
 

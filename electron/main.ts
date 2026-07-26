@@ -78,6 +78,7 @@ configureElectronUserDataPath();
 const desktopStorageRoots = resolveCurrentDesktopStorageRoots(
   app.getPath("userData"),
 );
+configureElectronSessionDataPath(desktopStorageRoots.hostSessionData);
 const appServerHost = new ElectronAppServerHost();
 const hostCommands = new ElectronHostCommands(
   appServerHost,
@@ -945,6 +946,20 @@ function configureElectronUserDataPath(): void {
     mkdirSync(stableUserDataDir, { recursive: true });
     app.setPath("userData", stableUserDataDir);
   }
+}
+
+/**
+ * 固定 Chromium cookies/storage/network state 与 cache 的唯一根。
+ * macOS 与 host profile 同根，行为不变；Windows 从 roaming `%APPDATA%`
+ * 移到 `<AppDataRoot>\host-session`，旧 roaming 会话数据不迁移。
+ */
+function configureElectronSessionDataPath(hostSessionData: string): void {
+  const resolved = path.resolve(hostSessionData);
+  if (path.resolve(app.getPath("sessionData")) === resolved) {
+    return;
+  }
+  mkdirSync(resolved, { recursive: true });
+  app.setPath("sessionData", resolved);
 }
 
 function broadcast(event: string, payload?: unknown): void {

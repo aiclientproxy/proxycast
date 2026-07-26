@@ -1,6 +1,8 @@
 # Codex Snapshot 对齐方案
 
-状态：663 条映射方案完整；P0 owner 回归与多模型审计持续收尾，精确 Gate 尚未完成
+状态：663 条映射完整，50 个场景已全部登记 owner 与 Gate 状态；精确 Gate 闭环 `8 / 44`
+（GUI + 多模型口径），6 项 runtime contract 为 `covered 3 / partial 3 / missing 0`。详见
+[04-implementation-status.md](04-implementation-status.md)。
 范围：`/Users/coso/Documents/dev/rust/codex/codex-rs` 的全部 `.snap`
 对应主线：`internal/refactor/v1`
 
@@ -58,10 +60,21 @@ Windows 换行或 macOS 终端颜色复制一套 Lime 业务测试。
 
 ## 推荐执行顺序
 
-1. 先跑 [02-runtime-contract-test-plan.md](02-runtime-contract-test-plan.md) 的 P0 contract。
-2. 再跑 [01-frontend-test-plan.md](01-frontend-test-plan.md) 的 P0 component/projection。
-3. 对 `layout-*`、`approval-*`、`history-*`、`tool-*` 补 Gate A/Gate B。
-4. 最后处理 plugin、settings、feedback、update、CLI 和平台差异的 P1/P2 项。
+先解除三条阻塞下游的依赖（详见 [04](04-implementation-status.md) 的“三条最短路径”）：
+
+1. 完成 world state producer 与历史链：provider request 消费已完成，继续补其余 typed producer 和 full/patch durable history。
+2. 完成 V1-05 Hook 接线，解除唯一的 `owner-unwired`（`hooks-lifecycle`）。裁决 owner
+   （`tool-runtime/src/hook_lifecycle.rs`）已就位并 fail closed；仍缺 discovery producer、
+   handler 执行、canonical Item 投影与 App Server notification。
+3. 补 `history-compaction-replacement` 的 manual/auto/mid-turn 三条 Gate B fixture。lineage 本身
+   已实现并有冷重启 replay 证据，不再是缺口。
+
+再按原顺序批量补齐 Gate：
+
+4. 跑 [02-runtime-contract-test-plan.md](02-runtime-contract-test-plan.md) 的 P0 contract。
+5. 跑 [01-frontend-test-plan.md](01-frontend-test-plan.md) 的 P0 component/projection。
+6. 对 `layout-*`、`approval-*`、`history-*`、`tool-*` 补 Gate A/Gate B。
+7. 最后处理 plugin、settings、feedback、update、CLI 和平台差异的 P1/P2 项。
 
 ## 参考事实源
 

@@ -3,6 +3,7 @@ import {
   resolveAgentRoot,
   resolveAppDataRoot,
   resolveDesktopStorageRoots,
+  resolveHostSessionData,
 } from "./appDataPaths";
 
 describe("app data paths", () => {
@@ -71,6 +72,7 @@ describe("app data paths", () => {
     ).toEqual({
       appDataRoot: "C:\\Temp\\lime-e2e-user-data",
       agentRoot: "C:\\Temp\\lime-e2e-user-data\\app-server",
+      hostSessionData: "C:\\Temp\\lime-e2e-user-data\\host-session",
     });
   });
 
@@ -97,7 +99,49 @@ describe("app data paths", () => {
     ).toEqual({
       appDataRoot: "/Users/test/Library/Application Support/lime",
       agentRoot: "/tmp/lime-agent-runtime",
+      hostSessionData: "/Users/test/Library/Application Support/lime",
     });
+  });
+
+  it("macOS HostSessionData 与 host profile 同根", () => {
+    expect(
+      resolveHostSessionData({
+        platform: "darwin",
+        hostUserData: "/Users/test/Library/Application Support/lime",
+      }),
+    ).toBe("/Users/test/Library/Application Support/lime");
+  });
+
+  it("Windows HostSessionData 离开 roaming，落在 AppDataRoot 下", () => {
+    expect(
+      resolveHostSessionData({
+        platform: "win32",
+        hostUserData: "C:\\Users\\test\\AppData\\Roaming\\lime",
+        localAppData: "C:\\Users\\test\\AppData\\Local",
+      }),
+    ).toBe("C:\\Users\\test\\AppData\\Local\\LimeCloud\\lime\\host-session");
+  });
+
+  it("Windows HostSessionData 拒绝落入 Squirrel 安装树", () => {
+    expect(() =>
+      resolveHostSessionData({
+        platform: "win32",
+        hostUserData: "C:\\Users\\test\\AppData\\Roaming\\lime",
+        localAppData: "C:\\Users\\test\\AppData\\Local",
+        appDataRootOverride: "C:\\Users\\test\\AppData\\Local\\lime\\data",
+      }),
+    ).toThrow("Windows 数据根不能位于 Squirrel 安装根");
+  });
+
+  it("E2E 下 HostSessionData 不回退真实 userData", () => {
+    expect(
+      resolveDesktopStorageRoots({
+        platform: "darwin",
+        hostUserData: "/Users/test/Library/Application Support/lime",
+        e2eMode: true,
+        e2eUserDataDir: "/tmp/lime-e2e-user-data",
+      }).hostSessionData,
+    ).toBe("/tmp/lime-e2e-user-data");
   });
 
   it("默认 AgentRoot 位于独立机器数据根下", () => {

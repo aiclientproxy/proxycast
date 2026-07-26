@@ -1,4 +1,3 @@
-use lime_core::app_paths;
 use rmcp::transport::auth::{AuthError, CredentialStore, StoredCredentials};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -7,6 +6,15 @@ use std::path::{Path, PathBuf};
 const STORE_PARENT_DIR_NAME: &str = "mcp";
 const STORE_DIR_NAME: &str = "oauth";
 const STORE_VERSION: u32 = 1;
+
+/// MCP OAuth 凭据的唯一 owner 目录，必须由 AppDataRoot 显式派生。
+/// 这里只做拼接，不解析平台根——解析只属于组合根。
+pub fn oauth_store_root_for_app_data_root(app_data_root: impl AsRef<Path>) -> PathBuf {
+    app_data_root
+        .as_ref()
+        .join(STORE_PARENT_DIR_NAME)
+        .join(STORE_DIR_NAME)
+}
 
 /// MCP OAuth 凭据持久化存储。
 ///
@@ -27,15 +35,6 @@ struct CredentialEnvelope {
 }
 
 impl PersistentCredentialStore {
-    pub fn new(server_name: impl Into<String>, server_url: impl Into<String>) -> Self {
-        Self {
-            server_name: server_name.into(),
-            server_url: server_url.into(),
-            root_dir: default_store_root(),
-        }
-    }
-
-    #[cfg(test)]
     pub fn new_in(
         root_dir: impl Into<PathBuf>,
         server_name: impl Into<String>,
@@ -142,10 +141,6 @@ impl CredentialStore for PersistentCredentialStore {
     }
 }
 
-fn default_store_root() -> PathBuf {
-    app_paths::best_effort_runtime_subdir(STORE_PARENT_DIR_NAME).join(STORE_DIR_NAME)
-}
-
 fn sanitize_file_stem(value: &str) -> String {
     let mut stem = value
         .chars()
@@ -227,6 +222,14 @@ mod tests {
             client_id: client_id.to_string(),
             token_response: None,
         }
+    }
+
+    #[test]
+    fn store_root_is_derived_from_injected_app_data_root() {
+        assert_eq!(
+            oauth_store_root_for_app_data_root("/tmp/machine-data"),
+            PathBuf::from("/tmp/machine-data/mcp/oauth")
+        );
     }
 
     #[tokio::test]

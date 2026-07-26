@@ -5,6 +5,7 @@ export const LIME_COMPANY_DATA_DIR_NAME = "LimeCloud";
 export const LIME_APP_DATA_DIR_NAME = "lime";
 export const LIME_HOST_DATA_DIR_NAME = "lime";
 export const LIME_AGENT_ROOT_DIR_NAME = "app-server";
+export const LIME_HOST_SESSION_DIR_NAME = "host-session";
 export const WINDOWS_SQUIRREL_INSTALL_DIR_NAME = "lime";
 
 export type AppDataRootOptions = {
@@ -27,6 +28,7 @@ export type DesktopStorageRootOptions = AgentRootOptions & {
 export type DesktopStorageRoots = {
   appDataRoot: string;
   agentRoot: string;
+  hostSessionData: string;
 };
 
 /** Windows roaming data 只保存 host profile，不能成为 durable Agent root。 */
@@ -82,6 +84,23 @@ export function resolveAgentRoot(options: AgentRootOptions): string {
   return pathApi.join(resolveAppDataRoot(options), LIME_AGENT_ROOT_DIR_NAME);
 }
 
+/**
+ * Chromium cookies/storage/network state 与 cache 的唯一根。
+ * macOS 与 host profile 物理同根；Windows 必须离开 roaming `%APPDATA%`，
+ * 落在 `<AppDataRoot>\host-session`。
+ */
+export function resolveHostSessionData(options: AppDataRootOptions): string {
+  const pathApi = pathForPlatform(options.platform);
+  if (options.platform !== "win32") {
+    return pathApi.resolve(options.hostUserData);
+  }
+
+  return pathApi.join(
+    resolveAppDataRoot(options),
+    LIME_HOST_SESSION_DIR_NAME,
+  );
+}
+
 export function resolveDesktopStorageRoots(
   options: DesktopStorageRootOptions,
 ): DesktopStorageRoots {
@@ -105,8 +124,14 @@ export function resolveDesktopStorageRoots(
         ...options,
         appDataRootOverride: appDataRoot,
       });
+  // E2E 下 host profile 就是隔离根，不能让 sessionData 回到真实 userData。
+  const hostSessionData = resolveHostSessionData({
+    ...options,
+    hostUserData: options.e2eMode ? appDataRoot : options.hostUserData,
+    appDataRootOverride: appDataRoot,
+  });
 
-  return { appDataRoot, agentRoot };
+  return { appDataRoot, agentRoot, hostSessionData };
 }
 
 export function resolveCurrentDesktopStorageRoots(

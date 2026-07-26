@@ -176,6 +176,10 @@ impl RuntimeToolExecutorHandle {
         Self { executor }
     }
 
+    pub fn inner_executor(&self) -> Arc<dyn RuntimeToolExecutor> {
+        Arc::clone(&self.executor)
+    }
+
     pub async fn execute(
         &self,
         request: RuntimeToolExecutionRequest<'_>,

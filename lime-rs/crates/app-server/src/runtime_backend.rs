@@ -54,6 +54,7 @@ use lime_agent::{
 use lime_core::database::DbConnection;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
 use model_provider::current_client::CurrentProviderMessage;
+use runtime_core::ModelRouteExclusion;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -252,6 +253,21 @@ fn runtime_error_from_route_failure(
     ))
 }
 
+fn runtime_route_exclusion(
+    selection: &request_context::RuntimeModelSelection,
+    direct_request: bool,
+    error: &lime_agent::ReplyAttemptError,
+) -> Option<ModelRouteExclusion> {
+    if direct_request || !error.is_reroutable_provider_failure() {
+        return None;
+    }
+    Some(ModelRouteExclusion::new(
+        selection.provider.clone(),
+        selection.model.clone(),
+        error.classification()?,
+    ))
+}
+
 impl RuntimeBackend {
     pub fn new() -> Self {
         Self::build(None, None)
@@ -316,6 +332,14 @@ impl RuntimeBackend {
         &self,
         request: &ExecutionRequest,
     ) -> Result<ResolvedTurnRoute, RuntimeCoreError> {
+        self.resolve_turn_route_excluding(request, &[]).await
+    }
+
+    async fn resolve_turn_route_excluding(
+        &self,
+        request: &ExecutionRequest,
+        excluded_routes: &[ModelRouteExclusion],
+    ) -> Result<ResolvedTurnRoute, RuntimeCoreError> {
         let db = initialize_runtime_database(self.db.as_ref())?;
         let requested_selection = resolve_runtime_model_selection(request)?;
         let host_request = runtime_request_from_request(request);
@@ -333,6 +357,7 @@ impl RuntimeBackend {
                 request,
                 &requested_selection,
                 direct_provider_config.as_ref(),
+                excluded_routes,
             )
             .map_err(backend_error)?;
             let prepared_selection = prepared.selection().clone();
@@ -537,148 +562,212 @@ impl RuntimeBackend {
                 }
             }
         }
-        let ResolvedTurnRoute {
-            db,
-            requested_selection,
-            selection,
-            direct_provider_config,
-            resolution: route_resolution,
-            ..
-        } = self.resolve_turn_route(&request).await?;
-
-        sink.emit(RuntimeEvent::new(
-            "routing.decision.made",
-            route_resolution.decision_payload.clone(),
-        ))?;
-        if let Some(payload) = route_resolution.fallback_payload.as_ref() {
-            sink.emit(RuntimeEvent::new(
-                "routing.fallback.applied",
-                payload.clone(),
-            ))?;
-        }
-        if let Some(route_failure) = route_resolution.resolved_route.failure.as_ref() {
-            sink.emit(RuntimeEvent::new(
-                "routing.not_possible",
-                route_resolution
-                    .not_possible_payload
-                    .clone()
-                    .unwrap_or_else(|| route_resolution.decision_payload.clone()),
-            ))?;
-            return Err(runtime_error_from_route_failure(
-                &request.session.session_id,
-                &selection,
-                route_failure,
-            ));
-        }
-
-        self.ensure_agent_initialized(&db).await?;
-        self.install_live_execution_process_hook_if_available()
+        let mut excluded_routes = Vec::new();
+        let mut previous_reply_error = None;
+        let mut resolved_turn_route = self
+            .resolve_turn_route_excluding(&request, &excluded_routes)
             .await?;
-        if !compact_tool_surface {
-            self.register_current_native_tools_if_available().await?;
-            mcp_bridges::ensure_thread_mcp_runtime_if_available(
-                &self.agent_state,
-                &self.app_data_source,
-                &session_scope.session_id,
-                &session_scope.thread_id,
-            )
-            .await?;
-        }
+
         let config_metadata = current_agent_runtime_config_metadata();
         let soul_style = tool_process_metadata::SoulStyleMetadata::from_config_metadata(
             config_metadata.as_ref(),
         );
         let mention_selection =
             mention_selection::resolve_mentions(&request, self.current_app_data_source()?).await;
-        let mut session_config = session_config_from_request(
-            &request,
-            host_request.as_ref(),
-            &session_scope,
-            &selection,
-            &request_tool_policy,
-            config_metadata,
-        );
-        mention_selection.apply_to_session_config(&mut session_config);
-        let model_context_window = lime_agent::model_request_policy_from_turn_context(
-            session_config.turn_context.as_ref(),
-        )
-        .and_then(|policy| policy.context_policy)
-        .and_then(|policy| policy.model_context_window);
         let mut emit_error = None;
         let mut coding_event_mirror = coding_events::CodingEventMirror::default();
         let mut proposed_plan_parser = proposed_plan_parser::ProposedPlanParser::default();
         let mut reasoning_event_state = reasoning_events::ReasoningEventState::default();
         let mut turn_usage = None;
-        let execution_result = run_agent_turn_with_policy(
-            &self.agent_state,
-            AgentTurnExecutionRequest {
-                session_id: &session_scope.session_id,
-                input: request.input.clone(),
-                initial_messages: provider_history,
-                session_config,
-                request_tool_policy: &request_tool_policy,
-                provider_configuration: Some(AgentTurnProviderConfiguration {
-                    db: &db,
-                    session_id: &session_scope.session_id,
-                    route_configuration: model_route_contract::provider_configuration_from_runtime(
-                        &selection,
-                        &route_resolution.resolved_route,
-                        direct_provider_config,
-                        service_tier_from_request(&request),
-                    ),
-                    credential_ref: route_resolution
-                        .resolved_route
-                        .auth
-                        .credential_ref
-                        .as_deref(),
-                }),
-                agent_control_gateway: request.agent_control_gateway.clone(),
-                pending_input,
-                cancellation_token,
-            },
-            |event| {
-                if let lime_agent::AgentEvent::Done { usage } = event {
-                    turn_usage = usage.clone();
+        let mut model_verification_emitted = false;
+        let mut runtime_initialized = false;
+        let (
+            turn_execution,
+            provider_config,
+            requested_selection,
+            selection,
+            route_resolution,
+            model_context_window,
+        ) = loop {
+            let ResolvedTurnRoute {
+                db,
+                requested_selection,
+                selection,
+                direct_provider_config,
+                resolution: route_resolution,
+                ..
+            } = resolved_turn_route;
+
+            sink.emit(RuntimeEvent::new(
+                "routing.decision.made",
+                route_resolution.decision_payload.clone(),
+            ))?;
+            if let Some(payload) = route_resolution.fallback_payload.as_ref() {
+                sink.emit(RuntimeEvent::new(
+                    "routing.fallback.applied",
+                    payload.clone(),
+                ))?;
+            }
+            if let Some(route_failure) = route_resolution.resolved_route.failure.as_ref() {
+                sink.emit(RuntimeEvent::new(
+                    "routing.not_possible",
+                    route_resolution
+                        .not_possible_payload
+                        .clone()
+                        .unwrap_or_else(|| route_resolution.decision_payload.clone()),
+                ))?;
+                if let Some(error) = previous_reply_error {
+                    emit_reasoning_finish(&mut reasoning_event_state, "failed", sink)?;
+                    emit_agent_message_finish(&mut proposed_plan_parser, "failed", sink)?;
+                    return Err(runtime_error_from_reply_attempt(error));
                 }
-                if emit_error.is_some() {
-                    return;
-                }
-                if let Err(error) =
-                    emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_soul_style(
-                        event,
-                        sink,
-                        &mut coding_event_mirror,
-                        &mut proposed_plan_parser,
-                        &mut reasoning_event_state,
-                        soul_style.as_ref(),
+                return Err(runtime_error_from_route_failure(
+                    &request.session.session_id,
+                    &selection,
+                    route_failure,
+                ));
+            }
+
+            if !runtime_initialized {
+                self.ensure_agent_initialized(&db).await?;
+                self.install_live_execution_process_hook_if_available()
+                    .await?;
+                if !compact_tool_surface {
+                    self.register_current_native_tools_if_available().await?;
+                    mcp_bridges::ensure_thread_mcp_runtime_if_available(
+                        &self.agent_state,
+                        &self.app_data_source,
+                        &session_scope.session_id,
+                        &session_scope.thread_id,
                     )
-                {
-                    emit_error = Some(error);
+                    .await?;
                 }
-            },
-        )
-        .await;
-        let turn_execution = match execution_result {
-            Ok(turn_execution) => turn_execution,
-            Err(error) => {
-                if let Some(error) = emit_error {
-                    return Err(error);
+                runtime_initialized = true;
+            }
+
+            let mut session_config = session_config_from_request(
+                &request,
+                host_request.as_ref(),
+                &session_scope,
+                &selection,
+                &request_tool_policy,
+                config_metadata.clone(),
+            );
+            mention_selection.apply_to_session_config(&mut session_config);
+            let model_context_window = lime_agent::model_request_policy_from_turn_context(
+                session_config.turn_context.as_ref(),
+            )
+            .and_then(|policy| policy.context_policy)
+            .and_then(|policy| policy.model_context_window);
+            let execution_result = run_agent_turn_with_policy(
+                &self.agent_state,
+                AgentTurnExecutionRequest {
+                    session_id: &session_scope.session_id,
+                    input: request.input.clone(),
+                    initial_messages: provider_history.clone(),
+                    session_config,
+                    request_tool_policy: &request_tool_policy,
+                    provider_configuration: Some(AgentTurnProviderConfiguration {
+                        db: &db,
+                        session_id: &session_scope.session_id,
+                        route_configuration:
+                            model_route_contract::provider_configuration_from_runtime(
+                                &selection,
+                                &route_resolution.resolved_route,
+                                direct_provider_config.clone(),
+                                service_tier_from_request(&request),
+                            ),
+                        credential_ref: route_resolution
+                            .resolved_route
+                            .auth
+                            .credential_ref
+                            .as_deref(),
+                    }),
+                    agent_control_gateway: request.agent_control_gateway.clone(),
+                    pending_input: pending_input.clone(),
+                    cancellation_token: cancellation_token.clone(),
+                },
+                |event| {
+                    if let lime_agent::AgentEvent::Done { usage } = event {
+                        turn_usage = usage.clone();
+                    }
+                    if matches!(event, lime_agent::AgentEvent::ModelVerification { .. }) {
+                        if model_verification_emitted {
+                            return;
+                        }
+                        model_verification_emitted = true;
+                    }
+                    if emit_error.is_some() {
+                        return;
+                    }
+                    if let Err(error) =
+                        emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_soul_style(
+                            event,
+                            sink,
+                            &mut coding_event_mirror,
+                            &mut proposed_plan_parser,
+                            &mut reasoning_event_state,
+                            soul_style.as_ref(),
+                        )
+                    {
+                        emit_error = Some(error);
+                    }
+                },
+            )
+            .await;
+            match execution_result {
+                Ok(turn_execution) => {
+                    let provider_config = turn_execution.provider_config.clone().ok_or_else(|| {
+                        RuntimeCoreError::Backend(
+                            "App Server runtime backend expected provider configuration for main turn"
+                                .to_string(),
+                        )
+                    })?;
+                    if let Some(error) = emit_error.take() {
+                        return Err(error);
+                    }
+                    break (
+                        turn_execution,
+                        provider_config,
+                        requested_selection,
+                        selection,
+                        route_resolution,
+                        model_context_window,
+                    );
                 }
-                emit_reasoning_finish(&mut reasoning_event_state, "failed", sink)?;
-                emit_agent_message_finish(&mut proposed_plan_parser, "failed", sink)?;
-                return Err(runtime_error_from_reply_attempt(error));
+                Err(error) => {
+                    if let Some(error) = emit_error.take() {
+                        return Err(error);
+                    }
+                    let Some(exclusion) = runtime_route_exclusion(
+                        &selection,
+                        direct_provider_config.is_some(),
+                        &error,
+                    ) else {
+                        emit_reasoning_finish(&mut reasoning_event_state, "failed", sink)?;
+                        emit_agent_message_finish(&mut proposed_plan_parser, "failed", sink)?;
+                        return Err(runtime_error_from_reply_attempt(error));
+                    };
+                    excluded_routes.push(exclusion);
+                    previous_reply_error = Some(error);
+                    resolved_turn_route = match self
+                        .resolve_turn_route_excluding(&request, &excluded_routes)
+                        .await
+                    {
+                        Ok(route) => route,
+                        Err(_) => {
+                            let error = previous_reply_error
+                                .take()
+                                .expect("runtime reroute preserves provider failure");
+                            emit_reasoning_finish(&mut reasoning_event_state, "failed", sink)?;
+                            emit_agent_message_finish(&mut proposed_plan_parser, "failed", sink)?;
+                            return Err(runtime_error_from_reply_attempt(error));
+                        }
+                    };
+                }
             }
         };
-        let provider_config = turn_execution.provider_config.ok_or_else(|| {
-            RuntimeCoreError::Backend(
-                "App Server runtime backend expected provider configuration for main turn"
-                    .to_string(),
-            )
-        })?;
         let execution = turn_execution.stream;
-        if let Some(error) = emit_error {
-            return Err(error);
-        }
         sink.emit(model_effective_event_from_runtime(
             &requested_selection,
             &selection,
@@ -752,6 +841,8 @@ fn runtime_error_from_reply_attempt(error: lime_agent::ReplyAttemptError) -> Run
 
 #[cfg(test)]
 mod initialization_tests;
+#[cfg(test)]
+mod runtime_reroute_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

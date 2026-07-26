@@ -297,6 +297,12 @@ impl Usage {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelVerification {
+    TrustedAccessForCyber,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum LlmEvent {
@@ -369,6 +375,12 @@ pub enum LlmEvent {
     },
     Usage {
         usage: Usage,
+    },
+    ServerModel {
+        model: String,
+    },
+    ModelVerification {
+        verifications: Vec<ModelVerification>,
     },
     StepFinish {
         index: u32,

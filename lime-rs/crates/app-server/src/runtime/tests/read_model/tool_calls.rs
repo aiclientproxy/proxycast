@@ -479,7 +479,8 @@ async fn read_session_projects_turn_completed_usage_into_read_model_turns() {
 #[tokio::test]
 async fn read_session_projects_workflow_audit_turn_completed_usage_into_read_model_turns() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let core = RuntimeCore::default().with_event_log_writer(event_log_writer.clone());
     core.start_session(AgentSessionStartParams {

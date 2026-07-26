@@ -372,10 +372,6 @@ impl EndpointProvidersConfig {
 }
 
 /// 主配置结构
-///
-/// 支持两种格式：
-/// - 旧版 JSON 格式：`default_provider` 在顶层
-/// - 新版 YAML 格式：`default_provider` 在 `routing` 中
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Config {
     /// 服务器配置
@@ -384,10 +380,10 @@ pub struct Config {
     /// Provider 配置
     #[serde(default)]
     pub providers: ProvidersConfig,
-    /// 默认 Provider（向后兼容旧版 JSON 配置）
+    /// 当前默认 Provider
     #[serde(default = "default_provider")]
     pub default_provider: String,
-    /// 路由配置（新版 YAML 配置）
+    /// 路由辅助配置
     #[serde(default)]
     pub routing: RoutingConfig,
     /// 重试配置
@@ -1516,12 +1512,10 @@ pub struct CustomProviderConfig {
     pub base_url: Option<String>,
 }
 
-/// 路由配置
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// 路由辅助配置
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct RoutingConfig {
-    /// 默认 Provider
-    #[serde(default = "default_provider")]
-    pub default_provider: String,
     /// 模型别名映射
     #[serde(default)]
     pub model_aliases: HashMap<String, String>,
@@ -1529,15 +1523,6 @@ pub struct RoutingConfig {
 
 fn default_provider() -> String {
     "openai".to_string()
-}
-
-impl Default for RoutingConfig {
-    fn default() -> Self {
-        Self {
-            default_provider: default_provider(),
-            model_aliases: HashMap::new(),
-        }
-    }
 }
 
 /// 重试配置
@@ -2770,7 +2755,6 @@ mod unit_tests {
         assert!(config.providers.kiro.credentials_path.is_none());
         assert!(!config.providers.gemini.enabled);
         assert_eq!(config.default_provider, "openai");
-        assert_eq!(config.routing.default_provider, "openai");
         assert_eq!(config.retry.max_retries, 3);
         assert!(config.logging.enabled);
         assert!(!config.injection.enabled);
@@ -3315,7 +3299,6 @@ memory:
     #[test]
     fn test_routing_config_default() {
         let config = RoutingConfig::default();
-        assert_eq!(config.default_provider, "openai");
         assert!(config.model_aliases.is_empty());
     }
 

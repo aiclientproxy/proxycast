@@ -47,58 +47,6 @@ function shellMemorySummary(overrides = {}) {
   };
 }
 
-function providerMigrationSummary(overrides = {}) {
-  return {
-    schemaVersion: 1,
-    candidateRunId: RUN_ID,
-    result: "pass",
-    surfaceProof: { surfaceId: "SHELL-02", proof: "gate-b-f", complete: true },
-    claimScope: "shell-02-config-path-migration-isolation",
-    missingScenarios: [],
-    assertions: passingAssertions(),
-    electronRenderer: true,
-    electronPreloadBridge: true,
-    electronIpcSeen: true,
-    appServerHandleJsonLinesSeen: true,
-    electronRequestMethods: [
-      "modelProvider/list",
-      "modelProviderUiState/read",
-      "modelProviderUiState/write",
-    ],
-    providerVisibleInGui: true,
-    restartVerified: true,
-    restartElectronRenderer: true,
-    restartElectronPreloadBridge: true,
-    restartElectronIpcSeen: true,
-    restartAppServerHandleJsonLinesSeen: true,
-    restartProviderVisibleInGui: true,
-    restartElectronRequestMethods: [
-      "modelProvider/list",
-      "modelProviderUiState/read",
-    ],
-    permissionFailureVerified: true,
-    permissionElectronRenderer: true,
-    permissionElectronPreloadBridge: true,
-    permissionElectronIpcSeen: true,
-    permissionAppServerHandleJsonLinesSeen: true,
-    permissionFailedRequestMethods: ["modelProvider/list"],
-    permissionFailureCauseSeen: true,
-    permissionUserVisible: true,
-    permissionSourceUnchanged: true,
-    permissionMigrationManifestExists: false,
-    permissionMigratedProductDbExists: false,
-    permissionPageErrorCount: 0,
-    permissionRendererCrashCount: 0,
-    legacyProviderCommandsSeen: [],
-    restartLegacyProviderCommandsSeen: [],
-    consoleErrors: [],
-    pageErrors: [],
-    invokeErrors: [],
-    rendererCrashCount: 0,
-    ...overrides,
-  };
-}
-
 function genericScenarioSummary(scenarioId, overrides = {}) {
   return {
     schemaVersion: 1,
@@ -148,17 +96,11 @@ function build(sourceRecords) {
 
 describe("project Gate SETTINGS-01 Gate B-F evidence", () => {
   it("aggregates only the exact claims proven by existing owner evidence", () => {
-    const evidence = build([
-      source("shell-memory", shellMemorySummary()),
-      source("provider-migration", providerMigrationSummary(), 1),
-    ]);
+    const evidence = build([source("shell-memory", shellMemorySummary())]);
 
     expect(evidence.result).toBe("pass");
     expect(evidence.surfaceProof.complete).toBe(false);
-    expect(evidence.coverage.completedScenarios).toEqual([
-      "memory-ready",
-      "provider-migration-recovery",
-    ]);
+    expect(evidence.coverage.completedScenarios).toEqual(["memory-ready"]);
     expect(evidence.missingScenarios).toContain("memory-soul-persistence");
     expect(evidence.missingScenarios).toContain("provider-crud-model-auth");
   });
@@ -193,17 +135,6 @@ describe("project Gate SETTINGS-01 Gate B-F evidence", () => {
     expect(() =>
       build([source("shell-memory", shellMemorySummary({ errors: {} }))]),
     ).toThrow(/incomplete real Electron Memory evidence/);
-  });
-
-  it("rejects Provider migration evidence without fail-closed permission proof", () => {
-    expect(() =>
-      build([
-        source(
-          "provider-migration",
-          providerMigrationSummary({ permissionSourceUnchanged: false }),
-        ),
-      ]),
-    ).toThrow(/incomplete Provider migration evidence/);
   });
 
   it("rejects duplicate scenario claims", () => {

@@ -5,7 +5,7 @@ use super::{
     ItemStartedNotification, McpServerElicitationRequestParams, McpToolCallProgressNotification,
     Method, ModelListParams, ModelProviderCapabilitiesReadParams,
     ModelProviderCapabilitiesReadResponse, ModelSafetyBufferingUpdatedNotification,
-    PlanDeltaNotification, ReasoningSummaryPartAddedNotification,
+    ModelVerificationNotification, PlanDeltaNotification, ReasoningSummaryPartAddedNotification,
     ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification,
     ServerRequestResolvedNotification, ThreadApproveGuardianDeniedActionParams,
     ThreadApproveGuardianDeniedActionResponse, ThreadArchiveParams, ThreadArchiveResponse,
@@ -37,11 +37,12 @@ use super::{
     METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_FILE_CHANGE_PATCH_UPDATED,
     METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL, METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
     METHOD_ITEM_TOOL_REQUEST_USER_INPUT, METHOD_MCP_SERVER_ELICITATION_REQUEST,
-    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_SAFETY_BUFFERING_UPDATED, METHOD_PLAN_DELTA,
-    METHOD_REASONING_SUMMARY_PART_ADDED, METHOD_REASONING_SUMMARY_TEXT_DELTA,
-    METHOD_REASONING_TEXT_DELTA, METHOD_SERVER_REQUEST_RESOLVED, METHOD_THREAD_CLOSED,
-    METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED,
-    METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED,
+    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
+    METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA, METHOD_REASONING_SUMMARY_PART_ADDED,
+    METHOD_REASONING_SUMMARY_TEXT_DELTA, METHOD_REASONING_TEXT_DELTA,
+    METHOD_SERVER_REQUEST_RESOLVED, METHOD_THREAD_CLOSED, METHOD_THREAD_GOAL_CLEARED,
+    METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED, METHOD_THREAD_STATUS_CHANGED,
+    METHOD_THREAD_TOKEN_USAGE_UPDATED,
 };
 use crate::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use schemars::JsonSchema;
@@ -622,6 +623,8 @@ pub enum ServerNotification {
     ReasoningSummaryPartAdded(ReasoningSummaryPartAddedNotification),
     #[serde(rename = "item/reasoning/textDelta")]
     ReasoningTextDelta(ReasoningTextDeltaNotification),
+    #[serde(rename = "model/verification")]
+    ModelVerification(ModelVerificationNotification),
     #[serde(rename = "model/safetyBuffering/updated")]
     ModelSafetyBufferingUpdated(ModelSafetyBufferingUpdatedNotification),
     #[serde(rename = "thread/settings/updated")]
@@ -658,6 +661,7 @@ impl ServerNotification {
             Self::ReasoningSummaryTextDelta(_) => METHOD_REASONING_SUMMARY_TEXT_DELTA,
             Self::ReasoningSummaryPartAdded(_) => METHOD_REASONING_SUMMARY_PART_ADDED,
             Self::ReasoningTextDelta(_) => METHOD_REASONING_TEXT_DELTA,
+            Self::ModelVerification(_) => METHOD_MODEL_VERIFICATION,
             Self::ModelSafetyBufferingUpdated(_) => METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
             Self::ThreadSettingsUpdated(_) => "thread/settings/updated",
             Self::ThreadTokenUsageUpdated(_) => METHOD_THREAD_TOKEN_USAGE_UPDATED,
@@ -730,6 +734,9 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             METHOD_REASONING_TEXT_DELTA => serde_json::from_value(params)
                 .map(Self::ReasoningTextDelta)
+                .map_err(|error| error.to_string()),
+            METHOD_MODEL_VERIFICATION => serde_json::from_value(params)
+                .map(Self::ModelVerification)
                 .map_err(|error| error.to_string()),
             METHOD_MODEL_SAFETY_BUFFERING_UPDATED => serde_json::from_value(params)
                 .map(Self::ModelSafetyBufferingUpdated)
@@ -809,6 +816,9 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::ReasoningTextDelta(params) => {
                 jsonrpc_notification(METHOD_REASONING_TEXT_DELTA, params)
+            }
+            ServerNotification::ModelVerification(params) => {
+                jsonrpc_notification(METHOD_MODEL_VERIFICATION, params)
             }
             ServerNotification::ModelSafetyBufferingUpdated(params) => {
                 jsonrpc_notification(METHOD_MODEL_SAFETY_BUFFERING_UPDATED, params)

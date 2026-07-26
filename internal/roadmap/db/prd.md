@@ -425,13 +425,13 @@ pub struct StorageRoots {
 4. 测试必须用 tempdir 显式传入 `--data-dir`，不污染真实用户目录。
 5. Electron host 写自己的配置时也必须在 `userData` 的受控子目录内，避免和 App Server product/runtime 文件互相猜路径。
 
-### 12.6 迁移规则
+### 12.6 存储边界规则
 
-1. 现有 `app_paths::preferred_data_dir()` 与 legacy copy 逻辑继续作为 compat 边界；新 runtime store 不直接读取 legacy root。
-2. 旧 `request_logs/`、`sessions/`、`agent/` 目录进入 P0 inventory，分别标记为 `current / compat / deprecated / dead`，不能因为目录还存在就继续承接新 runtime fact。
-3. Windows 现有 Roaming 目录如果已经有历史数据，只能作为迁移来源；新高频 DB / event / telemetry 目标应收敛到本机 data root。
-4. macOS 历史 `~/.lime` 只允许继续承接明确的跨工具用户 memory / skill 兼容语义；产品主库和 runtime store 不再向 home dotdir 扩展。
-5. 迁移完成后写 `migration-manifest.json`，包含 schema、migration identity、source/target fingerprint、schema/count、阶段时间和 digest；`.migration_completed` 为 dead，业务层不得散落 legacy source fallback。
+1. Product DB 只允许位于 current AgentRoot，不读取、复制或回退旧整库路径。
+2. 旧 `request_logs/`、`sessions/`、`agent/` 目录只进入 exact-path cleanup inventory，不能继续承接 runtime fact。
+3. Windows Roaming、旧 Product DB 与历史 home dotdir 不作为 Product DB、event 或 telemetry 的迁移来源。
+4. macOS `~/.lime` 只承接明确的跨工具 user memory / skill 语义，不承接产品主库或 runtime store。
+5. `storage-migration.v1`、`database-path-v1`、`migration-manifest.json` 与 `.migration_completed` 均为 `dead / deleted / forbidden-to-restore`；模型控制面一次性导入使用独立 owner 和 allowlist，不恢复整库迁移。
 
 ### 12.7 验收补充
 

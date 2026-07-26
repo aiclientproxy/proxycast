@@ -142,8 +142,7 @@ Codex 事实，不允许用旧 history 全量装载或 Renderer synthetic mailbo
 - `electron/main.ts`、`electron/smokeChecks.ts`、`electron/smokeEvidence*` 与
   `electron/smokeMemorySettings.ts` 中的 SHELL-01 smoke owner
 - `scripts/electron/smoke.mjs` 与 `scripts/electron/current-entrypoints.test.mjs`
-- `scripts/electron/settings-provider-migration-fixture-smoke.mjs`、对应测试与
-  `scripts/electron/lib/settings-provider-migration-fixture-core.mjs` 中的 SHELL-02 migration evidence owner
+- `verify:gui-smoke` 与 current Settings fixtures 中的 SHELL-02 AgentRoot/config isolation evidence owner；旧 Product DB migration fixture 已删除
 
 ### 3.2 执行阶段写集
 
@@ -300,7 +299,7 @@ Gate B-R 额外要求 RuntimeCore/backend/provider fixture 的 request marker �
 | ID          | Surface                                     | Gate A                             | Gate B                                             | 现有入口                                        | 本轮动作                                     |
 | ----------- | ------------------------------------------- | ---------------------------------- | -------------------------------------------------- | ----------------------------------------------- | -------------------------------------------- |
 | SHELL-01    | 启动页、侧栏、页面导航、崩溃边界            | 全 Page route 渲染和切换           | Electron 冷启动、ready、重载                       | `verify:gui-smoke`                              | 补结构化 startup/route summary               |
-| SHELL-02    | 配置、路径、迁移、隔离 userData             | schema/consumer 单测               | 冷启动、重启、迁移、无权限失败                     | `settings-provider-migration-electron-fixture`  | 补通用 app data migration 场景               |
+| SHELL-02    | 配置、current AgentRoot、隔离 userData      | schema/consumer 单测               | 冷启动、重启、current root 注入、无权限失败        | `verify:gui-smoke` + current Settings fixtures  | 补 current AgentRoot 隔离与权限失败场景      |
 | AGENT-01    | 新会话、发送、stream、terminal              | projection/state tests             | complete、failed、canceled、stale                  | `claw-chat-current-fixture`                     | 复用并统一证据字段                           |
 | AGENT-02    | queue、steer、cancel、继续输出              | reducer/command model              | multi-queue、pop-front、cancel-then-continue       | 同上 scenarios                                  | P0 全跑                                      |
 | AGENT-03    | 历史、分页、重启、导入、归档                | history/read/pagination projection | Electron history、Codex import、cold restart       | 多个 history/import fixture                     | 补 pagination、archive/unarchive 后恢复      |

@@ -1,8 +1,17 @@
-use crate::runtime_provider::{RuntimeProviderConfig, RuntimeProviderProtocol};
+use crate::runtime_provider::{
+    RuntimeProviderAuth, RuntimeProviderConfig, RuntimeProviderProtocol,
+};
+use sha2::{Digest, Sha256};
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+mod telemetry;
+
+pub(super) use telemetry::TransportRetryEvent;
+use telemetry::{CircuitObserver, RouteHealthTelemetry, TracingCircuitObserver};
 
 #[derive(Clone)]
 pub struct CurrentProviderHealthRegistry {
@@ -16,6 +25,7 @@ struct RouteHealthKey {
     model: String,
     base_url: String,
     protocol: &'static str,
+    credential_scope: String,
 }
 
 impl RouteHealthKey {
@@ -30,8 +40,28 @@ impl RouteHealthKey {
                 Some(RuntimeProviderProtocol::AnthropicMessages) => "anthropic_messages",
                 None => "missing",
             },
+            credential_scope: credential_scope(config),
         }
     }
+}
+
+fn credential_scope(config: &RuntimeProviderConfig) -> String {
+    match config.auth {
+        RuntimeProviderAuth::NoAuth => return "no-auth".to_string(),
+        RuntimeProviderAuth::OemManaged => return "oem-managed".to_string(),
+        RuntimeProviderAuth::ApiKey => {}
+    }
+    let credential_uuid = config.credential_uuid.trim();
+    if !credential_uuid.is_empty() {
+        return format!("stored:{credential_uuid}");
+    }
+
+    // Direct runtime credentials have no durable UUID. The registry only keeps
+    // a collision-resistant fingerprint, never the credential itself.
+    format!(
+        "direct:{:x}",
+        Sha256::digest(config.api_key.as_deref().unwrap_or_default().as_bytes())
+    )
 }
 
 impl CurrentProviderHealthRegistry {
@@ -45,11 +75,13 @@ impl CurrentProviderHealthRegistry {
             .breakers
             .lock()
             .expect("provider health registry mutex poisoned");
-        Arc::clone(
-            breakers
-                .entry(key)
-                .or_insert_with(|| Arc::new(CircuitBreaker::new(self.config))),
-        )
+        match breakers.entry(key) {
+            Entry::Occupied(entry) => Arc::clone(entry.get()),
+            Entry::Vacant(entry) => {
+                let breaker = Arc::new(CircuitBreaker::for_route(self.config, entry.key()));
+                Arc::clone(entry.insert(breaker))
+            }
+        }
     }
 
     #[cfg(test)]
@@ -144,6 +176,33 @@ enum State {
     HalfOpen { probe_in_flight: bool },
 }
 
+impl State {
+    fn kind(&self) -> CircuitState {
+        match self {
+            Self::Closed { .. } => CircuitState::Closed,
+            Self::Open { .. } => CircuitState::Open,
+            Self::HalfOpen { .. } => CircuitState::HalfOpen,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CircuitState {
+    Closed,
+    Open,
+    HalfOpen,
+}
+
+impl CircuitState {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Closed => "closed",
+            Self::Open => "open",
+            Self::HalfOpen => "half_open",
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Inner {
     config: HealthConfig,
@@ -153,10 +212,25 @@ struct Inner {
 /// 共享 provider 健康熔断器。
 pub(crate) struct CircuitBreaker {
     inner: Mutex<Inner>,
+    observer: Option<Arc<dyn CircuitObserver>>,
 }
 
 impl CircuitBreaker {
+    #[cfg(test)]
     pub(crate) fn new(config: HealthConfig) -> Self {
+        Self::build(config, None)
+    }
+
+    fn for_route(config: HealthConfig, key: &RouteHealthKey) -> Self {
+        Self::build(
+            config,
+            Some(Arc::new(TracingCircuitObserver::new(
+                RouteHealthTelemetry::from_key(key),
+            ))),
+        )
+    }
+
+    fn build(config: HealthConfig, observer: Option<Arc<dyn CircuitObserver>>) -> Self {
         let config = config.normalized();
         Self {
             inner: Mutex::new(Inner {
@@ -165,95 +239,168 @@ impl CircuitBreaker {
                     outcomes: VecDeque::new(),
                 },
             }),
+            observer,
         }
+    }
+
+    #[cfg(test)]
+    fn with_observer(config: HealthConfig, observer: Arc<dyn CircuitObserver>) -> Self {
+        Self::build(config, Some(observer))
     }
 
     pub(crate) fn acquire(self: &Arc<Self>) -> Result<CircuitPermit, CircuitOpen> {
-        let mut inner = self
-            .inner
-            .lock()
-            .expect("provider health circuit mutex poisoned");
-        let window_duration = inner.config.window_duration;
-        if let State::Closed { outcomes } = &mut inner.state {
-            prune_outcomes(outcomes, window_duration, Instant::now());
-        }
-        match &mut inner.state {
-            State::Closed { .. } => Ok(CircuitPermit {
-                breaker: Arc::clone(self),
-                mode: PermitMode::Closed,
-                settled: false,
-            }),
-            State::Open { opened_at } => {
-                let elapsed = opened_at.elapsed();
-                if elapsed < inner.config.open_duration {
-                    return Err(CircuitOpen {
-                        retry_after: inner.config.open_duration.saturating_sub(elapsed),
-                    });
-                }
-                inner.state = State::HalfOpen {
-                    probe_in_flight: true,
-                };
-                Ok(CircuitPermit {
-                    breaker: Arc::clone(self),
-                    mode: PermitMode::Probe,
-                    settled: false,
-                })
+        const HALF_OPEN_PROBE_BACKOFF: Duration = Duration::from_millis(50);
+        let (result, transition, probe_admission, rejected_state) = {
+            let mut inner = self
+                .inner
+                .lock()
+                .expect("provider health circuit mutex poisoned");
+            let window_duration = inner.config.window_duration;
+            if let State::Closed { outcomes } = &mut inner.state {
+                prune_outcomes(outcomes, window_duration, Instant::now());
             }
-            State::HalfOpen { probe_in_flight } => {
-                if *probe_in_flight {
-                    return Err(CircuitOpen {
-                        retry_after: inner.config.open_duration,
-                    });
+            match &mut inner.state {
+                State::Closed { .. } => (
+                    Ok(CircuitPermit {
+                        breaker: Arc::clone(self),
+                        mode: PermitMode::Closed,
+                        settled: false,
+                    }),
+                    None,
+                    None,
+                    None,
+                ),
+                State::Open { opened_at } => {
+                    let elapsed = opened_at.elapsed();
+                    if elapsed < inner.config.open_duration {
+                        (
+                            Err(CircuitOpen {
+                                retry_after: inner.config.open_duration.saturating_sub(elapsed),
+                            }),
+                            None,
+                            None,
+                            Some(CircuitState::Open),
+                        )
+                    } else {
+                        inner.state = State::HalfOpen {
+                            probe_in_flight: true,
+                        };
+                        (
+                            Ok(CircuitPermit {
+                                breaker: Arc::clone(self),
+                                mode: PermitMode::Probe,
+                                settled: false,
+                            }),
+                            Some((CircuitState::Open, CircuitState::HalfOpen, "open_elapsed")),
+                            Some(true),
+                            None,
+                        )
+                    }
                 }
-                *probe_in_flight = true;
-                Ok(CircuitPermit {
-                    breaker: Arc::clone(self),
-                    mode: PermitMode::Probe,
-                    settled: false,
-                })
+                State::HalfOpen { probe_in_flight } => {
+                    if *probe_in_flight {
+                        (
+                            Err(CircuitOpen {
+                                retry_after: HALF_OPEN_PROBE_BACKOFF
+                                    .min(inner.config.open_duration),
+                            }),
+                            None,
+                            Some(false),
+                            Some(CircuitState::HalfOpen),
+                        )
+                    } else {
+                        *probe_in_flight = true;
+                        (
+                            Ok(CircuitPermit {
+                                breaker: Arc::clone(self),
+                                mode: PermitMode::Probe,
+                                settled: false,
+                            }),
+                            None,
+                            Some(true),
+                            None,
+                        )
+                    }
+                }
+            }
+        };
+        if let Some(observer) = self.observer.as_deref() {
+            if let Some((old, new, reason)) = transition {
+                observer.on_state_change(old, new, reason);
+            }
+            if let Some(allowed) = probe_admission {
+                observer.on_probe_admission(allowed);
+            }
+            if let (Some(state), Err(error)) = (rejected_state, &result) {
+                observer.on_rejected(state, error.retry_after);
+            }
+        }
+        result
+    }
+
+    fn record(&self, mode: PermitMode, success: bool) {
+        let (transition, state) = {
+            let mut inner = self
+                .inner
+                .lock()
+                .expect("provider health circuit mutex poisoned");
+            let config = inner.config;
+            let old = inner.state.kind();
+            let mut reason = None;
+            match (&mut inner.state, mode) {
+                (State::Closed { outcomes }, PermitMode::Closed) => {
+                    let now = Instant::now();
+                    outcomes.push_back(Outcome {
+                        at: now,
+                        failed: !success,
+                    });
+                    while outcomes.len() > MAX_OUTCOMES {
+                        outcomes.pop_front();
+                    }
+                    prune_outcomes(outcomes, config.window_duration, now);
+                    let failures = outcomes.iter().filter(|outcome| outcome.failed).count();
+                    let error_rate = failures as f64 / outcomes.len().max(1) as f64;
+                    if outcomes.len() >= config.min_samples
+                        && error_rate >= config.error_rate_threshold
+                    {
+                        inner.state = State::Open {
+                            opened_at: Instant::now(),
+                        };
+                        reason = Some("trip");
+                    }
+                }
+                (State::HalfOpen { .. }, PermitMode::Probe) if success => {
+                    inner.state = State::Closed {
+                        outcomes: VecDeque::new(),
+                    };
+                    reason = Some("probe_success");
+                }
+                (State::HalfOpen { .. }, PermitMode::Probe) => {
+                    inner.state = State::Open {
+                        opened_at: Instant::now(),
+                    };
+                    reason = Some("probe_failure");
+                }
+                // 较早开始的 closed 请求可能晚于新请求完成；不能因此关闭或覆盖
+                // half-open probe 状态。
+                _ => {}
+            }
+            let new = inner.state.kind();
+            (reason.map(|reason| (old, new, reason)), inner.state.kind())
+        };
+        if let Some(observer) = self.observer.as_deref() {
+            if let Some((old, new, reason)) = transition {
+                observer.on_state_change(old, new, reason);
+            }
+            if !success {
+                observer.on_failure(state);
             }
         }
     }
 
-    fn record(&self, mode: PermitMode, success: bool) {
-        let mut inner = self
-            .inner
-            .lock()
-            .expect("provider health circuit mutex poisoned");
-        let config = inner.config;
-        match (&mut inner.state, mode) {
-            (State::Closed { outcomes }, PermitMode::Closed) => {
-                let now = Instant::now();
-                outcomes.push_back(Outcome {
-                    at: now,
-                    failed: !success,
-                });
-                while outcomes.len() > MAX_OUTCOMES {
-                    outcomes.pop_front();
-                }
-                prune_outcomes(outcomes, config.window_duration, now);
-                let failures = outcomes.iter().filter(|outcome| outcome.failed).count();
-                let error_rate = failures as f64 / outcomes.len().max(1) as f64;
-                if outcomes.len() >= config.min_samples && error_rate >= config.error_rate_threshold
-                {
-                    inner.state = State::Open {
-                        opened_at: Instant::now(),
-                    };
-                }
-            }
-            (State::HalfOpen { .. }, PermitMode::Probe) if success => {
-                inner.state = State::Closed {
-                    outcomes: VecDeque::new(),
-                };
-            }
-            (State::HalfOpen { .. }, PermitMode::Probe) => {
-                inner.state = State::Open {
-                    opened_at: Instant::now(),
-                };
-            }
-            // 较早开始的 closed 请求可能晚于新请求完成；不能因此关闭或覆盖
-            // half-open probe 状态。
-            _ => {}
+    pub(super) fn observe_transport_retry(&self, event: TransportRetryEvent) {
+        if let Some(observer) = self.observer.as_deref() {
+            observer.on_transport_retry(event);
         }
     }
 
@@ -363,6 +510,7 @@ mod tests {
             provider_selector: Some(provider_name.to_string()),
             model_name: model_name.to_string(),
             api_key: Some("test-key".to_string()),
+            auth: RuntimeProviderAuth::ApiKey,
             base_url: base_url.map(str::to_string),
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: None,
@@ -386,6 +534,75 @@ mod tests {
     fn succeed(breaker: &Arc<CircuitBreaker>) {
         let mut permit = breaker.acquire().expect("circuit permit");
         permit.success();
+    }
+
+    #[derive(Default)]
+    struct RecordingObserver {
+        breaker: Mutex<Option<std::sync::Weak<CircuitBreaker>>>,
+        transitions: Mutex<Vec<(CircuitState, CircuitState, &'static str)>>,
+        probe_admissions: Mutex<Vec<bool>>,
+        rejections: Mutex<Vec<CircuitState>>,
+        failure_states: Mutex<Vec<CircuitState>>,
+        transport_retries: Mutex<Vec<TransportRetryEvent>>,
+    }
+
+    impl RecordingObserver {
+        fn assert_breaker_unlocked(&self) {
+            let breaker = self
+                .breaker
+                .lock()
+                .expect("read observed breaker")
+                .as_ref()
+                .and_then(std::sync::Weak::upgrade);
+            if let Some(breaker) = breaker {
+                assert!(
+                    breaker.inner.try_lock().is_ok(),
+                    "observer callbacks must run outside the breaker mutex"
+                );
+            }
+        }
+    }
+
+    impl CircuitObserver for RecordingObserver {
+        fn on_state_change(&self, old: CircuitState, new: CircuitState, reason: &'static str) {
+            self.assert_breaker_unlocked();
+            self.transitions
+                .lock()
+                .expect("record transitions")
+                .push((old, new, reason));
+        }
+
+        fn on_probe_admission(&self, allowed: bool) {
+            self.assert_breaker_unlocked();
+            self.probe_admissions
+                .lock()
+                .expect("record probe admission")
+                .push(allowed);
+        }
+
+        fn on_rejected(&self, state: CircuitState, _retry_after: Duration) {
+            self.assert_breaker_unlocked();
+            self.rejections
+                .lock()
+                .expect("record rejection")
+                .push(state);
+        }
+
+        fn on_failure(&self, state: CircuitState) {
+            self.assert_breaker_unlocked();
+            self.failure_states
+                .lock()
+                .expect("record failure")
+                .push(state);
+        }
+
+        fn on_transport_retry(&self, event: TransportRetryEvent) {
+            self.assert_breaker_unlocked();
+            self.transport_retries
+                .lock()
+                .expect("record transport retries")
+                .push(event);
+        }
     }
 
     #[test]
@@ -424,6 +641,124 @@ mod tests {
         );
         probe.success();
         assert!(breaker.acquire().is_ok(), "successful probe closes circuit");
+    }
+
+    #[test]
+    fn observer_records_transitions_probe_admission_and_rejection() {
+        let observer = Arc::new(RecordingObserver::default());
+        let breaker = Arc::new(CircuitBreaker::with_observer(
+            HealthConfig {
+                window_duration: Duration::from_secs(60),
+                min_samples: 1,
+                error_rate_threshold: 1.0,
+                open_duration: Duration::ZERO,
+            },
+            observer.clone(),
+        ));
+        *observer.breaker.lock().expect("set observed breaker") = Some(Arc::downgrade(&breaker));
+        fail(&breaker);
+
+        let mut probe = breaker.acquire().expect("half-open probe");
+        assert!(breaker.acquire().is_err(), "second probe must be rejected");
+        probe.success();
+
+        assert_eq!(
+            *observer.transitions.lock().expect("read transitions"),
+            vec![
+                (CircuitState::Closed, CircuitState::Open, "trip"),
+                (CircuitState::Open, CircuitState::HalfOpen, "open_elapsed"),
+                (
+                    CircuitState::HalfOpen,
+                    CircuitState::Closed,
+                    "probe_success"
+                ),
+            ]
+        );
+        assert_eq!(
+            *observer.probe_admissions.lock().expect("read probes"),
+            vec![true, false]
+        );
+        assert_eq!(
+            *observer.rejections.lock().expect("read rejections"),
+            vec![CircuitState::HalfOpen]
+        );
+        assert_eq!(
+            *observer.failure_states.lock().expect("read failures"),
+            vec![CircuitState::Open]
+        );
+    }
+
+    #[test]
+    fn half_open_probe_rejection_uses_short_backoff() {
+        let breaker = breaker(HealthConfig {
+            window_duration: Duration::from_secs(60),
+            min_samples: 1,
+            error_rate_threshold: 1.0,
+            open_duration: Duration::from_millis(60),
+        });
+        fail(&breaker);
+        thread::sleep(Duration::from_millis(70));
+
+        let _probe = breaker.acquire().expect("half-open probe");
+        let rejected = match breaker.acquire() {
+            Err(error) => error,
+            Ok(_) => panic!("second probe must wait"),
+        };
+
+        assert_eq!(rejected.retry_after(), Duration::from_millis(50));
+    }
+
+    #[test]
+    fn observer_records_structured_transport_retry_outside_breaker_mutex() {
+        let observer = Arc::new(RecordingObserver::default());
+        let breaker = Arc::new(CircuitBreaker::with_observer(
+            HealthConfig::default(),
+            observer.clone(),
+        ));
+        *observer.breaker.lock().expect("set observed breaker") = Some(Arc::downgrade(&breaker));
+        let event = TransportRetryEvent::new(
+            "http",
+            "server_error",
+            1,
+            2,
+            5,
+            Duration::from_secs(2),
+            "retry_after",
+            Some(503),
+        );
+
+        breaker.observe_transport_retry(event);
+
+        assert_eq!(
+            *observer
+                .transport_retries
+                .lock()
+                .expect("read transport retries"),
+            vec![event]
+        );
+    }
+
+    #[test]
+    fn route_telemetry_excludes_endpoint_and_credential_values() {
+        let mut config = route_config(
+            "openai",
+            "gpt-5-codex",
+            Some("https://gateway.example.com/v1?token=endpoint-secret"),
+            RuntimeProviderProtocol::Responses,
+        );
+        config.credential_uuid.clear();
+        config.api_key = Some("direct-key-secret".to_string());
+
+        let telemetry = RouteHealthTelemetry::from_key(&RouteHealthKey::from_config(&config));
+        let rendered = format!("{telemetry:?}");
+
+        assert_eq!(telemetry.provider, "openai");
+        assert_eq!(telemetry.model, "gpt-5-codex");
+        assert_eq!(telemetry.protocol, "responses");
+        assert_eq!(telemetry.credential_kind, "direct");
+        assert_eq!(telemetry.route_id.len(), 64);
+        assert!(!rendered.contains("endpoint-secret"));
+        assert!(!rendered.contains("direct-key-secret"));
     }
 
     #[test]
@@ -538,6 +873,70 @@ mod tests {
         assert!(registry.circuit_for(&different_model).acquire().is_ok());
         assert!(registry.circuit_for(&different_base).acquire().is_ok());
         assert!(registry.circuit_for(&different_protocol).acquire().is_ok());
+    }
+
+    #[test]
+    fn registry_isolates_stored_and_direct_credential_scopes() {
+        let registry = CurrentProviderHealthRegistry::with_config(HealthConfig {
+            min_samples: 1,
+            error_rate_threshold: 1.0,
+            ..HealthConfig::default()
+        });
+        let stored = route_config(
+            "openai",
+            "gpt-5-codex",
+            Some("https://api.openai.com/v1"),
+            RuntimeProviderProtocol::Responses,
+        );
+        let mut different_stored = stored.clone();
+        different_stored.credential_uuid = "credential-2".to_string();
+        let mut direct_first = stored.clone();
+        direct_first.credential_uuid.clear();
+        direct_first.api_key = Some("direct-key-1".to_string());
+        let mut direct_second = direct_first.clone();
+        direct_second.api_key = Some("direct-key-2".to_string());
+
+        let mut permit = registry
+            .circuit_for(&stored)
+            .acquire()
+            .expect("stored route starts closed");
+        permit.failure();
+
+        assert!(registry.circuit_for(&stored).acquire().is_err());
+        assert!(registry.circuit_for(&different_stored).acquire().is_ok());
+        let direct_first_breaker = registry.circuit_for(&direct_first);
+        assert!(direct_first_breaker.acquire().is_ok());
+        assert!(registry.circuit_for(&direct_second).acquire().is_ok());
+        assert!(
+            !Arc::ptr_eq(&direct_first_breaker, &registry.circuit_for(&direct_second),),
+            "direct credentials must not share health state"
+        );
+        assert!(
+            Arc::ptr_eq(&direct_first_breaker, &registry.circuit_for(&direct_first)),
+            "the same direct credential must retain its route health state"
+        );
+    }
+
+    #[test]
+    fn no_auth_routes_share_health_without_credential_identity() {
+        let registry = CurrentProviderHealthRegistry::with_config(HealthConfig::default());
+        let mut first = route_config(
+            "openai",
+            "local-model",
+            Some("http://127.0.0.1:11434/v1"),
+            RuntimeProviderProtocol::ChatCompletions,
+        );
+        first.auth = RuntimeProviderAuth::NoAuth;
+        first.api_key = None;
+        first.credential_uuid.clear();
+        let mut second = first.clone();
+        second.api_key = Some("must-not-affect-no-auth-scope".to_string());
+        second.credential_uuid = "must-not-affect-no-auth-scope".to_string();
+
+        assert!(Arc::ptr_eq(
+            &registry.circuit_for(&first),
+            &registry.circuit_for(&second)
+        ));
     }
 
     #[test]

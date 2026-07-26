@@ -10,11 +10,11 @@ pub use payload::{
 };
 pub use profile_slots::{
     resolve_model_routing_for_candidate, resolve_ready_model_routing,
-    selection_from_profile_model_slot,
+    resolve_ready_model_routing_with_exclusions, selection_from_profile_model_slot,
 };
 pub use types::{
-    ModelRoutingDecision, ProfileModelSlot, ProviderReadiness, RoutingAttempt, RoutingResolution,
-    RuntimeModelSelection,
+    ModelRouteExclusion, ModelRoutingDecision, ProfileModelSlot, ProviderReadiness, RoutingAttempt,
+    RoutingResolution, RuntimeModelSelection,
 };
 
 pub const PROFILE_MODEL_SLOT_SOURCE: &str = "profile_model_slot";

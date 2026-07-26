@@ -67,8 +67,9 @@ async fn model_list_app_server() -> ModelListAppServer {
         ],
     )
     .expect("insert retired registry fixture");
-    let app_data_source = LocalAppDataSource::initialize_with_db_and_data_root(
+    let app_data_source = LocalAppDataSource::initialize_with_roots(
         Arc::new(Mutex::new(conn)),
+        temp.path(),
         temp.path().join("app-server"),
     )
     .await

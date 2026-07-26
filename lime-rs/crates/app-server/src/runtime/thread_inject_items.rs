@@ -313,7 +313,7 @@ mod tests {
     #[tokio::test]
     async fn cold_thread_is_hydrated_and_archived_thread_stays_unloaded() {
         let temp = tempfile::tempdir().expect("inject restart temp dir");
-        let roots = crate::StorageRoots::initialize(temp.path().join("app-server"))
+        let roots = crate::StorageRoots::initialize(temp.path(), temp.path().join("app-server"))
             .expect("inject restart storage roots");
         let database_path = roots.projection_db_path.clone();
         let event_log_root = roots.event_log_root.clone();

@@ -18,7 +18,9 @@ use model_provider::current_client::{
     CanonicalLlmEvent, CurrentProviderClient, CurrentProviderContent, CurrentProviderMessage,
     CurrentProviderRequest,
 };
-use model_provider::runtime_provider::{RuntimeProviderConfig, RuntimeProviderProtocol};
+use model_provider::runtime_provider::{
+    RuntimeProviderAuth, RuntimeProviderConfig, RuntimeProviderProtocol,
+};
 
 use crate::{LlmProvider, SkillError};
 
@@ -147,6 +149,7 @@ impl LimeLlmProvider {
             provider_selector: Some(credential.provider_type.to_string()),
             model_name: model.to_string(),
             api_key: Some(api_key.to_string()),
+            auth: RuntimeProviderAuth::ApiKey,
             base_url: base_url.map(ToOwned::to_owned),
             credential_uuid: credential.uuid.clone(),
             reasoning_effort: None,

@@ -10,7 +10,8 @@ struct ProjectionTestHarness {
 
 fn projection_test_core() -> ProjectionTestHarness {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));
@@ -27,7 +28,8 @@ fn projection_test_core() -> ProjectionTestHarness {
 
 fn projection_running_test_core() -> ProjectionTestHarness {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));

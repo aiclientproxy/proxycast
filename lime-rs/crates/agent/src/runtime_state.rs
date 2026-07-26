@@ -472,6 +472,7 @@ mod provider_session_tests {
             provider_selector: Some("openai".to_string()),
             model_name: model_name.to_string(),
             api_key: Some("test-key".to_string()),
+            auth: model_provider::runtime_provider::RuntimeProviderAuth::ApiKey,
             base_url: Some("https://api.openai.com/v1".to_string()),
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: None,

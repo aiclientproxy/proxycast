@@ -90,6 +90,7 @@ where
         initial_messages.push(message);
     }
     let structured_context = structured_input_context(&input, skill_snapshot.as_ref());
+    let emitted_pre_provider_warning = !structured_context.warnings.is_empty();
     initial_messages.extend(structured_context.messages);
     for warning in structured_context.warnings {
         on_event(&AgentEvent::Warning {
@@ -130,6 +131,7 @@ where
             session_config,
             initial_messages,
             tool_step_snapshot_source,
+            hook_snapshot_source: None,
             model_request_policy,
             tool_lifecycle_emitter: lifecycle_emitter,
             working_directory: working_directory
@@ -155,7 +157,14 @@ where
             }
             Some(event) = agent_event_receiver.recv() => on_event(&event),
         }
-    }?;
+    };
+    let execution = execution.map_err(|error| {
+        if emitted_pre_provider_warning {
+            error.suppress_reroute()
+        } else {
+            error
+        }
+    })?;
 
     if !execution.cancelled {
         web_search_tracker
@@ -379,6 +388,14 @@ fn handle_provider_event<F>(
                 attempt,
                 usage: project_usage(usage),
             },
+            on_event,
+        ),
+        CurrentProviderTurnEvent::ServerModel { model } => {
+            emit_with_artifacts(artifact_events, AgentEvent::ServerModel { model }, on_event)
+        }
+        CurrentProviderTurnEvent::ModelVerification { verifications } => emit_with_artifacts(
+            artifact_events,
+            AgentEvent::ModelVerification { verifications },
             on_event,
         ),
         CurrentProviderTurnEvent::ProviderStep {

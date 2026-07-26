@@ -23,6 +23,7 @@ runtime-core.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tokio.workspace = true
 tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 tracing.workspace = true

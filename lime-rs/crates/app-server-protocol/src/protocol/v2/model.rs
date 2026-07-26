@@ -87,6 +87,20 @@ pub struct ModelProviderCapabilitiesReadResponse {
     pub web_search: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelVerification {
+    TrustedAccessForCyber,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelVerificationNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub verifications: Vec<ModelVerification>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelSafetyBufferingUpdatedNotification {

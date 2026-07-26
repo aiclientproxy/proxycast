@@ -1,5 +1,5 @@
 use super::{AdditionalContextEntry, Thread, Turn, TurnEnvironmentParams, UserInput};
-use agent_protocol::CollaborationMode;
+use agent_protocol::{CollaborationMode, MultiAgentMode};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -45,7 +45,7 @@ pub struct TurnStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collaboration_mode: Option<CollaborationMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub multi_agent_mode: Option<Value>,
+    pub multi_agent_mode: Option<MultiAgentMode>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

@@ -45,7 +45,7 @@ async fn media_task_app_server() -> MediaTaskAppServer {
         Arc::new(EventLogWriter::new(temp.path().join("events")).expect("event log writer"));
     let sidecar_store =
         Arc::new(SidecarStore::new(temp.path().join("sidecars")).expect("sidecar store"));
-    let app_data_source = LocalAppDataSource::initialize_with_db_and_data_root(db, data_root)
+    let app_data_source = LocalAppDataSource::initialize_with_roots(db, temp.path(), data_root)
         .await
         .expect("local app data source");
     let runtime = RuntimeCore::with_backend(Arc::new(MockBackend))
@@ -605,7 +605,7 @@ async fn image_command_app_server() -> MediaTaskAppServer {
     let sidecar_store =
         Arc::new(SidecarStore::new(temp.path().join("sidecars")).expect("sidecar store"));
     let app_data_source =
-        LocalAppDataSource::initialize_with_db_and_data_root(db.clone(), data_root)
+        LocalAppDataSource::initialize_with_roots(db.clone(), temp.path(), data_root)
             .await
             .expect("local app data source");
     let runtime = RuntimeCore::with_backend(Arc::new(RuntimeBackend::with_db(db)))

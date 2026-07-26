@@ -13,6 +13,7 @@ fn runtime_config() -> RuntimeProviderConfig {
         provider_selector: Some("codex".to_string()),
         model_name: "gpt-5.3-codex".to_string(),
         api_key: None,
+        auth: crate::runtime_provider::RuntimeProviderAuth::ApiKey,
         base_url: Some("https://example.com/openai".to_string()),
         credential_uuid: "credential-1".to_string(),
         reasoning_effort: Some("medium".to_string()),
@@ -1287,6 +1288,11 @@ fn stream_request_projects_responses_lite_wire_shape() {
     let wire_shape = request.provider_request_wire_shape();
 
     assert!(wire_shape.use_responses_lite);
+    assert_eq!(
+        wire_shape.instructions_location.as_deref(),
+        Some("input_prefix")
+    );
+    assert_eq!(wire_shape.tools_location.as_deref(), Some("input_prefix"));
     assert_eq!(wire_shape.reasoning_context.as_deref(), Some("all_turns"));
     assert_eq!(wire_shape.parallel_tool_calls, Some(false));
     assert_eq!(
@@ -1323,7 +1329,26 @@ fn stream_request_accepts_responses_lite_wire_for_current_backend() {
         None,
     ));
 
+    assert_eq!(
+        request.provider_request_wire_shape().parallel_tool_calls,
+        Some(false)
+    );
     assert!(request.provider_request_wire_support_issue().is_none());
+}
+
+#[test]
+fn model_policy_keeps_parallel_tool_calls_fail_closed_without_explicit_support() {
+    let policy = RuntimeReplyModelRequestPolicy::new(
+        None,
+        Some(RuntimeReplyToolCallPolicy {
+            supports_parallel_tool_calls: false,
+            parallel_tool_calls: true,
+        }),
+        None,
+    )
+    .expect("tool policy");
+
+    assert_eq!(policy.parallel_tool_calls(), Some(false));
 }
 
 #[test]

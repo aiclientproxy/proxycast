@@ -2,6 +2,7 @@ use super::{
     SortDirection, Thread, ThreadHistoryMode, ThreadItem, ThreadListCwdFilter, ThreadSortKey,
     ThreadSourceKind, ThreadStartSource, ThreadStatus, Turn, TurnEnvironmentParams, TurnItemsView,
 };
+use agent_protocol::MultiAgentMode;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -41,7 +42,7 @@ pub struct ThreadStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub personality: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub multi_agent_mode: Option<Value>,
+    pub multi_agent_mode: Option<MultiAgentMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ephemeral: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -81,7 +82,7 @@ pub struct ThreadStartResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
     #[serde(default)]
-    pub multi_agent_mode: Value,
+    pub multi_agent_mode: MultiAgentMode,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -149,7 +150,7 @@ pub struct ThreadForkResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
     #[serde(default)]
-    pub multi_agent_mode: Value,
+    pub multi_agent_mode: MultiAgentMode,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -213,7 +214,7 @@ pub struct ThreadResumeResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
     #[serde(default)]
-    pub multi_agent_mode: Value,
+    pub multi_agent_mode: MultiAgentMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub initial_turns_page: Option<TurnsPage>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

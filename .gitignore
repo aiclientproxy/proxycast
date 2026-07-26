@@ -88,6 +88,7 @@ internal/exec-plans/*
 !internal/exec-plans/refactor-v2-research.md
 !internal/exec-plans/refactor-v2-implementation.md
 !internal/exec-plans/project-gate-a-b-acceptance-plan.md
+!internal/exec-plans/project-submenu-pointer-regression-2026-07-26.md
 !internal/exec-plans/refactor-v2-test-phase-2-plan.md
 !internal/exec-plans/codex-conversation-compat-refactor-plan.md
 !internal/exec-plans/codex-app-gui-alignment-plan.md

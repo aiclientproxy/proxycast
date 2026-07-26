@@ -138,7 +138,7 @@ macOS 允许 `HostUserData` 与 `AppDataRoot` 物理同根，但 owner 必须按
 | L02 | `.com.limecloud.lime.dev.ERcAJc`               | 未命名 JSON temp，先 consumer/fingerprint                          | `deprecated-review`；M1/X1            |
 | L03 | `.com.limecloud.lime.dev.JncgCl`               | 同上，禁止仅按前缀批删                                             | `deprecated-review`；M1/X1            |
 | L04 | `.com.limecloud.lime.dev.oLC4uN`               | 同上，禁止仅按前缀批删                                             | `deprecated-review`；M1/X1            |
-| L05 | `.migration_completed`                         | 已由 `app-server/migration-manifest.json` 替代                     | `dead / forbidden-to-restore`；M1     |
+| L05 | `.migration_completed`                         | 非模型 migration marker 与整库 manifest owner 均已退役            | `dead / forbidden-to-restore`；X1     |
 | L06 | `Cache/`                                       | `HostSessionData` cache                                            | `current/rebuildable`；H1/G1          |
 | L07 | `Code Cache/`                                  | `HostSessionData` code cache                                       | `current/rebuildable`；H1/G1          |
 | L08 | `Cookies`                                      | `HostSessionData` credential-adjacent web state                    | `current/semantic-state`；H1          |
@@ -247,8 +247,14 @@ macOS 允许 `HostUserData` 与 `AppDataRoot` 物理同根，但 owner 必须按
 4. **已完成切片**：Windows legacy candidate `%LOCALAPPDATA%\\lime` 已从递归迁移根剔除，只允许精确 DB/app-server 候选；InstallRoot 零写入回归通过。
 5. **已完成切片**：E2E 缺少 `ELECTRON_E2E_USER_DATA_DIR` 时 fail closed，且 E2E root 优先于 ambient `LIME_AGENT_RUNTIME_ROOT`。
 6. **已完成切片**：`VoiceModelHost` 使用 `AppDataRoot/models/voice`，`SystemUtilityHost` 使用唯一 connector owner 下的 `AppDataRoot/connectors/browser`；HostUserData machine-asset allowance 已从守卫移除。
-7. **部分完成**：`SessionFileStorage` 已由 `LocalAppDataSource` 注入 `AgentRoot/artifacts/sessions`；`LogStore`、diagnostics 与 support bundle 已统一注入 `AgentRoot/observability/log/lime.log`，Connect registry cache 已注入 `AgentRoot/cache/connect/registry.json`；Rust 注入链与真实 Electron Developer diagnostics Gate B-F 已通过。旧 `resolve_sessions_dir()`、`resolve_logs_dir()`、voice model 的 `preferred_data_dir()`/`dirs::data_dir()`/`best_effort_data_dir()`、Connect cache 的 `best_effort_data_dir()`、两处 LocalAppDataSource `best_effort_data_dir()`、startup credential cleanup 的 `preferred_data_dir()`、runtime AGENTS 全局层的 `best_effort_user_memory_path()`、两个孤立 Agent 模块的 `AppDataRoot/harness/**` 默认 writer、旧 PluginLoader 自动平台发现、raw RequestLogger 默认目录以及 Plugin package/runtime 的 `preferred_data_dir()` 已移除。runtime AGENTS 全局路径解析失败时只跳过全局层，Workspace `.lime/AGENTS.md` 仍独立加载，不回退 temp；Plugin package、installed state、seeded cache 和 cloud worker runtime 统一从 `LocalAppDataSource` 注入 `<AgentRoot>/plugins`，local folder 继续使用显式 `sourceUri`。Windows diagnostics、style pack、MCP OAuth 等 surface 仍有 4 个已登记 root bypass，必须继续逐项确认 active writer/read fallback/dead 后让守卫基线只减不增。
-8. **进行中**：旧 DB PRD/执行计划已标记 storage contract superseded；剩余生产迁移入口必须退役，HostSessionData 和 cleanup manifest 语义仍需收口。
+7. **已完成切片**：Electron 显式解析 `HostSessionData/AppDataRoot/AgentRoot`；Windows `sessionData` 固定为 `<AppDataRoot>/host-session`，E2E 使用隔离根。App Server 通过 `APP_SERVER_APP_DATA_DIR` 接收 AppDataRoot，`StorageRoots` 与 `LocalAppDataSource` 同时接收 AppDataRoot/AgentRoot；diagnostics、support bundle、Soul style-pack 与 MCP OAuth 均只消费注入根，叶子 root bypass 基线为零。style-pack 同根安装幂等、异根 fail closed；MCP OAuth 未注入时 fail closed。`preferred_data_dir` 与 Product DB path resolver 只解析不创建目录。
+8. **进行中**：旧 Product DB 整库复制、版本化 manifest、启动 cleanup owner，以及复制旧 managed project 并改写 workspace/session path 的 `migration_v6` 均已删除并补 dead-surface guard。cleanup manifest 语义、Windows 真机 runner 与责任开发者架构确认仍未完成。
+
+### 7.1.1 2026-07-26 至 2026-07-27 根注入增量证据
+
+- Electron path 与 sidecar 环境测试 `39/39`、Electron typecheck、`lime-core config::yaml` `17/17`、`lime-core app_paths` `17/17`、`lime-core --lib` `670/670`、App Server style-pack 注入/异根拒绝 `2/2`、storage/legacy guard `238/238` 已通过；此前 App Server storage roots `2/2`、diagnostics/support bundle `14/14`、MCP OAuth store `6/6` 及未注入 fail-closed `1/1` 继续有效。
+- `cargo check -p app-server`、`npm run test:contracts`（App Server client `284 checks`）、scoped `git diff --check` 与 `npm run governance:legacy-report` 通过，legacy report 边界违规为 `0`。`npm run verify:gui-smoke -- --timeout-ms 180000` 通过真实 Electron/preload/IPC/App Server sidecar，App Server ready、Claw shell reload 与 Memory 设置页均成功，evidence `result=pass`。本证据不替代 Windows 真机 runner。
+- 当前分类：`AppDataRoot -> AgentRoot -> StorageRoots/LocalAppDataSource` 为 `current`；模型控制面/模型文件迁移为唯一允许继续演进的 `compat`；旧整库迁移、manifest、cleanup 与 `migration_v6` 非模型 project/path 迁移均为 `dead / deleted / forbidden-to-restore`。
 
 ### 7.2 T1 dated rollout 当前切片
 

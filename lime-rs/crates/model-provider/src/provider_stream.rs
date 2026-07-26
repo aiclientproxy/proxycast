@@ -499,6 +499,18 @@ impl RuntimeReplyModelRequestPolicy {
             .map(|policy| policy.reasoning_context.as_str())
     }
 
+    pub fn instructions_location(&self) -> Option<&str> {
+        self.responses
+            .as_ref()
+            .map(|policy| policy.instructions_location.as_str())
+    }
+
+    pub fn tools_location(&self) -> Option<&str> {
+        self.responses
+            .as_ref()
+            .map(|policy| policy.tools_location.as_str())
+    }
+
     pub fn requires_responses_lite_header(&self) -> bool {
         self.responses
             .as_ref()
@@ -506,9 +518,19 @@ impl RuntimeReplyModelRequestPolicy {
     }
 
     pub fn parallel_tool_calls(&self) -> Option<bool> {
-        self.tool_call
+        let responses_disallow_parallel = self
+            .responses
             .as_ref()
-            .map(|policy| policy.parallel_tool_calls)
+            .is_some_and(|policy| policy.use_responses_lite || !policy.parallel_tool_calls_allowed);
+        match self.tool_call.as_ref() {
+            Some(policy) => Some(
+                policy.supports_parallel_tool_calls
+                    && policy.parallel_tool_calls
+                    && !responses_disallow_parallel,
+            ),
+            None if responses_disallow_parallel => Some(false),
+            None => None,
+        }
     }
 
     pub fn reasoning_summary(&self) -> Option<&str> {
@@ -528,6 +550,10 @@ impl RuntimeReplyModelRequestPolicy {
 pub struct RuntimeReplyProviderRequestWireShape {
     #[serde(default)]
     pub use_responses_lite: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions_location: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools_location: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_context: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -551,6 +577,8 @@ impl RuntimeReplyProviderRequestWireShape {
         };
 
         let use_responses_lite = policy.use_responses_lite();
+        let instructions_location = policy.instructions_location().map(ToOwned::to_owned);
+        let tools_location = policy.tools_location().map(ToOwned::to_owned);
         let reasoning_context = policy.reasoning_context().map(ToOwned::to_owned);
         let reasoning_summary = policy.reasoning_summary().map(ToOwned::to_owned);
         let text_verbosity = policy.text_verbosity().map(ToOwned::to_owned);
@@ -566,6 +594,8 @@ impl RuntimeReplyProviderRequestWireShape {
 
         Self {
             use_responses_lite,
+            instructions_location,
+            tools_location,
             reasoning_context,
             reasoning_summary,
             text_verbosity,
@@ -576,6 +606,8 @@ impl RuntimeReplyProviderRequestWireShape {
 
     pub fn requires_responses_lite_wire_support(&self) -> bool {
         self.use_responses_lite
+            || self.instructions_location.as_deref() == Some("input_prefix")
+            || self.tools_location.as_deref() == Some("input_prefix")
             || self.reasoning_context.as_deref() == Some("all_turns")
             || self
                 .headers

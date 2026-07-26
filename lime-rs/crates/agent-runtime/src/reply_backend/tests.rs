@@ -254,7 +254,7 @@ fn backend_start_exposes_trace_snapshot() {
     assert_eq!(trace.model_name, Some("gpt-5.3-codex"));
     assert_eq!(trace.use_responses_lite, Some(true));
     assert_eq!(trace.reasoning_context, Some("all_turns"));
-    assert_eq!(trace.parallel_tool_calls, None);
+    assert_eq!(trace.parallel_tool_calls, Some(false));
     assert_eq!(trace.requires_responses_lite_header, Some(true));
     assert_eq!(trace.message_chars, 5);
 }

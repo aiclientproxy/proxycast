@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-use super::{migration, migration_v2, migration_v4, migration_v5, migration_v6};
+use super::{migration, migration_v2, migration_v4, migration_v5};
 
 pub(super) fn run_startup_migrations(conn: &Connection) {
     run_provider_pool_startup_migrations(conn);
@@ -154,20 +154,6 @@ fn run_versioned_startup_migrations(conn: &Connection) {
                 format!(
                     "[数据库] workbench 会话模式旧别名迁移完成: sessions={}",
                     result.migrated_sessions
-                )
-            })
-        },
-    );
-
-    run_nonfatal_logged_startup_migration(
-        conn,
-        "受管项目路径迁移失败",
-        migration_v6::migrate_managed_workspace_paths,
-        |_, result| {
-            (result.executed || result.skipped_workspaces > 0).then(|| {
-                format!(
-                    "[数据库] 受管项目路径迁移完成: workspaces={}, sessions={}, skipped={}",
-                    result.migrated_workspaces, result.migrated_sessions, result.skipped_workspaces
                 )
             })
         },

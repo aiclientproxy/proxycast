@@ -8,8 +8,6 @@ use app_server_protocol::LogStorageDiagnosticsResponse;
 use app_server_protocol::SupportBundleExportParams;
 use app_server_protocol::SupportBundleExportResponse;
 use chrono::Utc;
-use lime_core::app_paths;
-use lime_core::database;
 use serde::Serialize;
 use std::fs;
 use std::io;
@@ -392,6 +390,8 @@ fn write_support_bundle_readme(
 
 fn export_support_bundle_to(
     output_directory: &Path,
+    app_data_root: &Path,
+    database_path: &Path,
     current_log_path: &Path,
     params: SupportBundleExportParams,
     trace_store_root: Option<&Path>,
@@ -415,12 +415,11 @@ fn export_support_bundle_to(
 
     let log_storage_diagnostics = read_log_storage_diagnostics_from_path(current_log_path, 0);
     let persisted_log_tail = read_persisted_logs_tail_from_path(current_log_path, 200);
-    let app_data_dir = app_paths::preferred_data_dir().ok();
+    // AppDataRoot 与 Product DB 路径都由组合根注入，不再重新猜平台根或重解析库路径。
+    let app_data_dir = Some(app_data_root.to_path_buf());
     let config_path = config_path_guess();
     let legacy_data_dir = legacy_data_dir_guess();
-    let database_path = database::get_db_path()
-        .ok()
-        .or_else(|| legacy_data_dir.as_ref().map(|dir| dir.join("lime.db")));
+    let database_path = Some(database_path.to_path_buf());
     let effective_logs_dir = current_log_path.parent().map(Path::to_path_buf);
     let trace_store_summary = collect_trace_store_summary(trace_store_root);
 
@@ -525,12 +524,16 @@ fn export_support_bundle_to(
 }
 
 pub(crate) fn export_support_bundle(
+    app_data_root: &Path,
+    database_path: &Path,
     current_log_path: &Path,
     params: SupportBundleExportParams,
     trace_store_root: Option<&Path>,
 ) -> Result<SupportBundleExportResponse, String> {
     export_support_bundle_to(
         &default_support_bundle_output_dir(),
+        app_data_root,
+        database_path,
         current_log_path,
         params,
         trace_store_root,
@@ -621,6 +624,11 @@ mod tests {
     #[test]
     fn support_bundle_uses_supplied_trace_root_for_opt_in_trace_export() {
         let temp = tempfile::tempdir().expect("tempdir");
+        let app_data_root = temp.path().join("machine-data");
+        let database_path = temp.path().join("portable-agent").join("lime.db");
+        fs::create_dir_all(&app_data_root).expect("app data dir");
+        fs::create_dir_all(database_path.parent().expect("database parent")).expect("database dir");
+        fs::write(&database_path, []).expect("database file");
         let trace_root = temp.path().join("runtime-current").join("traces");
         let session_dir = trace_root.join("sessions").join("session_session-a");
         fs::create_dir_all(&session_dir).expect("session dir");
@@ -640,6 +648,8 @@ mod tests {
 
         let response = export_support_bundle_to(
             &temp.path().join("bundles"),
+            &app_data_root,
+            &database_path,
             &log_path,
             SupportBundleExportParams {
                 include_trace_export: Some(
@@ -663,6 +673,22 @@ mod tests {
 
         let bundle = fs::File::open(response.bundle_path).expect("open support bundle");
         let mut archive = ZipArchive::new(bundle).expect("read support bundle");
+
+        let mut manifest = String::new();
+        archive
+            .by_name("meta/manifest.json")
+            .expect("manifest")
+            .read_to_string(&mut manifest)
+            .expect("read manifest");
+        let manifest: serde_json::Value = serde_json::from_str(&manifest).expect("parse manifest");
+        assert_eq!(
+            manifest["app_data_dir"],
+            app_data_root.to_string_lossy().as_ref()
+        );
+        assert_eq!(
+            manifest["database_path"],
+            database_path.to_string_lossy().as_ref()
+        );
 
         let mut trace_summary = String::new();
         archive

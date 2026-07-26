@@ -187,6 +187,7 @@ mod tests {
             route_protocol: None,
             credential_ref: None,
             direct_provider_config: None,
+            auth: model_provider::runtime_provider::RuntimeProviderAuth::ApiKey,
         }
     }
 

@@ -1,6 +1,12 @@
 use super::*;
-use crate::session_loop::{RuntimeSessionClosureTask, RuntimeSessionRegistry};
+use crate::reply_input::RuntimeReplyInput;
+use crate::session_loop::{RuntimeSessionClosureTask, RuntimeSessionInput, RuntimeSessionRegistry};
 use agent_protocol::provider_trace::ProviderTraceStage;
+use agent_protocol::world_state::{
+    RuntimeWorldEnvironment, RuntimeWorldMode, RuntimeWorldPermissions, RuntimeWorldState,
+    WORLD_STATE_TURN_METADATA_KEY,
+};
+use agent_protocol::MultiAgentMode;
 use futures::future::BoxFuture;
 use futures::{stream, StreamExt};
 use model_provider::current_client::CurrentProviderRole;
@@ -127,6 +133,54 @@ impl CurrentProvider for ScriptedProvider {
             });
         Box::pin(async move {
             let stream: CurrentProviderStream = Box::pin(stream::iter(stream));
+            Ok(stream)
+        })
+    }
+}
+
+struct GatedEmptyThenRetryableErrorProvider {
+    attempt: AtomicUsize,
+    started: Mutex<Option<oneshot::Sender<()>>>,
+    continue_after_steer: Mutex<Option<oneshot::Receiver<()>>>,
+    requests: Mutex<Vec<CurrentProviderRequest>>,
+}
+
+impl CurrentProvider for GatedEmptyThenRetryableErrorProvider {
+    fn stream<'a>(
+        &'a self,
+        request: CurrentProviderRequest,
+    ) -> BoxFuture<'a, Result<CurrentProviderStream, CurrentProviderError>> {
+        self.requests.lock().expect("record request").push(request);
+        if self.attempt.fetch_add(1, Ordering::SeqCst) == 0 {
+            if let Some(started) = self.started.lock().expect("started sender").take() {
+                let _ = started.send(());
+            }
+            let continue_after_steer = self
+                .continue_after_steer
+                .lock()
+                .expect("continue receiver")
+                .take()
+                .expect("first request continuation");
+            return Box::pin(async move {
+                let stream: CurrentProviderStream = Box::pin(stream::once(async move {
+                    let _ = continue_after_steer.await;
+                    Ok(CanonicalLlmEvent::Finish {
+                        reason: FinishReason::Stop,
+                        usage: None,
+                        response_id: Some("empty-before-steer".to_string()),
+                    })
+                }));
+                Ok(stream)
+            });
+        }
+
+        Box::pin(async move {
+            let stream: CurrentProviderStream =
+                Box::pin(stream::iter([Ok(CanonicalLlmEvent::ProviderError {
+                    message: "provider failed after steer".to_string(),
+                    classification: Some(FailureClassification::Transport),
+                    retryable: Some(true),
+                })]));
             Ok(stream)
         })
     }
@@ -467,7 +521,7 @@ fn provider_output_item_id_is_turn_and_attempt_scoped() {
 }
 
 #[tokio::test]
-async fn provider_request_includes_model_visible_working_directory_before_user_input() {
+async fn provider_request_uses_typed_cwd_world_state_without_app_server_snapshot() {
     let provider = Arc::new(ScriptedProvider::new(vec![vec![
         Ok(CanonicalLlmEvent::TextDelta {
             id: "text-0".to_string(),
@@ -497,6 +551,7 @@ async fn provider_request_includes_model_visible_working_directory_before_user_i
                     RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("/tmp/task<&>"),
@@ -522,10 +577,124 @@ async fn provider_request_includes_model_visible_working_directory_before_user_i
                 content: user_content,
             }
         ] if matches!(environment_content.as_slice(), [CurrentProviderContent::Text(text)]
-            if text == "<environment_context>\n<cwd>/tmp/task&lt;&amp;&gt;</cwd>\n</environment_context>")
+            if text == "<environment_context>\n  <cwd>/tmp/task&lt;&amp;&gt;</cwd>\n</environment_context>")
             && matches!(user_content.as_slice(), [CurrentProviderContent::Text(text)]
                 if text == "inspect the workspace")
     ));
+}
+
+#[tokio::test]
+async fn provider_request_projects_typed_world_state_once_before_current_user() {
+    let provider = Arc::new(ScriptedProvider::new(vec![vec![
+        Ok(CanonicalLlmEvent::TextDelta {
+            id: "text-0".to_string(),
+            text: "done".to_string(),
+        }),
+        Ok(CanonicalLlmEvent::Finish {
+            reason: FinishReason::Stop,
+            usage: None,
+            response_id: Some("response-1".to_string()),
+        }),
+    ]]));
+    let requests = Arc::clone(&provider.requests);
+    let world_state = RuntimeWorldState {
+        environment: Some(RuntimeWorldEnvironment {
+            cwd: Some("/tmp/repo & app".to_string()),
+            project_root: Some("/tmp/repo".to_string()),
+            workspace_id: Some("workspace-1".to_string()),
+            thread_id: Some("thread-1".to_string()),
+            turn_id: Some("turn-1".to_string()),
+            provider: Some("anthropic".to_string()),
+            model: Some("claude <sonnet>".to_string()),
+            reasoning_effort: Some("high".to_string()),
+        }),
+        permissions: Some(RuntimeWorldPermissions {
+            approval_policy: Some("on-request".to_string()),
+            sandbox_policy: Some("workspace-write".to_string()),
+            web_search: Some(false),
+        }),
+        collaboration: Some(RuntimeWorldMode {
+            mode: "default".to_string(),
+            source: Some("request & config".to_string()),
+        }),
+        multi_agent: Some(MultiAgentMode::ExplicitRequestOnly),
+        instruction_sections: Vec::new(),
+        source: Some("app_server_world_state".to_string()),
+    };
+    let mut turn_context = agent_protocol::turn_context::TurnContextOverride::default();
+    turn_context.metadata.insert(
+        WORLD_STATE_TURN_METADATA_KEY.to_string(),
+        serde_json::to_value(world_state).expect("serialize world state"),
+    );
+
+    run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-1")
+                .thread_id("thread-1")
+                .turn_id("turn-1")
+                .turn_context(turn_context)
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("inspect the workspace".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("/tmp/ignored-fallback"),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect("provider turn");
+
+    let requests = requests.lock().expect("recorded requests");
+    assert_eq!(requests.len(), 1);
+    let messages = &requests[0].messages;
+    assert_eq!(messages.len(), 2);
+    let CurrentProviderContent::Text(environment_context) = &messages[0].content[0] else {
+        panic!("world state must be provider-visible text");
+    };
+    assert_eq!(
+        environment_context,
+        "<environment_context>\n  <cwd>/tmp/repo &amp; app</cwd>\n  <project_root>/tmp/repo</project_root>\n  <workspace_id>workspace-1</workspace_id>\n  <thread_id>thread-1</thread_id>\n  <turn_id>turn-1</turn_id>\n  <model provider=\"anthropic\" name=\"claude &lt;sonnet&gt;\" reasoning_effort=\"high\" />\n  <permissions approval_policy=\"on-request\" sandbox_policy=\"workspace-write\" web_search=\"disabled\" />\n  <collaboration mode=\"default\" source=\"request &amp; config\" />\n  <multi_agent_mode>Any earlier instruction enabling proactive multi-agent delegation no longer applies. Do not spawn sub-agents unless the user or applicable AGENTS.md/skill instructions explicitly ask for sub-agents, delegation, or parallel agent work.</multi_agent_mode>\n</environment_context>"
+    );
+    assert_eq!(
+        environment_context.matches("<environment_context>").count(),
+        1
+    );
+    assert_eq!(environment_context.matches("<multi_agent_mode>").count(), 1);
+    assert!(!environment_context.contains("<instructions"));
+    assert!(matches!(
+        messages[1].content.as_slice(),
+        [CurrentProviderContent::Text(text)] if text == "inspect the workspace"
+    ));
+}
+
+#[test]
+fn invalid_world_state_metadata_is_not_hidden_by_cwd_fallback() {
+    let mut turn_context = agent_protocol::turn_context::TurnContextOverride::default();
+    turn_context.metadata.insert(
+        WORLD_STATE_TURN_METADATA_KEY.to_string(),
+        serde_json::json!({ "environment": "invalid" }),
+    );
+    let config = crate::session_config::SessionConfigBuilder::new("session-1")
+        .turn_context(turn_context)
+        .build();
+
+    let error = resolve_world_state(&config, Path::new("/tmp/fallback"))
+        .expect_err("invalid snapshot must fail closed");
+
+    assert!(error.message.contains("Invalid world_state turn metadata"));
 }
 
 #[tokio::test]
@@ -561,6 +730,7 @@ async fn provider_request_preserves_canonical_fork_lineage() {
                     RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("/tmp"),
@@ -580,6 +750,96 @@ async fn provider_request_preserves_canonical_fork_lineage() {
     assert_eq!(
         metadata.forked_from_thread_id.as_deref(),
         Some("thread-source")
+    );
+}
+
+#[tokio::test]
+async fn provider_metadata_is_deduplicated_across_sampling_steps() {
+    let metadata = || {
+        vec![
+            Ok(CanonicalLlmEvent::ServerModel {
+                model: "gpt-5-codex".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::ModelVerification {
+                verifications: vec![ModelVerification::TrustedAccessForCyber],
+            }),
+        ]
+    };
+    let mut first = metadata();
+    first.extend([
+        Ok(CanonicalLlmEvent::ToolCall {
+            id: "call-1".to_string(),
+            name: "Read".to_string(),
+            input: serde_json::json!({ "path": "README.md" }),
+            provider_executed: None,
+        }),
+        Ok(CanonicalLlmEvent::Finish {
+            reason: FinishReason::ToolCall,
+            usage: None,
+            response_id: Some("response-1".to_string()),
+        }),
+    ]);
+    let mut second = metadata();
+    second.extend([
+        Ok(CanonicalLlmEvent::TextDelta {
+            id: "text-0".to_string(),
+            text: "done".to_string(),
+        }),
+        Ok(CanonicalLlmEvent::Finish {
+            reason: FinishReason::Stop,
+            usage: None,
+            response_id: Some("response-2".to_string()),
+        }),
+    ]);
+    let provider = Arc::new(ScriptedProvider::new(vec![first, second]));
+    let mut events = Vec::new();
+
+    run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-1")
+                .turn_id("turn-1")
+                .max_turns(3)
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("read it".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    vec![RuntimeToolDefinition::new(
+                        "Read",
+                        "read files",
+                        serde_json::json!({ "type": "object" }),
+                    )],
+                    RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |event| events.push(event),
+    )
+    .await
+    .expect("provider turn");
+
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, CurrentProviderTurnEvent::ServerModel { .. }))
+            .count(),
+        1
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, CurrentProviderTurnEvent::ModelVerification { .. }))
+            .count(),
+        1
     );
 }
 
@@ -645,6 +905,7 @@ async fn reasoning_summary_and_content_share_item_but_only_content_enters_provid
                     RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("."),
@@ -765,6 +1026,7 @@ async fn each_sampling_attempt_emits_independent_provider_phase_trace() {
                     RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("."),
@@ -961,6 +1223,7 @@ async fn max_turns_stops_before_starting_an_extra_provider_request() {
                     RuntimeToolExecutorHandle::new(tool.clone()),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("."),
@@ -1054,6 +1317,7 @@ async fn provider_token_budget_stops_before_tool_execution_and_next_sampling() {
                     RuntimeToolExecutorHandle::new(tool.clone()),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("."),
@@ -1154,6 +1418,7 @@ async fn turn_executes_tool_then_continues_with_tool_result_transcript() {
                     RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: lifecycle_emitter.clone(),
             working_directory: PathBuf::from("."),
@@ -1258,6 +1523,7 @@ async fn each_sampling_step_uses_a_fresh_definition_and_executor_snapshot() {
                 CurrentProviderContent::Text("run it".to_string()),
             ])],
             tool_step_snapshot_source: source,
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("."),
@@ -1378,6 +1644,7 @@ async fn unadvertised_native_and_mcp_calls_fail_without_reaching_step_executor()
                     RuntimeToolExecutorHandle::new(step_executor.clone()),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: lifecycle_emitter.clone(),
             working_directory: PathBuf::from("."),
@@ -1488,6 +1755,7 @@ async fn turn_executes_same_response_tool_batch_in_parallel_when_policy_allows()
                     RuntimeToolExecutorHandle::new(probe.clone()),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: Some(policy),
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("."),
@@ -1549,7 +1817,7 @@ async fn turn_propagates_canonical_provider_error() {
     let provider = Arc::new(ScriptedProvider::new(vec![vec![Ok(
         CanonicalLlmEvent::ProviderError {
             message: "stream truncated".to_string(),
-            classification: None,
+            classification: Some(FailureClassification::Transport),
             retryable: Some(true),
         },
     )]]));
@@ -1570,6 +1838,7 @@ async fn turn_propagates_canonical_provider_error() {
                     RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("."),
@@ -1583,6 +1852,108 @@ async fn turn_propagates_canonical_provider_error() {
 
     assert_eq!(error.message, "stream truncated");
     assert!(!error.emitted_any);
+    assert_eq!(
+        error.classification(),
+        Some(FailureClassification::Transport)
+    );
+    assert!(error.retryable());
+    assert!(error.is_reroutable_provider_failure());
+}
+
+#[tokio::test]
+async fn provider_failure_after_consuming_steer_is_not_reroutable() {
+    let (started_tx, started_rx) = oneshot::channel();
+    let (continue_tx, continue_rx) = oneshot::channel();
+    let provider = Arc::new(GatedEmptyThenRetryableErrorProvider {
+        attempt: AtomicUsize::new(0),
+        started: Mutex::new(Some(started_tx)),
+        continue_after_steer: Mutex::new(Some(continue_rx)),
+        requests: Mutex::new(Vec::new()),
+    });
+    let observed_error = Arc::new(Mutex::new(None::<RuntimeReplyAttemptError>));
+    let registry = RuntimeSessionRegistry::default();
+    let session = registry.get_or_create("session-steer-reroute").await;
+    let task_provider = Arc::clone(&provider);
+    let task_error = Arc::clone(&observed_error);
+    let task = RuntimeSessionClosureTask::new(
+        "turn-steer-reroute",
+        Vec::new(),
+        move |context, _input, _task_cancel| {
+            let provider = Arc::clone(&task_provider);
+            let observed_error = Arc::clone(&task_error);
+            Box::pin(async move {
+                let error = run_current_provider_turn(
+                    CurrentProviderTurnInput {
+                        provider,
+                        provider_trace_metadata: None,
+                        session_config: crate::session_config::SessionConfigBuilder::new(
+                            "session-steer-reroute",
+                        )
+                        .turn_id("turn-steer-reroute")
+                        .build(),
+                        initial_messages: vec![CurrentProviderMessage::user(vec![
+                            CurrentProviderContent::Text("initial".to_string()),
+                        ])],
+                        tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                            RuntimeToolStepSnapshot::new(
+                                Vec::new(),
+                                RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                            ),
+                        ),
+                        hook_snapshot_source: None,
+                        model_request_policy: None,
+                        tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+                        working_directory: PathBuf::from("."),
+                        cancel_token: None,
+                        pending_input: Some(context.input_handle()),
+                    },
+                    |_| {},
+                )
+                .await
+                .expect_err("second sampling step should fail");
+                *observed_error.lock().expect("record provider error") = Some(error);
+                Ok(())
+            })
+        },
+    );
+    let submission = session
+        .submit(Arc::new(task), false)
+        .await
+        .expect("submit provider turn");
+
+    started_rx.await.expect("first provider request");
+    session
+        .steer(vec![RuntimeSessionInput::User(RuntimeReplyInput::text(
+            "follow-up",
+        ))])
+        .await
+        .expect("steer active turn");
+    continue_tx.send(()).expect("continue provider stream");
+    assert_eq!(
+        submission.completion.await.expect("task completion"),
+        Ok(crate::session_loop::RuntimeSessionTaskOutcome::Completed)
+    );
+
+    let error = observed_error
+        .lock()
+        .expect("provider error")
+        .clone()
+        .expect("recorded provider error");
+    assert!(!error.emitted_any);
+    assert!(error.retryable());
+    assert!(!error.is_reroutable_provider_failure());
+    let requests = provider.requests.lock().expect("provider requests");
+    assert_eq!(requests.len(), 2);
+    assert!(requests[1].messages.iter().any(|message| {
+        message.content.iter().any(
+            |content| matches!(content, CurrentProviderContent::Text(text) if text == "follow-up"),
+        )
+    }));
+
+    registry
+        .shutdown("session-steer-reroute")
+        .await
+        .expect("shutdown");
 }
 
 #[tokio::test]
@@ -1611,6 +1982,7 @@ async fn provider_quota_error_preserves_usage_limit_kind() {
                     RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("."),
@@ -1658,6 +2030,7 @@ async fn turn_fails_when_provider_completes_with_reasoning_but_no_user_visible_o
                     RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("."),
@@ -1725,6 +2098,7 @@ async fn cancelling_during_provider_request_releases_the_turn_without_waiting_fo
                         RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                     ),
                 ),
+                hook_snapshot_source: None,
                 model_request_policy: None,
                 tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
                 working_directory: PathBuf::from("."),
@@ -1776,6 +2150,7 @@ async fn cancelling_while_waiting_for_the_first_provider_event_releases_the_turn
                         RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                     ),
                 ),
+                hook_snapshot_source: None,
                 model_request_policy: None,
                 tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
                 working_directory: PathBuf::from("."),
@@ -1825,6 +2200,7 @@ async fn cancellation_preserves_usage_returned_by_the_same_provider_poll() {
                     RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("."),
@@ -1887,6 +2263,7 @@ async fn cancellation_flushes_provider_usage_to_the_session_runtime() {
                                 RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                             ),
                         ),
+                        hook_snapshot_source: None,
                         model_request_policy: None,
                         tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
                         working_directory: PathBuf::from("."),
@@ -1944,6 +2321,7 @@ async fn provider_error_flushes_prior_usage_to_the_session_runtime() {
                                 RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                             ),
                         ),
+                        hook_snapshot_source: None,
                         model_request_policy: None,
                         tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
                         working_directory: PathBuf::from("."),
@@ -2004,6 +2382,7 @@ async fn stream_error_flushes_prior_usage_to_the_session_runtime() {
                                 RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                             ),
                         ),
+                        hook_snapshot_source: None,
                         model_request_policy: None,
                         tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
                         working_directory: PathBuf::from("."),
@@ -2077,6 +2456,7 @@ async fn provider_step_timeout_flushes_prior_usage_to_the_session_runtime() {
                                 RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                             ),
                         ),
+                        hook_snapshot_source: None,
                         model_request_policy: None,
                         tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
                         working_directory: PathBuf::from("."),
@@ -2130,6 +2510,7 @@ async fn turn_requires_canonical_turn_id_before_provider_sampling() {
                     RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                 ),
             ),
+            hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
             working_directory: PathBuf::from("."),
@@ -2182,6 +2563,7 @@ async fn reasoning_heartbeats_do_not_bypass_first_visible_output_deadline() {
                         RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                     ),
                 ),
+                hook_snapshot_source: None,
                 model_request_policy: None,
                 tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
                 working_directory: PathBuf::from("."),
@@ -2240,6 +2622,7 @@ async fn provider_step_deadline_stops_continuous_heartbeat_stream() {
                         RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                     ),
                 ),
+                hook_snapshot_source: None,
                 model_request_policy: None,
                 tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
                 working_directory: PathBuf::from("."),
@@ -2298,6 +2681,7 @@ async fn provider_step_deadline_closes_continuous_visible_text_stream() {
                         RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
                     ),
                 ),
+                hook_snapshot_source: None,
                 model_request_policy: None,
                 tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
                 working_directory: PathBuf::from("."),

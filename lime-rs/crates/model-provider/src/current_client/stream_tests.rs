@@ -60,6 +60,14 @@ async fn collect_openai_events(body: &'static str) -> Vec<CanonicalLlmEvent> {
 }
 
 async fn collect_responses_events(body: &'static str) -> Vec<CanonicalLlmEvent> {
+    collect_responses_events_with_headers(body, "", true).await
+}
+
+async fn collect_responses_events_with_headers(
+    body: &'static str,
+    extra_headers: &'static str,
+    allow_model_verification: bool,
+) -> Vec<CanonicalLlmEvent> {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind fixture server");
@@ -77,7 +85,7 @@ async fn collect_responses_events(body: &'static str) -> Vec<CanonicalLlmEvent> 
         }
 
         let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n{extra_headers}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len(),
         );
         socket
@@ -94,12 +102,79 @@ async fn collect_responses_events(body: &'static str) -> Vec<CanonicalLlmEvent> 
         .send()
         .await
         .expect("SSE response");
-    let events = responses_sse(response)
+    let events = responses_sse(response, allow_model_verification)
         .map(|event| event.expect("valid Responses SSE event"))
         .collect()
         .await;
     server.await.expect("fixture server");
     events
+}
+
+#[tokio::test]
+async fn responses_projects_reported_models_from_headers_without_trusting_response_model() {
+    let events = collect_responses_events_with_headers(
+        concat!(
+            "data: {\"type\":\"response.metadata\",\"headers\":{\"X-OpenAI-Model\":[\"gpt-5\"]}}\n\n",
+            "data: {\"type\":\"response.output_item.added\",\"response\":{\"headers\":{\"OpenAI-Model\":\"gpt-5-mini\"}},\"headers\":{\"openai-model\":\"ignored-by-precedence\"},\"item\":{\"type\":\"message\"}}\n\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-model\",\"model\":\"must-not-be-trusted\",\"output\":[]}}\n\n",
+        ),
+        "OpenAI-Model: gpt-5\r\n",
+        true,
+    )
+    .await;
+
+    let models = events
+        .iter()
+        .filter_map(|event| match event {
+            CanonicalLlmEvent::ServerModel { model } => Some(model.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(models, ["gpt-5", "gpt-5-mini"]);
+}
+
+#[tokio::test]
+async fn responses_verification_is_typed_deduplicated_and_fail_closed() {
+    let events = collect_responses_events(concat!(
+        "data: {\"type\":\"response.output_item.added\",\"metadata\":{\"openai_verification_recommendation\":[\"trusted_access_for_cyber\"]},\"item\":{\"type\":\"message\"}}\n\n",
+        "data: {\"type\":\"response.metadata\",\"metadata\":{\"openai_verification_recommendation\":[\"unknown\",\"trusted_access_for_cyber\",\"trusted_access_for_cyber\"]}}\n\n",
+        "data: {\"type\":\"response.metadata\",\"metadata\":{\"openai_verification_recommendation\":[\"trusted_access_for_cyber\"]}}\n\n",
+        "data: {\"type\":\"response.metadata\",\"metadata\":{\"openai_verification_recommendation\":\"trusted_access_for_cyber\"}}\n\n",
+        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-verification\",\"output\":[]}}\n\n",
+    ))
+    .await;
+
+    let verifications = events
+        .iter()
+        .filter_map(|event| match event {
+            CanonicalLlmEvent::ModelVerification { verifications } => {
+                Some(verifications.as_slice())
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(verifications.len(), 1);
+    assert_eq!(
+        verifications[0],
+        [runtime_core::ModelVerification::TrustedAccessForCyber]
+    );
+}
+
+#[tokio::test]
+async fn responses_verification_is_ignored_for_untrusted_routes() {
+    let events = collect_responses_events_with_headers(
+        concat!(
+            "data: {\"type\":\"response.metadata\",\"metadata\":{\"openai_verification_recommendation\":[\"trusted_access_for_cyber\"]}}\n\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-untrusted\",\"output\":[]}}\n\n",
+        ),
+        "OpenAI-Verification-Recommendation: trusted_access_for_cyber\r\n",
+        false,
+    )
+    .await;
+
+    assert!(!events
+        .iter()
+        .any(|event| matches!(event, CanonicalLlmEvent::ModelVerification { .. })));
 }
 
 async fn assert_finish_releases_http_body(
@@ -300,7 +375,7 @@ async fn openai_finish_reason_is_terminal_without_done_sentinel() {
 async fn responses_finish_releases_http_body_before_consumer_polls_again() {
     assert_finish_releases_http_body(
         "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-close\",\"output\":[]}}\n\n",
-        |response| Box::pin(responses_sse(response)),
+        |response| Box::pin(responses_sse(response, true)),
     )
     .await;
 }

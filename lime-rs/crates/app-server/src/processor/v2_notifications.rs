@@ -20,6 +20,7 @@ enum EventProjection {
 #[derive(Default)]
 pub(crate) struct V2NotificationProjector {
     started_turn_ids: HashSet<String>,
+    model_verification_turn_ids: HashSet<String>,
     started_plan_item_ids: HashSet<String>,
     completed_plan_item_ids: HashSet<String>,
     started_command_item_ids: HashSet<String>,
@@ -129,6 +130,8 @@ impl V2NotificationProjector {
             "reasoning.summary" => self.project_reasoning_summary_text_delta(event),
             "reasoning.summary_part_added" => self.project_reasoning_summary_part_added(event),
             "reasoning.delta" => self.project_reasoning_text_delta(event),
+            "model.server_reported" => return EventProjection::Direct(Vec::new()),
+            "model.verification" => return self.project_model_verification(event),
             "provider_safety_buffering" => self.project_model_safety_buffering(event),
             _ => return EventProjection::SideChannel,
         };
@@ -318,6 +321,41 @@ impl V2NotificationProjector {
                 faster_model,
             },
         ))
+    }
+
+    fn project_model_verification(&mut self, event: &AgentEvent) -> EventProjection {
+        let Some(thread_id) = required_event_id(event.thread_id.as_deref()) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let Some(turn_id) = required_event_id(event.turn_id.as_deref()) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let Some(values) = event.payload.get("verifications").and_then(Value::as_array) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let verifications = values
+            .iter()
+            .map(|value| match value.as_str() {
+                Some("trusted_access_for_cyber") => {
+                    Some(v2::ModelVerification::TrustedAccessForCyber)
+                }
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>();
+        let Some(verifications) = verifications.filter(|values| !values.is_empty()) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        if !self.model_verification_turn_ids.insert(turn_id.clone()) {
+            return EventProjection::Direct(Vec::new());
+        }
+        EventProjection::Direct(vec![ServerNotification::ModelVerification(
+            v2::ModelVerificationNotification {
+                thread_id,
+                turn_id,
+                verifications,
+            },
+        )
+        .into()])
     }
 
     fn project_agent_message_delta(&self, event: &AgentEvent) -> Option<ServerNotification> {
@@ -1272,6 +1310,69 @@ mod tests {
                 "fasterModel": "gpt-5-mini"
             })
         );
+    }
+
+    #[test]
+    fn maps_model_verification_once_per_turn_to_direct_codex_notification() {
+        let mut projector = V2NotificationProjector::default();
+        let model_event = event(
+            "model.verification",
+            json!({"verifications": ["trusted_access_for_cyber"]}),
+        );
+        let notifications = projector
+            .project(model_event.clone())
+            .expect("direct model verification notification");
+
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0].method, "model/verification");
+        assert_eq!(
+            notifications[0]
+                .params
+                .as_ref()
+                .expect("verification params"),
+            &json!({
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "verifications": ["trustedAccessForCyber"]
+            })
+        );
+        assert!(projector
+            .project(model_event)
+            .expect("duplicate verification is ignored")
+            .is_empty());
+    }
+
+    #[test]
+    fn model_verification_and_server_model_fail_closed_at_v2_boundary() {
+        for payload in [
+            json!({}),
+            json!({"verifications": []}),
+            json!({"verifications": ["unknown"]}),
+            json!({"verifications": "trusted_access_for_cyber"}),
+        ] {
+            let error = V2NotificationProjector::default()
+                .project(event("model.verification", payload))
+                .expect_err("malformed verification must fail closed");
+            assert_eq!(error.code, error_codes::RUNTIME_ERROR);
+            assert!(error.message.contains("model.verification"));
+        }
+
+        let mut missing_identity = event(
+            "model.verification",
+            json!({"verifications": ["trusted_access_for_cyber"]}),
+        );
+        missing_identity.turn_id = None;
+        assert!(V2NotificationProjector::default()
+            .project(missing_identity)
+            .is_err());
+
+        assert!(V2NotificationProjector::default()
+            .project(event(
+                "model.server_reported",
+                json!({"model": "gpt-5-codex"}),
+            ))
+            .expect("server model is diagnostic-only")
+            .is_empty());
     }
 
     #[test]

@@ -27,7 +27,8 @@ struct ProjectionAppServer {
 
 async fn projection_app_server(sessions: &[(&str, &str, &str, &str)]) -> ProjectionAppServer {
     let temp = TempDir::new().expect("create projection fixture temp dir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("storage roots");
+    let roots = StorageRoots::initialize(temp.path(), temp.path().join("app-server"))
+        .expect("storage roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("event log"));
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));
@@ -67,8 +68,9 @@ async fn projection_app_server(sessions: &[(&str, &str, &str, &str)]) -> Project
 async fn local_app_data_source(roots: &StorageRoots) -> LocalAppDataSource {
     let conn = Connection::open_in_memory().expect("open in-memory product db");
     create_tables(&conn).expect("create product schema");
-    LocalAppDataSource::initialize_with_db_and_data_root(
+    LocalAppDataSource::initialize_with_roots(
         Arc::new(std::sync::Mutex::new(conn)),
+        roots.app_data_root.clone(),
         roots.data_root.clone(),
     )
     .await

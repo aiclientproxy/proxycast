@@ -3,7 +3,9 @@ use agent_protocol::{anthropic, openai};
 use async_stream::try_stream;
 use futures::{Stream, StreamExt};
 use reqwest::Response;
-use runtime_core::{CanonicalLlmEvent as LlmEvent, FailureClassification, FinishReason, Usage};
+use runtime_core::{
+    CanonicalLlmEvent as LlmEvent, FailureClassification, FinishReason, ModelVerification, Usage,
+};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
@@ -296,6 +298,9 @@ struct ResponsesStreamState {
     text_ids: HashSet<String>,
     reasoning_ids: HashSet<String>,
     active_reasoning_id: Option<String>,
+    server_model: Option<String>,
+    emitted_verifications: HashSet<ModelVerification>,
+    allow_model_verification: bool,
 }
 
 pub(super) struct ResponsesEventBatch {
@@ -309,6 +314,16 @@ pub(super) struct ResponsesEventReducer {
 }
 
 impl ResponsesEventReducer {
+    pub(super) fn new(server_model: Option<String>, allow_model_verification: bool) -> Self {
+        Self {
+            state: ResponsesStreamState {
+                server_model,
+                allow_model_verification,
+                ..ResponsesStreamState::default()
+            },
+        }
+    }
+
     pub fn push(&mut self, payload: &Value) -> Result<ResponsesEventBatch, CurrentProviderError> {
         let mut events = Vec::new();
         let mut terminal = false;
@@ -316,7 +331,22 @@ impl ResponsesEventReducer {
             .get("type")
             .and_then(Value::as_str)
             .unwrap_or_default();
+        if let Some(model) = response_server_model(payload) {
+            if self.state.server_model.as_deref() != Some(model.as_str()) {
+                self.state.server_model = Some(model.clone());
+                events.push(LlmEvent::ServerModel { model });
+            }
+        }
         match event_type {
+            "response.metadata" if self.state.allow_model_verification => {
+                let verifications = response_model_verifications(payload)
+                    .into_iter()
+                    .filter(|verification| self.state.emitted_verifications.insert(*verification))
+                    .collect::<Vec<_>>();
+                if !verifications.is_empty() {
+                    events.push(LlmEvent::ModelVerification { verifications });
+                }
+            }
             "response.output_text.delta" => {
                 let id = response_block_id(payload, "text");
                 if let Some(delta) = payload
@@ -530,9 +560,14 @@ impl ResponsesEventReducer {
 
 pub(super) fn responses_sse(
     response: Response,
+    allow_model_verification: bool,
 ) -> impl Stream<Item = Result<LlmEvent, CurrentProviderError>> + Send {
+    let server_model = response_header_model(response.headers());
     try_stream! {
-        let mut reducer = ResponsesEventReducer::default();
+        let mut reducer = ResponsesEventReducer::new(server_model.clone(), allow_model_verification);
+        if let Some(model) = server_model {
+            yield LlmEvent::ServerModel { model };
+        }
         let mut frames = Box::pin(sse_frames(response));
         while let Some(frame) = frames.next().await {
             let frame = frame?;
@@ -554,6 +589,62 @@ pub(super) fn responses_sse(
             yield event;
         }
     }
+}
+
+pub(super) fn response_header_model(headers: &reqwest::header::HeaderMap) -> Option<String> {
+    ["openai-model", "x-openai-model"]
+        .into_iter()
+        .find_map(|name| headers.get(name))
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn response_server_model(payload: &Value) -> Option<String> {
+    payload
+        .pointer("/response/headers")
+        .and_then(response_model_from_json_headers)
+        .or_else(|| {
+            payload
+                .get("headers")
+                .and_then(response_model_from_json_headers)
+        })
+}
+
+fn response_model_from_json_headers(headers: &Value) -> Option<String> {
+    headers.as_object()?.iter().find_map(|(name, value)| {
+        if !name.eq_ignore_ascii_case("openai-model")
+            && !name.eq_ignore_ascii_case("x-openai-model")
+        {
+            return None;
+        }
+        json_header_string(value)
+    })
+}
+
+fn json_header_string(value: &Value) -> Option<String> {
+    let value = match value {
+        Value::String(value) => Some(value.as_str()),
+        Value::Array(values) => values.first().and_then(Value::as_str),
+        _ => None,
+    }?;
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.to_string())
+}
+
+fn response_model_verifications(payload: &Value) -> Vec<ModelVerification> {
+    payload
+        .pointer("/metadata/openai_verification_recommendation")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter_map(|value| match value {
+            "trusted_access_for_cyber" => Some(ModelVerification::TrustedAccessForCyber),
+            _ => None,
+        })
+        .collect()
 }
 
 fn take_responses_calls(

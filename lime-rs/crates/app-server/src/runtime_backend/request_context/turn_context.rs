@@ -1,11 +1,16 @@
 use crate::trace_context::w3c_trace_context;
 use crate::ExecutionRequest;
-use agent_protocol::CollaborationMode;
+use agent_protocol::world_state::{
+    RuntimeWorldEnvironment, RuntimeWorldMode, RuntimeWorldPermissions, RuntimeWorldState,
+    WORLD_STATE_SOURCE, WORLD_STATE_TURN_METADATA_KEY,
+};
+use agent_protocol::{CollaborationMode, ModeKind, MultiAgentMode};
 use lime_agent::{
     build_agent_turn_context, AgentTurnContext, AgentTurnContextConfigurationRequest,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::Path;
 
 use super::{
     host_approval_policy, host_metadata_value, host_sandbox_policy, host_thinking_enabled,
@@ -66,6 +71,19 @@ pub(in crate::runtime_backend) fn turn_context_from_request(
     if let Some(config_metadata) = config_metadata {
         metadata.insert("config".to_string(), config_metadata);
     }
+    if let Some(world_state) = world_state_from_request(
+        request,
+        host_request,
+        scope,
+        selection,
+        workspace_scope.working_dir.as_deref(),
+        workspace_scope.project_root.as_deref(),
+    ) {
+        metadata.insert(
+            WORLD_STATE_TURN_METADATA_KEY.to_string(),
+            serde_json::to_value(world_state).expect("world state must serialize"),
+        );
+    }
     build_agent_turn_context(AgentTurnContextConfigurationRequest {
         cwd: workspace_scope.working_dir.clone(),
         model: Some(selection.model.clone()),
@@ -79,6 +97,50 @@ pub(in crate::runtime_backend) fn turn_context_from_request(
         output_schema: output_schema_from_request(request, host_request),
         metadata,
     })
+}
+
+fn world_state_from_request(
+    request: &ExecutionRequest,
+    host_request: Option<&RuntimeRequest>,
+    scope: &RuntimeSessionScope,
+    selection: &RuntimeModelSelection,
+    working_dir: Option<&Path>,
+    project_root: Option<&Path>,
+) -> Option<RuntimeWorldState> {
+    let collaboration =
+        collaboration_mode_from_request(request, host_request).map(|mode| RuntimeWorldMode {
+            mode: match mode.mode {
+                ModeKind::Plan => "plan",
+                ModeKind::Default => "default",
+            }
+            .to_string(),
+            source: Some("runtime_request".to_string()),
+        });
+    let permissions = Some(RuntimeWorldPermissions {
+        approval_policy: host_request.and_then(host_approval_policy),
+        sandbox_policy: host_request.and_then(host_sandbox_policy),
+        web_search: Some(request_tool_policy_from_request(host_request).allows_web_search()),
+    });
+    let state = RuntimeWorldState {
+        environment: Some(RuntimeWorldEnvironment {
+            cwd: working_dir.map(|path| path.to_string_lossy().into_owned()),
+            project_root: project_root.map(|path| path.to_string_lossy().into_owned()),
+            workspace_id: scope.workspace_id.clone(),
+            thread_id: Some(scope.thread_id.clone()),
+            turn_id: Some(scope.turn_id.clone()),
+            provider: Some(selection.provider.clone()),
+            model: Some(selection.model.clone()),
+            reasoning_effort: selection.reasoning_effort.clone(),
+        }),
+        permissions,
+        collaboration,
+        multi_agent: Some(MultiAgentMode::from_reasoning_effort(
+            selection.reasoning_effort.as_deref(),
+        )),
+        instruction_sections: Vec::new(),
+        source: Some(WORLD_STATE_SOURCE.to_string()),
+    };
+    (!state.is_empty()).then_some(state)
 }
 
 fn w3c_trace_context_metadata_from_request(request: &ExecutionRequest) -> Option<Value> {

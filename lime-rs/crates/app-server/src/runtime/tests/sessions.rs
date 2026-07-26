@@ -858,7 +858,8 @@ async fn read_session_current_does_not_fallback_to_persistent_history() {
 #[tokio::test]
 async fn read_session_current_repairs_and_reads_jsonl_projection() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));
@@ -979,7 +980,8 @@ async fn read_session_respects_history_limit_for_runtime_core_session() {
 #[tokio::test]
 async fn read_session_current_uses_projection_summary_for_limited_history() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));
@@ -1071,7 +1073,8 @@ async fn read_session_current_uses_projection_summary_for_limited_history() {
 #[tokio::test]
 async fn read_session_current_projection_summary_projects_turn_usage() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));
@@ -1177,7 +1180,8 @@ async fn read_session_current_projection_summary_projects_turn_usage() {
 #[tokio::test]
 async fn read_session_current_projection_summary_preserves_process_items() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));
@@ -1566,7 +1570,8 @@ async fn read_session_current_projection_summary_preserves_process_items() {
 #[tokio::test]
 async fn read_session_current_pages_projection_summary_with_cursor() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));
@@ -1656,7 +1661,8 @@ async fn read_session_current_pages_projection_summary_with_cursor() {
 #[tokio::test]
 async fn list_agent_sessions_derives_projection_title_from_first_user_message() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));

@@ -9,7 +9,7 @@ use lime_agent::SessionProviderConfig;
 use lime_core::database::dao::api_key_provider::ProviderWithKeys;
 use lime_core::database::DbConnection;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
-use runtime_core::RoutingResolution;
+use runtime_core::{ModelRouteExclusion, RoutingResolution};
 use serde_json::Value;
 
 #[derive(Debug, Clone)]
@@ -50,6 +50,7 @@ pub(super) fn prepare_chat_model_route(
     request: &ExecutionRequest,
     requested_selection: &RuntimeModelSelection,
     direct_provider_config: Option<&SessionProviderConfig>,
+    excluded_routes: &[ModelRouteExclusion],
 ) -> Result<PreparedChatModelRoute, String> {
     let routing_resolution = model_routing::resolve_ready_routing(
         db,
@@ -57,6 +58,7 @@ pub(super) fn prepare_chat_model_route(
         request,
         requested_selection,
         direct_provider_config,
+        excluded_routes,
     )?;
     let provider_record = if direct_provider_config.is_some() {
         None
@@ -167,6 +169,7 @@ pub(super) async fn resolve_chat_model_route(
         request,
         requested_selection,
         direct_provider_config,
+        &[],
     )?;
     assemble_chat_model_route(
         db,
@@ -987,7 +990,7 @@ mod tests {
             &request,
             &requested_selection,
             None,
-            prepare_chat_model_route(&db, &service, &request, &requested_selection, None)
+            prepare_chat_model_route(&db, &service, &request, &requested_selection, None, &[])
                 .expect("prepare key B route"),
             Some(&ref_b),
         )
@@ -1006,16 +1009,15 @@ mod tests {
                 .and_then(Value::as_str),
             Some("provider_models_cache")
         );
-        assert_eq!(
-            route_b
-                .decision_payload
-                .pointer("/resolvedRoute/auth/credentialRef")
-                .and_then(Value::as_str),
-            Some(ref_b.as_str())
-        );
+        assert!(route_b
+            .decision_payload
+            .pointer("/resolvedRoute/auth/credentialRef")
+            .is_none());
         let evidence = route_b.decision_payload.to_string();
         assert!(!evidence.contains("scope-key-a"));
         assert!(!evidence.contains("scope-key-b"));
+        assert!(!evidence.contains(&ref_a));
+        assert!(!evidence.contains(&ref_b));
 
         let route_a = assemble_chat_model_route(
             &db,
@@ -1023,7 +1025,7 @@ mod tests {
             &request,
             &requested_selection,
             None,
-            prepare_chat_model_route(&db, &service, &request, &requested_selection, None)
+            prepare_chat_model_route(&db, &service, &request, &requested_selection, None, &[])
                 .expect("prepare key A route"),
             Some(&ref_a),
         )

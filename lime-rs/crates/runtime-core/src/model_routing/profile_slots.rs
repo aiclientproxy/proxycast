@@ -1,7 +1,7 @@
 use super::{
-    ModelRoutingDecision, ProfileModelSlot, ProviderReadiness, RoutingAttempt, RoutingResolution,
-    RuntimeModelSelection, DEFAULT_CODING_SLOT, DERIVED_MODEL_SLOT_SOURCE, KNOWN_CODING_SLOTS,
-    PROFILE_MODEL_SLOT_SOURCE,
+    ModelRouteExclusion, ModelRoutingDecision, ProfileModelSlot, ProviderReadiness, RoutingAttempt,
+    RoutingResolution, RuntimeModelSelection, DEFAULT_CODING_SLOT, DERIVED_MODEL_SLOT_SOURCE,
+    KNOWN_CODING_SLOTS, PROFILE_MODEL_SLOT_SOURCE,
 };
 use serde_json::{Map, Value};
 
@@ -22,6 +22,18 @@ pub fn selection_from_profile_model_slot(
 pub fn resolve_ready_model_routing<F>(
     metadata_values: &[&Value],
     selection: &RuntimeModelSelection,
+    resolve_readiness: F,
+) -> Result<RoutingResolution, String>
+where
+    F: FnMut(&RuntimeModelSelection) -> Result<ProviderReadiness, String>,
+{
+    resolve_ready_model_routing_with_exclusions(metadata_values, selection, &[], resolve_readiness)
+}
+
+pub fn resolve_ready_model_routing_with_exclusions<F>(
+    metadata_values: &[&Value],
+    selection: &RuntimeModelSelection,
+    excluded_routes: &[ModelRouteExclusion],
     mut resolve_readiness: F,
 ) -> Result<RoutingResolution, String>
 where
@@ -33,6 +45,27 @@ where
 
     for candidate in candidates {
         let mut routing = resolve_model_routing_for_candidate(metadata_values, &candidate);
+        if let Some(runtime_failure) = excluded_routes.iter().find(|excluded| {
+            excluded.provider == candidate.provider && excluded.model == candidate.model
+        }) {
+            let readiness = ProviderReadiness::runtime_failure(runtime_failure.reason_code);
+            attempted.push(RoutingAttempt {
+                slot: routing.service_model_slot.clone(),
+                provider: candidate.provider.clone(),
+                model: candidate.model.clone(),
+                source: candidate.source.to_string(),
+                readiness: readiness.clone(),
+                runtime_failure: Some(runtime_failure.clone()),
+            });
+            routing.fallback_chain = fallback_chain_from_attempts(&attempted);
+            blocked_resolution = Some(RoutingResolution {
+                selection: candidate,
+                routing,
+                readiness,
+                attempted: attempted.clone(),
+            });
+            continue;
+        }
         let readiness = resolve_readiness(&candidate)?;
         attempted.push(RoutingAttempt {
             slot: routing.service_model_slot.clone(),
@@ -40,6 +73,7 @@ where
             model: candidate.model.clone(),
             source: candidate.source.to_string(),
             readiness: readiness.clone(),
+            runtime_failure: None,
         });
         routing.fallback_chain = fallback_chain_from_attempts(&attempted);
         let resolution = RoutingResolution {

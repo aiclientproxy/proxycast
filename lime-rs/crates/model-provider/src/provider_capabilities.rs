@@ -1,3 +1,5 @@
+use crate::runtime_provider::RuntimeProviderProtocol;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProviderCapabilities {
     pub namespace_tools: bool,
@@ -6,42 +8,14 @@ pub struct ProviderCapabilities {
 }
 
 impl ProviderCapabilities {
+    pub const NONE: Self = Self {
+        namespace_tools: false,
+        image_generation: false,
+        web_search: false,
+    };
+
     pub fn from_provider_type(provider_type: &str) -> Option<Self> {
-        let provider_type = provider_type.trim().to_ascii_lowercase();
-        if provider_type.is_empty() {
-            return None;
-        }
-
-        Some(match provider_type.as_str() {
-            "aws-bedrock" | "aws_bedrock" | "bedrock" => Self {
-                namespace_tools: true,
-                image_generation: false,
-                web_search: false,
-            },
-            "openai"
-            | "openai-response"
-            | "codex"
-            | "anthropic"
-            | "anthropic-compatible"
-            | "gemini"
-            | "azure-openai"
-            | "vertexai"
-            | "ollama"
-            | "fal"
-            | "new-api"
-            | "gateway" => Self::default(),
-            _ => return None,
-        })
-    }
-}
-
-impl Default for ProviderCapabilities {
-    fn default() -> Self {
-        Self {
-            namespace_tools: true,
-            image_generation: true,
-            web_search: true,
-        }
+        RuntimeProviderProtocol::from_provider_type(provider_type).map(|_| Self::NONE)
     }
 }
 
@@ -50,27 +24,45 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_provider_capabilities_match_codex() {
-        assert_eq!(
-            ProviderCapabilities::from_provider_type("openai-response"),
-            Some(ProviderCapabilities {
-                namespace_tools: true,
-                image_generation: true,
-                web_search: true,
-            })
-        );
+    fn current_chat_adapters_do_not_claim_unimplemented_hosted_tools() {
+        let expected = Some(ProviderCapabilities::NONE);
+
+        for provider_type in [
+            "openai",
+            "new-api",
+            "gateway",
+            "openai-response",
+            "openai_responses",
+            "responses",
+            "codex",
+            "anthropic",
+            "anthropic-compatible",
+            "anthropic_compatible",
+        ] {
+            assert_eq!(
+                ProviderCapabilities::from_provider_type(provider_type),
+                expected,
+                "provider_type={provider_type}"
+            );
+        }
     }
 
     #[test]
-    fn bedrock_disables_provider_hosted_tools_like_codex() {
-        assert_eq!(
-            ProviderCapabilities::from_provider_type("aws-bedrock"),
-            Some(ProviderCapabilities {
-                namespace_tools: true,
-                image_generation: false,
-                web_search: false,
-            })
-        );
+    fn providers_without_current_chat_adapters_have_no_capability_snapshot() {
+        for provider_type in [
+            "gemini",
+            "azure-openai",
+            "vertexai",
+            "aws-bedrock",
+            "ollama",
+            "fal",
+        ] {
+            assert_eq!(
+                ProviderCapabilities::from_provider_type(provider_type),
+                None,
+                "provider_type={provider_type}"
+            );
+        }
     }
 
     #[test]

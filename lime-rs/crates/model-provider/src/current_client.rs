@@ -6,10 +6,12 @@
 //! session 类型。
 
 use crate::provider_stream::{
-    RuntimeProviderBackend, RuntimeReplyModelRequestPolicy, RuntimeReplyProviderHandle,
-    RuntimeReplyProviderRequestWireShape,
+    RuntimeProviderBackend, RuntimeReplyModelRequestPolicy, RuntimeReplyProviderCapabilities,
+    RuntimeReplyProviderHandle, RuntimeReplyProviderRequestWireShape,
 };
-use crate::runtime_provider::{RuntimeProviderConfig, RuntimeProviderProtocol};
+use crate::runtime_provider::{
+    RuntimeProviderAuth, RuntimeProviderConfig, RuntimeProviderProtocol,
+};
 use crate::ModelProviderProtocol;
 use agent_protocol::ImageDetail;
 use async_stream::stream;
@@ -17,8 +19,8 @@ use futures::future::BoxFuture;
 use futures::Stream;
 use reqwest::{Client, Response, StatusCode};
 pub use runtime_core::{
-    CanonicalLlmEvent, FailureClassification, FinishReason, GenerationOptions, ProviderMetadata,
-    Usage,
+    CanonicalLlmEvent, FailureClassification, FinishReason, GenerationOptions, ModelVerification,
+    ProviderMetadata, Usage,
 };
 use runtime_core::{
     CanonicalRequest, CanonicalRole, CanonicalToolDefinition, ContentPart, ToolResultValue,
@@ -50,7 +52,8 @@ use health::{CircuitBreaker, CircuitOpen, CircuitPermit};
 use lowering::{anthropic_request, chat_completions_request, responses_request};
 use stream::{anthropic_sse, openai_chat_sse, responses_sse};
 use transport::{
-    request_failure, retry_delay, should_retry_stream_request_status, MAX_STREAM_REQUEST_ATTEMPTS,
+    observed_retry_delay, request_failure, request_retry_reason,
+    should_retry_stream_request_status, MAX_STREAM_REQUEST_ATTEMPTS,
 };
 use websocket::{responses_websocket, ResponsesSocket};
 
@@ -541,6 +544,7 @@ pub struct CurrentProviderClient {
     health: Arc<CircuitBreaker>,
     http_fallback: Arc<AtomicBool>,
     websocket: Arc<Mutex<Option<ResponsesSocket>>>,
+    websocket_server_model: Arc<Mutex<Option<String>>>,
 }
 
 impl CurrentProviderClient {
@@ -575,6 +579,7 @@ impl CurrentProviderClient {
             client,
             http_fallback: Arc::new(AtomicBool::new(false)),
             websocket: Arc::new(Mutex::new(None)),
+            websocket_server_model: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -593,6 +598,7 @@ impl CurrentProviderClient {
             client,
             http_fallback: Arc::new(AtomicBool::new(false)),
             websocket: Arc::new(Mutex::new(None)),
+            websocket_server_model: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -602,6 +608,11 @@ impl CurrentProviderClient {
 
     pub fn runtime_handle(&self) -> RuntimeReplyProviderHandle {
         RuntimeReplyProviderHandle::from_config(&self.config, RuntimeProviderBackend::Current)
+            .with_capabilities(RuntimeReplyProviderCapabilities {
+                supports_streaming: true,
+                supports_embeddings: false,
+                active_model_name: Some(self.config.model_name.clone()),
+            })
     }
 
     pub fn protocol(&self) -> Result<ModelProviderProtocol, CurrentProviderError> {
@@ -683,7 +694,10 @@ impl CurrentProviderClient {
             }
         };
         let stream: CurrentProviderStream = match protocol {
-            ModelProviderProtocol::Responses => Box::pin(responses_sse(response)),
+            ModelProviderProtocol::Responses => Box::pin(responses_sse(
+                response,
+                self.trusts_openai_response_metadata(),
+            )),
             ModelProviderProtocol::AnthropicMessages => Box::pin(anthropic_sse(response)),
             ModelProviderProtocol::ChatCompletions | ModelProviderProtocol::Custom(_) => {
                 Box::pin(openai_chat_sse(response))
@@ -750,14 +764,18 @@ impl CurrentProviderClient {
     ) -> CurrentProviderStream {
         let client = self.clone();
         Box::pin(stream! {
-            let mut emitted_any = false;
+            let mut emitted_replay_sensitive_event = false;
             while let Some(event) = futures::StreamExt::next(&mut websocket).await {
                 match event {
                     Ok(event) => {
-                        emitted_any = true;
+                        emitted_replay_sensitive_event |= !matches!(
+                            &event,
+                            CanonicalLlmEvent::ServerModel { .. }
+                                | CanonicalLlmEvent::ModelVerification { .. }
+                        );
                         yield Ok(event);
                     }
-                    Err(error) if !emitted_any => {
+                    Err(error) if !emitted_replay_sensitive_event => {
                         client.http_fallback.store(true, Ordering::Release);
                         tracing::warn!(
                             error = %error,
@@ -772,7 +790,10 @@ impl CurrentProviderClient {
                             .await
                         {
                             Ok(response) => {
-                                let mut http = Box::pin(responses_sse(response));
+                                let mut http = Box::pin(responses_sse(
+                                    response,
+                                    client.trusts_openai_response_metadata(),
+                                ));
                                 while let Some(event) = futures::StreamExt::next(&mut http).await {
                                     yield event;
                                 }
@@ -795,13 +816,7 @@ impl CurrentProviderClient {
         payload: Value,
         wire_shape: &RuntimeReplyProviderRequestWireShape,
     ) -> Result<CurrentProviderStream, CurrentProviderError> {
-        let api_key = self
-            .config
-            .api_key
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| CurrentProviderError::new("Provider API key 未配置"))?;
+        let api_key = self.request_api_key()?;
         let url = responses_websocket_url(self.config.base_url.as_deref())?;
         let mut attempts = 0;
         let mut websocket = self.websocket.lock().await;
@@ -813,14 +828,16 @@ impl CurrentProviderClient {
                     "创建 Responses WebSocket request 失败: {error}"
                 ))
             })?;
-            request.headers_mut().insert(
-                "Authorization",
-                HeaderValue::from_str(&format!("Bearer {api_key}")).map_err(|error| {
-                    CurrentProviderError::invalid_request(format!(
-                        "Responses WebSocket authorization header 无效: {error}"
-                    ))
-                })?,
-            );
+            if let Some(api_key) = api_key {
+                request.headers_mut().insert(
+                    "Authorization",
+                    HeaderValue::from_str(&format!("Bearer {api_key}")).map_err(|error| {
+                        CurrentProviderError::invalid_request(format!(
+                            "Responses WebSocket authorization header 无效: {error}"
+                        ))
+                    })?,
+                );
+            }
             request.headers_mut().insert(
                 "OpenAI-Beta",
                 HeaderValue::from_static("responses_websockets=2026-02-06"),
@@ -842,26 +859,44 @@ impl CurrentProviderClient {
             }
 
             match tokio_tungstenite::connect_async(request).await {
-                Ok((socket, _response)) => {
+                Ok((socket, response)) => {
+                    let server_model = ["openai-model", "x-openai-model"]
+                        .into_iter()
+                        .find_map(|name| response.headers().get(name))
+                        .and_then(|value| value.to_str().ok())
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string);
+                    *self.websocket_server_model.lock().await = server_model;
                     *websocket = Some(socket);
                 }
                 Err(error)
                     if websocket_error_status(&error) == Some(StatusCode::UPGRADE_REQUIRED) =>
                 {
-                    return Err(websocket_connect_error(&url, error));
+                    return Err(websocket_connect_error(error));
                 }
-                Err(_error) if attempts < MAX_STREAM_REQUEST_ATTEMPTS => {
-                    tokio::time::sleep(retry_delay(&reqwest::header::HeaderMap::new(), attempts))
-                        .await;
+                Err(error) if attempts < MAX_STREAM_REQUEST_ATTEMPTS => {
+                    let delay = observed_retry_delay(
+                        &self.health,
+                        &reqwest::header::HeaderMap::new(),
+                        attempts,
+                        "websocket",
+                        "connect_error",
+                        websocket_error_status(&error).map(|status| status.as_u16()),
+                    );
+                    tokio::time::sleep(delay).await;
                 }
-                Err(error) => return Err(websocket_connect_error(&url, error)),
+                Err(error) => return Err(websocket_connect_error(error)),
             }
         }
         drop(websocket);
+        let server_model = self.websocket_server_model.lock().await.clone();
         Ok(responses_websocket(
             Arc::clone(&self.websocket),
             payload,
             Arc::clone(&self.http_fallback),
+            server_model,
+            self.trusts_openai_response_metadata(),
         ))
     }
 
@@ -871,13 +906,7 @@ impl CurrentProviderClient {
         payload: Value,
         wire_shape: &RuntimeReplyProviderRequestWireShape,
     ) -> Result<Response, CurrentProviderError> {
-        let api_key = self
-            .config
-            .api_key
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| CurrentProviderError::new("Provider API key 未配置"))?;
+        let api_key = self.request_api_key()?;
         let urls = provider_urls(protocol, self.config.base_url.as_deref());
         let mut last_response = None;
         let mut attempts = 0;
@@ -891,26 +920,36 @@ impl CurrentProviderClient {
                     .header("Content-Type", "application/json")
                     .header("Accept", "text/event-stream")
                     .json(&payload);
-                request = match protocol {
-                    ModelProviderProtocol::AnthropicMessages => request
-                        .header("x-api-key", api_key)
-                        .header("anthropic-version", "2023-06-01"),
-                    _ => request.header("Authorization", format!("Bearer {api_key}")),
-                };
+                if matches!(protocol, ModelProviderProtocol::AnthropicMessages) {
+                    request = request.header("anthropic-version", "2023-06-01");
+                }
+                if let Some(api_key) = api_key {
+                    request = match protocol {
+                        ModelProviderProtocol::AnthropicMessages => {
+                            request.header("x-api-key", api_key)
+                        }
+                        _ => request.header("Authorization", format!("Bearer {api_key}")),
+                    };
+                }
                 for header in &wire_shape.headers {
                     request = request.header(&header.name, &header.value);
                 }
                 let response = match request.send().await {
                     Ok(response) => response,
-                    Err(_) if attempts < MAX_STREAM_REQUEST_ATTEMPTS => {
-                        tokio::time::sleep(retry_delay(
+                    Err(error) if attempts < MAX_STREAM_REQUEST_ATTEMPTS => {
+                        let reason = request_retry_reason(&error);
+                        let delay = observed_retry_delay(
+                            &self.health,
                             &reqwest::header::HeaderMap::new(),
                             attempts,
-                        ))
-                        .await;
+                            "http",
+                            reason,
+                            None,
+                        );
+                        tokio::time::sleep(delay).await;
                         continue;
                     }
-                    Err(error) => return Err(request_failure(&url, error)),
+                    Err(error) => return Err(request_failure(error)),
                 };
                 if response.status() == StatusCode::NOT_FOUND {
                     last_response = Some(response);
@@ -919,7 +958,14 @@ impl CurrentProviderClient {
                 if should_retry_stream_request_status(response.status())
                     && attempts < MAX_STREAM_REQUEST_ATTEMPTS
                 {
-                    let delay = retry_delay(response.headers(), attempts);
+                    let delay = observed_retry_delay(
+                        &self.health,
+                        response.headers(),
+                        attempts,
+                        "http",
+                        "server_error",
+                        Some(response.status().as_u16()),
+                    );
                     drop(response);
                     tokio::time::sleep(delay).await;
                     continue;
@@ -931,6 +977,46 @@ impl CurrentProviderClient {
         let response =
             last_response.ok_or_else(|| CurrentProviderError::new("Provider 未生成请求地址"))?;
         ensure_success_response(response).await
+    }
+
+    fn request_api_key(&self) -> Result<Option<&str>, CurrentProviderError> {
+        match self.config.auth {
+            RuntimeProviderAuth::NoAuth => return Ok(None),
+            RuntimeProviderAuth::OemManaged => {
+                return Err(CurrentProviderError::invalid_request(
+                    "OEM-managed authentication has no current model-provider adapter",
+                ));
+            }
+            RuntimeProviderAuth::ApiKey => {}
+        }
+        self.config
+            .api_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(Some)
+            .ok_or_else(|| CurrentProviderError::new("Provider API key 未配置"))
+    }
+
+    fn trusts_openai_response_metadata(&self) -> bool {
+        if self.config.protocol != Some(RuntimeProviderProtocol::Responses) {
+            return false;
+        }
+        let provider = self
+            .config
+            .provider_name
+            .trim()
+            .to_ascii_lowercase()
+            .replace(['-', ' '], "_");
+        if !matches!(provider.as_str(), "openai" | "codex") {
+            return false;
+        }
+        self.config.base_url.as_deref().map_or(true, |base_url| {
+            url::Url::parse(base_url)
+                .ok()
+                .and_then(|url| url.host_str().map(str::to_string))
+                .is_some_and(|host| host.eq_ignore_ascii_case("api.openai.com"))
+        })
     }
 }
 
@@ -991,16 +1077,9 @@ async fn ensure_success_response(response: Response) -> Result<Response, Current
         return Ok(response);
     }
     let status = response.status();
-    let body = response.text().await.unwrap_or_default();
-    let detail = provider_error_detail(&body);
-    let detail = if detail.is_empty() {
-        String::new()
-    } else {
-        format!(": {detail}")
-    };
     Err(CurrentProviderError::with_status(
         status,
-        format!("Provider 请求失败 ({status}){detail}"),
+        format!("Provider 请求失败 ({status})"),
     ))
 }
 
@@ -1019,37 +1098,6 @@ fn classification_from_status(status: StatusCode) -> FailureClassification {
 
 fn status_failure_is_retryable(status: StatusCode) -> bool {
     status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
-}
-
-fn provider_error_detail(body: &str) -> String {
-    const MAX_ERROR_DETAIL_CHARS: usize = 4_096;
-    let body = body.trim();
-    if body.is_empty() {
-        return String::new();
-    }
-    let detail = serde_json::from_str::<Value>(body)
-        .ok()
-        .and_then(|value| {
-            value
-                .pointer("/error/message")
-                .or_else(|| value.get("message"))
-                .or_else(|| value.get("error"))
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(str::to_string)
-        })
-        .unwrap_or_else(|| {
-            if body
-                .get(..body.len().min(32))
-                .is_some_and(|prefix| prefix.to_ascii_lowercase().contains("<html"))
-            {
-                "provider returned an HTML error response".to_string()
-            } else {
-                body.to_string()
-            }
-        });
-    detail.chars().take(MAX_ERROR_DETAIL_CHARS).collect()
 }
 
 fn is_local_media_reference(uri: &str) -> bool {
@@ -1112,14 +1160,14 @@ fn websocket_error_status(error: &WebSocketError) -> Option<StatusCode> {
     StatusCode::from_u16(response.status().as_u16()).ok()
 }
 
-fn websocket_connect_error(url: &url::Url, error: WebSocketError) -> CurrentProviderError {
+fn websocket_connect_error(error: WebSocketError) -> CurrentProviderError {
     if let Some(status) = websocket_error_status(&error) {
         return CurrentProviderError::with_status(
             status,
-            format!("Responses WebSocket upgrade 失败 ({url}, {status})"),
+            format!("Responses WebSocket upgrade 失败 ({status})"),
         );
     }
-    CurrentProviderError::transport(format!("Responses WebSocket 连接失败 ({url}): {error}"))
+    CurrentProviderError::transport("Responses WebSocket 连接失败")
 }
 
 fn ensure_supported_protocol(protocol: &ModelProviderProtocol) -> Result<(), CurrentProviderError> {
@@ -1221,6 +1269,7 @@ mod tests {
             provider_selector: Some("openai".to_string()),
             model_name: "gpt-5-codex".to_string(),
             api_key: Some("test".to_string()),
+            auth: RuntimeProviderAuth::ApiKey,
             base_url: Some("https://gateway.example.com/v1".to_string()),
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: Some("medium".to_string()),
@@ -1368,6 +1417,62 @@ mod tests {
         );
         assert!(!error.retryable);
         assert!(error.message.contains("unsupported provider protocol"));
+    }
+
+    #[test]
+    fn runtime_handle_reports_selected_model_and_streaming_capability() {
+        let client = CurrentProviderClient::with_client(
+            config(Some(RuntimeProviderProtocol::Responses)),
+            Client::new(),
+        );
+
+        let handle = client.runtime_handle();
+
+        assert!(handle.capabilities.supports_streaming);
+        assert!(!handle.capabilities.supports_embeddings);
+        assert_eq!(
+            handle.capabilities.active_model_name.as_deref(),
+            Some("gpt-5-codex")
+        );
+        assert_eq!(
+            handle
+                .provider_trace_metadata()
+                .runtime_provider_active_model
+                .as_deref(),
+            Some("gpt-5-codex")
+        );
+    }
+
+    #[test]
+    fn verification_metadata_is_trusted_only_for_first_party_routes() {
+        let mut official = config(Some(RuntimeProviderProtocol::Responses));
+        official.base_url = Some("https://api.openai.com/v1".to_string());
+        assert!(CurrentProviderClient::with_client(official, Client::new())
+            .trusts_openai_response_metadata());
+
+        let mut custom_official = config(Some(RuntimeProviderProtocol::Responses));
+        custom_official.provider_selector = Some("custom-provider-id".to_string());
+        custom_official.base_url = Some("https://api.openai.com/v1".to_string());
+        assert!(
+            CurrentProviderClient::with_client(custom_official, Client::new())
+                .trusts_openai_response_metadata()
+        );
+
+        let gateway = config(Some(RuntimeProviderProtocol::Responses));
+        assert!(!CurrentProviderClient::with_client(gateway, Client::new())
+            .trusts_openai_response_metadata());
+
+        let mut codex_labeled_gateway = config(Some(RuntimeProviderProtocol::Responses));
+        codex_labeled_gateway.provider_selector = Some("codex".to_string());
+        assert!(
+            !CurrentProviderClient::with_client(codex_labeled_gateway, Client::new())
+                .trusts_openai_response_metadata()
+        );
+
+        let mut chat = config(Some(RuntimeProviderProtocol::ChatCompletions));
+        chat.base_url = Some("https://api.openai.com/v1".to_string());
+        assert!(!CurrentProviderClient::with_client(chat, Client::new())
+            .trusts_openai_response_metadata());
     }
 
     #[test]
@@ -1815,7 +1920,7 @@ mod tests {
             .await
             .expect("SSE response");
 
-        let events = responses_sse(response)
+        let events = responses_sse(response, true)
             .collect::<Vec<_>>()
             .await
             .into_iter()
@@ -1869,7 +1974,7 @@ mod tests {
             .await
             .expect("SSE response");
 
-        let error = responses_sse(response)
+        let error = responses_sse(response, true)
             .collect::<Vec<_>>()
             .await
             .into_iter()
@@ -1905,6 +2010,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn no_auth_http_request_omits_authorization_header() {
+        let (base_url, headers, server) = spawn_http_headers_fixture(fixture_response(
+            "200 OK",
+            "Content-Type: text/event-stream\r\n",
+            "",
+        ))
+        .await;
+        let mut runtime_config = config(Some(RuntimeProviderProtocol::ChatCompletions));
+        runtime_config.auth = RuntimeProviderAuth::NoAuth;
+        runtime_config.api_key = None;
+        runtime_config.base_url = Some(base_url);
+        runtime_config.credential_uuid.clear();
+        let client = CurrentProviderClient::with_client(
+            runtime_config,
+            Client::builder().no_proxy().build().expect("HTTP client"),
+        );
+
+        client
+            .send_stream_request(
+                &ModelProviderProtocol::ChatCompletions,
+                json!({ "stream": true }),
+                &RuntimeReplyProviderRequestWireShape::default(),
+            )
+            .await
+            .expect("no-auth provider request");
+
+        let headers = headers
+            .await
+            .expect("captured HTTP request")
+            .to_ascii_lowercase();
+        server.await.expect("fixture server");
+        assert!(!headers.contains("\nauthorization:"));
+        assert!(!headers.contains("\nx-api-key:"));
+    }
+
+    #[tokio::test]
+    async fn api_key_auth_still_rejects_missing_key_before_network() {
+        let mut runtime_config = config(Some(RuntimeProviderProtocol::ChatCompletions));
+        runtime_config.api_key = None;
+        let client = CurrentProviderClient::with_client(runtime_config, Client::new());
+
+        let error = client
+            .send_stream_request(
+                &ModelProviderProtocol::ChatCompletions,
+                json!({ "stream": true }),
+                &RuntimeReplyProviderRequestWireShape::default(),
+            )
+            .await
+            .expect_err("API-key route must fail closed");
+
+        assert_eq!(error.message, "Provider API key 未配置");
+    }
+
+    #[tokio::test]
     async fn responses_websocket_capability_uses_upgrade_transport() {
         let (base_url, capture, server) = spawn_websocket_fixture().await;
         let mut runtime_config = config(Some(RuntimeProviderProtocol::Responses));
@@ -1929,6 +2088,7 @@ mod tests {
         server.await.expect("fixture server");
         assert_eq!(capture.method, "GET");
         assert_eq!(capture.path, "/v1/responses");
+        assert_eq!(capture.authorization.as_deref(), Some("Bearer test"));
         assert_eq!(
             capture.beta.as_deref(),
             Some("responses_websockets=2026-02-06")
@@ -1937,11 +2097,76 @@ mod tests {
         assert!(capture.payload.get("stream").is_none());
         assert!(events.iter().any(|event| matches!(
             event,
+            CanonicalLlmEvent::ServerModel { model } if model == "gpt-5-codex"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
             CanonicalLlmEvent::Finish {
                 response_id: Some(response_id),
                 ..
             } if response_id == "resp-ws-1"
         )));
+    }
+
+    #[tokio::test]
+    async fn no_auth_responses_websocket_omits_authorization_header() {
+        let (base_url, capture, server) = spawn_websocket_fixture().await;
+        let mut runtime_config = config(Some(RuntimeProviderProtocol::Responses));
+        runtime_config.auth = RuntimeProviderAuth::NoAuth;
+        runtime_config.api_key = None;
+        runtime_config.base_url = Some(base_url);
+        runtime_config.credential_uuid.clear();
+        runtime_config.supports_websockets = true;
+        let client = CurrentProviderClient::with_client(
+            runtime_config,
+            Client::builder().no_proxy().build().expect("HTTP client"),
+        );
+
+        client
+            .stream(text_request())
+            .await
+            .expect("no-auth websocket request")
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .expect("websocket events");
+        let capture = capture.await.expect("captured websocket request");
+
+        server.await.expect("fixture server");
+        assert!(capture.authorization.is_none());
+        assert_eq!(
+            capture.beta.as_deref(),
+            Some("responses_websockets=2026-02-06")
+        );
+    }
+
+    #[tokio::test]
+    async fn responses_websocket_ignores_verification_for_codex_labeled_third_party_route() {
+        let (base_url, _capture, server) = spawn_websocket_fixture().await;
+        let mut runtime_config = config(Some(RuntimeProviderProtocol::Responses));
+        runtime_config.provider_selector = Some("codex".to_string());
+        runtime_config.base_url = Some(base_url);
+        runtime_config.supports_websockets = true;
+        let client = CurrentProviderClient::with_client(
+            runtime_config,
+            Client::builder().no_proxy().build().expect("HTTP client"),
+        );
+
+        let events = client
+            .stream(text_request())
+            .await
+            .expect("third-party websocket request")
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .expect("websocket events");
+
+        server.await.expect("fixture server");
+        assert!(!events
+            .iter()
+            .any(|event| matches!(event, CanonicalLlmEvent::ModelVerification { .. })));
     }
 
     #[tokio::test]
@@ -2112,7 +2337,8 @@ mod tests {
             Some(FailureClassification::InvalidRequest)
         );
         assert!(!error.retryable);
-        assert!(error.message.contains("invalid model"));
+        assert_eq!(error.message, "Provider 请求失败 (400 Bad Request)");
+        assert!(!error.message.contains("invalid model"));
         server.await.expect("fixture server");
         assert_eq!(requests.load(Ordering::SeqCst), 1);
     }
@@ -2140,7 +2366,8 @@ mod tests {
             Some(FailureClassification::Authentication)
         );
         assert!(!error.retryable);
-        assert!(error.message.contains("invalid token"));
+        assert_eq!(error.message, "Provider 请求失败 (401 Unauthorized)");
+        assert!(!error.message.contains("invalid token"));
         server.await.expect("fixture server");
         assert_eq!(requests.load(Ordering::SeqCst), 1);
     }
@@ -2169,7 +2396,8 @@ mod tests {
         assert_eq!(error.status, Some(StatusCode::TOO_MANY_REQUESTS.as_u16()));
         assert_eq!(error.classification, Some(FailureClassification::RateLimit));
         assert!(error.retryable);
-        assert!(error.message.contains("rate limited"));
+        assert_eq!(error.message, "Provider 请求失败 (429 Too Many Requests)");
+        assert!(!error.message.contains("rate limited"));
         server.await.expect("fixture server");
         assert_eq!(requests.load(Ordering::SeqCst), 1);
     }
@@ -2199,7 +2427,7 @@ mod tests {
             Some(FailureClassification::ProviderInternal)
         );
         assert!(error.retryable);
-        assert!(error.message.contains("final"));
+        assert_eq!(error.message, "Provider 请求失败 (503 Service Unavailable)");
         server.await.expect("fixture server");
         assert_eq!(
             requests.load(Ordering::SeqCst),
@@ -2234,7 +2462,7 @@ mod tests {
             .expect_err("shared retry budget is exhausted");
 
         assert_eq!(error.status, Some(StatusCode::SERVICE_UNAVAILABLE.as_u16()));
-        assert!(error.message.contains("final"));
+        assert_eq!(error.message, "Provider 请求失败 (503 Service Unavailable)");
         server.await.expect("fixture server");
         assert_eq!(
             requests.load(Ordering::SeqCst),
@@ -2394,10 +2622,32 @@ mod tests {
         (format!("http://{address}"), requests, server)
     }
 
+    async fn spawn_http_headers_fixture(
+        response: String,
+    ) -> (String, oneshot::Receiver<String>, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind header fixture server");
+        let address = listener.local_addr().expect("header fixture address");
+        let (headers_tx, headers_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept fixture request");
+            let headers = read_http_headers_text(&mut stream).await;
+            let _ = headers_tx.send(headers);
+            stream
+                .write_all(response.as_bytes())
+                .await
+                .expect("write fixture response");
+            stream.shutdown().await.expect("close fixture response");
+        });
+        (format!("http://{address}"), headers_rx, server)
+    }
+
     #[derive(Debug)]
     struct WebSocketCapture {
         method: String,
         path: String,
+        authorization: Option<String>,
         beta: Option<String>,
         payload: Value,
     }
@@ -2413,12 +2663,17 @@ mod tests {
             let (stream, _) = listener.accept().await.expect("accept websocket request");
             let handshake = Arc::new(std::sync::Mutex::new(None));
             let handshake_capture = Arc::clone(&handshake);
-            let mut socket = tokio_tungstenite::accept_hdr_async(stream, move |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response: tokio_tungstenite::tungstenite::handshake::server::Response| {
+            let mut socket = tokio_tungstenite::accept_hdr_async(stream, move |request: &tokio_tungstenite::tungstenite::handshake::server::Request, mut response: tokio_tungstenite::tungstenite::handshake::server::Response| {
                 *handshake_capture.lock().expect("handshake capture") = Some((
                     request.method().to_string(),
                     request.uri().path().to_string(),
+                    request.headers().get("Authorization").and_then(|value| value.to_str().ok()).map(str::to_string),
                     request.headers().get("OpenAI-Beta").and_then(|value| value.to_str().ok()).map(str::to_string),
                 ));
+                response.headers_mut().insert(
+                    "OpenAI-Model",
+                    HeaderValue::from_static("gpt-5-codex"),
+                );
                 Ok(response)
             })
             .await
@@ -2432,7 +2687,7 @@ mod tests {
                 panic!("expected text websocket request");
             };
             let payload = serde_json::from_str(&request).expect("websocket request json");
-            let (method, path, beta) = handshake
+            let (method, path, authorization, beta) = handshake
                 .lock()
                 .expect("handshake capture")
                 .take()
@@ -2440,9 +2695,26 @@ mod tests {
             let _ = capture_tx.send(WebSocketCapture {
                 method,
                 path,
+                authorization,
                 beta,
                 payload,
             });
+            socket
+                .send(Message::Text(
+                    json!({
+                        "type": "response.metadata",
+                        "headers": { "X-OpenAI-Model": ["gpt-5-codex"] },
+                        "metadata": {
+                            "openai_verification_recommendation": [
+                                "trusted_access_for_cyber",
+                                "unknown"
+                            ]
+                        }
+                    })
+                    .to_string(),
+                ))
+                .await
+                .expect("send websocket metadata");
             socket
                 .send(Message::Text(
                     json!({

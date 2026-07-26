@@ -1,6 +1,29 @@
 {
   "imports": [
     {
+      "id": "retired-product-db-whole-migration-surface",
+      "classification": "dead",
+      "description": "已删除的 Product DB 整库复制、版本化 manifest 与专用 Electron fixture；current Product DB 只使用 AgentRoot，模型控制面导入由独立 owner 承接",
+      "targets": [
+        "lime-rs/crates/core/src/database_path_migration.rs",
+        "lime-rs/crates/core/src/migration_manifest.rs",
+        "lime-rs/crates/core/src/product_db_migration_cleanup.rs",
+        "scripts/electron/settings-provider-migration-fixture-smoke.mjs",
+        "scripts/electron/settings-provider-migration-fixture-smoke.test.mjs",
+        "scripts/electron/lib/settings-provider-migration-fixture-core.mjs"
+      ],
+      "allowedPaths": []
+    },
+    {
+      "id": "retired-managed-project-path-migration-surface",
+      "classification": "dead",
+      "description": "已删除的非模型 managed project 启动迁移；旧 projects、workspace 与 session path 不导入、不复制、不回填",
+      "targets": [
+        "lime-rs/crates/core/src/database/migration_v6.rs"
+      ],
+      "allowedPaths": []
+    },
+    {
       "id": "general-chat-root-entry",
       "classification": "dead-candidate",
       "description": "已删除的旧 general-chat 根导出入口",
@@ -4868,8 +4891,6 @@
       "description": "Rust runtime direct legacy general 表访问",
       "patterns": ["general_chat_sessions", "general_chat_messages"],
       "allowedPaths": [
-        "lime-rs/crates/core/src/app_paths.rs",
-        "lime-rs/crates/core/src/database_path_migration.rs",
         "lime-rs/crates/core/src/database/migration/general_chat_migration.rs",
         "lime-rs/crates/core/src/database/migration.rs",
         "lime-rs/crates/core/src/database/schema.rs"
@@ -5493,6 +5514,22 @@
       "description": "services crate 旧 tool_hooks_service 模块重新回到编译图",
       "patterns": ["pub mod tool_hooks_service;"],
       "includePathPrefixes": ["lime-rs/crates/services/src"],
+      "allowedPaths": []
+    },
+    {
+      "id": "rust-retired-agent-hook-manager",
+      "classification": "dead",
+      "description": "lime-agent 旧 HookManager 已删除；Hook 裁决归 tool-runtime::hook_lifecycle，discovery 与 Command 执行归 tool-runtime::hook_runtime。不得恢复 agent crate 的 hooks 模块、扁平 {hooks:[...]} 配置、已退役事件名或 async_exec",
+      "patterns": [
+        "pub mod hooks;",
+        "HookManager",
+        "BeforeToolCall",
+        "AfterToolCall",
+        "BeforePromptSubmit",
+        "AfterPromptSubmit",
+        "async_exec"
+      ],
+      "includePathPrefixes": ["lime-rs/crates/agent/src"],
       "allowedPaths": []
     },
     {

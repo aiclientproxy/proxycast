@@ -40,13 +40,15 @@ pub(super) fn chat_completions_request(
             "tools".to_string(),
             Value::Array(request.tools.iter().map(chat_tool).collect()),
         );
-        object.insert(
-            "parallel_tool_calls".to_string(),
-            json!(wire_shape.parallel_tool_calls.unwrap_or(true)),
-        );
+        if let Some(parallel_tool_calls) = wire_shape.parallel_tool_calls {
+            object.insert(
+                "parallel_tool_calls".to_string(),
+                json!(parallel_tool_calls),
+            );
+        }
     }
     apply_generation_options(&mut object, request, "max_tokens", false);
-    apply_reasoning_effort(&mut object, config, false);
+    apply_chat_reasoning_effort(&mut object, config);
     apply_service_tier(&mut object, config);
     if let Some(enable_thinking) = request
         .provider_options
@@ -71,42 +73,56 @@ pub(super) fn responses_request(
     for message in &request.messages {
         input.extend(responses_message(message, media_payloads));
     }
+    if wire_shape.use_responses_lite {
+        input
+            .iter_mut()
+            .for_each(strip_responses_lite_image_details);
+    }
+
+    let instructions = text_from_parts(&request.system);
+    let instructions_in_input = wire_shape.instructions_location.as_deref() == Some("input_prefix")
+        || (wire_shape.use_responses_lite && wire_shape.instructions_location.is_none());
+    let tools_in_input = wire_shape.tools_location.as_deref() == Some("input_prefix")
+        || (wire_shape.use_responses_lite && wire_shape.tools_location.is_none());
+    let response_tools = request.tools.iter().map(responses_tool).collect::<Vec<_>>();
+    let mut input_prefix = Vec::new();
+    if tools_in_input {
+        input_prefix.push(json!({
+            "type": "additional_tools",
+            "role": "developer",
+            "tools": response_tools,
+        }));
+    }
+    if instructions_in_input && !instructions.is_empty() {
+        input_prefix.push(json!({
+            "type": "message",
+            "role": "developer",
+            "content": [{ "type": "input_text", "text": instructions }],
+        }));
+    }
+    input.splice(0..0, input_prefix);
+
     let mut object = Map::from_iter([
         ("model".to_string(), json!(config.model_name)),
         ("input".to_string(), Value::Array(input)),
         ("stream".to_string(), Value::Bool(true)),
         ("store".to_string(), Value::Bool(false)),
     ]);
-    let instructions = text_from_parts(&request.system);
-    if !instructions.is_empty() {
+    if !instructions_in_input && !instructions.is_empty() {
         object.insert("instructions".to_string(), json!(instructions));
     }
-    if !request.tools.is_empty() {
-        object.insert(
-            "tools".to_string(),
-            Value::Array(
-                request
-                    .tools
-                    .iter()
-                    .map(|tool| {
-                        json!({
-                            "type": "function",
-                            "name": tool.name,
-                            "description": tool.description,
-                            "parameters": tool.input_schema,
-                            "strict": false,
-                        })
-                    })
-                    .collect(),
-            ),
-        );
+    if !tools_in_input && !response_tools.is_empty() {
+        object.insert("tools".to_string(), Value::Array(response_tools));
+    }
+    if let Some(parallel_tool_calls) = wire_shape.parallel_tool_calls {
         object.insert(
             "parallel_tool_calls".to_string(),
-            json!(wire_shape.parallel_tool_calls.unwrap_or(true)),
+            json!(parallel_tool_calls),
         );
     }
     apply_generation_options(&mut object, request, "max_output_tokens", false);
-    apply_reasoning_effort(&mut object, config, true);
+    apply_responses_reasoning(&mut object, config, wire_shape);
+    apply_text_verbosity(&mut object, wire_shape);
     apply_service_tier(&mut object, config);
     if let Some(client_metadata) = responses_client_metadata(request) {
         object.insert(
@@ -222,11 +238,7 @@ fn apply_generation_options(
     }
 }
 
-fn apply_reasoning_effort(
-    object: &mut Map<String, Value>,
-    config: &RuntimeProviderConfig,
-    responses_api: bool,
-) {
+fn apply_chat_reasoning_effort(object: &mut Map<String, Value>, config: &RuntimeProviderConfig) {
     let Some(effort) = config
         .reasoning_effort
         .as_deref()
@@ -235,11 +247,57 @@ fn apply_reasoning_effort(
         return;
     };
 
-    if responses_api {
-        object.insert("reasoning".to_string(), json!({ "effort": effort }));
-    } else {
-        object.insert("reasoning_effort".to_string(), json!(effort));
+    object.insert("reasoning_effort".to_string(), json!(effort));
+}
+
+fn apply_responses_reasoning(
+    object: &mut Map<String, Value>,
+    config: &RuntimeProviderConfig,
+    wire_shape: &RuntimeReplyProviderRequestWireShape,
+) {
+    let mut reasoning = Map::new();
+    if let Some(effort) = config
+        .reasoning_effort
+        .as_deref()
+        .map(str::trim)
+        .filter(|effort| !effort.is_empty())
+    {
+        reasoning.insert("effort".to_string(), json!(effort));
     }
+    if let Some(summary) = wire_shape
+        .reasoning_summary
+        .as_deref()
+        .map(str::trim)
+        .filter(|summary| !summary.is_empty() && *summary != "none")
+    {
+        reasoning.insert("summary".to_string(), json!(summary));
+    }
+    if let Some(context) = wire_shape
+        .reasoning_context
+        .as_deref()
+        .map(str::trim)
+        .filter(|context| matches!(*context, "all_turns" | "current_turn" | "auto"))
+    {
+        reasoning.insert("context".to_string(), json!(context));
+    }
+    if !reasoning.is_empty() {
+        object.insert("reasoning".to_string(), Value::Object(reasoning));
+    }
+}
+
+fn apply_text_verbosity(
+    object: &mut Map<String, Value>,
+    wire_shape: &RuntimeReplyProviderRequestWireShape,
+) {
+    let Some(verbosity) = wire_shape
+        .text_verbosity
+        .as_deref()
+        .map(str::trim)
+        .filter(|verbosity| matches!(*verbosity, "low" | "medium" | "high"))
+    else {
+        return;
+    };
+    object.insert("text".to_string(), json!({ "verbosity": verbosity }));
 }
 
 fn apply_service_tier(object: &mut Map<String, Value>, config: &RuntimeProviderConfig) {
@@ -357,6 +415,33 @@ fn chat_tool(tool: &runtime_core::CanonicalToolDefinition) -> Value {
             "strict": false,
         }
     })
+}
+
+fn responses_tool(tool: &runtime_core::CanonicalToolDefinition) -> Value {
+    json!({
+        "type": "function",
+        "name": tool.name,
+        "description": tool.description,
+        "parameters": tool.input_schema,
+        "strict": false,
+    })
+}
+
+fn strip_responses_lite_image_details(value: &mut Value) {
+    match value {
+        Value::Object(object) => {
+            if object.get("type").and_then(Value::as_str) == Some("input_image") {
+                object.remove("detail");
+            }
+            object
+                .values_mut()
+                .for_each(strip_responses_lite_image_details);
+        }
+        Value::Array(values) => values
+            .iter_mut()
+            .for_each(strip_responses_lite_image_details),
+        _ => {}
+    }
 }
 
 fn responses_message(
@@ -646,6 +731,7 @@ mod tests {
             provider_selector: Some("openai".to_string()),
             model_name: "gpt-5-codex".to_string(),
             api_key: Some("test".to_string()),
+            auth: crate::runtime_provider::RuntimeProviderAuth::ApiKey,
             base_url: Some("https://gateway.example.com/v1".to_string()),
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: reasoning_effort.map(str::to_string),
@@ -676,6 +762,136 @@ mod tests {
             &BTreeMap::new(),
         );
         assert_eq!(responses["reasoning"], json!({ "effort": "high" }));
+    }
+
+    fn request_with_tool() -> CanonicalRequest {
+        let mut request = CanonicalRequest::text("gpt-5-codex", "hello");
+        request.tools = vec![runtime_core::CanonicalToolDefinition {
+            name: "read_file".to_string(),
+            description: "Read a file".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": { "path": { "type": "string" } },
+                "required": ["path"]
+            }),
+            output_schema: None,
+            metadata: Default::default(),
+        }];
+        request
+    }
+
+    #[test]
+    fn parallel_tool_calls_preserves_true_false_and_unknown_wire_states() {
+        let request = request_with_tool();
+
+        for (parallel_tool_calls, expected) in [
+            (Some(true), Some(true)),
+            (Some(false), Some(false)),
+            (None, None),
+        ] {
+            let wire_shape = RuntimeReplyProviderRequestWireShape {
+                parallel_tool_calls,
+                ..Default::default()
+            };
+            let responses =
+                responses_request(&config(None), &request, &wire_shape, &BTreeMap::new());
+            assert_eq!(
+                responses
+                    .get("parallel_tool_calls")
+                    .and_then(Value::as_bool),
+                expected,
+                "parallel_tool_calls={parallel_tool_calls:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn responses_reasoning_summary_context_and_verbosity_share_native_objects() {
+        let request = CanonicalRequest::text("gpt-5-codex", "hello");
+        let wire_shape = RuntimeReplyProviderRequestWireShape {
+            reasoning_context: Some("all_turns".to_string()),
+            reasoning_summary: Some("detailed".to_string()),
+            text_verbosity: Some("low".to_string()),
+            ..Default::default()
+        };
+
+        let responses = responses_request(
+            &config(Some("high")),
+            &request,
+            &wire_shape,
+            &BTreeMap::new(),
+        );
+
+        assert_eq!(
+            responses["reasoning"],
+            json!({
+                "effort": "high",
+                "summary": "detailed",
+                "context": "all_turns"
+            })
+        );
+        assert_eq!(responses["text"], json!({ "verbosity": "low" }));
+    }
+
+    #[test]
+    fn responses_lite_uses_input_prefix_and_strips_image_detail() {
+        let mut request = request_with_tool();
+        request.system = vec![ContentPart::text("Follow repository rules")];
+        request.messages[0].content = detailed_image_content(ImageDetail::Original);
+        let wire_shape = RuntimeReplyProviderRequestWireShape {
+            use_responses_lite: true,
+            instructions_location: Some("input_prefix".to_string()),
+            tools_location: Some("input_prefix".to_string()),
+            reasoning_context: Some("all_turns".to_string()),
+            parallel_tool_calls: Some(false),
+            ..Default::default()
+        };
+
+        let responses = responses_request(&config(None), &request, &wire_shape, &media_payloads());
+
+        assert_eq!(
+            responses,
+            json!({
+                "model": "gpt-5-codex",
+                "input": [
+                    {
+                        "type": "additional_tools",
+                        "role": "developer",
+                        "tools": [{
+                            "type": "function",
+                            "name": "read_file",
+                            "description": "Read a file",
+                            "parameters": {
+                                "type": "object",
+                                "properties": { "path": { "type": "string" } },
+                                "required": ["path"]
+                            },
+                            "strict": false
+                        }]
+                    },
+                    {
+                        "type": "message",
+                        "role": "developer",
+                        "content": [{
+                            "type": "input_text",
+                            "text": "Follow repository rules"
+                        }]
+                    },
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{
+                            "type": "input_image",
+                            "image_url": "data:image/png;base64,abc"
+                        }]
+                    }
+                ],
+                "stream": true,
+                "store": false,
+                "parallel_tool_calls": false,
+                "reasoning": { "context": "all_turns" }
+            })
+        );
     }
 
     #[test]

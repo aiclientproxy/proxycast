@@ -216,7 +216,15 @@ fn capability_satisfied(required: &str, snapshot: &CapabilitySnapshot) -> bool {
                     .iter()
                     .any(|family| family == "reasoning")
         }
-        _ => true,
+        "image_generation" => {
+            normalized_values(&snapshot.task_families)
+                .iter()
+                .any(|family| family == "image_generation")
+                && normalized_values(&snapshot.output_modalities)
+                    .iter()
+                    .any(|modality| modality == "image")
+        }
+        _ => false,
     }
 }
 
@@ -387,5 +395,69 @@ mod tests {
             route_capability_gap(&request, &snapshot).as_deref(),
             Some("task_family:image_generation")
         );
+    }
+
+    #[test]
+    fn route_capability_gap_rejects_unknown_capability() {
+        let request = build_model_task_request(ModelTaskRequestInput {
+            task_kind: ModelTaskKind::Chat,
+            source: ModelTaskSource::AgentTurn,
+            provider_id: Some("openai".to_string()),
+            model_id: Some("gpt-5-codex".to_string()),
+            model_ref_source: ModelRefSource::RuntimeOptions,
+            modality_contract_key: None,
+            routing_slot: Some("coding".to_string()),
+            task_families: Vec::new(),
+            input_modalities: Vec::new(),
+            output_modalities: Vec::new(),
+            runtime_features: Vec::new(),
+            capabilities: vec!["future_unknown_capability".to_string()],
+            session_id: None,
+            thread_id: None,
+            turn_id: None,
+            content_id: None,
+            trace_id: None,
+        });
+        let snapshot = capability_snapshot_from_model_capabilities(&json!({
+            "capabilities": {
+                "tools": true,
+                "streaming": true
+            }
+        }));
+
+        assert_eq!(
+            route_capability_gap(&request, &snapshot).as_deref(),
+            Some("capability:future_unknown_capability")
+        );
+    }
+
+    #[test]
+    fn image_generation_capability_uses_declared_task_and_output_modality() {
+        let request = build_model_task_request(ModelTaskRequestInput {
+            task_kind: ModelTaskKind::ImageGenerate,
+            source: ModelTaskSource::MediaTaskArtifact,
+            provider_id: Some("openai".to_string()),
+            model_id: Some("gpt-image-2".to_string()),
+            model_ref_source: ModelRefSource::Task,
+            modality_contract_key: Some("image_generation".to_string()),
+            routing_slot: Some("image_generation_model".to_string()),
+            task_families: vec!["image_generation".to_string()],
+            input_modalities: vec!["text".to_string()],
+            output_modalities: vec!["image".to_string()],
+            runtime_features: Vec::new(),
+            capabilities: vec!["image_generation".to_string()],
+            session_id: None,
+            thread_id: None,
+            turn_id: None,
+            content_id: None,
+            trace_id: None,
+        });
+        let snapshot = capability_snapshot_from_model_capabilities(&json!({
+            "taskFamilies": ["image_generation"],
+            "inputModalities": ["text"],
+            "outputModalities": ["image"]
+        }));
+
+        assert_eq!(route_capability_gap(&request, &snapshot), None);
     }
 }

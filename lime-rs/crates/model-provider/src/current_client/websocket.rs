@@ -41,6 +41,8 @@ pub(super) fn responses_websocket(
     connection: Arc<Mutex<Option<ResponsesSocket>>>,
     payload: Value,
     http_fallback: Arc<AtomicBool>,
+    server_model: Option<String>,
+    allow_model_verification: bool,
 ) -> CurrentProviderStream {
     Box::pin(try_stream! {
         let mut lease = SocketLease {
@@ -55,7 +57,10 @@ pub(super) fn responses_websocket(
             )
         })?;
 
-        let mut reducer = ResponsesEventReducer::default();
+        let mut reducer = ResponsesEventReducer::new(server_model.clone(), allow_model_verification);
+        if let Some(model) = server_model {
+            yield runtime_core::CanonicalLlmEvent::ServerModel { model };
+        }
         loop {
             let message = tokio::time::timeout(DEFAULT_STREAM_IDLE_TIMEOUT, lease.socket()?.next())
                 .await
@@ -243,6 +248,7 @@ mod tests {
             provider_selector: Some("openai".to_string()),
             model_name: "gpt-5.4".to_string(),
             api_key: Some("test-key".to_string()),
+            auth: crate::runtime_provider::RuntimeProviderAuth::ApiKey,
             base_url: Some(format!("http://{address}")),
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: None,

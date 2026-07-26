@@ -808,9 +808,13 @@ mod tests {
         let temp = tempfile::tempdir().expect("temp dir");
         let db = database::init_database_at_path(temp.path().join("automation.db"))
             .expect("init test db");
-        let data_source = LocalAppDataSource::initialize_with_db(db.clone())
-            .await
-            .expect("local data source");
+        let data_source = LocalAppDataSource::initialize_with_roots(
+            db.clone(),
+            temp.path(),
+            temp.path().join("app-server"),
+        )
+        .await
+        .expect("local data source");
         let job = sample_job(json!({
             "kind": "agent_turn",
             "prompt": "生成今日摘要",

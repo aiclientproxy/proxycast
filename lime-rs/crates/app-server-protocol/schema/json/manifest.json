@@ -635,6 +635,10 @@
       "method": "model/safetyBuffering/updated"
     },
     {
+      "kind": "notification",
+      "method": "model/verification"
+    },
+    {
       "kind": "request",
       "method": "modelPreferences/list"
     },
@@ -2212,6 +2216,8 @@
       "ModelSafetyBufferingUpdatedNotification",
       "ModelServiceTier",
       "ModelUpgradeInfo",
+      "ModelVerification",
+      "ModelVerificationNotification",
       "PatchApplyStatus",
       "PatchChangeKind",
       "PlanDeltaNotification",

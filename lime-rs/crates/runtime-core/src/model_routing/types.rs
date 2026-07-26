@@ -1,5 +1,7 @@
 use serde_json::{json, Value};
 
+use crate::FailureClassification;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeModelSelection {
     pub provider: String,
@@ -57,6 +59,16 @@ pub struct RoutingAttempt {
     pub model: String,
     pub source: String,
     pub readiness: ProviderReadiness,
+    pub runtime_failure: Option<ModelRouteExclusion>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelRouteExclusion {
+    pub provider: String,
+    pub model: String,
+    pub reason_code: &'static str,
+    pub classification: FailureClassification,
+    pub retryable: bool,
 }
 
 impl ProviderReadiness {
@@ -74,17 +86,17 @@ impl ProviderReadiness {
         }
     }
 
-    pub fn builtin_provider_ready(provider_type: String) -> Self {
+    pub fn direct_request_blocked(reason_code: &'static str) -> Self {
         Self {
-            ready: true,
-            status: "ready",
-            source: "builtin_runtime_provider",
-            reason_code: None,
-            provider_type: Some(provider_type),
+            ready: false,
+            status: "blocked",
+            source: "direct_provider_config",
+            reason_code: Some(reason_code),
+            provider_type: None,
             enabled: None,
             enabled_key_count: None,
             total_key_count: None,
-            direct_request_config: false,
+            direct_request_config: true,
         }
     }
 
@@ -98,6 +110,20 @@ impl ProviderReadiness {
             enabled: None,
             enabled_key_count: Some(0),
             total_key_count: Some(0),
+            direct_request_config: false,
+        }
+    }
+
+    pub fn runtime_failure(reason_code: &'static str) -> Self {
+        Self {
+            ready: false,
+            status: "excluded",
+            source: "runtime_failure",
+            reason_code: Some(reason_code),
+            provider_type: None,
+            enabled: None,
+            enabled_key_count: None,
+            total_key_count: None,
             direct_request_config: false,
         }
     }
@@ -191,6 +217,50 @@ impl RoutingAttempt {
             "source": self.source,
             "providerReadiness": self.readiness.to_payload(),
             "provider_readiness": self.readiness.to_payload(),
+            "runtimeFailure": self.runtime_failure.as_ref().map(ModelRouteExclusion::to_payload),
+            "runtime_failure": self.runtime_failure.as_ref().map(ModelRouteExclusion::to_payload),
         })
+    }
+}
+
+impl ModelRouteExclusion {
+    pub fn new(
+        provider: impl Into<String>,
+        model: impl Into<String>,
+        classification: FailureClassification,
+    ) -> Self {
+        Self {
+            provider: provider.into(),
+            model: model.into(),
+            reason_code: runtime_failure_reason_code(classification),
+            classification,
+            retryable: true,
+        }
+    }
+
+    fn to_payload(&self) -> Value {
+        json!({
+            "provider": self.provider,
+            "model": self.model,
+            "reasonCode": self.reason_code,
+            "reason_code": self.reason_code,
+            "classification": self.classification,
+            "retryable": self.retryable,
+        })
+    }
+}
+
+fn runtime_failure_reason_code(classification: FailureClassification) -> &'static str {
+    match classification {
+        FailureClassification::RateLimit => "provider_rate_limited",
+        FailureClassification::ProviderInternal => "provider_internal_failure",
+        FailureClassification::Transport => "provider_transport_failure",
+        FailureClassification::Authentication
+        | FailureClassification::Permission
+        | FailureClassification::Quota
+        | FailureClassification::InvalidRequest
+        | FailureClassification::ContextOverflow
+        | FailureClassification::ContentPolicy
+        | FailureClassification::Unknown => "provider_runtime_failure",
     }
 }

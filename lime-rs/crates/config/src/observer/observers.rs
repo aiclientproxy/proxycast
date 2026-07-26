@@ -49,16 +49,12 @@ impl ConfigObserver for RouterObserver {
         config: &Config,
     ) -> Result<(), String> {
         // 更新默认 Provider
-        if let Ok(provider_type) = config
-            .routing
-            .default_provider
-            .parse::<lime_core::ProviderType>()
-        {
+        if let Ok(provider_type) = config.default_provider.parse::<lime_core::ProviderType>() {
             let mut router = self.router.write().await;
             router.set_default_provider(provider_type);
             tracing::info!(
                 "[RouterObserver] 更新默认 Provider: {}",
-                config.routing.default_provider
+                config.default_provider
             );
         }
 
@@ -238,10 +234,10 @@ impl ConfigObserver for DefaultProviderRefObserver {
         config: &Config,
     ) -> Result<(), String> {
         let mut dp = self.default_provider_ref.write().await;
-        *dp = config.routing.default_provider.clone();
+        *dp = config.default_provider.clone();
         tracing::debug!(
             "[DefaultProviderRefObserver] 更新 default_provider_ref: {}",
-            config.routing.default_provider
+            config.default_provider
         );
         Ok(())
     }

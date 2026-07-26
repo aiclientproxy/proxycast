@@ -593,8 +593,12 @@ async fn restart_reads_coding_snapshot_refs_from_event_log_projection() {
             "executionStrategy": "runtime-core"
         })),
     });
-    let roots = StorageRoots::initialize(unique_temp_dir("lime-runtime-current-roots"))
-        .expect("storage roots");
+    let isolated_app_data_root = unique_temp_dir("lime-runtime-current-roots");
+    let roots = StorageRoots::initialize(
+        &isolated_app_data_root,
+        isolated_app_data_root.join("app-server"),
+    )
+    .expect("storage roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));

@@ -5,7 +5,6 @@ mod migration_support;
 pub mod migration_v2;
 pub mod migration_v4;
 pub mod migration_v5;
-pub mod migration_v6;
 pub mod model_control_migration;
 pub mod schema;
 mod startup_migrations;
@@ -71,21 +70,10 @@ pub fn init_database() -> Result<DbConnection, String> {
     init_database_at_path(&db_path)
 }
 
-/// 在指定数据根下初始化数据库连接。
+/// 在指定数据根下初始化数据库连接。旧库不迁移：路径只解析，不复制、不写 migration manifest。
 pub fn init_database_with_data_dir(data_dir: impl AsRef<Path>) -> Result<DbConnection, String> {
-    init_database_with_data_dir_resolution(data_dir).map(|(db, _)| db)
-}
-
-/// 在指定数据根下初始化数据库连接，并返回路径迁移解析结果。
-pub fn init_database_with_data_dir_resolution(
-    data_dir: impl AsRef<Path>,
-) -> Result<(DbConnection, app_paths::DatabasePathResolution), String> {
-    let data_dir = data_dir.as_ref();
-    fs::create_dir_all(data_dir)
-        .map_err(|e| format!("无法创建数据库数据目录 {}: {e}", data_dir.display()))?;
-    let resolution = app_paths::resolve_database_path_for_data_dir_with_migration(data_dir)?;
-    let db = init_database_at_path(&resolution.database_path)?;
-    Ok((db, resolution))
+    let database_path = app_paths::resolve_database_path_for_data_dir(data_dir)?;
+    init_database_at_path(&database_path)
 }
 
 /// 在指定路径初始化数据库连接。

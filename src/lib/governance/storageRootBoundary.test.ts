@@ -12,6 +12,7 @@ import {
 type UsageBaseline = Record<string, Record<string, number>>;
 
 const RUST_CRATES_ROOT = join(REPO_ROOT, "lime-rs/crates");
+const CORE_SRC_ROOT = join(REPO_ROOT, "lime-rs/crates/core/src");
 const ELECTRON_ROOT = join(REPO_ROOT, "electron");
 const APP_SERVER_CLIENT_ROOT = join(
   REPO_ROOT,
@@ -79,27 +80,34 @@ const LOCAL_DIAGNOSTICS = join(
   REPO_ROOT,
   "lime-rs/crates/app-server/src/local_data_source/diagnostics.rs",
 );
+const SUPPORT_BUNDLE = join(
+  REPO_ROOT,
+  "lime-rs/crates/app-server/src/local_data_source/diagnostics/support_bundle.rs",
+);
+const STYLE_PACK_PATHS = join(
+  REPO_ROOT,
+  "lime-rs/crates/app-server/src/runtime/soul/style_pack_paths.rs",
+);
+const MCP_OAUTH_STORE = join(
+  REPO_ROOT,
+  "lime-rs/crates/mcp/src/oauth_store.rs",
+);
 const STORAGE_ROOT_OWNER = "lime-rs/crates/core/src/app_paths.rs";
 const ELECTRON_STORAGE_ROOT_OWNER = "electron/appDataPaths.ts";
 
 const STORAGE_ROOT_BYPASS_PATTERN =
   /\b(?:[A-Za-z_][A-Za-z0-9_]*::)*(preferred_data_dir|resolve_sessions_dir|resolve_request_logs_dir|best_effort_[A-Za-z0-9_]+)\s*\(/gu;
 
-// These production call sites are migration debt. The baseline may shrink, but
-// new files, new resolver symbols, or higher counts must fail the guard.
-const KNOWN_STORAGE_ROOT_BYPASS_BASELINE: UsageBaseline = {
-  "lime-rs/crates/app-server/src/local_data_source/diagnostics.rs": {
+// 叶子 writer 基线必须保持为空：任何 durable writer / 诊断 / 产品资产 owner
+// 都只能接收组合根注入的 root，不得自行解析平台默认目录。
+const KNOWN_STORAGE_ROOT_BYPASS_BASELINE: UsageBaseline = {};
+
+// 组合根是唯一允许解析平台默认根的位置：App Server 二进制在启动时解析一次
+// AppDataRoot，再把它注入 StorageRoots / LocalAppDataSource / 产品资产 owner。
+// 这里只允许该一处，且计数只减不增。
+const COMPOSITION_ROOT_ALLOWLIST: UsageBaseline = {
+  "lime-rs/crates/app-server/src/main.rs": {
     preferred_data_dir: 1,
-  },
-  "lime-rs/crates/app-server/src/local_data_source/diagnostics/support_bundle.rs":
-    {
-      preferred_data_dir: 1,
-    },
-  "lime-rs/crates/app-server/src/runtime/soul/style_pack_paths.rs": {
-    preferred_data_dir: 1,
-  },
-  "lime-rs/crates/mcp/src/oauth_store.rs": {
-    best_effort_runtime_subdir: 1,
   },
 };
 
@@ -123,7 +131,9 @@ const APP_DATA_ROOT_CHILD_PATTERN =
   /(?:path|pathApi)\.(?:join|resolve)\(\s*(?:(?:this\.)?#?appDataRoot|appDataRoot)\s*,\s*(?:"([^"]+)"|'([^']+)'|([A-Za-z_$][A-Za-z0-9_$]*))/gu;
 
 const RETIRED_PRODUCT_DB_STARTUP_CLEANUP_PATTERN =
-  /APP_SERVER_PRODUCT_DB_MIGRATION_CLEANUP|--product-db-migration-cleanup|productDbMigrationCleanup|cleanup_migrated_product_db_source|ProductDbMigrationCleanupPolicy/gu;
+  /APP_SERVER_PRODUCT_DB_MIGRATION_CLEANUP|--product-db-migration-cleanup|productDbMigrationCleanup|cleanup_migrated_product_db_source|ProductDbMigrationCleanupPolicy|resolve_database_path_with_migration|DatabasePathResolution|migration-manifest\.json|storage-migration\.v1|database-path-v1/gu;
+const RETIRED_MANAGED_PROJECT_MIGRATION_PATTERN =
+  /migration_v6|migrate_managed_workspace_paths|migrate_managed_project_path_to_preferred|migrated_managed_workspace_paths_to_lime_v1|copy_dir_contents_if_missing/gu;
 const RETIRED_TIMESTAMP_MIGRATION_MARKER = ".migration_completed";
 
 function isDedicatedTestFile(relativePath: string): boolean {
@@ -252,6 +262,22 @@ function collectRetiredProductDbStartupCleanupReferences(): string[] {
   return findings;
 }
 
+function collectRetiredManagedProjectMigrationReferences(): string[] {
+  const findings: string[] = [];
+
+  for (const filePath of collectRustFiles(CORE_SRC_ROOT)) {
+    const relativePath = repoRelative(filePath);
+    const source = readFileSync(filePath, "utf8");
+    for (const match of source.matchAll(
+      RETIRED_MANAGED_PROJECT_MIGRATION_PATTERN,
+    )) {
+      findings.push(`${relativePath}: ${match[0]}`);
+    }
+  }
+
+  return findings;
+}
+
 function collectRetiredTimestampMigrationMarkerReferences(): string[] {
   const findings: string[] = [];
   const storageOwnerPath = join(REPO_ROOT, STORAGE_ROOT_OWNER);
@@ -305,12 +331,42 @@ describe("storage root boundary", () => {
     const increases = findBaselineIncreases(
       collectRustStorageRootBypasses(),
       KNOWN_STORAGE_ROOT_BYPASS_BASELINE,
+      COMPOSITION_ROOT_ALLOWLIST,
     );
 
     expect(
       increases,
-      "preferred_data_dir / resolve_sessions_dir / resolve_request_logs_dir / best_effort_* 只允许停留在已登记迁移负债；新增 durable writer 必须接收显式 StorageRoots 或领域 root",
+      "preferred_data_dir / resolve_sessions_dir / resolve_request_logs_dir / best_effort_* 只允许出现在组合根；新增 durable writer 必须接收显式 StorageRoots 或领域 root",
     ).toEqual([]);
+  });
+
+  it("叶子 writer 的 root bypass 基线必须保持为空", () => {
+    expect(
+      KNOWN_STORAGE_ROOT_BYPASS_BASELINE,
+      "叶子 writer 不得重新登记迁移负债；只允许组合根解析平台默认根",
+    ).toEqual({});
+  });
+
+  it("退役的 root bypass 不得回流到叶子 owner", () => {
+    const diagnostics = readFileSync(LOCAL_DIAGNOSTICS, "utf8");
+    const supportBundle = readFileSync(SUPPORT_BUNDLE, "utf8");
+    const stylePackPaths = readFileSync(STYLE_PACK_PATHS, "utf8");
+    const mcpOAuthStore = readFileSync(MCP_OAUTH_STORE, "utf8");
+
+    for (const source of [diagnostics, supportBundle, stylePackPaths]) {
+      expect(source).not.toContain("preferred_data_dir");
+    }
+    expect(mcpOAuthStore).not.toContain("best_effort_runtime_subdir");
+    expect(mcpOAuthStore).not.toContain("app_paths");
+
+    // 诊断必须报告实际生效的根与实际打开的库，不得重新解析。
+    expect(diagnostics).toContain("app_data_root: &Path");
+    expect(diagnostics).not.toContain("database::get_db_path()");
+    expect(supportBundle).not.toContain("database::get_db_path()");
+
+    // 领域 root 只能由 AppDataRoot 派生。
+    expect(stylePackPaths).toContain("style_pack_data_root_for_app_data_root");
+    expect(mcpOAuthStore).toContain("oauth_store_root_for_app_data_root");
   });
 
   it("production canonical ThreadStore 必须注入 StorageRoots 与 AgentRoot rollout owner", () => {
@@ -470,10 +526,17 @@ describe("storage root boundary", () => {
     ).toEqual([]);
   });
 
-  it("正常启动链不得恢复 Product DB destructive cleanup 参数", () => {
+  it("正常启动链不得恢复 Product DB 迁移或 destructive cleanup", () => {
     expect(
       collectRetiredProductDbStartupCleanupReferences(),
-      "旧 Product DB source 只能 retain；clear/drop/delete 必须等待版本化 manifest 后进入独立 maintenance，不得回到 Electron、client args、App Server startup 或 smoke env",
+      "Product DB 只使用 current AgentRoot；旧整库迁移、manifest 与 destructive cleanup 不得回到 Electron、client args、App Server startup 或 smoke env",
+    ).toEqual([]);
+  });
+
+  it("core 不得恢复非模型 managed project 启动迁移", () => {
+    expect(
+      collectRetiredManagedProjectMigrationReferences(),
+      "旧 projects、workspace 与 session path 不导入、不复制、不回填；migration_v6 及其复制 helper 均为 dead / forbidden-to-restore",
     ).toEqual([]);
   });
 
@@ -498,7 +561,7 @@ describe("storage root boundary", () => {
   it("current 存储迁移不得恢复时间戳 marker", () => {
     expect(
       collectRetiredTimestampMigrationMarkerReferences(),
-      "旧 .migration_completed 无 schema、fingerprint、count 或 digest；current owner 必须只写 versioned migration-manifest.json",
+      "旧 .migration_completed 已退役；Product DB current owner 不写任何旧整库迁移 marker 或 manifest",
     ).toEqual([]);
   });
 });

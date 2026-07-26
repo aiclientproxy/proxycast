@@ -67,7 +67,8 @@ fn complete_running_turn(core: &RuntimeCore, session_id: &str) {
 #[tokio::test]
 async fn queued_resume_helper_reports_idle_boundary_without_workflow_audit() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let core = create_resume_audit_core(
         "sess_queue_resume_helper",
@@ -132,7 +133,8 @@ async fn queued_resume_helper_reports_idle_boundary_without_workflow_audit() {
 #[tokio::test]
 async fn queued_turn_helper_does_not_forge_workflow_resume_audit() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let core = create_resume_audit_core(
         "sess_queue_resume_audit",
@@ -296,7 +298,8 @@ async fn pending_work_recovery_scans_in_memory_queued_turns() {
 #[tokio::test]
 async fn action_response_writes_workflow_resume_audit_with_worker_lifecycle_metadata() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let core = RuntimeCore::with_backend(Arc::new(RecordingBackend::default()))
         .with_event_log_writer(event_log_writer.clone());
@@ -426,7 +429,8 @@ async fn action_response_writes_workflow_resume_audit_with_worker_lifecycle_meta
 #[tokio::test]
 async fn workflow_respond_writes_resume_lifecycle_before_progress_audit() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let core = RuntimeCore::with_backend(Arc::new(RecordingBackend::default()))
         .with_event_log_writer(event_log_writer.clone());

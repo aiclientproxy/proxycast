@@ -296,7 +296,8 @@ async fn export_evidence_uses_injected_evidence_pack_provider() {
 #[tokio::test]
 async fn export_evidence_reads_request_logs_from_telemetry_store() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let telemetry_store =
         TelemetryStore::initialize(&roots.telemetry_db_path).expect("telemetry store");
     let mut request_log = lime_infra::telemetry::RequestLog::new(

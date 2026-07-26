@@ -385,6 +385,9 @@ describe("ElectronAppServerHost", () => {
     expect(lifecycleOptions[0]?.env?.LIME_AGENT_RUNTIME_ROOT).toBe(
       "/tmp/lime-electron-user-data/app-server",
     );
+    expect(lifecycleOptions[0]?.env?.APP_SERVER_APP_DATA_DIR).toBe(
+      "/tmp/lime-electron-user-data",
+    );
     expect(lifecycleInitializeParams[0]).toMatchObject({
       capabilities: {
         eventMethods: expect.arrayContaining([
@@ -411,6 +414,9 @@ describe("ElectronAppServerHost", () => {
     expect(lifecycleOptions[0]?.env?.LIME_AGENT_RUNTIME_ROOT).toBe(
       "/tmp/lime-agent-runtime",
     );
+    expect(lifecycleOptions[0]?.env?.APP_SERVER_APP_DATA_DIR).toBe(
+      "/tmp/lime-electron-user-data",
+    );
   });
 
   it("Windows E2E 隔离 root 压过 ambient AgentRoot 和真实 LOCALAPPDATA", async () => {
@@ -430,6 +436,9 @@ describe("ElectronAppServerHost", () => {
     );
     expect(lifecycleOptions[0]?.env?.LIME_AGENT_RUNTIME_ROOT).toBe(
       "C:\\Temp\\lime-e2e-user-data\\app-server",
+    );
+    expect(lifecycleOptions[0]?.env?.APP_SERVER_APP_DATA_DIR).toBe(
+      "C:\\Temp\\lime-e2e-user-data",
     );
   });
 

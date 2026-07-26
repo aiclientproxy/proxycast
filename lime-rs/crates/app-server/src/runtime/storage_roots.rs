@@ -15,8 +15,17 @@ const THREAD_HISTORY_DB_FILE_NAME: &str = "thread_history.sqlite";
 const PROJECTION_DB_FILE_NAME: &str = "projection_1.sqlite";
 const TELEMETRY_DB_FILE_NAME: &str = "telemetry_1.sqlite";
 
+/// Product DB 的唯一位置只由 AgentRoot 决定，供不持有 `StorageRoots` 的
+/// owner 复用同一个契约，避免各自重新解析库路径。
+pub fn product_db_path_for_agent_root(data_root: impl AsRef<Path>) -> PathBuf {
+    data_root.as_ref().join(PRODUCT_DB_FILE_NAME)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageRoots {
+    /// 应用管理的机器数据根。只能由组合根显式注入，
+    /// 不得从 `data_root.parent()` 推断——portable/E2E override 下会逃逸出受控根。
+    pub app_data_root: PathBuf,
     pub data_root: PathBuf,
     pub memory_root: PathBuf,
     pub product_db_path: PathBuf,
@@ -34,7 +43,8 @@ pub struct StorageRoots {
 }
 
 impl StorageRoots {
-    pub fn from_data_root(data_root: impl AsRef<Path>) -> Self {
+    pub fn from_roots(app_data_root: impl AsRef<Path>, data_root: impl AsRef<Path>) -> Self {
+        let app_data_root = app_data_root.as_ref().to_path_buf();
         let data_root = data_root.as_ref().to_path_buf();
         let runtime_root = data_root.join(RUNTIME_DIR_NAME);
         let event_log_root = runtime_root.join(EVENT_LOG_DIR_NAME);
@@ -51,6 +61,7 @@ impl StorageRoots {
             thread_history_db_path: sqlite_root.join(THREAD_HISTORY_DB_FILE_NAME),
             projection_db_path: runtime_root.join(PROJECTION_DB_FILE_NAME),
             telemetry_db_path: runtime_root.join(TELEMETRY_DB_FILE_NAME),
+            app_data_root,
             data_root,
             runtime_root,
             event_log_root,
@@ -60,8 +71,11 @@ impl StorageRoots {
         }
     }
 
-    pub fn initialize(data_root: impl AsRef<Path>) -> Result<Self, String> {
-        let roots = Self::from_data_root(data_root);
+    pub fn initialize(
+        app_data_root: impl AsRef<Path>,
+        data_root: impl AsRef<Path>,
+    ) -> Result<Self, String> {
+        let roots = Self::from_roots(app_data_root, data_root);
         fs::create_dir_all(&roots.event_log_root).map_err(|error| {
             format!(
                 "无法创建 App Server runtime 事件目录 {}: {error}",
@@ -104,8 +118,10 @@ mod tests {
     #[test]
     fn initialize_derives_runtime_paths_from_data_root() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+        let roots =
+            StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
 
+        assert_eq!(roots.app_data_root, temp.path());
         assert_eq!(roots.product_db_path, roots.data_root.join("lime.db"));
         assert_eq!(roots.memory_root, roots.data_root.join("memories"));
         assert_eq!(roots.sessions_root, roots.data_root.join("sessions"));
@@ -135,5 +151,23 @@ mod tests {
         assert!(roots.trace_log_root.is_dir());
         assert!(roots.sidecar_root.is_dir());
         assert!(roots.sqlite_root.is_dir());
+    }
+
+    #[test]
+    fn app_data_root_is_injected_not_derived_from_agent_root_parent() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let app_data_root = temp.path().join("machine-data");
+        let portable_agent_root = temp.path().join("portable/elsewhere/agent");
+        let roots = StorageRoots::from_roots(&app_data_root, &portable_agent_root);
+
+        assert_eq!(roots.app_data_root, app_data_root);
+        assert_eq!(roots.data_root, portable_agent_root);
+        assert_ne!(
+            roots.app_data_root,
+            portable_agent_root
+                .parent()
+                .expect("agent root parent")
+                .to_path_buf()
+        );
     }
 }

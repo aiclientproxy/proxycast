@@ -28,7 +28,7 @@ describe("project Gate SETTINGS-01 Gate B-F CLI guard", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("shell-memory");
-    expect(result.stdout).toContain("provider-migration");
     expect(result.stdout).toContain("settings-scenario");
+    expect(result.stdout).not.toContain("provider-migration");
   });
 });

@@ -798,6 +798,8 @@ pub(super) fn v2_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<v2::ModelProviderCapabilitiesReadResponse>(
             "ModelProviderCapabilitiesReadResponse",
         ),
+        typed_schema::<v2::ModelVerification>("ModelVerification"),
+        typed_schema::<v2::ModelVerificationNotification>("ModelVerificationNotification"),
         typed_schema::<v2::ModelSafetyBufferingUpdatedNotification>(
             "ModelSafetyBufferingUpdatedNotification",
         ),

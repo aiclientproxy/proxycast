@@ -213,15 +213,16 @@ impl ConfigManager {
             self.config.providers.claude = other.providers.claude;
         }
 
-        // 合并路由配置
+        if other.default_provider != Config::default().default_provider {
+            self.config.default_provider = other.default_provider;
+        }
+
+        // 合并路由辅助配置
         if !other.routing.model_aliases.is_empty() {
             self.config
                 .routing
                 .model_aliases
                 .extend(other.routing.model_aliases);
-        }
-        if other.routing.default_provider != RoutingConfig::default().default_provider {
-            self.config.routing.default_provider = other.routing.default_provider;
         }
 
         // 合并重试配置
@@ -248,7 +249,7 @@ impl ConfigManager {
     }
 }
 
-use super::types::{LoggingConfig, RetrySettings, RoutingConfig, ServerConfig};
+use super::types::{LoggingConfig, RetrySettings, ServerConfig};
 
 fn normalize_legacy_workspace_preferences_yaml_value(value: &mut serde_yaml::Value) -> bool {
     let Some(mapping) = value.as_mapping_mut() else {
@@ -270,13 +271,40 @@ fn normalize_legacy_workspace_preferences_yaml_value(value: &mut serde_yaml::Val
     false
 }
 
+fn normalize_retired_nested_default_provider_yaml_value(value: &mut serde_yaml::Value) -> bool {
+    let Some(mapping) = value.as_mapping_mut() else {
+        return false;
+    };
+
+    let routing_key = serde_yaml::Value::String("routing".to_string());
+    let provider_key = serde_yaml::Value::String("default_provider".to_string());
+    let nested_provider = mapping
+        .get_mut(&routing_key)
+        .and_then(serde_yaml::Value::as_mapping_mut)
+        .and_then(|routing| routing.remove(&provider_key));
+    let Some(nested_provider) = nested_provider else {
+        return false;
+    };
+
+    if !mapping.contains_key(&provider_key) {
+        mapping.insert(provider_key, nested_provider);
+    }
+    true
+}
+
 fn parse_yaml_config_with_legacy_tracking(yaml: &str) -> Result<(Config, bool), ConfigError> {
     let mut value: serde_yaml::Value =
         serde_yaml::from_str(yaml).map_err(|e| ConfigError::ParseError(e.to_string()))?;
-    let migrated_legacy_key = normalize_legacy_workspace_preferences_yaml_value(&mut value);
+    let migrated_workspace_preferences =
+        normalize_legacy_workspace_preferences_yaml_value(&mut value);
+    let migrated_default_provider =
+        normalize_retired_nested_default_provider_yaml_value(&mut value);
     let config =
         serde_yaml::from_value(value).map_err(|e| ConfigError::ParseError(e.to_string()))?;
-    Ok((config, migrated_legacy_key))
+    Ok((
+        config,
+        migrated_workspace_preferences || migrated_default_provider,
+    ))
 }
 
 fn normalized_config_for_persistence(config: &Config) -> Config {
@@ -821,8 +849,8 @@ providers:
     base_url: "https://api.openai.com/v1"
   claude:
     enabled: false
+default_provider: "openai"
 routing:
-  default_provider: "openai"
   model_aliases:
     gpt-4: "claude-sonnet-4-5-20250514"
 retry:
@@ -837,10 +865,57 @@ logging:
 "#;
         let config = ConfigManager::parse_yaml(yaml).unwrap();
         assert_eq!(config.server.host, "127.0.0.1");
+        assert_eq!(config.default_provider, "openai");
         assert_eq!(
             config.routing.model_aliases.get("gpt-4"),
             Some(&"claude-sonnet-4-5-20250514".to_string())
         );
+    }
+
+    #[test]
+    fn test_parse_yaml_migrates_retired_nested_default_provider() {
+        let config = ConfigManager::parse_yaml(
+            r#"
+routing:
+  default_provider: "gemini"
+  model_aliases:
+    fast: "gemini/gemini-2.5-flash"
+"#,
+        )
+        .expect("retired nested provider should migrate at the YAML boundary");
+
+        assert_eq!(config.default_provider, "gemini");
+        assert_eq!(
+            config.routing.model_aliases.get("fast"),
+            Some(&"gemini/gemini-2.5-flash".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_yaml_prefers_current_top_level_default_provider() {
+        let config = ConfigManager::parse_yaml(
+            r#"
+default_provider: "anthropic"
+routing:
+  default_provider: "gemini"
+"#,
+        )
+        .expect("current top-level provider should win during migration");
+
+        assert_eq!(config.default_provider, "anthropic");
+    }
+
+    #[test]
+    fn test_parse_yaml_rejects_other_unknown_routing_fields() {
+        let error = ConfigManager::parse_yaml(
+            r#"
+routing:
+  retired_field: true
+"#,
+        )
+        .expect_err("unknown routing fields must still fail closed");
+
+        assert!(error.to_string().contains("retired_field"));
     }
 
     #[test]
@@ -914,6 +989,41 @@ content_creator:
         let error = load_config_from_path(&yaml_path).unwrap_err().to_string();
 
         assert!(error.contains("duplicate entry with key"));
+    }
+
+    #[test]
+    fn test_load_config_rewrites_nested_default_provider_to_current_shape() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let yaml_path = temp_dir.path().join("config.yaml");
+        std::fs::write(
+            &yaml_path,
+            r#"
+server:
+  api_key: "custom-key"
+routing:
+  default_provider: "gemini"
+  model_aliases:
+    fast: "gemini/gemini-2.5-flash"
+"#,
+        )
+        .unwrap();
+
+        let config = load_config_from_path(&yaml_path).unwrap();
+        let persisted: serde_yaml::Value =
+            serde_yaml::from_str(&std::fs::read_to_string(&yaml_path).unwrap()).unwrap();
+
+        assert_eq!(config.default_provider, "gemini");
+        assert_eq!(
+            persisted
+                .get("default_provider")
+                .and_then(serde_yaml::Value::as_str),
+            Some("gemini")
+        );
+        assert!(persisted
+            .get("routing")
+            .and_then(serde_yaml::Value::as_mapping)
+            .is_some_and(|routing| !routing.contains_key("default_provider")));
+        assert!(yaml_path.with_extension("yaml.backup").is_file());
     }
 
     #[test]

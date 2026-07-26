@@ -27,7 +27,8 @@ fn setup() -> (
     ProjectionStore,
 ) {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log = EventLogWriter::new(&roots.event_log_root).expect("event log");
     let projection = ProjectionStore::initialize(&roots.projection_db_path).expect("projection");
     (temp, roots, event_log, projection)

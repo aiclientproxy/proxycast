@@ -11,13 +11,15 @@ use crate::reply_loop::{RuntimeReplyLoop, RuntimeReplyLoopStep, MAX_REPLY_TURNS_
 use crate::session_config::AgentSessionConfig;
 use crate::session_loop::RuntimeSessionInputHandle;
 use agent_protocol::provider_trace::{ProviderTraceEvent, ProviderTraceFailure};
+use agent_protocol::world_state::{RuntimeWorldState, WORLD_STATE_TURN_METADATA_KEY};
 use futures::future::join_all;
 use futures::StreamExt;
 use model_provider::current_client::{
     CanonicalLlmEvent, CurrentProvider, CurrentProviderContent, CurrentProviderError,
     CurrentProviderMessage, CurrentProviderRequest, CurrentProviderRole, CurrentProviderStream,
     CurrentProviderTool, CurrentProviderToolCall, CurrentProviderToolResult, CurrentProviderUsage,
-    FailureClassification, FinishReason, GenerationOptions, ProviderMetadata, Usage,
+    FailureClassification, FinishReason, GenerationOptions, ModelVerification, ProviderMetadata,
+    Usage,
 };
 use model_provider::provider_stream::RuntimeReplyModelRequestPolicy;
 use model_provider::provider_stream::RuntimeReplyProviderTraceMetadata;
@@ -37,12 +39,13 @@ use tool_runtime::tool_executor::{
     RuntimeToolExecutorHandle, RuntimeToolPolicyErrorKind,
 };
 use tool_runtime::tool_lifecycle::ToolLifecycleEmitter;
+use tool_runtime::turn_snapshot::{RuntimeHookSnapshot, RuntimeToolIdentity, RuntimeToolSnapshot};
 
 mod input;
 mod output_lifecycle;
 #[cfg(test)]
 use input::runtime_inter_agent_text;
-use input::{escape_xml_text, runtime_session_input_message};
+use input::runtime_session_input_message;
 use output_lifecycle::{
     defer_text_output_item_end, end_reasoning_output_item, finish_active_output_items,
     provider_output_item_id, start_output_item, ProviderOutputFamily,
@@ -134,6 +137,40 @@ impl RuntimeToolStepSnapshotSource for FixedRuntimeToolStepSnapshotSource {
     }
 }
 
+pub type RuntimeHookSnapshotFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<Vec<RuntimeHookSnapshot>, String>> + Send + 'a>>;
+
+pub trait RuntimeHookSnapshotSource: Send + Sync {
+    fn capture(&self) -> RuntimeHookSnapshotFuture<'_>;
+}
+
+#[derive(Clone)]
+pub struct RuntimeHookSnapshotSourceHandle(Arc<dyn RuntimeHookSnapshotSource>);
+
+impl RuntimeHookSnapshotSourceHandle {
+    pub fn new(source: Arc<dyn RuntimeHookSnapshotSource>) -> Self {
+        Self(source)
+    }
+
+    pub fn fixed(hooks: Vec<RuntimeHookSnapshot>) -> Self {
+        Self::new(Arc::new(FixedRuntimeHookSnapshotSource { hooks }))
+    }
+
+    async fn capture(&self) -> Result<Vec<RuntimeHookSnapshot>, String> {
+        self.0.capture().await
+    }
+}
+
+struct FixedRuntimeHookSnapshotSource {
+    hooks: Vec<RuntimeHookSnapshot>,
+}
+
+impl RuntimeHookSnapshotSource for FixedRuntimeHookSnapshotSource {
+    fn capture(&self) -> RuntimeHookSnapshotFuture<'_> {
+        Box::pin(async move { Ok(self.hooks.clone()) })
+    }
+}
+
 #[derive(Clone)]
 pub struct CurrentProviderTurnInput {
     pub provider: Arc<dyn CurrentProvider>,
@@ -141,6 +178,7 @@ pub struct CurrentProviderTurnInput {
     pub session_config: AgentSessionConfig,
     pub initial_messages: Vec<CurrentProviderMessage>,
     pub tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle,
+    pub hook_snapshot_source: Option<RuntimeHookSnapshotSourceHandle>,
     pub model_request_policy: Option<RuntimeReplyModelRequestPolicy>,
     pub tool_lifecycle_emitter: Arc<dyn ToolLifecycleEmitter>,
     pub working_directory: PathBuf,
@@ -200,6 +238,12 @@ pub enum CurrentProviderTurnEvent {
         attempt: u32,
         usage: CurrentProviderUsage,
     },
+    ServerModel {
+        model: String,
+    },
+    ModelVerification {
+        verifications: Vec<ModelVerification>,
+    },
     ProviderStep {
         attempt: u32,
         completed: bool,
@@ -224,6 +268,7 @@ where
         session_config,
         mut initial_messages,
         tool_step_snapshot_source,
+        hook_snapshot_source,
         model_request_policy,
         tool_lifecycle_emitter,
         working_directory,
@@ -240,13 +285,17 @@ where
                 false,
             )
         })?;
-    insert_environment_context_before_current_user(&mut initial_messages, &working_directory);
+    let world_state = resolve_world_state(&session_config, &working_directory)?;
+    insert_world_state_before_current_user(&mut initial_messages, &world_state);
     let mut loop_state = RuntimeReplyLoop::new(session_config.max_turns);
     let mut text_output = String::new();
     let mut errors = Vec::new();
     let mut emitted_any = false;
     let mut emitted_tool_call = false;
+    let mut consumed_pending_input = false;
     let mut provider_budget_tokens_used = 0_u64;
+    let mut last_server_model = None;
+    let mut model_verification_emitted = false;
     let (generation, provider_options) = provider_request_controls(&session_config);
     let first_visible_output_timeout = first_visible_output_timeout(&session_config);
     let provider_step_timeout = provider_step_timeout(&session_config);
@@ -300,10 +349,53 @@ where
             let _step_context = input.capture_step_context().await;
         }
 
-        let tool_step_snapshot = tool_step_snapshot_source
+        let mut tool_step_snapshot = tool_step_snapshot_source
             .capture()
             .await
             .map_err(|message| RuntimeReplyAttemptError::new(message, emitted_any))?;
+
+        // Hook 门控：捕获 Hook snapshot，构造 RuntimeTurnSnapshot，并包装 executor。
+        if let Some(ref hook_source) = hook_snapshot_source {
+            let hook_snapshots = hook_source
+                .capture()
+                .await
+                .map_err(|message| RuntimeReplyAttemptError::new(message, emitted_any))?;
+            if !hook_snapshots.is_empty() {
+                let tool_snapshots = tool_step_snapshot
+                    .definitions
+                    .iter()
+                    .map(|def| {
+                        RuntimeToolSnapshot::new(
+                            RuntimeToolIdentity::plain(&def.name),
+                            def.clone(),
+                            RuntimeToolExposure::Direct,
+                            false,
+                            true,
+                        )
+                    })
+                    .collect();
+                if let Ok(turn_snapshot) = tool_runtime::turn_snapshot::RuntimeTurnSnapshot::try_new(
+                    tool_snapshots,
+                    hook_snapshots,
+                ) {
+                    use tool_runtime::hook_gated_executor::{
+                        hook_gated_executor, FixedHookReporter,
+                    };
+                    use tool_runtime::tool_executor::RuntimeToolExecutorHandle;
+                    // TODO: 替换为真实的 HookReporter 实现，当前用占位 reporter。
+                    let reporter = Arc::new(FixedHookReporter::new(None));
+                    // 克隆原 executor 的内部 Arc，用 hook 包装后重新构造 handle。
+                    let original_executor = tool_step_snapshot.executor.clone();
+                    let gated = hook_gated_executor(
+                        original_executor.inner_executor(),
+                        Arc::new(turn_snapshot),
+                        reporter,
+                    );
+                    tool_step_snapshot.executor = RuntimeToolExecutorHandle::new(gated);
+                }
+            }
+        }
+
         let tools = tool_step_snapshot
             .definitions
             .iter()
@@ -416,6 +508,8 @@ where
                     error.message,
                     emitted_any,
                     error.classification,
+                    error.retryable,
+                    consumed_pending_input,
                 ));
             }
         };
@@ -539,6 +633,8 @@ where
                         error.message,
                         emitted_any,
                         error.classification,
+                        error.retryable,
+                        consumed_pending_input,
                     ));
                 }
             };
@@ -725,6 +821,18 @@ where
                     step_usage = Some(usage.clone());
                     on_event(CurrentProviderTurnEvent::Usage { attempt, usage });
                 }
+                CanonicalLlmEvent::ServerModel { model } => {
+                    if last_server_model.as_deref() != Some(model.as_str()) {
+                        last_server_model = Some(model.clone());
+                        on_event(CurrentProviderTurnEvent::ServerModel { model });
+                    }
+                }
+                CanonicalLlmEvent::ModelVerification { verifications } => {
+                    if !model_verification_emitted && !verifications.is_empty() {
+                        model_verification_emitted = true;
+                        on_event(CurrentProviderTurnEvent::ModelVerification { verifications });
+                    }
+                }
                 CanonicalLlmEvent::Finish { reason, usage, .. } => {
                     if let Some(usage) = usage {
                         let usage = current_provider_usage(usage);
@@ -756,7 +864,13 @@ where
                             )),
                         );
                     }
-                    return Err(provider_attempt_error(message, emitted_any, classification));
+                    return Err(provider_attempt_error(
+                        message,
+                        emitted_any,
+                        classification,
+                        retryable.unwrap_or(false),
+                        consumed_pending_input,
+                    ));
                 }
                 CanonicalLlmEvent::StepStart { .. }
                 | CanonicalLlmEvent::ToolInputStart { .. }
@@ -825,6 +939,7 @@ where
                 None => Vec::new(),
             };
             if !pending_messages.is_empty() {
+                consumed_pending_input = true;
                 initial_messages.extend(pending_messages);
                 continue;
             }
@@ -834,6 +949,7 @@ where
                         .try_take_pending_input(false)
                         .await
                         .map_err(|message| RuntimeReplyAttemptError::new(message, emitted_any))?;
+                    consumed_pending_input |= !steer.is_empty();
                     initial_messages
                         .extend(steer.into_iter().filter_map(runtime_session_input_message));
                     continue;
@@ -1033,11 +1149,15 @@ fn provider_attempt_error(
     message: impl Into<String>,
     emitted_any: bool,
     classification: Option<FailureClassification>,
+    retryable: bool,
+    consumed_pending_input: bool,
 ) -> RuntimeReplyAttemptError {
-    if classification == Some(FailureClassification::Quota) {
-        RuntimeReplyAttemptError::usage_limit_exceeded(message, emitted_any)
+    let error =
+        RuntimeReplyAttemptError::provider_failure(message, emitted_any, classification, retryable);
+    if consumed_pending_input {
+        error.suppress_reroute()
     } else {
-        RuntimeReplyAttemptError::new(message, emitted_any)
+        error
     }
 }
 
@@ -1073,14 +1193,34 @@ fn provider_trace_failure(
     ProviderTraceFailure::new(category, retryable, non_retryable_provider_rejection)
 }
 
-fn insert_environment_context_before_current_user(
-    messages: &mut Vec<CurrentProviderMessage>,
+fn resolve_world_state(
+    session_config: &AgentSessionConfig,
     working_directory: &Path,
+) -> Result<RuntimeWorldState, RuntimeReplyAttemptError> {
+    let Some(snapshot) = session_config
+        .turn_context
+        .as_ref()
+        .and_then(|context| context.metadata.get(WORLD_STATE_TURN_METADATA_KEY))
+    else {
+        return Ok(RuntimeWorldState::from_cwd(working_directory));
+    };
+
+    serde_json::from_value(snapshot.clone()).map_err(|error| {
+        RuntimeReplyAttemptError::new(
+            format!("Invalid {WORLD_STATE_TURN_METADATA_KEY} turn metadata: {error}"),
+            false,
+        )
+    })
+}
+
+fn insert_world_state_before_current_user(
+    messages: &mut Vec<CurrentProviderMessage>,
+    world_state: &RuntimeWorldState,
 ) {
-    let context = CurrentProviderMessage::user(vec![CurrentProviderContent::Text(format!(
-        "<environment_context>\n<cwd>{}</cwd>\n</environment_context>",
-        escape_xml_text(&working_directory.to_string_lossy())
-    ))]);
+    let Some(rendered) = world_state.render_environment_context() else {
+        return;
+    };
+    let context = CurrentProviderMessage::user(vec![CurrentProviderContent::Text(rendered)]);
     let insertion_index = if matches!(
         messages.last(),
         Some(message) if message.role == CurrentProviderRole::User

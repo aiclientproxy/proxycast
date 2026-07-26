@@ -1,5 +1,7 @@
 //! Runtime provider 配置与错误判定边界。
 
+use app_server_protocol::ProtocolKind;
+
 use crate::ModelProviderProtocol;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +23,53 @@ impl RuntimeProviderProtocol {
             Self::AnthropicMessages => ModelProviderProtocol::AnthropicMessages,
         }
     }
+
+    pub fn from_route_protocol(protocol: &ProtocolKind) -> Option<Self> {
+        match protocol {
+            ProtocolKind::OpenaiChat => Some(Self::ChatCompletions),
+            ProtocolKind::OpenaiResponses | ProtocolKind::CodexResponses => Some(Self::Responses),
+            ProtocolKind::AnthropicMessages => Some(Self::AnthropicMessages),
+            ProtocolKind::OpenaiImages
+            | ProtocolKind::GeminiGenerateContent
+            | ProtocolKind::OllamaChat
+            | ProtocolKind::Fal
+            | ProtocolKind::BedrockConverse
+            | ProtocolKind::VertexGemini
+            | ProtocolKind::Unknown => None,
+        }
+    }
+
+    pub fn from_provider_type(provider_type: &str) -> Option<Self> {
+        match normalize_provider_type(provider_type).as_str() {
+            "openai" | "new_api" | "gateway" => Some(Self::ChatCompletions),
+            "openai_response" | "openai_responses" | "responses" | "codex" => Some(Self::Responses),
+            "anthropic" | "anthropic_compatible" => Some(Self::AnthropicMessages),
+            "azure" | "azure_openai" | "gemini" | "gemini_api_key" | "google" | "vertex"
+            | "vertexai" | "vertex_ai" | "gcpvertexai" | "aws_bedrock" | "bedrock" | "ollama"
+            | "fal" => None,
+            _ => None,
+        }
+    }
+
+    pub fn from_direct_route(provider_name: &str, protocol: &ProtocolKind) -> Option<Self> {
+        let normalized = normalize_provider_type(provider_name);
+        if matches!(normalized.as_str(), "azure" | "azure_openai") {
+            return None;
+        }
+        Self::from_route_protocol(protocol)
+    }
+}
+
+fn normalize_provider_type(value: &str) -> String {
+    value.trim().to_ascii_lowercase().replace(['-', ' '], "_")
+}
+
+/// 已解析 provider route 的认证语义。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeProviderAuth {
+    ApiKey,
+    NoAuth,
+    OemManaged,
 }
 
 /// Runtime provider 配置。
@@ -34,6 +83,8 @@ pub struct RuntimeProviderConfig {
     pub model_name: String,
     /// API Key
     pub api_key: Option<String>,
+    /// Route resolver 明确给出的认证方式
+    pub auth: RuntimeProviderAuth,
     /// Base URL
     pub base_url: Option<String>,
     /// 凭证 UUID（用于记录使用和健康状态）
@@ -83,7 +134,86 @@ fn is_retryable_request_failed_message(message: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::message_is_non_retryable_provider_rejection;
+    use super::{message_is_non_retryable_provider_rejection, RuntimeProviderProtocol};
+    use app_server_protocol::ProtocolKind;
+
+    #[test]
+    fn route_protocol_adapter_availability_is_explicit() {
+        assert_eq!(
+            RuntimeProviderProtocol::from_route_protocol(&ProtocolKind::OpenaiChat),
+            Some(RuntimeProviderProtocol::ChatCompletions)
+        );
+        assert_eq!(
+            RuntimeProviderProtocol::from_route_protocol(&ProtocolKind::OpenaiResponses),
+            Some(RuntimeProviderProtocol::Responses)
+        );
+        assert_eq!(
+            RuntimeProviderProtocol::from_route_protocol(&ProtocolKind::CodexResponses),
+            Some(RuntimeProviderProtocol::Responses)
+        );
+        assert_eq!(
+            RuntimeProviderProtocol::from_route_protocol(&ProtocolKind::AnthropicMessages),
+            Some(RuntimeProviderProtocol::AnthropicMessages)
+        );
+
+        for protocol in [
+            ProtocolKind::OpenaiImages,
+            ProtocolKind::GeminiGenerateContent,
+            ProtocolKind::OllamaChat,
+            ProtocolKind::Fal,
+            ProtocolKind::BedrockConverse,
+            ProtocolKind::VertexGemini,
+            ProtocolKind::Unknown,
+        ] {
+            assert_eq!(
+                RuntimeProviderProtocol::from_route_protocol(&protocol),
+                None,
+                "{protocol:?} must remain unavailable until its wire adapter exists"
+            );
+        }
+    }
+
+    #[test]
+    fn provider_adapter_availability_includes_auth_transport_requirements() {
+        for (provider_type, expected) in [
+            ("openai", RuntimeProviderProtocol::ChatCompletions),
+            ("new-api", RuntimeProviderProtocol::ChatCompletions),
+            ("gateway", RuntimeProviderProtocol::ChatCompletions),
+            ("openai-response", RuntimeProviderProtocol::Responses),
+            ("codex", RuntimeProviderProtocol::Responses),
+            (
+                "anthropic-compatible",
+                RuntimeProviderProtocol::AnthropicMessages,
+            ),
+        ] {
+            assert_eq!(
+                RuntimeProviderProtocol::from_provider_type(provider_type),
+                Some(expected),
+                "provider_type={provider_type}"
+            );
+        }
+
+        for provider_type in [
+            "azure-openai",
+            "gemini",
+            "vertexai",
+            "aws-bedrock",
+            "ollama",
+            "fal",
+        ] {
+            assert_eq!(
+                RuntimeProviderProtocol::from_provider_type(provider_type),
+                None,
+                "{provider_type} must remain unavailable until its full adapter exists"
+            );
+        }
+
+        assert_eq!(
+            RuntimeProviderProtocol::from_direct_route("azure_openai", &ProtocolKind::OpenaiChat,),
+            None,
+            "OpenAI-shaped bodies do not satisfy Azure auth/query requirements"
+        );
+    }
 
     #[test]
     fn classifies_non_retryable_provider_rejections() {

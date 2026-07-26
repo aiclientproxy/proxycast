@@ -413,6 +413,30 @@
       ],
       "type": "object"
     },
+    "MultiAgentMode": {
+      "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
+      "oneOf": [
+        {
+          "enum": [
+            "explicitRequestOnly",
+            "proactive"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "custom": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "PatchApplyStatus": {
       "enum": [
         "completed",
@@ -1531,7 +1555,8 @@
       "type": "string"
     },
     "multiAgentMode": {
-      "default": null
+      "$ref": "#/$defs/MultiAgentMode",
+      "default": "explicitRequestOnly"
     },
     "reasoningEffort": {
       "type": [

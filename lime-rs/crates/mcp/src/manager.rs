@@ -201,6 +201,12 @@ impl McpClientManager {
         }
     }
 
+    /// 注入 OAuth 凭据根。未注入时凭据操作 fail closed，不解析平台默认目录。
+    pub fn with_oauth_store_root(mut self, root_dir: impl Into<std::path::PathBuf>) -> Self {
+        self.oauth_registry = McpOAuthRegistry::new_in(root_dir);
+        self
+    }
+
     /// 设置事件发射器
     pub fn set_emitter(&mut self, emitter: DynEmitter) {
         self.emitter = Some(emitter);

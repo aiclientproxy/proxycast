@@ -209,6 +209,7 @@ export const METHOD_MEMORY_STORE_SEARCH = "memoryStore/search";
 export const METHOD_MODEL_LIST = "model/list";
 export const METHOD_MODEL_SAFETY_BUFFERING_UPDATED =
   "model/safetyBuffering/updated";
+export const METHOD_MODEL_VERIFICATION = "model/verification";
 export const METHOD_MODEL_PREFERENCES_LIST = "modelPreferences/list";
 export const METHOD_MODEL_PROVIDER_CAPABILITIES_READ =
   "modelProvider/capabilities/read";
@@ -1048,6 +1049,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "notification",
     method: "model/safetyBuffering/updated",
+  },
+  {
+    kind: "notification",
+    method: "model/verification",
   },
   {
     kind: "request",
@@ -6740,6 +6745,14 @@ export interface ModelUpgradeInfo {
   upgradeCopy?: null | string;
 }
 
+export type ModelVerification = "trustedAccessForCyber";
+
+export interface ModelVerificationNotification {
+  threadId: string;
+  turnId: string;
+  verifications: ModelVerification[];
+}
+
 export interface OpenDeepLinkPayload {
   action?: null | string;
   kind: string;
@@ -7612,6 +7625,10 @@ export type ServerNotification =
       params: ReasoningTextDeltaNotification;
     }
   | {
+      method: "model/verification";
+      params: ModelVerificationNotification;
+    }
+  | {
       method: "model/safetyBuffering/updated";
       params: ModelSafetyBufferingUpdatedNotification;
     }
@@ -8239,7 +8256,7 @@ export interface ThreadForkResponse {
   instructionSources?: string[];
   model: string;
   modelProvider: string;
-  multiAgentMode?: unknown;
+  multiAgentMode?: MultiAgentMode;
   reasoningEffort?: null | string;
   runtimeWorkspaceRoots?: string[];
   sandbox: unknown;
@@ -8566,7 +8583,7 @@ export interface ThreadResumeResponse {
   itemsBackwardsCursor?: null | string;
   model: string;
   modelProvider: string;
-  multiAgentMode?: unknown;
+  multiAgentMode?: MultiAgentMode;
   reasoningEffort?: null | string;
   runtimeWorkspaceRoots?: string[];
   sandbox: unknown;
@@ -8704,7 +8721,7 @@ export interface ThreadStartParams {
   historyMode?: ThreadHistoryMode | null;
   model?: null | string;
   modelProvider?: null | string;
-  multiAgentMode?: unknown;
+  multiAgentMode?: MultiAgentMode | null;
   permissions?: null | string;
   personality?: unknown;
   runtimeWorkspaceRoots?: string[] | null;
@@ -8724,7 +8741,7 @@ export interface ThreadStartResponse {
   instructionSources?: string[];
   model: string;
   modelProvider: string;
-  multiAgentMode?: unknown;
+  multiAgentMode?: MultiAgentMode;
   reasoningEffort?: null | string;
   runtimeWorkspaceRoots?: string[];
   sandbox: unknown;
@@ -8898,7 +8915,7 @@ export interface TurnStartParams {
   environments?: TurnEnvironmentParams[] | null;
   input: UserInput[];
   model?: null | string;
-  multiAgentMode?: unknown;
+  multiAgentMode?: MultiAgentMode | null;
   outputSchema?: unknown;
   permissions?: null | string;
   personality?: unknown;
@@ -9552,6 +9569,13 @@ export interface ByteRange {
 }
 
 export type ImageDetail = "auto" | "high" | "low" | "original";
+
+export type MultiAgentMode =
+  | "explicitRequestOnly"
+  | "proactive"
+  | {
+      custom: string;
+    };
 
 export interface TextElement {
   byteRange: ByteRange;

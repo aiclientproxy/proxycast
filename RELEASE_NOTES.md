@@ -1,38 +1,38 @@
-## Lime v1.112.0
+## Lime v1.113.0
 
 ### 新功能
 
-- 扩展 App Server v2 Thread 管理能力，新增压缩、命名、已加载列表、搜索、metadata 更新、取消订阅以及状态/关闭通知。
-- 新增 Thread 后台终端列表、清理与终止协议，并投影模型 safety buffering 状态更新。
-- 完善 Thread fork 与恢复流程，支持压缩历史、中途回合 fork、直接输入策略和 canonical Thread/Turn/Item 投影。
-- 建立 v2 模型与 Provider 能力协议，覆盖输入模态、推理档位、服务层级、可用性提示、升级信息和动态 capability 读取。
+- 新增 typed Runtime World State，将工作目录、项目、模型、权限、协作模式与有效 Multi-Agent 模式统一投影到 Provider 上下文。
+- 为 Provider 运行链补充按路由与凭证隔离的健康状态、结构化重试遥测和无输出前的有限备用路由重选。
+- 将工具 Hook 的发现、生命周期裁决与执行收敛到 `tool-runtime`，支持统一的调用前后门禁。
+- 补齐 App Server v2 `model/verification` typed 通知与 schema，支持可信访问验证状态的标准投影。
 
 ### 修复
 
-- 修复 Thread resume/replay/fork 场景中的 identity、历史回放、状态通知和 read model 同步偏差。
-- 修复模型路由、Provider capability lowering、健康检查与有效配置投影不一致的问题。
-- 修复缺少展示字段的 service tier 在 App Server 模型投影中被静默丢弃的问题。
-- 修复历史代码任务恢复后残留 optimistic Turn、重复展示完整工具过程的问题，默认只保留紧凑过程摘要与最新终态。
-- 修复对话滚动、布局过渡、侧边栏会话操作和 Right Surface 状态同步中的可见回归。
+- 修复项目菜单移动到“新增项目”子菜单时命中区域断开、子菜单意外关闭的问题。
+- 修复 Provider 认证类型、adapter readiness、能力上界与实际路由不一致导致的错误可选、错误回退或认证头投影问题。
+- 修复 Windows Chromium session 数据落入 roaming 目录，以及 portable/E2E 场景从 AgentRoot 反推应用数据根的问题。
+- 修复可重试 Provider 故障在已产生输出、已消费 steer 或 direct route 场景中被不安全重放的问题。
 
 ### 优化与重构
 
-- 收敛 App Server protocol、Rust client、TypeScript client、schema 与 generated types，移除已被 v2 owner 替代的旧会话和模型入口。
-- 统一 Agent Runtime 的 tool options、runtime options、queued intent、会话配置和 unified exec 生命周期。
-- 收敛文章工作区 canonical projection 与写回边界，删除重复的 Renderer selection writeback 路径。
+- 统一 AppDataRoot、AgentRoot、HostSessionData、Product DB、diagnostics、Soul 与 MCP OAuth 的存储根组合链。
+- 删除 Product DB 整库复制、通用 migration manifest、启动清理和 managed project path 迁移等已退役路径，不保留兼容回退。
+- 将默认 Provider、模型路由、认证配置与 capability admission 收敛到单一 current owner，未实现 adapter 默认 fail closed。
+- 移除 `lime-agent` 中旧 HookManager 与旧 Provider migration fixture，补充防止 dead surface 回流的治理规则。
 
 ### 测试与质量
 
-- 新增 Thread compact、fork、search、metadata、unsubscribe、closed notification、model list 与 Provider capability 的公共 JSON-RPC 回归测试。
-- 扩充 App Server client、Agent Runtime current fixture、Electron Gate B、模型选择器、消息滚动和 Workspace 布局测试。
-- 建立前端与 Runtime contract 测试快照、source-to-scenario 映射及 CLI/TUI 测试资产清单。
+- 扩充 Runtime World State、Multi-Agent mode、Hook lifecycle、Provider health/retry/reroute、workspace scope 与 App Server JSON-RPC 回归测试。
+- 补充 Electron 存储根、Windows sessionData、项目子菜单连续指针命中和旧迁移路径负向守卫。
+- 同步 App Server v2 schema 与 TypeScript generated protocol types，更新项目 Gate B 场景合同。
 
 ### 文档
 
-- 更新 Codex 方法到 Lime 产品面的对齐矩阵、Agent Runtime 协调计划、memory/query loop 规则和测试体系说明。
+- 更新 Agent Runtime、Provider、存储对齐、架构事实源、实现快照与 Codex 对齐执行记录。
 
 ### 其他
 
-- 将根应用、CLI npm 包、Rust workspace 与锁文件版本统一提升到 `1.112.0`。
+- 将根应用、CLI npm 包、Rust workspace 与锁文件版本统一提升到 `1.113.0`。
 
-**完整变更**: `v1.111.0` -> `v1.112.0`
+**完整变更**: `v1.112.0` -> `v1.113.0`

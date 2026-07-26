@@ -581,6 +581,8 @@ async function resolveAppServerSidecarEnv(
   const env: NodeJS.ProcessEnv = {
     ...resolveAppServerRuntimeLibraryEnv(binaryPath),
     LIME_AGENT_RUNTIME_ROOT: agentRoot,
+    // AppDataRoot 由 Host 显式解析后下发；App Server 的叶子 writer 不再自行猜平台根。
+    APP_SERVER_APP_DATA_DIR: resolveAppServerAppDataRoot(),
   };
   const currentNoProxy = APP_SERVER_NO_PROXY_ENV_KEYS.map(
     (key) => process.env[key],
@@ -786,6 +788,10 @@ function stdioSidecarWithRuntimeBackend(
 
 function resolveAppServerDataDir(): string {
   return resolveCurrentDesktopStorageRoots(app.getPath("userData")).agentRoot;
+}
+
+function resolveAppServerAppDataRoot(): string {
+  return resolveCurrentDesktopStorageRoots(app.getPath("userData")).appDataRoot;
 }
 
 function resolveAppServerConfigPath(): string {

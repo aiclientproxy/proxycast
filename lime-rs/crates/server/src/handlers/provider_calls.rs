@@ -21,7 +21,9 @@ use model_provider::current_client::{
     CurrentProviderToolCall, CurrentProviderToolResult, FinishReason, GenerationOptions,
 };
 use model_provider::current_client::{CurrentProviderStream, Usage};
-use model_provider::runtime_provider::{RuntimeProviderConfig, RuntimeProviderProtocol};
+use model_provider::runtime_provider::{
+    RuntimeProviderAuth, RuntimeProviderConfig, RuntimeProviderProtocol,
+};
 use serde_json::{json, Value};
 
 use crate::AppState;
@@ -102,6 +104,7 @@ fn provider_client_for_credential(
         provider_selector: Some(credential.provider_type.to_string()),
         model_name: model.to_string(),
         api_key: Some(api_key.clone()),
+        auth: RuntimeProviderAuth::ApiKey,
         base_url: base_url.clone(),
         credential_uuid: credential.uuid.clone(),
         reasoning_effort: None,
@@ -214,6 +217,8 @@ async fn collect_provider_output(
             | CanonicalLlmEvent::ToolInputEnd { .. }
             | CanonicalLlmEvent::ToolResult { .. }
             | CanonicalLlmEvent::ToolError { .. }
+            | CanonicalLlmEvent::ServerModel { .. }
+            | CanonicalLlmEvent::ModelVerification { .. }
             | CanonicalLlmEvent::StepStart { .. } => {}
         }
     }
@@ -699,7 +704,7 @@ mod tests {
     use axum::http::header;
     use futures::stream;
     use lime_core::models::openai::ChatMessage;
-    use model_provider::current_client::FailureClassification;
+    use model_provider::current_client::{FailureClassification, ModelVerification};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
@@ -911,6 +916,47 @@ mod tests {
             let body = String::from_utf8(body.to_vec()).expect("reasoning SSE UTF-8");
             assert!(body.contains("raw-reasoning"));
             assert!(!body.contains("summary-only"));
+        }
+    }
+
+    #[tokio::test]
+    async fn provider_metadata_events_do_not_leak_into_compat_outputs() {
+        let events = vec![
+            Ok(CanonicalLlmEvent::ServerModel {
+                model: "internal-routed-model".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::ModelVerification {
+                verifications: vec![ModelVerification::TrustedAccessForCyber],
+            }),
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-0".to_string(),
+                text: "visible".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: None,
+            }),
+        ];
+
+        let collected = collect_provider_output(Box::pin(stream::iter(events.clone())))
+            .await
+            .expect("collect provider output");
+        assert_eq!(collected.text, "visible");
+
+        for format in [OutputFormat::OpenAi, OutputFormat::Anthropic] {
+            let response = stream_provider_response(
+                Box::pin(stream::iter(events.clone())),
+                "requested-model",
+                format,
+            );
+            let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+                .await
+                .expect("collect metadata SSE body");
+            let body = String::from_utf8(body.to_vec()).expect("metadata SSE UTF-8");
+            assert!(body.contains("visible"));
+            assert!(!body.contains("internal-routed-model"));
+            assert!(!body.contains("trustedAccessForCyber"));
         }
     }
 

@@ -319,7 +319,6 @@ impl RequestProcessor {
             "baseInstructions": params.base_instructions,
             "developerInstructions": params.developer_instructions,
             "personality": params.personality,
-            "multiAgentMode": params.multi_agent_mode,
             "sessionStartSource": params.session_start_source,
             "environments": params.environments,
             "dynamicTools": params.dynamic_tools,
@@ -379,10 +378,7 @@ impl RequestProcessor {
                 .unwrap_or(serde_json::Value::Null),
             active_permission_profile: None,
             reasoning_effort: None,
-            multi_agent_mode: metadata
-                .get("multiAgentMode")
-                .cloned()
-                .unwrap_or(serde_json::Value::Null),
+            multi_agent_mode: agent_protocol::MultiAgentMode::default(),
         })
         .map(|dispatch| dispatch.with_notification(thread_started))
     }
@@ -468,7 +464,7 @@ impl RequestProcessor {
                 .filter(|value| !value.is_null())
                 .cloned(),
             reasoning_effort: metadata_optional_string(metadata, "reasoningEffort"),
-            multi_agent_mode: metadata_value(metadata, "multiAgentMode"),
+            multi_agent_mode: agent_protocol::MultiAgentMode::default(),
             initial_turns_page,
             turns_backwards_cursor: None,
             items_backwards_cursor: None,

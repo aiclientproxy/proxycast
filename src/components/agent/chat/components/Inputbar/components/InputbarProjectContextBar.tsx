@@ -169,8 +169,7 @@ export function InputbarProjectContextBar({
   const [resolvedProject, setResolvedProject] =
     useState<InputbarOpenedProject | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [uncontrolledProjectOpen, setUncontrolledProjectOpen] =
-    useState(false);
+  const [uncontrolledProjectOpen, setUncontrolledProjectOpen] = useState(false);
   const [submenuOpen, setSubmenuOpen] = useState(false);
   const [modePopoverOpen, setModePopoverOpen] = useState(false);
   const [branchPopoverOpen, setBranchPopoverOpen] = useState(false);
@@ -581,30 +580,36 @@ export function InputbarProjectContextBar({
               <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
             </button>
             {submenuOpen ? (
+              // Keep the hit area flush with the parent while preserving the visual gap.
               <div
-                className="absolute left-[calc(100%+8px)] top-0 z-[80] w-[186px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.52)]"
+                className="absolute left-full top-0 z-[80] w-[194px] pl-2"
                 data-testid="inputbar-project-context-add-submenu"
               >
-                <button
-                  type="button"
-                  className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
-                  data-testid="inputbar-project-context-create-blank"
-                  disabled={Boolean(actionState)}
-                  onClick={() => void handleCreateBlankProject()}
+                <div
+                  className="rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.52)]"
+                  data-testid="inputbar-project-context-add-submenu-panel"
                 >
-                  <FolderPlus className="h-4 w-4 text-emerald-700" />
-                  <span className="truncate">{copy.createBlankProject}</span>
-                </button>
-                <button
-                  type="button"
-                  className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
-                  data-testid="inputbar-project-context-use-existing"
-                  disabled={Boolean(actionState)}
-                  onClick={() => void handleUseExistingFolder()}
-                >
-                  <FolderOpen className="h-4 w-4 text-sky-700" />
-                  <span className="truncate">{copy.useExistingFolder}</span>
-                </button>
+                  <button
+                    type="button"
+                    className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
+                    data-testid="inputbar-project-context-create-blank"
+                    disabled={Boolean(actionState)}
+                    onClick={() => void handleCreateBlankProject()}
+                  >
+                    <FolderPlus className="h-4 w-4 text-emerald-700" />
+                    <span className="truncate">{copy.createBlankProject}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
+                    data-testid="inputbar-project-context-use-existing"
+                    disabled={Boolean(actionState)}
+                    onClick={() => void handleUseExistingFolder()}
+                  >
+                    <FolderOpen className="h-4 w-4 text-sky-700" />
+                    <span className="truncate">{copy.useExistingFolder}</span>
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>

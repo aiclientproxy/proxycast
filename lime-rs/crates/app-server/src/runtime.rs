@@ -179,6 +179,8 @@ pub use right_surface::WorkspaceObjectCanvasReplayReadinessListParams;
 pub use sidecar_store::SidecarRef;
 pub use sidecar_store::SidecarStore;
 pub use sidecar_store::SidecarWriteRequest;
+pub use soul::install_style_pack_data_root;
+pub use storage_roots::product_db_path_for_agent_root;
 pub use storage_roots::StorageRoots;
 pub(crate) use trace_store::export_trace_events_from_store_to_path;
 pub(crate) use trace_store::summarize_trace_event_store;

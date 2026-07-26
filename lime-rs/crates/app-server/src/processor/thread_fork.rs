@@ -61,7 +61,7 @@ impl RequestProcessor {
             sandbox: metadata_value(&metadata, "sandbox"),
             active_permission_profile: metadata.get("activePermissionProfile").cloned(),
             reasoning_effort: metadata_optional_string(&metadata, "reasoningEffort"),
-            multi_agent_mode: metadata_value(&metadata, "multiAgentMode"),
+            multi_agent_mode: agent_protocol::MultiAgentMode::default(),
             thread,
         };
         let mut notifications = Vec::with_capacity(3);

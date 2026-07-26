@@ -519,7 +519,8 @@ async fn denied_ask_user_cancels_restored_action_without_resolved_event() {
 #[tokio::test]
 async fn runtime_core_hydrates_persisted_descriptor_into_runtime_backend() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = crate::StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots = crate::StorageRoots::initialize(temp.path(), temp.path().join("app-server"))
+        .expect("roots");
     let event_log_writer =
         Arc::new(crate::EventLogWriter::new(&roots.event_log_root).expect("event log"));
     let projection_store = Arc::new(

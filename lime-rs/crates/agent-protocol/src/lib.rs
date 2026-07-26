@@ -5,15 +5,18 @@ pub mod context_trace;
 pub mod input;
 pub mod message_content;
 pub mod model_context;
+pub mod multi_agent_mode;
 pub mod openai;
 pub mod provider_trace;
 pub mod response_item;
 pub mod session_context;
 pub mod thread;
 pub mod turn_context;
+pub mod world_state;
 
 pub use collaboration_mode::{CollaborationMode, CollaborationModeSettings, ModeKind};
 pub use input::{AgentInput, AgentInputError, ByteRange, ImageDetail, TextElement};
+pub use multi_agent_mode::MultiAgentMode;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

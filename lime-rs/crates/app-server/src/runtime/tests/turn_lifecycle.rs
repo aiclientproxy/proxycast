@@ -403,7 +403,8 @@ async fn streaming_turn_start_emits_lifecycle_before_backend_progress() {
 #[tokio::test]
 async fn admitted_session_task_completion_finalizes_canonical_turn() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));
     let core = RuntimeCore::with_backend(Arc::new(CompletedSessionTaskWithoutTerminalBackend))
@@ -644,7 +645,8 @@ async fn message_and_reasoning_emit_stable_canonical_item_lifecycle() {
 #[tokio::test]
 async fn runtime_events_are_appended_to_jsonl_event_log() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let projection_store =
         Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection"));
@@ -765,7 +767,8 @@ async fn runtime_events_are_appended_to_jsonl_event_log() {
 #[tokio::test]
 async fn missing_canonical_item_fails_before_durable_append() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let core = RuntimeCore::default().with_event_log_writer(event_log_writer.clone());
     let session = core
@@ -833,7 +836,8 @@ async fn missing_canonical_item_fails_before_durable_append() {
 #[tokio::test]
 async fn workflow_events_are_written_only_to_workflow_audit_jsonl() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let core = RuntimeCore::default().with_event_log_writer(event_log_writer.clone());
     core.start_session(AgentSessionStartParams {
@@ -1207,7 +1211,8 @@ async fn provider_trace_events_keep_provider_wait_separate_from_message_delta() 
 #[tokio::test]
 async fn trace_events_are_appended_to_raw_trace_store_without_payload_text() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let trace_event_writer =
         Arc::new(TraceEventWriter::new(&roots.trace_log_root).expect("trace writer"));
     let core = RuntimeCore::with_backend(Arc::new(ProviderTraceBackend))
@@ -1582,7 +1587,8 @@ async fn cancel_waiting_action_persists_action_canceled_before_turn_terminal() {
 #[tokio::test]
 async fn cancel_turn_writes_open_workflow_cancel_events_to_workflow_audit_jsonl() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let event_log_writer = Arc::new(EventLogWriter::new(&roots.event_log_root).expect("writer"));
     let core = RuntimeCore::with_backend(Arc::new(HangingCancelBackend {
         cancel_count: AtomicUsize::new(0),

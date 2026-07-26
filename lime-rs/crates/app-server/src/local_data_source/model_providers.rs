@@ -187,40 +187,51 @@ pub(crate) fn read_model_provider_capabilities(
     db: &DbConnection,
     api_key_provider_service: &ApiKeyProviderService,
 ) -> Result<ModelProviderCapabilitiesReadResponse, RuntimeCoreError> {
-    resolve_model_provider_capabilities(db, api_key_provider_service)
+    let config = lime_core::config::load_config().map_err(data_error)?;
+    resolve_model_provider_capabilities(
+        db,
+        api_key_provider_service,
+        config.default_provider.trim(),
+    )
 }
 
 fn resolve_model_provider_capabilities(
     db: &DbConnection,
     api_key_provider_service: &ApiKeyProviderService,
+    provider_id: &str,
 ) -> Result<ModelProviderCapabilitiesReadResponse, RuntimeCoreError> {
-    let providers = api_key_provider_service
-        .get_all_providers(db)
-        .map_err(data_error)?;
-    let mut response = ModelProviderCapabilitiesReadResponse {
+    let unavailable = || ModelProviderCapabilitiesReadResponse {
         namespace_tools: false,
         image_generation: false,
         web_search: false,
     };
-
-    for provider in providers {
-        if !configured_provider_readiness(&provider).ready {
-            continue;
-        }
-        let provider_type = provider.provider.effective_provider_type().to_string();
-        let Some(capabilities) =
-            model_provider::provider_capabilities::ProviderCapabilities::from_provider_type(
-                &provider_type,
-            )
-        else {
-            continue;
-        };
-        response.namespace_tools |= capabilities.namespace_tools;
-        response.image_generation |= capabilities.image_generation;
-        response.web_search |= capabilities.web_search;
+    let provider_id = provider_id.trim();
+    if provider_id.is_empty() {
+        return Ok(unavailable());
     }
+    let Some(provider) = api_key_provider_service
+        .get_provider(db, provider_id)
+        .map_err(data_error)?
+    else {
+        return Ok(unavailable());
+    };
+    if !configured_provider_readiness(&provider).ready {
+        return Ok(unavailable());
+    }
+    let provider_type = provider.provider.effective_provider_type().to_string();
+    let Some(capabilities) =
+        model_provider::provider_capabilities::ProviderCapabilities::from_provider_type(
+            &provider_type,
+        )
+    else {
+        return Ok(unavailable());
+    };
 
-    Ok(response)
+    Ok(ModelProviderCapabilitiesReadResponse {
+        namespace_tools: capabilities.namespace_tools,
+        image_generation: capabilities.image_generation,
+        web_search: capabilities.web_search,
+    })
 }
 
 pub(crate) fn list_model_provider_catalog(
@@ -825,7 +836,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_capabilities_union_all_runtime_ready_provider_types() {
+    fn provider_capabilities_read_current_configured_provider_only() {
         let db = setup_model_provider_db();
         insert_typed_provider(&db, "bedrock-route", "aws-bedrock", true, &[]);
         insert_typed_provider_with_host(
@@ -841,16 +852,23 @@ mod tests {
             .add_api_key(&db, "openai-route", "sk-test", None, true)
             .expect("add enabled OpenAI key");
 
-        let response = resolve_model_provider_capabilities(&db, &service)
-            .expect("read provider capability union");
+        let response = resolve_model_provider_capabilities(&db, &service, "openai-route")
+            .expect("read current provider capabilities");
 
-        assert!(response.namespace_tools);
-        assert!(response.image_generation);
-        assert!(response.web_search);
+        assert!(!response.namespace_tools);
+        assert!(!response.image_generation);
+        assert!(!response.web_search);
+
+        let response = resolve_model_provider_capabilities(&db, &service, "bedrock-route")
+            .expect("read unsupported current provider capabilities");
+
+        assert!(!response.namespace_tools);
+        assert!(!response.image_generation);
+        assert!(!response.web_search);
     }
 
     #[test]
-    fn provider_capabilities_skip_unready_non_chat_and_unknown_providers() {
+    fn provider_capabilities_fail_closed_without_a_ready_current_provider() {
         let db = setup_model_provider_db();
         insert_typed_provider(&db, "bedrock-route", "aws-bedrock", true, &[]);
         insert_typed_provider_with_host(
@@ -863,15 +881,23 @@ mod tests {
         );
         insert_typed_provider(&db, "disabled-route", "openai", false, &[]);
         insert_typed_provider(&db, "media-route", "fal", true, &[]);
-        insert_typed_provider(&db, "unknown-route", "future-provider", true, &[]);
         let service = ApiKeyProviderService::new();
 
-        let response = resolve_model_provider_capabilities(&db, &service)
-            .expect("read filtered provider capabilities");
+        for provider_id in [
+            "",
+            "missing-route",
+            "missing-key-route",
+            "disabled-route",
+            "bedrock-route",
+            "media-route",
+        ] {
+            let response = resolve_model_provider_capabilities(&db, &service, provider_id)
+                .expect("read unavailable current provider capabilities");
 
-        assert!(response.namespace_tools);
-        assert!(!response.image_generation);
-        assert!(!response.web_search);
+            assert!(!response.namespace_tools, "provider_id={provider_id}");
+            assert!(!response.image_generation, "provider_id={provider_id}");
+            assert!(!response.web_search, "provider_id={provider_id}");
+        }
     }
 
     #[tokio::test]
@@ -903,16 +929,16 @@ mod tests {
         insert_typed_provider_with_host(
             &db,
             "provider-z",
-            "ollama",
-            "http://127.0.0.1:11434",
+            "openai",
+            "https://llm.limeai.run#lime_tenant_id=tenant-0001",
             true,
             &["model-z"],
         );
         insert_typed_provider_with_host(
             &db,
             "provider-a",
-            "ollama",
-            "http://127.0.0.1:11434",
+            "openai",
+            "https://llm.limeai.run#lime_tenant_id=tenant-0001",
             true,
             &["model-a"],
         );
@@ -1027,7 +1053,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn model_catalog_includes_keyless_ollama_without_key() {
+    async fn model_catalog_skips_keyless_ollama_without_current_adapter() {
         let db = setup_model_provider_db();
         insert_typed_provider_with_host(
             &db,
@@ -1050,15 +1076,24 @@ mod tests {
         )
         .expect("list keyless Ollama models");
 
-        assert_eq!(catalogs.len(), 1);
-        assert_eq!(catalogs[0].models.len(), 1);
-        assert_eq!(catalogs[0].models[0].id, "qwen3:14b");
+        assert!(catalogs.is_empty());
     }
 
     #[tokio::test]
     async fn model_catalog_skips_non_chat_and_unknown_provider_types() {
         let db = setup_model_provider_db();
         insert_typed_provider(&db, "media-route", "fal", true, &["fal-image"]);
+        insert_typed_provider(&db, "gemini-route", "gemini", true, &["gemini-model"]);
+        insert_typed_provider(&db, "azure-route", "azure-openai", true, &["azure-model"]);
+        insert_typed_provider(&db, "vertex-route", "vertexai", true, &["vertex-model"]);
+        insert_typed_provider(
+            &db,
+            "bedrock-route",
+            "aws-bedrock",
+            true,
+            &["bedrock-model"],
+        );
+        insert_typed_provider(&db, "ollama-route", "ollama", true, &["ollama-model"]);
         insert_typed_provider(
             &db,
             "unknown-route",

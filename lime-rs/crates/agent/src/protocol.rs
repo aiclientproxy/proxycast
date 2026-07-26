@@ -5,6 +5,7 @@ use agent_protocol::{
     ToolArgument, ToolOutput, TurnId,
 };
 use lime_core::database::dao::agent_timeline::AgentThreadTurn;
+use model_provider::current_client::ModelVerification;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -415,6 +416,14 @@ pub enum AgentEvent {
 
     #[serde(rename = "model_change")]
     ModelChange { model: String, mode: String },
+
+    #[serde(rename = "server_model")]
+    ServerModel { model: String },
+
+    #[serde(rename = "model_verification")]
+    ModelVerification {
+        verifications: Vec<ModelVerification>,
+    },
 
     #[serde(rename = "provider_trace")]
     ProviderTrace {
@@ -1147,6 +1156,26 @@ mod tests {
         assert_eq!(value["payload"]["source"], "payload_retry_model");
         assert!(value["payload"].get("retry_model").is_none());
         assert!(value["payload"].get("fasterModel").is_none());
+    }
+
+    #[test]
+    fn agent_event_serializes_provider_neutral_model_facts() {
+        let server_model = serde_json::to_value(AgentEvent::ServerModel {
+            model: "gpt-5-codex".to_string(),
+        })
+        .expect("serialize server model");
+        assert_eq!(server_model["type"], "server_model");
+        assert_eq!(server_model["model"], "gpt-5-codex");
+
+        let verification = serde_json::to_value(AgentEvent::ModelVerification {
+            verifications: vec![ModelVerification::TrustedAccessForCyber],
+        })
+        .expect("serialize model verification");
+        assert_eq!(verification["type"], "model_verification");
+        assert_eq!(
+            verification["verifications"],
+            serde_json::json!(["trusted_access_for_cyber"])
+        );
     }
 
     #[test]

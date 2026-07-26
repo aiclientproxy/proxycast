@@ -94,6 +94,8 @@ pub(super) fn runtime_event_type_from_raw(raw_type: &str) -> &'static str {
         "action_resolved" => "action.resolved",
         "turn_context" => "turn.context",
         "model_change" => "model.changed",
+        "server_model" => "model.server_reported",
+        "model_verification" => "model.verification",
         "provider_trace" => "provider.trace",
         "provider_usage" => "provider.usage",
         "provider_step" => "provider.step",
@@ -249,6 +251,28 @@ mod tests {
         assert_eq!(
             runtime_event_type_from_raw("runtime_status"),
             "runtime.status"
+        );
+    }
+
+    #[test]
+    fn model_facts_map_to_canonical_runtime_event_types() {
+        let server_model = runtime_events_from_agent_event(&RuntimeAgentEvent::ServerModel {
+            model: "gpt-5-codex".to_string(),
+        })
+        .expect("server model event");
+        assert_eq!(server_model[0].event_type, "model.server_reported");
+        assert_eq!(server_model[0].payload["model"], "gpt-5-codex");
+
+        let verification = runtime_events_from_agent_event(&RuntimeAgentEvent::ModelVerification {
+            verifications: vec![
+                model_provider::current_client::ModelVerification::TrustedAccessForCyber,
+            ],
+        })
+        .expect("model verification event");
+        assert_eq!(verification[0].event_type, "model.verification");
+        assert_eq!(
+            verification[0].payload["verifications"],
+            json!(["trusted_access_for_cyber"])
         );
     }
 

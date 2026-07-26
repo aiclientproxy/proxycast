@@ -3,7 +3,8 @@ use super::*;
 #[tokio::test]
 async fn export_evidence_request_telemetry_ignores_unmatched_session_and_turn_logs() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("roots");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
     let telemetry_store =
         TelemetryStore::initialize(&roots.telemetry_db_path).expect("telemetry store");
 

@@ -1,0 +1,32 @@
+{
+  "$defs": {
+    "ModelVerification": {
+      "enum": [
+        "trustedAccessForCyber"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "threadId": {
+      "type": "string"
+    },
+    "turnId": {
+      "type": "string"
+    },
+    "verifications": {
+      "items": {
+        "$ref": "#/$defs/ModelVerification"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "threadId",
+    "turnId",
+    "verifications"
+  ],
+  "title": "ModelVerificationNotification",
+  "type": "object"
+}

@@ -52,14 +52,21 @@ impl DiagnosticsAppDataSource for LocalAppDataSource {
         trace_store_root: Option<std::path::PathBuf>,
     ) -> Result<SupportBundleExportResponse, RuntimeCoreError> {
         let (current_log_path, _) = log_storage_snapshot(self).await?;
-        diagnostics::export_support_bundle(&current_log_path, params, trace_store_root.as_deref())
-            .map_err(data_error)
+        diagnostics::export_support_bundle(
+            self.app_data_root(),
+            self.product_db_path(),
+            &current_log_path,
+            params,
+            trace_store_root.as_deref(),
+        )
+        .map_err(data_error)
     }
 
     async fn read_windows_startup_diagnostics(
         &self,
     ) -> Result<WindowsStartupDiagnosticsResponse, RuntimeCoreError> {
-        diagnostics::read_windows_startup_diagnostics().map_err(data_error)
+        diagnostics::read_windows_startup_diagnostics(self.app_data_root(), self.product_db_path())
+            .map_err(data_error)
     }
 }
 

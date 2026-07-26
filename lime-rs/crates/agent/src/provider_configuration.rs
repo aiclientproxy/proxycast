@@ -2,7 +2,9 @@ use crate::{credential_bridge::ConfiguredReplyProvider, AgentRuntimeState};
 use agent_runtime::turn_executor::TurnProviderConfiguration;
 use app_server_protocol::ProtocolKind;
 use lime_core::database::DbConnection;
-use model_provider::runtime_provider::{RuntimeProviderConfig, RuntimeProviderProtocol};
+use model_provider::runtime_provider::{
+    RuntimeProviderAuth, RuntimeProviderConfig, RuntimeProviderProtocol,
+};
 use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +34,7 @@ struct ProviderConfigurationRequest<'a> {
     pub route_protocol: Option<ProtocolKind>,
     pub credential_ref: Option<&'a str>,
     pub direct_provider_config: Option<SessionProviderConfig>,
+    pub auth: RuntimeProviderAuth,
 }
 
 pub(crate) struct ConfiguredSessionProvider {
@@ -56,6 +59,7 @@ pub struct ModelRouteProviderConfiguration {
     pub route_protocol: Option<ProtocolKind>,
     pub credential_ref: Option<String>,
     pub direct_provider_config: Option<SessionProviderConfig>,
+    pub auth: RuntimeProviderAuth,
 }
 
 async fn configure_provider_for_session(
@@ -69,6 +73,10 @@ async fn configure_provider_for_session(
     ensure_supported_route_protocol(request.route_protocol.as_ref().or(direct_route_protocol))?;
     agent_state.init_agent_with_db(request.db).await?;
 
+    if request.auth == RuntimeProviderAuth::OemManaged {
+        return Err("OEM-managed authentication has no current model-provider adapter".to_string());
+    }
+
     if let Some(mut config) = request.direct_provider_config {
         if let Some(credential_ref) = request.credential_ref {
             if config.credential_uuid.as_deref() != Some(credential_ref) {
@@ -80,10 +88,18 @@ async fn configure_provider_for_session(
         config.route_protocol = request.route_protocol.or(config.route_protocol);
         config.service_tier = request.service_tier.or(config.service_tier);
         let runtime_config =
-            session_provider_config_to_runtime_provider_config(&config, request.session_id);
+            session_provider_config_to_runtime_provider_config(&config, request.auth);
         let provider =
             install_provider_for_session(agent_state, request.session_id, &runtime_config).await?;
         return Ok(ConfiguredSessionProvider { config, provider });
+    }
+
+    match request.auth {
+        RuntimeProviderAuth::NoAuth => {
+            return Err("no-auth provider route is missing its resolved direct config".to_string());
+        }
+        RuntimeProviderAuth::OemManaged => unreachable!("rejected before provider selection"),
+        RuntimeProviderAuth::ApiKey => {}
     }
 
     let mut runtime_config = agent_state
@@ -157,6 +173,7 @@ pub(crate) async fn configure_model_route_provider_for_session_with_provider_and
             route_protocol: configuration.route_protocol,
             credential_ref,
             direct_provider_config: configuration.direct_provider_config,
+            auth: configuration.auth,
         },
     )
     .await
@@ -175,7 +192,7 @@ fn ensure_supported_route_protocol(protocol: Option<&ProtocolKind>) -> Result<()
                 .to_string(),
         );
     };
-    if model_provider_protocol_from_route_protocol(Some(protocol.clone())).is_some() {
+    if RuntimeProviderProtocol::from_route_protocol(protocol).is_some() {
         return Ok(());
     }
     Err(format!(
@@ -186,41 +203,9 @@ fn ensure_supported_route_protocol(protocol: Option<&ProtocolKind>) -> Result<()
 fn runtime_provider_protocol_from_route_protocol(
     protocol: Option<ProtocolKind>,
 ) -> Option<RuntimeProviderProtocol> {
-    runtime_provider_protocol_from_model_provider_protocol(
-        model_provider_protocol_from_route_protocol(protocol),
-    )
-}
-
-fn model_provider_protocol_from_route_protocol(
-    protocol: Option<ProtocolKind>,
-) -> Option<model_provider::ModelProviderProtocol> {
-    match protocol? {
-        ProtocolKind::OpenaiResponses | ProtocolKind::CodexResponses => {
-            Some(model_provider::ModelProviderProtocol::Responses)
-        }
-        ProtocolKind::OpenaiChat => Some(model_provider::ModelProviderProtocol::ChatCompletions),
-        ProtocolKind::AnthropicMessages => {
-            Some(model_provider::ModelProviderProtocol::AnthropicMessages)
-        }
-        _ => None,
-    }
-}
-
-fn runtime_provider_protocol_from_model_provider_protocol(
-    protocol: Option<model_provider::ModelProviderProtocol>,
-) -> Option<RuntimeProviderProtocol> {
-    match protocol {
-        Some(model_provider::ModelProviderProtocol::Responses) => {
-            Some(RuntimeProviderProtocol::Responses)
-        }
-        Some(model_provider::ModelProviderProtocol::ChatCompletions) => {
-            Some(RuntimeProviderProtocol::ChatCompletions)
-        }
-        Some(model_provider::ModelProviderProtocol::AnthropicMessages) => {
-            Some(RuntimeProviderProtocol::AnthropicMessages)
-        }
-        Some(model_provider::ModelProviderProtocol::Custom(_)) | None => None,
-    }
+    protocol
+        .as_ref()
+        .and_then(RuntimeProviderProtocol::from_route_protocol)
 }
 
 fn route_protocol_from_runtime_provider_protocol(
@@ -233,18 +218,19 @@ fn route_protocol_from_runtime_provider_protocol(
 
 fn session_provider_config_to_runtime_provider_config(
     config: &SessionProviderConfig,
-    session_id: &str,
+    auth: RuntimeProviderAuth,
 ) -> RuntimeProviderConfig {
     RuntimeProviderConfig {
         provider_name: config.provider_name.clone(),
         provider_selector: config.provider_selector.clone(),
         model_name: config.model_name.clone(),
-        api_key: config.api_key.clone(),
+        api_key: match auth {
+            RuntimeProviderAuth::ApiKey => config.api_key.clone(),
+            RuntimeProviderAuth::NoAuth | RuntimeProviderAuth::OemManaged => None,
+        },
+        auth,
         base_url: config.base_url.clone(),
-        credential_uuid: config
-            .credential_uuid
-            .clone()
-            .unwrap_or_else(|| format!("manual:{session_id}")),
+        credential_uuid: config.credential_uuid.clone().unwrap_or_default(),
         reasoning_effort: config.reasoning_effort.clone(),
         service_tier: config.service_tier.clone(),
         protocol: runtime_provider_protocol_from_route_protocol(config.route_protocol.clone()),
@@ -304,27 +290,8 @@ mod tests {
             route_protocol,
             credential_ref: None,
             direct_provider_config: None,
+            auth: RuntimeProviderAuth::ApiKey,
         }
-    }
-
-    #[test]
-    fn route_protocol_is_projected_to_model_provider_protocol() {
-        assert_eq!(
-            model_provider_protocol_from_route_protocol(Some(ProtocolKind::OpenaiResponses)),
-            Some(model_provider::ModelProviderProtocol::Responses)
-        );
-        assert_eq!(
-            model_provider_protocol_from_route_protocol(Some(ProtocolKind::CodexResponses)),
-            Some(model_provider::ModelProviderProtocol::Responses)
-        );
-        assert_eq!(
-            model_provider_protocol_from_route_protocol(Some(ProtocolKind::OpenaiChat)),
-            Some(model_provider::ModelProviderProtocol::ChatCompletions)
-        );
-        assert_eq!(
-            model_provider_protocol_from_route_protocol(Some(ProtocolKind::AnthropicMessages)),
-            Some(model_provider::ModelProviderProtocol::AnthropicMessages)
-        );
     }
 
     #[test]
@@ -411,8 +378,10 @@ mod tests {
             supports_websockets: false,
         };
 
-        let runtime_config =
-            session_provider_config_to_runtime_provider_config(&config, "session-a");
+        let runtime_config = session_provider_config_to_runtime_provider_config(
+            &config,
+            RuntimeProviderAuth::ApiKey,
+        );
 
         assert_eq!(runtime_config.provider_name, "anthropic");
         assert_eq!(runtime_config.model_name, "claude-sonnet-4-5");
@@ -432,7 +401,7 @@ mod tests {
             provider_name: "openai".to_string(),
             provider_selector: Some("openai".to_string()),
             model_name: "gpt-4.1".to_string(),
-            api_key: None,
+            api_key: Some("must-be-discarded".to_string()),
             base_url: None,
             credential_uuid: None,
             reasoning_effort: None,
@@ -449,8 +418,11 @@ mod tests {
         );
         assert!(config.supports_websockets);
         assert!(
-            session_provider_config_to_runtime_provider_config(&config, "session-a")
-                .supports_websockets
+            session_provider_config_to_runtime_provider_config(
+                &config,
+                RuntimeProviderAuth::ApiKey,
+            )
+            .supports_websockets
         );
 
         config.route_protocol = Some(ProtocolKind::OpenaiChat);
@@ -458,6 +430,34 @@ mod tests {
             route_protocol_from_session_provider_config(&config),
             Some(ProtocolKind::OpenaiChat)
         );
+    }
+
+    #[test]
+    fn no_auth_direct_config_projects_without_synthetic_credential() {
+        let config = SessionProviderConfig {
+            provider_name: "openai".to_string(),
+            provider_selector: Some("local-openai".to_string()),
+            model_name: "local-model".to_string(),
+            api_key: None,
+            base_url: Some("http://127.0.0.1:11434/v1".to_string()),
+            credential_uuid: None,
+            reasoning_effort: None,
+            service_tier: None,
+            route_protocol: Some(ProtocolKind::OpenaiChat),
+            toolshim: false,
+            toolshim_model: None,
+            model_capabilities: None,
+            supports_websockets: false,
+        };
+
+        let runtime_config = session_provider_config_to_runtime_provider_config(
+            &config,
+            RuntimeProviderAuth::NoAuth,
+        );
+
+        assert_eq!(runtime_config.auth, RuntimeProviderAuth::NoAuth);
+        assert!(runtime_config.api_key.is_none());
+        assert!(runtime_config.credential_uuid.is_empty());
     }
 
     #[tokio::test]

@@ -120,6 +120,29 @@ pub fn routing_fallback_applied_payload(
             "routing_attempts".to_string(),
             routing_attempts_payload(attempted),
         );
+        if let Some(runtime_failure) = attempted
+            .iter()
+            .find_map(|attempt| attempt.runtime_failure.as_ref())
+        {
+            object.insert(
+                "fallbackReason".to_string(),
+                Value::String("runtime_provider_failure".to_string()),
+            );
+            object.insert(
+                "fallback_reason".to_string(),
+                Value::String("runtime_provider_failure".to_string()),
+            );
+            let runtime_failure = serde_json::json!({
+                "provider": runtime_failure.provider,
+                "model": runtime_failure.model,
+                "reasonCode": runtime_failure.reason_code,
+                "reason_code": runtime_failure.reason_code,
+                "classification": runtime_failure.classification,
+                "retryable": runtime_failure.retryable,
+            });
+            object.insert("runtimeFailure".to_string(), runtime_failure.clone());
+            object.insert("runtime_failure".to_string(), runtime_failure);
+        }
     }
     payload
 }

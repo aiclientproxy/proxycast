@@ -4,7 +4,8 @@ use app_server_protocol::AgentSessionReadResponse;
 fn persistent_core(
     temp: &tempfile::TempDir,
 ) -> (Arc<EventLogWriter>, Arc<ProjectionStore>, RuntimeCore) {
-    let roots = StorageRoots::initialize(temp.path().join("app-server")).expect("storage roots");
+    let roots = StorageRoots::initialize(temp.path(), temp.path().join("app-server"))
+        .expect("storage roots");
     let event_log_writer =
         Arc::new(EventLogWriter::new(&roots.event_log_root).expect("event log writer"));
     let projection_store =

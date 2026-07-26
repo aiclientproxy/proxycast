@@ -24,13 +24,13 @@ Usage:
   node scripts/agent-qc/project-gate-settings-b.mjs \\
     --run-id <candidate-run-id> \\
     --source shell-memory=<summary.json> \\
-    --source provider-migration=<summary.json>
+    --source settings-scenario=<summary.json>
 
 Options:
   --run-id <id>        Candidate or explicit standalone run-id
   --source <kind>=<path>
                        Same-run owner evidence. Repeat for each scenario.
-                       Kinds: shell-memory, provider-migration, settings-scenario
+                       Kinds: shell-memory, settings-scenario
   --evidence-dir <dir> Output directory. Must remain under the run evidence root.
   -h, --help           Show help
 

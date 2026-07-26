@@ -314,7 +314,7 @@ describe("ChatNavbar", () => {
     ).not.toBeNull();
   });
 
-  it("任务中心项目菜单应能通过现有文件夹进入项目", async () => {
+  it("任务中心项目菜单应保留连续指针命中桥并通过现有文件夹进入项目", async () => {
     const onProjectChange = vi.fn();
     mockRequestChatHostOpenPath.mockResolvedValueOnce(
       "/Users/test/existing-project",
@@ -354,7 +354,24 @@ describe("ChatNavbar", () => {
       );
     });
 
-    const useExistingButton = document.body.querySelector(
+    const addProjectSubmenu = document.body.querySelector(
+      '[data-testid="inputbar-project-context-add-submenu"]',
+    ) as HTMLDivElement | null;
+    expect(addProjectSubmenu).not.toBeNull();
+    expect(addProjectSubmenu?.classList.contains("left-full")).toBe(true);
+    expect(addProjectSubmenu?.classList.contains("pl-2")).toBe(true);
+    expect(
+      addProjectSubmenu?.querySelector(
+        '[data-testid="inputbar-project-context-add-submenu-panel"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      addProjectSubmenu?.querySelector(
+        '[data-testid="inputbar-project-context-create-blank"]',
+      ),
+    ).not.toBeNull();
+
+    const useExistingButton = addProjectSubmenu?.querySelector(
       '[data-testid="inputbar-project-context-use-existing"]',
     ) as HTMLButtonElement | null;
     expect(useExistingButton).not.toBeNull();

@@ -2,8 +2,12 @@
 
 > status: `mcp-progress-current / inventory-open`
 > owner: `app-server-protocol` + `thread-store` + `agent-runtime-projection`
-> upstream: `/Users/coso/Documents/dev/rust/codex`
+> upstream: `/Users/coso/Documents/dev/rust/codex@9fc715c0861c956c894a91890b78dc05b304ba29`
 > fixture: `internal/refactor/v1/fixtures/item-inventory.v0.1.json`
+
+本清单与 fixture 落后 `README.md` 的 reference lock（`4c43465...`）一个 revision。升级前必须按
+lock revision 重新对照 `codex-rs/app-server-protocol/src/protocol/v2/item.rs` 审计 variant、字段与
+增量通知，再同步 fixture 的 `upstream.revision`；只改 hash 让守卫通过属于伪对齐。
 
 ## 目标
 

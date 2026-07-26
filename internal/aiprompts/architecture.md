@@ -160,6 +160,30 @@ outer JSON-RPC id 只负责 App Server 到客户端的响应关联，domain toke
 
 会话提交的唯一执行 owner 是 `agent-runtime::session_loop`：每个 session 只有一个串行 actor，FIFO task、regular/review/compact kind、replace/interrupt/shutdown、迟到 completion 防护和 steer/mailbox 分流均在此收口。所有 actor 命令先进入统一 operation envelope；envelope 使用 UUIDv7 identity，并携带可选 client user message identity 与 W3C trace carrier，首次启动和 FIFO promote 必须把同一份不可变 metadata 交给 task context。普通用户输入只通过 typed `UserInput` operation 进入该队列：active regular task 存在时原子 steer，否则启动或排队 candidate task，同一份输入必须成为新 task 的 initial input；App Server 只能消费 actor 返回的 `Submitted/Steered` receipt，不能把 read model 的预判当成调度事实。Review、Compact、ThreadSettings、SetMemoryMode、RefreshMcp、ReloadConfig 与 RunShell 使用各自的 typed task operation，并校验 operation 与 task kind 一致；Approval、UserInput、Permission、DynamicTool 与 MCP elicitation response 使用五类独立 response operation，禁止恢复通用 response operation。durable inter-agent append 成功后，App Server 只向已经存在的 recipient actor 提交 typed `InterAgentCommunication` envelope，保留 message/root/sender/recipient/source-turn identity、kind、result status 与 delivery mode；actor 只发布 durable activity，不复制 store payload，也不得为了通知创建空 actor。child terminal result 必须先完成 canonical Turn 与 durable result mailbox append，再由正常 append、durable replay、restart recovery 三条路径统一发布同一 typed activity；通知失败不能回滚 durable record，也不能创建空 actor。provider boundary 只能由 durable loader 把同一记录转换为 typed runtime input，禁止重新解析自由 JSON。steer 与 mailbox activity 通过 typed watch 发布；mailbox pending 使用单调 generation，loader 成功只确认调用前捕获的 generation，失败或并发新 append 必须继续保持 pending。sampling step snapshot 单调增加 step index；pending context rollover 只由下一次 snapshot 原子消费并推进一次 context epoch，显式推进 epoch 也必须清除 pending rollover，禁止在后续 step 重复滚动。RuntimeCore 只负责把 provider/tool 执行、canonical event 持久化和 durable mailbox loader 接到该 actor；QueueOnly mailbox 只有在 provider step 明确打开 mailbox boundary 后才 append + ack，不能由 AgentControl 或 GUI 另起活动回合旁路。AgentControl wait 必须先向既有 actor 注册 activity receiver，再读取 pending snapshot；steer、mailbox 和 queued admission 由 actor 的 typed watch 唤醒，不能通过固定间隔扫描 RuntimeCore turns。
 
+World state 的 typed DTO owner 固定为 `agent-protocol::world_state::RuntimeWorldState`。当前链路为：
+
+```text
+typed RuntimeRequest + session scope + resolved model selection
+  -> App Server request_context::turn_context
+  -> AgentTurnContext.metadata["world_state"]
+  -> agent-runtime::provider_turn typed resolver + renderer
+  -> provider-visible contextual user message
+```
+
+App Server 当前只投影有明确事实源的 environment（cwd/project root/workspace/thread/turn、
+provider/model/reasoning）、permissions（approval/sandbox/web search）、collaboration mode 与 effective
+multi-agent mode。`agent-protocol::MultiAgentMode` 复制 Codex exact typed union；effective mode 只从 resolved
+reasoning effort 推导：`ultra -> proactive`，其余为 `explicitRequestOnly`。deprecated
+`thread/start.multiAgentMode` / `turn/start.multiAgentMode` 只保留 typed wire 形状并被 runtime 忽略，不进入
+durable metadata，也不能覆盖 effective mode。没有 typed 来源的 AGENTS/apps/plugins/environment
+instructions 和 realtime 必须保持缺失，不得从 prompt 文案、进程环境或 provider 名称猜测。Agent Runtime
+必须优先反序列化该 snapshot，并在当前 user input 前只渲染一次；metadata 存在但损坏时 fail closed，只有
+非 App Server 调用者缺少 snapshot 时才通过同一 DTO 的 `from_cwd` 生成最小状态。旧的 runtime cwd XML
+拼接与 arbitrary-JSON multi-agent 控制面已删除。该链路仍为 `partial`：provider-visible consumption 与
+effective multi-agent producer 已落地，但其余 typed producer 与 Codex durable full/patch world-state history
+尚未完成。后续只能在同一 DTO owner 补齐，禁止在 App Server、Agent prompt 与 provider lowering 分别拼接
+第二套 environment context。
+
 状态模型与 Codex 对齐：Thread 是会话上下文，Turn 是一次执行，Item 是可恢复的输入、输出、工具或审批活动。`ThreadStore` 的 raw canonical append 与独立 metadata patch 是持久化 contract；App Server `ProjectionStore` 只能是该 contract 的实现，queue payload、stream buffer 与 renderer cache 不得反向成为事实源。
 
 #### 6.2.1 Storage alignment target（P1 `in_progress`）
@@ -169,6 +193,8 @@ outer JSON-RPC id 只负责 App Server 到客户端的响应关联，domain toke
 production `ProjectionStore` 通过显式 `AgentRoot` 注入 `RolloutStore`：新 Thread 按创建时本地日期生成唯一相对 `rollout_path`，metadata 保留 UTC 创建时间，typed `ThreadHistoryChangeSet` 在 SQLite commit 前同步写入 JSONL；跨日续写与 restart 重试沿用原路径，同 sequence 同 fingerprint 幂等、不同 fingerprint fail closed。state/history 为空时，constructor 从 active/archived rollout 单事务重建 Thread/Turn/Item；canonical 已存在而 projection 四表全空时，也会独立从 canonical snapshot 重建 projection。已有非空 projected row 时 no-clobber，不清表、不隐式迁移；history `content_digest` 不匹配时启动 fail closed。用户消息全文只在 rollout，重建 SQLite 只保留现有 summary 上限内的单份摘要。`canonical_threads.last_sequence` 当前只作为跨库 commit watermark 暂留 state；迁入 history projection state 后才允许关闭这项 P1 债务。
 
 flat EventLog 仍是 `deprecated / bounded diagnostics`，旧 `runtime/projection_1.sqlite` 是 `deprecated / frozen-for-removal` read model；二者不得新增 transcript payload、第二 canonical writer或长期兼容读取。启动期 queued recovery 禁止扫描 raw EventLog；projection 中的 queued row 只有在 `(session_id, thread_id)` 能 join current `canonical_threads`，且 production Thread 有非空 `rollout_path` 时才可恢复。启用 rollout 的生产实例不再允许 raw EventLog 重写 canonical ThreadStore；旧 `canonical_threads.rollout_path IS NULL` 行也拒绝继续 append，不导入旧 session/event/DB。Codex v2 `thread/archive` / `thread/unarchive`、macOS JSON-RPC/Gate B 和三库物理 inventory 已完成；P1 仍受 projection reader 退役、`last_sequence` owner 收口、旧 source exact-path cleanup guard 与 Windows Gate B 阻塞，不得标成完成。`sessionFile/*` 生成文件归 `AgentRoot/artifacts/sessions/<session-id>`；bounded text diagnostics 固定为 `AgentRoot/observability/log/lime.log`。其他旧数据只进入 exact-path cleanup manifest；允许迁移的只有模型控制面小型语义状态（provider、加密 key ciphertext、UI state、model preference、active tab）与已下载模型文件。模型控制面 source 只读并按 WAL 事务选取，不复制整库；`HostUserData / HostSessionData / AppDataRoot / AgentRoot / UserHome / Workspace` 的逐路径决策以 `internal/exec-plans/codex-lime-storage-alignment-plan.md` 与 `internal/refactor/data/03-one-to-one-storage-alignment-plan.md` 为准，责任开发者架构确认仍为 `pending`。
+
+P0 的 current 组合根链固定为 `Electron appDataPaths -> APP_SERVER_APP_DATA_DIR + AgentRoot -> App Server StorageRoots/LocalAppDataSource -> domain root`。Windows `HostUserData` 保持 roaming，`HostSessionData` 固定到 `<AppDataRoot>/host-session`；portable/E2E override 必须同时显式注入 AppDataRoot 与 AgentRoot，禁止从 `AgentRoot.parent()` 反推。Product DB 只写 `AgentRoot/lime.db`；diagnostics、support bundle、Soul style-pack 与 MCP OAuth 不得自行解析平台默认根。旧 Product DB 整库复制、通用 migration manifest、启动 cleanup，以及 managed project/workspace/session path 启动迁移均为 `dead / deleted / forbidden-to-restore`；Windows 真机证据与责任开发者确认完成前，P0 继续保持 `in_progress`。
 
 Message、Reasoning 与 Plan 必须遵循 Codex 的 canonical Item lifecycle。用户输入在 `message.created` 时直接形成带 `completed_at_ms` 的 completed UserMessage；provider text/reasoning 的 Start/Delta/End 必须以 canonical Turn + sampling attempt scoped Item identity 贯穿 `model-provider -> agent-runtime -> agent -> App Server`，同一 Turn 的后续 sampling 或同一 Thread 的后续 Turn 均不得复用前一 Item。assistant 只有出现真实正文时才启动 AgentMessage，并由同一 Item 在对应 End/`message.completed` 进入 completed，取消或中断映射为 `Interrupted`；terminal Item 拒绝 late delta。Plan 是独立的 `ThreadItemPayload::Plan`，`plan.delta` 与 `plan.final` 必须按 `(turn_id, revision_id)` 共享稳定 Item identity；delta 只表达流式过程，completed `plan.final` snapshot 是恢复和 GUI 决策绑定的权威内容。Plan parser 按 source Message Item 隔离 buffer，Plan 只记录 `sourceItemId` 而不复用 Message identity。Plan 前的纯空白按 Codex `leading_whitespace_by_item` 语义暂存：后续出现正文时随正文发出，Plan-only 输出则丢弃，因此不得创建空白 AgentMessage 或伪造 `message.completed`。历史恢复、live notification 与 read model 必须保留同一 revision identity、Plan steps/status 与 terminal timestamp，禁止用 `update_plan` Tool Item 或 Renderer 本地状态替代。
 
@@ -387,6 +413,85 @@ typed runtime request
 网络实现必须一一对应。
 
 Responses WebSocket 的 capability 由 `ProviderRuntimeSpec.supports_websockets` 或 direct runtime request 的显式字段进入 current config；`model-provider` 不按 provider 名称猜测支持。`AgentRuntimeState` 按 session identity 持有 provider client，route/config 不变时跨 Turn 复用，session close 时清理；不同 session 不共享 transport fallback。支持 WebSocket 的 Responses client 在同一连接上串行发送 `response.create`，禁止 multiplex，并让 SSE 与 WebSocket frame 复用同一个 Responses event reducer。Upgrade 426 或连接重试耗尽后，当前 session sticky 切到 HTTP SSE；WebSocket 在任何用户可见 event 前失败时可用完整 request 安全重放 HTTP，已经发出 text/tool event 后禁止重放，避免重复正文或工具副作用。流被取消或未完整消费时连接必须淘汰，不得把未读 frame 带入下一 Turn。
+
+`ResolvedModelRoute.auth.kind` 必须经 `ModelRouteProviderConfiguration` 显式下传为
+`RuntimeProviderAuth`，不得再由 provider 名称或空 API key 推断。`NoAuth` 只接受已解析的 direct
+route，并在投影时清除任何误带 key；HTTP 与 Responses WebSocket 均省略认证头。`ApiKey` route 缺
+key 必须在发网前拒绝。`OemManaged` 目前没有 `model-provider` adapter，provider admission 必须 fail
+closed；不得将其伪装为无认证或 API-key route。
+
+provider readiness 表示“该 chat route 可被 current adapter 执行”，不只是 provider enabled 或存在
+key。configured provider 必须以 effective provider type 查询 `model-provider` adapter availability；
+provider capability upper bound 必须委托同一 adapter availability，禁止维护第二份 provider-type alias
+白名单而产生 ready/capability 漂移。`namespace_tools`、hosted `image_generation` 与 hosted `web_search`
+只有在 canonical schema、request lowering、stream reducer 和 route gate 全部可执行后才能置为 true；普通
+function/client tool 支持不能代替这些 provider capability。
+Gemini、Vertex、Bedrock、Ollama、Fal 和 Azure OpenAI 在完整 lowering/auth/query/stream adapter 落地前均
+返回 `unsupported_protocol`，不得进入 `model/list` selectable catalog、当前 provider capability read、profile fallback
+或 connection/chat probe。Azure 不能因 body 近似 OpenAI Chat 而放行：current transport 尚未消费其
+`api-key` header 与 `api-version`。Store 未命中的 provider 名称不得生成 builtin ready；唯一无 Store 旁路
+是带完整 route/config/capability 的 explicit direct request。direct request 与当前 selection 绑定，只允许
+一次 admission，不复用同一 endpoint/credential 参与 profile fallback。
+
+`modelProvider/capabilities/read` 与 Codex 一致，每次读取最新产品配置中的当前 provider ID，并精确查询
+Store、readiness 与 capability snapshot。它不得汇总其他 ready provider、回退第一个可用 provider 或按
+显示名猜测；当前 provider 未配置、禁用、缺凭证或 adapter 未实现时返回全 false。具体 Turn 仍使用 resolved
+route/model capability 决定实际工具暴露，不能把该配置读结果当成跨 provider 能力上界。
+
+产品默认 provider 的配置事实源只有顶层 `Config.default_provider`；Electron AppConfig、App Server、
+`lime-config` observer 与 `lime-server` 必须读取同一字段。`RoutingConfig` 只承载 model aliases，旧
+`routing.default_provider` 已删除且 YAML 解析必须 fail closed，禁止恢复双读、优先级合并或迁移期 fallback。
+
+provider health 的共享粒度是 `provider/model/base-url/protocol/credential-scope`，由
+`model-provider::CurrentProviderHealthRegistry` 持有；同一 scope 的不同 session 复用同一 circuit
+breaker，但 HTTP client、WebSocket 与 HTTP fallback 仍保持 session-local。持久化凭证 scope 使用
+credential UUID；direct runtime key 只使用进程内 SHA-256 指纹，不保存原始 key；`NoAuth` 固定使用
+`no-auth` scope，不能由 session 或误带 credential 分裂。不同 credential 的 429/5xx 不得打开彼此的
+breaker。该 transport 诊断不产生 Codex `model/rerouted` 或
+`model/verification`：两者只能由对应的 cyber safety runtime 事实 producer 投影。
+breaker 的结构化 observer 必须在内部 mutex 释放后发出 `provider_health` tracing，只包含
+provider/model/protocol、credential kind、不可逆 route hash、state/reason、probe admission 与
+retry-after；禁止记录 base URL、credential UUID、API key 或请求内容。HalfOpen 已有 probe 时的拒绝只返回
+`50ms` 上限的短退避，不能再次宣告完整 open cooldown。
+HTTP/WebSocket transport 的真实重试在 sleep 前由同一 route observer 发出 `provider_retry` tracing，记录
+transport、reason、failed/next/max attempt、delay_ms、delay_source 与可选 HTTP status；仍复用相同的
+credential-safe route hash，不记录 endpoint、错误正文或凭证。当前请求策略保持 Codex 语义：只对 5xx 做
+request-layer retry，429/auth/content rejection 不被普通 transport retry 放大；没有实际重试就不发
+`provider_retry`。该 evidence 只服务 provider retry/health 诊断，不进入模型切换通知或配置 readiness。
+
+provider 运行期重路由仍沿唯一 current owner 链执行。`model-provider` 负责产生结构化失败分类与
+`retryable` 事实；`agent-runtime` 只传播单一 route 的执行失败、是否已经产生输出以及用量，不选择备用
+provider。只有尚未产生 text/reasoning/tool 输出、尚未消费 pending steer 且 provider 调用前未发出用户可见
+structured-input warning 的 `rate_limit`、`provider_internal` 或 `transport` 可重试失败，App Server 才把失败的
+provider/model 交给 RuntimeCore resolver 作为显式 exclusion，重新完成 candidate readiness、credential 与
+route resolution，并执行下一条 ready profile route。认证、权限、quota、请求错误、context overflow、
+content policy、unknown、非 retryable、已经产生输出、已经消费 pending input 或已经发出上述 warning 的失败
+必须原样终止；否则完整 route replay 会丢失 steer 或重复可见事件。explicit direct request 也必须原样终止，
+禁止借 profile fallback 偷换 endpoint 或 credential。RuntimeCore 负责
+candidate exclusion 和 routing attempts，App Server 负责有限重路由编排并复用
+`routing.fallback.applied` 输出 `runtime_provider_failure` evidence；不得新增平行 event、第二 resolver 或
+renderer fallback。evidence 只允许 provider/model、classification、retryable 与稳定 reason code，禁止写入
+endpoint、credential ref、API key 或 provider 错误正文。无备用 candidate 时保留最近一次真实 provider
+错误作为 Turn 失败原因。
+
+Responses 服务端事实只从 wire evidence 进入 canonical 主链。HTTP/WS handshake 只读取
+`openai-model` / `x-openai-model` header；stream event 只读取 `response.headers`（优先）或顶层
+`headers`，不得把普通 `response.model` 当成服务端实际模型。该事实经
+`CanonicalLlmEvent::ServerModel -> agent-runtime -> model.server_reported` 保存为诊断 evidence，按 Turn
+去重，但不直接产生 Codex `model/rerouted`、warning 或 deprecated v2 side-channel。普通 provider fallback
+继续只使用 `routing.fallback.applied`。未来只有受信任 OpenAI/Codex route 的 requested/server model 不一致
+且具备 exact `highRiskCyberActivity` producer 时，才能新增 `model/rerouted`。
+
+`model/verification` 的唯一 producer 是受信任 OpenAI/Codex Responses route 的
+`response.metadata.metadata.openai_verification_recommendation`。只识别
+`trusted_access_for_cyber`，未知值、非数组、错误 event type、HTTP recommendation header 和第三方
+OpenAI-compatible route 一律忽略。信任必须由已解析 runtime provider、Responses protocol 与 exact
+`api.openai.com` endpoint host 共同证明；provider selector、展示名和 compatible alias 都不是信任依据。
+canonical verification 在同一 Turn 的 transport retry 与 tool-loop
+sampling 间最多投影一次，经 `model.verification` runtime fact 进入 App Server exact v2
+`model/verification` notification；缺 thread/turn/typed payload 必须 fail closed。该通知不加入历史 item
+resume replay，也不得触发 reroute。schema、Rust envelope 与 generated TypeScript client 由
+`app-server-protocol` 单一事实源生成。
 
 业务层不得拼 OpenAI、Anthropic 或自定义 provider payload。工具执行只按以下方向流动：
 
@@ -686,13 +791,13 @@ MCP server 的执行环境身份只来自 `McpServerConfig.environment_id`，由
 `threadClient` 只负责转发、通知路由与 read-model 投影，不再接受或转换第二套
 snake_case runtime request。
 
-| 边界                            | 唯一 owner                              | 字段                                                                                                                                                                                                      |
-| ------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TurnStartParams`               | Codex v2 Turn 协议                      | `threadId`、typed `input[]`、model/effort、cwd/workspace roots、approval/sandbox/permissions、output schema、service tier、environment、collaboration/multi-agent/personality 与 typed context metadata。 |
-| `TurnSteerParams`               | Codex v2 Turn 协议                      | `threadId`、`expectedTurnId`、typed `input[]`、`clientUserMessageId`、additional context 与 Responses API client metadata。                                                                               |
-| `RuntimeRequest`                | App Server -> RuntimeCore 内部 lowering | provider/model/config、typed `collaborationMode`、reasoning、approval/sandbox、workspace 与执行 metadata；Renderer 不再直接构造或传输该内部 DTO。                                                         |
-| `RuntimeOptions` / queue fields | dead for current turn protocol          | `runtimeOptions`、`queueIfBusy`、`skipPreSubmitResume`、caller-supplied `turnId` 不属于 v2 `turn/start`，不得通过 alias、metadata 或 compat wrapper 回流。                                                |
-| `hostOptions`                   | dead / deleted                          | 不在 current turn 协议中；不得作为宿主扩展、provider route、tool policy、workspace、session context 或任意 runtime JSON escape hatch 恢复。                                                               |
+| 边界                            | 唯一 owner                              | 字段                                                                                                                                                                                                                                             |
+| ------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TurnStartParams`               | Codex v2 Turn 协议                      | `threadId`、typed `input[]`、model/effort、cwd/workspace roots、approval/sandbox/permissions、output schema、service tier、environment、collaboration/personality 与 typed context metadata；deprecated typed `multiAgentMode` 被 runtime 忽略。 |
+| `TurnSteerParams`               | Codex v2 Turn 协议                      | `threadId`、`expectedTurnId`、typed `input[]`、`clientUserMessageId`、additional context 与 Responses API client metadata。                                                                                                                      |
+| `RuntimeRequest`                | App Server -> RuntimeCore 内部 lowering | provider/model/config、typed `collaborationMode`、reasoning、approval/sandbox、workspace 与执行 metadata；Renderer 不再直接构造或传输该内部 DTO。                                                                                                |
+| `RuntimeOptions` / queue fields | dead for current turn protocol          | `runtimeOptions`、`queueIfBusy`、`skipPreSubmitResume`、caller-supplied `turnId` 不属于 v2 `turn/start`，不得通过 alias、metadata 或 compat wrapper 回流。                                                                                       |
+| `hostOptions`                   | dead / deleted                          | 不在 current turn 协议中；不得作为宿主扩展、provider route、tool policy、workspace、session context 或任意 runtime JSON escape hatch 恢复。                                                                                                      |
 
 `collaborationMode` 采用 Codex 的 `ModeKind + settings` 结构，由 `turn/start` typed wire 进入
 `RuntimeRequest`，再进入 `TurnContextOverride` 和 Goal admission；Plan 判定只读取

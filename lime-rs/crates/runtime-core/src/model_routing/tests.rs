@@ -1,4 +1,5 @@
 use super::*;
+use crate::FailureClassification;
 use serde_json::json;
 
 fn selection(provider: &str, model: &str) -> RuntimeModelSelection {
@@ -284,5 +285,82 @@ fn ready_routing_falls_back_from_unready_fast_slot_to_coding_slot() {
             "responsive-provider/fast-chat".to_string(),
             "custom-coding/coder-large".to_string()
         ]
+    );
+}
+
+#[test]
+fn ready_routing_excludes_runtime_failed_route_and_records_reroute_evidence() {
+    let metadata = json!({
+        "harness": {
+            "coding_model_slots": {
+                "coding": {
+                    "provider": "primary-provider",
+                    "model": "primary-model"
+                },
+                "base": {
+                    "provider": "backup-provider",
+                    "model": "backup-model"
+                }
+            }
+        }
+    });
+    let requested = selection("primary-provider", "primary-model");
+    let excluded = ModelRouteExclusion::new(
+        "primary-provider",
+        "primary-model",
+        FailureClassification::ProviderInternal,
+    );
+
+    let resolution = resolve_ready_model_routing_with_exclusions(
+        &[&metadata],
+        &requested,
+        &[excluded],
+        |candidate| {
+            assert_eq!(candidate.provider, "backup-provider");
+            Ok(ProviderReadiness::provider_store_ready(
+                Some("openai".to_string()),
+                1,
+                1,
+            ))
+        },
+    )
+    .expect("rerouted resolution");
+
+    assert_eq!(resolution.selection.provider, "backup-provider");
+    assert_eq!(resolution.selection.model, "backup-model");
+    assert_eq!(resolution.attempted.len(), 2);
+    assert_eq!(resolution.attempted[0].readiness.source, "runtime_failure");
+    assert_eq!(
+        resolution.attempted[0].readiness.reason_code,
+        Some("provider_internal_failure")
+    );
+    assert_eq!(
+        resolution.attempted[0]
+            .runtime_failure
+            .as_ref()
+            .map(|failure| failure.classification),
+        Some(FailureClassification::ProviderInternal)
+    );
+    assert!(resolution.attempted[1].runtime_failure.is_none());
+
+    let payload = routing_fallback_applied_payload(
+        &requested,
+        &resolution.selection,
+        &resolution.routing,
+        &resolution.readiness,
+        &json!({}),
+        &resolution.attempted,
+    );
+    assert_eq!(
+        payload["fallbackReason"].as_str(),
+        Some("runtime_provider_failure")
+    );
+    assert_eq!(
+        payload["runtimeFailure"]["classification"].as_str(),
+        Some("provider-internal")
+    );
+    assert_eq!(
+        payload["routingAttempts"][0]["runtimeFailure"]["reasonCode"].as_str(),
+        Some("provider_internal_failure")
     );
 }

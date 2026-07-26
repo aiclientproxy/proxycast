@@ -250,7 +250,6 @@ fn lower_runtime_options(params: &TurnStartParams) -> Result<Option<RuntimeOptio
     for (key, value) in [
         ("summary", params.summary.clone().map(Value::String)),
         ("personality", params.personality.clone()),
-        ("multiAgentMode", params.multi_agent_mode.clone()),
     ] {
         if let Some(value) = value {
             metadata.insert(key.to_string(), value);
@@ -592,6 +591,23 @@ mod tests {
         let error = lower_runtime_options(&params).expect_err("empty model must fail closed");
         assert_eq!(error.code, error_codes::INVALID_PARAMS);
         assert!(error.message.contains("settings.model must not be empty"));
+    }
+
+    #[test]
+    fn deprecated_multi_agent_mode_does_not_enter_runtime_metadata() {
+        let params = TurnStartParams {
+            thread_id: "thread-1".to_string(),
+            input: vec![UserInput::Text {
+                text: "hello".to_string(),
+                text_elements: Vec::new(),
+            }],
+            multi_agent_mode: Some(agent_protocol::MultiAgentMode::Proactive),
+            ..TurnStartParams::default()
+        };
+
+        assert!(lower_runtime_options(&params)
+            .expect("deprecated field is accepted")
+            .is_none());
     }
 
     #[test]

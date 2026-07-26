@@ -101,24 +101,22 @@ fn arb_providers_config() -> impl Strategy<Value = ProvidersConfig> {
         })
 }
 
-/// 生成随机的路由配置
+fn arb_default_provider() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just("kiro".to_string()),
+        Just("gemini".to_string()),
+        Just("qwen".to_string()),
+    ]
+}
+
+/// 生成随机的路由辅助配置
 fn arb_routing_config() -> impl Strategy<Value = RoutingConfig> {
-    (
-        prop_oneof![
-            Just("kiro".to_string()),
-            Just("gemini".to_string()),
-            Just("qwen".to_string()),
-        ],
-        proptest::collection::hash_map(
-            "[a-z]+-[a-z0-9]+".prop_map(|s| s),
-            "[a-z]+-[a-z0-9-]+".prop_map(|s| s),
-            0..5,
-        ),
+    proptest::collection::hash_map(
+        "[a-z]+-[a-z0-9]+".prop_map(|s| s),
+        "[a-z]+-[a-z0-9-]+".prop_map(|s| s),
+        0..5,
     )
-        .prop_map(|(default_provider, model_aliases)| RoutingConfig {
-            default_provider,
-            model_aliases,
-        })
+    .prop_map(|model_aliases| RoutingConfig { model_aliases })
 }
 
 /// 生成随机的重试配置
@@ -167,34 +165,37 @@ fn arb_config() -> impl Strategy<Value = Config> {
     (
         arb_server_config(),
         arb_providers_config(),
+        arb_default_provider(),
         arb_routing_config(),
         arb_retry_settings(),
         arb_logging_config(),
     )
-        .prop_map(|(server, providers, routing, retry, logging)| Config {
-            server,
-            providers,
-            default_provider: routing.default_provider.clone(),
-            routing,
-            retry,
-            logging,
-            injection: InjectionSettings::default(),
-            auth_dir: "~/.lime/auth".to_string(),
-            credential_pool: crate::config::CredentialPoolConfig::default(),
-            remote_management: crate::config::RemoteManagementConfig::default(),
-            quota_exceeded: crate::config::QuotaExceededConfig::default(),
-            proxy_url: None,
-            ampcode: crate::config::AmpConfig::default(),
-            endpoint_providers: crate::config::EndpointProvidersConfig::default(),
-            minimize_to_tray: true,
-            models: crate::config::ModelsConfig::default(),
-            agent: crate::config::NativeAgentConfig::default(),
-            language: "zh-CN".to_string(),
-            experimental: crate::config::ExperimentalFeatures::default(),
-            tool_calling: crate::config::ToolCallingConfig::default(),
-            workspace_preferences: WorkspacePreferencesConfig::default(),
-            navigation: NavigationConfig::default(),
-        })
+        .prop_map(
+            |(server, providers, default_provider, routing, retry, logging)| Config {
+                server,
+                providers,
+                default_provider,
+                routing,
+                retry,
+                logging,
+                injection: InjectionSettings::default(),
+                auth_dir: "~/.lime/auth".to_string(),
+                credential_pool: crate::config::CredentialPoolConfig::default(),
+                remote_management: crate::config::RemoteManagementConfig::default(),
+                quota_exceeded: crate::config::QuotaExceededConfig::default(),
+                proxy_url: None,
+                ampcode: crate::config::AmpConfig::default(),
+                endpoint_providers: crate::config::EndpointProvidersConfig::default(),
+                minimize_to_tray: true,
+                models: crate::config::ModelsConfig::default(),
+                agent: crate::config::NativeAgentConfig::default(),
+                language: "zh-CN".to_string(),
+                experimental: crate::config::ExperimentalFeatures::default(),
+                tool_calling: crate::config::ToolCallingConfig::default(),
+                workspace_preferences: WorkspacePreferencesConfig::default(),
+                navigation: NavigationConfig::default(),
+            },
+        )
 }
 
 proptest! {
@@ -225,8 +226,8 @@ proptest! {
             "Provider 配置往返不一致"
         );
         prop_assert_eq!(
-            config.routing.default_provider,
-            parsed.routing.default_provider,
+            config.default_provider,
+            parsed.default_provider,
             "默认 Provider 往返不一致"
         );
         prop_assert_eq!(
@@ -326,7 +327,7 @@ proptest! {
         );
     }
 
-    /// **Feature: enhancement-roadmap, Property 11: 配置往返一致性（路由配置）**
+    /// **Feature: enhancement-roadmap, Property 11: 配置往返一致性（路由辅助配置）**
     /// *对于任意* 路由配置，序列化后再反序列化应得到等价的配置
     /// **Validates: Requirements 4.1**
     #[test]
@@ -339,11 +340,6 @@ proptest! {
         let yaml = ConfigManager::to_yaml(&config).expect("序列化应成功");
         let parsed = ConfigManager::parse_yaml(&yaml).expect("反序列化应成功");
 
-        prop_assert_eq!(
-            routing.default_provider,
-            parsed.routing.default_provider,
-            "默认 Provider 往返不一致"
-        );
         prop_assert_eq!(
             routing.model_aliases,
             parsed.routing.model_aliases,
@@ -409,34 +405,37 @@ fn arb_valid_config() -> impl Strategy<Value = Config> {
     (
         arb_valid_server_config(),
         arb_providers_config(),
+        arb_default_provider(),
         arb_routing_config(),
         arb_valid_retry_settings(),
         arb_valid_logging_config(),
     )
-        .prop_map(|(server, providers, routing, retry, logging)| Config {
-            server,
-            providers,
-            default_provider: routing.default_provider.clone(),
-            routing,
-            retry,
-            logging,
-            injection: InjectionSettings::default(),
-            auth_dir: "~/.lime/auth".to_string(),
-            credential_pool: crate::config::CredentialPoolConfig::default(),
-            remote_management: crate::config::RemoteManagementConfig::default(),
-            quota_exceeded: crate::config::QuotaExceededConfig::default(),
-            proxy_url: None,
-            ampcode: crate::config::AmpConfig::default(),
-            endpoint_providers: crate::config::EndpointProvidersConfig::default(),
-            minimize_to_tray: true,
-            models: crate::config::ModelsConfig::default(),
-            agent: crate::config::NativeAgentConfig::default(),
-            language: "zh-CN".to_string(),
-            experimental: crate::config::ExperimentalFeatures::default(),
-            tool_calling: crate::config::ToolCallingConfig::default(),
-            workspace_preferences: WorkspacePreferencesConfig::default(),
-            navigation: NavigationConfig::default(),
-        })
+        .prop_map(
+            |(server, providers, default_provider, routing, retry, logging)| Config {
+                server,
+                providers,
+                default_provider,
+                routing,
+                retry,
+                logging,
+                injection: InjectionSettings::default(),
+                auth_dir: "~/.lime/auth".to_string(),
+                credential_pool: crate::config::CredentialPoolConfig::default(),
+                remote_management: crate::config::RemoteManagementConfig::default(),
+                quota_exceeded: crate::config::QuotaExceededConfig::default(),
+                proxy_url: None,
+                ampcode: crate::config::AmpConfig::default(),
+                endpoint_providers: crate::config::EndpointProvidersConfig::default(),
+                minimize_to_tray: true,
+                models: crate::config::ModelsConfig::default(),
+                agent: crate::config::NativeAgentConfig::default(),
+                language: "zh-CN".to_string(),
+                experimental: crate::config::ExperimentalFeatures::default(),
+                tool_calling: crate::config::ToolCallingConfig::default(),
+                workspace_preferences: WorkspacePreferencesConfig::default(),
+                navigation: NavigationConfig::default(),
+            },
+        )
 }
 
 /// 生成无效配置的类型
@@ -453,6 +452,7 @@ fn arb_invalid_config() -> impl Strategy<Value = Config> {
     (
         arb_valid_server_config(),
         arb_providers_config(),
+        arb_default_provider(),
         arb_routing_config(),
         arb_valid_retry_settings(),
         arb_valid_logging_config(),
@@ -464,11 +464,11 @@ fn arb_invalid_config() -> impl Strategy<Value = Config> {
         ],
     )
         .prop_map(
-            |(server, providers, routing, retry, logging, invalid_type)| {
+            |(server, providers, default_provider, routing, retry, logging, invalid_type)| {
                 let mut config = Config {
                     server,
                     providers,
-                    default_provider: routing.default_provider.clone(),
+                    default_provider,
                     routing,
                     retry,
                     logging,
@@ -1525,8 +1525,8 @@ proptest! {
             "Kiro 启用状态应保持不变"
         );
         prop_assert_eq!(
-            config.routing.default_provider,
-            redacted.routing.default_provider,
+            config.default_provider,
+            redacted.default_provider,
             "默认 Provider 应保持不变"
         );
         prop_assert_eq!(
@@ -1770,8 +1770,8 @@ proptest! {
             "替换模式下 Provider 配置应等于导入的配置"
         );
         prop_assert_eq!(
-            result.config.routing.default_provider,
-            imported_config.routing.default_provider,
+            result.config.default_provider,
+            imported_config.default_provider,
             "替换模式下默认 Provider 应等于导入的配置"
         );
         prop_assert_eq!(
@@ -1910,8 +1910,8 @@ proptest! {
             "Provider 配置往返不一致"
         );
         prop_assert_eq!(
-            config.routing.default_provider,
-            result.config.routing.default_provider,
+            config.default_provider,
+            result.config.default_provider,
             "默认 Provider 往返不一致"
         );
         prop_assert_eq!(

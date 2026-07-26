@@ -467,7 +467,7 @@ impl ServerState {
 
         // 从配置初始化 Router 的默认 Provider
         {
-            let default_provider_str = &config.routing.default_provider;
+            let default_provider_str = &config.default_provider;
 
             // 尝试解析为 ProviderType 枚举
             match default_provider_str.parse::<lime_core::ProviderType>() {
@@ -790,16 +790,12 @@ async fn update_processor_config(processor: &RequestProcessor, config: &Config) 
         let mut router = processor.router.write().await;
 
         // 尝试解析为 ProviderType 枚举
-        match config
-            .routing
-            .default_provider
-            .parse::<lime_core::ProviderType>()
-        {
+        match config.default_provider.parse::<lime_core::ProviderType>() {
             Ok(provider_type) => {
                 router.set_default_provider(provider_type);
                 tracing::debug!(
                     "[HOT_RELOAD] 路由器默认 Provider 已更新: {} (ProviderType)",
-                    config.routing.default_provider
+                    config.default_provider
                 );
             }
             Err(_) => {
@@ -808,7 +804,7 @@ async fn update_processor_config(processor: &RequestProcessor, config: &Config) 
                 tracing::warn!(
                     "[HOT_RELOAD] 配置的默认 Provider '{}' 不是有效的 ProviderType 枚举值，可能是自定义 Provider ID。\
                     路由器默认 Provider 将被清空。",
-                    config.routing.default_provider
+                    config.default_provider
                 );
             }
         }
@@ -889,7 +885,7 @@ async fn run_server(
 
     // 从配置初始化 Router 的默认 Provider
     if let Some(cfg) = &config {
-        let default_provider_str = &cfg.routing.default_provider;
+        let default_provider_str = &cfg.default_provider;
 
         // 尝试解析为 ProviderType 枚举
         match default_provider_str.parse::<lime_core::ProviderType>() {

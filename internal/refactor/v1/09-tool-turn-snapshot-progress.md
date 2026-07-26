@@ -1,11 +1,48 @@
 # Codex V1 Tool Turn Snapshot 进度
 
-> status: metadata-projection-skeleton / execution-chain-not-wired
+> status: metadata-projection-skeleton + hook-decision-and-execution-owner / execution-chain-not-wired
 > owner: tool-runtime cold slice
 > date: 2026-07-23
 > roadmap: `internal/refactor/v1/04-execution-plan.md#v1-05-tool-hooksexposurelifecycle`
 > upstream: `/Users/coso/Documents/dev/rust/codex`
 > upstream revision audited: `9fc715c0861c956c894a91890b78dc05b304ba29`
+
+## 2026-07-26 增量：Hook 裁决与 discovery/执行迁入 tool-runtime
+
+在上述骨架之外新增两个模块，均在 `tool-runtime` owner 内，未触碰 provider/tool lifecycle 热区：
+
+- `hook_lifecycle.rs`：Hook 生命周期**裁决** owner。block / abort / rewrite / inject 四类终态，
+  按 display order 聚合，稳定 `run_id`；对 handler 未回报终态（`MissingDecision`）、未实现 handler
+  类型、不可信或被改写来源、非法 matcher 正则、非 Sync 执行模式全部 fail closed。非 Sync 的口径
+  与 `RuntimeTurnSnapshot::try_new` 一致，不降级成「跳过」。
+- `hook_runtime.rs`：discovery 与 `Command` handler 执行 owner。配置只接受按 Codex
+  `RuntimeHookEventName` 分组的单一格式；跨平台 shell 解析（sh / cmd / powershell）、stdin 上下文、
+  超时、blocking 语义与 stdout 结构化结果解析都在此收口。
+
+旧 `lime-rs/crates/agent/src/hooks.rs` 的能力已被逐项覆盖：配置加载、shell 解析、shell flag、
+命令执行、超时、blocking、`additional_context` 解析分别落到上述两个模块。**旧的扁平
+`{"hooks": [...]}` 格式、已退役事件名（`BeforeToolCall`、`AfterToolCall`、`BeforePromptSubmit`、
+`AfterPromptSubmit`、`AfterCommit`、`OnError`）与 `async_exec` 一律不迁移，按 fail closed 拒绝**，
+避免把双轨带进新 owner。
+
+`agent/src/hooks.rs` 与 `lib.rs` 的 `pub mod hooks` 已物理删除；回流守卫为治理目录
+`rustText` 的 `rust-retired-agent-hook-manager`（`dead`，扫描实际引用 0、测试引用 0）。
+定向验证：两模块 25/25，`tool-runtime` 全量 286/286，`governance:legacy-report` 0/0/0。
+
+同轮新增 `hook_gated_executor.rs`：把 `hook_lifecycle` 的裁决接入工具执行。用装饰器包装任何
+`RuntimeToolExecutor` 实现，不改写既有 executor。`PreToolUse` 可阻断或改写参数（非法改写 fail closed，
+不静默沿用原参数），`PostToolUse` 在执行后评估。被阻断的调用标记为 `before_handler` 时不得进入
+handler；`PostToolUse` 阻断不能把已执行标记成未执行。
+
+**Sampling step 接线**：在 `agent-runtime/src/provider_turn.rs` 加入 `RuntimeHookSnapshotSource` trait
+与 `RuntimeHookSnapshotSourceHandle`（与 `RuntimeToolStepSnapshotSource` 对称）；`CurrentProviderTurnInput`
+新增 `hook_snapshot_source: Option<RuntimeHookSnapshotSourceHandle>` 字段；在每次 sampling step 的
+tool snapshot 捕获点（L342）同时捕获 Hook snapshot，构造 `RuntimeTurnSnapshot`，用 `hook_gated_executor`
+包装原 executor 后替换 `tool_step_snapshot.executor`。26 个测试已补齐新字段。`RuntimeToolExecutorHandle`
+新增 `inner_executor()` accessor 用于装饰器包装。
+
+仍未完成，`V1-05` 保持 `alignment-open`：sampling step 接线、canonical Item 投影、App Server
+notification、Renderer 与 Gate B。
 
 ## 主目标与本轮边界
 
@@ -27,8 +64,10 @@ Codex 当前没有同名的统一 `ToolSnapshot` / `HookSnapshot` 类型：每�
 `ToolRouter { registry, model_visible_specs }`，Hook 则由独立 discovery/engine 持有。本模块
 只为 Lime 的 V1-05 接线提供结构化投影，不能替代这两个 upstream owner。
 
-`internal/refactor/v1/README.md` 仍把参考快照锁在 `2e4f556...`；本切片按上述 current HEAD
-只读审计。是否整体升级 v1 reference lock 由协调进程统一裁决，本车道不夹写总路线图。
+本切片按 `9fc715c0...` 只读审计。`internal/refactor/v1/README.md` 的 reference lock 已于
+2026-07-26 统一升级到 codex 当前 HEAD `4c43465...`，本文件因此落后于 lock 一个 revision：
+接线时必须先按 `4c43465...` 重新审计 tool/hook registry 与 exposure 分类，再更新本文的
+`upstream revision audited`，不得只改 hash。
 
 ## 写集与协调
 

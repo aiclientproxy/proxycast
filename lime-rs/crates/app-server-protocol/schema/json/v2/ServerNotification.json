@@ -647,6 +647,34 @@
       ],
       "type": "object"
     },
+    "ModelVerification": {
+      "enum": [
+        "trustedAccessForCyber"
+      ],
+      "type": "string"
+    },
+    "ModelVerificationNotification": {
+      "properties": {
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "verifications": {
+          "items": {
+            "$ref": "#/$defs/ModelVerification"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "threadId",
+        "turnId",
+        "verifications"
+      ],
+      "type": "object"
+    },
     "PatchApplyStatus": {
       "enum": [
         "completed",
@@ -2518,6 +2546,22 @@
         },
         "params": {
           "$ref": "#/$defs/ReasoningTextDeltaNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "model/verification",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ModelVerificationNotification"
         }
       },
       "required": [

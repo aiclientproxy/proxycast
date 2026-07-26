@@ -1,40 +1,40 @@
-## Lime v1.112.0
+## Lime v1.113.0
 
 <sub>The Simplified Chinese release notes are the primary version. This English page is a companion for international readers.</sub>
 
 ### New Features
 
-- Expanded App Server v2 thread management with compaction, naming, loaded-thread listing, search, metadata updates, unsubscribe, and status/closed notifications.
-- Added thread background-terminal list, clean, and terminate contracts plus model safety-buffering status updates.
-- Completed thread fork and recovery flows for compacted history, mid-turn forks, direct-input policy, and canonical Thread/Turn/Item projection.
-- Added v2 model and provider capability contracts for input modalities, reasoning efforts, service tiers, availability notices, upgrades, and dynamic capability reads.
+- Added typed Runtime World State projection for working directories, projects, models, permissions, collaboration, and effective multi-agent mode in provider context.
+- Added credential-scoped provider health state, structured retry telemetry, and bounded fallback route selection before any user-visible output.
+- Converged tool hook discovery, lifecycle decisions, and execution in `tool-runtime` with consistent pre- and post-call gates.
+- Added the typed App Server v2 `model/verification` notification and schemas for standard trusted-access verification projection.
 
 ### Fixes
 
-- Fixed identity, replay, status-notification, and read-model drift across thread resume, replay, and fork scenarios.
-- Fixed inconsistencies across model routing, provider capability lowering, health checks, and effective configuration projection.
-- Fixed service tiers without display fields being silently dropped from the App Server model projection.
-- Fixed restored coding tasks retaining an optimistic Turn and exposing duplicate full tool timelines; historical runs now keep a compact process summary and the latest terminal state.
-- Fixed visible regressions in conversation scrolling, layout transitions, sidebar conversation actions, and Right Surface synchronization.
+- Fixed the pointer hit-area gap that could close the Add Project submenu while moving into it.
+- Fixed provider auth kinds, adapter readiness, capability upper bounds, and route execution drifting into invalid selection, fallback, or authentication headers.
+- Fixed Chromium session data using the roaming directory on Windows and portable/E2E storage deriving AppDataRoot from AgentRoot.
+- Fixed retryable provider failures being replayed after output, consumed steer input, or explicit direct-route admission.
 
 ### Improvements and Refactors
 
-- Converged App Server protocols, Rust and TypeScript clients, schemas, and generated types while removing superseded legacy session and model entry points.
-- Unified Agent Runtime tool options, runtime options, queued intents, session configuration, and unified-exec lifecycle handling.
-- Converged canonical article-workspace projection and writeback boundaries, removing the duplicate Renderer selection-writeback path.
+- Unified the storage-root composition chain for AppDataRoot, AgentRoot, HostSessionData, the product database, diagnostics, Soul, and MCP OAuth.
+- Removed retired whole-database copying, generic migration manifests, startup cleanup, and managed-project path migration without compatibility fallbacks.
+- Converged default-provider configuration, model routing, authentication projection, and capability admission on current owners; unsupported adapters now fail closed.
+- Removed the legacy `lime-agent` HookManager and provider-migration fixture, with governance guards against restoring dead surfaces.
 
 ### Tests and Quality
 
-- Added public JSON-RPC regression coverage for thread compact, fork, search, metadata, unsubscribe, closed notifications, model listing, and provider capabilities.
-- Expanded App Server client, current Agent Runtime fixture, Electron Gate B, model selector, message scrolling, and workspace layout coverage.
-- Added frontend and runtime contract snapshots, source-to-scenario mappings, and CLI/TUI test asset inventories.
+- Expanded regression coverage for Runtime World State, multi-agent mode, hook lifecycle, provider health/retry/reroute, workspace scope, and App Server JSON-RPC.
+- Added Electron storage-root, Windows sessionData, project submenu pointer continuity, and retired-migration negative guards.
+- Synchronized App Server v2 schemas and generated TypeScript protocol types, and updated the Project Gate B scenario contract.
 
 ### Documentation
 
-- Updated the Codex-method product alignment matrix, Agent Runtime coordination plan, memory/query-loop rules, and test-system documentation.
+- Updated Agent Runtime, provider, storage alignment, architecture sources, implementation snapshots, and Codex alignment execution records.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and lockfile versions to `1.112.0`.
+- Bumped the root app, CLI npm package, Rust workspace, and lockfile versions to `1.113.0`.
 
-**Full changes**: `v1.111.0` -> `v1.112.0`
+**Full changes**: `v1.112.0` -> `v1.113.0`

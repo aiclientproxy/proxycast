@@ -193,6 +193,30 @@
     "ModelProviderCapabilitiesReadParams": {
       "type": "object"
     },
+    "MultiAgentMode": {
+      "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
+      "oneOf": [
+        {
+          "enum": [
+            "explicitRequestOnly",
+            "proactive"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "custom": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "RequestId": {
       "anyOf": [
         {
@@ -1222,7 +1246,16 @@
             "string"
           ]
         },
-        "multiAgentMode": true,
+        "multiAgentMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MultiAgentMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "permissions": {
           "type": [
             "null",
@@ -1462,7 +1495,16 @@
             "string"
           ]
         },
-        "multiAgentMode": true,
+        "multiAgentMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MultiAgentMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "outputSchema": true,
         "permissions": {
           "type": [

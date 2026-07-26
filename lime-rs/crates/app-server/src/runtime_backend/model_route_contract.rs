@@ -13,6 +13,7 @@ use lime_agent::{
     SessionProviderConfig,
 };
 use lime_core::database::dao::api_key_provider::ProviderWithKeys;
+use model_provider::runtime_provider::RuntimeProviderAuth;
 use model_provider::{ModelProviderProtocol, ModelRoute};
 use serde_json::{json, Value};
 
@@ -124,6 +125,15 @@ pub(super) fn provider_configuration_from_runtime(
         route_protocol: Some(resolved_route.protocol.clone()),
         credential_ref: resolved_route.auth.credential_ref.clone(),
         direct_provider_config,
+        auth: runtime_provider_auth(&resolved_route.auth.kind),
+    }
+}
+
+fn runtime_provider_auth(auth: &AuthKind) -> RuntimeProviderAuth {
+    match auth {
+        AuthKind::NoAuth => RuntimeProviderAuth::NoAuth,
+        AuthKind::ApiKeyRef | AuthKind::DirectApiKey => RuntimeProviderAuth::ApiKey,
+        AuthKind::OemManaged => RuntimeProviderAuth::OemManaged,
     }
 }
 
@@ -162,7 +172,6 @@ fn no_auth_direct_provider_config_from_route(
 fn no_auth_provider_name_from_protocol(protocol: &ProtocolKind) -> Option<&'static str> {
     match protocol {
         ProtocolKind::OpenaiChat | ProtocolKind::OpenaiResponses => Some("openai"),
-        ProtocolKind::OllamaChat => Some("ollama"),
         _ => None,
     }
 }
@@ -595,6 +604,7 @@ mod tests {
             .expect("no-auth route should create direct provider config");
 
         assert_eq!(resolved_route.auth.kind, AuthKind::NoAuth);
+        assert_eq!(configuration.auth, RuntimeProviderAuth::NoAuth);
         assert_eq!(direct_config.provider_name, "openai");
         assert_eq!(direct_config.provider_selector.as_deref(), Some("lime-hub"));
         assert_eq!(direct_config.model_name, "agnes-2.0-flash");

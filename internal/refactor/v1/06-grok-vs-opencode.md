@@ -5,6 +5,10 @@
 - grok-build：`98c3b2438aa922fbbe6178a5c0a4c48f85edc8ce`
 - OpenCode：`fab213312927ea64cf968832c527206e8c944f9e`
 
+grok-build 快照落后 `README.md` 的 reference lock（`6e386420...`）。本文只裁决 grok-build 与
+OpenCode 的分层取舍，该结论不随 revision 变化；具体控制平面字段以
+[02-multi-model-grok-build.md](02-multi-model-grok-build.md) 和 lock revision 为准。
+
 ## 结论先行
 
 对 Lime 最合适的不是完整二选一，而是分层采用：

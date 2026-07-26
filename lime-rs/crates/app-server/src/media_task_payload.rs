@@ -42,6 +42,10 @@ fn image_required_capabilities(params: &MediaTaskArtifactImageCreateParams) -> V
     }
 }
 
+fn image_route_required_capabilities() -> Vec<String> {
+    vec!["image_generation".to_string()]
+}
+
 fn image_input_modalities(params: &MediaTaskArtifactImageCreateParams) -> Vec<String> {
     let mut modalities = vec!["text".to_string()];
     if params
@@ -73,7 +77,7 @@ pub(crate) fn image_model_task_request(
         input_modalities: image_input_modalities(params),
         output_modalities: vec!["image".to_string()],
         runtime_features: Vec::new(),
-        capabilities: image_required_capabilities(params),
+        capabilities: image_route_required_capabilities(),
         session_id: params.session_id.clone(),
         thread_id: params.thread_id.clone(),
         turn_id: params.turn_id.clone(),
@@ -518,6 +522,31 @@ mod tests {
         assert_eq!(
             image_to_image.requirements.input_modalities,
             vec!["text".to_string(), "image".to_string()]
+        );
+    }
+
+    #[test]
+    fn image_task_lowers_workflow_capabilities_to_image_provider_requirements() {
+        let params = MediaTaskArtifactImageCreateParams {
+            prompt: "生成封面".to_string(),
+            required_capabilities: vec![
+                "text_generation".to_string(),
+                "image_generation".to_string(),
+                "vision_input".to_string(),
+            ],
+            ..MediaTaskArtifactImageCreateParams::default()
+        };
+
+        let payload = create_image_payload(&params, None);
+        let request = image_model_task_request(&params);
+
+        assert_eq!(
+            payload["required_capabilities"],
+            json!(["text_generation", "image_generation", "vision_input"])
+        );
+        assert_eq!(
+            request.requirements.capabilities,
+            vec!["image_generation".to_string()]
         );
     }
 

@@ -11301,6 +11301,30 @@
         "ModelProviderCapabilitiesReadParams": {
           "type": "object"
         },
+        "MultiAgentMode": {
+          "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
+          "oneOf": [
+            {
+              "enum": [
+                "explicitRequestOnly",
+                "proactive"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "custom": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "custom"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "RequestId": {
           "anyOf": [
             {
@@ -12330,7 +12354,16 @@
                 "string"
               ]
             },
-            "multiAgentMode": true,
+            "multiAgentMode": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MultiAgentMode"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "permissions": {
               "type": [
                 "null",
@@ -12570,7 +12603,16 @@
                 "string"
               ]
             },
-            "multiAgentMode": true,
+            "multiAgentMode": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MultiAgentMode"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "outputSchema": true,
             "permissions": {
               "type": [
@@ -32977,6 +33019,46 @@
       "title": "ModelUpgradeInfo",
       "type": "object"
     },
+    "ModelVerification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "trustedAccessForCyber"
+      ],
+      "title": "ModelVerification",
+      "type": "string"
+    },
+    "ModelVerificationNotification": {
+      "$defs": {
+        "ModelVerification": {
+          "enum": [
+            "trustedAccessForCyber"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "verifications": {
+          "items": {
+            "$ref": "#/$defs/ModelVerification"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "threadId",
+        "turnId",
+        "verifications"
+      ],
+      "title": "ModelVerificationNotification",
+      "type": "object"
+    },
     "OpenDeepLinkPayload": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -39920,6 +40002,34 @@
           ],
           "type": "object"
         },
+        "ModelVerification": {
+          "enum": [
+            "trustedAccessForCyber"
+          ],
+          "type": "string"
+        },
+        "ModelVerificationNotification": {
+          "properties": {
+            "threadId": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": "string"
+            },
+            "verifications": {
+              "items": {
+                "$ref": "#/$defs/ModelVerification"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "threadId",
+            "turnId",
+            "verifications"
+          ],
+          "type": "object"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -41791,6 +41901,22 @@
             },
             "params": {
               "$ref": "#/$defs/ReasoningTextDeltaNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "model/verification",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ModelVerificationNotification"
             }
           },
           "required": [
@@ -47372,6 +47498,30 @@
           ],
           "type": "object"
         },
+        "MultiAgentMode": {
+          "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
+          "oneOf": [
+            {
+              "enum": [
+                "explicitRequestOnly",
+                "proactive"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "custom": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "custom"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -48490,7 +48640,8 @@
           "type": "string"
         },
         "multiAgentMode": {
-          "default": null
+          "$ref": "#/$defs/MultiAgentMode",
+          "default": "explicitRequestOnly"
         },
         "reasoningEffort": {
           "type": [
@@ -58214,6 +58365,30 @@
           ],
           "type": "object"
         },
+        "MultiAgentMode": {
+          "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
+          "oneOf": [
+            {
+              "enum": [
+                "explicitRequestOnly",
+                "proactive"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "custom": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "custom"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -59374,7 +59549,8 @@
           "type": "string"
         },
         "multiAgentMode": {
-          "default": null
+          "$ref": "#/$defs/MultiAgentMode",
+          "default": "explicitRequestOnly"
         },
         "reasoningEffort": {
           "type": [
@@ -63166,6 +63342,30 @@
     },
     "ThreadStartParams": {
       "$defs": {
+        "MultiAgentMode": {
+          "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
+          "oneOf": [
+            {
+              "enum": [
+                "explicitRequestOnly",
+                "proactive"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "custom": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "custom"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "ThreadHistoryMode": {
           "enum": [
             "legacy",
@@ -63285,7 +63485,16 @@
             "string"
           ]
         },
-        "multiAgentMode": true,
+        "multiAgentMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MultiAgentMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "permissions": {
           "type": [
             "null",
@@ -63756,6 +63965,30 @@
             "path"
           ],
           "type": "object"
+        },
+        "MultiAgentMode": {
+          "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
+          "oneOf": [
+            {
+              "enum": [
+                "explicitRequestOnly",
+                "proactive"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "custom": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "custom"
+              ],
+              "type": "object"
+            }
+          ]
         },
         "PatchApplyStatus": {
           "enum": [
@@ -64875,7 +65108,8 @@
           "type": "string"
         },
         "multiAgentMode": {
-          "default": null
+          "$ref": "#/$defs/MultiAgentMode",
+          "default": "explicitRequestOnly"
         },
         "reasoningEffort": {
           "type": [
@@ -72709,6 +72943,30 @@
           ],
           "type": "string"
         },
+        "MultiAgentMode": {
+          "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
+          "oneOf": [
+            {
+              "enum": [
+                "explicitRequestOnly",
+                "proactive"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "custom": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "custom"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "TextElement": {
           "properties": {
             "byteRange": {
@@ -72933,7 +73191,16 @@
             "string"
           ]
         },
-        "multiAgentMode": true,
+        "multiAgentMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MultiAgentMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "outputSchema": true,
         "permissions": {
           "type": [
@@ -81170,6 +81437,7 @@
               "item/reasoning/textDelta",
               "item/started",
               "model/safetyBuffering/updated",
+              "model/verification",
               "serverRequest/resolved",
               "thread/archived",
               "thread/closed",

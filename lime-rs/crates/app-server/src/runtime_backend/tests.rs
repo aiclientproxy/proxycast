@@ -66,6 +66,56 @@ fn reply_attempt_usage_limit_maps_to_structured_runtime_error() {
     ));
 }
 
+#[test]
+fn runtime_reroute_policy_rejects_direct_hard_and_partial_failures() {
+    let selection = RuntimeModelSelection {
+        provider: "primary-provider".to_string(),
+        model: "primary-model".to_string(),
+        source: "profile_model_slot",
+        reasoning_effort: None,
+    };
+    let transport = lime_agent::ReplyAttemptError::provider_failure(
+        "transport failed",
+        false,
+        Some(runtime_core::FailureClassification::Transport),
+        true,
+    );
+    let exclusion = runtime_route_exclusion(&selection, false, &transport)
+        .expect("retryable untouched profile route");
+    assert_eq!(exclusion.provider, "primary-provider");
+    assert_eq!(exclusion.model, "primary-model");
+    assert!(runtime_route_exclusion(&selection, true, &transport).is_none());
+
+    for error in [
+        lime_agent::ReplyAttemptError::provider_failure(
+            "authentication failed",
+            false,
+            Some(runtime_core::FailureClassification::Authentication),
+            false,
+        ),
+        lime_agent::ReplyAttemptError::provider_failure(
+            "permission denied",
+            false,
+            Some(runtime_core::FailureClassification::Permission),
+            false,
+        ),
+        lime_agent::ReplyAttemptError::provider_failure(
+            "quota exhausted",
+            false,
+            Some(runtime_core::FailureClassification::Quota),
+            false,
+        ),
+        lime_agent::ReplyAttemptError::provider_failure(
+            "partial output failed",
+            true,
+            Some(runtime_core::FailureClassification::Transport),
+            true,
+        ),
+    ] {
+        assert!(runtime_route_exclusion(&selection, false, &error).is_none());
+    }
+}
+
 pub(super) fn request_for_test(
     message: &str,
     runtime_request: Option<app_server_protocol::RuntimeRequest>,
