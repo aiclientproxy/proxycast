@@ -8,7 +8,7 @@ import {
   flushEffects,
   mockGetAgentRuntimeSession,
   mockListAgentRuntimeSessions,
-  mockUpdateAgentRuntimeSession,
+  mockUpdateAgentRuntimeThreadSettings,
   mountHook,
 } from "../useAgentChat.testUtils";
 
@@ -46,13 +46,13 @@ describe("useAgentChat 偏好持久化 - history normalization", () => {
       });
       await flushEffects();
 
-      expect(mockUpdateAgentRuntimeSession).toHaveBeenCalledTimes(1);
-      expect(mockUpdateAgentRuntimeSession).toHaveBeenCalledWith({
-        session_id: topicId,
-        recent_access_mode: "read-only",
-        provider_selector: "gemini",
-        model_name: "gemini-2.5-pro",
-        execution_strategy: "react",
+      expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledTimes(1);
+      expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
+        threadId: topicId,
+        approvalPolicy: "on-request",
+        sandboxPolicy: "read-only",
+        modelProvider: "gemini",
+        model: "gemini-2.5-pro",
       });
     } finally {
       harness.unmount();
@@ -281,6 +281,11 @@ describe("useAgentChat 偏好持久化 - history normalization", () => {
         messages: recentMessages,
         turns: [],
         items: [],
+      })
+      .mockResolvedValueOnce({
+        id: topicId,
+        thread_id: topicId,
+        messages: [],
       })
       .mockResolvedValueOnce({
         id: topicId,

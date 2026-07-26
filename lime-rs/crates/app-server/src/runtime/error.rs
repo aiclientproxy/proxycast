@@ -3,6 +3,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum RuntimeCoreError {
+    #[error("{0}")]
+    MethodNotFound(String),
     #[error("invalid request: {0}")]
     InvalidRequest(String),
     #[error("session not found: {0}")]
@@ -82,8 +84,11 @@ impl RuntimeCoreError {
 
     pub fn into_jsonrpc_error(self) -> JsonRpcError {
         match self {
+            Self::MethodNotFound(message) => {
+                JsonRpcError::new(error_codes::METHOD_NOT_FOUND, message)
+            }
             Self::InvalidRequest(message) => {
-                JsonRpcError::new(error_codes::INVALID_PARAMS, message)
+                JsonRpcError::new(error_codes::INVALID_REQUEST, message)
             }
             Self::SessionNotFound(session_id) => JsonRpcError::new(
                 error_codes::SESSION_NOT_FOUND,

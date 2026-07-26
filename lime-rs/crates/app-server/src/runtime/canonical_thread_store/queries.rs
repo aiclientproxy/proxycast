@@ -219,8 +219,17 @@ fn query_entity_page(
         "DESC"
     };
     let turn_clause = turn_id.map_or("", |_| "AND turn_id = ?2");
-    let cursor_clause = cursor.map_or(String::new(), |_| {
-        format!("AND ((ordinal {comparator} ?3) OR (ordinal = ?3 AND {id_column} {comparator} ?4))")
+    let cursor_clause = cursor.map_or(String::new(), |cursor| {
+        let anchor_comparator = if cursor.inclusive {
+            if direction == SortDirection::Asc {
+                ">="
+            } else {
+                "<="
+            }
+        } else {
+            comparator
+        };
+        format!("AND ((ordinal {comparator} ?3) OR (ordinal = ?3 AND {id_column} {anchor_comparator} ?4))")
     });
     let sql = format!(
         "SELECT {json_column}, ordinal, {id_column} FROM {table}
@@ -256,6 +265,7 @@ fn cursor_fallback(kind: CursorKind, direction: SortDirection) -> CursorValue {
             i64::MAX
         },
         id: String::new(),
+        inclusive: false,
     }
 }
 

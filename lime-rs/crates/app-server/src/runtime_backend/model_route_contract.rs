@@ -106,15 +106,21 @@ pub(super) fn provider_configuration_from_runtime(
     selection: &RuntimeModelSelection,
     resolved_route: &ResolvedModelRoute,
     direct_provider_config: Option<SessionProviderConfig>,
+    service_tier: Option<String>,
 ) -> ModelRouteProviderConfiguration {
-    let direct_provider_config = direct_provider_config
+    let mut direct_provider_config = direct_provider_config
         .or_else(|| no_auth_direct_provider_config_from_route(selection, resolved_route));
+    if let Some(config) = direct_provider_config.as_mut() {
+        config.reasoning_effort = selection.reasoning_effort.clone();
+        config.service_tier = service_tier.clone();
+    }
 
     ModelRouteProviderConfiguration {
         turn_provider: TurnProviderConfiguration {
             route: model_route_from_runtime(selection, resolved_route),
             reasoning_effort: selection.reasoning_effort.clone(),
         },
+        service_tier,
         route_protocol: Some(resolved_route.protocol.clone()),
         credential_ref: resolved_route.auth.credential_ref.clone(),
         direct_provider_config,
@@ -144,6 +150,7 @@ fn no_auth_direct_provider_config_from_route(
         base_url: Some(base_url),
         credential_uuid: None,
         reasoning_effort: selection.reasoning_effort.clone(),
+        service_tier: None,
         route_protocol: Some(resolved_route.protocol.clone()),
         toolshim: false,
         toolshim_model: None,
@@ -565,6 +572,7 @@ mod tests {
             base_url: Some("https://llm.limeai.run/v1#lime_tenant_id=tenant-0001".to_string()),
             credential_uuid: None,
             reasoning_effort: None,
+            service_tier: None,
             route_protocol: Some(ProtocolKind::OpenaiChat),
             toolshim: false,
             toolshim_model: None,
@@ -580,7 +588,8 @@ mod tests {
             Some(&route_seed),
         );
 
-        let configuration = provider_configuration_from_runtime(&selection, &resolved_route, None);
+        let configuration =
+            provider_configuration_from_runtime(&selection, &resolved_route, None, None);
         let direct_config = configuration
             .direct_provider_config
             .expect("no-auth route should create direct provider config");
@@ -613,11 +622,53 @@ mod tests {
             ..Default::default()
         };
 
-        let configuration = provider_configuration_from_runtime(&selection, &resolved_route, None);
+        let configuration =
+            provider_configuration_from_runtime(&selection, &resolved_route, None, None);
 
         assert_eq!(
             configuration.credential_ref.as_deref(),
             Some("runtime-api-key:credential-a")
+        );
+    }
+
+    #[test]
+    fn provider_configuration_overwrites_stale_direct_reasoning_with_effective_selection() {
+        let selection = RuntimeModelSelection {
+            provider: "openai".to_string(),
+            model: "gpt-codex".to_string(),
+            source: "runtime_options",
+            reasoning_effort: None,
+        };
+        let direct_config = SessionProviderConfig {
+            provider_name: "openai".to_string(),
+            provider_selector: Some("openai".to_string()),
+            model_name: "gpt-codex".to_string(),
+            api_key: Some("test-key".to_string()),
+            base_url: Some("https://api.example.test/v1".to_string()),
+            credential_uuid: None,
+            reasoning_effort: Some("high".to_string()),
+            service_tier: None,
+            route_protocol: Some(ProtocolKind::OpenaiResponses),
+            toolshim: false,
+            toolshim_model: None,
+            model_capabilities: None,
+            supports_websockets: false,
+        };
+
+        let configuration = provider_configuration_from_runtime(
+            &selection,
+            &ResolvedModelRoute::default(),
+            Some(direct_config),
+            None,
+        );
+
+        assert_eq!(configuration.turn_provider.reasoning_effort, None);
+        assert_eq!(
+            configuration
+                .direct_provider_config
+                .expect("direct config")
+                .reasoning_effort,
+            None
         );
     }
 }

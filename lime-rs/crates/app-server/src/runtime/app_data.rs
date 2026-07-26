@@ -24,7 +24,7 @@ pub use knowledge::KnowledgeAppDataSource;
 pub use mcp::McpAppDataSource;
 pub use media::MediaAppDataSource;
 pub use memory::MemoryAppDataSource;
-pub use model_providers::ModelProviderAppDataSource;
+pub use model_providers::{ModelCatalogQuery, ModelProviderAppDataSource, ProviderModelCatalog};
 pub use plugins::PluginDataSource;
 pub use right_surface::{
     RightSurfaceAppDataSource, WorkspaceObjectCanvasSnapshot,

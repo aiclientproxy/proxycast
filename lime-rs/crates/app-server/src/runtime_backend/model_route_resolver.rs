@@ -2,7 +2,7 @@ use super::model_registry_metadata;
 use super::model_route_contract;
 use super::model_route_credential::{self, RouteCredential};
 use super::model_routing;
-use super::request_context::RuntimeModelSelection;
+use super::request_context::{selection_with_capability_reasoning, RuntimeModelSelection};
 use crate::ExecutionRequest;
 use app_server_protocol::{ModelTaskRequest, ResolvedModelRoute};
 use lime_agent::SessionProviderConfig;
@@ -80,14 +80,14 @@ pub(super) async fn assemble_chat_model_route(
     preferred_credential_ref: Option<&str>,
 ) -> Result<ChatModelRouteResolution, String> {
     let routing_resolution = prepared.routing_resolution;
-    let selection = &routing_resolution.selection;
+    let requested_route_selection = &routing_resolution.selection;
     let model_routing = &routing_resolution.routing;
     let provider_readiness = &routing_resolution.readiness;
     let route_credential = if provider_readiness.ready {
         model_route_credential::resolve_route_credential(
             db,
             api_key_provider_service,
-            &selection.provider,
+            &requested_route_selection.provider,
             prepared.provider_record.as_ref(),
             direct_provider_config,
             preferred_credential_ref,
@@ -99,27 +99,35 @@ pub(super) async fn assemble_chat_model_route(
     let model_registry = model_registry_metadata::resolve_runtime_model_registry_metadata(
         db,
         api_key_provider_service,
-        selection,
+        requested_route_selection,
         direct_provider_config,
         route_credential.runtime_credential(),
     )
     .await?;
     let routing_payload = model_routing::routing_decision_payload(
-        selection,
+        requested_route_selection,
         model_routing,
         provider_readiness,
         &model_registry,
     );
-    let model_task_request =
-        model_route_contract::chat_task_request_from_runtime(request, selection, &routing_payload);
+    let model_task_request = model_route_contract::chat_task_request_from_runtime(
+        request,
+        requested_route_selection,
+        &routing_payload,
+    );
     let mut resolved_route = model_route_contract::resolved_route_from_runtime(
         &model_task_request,
-        selection,
+        requested_route_selection,
         &routing_payload,
         prepared.provider_record.as_ref(),
         route_credential.credential_ref(),
         direct_provider_config,
     );
+    let selection = selection_with_capability_reasoning(
+        requested_route_selection,
+        &resolved_route.capability_snapshot,
+    );
+    resolved_route.defaults.reasoning_effort = selection.reasoning_effort.clone();
     if direct_provider_config.is_none()
         && resolved_route.auth.kind == app_server_protocol::AuthKind::ApiKeyRef
     {
@@ -137,7 +145,7 @@ pub(super) async fn assemble_chat_model_route(
         &resolved_route,
     );
     Ok(ChatModelRouteResolution {
-        selection: selection.clone(),
+        selection,
         model_task_request,
         resolved_route,
         decision_payload: evidence.decision_payload,
@@ -214,6 +222,7 @@ mod tests {
             base_url: Some("http://127.0.0.1:56599".to_string()),
             credential_uuid: None,
             reasoning_effort: None,
+            service_tier: None,
             route_protocol: None,
             toolshim: false,
             toolshim_model: None,
@@ -283,6 +292,7 @@ mod tests {
             base_url: Some("http://127.0.0.1:56599".to_string()),
             credential_uuid: None,
             reasoning_effort: None,
+            service_tier: None,
             route_protocol: None,
             toolshim: false,
             toolshim_model: None,
@@ -332,6 +342,113 @@ mod tests {
                 .and_then(|value| value.as_bool()),
             Some(true)
         );
+    }
+
+    #[tokio::test]
+    async fn resolved_route_only_keeps_snapshot_declared_custom_reasoning_effort() {
+        let db = test_db();
+        let service = ApiKeyProviderService::new();
+        let request = request_for_test("hello", None, None);
+        let mut requested_selection = selection("fixture-openai", "fixture-model");
+        requested_selection.reasoning_effort = Some("ultra".to_string());
+        let direct_provider_config = SessionProviderConfig {
+            provider_name: "openai".to_string(),
+            provider_selector: Some("fixture-openai".to_string()),
+            model_name: "fixture-model".to_string(),
+            api_key: Some("fixture-key".to_string()),
+            base_url: Some("http://127.0.0.1:56599".to_string()),
+            credential_uuid: None,
+            reasoning_effort: Some("ultra".to_string()),
+            service_tier: None,
+            route_protocol: None,
+            toolshim: false,
+            toolshim_model: None,
+            model_capabilities: Some(json!({
+                "capabilities": {
+                    "tools": true,
+                    "streaming": true,
+                    "reasoning": true,
+                    "reasoningEffort": {
+                        "supported": true,
+                        "levels": ["low", "high", "ultra"]
+                    }
+                },
+                "taskFamilies": ["chat"],
+                "inputModalities": ["text"],
+                "outputModalities": ["text"],
+                "runtimeFeatures": ["streaming", "reasoning"]
+            })),
+            supports_websockets: false,
+        };
+
+        let route = resolve_chat_model_route(
+            &db,
+            &service,
+            &request,
+            &requested_selection,
+            Some(&direct_provider_config),
+        )
+        .await
+        .expect("route");
+
+        assert!(route.resolved_route.failure.is_none());
+        assert_eq!(route.selection.reasoning_effort.as_deref(), Some("ultra"));
+        assert_eq!(
+            route.resolved_route.defaults.reasoning_effort.as_deref(),
+            Some("ultra")
+        );
+    }
+
+    #[tokio::test]
+    async fn resolved_route_drops_reasoning_effort_not_declared_by_snapshot() {
+        let db = test_db();
+        let service = ApiKeyProviderService::new();
+        let request = request_for_test("hello", None, None);
+        let mut requested_selection = selection("fixture-openai", "fixture-model");
+        requested_selection.reasoning_effort = Some("medium".to_string());
+        let direct_provider_config = SessionProviderConfig {
+            provider_name: "openai".to_string(),
+            provider_selector: Some("fixture-openai".to_string()),
+            model_name: "fixture-model".to_string(),
+            api_key: Some("fixture-key".to_string()),
+            base_url: Some("http://127.0.0.1:56599".to_string()),
+            credential_uuid: None,
+            reasoning_effort: Some("medium".to_string()),
+            service_tier: None,
+            route_protocol: None,
+            toolshim: false,
+            toolshim_model: None,
+            model_capabilities: Some(json!({
+                "capabilities": {
+                    "tools": true,
+                    "streaming": true,
+                    "reasoning": true,
+                    "reasoningEffort": {
+                        "supported": true,
+                        "levels": ["low", "high"]
+                    }
+                },
+                "taskFamilies": ["chat"],
+                "inputModalities": ["text"],
+                "outputModalities": ["text"],
+                "runtimeFeatures": ["streaming", "reasoning"]
+            })),
+            supports_websockets: false,
+        };
+
+        let route = resolve_chat_model_route(
+            &db,
+            &service,
+            &request,
+            &requested_selection,
+            Some(&direct_provider_config),
+        )
+        .await
+        .expect("route");
+
+        assert!(route.resolved_route.failure.is_none());
+        assert_eq!(route.selection.reasoning_effort, None);
+        assert_eq!(route.resolved_route.defaults.reasoning_effort, None);
     }
 
     #[tokio::test]

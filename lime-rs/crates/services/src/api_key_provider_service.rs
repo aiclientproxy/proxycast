@@ -1740,6 +1740,7 @@ impl ApiKeyProviderService {
             base_url: Some(api_host.to_string()),
             credential_uuid: format!("api-key-provider:{provider_type}"),
             reasoning_effort: None,
+            service_tier: None,
             protocol: Some(protocol),
             supports_websockets: false,
             toolshim: false,

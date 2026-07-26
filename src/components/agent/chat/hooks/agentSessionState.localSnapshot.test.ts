@@ -227,7 +227,6 @@ describe("agentSessionState local snapshot hydrate", () => {
         }),
       ],
       items: [],
-      queued_turns: [],
     } satisfies AgentSessionDetail;
 
     const result = buildHydratedAgentSessionSnapshot({
@@ -305,7 +304,6 @@ describe("agentSessionState local snapshot hydrate", () => {
       ],
       turns: [],
       items: [],
-      queued_turns: [],
     } satisfies AgentSessionDetail;
 
     const result = buildHydratedAgentSessionSnapshot({
@@ -409,7 +407,6 @@ describe("agentSessionState local snapshot hydrate", () => {
       ],
       turns: [],
       items: [],
-      queued_turns: [],
     } satisfies AgentSessionDetail;
 
     const result = buildHydratedAgentSessionSnapshot({
@@ -508,7 +505,6 @@ describe("agentSessionState local snapshot hydrate", () => {
       ],
       turns: [],
       items: [],
-      queued_turns: [],
     } satisfies AgentSessionDetail;
 
     const result = buildHydratedAgentSessionSnapshot({

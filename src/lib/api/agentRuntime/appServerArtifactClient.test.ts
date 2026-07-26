@@ -565,6 +565,77 @@ describe("appServerArtifactClient", () => {
     );
   });
 
+  it("应通过 App Server artifact/write 写入通用 Artifact 快照", async () => {
+    const result = {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      artifactRef: "artifact-article-1",
+      artifactDocumentId: "article-1",
+      eventId: "evt-article-save-1",
+      sequence: 8,
+      persistedAt: "2026-06-29T10:00:00.000Z",
+      sidecar: {
+        relativePath: "threads/thread-1/artifacts/artifact-article-1.json",
+        bytes: 256,
+        sha256: "sha256:article-content",
+        contentStatus: "available",
+      },
+    };
+    const appServerClient = {
+      readArtifacts: vi.fn(),
+      writeArtifact: vi.fn().mockResolvedValue({
+        id: 1,
+        result,
+        response: { id: 1, result: {} },
+        notifications: [],
+        messages: [],
+      }),
+    };
+    const client = createAppServerArtifactClient({ appServerClient });
+    const params = {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      artifact: {
+        artifactRef: "artifact-article-1",
+        artifactDocumentId: "article-1",
+        kind: "article_workspace_draft",
+        status: "draft",
+        content: "# Article",
+      },
+    };
+
+    await expect(
+      client.writeAgentRuntimeArtifactSnapshot(params),
+    ).resolves.toEqual(result);
+    expect(appServerClient.writeArtifact).toHaveBeenCalledWith(params);
+  });
+
+  it("artifact/write 返回畸形成功 envelope 时应 fail closed", async () => {
+    const appServerClient = {
+      readArtifacts: vi.fn(),
+      writeArtifact: vi.fn().mockResolvedValue({
+        id: 1,
+        result: { success: true },
+        response: { id: 1, result: {} },
+        notifications: [],
+        messages: [],
+      }),
+    };
+    const client = createAppServerArtifactClient({ appServerClient });
+
+    await expect(
+      client.writeAgentRuntimeArtifactSnapshot({
+        threadId: "thread-1",
+        artifact: {
+          artifactRef: "artifact-article-1",
+          kind: "article_workspace_draft",
+          status: "draft",
+          content: "# Article",
+        },
+      }),
+    ).rejects.toThrow("artifact/write did not return write evidence");
+  });
+
   it("保存证据直接消费 artifact/write 响应并保留稳定文档范围", () => {
     const document = createDocument();
     const params = appServerArtifactWriteParamsFromArtifactDocument(

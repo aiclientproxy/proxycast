@@ -18,10 +18,6 @@ import {
   HOME_HOTPATH_SCENARIO,
   IMAGE_COMMAND_PROMPT,
   IMAGE_COMMAND_SCENARIO,
-  INPUTBAR_PENDING_STEER_ACTIVE_PROMPT,
-  INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO,
-  INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO,
-  INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO,
   INPUTBAR_RICH_RESTORE_PROMPT,
   INPUTBAR_RICH_RESTORE_SCENARIO,
   LIVE_TAIL_COMMIT_PROMPT,
@@ -62,6 +58,10 @@ import {
   MEDIA_REFERENCE_PROMPT,
   MEDIA_REFERENCE_SCENARIO,
 } from "./claw-chat-current-fixture-media-reference.mjs";
+import {
+  ACTIVE_STEER_INITIAL_PROMPT,
+  ACTIVE_STEER_SCENARIO,
+} from "./claw-chat-current-fixture-active-steer.mjs";
 
 export function resolveGateBExpectedIdentity({
   summary,
@@ -69,17 +69,23 @@ export function resolveGateBExpectedIdentity({
   backendLedger,
   appServerRequests,
 }) {
+  if (options?.scenario === ACTIVE_STEER_SCENARIO) {
+    const turnId = summary?.activeSteer?.activeTurnId ?? null;
+    if (!summary?.sessionId || !summary?.threadId || !turnId) {
+      throw new Error(
+        "Gate B active steer identity requires sessionId, threadId and activeTurnId",
+      );
+    }
+    return {
+      sessionId: summary.sessionId,
+      threadId: summary.threadId,
+      turnId,
+    };
+  }
   const isHomeHotpathScenario =
     options?.scenario === HOME_HOTPATH_SCENARIO ||
     options?.scenario === HOME_HOTPATH_GREETING_SCENARIO;
-  const pendingSteerTurn =
-    options?.scenario === INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO
-      ? summary?.inputbarPendingSteerPopFrontRichBackendTurnStart
-      : options?.scenario === INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO ||
-          options?.scenario === INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO
-        ? summary?.inputbarPendingSteerActiveBackendTurnStart
-        : null;
-  if (!isHomeHotpathScenario && !pendingSteerTurn) {
+  if (!isHomeHotpathScenario) {
     const scenarioTurnStart = resolveScenarioTurnStart(summary, options);
     if (scenarioTurnStart) {
       return resolveTurnIdentity({
@@ -96,14 +102,8 @@ export function resolveGateBExpectedIdentity({
     };
   }
 
-  const sessionId =
-    pendingSteerTurn?.sessionId ??
-    summary?.homeHotpath?.backendTurnStart?.sessionId ??
-    null;
-  const turnId =
-    pendingSteerTurn?.turnId ??
-    summary?.homeHotpath?.backendTurnStart?.turnId ??
-    null;
+  const sessionId = summary?.homeHotpath?.backendTurnStart?.sessionId ?? null;
+  const turnId = summary?.homeHotpath?.backendTurnStart?.turnId ?? null;
   return resolveTurnIdentity({
     sessionId,
     turnId,
@@ -311,11 +311,6 @@ export function buildAssertionContext({
       entry.kind === "turnStart" &&
       String(entry.inputText || "").includes(INPUTBAR_RICH_RESTORE_PROMPT),
   );
-  const inputbarPendingSteerActiveTurnStart = backendLedger.find(
-    (entry) =>
-      entry.kind === "turnStart" &&
-      entry.inputText === INPUTBAR_PENDING_STEER_ACTIVE_PROMPT,
-  );
   const expectedImageIntentRoutedPrompt =
     options.scenario === PLAIN_IMAGE_INTENT_SCENARIO
       ? PLAIN_IMAGE_INTENT_ROUTED_PROMPT
@@ -428,16 +423,7 @@ export function buildAssertionContext({
     options.scenario === PLAIN_IMAGE_INTENT_SCENARIO;
   const isInputbarRichRestoreScenario =
     options.scenario === INPUTBAR_RICH_RESTORE_SCENARIO;
-  const isInputbarPendingSteerRichRestoreScenario =
-    options.scenario === INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO;
-  const isInputbarPendingSteerMultiQueueScenario =
-    options.scenario === INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO;
-  const isInputbarPendingSteerPopFrontResumeScenario =
-    options.scenario === INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO;
-  const isInputbarPendingSteerScenario =
-    isInputbarPendingSteerRichRestoreScenario ||
-    isInputbarPendingSteerMultiQueueScenario ||
-    isInputbarPendingSteerPopFrontResumeScenario;
+  const isActiveSteerScenario = options.scenario === ACTIVE_STEER_SCENARIO;
   const isWebToolsRenderingScenario =
     options.scenario === "web-tools-rendering";
   const isReasoningFirstVisibleScenario =
@@ -489,16 +475,16 @@ export function buildAssertionContext({
     ? expertPanelSkillsRuntimeTurnStart
     : expertSkillsRuntimeTurnStart;
   const runtimeRequest =
-    (isPlanScenario
-      ? planTurnStart?.runtimeRequest
-      : isGoalScenario
-        ? goalTurnStart?.runtimeRequest
-        : isImageCommandScenario
-          ? imageCommandTurnStart?.runtimeRequest
-          : isInputbarRichRestoreScenario
-            ? inputbarRichRestoreTurnStart?.runtimeRequest
-            : isInputbarPendingSteerScenario
-              ? inputbarPendingSteerActiveTurnStart?.runtimeRequest
+    (isActiveSteerScenario
+      ? {}
+      : isPlanScenario
+        ? planTurnStart?.runtimeRequest
+        : isGoalScenario
+          ? goalTurnStart?.runtimeRequest
+          : isImageCommandScenario
+            ? imageCommandTurnStart?.runtimeRequest
+            : isInputbarRichRestoreScenario
+              ? inputbarRichRestoreTurnStart?.runtimeRequest
               : isWebToolsRenderingScenario
                 ? webToolsRenderingTurnStart?.runtimeRequest
                 : isReasoningFirstVisibleScenario
@@ -559,22 +545,24 @@ export function buildAssertionContext({
     ? EXPERT_PANEL_SKILLS_RUNTIME_UI_SKILL_REF
     : EXPERT_SKILLS_RUNTIME_SKILL_REF;
   const collaborationMode = runtimeRequest?.collaborationMode?.mode ?? null;
-  const guiTurnStartReachedBackend = isPlanScenario
-    ? planTurnStart?.inputText === PLAN_PROMPT
-    : isGoalScenario
-      ? goalTurnStart?.inputText === GOAL_PROMPT
-      : isHomeHotpathScenario
-        ? homeHotpathTurnStart?.inputText === homeHotpathPrompt ||
-          homeHotpathTraceTurnStart?.inputText === homeHotpathPrompt
-        : isImageCommandScenario
-          ? imageCommandTurnStart?.inputText === expectedImageIntentRoutedPrompt
-          : isInputbarRichRestoreScenario
-            ? String(inputbarRichRestoreTurnStart?.inputText || "").includes(
-                INPUTBAR_RICH_RESTORE_PROMPT,
-              )
-            : isInputbarPendingSteerScenario
-              ? inputbarPendingSteerActiveTurnStart?.inputText ===
-                INPUTBAR_PENDING_STEER_ACTIVE_PROMPT
+  const guiTurnStartReachedBackend = isActiveSteerScenario
+    ? summary.activeSteer?.provider?.initialRequestObserved === true &&
+      summary.activeSteer?.activeRead?.includesInitialPrompt === true &&
+      summary.activeSteer?.inputSend?.clicked?.clicked === true
+    : isPlanScenario
+      ? planTurnStart?.inputText === PLAN_PROMPT
+      : isGoalScenario
+        ? goalTurnStart?.inputText === GOAL_PROMPT
+        : isHomeHotpathScenario
+          ? homeHotpathTurnStart?.inputText === homeHotpathPrompt ||
+            homeHotpathTraceTurnStart?.inputText === homeHotpathPrompt
+          : isImageCommandScenario
+            ? imageCommandTurnStart?.inputText ===
+              expectedImageIntentRoutedPrompt
+            : isInputbarRichRestoreScenario
+              ? String(inputbarRichRestoreTurnStart?.inputText || "").includes(
+                  INPUTBAR_RICH_RESTORE_PROMPT,
+                )
               : isWebToolsRenderingScenario
                 ? webToolsRenderingTurnStart?.inputText ===
                   WEB_TOOLS_RENDERING_PROMPT
@@ -656,7 +644,6 @@ export function buildAssertionContext({
     planTurnStart,
     goalTurnStart,
     inputbarRichRestoreTurnStart,
-    inputbarPendingSteerActiveTurnStart,
     imageCommandTurnStart,
     expectedImageIntentRoutedPrompt,
     webToolsRenderingTurnStart,
@@ -685,10 +672,7 @@ export function buildAssertionContext({
     isHomeHotpathScenario,
     isImageCommandScenario,
     isInputbarRichRestoreScenario,
-    isInputbarPendingSteerRichRestoreScenario,
-    isInputbarPendingSteerMultiQueueScenario,
-    isInputbarPendingSteerPopFrontResumeScenario,
-    isInputbarPendingSteerScenario,
+    isActiveSteerScenario,
     isWebToolsRenderingScenario,
     isReasoningFirstVisibleScenario,
     isLiveTailCommitScenario,

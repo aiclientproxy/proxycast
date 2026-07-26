@@ -18,6 +18,10 @@ use app_server_protocol::{
     ThreadReadParams,
 };
 use serde_json::{Map, Value};
+
+const DIRECT_INPUT_TO_PARENT_OWNED_THREAD_ERROR: &str =
+    "direct app-server input is not allowed for parent-owned threads";
+
 impl RequestProcessor {
     /// v2 `turn/start` boundary. The runtime still owns execution; this
     /// adapter only resolves the canonical thread identity and lowers the
@@ -29,7 +33,8 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: TurnStartParams = parse_params(params)?;
-        let session_id = self.resolve_v2_thread_session(&params.thread_id).await?;
+        let session_id = self.resolve_loaded_v2_thread_session(&params.thread_id)?;
+        self.ensure_direct_input_allowed(&params.thread_id).await?;
         let runtime_params = lower_turn_start_params(&params, session_id)?;
         let host = self.runtime_host_context();
         let config_warnings = self.config_warning_notifications(ConfigWarningScope::TurnStart);
@@ -52,7 +57,7 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: TurnInterruptParams = parse_params(params)?;
-        let session_id = self.resolve_v2_thread_session(&params.thread_id).await?;
+        let session_id = self.resolve_loaded_v2_thread_session(&params.thread_id)?;
         let turn_id = non_empty_param(&params.turn_id, "turnId")?;
         self.runtime
             .ensure_turn_interruptible(&session_id, &turn_id)
@@ -75,7 +80,17 @@ impl RequestProcessor {
         Ok(dispatch_result(TurnInterruptResponse {})?.with_notifications(notifications))
     }
 
-    pub(super) async fn resolve_v2_thread_session(
+    pub(super) fn resolve_loaded_v2_thread_session(
+        &self,
+        thread_id: &str,
+    ) -> Result<String, JsonRpcError> {
+        let thread_id = non_empty_param(thread_id, "threadId")?;
+        self.runtime
+            .loaded_session_id_for_thread(&thread_id)
+            .ok_or_else(|| invalid_request(format!("thread not found: {thread_id}")))
+    }
+
+    pub(super) async fn resolve_persisted_v2_thread_session(
         &self,
         thread_id: &str,
     ) -> Result<String, JsonRpcError> {
@@ -89,6 +104,21 @@ impl RequestProcessor {
             .await
             .map_err(to_jsonrpc_error)?;
         Ok(response.thread.session_id.to_string())
+    }
+
+    pub(super) async fn ensure_direct_input_allowed(
+        &self,
+        thread_id: &str,
+    ) -> Result<(), JsonRpcError> {
+        let allowed = self
+            .runtime
+            .can_accept_direct_input(thread_id)
+            .await
+            .map_err(to_jsonrpc_error)?;
+        if !allowed {
+            return Err(invalid_request(DIRECT_INPUT_TO_PARENT_OWNED_THREAD_ERROR));
+        }
+        Ok(())
     }
 }
 
@@ -320,6 +350,8 @@ impl RequestProcessor {
             params.responsesapi_client_metadata.as_ref(),
         )?;
         reject_unsupported_map("additionalContext", params.additional_context.as_ref())?;
+        self.resolve_loaded_v2_thread_session(&params.thread_id)?;
+        self.ensure_direct_input_allowed(&params.thread_id).await?;
         let input = lower_user_input(params.input.clone())?;
         let output = self
             .runtime

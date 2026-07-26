@@ -55,6 +55,21 @@ describe("agent runtime current fixture regression smoke guard", () => {
     );
   });
 
+  it("keeps active turn steer in the exact Electron regression matrix", () => {
+    const content = readSmokeScript();
+
+    expect(content).toContain(
+      "Claw active turn steer same identity Electron fixture",
+    );
+    expect(content).toContain('"inputbar-active-steer"');
+    expect(content).toContain(
+      "claw-chat-current-fixture-active-steer-regression",
+    );
+    expect(content).toContain(
+      "active turn 经 thread/read -> turn/steer 保持同一 Turn identity",
+    );
+  });
+
   it("keeps Electron fixture guards in the current regression set", () => {
     const content = readSmokeScript();
 
@@ -359,11 +374,20 @@ describe("agent runtime current fixture regression smoke guard", () => {
     expect(content).not.toContain(
       "Claw Inputbar pending steer multi queue order Electron fixture",
     );
+    expect(content).not.toContain('"inputbar-pending-steer-rich-restore"');
     expect(content).not.toContain('"inputbar-pending-steer-multi-queue"');
     expect(content).not.toContain(
       "Claw Inputbar pending steer pop-front resume hydrate Electron fixture",
     );
     expect(content).not.toContain('"inputbar-pending-steer-pop-front-resume"');
+    for (const filePath of [
+      "scripts/agent-runtime/claw-chat-current-fixture-inputbar-pending-steer.mjs",
+      "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-gui-actions.mjs",
+      "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-read-model.mjs",
+      "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-assertions.mjs",
+    ]) {
+      expect(fs.existsSync(filePath)).toBe(false);
+    }
   });
 
   it("does not opt into live provider or mock backend evidence", () => {

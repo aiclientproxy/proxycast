@@ -9,12 +9,14 @@ import {
 interface InputbarModeStatusChipProps {
   label: string;
   testId: string;
+  disabled?: boolean;
   onRemove: () => void;
 }
 
 export function InputbarModeStatusChip({
   label,
   testId,
+  disabled = false,
   onRemove,
 }: InputbarModeStatusChipProps) {
   return (
@@ -23,6 +25,7 @@ export function InputbarModeStatusChip({
       aria-label={label}
       title={label}
       data-testid={testId}
+      disabled={disabled}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onRemove}
     >

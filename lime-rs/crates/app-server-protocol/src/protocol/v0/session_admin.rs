@@ -1,8 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::*;
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum AgentSessionCwdFilter {
@@ -62,87 +60,6 @@ pub struct AgentSessionOverview {
 pub struct AgentSessionListResponse {
     #[serde(default)]
     pub sessions: Vec<AgentSessionOverview>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentSessionUpdateParams {
-    pub session_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_selector: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub execution_strategy: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recent_access_mode: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recent_preferences: Option<serde_json::Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub article_workspace_selected_object_ref: Option<serde_json::Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub article_workspace_edited_draft: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentSessionUpdateResponse {
-    pub session: AgentSessionOverview,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentSessionCompactParams {
-    pub session_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub event_name: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentSessionCompactResponse {
-    pub session: AgentSession,
-    #[serde(default)]
-    pub turns: Vec<AgentTurn>,
-    pub compacted: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentSessionQueuedTurnRemoveParams {
-    pub session_id: String,
-    pub queued_turn_id: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentSessionQueuedTurnRemoveResponse {
-    pub session: AgentSession,
-    #[serde(default)]
-    pub turns: Vec<AgentTurn>,
-    pub queued_turn_id: String,
-    pub removed: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentSessionQueuedTurnPromoteParams {
-    pub session_id: String,
-    pub queued_turn_id: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentSessionQueuedTurnPromoteResponse {
-    pub session: AgentSession,
-    #[serde(default)]
-    pub turns: Vec<AgentTurn>,
-    pub queued_turn_id: String,
-    pub promoted: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

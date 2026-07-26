@@ -15,7 +15,6 @@ import type {
   AgentSessionExecutionRuntimeLimitState,
   AgentSessionExecutionRuntimePermissionState,
 } from "../agentExecutionRuntime";
-import type { QueuedTurnSnapshot } from "../queuedTurn";
 import type { ModelCapabilities } from "@/lib/types/modelRegistry";
 
 export interface AgentRuntimeGeneratedTitleResult {
@@ -74,6 +73,7 @@ export interface AutoContinueRequestPayload {
  */
 export interface AgentSessionInfo {
   id: string;
+  thread_id?: string;
   name?: string;
   created_at: number;
   updated_at: number;
@@ -305,6 +305,7 @@ export interface AgentRuntimeThreadDiagnostics {
 
 export interface AgentRuntimeThreadReadModel {
   thread_id: string;
+  can_accept_direct_input?: boolean | null;
   session_business_object_ref_metadata?: Record<string, unknown> | null;
   status?: string;
   profile_status?: AgentRuntimeProfileStatus;
@@ -314,7 +315,6 @@ export interface AgentRuntimeThreadReadModel {
   pending_requests?: AgentRuntimeRequestView[];
   last_outcome?: AgentRuntimeOutcomeView | null;
   incidents?: AgentRuntimeIncidentView[];
-  queued_turns?: QueuedTurnSnapshot[];
   tool_calls?: AgentRuntimeThreadToolCallView[];
   commands?: AgentRuntimeThreadCommandView[];
   tests?: AgentRuntimeThreadTestRunView[];
@@ -556,7 +556,6 @@ export interface AgentSessionDetail {
   messages: AgentMessage[];
   turns?: AgentThreadTurn[];
   items?: AgentThreadItem[];
-  queued_turns?: QueuedTurnSnapshot[];
   thread_read?: AgentRuntimeThreadReadModel | null;
   todo_items?: AgentTodoItem[];
 }

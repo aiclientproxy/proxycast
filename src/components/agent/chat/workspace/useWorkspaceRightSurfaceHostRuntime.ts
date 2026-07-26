@@ -1,5 +1,4 @@
 import { useCallback, type MutableRefObject, type ReactNode } from "react";
-import { updateAgentRuntimeSession } from "@/lib/api/agentRuntime/sessionClient";
 import type { LayoutMode } from "@/lib/workspace/workbenchContract";
 import type { WorkspaceHandleSend } from "./useWorkspaceSendActions";
 import {
@@ -9,10 +8,6 @@ import {
 import type { WorkspaceRightSurfaceCoordinatorRuntime } from "./useWorkspaceRightSurfaceCoordinatorRuntime";
 import { submitWorkspaceArticleEditorActionIntent } from "./workspaceArticleEditorActionDispatch";
 import type { WorkspaceArticleWorkspaceActionIntent } from "./workspaceArticleWorkspaceModel";
-import {
-  buildWorkspaceArticleWorkspaceSelectionUpdateRequest,
-  type WorkspaceArticleWorkspaceSelectionChange,
-} from "./workspaceArticleWorkspaceSelectionWriteback";
 
 type RightSurfaceHostRuntimeProjection = Pick<
   WorkspaceRightSurfaceCoordinatorRuntime,
@@ -107,23 +102,6 @@ export function useWorkspaceRightSurfaceHostRuntime({
     [handleSendRef, restoreInput, setLayoutMode],
   );
 
-  const handleArticleWorkspaceSelectedObjectChange = useCallback(
-    (change: WorkspaceArticleWorkspaceSelectionChange) => {
-      const request =
-        buildWorkspaceArticleWorkspaceSelectionUpdateRequest(change);
-      if (!request) {
-        return;
-      }
-      void updateAgentRuntimeSession(request).catch((error) => {
-        console.warn(
-          "[AgentChatWorkspace] Article Editor selection 写回失败:",
-          error,
-        );
-      });
-    },
-    [],
-  );
-
   return renderWorkspaceRightSurfaceHostRuntime({
     ...hostRuntimeParams,
     activePluginSurfaceContainerId:
@@ -159,7 +137,7 @@ export function useWorkspaceRightSurfaceHostRuntime({
       rightSurfaceRuntime.rightSurfaceTraceAvailable,
     rightSurfaceTraceEnabled: rightSurfaceRuntime.rightSurfaceTraceEnabled,
     onArticleActionIntent: handleArticleWorkspaceActionIntent,
-    onArticleSelectedObjectChange: handleArticleWorkspaceSelectedObjectChange,
+    onArticleSelectedObjectChange: undefined,
     onClosePluginSurface: rightSurfaceRuntime.handleClosePluginSurface,
     onCloseRightSurfaceShell: rightSurfaceRuntime.handleCloseRightSurfaceShell,
     onOpenArticlePreviewArtifact,

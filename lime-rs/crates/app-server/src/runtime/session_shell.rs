@@ -211,7 +211,7 @@ impl RuntimeCore {
         }
 
         let server = match self
-            .start_shell_process(process_id, item_id, command, cwd)
+            .start_shell_process(thread_id, process_id, item_id, command, cwd)
             .await
         {
             Ok(server) => server,
@@ -342,6 +342,7 @@ impl RuntimeCore {
 
     async fn start_shell_process(
         &self,
+        thread_id: &str,
         process_id: &str,
         item_id: &str,
         command: &str,
@@ -351,22 +352,26 @@ impl RuntimeCore {
             .execution_process_server()
             .ok_or_else(|| "local execution environment is not configured".to_string())?;
         server
-            .start_process(ExecutionProcessStartParams {
-                process_id: process_id.to_string(),
-                tool_id: item_id.to_string(),
-                tool_name: tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME.to_string(),
-                command: tool_runtime::shell_runtime::platform_shell_argv(command),
-                working_directory: cwd.to_string_lossy().to_string(),
-                tty: false,
-                approval_policy: Some("never".to_string()),
-                sandbox_policy: Some("danger-full-access".to_string()),
-                runtime_metadata: Some(json!({
-                    "surface": "user_shell",
-                    "explicitUserCommand": true,
-                })),
-                cwd: None,
-                env: HashMap::new(),
-            })
+            .start_thread_process(
+                thread_id,
+                command,
+                ExecutionProcessStartParams {
+                    process_id: process_id.to_string(),
+                    tool_id: item_id.to_string(),
+                    tool_name: tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME.to_string(),
+                    command: tool_runtime::shell_runtime::platform_shell_argv(command),
+                    working_directory: cwd.to_string_lossy().to_string(),
+                    tty: false,
+                    approval_policy: Some("never".to_string()),
+                    sandbox_policy: Some("danger-full-access".to_string()),
+                    runtime_metadata: Some(json!({
+                        "surface": "user_shell",
+                        "explicitUserCommand": true,
+                    })),
+                    cwd: None,
+                    env: HashMap::new(),
+                },
+            )
             .await
             .map_err(|error| error.to_string())?;
         Ok(server)

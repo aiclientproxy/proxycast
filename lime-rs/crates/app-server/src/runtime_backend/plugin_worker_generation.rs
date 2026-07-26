@@ -2,7 +2,7 @@ use super::tool_process_metadata::SoulStyleMetadata;
 use super::{
     backend_error, current_agent_runtime_config_metadata, direct_provider_config_from_request,
     initialize_runtime_database, model_route_contract, model_route_resolver, request_context,
-    selection_with_effective_reasoning, RuntimeBackend,
+    RuntimeBackend,
 };
 use crate::runtime::memory_prompt::append_soul_context_to_system_prompt;
 use crate::{ExecutionRequest, RuntimeCoreError};
@@ -94,23 +94,22 @@ async fn generate_outputs(
     let db = initialize_runtime_database(runtime_backend.db.as_ref())?;
     runtime_backend.ensure_agent_initialized(&db).await?;
     let requested_selection = request_context::resolve_runtime_model_selection(request)?;
-    let effective_requested_selection = selection_with_effective_reasoning(&requested_selection);
     let host_request = request_context::runtime_request_from_request(request);
     let direct_provider_config = direct_provider_config_from_request(
         host_request.as_ref(),
-        &effective_requested_selection,
-        effective_requested_selection.reasoning_effort.clone(),
+        &requested_selection,
+        requested_selection.reasoning_effort.clone(),
     );
     let route_resolution = model_route_resolver::resolve_chat_model_route(
         &db,
         &runtime_backend.api_key_provider_service,
         request,
-        &effective_requested_selection,
+        &requested_selection,
         direct_provider_config.as_ref(),
     )
     .await
     .map_err(backend_error)?;
-    let selection = selection_with_effective_reasoning(&route_resolution.selection);
+    let selection = route_resolution.selection.clone();
     if let Some(route_failure) = route_resolution.resolved_route.failure.as_ref() {
         return Err(RuntimeCoreError::Backend(format!(
             "host managed generation route unavailable: {}",
@@ -134,6 +133,7 @@ async fn generate_outputs(
                     &selection,
                     &route_resolution.resolved_route,
                     direct_provider_config,
+                    request_context::service_tier_from_request(request),
                 ),
             ),
         },
@@ -695,6 +695,7 @@ mod tests {
                 started_at: None,
                 completed_at: None,
             },
+            forked_from_thread_id: None,
             input: agent_runtime::reply_input::RuntimeReplyInput::text(
                 "写一篇关于内容工厂插件化写作的文章",
             ),

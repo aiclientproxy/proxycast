@@ -74,6 +74,12 @@
         }
       ]
     },
+    "isPinned": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
     "limit": {
       "format": "uint32",
       "minimum": 0,

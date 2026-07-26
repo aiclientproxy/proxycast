@@ -26,8 +26,8 @@ import {
   mockScheduleMinimumDelayIdleTask,
   mockSelectPluginDirectory,
   mockToastSuccess,
+  mockSetAgentRuntimeThreadName,
   mockUpdateProject,
-  mockUpdateAgentRuntimeSession,
   mockWaitForConversationImportJob,
   mountSidebar,
   mountSidebarContainer,
@@ -2628,7 +2628,6 @@ describe("AppSidebar conversations", () => {
         '[data-testid="app-sidebar-conversation-menu-multiselect"]',
       ),
     ).toBeNull();
-    expect(mockUpdateAgentRuntimeSession).not.toHaveBeenCalled();
   });
 
   it("归档会话不应出现在左侧导航恢复菜单中", async () => {
@@ -2672,6 +2671,7 @@ describe("AppSidebar conversations", () => {
     mockListAgentRuntimeSessions.mockResolvedValue([
       {
         id: "session-recent",
+        thread_id: "thread-recent",
         name: "最近会话",
         created_at: 1714000000,
         updated_at: 1714000600,
@@ -2695,8 +2695,8 @@ describe("AppSidebar conversations", () => {
     await flushEffects(2);
 
     expect(window.prompt).toHaveBeenCalledWith("重命名对话", "最近会话");
-    expect(mockUpdateAgentRuntimeSession).toHaveBeenCalledWith({
-      session_id: "session-recent",
+    expect(mockSetAgentRuntimeThreadName).toHaveBeenCalledWith({
+      threadId: "thread-recent",
       name: "重命名后的会话",
     });
     expect(mockToastSuccess).toHaveBeenCalledWith("已重命名对话");

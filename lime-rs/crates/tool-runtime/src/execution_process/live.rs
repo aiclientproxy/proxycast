@@ -11,6 +11,8 @@ use async_trait::async_trait;
 pub trait RuntimeLiveExecutionGateway: Send + Sync {
     async fn start_process(
         &self,
+        thread_id: &str,
+        display_command: &str,
         params: ExecutionProcessStartParams,
     ) -> Result<ExecutionProcessStartResponse, String>;
 

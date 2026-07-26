@@ -2,7 +2,6 @@ import {
   APP_SERVER_METHOD_PLUGIN_INSTALLED_SAVE,
   APP_SERVER_METHOD_ARTIFACT_READ,
   APP_SERVER_METHOD_ARTIFACT_WRITE,
-  APP_SERVER_METHOD_SESSION_UPDATE,
   APP_SERVER_METHOD_SESSION_TURN_START,
   APP_SERVER_METHOD_WORKSPACE_RIGHT_SURFACE_REQUEST,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID,
@@ -124,7 +123,8 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
       artifactRead.documentRichTextLength > 160 &&
       artifactRead.contentIncludesArticleTitle === true &&
       artifactRead.richTextHasForbiddenTemplate !== true &&
-      artifactRead.contentIncludesWorkerArticle === true,
+      artifactRead.contentIncludesCanonicalArticle === true &&
+      artifactRead.contentIncludesEditedDraftMarker === true,
     contentFactoryArticleWorkspaceArticleCanvasSurfaceVisible:
       summary.contentFactoryArticleWorkspaceArticleObjectSelection?.selected ===
         true &&
@@ -179,7 +179,10 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
       summary.contentFactoryArticleWorkspaceArticleCanvasSurface
         ?.hasVisibleHooks === false,
     contentFactoryArticleWorkspaceEditedDraftRestored:
-      appServerRequestMethods.includes(APP_SERVER_METHOD_SESSION_UPDATE) &&
+      appServerRequestMethods.includes(APP_SERVER_METHOD_ARTIFACT_WRITE) &&
+      Boolean(
+        summary.contentFactoryArticleWorkspaceEditedDraftUpdate?.eventId,
+      ) &&
       summary.contentFactoryArticleWorkspaceEditedDraftUpdate?.sessionId ===
         identity.sessionId &&
       summary.contentFactoryArticleWorkspaceEditedDraftUpdate?.objectRef
@@ -205,8 +208,7 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
       readModel.editedDraft?.markdownIncludesEditedDraftMarker === true &&
       readModel.editedDraft?.objectRef?.kind === "articleDraft" &&
       readModel.workerArticleObject?.markdownIncludesEditedDraftMarker ===
-        true &&
-      readModel.workerArticleObject?.sourceEdited === true,
+        true,
     contentFactoryArticleWorkspaceWorkerTurnExecuted:
       appServerRequestMethods.includes(
         APP_SERVER_METHOD_PLUGIN_INSTALLED_SAVE,

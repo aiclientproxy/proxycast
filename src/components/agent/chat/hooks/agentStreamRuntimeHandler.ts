@@ -97,7 +97,7 @@ import {
 } from "./agentStreamImageTaskEventController";
 import type { HandleTurnStreamEventOptions } from "./agentStreamRuntimeHandlerTypes";
 import {
-  bindAssistantMessageToRuntimeTurn,
+  bindSubmissionMessagesToRuntimeTurn,
   finishRequestLog,
   resolveActionResolvedUserData,
   resolveVisibleTextDeltaAfterSnapshotPrefill,
@@ -477,7 +477,12 @@ export function handleTurnStreamEvent({
       },
     );
 
-    bindAssistantMessageToRuntimeTurn(setMessages, assistantMsgId, turnId);
+    bindSubmissionMessagesToRuntimeTurn(
+      setMessages,
+      assistantMsgId,
+      pendingTurnKey,
+      turnId,
+    );
     if (options.shouldSyncThreadItem !== false) {
       setThreadItems((prev) =>
         upsertThreadItemState(
@@ -635,6 +640,7 @@ export function handleTurnStreamEvent({
         assistantMsgId,
         event: data,
         pendingItemKey,
+        pendingTurnKey,
         requestState,
         shouldPreserveAssistantContent,
         setters: runtimeStateSetters,
@@ -654,6 +660,7 @@ export function handleTurnStreamEvent({
         assistantMsgId,
         event: data,
         pendingItemKey,
+        pendingTurnKey,
         requestState,
         shouldPreserveAssistantContent,
         setters: runtimeStateSetters,
@@ -1339,9 +1346,10 @@ export function handleTurnStreamEvent({
         const imageTaskTurnId = resolveImageTaskCreatedTurnId(data);
         if (imageTaskTurnId) {
           requestState.currentTurnId = imageTaskTurnId;
-          bindAssistantMessageToRuntimeTurn(
+          bindSubmissionMessagesToRuntimeTurn(
             setMessages,
             assistantMsgId,
+            pendingTurnKey,
             imageTaskTurnId,
           );
           setCurrentTurnId(imageTaskTurnId);
@@ -1427,9 +1435,10 @@ export function handleTurnStreamEvent({
       }
       noteProcessEventSequence(sequenceFromAgentEvent(data));
       commitRenderedTextBeforeProcessPart();
-      bindAssistantMessageToRuntimeTurn(
+      bindSubmissionMessagesToRuntimeTurn(
         setMessages,
         assistantMsgId,
+        pendingTurnKey,
         data.scope?.turn_id,
       );
       upsertProjectedTimelineItem(data);
@@ -1449,9 +1458,10 @@ export function handleTurnStreamEvent({
 
     case "action_resolved":
       activateStream();
-      bindAssistantMessageToRuntimeTurn(
+      bindSubmissionMessagesToRuntimeTurn(
         setMessages,
         assistantMsgId,
+        pendingTurnKey,
         data.scope?.turn_id,
       );
       upsertProjectedTimelineItem(data);

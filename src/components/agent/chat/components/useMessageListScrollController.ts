@@ -8,6 +8,7 @@ import {
 } from "react";
 
 const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 64;
+const RESIZE_FOLLOW_FRAME_COUNT = 4;
 const USER_SCROLL_IDLE_MS = 500;
 
 interface UseMessageListAutoScrollOptions {
@@ -95,7 +96,9 @@ export function useMessageListScrollController() {
 
     const handleScroll = () => {
       markUserScrolling();
-      setAutoScrollEnabled(isNearScrollBottom(container));
+      if (isNearScrollBottom(container)) {
+        setAutoScrollEnabled(true);
+      }
     };
 
     const handleWheel = (event: WheelEvent) => {
@@ -120,6 +123,15 @@ export function useMessageListScrollController() {
   }, [markUserScrolling, setAutoScrollEnabled]);
 
   const scrollToTail = useCallback((behavior: "auto" | "smooth") => {
+    const container = containerRef.current;
+    if (container && typeof container.scrollTo === "function") {
+      container.scrollTo({
+        behavior,
+        top: container.scrollHeight,
+      });
+      return;
+    }
+
     scrollRef.current?.scrollIntoView({
       behavior,
       block: "end",
@@ -133,31 +145,48 @@ export function useMessageListScrollController() {
     }
 
     let animationFrame: number | null = null;
+    let followFramesRemaining = 0;
+    const runResizeFollow = () => {
+      animationFrame = null;
+      if (!shouldAutoScrollRef.current) {
+        followFramesRemaining = 0;
+        return;
+      }
+
+      scrollToTail("auto");
+      followFramesRemaining -= 1;
+      if (followFramesRemaining > 0) {
+        animationFrame = window.requestAnimationFrame(runResizeFollow);
+      }
+    };
     const scheduleResizeFollow = () => {
       if (!shouldAutoScrollRef.current) {
         return;
       }
       if (animationFrame !== null && typeof window !== "undefined") {
         window.cancelAnimationFrame(animationFrame);
-      }
-      const run = () => {
         animationFrame = null;
-        if (shouldAutoScrollRef.current) {
-          scrollToTail("auto");
-        }
-      };
+      }
+      followFramesRemaining = RESIZE_FOLLOW_FRAME_COUNT;
       if (typeof window !== "undefined" && window.requestAnimationFrame) {
-        animationFrame = window.requestAnimationFrame(run);
+        animationFrame = window.requestAnimationFrame(runResizeFollow);
         return;
       }
-      run();
+      scrollToTail("auto");
+      followFramesRemaining = 0;
     };
 
     const resizeObserver = new ResizeObserver(scheduleResizeFollow);
     resizeObserver.observe(container);
+    const messageColumn = container.firstElementChild;
+    if (messageColumn instanceof Element) {
+      resizeObserver.observe(messageColumn);
+    }
+    window.addEventListener("resize", scheduleResizeFollow);
 
     return () => {
       resizeObserver.disconnect();
+      window.removeEventListener("resize", scheduleResizeFollow);
       if (animationFrame !== null && typeof window !== "undefined") {
         window.cancelAnimationFrame(animationFrame);
       }

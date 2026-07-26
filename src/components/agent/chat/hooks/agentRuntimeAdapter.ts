@@ -9,6 +9,7 @@ import {
   type AgentRuntimeEventListener,
 } from "@/lib/api/agentRuntimeEvents";
 import type { AgentExecutionStrategy } from "@/lib/api/agentExecutionRuntime";
+import type { AppServerThreadSettingsUpdateParams } from "@/lib/api/appServer";
 import type {
   TurnSteerParams,
   TurnSteerResponse,
@@ -94,6 +95,7 @@ export interface AgentRuntimeAdapter {
     sessionId: string,
     providerType: string,
     model: string,
+    reasoningEffort?: string,
   ): Promise<void>;
   updateSessionMetadata?(
     sessionId: string,
@@ -141,9 +143,10 @@ export interface AgentRuntimeAdapterDeps {
     | "resumeThread"
     | "respondAgentRuntimeAction"
     | "runUserShellCommand"
+    | "setAgentRuntimeThreadName"
     | "steerAgentRuntimeTurn"
     | "submitAgentRuntimeTurn"
-    | "updateAgentRuntimeSession"
+    | "updateAgentRuntimeThreadSettings"
   >;
   listenRuntimeEvent?: AgentRuntimeEventListener;
 }
@@ -166,6 +169,53 @@ export function createAgentRuntimeAdapter({
   listenRuntimeEvent = listenAgentRuntimeEvent,
 }: AgentRuntimeAdapterDeps = {}): AgentRuntimeAdapter {
   const getSessionInFlight = new Map<string, Promise<AgentSessionDetail>>();
+
+  async function resolveSessionThreadId(sessionId: string): Promise<string> {
+    const normalizedSessionId = sessionId.trim();
+    if (!normalizedSessionId) {
+      throw new Error("sessionId is required to resolve canonical thread");
+    }
+    const detail = await client.getAgentRuntimeSession(normalizedSessionId);
+    const threadId =
+      detail.thread_id?.trim() || detail.thread_read?.thread_id?.trim();
+    if (!threadId) {
+      throw new Error("canonical session detail did not include a thread_id");
+    }
+    return threadId;
+  }
+
+  async function updateCurrentThreadSettings(
+    sessionId: string,
+    settings: Omit<AppServerThreadSettingsUpdateParams, "threadId">,
+  ): Promise<void> {
+    const threadId = await resolveSessionThreadId(sessionId);
+    await client.updateAgentRuntimeThreadSettings({
+      threadId,
+      ...settings,
+    });
+  }
+
+  function accessModeThreadSettings(
+    accessMode: AgentAccessMode,
+  ): Pick<
+    AppServerThreadSettingsUpdateParams,
+    "approvalPolicy" | "sandboxPolicy"
+  > {
+    switch (accessMode) {
+      case "read-only":
+        return { approvalPolicy: "on-request", sandboxPolicy: "read-only" };
+      case "current":
+        return {
+          approvalPolicy: "on-request",
+          sandboxPolicy: "workspace-write",
+        };
+      case "full-access":
+        return {
+          approvalPolicy: "never",
+          sandboxPolicy: "danger-full-access",
+        };
+    }
+  }
 
   return {
     async getRuntimeProviderSelection() {
@@ -230,52 +280,62 @@ export function createAgentRuntimeAdapter({
       });
     },
     async renameSession(sessionId, title) {
-      await client.updateAgentRuntimeSession({
-        session_id: sessionId,
+      await client.setAgentRuntimeThreadName({
+        threadId: await resolveSessionThreadId(sessionId),
         name: title,
       });
     },
     async deleteSession(sessionId) {
       await client.deleteAgentRuntimeSession(sessionId);
     },
-    async setSessionExecutionStrategy(sessionId, executionStrategy) {
-      await client.updateAgentRuntimeSession({
-        session_id: sessionId,
-        execution_strategy: executionStrategy,
-      });
+    async setSessionExecutionStrategy(_sessionId, executionStrategy) {
+      if (executionStrategy !== "react") {
+        throw new Error(`unsupported execution strategy: ${executionStrategy}`);
+      }
     },
     async setSessionAccessMode(sessionId, accessMode) {
-      await client.updateAgentRuntimeSession({
-        session_id: sessionId,
-        recent_access_mode: accessMode,
-      });
+      await updateCurrentThreadSettings(
+        sessionId,
+        accessModeThreadSettings(accessMode),
+      );
     },
-    async setSessionProviderSelection(sessionId, providerType, model) {
-      await client.updateAgentRuntimeSession({
-        session_id: sessionId,
-        provider_selector: providerType,
-        model_name: model,
+    async setSessionProviderSelection(
+      sessionId,
+      providerType,
+      model,
+      reasoningEffort,
+    ) {
+      await updateCurrentThreadSettings(sessionId, {
+        modelProvider: providerType.trim() || null,
+        model: model.trim() || null,
+        ...(reasoningEffort === undefined
+          ? {}
+          : { effort: reasoningEffort.trim() || null }),
       });
     },
     async updateSessionMetadata(sessionId, patch) {
-      const request: Parameters<
-        AgentRuntimeClient["updateAgentRuntimeSession"]
-      >[0] = {
-        session_id: sessionId,
-      };
+      const settings: Omit<AppServerThreadSettingsUpdateParams, "threadId"> =
+        {};
       if (patch.accessMode) {
-        request.recent_access_mode = patch.accessMode;
+        Object.assign(settings, accessModeThreadSettings(patch.accessMode));
       }
-      if (patch.providerType) {
-        request.provider_selector = patch.providerType;
+      if (patch.providerType || patch.model) {
+        if (!patch.providerType || !patch.model) {
+          throw new Error(
+            "providerType and model must be updated together through thread/settings/update",
+          );
+        }
+        settings.modelProvider = patch.providerType.trim() || null;
+        settings.model = patch.model.trim() || null;
       }
-      if (patch.model) {
-        request.model_name = patch.model;
+      if (patch.executionStrategy && patch.executionStrategy !== "react") {
+        throw new Error(
+          `unsupported execution strategy: ${patch.executionStrategy}`,
+        );
       }
-      if (patch.executionStrategy) {
-        request.execution_strategy = patch.executionStrategy;
+      if (Object.keys(settings).length > 0) {
+        await updateCurrentThreadSettings(sessionId, settings);
       }
-      await client.updateAgentRuntimeSession(request);
     },
     async generateSessionTitle(sessionId, previewText) {
       return client.generateAgentRuntimeSessionTitle(sessionId, previewText);

@@ -4,8 +4,8 @@ import {
   archiveAgentRuntimeSession,
   deleteAgentRuntimeSession,
   unarchiveAgentRuntimeSession,
-  updateAgentRuntimeSession,
 } from "@/lib/api/agentRuntime/sessionClient";
+import { setAgentRuntimeThreadName } from "@/lib/api/agentRuntime/threadClient";
 import type { AgentSessionInfo } from "@/lib/api/agentRuntime/sessionTypes";
 import { recordAgentUiPerformanceMetric } from "@/lib/agentUiPerformanceMetrics";
 import {
@@ -342,8 +342,14 @@ export function useAppSidebarConversationActions({
       renameSidebarSessionOptimistically(nextSession);
 
       try {
-        await updateAgentRuntimeSession({
-          session_id: session.id,
+        const threadId = session.thread_id?.trim();
+        if (!threadId) {
+          throw new Error(
+            `canonical thread identity is missing for session ${session.id}`,
+          );
+        }
+        await setAgentRuntimeThreadName({
+          threadId,
           name: nextTitle,
         });
         toast.success(renameConversationSuccessLabel);

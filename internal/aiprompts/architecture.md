@@ -178,6 +178,41 @@ AgentMessage 的 canonical 正文只由 `ThreadItemPayload::AgentMessage { text,
 
 canonical 持久化的当前 P1 切片是 App Server `RolloutStore` 承接新 Thread 的 dated JSONL，`ProjectionStore` 暂时同时实现 `thread_store::ThreadStore` 的 state/history repository 与 deprecated read model。`state.sqlite` 只持有 Thread metadata/graph，`thread_history.sqlite` 只持有可由 rollout 重建的 Turn/Item/history apply snapshot；任何 history 表落回 state 或 projection 都是回流违规。`ThreadStore::append_items` 只追加已经 canonical 的 typed item；`update_thread_metadata` 是独立 patch API，append 不从 item 内容推断 metadata。typed `ThreadHistoryChangeSet`、sequence collision、rollback/remove、opaque cursor 和 metadata patch 在过渡期仍必须保持确定性；不得增加 `RuntimeStore` 适配层、第二个 transcript 数据库或 renderer 持久化副本。ThreadStore archive/unarchive 已在同一 AgentRoot 内原子移动 rollout 并更新 state `rollout_path`，重复 move 按 identity 幂等；旧 `agentSession/update` 与 `archive_many` 已删除，公共 owner 是 Codex v2 `thread/archive` / `thread/unarchive`。`thread/delete` 也只允许走 v2 App Server current 链：RuntimeCore 先冻结包含 persisted 与 pending-only descendants 的 deepest-first 子树快照，停止全部 session loop/backend owner，并幂等清理 rollout、event log、sidecar、trace 与 telemetry；随后 `ProjectionStore` 以 `BEGIN IMMEDIATE` 重读并校验快照，在一次 ATTACH transaction 中删除 goal/accounting/outbox、canonical history、projection、spawn graph、Agent identity/mailbox 与 canonical Thread。App Server 在 `{}` 响应后通过 per-thread listener 将 child-to-root `thread/deleted` 广播给发起连接和全部订阅连接，再取消 listener、resume barrier 与双向 connection index；同一子树的 pending server requests 先收到 `serverRequest/resolved` 并以 `REQUEST_CANCELLED` 终止。旧 `agentSession/delete` production method/DTO/helper 为 `dead / deleted / forbidden-to-restore`。每个 Item 的 canonical ordinal 只取该 Item 首次出现时的 Lime outer `AgentEvent.sequence`，后续 lifecycle merge 必须保留首次 ordinal；Tool、Message、Reasoning、Plan 和 import producer 自有 ordinal 均不得进入持久化 ordering，Codex `sourceEventSeq` 只能作为 provenance/metadata，ThreadStore 不得通过 `MAX+1` 或其他 store-side renumbering 生成 ordinal。旧 `thread-store::runtime_store`、`session_repository` 以及 production AgentSession read/list/history fallback 已是 `dead / deleted`；event/app-data fallback 与 Renderer detail synthesis 只允许历史测试 evidence，不得成为 production read path。production App Server 构造必须显式注入 projection/state/history/AgentRoot 四路径；`ProjectionStore::initialize*` 单文件构造只允许隔离测试，`AppServer::new()` 只存在于 unit-test build。
 
+Codex v2 `thread/searchOccurrences` 的唯一读取链是：
+
+```text
+App Server thread/searchOccurrences
+  -> RuntimeCore read boundary
+  -> ThreadStore::search_thread_occurrences
+  -> ProjectionStore
+  -> history.canonical_turns + history.canonical_items
+  -> typed Rust / TypeScript response client
+```
+
+搜索只读取已持久化的 canonical history，因此 cold、archived 与 fork 后已物化的 child Thread 使用同一 owner，active 但尚未持久化的内存 snapshot 不参与结果。正文必须从 typed `ThreadItemPayload` 提取，禁止对 `item_json` 做 `LIKE` 或回读 deprecated projection：UserMessage 按原 part 顺序拼接 Text，assistant 只搜索每个 Turn 最后一个 `final/final_answer` AgentMessage；Lime 在 Turn 尚无 `final_agent_item_id` 时以 canonical Item ordinal 选择该末项。匹配为大小写不敏感的 literal substring，assistant Markdown 先投影成纯文本；snippet range 使用 UTF-16 code unit。分页 cursor 必须同时绑定 Thread identity、原始 search term 与 occurrence 位置，`turnCursor` 是可直接交给 `thread/turns/list` 的 inclusive opaque cursor；非法 cursor、空 search term、未知 Thread 与 store unsupported 都按结构化错误 fail closed。Renderer 当前没有 Thread 内查找产品面，本切片不新增侧栏标题搜索复用或无交互闭环的 GUI 空壳。
+
+Codex v2 `thread/search` 的唯一跨 Thread 内容搜索链是：
+
+```text
+App Server thread/search
+  -> RequestProcessor v2 lowering
+  -> RuntimeCore read boundary
+  -> ThreadStore::search_threads
+  -> ProjectionStore
+  -> state.canonical_threads + history.canonical_items
+  -> current Thread status projection + first content snippet
+  -> typed Rust / TypeScript response client
+```
+
+该方法与 `thread/list.searchTerm`、Renderer 侧栏本地标题过滤不是同一能力：它只按已持久化的 UserMessage
+与 AgentMessage conversation text 匹配，并返回每个 Thread 的首个正文 snippet，不搜索 name/preview。默认及空
+`sourceKinds` 只包含 Codex interactive source `cli + vscode`；显式 source filter、active/archived 二选一、
+`created_at/updated_at/recency_at` 排序和前后翻页全部由 store-owned opaque cursor 收口。cursor 绑定 trim 后的
+search term、archive scope、sort key 与 source kinds；反向翻页只切换 `sortDirection`，不得由 handler 或 GUI
+解析 cursor。默认 limit 为 `25`、范围为 `1..100`，空 term、损坏或跨查询 cursor 必须 fail closed。搜索结果
+Thread 继续经过同一个 v2 projection，不建立第二套 session DTO；active 但尚未持久化的内存正文不参与结果。
+当前 Renderer 尚未接入 snippet 搜索产品面，本切片不把现有标题 Dialog 冒充 `thread/search` consumer。
+
 canonical 写入必须先在 SQLite 事务内完成 normalization 与约束校验，再同步 append rollout，最后提交 projection；这样无效 change set 不污染文件，而文件成功、DB commit 失败可由 `(thread_id, sequence, fingerprint)` 幂等重试。metadata patch 不得隐藏在 append。ThreadStore apply 失败必须显式 fail closed；P1 完成后未完成的 projection tail 只能由 rollout rebuild，不能再由 raw EventLog 重写 canonical history，也不能 warning-and-continue 造成 GUI 可见而 rollout 丢失。
 
 `thread/settings/update` 与 `thread/memoryMode/set` 的生产写入沿同一个 session actor 串行执行，不创建 Turn/Item，也不修改 active Turn 已捕获的 runtime request；更新只进入后续 Turn 的 session defaults。持久化顺序固定为：
@@ -214,6 +249,91 @@ Command Item 必须持久化 `UserShell` source、process id、canonical cwd、�
 
 Renderer 的显式用户 shell 入口固定为输入首字符 `!`。输入 owner 只负责识别和清空命令文本；提交必须依次经过 Agent Chat shell controller、runtime adapter、typed App Server client 和 `thread/shellCommand`，不得调用裸 bridge、ExecutionProcess API 或 Electron 业务命令。controller 在请求前确保 session 并解析 canonical thread identity，订阅同一 session event route；Item started/completed 只触发 current read model/detail 刷新，ack 不得在前端合成 terminal。空命令不发请求，请求错误必须进入本地化可见错误通道。
 
+Codex v2 background terminal control 只允许走 thread-scoped current 链：
+
+```text
+thread/backgroundTerminals/{list,terminate,clean}
+  -> RequestProcessor v2 thread serialization
+  -> RuntimeCore background-terminal boundary
+  -> ExecutionProcessServer authoritative thread index
+  -> tool-runtime local process supervisor
+```
+
+Thread identity 必须由 `CurrentTurnToolExecutor` 或 `thread/shellCommand` 的 canonical context 显式下传，
+禁止从 provider 可写 metadata、cwd、session id 或命令文本反解。对外 `processId` 是单调数字字符串，作为
+稳定排序和 cursor；list 只返回当前 Thread 尚未隐藏的 running process，cursor anchor 已消失时继续返回更大
+process id，默认返回全部且 `limit=0` 提升为 `1`。terminate 必须在同一 registry 临界区校验
+`threadId + processId`，跨 Thread 返回 `terminated=false`；命中后立即从 list 隐藏、释放 registry 锁，再向
+真实 supervisor 发终止信号，并清理 `unified_exec` session mapping。clean 对当前 Thread 的已登记后台进程
+执行同一隐藏与终止语义，响应固定为空对象。`write_stdin` 也必须校验 canonical Thread ownership，不能借
+内部 session id 跨 Thread 控制进程。旧全局 `executionProcess/*` wire 不参与 Codex parity，不得为这三个
+method 新建 adapter、mock fallback 或第二套进程 owner。
+
+Codex out-of-band elicitation accounting 使用独立的 Thread-local current 控制链：
+
+```text
+thread/{increment,decrement}_elicitation
+  -> RequestProcessor v2 Thread serialization / exclusive access
+  -> RuntimeCore loaded Thread registry
+  -> thread-local volatile reference count
+```
+
+两个方法只接受 loaded canonical Thread，并使用 checked `i64` 计数。increment overflow、count 为零时
+decrement、非法 Thread id、cold/unknown Thread 都 fail closed；`paused` 严格等于 `count > 0`，归零后删除
+registry entry。archive、delete 与 idle unload 都清理该 entry，因此 resume 不会继承过期的 process-local
+registration。该状态表达外部 helper 的 live registration，不写入 rollout 或 Thread/Turn/Item projection。
+
+当前切片只完成 exact public control plane，尚未把 Thread-level state 接入 `agent-runtime` provider
+active-time budget。现有 MCP `ElicitationPauseState` 是 connection-local owner，不能代替 Thread registry。
+统一 active-time consumer 接入前，`paused: true` 只证明 registration state，不代表已经实现 Codex 的完整
+timeout-pause parity。
+
+Codex Guardian denial 的人工放行使用独立的 provider continuation current 链：
+
+```text
+thread/approveGuardianDeniedAction
+  -> typed v2 RequestProcessor + Thread serialization
+  -> RuntimeCore loaded canonical Thread lookup
+  -> typed Guardian denial/action validation
+  -> provider-only developer continuation
+       -> active regular Turn: agent-runtime session pending input
+       -> idle/racing Turn: durable canonical runtime event
+  -> provider history Developer message
+```
+
+wire 上的 `event` 保持 Codex opaque JSON shape，RuntimeCore 必须在副作用前解析 `status` 和完整 action tag，
+并拒绝缺字段、unknown variant 与非绝对本地路径。只有 `status=denied` 生成 continuation；其他合法终态按
+Codex 语义无副作用返回空对象。developer text 使用 Codex 的 exact-action marker，只授权原 event 中的单个
+action，不得转成 session-wide approval、通用 permission cache 或旧 `agentSession/action/respond` waiter。
+活动回合交给既有 session actor 在下一 sampling boundary 消费；同时写入 canonical event，使 idle、finishing
+race、restart 与后续 Turn 都从同一 provider-history owner 恢复。该 provider-only event 不投影为用户可见
+Thread Item，也不引入 v0/compat/mock。Lime 当前尚未生产 Guardian assessment/review lifecycle；本 method
+完成的是 Codex 手工放行 continuation boundary，不代表 Guardian reviewer 产品闭环已经完成。
+
+Codex v2 raw response item injection 使用独立的 provider-history current 链：
+
+```text
+thread/inject_items
+  -> typed v2 RequestProcessor + Thread serialization
+  -> RuntimeCore canonical Thread lookup / cold resume
+  -> durable response_item.injected provider-only event
+       + active regular Turn: agent-runtime session pending raw input
+  -> provider history RawResponseItem
+  -> model-provider protocol lowering
+       -> Responses: preserve exact item JSON
+       -> non-Responses: fail closed
+```
+
+wire 上的 `items` 保持 Codex opaque JSON shape，但 RuntimeCore 必须在写入前按 current `ResponseItem` union
+完整校验，并拒绝远程图片 URL。cold Thread 先从 canonical store hydrate/resume；archived、unknown、空数组或
+非法 item 均 fail closed。durable event 是 restart、idle 和 active/finishing race 的事实源；active regular Turn
+同时通过既有 session actor 在下一 sampling boundary 消费 raw item。该 event 只进入 provider history，不生成
+用户可见 Thread Item，也不得经 `ThreadItemPayload::Extension` 建立第二套 rollout 表示。
+
+`model-provider` 是唯一 lowering owner：Responses route 原样保留 item JSON，包括通过 validation 后的 provider
+扩展字段；Chat Completions、Anthropic 与其他不支持 raw Responses item 的 route 在发网前拒绝。当前 method
+boundary 不关闭 P0-03 的全局 canonical history/rollout、rollback/fork/replay 与未知记录一致性缺口。
+
 session start 返回成功前必须先同步写入 rollout metadata 首行并提交 Thread metadata row，再把 session 暴露到 RuntimeCore 内存状态；文件或 SQLite 失败都不得留下 memory-only session，DB commit 失败后的 metadata 文件由同 identity 重试接管而不是覆盖。canonical `session_id`、`thread_id` 与非空 `rollout_path` 均为唯一 identity，跨 RuntimeCore 重启也不得一对多。显式 session delete 与 import replace 的文件/metadata 原子协议尚未完成，当前入口不得被描述为安全清理能力；GUI、AgentSession adapter 和首事件 lazy create 都不能充当 empty Thread fallback。首事件 ensure 只保留为防御式幂等边界，不再拥有 Thread 创建时点。
 
 action-required/approval 与 ask-user 的 live continuation 归 `agent-runtime` session/turn scoped pending state；可持久化恢复事实归 RuntimeCore canonical events。Codex v2 typed server request 必须先从 canonical descriptor 恢复 scope，再校验 caller 参数；不得信任 caller type、从 presentation/read-model JSON 二次解析、或让 RuntimeBackend 回读 AppDataSource。重启后只能恢复 typed descriptor，不能伪造原 oneshot；无 continuation 时返回结构化 `action_not_resumable` 且不得写 resolved。ask-user 的否定响应必须消费 waiter 并投影 canceled。MCP server-originated elicitation 不属于 approval 链，不能写入这些 runtime event 或 canonical Item。
@@ -229,6 +349,25 @@ action-required/approval 与 ask-user 的 live continuation 归 `agent-runtime` 
 | `skills`                                         | skill discovery、读取与运行时集成。                                                                                                      |
 | `patch-apply`                                    | 受控 patch 应用领域能力。                                                                                                                |
 | `browser-runtime`、`media-runtime`、`voice-core` | 浏览器、媒体、语音等独立 runtime domain。                                                                                                |
+
+模型目录控制面固定为：
+
+```text
+provider config + configured-provider readiness + ModelRegistry metadata
+  -> AppDataSource provider-scoped ProviderModelCatalog
+  -> RuntimeCore model/list Codex v2 projection + pagination
+  -> Renderer typed gateway / Electron recovery projection
+```
+
+`ProviderModelCatalog` 是 App Server 内部 read projection，不是第二个 provider network owner；
+provider wire、capability 与执行 route 仍只归 `model-provider`。public `model/list` 必须保持 Codex
+v2 exact shape：`{ cursor?, limit?, includeHidden? } -> { data, nextCursor }`，不得扩展
+`providerId`、`tier` 或返回 provider 字段。多 provider identity 编入可逆 opaque `Model.id`：
+`route:<base64url(providerId)>.<base64url(stableModelId)>`；`Model.model` 只表示 provider wire
+model id。Renderer/Electron 只能通过 typed decoder 恢复 route，不能解析显示名或按 provider
+名称猜路由。默认目录只投影 picker-visible model；管理面显式 `includeHidden=true`。Spawn Agent
+模型选项消费内部 provider-scoped catalog，不得反向依赖 public DTO 或借 public 字段传递 provider
+identity。
 
 canonical Tool display contract 是 `ThreadItemPayload::{Tool,McpToolCall,CollabAgentToolCall}` 加 `ToolOutput`；call identity、arguments、structured content、duration、truncation、output reference 与 error 必须是 typed 字段，不能藏在 metadata 或由 Renderer 解析文本。Approval Item 的 ordered `available_decisions` 与 resolution 使用 Codex 同义的 `Approved`、`ApprovedForSession`、`Denied`、`Abort`、`TimedOut`；pending 只由 Item status 表达，此时 `decision = null`。GUI 只允许显式 lower 为 `allow_once`、`allow_for_session`、`decline`、`cancel`，不得从 scope 反推丢失的 decision。`requestId` 是审批 identity，`actionId` 只能作为缺少 request identity 时的退场 fallback；ask-user 可以 terminal 且 `decision = null`，Turn 使用 `Resolved` 表达已回答。MCP server elicitation 始终是独立的瞬时 reverse request，不产生 Approval 或其他 Item。
 
@@ -551,7 +690,7 @@ snake_case runtime request。
 | ------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TurnStartParams`               | Codex v2 Turn 协议                      | `threadId`、typed `input[]`、model/effort、cwd/workspace roots、approval/sandbox/permissions、output schema、service tier、environment、collaboration/multi-agent/personality 与 typed context metadata。 |
 | `TurnSteerParams`               | Codex v2 Turn 协议                      | `threadId`、`expectedTurnId`、typed `input[]`、`clientUserMessageId`、additional context 与 Responses API client metadata。                                                                               |
-| `RuntimeRequest`                | App Server -> RuntimeCore 内部 lowering | provider/model/config、typed `collaborationMode`、reasoning、approval/sandbox、workspace 与执行 metadata；Renderer 不再直接构造或传输该内部 DTO。                                                                  |
+| `RuntimeRequest`                | App Server -> RuntimeCore 内部 lowering | provider/model/config、typed `collaborationMode`、reasoning、approval/sandbox、workspace 与执行 metadata；Renderer 不再直接构造或传输该内部 DTO。                                                         |
 | `RuntimeOptions` / queue fields | dead for current turn protocol          | `runtimeOptions`、`queueIfBusy`、`skipPreSubmitResume`、caller-supplied `turnId` 不属于 v2 `turn/start`，不得通过 alias、metadata 或 compat wrapper 回流。                                                |
 | `hostOptions`                   | dead / deleted                          | 不在 current turn 协议中；不得作为宿主扩展、provider route、tool policy、workspace、session context 或任意 runtime JSON escape hatch 恢复。                                                               |
 

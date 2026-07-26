@@ -225,6 +225,9 @@ async function readInvokeDiagnostics(page) {
             if (typeof message?.method !== "string") continue;
             calls.push({
               method: message.method,
+              threadId: String(
+                message?.params?.threadId ?? message?.params?.thread_id ?? "",
+              ),
               transport: String(entry?.transport || ""),
               status: String(entry?.status || ""),
             });
@@ -444,6 +447,210 @@ async function readAgentControlDomState({ page, sessionId, timeoutMs }) {
   };
 }
 
+function turnStartCountForThread(diagnostics, threadId) {
+  return (diagnostics?.appServerCalls ?? []).filter(
+    (call) => call?.method === "turn/start" && call?.threadId === threadId,
+  ).length;
+}
+
+async function openSubagentActivityThread(page, childThreadId, timeoutMs) {
+  const rows = page.locator('[data-testid="subagent-activity-row"]');
+  for (let index = 0; index < (await rows.count()); index += 1) {
+    const row = rows.nth(index);
+    if ((await row.getAttribute("data-subagent-thread-id")) !== childThreadId) {
+      continue;
+    }
+    const button = row.locator("button").first();
+    if ((await button.count()) === 0) {
+      continue;
+    }
+    await button.click({ timeout: timeoutMs });
+    return;
+  }
+  throw new Error(`未找到可打开的 canonical child Thread: ${childThreadId}`);
+}
+
+async function collectParentOwnedChildGateB({
+  outputPath,
+  page,
+  parentSessionId,
+  subagentActivityRows,
+  timeoutMs,
+}) {
+  const childThreadIds = [
+    ...new Set(
+      subagentActivityRows
+        .map((row) => String(row?.threadId || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (childThreadIds.length !== 1) {
+    throw new Error(
+      `AgentControl Gate B 需要唯一 child Thread，实际为 ${JSON.stringify(childThreadIds)}`,
+    );
+  }
+  const childThreadId = childThreadIds[0];
+  const readReply = await invokeAppServerJsonRpcRaw(page, "thread/read", {
+    threadId: childThreadId,
+    includeTurns: true,
+  });
+  if (readReply?.error || !readReply?.result?.thread) {
+    throw new Error(
+      `读取 canonical child Thread 失败: ${JSON.stringify(readReply?.error ?? null)}`,
+    );
+  }
+  const canonicalThread = readReply.result.thread;
+  await openSubagentActivityThread(page, childThreadId, timeoutMs);
+  await page.waitForFunction(
+    (childSessionId) => {
+      const textarea = Array.from(
+        document.querySelectorAll('textarea[name="agent-chat-message"]'),
+      ).find((node) => {
+        const rect = node.getBoundingClientRect();
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          node instanceof HTMLTextAreaElement &&
+          node.dataset.sessionId === childSessionId
+        );
+      });
+      return textarea instanceof HTMLTextAreaElement && textarea.disabled;
+    },
+    canonicalThread.sessionId,
+    { timeout: timeoutMs },
+  );
+
+  const dom = await page.evaluate(({ childSessionId, childThreadId }) => {
+    const visible = (node) => {
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+    const textarea = Array.from(
+      document.querySelectorAll('textarea[name="agent-chat-message"]'),
+    ).find(
+      (node) =>
+        node instanceof HTMLTextAreaElement &&
+        node.dataset.sessionId === childSessionId &&
+        visible(node),
+    );
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("parent-owned child textarea missing");
+    }
+    const core = textarea.closest('[data-testid="inputbar-core-container"]');
+    const send = core?.querySelector('[data-testid="send-btn"]');
+    const accessMode = Array.from(
+      document.querySelectorAll('[data-testid="inputbar-access-mode-select"]'),
+    ).find(visible);
+    const modelSelectors = Array.from(
+      document.querySelectorAll('[data-testid="model-selector"]'),
+    ).filter(visible);
+    const taskModes = Array.from(
+      document.querySelectorAll('[data-testid="inputbar-task-mode-status"]'),
+    ).filter(visible);
+    return {
+      activeSessionId: textarea.dataset.sessionId || null,
+      childThreadId,
+      textareaVisible: textarea.getBoundingClientRect().height > 0,
+      textareaDisabled: textarea.disabled,
+      placeholder: textarea.getAttribute("placeholder") || "",
+      controls: {
+        sendDisabled: send instanceof HTMLButtonElement && send.disabled,
+        accessModeDisabled:
+          accessMode instanceof HTMLSelectElement && accessMode.disabled,
+        modelSelectorCount: modelSelectors.length,
+        modelSelectorsDisabled:
+          modelSelectors.length > 0 &&
+          modelSelectors.every(
+            (node) => node instanceof HTMLButtonElement && node.disabled,
+          ),
+        taskModeDisabled:
+          taskModes.length === 0 ||
+          taskModes.every(
+            (node) => node instanceof HTMLButtonElement && node.disabled,
+          ),
+      },
+    };
+  }, { childSessionId: canonicalThread.sessionId, childThreadId });
+
+  const diagnosticsBeforeAttempt = await readInvokeDiagnostics(page);
+  const turnStartCountBefore = turnStartCountForThread(
+    diagnosticsBeforeAttempt,
+    childThreadId,
+  );
+  const uiAttempt = await page.evaluate(() => {
+    const textarea = Array.from(
+      document.querySelectorAll('textarea[name="agent-chat-message"]'),
+    ).find((node) => {
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    const core = textarea?.closest('[data-testid="inputbar-core-container"]');
+    const send = core?.querySelector('[data-testid="send-btn"]');
+    const dispatchedEnter = textarea instanceof HTMLTextAreaElement;
+    if (textarea instanceof HTMLTextAreaElement) {
+      textarea.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "Enter",
+        }),
+      );
+    }
+    if (send instanceof HTMLButtonElement) {
+      send.click();
+    }
+    return {
+      dispatchedEnter,
+      clickedDisabledSend: send instanceof HTMLButtonElement && send.disabled,
+    };
+  });
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      ),
+  );
+  const diagnosticsAfterAttempt = await readInvokeDiagnostics(page);
+  const turnStartCountAfter = turnStartCountForThread(
+    diagnosticsAfterAttempt,
+    childThreadId,
+  );
+
+  const rejectedReply = await invokeAppServerJsonRpcRaw(page, "turn/start", {
+    threadId: childThreadId,
+    input: [{ type: "text", text: "parent-owned direct input must fail" }],
+  });
+  const screenshotPath = screenshotPathForEvidence(
+    outputPath,
+    "parent-owned-child",
+  );
+  fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+
+  return {
+    parentSessionId,
+    childThreadId,
+    canonicalThread: {
+      id: canonicalThread.id,
+      sessionId: canonicalThread.sessionId,
+      parentThreadId: canonicalThread.parentThreadId ?? null,
+      canAcceptDirectInput: canonicalThread.canAcceptDirectInput ?? null,
+    },
+    dom,
+    uiAttempt: {
+      ...uiAttempt,
+      turnStartCountBefore,
+      turnStartCountAfter,
+    },
+    serverRejection: {
+      code: rejectedReply?.error?.code ?? null,
+      message: rejectedReply?.error?.message ?? null,
+      hasResult: Object.hasOwn(rejectedReply ?? {}, "result"),
+    },
+    screenshotPath: path.relative(process.cwd(), screenshotPath),
+  };
+}
+
 async function collectDeferredMcpVisibleDomGateB({
   consoleErrors,
   evidence,
@@ -531,13 +738,20 @@ async function collectAgentControlVisibleDomGateB({
     `${LOG_PREFIX} subagent-activity-rows=${JSON.stringify(subagentActivityRows)}`,
   );
 
-  const diagnostics = await readInvokeDiagnostics(page);
   const screenshotPath = screenshotPathForEvidence(
     outputPath,
     "cold-restart-visible-dom",
   );
   fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
   await page.screenshot({ path: screenshotPath, fullPage: true });
+  const parentOwnedChild = await collectParentOwnedChildGateB({
+    outputPath,
+    page,
+    parentSessionId: sessionId,
+    subagentActivityRows,
+    timeoutMs,
+  });
+  const diagnostics = await readInvokeDiagnostics(page);
   const snapshot = {
     proofLevel: "Gate B",
     claimBoundary:
@@ -552,6 +766,7 @@ async function collectAgentControlVisibleDomGateB({
     activeSessionId: domState.activeSessionId,
     typedToolRows,
     subagentActivityRows,
+    parentOwnedChild,
     finalAssistantTextVisible: domState.finalAssistantTextVisible,
     appServerCalls: diagnostics.appServerCalls,
     invokeErrorCount: diagnostics.invokeErrorCount,
@@ -576,6 +791,35 @@ async function invokeElectron(page, command, args) {
       return await invoke(command, args);
     },
     { command, args },
+  );
+}
+
+async function invokeAppServerJsonRpcRaw(page, method, params) {
+  return await page.evaluate(
+    async ({ command, method, params }) => {
+      const invoke = window.electronAPI?.invoke;
+      if (typeof invoke !== "function") {
+        throw new Error("Electron preload invoke bridge is unavailable");
+      }
+      const id = `agent-control-parent-owned-${Date.now()}-${Math.random()}`;
+      const response = await invoke(command, {
+        request: {
+          lines: [JSON.stringify({ jsonrpc: "2.0", id, method, params })],
+        },
+      });
+      const lines = response?.result?.lines ?? response?.lines;
+      const messages = (Array.isArray(lines) ? lines : [])
+        .map((line) => {
+          try {
+            return JSON.parse(String(line));
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      return messages.find((message) => message?.id === id) ?? null;
+    },
+    { command: APP_SERVER_HANDLE_JSON_LINES_COMMAND, method, params },
   );
 }
 

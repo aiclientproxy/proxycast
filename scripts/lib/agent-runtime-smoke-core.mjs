@@ -12,7 +12,7 @@ const APP_SERVER_DRAIN_EVENTS_COMMAND = "app_server_drain_events";
 const APP_SERVER_METHOD_MODEL_PROVIDER_LIST = "modelProvider/list";
 const APP_SERVER_METHOD_MODEL_PROVIDER_READ = "modelProvider/read";
 const APP_SERVER_METHOD_THREAD_START = "thread/start";
-const APP_SERVER_METHOD_AGENT_SESSION_UPDATE = "agentSession/update";
+const APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE = "thread/settings/update";
 const APP_SERVER_METHOD_THREAD_READ = "thread/read";
 const APP_SERVER_METHOD_TURN_START = "turn/start";
 const APP_SERVER_METHOD_TURN_INTERRUPT = "turn/interrupt";
@@ -402,20 +402,18 @@ export async function createAgentSessionCurrent(
   return sessionId;
 }
 
-export async function updateAgentSessionRuntimeCurrent(
+export async function updateAgentThreadSettingsCurrent(
   options,
-  { sessionId, provider, executionStrategy = "react" },
+  { threadId, provider },
   invoke = invokeAppServerMethod,
 ) {
   await invoke(
     options,
-    APP_SERVER_METHOD_AGENT_SESSION_UPDATE,
+    APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE,
     {
-      sessionId,
-      providerSelector: provider.providerPreference,
-      providerName: provider.providerName,
-      modelName: provider.modelPreference,
-      executionStrategy,
+      threadId,
+      modelProvider: provider.providerPreference,
+      model: provider.modelPreference,
     },
     30_000,
   );

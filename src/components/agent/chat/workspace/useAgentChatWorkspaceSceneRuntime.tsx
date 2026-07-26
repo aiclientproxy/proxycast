@@ -98,6 +98,7 @@ export function useAgentChatWorkspaceSceneRuntime({
     isThemeWorkbench,
     sessionId,
     threadId: threadRead?.thread_id ?? null,
+    canAcceptDirectInput: threadRead?.can_accept_direct_input,
     threadGoal,
     threadGoalError,
     threadGoalLoading: isThreadGoalLoading,

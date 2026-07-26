@@ -87,7 +87,7 @@
 - App Server `agentSession/turn/start` 是唯一 current 提交入口
 - App Server `agentSession/action/respond` 这类恢复路径只能复用当前 turn context snapshot 组装，不能再旁路拼第二份 turn context 真相
 - App Server `agentSession/read` 负责消费稳定读模型，不负责重新解释提交逻辑
-- App Server `agentSession/compact` / RuntimeCore compaction 是主链内的上下文治理动作，不是独立聊天系统
+- App Server `thread/compact/start` / RuntimeCore compaction 是主链内的上下文治理动作，不是独立聊天系统
 
 ### 2. turn 归一化与输入组装
 
@@ -197,7 +197,7 @@
 
 当前 Query Loop 的下游消费统一挂在下面几处：
 
-- App Server `agentSession/compact`
+- App Server exact `thread/compact/start`：params 为 `{ threadId }`，立即返回 `{}`；压缩进度通过标准 `turn/*`、`item/*` lifecycle 投影
 - App Server `agentSession/read`
 - App Server `evidence/export`
 - App Server `agentSession/handoffBundle/export`
@@ -209,6 +209,7 @@
 固定规则：
 
 - 自动压缩与手动压缩都属于同一 runtime 主链
+- 手动压缩不保留旧 session-scoped RPC alias、双发或 fallback
 - `thread_read` 是稳定读模型，不重新定义提交逻辑
 - `evidence / replay / review` 必须消费 runtime facts，不允许自己拼第二份 Query Loop 真相
 
@@ -249,7 +250,7 @@
 - `runtime_queue.rs`
 - `lime-rs/crates/agent` 工具 catalog / request tool policy
 - App Server `agentSession/read`
-- App Server `agentSession/compact`
+- App Server `thread/compact/start`
 - App Server `evidence/export` 与 `agentSession/*/export`
 
 ### `compat`
@@ -262,7 +263,6 @@
 当前命令层允许保留的原始执行面只剩 `action_runtime` current 恢复链与 `agent_generate_title` 受控 compat 一次性命令。旧 `persona_cmd` wrapper 已删除；persona 生成语义若继续保留，应通过 runtime auxiliary service / App Server current 边界承接。旧 `agent_theme_context_search` 已下线，主题上下文搜索 current 事实源是 `src/lib/api/themeContextSearch.ts -> App Server agentSession/start + agentSession/turn/start + agentSession/read`。
 
 ### `dead`
-
 
 旧主题上下文搜索 Tauri 命令不得重新注册到 legacy desktop facade；如果后续继续增强主题上下文搜索，只能扩展 App Server current session turn 网关与 RuntimeCore/backend。
 

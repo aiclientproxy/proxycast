@@ -130,6 +130,51 @@ pub struct ThreadPage {
     pub backwards_cursor: Option<StoreCursor>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ThreadSearchSortKey {
+    CreatedAt,
+    UpdatedAt,
+    RecencyAt,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ThreadSearchSourceKind {
+    Cli,
+    VsCode,
+    Exec,
+    AppServer,
+    SubAgent,
+    SubAgentReview,
+    SubAgentCompact,
+    SubAgentThreadSpawn,
+    SubAgentOther,
+    Unknown,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchThreadsParams {
+    pub cursor: Option<StoreCursor>,
+    pub page_size: usize,
+    pub sort_key: ThreadSearchSortKey,
+    pub sort_direction: SortDirection,
+    pub source_kinds: Vec<ThreadSearchSourceKind>,
+    pub archived: bool,
+    pub search_term: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct StoredThreadSearchResult {
+    pub thread: Thread,
+    pub snippet: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ThreadSearchPage {
+    pub data: Vec<StoredThreadSearchResult>,
+    pub next_cursor: Option<StoreCursor>,
+    pub backwards_cursor: Option<StoreCursor>,
+}
+
 /// A page of canonical turns.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TurnPage {
@@ -144,6 +189,35 @@ pub struct ItemPage {
     pub data: Vec<ThreadItem>,
     pub next_cursor: Option<StoreCursor>,
     pub backwards_cursor: Option<StoreCursor>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchThreadOccurrencesParams {
+    pub thread_id: ThreadId,
+    pub search_term: String,
+    pub cursor: Option<StoreCursor>,
+    pub page_size: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchTextRange {
+    pub start: u32,
+    pub end: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredThreadOccurrence {
+    pub turn_id: TurnId,
+    pub item_id: agent_protocol::ItemId,
+    pub snippet: String,
+    pub snippet_match_range: SearchTextRange,
+    pub turn_cursor: StoreCursor,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreadOccurrenceSearchPage {
+    pub data: Vec<StoredThreadOccurrence>,
+    pub next_cursor: Option<StoreCursor>,
 }
 
 /// Parameters for appending already-canonical items to one thread.

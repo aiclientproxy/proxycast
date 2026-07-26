@@ -1,0 +1,23 @@
+{
+  "$defs": {
+    "ThreadUnsubscribeStatus": {
+      "enum": [
+        "notLoaded",
+        "notSubscribed",
+        "unsubscribed"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "status": {
+      "$ref": "#/$defs/ThreadUnsubscribeStatus"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "ThreadUnsubscribeResponse",
+  "type": "object"
+}

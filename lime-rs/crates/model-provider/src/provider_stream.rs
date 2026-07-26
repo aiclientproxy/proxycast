@@ -128,6 +128,8 @@ pub struct RuntimeReplyProviderIdentity {
     pub protocol: Option<ModelProviderProtocol>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_tier: Option<String>,
     #[serde(default)]
     pub toolshim: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -145,6 +147,7 @@ impl RuntimeReplyProviderIdentity {
                 .protocol
                 .map(RuntimeProviderProtocol::to_model_provider_protocol),
             reasoning_effort: config.reasoning_effort.clone(),
+            service_tier: config.service_tier.clone(),
             toolshim: config.toolshim,
             toolshim_model: config.toolshim_model.clone(),
         }

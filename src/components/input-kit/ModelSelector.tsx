@@ -42,6 +42,10 @@ import { ModelCapabilityBadges } from "@/components/model/ModelCapabilityBadges"
 import { resolveOemCloudRuntimeContext } from "@/lib/api/oemCloudRuntime";
 import { resolveOemLimeHubProviderName } from "@/lib/oemLimeHubProvider";
 import { resolveProviderModelLoadOptions } from "@/lib/model/providerModelLoadOptions";
+import {
+  resolveModelReasoningEffortForModelSwitch,
+  type ModelReasoningEffortPreset,
+} from "@/lib/model/modelReasoningPolicy";
 import type {
   EnhancedModelMetadata,
   ModelReasoningEffortLevel,
@@ -60,7 +64,6 @@ const BACKGROUND_PRELOAD_IDLE_TIMEOUT_MS = 1_500;
 const BACKGROUND_PRELOAD_FALLBACK_DELAY_MS = 180;
 const NO_PROVIDER_GUIDE_DISMISSED_STORAGE_KEY =
   "lime_model_selector_no_provider_guide_dismissed_v1";
-const DEFAULT_REASONING_EFFORT_LEVEL: ModelReasoningEffortLevel = "medium";
 
 function resolveProviderSelectionValue(provider: ConfiguredProvider): string {
   return provider.providerId ?? provider.key;
@@ -122,36 +125,29 @@ function hasProviderDeclaredModel(provider: ConfiguredProvider): boolean {
   return Boolean(resolveInitialProviderModel(provider));
 }
 
-function resolveApiReasoningEffortLevels(
+function resolveReasoningEffortOptions(
   model: EnhancedModelMetadata | null | undefined,
-): ModelReasoningEffortLevel[] {
-  const support = model?.capabilities.reasoning_effort;
-  if (
-    !support?.supported ||
-    support.source !== "api" ||
-    !Array.isArray(support.levels)
-  ) {
+): ModelReasoningEffortPreset[] {
+  const policy = model?.reasoning_policy;
+  if (!policy?.can_set_reasoning_effort) {
     return [];
   }
 
-  return support.levels.filter(Boolean);
+  return policy.supported_reasoning_levels;
 }
 
-function resolveDefaultReasoningEffort(
+function resolveReasoningEffortForModelSwitch(
   model: EnhancedModelMetadata | null | undefined,
-  levels: ModelReasoningEffortLevel[],
+  currentReasoningEffort: ModelReasoningEffortLevel | "",
 ): ModelReasoningEffortLevel | "" {
-  if (levels.length === 0) {
+  const policy = model?.reasoning_policy;
+  if (!policy?.can_set_reasoning_effort) {
     return "";
   }
-  const supportDefault = model?.capabilities.reasoning_effort?.default;
-  if (supportDefault && levels.includes(supportDefault)) {
-    return supportDefault;
-  }
-  if (levels.includes(DEFAULT_REASONING_EFFORT_LEVEL)) {
-    return DEFAULT_REASONING_EFFORT_LEVEL;
-  }
-  return levels[0] ?? "";
+  return (
+    resolveModelReasoningEffortForModelSwitch(policy, currentReasoningEffort) ??
+    ""
+  );
 }
 
 export interface ModelSelectorProps {
@@ -447,16 +443,21 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     () => modelOptions.find((item) => item.id === model) ?? null,
     [model, modelOptions],
   );
-  const selectedReasoningEffortLevels = useMemo(
-    () => resolveApiReasoningEffortLevels(selectedModelOption?.metadata),
+  const selectedReasoningEffortOptions = useMemo(
+    () => resolveReasoningEffortOptions(selectedModelOption?.metadata),
     [selectedModelOption?.metadata],
   );
-  const selectedReasoningEffort =
-    reasoningEffort && selectedReasoningEffortLevels.includes(reasoningEffort)
-      ? reasoningEffort
-      : "";
-  const selectedReasoningEffortLabel = selectedReasoningEffort
-    ? t(`common.modelSelector.reasoning.level.${selectedReasoningEffort}`)
+  const selectedReasoningEffortOption =
+    selectedReasoningEffortOptions.find(
+      (option) => option.value === reasoningEffort,
+    ) ?? null;
+  const selectedReasoningEffort = selectedReasoningEffortOption?.value ?? "";
+  const selectedReasoningEffortLabel = selectedReasoningEffortOption
+    ? selectedReasoningEffortOption.label ||
+      t(
+        `common.modelSelector.reasoning.level.${selectedReasoningEffortOption.value}`,
+        { defaultValue: selectedReasoningEffortOption.id },
+      )
     : "";
 
   useEffect(() => {
@@ -467,28 +468,24 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       return;
     }
 
-    if (!selectedModelOption || selectedReasoningEffortLevels.length === 0) {
+    if (!selectedModelOption || selectedReasoningEffortOptions.length === 0) {
       if (reasoningEffort) {
         setReasoningEffort("");
       }
       return;
     }
 
-    if (
-      !reasoningEffort ||
-      !selectedReasoningEffortLevels.includes(reasoningEffort)
-    ) {
-      setReasoningEffort(
-        resolveDefaultReasoningEffort(
-          selectedModelOption.metadata,
-          selectedReasoningEffortLevels,
-        ),
-      );
+    const nextReasoningEffort = resolveReasoningEffortForModelSwitch(
+      selectedModelOption.metadata,
+      reasoningEffort,
+    );
+    if (nextReasoningEffort !== reasoningEffort) {
+      setReasoningEffort(nextReasoningEffort);
     }
   }, [
     reasoningEffort,
     selectedModelOption,
-    selectedReasoningEffortLevels,
+    selectedReasoningEffortOptions,
     setReasoningEffort,
     shouldLoadModels,
   ]);
@@ -994,7 +991,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 </div>
               ) : null}
 
-              {selectedReasoningEffortLevels.length > 0 ? (
+              {selectedReasoningEffortOptions.length > 0 ? (
                 <div
                   className="mb-2 rounded-2xl border border-slate-200/80 bg-slate-50 px-2.5 py-2"
                   data-testid="model-selector-reasoning-effort"
@@ -1012,24 +1009,27 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   <div
                     className="grid gap-1"
                     style={{
-                      gridTemplateColumns: `repeat(${selectedReasoningEffortLevels.length}, minmax(0, 1fr))`,
+                      gridTemplateColumns: `repeat(${selectedReasoningEffortOptions.length}, minmax(0, 1fr))`,
                     }}
                   >
-                    {selectedReasoningEffortLevels.map((level) => {
-                      const label = t(
-                        `common.modelSelector.reasoning.level.${level}`,
-                      );
+                    {selectedReasoningEffortOptions.map((option) => {
+                      const label =
+                        option.label ||
+                        t(
+                          `common.modelSelector.reasoning.level.${option.value}`,
+                          { defaultValue: option.id },
+                        );
                       const selected =
-                        selectedReasoningEffort === level ||
+                        selectedReasoningEffort === option.value ||
                         (!selectedReasoningEffort &&
-                          level ===
-                            resolveDefaultReasoningEffort(
+                          option.value ===
+                            resolveReasoningEffortForModelSwitch(
                               selectedModelOption?.metadata,
-                              selectedReasoningEffortLevels,
+                              reasoningEffort,
                             ));
                       return (
                         <button
-                          key={level}
+                          key={option.id}
                           type="button"
                           aria-pressed={selected}
                           aria-label={t("common.modelSelector.reasoning.aria", {
@@ -1041,7 +1041,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                               ? "bg-slate-900 text-white shadow-sm shadow-slate-950/10"
                               : "text-slate-500 hover:bg-white hover:text-slate-900",
                           )}
-                          onClick={() => setReasoningEffort?.(level)}
+                          onClick={() => setReasoningEffort?.(option.value)}
                         >
                           <span className="truncate">{label}</span>
                           {selected ? (
@@ -1142,14 +1142,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                               return;
                             }
                             setModel(currentModelItem.id);
-                            const reasoningLevels =
-                              resolveApiReasoningEffortLevels(
-                                currentModelItem.metadata,
-                              );
                             setReasoningEffort?.(
-                              resolveDefaultReasoningEffort(
+                              resolveReasoningEffortForModelSwitch(
                                 currentModelItem.metadata,
-                                reasoningLevels,
+                                reasoningEffort,
                               ),
                             );
                             setOpen(false);

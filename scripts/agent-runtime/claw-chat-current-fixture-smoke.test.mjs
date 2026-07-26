@@ -50,6 +50,14 @@ import {
 import { runtimeEventFromDirectNotification } from "./claw-chat-current-fixture-rpc.mjs";
 import { isGuiChatCompletedSnapshotReady } from "./claw-chat-current-fixture-gui-completion-waits.mjs";
 import { startTextProviderFixtureServer } from "./claw-chat-current-fixture-backend-file.mjs";
+import {
+  ACTIVE_STEER_DONE_TEXT,
+  ACTIVE_STEER_FINAL_TEXT,
+  ACTIVE_STEER_INITIAL_PROMPT,
+  ACTIVE_STEER_INPUT,
+  ACTIVE_STEER_SCENARIO,
+  buildActiveSteerScenarioAssertions,
+} from "./claw-chat-current-fixture-active-steer.mjs";
 
 const fixtureSourceFiles = [
   "scripts/agent-runtime/claw-chat-current-fixture-smoke.mjs",
@@ -80,10 +88,8 @@ const fixtureSourceFiles = [
   "scripts/agent-runtime/claw-chat-current-fixture-image-command-workflow-read.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-skills-workspace.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-inputbar-rich-restore.mjs",
-  "scripts/agent-runtime/claw-chat-current-fixture-inputbar-pending-steer.mjs",
+  "scripts/agent-runtime/claw-chat-current-fixture-active-steer.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-home-hotpath.mjs",
-  "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-gui-actions.mjs",
-  "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-read-model.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-skills-runtime-flow.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-terminal-after-answer.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-terminal-stale-guard.mjs",
@@ -100,7 +106,6 @@ const fixtureSourceFiles = [
   "scripts/agent-runtime/claw-chat-current-fixture-scenario-flow.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-common-assertions.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-scenario-assertions.mjs",
-  "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-assertions.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-resize-reflow-assertions.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-runtime-surface-assertions.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-skills-runtime-assertions.mjs",
@@ -916,7 +921,8 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain('const FIXTURE_PROVIDER = "fixture-provider"');
     expect(content).toContain('const FIXTURE_MODEL = "fixture-model"');
     expect(content).toContain('"thread/start"');
-    expect(content).toContain('"agentSession/update"');
+    expect(content).not.toContain('"agentSession/update"');
+    expect(content).toContain('"thread/settings/update"');
     expect(content).toContain('"turn/start"');
     expect(content).toContain('"turn/interrupt"');
     expect(content).toContain('"thread/read"');
@@ -1799,117 +1805,235 @@ describe("claw chat current Electron fixture smoke guard", () => {
     ).toBe(true);
   });
 
-  it("covers Inputbar pending steer rich draft queue and restore", () => {
+  it("keeps retired pending-steer GUI fixtures deleted", () => {
     const content = readSmokeScript();
     const regressionContent = readCurrentFixtureRegressionSmokeScript();
-    const readModelWaitsContent = fs.readFileSync(
-      "scripts/agent-runtime/claw-chat-current-fixture-read-model-waits.mjs",
-      "utf8",
-    );
-    const rpcContent = fs.readFileSync(
-      "scripts/agent-runtime/claw-chat-current-fixture-rpc.mjs",
-      "utf8",
-    );
-    const skillsRuntimeFlowContent = fs.readFileSync(
-      "scripts/agent-runtime/claw-chat-current-fixture-skills-runtime-flow.mjs",
-      "utf8",
-    );
-    const pendingSteerAssertionsContent = fs.readFileSync(
+    const retiredFixtureFiles = [
+      "scripts/agent-runtime/claw-chat-current-fixture-inputbar-pending-steer.mjs",
+      "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-gui-actions.mjs",
+      "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-read-model.mjs",
       "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-assertions.mjs",
-      "utf8",
-    );
+    ];
+    const retiredScenarios = [
+      "inputbar-pending-steer-rich-restore",
+      "inputbar-pending-steer-multi-queue",
+      "inputbar-pending-steer-pop-front-resume",
+    ];
 
-    expect(content).toContain("inputbar-pending-steer-rich-restore");
-    expect(content).toContain("inputbar-pending-steer-multi-queue");
-    expect(content).toContain("inputbar-pending-steer-pop-front-resume");
-    expect(content).toContain("INPUTBAR_PENDING_STEER_ACTIVE_PROMPT");
-    expect(content).toContain("INPUTBAR_PENDING_STEER_ACTIVE_OUTPUT_TEXT");
-    expect(content).toContain("INPUTBAR_PENDING_STEER_SECOND_PROMPT");
-    expect(content).toContain("runInputbarPendingSteerRichRestoreScenario");
-    expect(content).toContain("runInputbarPendingSteerMultiQueueScenario");
-    expect(content).toContain("runInputbarPendingSteerPopFrontResumeScenario");
-    expect(content).toContain("scenarioWaitsForExternalBackendCancel");
-    expect(content).toContain("Math.max(options.timeoutMs, 130_000)");
-    expect(content).toContain("clickRichRestoreDeferButton");
-    expect(content).toContain("clickQueuedTurnPromoteButtonForPrompt");
-    expect(content).toContain(
-      "textarea?.closest('[data-testid=\"inputbar-core-container\"]')",
+    for (const filePath of retiredFixtureFiles) {
+      expect(fs.existsSync(filePath)).toBe(false);
+      expect(fixtureSourceFiles).not.toContain(filePath);
+    }
+    for (const scenario of retiredScenarios) {
+      expect(content).not.toContain(scenario);
+      expect(regressionContent).not.toContain(scenario);
+    }
+    expect(content).not.toContain("INPUTBAR_PENDING_STEER");
+    expect(content).not.toContain("inputbarPendingSteer");
+    expect(content).not.toContain("InputbarPendingSteer");
+  });
+
+  it("covers active steer through thread/read and turn/steer without public queue", () => {
+    const content = readSmokeScript();
+    const regressionContent = readCurrentFixtureRegressionSmokeScript();
+
+    expect(content).toContain(ACTIVE_STEER_SCENARIO);
+    expect(content).toContain("runActiveSteerScenario");
+    expect(content).toContain('request.method === "turn/steer"');
+    expect(content).toContain('request.method === "thread/read"');
+    expect(content).toContain("expectedTurnId");
+    expect(content).toContain("activeSteerProviderReceivedSecondStep");
+    expect(content).toContain("activeSteerSingleTurnInReadModel");
+    expect(content).toContain("activeSteerSingleTurnInGui");
+    expect(content).toContain("activeSteerNoSecondTurnStart");
+    expect(content).toContain("activeSteerNoPublicQueueMethod");
+    expect(content).toContain("activeSteerNoQueuedTurnGui");
+    expect(content).toContain('APP_SERVER_BACKEND_MODE: "runtime"');
+    expect(regressionContent).toContain(
+      "Claw active turn steer same identity Electron fixture",
     );
-    expect(content).toContain("scopedRowCount");
-    expect(content).toContain("deferSecondPlainPendingSteer");
-    expect(content).toContain("DEFER_BUTTON_LABELS");
-    expect(content).toContain("Handle later");
-    expect(content).toContain("稍后处理");
-    expect(content).toContain("waitForInputbarPendingSteerQueuedReadModel");
-    expect(content).toContain("summarizePendingSteerQueue");
-    expect(content).toContain("findReadModelQueuedTurnForPrompt");
-    expect(content).toContain("inputbarPendingSteerQueuedReadModel");
-    expect(content).toContain("inputbarPendingSteerSecondInputDefer");
-    expect(content).toContain("inputbarPendingSteerBackendBeforeCancel");
-    expect(content).toContain(
-      "inputbarPendingSteerRichPromptNotStartedBeforeCancel",
+    expect(regressionContent).toContain(`"${ACTIVE_STEER_SCENARIO}"`);
+    expect(regressionContent).toContain(
+      "claw-chat-current-fixture-active-steer-regression",
     );
-    expect(content).toContain("inputbarPendingSteerQueuedRestoreClicked");
-    expect(content).toContain("inputbarPendingSteerQueuedRichImagePreserved");
-    expect(content).toContain("inputbarPendingSteerQueuedRichPathPreserved");
-    expect(content).toContain(
-      "inputbarPendingSteerQueuedRichTextElementsPreserved",
-    );
-    expect(content).toContain("inputbarPendingSteerQueuedRichSkillPreserved");
-    expect(content).toContain("inputbarPendingSteerMultipleQueued");
-    expect(content).toContain("inputbarPendingSteerQueueOrderPreserved");
-    expect(content).toContain("inputbarPendingSteerSecondTextQueued");
-    expect(content).toContain("inputbarPendingSteerPopFrontGuiPromoteClicked");
-    expect(content).toContain("inputbarPendingSteerPopFrontUsedCurrentResume");
-    expect(skillsRuntimeFlowContent).toContain("waitForBackendLedgerTurnStart");
-    expect(readModelWaitsContent).not.toContain(
-      "APP_SERVER_METHOD_SESSION_THREAD_RESUME",
-    );
-    expect(rpcContent).not.toContain("APP_SERVER_METHOD_SESSION_THREAD_RESUME");
-    expect(pendingSteerAssertionsContent).not.toContain(
-      "APP_SERVER_METHOD_SESSION_THREAD_RESUME",
-    );
-    expect(content).not.toMatch(
-      /summary\.inputbarPendingSteerPopFrontActiveCancel\s*=\s*await cancelActivePendingSteerTurn/u,
-    );
-    expect(content).toContain("inputbarPendingSteerPopFrontSecondReindexed");
-    expect(content).toContain(
-      "inputbarPendingSteerPopFrontGuiHydratedSecondQueue",
-    );
-    expect(content).toContain(
-      "inputbarPendingSteerPopFrontHydratedResumeReady",
-    );
-    expect(content).toContain(
-      "inputbarPendingSteerPopFrontQueuedPanel.richTurnTerminal === true",
-    );
-    expect(content).toContain(
-      "inputbarPendingSteerPopFrontQueuedPanel.stopButtonVisible === false",
-    );
-    expect(content).toMatch(
-      /isInputbarPendingSteerPopFrontResumeScenario\s*\?\s*inputbarPendingSteerPopFrontHydratedResumeReady/u,
-    );
-    expect(content).toContain(
-      "INPUTBAR_PENDING_STEER_MULTI_QUEUE_ASSERTION_KEYS",
-    );
-    expect(content).toContain(
-      "INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_ASSERTION_KEYS",
-    );
-    expect(content).toContain(
-      "INPUTBAR_PENDING_STEER_RICH_RESTORE_ASSERTION_KEYS",
-    );
-    expect(content).toContain("inputbarPendingSteerQueuedProjectionCleared");
-    expect(content).toContain(
-      "options.scenario !== INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO",
-    );
-    expect(regressionContent).not.toContain(
-      "Claw Inputbar pending steer rich draft queue + restore Electron fixture",
-    );
-    expect(regressionContent).not.toContain(
-      '"inputbar-pending-steer-multi-queue"',
-    );
-    expect(regressionContent).not.toContain(
-      '"inputbar-pending-steer-pop-front-resume"',
-    );
+  });
+
+  it("binds active steer Gate B identity without an external backend ledger", () => {
+    expect(
+      resolveGateBExpectedIdentity({
+        summary: {
+          sessionId: "session-active-steer",
+          threadId: "thread-active-steer",
+          activeSteer: { activeTurnId: "turn-active-steer" },
+        },
+        options: { scenario: ACTIVE_STEER_SCENARIO },
+        backendLedger: [],
+        appServerRequests: [],
+      }),
+    ).toEqual({
+      sessionId: "session-active-steer",
+      threadId: "thread-active-steer",
+      turnId: "turn-active-steer",
+    });
+  });
+
+  it("requires one active Turn across steer trace, provider, read model and GUI", () => {
+    const summary = {
+      guiCompleted: {
+        completionScope: {
+          runtimeTurnId: "turn-active-steer",
+          assistantRuntimeTurnId: "turn-active-steer",
+        },
+      },
+      activeSteer: {
+        activeTurnId: "turn-active-steer",
+        steerTrace: {
+          threadReadBeforeSteer: true,
+          steer: {
+            expectedTurnId: "turn-active-steer",
+            transport: "electron-ipc",
+            status: "success",
+            inputIsTyped: true,
+            inputText: ACTIVE_STEER_INPUT,
+          },
+        },
+        provider: {
+          chatRequestCount: 2,
+          initialRequestObserved: true,
+          steerRequestObserved: true,
+        },
+        readModel: {
+          turnIds: ["turn-active-steer"],
+          relevantItemTurnIds: [],
+          includesInitialPrompt: true,
+          includesSteerInput: true,
+          includesFirstText: true,
+          includesFinalText: true,
+          includesDoneText: true,
+          includesTurnSteerSource: false,
+        },
+        gui: {
+          scenarioGroupCount: 4,
+          scenarioRuntimeTurnIds: ["turn-active-steer"],
+          includesInitialPrompt: true,
+          includesSteerInput: true,
+          includesFirstText: true,
+          includesFinalText: true,
+          includesDoneText: true,
+          scenarioGroups: [
+            {
+              runtimeTurnId: "turn-active-steer",
+              includesInitialPrompt: true,
+              includesSteerInput: false,
+              includesFirstText: false,
+              includesFinalText: false,
+              includesDoneText: false,
+            },
+            {
+              runtimeTurnId: "turn-active-steer",
+              includesInitialPrompt: false,
+              includesSteerInput: true,
+              includesFirstText: false,
+              includesFinalText: false,
+              includesDoneText: false,
+            },
+            {
+              runtimeTurnId: "turn-active-steer",
+              includesInitialPrompt: false,
+              includesSteerInput: false,
+              includesFirstText: true,
+              includesFinalText: false,
+              includesDoneText: false,
+            },
+            {
+              runtimeTurnId: "turn-active-steer",
+              includesInitialPrompt: false,
+              includesSteerInput: false,
+              includesFirstText: false,
+              includesFinalText: true,
+              includesDoneText: true,
+            },
+          ],
+          textareaVisible: true,
+          textareaDisabled: false,
+          stopButtonVisible: false,
+          queuedTurnGuiCount: 0,
+        },
+        trace: {
+          scenarioTurnStartCount: 1,
+          initialTurnStartCount: 1,
+          steerInputTurnStartCount: 0,
+          postBaselineTurnStartCount: 0,
+          publicQueueMethodHits: [],
+        },
+      },
+    };
+
+    expect(
+      Object.values(buildActiveSteerScenarioAssertions({ summary })),
+    ).toEqual(Array(10).fill(true));
+    summary.activeSteer.readModel.turnIds.push("turn-forbidden-second");
+    expect(
+      buildActiveSteerScenarioAssertions({ summary })
+        .activeSteerSingleTurnInReadModel,
+    ).toBe(false);
+  });
+
+  it("streams the active steer first step and records only request markers", async () => {
+    const fixture = await startTextProviderFixtureServer({
+      activeSteerDelayMs: 10,
+    });
+    const headers = {
+      Authorization: `Bearer ${TEXT_PROVIDER_FIXTURE_API_KEY}`,
+      "content-type": "application/json",
+    };
+    try {
+      const firstResponse = await fetch(`${fixture.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          stream: true,
+          messages: [{ role: "user", content: ACTIVE_STEER_INITIAL_PROMPT }],
+        }),
+      });
+      expect(await firstResponse.text()).toContain(
+        "ACTIVE_STEER_FIRST_VISIBLE",
+      );
+
+      const secondResponse = await fetch(
+        `${fixture.baseUrl}/chat/completions`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            stream: true,
+            messages: [
+              { role: "user", content: ACTIVE_STEER_INITIAL_PROMPT },
+              { role: "user", content: ACTIVE_STEER_INPUT },
+            ],
+          }),
+        },
+      );
+      const secondBody = await secondResponse.text();
+      expect(secondBody).toContain(ACTIVE_STEER_FINAL_TEXT);
+      expect(secondBody).toContain(ACTIVE_STEER_DONE_TEXT);
+
+      const requests = fixture
+        .requests()
+        .filter((request) => request.method === "POST");
+      expect(requests).toHaveLength(2);
+      expect(requests[0].bodySummary).toMatchObject({
+        bodyIncludesActiveSteerInitialPrompt: true,
+        bodyIncludesActiveSteerInput: false,
+      });
+      expect(requests[1].bodySummary).toMatchObject({
+        bodyIncludesActiveSteerInitialPrompt: true,
+        bodyIncludesActiveSteerInput: true,
+      });
+      expect(requests.every((request) => !("body" in request))).toBe(true);
+    } finally {
+      await fixture.close();
+    }
   });
 
   it("requires scoped credential for text provider model discovery", async () => {
@@ -2221,15 +2345,33 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain("request-electron-resize-reflow-files-surface");
     expect(content).toContain("wait-electron-resize-reflow-backend-turn-start");
     expect(content).toContain("capture-electron-resize-reflow-${label}");
-    expect(content).toContain("wide: { width: 1440, height: 1000 }");
-    expect(content).toContain("compact: { width: 1240, height: 760 }");
-    expect(content).toContain("restored: { width: 1440, height: 1000 }");
+    expect(content).toContain("wide: { width: 1280, height: 820 }");
+    expect(content).toContain("compact: { width: 880, height: 720 }");
+    expect(content).toContain("restored: { width: 1280, height: 820 }");
+    expect(content).toContain("tableOverflowHandled");
+    expect(content).toContain("noDocumentHorizontalOverflow");
+    expect(content).toContain("noTableRightOverlap");
+    expect(content).toContain('label === "compact"');
+    expect(content).toContain("rightSurfaceExpectedVisibility");
+    expect(content).not.toContain(
+      'snapshot.label !== "compact" || snapshot.table?.overflowed === true',
+    );
     expect(content).toContain("captureResizeScreenshot");
     expect(content).toContain("screenshotCount");
+    expect(content).toContain(
+      "page.setViewportSize(RESIZE_REFLOW_VIEWPORTS.wide)",
+    );
+    expect(content).toContain('window.dispatchEvent(new Event("resize"))');
+    expect(content).toContain("stableFrameCount < 2");
+    expect(content).toContain('scrollRoot.dispatchEvent(new Event("scroll"))');
     expect(content).toContain("workspace-files-surface");
     expect(content).toContain("task-center-files-toggle");
     expect(content).toContain("textRangeRect");
     expect(content).toContain("noTailInputOverlap");
+    expect(content).toContain("noTableTailInputOverlap");
+    expect(content).toContain("noDoneTextInputOverlap");
+    expect(content).toContain("noTurnGroupInputOverlap");
+    expect(content).toContain("doneTextRange ?? tableTailRange");
     expect(content).toContain("noMessageRightOverlap");
     expect(content).toContain("guiElectronResizeReflowNoOverlap");
     expect(content).toContain("ELECTRON_RESIZE_REFLOW_ASSERTION_KEYS");
@@ -2469,8 +2611,8 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain("workspace-object-canvas-surface");
     expect(content).toContain("right-surface-browser-panel");
     expect(content).toContain("summarizeRightSurfaceRequest(requests.browser)");
-    expect(content).toContain(
-      "fs.existsSync(rightSurfaceVisualCaptures.browser.screenshot)",
+    expect(content).toMatch(
+      /fs\.existsSync\(\s*rightSurfaceVisualCaptures\.browser\.screenshot,?\s*\)/u,
     );
     expect(content).toContain("expert-info-panel");
     expect(content).toContain("workspace-plugin-surface");
@@ -2530,6 +2672,24 @@ describe("claw chat current Electron fixture smoke guard", () => {
         "files",
       ),
     ).toBe(false);
+
+    expect(
+      isRightSurfaceSnapshotReady(
+        {
+          activeSurface: "files",
+          hostVisible: true,
+          rootVisible: true,
+          visibleRootKinds: ["files"],
+          geometry: {
+            hostFillsCanvasPanel: false,
+            rootFillsSurfaceViewport: true,
+          },
+        },
+        "files",
+        "files",
+        false,
+      ),
+    ).toBe(true);
   });
 
   it("does not use live providers, App Server mock backend, renderer mocks, or legacy commands", () => {

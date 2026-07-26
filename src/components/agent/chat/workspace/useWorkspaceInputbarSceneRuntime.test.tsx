@@ -229,6 +229,7 @@ function renderHookNode(props: HookProps): HTMLDivElement {
 
 function getLatestInputbarProps(): {
   disabled?: boolean;
+  disabledPlaceholder?: string;
   isLoading?: boolean;
   inputRestoreRequest?: unknown;
   onInputRestoreRequestHandled?: (requestId: string) => void;
@@ -248,6 +249,7 @@ function getLatestInputbarProps(): {
   expect(latestCall).toBeTruthy();
   return latestCall?.[0] as {
     disabled?: boolean;
+    disabledPlaceholder?: string;
     isLoading?: boolean;
     inputRestoreRequest?: unknown;
     onInputRestoreRequestHandled?: (requestId: string) => void;
@@ -736,6 +738,34 @@ describe("useWorkspaceInputbarSceneRuntime", () => {
     );
 
     expect(getLatestInputbarProps().disabled).toBe(true);
+  });
+
+  it("parent-owned thread 应保留草稿并拒绝发送与设置变更", async () => {
+    const handleSend = vi.fn().mockResolvedValue(true);
+    const setChatToolPreferences = vi.fn();
+    renderHookNode(
+      createDefaultProps({
+        canAcceptDirectInput: false,
+        handleSend,
+        setChatToolPreferences,
+      }),
+    );
+
+    const inputbarProps = getLatestInputbarProps();
+    expect(inputbarProps.disabled).toBe(true);
+    expect(inputbarProps.disabledPlaceholder).toBe(
+      "此子线程由父线程管理，无法直接输入",
+    );
+
+    expect(inputbarProps.onSend?.({ textOverride: "不得直接提交" })).toBe(
+      false,
+    );
+    act(() => {
+      inputbarProps.onToolStatesChange?.({ plan: true });
+    });
+
+    expect(handleSend).not.toHaveBeenCalled();
+    expect(setChatToolPreferences).not.toHaveBeenCalled();
   });
 
   it("普通会话没有 projectId 但已有 sessionId 时仍应允许继续输入", () => {

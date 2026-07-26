@@ -1,9 +1,23 @@
 use super::unavailable;
 use super::NoopAppDataSource;
 use super::RuntimeCoreError;
+use app_server_protocol::protocol::v2::ModelProviderCapabilitiesReadResponse;
 use app_server_protocol::*;
 use async_trait::async_trait;
+use lime_core::models::model_registry::EnhancedModelMetadata;
 use serde_json::json;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModelCatalogQuery {
+    pub provider_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProviderModelCatalog {
+    pub provider_id: String,
+    pub sort_order: i32,
+    pub models: Vec<EnhancedModelMetadata>,
+}
 
 #[async_trait]
 pub trait ModelProviderAppDataSource: Send + Sync {
@@ -11,11 +25,11 @@ pub trait ModelProviderAppDataSource: Send + Sync {
         Err(unavailable("modelProvider/routeGeneration/read"))
     }
 
-    async fn list_models(
+    async fn model_catalog(
         &self,
-        _params: ModelListParams,
-    ) -> Result<ModelListResponse, RuntimeCoreError> {
-        Ok(ModelListResponse::default())
+        _query: ModelCatalogQuery,
+    ) -> Result<Vec<ProviderModelCatalog>, RuntimeCoreError> {
+        Ok(Vec::new())
     }
 
     async fn list_model_preferences(
@@ -37,6 +51,12 @@ pub trait ModelProviderAppDataSource: Send + Sync {
 
     async fn list_model_providers(&self) -> Result<ModelProviderListResponse, RuntimeCoreError> {
         Ok(ModelProviderListResponse::default())
+    }
+
+    async fn read_model_provider_capabilities(
+        &self,
+    ) -> Result<ModelProviderCapabilitiesReadResponse, RuntimeCoreError> {
+        Err(unavailable("modelProvider/capabilities/read"))
     }
 
     async fn list_model_provider_catalog(

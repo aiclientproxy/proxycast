@@ -51,7 +51,7 @@ const {
   mockRevealPathInFinder,
   mockArchiveAgentRuntimeSession,
   mockUnarchiveAgentRuntimeSession,
-  mockUpdateAgentRuntimeSession,
+  mockSetAgentRuntimeThreadName,
   mockDeleteAgentRuntimeSession,
   mockScanConversationImportSource,
   mockPreviewConversationImportThread,
@@ -96,7 +96,7 @@ const {
   mockRevealPathInFinder: vi.fn(),
   mockArchiveAgentRuntimeSession: vi.fn(),
   mockUnarchiveAgentRuntimeSession: vi.fn(),
-  mockUpdateAgentRuntimeSession: vi.fn(),
+  mockSetAgentRuntimeThreadName: vi.fn(),
   mockDeleteAgentRuntimeSession: vi.fn(),
   mockScanConversationImportSource: vi.fn(),
   mockPreviewConversationImportThread: vi.fn(),
@@ -184,7 +184,7 @@ export {
   mockToastSuccess,
   mockArchiveAgentRuntimeSession,
   mockUnarchiveAgentRuntimeSession,
-  mockUpdateAgentRuntimeSession,
+  mockSetAgentRuntimeThreadName,
 };
 
 vi.mock("@/lib/api/appConfig", () => ({
@@ -206,7 +206,10 @@ vi.mock("@/lib/api/agentRuntime/sessionClient", () => ({
   deleteAgentRuntimeSession: mockDeleteAgentRuntimeSession,
   listAgentRuntimeSessions: mockListAgentRuntimeSessions,
   unarchiveAgentRuntimeSession: mockUnarchiveAgentRuntimeSession,
-  updateAgentRuntimeSession: mockUpdateAgentRuntimeSession,
+}));
+
+vi.mock("@/lib/api/agentRuntime/threadClient", () => ({
+  setAgentRuntimeThreadName: mockSetAgentRuntimeThreadName,
 }));
 
 vi.mock("@/lib/api/conversationImport", () => ({
@@ -704,7 +707,7 @@ export async function resetAppSidebarTest() {
   mockRevealPathInFinder.mockResolvedValue(undefined);
   mockArchiveAgentRuntimeSession.mockResolvedValue(undefined);
   mockUnarchiveAgentRuntimeSession.mockResolvedValue(undefined);
-  mockUpdateAgentRuntimeSession.mockResolvedValue(undefined);
+  mockSetAgentRuntimeThreadName.mockResolvedValue(undefined);
   mockDeleteAgentRuntimeSession.mockResolvedValue(undefined);
   mockScanConversationImportSource.mockResolvedValue({
     source: {

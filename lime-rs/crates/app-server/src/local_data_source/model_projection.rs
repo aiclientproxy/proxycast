@@ -1,11 +1,38 @@
 use app_server_protocol::ModelCapabilitiesInfo;
 use app_server_protocol::ModelInfo;
+use app_server_protocol::ModelReasoningEffortSupportInfo;
+use app_server_protocol::ModelServiceTierInfo;
 use app_server_protocol::ProviderInfo;
 use app_server_protocol::ProviderKeyInfo;
 use serde_json::Value;
 
 pub(super) fn model_info_from_value(value: &Value) -> ModelInfo {
     let capabilities = value.get("capabilities");
+    let reasoning_effort: Option<ModelReasoningEffortSupportInfo> = capabilities
+        .and_then(|capabilities| field_value(capabilities, "reasoning_effort"))
+        .and_then(|support| serde_json::from_value(support.to_owned()).ok());
+    let default_reasoning_level = string_field(value, "default_reasoning_level").or_else(|| {
+        reasoning_effort
+            .as_ref()
+            .and_then(|support| support.default.clone())
+    });
+    let mut supported_reasoning_levels = value_vec_field(value, "supported_reasoning_levels");
+    if supported_reasoning_levels.is_empty() {
+        supported_reasoning_levels = reasoning_effort
+            .as_ref()
+            .map(|support| {
+                if support.options.is_empty() {
+                    support.levels.iter().cloned().map(Value::String).collect()
+                } else {
+                    support
+                        .options
+                        .iter()
+                        .filter_map(|option| serde_json::to_value(option).ok())
+                        .collect()
+                }
+            })
+            .unwrap_or_default();
+    }
     ModelInfo {
         id: string_field(value, "id").unwrap_or_default(),
         provider_id: string_field(value, "provider_id").unwrap_or_default(),
@@ -22,8 +49,7 @@ pub(super) fn model_info_from_value(value: &Value) -> ModelInfo {
             json_mode: bool_field(capabilities, "json_mode").unwrap_or(false),
             function_calling: bool_field(capabilities, "function_calling").unwrap_or(false),
             reasoning: bool_field(capabilities, "reasoning").unwrap_or(false),
-            reasoning_effort: capabilities
-                .and_then(|capabilities| field_value(capabilities, "reasoning_effort").cloned()),
+            reasoning_effort,
         },
         task_families: string_vec_field(value, "task_families"),
         input_modalities: string_vec_field(value, "input_modalities"),
@@ -37,12 +63,12 @@ pub(super) fn model_info_from_value(value: &Value) -> ModelInfo {
         auto_compact_token_limit: i64_field(value, "auto_compact_token_limit"),
         effective_context_window_percent: i64_field(value, "effective_context_window_percent"),
         visibility: string_field(value, "visibility"),
-        service_tiers: value_vec_field(value, "service_tiers"),
+        service_tiers: model_service_tiers_field(value, "service_tiers"),
         default_service_tier: string_field(value, "default_service_tier"),
         supports_parallel_tool_calls: bool_field(Some(value), "supports_parallel_tool_calls")
             .unwrap_or(false),
-        default_reasoning_level: string_field(value, "default_reasoning_level"),
-        supported_reasoning_levels: value_vec_field(value, "supported_reasoning_levels"),
+        default_reasoning_level,
+        supported_reasoning_levels,
         supports_reasoning_summaries: bool_field(
             Some(value),
             "supports_reasoning_summary_parameter",
@@ -181,6 +207,47 @@ fn value_vec_field(value: &Value, key: &str) -> Vec<Value> {
         .unwrap_or_default()
 }
 
+fn model_service_tiers_field(value: &Value, key: &str) -> Vec<ModelServiceTierInfo> {
+    value_vec_field(value, key)
+        .into_iter()
+        .filter_map(|item| match item {
+            Value::String(id) => {
+                let id = id.trim();
+                (!id.is_empty()).then(|| ModelServiceTierInfo {
+                    id: id.to_string(),
+                    name: id.to_string(),
+                    description: String::new(),
+                })
+            }
+            Value::Object(fields) => {
+                let id = fields
+                    .get("id")
+                    .or_else(|| fields.get("value"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|id| !id.is_empty())?;
+                let name = fields
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or(id);
+                let description = fields
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .unwrap_or_default();
+                Some(ModelServiceTierInfo {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    description: description.to_string(),
+                })
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 fn to_camel_case(key: &str) -> String {
     let mut result = String::new();
     let mut uppercase_next = false;
@@ -257,6 +324,9 @@ mod tests {
         assert_eq!(info.effective_context_window_percent, Some(90));
         assert_eq!(info.visibility.as_deref(), Some("public"));
         assert_eq!(info.service_tiers.len(), 1);
+        assert_eq!(info.service_tiers[0].id, "default");
+        assert_eq!(info.service_tiers[0].name, "default");
+        assert_eq!(info.service_tiers[0].description, "");
         assert_eq!(info.default_service_tier.as_deref(), Some("default"));
         assert!(info.supports_parallel_tool_calls);
         assert_eq!(info.default_reasoning_level.as_deref(), Some("medium"));
@@ -270,5 +340,80 @@ mod tests {
         assert_eq!(info.shell_type.as_deref(), Some("bash"));
         assert_eq!(info.apply_patch_tool_type.as_deref(), Some("apply_patch"));
         assert_eq!(info.experimental_supported_tools, vec!["web_search"]);
+    }
+
+    #[test]
+    fn model_info_from_value_projects_reasoning_menu_from_capability_fact() {
+        let value = serde_json::json!({
+            "id": "grok-4.5",
+            "providerId": "xai",
+            "displayName": "Grok 4.5",
+            "providerName": "xAI",
+            "capabilities": {
+                "reasoning": true,
+                "reasoningEffort": {
+                    "supported": true,
+                    "levels": ["xhigh", "medium"],
+                    "options": [
+                        {
+                            "id": "deep",
+                            "value": "xhigh",
+                            "label": "Deep",
+                            "description": "Maximum reasoning",
+                            "default": true
+                        },
+                        {
+                            "id": "balanced",
+                            "value": "medium",
+                            "label": "Balanced",
+                            "default": false
+                        }
+                    ],
+                    "default": "xhigh",
+                    "source": "api"
+                }
+            },
+            "deploymentSource": "user_cloud",
+            "managementPlane": "local_settings",
+            "status": "active",
+            "source": "api",
+            "pricing": null,
+            "limits": {},
+            "createdAt": 1,
+            "updatedAt": 2
+        });
+
+        let info = model_info_from_value(&value);
+
+        let support = info
+            .capabilities
+            .reasoning_effort
+            .as_ref()
+            .expect("typed reasoning effort support");
+        assert!(support.supported);
+        assert_eq!(support.default.as_deref(), Some("xhigh"));
+        assert_eq!(support.source.as_deref(), Some("api"));
+        assert_eq!(support.options[0].id, "deep");
+        assert_eq!(support.options[0].value, "xhigh");
+        assert_eq!(support.options[0].label, "Deep");
+        assert_eq!(info.default_reasoning_level.as_deref(), Some("xhigh"));
+        assert_eq!(
+            info.supported_reasoning_levels,
+            vec![
+                serde_json::json!({
+                    "id": "deep",
+                    "value": "xhigh",
+                    "label": "Deep",
+                    "description": "Maximum reasoning",
+                    "default": true
+                }),
+                serde_json::json!({
+                    "id": "balanced",
+                    "value": "medium",
+                    "label": "Balanced",
+                    "default": false
+                })
+            ]
+        );
     }
 }

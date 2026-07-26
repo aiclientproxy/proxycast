@@ -14,7 +14,7 @@ import {
   mockScheduleMinimumDelayIdleTask,
   mockSubmitAgentRuntimeTurn,
   mockToast,
-  mockUpdateAgentRuntimeSession,
+  mockUpdateAgentRuntimeThreadSettings,
   mountHook,
   seedSession,
 } from "../useAgentChat.testUtils";
@@ -159,7 +159,6 @@ describe("useAgentChat slash skill 执行链路", () => {
       ],
       turns: [],
       items: [],
-      queued_turns: [],
     });
     const harness = mountHook(workspaceId);
 
@@ -331,15 +330,7 @@ describe("useAgentChat slash skill 执行链路", () => {
         mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.runtimeOptions
           ?.runtimeRequest?.modelPreference,
       ).toBeUndefined();
-      expect(mockUpdateAgentRuntimeSession).not.toHaveBeenCalledWith({
-        session_id: "session-first-send",
-        provider_name: harness.getValue().providerType,
-        model_name: harness.getValue().model,
-      });
-      expect(mockUpdateAgentRuntimeSession).not.toHaveBeenCalledWith({
-        session_id: "session-first-send",
-        recent_access_mode: harness.getValue().accessMode,
-      });
+      expect(mockUpdateAgentRuntimeThreadSettings).not.toHaveBeenCalled();
       expect(mockListAgentRuntimeSessions).toHaveBeenCalledTimes(1);
     } finally {
       harness.unmount();

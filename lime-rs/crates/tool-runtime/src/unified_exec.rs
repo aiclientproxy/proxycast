@@ -40,6 +40,7 @@ const PROCESS_POLL_INTERVAL: Duration = Duration::from_millis(25);
 pub struct RuntimeUnifiedExecToolRequest<'a> {
     pub tool_name: &'a str,
     pub params: &'a Value,
+    pub thread_id: &'a str,
     pub working_directory: PathBuf,
     pub environment: HashMap<String, String>,
     pub tool_call_id: String,
@@ -85,16 +86,23 @@ struct WriteStdinInput {
 
 #[derive(Debug)]
 struct UnifiedExecSession {
+    thread_id: String,
     process_id: String,
     call_id: String,
     command: String,
     cwd: String,
     after_sequence: Option<u64>,
+    empty_poll_count: u64,
 }
 
 #[derive(Default)]
 struct UnifiedExecSessionRegistry {
-    sessions: HashMap<i32, Arc<tokio::sync::Mutex<UnifiedExecSession>>>,
+    sessions: HashMap<i32, UnifiedExecSessionRegistration>,
+}
+
+struct UnifiedExecSessionRegistration {
+    process_id: String,
+    session: Arc<tokio::sync::Mutex<UnifiedExecSession>>,
 }
 
 #[derive(Debug)]
@@ -105,8 +113,27 @@ struct UnifiedExecCallOutput {
     cwd: String,
     output: String,
     exit_code: Option<i32>,
+    observation: UnifiedExecObservationKind,
+    empty_poll_count: u64,
     wall_time: Duration,
     max_output_tokens: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UnifiedExecObservationKind {
+    Output,
+    Waiting,
+    Terminal,
+}
+
+impl UnifiedExecObservationKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Output => "output",
+            Self::Waiting => "waiting",
+            Self::Terminal => "terminal",
+        }
+    }
 }
 
 pub fn unified_exec_tool_definitions() -> Vec<RuntimeToolDefinition> {
@@ -239,33 +266,39 @@ async fn execute_command(
     let shell_command = build_shell_command(&command, input.shell.as_deref(), input.login);
     let cwd_text = cwd.to_string_lossy().to_string();
     let session = Arc::new(tokio::sync::Mutex::new(UnifiedExecSession {
+        thread_id: request.thread_id.to_string(),
         process_id: process_id.clone(),
         call_id: call_id.clone(),
         command: command.clone(),
         cwd: cwd_text.clone(),
         after_sequence: None,
+        empty_poll_count: 0,
     }));
-    register_session(session_id, Arc::clone(&session))?;
+    register_session(session_id, process_id.clone(), Arc::clone(&session))?;
 
     let start_result = gateway
-        .start_process(ExecutionProcessStartParams {
-            process_id,
-            tool_id: call_id,
-            tool_name: EXEC_COMMAND_TOOL_NAME.to_string(),
-            command: shell_command,
-            working_directory: cwd_text,
-            tty: input.tty,
-            approval_policy: Some("never".to_string()),
-            sandbox_policy: effective_sandbox_policy(
-                input.sandbox_permissions.as_deref(),
-                request.turn_context,
-            ),
-            runtime_metadata: request
-                .turn_context
-                .map(|context| serde_json::to_value(context).unwrap_or(Value::Null)),
-            cwd: None,
-            env: request.environment,
-        })
+        .start_process(
+            request.thread_id,
+            &command,
+            ExecutionProcessStartParams {
+                process_id,
+                tool_id: call_id,
+                tool_name: EXEC_COMMAND_TOOL_NAME.to_string(),
+                command: shell_command,
+                working_directory: cwd_text,
+                tty: input.tty,
+                approval_policy: Some("never".to_string()),
+                sandbox_policy: effective_sandbox_policy(
+                    input.sandbox_permissions.as_deref(),
+                    request.turn_context,
+                ),
+                runtime_metadata: request
+                    .turn_context
+                    .map(|context| serde_json::to_value(context).unwrap_or(Value::Null)),
+                cwd: None,
+                env: request.environment,
+            },
+        )
         .await;
     if let Err(error) = start_result {
         remove_session(session_id);
@@ -295,6 +328,12 @@ async fn write_stdin(
     let session = find_session(input.session_id)?;
     {
         let session = session.lock().await;
+        if session.thread_id != request.thread_id {
+            return Err(unified_exec_error(format!(
+                "unified exec session {} does not belong to thread {}",
+                input.session_id, request.thread_id
+            )));
+        }
         gateway
             .write_stdin(ExecutionProcessWriteStdinParams {
                 process_id: session.process_id.clone(),
@@ -380,20 +419,31 @@ async fn collect_process_output(
                 cwd: facts.cwd,
                 output,
                 exit_code: snapshot.exit_code,
+                observation: UnifiedExecObservationKind::Terminal,
+                empty_poll_count: 0,
                 wall_time: started_at.elapsed(),
                 max_output_tokens,
             });
         }
 
         if Instant::now() >= deadline {
-            let facts = session_facts(&session).await;
+            let mut facts = session.lock().await;
+            let observation = if output.is_empty() {
+                facts.empty_poll_count = facts.empty_poll_count.saturating_add(1);
+                UnifiedExecObservationKind::Waiting
+            } else {
+                facts.empty_poll_count = 0;
+                UnifiedExecObservationKind::Output
+            };
             return Ok(UnifiedExecCallOutput {
                 session_id: Some(session_id),
-                call_id: facts.call_id,
-                command: facts.command,
-                cwd: facts.cwd,
+                call_id: facts.call_id.clone(),
+                command: facts.command.clone(),
+                cwd: facts.cwd.clone(),
                 output,
                 exit_code: None,
+                observation,
+                empty_poll_count: facts.empty_poll_count,
                 wall_time: started_at.elapsed(),
                 max_output_tokens,
             });
@@ -405,11 +455,13 @@ async fn collect_process_output(
 async fn session_facts(session: &tokio::sync::Mutex<UnifiedExecSession>) -> UnifiedExecSession {
     let session = session.lock().await;
     UnifiedExecSession {
+        thread_id: session.thread_id.clone(),
         process_id: session.process_id.clone(),
         call_id: session.call_id.clone(),
         command: session.command.clone(),
         cwd: session.cwd.clone(),
         after_sequence: session.after_sequence,
+        empty_poll_count: session.empty_poll_count,
     }
 }
 
@@ -424,6 +476,11 @@ fn project_output(output: UnifiedExecCallOutput) -> RuntimeToolExecutionResult {
         "wall_time_seconds": output.wall_time.as_secs_f64(),
         "original_token_count": original_token_count,
         "output": visible_output,
+        "observation": {
+            "kind": output.observation.label(),
+            "empty_poll_count": output.empty_poll_count,
+            "process_active": output.session_id.is_some(),
+        },
     });
     if let Some(session_id) = output.session_id {
         structured["session_id"] = json!(session_id);
@@ -448,6 +505,14 @@ fn project_output(output: UnifiedExecCallOutput) -> RuntimeToolExecutionResult {
             json!(original_token_count),
         ),
         ("command_output".to_string(), json!(visible_output)),
+        (
+            "unified_exec_observation".to_string(),
+            json!(output.observation.label()),
+        ),
+        (
+            "unified_exec_empty_poll_count".to_string(),
+            json!(output.empty_poll_count),
+        ),
         ("execution_surface".to_string(), json!("unified_exec")),
     ]);
     RuntimeToolExecutionResult::new(
@@ -644,12 +709,19 @@ fn next_session_id() -> i32 {
 
 fn register_session(
     session_id: i32,
+    process_id: String,
     session: Arc<tokio::sync::Mutex<UnifiedExecSession>>,
 ) -> Result<(), RuntimeToolExecutionError> {
     let mut registry = session_registry()
         .lock()
         .map_err(|_| unified_exec_error("unified exec session registry is unavailable"))?;
-    registry.sessions.insert(session_id, session);
+    registry.sessions.insert(
+        session_id,
+        UnifiedExecSessionRegistration {
+            process_id,
+            session,
+        },
+    );
     Ok(())
 }
 
@@ -661,13 +733,21 @@ fn find_session(
         .map_err(|_| unified_exec_error("unified exec session registry is unavailable"))?
         .sessions
         .get(&session_id)
-        .cloned()
+        .map(|registration| Arc::clone(&registration.session))
         .ok_or_else(|| unified_exec_error(format!("unified exec session not found: {session_id}")))
 }
 
 fn remove_session(session_id: i32) {
     if let Ok(mut registry) = session_registry().lock() {
         registry.sessions.remove(&session_id);
+    }
+}
+
+pub fn forget_process_session(process_id: &str) {
+    if let Ok(mut registry) = session_registry().lock() {
+        registry
+            .sessions
+            .retain(|_, registration| registration.process_id != process_id);
     }
 }
 

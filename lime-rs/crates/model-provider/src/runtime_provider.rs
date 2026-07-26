@@ -40,6 +40,8 @@ pub struct RuntimeProviderConfig {
     pub credential_uuid: String,
     /// 当前回合显式推理强度
     pub reasoning_effort: Option<String>,
+    /// 当前回合显式服务等级
+    pub service_tier: Option<String>,
     /// App Server RouteResolver 派生出的 provider 执行协议
     pub protocol: Option<RuntimeProviderProtocol>,
     /// Provider 是否显式支持 Responses WebSocket transport

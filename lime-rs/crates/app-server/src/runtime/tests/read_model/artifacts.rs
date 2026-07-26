@@ -279,6 +279,83 @@ fn article_workspace_search_snapshot_payload(search_evidence: Value) -> Value {
     Value::Object(payload)
 }
 
+fn article_workspace_selection_snapshot_payload() -> Value {
+    json!({
+        "artifact": {
+            "artifactId": "artifact-workspace-selection",
+            "kind": "article_workspace_selection",
+            "metadata": {
+                "workspacePatch": {
+                    "schemaVersion": "article-workspace.v1",
+                    "appId": "content-factory-app",
+                    "sessionId": "sess_article_workspace",
+                    "selectedObjectRef": {
+                        "appId": "content-factory-app",
+                        "kind": "imageGenerationSet",
+                        "id": "image-set-1",
+                        "sessionId": "sess_article_workspace"
+                    },
+                    "objects": [{
+                        "ref": {
+                            "appId": "content-factory-app",
+                            "kind": "imageGenerationSet",
+                            "id": "image-set-1",
+                            "sessionId": "sess_article_workspace"
+                        }
+                    }]
+                }
+            }
+        }
+    })
+}
+
+fn article_workspace_edited_draft_snapshot_payload(markdown: &str, updated_at: &str) -> Value {
+    let object_ref = json!({
+        "appId": "content-factory-app",
+        "kind": "articleDraft",
+        "id": "article-1",
+        "sessionId": "sess_article_workspace",
+        "artifactIds": ["artifact-article-1"],
+        "sourceTurnId": "turn_article_workspace"
+    });
+    let object_key = "content-factory-app:sess_article_workspace:articleDraft:article-1";
+    json!({
+        "artifact": {
+            "artifactId": "artifact-article-1",
+            "artifactRef": "artifact-article-1",
+            "artifactDocumentId": "article-1",
+            "title": "公众号文章草稿",
+            "kind": "article_workspace_draft",
+            "status": "draft",
+            "metadata": {
+                "workspacePatch": {
+                    "schemaVersion": "article-workspace.v1",
+                    "appId": "content-factory-app",
+                    "sessionId": "sess_article_workspace",
+                    "objects": [{
+                        "ref": object_ref,
+                        "title": "公众号文章草稿",
+                        "status": "draft",
+                        "source": {
+                            "documentText": markdown,
+                            "finalMarkdown": markdown,
+                            "edited": true,
+                            "updatedAt": updated_at
+                        }
+                    }],
+                    "updatedAt": updated_at
+                },
+                "editedDraft": {
+                    "objectKey": object_key,
+                    "objectRef": object_ref,
+                    "markdown": markdown,
+                    "updatedAt": updated_at
+                }
+            }
+        }
+    })
+}
+
 #[tokio::test]
 async fn read_session_keeps_workspace_patch_in_thread_read_artifacts_only() {
     let core = RuntimeCore::default();
@@ -1044,18 +1121,12 @@ async fn read_session_materializes_content_factory_workspace_patch_into_article_
     assert!(content
         .contains("\"artifactId\": \"artifact-document:content-factory-app:artifact-article-1\""));
 
-    core.update_session_current(AgentSessionUpdateParams {
-        session_id: "sess_article_workspace".to_string(),
-        article_workspace_selected_object_ref: Some(json!({
-            "appId": "content-factory-app",
-            "kind": "imageGenerationSet",
-            "id": "image-set-1",
-            "sessionId": "sess_article_workspace"
-        })),
-        ..AgentSessionUpdateParams::default()
-    })
-    .await
-    .expect("update selected product object");
+    core.append_artifact_snapshot(
+        "sess_article_workspace",
+        Some(&turn.turn_id),
+        article_workspace_selection_snapshot_payload(),
+    )
+    .expect("append selected product object snapshot");
 
     let updated_read = core
         .read_session(AgentSessionReadParams {
@@ -1076,25 +1147,15 @@ async fn read_session_materializes_content_factory_workspace_patch_into_article_
         "imageGenerationSet"
     );
 
-    core.update_session_current(AgentSessionUpdateParams {
-        session_id: "sess_article_workspace".to_string(),
-        article_workspace_edited_draft: Some(json!({
-            "objectKey": "content-factory-app:sess_article_workspace:articleDraft:article-1",
-            "objectRef": {
-                "appId": "content-factory-app",
-                "kind": "articleDraft",
-                "id": "article-1",
-                "sessionId": "sess_article_workspace",
-                "artifactIds": ["artifact-article-1"],
-                "sourceTurnId": "turn_article_workspace"
-            },
-            "markdown": "# 用户编辑稿\n\n这是 Article Editor 画布写回后的正文。",
-            "updatedAt": "2026-06-29T10:00:00.000Z"
-        })),
-        ..AgentSessionUpdateParams::default()
-    })
-    .await
-    .expect("update edited article draft");
+    core.append_artifact_snapshot(
+        "sess_article_workspace",
+        Some(&turn.turn_id),
+        article_workspace_edited_draft_snapshot_payload(
+            "# 用户编辑稿\n\n这是 Article Editor 画布写回后的正文。",
+            "2026-06-29T10:00:00.000Z",
+        ),
+    )
+    .expect("append edited article draft snapshot");
 
     let edited_read = core
         .read_session(AgentSessionReadParams {
@@ -1130,45 +1191,25 @@ async fn read_session_materializes_content_factory_workspace_patch_into_article_
         "# 用户编辑稿\n\n这是 Article Editor 画布写回后的正文。"
     );
 
-    core.update_session_current(AgentSessionUpdateParams {
-        session_id: "sess_article_workspace".to_string(),
-        article_workspace_edited_draft: Some(json!({
-            "objectKey": "content-factory-app:sess_article_workspace:articleDraft:article-1",
-            "objectRef": {
-                "appId": "content-factory-app",
-                "kind": "articleDraft",
-                "id": "article-1",
-                "sessionId": "sess_article_workspace",
-                "artifactIds": ["artifact-article-1"],
-                "sourceTurnId": "turn_article_workspace"
-            },
-            "markdown": "# 用户编辑稿\n\n![正文配图](pending-image-task://task-inline?status=running&prompt=%E9%85%8D%E5%9B%BE)\n<!-- lime:image-task-slot:article-image-slot-1 -->",
-            "updatedAt": "2026-06-29T10:01:00.000Z"
-        })),
-        ..AgentSessionUpdateParams::default()
-    })
-    .await
-    .expect("update inline image slot edited article draft");
+    core.append_artifact_snapshot(
+        "sess_article_workspace",
+        Some(&turn.turn_id),
+        article_workspace_edited_draft_snapshot_payload(
+            "# 用户编辑稿\n\n![正文配图](pending-image-task://task-inline?status=running&prompt=%E9%85%8D%E5%9B%BE)\n<!-- lime:image-task-slot:article-image-slot-1 -->",
+            "2026-06-29T10:01:00.000Z",
+        ),
+    )
+    .expect("append inline image slot article snapshot");
 
-    core.update_session_current(AgentSessionUpdateParams {
-        session_id: "sess_article_workspace".to_string(),
-        article_workspace_edited_draft: Some(json!({
-            "objectKey": "content-factory-app:sess_article_workspace:articleDraft:article-1",
-            "objectRef": {
-                "appId": "content-factory-app",
-                "kind": "articleDraft",
-                "id": "article-1",
-                "sessionId": "sess_article_workspace",
-                "artifactIds": ["artifact-article-1"],
-                "sourceTurnId": "turn_article_workspace"
-            },
-            "markdown": "# 用户编辑稿\n\n正文被陈旧编辑器写回覆盖，已经没有 inline slot。",
-            "updatedAt": "2026-06-29T10:02:00.000Z"
-        })),
-        ..AgentSessionUpdateParams::default()
-    })
-    .await
-    .expect("ignore stale inline image slot downgrade");
+    core.append_artifact_snapshot(
+        "sess_article_workspace",
+        Some(&turn.turn_id),
+        article_workspace_edited_draft_snapshot_payload(
+            "# 用户编辑稿\n\n正文被陈旧编辑器写回覆盖，已经没有 inline slot。",
+            "2026-06-29T10:02:00.000Z",
+        ),
+    )
+    .expect("append stale inline image downgrade snapshot");
 
     let inline_slot_read = core
         .read_session(AgentSessionReadParams {
@@ -1192,25 +1233,15 @@ async fn read_session_materializes_content_factory_workspace_patch_into_article_
         "2026-06-29T10:01:00.000Z"
     );
 
-    core.update_session_current(AgentSessionUpdateParams {
-        session_id: "sess_article_workspace".to_string(),
-        article_workspace_edited_draft: Some(json!({
-            "objectKey": "content-factory-app:sess_article_workspace:articleDraft:article-1",
-            "objectRef": {
-                "appId": "content-factory-app",
-                "kind": "articleDraft",
-                "id": "article-1",
-                "sessionId": "sess_article_workspace",
-                "artifactIds": ["artifact-article-1"],
-                "sourceTurnId": "turn_article_workspace"
-            },
-            "markdown": "# 用户编辑稿\n\n![正文配图](https://example.com/article-image.png)",
-            "updatedAt": "2026-06-29T10:03:00.000Z"
-        })),
-        ..AgentSessionUpdateParams::default()
-    })
-    .await
-    .expect("accept resolved inline image edited article draft");
+    core.append_artifact_snapshot(
+        "sess_article_workspace",
+        Some(&turn.turn_id),
+        article_workspace_edited_draft_snapshot_payload(
+            "# 用户编辑稿\n\n![正文配图](https://example.com/article-image.png)",
+            "2026-06-29T10:03:00.000Z",
+        ),
+    )
+    .expect("append resolved inline image article snapshot");
 
     let resolved_inline_slot_read = core
         .read_session(AgentSessionReadParams {

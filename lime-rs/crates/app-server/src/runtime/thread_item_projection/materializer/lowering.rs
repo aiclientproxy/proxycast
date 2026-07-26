@@ -354,7 +354,17 @@ pub(super) fn typed_payload(
         },
         ItemFamily::ContextCompaction => ThreadItemPayload::ContextCompaction {
             summary: map_string(payload, &["summary", "message", "text"]),
+            replacement_history: payload
+                .get("replacementHistory")
+                .or_else(|| payload.get("replacement_history"))
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default(),
+            window_number: map_u64(payload, &["windowNumber", "window_number"]),
+            first_window_id: map_string(payload, &["firstWindowId", "first_window_id"]),
+            previous_window_id: map_string(payload, &["previousWindowId", "previous_window_id"]),
             window_id: map_string(payload, &["windowId", "window_id", "contextWindowId"]),
+            tail_start_turn_id: map_string(payload, &["tailStartTurnId", "tail_start_turn_id"]),
         },
     })
 }

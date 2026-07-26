@@ -70,14 +70,9 @@ impl RuntimeCore {
         thread_id: &str,
         host: RuntimeHostContext,
     ) -> Result<(), RuntimeCoreError> {
-        let thread = self
-            .read_thread(agent_protocol::thread::ThreadReadParams {
-                thread_id: agent_protocol::ThreadId::new(thread_id),
-                turns_view: agent_protocol::ThreadTurnsView::NotLoaded,
-            })
-            .await?;
-        let session_id = thread.thread.session_id.to_string();
-        self.ensure_current_session_hydrated(&session_id).await?;
+        let Some(session_id) = self.loaded_session_id_for_thread(thread_id) else {
+            return Ok(());
+        };
         self.maybe_start_thread_goal_if_idle(&session_id, host)
             .await;
         Ok(())

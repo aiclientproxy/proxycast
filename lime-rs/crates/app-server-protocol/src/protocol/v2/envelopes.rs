@@ -3,30 +3,45 @@ use super::{
     CommandExecutionOutputDeltaNotification, CommandExecutionRequestApprovalParams,
     FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, ItemCompletedNotification,
     ItemStartedNotification, McpServerElicitationRequestParams, McpToolCallProgressNotification,
-    Method, PlanDeltaNotification, ReasoningSummaryPartAddedNotification,
+    Method, ModelListParams, ModelProviderCapabilitiesReadParams,
+    ModelProviderCapabilitiesReadResponse, ModelSafetyBufferingUpdatedNotification,
+    PlanDeltaNotification, ReasoningSummaryPartAddedNotification,
     ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification,
-    ServerRequestResolvedNotification, ThreadArchiveParams, ThreadArchiveResponse,
-    ThreadArchivedNotification, ThreadDeleteParams, ThreadDeleteResponse,
+    ServerRequestResolvedNotification, ThreadApproveGuardianDeniedActionParams,
+    ThreadApproveGuardianDeniedActionResponse, ThreadArchiveParams, ThreadArchiveResponse,
+    ThreadArchivedNotification, ThreadBackgroundTerminalsCleanParams,
+    ThreadBackgroundTerminalsCleanResponse, ThreadBackgroundTerminalsListParams,
+    ThreadBackgroundTerminalsListResponse, ThreadBackgroundTerminalsTerminateParams,
+    ThreadBackgroundTerminalsTerminateResponse, ThreadClosedNotification, ThreadCompactStartParams,
+    ThreadCompactStartResponse, ThreadDecrementElicitationParams,
+    ThreadDecrementElicitationResponse, ThreadDeleteParams, ThreadDeleteResponse,
     ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse, ThreadGoalClearParams,
     ThreadGoalClearResponse, ThreadGoalClearedNotification, ThreadGoalGetParams,
     ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
-    ThreadGoalUpdatedNotification, ThreadItemsListParams, ThreadItemsListResponse,
-    ThreadListParams, ThreadListResponse, ThreadMemoryModeSetParams, ThreadMemoryModeSetResponse,
-    ThreadReadParams, ThreadReadResponse, ThreadResumeParams, ThreadResumeResponse,
+    ThreadGoalUpdatedNotification, ThreadIncrementElicitationParams,
+    ThreadIncrementElicitationResponse, ThreadInjectItemsParams, ThreadInjectItemsResponse,
+    ThreadItemsListParams, ThreadItemsListResponse, ThreadListParams, ThreadListResponse,
+    ThreadLoadedListParams, ThreadLoadedListResponse, ThreadMemoryModeSetParams,
+    ThreadMemoryModeSetResponse, ThreadMetadataUpdateParams, ThreadMetadataUpdateResponse,
+    ThreadNameUpdatedNotification, ThreadReadParams, ThreadReadResponse, ThreadResumeParams,
+    ThreadResumeResponse, ThreadSearchOccurrencesParams, ThreadSearchOccurrencesResponse,
+    ThreadSearchParams, ThreadSearchResponse, ThreadSetNameParams, ThreadSetNameResponse,
     ThreadSettingsUpdateParams, ThreadSettingsUpdateResponse, ThreadSettingsUpdatedNotification,
     ThreadShellCommandParams, ThreadShellCommandResponse, ThreadStartParams, ThreadStartResponse,
-    ThreadStartedNotification, ThreadTokenUsageUpdatedNotification, ThreadTurnsListParams,
-    ThreadTurnsListResponse, ThreadUnarchiveParams, ThreadUnarchiveResponse,
-    ThreadUnarchivedNotification, ToolRequestUserInputParams, TurnCompletedNotification,
-    TurnInterruptParams, TurnInterruptResponse, TurnStartParams, TurnStartResponse,
-    TurnStartedNotification, TurnSteerParams, TurnSteerResponse,
+    ThreadStartedNotification, ThreadStatusChangedNotification,
+    ThreadTokenUsageUpdatedNotification, ThreadTurnsListParams, ThreadTurnsListResponse,
+    ThreadUnarchiveParams, ThreadUnarchiveResponse, ThreadUnarchivedNotification,
+    ThreadUnsubscribeParams, ThreadUnsubscribeResponse, ToolRequestUserInputParams,
+    TurnCompletedNotification, TurnInterruptParams, TurnInterruptResponse, TurnStartParams,
+    TurnStartResponse, TurnStartedNotification, TurnSteerParams, TurnSteerResponse,
     METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_FILE_CHANGE_PATCH_UPDATED,
     METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL, METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
     METHOD_ITEM_TOOL_REQUEST_USER_INPUT, METHOD_MCP_SERVER_ELICITATION_REQUEST,
-    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_PLAN_DELTA, METHOD_REASONING_SUMMARY_PART_ADDED,
-    METHOD_REASONING_SUMMARY_TEXT_DELTA, METHOD_REASONING_TEXT_DELTA,
-    METHOD_SERVER_REQUEST_RESOLVED, METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED,
-    METHOD_THREAD_TOKEN_USAGE_UPDATED,
+    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_SAFETY_BUFFERING_UPDATED, METHOD_PLAN_DELTA,
+    METHOD_REASONING_SUMMARY_PART_ADDED, METHOD_REASONING_SUMMARY_TEXT_DELTA,
+    METHOD_REASONING_TEXT_DELTA, METHOD_SERVER_REQUEST_RESOLVED, METHOD_THREAD_CLOSED,
+    METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED,
+    METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED,
 };
 use crate::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use schemars::JsonSchema;
@@ -71,6 +86,26 @@ pub enum ClientRequest {
         id: RequestId,
         params: ThreadListParams,
     },
+    #[serde(rename = "thread/loaded/list")]
+    ThreadLoadedList {
+        id: RequestId,
+        params: ThreadLoadedListParams,
+    },
+    #[serde(rename = "thread/unsubscribe")]
+    ThreadUnsubscribe {
+        id: RequestId,
+        params: ThreadUnsubscribeParams,
+    },
+    #[serde(rename = "thread/increment_elicitation")]
+    ThreadIncrementElicitation {
+        id: RequestId,
+        params: ThreadIncrementElicitationParams,
+    },
+    #[serde(rename = "thread/decrement_elicitation")]
+    ThreadDecrementElicitation {
+        id: RequestId,
+        params: ThreadDecrementElicitationParams,
+    },
     #[serde(rename = "thread/archive")]
     ThreadArchive {
         id: RequestId,
@@ -86,6 +121,21 @@ pub enum ClientRequest {
         id: RequestId,
         params: ThreadUnarchiveParams,
     },
+    #[serde(rename = "thread/name/set")]
+    ThreadSetName {
+        id: RequestId,
+        params: ThreadSetNameParams,
+    },
+    #[serde(rename = "thread/metadata/update")]
+    ThreadMetadataUpdate {
+        id: RequestId,
+        params: ThreadMetadataUpdateParams,
+    },
+    #[serde(rename = "thread/compact/start")]
+    ThreadCompactStart {
+        id: RequestId,
+        params: ThreadCompactStartParams,
+    },
     #[serde(rename = "thread/turns/list")]
     ThreadTurnsList {
         id: RequestId,
@@ -95,6 +145,21 @@ pub enum ClientRequest {
     ThreadItemsList {
         id: RequestId,
         params: ThreadItemsListParams,
+    },
+    #[serde(rename = "thread/inject_items")]
+    ThreadInjectItems {
+        id: RequestId,
+        params: ThreadInjectItemsParams,
+    },
+    #[serde(rename = "thread/search")]
+    ThreadSearch {
+        id: RequestId,
+        params: ThreadSearchParams,
+    },
+    #[serde(rename = "thread/searchOccurrences")]
+    ThreadSearchOccurrences {
+        id: RequestId,
+        params: ThreadSearchOccurrencesParams,
     },
     #[serde(rename = "thread/settings/update")]
     ThreadSettingsUpdate {
@@ -110,6 +175,26 @@ pub enum ClientRequest {
     ThreadShellCommand {
         id: RequestId,
         params: ThreadShellCommandParams,
+    },
+    #[serde(rename = "thread/approveGuardianDeniedAction")]
+    ThreadApproveGuardianDeniedAction {
+        id: RequestId,
+        params: ThreadApproveGuardianDeniedActionParams,
+    },
+    #[serde(rename = "thread/backgroundTerminals/clean")]
+    ThreadBackgroundTerminalsClean {
+        id: RequestId,
+        params: ThreadBackgroundTerminalsCleanParams,
+    },
+    #[serde(rename = "thread/backgroundTerminals/list")]
+    ThreadBackgroundTerminalsList {
+        id: RequestId,
+        params: ThreadBackgroundTerminalsListParams,
+    },
+    #[serde(rename = "thread/backgroundTerminals/terminate")]
+    ThreadBackgroundTerminalsTerminate {
+        id: RequestId,
+        params: ThreadBackgroundTerminalsTerminateParams,
     },
     #[serde(rename = "thread/goal/set")]
     ThreadGoalSet {
@@ -130,6 +215,16 @@ pub enum ClientRequest {
     ArtifactWrite {
         id: RequestId,
         params: ArtifactWriteParams,
+    },
+    #[serde(rename = "model/list")]
+    ModelList {
+        id: RequestId,
+        params: ModelListParams,
+    },
+    #[serde(rename = "modelProvider/capabilities/read")]
+    ModelProviderCapabilitiesRead {
+        id: RequestId,
+        params: ModelProviderCapabilitiesReadParams,
     },
     #[serde(rename = "turn/start")]
     TurnStart {
@@ -156,18 +251,34 @@ impl ClientRequest {
             | Self::ThreadResume { id, .. }
             | Self::ThreadRead { id, .. }
             | Self::ThreadList { id, .. }
+            | Self::ThreadLoadedList { id, .. }
+            | Self::ThreadUnsubscribe { id, .. }
+            | Self::ThreadIncrementElicitation { id, .. }
+            | Self::ThreadDecrementElicitation { id, .. }
             | Self::ThreadArchive { id, .. }
             | Self::ThreadDelete { id, .. }
             | Self::ThreadUnarchive { id, .. }
+            | Self::ThreadSetName { id, .. }
+            | Self::ThreadMetadataUpdate { id, .. }
+            | Self::ThreadCompactStart { id, .. }
             | Self::ThreadTurnsList { id, .. }
             | Self::ThreadItemsList { id, .. }
+            | Self::ThreadInjectItems { id, .. }
+            | Self::ThreadSearch { id, .. }
+            | Self::ThreadSearchOccurrences { id, .. }
             | Self::ThreadSettingsUpdate { id, .. }
             | Self::ThreadMemoryModeSet { id, .. }
             | Self::ThreadShellCommand { id, .. }
+            | Self::ThreadApproveGuardianDeniedAction { id, .. }
+            | Self::ThreadBackgroundTerminalsClean { id, .. }
+            | Self::ThreadBackgroundTerminalsList { id, .. }
+            | Self::ThreadBackgroundTerminalsTerminate { id, .. }
             | Self::ThreadGoalSet { id, .. }
             | Self::ThreadGoalGet { id, .. }
             | Self::ThreadGoalClear { id, .. }
             | Self::ArtifactWrite { id, .. }
+            | Self::ModelList { id, .. }
+            | Self::ModelProviderCapabilitiesRead { id, .. }
             | Self::TurnStart { id, .. }
             | Self::TurnSteer { id, .. }
             | Self::TurnInterrupt { id, .. } => id,
@@ -181,18 +292,38 @@ impl ClientRequest {
             Self::ThreadResume { .. } => Method::ThreadResume,
             Self::ThreadRead { .. } => Method::ThreadRead,
             Self::ThreadList { .. } => Method::ThreadList,
+            Self::ThreadLoadedList { .. } => Method::ThreadLoadedList,
+            Self::ThreadUnsubscribe { .. } => Method::ThreadUnsubscribe,
+            Self::ThreadIncrementElicitation { .. } => Method::ThreadIncrementElicitation,
+            Self::ThreadDecrementElicitation { .. } => Method::ThreadDecrementElicitation,
             Self::ThreadArchive { .. } => Method::ThreadArchive,
             Self::ThreadDelete { .. } => Method::ThreadDelete,
             Self::ThreadUnarchive { .. } => Method::ThreadUnarchive,
+            Self::ThreadSetName { .. } => Method::ThreadSetName,
+            Self::ThreadMetadataUpdate { .. } => Method::ThreadMetadataUpdate,
+            Self::ThreadCompactStart { .. } => Method::ThreadCompactStart,
             Self::ThreadTurnsList { .. } => Method::ThreadTurnsList,
             Self::ThreadItemsList { .. } => Method::ThreadItemsList,
+            Self::ThreadInjectItems { .. } => Method::ThreadInjectItems,
+            Self::ThreadSearch { .. } => Method::ThreadSearch,
+            Self::ThreadSearchOccurrences { .. } => Method::ThreadSearchOccurrences,
             Self::ThreadSettingsUpdate { .. } => Method::ThreadSettingsUpdate,
             Self::ThreadMemoryModeSet { .. } => Method::ThreadMemoryModeSet,
             Self::ThreadShellCommand { .. } => Method::ThreadShellCommand,
+            Self::ThreadApproveGuardianDeniedAction { .. } => {
+                Method::ThreadApproveGuardianDeniedAction
+            }
+            Self::ThreadBackgroundTerminalsClean { .. } => Method::ThreadBackgroundTerminalsClean,
+            Self::ThreadBackgroundTerminalsList { .. } => Method::ThreadBackgroundTerminalsList,
+            Self::ThreadBackgroundTerminalsTerminate { .. } => {
+                Method::ThreadBackgroundTerminalsTerminate
+            }
             Self::ThreadGoalSet { .. } => Method::ThreadGoalSet,
             Self::ThreadGoalGet { .. } => Method::ThreadGoalGet,
             Self::ThreadGoalClear { .. } => Method::ThreadGoalClear,
             Self::ArtifactWrite { .. } => Method::ArtifactWrite,
+            Self::ModelList { .. } => Method::ModelList,
+            Self::ModelProviderCapabilitiesRead { .. } => Method::ModelProviderCapabilitiesRead,
             Self::TurnStart { .. } => Method::TurnStart,
             Self::TurnSteer { .. } => Method::TurnSteer,
             Self::TurnInterrupt { .. } => Method::TurnInterrupt,
@@ -218,18 +349,33 @@ pub enum ClientResponsePayload {
     ThreadResume(ThreadResumeResponse),
     ThreadRead(ThreadReadResponse),
     ThreadList(ThreadListResponse),
+    ThreadLoadedList(ThreadLoadedListResponse),
+    ThreadUnsubscribe(ThreadUnsubscribeResponse),
+    ThreadIncrementElicitation(ThreadIncrementElicitationResponse),
+    ThreadDecrementElicitation(ThreadDecrementElicitationResponse),
     ThreadArchive(ThreadArchiveResponse),
     ThreadDelete(ThreadDeleteResponse),
     ThreadUnarchive(ThreadUnarchiveResponse),
+    ThreadSetName(ThreadSetNameResponse),
+    ThreadMetadataUpdate(ThreadMetadataUpdateResponse),
+    ThreadCompactStart(ThreadCompactStartResponse),
     ThreadTurnsList(ThreadTurnsListResponse),
     ThreadItemsList(ThreadItemsListResponse),
+    ThreadInjectItems(ThreadInjectItemsResponse),
+    ThreadSearch(ThreadSearchResponse),
+    ThreadSearchOccurrences(ThreadSearchOccurrencesResponse),
     ThreadSettingsUpdate(ThreadSettingsUpdateResponse),
     ThreadMemoryModeSet(ThreadMemoryModeSetResponse),
     ThreadShellCommand(ThreadShellCommandResponse),
+    ThreadApproveGuardianDeniedAction(ThreadApproveGuardianDeniedActionResponse),
+    ThreadBackgroundTerminalsClean(ThreadBackgroundTerminalsCleanResponse),
+    ThreadBackgroundTerminalsList(ThreadBackgroundTerminalsListResponse),
+    ThreadBackgroundTerminalsTerminate(ThreadBackgroundTerminalsTerminateResponse),
     ThreadGoalSet(ThreadGoalSetResponse),
     ThreadGoalGet(ThreadGoalGetResponse),
     ThreadGoalClear(ThreadGoalClearResponse),
     ArtifactWrite(ArtifactWriteResponse),
+    ModelProviderCapabilitiesRead(ModelProviderCapabilitiesReadResponse),
     TurnStart(TurnStartResponse),
     TurnSteer(TurnSteerResponse),
     TurnInterrupt(TurnInterruptResponse),
@@ -243,18 +389,35 @@ impl ClientResponsePayload {
             Self::ThreadResume(_) => Method::ThreadResume,
             Self::ThreadRead(_) => Method::ThreadRead,
             Self::ThreadList(_) => Method::ThreadList,
+            Self::ThreadLoadedList(_) => Method::ThreadLoadedList,
+            Self::ThreadUnsubscribe(_) => Method::ThreadUnsubscribe,
+            Self::ThreadIncrementElicitation(_) => Method::ThreadIncrementElicitation,
+            Self::ThreadDecrementElicitation(_) => Method::ThreadDecrementElicitation,
             Self::ThreadArchive(_) => Method::ThreadArchive,
             Self::ThreadDelete(_) => Method::ThreadDelete,
             Self::ThreadUnarchive(_) => Method::ThreadUnarchive,
+            Self::ThreadSetName(_) => Method::ThreadSetName,
+            Self::ThreadMetadataUpdate(_) => Method::ThreadMetadataUpdate,
+            Self::ThreadCompactStart(_) => Method::ThreadCompactStart,
             Self::ThreadTurnsList(_) => Method::ThreadTurnsList,
             Self::ThreadItemsList(_) => Method::ThreadItemsList,
+            Self::ThreadInjectItems(_) => Method::ThreadInjectItems,
+            Self::ThreadSearch(_) => Method::ThreadSearch,
+            Self::ThreadSearchOccurrences(_) => Method::ThreadSearchOccurrences,
             Self::ThreadSettingsUpdate(_) => Method::ThreadSettingsUpdate,
             Self::ThreadMemoryModeSet(_) => Method::ThreadMemoryModeSet,
             Self::ThreadShellCommand(_) => Method::ThreadShellCommand,
+            Self::ThreadApproveGuardianDeniedAction(_) => Method::ThreadApproveGuardianDeniedAction,
+            Self::ThreadBackgroundTerminalsClean(_) => Method::ThreadBackgroundTerminalsClean,
+            Self::ThreadBackgroundTerminalsList(_) => Method::ThreadBackgroundTerminalsList,
+            Self::ThreadBackgroundTerminalsTerminate(_) => {
+                Method::ThreadBackgroundTerminalsTerminate
+            }
             Self::ThreadGoalSet(_) => Method::ThreadGoalSet,
             Self::ThreadGoalGet(_) => Method::ThreadGoalGet,
             Self::ThreadGoalClear(_) => Method::ThreadGoalClear,
             Self::ArtifactWrite(_) => Method::ArtifactWrite,
+            Self::ModelProviderCapabilitiesRead(_) => Method::ModelProviderCapabilitiesRead,
             Self::TurnStart(_) => Method::TurnStart,
             Self::TurnSteer(_) => Method::TurnSteer,
             Self::TurnInterrupt(_) => Method::TurnInterrupt,
@@ -268,18 +431,33 @@ impl ClientResponsePayload {
             Self::ThreadResume(response) => serde_json::to_value(response)?,
             Self::ThreadRead(response) => serde_json::to_value(response)?,
             Self::ThreadList(response) => serde_json::to_value(response)?,
+            Self::ThreadLoadedList(response) => serde_json::to_value(response)?,
+            Self::ThreadUnsubscribe(response) => serde_json::to_value(response)?,
+            Self::ThreadIncrementElicitation(response) => serde_json::to_value(response)?,
+            Self::ThreadDecrementElicitation(response) => serde_json::to_value(response)?,
             Self::ThreadArchive(response) => serde_json::to_value(response)?,
             Self::ThreadDelete(response) => serde_json::to_value(response)?,
             Self::ThreadUnarchive(response) => serde_json::to_value(response)?,
+            Self::ThreadSetName(response) => serde_json::to_value(response)?,
+            Self::ThreadMetadataUpdate(response) => serde_json::to_value(response)?,
+            Self::ThreadCompactStart(response) => serde_json::to_value(response)?,
             Self::ThreadTurnsList(response) => serde_json::to_value(response)?,
             Self::ThreadItemsList(response) => serde_json::to_value(response)?,
+            Self::ThreadInjectItems(response) => serde_json::to_value(response)?,
+            Self::ThreadSearch(response) => serde_json::to_value(response)?,
+            Self::ThreadSearchOccurrences(response) => serde_json::to_value(response)?,
             Self::ThreadSettingsUpdate(response) => serde_json::to_value(response)?,
             Self::ThreadMemoryModeSet(response) => serde_json::to_value(response)?,
             Self::ThreadShellCommand(response) => serde_json::to_value(response)?,
+            Self::ThreadApproveGuardianDeniedAction(response) => serde_json::to_value(response)?,
+            Self::ThreadBackgroundTerminalsClean(response) => serde_json::to_value(response)?,
+            Self::ThreadBackgroundTerminalsList(response) => serde_json::to_value(response)?,
+            Self::ThreadBackgroundTerminalsTerminate(response) => serde_json::to_value(response)?,
             Self::ThreadGoalSet(response) => serde_json::to_value(response)?,
             Self::ThreadGoalGet(response) => serde_json::to_value(response)?,
             Self::ThreadGoalClear(response) => serde_json::to_value(response)?,
             Self::ArtifactWrite(response) => serde_json::to_value(response)?,
+            Self::ModelProviderCapabilitiesRead(response) => serde_json::to_value(response)?,
             Self::TurnStart(response) => serde_json::to_value(response)?,
             Self::TurnSteer(response) => serde_json::to_value(response)?,
             Self::TurnInterrupt(response) => serde_json::to_value(response)?,
@@ -414,6 +592,12 @@ pub enum ServerNotification {
     ThreadDeleted(ThreadDeletedNotification),
     #[serde(rename = "thread/unarchived")]
     ThreadUnarchived(ThreadUnarchivedNotification),
+    #[serde(rename = "thread/closed")]
+    ThreadClosed(ThreadClosedNotification),
+    #[serde(rename = "thread/name/updated")]
+    ThreadNameUpdated(ThreadNameUpdatedNotification),
+    #[serde(rename = "thread/status/changed")]
+    ThreadStatusChanged(ThreadStatusChangedNotification),
     #[serde(rename = "turn/started")]
     TurnStarted(TurnStartedNotification),
     #[serde(rename = "turn/completed")]
@@ -438,6 +622,8 @@ pub enum ServerNotification {
     ReasoningSummaryPartAdded(ReasoningSummaryPartAddedNotification),
     #[serde(rename = "item/reasoning/textDelta")]
     ReasoningTextDelta(ReasoningTextDeltaNotification),
+    #[serde(rename = "model/safetyBuffering/updated")]
+    ModelSafetyBufferingUpdated(ModelSafetyBufferingUpdatedNotification),
     #[serde(rename = "thread/settings/updated")]
     ThreadSettingsUpdated(ThreadSettingsUpdatedNotification),
     #[serde(rename = "thread/tokenUsage/updated")]
@@ -457,6 +643,9 @@ impl ServerNotification {
             Self::ThreadArchived(_) => "thread/archived",
             Self::ThreadDeleted(_) => "thread/deleted",
             Self::ThreadUnarchived(_) => "thread/unarchived",
+            Self::ThreadClosed(_) => METHOD_THREAD_CLOSED,
+            Self::ThreadNameUpdated(_) => METHOD_THREAD_NAME_UPDATED,
+            Self::ThreadStatusChanged(_) => METHOD_THREAD_STATUS_CHANGED,
             Self::TurnStarted(_) => "turn/started",
             Self::TurnCompleted(_) => "turn/completed",
             Self::ItemStarted(_) => "item/started",
@@ -469,6 +658,7 @@ impl ServerNotification {
             Self::ReasoningSummaryTextDelta(_) => METHOD_REASONING_SUMMARY_TEXT_DELTA,
             Self::ReasoningSummaryPartAdded(_) => METHOD_REASONING_SUMMARY_PART_ADDED,
             Self::ReasoningTextDelta(_) => METHOD_REASONING_TEXT_DELTA,
+            Self::ModelSafetyBufferingUpdated(_) => METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
             Self::ThreadSettingsUpdated(_) => "thread/settings/updated",
             Self::ThreadTokenUsageUpdated(_) => METHOD_THREAD_TOKEN_USAGE_UPDATED,
             Self::ThreadGoalUpdated(_) => METHOD_THREAD_GOAL_UPDATED,
@@ -495,6 +685,15 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             "thread/unarchived" => serde_json::from_value(params)
                 .map(Self::ThreadUnarchived)
+                .map_err(|error| error.to_string()),
+            METHOD_THREAD_CLOSED => serde_json::from_value(params)
+                .map(Self::ThreadClosed)
+                .map_err(|error| error.to_string()),
+            METHOD_THREAD_NAME_UPDATED => serde_json::from_value(params)
+                .map(Self::ThreadNameUpdated)
+                .map_err(|error| error.to_string()),
+            METHOD_THREAD_STATUS_CHANGED => serde_json::from_value(params)
+                .map(Self::ThreadStatusChanged)
                 .map_err(|error| error.to_string()),
             "turn/started" => serde_json::from_value(params)
                 .map(Self::TurnStarted)
@@ -532,6 +731,9 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
             METHOD_REASONING_TEXT_DELTA => serde_json::from_value(params)
                 .map(Self::ReasoningTextDelta)
                 .map_err(|error| error.to_string()),
+            METHOD_MODEL_SAFETY_BUFFERING_UPDATED => serde_json::from_value(params)
+                .map(Self::ModelSafetyBufferingUpdated)
+                .map_err(|error| error.to_string()),
             "thread/settings/updated" => serde_json::from_value(params)
                 .map(Self::ThreadSettingsUpdated)
                 .map_err(|error| error.to_string()),
@@ -567,6 +769,15 @@ impl From<ServerNotification> for JsonRpcNotification {
             ServerNotification::ThreadUnarchived(params) => {
                 jsonrpc_notification("thread/unarchived", params)
             }
+            ServerNotification::ThreadClosed(params) => {
+                jsonrpc_notification(METHOD_THREAD_CLOSED, params)
+            }
+            ServerNotification::ThreadNameUpdated(params) => {
+                jsonrpc_notification(METHOD_THREAD_NAME_UPDATED, params)
+            }
+            ServerNotification::ThreadStatusChanged(params) => {
+                jsonrpc_notification(METHOD_THREAD_STATUS_CHANGED, params)
+            }
             ServerNotification::TurnStarted(params) => jsonrpc_notification("turn/started", params),
             ServerNotification::TurnCompleted(params) => {
                 jsonrpc_notification("turn/completed", params)
@@ -598,6 +809,9 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::ReasoningTextDelta(params) => {
                 jsonrpc_notification(METHOD_REASONING_TEXT_DELTA, params)
+            }
+            ServerNotification::ModelSafetyBufferingUpdated(params) => {
+                jsonrpc_notification(METHOD_MODEL_SAFETY_BUFFERING_UPDATED, params)
             }
             ServerNotification::ThreadSettingsUpdated(params) => {
                 jsonrpc_notification("thread/settings/updated", params)

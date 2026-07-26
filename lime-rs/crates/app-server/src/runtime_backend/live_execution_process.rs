@@ -12,9 +12,11 @@ use tool_runtime::execution_process::live::RuntimeLiveExecutionGateway;
 impl RuntimeLiveExecutionGateway for ExecutionProcessServer {
     async fn start_process(
         &self,
+        thread_id: &str,
+        display_command: &str,
         params: ExecutionProcessStartParams,
     ) -> Result<ExecutionProcessStartResponse, String> {
-        self.start_process(params)
+        self.start_thread_process(thread_id, display_command, params)
             .await
             .map_err(|error| error.to_string())
     }

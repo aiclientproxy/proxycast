@@ -2,8 +2,8 @@ use super::backend_error;
 use super::provider_config::current_agent_runtime_config_metadata;
 use super::provider_config::initialize_runtime_database;
 use super::request_context::{
-    resolve_runtime_model_selection, runtime_request_from_request,
-    selection_with_effective_reasoning, session_scope_from_request, RuntimeModelSelection,
+    resolve_runtime_model_selection, runtime_request_from_request, session_scope_from_request,
+    RuntimeModelSelection,
 };
 use super::workspace_patch_host_tools;
 use super::RuntimeBackend;
@@ -46,14 +46,12 @@ pub(super) async fn prepare_runtime_worker_artifact_events(
 
     let host_request = runtime_request_from_request(request);
     let scope = session_scope_from_request(request)?;
-    let selection = resolve_runtime_model_selection(request)
-        .map(|selection| selection_with_effective_reasoning(&selection))
-        .unwrap_or(RuntimeModelSelection {
-            provider: "host-tool-execution".to_string(),
-            model: "host-tool-execution".to_string(),
-            source: workspace_patch_host_tools::WORKSPACE_PATCH_HOST_TOOL_EVENT_SOURCE,
-            reasoning_effort: None,
-        });
+    let selection = resolve_runtime_model_selection(request).unwrap_or(RuntimeModelSelection {
+        provider: "host-tool-execution".to_string(),
+        model: "host-tool-execution".to_string(),
+        source: workspace_patch_host_tools::WORKSPACE_PATCH_HOST_TOOL_EVENT_SOURCE,
+        reasoning_effort: None,
+    });
     let turn_context = workspace_patch_host_tools::workspace_patch_host_tool_turn_context(
         request,
         host_request.as_ref(),

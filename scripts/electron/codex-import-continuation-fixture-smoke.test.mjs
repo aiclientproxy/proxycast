@@ -59,7 +59,8 @@ describe("codex import continuation Electron fixture smoke guard", () => {
     expect(content).toContain('"modelProviderKey/create"');
     expect(content).toContain('"thread/read"');
     expect(content).toContain('"thread/start"');
-    expect(content).toContain('"agentSession/update"');
+    expect(content).toContain('"thread/settings/update"');
+    expect(content).not.toContain('"agentSession/update"');
     expect(content).toContain('"turn/start"');
     expect(content).toContain("writeCodexRolloutFixture");
     expect(content).toContain('type: "reasoning"');
@@ -76,7 +77,9 @@ describe("codex import continuation Electron fixture smoke guard", () => {
     expect(content).toContain("threadId,");
     expect(content).toContain("includeTurns: true");
     expect(content).toContain('input: [{ type: "text", text }]');
-    expect(content).toContain("const importedTurnId = String(importedTurn?.turn?.id");
+    expect(content).toContain(
+      "const importedTurnId = String(importedTurn?.turn?.id",
+    );
     expect(content).not.toContain("runtimeOptions(");
   });
 

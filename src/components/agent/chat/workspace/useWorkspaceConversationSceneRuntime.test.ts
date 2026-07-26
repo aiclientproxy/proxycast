@@ -121,4 +121,19 @@ describe("useWorkspaceConversationSceneRuntime", () => {
       sceneAppExecutionSummaryCard,
     );
   });
+
+  it("parent-owned thread 不应暴露手动上下文压缩入口", () => {
+    const params = createBaseParams({
+      sessionId: "session-child",
+      threadRead: {
+        thread_id: "thread-child",
+        can_accept_direct_input: false,
+      },
+    });
+
+    const sceneProps = getRenderedSceneProps(params);
+
+    expect(sceneProps.showContextCompactionAction).toBe(false);
+    expect(sceneProps.onCompactContext).toBeUndefined();
+  });
 });

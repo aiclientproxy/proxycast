@@ -404,7 +404,6 @@ export function useInputbarController({
     clearActiveCapability: () => setActiveCapability(null),
     getInputRestoreEpoch: () => inputRestoreEpochRef.current,
   });
-
   const inputAdapter = useInputbarAdapter({
     input,
     setInput: handleSetInput,

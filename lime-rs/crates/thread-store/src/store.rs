@@ -10,8 +10,9 @@ use agent_protocol::{Thread, ThreadId};
 use crate::{
     AppendThreadItemsParams, ApplyThreadHistoryParams, ApplyThreadHistoryResult,
     ArchiveThreadParams, CreateThreadParams, DeleteThreadParams, ItemPage, ListItemsParams,
-    ListThreadsParams, ListTurnsParams, ReadThreadParams, ThreadPage, ThreadStoreResult, TurnPage,
-    UpdateThreadMetadataParams,
+    ListThreadsParams, ListTurnsParams, ReadThreadParams, SearchThreadOccurrencesParams,
+    SearchThreadsParams, ThreadOccurrenceSearchPage, ThreadPage, ThreadSearchPage,
+    ThreadStoreResult, TurnPage, UpdateThreadMetadataParams,
 };
 
 /// Future returned by [`ThreadStore`] operations.
@@ -34,6 +35,12 @@ pub trait ThreadStore: Any + Send + Sync {
 
     /// Lists canonical threads using a store-owned opaque cursor.
     fn list_threads(&self, params: ListThreadsParams) -> ThreadStoreFuture<'_, ThreadPage>;
+
+    /// Searches visible user and assistant conversation text across canonical threads.
+    fn search_threads(
+        &self,
+        params: SearchThreadsParams,
+    ) -> ThreadStoreFuture<'_, ThreadSearchPage>;
 
     /// Appends already-canonical items without deriving or changing thread metadata.
     ///
@@ -58,6 +65,12 @@ pub trait ThreadStore: Any + Send + Sync {
 
     /// Lists canonical items using stable ordinals encoded by the store cursor.
     fn list_items(&self, params: ListItemsParams) -> ThreadStoreFuture<'_, ItemPage>;
+
+    /// Searches visible user and final assistant message occurrences in chronological order.
+    fn search_thread_occurrences(
+        &self,
+        params: SearchThreadOccurrencesParams,
+    ) -> ThreadStoreFuture<'_, ThreadOccurrenceSearchPage>;
 
     /// Applies a literal metadata patch and returns the updated canonical thread.
     fn update_thread_metadata(

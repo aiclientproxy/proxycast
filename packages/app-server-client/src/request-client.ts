@@ -30,9 +30,31 @@ export interface AppServerClient {
   ): protocol.JsonRpcRequest;
   readThread(params: protocol.ThreadReadParams): protocol.JsonRpcRequest;
   listThreads(params?: protocol.ThreadListParams): protocol.JsonRpcRequest;
+  listLoadedThreads(
+    params?: protocol.ThreadLoadedListParams,
+  ): protocol.JsonRpcRequest;
+  unsubscribeThread(
+    params: protocol.ThreadUnsubscribeParams,
+  ): protocol.JsonRpcRequest;
+  incrementThreadElicitation(
+    params: protocol.ThreadIncrementElicitationParams,
+  ): protocol.JsonRpcRequest;
+  decrementThreadElicitation(
+    params: protocol.ThreadDecrementElicitationParams,
+  ): protocol.JsonRpcRequest;
+  approveGuardianDeniedAction(
+    params: protocol.ThreadApproveGuardianDeniedActionParams,
+  ): protocol.JsonRpcRequest;
+  injectThreadItems(
+    params: protocol.ThreadInjectItemsParams,
+  ): protocol.JsonRpcRequest;
   archiveThread(params: protocol.ThreadArchiveParams): protocol.JsonRpcRequest;
   unarchiveThread(
     params: protocol.ThreadUnarchiveParams,
+  ): protocol.JsonRpcRequest;
+  setThreadName(params: protocol.ThreadSetNameParams): protocol.JsonRpcRequest;
+  updateThreadMetadata(
+    params: protocol.ThreadMetadataUpdateParams,
   ): protocol.JsonRpcRequest;
   listThreadTurns(
     params: protocol.ThreadTurnsListParams,
@@ -40,26 +62,33 @@ export interface AppServerClient {
   listThreadItems(
     params: protocol.ThreadItemsListParams,
   ): protocol.JsonRpcRequest;
+  searchThreads(params: protocol.ThreadSearchParams): protocol.JsonRpcRequest;
+  searchThreadOccurrences(
+    params: protocol.ThreadSearchOccurrencesParams,
+  ): protocol.JsonRpcRequest;
+  cleanThreadBackgroundTerminals(
+    params: protocol.ThreadBackgroundTerminalsCleanParams,
+  ): protocol.JsonRpcRequest;
+  listThreadBackgroundTerminals(
+    params: protocol.ThreadBackgroundTerminalsListParams,
+  ): protocol.JsonRpcRequest;
+  terminateThreadBackgroundTerminal(
+    params: protocol.ThreadBackgroundTerminalsTerminateParams,
+  ): protocol.JsonRpcRequest;
   updateThreadSettings(
     params: protocol.ThreadSettingsUpdateParams,
   ): protocol.JsonRpcRequest;
   setThreadMemoryMode(
     params: protocol.ThreadMemoryModeSetParams,
   ): protocol.JsonRpcRequest;
-  updateSession(
-    params: protocol.AgentSessionUpdateParams,
+  runThreadShellCommand(
+    params: protocol.ThreadShellCommandParams,
   ): protocol.JsonRpcRequest;
   deleteThread(params: protocol.ThreadDeleteParams): protocol.JsonRpcRequest;
-  compactAgentSession(
-    params: protocol.AgentSessionCompactParams,
+  startThreadCompaction(
+    params: protocol.ThreadCompactStartParams,
   ): protocol.JsonRpcRequest;
   resumeThread(params: protocol.ThreadResumeParams): protocol.JsonRpcRequest;
-  removeAgentSessionQueuedTurn(
-    params: protocol.AgentSessionQueuedTurnRemoveParams,
-  ): protocol.JsonRpcRequest;
-  promoteAgentSessionQueuedTurn(
-    params: protocol.AgentSessionQueuedTurnPromoteParams,
-  ): protocol.JsonRpcRequest;
   listAgentSessionFileCheckpoints(
     params: protocol.AgentSessionFileCheckpointListParams,
   ): protocol.JsonRpcRequest;
@@ -674,6 +703,7 @@ export interface AppServerClient {
   listModelPreferences(): protocol.JsonRpcRequest;
   readModelSyncState(): protocol.JsonRpcRequest;
   listModelProviders(): protocol.JsonRpcRequest;
+  readModelProviderCapabilities(): protocol.JsonRpcRequest;
   listModelProviderCatalog(): protocol.JsonRpcRequest;
   readModelProvider(
     params: protocol.ModelProviderReadParams,

@@ -27,8 +27,7 @@ Current scope:
 Session archive semantics:
 
 - list archived sessions with `agentSession/list` and `archivedOnly: true`;
-- archive or unarchive sessions with `agentSession/update` and `archived: true`
-  or `archived: false`;
+- archive or unarchive threads with `thread/archive` and `thread/unarchive`;
 - preserve App Server JSON-RPC errors as `AppServerRequestError`; callers must
   fail closed instead of falling back to legacy `agent_runtime_*` commands or
   mock responses.

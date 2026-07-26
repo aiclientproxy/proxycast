@@ -122,14 +122,6 @@ pub enum AppServerRequestMethod {
     AgentSessionReviewDecisionTemplateExport,
     #[serde(rename = "agentSession/reviewDecision/save")]
     AgentSessionReviewDecisionSave,
-    #[serde(rename = "agentSession/update")]
-    AgentSessionUpdate,
-    #[serde(rename = "agentSession/compact")]
-    AgentSessionCompact,
-    #[serde(rename = "agentSession/queuedTurn/remove")]
-    AgentSessionQueuedTurnRemove,
-    #[serde(rename = "agentSession/queuedTurn/promote")]
-    AgentSessionQueuedTurnPromote,
     #[serde(rename = "agentSession/fileCheckpoint/list")]
     AgentSessionFileCheckpointList,
     #[serde(rename = "agentSession/fileCheckpoint/get")]
@@ -530,8 +522,6 @@ pub enum AppServerRequestMethod {
     UsageStatsModelRankingList,
     #[serde(rename = "usageStats/dailyTrends/list")]
     UsageStatsDailyTrendsList,
-    #[serde(rename = "model/list")]
-    ModelList,
     #[serde(rename = "modelPreferences/list")]
     ModelPreferencesList,
     #[serde(rename = "modelSyncState/read")]
@@ -641,10 +631,6 @@ impl AppServerRequestMethod {
                 METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT
             }
             Self::AgentSessionReviewDecisionSave => METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE,
-            Self::AgentSessionUpdate => METHOD_AGENT_SESSION_UPDATE,
-            Self::AgentSessionCompact => METHOD_AGENT_SESSION_COMPACT,
-            Self::AgentSessionQueuedTurnRemove => METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE,
-            Self::AgentSessionQueuedTurnPromote => METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE,
             Self::AgentSessionFileCheckpointList => METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST,
             Self::AgentSessionFileCheckpointGet => METHOD_AGENT_SESSION_FILE_CHECKPOINT_GET,
             Self::AgentSessionFileCheckpointDiff => METHOD_AGENT_SESSION_FILE_CHECKPOINT_DIFF,
@@ -853,7 +839,6 @@ impl AppServerRequestMethod {
             Self::UsageStatsRead => METHOD_USAGE_STATS_READ,
             Self::UsageStatsModelRankingList => METHOD_USAGE_STATS_MODEL_RANKING_LIST,
             Self::UsageStatsDailyTrendsList => METHOD_USAGE_STATS_DAILY_TRENDS_LIST,
-            Self::ModelList => METHOD_MODEL_LIST,
             Self::ModelPreferencesList => METHOD_MODEL_PREFERENCES_LIST,
             Self::ModelSyncStateRead => METHOD_MODEL_SYNC_STATE_READ,
             Self::ModelProviderList => METHOD_MODEL_PROVIDER_LIST,
@@ -932,10 +917,6 @@ impl AppServerRequestMethod {
                 Some(Self::AgentSessionReviewDecisionTemplateExport)
             }
             METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE => Some(Self::AgentSessionReviewDecisionSave),
-            METHOD_AGENT_SESSION_UPDATE => Some(Self::AgentSessionUpdate),
-            METHOD_AGENT_SESSION_COMPACT => Some(Self::AgentSessionCompact),
-            METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE => Some(Self::AgentSessionQueuedTurnRemove),
-            METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE => Some(Self::AgentSessionQueuedTurnPromote),
             METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST => Some(Self::AgentSessionFileCheckpointList),
             METHOD_AGENT_SESSION_FILE_CHECKPOINT_GET => Some(Self::AgentSessionFileCheckpointGet),
             METHOD_AGENT_SESSION_FILE_CHECKPOINT_DIFF => Some(Self::AgentSessionFileCheckpointDiff),
@@ -1156,7 +1137,6 @@ impl AppServerRequestMethod {
             METHOD_USAGE_STATS_READ => Some(Self::UsageStatsRead),
             METHOD_USAGE_STATS_MODEL_RANKING_LIST => Some(Self::UsageStatsModelRankingList),
             METHOD_USAGE_STATS_DAILY_TRENDS_LIST => Some(Self::UsageStatsDailyTrendsList),
-            METHOD_MODEL_LIST => Some(Self::ModelList),
             METHOD_MODEL_PREFERENCES_LIST => Some(Self::ModelPreferencesList),
             METHOD_MODEL_SYNC_STATE_READ => Some(Self::ModelSyncStateRead),
             METHOD_MODEL_PROVIDER_LIST => Some(Self::ModelProviderList),
@@ -1371,22 +1351,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AGENT_SESSION_UPDATE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AGENT_SESSION_COMPACT,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
@@ -2194,10 +2158,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
-        method: METHOD_MODEL_LIST,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
         method: METHOD_MODEL_PREFERENCES_LIST,
         kind: AppServerMethodKind::Request,
     },
@@ -2357,7 +2317,23 @@ pub const APP_SERVER_REQUEST_SERIALIZATION_SCOPES: &[AppServerRequestSerializati
         scope: AppServerRequestSerializationScope::Thread,
     },
     AppServerRequestSerializationScopeSpec {
+        method: crate::protocol::v2::METHOD_THREAD_UNSUBSCRIBE,
+        scope: AppServerRequestSerializationScope::Thread,
+    },
+    AppServerRequestSerializationScopeSpec {
+        method: crate::protocol::v2::METHOD_THREAD_INCREMENT_ELICITATION,
+        scope: AppServerRequestSerializationScope::Thread,
+    },
+    AppServerRequestSerializationScopeSpec {
+        method: crate::protocol::v2::METHOD_THREAD_DECREMENT_ELICITATION,
+        scope: AppServerRequestSerializationScope::Thread,
+    },
+    AppServerRequestSerializationScopeSpec {
         method: crate::protocol::v2::METHOD_THREAD_UNARCHIVE,
+        scope: AppServerRequestSerializationScope::Thread,
+    },
+    AppServerRequestSerializationScopeSpec {
+        method: crate::protocol::v2::METHOD_THREAD_COMPACT_START,
         scope: AppServerRequestSerializationScope::Thread,
     },
     AppServerRequestSerializationScopeSpec {
@@ -2366,6 +2342,10 @@ pub const APP_SERVER_REQUEST_SERIALIZATION_SCOPES: &[AppServerRequestSerializati
     },
     AppServerRequestSerializationScopeSpec {
         method: METHOD_THREAD_ITEMS_LIST,
+        scope: AppServerRequestSerializationScope::Thread,
+    },
+    AppServerRequestSerializationScopeSpec {
+        method: crate::protocol::v2::METHOD_THREAD_INJECT_ITEMS,
         scope: AppServerRequestSerializationScope::Thread,
     },
     AppServerRequestSerializationScopeSpec {
@@ -2378,6 +2358,22 @@ pub const APP_SERVER_REQUEST_SERIALIZATION_SCOPES: &[AppServerRequestSerializati
     },
     AppServerRequestSerializationScopeSpec {
         method: crate::protocol::v2::METHOD_THREAD_SHELL_COMMAND,
+        scope: AppServerRequestSerializationScope::Thread,
+    },
+    AppServerRequestSerializationScopeSpec {
+        method: crate::protocol::v2::METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION,
+        scope: AppServerRequestSerializationScope::Thread,
+    },
+    AppServerRequestSerializationScopeSpec {
+        method: crate::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN,
+        scope: AppServerRequestSerializationScope::Thread,
+    },
+    AppServerRequestSerializationScopeSpec {
+        method: crate::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_LIST,
+        scope: AppServerRequestSerializationScope::Thread,
+    },
+    AppServerRequestSerializationScopeSpec {
+        method: crate::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE,
         scope: AppServerRequestSerializationScope::Thread,
     },
     AppServerRequestSerializationScopeSpec {
@@ -2410,14 +2406,6 @@ pub const APP_SERVER_REQUEST_SERIALIZATION_SCOPES: &[AppServerRequestSerializati
     },
     AppServerRequestSerializationScopeSpec {
         method: METHOD_THREAD_RESUME,
-        scope: AppServerRequestSerializationScope::Thread,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE,
-        scope: AppServerRequestSerializationScope::Thread,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE,
         scope: AppServerRequestSerializationScope::Thread,
     },
     AppServerRequestSerializationScopeSpec {
@@ -2512,6 +2500,10 @@ pub const APP_SERVER_REQUEST_ACCESSES: &[AppServerRequestAccessSpec] = &[
         access: AppServerRequestAccess::SharedRead,
     },
     AppServerRequestAccessSpec {
+        method: crate::protocol::v2::METHOD_THREAD_LOADED_LIST,
+        access: AppServerRequestAccess::SharedRead,
+    },
+    AppServerRequestAccessSpec {
         method: METHOD_THREAD_TURNS_LIST,
         access: AppServerRequestAccess::SharedRead,
     },
@@ -2520,7 +2512,15 @@ pub const APP_SERVER_REQUEST_ACCESSES: &[AppServerRequestAccessSpec] = &[
         access: AppServerRequestAccess::SharedRead,
     },
     AppServerRequestAccessSpec {
+        method: crate::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_LIST,
+        access: AppServerRequestAccess::SharedRead,
+    },
+    AppServerRequestAccessSpec {
         method: crate::protocol::v2::METHOD_THREAD_GOAL_GET,
+        access: AppServerRequestAccess::SharedRead,
+    },
+    AppServerRequestAccessSpec {
+        method: crate::protocol::v2::METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
         access: AppServerRequestAccess::SharedRead,
     },
 ];
@@ -2603,6 +2603,7 @@ mod tests {
         for method in [
             METHOD_THREAD_READ,
             METHOD_THREAD_LIST,
+            crate::protocol::v2::METHOD_THREAD_LOADED_LIST,
             METHOD_THREAD_TURNS_LIST,
             METHOD_THREAD_ITEMS_LIST,
         ] {

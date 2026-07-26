@@ -5626,7 +5626,7 @@ function main() {
   if (retiredAgentRuntimeDeleteSessionSurfaceLeaks.size > 0) {
     hasError = true;
     printCommandGroup(
-      "已收敛到 App Server agentSession/update archived projection 的旧 delete session 命令不能回到 Electron Host、DevBridge truth、mock priority 或 runtime surface",
+      "已收敛到 App Server thread/delete 的旧 delete session 命令不能回到 Electron Host、DevBridge truth、mock priority 或 runtime surface",
       retiredAgentRuntimeDeleteSessionSurfaceLeaks,
     );
   }

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "processId": {
+      "type": "string"
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "processId",
+    "threadId"
+  ],
+  "title": "ThreadBackgroundTerminalsTerminateParams",
+  "type": "object"
+}

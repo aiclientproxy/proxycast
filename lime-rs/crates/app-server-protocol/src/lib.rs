@@ -19,4 +19,10 @@ pub use schema_fixtures::write_fixture_tree;
 pub use jsonrpc_lite::*;
 pub use protocol::app_server_method_catalog;
 pub use protocol::v0::*;
-pub use protocol::v2::{METHOD_THREAD_RESUME, V2_SCHEMA_TYPE_NAMES};
+pub use protocol::v2::{
+    InputModality, Model, ModelAvailabilityNux, ModelListParams, ModelListResponse,
+    ModelServiceTier, ModelUpgradeInfo, ReasoningEffortOption, METHOD_MODEL_LIST,
+    METHOD_THREAD_COMPACT_START, METHOD_THREAD_DECREMENT_ELICITATION,
+    METHOD_THREAD_INCREMENT_ELICITATION, METHOD_THREAD_LOADED_LIST, METHOD_THREAD_RESUME,
+    METHOD_THREAD_SEARCH_OCCURRENCES, V2_SCHEMA_TYPE_NAMES,
+};

@@ -1,6 +1,7 @@
 mod agent_session;
 mod artifact;
 mod automation;
+mod background_terminal;
 mod browser_session;
 mod config_warning;
 mod connect;
@@ -40,6 +41,7 @@ mod workspace;
 
 use crate::execution_process::ExecutionProcessServer;
 use crate::project_shell::ProjectShellManager;
+use crate::thread_state::ThreadStateManager;
 use crate::AppServerError;
 use crate::RuntimeCore;
 use crate::RuntimeCoreError;
@@ -93,6 +95,7 @@ pub(crate) type TurnInterruptHook =
 pub struct RequestProcessor {
     state: Arc<Mutex<ProcessorState>>,
     runtime: Arc<RuntimeCore>,
+    thread_states: ThreadStateManager,
     project_shell: ProjectShellManager,
     execution_process: ExecutionProcessServer,
     config_warning_provider: ConfigWarningProvider,
@@ -124,20 +127,22 @@ impl ConnectionRequestId {
 }
 
 impl RequestProcessor {
+    #[cfg(test)]
     pub fn new(runtime: RuntimeCore) -> Self {
+        Self::new_with_thread_states(runtime, ThreadStateManager::new())
+    }
+
+    pub(crate) fn new_with_thread_states(
+        runtime: RuntimeCore,
+        thread_states: ThreadStateManager,
+    ) -> Self {
         let execution_process = runtime
             .execution_process_server()
             .unwrap_or_else(ExecutionProcessServer::default);
-        Self::new_with_execution_process(runtime, execution_process)
-    }
-
-    pub(crate) fn new_with_execution_process(
-        runtime: RuntimeCore,
-        execution_process: ExecutionProcessServer,
-    ) -> Self {
         Self {
             state: Arc::new(Mutex::new(ProcessorState::default())),
             runtime: Arc::new(runtime),
+            thread_states,
             project_shell: ProjectShellManager::default(),
             execution_process,
             config_warning_provider: config_warning::default_config_warning_provider(),

@@ -300,12 +300,10 @@ async function main() {
         },
       },
     });
-    await transport.invoke(options, "agentSession/update", {
-      sessionId,
-      providerSelector: provider.providerPreference,
-      providerName: provider.providerName,
-      modelName: provider.modelPreference,
-      executionStrategy: "react",
+    await transport.invoke(options, "thread/settings/update", {
+      threadId: sessionId,
+      modelProvider: provider.providerPreference,
+      model: provider.modelPreference,
     });
 
     const turnPromise = transport.invoke(options, "turn/start", {

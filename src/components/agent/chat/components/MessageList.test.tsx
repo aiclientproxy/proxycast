@@ -417,10 +417,13 @@ describe("MessageList layout and scrolling", () => {
     const root = createRoot(host);
     mountedRoots.push({ container: host, root });
     const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const originalScrollTo = HTMLElement.prototype.scrollTo;
     const originalRequestAnimationFrame = window.requestAnimationFrame;
     const originalCancelAnimationFrame = window.cancelAnimationFrame;
     const originalResizeObserver = globalThis.ResizeObserver;
     const scrollIntoViewMock = vi.fn();
+    const scrollToMock = vi.fn();
+    const observeMock = vi.fn();
     type TestResizeObserverCallback = (
       entries: unknown[],
       observer: MockResizeObserver,
@@ -432,11 +435,12 @@ describe("MessageList layout and scrolling", () => {
         resizeCallback = callback;
       }
 
-      observe = vi.fn();
+      observe = observeMock;
       disconnect = vi.fn();
     }
 
     HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+    HTMLElement.prototype.scrollTo = scrollToMock;
     window.requestAnimationFrame = ((callback: (timestamp: number) => void) => {
       callback(0);
       return 1;
@@ -456,7 +460,15 @@ describe("MessageList layout and scrolling", () => {
       const scrollContainer = host.querySelector<HTMLElement>(
         '[data-testid="message-list-scroll-container"]',
       );
+      const messageColumn = host.querySelector<HTMLElement>(
+        '[data-testid="message-list-column"]',
+      );
       expect(scrollContainer).not.toBeNull();
+      expect(messageColumn).not.toBeNull();
+      expect(observeMock.mock.calls.map(([target]) => target)).toEqual([
+        scrollContainer,
+        messageColumn,
+      ]);
       setScrollMetrics(scrollContainer as HTMLElement, {
         scrollTop: 600,
         scrollHeight: 1000,
@@ -467,12 +479,40 @@ describe("MessageList layout and scrolling", () => {
         resizeCallback?.([], {} as MockResizeObserver);
       });
 
-      expect(scrollIntoViewMock).toHaveBeenCalledWith({
+      expect(scrollToMock).toHaveBeenCalledWith({
         behavior: "auto",
-        block: "end",
+        top: 1000,
       });
+
+      scrollToMock.mockClear();
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      expect(scrollToMock).toHaveBeenCalledWith({
+        behavior: "auto",
+        top: 1000,
+      });
+
+      scrollIntoViewMock.mockClear();
+      scrollToMock.mockClear();
+      setScrollMetrics(scrollContainer as HTMLElement, {
+        scrollTop: 400,
+        scrollHeight: 1000,
+        clientHeight: 400,
+      });
+      act(() => {
+        scrollContainer?.dispatchEvent(
+          new WheelEvent("wheel", { bubbles: true, deltaY: -120 }),
+        );
+        scrollContainer?.dispatchEvent(new Event("scroll", { bubbles: true }));
+        resizeCallback?.([], {} as MockResizeObserver);
+        window.dispatchEvent(new Event("resize"));
+      });
+      expect(scrollIntoViewMock).not.toHaveBeenCalled();
+      expect(scrollToMock).not.toHaveBeenCalled();
     } finally {
       HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+      HTMLElement.prototype.scrollTo = originalScrollTo;
       window.requestAnimationFrame = originalRequestAnimationFrame;
       window.cancelAnimationFrame = originalCancelAnimationFrame;
       globalThis.ResizeObserver = originalResizeObserver;

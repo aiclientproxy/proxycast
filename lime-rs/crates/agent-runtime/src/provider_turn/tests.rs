@@ -529,6 +529,61 @@ async fn provider_request_includes_model_visible_working_directory_before_user_i
 }
 
 #[tokio::test]
+async fn provider_request_preserves_canonical_fork_lineage() {
+    let provider = Arc::new(ScriptedProvider::new(vec![vec![
+        Ok(CanonicalLlmEvent::TextDelta {
+            id: "text-0".to_string(),
+            text: "done".to_string(),
+        }),
+        Ok(CanonicalLlmEvent::Finish {
+            reason: FinishReason::Stop,
+            usage: None,
+            response_id: Some("response-1".to_string()),
+        }),
+    ]]));
+    let requests = Arc::clone(&provider.requests);
+
+    run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-1")
+                .thread_id("thread-1")
+                .turn_id("turn-1")
+                .forked_from_thread_id("thread-source")
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("continue".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                ),
+            ),
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("/tmp"),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect("provider turn");
+
+    let requests = requests.lock().expect("recorded requests");
+    let metadata = requests[0].metadata.as_ref().expect("request metadata");
+    assert_eq!(metadata.session_id, "session-1");
+    assert_eq!(metadata.thread_id, "thread-1");
+    assert_eq!(metadata.turn_id, "turn-1");
+    assert_eq!(
+        metadata.forked_from_thread_id.as_deref(),
+        Some("thread-source")
+    );
+}
+
+#[tokio::test]
 async fn reasoning_summary_and_content_share_item_but_only_content_enters_provider_history() {
     let provider = Arc::new(ScriptedProvider::new(vec![
         vec![

@@ -8,7 +8,7 @@
 - Soul 如何继续作为用户可编辑的交互身份配置保留
 - 模型可见上下文如何经过 typed packet、防腐、预算和 provider adapter
 - 旧 `unified_memory_*`、`memory_runtime_*`、旧 MemoryPage 灵感库和旧命中预演如何清理
-- App Server `agentSession/compact` 与记忆文件主链如何保持分离，避免把压缩续接做成第二套记忆系统
+- App Server `thread/compact/start` 与记忆文件主链如何保持分离，避免把压缩续接做成第二套记忆系统
 - 多模型上下文窗口、工具 schema、输出保留和自动压缩阈值如何统一规划
 
 它是 **记忆与压缩边界的 current 文档**。旧数据库记忆、旧灵感库和旧 runtime recall 只能作为清理对象或 retired guard 出现，不再定义当前记忆事实源。
@@ -18,7 +18,7 @@
 遇到以下任一情况时，先读本文件：
 
 - 调整 memory store、`memory_summary.md`、`MEMORY.md`、memory tools 或 `MemoryBackend`
-- 调整 App Server `agentSession/compact`、summary cache 或 overflow compaction
+- 调整 App Server `thread/compact/start`、summary cache 或 overflow compaction
 - 调整 `ContextPacket`、`ContextContributor`、`ContextAssembler`、`ContextBudgetPlanner` 或 provider context profile
 - 调整 `memory.soul`、`SOUL.md` 导入 / 复制、artifact voice generation brief
 - 清理 `unified_memory_*`、`memory_runtime_*`、旧 MemoryPage 灵感库或旧命中预演
@@ -49,7 +49,7 @@ memory store folder
 3. `MemoryBackend` 是 list/read/search/add note 的唯一后端合同。
 4. `memory.soul` / `MemorySoulConfig` 是交互身份、沟通节奏和 artifact voice 的 current 配置。
 5. `SOUL.md` 只是导入 / 复制快照，运行时读取保存后的 app config，不依赖该文件路径。
-6. App Server `agentSession/compact` 仍是压缩入口；压缩摘要不能替代 memory store，也不能把旧 runtime recall 重新接成 current。
+6. App Server exact `thread/compact/start` 是手动压缩入口；压缩摘要不能替代 memory store，也不能把旧 runtime recall 重新接成 current。
 7. 项目资料继续走 project memory / knowledge 当前边界，只能作为资料附属层，不抢长期记忆事实源。
 8. 模型可见上下文必须先形成 `ContextPacket`，再由 `ContextAssembler` 做 admission、截断、防腐、去重和 provider 渲染。
 9. provider / model 差异只进入 `ProviderContextProfile` 与 provider adapter，不允许 memory、Soul、GUI 或单个功能 prompt 分叉。
@@ -101,18 +101,19 @@ memory store folder
 
 当前保留：
 
-- App Server `agentSession/compact`
+- App Server exact `thread/compact/start`
 - RuntimeCore / Agent shared compaction core
 - summary cache / overflow compaction 的运行时治理边界
 
 固定规则：
 
 1. 压缩是会话上下文治理动作，不是长期记忆事实源。
-2. 手动压缩继续走 App Server `agentSession/compact`。
-3. 旧 `agent_runtime_compact_session` 只允许 retired guard / test-only evidence。
-4. 压缩结果如需进入长期记忆，必须通过 rollout summary / consolidation 写入 memory store。
-5. 压缩不得重写历史消息；只生成 compaction artifact、context epoch 和 tail window。
-6. 自动溢出压缩由 provider context profile 和 budget planner 触发，不在 provider adapter 或 GUI 中私自实现。
+2. 手动压缩只走 App Server exact `thread/compact/start`；params 只能是 `{ threadId }`，请求被接受后立即返回 `{}`。
+3. 压缩状态只走标准 Thread / Turn / Item lifecycle：`turn/started`、`item/started` / `item/completed` 的 `contextCompaction` item 和 `turn/completed`；不得把 session、turns 或 compacted 状态塞回 response。
+4. 旧 session-scoped compact method 和 `agent_runtime_compact_session` 都是 `dead`；只允许 retired guard / test-only evidence，不保留 alias、双发或 fallback。
+5. 压缩结果如需进入长期记忆，必须通过 rollout summary / consolidation 写入 memory store。
+6. 压缩不得重写历史消息；只生成 compaction artifact、context epoch 和 tail window。
+7. 自动溢出压缩由 provider context profile 和 budget planner 触发，并复用同一 compaction lifecycle；不在 provider adapter 或 GUI 中私自实现。
 
 ### 4. Context current
 
@@ -170,7 +171,7 @@ memory store folder
 - `memory.soul` / `MemorySoulConfig`
 - `SOUL.md` 导入 / 复制快照
 - `memory.soul.artifact_voice` generation brief
-- App Server `agentSession/compact`
+- App Server `thread/compact/start`
 - `ContextPacket`
 - `ContextContributor`
 - `ContextAssembler`
@@ -242,7 +243,7 @@ memory store folder
 - 解释默认注入，回到 `memory_summary.md`
 - 解释按需读取，回到 memory tools / `MemoryBackend`
 - 解释交互身份，回到 `memory.soul`
-- 解释压缩续接，回到 App Server `agentSession/compact`
+- 解释压缩续接，回到 App Server exact `thread/compact/start` 与标准 Thread / Turn / Item lifecycle
 - 解释上下文防腐，回到 `ContextPacket` / `ContextAssembler`
 - 解释多模型预算，回到 `ProviderContextProfile`
 - 解释旧记忆或旧灵感库，回到 `dead / cleanup`

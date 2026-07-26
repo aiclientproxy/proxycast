@@ -1,6 +1,5 @@
 import {
   AppServerClient,
-  type AppServerAgentSessionUpdateParams,
   type AppServerThreadListParams,
   type AppServerThreadListResponse,
   type AppServerThreadReadParams,
@@ -12,7 +11,10 @@ import {
   type ThreadItemsListResponse,
   type ThreadTurnsListResponse,
 } from "../../../../packages/app-server-client/src/protocol";
-import type { AgentExecutionStrategy } from "../agentExecutionRuntime";
+import type {
+  AgentExecutionStrategy,
+  AgentSessionExecutionRuntimePreferences,
+} from "../agentExecutionRuntime";
 import {
   readCanonicalThreadDetail,
   readCanonicalThreadListResponse,
@@ -20,7 +22,6 @@ import {
 import type {
   AgentRuntimeCreateSessionOptions,
   AgentRuntimeGetSessionOptions,
-  AgentRuntimeUpdateSessionRequest,
 } from "./requestTypes";
 import type {
   AgentSessionDetail,
@@ -34,7 +35,7 @@ export type AppServerSessionRpcClient = Pick<
   AppServerClient,
   | "startSession"
   | "readThread"
-  | "updateSession"
+  | "updateThreadSettings"
   | "archiveThread"
   | "unarchiveThread"
   | "deleteThread"
@@ -45,6 +46,7 @@ export type AppServerAgentSessionOverview = {
   sessionId: string;
   threadId?: string;
   parentThreadId?: string;
+  canAcceptDirectInput?: boolean;
   title?: string;
   businessObjectRefMetadata?: unknown;
   model: string;
@@ -177,12 +179,19 @@ export function createAppServerSessionClient({
     return canonicalDetail;
   }
 
-  async function updateAgentRuntimeSession(
-    request: AgentRuntimeUpdateSessionRequest,
+  async function updateAgentRuntimeThreadToolPreferences(
+    sessionId: string,
+    preferences: AgentSessionExecutionRuntimePreferences,
   ): Promise<void> {
-    await appServerClient.updateSession(
-      appServerSessionUpdateParamsFromRequest(request),
+    const threadId = await resolveCanonicalThreadId(
+      appServerClient,
+      sessionId,
+      "thread/settings/update",
     );
+    await appServerClient.updateThreadSettings({
+      threadId,
+      toolPreferences: preferences,
+    });
   }
 
   async function archiveAgentRuntimeSession(sessionId: string): Promise<void> {
@@ -228,7 +237,7 @@ export function createAppServerSessionClient({
     getAgentRuntimeSession,
     listAgentRuntimeSessions,
     unarchiveAgentRuntimeSession,
-    updateAgentRuntimeSession,
+    updateAgentRuntimeThreadToolPreferences,
   };
 }
 
@@ -408,7 +417,11 @@ async function findCanonicalThreadIdBySessionId(
 async function resolveCanonicalThreadId(
   client: AppServerSessionRpcClient,
   sessionId: string,
-  method: "thread/archive" | "thread/delete" | "thread/unarchive",
+  method:
+    | "thread/archive"
+    | "thread/delete"
+    | "thread/settings/update"
+    | "thread/unarchive",
 ): Promise<string> {
   const normalizedSessionId = sessionId.trim();
   if (!normalizedSessionId) {
@@ -641,30 +654,6 @@ function readNextCursor(value: Record<string, unknown>): string | undefined {
 
 function canonicalTurnId(value: Record<string, unknown>): string {
   return readStringField(value, "turnId") || readStringField(value, "id");
-}
-
-function appServerSessionUpdateParamsFromRequest(
-  request: AgentRuntimeUpdateSessionRequest,
-): AppServerAgentSessionUpdateParams {
-  const sessionId = request.session_id.trim();
-  if (!sessionId) {
-    throw new Error("sessionId is required to update App Server session");
-  }
-
-  return omitUndefined({
-    sessionId,
-    title: request.name?.trim() || undefined,
-    providerSelector: request.provider_selector?.trim() || undefined,
-    providerName: request.provider_name?.trim() || undefined,
-    modelName: request.model_name?.trim() || undefined,
-    executionStrategy: request.execution_strategy,
-    recentAccessMode: request.recent_access_mode,
-    recentPreferences: request.recent_preferences,
-    articleWorkspaceSelectedObjectRef:
-      request.article_workspace_selected_object_ref ?? undefined,
-    articleWorkspaceEditedDraft:
-      request.article_workspace_edited_draft ?? undefined,
-  });
 }
 
 function appServerSessionOverviewToRuntimeInfo(

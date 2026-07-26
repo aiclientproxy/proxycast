@@ -368,6 +368,7 @@ async fn restart_preserves_agent_control_provider_defaults() {
                     runtime_request: Some(app_server_protocol::RuntimeRequest {
                         provider_preference: Some("fixture-provider".to_string()),
                         model_preference: Some("fixture-model".to_string()),
+                        service_tier: Some("priority".to_string()),
                         provider_config: Some(app_server_protocol::RuntimeProviderConfig {
                             provider_id: Some("fixture-provider-id".to_string()),
                             provider_name: Some("fixture-provider".to_string()),
@@ -389,6 +390,7 @@ async fn restart_preserves_agent_control_provider_defaults() {
                                 "schemaVersion": 2,
                                 "providerPreference": "fixture-provider",
                                 "modelPreference": "fixture-model",
+                                "serviceTier": "priority",
                                 "providerConfig": {
                                     "providerId": "fixture-provider-id",
                                     "providerName": "fixture-provider",
@@ -442,6 +444,7 @@ async fn restart_preserves_agent_control_provider_defaults() {
                 task_name: "provider_child".to_string(),
                 message: "continue after restart".to_string(),
                 fork_mode: SpawnAgentForkMode::None,
+                model_overrides: SpawnAgentModelOverrides::default(),
             },
             cancel_token: None,
         })
@@ -468,6 +471,7 @@ async fn restart_preserves_agent_control_provider_defaults() {
     assert_eq!(metadata["providerSelector"], "fixture-provider");
     assert_eq!(metadata["providerName"], "fixture-provider");
     assert_eq!(metadata["modelName"], "fixture-model");
+    assert_eq!(metadata["serviceTier"], "priority");
     let route_snapshot = metadata["agentControlRoute"]
         .as_object()
         .expect("route snapshot");
@@ -482,6 +486,7 @@ async fn restart_preserves_agent_control_provider_defaults() {
     assert!(provider_config.get("apiKey").is_none());
     assert_eq!(route_snapshot["credentialRef"], "credential-ref-1");
     assert_eq!(route_snapshot["routeProtocol"], "openai_responses");
+    assert_eq!(route_snapshot["serviceTier"], "priority");
     assert_eq!(route_snapshot["effectiveGeneration"], 7);
     store
         .append_agent_mailbox_message(thread_store::AppendAgentMailboxMessageParams {
@@ -541,6 +546,7 @@ async fn restart_preserves_agent_control_provider_defaults() {
         .runtime_request
         .as_ref()
         .expect("restored runtime request");
+    assert_eq!(restored_request.service_tier.as_deref(), Some("priority"));
     let restored_provider_config = restored_request
         .provider_config
         .as_ref()
@@ -565,6 +571,7 @@ async fn restart_preserves_agent_control_provider_defaults() {
         .expect("restored durable route");
     assert_eq!(restored_route["credentialRef"], "credential-ref-1");
     assert_eq!(restored_route["routeProtocol"], "openai_responses");
+    assert_eq!(restored_route["serviceTier"], "priority");
     assert_eq!(restored_route["effectiveGeneration"], 7);
 }
 
@@ -1453,6 +1460,7 @@ async fn restart_hydrates_only_the_exact_open_child_on_demand() {
                     task_name: task_name.to_string(),
                     message: format!("initial {task_name} task"),
                     fork_mode: SpawnAgentForkMode::None,
+                    model_overrides: SpawnAgentModelOverrides::default(),
                 },
                 cancel_token: None,
             })
@@ -1494,6 +1502,7 @@ async fn restart_hydrates_only_the_exact_open_child_on_demand() {
                 task_name: "reviewer".to_string(),
                 message: "review the child work".to_string(),
                 fork_mode: SpawnAgentForkMode::None,
+                model_overrides: SpawnAgentModelOverrides::default(),
             },
             cancel_token: None,
         })

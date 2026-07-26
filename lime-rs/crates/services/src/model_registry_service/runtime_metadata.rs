@@ -215,8 +215,8 @@ mod tests {
     };
     use lime_core::database::schema::create_tables;
     use lime_core::models::model_registry::{
-        ModelCapabilities, ModelReasoningEffortLevel, ModelReasoningEffortSource,
-        ModelReasoningEffortSupport, ModelRuntimeFeature, ModelTaskFamily,
+        ModelCapabilities, ModelReasoningEffortSource, ModelReasoningEffortSupport,
+        ModelRuntimeFeature, ModelTaskFamily,
     };
     use lime_core::models::RuntimeProviderType;
     use rusqlite::Connection;
@@ -284,12 +284,9 @@ mod tests {
             reasoning: true,
             reasoning_effort: Some(ModelReasoningEffortSupport {
                 supported: true,
-                levels: vec![
-                    ModelReasoningEffortLevel::Low,
-                    ModelReasoningEffortLevel::Medium,
-                    ModelReasoningEffortLevel::High,
-                ],
-                default: Some(ModelReasoningEffortLevel::Medium),
+                levels: vec!["low".to_string(), "medium".to_string(), "high".to_string()],
+                options: Vec::new(),
+                default: Some("medium".to_string()),
                 source: Some(ModelReasoningEffortSource::Api),
             }),
             ..Default::default()

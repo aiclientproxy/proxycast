@@ -4,7 +4,7 @@ import {
   clearAgentUiPerformanceMetrics,
   getAgentUiPerformanceMetrics,
 } from "@/lib/agentUiPerformanceMetrics";
-import type { Message } from "../types";
+import type { AgentThreadTurn, Message } from "../types";
 import { handleAgentStreamThreadItemLifecycleEvent } from "./agentStreamRuntimeLifecycleEvents";
 import { handleTurnStreamEvent } from "./agentStreamRuntimeHandler";
 
@@ -12,6 +12,97 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
   afterEach(() => {
     clearAgentUiPerformanceMetrics();
     vi.restoreAllMocks();
+  });
+
+  it("缺少 turn_started 时首个 canonical item 应替换 optimistic turn identity", () => {
+    const pendingTurnKey = "pending-turn:request-1";
+    let messages: Message[] = [
+      {
+        id: "user-1",
+        role: "user",
+        content: "修复测试并补回归",
+        runtimeTurnId: pendingTurnKey,
+        timestamp: new Date("2026-07-26T05:31:01.900Z"),
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: "",
+        runtimeTurnId: pendingTurnKey,
+        timestamp: new Date("2026-07-26T05:31:02.000Z"),
+      },
+    ];
+    let threadTurns: AgentThreadTurn[] = [
+      {
+        id: pendingTurnKey,
+        thread_id: "thread-1",
+        prompt_text: "修复测试并补回归",
+        status: "running",
+        started_at: "2026-07-26T05:31:02.000Z",
+        created_at: "2026-07-26T05:31:02.000Z",
+        updated_at: "2026-07-26T05:31:02.000Z",
+      },
+    ];
+    const setCurrentTurnId = vi.fn();
+    const requestState = {
+      accumulatedContent: "",
+      currentTurnId: pendingTurnKey,
+      requestLogId: null,
+      requestStartedAt: 0,
+      requestFinished: false,
+    };
+    const item: AgentThreadItem = {
+      id: "tool-real-1",
+      thread_id: "thread-1",
+      turn_id: "turn-real-1",
+      type: "tool_call",
+      tool_name: "WebFetch",
+      arguments: { url: "https://example.com" },
+      status: "in_progress",
+      sequence: 1,
+      started_at: "2026-07-26T05:31:03.000Z",
+      updated_at: "2026-07-26T05:31:03.000Z",
+    };
+
+    handleAgentStreamThreadItemLifecycleEvent({
+      assistantMsgId: "assistant-1",
+      event: { type: "item_started", item },
+      pendingItemKey: `pending-item:${pendingTurnKey}`,
+      pendingTurnKey,
+      requestState,
+      setters: {
+        getThreadItems: () => [],
+        setCurrentTurnId,
+        setMessages: ((value: Message[] | ((prev: Message[]) => Message[])) => {
+          messages = typeof value === "function" ? value(messages) : value;
+        }) as never,
+        setPendingActions: vi.fn() as never,
+        setThreadItems: vi.fn((value: unknown) => value) as never,
+        setThreadTurns: ((
+          value:
+            | AgentThreadTurn[]
+            | ((prev: AgentThreadTurn[]) => AgentThreadTurn[]),
+        ) => {
+          threadTurns =
+            typeof value === "function" ? value(threadTurns) : value;
+        }) as never,
+      },
+    });
+
+    expect(requestState.currentTurnId).toBe("turn-real-1");
+    expect(setCurrentTurnId).toHaveBeenCalledWith("turn-real-1");
+    expect(messages.map((message) => message.runtimeTurnId)).toEqual([
+      "turn-real-1",
+      "turn-real-1",
+    ]);
+    expect(threadTurns).toEqual([
+      expect.objectContaining({
+        id: "turn-real-1",
+        thread_id: "thread-1",
+        status: "running",
+        updated_at: "2026-07-26T05:31:03.000Z",
+      }),
+    ]);
   });
 
   it("运行中的 canonical AgentMessage snapshot 应立即同步到同一 commentary part", () => {
@@ -57,6 +148,7 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
       assistantMsgId: "assistant-1",
       event: { type: "item_updated", item },
       pendingItemKey: "pending-item",
+      pendingTurnKey: "pending-turn",
       requestState: {
         accumulatedContent: "",
         requestLogId: null,
@@ -136,6 +228,7 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
       assistantMsgId: "assistant-1",
       event: { type: "item_updated", item: snapshot("最终", 50) },
       pendingItemKey: "pending-item",
+      pendingTurnKey: "pending-turn",
       requestState,
       setters,
     });
@@ -143,6 +236,7 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
       assistantMsgId: "assistant-1",
       event: { type: "item_updated", item: snapshot("最终答复", 51) },
       pendingItemKey: "pending-item",
+      pendingTurnKey: "pending-turn",
       requestState,
       setters,
     });
@@ -189,6 +283,7 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
         },
       },
       pendingItemKey: "pending-item",
+      pendingTurnKey: "pending-turn",
       requestState,
       setters: {
         getThreadItems: () => [],

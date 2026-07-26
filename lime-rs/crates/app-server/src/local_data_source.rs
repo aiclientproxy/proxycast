@@ -166,8 +166,6 @@ use app_server_protocol::MemoryStoreReviewResolveResponse;
 use app_server_protocol::MemoryStoreRootParams;
 use app_server_protocol::MemoryStoreSearchParams;
 use app_server_protocol::MemoryStoreSearchResponse;
-use app_server_protocol::ModelListParams;
-use app_server_protocol::ModelListResponse;
 use app_server_protocol::ModelPreferencesListResponse;
 use app_server_protocol::ModelProviderAliasListResponse;
 use app_server_protocol::ModelProviderAliasReadParams;

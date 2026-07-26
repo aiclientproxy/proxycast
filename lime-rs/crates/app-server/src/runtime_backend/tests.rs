@@ -2,7 +2,7 @@ use super::request_context::{
     apply_app_server_turn_policy, effective_runtime_options_for_turn, host_reasoning_effort,
     host_thinking_enabled, request_workspace_scope, resolve_runtime_model_selection,
     selection_from_explicit_preferences, selection_from_host_provider_config,
-    selection_from_session_default, selection_with_effective_reasoning,
+    selection_from_session_default, selection_with_capability_reasoning,
     should_use_compact_tool_surface, turn_context_from_request, RuntimeModelSelection,
 };
 use super::*;
@@ -103,6 +103,7 @@ pub(super) fn request_for_test(
             started_at: None,
             completed_at: None,
         },
+        forked_from_thread_id: None,
         input: agent_runtime::reply_input::RuntimeReplyInput::text(message),
         runtime_options: Some(RuntimeOptions {
             stream: true,

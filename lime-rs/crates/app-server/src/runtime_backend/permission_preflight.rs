@@ -173,6 +173,7 @@ mod tests {
                 started_at: None,
                 completed_at: None,
             },
+            forked_from_thread_id: None,
             input: agent_runtime::reply_input::RuntimeReplyInput::text("打开浏览器"),
             runtime_options: None,
             expected_output: None,

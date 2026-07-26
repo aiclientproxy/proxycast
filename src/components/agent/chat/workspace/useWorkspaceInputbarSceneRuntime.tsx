@@ -4,6 +4,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { useTranslation } from "react-i18next";
 import type {
   AgentInitialInputCapabilityParams,
   AgentInitialKnowledgePackSelectionParams,
@@ -41,6 +42,7 @@ interface UseWorkspaceInputbarSceneRuntimeParams {
   isThemeWorkbench: InputbarScenePresentationParams["isThemeWorkbench"];
   sessionId: InputbarParams["sessionId"];
   threadId: InputbarParams["threadId"];
+  canAcceptDirectInput?: boolean | null;
   threadGoal: InputbarParams["threadGoal"];
   threadGoalError: InputbarParams["threadGoalError"];
   threadGoalLoading: InputbarParams["threadGoalLoading"];
@@ -129,6 +131,7 @@ export function useWorkspaceInputbarSceneRuntime({
   isThemeWorkbench,
   sessionId,
   threadId,
+  canAcceptDirectInput,
   threadGoal,
   threadGoalError,
   threadGoalLoading,
@@ -203,6 +206,8 @@ export function useWorkspaceInputbarSceneRuntime({
   onToggleFileManager,
   inputCompletionEnabled = true,
 }: UseWorkspaceInputbarSceneRuntimeParams) {
+  const { t } = useTranslation("agent");
+  const directInputBlocked = canAcceptDirectInput === false;
   const knowledgeRuntime = useWorkspaceKnowledgeRuntime({
     projectRootPath,
     currentSessionTitle,
@@ -235,6 +240,9 @@ export function useWorkspaceInputbarSceneRuntime({
   const inputbarTargetSessionId = sessionId?.trim() || undefined;
   const handleInputbarSend = useCallback<InputbarSendHandler>(
     (payload = {}) => {
+      if (directInputBlocked) {
+        return false;
+      }
       const payloadTargetSessionId =
         payload.sendOptions?.targetSessionId?.trim() || undefined;
       const sendOptions =
@@ -255,10 +263,13 @@ export function useWorkspaceInputbarSceneRuntime({
         sendOptions,
       );
     },
-    [handleSend, inputbarTargetSessionId],
+    [directInputBlocked, handleSend, inputbarTargetSessionId],
   );
   const handleInputbarToolStatesChange = useCallback(
     (nextToolStates: WorkspaceInputbarToolStates) => {
+      if (directInputBlocked) {
+        return;
+      }
       const hasPlanChange = typeof nextToolStates.plan === "boolean";
       const hasSubagentChange = typeof nextToolStates.subagent === "boolean";
       const hasObjectiveChange = typeof nextToolStates.objective === "boolean";
@@ -277,7 +288,7 @@ export function useWorkspaceInputbarSceneRuntime({
         onObjectiveEnabledChange?.(nextToolStates.objective === true);
       }
     },
-    [onObjectiveEnabledChange, setChatToolPreferences],
+    [directInputBlocked, onObjectiveEnabledChange, setChatToolPreferences],
   );
   const resolvedTurns = useMemo(
     () => generalWorkbenchHarnessPanelBaseProps.turns ?? [],
@@ -347,9 +358,13 @@ export function useWorkspaceInputbarSceneRuntime({
         activeTheme,
         onManageProviders: navigationActions.handleManageProviders,
         disabled:
+          directInputBlocked ||
           isSessionRestoring ||
           isPreparingSend ||
           (contextVariant !== "task-center" && !projectId && !sessionId),
+        disabledPlaceholder: directInputBlocked
+          ? t("agentChat.inputbar.parentOwned.placeholder")
+          : undefined,
         characters,
         skills,
         serviceSkills,

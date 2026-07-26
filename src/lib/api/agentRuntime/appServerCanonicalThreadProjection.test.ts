@@ -8,6 +8,77 @@ import {
 const CREATED_AT_SECONDS = 1_780_704_000;
 
 describe("appServerCanonicalThreadProjection", () => {
+  it("queued turn 不应进入普通历史投影", () => {
+    const detail = readCanonicalThreadDetail({
+      thread: {
+        id: "thread-queue",
+        sessionId: "session-queue",
+        status: { type: "active", activeFlags: [] },
+        createdAt: CREATED_AT_SECONDS,
+        updatedAt: CREATED_AT_SECONDS + 5,
+        turns: [
+          {
+            id: "turn-active",
+            status: "inProgress",
+            queue: { state: "running" },
+            items: [],
+          },
+          {
+            id: "turn-queued",
+            status: "inProgress",
+            queue: { state: "queued", position: 0 },
+            items: [],
+          },
+        ],
+      },
+    });
+
+    expect(detail?.messages).toEqual([]);
+    expect(detail?.turns).toEqual([
+      expect.objectContaining({ id: "turn-active", status: "running" }),
+    ]);
+  });
+
+  it("保留 App Server parent-owned direct-input policy", () => {
+    const detail = readCanonicalThreadDetail({
+      thread: {
+        id: "thread-child",
+        sessionId: "session-child",
+        parentThreadId: "thread-parent",
+        canAcceptDirectInput: false,
+        status: { type: "idle" },
+        createdAt: CREATED_AT_SECONDS,
+        updatedAt: CREATED_AT_SECONDS,
+        turns: [],
+      },
+    });
+
+    expect(detail?.thread_read).toMatchObject({
+      thread_id: "thread-child",
+      can_accept_direct_input: false,
+    });
+    expect(
+      readCanonicalThreadListResponse({
+        data: [
+          {
+            id: "thread-child",
+            sessionId: "session-child",
+            parentThreadId: "thread-parent",
+            canAcceptDirectInput: false,
+            createdAt: CREATED_AT_SECONDS,
+            updatedAt: CREATED_AT_SECONDS,
+            status: { type: "idle" },
+          },
+        ],
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        parentThreadId: "thread-parent",
+        canAcceptDirectInput: false,
+      }),
+    ]);
+  });
+
   it("截断的 Codex MCP 结果仅保留空 content 时仍应恢复完整会话", () => {
     const detail = readCanonicalThreadDetail({
       thread: {

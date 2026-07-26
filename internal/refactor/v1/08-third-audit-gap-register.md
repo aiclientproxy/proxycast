@@ -34,14 +34,14 @@ Codex current runtime 与 Lime current owner；Grok Build 和 OpenCode 只用于
 
 ### 2.1 唯一 owner
 
-| 能力 | current owner | 禁止路径 |
-| --- | --- | --- |
-| Thread/Turn/Item、method/notification、server request | `app-server-protocol` + App Server | `agentSession/*` 新写入、Renderer transcript 拼接 |
-| session/turn/queue/steer/cancel/recovery | `agent-runtime` + App Server | Electron loop、第二 session state machine |
-| canonical model context、compaction、world state | `runtime-core` + `thread-store` | provider history tail 直接充当 durable truth |
-| catalog、route、capability、credential readiness、lowering、stream | `model-provider` | `lime-providers`、provider adapter 直接生成 Item |
-| tool、approval、sandbox、MCP dispatch | `tool-runtime` | App Server 拼 provider body 或 GUI 作为 policy owner |
-| durable Thread/Turn/Item、graph、identity、mailbox | `thread-store` | EventLog、Renderer cache 或 session metadata 第二事实源 |
+| 能力                                                               | current owner                      | 禁止路径                                                |
+| ------------------------------------------------------------------ | ---------------------------------- | ------------------------------------------------------- |
+| Thread/Turn/Item、method/notification、server request              | `app-server-protocol` + App Server | `agentSession/*` 新写入、Renderer transcript 拼接       |
+| session/turn/queue/steer/cancel/recovery                           | `agent-runtime` + App Server       | Electron loop、第二 session state machine               |
+| canonical model context、compaction、world state                   | `runtime-core` + `thread-store`    | provider history tail 直接充当 durable truth            |
+| catalog、route、capability、credential readiness、lowering、stream | `model-provider`                   | `lime-providers`、provider adapter 直接生成 Item        |
+| tool、approval、sandbox、MCP dispatch                              | `tool-runtime`                     | App Server 拼 provider body 或 GUI 作为 policy owner    |
+| durable Thread/Turn/Item、graph、identity、mailbox                 | `thread-store`                     | EventLog、Renderer cache 或 session metadata 第二事实源 |
 
 ### 2.2 不能把整个 `protocol/v0` 直接判 dead
 
@@ -68,17 +68,43 @@ serialization scope 和 v2 schema 绑定；README 还要求每条连接执行
 `InitializeParams` 只有 `eventMethods/experimental`，Processor 只保存 `clientInfo`，
 没有逐连接 notification opt-out 或 v2 experimental gating。
 
-必须补一张 machine-readable method matrix，每个 Codex method 都只能标记为：
-`implemented`、`product-scope-excluded`、`planned`，禁止用“模块存在”代替实现。最低
-分组如下：
+已补 machine-readable method matrix：
+`internal/refactor/v1/fixtures/codex-method-product-scope.v0.1.json`。矩阵覆盖 Codex
+注册表的 214 个方向化 method，每个只能标记为 `implemented`、`product-scope-excluded`
+或 `planned`，并由
+`src/lib/governance/codexMethodProductScopeBoundary.test.ts` 固定方向计数、唯一性、
+owner/evidence、planned gap、excluded rationale 和 Lime generated manifest 同方向契约。
+这一步不把“模块存在”当成实现，未闭合的范围继续保留在下表和矩阵的 `planned`。
 
-| 分组 | Codex surface | Lime 退出条件 |
-| --- | --- | --- |
-| Thread lifecycle | `thread/start|resume|fork|read|list|loaded/list|turns/list|items/list|archive|delete|unarchive|unsubscribe|name/set|metadata/update|settings/update|rollback|inject_items` | v2 request/response/notification、cursor、subscription、status 和 fork boundary 全部有 schema/handler/fixture |
-| Turn | `turn/start|steer|interrupt` | accepted 与 started 分离；steer/interrupt 的 active-turn、review/compact 拒绝和 terminal 状态可恢复 |
-| Item/approval | `item/started|completed`、delta、approval、dynamic tool、MCP progress | server request 精确关联 connection/request id；unknown method/late delta/deny 不产生副作用 |
-| Process/command/fs | `command/exec/*`、`process/*`、`fs/*`、background terminals | 真实 owner 或明确产品排除；不能用 `executionProcess/*` 同名映射冒充 parity |
-| Runtime controls | `model/list`、`modelProvider/capabilities/read`、`permissionProfile/list`、`environment/*`、`hooks/list`、`skills/*`、`plugin/*`、`app/list`、`review/*`、`thread/realtime/*` | 每个组写明 current owner、实验 gate、通知和 Gate B 证据 |
+`thread/increment_elicitation` 与 `thread/decrement_elicitation` 已补 exact v2 schema、Thread
+serialization/exclusive access、loaded-thread `i64` 引用计数、溢出/下溢、archive/delete/unload
+清理、typed clients 与 public JSON-RPC evidence，因此 method boundary 已从 `planned` 迁入
+`implemented`。剩余生命周期缺口是把该 Thread-level pause state 接入 `agent-runtime` provider
+active-time budget；现有 MCP connection-local pause state 不得冒充这个 consumer。
+
+`thread/approveGuardianDeniedAction` 已补 exact opaque-event v2 boundary、Thread serialization、loaded
+Thread 校验、typed Guardian action parse、Codex exact-action developer marker、session actor active-turn
+delivery、durable provider-only history 与 public JSON-RPC evidence，因此 method boundary 已从 `planned`
+迁入 `implemented`。Lime 仍未生产 Guardian assessment/review lifecycle；该 producer gap 继续留在 MCP/tool
+review 工作，不得把手工 continuation method 冒充完整 Guardian reviewer。
+
+`thread/inject_items` 已补 exact opaque-item v2 boundary、Codex current `ResponseItem` validation union、
+remote image guard、active regular Turn session actor delivery、durable `response_item.injected` provider-only
+history、restart/cold hydrate、archived fail-closed、Responses 原样 lowering、非 Responses route fail-closed 与
+Rust/TypeScript typed client/public JSON-RPC evidence，因此 method boundary 已从 `planned` 迁入
+`implemented`。raw item 不生成用户可见 Thread Item，也不经过 `ThreadItemPayload::Extension`。P0-03 仍保留
+全局 canonical history/rollout、rollback/fork/replay 与未知记录一致性的更大退出条件；不得用本 method
+boundary 的完成冒充整个 history parity 已关闭。
+
+最低分组如下：
+
+| 分组               | Codex surface                                                                                                                                                                 | Lime 退出条件                                                              |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ---- | ----------- | ---------- | ---------- | ------- | ------ | --------- | ----------- | -------- | --------------- | --------------- | -------- | ------------- | ------------------------------------------------------------------------------------------------------------- |
+| Thread lifecycle   | `thread/start                                                                                                                                                                 | resume                                                                     | fork                                                                                       | read                                                                                                | list | loaded/list | turns/list | items/list | archive | delete | unarchive | unsubscribe | name/set | metadata/update | settings/update | rollback | inject_items` | v2 request/response/notification、cursor、subscription、status 和 fork boundary 全部有 schema/handler/fixture |
+| Turn               | `turn/start                                                                                                                                                                   | steer                                                                      | interrupt`                                                                                 | accepted 与 started 分离；steer/interrupt 的 active-turn、review/compact 拒绝和 terminal 状态可恢复 |
+| Item/approval      | `item/started                                                                                                                                                                 | completed`、delta、approval、dynamic tool、MCP progress                    | server request 精确关联 connection/request id；unknown method/late delta/deny 不产生副作用 |
+| Process/command/fs | `command/exec/*`、`process/*`、`fs/*`                                                                                                                                         | 真实 owner 或明确产品排除；不能用 `executionProcess/*` 同名映射冒充 parity |
+| Runtime controls   | `model/list`、`modelProvider/capabilities/read`、`permissionProfile/list`、`environment/*`、`hooks/list`、`skills/*`、`plugin/*`、`app/list`、`review/*`、`thread/realtime/*` | 每个组写明 current owner、实验 gate、通知和 Gate B 证据                    |
 
 ### P0-02：Thread/Turn/Item 逐字段契约
 
@@ -141,9 +167,10 @@ remote compaction、token accounting 和 compaction hooks。Lime 目前的 summa
 
 **2026-07-19 进度（partial）**：Lime 已持久化窗口字段，新增 UUIDv7 window id；replacement
 history 现在保留压缩前用户边界并追加最终摘要 user message，provider history 仅消费最新
-有效窗口和 tail，nested/top-level marker 缺字段时 fail-safe 回退完整事件历史。仍未完成
-Codex `ResponseItem` 全量 union、rollback/fork/replay 的窗口链确定性和 ThreadStore durable
-canonical compaction item 端到端证据；不得关闭本 P0。
+有效窗口和 tail，nested/top-level marker 缺字段时 fail-safe 回退完整事件历史。`thread/inject_items`
+所需的 Codex current `ResponseItem` validation union 已进入 current owner；仍未完成
+rollback/fork/replay 的窗口链确定性和 ThreadStore durable canonical compaction item 端到端证据；
+不得关闭本 P0。
 
 ### P0-05：重启恢复不能因缺 route 退出 App Server
 
@@ -248,20 +275,20 @@ provider credential fingerprint、source provenance 和 replay import/export 一
 
 ## 5. P2/P3 明确不能静默跳过
 
-| 域 | 必须逐项决定的 Codex contract | 允许的 Lime 结果 |
-| --- | --- | --- |
-| Multi-Agent | root-shared AgentControl、role/model/reasoning/service-tier 约束、max width/depth、execution limiter、rollout budget、nickname/path、V2 residency restore、full/last-N fork、过滤 tool/reasoning/inter-agent side-channel、mailbox `trigger_turn`、delivery phase、steer 优先、wait 三态 | `implemented` 或 `product-scope-excluded`，不能以 graph/identity/mailbox 模块存在代替完成 |
-| Process/admin | `command/exec/*`、`process/spawn|writeStdin|resizePty|kill`、background terminals、`fs/*`、file checkpoint、rollback、inject items、config lock、current time、memory mode、attestation | 有真实 App Server handler/read model/evidence，或写出明确 exclusion 和删除未实现声明的条件 |
-| Realtime/review | `thread/realtime/*`、review start/notification、audio/text/speech lifecycle | 产品需要则迁入 current；不需要则在 method matrix 标记排除并移除 catalog/fixture |
-| Clients | CLI/TUI/SDK/VS Code 都只消费 App Server schema | Lime 可仅实现 Electron/typed client；不得为“对齐 Codex”把客户端逻辑塞进 runtime |
+| 域              | 必须逐项决定的 Codex contract                                                                                                                                                                                                                                                            | 允许的 Lime 结果                                                                          |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Multi-Agent     | root-shared AgentControl、role/model/reasoning/service-tier 约束、max width/depth、execution limiter、rollout budget、nickname/path、V2 residency restore、full/last-N fork、过滤 tool/reasoning/inter-agent side-channel、mailbox `trigger_turn`、delivery phase、steer 优先、wait 三态 | `implemented` 或 `product-scope-excluded`，不能以 graph/identity/mailbox 模块存在代替完成 |
+| Process/admin   | `command/exec/*`、`process/spawn                                                                                                                                                                                                                                                         | writeStdin                                                                                | resizePty | kill`、`fs/\*`、file checkpoint、rollback、inject items、config lock、current time、memory mode、attestation | 有真实 App Server handler/read model/evidence，或写出明确 exclusion 和删除未实现声明的条件 |
+| Realtime/review | `thread/realtime/*`、review start/notification、audio/text/speech lifecycle                                                                                                                                                                                                              | 产品需要则迁入 current；不需要则在 method matrix 标记排除并移除 catalog/fixture           |
+| Clients         | CLI/TUI/SDK/VS Code 都只消费 App Server schema                                                                                                                                                                                                                                           | Lime 可仅实现 Electron/typed client；不得为“对齐 Codex”把客户端逻辑塞进 runtime           |
 
 ## 6. 多模型最终取舍（本轮修正）
 
-| 维度 | primary | secondary | 本轮新增验收 |
-| --- | --- | --- | --- |
-| catalog/default/selection/switch/child subset/retry-breaker | Grok Build | - | route readiness、credential identity、effective options、unsupported protocol fail closed |
-| endpoint/auth/query/header/variant/body/content/media/lowering | Lime `model-provider` | OpenCode | variant/header/body merge、media capability、repairToolCall/invalid tool、协议穷举 |
-| runtime/session/history/Thread/Turn/Item | Codex | - | 不把 OpenCode session store 或 Grok MvpAgent 带入 Lime |
+| 维度                                                           | primary               | secondary | 本轮新增验收                                                                              |
+| -------------------------------------------------------------- | --------------------- | --------- | ----------------------------------------------------------------------------------------- |
+| catalog/default/selection/switch/child subset/retry-breaker    | Grok Build            | -         | route readiness、credential identity、effective options、unsupported protocol fail closed |
+| endpoint/auth/query/header/variant/body/content/media/lowering | Lime `model-provider` | OpenCode  | variant/header/body merge、media capability、repairToolCall/invalid tool、协议穷举        |
+| runtime/session/history/Thread/Turn/Item                       | Codex                 | -         | 不把 OpenCode session store 或 Grok MvpAgent 带入 Lime                                    |
 
 Grok 的 `SamplerConfig` 与 Codex `ModelProviderInfo` 提醒我们：provider/model 选择还包括
 auth scheme、headers/query、variant、limits、timeouts、stream/request retry、service tier、

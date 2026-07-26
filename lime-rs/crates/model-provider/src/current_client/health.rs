@@ -1,7 +1,94 @@
-use std::collections::VecDeque;
+use crate::runtime_provider::{RuntimeProviderConfig, RuntimeProviderProtocol};
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+#[derive(Clone)]
+pub struct CurrentProviderHealthRegistry {
+    config: HealthConfig,
+    breakers: Arc<Mutex<HashMap<RouteHealthKey, Arc<CircuitBreaker>>>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct RouteHealthKey {
+    provider: String,
+    model: String,
+    base_url: String,
+    protocol: &'static str,
+}
+
+impl RouteHealthKey {
+    fn from_config(config: &RuntimeProviderConfig) -> Self {
+        Self {
+            provider: config.provider_name.trim().to_ascii_lowercase(),
+            model: config.model_name.trim().to_string(),
+            base_url: normalized_base_url(config),
+            protocol: match config.protocol {
+                Some(RuntimeProviderProtocol::ChatCompletions) => "chat_completions",
+                Some(RuntimeProviderProtocol::Responses) => "responses",
+                Some(RuntimeProviderProtocol::AnthropicMessages) => "anthropic_messages",
+                None => "missing",
+            },
+        }
+    }
+}
+
+impl CurrentProviderHealthRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn circuit_for(&self, config: &RuntimeProviderConfig) -> Arc<CircuitBreaker> {
+        let key = RouteHealthKey::from_config(config);
+        let mut breakers = self
+            .breakers
+            .lock()
+            .expect("provider health registry mutex poisoned");
+        Arc::clone(
+            breakers
+                .entry(key)
+                .or_insert_with(|| Arc::new(CircuitBreaker::new(self.config))),
+        )
+    }
+
+    #[cfg(test)]
+    fn with_config(config: HealthConfig) -> Self {
+        Self {
+            config,
+            breakers: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+impl Default for CurrentProviderHealthRegistry {
+    fn default() -> Self {
+        Self {
+            config: HealthConfig::default(),
+            breakers: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+fn normalized_base_url(config: &RuntimeProviderConfig) -> String {
+    let fallback = match config.protocol {
+        Some(RuntimeProviderProtocol::AnthropicMessages) => "https://api.anthropic.com",
+        _ => "https://api.openai.com",
+    };
+    let value = config
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(fallback);
+    let Ok(mut url) = url::Url::parse(value) else {
+        return value.trim_end_matches('/').to_string();
+    };
+    url.set_fragment(None);
+    let path = url.path().trim_end_matches('/').to_string();
+    url.set_path(if path.is_empty() { "/" } else { &path });
+    url.to_string().trim_end_matches('/').to_string()
+}
 
 /// Provider 传输健康熔断策略。
 ///
@@ -265,6 +352,28 @@ mod tests {
     use super::*;
     use std::thread;
 
+    fn route_config(
+        provider_name: &str,
+        model_name: &str,
+        base_url: Option<&str>,
+        protocol: RuntimeProviderProtocol,
+    ) -> RuntimeProviderConfig {
+        RuntimeProviderConfig {
+            provider_name: provider_name.to_string(),
+            provider_selector: Some(provider_name.to_string()),
+            model_name: model_name.to_string(),
+            api_key: Some("test-key".to_string()),
+            base_url: base_url.map(str::to_string),
+            credential_uuid: "credential-1".to_string(),
+            reasoning_effort: None,
+            service_tier: None,
+            protocol: Some(protocol),
+            supports_websockets: false,
+            toolshim: false,
+            toolshim_model: None,
+        }
+    }
+
     fn breaker(config: HealthConfig) -> Arc<CircuitBreaker> {
         Arc::new(CircuitBreaker::new(config))
     }
@@ -363,6 +472,72 @@ mod tests {
         trigger.failure();
         old_request.success();
         assert!(breaker.acquire().is_err());
+    }
+
+    #[test]
+    fn registry_reuses_breaker_for_normalized_route() {
+        let registry = CurrentProviderHealthRegistry::with_config(HealthConfig {
+            min_samples: 1,
+            error_rate_threshold: 1.0,
+            ..HealthConfig::default()
+        });
+        let first = route_config(
+            " OpenAI ",
+            " gpt-5-codex ",
+            Some("HTTPS://API.OPENAI.COM/v1/"),
+            RuntimeProviderProtocol::Responses,
+        );
+        let second = route_config(
+            "openai",
+            "gpt-5-codex",
+            Some("https://api.openai.com/v1"),
+            RuntimeProviderProtocol::Responses,
+        );
+        let first_breaker = registry.circuit_for(&first);
+        let second_breaker = registry.circuit_for(&second);
+
+        assert!(Arc::ptr_eq(&first_breaker, &second_breaker));
+    }
+
+    #[test]
+    fn registry_isolates_model_base_url_and_protocol() {
+        let registry = CurrentProviderHealthRegistry::with_config(HealthConfig {
+            min_samples: 1,
+            error_rate_threshold: 1.0,
+            ..HealthConfig::default()
+        });
+        let route = route_config(
+            "openai",
+            "gpt-5-codex",
+            Some("https://api.openai.com/v1"),
+            RuntimeProviderProtocol::Responses,
+        );
+        let different_model = route_config(
+            "openai",
+            "gpt-5.5",
+            Some("https://api.openai.com/v1"),
+            RuntimeProviderProtocol::Responses,
+        );
+        let different_base = route_config(
+            "openai",
+            "gpt-5-codex",
+            Some("https://gateway.example.com/v1"),
+            RuntimeProviderProtocol::Responses,
+        );
+        let different_protocol = route_config(
+            "openai",
+            "gpt-5-codex",
+            Some("https://api.openai.com/v1"),
+            RuntimeProviderProtocol::ChatCompletions,
+        );
+        let route_breaker = registry.circuit_for(&route);
+        let mut permit = route_breaker.acquire().expect("route starts closed");
+        permit.failure();
+
+        assert!(registry.circuit_for(&route).acquire().is_err());
+        assert!(registry.circuit_for(&different_model).acquire().is_ok());
+        assert!(registry.circuit_for(&different_base).acquire().is_ok());
+        assert!(registry.circuit_for(&different_protocol).acquire().is_ok());
     }
 
     #[test]

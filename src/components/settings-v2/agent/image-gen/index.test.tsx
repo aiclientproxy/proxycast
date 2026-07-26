@@ -166,6 +166,7 @@ vi.mock("@/hooks/useApiKeyProvider", () => ({
         name: "Relay OpenAI",
         enabled: true,
         api_key_count: 1,
+        api_keys: [{ enabled: true }],
         custom_models: ["gpt-images-2"],
       },
       {
@@ -174,6 +175,7 @@ vi.mock("@/hooks/useApiKeyProvider", () => ({
         name: "Fal",
         enabled: true,
         api_key_count: 1,
+        api_keys: [{ enabled: true }],
         api_host: "https://fal.run/fal-ai",
         custom_models: ["gpt-5.2-pro"],
       },
@@ -183,6 +185,7 @@ vi.mock("@/hooks/useApiKeyProvider", () => ({
         name: "agnes",
         enabled: true,
         api_key_count: 1,
+        api_keys: [{ enabled: true }],
         api_host: "https://agnes.example.test/v1",
         custom_models: [
           "agnes-2.0-flash",
@@ -196,6 +199,7 @@ vi.mock("@/hooks/useApiKeyProvider", () => ({
         name: "TTS Only",
         enabled: true,
         api_key_count: 1,
+        api_keys: [{ enabled: true }],
         custom_models: ["gpt-4o-mini-tts"],
       },
     ],

@@ -1079,4 +1079,24 @@ describe("WorkspaceConversationScene", () => {
       mockWorkspaceMainArea.mock.calls.at(-1)?.[0]?.showFloatingInputOverlay,
     ).toBe(false);
   });
+
+  it("浮动输入区应在消息滚动内容尾部预留响应式避让空间", () => {
+    const container = renderScene({
+      contextWorkspaceEnabled: true,
+      showFloatingInputOverlay: true,
+    });
+
+    const spacer = container.querySelector(
+      '[data-testid="message-list-floating-input-spacer"]',
+    );
+
+    expect(spacer).not.toBeNull();
+    expect(spacer?.className).toContain("h-8");
+    expect(spacer?.className).toContain("max-[960px]:h-16");
+    expect(
+      container
+        .querySelector('[data-testid="message-list-stub"]')
+        ?.contains(spacer),
+    ).toBe(true);
+  });
 });

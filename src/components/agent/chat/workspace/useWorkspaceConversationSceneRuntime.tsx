@@ -597,11 +597,15 @@ export function useWorkspaceConversationSceneRuntime({
       onBackHome: handleBackHome,
       ...rightSurfaceSceneProps,
       showContextCompactionAction:
-        navbarUtilityActionsVisible && Boolean(sessionId),
+        navbarUtilityActionsVisible &&
+        Boolean(sessionId) &&
+        projectedThreadRead?.can_accept_direct_input !== false,
       contextCompactionRunning: navbarUtilityActionsVisible && isSending,
-      onCompactContext: navbarUtilityActionsVisible
-        ? navigationActions.handleCompactContext
-        : undefined,
+      onCompactContext:
+        navbarUtilityActionsVisible &&
+        projectedThreadRead?.can_accept_direct_input !== false
+          ? navigationActions.handleCompactContext
+          : undefined,
       syncStatus,
       pendingA2UIForm,
       onPendingA2UISubmit: handlePendingA2UISubmit,

@@ -41,15 +41,45 @@ pub(super) fn into_parts(
         ClientRequest::ThreadResume { id, params } => parts(id, Method::ThreadResume, params),
         ClientRequest::ThreadRead { id, params } => parts(id, Method::ThreadRead, params),
         ClientRequest::ThreadList { id, params } => parts(id, Method::ThreadList, params),
+        ClientRequest::ThreadLoadedList { id, params } => {
+            parts(id, Method::ThreadLoadedList, params)
+        }
+        ClientRequest::ThreadUnsubscribe { id, params } => {
+            parts(id, Method::ThreadUnsubscribe, params)
+        }
+        ClientRequest::ThreadIncrementElicitation { id, params } => {
+            parts(id, Method::ThreadIncrementElicitation, params)
+        }
+        ClientRequest::ThreadDecrementElicitation { id, params } => {
+            parts(id, Method::ThreadDecrementElicitation, params)
+        }
         ClientRequest::ThreadArchive { id, params } => parts(id, Method::ThreadArchive, params),
         ClientRequest::ThreadDelete { id, params } => parts(id, Method::ThreadDelete, params),
         ClientRequest::ThreadUnarchive { id, params } => parts(id, Method::ThreadUnarchive, params),
+        ClientRequest::ThreadSetName { id, params } => parts(id, Method::ThreadSetName, params),
+        ClientRequest::ThreadMetadataUpdate { id, params } => {
+            parts(id, Method::ThreadMetadataUpdate, params)
+        }
+        ClientRequest::ThreadCompactStart { id, params } => {
+            parts(id, Method::ThreadCompactStart, params)
+        }
         ClientRequest::ThreadTurnsList { id, params } => parts(id, Method::ThreadTurnsList, params),
         ClientRequest::ThreadItemsList { id, params } => parts(id, Method::ThreadItemsList, params),
+        ClientRequest::ThreadInjectItems { id, params } => {
+            parts(id, Method::ThreadInjectItems, params)
+        }
+        ClientRequest::ThreadSearch { id, params } => parts(id, Method::ThreadSearch, params),
+        ClientRequest::ThreadSearchOccurrences { id, params } => {
+            parts(id, Method::ThreadSearchOccurrences, params)
+        }
         ClientRequest::ThreadGoalSet { id, params } => parts(id, Method::ThreadGoalSet, params),
         ClientRequest::ThreadGoalGet { id, params } => parts(id, Method::ThreadGoalGet, params),
         ClientRequest::ThreadGoalClear { id, params } => parts(id, Method::ThreadGoalClear, params),
         ClientRequest::ArtifactWrite { id, params } => parts(id, Method::ArtifactWrite, params),
+        ClientRequest::ModelList { id, params } => parts(id, Method::ModelList, params),
+        ClientRequest::ModelProviderCapabilitiesRead { id, params } => {
+            parts(id, Method::ModelProviderCapabilitiesRead, params)
+        }
         ClientRequest::ThreadSettingsUpdate { id, params } => {
             parts(id, Method::ThreadSettingsUpdate, params)
         }
@@ -58,6 +88,18 @@ pub(super) fn into_parts(
         }
         ClientRequest::ThreadShellCommand { id, params } => {
             parts(id, Method::ThreadShellCommand, params)
+        }
+        ClientRequest::ThreadApproveGuardianDeniedAction { id, params } => {
+            parts(id, Method::ThreadApproveGuardianDeniedAction, params)
+        }
+        ClientRequest::ThreadBackgroundTerminalsClean { id, params } => {
+            parts(id, Method::ThreadBackgroundTerminalsClean, params)
+        }
+        ClientRequest::ThreadBackgroundTerminalsList { id, params } => {
+            parts(id, Method::ThreadBackgroundTerminalsList, params)
+        }
+        ClientRequest::ThreadBackgroundTerminalsTerminate { id, params } => {
+            parts(id, Method::ThreadBackgroundTerminalsTerminate, params)
         }
         ClientRequest::TurnStart { id, params } => parts(id, Method::TurnStart, params),
         ClientRequest::TurnSteer { id, params } => parts(id, Method::TurnSteer, params),

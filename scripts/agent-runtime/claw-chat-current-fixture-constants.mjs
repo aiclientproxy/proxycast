@@ -87,7 +87,8 @@ export const APP_SERVER_DRAIN_EVENTS_COMMAND = "app_server_drain_events";
 export const APP_SERVER_METHOD_INITIALIZE = "initialize";
 export const APP_SERVER_METHOD_INITIALIZED = "initialized";
 export const APP_SERVER_METHOD_SESSION_START = "thread/start";
-export const APP_SERVER_METHOD_SESSION_UPDATE = "agentSession/update";
+export const APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE =
+  "thread/settings/update";
 export const APP_SERVER_METHOD_SESSION_TURN_START = "turn/start";
 export const APP_SERVER_METHOD_SESSION_TURN_CANCEL = "turn/interrupt";
 export const APP_SERVER_METHOD_THREAD_SHELL_COMMAND = "thread/shellCommand";
@@ -137,12 +138,6 @@ export const CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO =
   "content-factory-inline-image-article-workspace";
 export const SOUL_STYLE_SCENARIO = "soul-style";
 export const INPUTBAR_RICH_RESTORE_SCENARIO = "inputbar-rich-restore";
-export const INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO =
-  "inputbar-pending-steer-rich-restore";
-export const INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO =
-  "inputbar-pending-steer-multi-queue";
-export const INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO =
-  "inputbar-pending-steer-pop-front-resume";
 export const HOME_HOTPATH_SCENARIO = "home-hotpath";
 export const HOME_HOTPATH_GREETING_SCENARIO = "home-hotpath-greeting";
 export const NEWS_PROMPT = "整理今天的国际新闻";
@@ -150,12 +145,6 @@ export const GREETING_PROMPT = "你好";
 export const CONTINUE_PROMPT = "继续输出";
 export const PLAN_PROMPT = "先给我一个修复计划，不要直接改代码";
 export const GOAL_PROMPT = "本周完成 Goal E2E 修复";
-export const INPUTBAR_PENDING_STEER_ACTIVE_PROMPT =
-  "请持续输出一段用于 pending steer fixture 的长回复。";
-export const INPUTBAR_PENDING_STEER_ACTIVE_OUTPUT_TEXT =
-  "pending steer active turn 正在输出，后续 rich draft 应先进入 queue。";
-export const INPUTBAR_PENDING_STEER_SECOND_PROMPT =
-  "第二个 pending steer 应排在 rich draft 之后。";
 export const INPUTBAR_RICH_RESTORE_PROMPT =
   "请结合这个截图、文件和 Capability Report 技能，先不要输出正文。";
 export const INPUTBAR_RICH_RESTORE_PATH_NAME =
@@ -439,6 +428,7 @@ export const LIVE_TAIL_COMMIT_ASSERTION_KEYS = [
   "guiLiveTailNoStartupNote",
   "guiLiveTailOverflowCommitted",
   "guiLiveTailTableTailVisible",
+  "guiLiveTailCanonicalRepairExactOnce",
   "guiLiveTailScrollAnchorStable",
   "guiLiveTailCompleted",
   "readModelLiveTailCommitCompleted",
@@ -604,51 +594,6 @@ export const INPUTBAR_RICH_RESTORE_ASSERTION_KEYS = [
   "inputbarRichRestoreSkillRestored",
   "inputbarRichRestoreNoVisibleAssistantOutput",
   "inputbarRichRestoreReadModelCanceled",
-];
-export const INPUTBAR_PENDING_STEER_RICH_RESTORE_ASSERTION_KEYS = [
-  "inputbarPendingSteerActivePromptReachedBackend",
-  "inputbarPendingSteerActiveOutputVisible",
-  "inputbarPendingSteerRichDraftPrepared",
-  "inputbarPendingSteerRichInputDeferred",
-  "inputbarPendingSteerReadModelQueued",
-  "inputbarPendingSteerQueuedRichTextPreserved",
-  "inputbarPendingSteerQueuedRichImagePreserved",
-  "inputbarPendingSteerQueuedRichPathPreserved",
-  "inputbarPendingSteerQueuedRichTextElementsPreserved",
-  "inputbarPendingSteerQueuedRichSkillPreserved",
-  "inputbarPendingSteerRichPromptNotStartedBeforeCancel",
-  "inputbarPendingSteerQueuedRestoreClicked",
-  "inputbarPendingSteerGuiCanceled",
-  "inputbarPendingSteerQueuedProjectionCleared",
-  "inputbarPendingSteerTextRestored",
-  "inputbarPendingSteerImageRestored",
-  "inputbarPendingSteerPathRestored",
-  "inputbarPendingSteerSkillRestored",
-  "inputbarPendingSteerActiveAssistantOutputKept",
-];
-export const INPUTBAR_PENDING_STEER_MULTI_QUEUE_ASSERTION_KEYS = [
-  "inputbarPendingSteerActivePromptReachedBackend",
-  "inputbarPendingSteerActiveOutputVisible",
-  "inputbarPendingSteerRichInputDeferred",
-  "inputbarPendingSteerMultipleQueued",
-  "inputbarPendingSteerQueueOrderPreserved",
-  "inputbarPendingSteerSecondTextQueued",
-  "inputbarPendingSteerRichPromptNotStartedBeforeCancel",
-];
-export const INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_ASSERTION_KEYS = [
-  "inputbarPendingSteerActivePromptReachedBackend",
-  "inputbarPendingSteerActiveOutputVisible",
-  "inputbarPendingSteerMultipleQueued",
-  "inputbarPendingSteerQueueOrderPreserved",
-  "inputbarPendingSteerPopFrontGuiPromoteClicked",
-  "inputbarPendingSteerPopFrontUsedCurrentCancel",
-  "inputbarPendingSteerPopFrontBackendCanceled",
-  "inputbarPendingSteerPopFrontUsedCurrentResume",
-  "inputbarPendingSteerPopFrontRichStartedBackend",
-  "inputbarPendingSteerPopFrontRichDequeued",
-  "inputbarPendingSteerPopFrontSecondReindexed",
-  "inputbarPendingSteerPopFrontGuiHydratedSecondQueue",
-  "inputbarPendingSteerPopFrontGuiInputReady",
 ];
 export const RIGHT_SURFACE_VISUAL_MATRIX_ASSERTION_KEYS = [
   "rightSurfaceVisualMatrixRequestedThroughAppServer",

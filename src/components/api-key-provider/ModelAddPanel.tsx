@@ -850,7 +850,10 @@ export const ModelAddPanel: React.FC<ModelAddPanelProps> = ({
     providerId: string;
     value: string;
   } | null>(null);
-  const { groupedByProvider } = useModelRegistry({ autoLoad: true });
+  const { groupedByProvider } = useModelRegistry({
+    autoLoad: true,
+    includeHidden: true,
+  });
   const validationCopy = useMemo<ModelAddValidationCopy>(
     () => ({
       providerNameRequired: t(

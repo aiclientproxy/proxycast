@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { AppServerJsonRpcNotification } from "@/lib/api/appServer";
 import { projectAppServerAgentEventPayload } from "./appServerEventStream";
 
+const COMPLETED_MESSAGE_TEXT =
+  "The transport kept this.\nAnd dropped this.\n\n- Finding — /tmp/file.rs:1\n  Keep ::git-stage{cwd=/tmp} literal.";
+
 function directToolNotification(
   type: "item.started" | "item.completed",
   status: "inProgress" | "completed",
@@ -49,6 +52,23 @@ function directAgentMessageSnapshotNotification() {
   } satisfies AppServerJsonRpcNotification;
 }
 
+function directAgentMessageCompletedNotification() {
+  return {
+    method: "item/completed",
+    params: {
+      threadId: "thread-turn-stream-repair",
+      turnId: "turn-turn-stream-repair",
+      completedAtMs: 1_752_347_281_113,
+      item: {
+        id: "message-turn-stream-repair",
+        type: "agentMessage",
+        text: COMPLETED_MESSAGE_TEXT,
+        phase: "final",
+      },
+    },
+  } satisfies AppServerJsonRpcNotification;
+}
+
 describe("direct v2 App Server Item projection", () => {
   it("projects a running AgentMessage snapshot from item/started", () => {
     expect(
@@ -63,6 +83,25 @@ describe("direct v2 App Server Item projection", () => {
         type: "agent_message",
         text: "先检查，再继续核对。",
         phase: "commentary",
+      },
+    });
+  });
+
+  it("projects a completed AgentMessage with full text for stream repair", () => {
+    expect(
+      projectAppServerAgentEventPayload(
+        directAgentMessageCompletedNotification(),
+      ),
+    ).toMatchObject({
+      type: "item_completed",
+      thread_id: "thread-turn-stream-repair",
+      turn_id: "turn-turn-stream-repair",
+      item: {
+        id: "message-turn-stream-repair",
+        status: "completed",
+        type: "agent_message",
+        text: COMPLETED_MESSAGE_TEXT,
+        phase: "final",
       },
     });
   });

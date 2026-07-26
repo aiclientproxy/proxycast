@@ -53,7 +53,6 @@ describe("appServerReadModelProjection", () => {
       updated_at: "2026-06-06T00:00:03.000Z",
       pending_requests: [],
       incidents: [],
-      queued_turns: [],
       turns: [
         {
           turn_id: "turn-1",
@@ -102,12 +101,6 @@ describe("appServerReadModelProjection", () => {
             thread_id: "thread-1",
             status: "running",
             active_turn_id: null,
-            queued_turns: [
-              {
-                queued_turn_id: "queued-1",
-                message_preview: "稍后处理",
-              },
-            ],
           },
         },
         turns: [
@@ -131,10 +124,9 @@ describe("appServerReadModelProjection", () => {
     );
 
     expect(result.active_turn_id).toBeUndefined();
-    expect(result.queued_turns).toHaveLength(1);
   });
 
-  it("应保留 detail.thread_read 的富 read model 并归一 queued turns", () => {
+  it("应保留 detail.thread_read 的富 read model", () => {
     const result = projectAppServerSessionReadToThreadReadModel(
       sessionRead({
         detail: {
@@ -182,15 +174,6 @@ describe("appServerReadModelProjection", () => {
                 failed: 0,
               },
             ],
-            queued_turns: [
-              {
-                queuedTurnId: "queued-1",
-                messageText: "继续生成",
-                createdAt: 1770000000000,
-                imageCount: 0,
-                position: 1,
-              },
-            ],
           },
         },
       }),
@@ -236,16 +219,6 @@ describe("appServerReadModelProjection", () => {
           suite: "unit",
           passed: 3,
           failed: 0,
-        },
-      ],
-      queued_turns: [
-        {
-          queued_turn_id: "queued-1",
-          message_preview: "继续生成",
-          message_text: "继续生成",
-          created_at: 1770000000000,
-          image_count: 0,
-          position: 1,
         },
       ],
     });

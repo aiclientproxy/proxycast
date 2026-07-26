@@ -87,7 +87,6 @@ describe("agentSessionState runtimeSync detail refresh", () => {
           turnId: "turn-app-server",
         },
       ],
-      queued_turns: [],
       thread_read: {
         thread_id: "thread-app-server-detail",
         status: "completed",
@@ -176,16 +175,6 @@ describe("agentSessionState runtimeSync detail refresh", () => {
           status: "completed",
           updated_at: "2026-06-30T10:00:03.000Z",
         }),
-      ],
-      queued_turns: [
-        {
-          queued_turn_id: "queued-runtime-sync",
-          message_preview: "继续",
-          message_text: "继续当前输出",
-          created_at: 1782800002000,
-          image_count: 0,
-          position: 1,
-        },
       ],
       thread_read: {
         thread_id: "topic-runtime-sync",

@@ -4,6 +4,7 @@ import {
   AGENT_CONTROL_FINAL_TEXT,
   AGENT_CONTROL_SUBAGENT_ACTIVITY_KINDS,
   AGENT_CONTROL_TOOL_NAMES,
+  PARENT_OWNED_DIRECT_INPUT_ERROR,
   buildAgentControlVisibleDomAssertions,
 } from "./agent-control-visible-dom-gate-b.mjs";
 import {
@@ -149,6 +150,11 @@ describe("agent runtime tool execution smoke guard", () => {
     expect(content).toContain("visibleDomToolIdentityStableAcrossRestart");
     expect(content).toContain("visibleDomSubAgentIdentityStableAcrossRestart");
     expect(content).toContain("visibleDomChildThreadStableAcrossRestart");
+    expect(content).toContain("visibleDomParentOwnedComposerDisabled");
+    expect(content).toContain("visibleDomParentOwnedServerRejectsDirectTurn");
+    expect(content).toContain('"thread/read"');
+    expect(content).toContain('"turn/start"');
+    expect(content).toContain(PARENT_OWNED_DIRECT_INPUT_ERROR);
     expect(content).toContain('data-testid="subagent-activity-row"');
     expect(content).toContain('data-testid$=":subagent"');
     expect(content).toContain("visibleDomAllAgentControlToolRowsCompleted");
@@ -373,6 +379,40 @@ describe("agent runtime tool execution smoke guard", () => {
           visible: true,
         }),
       ),
+      parentOwnedChild: {
+        childThreadId: "thread-child",
+        canonicalThread: {
+          id: "thread-child",
+          sessionId: "session-child",
+          parentThreadId: "session-agent-control",
+          canAcceptDirectInput: false,
+        },
+        dom: {
+          activeSessionId: "session-child",
+          childThreadId: "thread-child",
+          textareaVisible: true,
+          textareaDisabled: true,
+          placeholder: "此子线程由父线程管理，无法直接输入",
+          controls: {
+            sendDisabled: true,
+            accessModeDisabled: true,
+            modelSelectorCount: 1,
+            modelSelectorsDisabled: true,
+            taskModeDisabled: true,
+          },
+        },
+        uiAttempt: {
+          dispatchedEnter: true,
+          clickedDisabledSend: true,
+          turnStartCountBefore: 0,
+          turnStartCountAfter: 0,
+        },
+        serverRejection: {
+          code: -32600,
+          message: PARENT_OWNED_DIRECT_INPUT_ERROR,
+          hasResult: false,
+        },
+      },
       finalAssistantTextVisible: true,
       invokeErrorCount: 0,
       consoleErrorCount: 0,
@@ -429,5 +469,36 @@ describe("agent runtime tool execution smoke guard", () => {
     expect(
       missingIdentity.visibleDomSubAgentActivitiesUseCanonicalIdentity,
     ).toBe(false);
+
+    const directInputLeaked = buildAgentControlVisibleDomAssertions({
+      evidence,
+      snapshot: {
+        ...snapshot,
+        parentOwnedChild: {
+          ...snapshot.parentOwnedChild,
+          uiAttempt: {
+            ...snapshot.parentOwnedChild.uiAttempt,
+            turnStartCountAfter: 1,
+          },
+        },
+      },
+    });
+    expect(directInputLeaked.visibleDomParentOwnedUiAttemptDidNotStartTurn).toBe(
+      false,
+    );
+
+    const serverAccepted = buildAgentControlVisibleDomAssertions({
+      evidence,
+      snapshot: {
+        ...snapshot,
+        parentOwnedChild: {
+          ...snapshot.parentOwnedChild,
+          serverRejection: { code: null, message: null, hasResult: true },
+        },
+      },
+    });
+    expect(serverAccepted.visibleDomParentOwnedServerRejectsDirectTurn).toBe(
+      false,
+    );
   });
 });

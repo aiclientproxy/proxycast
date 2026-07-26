@@ -3,9 +3,9 @@ use super::model_projection::model_info_from_value;
 use super::model_projection::provider_info_from_value;
 use super::model_projection::provider_key_info_from_value;
 use super::values_from_serializable_vec;
+use crate::runtime_backend::configured_provider_readiness;
 use crate::RuntimeCoreError;
-use app_server_protocol::ModelListParams;
-use app_server_protocol::ModelListResponse;
+use app_server_protocol::protocol::v2::ModelProviderCapabilitiesReadResponse;
 use app_server_protocol::ModelPreferencesListResponse;
 use app_server_protocol::ModelProviderAliasListResponse;
 use app_server_protocol::ModelProviderAliasReadParams;
@@ -50,7 +50,6 @@ use lime_core::database::system_providers::get_system_providers;
 use lime_core::database::system_providers::SystemProviderDef;
 use lime_core::database::DbConnection;
 use lime_core::models::model_registry::EnhancedModelMetadata;
-use lime_core::models::model_registry::ModelTier;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
 use lime_services::model_registry_service::FetchModelsResult;
 use lime_services::model_registry_service::ModelRegistryService;
@@ -64,80 +63,37 @@ pub(crate) fn read_model_route_generation(db: &DbConnection) -> Result<u64, Runt
     RouteStateDao::read_generation(&conn).map_err(data_error)
 }
 
-pub(crate) async fn list_models(
+pub(crate) fn model_catalog(
     db: &DbConnection,
     api_key_provider_service: &ApiKeyProviderService,
     model_registry_service: &ModelRegistryService,
-    params: ModelListParams,
-) -> Result<ModelListResponse, RuntimeCoreError> {
-    let provider_filter = params
+    query: crate::ModelCatalogQuery,
+) -> Result<Vec<crate::ProviderModelCatalog>, RuntimeCoreError> {
+    let provider_filter = query
         .provider_id
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty());
-    let tier_filter = params
-        .tier
-        .as_deref()
-        .map(|tier| tier.parse::<ModelTier>().map_err(data_error))
-        .transpose()?;
-
-    let mut models = if let Some(provider_id) = provider_filter {
-        model_registry_service
-            .get_models_by_provider(provider_id)
-            .await
-    } else if let Some(tier) = tier_filter.clone() {
-        model_registry_service.get_models_by_tier(tier).await
-    } else {
-        model_registry_service.get_all_models().await
-    };
-
-    append_provider_models(
-        db,
-        api_key_provider_service,
-        model_registry_service,
-        provider_filter,
-        tier_filter.as_ref(),
-        &mut models,
-    )?;
-
-    Ok(ModelListResponse {
-        models: values_from_serializable_vec(models)?
-            .iter()
-            .map(model_info_from_value)
-            .collect(),
-    })
-}
-
-fn append_provider_models(
-    db: &DbConnection,
-    api_key_provider_service: &ApiKeyProviderService,
-    model_registry_service: &ModelRegistryService,
-    provider_filter: Option<&str>,
-    tier_filter: Option<&ModelTier>,
-    models: &mut Vec<EnhancedModelMetadata>,
-) -> Result<(), RuntimeCoreError> {
-    let mut seen = models
-        .iter()
-        .map(model_dedupe_key)
-        .collect::<HashSet<(String, String)>>();
     let providers = api_key_provider_service
         .get_all_providers(db)
         .map_err(data_error)?;
+    let mut catalogs = Vec::new();
 
     for provider in providers {
-        if !provider.provider.enabled {
+        if !configured_provider_readiness(&provider).ready {
             continue;
         }
         let provider_id = provider.provider.id.as_str();
         if provider_filter.is_some_and(|filter| filter != provider_id) {
             continue;
         }
+        let mut models = Vec::new();
+        let mut seen = HashSet::new();
 
         for model_id in &provider.provider.custom_models {
-            append_model_if_visible(
-                models,
+            append_model(
+                &mut models,
                 &mut seen,
-                tier_filter,
                 model_registry_service.build_declared_model_metadata(provider_id, model_id),
             );
         }
@@ -150,7 +106,7 @@ fn append_provider_models(
         ) {
             Ok(Some(result)) => {
                 for model in result.models {
-                    append_model_if_visible(models, &mut seen, tier_filter, model);
+                    append_model(&mut models, &mut seen, model);
                 }
             }
             Ok(None) => {}
@@ -162,31 +118,34 @@ fn append_provider_models(
                 );
             }
         }
+        catalogs.push(crate::ProviderModelCatalog {
+            provider_id: provider_id.to_string(),
+            sort_order: provider.provider.sort_order,
+            models,
+        });
     }
 
-    Ok(())
+    catalogs.sort_by(|left, right| {
+        left.sort_order
+            .cmp(&right.sort_order)
+            .then_with(|| left.provider_id.cmp(&right.provider_id))
+    });
+    Ok(catalogs)
 }
 
-fn append_model_if_visible(
+fn append_model(
     models: &mut Vec<EnhancedModelMetadata>,
-    seen: &mut HashSet<(String, String)>,
-    tier_filter: Option<&ModelTier>,
+    seen: &mut HashSet<String>,
     model: EnhancedModelMetadata,
 ) {
-    if tier_filter.is_some_and(|tier| &model.tier != tier) {
-        return;
-    }
     let key = model_dedupe_key(&model);
     if seen.insert(key) {
         models.push(model);
     }
 }
 
-fn model_dedupe_key(model: &EnhancedModelMetadata) -> (String, String) {
-    (
-        model.provider_id.trim().to_ascii_lowercase(),
-        model.id.trim().to_ascii_lowercase(),
-    )
+fn model_dedupe_key(model: &EnhancedModelMetadata) -> String {
+    model.id.trim().to_ascii_lowercase()
 }
 
 pub(crate) async fn list_model_preferences(
@@ -222,6 +181,46 @@ pub(crate) fn list_model_providers(
         .map(|provider| provider_info_from_value(&provider))
         .collect();
     Ok(ModelProviderListResponse { providers })
+}
+
+pub(crate) fn read_model_provider_capabilities(
+    db: &DbConnection,
+    api_key_provider_service: &ApiKeyProviderService,
+) -> Result<ModelProviderCapabilitiesReadResponse, RuntimeCoreError> {
+    resolve_model_provider_capabilities(db, api_key_provider_service)
+}
+
+fn resolve_model_provider_capabilities(
+    db: &DbConnection,
+    api_key_provider_service: &ApiKeyProviderService,
+) -> Result<ModelProviderCapabilitiesReadResponse, RuntimeCoreError> {
+    let providers = api_key_provider_service
+        .get_all_providers(db)
+        .map_err(data_error)?;
+    let mut response = ModelProviderCapabilitiesReadResponse {
+        namespace_tools: false,
+        image_generation: false,
+        web_search: false,
+    };
+
+    for provider in providers {
+        if !configured_provider_readiness(&provider).ready {
+            continue;
+        }
+        let provider_type = provider.provider.effective_provider_type().to_string();
+        let Some(capabilities) =
+            model_provider::provider_capabilities::ProviderCapabilities::from_provider_type(
+                &provider_type,
+            )
+        else {
+            continue;
+        };
+        response.namespace_tools |= capabilities.namespace_tools;
+        response.image_generation |= capabilities.image_generation;
+        response.web_search |= capabilities.web_search;
+    }
+
+    Ok(response)
 }
 
 pub(crate) fn list_model_provider_catalog(
@@ -777,17 +776,46 @@ mod tests {
         enabled: bool,
         custom_models: &[&str],
     ) {
+        insert_typed_provider(db, provider_id, "openai", enabled, custom_models);
+    }
+
+    fn insert_typed_provider(
+        db: &DbConnection,
+        provider_id: &str,
+        provider_type: &str,
+        enabled: bool,
+        custom_models: &[&str],
+    ) {
+        insert_typed_provider_with_host(
+            db,
+            provider_id,
+            provider_type,
+            "https://llm.limeai.run#lime_tenant_id=tenant-0001",
+            enabled,
+            custom_models,
+        );
+    }
+
+    fn insert_typed_provider_with_host(
+        db: &DbConnection,
+        provider_id: &str,
+        provider_type: &str,
+        api_host: &str,
+        enabled: bool,
+        custom_models: &[&str],
+    ) {
         let custom_models = serde_json::to_string(custom_models).expect("serialize models");
         let conn = db.lock().expect("lock db");
         conn.execute(
             "INSERT INTO api_key_providers (
                 id, name, type, api_host, is_system, group_name, enabled, sort_order,
                 custom_models, created_at, updated_at
-             ) VALUES (?1, ?2, 'openai', ?3, 0, 'cloud', ?4, 0, ?5, ?6, ?6)",
+             ) VALUES (?1, ?2, ?3, ?4, 0, 'cloud', ?5, 0, ?6, ?7, ?7)",
             params![
                 provider_id,
                 provider_id,
-                "https://llm.limeai.run#lime_tenant_id=tenant-0001",
+                provider_type,
+                api_host,
                 if enabled { 1 } else { 0 },
                 custom_models,
                 "2026-07-06T00:00:00Z",
@@ -796,47 +824,260 @@ mod tests {
         .expect("insert provider");
     }
 
+    #[test]
+    fn provider_capabilities_union_all_runtime_ready_provider_types() {
+        let db = setup_model_provider_db();
+        insert_typed_provider(&db, "bedrock-route", "aws-bedrock", true, &[]);
+        insert_typed_provider_with_host(
+            &db,
+            "openai-route",
+            "openai",
+            "https://api.openai.com/v1",
+            true,
+            &[],
+        );
+        let service = ApiKeyProviderService::new();
+        service
+            .add_api_key(&db, "openai-route", "sk-test", None, true)
+            .expect("add enabled OpenAI key");
+
+        let response = resolve_model_provider_capabilities(&db, &service)
+            .expect("read provider capability union");
+
+        assert!(response.namespace_tools);
+        assert!(response.image_generation);
+        assert!(response.web_search);
+    }
+
+    #[test]
+    fn provider_capabilities_skip_unready_non_chat_and_unknown_providers() {
+        let db = setup_model_provider_db();
+        insert_typed_provider(&db, "bedrock-route", "aws-bedrock", true, &[]);
+        insert_typed_provider_with_host(
+            &db,
+            "missing-key-route",
+            "openai",
+            "https://api.openai.com/v1",
+            true,
+            &[],
+        );
+        insert_typed_provider(&db, "disabled-route", "openai", false, &[]);
+        insert_typed_provider(&db, "media-route", "fal", true, &[]);
+        insert_typed_provider(&db, "unknown-route", "future-provider", true, &[]);
+        let service = ApiKeyProviderService::new();
+
+        let response = resolve_model_provider_capabilities(&db, &service)
+            .expect("read filtered provider capabilities");
+
+        assert!(response.namespace_tools);
+        assert!(!response.image_generation);
+        assert!(!response.web_search);
+    }
+
     #[tokio::test]
-    async fn list_models_includes_enabled_provider_declared_models() {
+    async fn model_catalog_includes_enabled_provider_declared_models() {
         let db = setup_model_provider_db();
         insert_provider(&db, "lime-hub", true, &["gpt-5.1", "gpt-5.1"]);
         let api_key_provider_service = ApiKeyProviderService::new();
         let model_registry_service = ModelRegistryService::new(db.clone());
 
-        let response = list_models(
+        let catalogs = model_catalog(
             &db,
             &api_key_provider_service,
             &model_registry_service,
-            ModelListParams {
+            crate::ModelCatalogQuery {
                 provider_id: Some("lime-hub".to_string()),
-                tier: None,
             },
         )
-        .await
         .expect("list models");
 
-        assert_eq!(response.models.len(), 1);
-        assert_eq!(response.models[0].id, "gpt-5.1");
-        assert_eq!(response.models[0].provider_id, "lime-hub");
+        assert_eq!(catalogs.len(), 1);
+        assert_eq!(catalogs[0].models.len(), 1);
+        assert_eq!(catalogs[0].models[0].id, "gpt-5.1");
+        assert_eq!(catalogs[0].provider_id, "lime-hub");
     }
 
     #[tokio::test]
-    async fn list_models_skips_disabled_provider_declared_models() {
+    async fn model_catalog_orders_providers_by_sort_order_then_id() {
+        let db = setup_model_provider_db();
+        insert_typed_provider_with_host(
+            &db,
+            "provider-z",
+            "ollama",
+            "http://127.0.0.1:11434",
+            true,
+            &["model-z"],
+        );
+        insert_typed_provider_with_host(
+            &db,
+            "provider-a",
+            "ollama",
+            "http://127.0.0.1:11434",
+            true,
+            &["model-a"],
+        );
+        {
+            let conn = db.lock().expect("lock db");
+            conn.execute(
+                "UPDATE api_key_providers SET sort_order = 20 WHERE id = 'provider-a'",
+                [],
+            )
+            .expect("update provider sort order");
+            conn.execute(
+                "UPDATE api_key_providers SET sort_order = 10 WHERE id = 'provider-z'",
+                [],
+            )
+            .expect("update provider sort order");
+        }
+        let api_key_provider_service = ApiKeyProviderService::new();
+        let model_registry_service = ModelRegistryService::new(db.clone());
+
+        let catalogs = model_catalog(
+            &db,
+            &api_key_provider_service,
+            &model_registry_service,
+            crate::ModelCatalogQuery::default(),
+        )
+        .expect("list ordered model catalog");
+
+        assert_eq!(
+            catalogs
+                .iter()
+                .map(|catalog| catalog.provider_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["provider-z", "provider-a"]
+        );
+    }
+
+    #[tokio::test]
+    async fn model_catalog_skips_disabled_provider_declared_models() {
         let db = setup_model_provider_db();
         insert_provider(&db, "disabled-hub", false, &["gpt-disabled"]);
         let api_key_provider_service = ApiKeyProviderService::new();
         let model_registry_service = ModelRegistryService::new(db.clone());
 
-        let response = list_models(
+        let catalogs = model_catalog(
             &db,
             &api_key_provider_service,
             &model_registry_service,
-            ModelListParams::default(),
+            crate::ModelCatalogQuery::default(),
         )
-        .await
         .expect("list models");
 
-        assert!(response.models.is_empty());
+        assert!(catalogs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn model_catalog_skips_provider_without_required_key() {
+        let db = setup_model_provider_db();
+        insert_typed_provider_with_host(
+            &db,
+            "missing-key-route",
+            "openai",
+            "https://api.openai.com/v1",
+            true,
+            &["gpt-unready"],
+        );
+        let api_key_provider_service = ApiKeyProviderService::new();
+        let model_registry_service = ModelRegistryService::new(db.clone());
+
+        let catalogs = model_catalog(
+            &db,
+            &api_key_provider_service,
+            &model_registry_service,
+            crate::ModelCatalogQuery {
+                provider_id: Some("missing-key-route".to_string()),
+            },
+        )
+        .expect("list models without required key");
+
+        assert!(catalogs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn model_catalog_includes_provider_with_enabled_key() {
+        let db = setup_model_provider_db();
+        insert_typed_provider_with_host(
+            &db,
+            "ready-openai-route",
+            "openai",
+            "https://api.openai.com/v1",
+            true,
+            &["gpt-ready"],
+        );
+        let api_key_provider_service = ApiKeyProviderService::new();
+        api_key_provider_service
+            .add_api_key(&db, "ready-openai-route", "sk-test", None, true)
+            .expect("add enabled OpenAI key");
+        let model_registry_service = ModelRegistryService::new(db.clone());
+
+        let catalogs = model_catalog(
+            &db,
+            &api_key_provider_service,
+            &model_registry_service,
+            crate::ModelCatalogQuery {
+                provider_id: Some("ready-openai-route".to_string()),
+            },
+        )
+        .expect("list models with enabled key");
+
+        assert_eq!(catalogs.len(), 1);
+        assert_eq!(catalogs[0].models.len(), 1);
+        assert_eq!(catalogs[0].models[0].id, "gpt-ready");
+    }
+
+    #[tokio::test]
+    async fn model_catalog_includes_keyless_ollama_without_key() {
+        let db = setup_model_provider_db();
+        insert_typed_provider_with_host(
+            &db,
+            "local-ollama",
+            "ollama",
+            "http://127.0.0.1:11434",
+            true,
+            &["qwen3:14b"],
+        );
+        let api_key_provider_service = ApiKeyProviderService::new();
+        let model_registry_service = ModelRegistryService::new(db.clone());
+
+        let catalogs = model_catalog(
+            &db,
+            &api_key_provider_service,
+            &model_registry_service,
+            crate::ModelCatalogQuery {
+                provider_id: Some("local-ollama".to_string()),
+            },
+        )
+        .expect("list keyless Ollama models");
+
+        assert_eq!(catalogs.len(), 1);
+        assert_eq!(catalogs[0].models.len(), 1);
+        assert_eq!(catalogs[0].models[0].id, "qwen3:14b");
+    }
+
+    #[tokio::test]
+    async fn model_catalog_skips_non_chat_and_unknown_provider_types() {
+        let db = setup_model_provider_db();
+        insert_typed_provider(&db, "media-route", "fal", true, &["fal-image"]);
+        insert_typed_provider(
+            &db,
+            "unknown-route",
+            "future-provider",
+            true,
+            &["future-model"],
+        );
+        let api_key_provider_service = ApiKeyProviderService::new();
+        let model_registry_service = ModelRegistryService::new(db.clone());
+
+        let catalogs = model_catalog(
+            &db,
+            &api_key_provider_service,
+            &model_registry_service,
+            crate::ModelCatalogQuery::default(),
+        )
+        .expect("list filtered provider models");
+
+        assert!(catalogs.is_empty());
     }
 
     #[tokio::test]

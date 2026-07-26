@@ -1,5 +1,139 @@
 use super::*;
 
+fn reasoning_capability_snapshot(levels: &[&str]) -> app_server_protocol::CapabilitySnapshot {
+    app_server_protocol::CapabilitySnapshot {
+        runtime_features: vec!["streaming".to_string(), "reasoning".to_string()],
+        capabilities: app_server_protocol::ModelCapabilitiesInfo {
+            tools: true,
+            streaming: true,
+            reasoning: true,
+            reasoning_effort: Some(app_server_protocol::ModelReasoningEffortSupportInfo {
+                supported: true,
+                levels: levels.iter().map(|level| (*level).to_string()).collect(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn thread_settings(
+    provider: &str,
+    model: &str,
+    effort: Option<&str>,
+) -> app_server_protocol::protocol::v2::ThreadSettings {
+    app_server_protocol::protocol::v2::ThreadSettings {
+        cwd: "/tmp/model-switch".to_string(),
+        approval_policy: serde_json::Value::Null,
+        approvals_reviewer: serde_json::Value::Null,
+        sandbox_policy: serde_json::Value::Null,
+        active_permission_profile: None,
+        model: model.to_string(),
+        model_provider: provider.to_string(),
+        service_tier: None,
+        effort: effort.map(ToString::to_string),
+        summary: None,
+        collaboration_mode: agent_protocol::CollaborationMode {
+            mode: agent_protocol::ModeKind::Default,
+            settings: agent_protocol::CollaborationModeSettings {
+                model: model.to_string(),
+                reasoning_effort: effort.map(ToString::to_string),
+                developer_instructions: None,
+            },
+        },
+        personality: None,
+        tool_preferences: None,
+    }
+}
+
+fn configured_model_switch_backend(model: &str) -> (RuntimeBackend, String) {
+    let connection = rusqlite::Connection::open_in_memory().expect("open database");
+    lime_core::database::schema::create_tables(&connection).expect("create schema");
+    let db = std::sync::Arc::new(std::sync::Mutex::new(connection));
+    let backend = RuntimeBackend::with_db(db.clone());
+    let provider = backend
+        .api_key_provider_service
+        .add_custom_provider(
+            &db,
+            "Model Switch Fixture".to_string(),
+            lime_core::database::dao::api_key_provider::ApiProviderType::Openai,
+            "https://example.invalid/v1".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("custom provider");
+    backend
+        .api_key_provider_service
+        .add_api_key(&db, &provider.id, "fixture-key", None, true)
+        .expect("provider key");
+    backend
+        .api_key_provider_service
+        .update_provider(
+            &db,
+            &provider.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(vec![model.to_string()]),
+        )
+        .expect("declared model");
+    (backend, provider.id)
+}
+
+#[tokio::test]
+async fn model_switch_preflight_requires_ready_catalog_model_and_supported_effort() {
+    let (backend, provider_id) = configured_model_switch_backend("switch-model");
+    let session = request_for_test("preflight", None, None).session;
+
+    backend
+        .preflight_thread_settings_route(
+            &session,
+            &thread_settings(&provider_id, "switch-model", None),
+        )
+        .await
+        .expect("declared model is executable");
+
+    let missing_model = backend
+        .preflight_thread_settings_route(
+            &session,
+            &thread_settings(&provider_id, "missing-model", None),
+        )
+        .await
+        .expect_err("unknown model must fail before settings persistence");
+    assert!(matches!(
+        missing_model,
+        RuntimeCoreError::PendingRoute { reason_code, .. }
+            if reason_code == "model_registry_metadata_missing"
+    ));
+
+    let unsupported_effort = backend
+        .preflight_thread_settings_route(
+            &session,
+            &thread_settings(&provider_id, "switch-model", Some("ultra")),
+        )
+        .await
+        .expect_err("unsupported effort must fail before settings persistence");
+    assert!(matches!(
+        unsupported_effort,
+        RuntimeCoreError::RouteRejected {
+            reason_code,
+            category: app_server_protocol::RouteFailureCategory::CapabilityGap,
+            ..
+        } if reason_code == "reasoning_effort_unsupported"
+    ));
+}
+
 #[tokio::test]
 async fn prepared_route_pins_the_round_robin_credential_for_execution() {
     let connection = rusqlite::Connection::open_in_memory().expect("open database");
@@ -233,18 +367,15 @@ fn runtime_model_selection_prefers_responsive_slot_for_detached_first_turn() {
     assert_eq!(selection.model, "fast-chat");
     assert_eq!(selection.source, "profile_model_slot");
     assert_eq!(selection.reasoning_effort, None);
-    let effective_selection = selection_with_effective_reasoning(&selection);
-    assert_eq!(effective_selection.reasoning_effort, None);
 
     let scope = session_scope_from_request(&request).expect("scope");
     let turn_context =
-        turn_context_from_request(&request, None, &scope, &effective_selection, None)
-            .expect("turn context");
+        turn_context_from_request(&request, None, &scope, &selection, None).expect("turn context");
     assert_eq!(turn_context.effort, None);
 }
 
 #[test]
-fn effective_reasoning_selection_drops_unsupported_plain_chat_reasoning() {
+fn effective_reasoning_selection_drops_effort_missing_from_snapshot() {
     let selection = RuntimeModelSelection {
         provider: "openai-compatible".to_string(),
         model: "gpt-4o-mini".to_string(),
@@ -252,13 +383,14 @@ fn effective_reasoning_selection_drops_unsupported_plain_chat_reasoning() {
         reasoning_effort: Some("minimal".to_string()),
     };
 
-    let effective_selection = selection_with_effective_reasoning(&selection);
+    let snapshot = reasoning_capability_snapshot(&["low", "high"]);
+    let effective_selection = selection_with_capability_reasoning(&selection, &snapshot);
 
     assert_eq!(effective_selection.reasoning_effort, None);
 }
 
 #[test]
-fn effective_reasoning_selection_maps_minimal_for_reasoning_models() {
+fn effective_reasoning_selection_keeps_explicit_minimal_wire_value() {
     let selection = RuntimeModelSelection {
         provider: "openai".to_string(),
         model: "gpt-codex".to_string(),
@@ -266,9 +398,13 @@ fn effective_reasoning_selection_maps_minimal_for_reasoning_models() {
         reasoning_effort: Some("minimal".to_string()),
     };
 
-    let effective_selection = selection_with_effective_reasoning(&selection);
+    let snapshot = reasoning_capability_snapshot(&["minimal", "low", "high"]);
+    let effective_selection = selection_with_capability_reasoning(&selection, &snapshot);
 
-    assert_eq!(effective_selection.reasoning_effort.as_deref(), Some("low"));
+    assert_eq!(
+        effective_selection.reasoning_effort.as_deref(),
+        Some("minimal")
+    );
 }
 
 #[test]
@@ -451,7 +587,7 @@ async fn prepared_direct_route_persists_non_secret_provider_defaults() {
 
     assert_eq!(provider_config["providerId"], "fixture-openai");
     assert_eq!(provider_config["modelName"], "gpt-5.4");
-    assert_eq!(provider_config["reasoningEffort"], "high");
+    assert_eq!(provider_config["reasoningEffort"], Value::Null);
     assert_eq!(provider_config["toolshim"], true);
     assert_eq!(provider_config["toolshimModel"], "fixture-toolshim");
     assert_eq!(provider_config["supportsWebsockets"], true);
@@ -1129,7 +1265,7 @@ fn effective_child_options_pin_profile_route_reasoning_policy_and_workspace() {
         runtime_request.model_preference.as_deref(),
         Some("gpt-codex")
     );
-    assert_eq!(runtime_request.reasoning_effort.as_deref(), Some("low"));
+    assert_eq!(runtime_request.reasoning_effort.as_deref(), Some("minimal"));
     assert_eq!(
         runtime_request.working_dir.as_deref(),
         Some("/tmp/lime-profile-workspace/subdir")

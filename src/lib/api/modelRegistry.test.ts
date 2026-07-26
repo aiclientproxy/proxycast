@@ -5,8 +5,6 @@ import {
   getModelRegistry,
   getModelRegistryProviderIds,
   getModelPreferences,
-  getModelsByTier,
-  getModelsForProvider,
   getProviderAliasConfig,
   getModelSyncState,
   fetchProviderModelsAuto,
@@ -81,6 +79,39 @@ function createModelInfo(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function routePart(value: string): string {
+  return btoa(value)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+}
+
+function createCatalogModel(
+  providerId = "openai",
+  modelId = "gpt-4.1",
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    id: `route:${routePart(providerId)}.${routePart(modelId)}`,
+    model: modelId,
+    upgrade: null,
+    upgradeInfo: null,
+    availabilityNux: null,
+    displayName: modelId,
+    description: "",
+    hidden: false,
+    supportedReasoningEfforts: [],
+    defaultReasoningEffort: "none",
+    inputModalities: ["text"],
+    supportsPersonality: false,
+    additionalSpeedTiers: [],
+    serviceTiers: [],
+    defaultServiceTier: null,
+    isDefault: false,
+    ...overrides,
+  };
+}
+
 function createProviderInfo(overrides: Record<string, unknown> = {}) {
   return {
     id: "openai",
@@ -115,7 +146,8 @@ describe("modelRegistry API", () => {
 
   it("getModelRegistry 应缓存并复用同一轮读取结果", async () => {
     resolveAppServerRequest({
-      models: [createModelInfo()],
+      data: [createCatalogModel()],
+      nextCursor: null,
     });
 
     const [first, second] = await Promise.all([
@@ -130,19 +162,68 @@ describe("modelRegistry API", () => {
     expect(first).not.toBe(second);
   });
 
+  it("getModelRegistry 应聚合 model/list 的全部分页", async () => {
+    resolveAppServerRequest({
+      data: [createCatalogModel("openai", "gpt-5.6-sol")],
+      nextCursor: "1",
+    });
+    resolveAppServerRequest({
+      data: [createCatalogModel("anthropic", "claude-sonnet-4")],
+      nextCursor: null,
+    });
+
+    await expect(getModelRegistry()).resolves.toEqual([
+      expect.objectContaining({ id: "gpt-5.6-sol", provider_id: "openai" }),
+      expect.objectContaining({
+        id: "claude-sonnet-4",
+        provider_id: "anthropic",
+      }),
+    ]);
+    expectAppServerRequest(1, "model/list", {});
+    expectAppServerRequest(2, "model/list", { cursor: "1" });
+  });
+
+  it("getModelRegistry 遇到重复 cursor 时应 fail closed", async () => {
+    resolveAppServerRequest({ data: [], nextCursor: "1" });
+    resolveAppServerRequest({ data: [], nextCursor: "1" });
+
+    await expect(getModelRegistry()).rejects.toThrow(
+      "App Server model/list repeated cursor: 1",
+    );
+  });
+
+  it("getModelRegistry 应隔离默认目录与 includeHidden 缓存", async () => {
+    resolveAppServerRequest({
+      data: [createCatalogModel("openai", "visible")],
+      nextCursor: null,
+    });
+    resolveAppServerRequest({
+      data: [
+        createCatalogModel("openai", "visible"),
+        createCatalogModel("openai", "hidden", { hidden: true }),
+      ],
+      nextCursor: null,
+    });
+
+    await expect(getModelRegistry()).resolves.toHaveLength(1);
+    await expect(
+      getModelRegistry({ includeHidden: true }),
+    ).resolves.toHaveLength(2);
+    await expect(getModelRegistry()).resolves.toHaveLength(1);
+
+    expect(appServerRequestMock).toHaveBeenCalledTimes(2);
+    expectAppServerRequest(1, "model/list", {});
+    expectAppServerRequest(2, "model/list", { includeHidden: true });
+  });
+
   it("model/list 应把 App Server Codex policy 字段归一到 registry metadata", async () => {
     resolveAppServerRequest({
-      models: [
-        createModelInfo({
-          toolMode: "code-mode-only",
-          supportsSearchTool: true,
-          webSearchToolType: "text_and_image",
-          supportsImageDetailOriginal: true,
-          contextWindow: 200_000,
-          maxContextWindow: 300_000,
-          autoCompactTokenLimit: 250_000,
-          effectiveContextWindowPercent: 80,
-          visibility: "list",
+      data: [
+        createCatalogModel("openai", "gpt-5.6-sol", {
+          model: "gpt-5.6-sol-wire",
+          displayName: "GPT-5.6 Sol",
+          description: "Frontier coding model",
+          hidden: false,
           serviceTiers: [
             {
               id: "default",
@@ -156,50 +237,29 @@ describe("modelRegistry API", () => {
             },
           ],
           defaultServiceTier: "flex",
-          supportsParallelToolCalls: true,
-          defaultReasoningLevel: "medium",
-          supportedReasoningLevels: [
-            { effort: "low", description: "Fast" },
-            { effort: "high", description: "Deep" },
+          defaultReasoningEffort: "high",
+          supportedReasoningEfforts: [
+            {
+              reasoningEffort: "low",
+              description: "Fast",
+            },
+            {
+              reasoningEffort: "high",
+              description: "Deep",
+            },
           ],
-          supportsReasoningSummaries: true,
-          defaultReasoningSummary: "concise",
-          supportVerbosity: true,
-          defaultVerbosity: "high",
-          inputModalities: ["text", "image", "pdf", "future-modal"],
-          useResponsesLite: true,
-          truncationPolicy: {
-            mode: "tokens",
-            limit: 4096,
-          },
-          shellType: "unified-exec",
-          applyPatchToolType: "freeform",
-          experimentalSupportedTools: ["workspace-patch", "mcp_browser"],
-          tier: "max",
-          status: "preview",
+          inputModalities: ["text", "image"],
         }),
       ],
+      nextCursor: null,
     });
 
     await expect(getModelRegistry()).resolves.toEqual([
       expect.objectContaining({
-        execution_policy: {
-          tool_mode: "code_mode_only",
-          supports_search_tool: true,
-          web_search_tool_type: "text_and_image",
-          search_content_modalities: ["text", "image"],
-          supports_image_detail_original: true,
-          allowed_image_detail_values: ["auto", "low", "high", "original"],
-          default_image_detail: "high",
-        },
-        context_policy: {
-          context_window: 200_000,
-          max_context_window: 300_000,
-          resolved_context_window: 200_000,
-          effective_context_window_percent: 80,
-          model_context_window: 160_000,
-          auto_compact_token_limit: 180_000,
-        },
+        id: "gpt-5.6-sol",
+        provider_id: "openai",
+        canonical_model_id: "gpt-5.6-sol",
+        provider_model_id: "gpt-5.6-sol-wire",
         picker_policy: {
           visibility: "list",
           show_in_picker: true,
@@ -218,59 +278,56 @@ describe("modelRegistry API", () => {
           supported_service_tier_ids: ["default", "flex"],
           default_service_tier: "flex",
         },
-        tool_call_policy: {
-          supports_parallel_tool_calls: true,
-          parallel_tool_calls: true,
-        },
         reasoning_policy: {
-          supports_reasoning_summaries: true,
-          default_reasoning_level: "medium",
+          supports_reasoning_summaries: false,
+          default_reasoning_level: "high",
           supported_reasoning_levels: [
-            { effort: "low", description: "Fast" },
-            { effort: "high", description: "Deep" },
+            {
+              id: "low",
+              label: "Fast",
+              value: "low",
+              description: "Fast",
+            },
+            {
+              id: "high",
+              label: "Deep",
+              value: "high",
+              description: "Deep",
+            },
           ],
           supported_reasoning_efforts: ["low", "high"],
           can_set_reasoning_effort: true,
         },
-        reasoning_output_policy: {
-          default_reasoning_summary: "concise",
-          support_verbosity: true,
-          default_verbosity: "high",
-          can_set_verbosity: true,
-        },
+        capabilities: expect.objectContaining({
+          reasoning_effort: {
+            supported: true,
+            levels: ["low", "high"],
+            options: [
+              {
+                id: "low",
+                value: "low",
+                label: "Fast",
+                description: "Fast",
+              },
+              {
+                id: "high",
+                value: "high",
+                label: "Deep",
+                description: "Deep",
+              },
+            ],
+            default: "high",
+            source: "api",
+          },
+        }),
         input_modality_policy: {
-          input_modalities: ["text", "image", "pdf"],
-          send_gate_modalities: ["text", "image", "file"],
-          unknown_input_modalities: ["future_modal"],
+          input_modalities: ["text", "image"],
+          send_gate_modalities: ["text", "image"],
+          unknown_input_modalities: [],
           supports_text_input: true,
           supports_media_input: true,
           supports_image_input: true,
           source: "explicit",
-        },
-        responses_policy: {
-          use_responses_lite: true,
-          request_mode: "responses_lite",
-          instructions_location: "input_prefix",
-          tools_location: "input_prefix",
-          reasoning_context: "all_turns",
-          parallel_tool_calls_allowed: false,
-          requires_responses_lite_header: true,
-        },
-        truncation_policy: {
-          mode: "tokens",
-          limit: 4096,
-          truncation_policy: {
-            mode: "tokens",
-            limit: 4096,
-          },
-        },
-        native_tool_policy: {
-          shell_type: "unified_exec",
-          shell_tool_enabled: true,
-          preferred_shell_surface: "unified_exec",
-          apply_patch_tool_type: "freeform",
-          apply_patch_tool_enabled: true,
-          experimental_supported_tools: ["mcp_browser", "workspace_patch"],
         },
       }),
     ]);
@@ -311,15 +368,12 @@ describe("modelRegistry API", () => {
 
   it("refreshModelRegistry 后应失效缓存并触发下一次重新读取", async () => {
     resolveAppServerRequest({
-      models: [createModelInfo()],
+      data: [createCatalogModel()],
+      nextCursor: null,
     });
     resolveAppServerRequest({
-      models: [
-        createModelInfo({
-          id: "gpt-5",
-          displayName: "GPT-5",
-        }),
-      ],
+      data: [createCatalogModel("openai", "gpt-5", { displayName: "GPT-5" })],
+      nextCursor: null,
     });
 
     await getModelRegistry();
@@ -335,22 +389,17 @@ describe("modelRegistry API", () => {
 
   it("searchModels 应基于 App Server current 模型列表做前端过滤", async () => {
     resolveAppServerRequest({
-      models: [
-        createModelInfo({
-          id: "openai/gpt-4.1",
-          displayName: "GPT-4.1",
-        }),
-        createModelInfo({
-          id: "anthropic/claude-sonnet-4",
+      data: [
+        createCatalogModel("openai", "gpt-4.1", { displayName: "GPT-4.1" }),
+        createCatalogModel("anthropic", "claude-sonnet-4", {
           displayName: "Claude Sonnet 4",
-          providerId: "anthropic",
-          providerName: "Anthropic",
         }),
       ],
+      nextCursor: null,
     });
 
     await expect(searchModels("gpt", 1)).resolves.toEqual([
-      expect.objectContaining({ id: "openai/gpt-4.1" }),
+      expect.objectContaining({ id: "gpt-4.1" }),
     ]);
 
     expectAppServerRequest(1, "model/list", {});
@@ -360,7 +409,7 @@ describe("modelRegistry API", () => {
     });
   });
 
-  it("模型偏好、同步状态、provider 与 tier 读取应走 App Server current", async () => {
+  it("模型偏好与同步状态读取应走 App Server current", async () => {
     resolveAppServerRequest({
       preferences: [
         {
@@ -383,35 +432,14 @@ describe("modelRegistry API", () => {
         last_error: null,
       },
     });
-    resolveAppServerRequest({
-      models: [createModelInfo({ id: "openai/gpt-4.1" })],
-    });
-    resolveAppServerRequest({
-      models: [
-        createModelInfo({
-          id: "openai/gpt-4.1-mini",
-          tier: "mini",
-        }),
-      ],
-    });
-
     await expect(getModelPreferences()).resolves.toEqual([
       expect.objectContaining({ model_id: "gpt-4.1" }),
     ]);
     await expect(getModelSyncState()).resolves.toEqual(
       expect.objectContaining({ model_count: 2 }),
     );
-    await expect(getModelsForProvider("openai")).resolves.toEqual([
-      expect.objectContaining({ provider_id: "openai" }),
-    ]);
-    await expect(getModelsByTier("mini")).resolves.toEqual([
-      expect.objectContaining({ tier: "mini" }),
-    ]);
-
     expectAppServerRequest(1, "modelPreferences/list", {});
     expectAppServerRequest(2, "modelSyncState/read", {});
-    expectAppServerRequest(3, "model/list", { providerId: "openai" });
-    expectAppServerRequest(4, "model/list", { tier: "mini" });
     expect(safeInvoke).not.toHaveBeenCalled();
   });
 
@@ -467,7 +495,7 @@ describe("modelRegistry API", () => {
   it("App Server 模型读链缺少必需 result 时不应回退 legacy", async () => {
     resolveAppServerRequest({});
     await expect(getModelRegistry()).rejects.toThrow(
-      "App Server model/list did not return models",
+      "App Server model/list did not return data",
     );
 
     appServerRequestMock.mockReset();

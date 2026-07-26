@@ -391,8 +391,18 @@ pub enum ThreadItemPayload {
     ContextCompaction {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         summary: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        replacement_history: Vec<Value>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        window_number: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        first_window_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        previous_window_id: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         window_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tail_start_turn_id: Option<String>,
     },
     Extension {
         name: String,

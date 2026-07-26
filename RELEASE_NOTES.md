@@ -1,35 +1,38 @@
-## Lime v1.111.0
+## Lime v1.112.0
 
 ### 新功能
 
-- 新增 App Server v2 `artifact/write`，将工作区文档保存收敛到 typed JSON-RPC、canonical artifact snapshot 与可校验 sidecar evidence。
-- 新增命令输出、文件补丁、Plan delta 与 MCP progress 的 v2 直接通知，并打通 Rust/TypeScript client、Renderer 投影和 GUI 更新。
-- 扩展 token usage/read model，记录 cache write input tokens，并保持 Goal 用量、历史恢复与前端统计一致。
+- 扩展 App Server v2 Thread 管理能力，新增压缩、命名、已加载列表、搜索、metadata 更新、取消订阅以及状态/关闭通知。
+- 新增 Thread 后台终端列表、清理与终止协议，并投影模型 safety buffering 状态更新。
+- 完善 Thread fork 与恢复流程，支持压缩历史、中途回合 fork、直接输入策略和 canonical Thread/Turn/Item 投影。
+- 建立 v2 模型与 Provider 能力协议，覆盖输入模态、推理档位、服务层级、可用性提示、升级信息和动态 capability 读取。
 
 ### 修复
 
-- 修复 thread resume/replay 后 Turn 内 Item 不同步、历史本地合并误配、topic 切换与侧边栏导航状态漂移。
-- 修复直接通知与 raw side-channel 共存时的 sequence gate 互相污染，避免流式事件误丢、重复或错误终止。
-- 修复工具审批、MCP snapshot、provider turn 与终态投影在恢复和多回合执行中的生命周期不一致。
-- 对齐 Codex 的 `AGENTS.override.md` 覆盖语义并保留符号链接工作目录身份，避免加载过时或错误作用域的指令。
+- 修复 Thread resume/replay/fork 场景中的 identity、历史回放、状态通知和 read model 同步偏差。
+- 修复模型路由、Provider capability lowering、健康检查与有效配置投影不一致的问题。
+- 修复缺少展示字段的 service tier 在 App Server 模型投影中被静默丢弃的问题。
+- 修复历史代码任务恢复后残留 optimistic Turn、重复展示完整工具过程的问题，默认只保留紧凑过程摘要与最新终态。
+- 修复对话滚动、布局过渡、侧边栏会话操作和 Right Surface 状态同步中的可见回归。
 
 ### 优化与重构
 
-- 删除旧 `agentSession/runtimeEvents/append` 协议与 schema、legacy plugin runtime gateway、旧 prompt builder 和旧权限实现，封住 parallel owner 回流。
-- 将 App Server v2 notification projector 拆分到 command、file change、MCP 与 Plan 领域 owner，并同步 method catalog、schema 与 generated client。
-- 统一 MCP tool result 的 content、structured content、错误和 sidecar metadata 投影，减少 provider history 与 GUI 的兼容解释。
+- 收敛 App Server protocol、Rust client、TypeScript client、schema 与 generated types，移除已被 v2 owner 替代的旧会话和模型入口。
+- 统一 Agent Runtime 的 tool options、runtime options、queued intent、会话配置和 unified exec 生命周期。
+- 收敛文章工作区 canonical projection 与写回边界，删除重复的 Renderer selection writeback 路径。
 
 ### 测试与质量
 
-- 新增 artifact write/replay JSON-RPC、v2 直接通知、thread history、approval、MCP 与 cache usage 的 Rust/TypeScript 回归。
-- 扩展 App Server client、Agent current fixture、plugin/workspace GUI smoke 与 forbidden-to-restore 治理守卫。
+- 新增 Thread compact、fork、search、metadata、unsubscribe、closed notification、model list 与 Provider capability 的公共 JSON-RPC 回归测试。
+- 扩充 App Server client、Agent Runtime current fixture、Electron Gate B、模型选择器、消息滚动和 Workspace 布局测试。
+- 建立前端与 Runtime contract 测试快照、source-to-scenario 映射及 CLI/TUI 测试资产清单。
 
 ### 文档
 
-- 更新 runtime instructions、tool owner、存储对齐、协议收敛与 Refactor v1 执行记录。
+- 更新 Codex 方法到 Lime 产品面的对齐矩阵、Agent Runtime 协调计划、memory/query loop 规则和测试体系说明。
 
 ### 其他
 
-- 版本事实源更新到 `1.111.0`：根应用、CLI npm package、Rust workspace、`lime-rs/Cargo.lock` 和 release notes。
+- 将根应用、CLI npm 包、Rust workspace 与锁文件版本统一提升到 `1.112.0`。
 
-**完整变更**: `v1.110.0` -> `v1.111.0`
+**完整变更**: `v1.111.0` -> `v1.112.0`

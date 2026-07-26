@@ -7,7 +7,7 @@ import {
 import {
   flushEffects,
   mockGetAgentRuntimeSession,
-  mockUpdateAgentRuntimeSession,
+  mockUpdateAgentRuntimeThreadSettings,
   mountHook,
 } from "../useAgentChat.testUtils";
 
@@ -101,11 +101,12 @@ describe("useAgentChat 偏好持久化 - topic runtime fallback", () => {
       const value = harness.getValue();
       expect(value.providerType).toBe("gemini");
       expect(value.model).toBe("gemini-2.5-pro");
-      expect(mockUpdateAgentRuntimeSession).toHaveBeenCalledWith({
-        session_id: topicId,
-        recent_access_mode: "full-access",
-        provider_selector: "gemini",
-        model_name: "gemini-2.5-pro",
+      expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
+        threadId: topicId,
+        approvalPolicy: "never",
+        sandboxPolicy: "danger-full-access",
+        modelProvider: "gemini",
+        model: "gemini-2.5-pro",
       });
     } finally {
       harness.unmount();
@@ -135,10 +136,10 @@ describe("useAgentChat 偏好持久化 - topic runtime fallback", () => {
       await flushEffects();
 
       expect(harness.getValue().executionStrategy).toBe("react");
-      expect(mockUpdateAgentRuntimeSession).toHaveBeenCalledWith({
-        session_id: topicId,
-        recent_access_mode: "full-access",
-        execution_strategy: "react",
+      expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
+        threadId: topicId,
+        approvalPolicy: "never",
+        sandboxPolicy: "danger-full-access",
       });
     } finally {
       harness.unmount();
@@ -169,9 +170,10 @@ describe("useAgentChat 偏好持久化 - topic runtime fallback", () => {
       await flushEffects();
 
       expect(harness.getValue().accessMode).toBe("full-access");
-      expect(mockUpdateAgentRuntimeSession).toHaveBeenCalledWith({
-        session_id: topicId,
-        recent_access_mode: "full-access",
+      expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
+        threadId: topicId,
+        approvalPolicy: "never",
+        sandboxPolicy: "danger-full-access",
       });
     } finally {
       harness.unmount();
@@ -202,9 +204,10 @@ describe("useAgentChat 偏好持久化 - topic runtime fallback", () => {
       await flushEffects();
 
       expect(harness.getValue().accessMode).toBe("read-only");
-      expect(mockUpdateAgentRuntimeSession).toHaveBeenCalledWith({
-        session_id: topicId,
-        recent_access_mode: "read-only",
+      expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
+        threadId: topicId,
+        approvalPolicy: "on-request",
+        sandboxPolicy: "read-only",
       });
     } finally {
       harness.unmount();

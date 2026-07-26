@@ -268,7 +268,7 @@ RemoteMemoryBackend
 
 入口：
 
-1. 用户显式触发 `agentSession/compact`。
+1. 用户以 `{ threadId }` 显式调用 App Server exact `thread/compact/start`；请求被接受后立即返回 `{}`，后续状态只通过标准 Thread / Turn / Item lifecycle 投影。
 2. `ContextBudgetPlanner` 检测到下一轮会超过模型 profile 的自动压缩阈值。
 
 职责：
@@ -450,14 +450,21 @@ user says remember / add note
 ### 6.6 Compaction
 
 ```text
-agentSession/compact or overflow threshold
+manual thread/compact/start { threadId } or overflow threshold
+  -> manual request returns {}
+  -> turn/started
+  -> item/started { type: contextCompaction }
   -> read durable session history
   -> keep recent tail window
   -> summarize older window
   -> write compaction artifact + contextEpoch
+  -> item/completed { type: contextCompaction }
+  -> turn/completed
   -> next turn injects compaction packet
   -> optional rollout candidate only after explicit export
 ```
+
+手动入口不保留旧 session-scoped RPC alias、双发或 fallback；自动阈值只复用同一 compaction lifecycle，不新增第二个 GUI 或 provider 入口。
 
 ### 6.7 Reset
 

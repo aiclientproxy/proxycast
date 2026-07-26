@@ -6,7 +6,6 @@ export const METHOD_AGENT_SESSION_ACTION_RESPOND =
   "agentSession/action/respond";
 export const METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT =
   "agentSession/analysisHandoff/export";
-export const METHOD_AGENT_SESSION_COMPACT = "agentSession/compact";
 export const METHOD_AGENT_SESSION_EVENT = "agentSession/event";
 export const METHOD_AGENT_SESSION_FILE_CHECKPOINT_DIFF =
   "agentSession/fileCheckpoint/diff";
@@ -19,10 +18,6 @@ export const METHOD_AGENT_SESSION_FILE_CHECKPOINT_RESTORE =
 export const METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT =
   "agentSession/handoffBundle/export";
 export const METHOD_AGENT_SESSION_MEDIA_READ = "agentSession/media/read";
-export const METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE =
-  "agentSession/queuedTurn/promote";
-export const METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE =
-  "agentSession/queuedTurn/remove";
 export const METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT =
   "agentSession/replayCase/export";
 export const METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE =
@@ -31,7 +26,6 @@ export const METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT =
   "agentSession/reviewDecisionTemplate/export";
 export const METHOD_AGENT_SESSION_TOOL_INVENTORY_READ =
   "agentSession/toolInventory/read";
-export const METHOD_AGENT_SESSION_UPDATE = "agentSession/update";
 export const METHOD_ARTIFACT_READ = "artifact/read";
 export const METHOD_ARTIFACT_WRITE = "artifact/write";
 export const METHOD_AUTOMATION_JOB_CREATE = "automationJob/create";
@@ -213,7 +207,11 @@ export const METHOD_MEMORY_STORE_REVIEW_LIST = "memoryStore/review/list";
 export const METHOD_MEMORY_STORE_REVIEW_RESOLVE = "memoryStore/review/resolve";
 export const METHOD_MEMORY_STORE_SEARCH = "memoryStore/search";
 export const METHOD_MODEL_LIST = "model/list";
+export const METHOD_MODEL_SAFETY_BUFFERING_UPDATED =
+  "model/safetyBuffering/updated";
 export const METHOD_MODEL_PREFERENCES_LIST = "modelPreferences/list";
+export const METHOD_MODEL_PROVIDER_CAPABILITIES_READ =
+  "modelProvider/capabilities/read";
 export const METHOD_MODEL_PROVIDER_CATALOG_LIST = "modelProvider/catalog/list";
 export const METHOD_MODEL_PROVIDER_CREATE = "modelProvider/create";
 export const METHOD_MODEL_PROVIDER_DELETE = "modelProvider/delete";
@@ -312,8 +310,20 @@ export const METHOD_SOUL_STYLE_PACK_LIST = "soulStylePack/list";
 export const METHOD_SOUL_STYLE_PACK_STATUS_SET = "soulStylePack/status/set";
 export const METHOD_SOUL_STYLE_PACK_UNINSTALL = "soulStylePack/uninstall";
 export const METHOD_TELEGRAM_CHANNEL_PROBE = "telegramChannel/probe";
+export const METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION =
+  "thread/approveGuardianDeniedAction";
 export const METHOD_THREAD_ARCHIVE = "thread/archive";
 export const METHOD_THREAD_ARCHIVED = "thread/archived";
+export const METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN =
+  "thread/backgroundTerminals/clean";
+export const METHOD_THREAD_BACKGROUND_TERMINALS_LIST =
+  "thread/backgroundTerminals/list";
+export const METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE =
+  "thread/backgroundTerminals/terminate";
+export const METHOD_THREAD_CLOSED = "thread/closed";
+export const METHOD_THREAD_COMPACT_START = "thread/compact/start";
+export const METHOD_THREAD_DECREMENT_ELICITATION =
+  "thread/decrement_elicitation";
 export const METHOD_THREAD_DELETE = "thread/delete";
 export const METHOD_THREAD_DELETED = "thread/deleted";
 export const METHOD_THREAD_FORK = "thread/fork";
@@ -322,20 +332,31 @@ export const METHOD_THREAD_GOAL_CLEARED = "thread/goal/cleared";
 export const METHOD_THREAD_GOAL_GET = "thread/goal/get";
 export const METHOD_THREAD_GOAL_SET = "thread/goal/set";
 export const METHOD_THREAD_GOAL_UPDATED = "thread/goal/updated";
+export const METHOD_THREAD_INCREMENT_ELICITATION =
+  "thread/increment_elicitation";
+export const METHOD_THREAD_INJECT_ITEMS = "thread/inject_items";
 export const METHOD_THREAD_ITEMS_LIST = "thread/items/list";
 export const METHOD_THREAD_LIST = "thread/list";
+export const METHOD_THREAD_LOADED_LIST = "thread/loaded/list";
 export const METHOD_THREAD_MEMORY_MODE_SET = "thread/memoryMode/set";
+export const METHOD_THREAD_METADATA_UPDATE = "thread/metadata/update";
+export const METHOD_THREAD_NAME_SET = "thread/name/set";
+export const METHOD_THREAD_NAME_UPDATED = "thread/name/updated";
 export const METHOD_THREAD_READ = "thread/read";
 export const METHOD_THREAD_RESUME = "thread/resume";
+export const METHOD_THREAD_SEARCH = "thread/search";
+export const METHOD_THREAD_SEARCH_OCCURRENCES = "thread/searchOccurrences";
 export const METHOD_THREAD_SETTINGS_UPDATE = "thread/settings/update";
 export const METHOD_THREAD_SETTINGS_UPDATED = "thread/settings/updated";
 export const METHOD_THREAD_SHELL_COMMAND = "thread/shellCommand";
 export const METHOD_THREAD_START = "thread/start";
 export const METHOD_THREAD_STARTED = "thread/started";
+export const METHOD_THREAD_STATUS_CHANGED = "thread/status/changed";
 export const METHOD_THREAD_TOKEN_USAGE_UPDATED = "thread/tokenUsage/updated";
 export const METHOD_THREAD_TURNS_LIST = "thread/turns/list";
 export const METHOD_THREAD_UNARCHIVE = "thread/unarchive";
 export const METHOD_THREAD_UNARCHIVED = "thread/unarchived";
+export const METHOD_THREAD_UNSUBSCRIBE = "thread/unsubscribe";
 export const METHOD_TURN_COMPLETED = "turn/completed";
 export const METHOD_TURN_INTERRUPT = "turn/interrupt";
 export const METHOD_TURN_START = "turn/start";
@@ -413,10 +434,6 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "agentSession/analysisHandoff/export",
   },
   {
-    kind: "request",
-    method: "agentSession/compact",
-  },
-  {
     kind: "notification",
     method: "agentSession/event",
   },
@@ -446,14 +463,6 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
-    method: "agentSession/queuedTurn/promote",
-  },
-  {
-    kind: "request",
-    method: "agentSession/queuedTurn/remove",
-  },
-  {
-    kind: "request",
     method: "agentSession/replayCase/export",
   },
   {
@@ -467,10 +476,6 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "agentSession/toolInventory/read",
-  },
-  {
-    kind: "request",
-    method: "agentSession/update",
   },
   {
     kind: "request",
@@ -1041,8 +1046,16 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "model/list",
   },
   {
+    kind: "notification",
+    method: "model/safetyBuffering/updated",
+  },
+  {
     kind: "request",
     method: "modelPreferences/list",
+  },
+  {
+    kind: "request",
+    method: "modelProvider/capabilities/read",
   },
   {
     kind: "request",
@@ -1398,11 +1411,39 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
+    method: "thread/approveGuardianDeniedAction",
+  },
+  {
+    kind: "request",
     method: "thread/archive",
   },
   {
     kind: "notification",
     method: "thread/archived",
+  },
+  {
+    kind: "request",
+    method: "thread/backgroundTerminals/clean",
+  },
+  {
+    kind: "request",
+    method: "thread/backgroundTerminals/list",
+  },
+  {
+    kind: "request",
+    method: "thread/backgroundTerminals/terminate",
+  },
+  {
+    kind: "notification",
+    method: "thread/closed",
+  },
+  {
+    kind: "request",
+    method: "thread/compact/start",
+  },
+  {
+    kind: "request",
+    method: "thread/decrement_elicitation",
   },
   {
     kind: "request",
@@ -1438,6 +1479,14 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
+    method: "thread/increment_elicitation",
+  },
+  {
+    kind: "request",
+    method: "thread/inject_items",
+  },
+  {
+    kind: "request",
     method: "thread/items/list",
   },
   {
@@ -1446,7 +1495,23 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
+    method: "thread/loaded/list",
+  },
+  {
+    kind: "request",
     method: "thread/memoryMode/set",
+  },
+  {
+    kind: "request",
+    method: "thread/metadata/update",
+  },
+  {
+    kind: "request",
+    method: "thread/name/set",
+  },
+  {
+    kind: "notification",
+    method: "thread/name/updated",
   },
   {
     kind: "request",
@@ -1455,6 +1520,14 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "thread/resume",
+  },
+  {
+    kind: "request",
+    method: "thread/search",
+  },
+  {
+    kind: "request",
+    method: "thread/searchOccurrences",
   },
   {
     kind: "request",
@@ -1478,6 +1551,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "notification",
+    method: "thread/status/changed",
+  },
+  {
+    kind: "notification",
     method: "thread/tokenUsage/updated",
   },
   {
@@ -1491,6 +1568,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "notification",
     method: "thread/unarchived",
+  },
+  {
+    kind: "request",
+    method: "thread/unsubscribe",
   },
   {
     kind: "notification",
@@ -1697,14 +1778,6 @@ export type GeneratedAppServerMethodKind = GeneratedAppServerMethodSpec["kind"];
 
 export const GENERATED_APP_SERVER_REQUEST_SERIALIZATION_SCOPES = [
   {
-    method: "agentSession/queuedTurn/promote",
-    scope: "thread",
-  },
-  {
-    method: "agentSession/queuedTurn/remove",
-    scope: "thread",
-  },
-  {
     method: "artifact/write",
     scope: "thread",
   },
@@ -1785,7 +1858,31 @@ export const GENERATED_APP_SERVER_REQUEST_SERIALIZATION_SCOPES = [
     scope: "projectShellSession",
   },
   {
+    method: "thread/approveGuardianDeniedAction",
+    scope: "thread",
+  },
+  {
     method: "thread/archive",
+    scope: "thread",
+  },
+  {
+    method: "thread/backgroundTerminals/clean",
+    scope: "thread",
+  },
+  {
+    method: "thread/backgroundTerminals/list",
+    scope: "thread",
+  },
+  {
+    method: "thread/backgroundTerminals/terminate",
+    scope: "thread",
+  },
+  {
+    method: "thread/compact/start",
+    scope: "thread",
+  },
+  {
+    method: "thread/decrement_elicitation",
     scope: "thread",
   },
   {
@@ -1802,6 +1899,14 @@ export const GENERATED_APP_SERVER_REQUEST_SERIALIZATION_SCOPES = [
   },
   {
     method: "thread/goal/set",
+    scope: "thread",
+  },
+  {
+    method: "thread/increment_elicitation",
+    scope: "thread",
+  },
+  {
+    method: "thread/inject_items",
     scope: "thread",
   },
   {
@@ -1834,6 +1939,10 @@ export const GENERATED_APP_SERVER_REQUEST_SERIALIZATION_SCOPES = [
   },
   {
     method: "thread/unarchive",
+    scope: "thread",
+  },
+  {
+    method: "thread/unsubscribe",
     scope: "thread",
   },
   {
@@ -1953,17 +2062,6 @@ export interface AgentSessionAnalysisHandoffExportResponse {
   title: string;
   workspaceId?: null | string;
   workspaceRoot: string;
-}
-
-export interface AgentSessionCompactParams {
-  eventName?: null | string;
-  sessionId: string;
-}
-
-export interface AgentSessionCompactResponse {
-  compacted: boolean;
-  session: AgentSession;
-  turns?: AgentTurn[];
 }
 
 export interface AgentSessionEventParams {
@@ -2143,30 +2241,6 @@ export interface AgentSessionOverview {
   workspaceId?: null | string;
 }
 
-export interface AgentSessionQueuedTurnPromoteParams {
-  queuedTurnId: string;
-  sessionId: string;
-}
-
-export interface AgentSessionQueuedTurnPromoteResponse {
-  promoted: boolean;
-  queuedTurnId: string;
-  session: AgentSession;
-  turns?: AgentTurn[];
-}
-
-export interface AgentSessionQueuedTurnRemoveParams {
-  queuedTurnId: string;
-  sessionId: string;
-}
-
-export interface AgentSessionQueuedTurnRemoveResponse {
-  queuedTurnId: string;
-  removed: boolean;
-  session: AgentSession;
-  turns?: AgentTurn[];
-}
-
 export interface AgentSessionReadParams {
   historyBeforeMessageId?: number | null;
   historyLimit?: number | null;
@@ -2313,23 +2387,6 @@ export interface AgentSessionTurnStartParams {
 
 export interface AgentSessionTurnStartResponse {
   turn: AgentTurn;
-}
-
-export interface AgentSessionUpdateParams {
-  articleWorkspaceEditedDraft?: unknown;
-  articleWorkspaceSelectedObjectRef?: unknown;
-  executionStrategy?: null | string;
-  modelName?: null | string;
-  providerName?: null | string;
-  providerSelector?: null | string;
-  recentAccessMode?: null | string;
-  recentPreferences?: unknown;
-  sessionId: string;
-  title?: null | string;
-}
-
-export interface AgentSessionUpdateResponse {
-  session: AgentSessionOverview;
 }
 
 export interface AgentThreadContentReference {
@@ -2533,26 +2590,6 @@ export type AppServerClientRequest =
   | {
       id: number | string;
       method: "agentSession/reviewDecision/save";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "agentSession/update";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "agentSession/compact";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "agentSession/queuedTurn/remove";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "agentSession/queuedTurn/promote";
       params?: unknown;
     }
   | {
@@ -3557,11 +3594,6 @@ export type AppServerClientRequest =
     }
   | {
       id: number | string;
-      method: "model/list";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
       method: "modelPreferences/list";
       params?: unknown;
     }
@@ -3759,20 +3791,16 @@ export interface AppServerRequestAccessSpec {
 export type AppServerRequestMethod =
   | "agentSession/action/respond"
   | "agentSession/analysisHandoff/export"
-  | "agentSession/compact"
   | "agentSession/fileCheckpoint/diff"
   | "agentSession/fileCheckpoint/get"
   | "agentSession/fileCheckpoint/list"
   | "agentSession/fileCheckpoint/restore"
   | "agentSession/handoffBundle/export"
   | "agentSession/media/read"
-  | "agentSession/queuedTurn/promote"
-  | "agentSession/queuedTurn/remove"
   | "agentSession/replayCase/export"
   | "agentSession/reviewDecision/save"
   | "agentSession/reviewDecisionTemplate/export"
   | "agentSession/toolInventory/read"
-  | "agentSession/update"
   | "artifact/read"
   | "automationJob/create"
   | "automationJob/delete"
@@ -3897,7 +3925,6 @@ export type AppServerRequestMethod =
   | "memoryStore/review/list"
   | "memoryStore/review/resolve"
   | "memoryStore/search"
-  | "model/list"
   | "modelPreferences/list"
   | "modelProvider/catalog/list"
   | "modelProvider/create"
@@ -4410,6 +4437,26 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "thread/loaded/list";
+      params: ThreadLoadedListParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/unsubscribe";
+      params: ThreadUnsubscribeParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/increment_elicitation";
+      params: ThreadIncrementElicitationParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/decrement_elicitation";
+      params: ThreadDecrementElicitationParams;
+    }
+  | {
+      id: number | string;
       method: "thread/archive";
       params: ThreadArchiveParams;
     }
@@ -4425,6 +4472,21 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "thread/name/set";
+      params: ThreadSetNameParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/metadata/update";
+      params: ThreadMetadataUpdateParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/compact/start";
+      params: ThreadCompactStartParams;
+    }
+  | {
+      id: number | string;
       method: "thread/turns/list";
       params: ThreadTurnsListParams;
     }
@@ -4432,6 +4494,21 @@ export type ClientRequest =
       id: number | string;
       method: "thread/items/list";
       params: ThreadItemsListParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/inject_items";
+      params: ThreadInjectItemsParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/search";
+      params: ThreadSearchParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/searchOccurrences";
+      params: ThreadSearchOccurrencesParams;
     }
   | {
       id: number | string;
@@ -4447,6 +4524,26 @@ export type ClientRequest =
       id: number | string;
       method: "thread/shellCommand";
       params: ThreadShellCommandParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/approveGuardianDeniedAction";
+      params: ThreadApproveGuardianDeniedActionParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/backgroundTerminals/clean";
+      params: ThreadBackgroundTerminalsCleanParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/backgroundTerminals/list";
+      params: ThreadBackgroundTerminalsListParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/backgroundTerminals/terminate";
+      params: ThreadBackgroundTerminalsTerminateParams;
     }
   | {
       id: number | string;
@@ -4467,6 +4564,16 @@ export type ClientRequest =
       id: number | string;
       method: "artifact/write";
       params: ArtifactWriteParams;
+    }
+  | {
+      id: number | string;
+      method: "model/list";
+      params: ModelListParams;
+    }
+  | {
+      id: number | string;
+      method: "modelProvider/capabilities/read";
+      params: ModelProviderCapabilitiesReadParams;
     }
   | {
       id: number | string;
@@ -5453,6 +5560,8 @@ export interface InitializeResponse {
   serverInfo: ServerInfo;
 }
 
+export type InputModality = "audio" | "image" | "text";
+
 export interface ItemCompletedNotification {
   completedAtMs: number;
   item: ThreadItem;
@@ -6212,31 +6321,70 @@ export interface MemoryStoreSearchResponse {
 
 export type Method =
   | "artifact/write"
+  | "model/list"
+  | "modelProvider/capabilities/read"
+  | "thread/approveGuardianDeniedAction"
   | "thread/archive"
+  | "thread/backgroundTerminals/clean"
+  | "thread/backgroundTerminals/list"
+  | "thread/backgroundTerminals/terminate"
+  | "thread/compact/start"
+  | "thread/decrement_elicitation"
   | "thread/delete"
   | "thread/fork"
   | "thread/goal/clear"
   | "thread/goal/get"
   | "thread/goal/set"
+  | "thread/increment_elicitation"
+  | "thread/inject_items"
   | "thread/items/list"
   | "thread/list"
+  | "thread/loaded/list"
   | "thread/memoryMode/set"
+  | "thread/metadata/update"
+  | "thread/name/set"
   | "thread/read"
   | "thread/resume"
+  | "thread/search"
+  | "thread/searchOccurrences"
   | "thread/settings/update"
   | "thread/shellCommand"
   | "thread/start"
   | "thread/turns/list"
   | "thread/unarchive"
+  | "thread/unsubscribe"
   | "turn/interrupt"
   | "turn/start"
   | "turn/steer";
+
+export interface Model {
+  additionalSpeedTiers: string[];
+  availabilityNux?: ModelAvailabilityNux | null;
+  defaultReasoningEffort: string;
+  defaultServiceTier?: null | string;
+  description: string;
+  displayName: string;
+  hidden: boolean;
+  id: string;
+  inputModalities: InputModality[];
+  isDefault: boolean;
+  model: string;
+  serviceTiers: ModelServiceTier[];
+  supportedReasoningEfforts: ReasoningEffortOption[];
+  supportsPersonality: boolean;
+  upgrade?: null | string;
+  upgradeInfo?: ModelUpgradeInfo | null;
+}
+
+export interface ModelAvailabilityNux {
+  message: string;
+}
 
 export interface ModelCapabilitiesInfo {
   functionCalling: boolean;
   jsonMode: boolean;
   reasoning: boolean;
-  reasoningEffort?: unknown;
+  reasoningEffort?: ModelReasoningEffortSupportInfo | null;
   streaming: boolean;
   tools: boolean;
   vision: boolean;
@@ -6273,7 +6421,7 @@ export interface ModelInfo {
   providerName: string;
   releaseDate?: null | string;
   runtimeFeatures?: string[];
-  serviceTiers?: unknown[];
+  serviceTiers?: ModelServiceTierInfo[];
   shellType?: null | string;
   source: string;
   status: string;
@@ -6294,12 +6442,14 @@ export interface ModelInfo {
 }
 
 export interface ModelListParams {
-  providerId?: null | string;
-  tier?: null | string;
+  cursor?: null | string;
+  includeHidden?: boolean | null;
+  limit?: number | null;
 }
 
 export interface ModelListResponse {
-  models?: ModelInfo[];
+  data: Model[];
+  nextCursor?: null | string;
 }
 
 export interface ModelPreferencesListResponse {
@@ -6316,6 +6466,14 @@ export interface ModelProviderAliasReadParams {
 
 export interface ModelProviderAliasReadResponse {
   config?: unknown;
+}
+
+export type ModelProviderCapabilitiesReadParams = Record<string, unknown>;
+
+export interface ModelProviderCapabilitiesReadResponse {
+  imageGeneration: boolean;
+  namespaceTools: boolean;
+  webSearch: boolean;
 }
 
 export interface ModelProviderCatalogListResponse {
@@ -6482,6 +6640,22 @@ export interface ModelProviderWriteResponse {
   provider: ProviderInfo;
 }
 
+export interface ModelReasoningEffortOptionInfo {
+  default?: boolean;
+  description?: null | string;
+  id: string;
+  label: string;
+  value: string;
+}
+
+export interface ModelReasoningEffortSupportInfo {
+  default?: null | string;
+  levels?: string[];
+  options?: ModelReasoningEffortOptionInfo[];
+  source?: null | string;
+  supported: boolean;
+}
+
 export interface ModelRef {
   modelId: string;
   providerId: string;
@@ -6500,6 +6674,28 @@ export type ModelRefSource =
   | "runtime_request"
   | "session_default"
   | "task";
+
+export interface ModelSafetyBufferingUpdatedNotification {
+  fasterModel?: null | string;
+  model: string;
+  reasons: string[];
+  showBufferingUi: boolean;
+  threadId: string;
+  turnId: string;
+  useCases: string[];
+}
+
+export interface ModelServiceTier {
+  description: string;
+  id: string;
+  name: string;
+}
+
+export interface ModelServiceTierInfo {
+  description: string;
+  id: string;
+  name: string;
+}
 
 export interface ModelSyncStateReadResponse {
   syncState: unknown;
@@ -6536,6 +6732,13 @@ export type ModelTaskSource =
   | "media_task_artifact"
   | "plugin"
   | "provider_probe";
+
+export interface ModelUpgradeInfo {
+  migrationMarkdown?: null | string;
+  model: string;
+  modelLink?: null | string;
+  upgradeCopy?: null | string;
+}
 
 export interface OpenDeepLinkPayload {
   action?: null | string;
@@ -7157,6 +7360,11 @@ export interface ProviderKeyInfo {
   usageCount: number;
 }
 
+export interface ReasoningEffortOption {
+  description: string;
+  reasoningEffort: string;
+}
+
 export interface ReasoningSummaryPartAddedNotification {
   itemId: string;
   summaryIndex: number;
@@ -7287,6 +7495,7 @@ export interface RuntimeRequest {
   reasoningEffort?: null | string;
   sandboxPolicy?: null | string;
   searchMode?: RuntimeSearchMode | null;
+  serviceTier?: null | string;
   systemPrompt?: null | string;
   thinkingEnabled?: boolean | null;
   webSearch?: boolean | null;
@@ -7343,6 +7552,18 @@ export type ServerNotification =
       params: ThreadUnarchivedNotification;
     }
   | {
+      method: "thread/closed";
+      params: ThreadClosedNotification;
+    }
+  | {
+      method: "thread/name/updated";
+      params: ThreadNameUpdatedNotification;
+    }
+  | {
+      method: "thread/status/changed";
+      params: ThreadStatusChangedNotification;
+    }
+  | {
       method: "turn/started";
       params: TurnStartedNotification;
     }
@@ -7389,6 +7610,10 @@ export type ServerNotification =
   | {
       method: "item/reasoning/textDelta";
       params: ReasoningTextDeltaNotification;
+    }
+  | {
+      method: "model/safetyBuffering/updated";
+      params: ModelSafetyBufferingUpdatedNotification;
     }
   | {
       method: "thread/settings/updated";
@@ -7874,6 +8099,7 @@ export interface TextRange {
 export interface Thread {
   agentNickname?: null | string;
   agentRole?: null | string;
+  canAcceptDirectInput?: boolean | null;
   cliVersion: string;
   createdAt: number;
   cwd: string;
@@ -7883,6 +8109,7 @@ export interface Thread {
   gitInfo?: GitInfo | null;
   historyMode?: ThreadHistoryMode;
   id: string;
+  isPinned?: boolean;
   modelProvider: string;
   name?: null | string;
   parentThreadId?: null | string;
@@ -7899,6 +8126,13 @@ export interface Thread {
 
 export type ThreadActiveFlag = "waitingOnApproval" | "waitingOnUserInput";
 
+export interface ThreadApproveGuardianDeniedActionParams {
+  event: unknown;
+  threadId: string;
+}
+
+export type ThreadApproveGuardianDeniedActionResponse = Record<string, unknown>;
+
 export interface ThreadArchiveParams {
   threadId: string;
 }
@@ -7907,6 +8141,61 @@ export type ThreadArchiveResponse = Record<string, unknown>;
 
 export interface ThreadArchivedNotification {
   threadId: string;
+}
+
+export interface ThreadBackgroundTerminal {
+  command: string;
+  cpuPercent?: null | number;
+  cwd: string;
+  itemId: string;
+  osPid?: number | null;
+  processId: string;
+  rssKb?: number | null;
+}
+
+export interface ThreadBackgroundTerminalsCleanParams {
+  threadId: string;
+}
+
+export type ThreadBackgroundTerminalsCleanResponse = Record<string, unknown>;
+
+export interface ThreadBackgroundTerminalsListParams {
+  cursor?: null | string;
+  limit?: number | null;
+  threadId: string;
+}
+
+export interface ThreadBackgroundTerminalsListResponse {
+  data: ThreadBackgroundTerminal[];
+  nextCursor?: null | string;
+}
+
+export interface ThreadBackgroundTerminalsTerminateParams {
+  processId: string;
+  threadId: string;
+}
+
+export interface ThreadBackgroundTerminalsTerminateResponse {
+  terminated: boolean;
+}
+
+export interface ThreadClosedNotification {
+  threadId: string;
+}
+
+export interface ThreadCompactStartParams {
+  threadId: string;
+}
+
+export type ThreadCompactStartResponse = Record<string, unknown>;
+
+export interface ThreadDecrementElicitationParams {
+  threadId: string;
+}
+
+export interface ThreadDecrementElicitationResponse {
+  count: number;
+  paused: boolean;
 }
 
 export interface ThreadDeleteParams {
@@ -8015,6 +8304,22 @@ export interface ThreadGoalUpdatedNotification {
 }
 
 export type ThreadHistoryMode = "legacy" | "paginated";
+
+export interface ThreadIncrementElicitationParams {
+  threadId: string;
+}
+
+export interface ThreadIncrementElicitationResponse {
+  count: number;
+  paused: boolean;
+}
+
+export interface ThreadInjectItemsParams {
+  items: unknown[];
+  threadId: string;
+}
+
+export type ThreadInjectItemsResponse = Record<string, unknown>;
 
 export type ThreadItem =
   | {
@@ -8158,6 +8463,7 @@ export interface ThreadListParams {
   archived?: boolean | null;
   cursor?: null | string;
   cwd?: ThreadListCwdFilter | null;
+  isPinned?: boolean | null;
   limit?: number | null;
   modelProviders?: string[] | null;
   parentThreadId?: null | string;
@@ -8174,6 +8480,16 @@ export interface ThreadListResponse {
   nextCursor?: null | string;
 }
 
+export interface ThreadLoadedListParams {
+  cursor?: null | string;
+  limit?: number | null;
+}
+
+export interface ThreadLoadedListResponse {
+  data: string[];
+  nextCursor?: null | string;
+}
+
 export type ThreadMemoryMode = "disabled" | "enabled";
 
 export interface ThreadMemoryModeSetParams {
@@ -8182,6 +8498,27 @@ export interface ThreadMemoryModeSetParams {
 }
 
 export type ThreadMemoryModeSetResponse = Record<string, unknown>;
+
+export interface ThreadMetadataGitInfoUpdateParams {
+  branch?: null | string;
+  originUrl?: null | string;
+  sha?: null | string;
+}
+
+export interface ThreadMetadataUpdateParams {
+  gitInfo?: ThreadMetadataGitInfoUpdateParams | null;
+  isPinned?: boolean | null;
+  threadId: string;
+}
+
+export interface ThreadMetadataUpdateResponse {
+  thread: Thread;
+}
+
+export interface ThreadNameUpdatedNotification {
+  threadId: string;
+  threadName?: null | string;
+}
 
 export interface ThreadReadParams {
   includeTurns?: boolean;
@@ -8238,6 +8575,59 @@ export interface ThreadResumeResponse {
   turnsBackwardsCursor?: null | string;
 }
 
+export interface ThreadSearchOccurrence {
+  itemId: string;
+  snippet: string;
+  snippetMatchRange: ThreadSearchTextRange;
+  turnCursor: string;
+  turnId: string;
+}
+
+export interface ThreadSearchOccurrencesParams {
+  cursor?: null | string;
+  limit?: number | null;
+  searchTerm: string;
+  threadId: string;
+}
+
+export interface ThreadSearchOccurrencesResponse {
+  data: ThreadSearchOccurrence[];
+  nextCursor?: null | string;
+}
+
+export interface ThreadSearchParams {
+  archived?: boolean | null;
+  cursor?: null | string;
+  limit?: number | null;
+  searchTerm: string;
+  sortDirection?: SortDirection | null;
+  sortKey?: ThreadSortKey | null;
+  sourceKinds?: ThreadSourceKind[] | null;
+}
+
+export interface ThreadSearchResponse {
+  backwardsCursor?: null | string;
+  data: ThreadSearchResult[];
+  nextCursor?: null | string;
+}
+
+export interface ThreadSearchResult {
+  snippet: string;
+  thread: Thread;
+}
+
+export interface ThreadSearchTextRange {
+  end: number;
+  start: number;
+}
+
+export interface ThreadSetNameParams {
+  name: string;
+  threadId: string;
+}
+
+export type ThreadSetNameResponse = Record<string, unknown>;
+
 export interface ThreadSettings {
   activePermissionProfile?: unknown;
   approvalPolicy: unknown;
@@ -8251,6 +8641,7 @@ export interface ThreadSettings {
   sandboxPolicy: unknown;
   serviceTier?: null | string;
   summary?: unknown;
+  toolPreferences?: unknown;
 }
 
 export interface ThreadSettingsUpdateParams {
@@ -8260,12 +8651,14 @@ export interface ThreadSettingsUpdateParams {
   cwd?: null | string;
   effort?: null | string;
   model?: null | string;
+  modelProvider?: null | string;
   permissions?: null | string;
   personality?: unknown;
   sandboxPolicy?: unknown;
   serviceTier?: null | string;
   summary?: unknown;
   threadId: string;
+  toolPreferences?: unknown;
 }
 
 export type ThreadSettingsUpdateResponse = Record<string, unknown>;
@@ -8360,6 +8753,11 @@ export type ThreadStatus =
       type: "active";
     };
 
+export interface ThreadStatusChangedNotification {
+  status: ThreadStatus;
+  threadId: string;
+}
+
 export interface ThreadTokenUsage {
   last: TokenUsageBreakdown;
   modelContextWindow?: number | null;
@@ -8397,6 +8795,19 @@ export interface ThreadUnarchiveResponse {
 export interface ThreadUnarchivedNotification {
   threadId: string;
 }
+
+export interface ThreadUnsubscribeParams {
+  threadId: string;
+}
+
+export interface ThreadUnsubscribeResponse {
+  status: ThreadUnsubscribeStatus;
+}
+
+export type ThreadUnsubscribeStatus =
+  | "notLoaded"
+  | "notSubscribed"
+  | "unsubscribed";
 
 export interface TokenUsageBreakdown {
   cacheWriteInputTokens?: number;

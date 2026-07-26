@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "items": {
+      "description": "Raw Responses API items appended to model-visible history without a user turn.",
+      "items": true,
+      "type": "array"
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "items",
+    "threadId"
+  ],
+  "title": "ThreadInjectItemsParams",
+  "type": "object"
+}

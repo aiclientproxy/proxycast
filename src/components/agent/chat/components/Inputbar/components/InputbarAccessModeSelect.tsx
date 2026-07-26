@@ -8,6 +8,7 @@ import {
 
 interface InputbarAccessModeSelectProps {
   isFullscreen?: boolean;
+  disabled?: boolean;
   accessMode?: AgentAccessMode;
   setAccessMode?: (mode: AgentAccessMode) => void;
 }
@@ -25,6 +26,7 @@ export const InputbarAccessModeSelect: React.FC<
   InputbarAccessModeSelectProps
 > = ({
   isFullscreen = false,
+  disabled = false,
   accessMode = DEFAULT_AGENT_ACCESS_MODE,
   setAccessMode,
 }) => {
@@ -38,6 +40,7 @@ export const InputbarAccessModeSelect: React.FC<
         <ShieldCheck strokeWidth={1.8} />
       </MetaSelectIcon>
       <MetaSelect
+        disabled={disabled}
         aria-label="权限模式"
         data-testid="inputbar-access-mode-select"
         value={accessMode}

@@ -114,12 +114,6 @@ fn runtime_session_read_detail_with_item_source(
             stored,
         );
     let article_workspace =
-        article_workspace_projection::apply_session_selection(article_workspace, &stored.session);
-    let article_workspace = article_workspace_projection::apply_session_edited_draft(
-        article_workspace,
-        &stored.session,
-    );
-    let article_workspace =
         article_workspace_action_projection::apply_action_history_to_article_workspace(
             article_workspace,
             &article_workspace_actions,

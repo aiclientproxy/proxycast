@@ -33,9 +33,13 @@ function dispatchPointerLikeEvent(
 function LayoutHarness({
   mode,
   forceOpenChatPanel = false,
+  chatPanelTopInset,
+  canvasPanelTopInset,
 }: {
   mode: LayoutMode;
   forceOpenChatPanel?: boolean;
+  chatPanelTopInset?: string;
+  canvasPanelTopInset?: string;
 }) {
   return (
     <div style={{ width: "1200px", height: "720px" }}>
@@ -44,6 +48,8 @@ function LayoutHarness({
         chatContent={<div data-testid="layout-chat-content">chat</div>}
         canvasContent={<div data-testid="layout-canvas-content">canvas</div>}
         forceOpenChatPanel={forceOpenChatPanel}
+        chatPanelTopInset={chatPanelTopInset}
+        canvasPanelTopInset={canvasPanelTopInset}
       />
     </div>
   );
@@ -352,6 +358,45 @@ describe("LayoutTransition", () => {
     });
 
     expect(root?.getAttribute("data-compact-primary-panel")).toBe("chat");
+  });
+
+  it("紧凑模式条应消费顶部页头占位且不在单面板内重复留白", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 820,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: 720,
+    });
+
+    const { container } = mountHarness(
+      LayoutHarness,
+      {
+        mode: "chat-canvas",
+        chatPanelTopInset: "52px",
+        canvasPanelTopInset: "52px",
+      },
+      mountedRoots,
+    );
+
+    const compactModeBar = container.querySelector<HTMLElement>(
+      '[data-testid="layout-compact-mode-bar"]',
+    );
+    const chatPanel = container.querySelector<HTMLElement>(
+      '[data-testid="layout-chat-panel-inner"]',
+    );
+    const canvasPanel = container.querySelector<HTMLElement>(
+      '[data-testid="layout-canvas-panel"]',
+    );
+
+    expect(compactModeBar?.dataset.visible).toBe("true");
+    expect(compactModeBar?.dataset.topInset).toBe("52px");
+    expect(window.getComputedStyle(compactModeBar!).marginTop).toBe("52px");
+    expect(chatPanel?.dataset.topInset).toBe("0px");
+    expect(canvasPanel?.dataset.topInset).toBe("0px");
   });
 
   it("应按实际工作区容器宽度切换单面板，而不是只看窗口宽度", async () => {

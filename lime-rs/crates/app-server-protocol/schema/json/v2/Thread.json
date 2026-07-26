@@ -1382,6 +1382,13 @@
         "string"
       ]
     },
+    "canAcceptDirectInput": {
+      "description": "Whether this thread may accept direct input from an App Server client.\nSpawned child threads are parent-owned and must be driven through the\ncanonical agent-control route instead.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
     "cliVersion": {
       "type": "string"
     },
@@ -1418,6 +1425,10 @@
     },
     "id": {
       "type": "string"
+    },
+    "isPinned": {
+      "default": false,
+      "type": "boolean"
     },
     "modelProvider": {
       "type": "string"

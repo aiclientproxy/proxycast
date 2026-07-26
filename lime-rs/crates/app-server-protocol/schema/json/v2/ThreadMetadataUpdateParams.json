@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "ThreadMetadataGitInfoUpdateParams": {
+      "properties": {
+        "branch": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "originUrl": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sha": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "gitInfo": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ThreadMetadataGitInfoUpdateParams"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "isPinned": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "threadId"
+  ],
+  "title": "ThreadMetadataUpdateParams",
+  "type": "object"
+}

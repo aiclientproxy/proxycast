@@ -1,0 +1,94 @@
+{
+  "$defs": {
+    "SortDirection": {
+      "enum": [
+        "asc",
+        "desc"
+      ],
+      "type": "string"
+    },
+    "ThreadSortKey": {
+      "enum": [
+        "created_at",
+        "recency_at",
+        "updated_at"
+      ],
+      "type": "string"
+    },
+    "ThreadSourceKind": {
+      "enum": [
+        "appServer",
+        "cli",
+        "exec",
+        "subAgent",
+        "subAgentCompact",
+        "subAgentOther",
+        "subAgentReview",
+        "subAgentThreadSpawn",
+        "unknown",
+        "vscode"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "archived": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "cursor": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "limit": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "searchTerm": {
+      "type": "string"
+    },
+    "sortDirection": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SortDirection"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sortKey": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ThreadSortKey"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sourceKinds": {
+      "items": {
+        "$ref": "#/$defs/ThreadSourceKind"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "searchTerm"
+  ],
+  "title": "ThreadSearchParams",
+  "type": "object"
+}

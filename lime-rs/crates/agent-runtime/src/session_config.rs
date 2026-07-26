@@ -4,6 +4,7 @@ pub struct AgentSessionConfigurationRequest {
     pub session_id: String,
     pub thread_id: String,
     pub turn_id: String,
+    pub forked_from_thread_id: Option<String>,
     pub max_turns: Option<u32>,
     pub provider_token_budget: Option<u64>,
     pub system_prompt: Option<String>,
@@ -16,6 +17,7 @@ pub struct AgentSessionConfig {
     pub id: String,
     pub thread_id: Option<String>,
     pub turn_id: Option<String>,
+    pub forked_from_thread_id: Option<String>,
     pub schedule_id: Option<String>,
     pub max_turns: Option<u32>,
     pub provider_token_budget: Option<u64>,
@@ -30,6 +32,7 @@ pub fn build_agent_session_config(request: AgentSessionConfigurationRequest) -> 
         id: request.session_id,
         thread_id: Some(request.thread_id),
         turn_id: Some(request.turn_id),
+        forked_from_thread_id: request.forked_from_thread_id,
         schedule_id: None,
         max_turns: request.max_turns,
         provider_token_budget: request.provider_token_budget,
@@ -48,6 +51,7 @@ pub struct SessionConfigBuilder {
     id: String,
     thread_id: Option<String>,
     turn_id: Option<String>,
+    forked_from_thread_id: Option<String>,
     schedule_id: Option<String>,
     max_turns: Option<u32>,
     provider_token_budget: Option<u64>,
@@ -63,6 +67,7 @@ impl SessionConfigBuilder {
             id: id.into(),
             thread_id: None,
             turn_id: None,
+            forked_from_thread_id: None,
             schedule_id: None,
             max_turns: None,
             provider_token_budget: None,
@@ -80,6 +85,11 @@ impl SessionConfigBuilder {
 
     pub fn turn_id(mut self, turn_id: impl Into<String>) -> Self {
         self.turn_id = Some(turn_id.into());
+        self
+    }
+
+    pub fn forked_from_thread_id(mut self, thread_id: impl Into<String>) -> Self {
+        self.forked_from_thread_id = Some(thread_id.into());
         self
     }
 
@@ -123,6 +133,7 @@ impl SessionConfigBuilder {
             id: self.id,
             thread_id: self.thread_id,
             turn_id: self.turn_id,
+            forked_from_thread_id: self.forked_from_thread_id,
             schedule_id: self.schedule_id,
             max_turns: self.max_turns,
             provider_token_budget: self.provider_token_budget,
@@ -144,6 +155,7 @@ mod tests {
             session_id: "session-1".to_string(),
             thread_id: "thread-1".to_string(),
             turn_id: "turn-1".to_string(),
+            forked_from_thread_id: Some("thread-source".to_string()),
             max_turns: Some(2),
             provider_token_budget: Some(1_000),
             system_prompt: Some("system".to_string()),
@@ -154,6 +166,10 @@ mod tests {
         assert_eq!(config.id, "session-1");
         assert_eq!(config.thread_id.as_deref(), Some("thread-1"));
         assert_eq!(config.turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(
+            config.forked_from_thread_id.as_deref(),
+            Some("thread-source")
+        );
         assert_eq!(config.max_turns, Some(2));
         assert_eq!(config.provider_token_budget, Some(1_000));
         assert_eq!(config.system_prompt.as_deref(), Some("system"));

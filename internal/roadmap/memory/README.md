@@ -35,7 +35,7 @@ Lime 后续记忆主线只允许向这组边界收敛：
 8. `ContextPacket`：所有模型可见外部片段的结构化 envelope，必须带 source、scope、role、tokenBudget、trustLevel、cacheKey 和 invalidation policy。
 9. `ContextContributor`：memory summary、Soul、项目规则、压缩摘要、工具 schema、运行时状态等只能通过 contributor 进入上下文。
 10. `ContextAssembler`：按 provider profile 和 turn budget 汇总 packet，执行硬上限、排序、截断、去重和防腐检查。
-11. `ContextCompaction`：`agentSession/compact` 负责会话上下文续接；压缩摘要只作为 session artifact / context packet，不是 memory store truth。
+11. `ContextCompaction`：App Server exact `thread/compact/start` 负责手动触发 thread 上下文续接；params 为 `{ threadId }`，立即返回 `{}`，状态通过标准 `turn/*`、`item/*` lifecycle 投影；压缩摘要只作为 session artifact / context packet，不是 memory store truth。
 12. `ProviderContextProfile`：从模型目录和 provider 能力解析 context window、output reserve、tool schema 限制、reasoning / summary 支持和 cache 策略。
 13. `prompt contributor`：只把截断后的 summary / Soul / 压缩摘要等受控 packet 注入。
 14. `memory.soul` / `MemorySoulConfig`：用户可编辑的交互身份、沟通节奏和 artifact voice 配置。
@@ -103,11 +103,13 @@ Soul 继续支持，但它不是长期记忆本体：
 
 压缩层只处理 session context：
 
-1. 手动压缩和自动溢出压缩都走 App Server current `agentSession/compact` / 后续统一 session compact 边界。
-2. 压缩不得重写历史消息，只能生成新的 compaction artifact，并记录 `contextEpoch` / `tailStart` / `summaryTokens`。
-3. 压缩结果进入后续 turn 的 context packet，保留最近尾部消息作为原文窗口。
-4. 压缩结果如需长期沉淀，只能先写 `rollout_summaries/*.md` 候选，再由显式 consolidation 审核进入 memory store。
-5. 压缩失败不能污染 memory store，不能让 reset 误删 thread / turn 状态。
+1. 手动压缩只走 App Server exact `thread/compact/start`，wire params 只能是 `{ threadId }`；旧 session-scoped method 不保留 alias、双发或 fallback。
+2. 请求被接受后立即返回 `{}`；压缩进度只通过标准 `turn/started`、`item/started` / `item/completed` 的 `contextCompaction` item 和 `turn/completed` 投影。
+3. 自动溢出压缩由 runtime threshold 触发并复用同一 compaction lifecycle，不由 GUI 或 provider adapter 另开入口。
+4. 压缩不得重写历史消息，只能生成新的 compaction artifact，并记录 `contextEpoch` / `tailStart` / `summaryTokens`。
+5. 压缩结果进入后续 turn 的 context packet，保留最近尾部消息作为原文窗口。
+6. 压缩结果如需长期沉淀，只能先写 `rollout_summaries/*.md` 候选，再由显式 consolidation 审核进入 memory store。
+7. 压缩失败不能污染 memory store，不能让 reset 误删 thread / turn 状态。
 
 ### 5.3 多模型预算层
 

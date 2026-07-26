@@ -1,0 +1,1067 @@
+{
+  "version": "0.1",
+  "kind": "codex-app-server-method-product-scope",
+  "upstream": {
+    "repository": "/Users/coso/Documents/dev/rust/codex",
+    "revision": "4c43465133428898aa84f0bfc02c306ed65fb66a",
+    "source": "codex-rs/app-server-protocol/src/protocol/common.rs"
+  },
+  "lime": {
+    "manifest": "lime-rs/crates/app-server-protocol/schema/json/manifest.json",
+    "v2Methods": "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs"
+  },
+  "allowedStatuses": ["implemented", "product-scope-excluded", "planned"],
+  "inventory": {
+    "total": 214,
+    "byDirection": {
+      "clientRequest": 130,
+      "serverRequest": 11,
+      "serverNotification": 72,
+      "clientNotification": 1
+    },
+    "byStatus": {
+      "implemented": 69,
+      "product-scope-excluded": 34,
+      "planned": 111
+    }
+  },
+  "groups": [
+    {
+      "id": "connection-current",
+      "direction": "clientRequest",
+      "productArea": "connection",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server-protocol + app-server transport",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/schema/json/envelopes/request.json",
+        "lime-rs/crates/app-server/src/lib.rs",
+        "packages/app-server-client/src/request-client-methods.ts"
+      ],
+      "methods": ["initialize"]
+    },
+    {
+      "id": "connection-notification-current",
+      "direction": "clientNotification",
+      "productArea": "connection",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server-protocol + app-server transport",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/schema/json/envelopes/notification.json",
+        "lime-rs/crates/app-server/src/lib.rs",
+        "packages/app-server-client/src/request-client-methods.ts"
+      ],
+      "methods": ["initialized"]
+    },
+    {
+      "id": "thread-current",
+      "direction": "clientRequest",
+      "productArea": "thread",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server-protocol/v2 + app-server thread/elicitation/Guardian/injection/background-terminal processors",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs",
+        "lime-rs/crates/app-server/src/processor/thread.rs",
+        "lime-rs/crates/app-server/src/processor/background_terminal.rs",
+        "lime-rs/crates/app-server/src/runtime/thread_elicitation.rs",
+        "lime-rs/crates/app-server/src/runtime/thread_guardian.rs",
+        "lime-rs/crates/app-server/src/runtime/thread_inject_items.rs",
+        "lime-rs/crates/agent-protocol/src/response_item.rs",
+        "lime-rs/crates/app-server/tests/thread_background_terminals_jsonrpc.rs",
+        "lime-rs/crates/app-server/tests/thread_elicitation_jsonrpc.rs",
+        "lime-rs/crates/app-server/tests/thread_guardian_jsonrpc.rs",
+        "lime-rs/crates/app-server/tests/thread_inject_items_jsonrpc.rs",
+        "lime-rs/crates/app-server/tests/thread_loaded_list_jsonrpc.rs",
+        "lime-rs/crates/app-server/tests/thread_name_jsonrpc.rs",
+        "lime-rs/crates/app-server/tests/thread_search_jsonrpc.rs",
+        "lime-rs/crates/app-server/tests/thread_search_occurrences_jsonrpc.rs",
+        "lime-rs/crates/app-server/tests/thread_unsubscribe_jsonrpc.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "lime-rs/crates/app-server-protocol/schema/json/v2/ClientRequest.json"
+      ],
+      "methods": [
+        "thread/approveGuardianDeniedAction",
+        "thread/archive",
+        "thread/backgroundTerminals/clean",
+        "thread/backgroundTerminals/list",
+        "thread/backgroundTerminals/terminate",
+        "thread/compact/start",
+        "thread/decrement_elicitation",
+        "thread/delete",
+        "thread/fork",
+        "thread/goal/clear",
+        "thread/goal/get",
+        "thread/goal/set",
+        "thread/increment_elicitation",
+        "thread/inject_items",
+        "thread/items/list",
+        "thread/list",
+        "thread/loaded/list",
+        "thread/memoryMode/set",
+        "thread/metadata/update",
+        "thread/name/set",
+        "thread/read",
+        "thread/resume",
+        "thread/search",
+        "thread/searchOccurrences",
+        "thread/settings/update",
+        "thread/shellCommand",
+        "thread/start",
+        "thread/turns/list",
+        "thread/unarchive",
+        "thread/unsubscribe"
+      ]
+    },
+    {
+      "id": "turn-current",
+      "direction": "clientRequest",
+      "productArea": "turn",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server-protocol/v2 + app-server turn processor",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs",
+        "lime-rs/crates/app-server/src/processor/turn.rs",
+        "lime-rs/crates/app-server-protocol/schema/json/v2/ClientRequest.json"
+      ],
+      "methods": ["turn/interrupt", "turn/start", "turn/steer"]
+    },
+    {
+      "id": "mcp-request-current",
+      "direction": "clientRequest",
+      "productArea": "mcp",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "app-server MCP processor + mcp manager",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v0/method_names.rs",
+        "lime-rs/crates/app-server/src/processor/dispatch.rs",
+        "lime-rs/crates/app-server/src/processor/tests/mcp.rs"
+      ],
+      "methods": ["mcpServer/oauth/login", "mcpServerStatus/list"]
+    },
+    {
+      "id": "model-list-current",
+      "direction": "clientRequest",
+      "productArea": "model",
+      "status": "implemented",
+      "priority": "P2",
+      "owner": "app-server model processor + model-provider",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v0/method_names.rs",
+        "lime-rs/crates/app-server/src/processor/dispatch.rs",
+        "src/lib/api/modelRegistry.test.ts"
+      ],
+      "methods": ["model/list"]
+    },
+    {
+      "id": "item-server-request-current",
+      "direction": "serverRequest",
+      "productArea": "item-approval",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server server-request registry + tool-runtime",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs",
+        "lime-rs/crates/app-server/src/server_request.rs",
+        "packages/app-server-client/tests/server-request-response.test.mjs"
+      ],
+      "methods": [
+        "item/commandExecution/requestApproval",
+        "item/fileChange/requestApproval",
+        "item/tool/requestUserInput"
+      ]
+    },
+    {
+      "id": "mcp-server-request-current",
+      "direction": "serverRequest",
+      "productArea": "mcp",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "app-server server-request registry + mcp manager",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs",
+        "lime-rs/crates/app-server/src/server_request.rs",
+        "packages/app-server-client/tests/server-request-response.test.mjs"
+      ],
+      "methods": ["mcpServer/elicitation/request"]
+    },
+    {
+      "id": "thread-notification-current",
+      "direction": "serverNotification",
+      "productArea": "thread",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server lifecycle + v2 notification projector",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs",
+        "lime-rs/crates/app-server-protocol/schema/json/v2/ServerNotification.json",
+        "lime-rs/crates/app-server/src/lib.rs",
+        "lime-rs/crates/app-server/src/processor/v2_notifications/thread_status.rs",
+        "lime-rs/crates/app-server/src/runtime/thread_read.rs",
+        "lime-rs/crates/app-server/src/thread_state.rs",
+        "lime-rs/crates/app-server/tests/thread_closed_jsonrpc.rs",
+        "lime-rs/crates/app-server/tests/thread_compact_jsonrpc.rs",
+        "lime-rs/crates/app-server/tests/thread_name_jsonrpc.rs"
+      ],
+      "methods": [
+        "thread/archived",
+        "thread/closed",
+        "thread/deleted",
+        "thread/goal/cleared",
+        "thread/goal/updated",
+        "thread/name/updated",
+        "thread/settings/updated",
+        "thread/started",
+        "thread/status/changed",
+        "thread/tokenUsage/updated",
+        "thread/unarchived"
+      ]
+    },
+    {
+      "id": "turn-notification-current",
+      "direction": "serverNotification",
+      "productArea": "turn",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server v2 notification projector",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs",
+        "lime-rs/crates/app-server-protocol/schema/json/v2/ServerNotification.json"
+      ],
+      "methods": ["turn/completed", "turn/started"]
+    },
+    {
+      "id": "item-notification-current",
+      "direction": "serverNotification",
+      "productArea": "item",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server v2 notification projector",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs",
+        "lime-rs/crates/app-server-protocol/schema/json/v2/ServerNotification.json",
+        "src/lib/governance/agentItemInventoryBoundary.test.ts"
+      ],
+      "methods": [
+        "item/agentMessage/delta",
+        "item/commandExecution/outputDelta",
+        "item/completed",
+        "item/fileChange/patchUpdated",
+        "item/mcpToolCall/progress",
+        "item/plan/delta",
+        "item/reasoning/summaryPartAdded",
+        "item/reasoning/summaryTextDelta",
+        "item/reasoning/textDelta",
+        "item/started"
+      ]
+    },
+    {
+      "id": "server-request-resolution-current",
+      "direction": "serverNotification",
+      "productArea": "server-request",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server server-request registry",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs",
+        "lime-rs/crates/app-server/src/server_request.rs"
+      ],
+      "methods": ["serverRequest/resolved"]
+    },
+    {
+      "id": "config-warning-current",
+      "direction": "serverNotification",
+      "productArea": "config",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server config warning projector",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v0/method_names.rs",
+        "lime-rs/crates/app-server/src/processor/config_warning.rs",
+        "lime-rs/crates/app-server/src/processor/tests/config_warning.rs"
+      ],
+      "methods": ["configWarning"]
+    },
+    {
+      "id": "apps-planned",
+      "direction": "clientRequest",
+      "productArea": "apps",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "app-server Apps registry",
+      "counterpartRule": "none",
+      "gap": "Codex Apps read/list/installed wire contract and readiness are not present on the current v2 boundary.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["app/installed", "app/list", "app/read"]
+    },
+    {
+      "id": "collaboration-mode-planned",
+      "direction": "clientRequest",
+      "productArea": "multi-agent",
+      "status": "planned",
+      "priority": "P3",
+      "owner": "agent-runtime + app-server",
+      "counterpartRule": "none",
+      "gap": "Agent graph exists, but Codex collaboration mode discovery is not a public current method.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["collaborationMode/list"]
+    },
+    {
+      "id": "command-planned",
+      "direction": "clientRequest",
+      "productArea": "command",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "tool-runtime + app-server command processor",
+      "counterpartRule": "none",
+      "gap": "Legacy executionProcess/projectShell names cannot stand in for Codex command/exec lifecycle.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "command/exec",
+        "command/exec/resize",
+        "command/exec/terminate",
+        "command/exec/write"
+      ]
+    },
+    {
+      "id": "config-planned",
+      "direction": "clientRequest",
+      "productArea": "config",
+      "status": "planned",
+      "priority": "P2",
+      "owner": "app-server config owner",
+      "counterpartRule": "none",
+      "gap": "Current config APIs do not expose the Codex typed read/write/requirements contract.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "config/batchWrite",
+        "config/mcpServer/reload",
+        "config/read",
+        "config/value/write",
+        "configRequirements/read"
+      ]
+    },
+    {
+      "id": "environment-planned",
+      "direction": "clientRequest",
+      "productArea": "environment",
+      "status": "planned",
+      "priority": "P2",
+      "owner": "app-server environment owner",
+      "counterpartRule": "none",
+      "gap": "Remote environment registry and status are not modeled on the current App Server boundary.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["environment/add", "environment/info", "environment/status"]
+    },
+    {
+      "id": "experimental-feature-planned",
+      "direction": "clientRequest",
+      "productArea": "capability",
+      "status": "planned",
+      "priority": "P2",
+      "owner": "app-server capability registry",
+      "counterpartRule": "none",
+      "gap": "Initialize capability gating exists only partially; feature discovery and enablement are not aligned.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "experimentalFeature/enablement/set",
+        "experimentalFeature/list"
+      ]
+    },
+    {
+      "id": "external-agent-config-planned",
+      "direction": "clientRequest",
+      "productArea": "config-import",
+      "status": "planned",
+      "priority": "P4",
+      "owner": "app-server config import owner",
+      "counterpartRule": "none",
+      "gap": "External agent config detection/import has no current typed owner or product evidence.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "externalAgentConfig/detect",
+        "externalAgentConfig/import",
+        "externalAgentConfig/import/readHistories",
+        "externalAgentConfig/import/recordHistory"
+      ]
+    },
+    {
+      "id": "fs-planned",
+      "direction": "clientRequest",
+      "productArea": "filesystem",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "app-server filesystem owner",
+      "counterpartRule": "none",
+      "gap": "Legacy fileSystem methods have different names and shapes; the Codex fs contract has not replaced them.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "fs/copy",
+        "fs/createDirectory",
+        "fs/getMetadata",
+        "fs/readDirectory",
+        "fs/readFile",
+        "fs/remove",
+        "fs/unwatch",
+        "fs/watch",
+        "fs/writeFile"
+      ]
+    },
+    {
+      "id": "fuzzy-search-planned",
+      "direction": "clientRequest",
+      "productArea": "filesystem-search",
+      "status": "planned",
+      "priority": "P4",
+      "owner": "app-server filesystem search owner",
+      "counterpartRule": "none",
+      "gap": "Codex fuzzy search request/session lifecycle is not exposed by the current App Server.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "fuzzyFileSearch",
+        "fuzzyFileSearch/sessionStart",
+        "fuzzyFileSearch/sessionStop",
+        "fuzzyFileSearch/sessionUpdate"
+      ]
+    },
+    {
+      "id": "hooks-planned",
+      "direction": "clientRequest",
+      "productArea": "hooks",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "tool-runtime hook lifecycle",
+      "counterpartRule": "none",
+      "gap": "Hook execution exists internally, but list/readiness is not a current App Server contract.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["hooks/list"]
+    },
+    {
+      "id": "marketplace-planned",
+      "direction": "clientRequest",
+      "productArea": "plugins",
+      "status": "planned",
+      "priority": "P4",
+      "owner": "plugin registry",
+      "counterpartRule": "none",
+      "gap": "Marketplace mutations are not aligned to the Codex plugin registry contract.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "marketplace/add",
+        "marketplace/remove",
+        "marketplace/upgrade"
+      ]
+    },
+    {
+      "id": "mcp-request-planned",
+      "direction": "clientRequest",
+      "productArea": "mcp",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "app-server MCP processor + mcp manager",
+      "counterpartRule": "none",
+      "gap": "Lime uses mcpResource/read and mcpTool/call; exact Codex method names and payloads are not aligned.",
+      "evidence": ["internal/aiprompts/commands.md"],
+      "methods": ["mcpServer/resource/read", "mcpServer/tool/call"]
+    },
+    {
+      "id": "memory-reset-planned",
+      "direction": "clientRequest",
+      "productArea": "memory",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "thread-store memory owner",
+      "counterpartRule": "none",
+      "gap": "Memory mode is current, but Codex reset semantics and durable evidence are missing.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["memory/reset"]
+    },
+    {
+      "id": "model-provider-capabilities-current",
+      "direction": "clientRequest",
+      "productArea": "model",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "model-provider + app-server protocol/v2 + app-server",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/model-provider/src/provider_capabilities.rs",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/model.rs",
+        "lime-rs/crates/app-server/tests/model_provider_capabilities_jsonrpc.rs"
+      ],
+      "methods": ["modelProvider/capabilities/read"]
+    },
+    {
+      "id": "permission-profile-planned",
+      "direction": "clientRequest",
+      "productArea": "model",
+      "status": "planned",
+      "priority": "P2",
+      "owner": "app-server permission policy owner",
+      "counterpartRule": "none",
+      "gap": "Permission profile results are not yet frozen into the Codex-shaped current contract.",
+      "evidence": [
+        "internal/refactor/v1/02-multi-model-grok-build.md",
+        "internal/refactor/v1/08-third-audit-gap-register.md"
+      ],
+      "methods": ["permissionProfile/list"]
+    },
+    {
+      "id": "plugins-planned",
+      "direction": "clientRequest",
+      "productArea": "plugins",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "plugin registry + app-server",
+      "counterpartRule": "none",
+      "gap": "Legacy plugin methods do not satisfy Codex manifest, share, watcher, and readiness semantics.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "plugin/install",
+        "plugin/installed",
+        "plugin/list",
+        "plugin/read",
+        "plugin/share/checkout",
+        "plugin/share/delete",
+        "plugin/share/list",
+        "plugin/share/save",
+        "plugin/share/updateTargets",
+        "plugin/skill/read",
+        "plugin/uninstall"
+      ]
+    },
+    {
+      "id": "process-planned",
+      "direction": "clientRequest",
+      "productArea": "process",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "tool-runtime process owner + app-server",
+      "counterpartRule": "none",
+      "gap": "executionProcess is a different legacy contract and cannot be counted as Codex process parity.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "process/kill",
+        "process/resizePty",
+        "process/spawn",
+        "process/writeStdin"
+      ]
+    },
+    {
+      "id": "review-planned",
+      "direction": "clientRequest",
+      "productArea": "review",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "agent-runtime review lifecycle + app-server",
+      "counterpartRule": "none",
+      "gap": "Review items project internally, but review/start is not a public current method with recovery evidence.",
+      "evidence": [
+        "packages/agent-runtime-projection/tests/reviewStartItem.test.mjs"
+      ],
+      "methods": ["review/start"]
+    },
+    {
+      "id": "skills-planned",
+      "direction": "clientRequest",
+      "productArea": "skills",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "skills registry + app-server",
+      "counterpartRule": "none",
+      "gap": "Legacy skill APIs do not satisfy Codex list/config/roots watcher and readiness semantics.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["skills/config/write", "skills/extraRoots/set", "skills/list"]
+    },
+    {
+      "id": "thread-realtime-planned",
+      "direction": "clientRequest",
+      "productArea": "realtime",
+      "status": "planned",
+      "priority": "P2",
+      "owner": "agent-runtime realtime owner + model-provider",
+      "counterpartRule": "none",
+      "gap": "Realtime text/audio/speech session control has no current Thread owner or Gate B evidence.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "thread/realtime/appendAudio",
+        "thread/realtime/appendSpeech",
+        "thread/realtime/appendText",
+        "thread/realtime/listVoices",
+        "thread/realtime/start",
+        "thread/realtime/stop"
+      ]
+    },
+    {
+      "id": "windows-sandbox-planned",
+      "direction": "clientRequest",
+      "productArea": "sandbox",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "tool-runtime sandbox + Desktop Host",
+      "counterpartRule": "none",
+      "gap": "Windows readiness/setup must be rebuilt in current owners and validated on Windows.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["windowsSandbox/readiness", "windowsSandbox/setupStart"]
+    },
+    {
+      "id": "client-clock-planned",
+      "direction": "serverRequest",
+      "productArea": "client-capability",
+      "status": "planned",
+      "priority": "P4",
+      "owner": "app-server server-request registry",
+      "counterpartRule": "none",
+      "gap": "External client clock request and capability gate are not implemented.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["currentTime/read"]
+    },
+    {
+      "id": "item-server-request-planned",
+      "direction": "serverRequest",
+      "productArea": "item-approval",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "app-server server-request registry + tool-runtime",
+      "counterpartRule": "none",
+      "gap": "Granular permission approval and client dynamic tool dispatch have no current typed lifecycle.",
+      "evidence": ["internal/refactor/v1/10-item-inventory-skeleton.md"],
+      "methods": ["item/permissions/requestApproval", "item/tool/call"]
+    },
+    {
+      "id": "apps-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "apps",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "app-server Apps registry",
+      "counterpartRule": "none",
+      "gap": "Apps watcher/readiness notification is not on the current boundary.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["app/list/updated"]
+    },
+    {
+      "id": "command-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "command",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "tool-runtime + app-server command processor",
+      "counterpartRule": "none",
+      "gap": "command/exec output streaming is not exposed as the Codex notification contract.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["command/exec/outputDelta"]
+    },
+    {
+      "id": "diagnostics-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "diagnostics",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "app-server notification projector",
+      "counterpartRule": "none",
+      "gap": "Generic error/warning/deprecation and guardian warning shapes are not aligned to Codex.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["deprecationNotice", "error", "guardianWarning", "warning"]
+    },
+    {
+      "id": "external-agent-config-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "config-import",
+      "status": "planned",
+      "priority": "P4",
+      "owner": "app-server config import owner",
+      "counterpartRule": "none",
+      "gap": "External agent config import progress has no current typed lifecycle.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "externalAgentConfig/import/completed",
+        "externalAgentConfig/import/progress"
+      ]
+    },
+    {
+      "id": "fs-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "filesystem",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "app-server filesystem owner",
+      "counterpartRule": "none",
+      "gap": "Codex fs watch changes are not exposed by the current App Server contract.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["fs/changed"]
+    },
+    {
+      "id": "fuzzy-search-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "filesystem-search",
+      "status": "planned",
+      "priority": "P4",
+      "owner": "app-server filesystem search owner",
+      "counterpartRule": "none",
+      "gap": "Fuzzy search session progress and completion notifications are missing.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "fuzzyFileSearch/sessionCompleted",
+        "fuzzyFileSearch/sessionUpdated"
+      ]
+    },
+    {
+      "id": "hooks-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "hooks",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "tool-runtime hook lifecycle + app-server",
+      "counterpartRule": "none",
+      "gap": "Hook start/completion is not emitted through the current public notification projector.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["hook/completed", "hook/started"]
+    },
+    {
+      "id": "item-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "item",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "tool-runtime + app-server v2 notification projector",
+      "counterpartRule": "none",
+      "gap": "Auto-approval review and terminal interaction lack runtime source events and typed projection.",
+      "evidence": ["internal/refactor/v1/10-item-inventory-skeleton.md"],
+      "methods": [
+        "item/autoApprovalReview/completed",
+        "item/autoApprovalReview/started",
+        "item/commandExecution/terminalInteraction"
+      ]
+    },
+    {
+      "id": "mcp-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "mcp",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "mcp manager + app-server notification projector",
+      "counterpartRule": "none",
+      "gap": "OAuth completion and startup status updates are not aligned to the Codex notification contract.",
+      "evidence": ["internal/aiprompts/commands.md"],
+      "methods": [
+        "mcpServer/oauthLogin/completed",
+        "mcpServer/startupStatus/updated"
+      ]
+    },
+    {
+      "id": "model-safety-buffering-notification-current",
+      "direction": "serverNotification",
+      "productArea": "model",
+      "status": "implemented",
+      "priority": "P2",
+      "owner": "model-provider + app-server v2 notification projector",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/model-provider/src/safety.rs",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/model.rs",
+        "lime-rs/crates/app-server/src/processor/v2_notifications.rs"
+      ],
+      "methods": ["model/safetyBuffering/updated"]
+    },
+    {
+      "id": "model-routing-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "model",
+      "status": "planned",
+      "priority": "P2",
+      "owner": "model-provider + app-server notification projector",
+      "counterpartRule": "none",
+      "gap": "Reroute and verification do not yet have reliable current runtime producers to project.",
+      "evidence": ["internal/refactor/v1/02-multi-model-grok-build.md"],
+      "methods": ["model/rerouted", "model/verification"]
+    },
+    {
+      "id": "process-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "process",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "tool-runtime process owner + app-server",
+      "counterpartRule": "none",
+      "gap": "Codex process output and terminal lifecycle are not exposed by the current contract.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["process/exited", "process/outputDelta"]
+    },
+    {
+      "id": "skills-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "skills",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "skills registry + app-server",
+      "counterpartRule": "none",
+      "gap": "Skills watcher does not emit the Codex skills/changed contract.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["skills/changed"]
+    },
+    {
+      "id": "environment-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "environment",
+      "status": "planned",
+      "priority": "P2",
+      "owner": "app-server environment owner",
+      "counterpartRule": "none",
+      "gap": "Thread environment connection transitions have no current typed owner.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "thread/environment/connected",
+        "thread/environment/disconnected"
+      ]
+    },
+    {
+      "id": "realtime-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "realtime",
+      "status": "planned",
+      "priority": "P2",
+      "owner": "agent-runtime realtime owner + app-server",
+      "counterpartRule": "none",
+      "gap": "Realtime item/audio/transcript/session lifecycle has no current projection or Gate B evidence.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "thread/realtime/closed",
+        "thread/realtime/error",
+        "thread/realtime/itemAdded",
+        "thread/realtime/outputAudio/delta",
+        "thread/realtime/sdp",
+        "thread/realtime/started",
+        "thread/realtime/transcript/delta",
+        "thread/realtime/transcript/done"
+      ]
+    },
+    {
+      "id": "review-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "review",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "agent-runtime review lifecycle + app-server",
+      "counterpartRule": "none",
+      "gap": "Review/plan/diff updates are not all represented by durable public notifications.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "turn/diff/updated",
+        "turn/moderationMetadata",
+        "turn/plan/updated"
+      ]
+    },
+    {
+      "id": "windows-sandbox-notification-planned",
+      "direction": "serverNotification",
+      "productArea": "sandbox",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "tool-runtime sandbox + Desktop Host",
+      "counterpartRule": "none",
+      "gap": "Windows warnings and setup completion require a current cross-platform contract and platform evidence.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
+        "windows/worldWritableWarning",
+        "windowsSandbox/setupCompleted"
+      ]
+    },
+    {
+      "id": "codex-account-excluded",
+      "direction": "clientRequest",
+      "productArea": "codex-account",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "Lime uses provider-neutral credentials and billing; Codex/ChatGPT account commerce is not part of the product chain.",
+      "evidence": ["internal/refactor/v1/README.md"],
+      "methods": [
+        "account/login/cancel",
+        "account/login/start",
+        "account/logout",
+        "account/rateLimitResetCredit/consume",
+        "account/rateLimits/read",
+        "account/read",
+        "account/sendAddCreditsNudgeEmail",
+        "account/usage/read",
+        "account/workspaceMessages/read"
+      ]
+    },
+    {
+      "id": "feedback-excluded",
+      "direction": "clientRequest",
+      "productArea": "codex-service",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "Codex feedback upload targets an upstream service that Lime does not own.",
+      "evidence": ["internal/refactor/v1/README.md"],
+      "methods": ["feedback/upload"]
+    },
+    {
+      "id": "legacy-client-request-excluded",
+      "direction": "clientRequest",
+      "productArea": "legacy",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "forbidden-to-restore guard",
+      "counterpartRule": "none",
+      "rationale": "These Codex v1 methods are removed from the v2 schema and must not create Lime compatibility APIs.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["getAuthStatus", "getConversationSummary", "gitDiffToRemote"]
+    },
+    {
+      "id": "deprecated-thread-request-excluded",
+      "direction": "clientRequest",
+      "productArea": "thread",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "app-server thread processor",
+      "counterpartRule": "none",
+      "rationale": "Codex marks thread/rollback deprecated and scheduled for removal; Lime has no compatibility burden and will not add this public method.",
+      "evidence": [
+        "internal/refactor/v1/11-codex-method-product-scope-matrix.md"
+      ],
+      "methods": ["thread/rollback"]
+    },
+    {
+      "id": "experimental-mock-excluded",
+      "direction": "clientRequest",
+      "productArea": "test-only",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "forbidden-to-restore guard",
+      "counterpartRule": "none",
+      "rationale": "The upstream method exists only to test experimental capability gating.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["mock/experimentalMethod"]
+    },
+    {
+      "id": "remote-control-request-excluded",
+      "direction": "clientRequest",
+      "productArea": "codex-remote-control",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "Codex remote-control pairing and client administration are not part of Lime's desktop Agent product chain.",
+      "evidence": ["internal/refactor/v1/README.md"],
+      "methods": [
+        "remoteControl/client/list",
+        "remoteControl/client/revoke",
+        "remoteControl/disable",
+        "remoteControl/enable",
+        "remoteControl/pairing/start",
+        "remoteControl/pairing/status",
+        "remoteControl/status/read"
+      ]
+    },
+    {
+      "id": "codex-account-server-request-excluded",
+      "direction": "serverRequest",
+      "productArea": "codex-account",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "ChatGPT auth token refresh belongs to Codex account integration, not provider-neutral Lime credentials.",
+      "evidence": ["internal/refactor/v1/README.md"],
+      "methods": ["account/chatgptAuthTokens/refresh"]
+    },
+    {
+      "id": "attestation-excluded",
+      "direction": "serverRequest",
+      "productArea": "codex-service",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "Upstream service attestation has no Lime-owned verifier or product requirement.",
+      "evidence": ["internal/refactor/v1/README.md"],
+      "methods": ["attestation/generate"]
+    },
+    {
+      "id": "legacy-server-request-excluded",
+      "direction": "serverRequest",
+      "productArea": "legacy",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "forbidden-to-restore guard",
+      "counterpartRule": "none",
+      "rationale": "Legacy v1 approval requests are replaced by typed item approval server requests.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": ["applyPatchApproval", "execCommandApproval"]
+    },
+    {
+      "id": "codex-account-notification-excluded",
+      "direction": "serverNotification",
+      "productArea": "codex-account",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "Codex account login and rate-limit events do not belong to Lime's provider-neutral account model.",
+      "evidence": ["internal/refactor/v1/README.md"],
+      "methods": [
+        "account/login/completed",
+        "account/rateLimits/updated",
+        "account/updated"
+      ]
+    },
+    {
+      "id": "deprecated-notification-excluded",
+      "direction": "serverNotification",
+      "productArea": "legacy",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "forbidden-to-restore guard",
+      "counterpartRule": "none",
+      "rationale": "Codex has deprecated these events; Lime uses patchUpdated and ContextCompaction items instead.",
+      "evidence": ["internal/refactor/v1/10-item-inventory-skeleton.md"],
+      "methods": ["item/fileChange/outputDelta", "thread/compacted"]
+    },
+    {
+      "id": "internal-raw-response-excluded",
+      "direction": "serverNotification",
+      "productArea": "codex-internal",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "Raw upstream response notifications are Codex internal/cloud surfaces and bypass canonical Thread/Turn/Item projection.",
+      "evidence": ["internal/refactor/v1/10-item-inventory-skeleton.md"],
+      "methods": ["rawResponse/completed", "rawResponseItem/completed"]
+    },
+    {
+      "id": "remote-control-notification-excluded",
+      "direction": "serverNotification",
+      "productArea": "codex-remote-control",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "Remote-control status is excluded with its request surface; no compatibility event is retained.",
+      "evidence": ["internal/refactor/v1/README.md"],
+      "methods": ["remoteControl/status/changed"]
+    }
+  ]
+}

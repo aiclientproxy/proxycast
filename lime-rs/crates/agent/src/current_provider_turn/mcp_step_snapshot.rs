@@ -170,8 +170,8 @@ fn tool_definitions(
     let mut definitions = native_dispatch.definitions();
     definitions.extend(tool_runtime::unified_exec::unified_exec_tool_definitions());
     definitions.push(tool_runtime::request_user_input::request_user_input_tool_definition());
-    if agent_control_gateway.is_some() {
-        definitions.extend(tool_runtime::agent_control::agent_control_tool_definitions());
+    if let Some(gateway) = agent_control_gateway {
+        definitions.extend(gateway.tool_definitions());
     }
     definitions.extend(state.gateway_tools().definitions());
     definitions.extend(mcp_tool_definitions(mcp_snapshot));

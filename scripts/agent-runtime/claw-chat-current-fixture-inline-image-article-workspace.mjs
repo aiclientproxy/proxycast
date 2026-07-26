@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import {
+  APP_SERVER_METHOD_ARTIFACT_WRITE,
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_IMAGE_COMPLETE,
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_IMAGE_CREATE,
   APP_SERVER_METHOD_SESSION_READ,
-  APP_SERVER_METHOD_SESSION_UPDATE,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_TITLE,
   CONTENT_FACTORY_INLINE_IMAGE_FILE_PATH,
   CONTENT_FACTORY_INLINE_IMAGE_SLOT_ID,
@@ -130,7 +130,12 @@ export async function runContentFactoryInlineImageArticleWorkspaceScenario({
   });
 }
 
-async function waitForArticleDraftObjectRef(page, options, requestLog, identity) {
+async function waitForArticleDraftObjectRef(
+  page,
+  options,
+  requestLog,
+  identity,
+) {
   const startedAt = Date.now();
   let lastSummary = null;
   while (Date.now() - startedAt < options.timeoutMs) {
@@ -143,8 +148,14 @@ async function waitForArticleDraftObjectRef(page, options, requestLog, identity)
       },
       requestLog,
     );
-    const objectRef = findArticleDraftObjectRef(read.result, identity.workerTaskId);
-    lastSummary = summarizeArticleWorkspaceRead(read.result, identity.workerTaskId);
+    const objectRef = findArticleDraftObjectRef(
+      read.result,
+      identity.workerTaskId,
+    );
+    lastSummary = summarizeArticleWorkspaceRead(
+      read.result,
+      identity.workerTaskId,
+    );
     if (objectRef) {
       return objectRef;
     }
@@ -286,28 +297,55 @@ async function writeInlinePendingEditedDraft({
 
   const updatedAt = "2026-07-04T00:00:00.000Z";
   const objectKey = `${objectRef.appId}:${objectRef.sessionId}:${objectRef.kind}:${objectRef.id}`;
+  const artifactRef =
+    objectRef.artifactIds?.find(
+      (value) => typeof value === "string" && value.trim(),
+    ) || objectKey;
+  const editedDraft = {
+    objectKey,
+    objectRef,
+    markdown: INLINE_PENDING_MARKDOWN,
+    updatedAt,
+  };
+  const workspacePatch = {
+    objects: [
+      {
+        ref: objectRef,
+        title: "Inline image edited draft",
+        status: "draft",
+        source: {
+          documentText: INLINE_PENDING_MARKDOWN,
+          finalMarkdown: INLINE_PENDING_MARKDOWN,
+          updatedAt,
+        },
+      },
+    ],
+    updatedAt,
+  };
   const response = await invokeAppServerFromPage(
     page,
-    APP_SERVER_METHOD_SESSION_UPDATE,
+    APP_SERVER_METHOD_ARTIFACT_WRITE,
     {
-      sessionId: identity.sessionId,
-      articleWorkspaceSelectedObjectRef: objectRef,
-      articleWorkspaceEditedDraft: {
-        objectKey,
-        objectRef,
-        markdown: INLINE_PENDING_MARKDOWN,
-        documentText: INLINE_PENDING_MARKDOWN,
-        finalMarkdown: INLINE_PENDING_MARKDOWN,
-        updatedAt,
+      threadId: identity.threadId,
+      artifact: {
+        artifactRef,
+        artifactDocumentId: objectRef.id,
+        title: "Inline image edited draft",
+        kind: "article_workspace_draft",
+        status: "draft",
+        content: INLINE_PENDING_MARKDOWN,
+        metadata: {
+          workspacePatch,
+          editedDraft,
+        },
       },
     },
     requestLog,
   );
   return sanitizeJson({
-    sessionId:
-      response.result?.session?.sessionId ??
-      response.result?.session?.session_id ??
-      identity.sessionId,
+    sessionId: identity.sessionId,
+    threadId: response.result?.threadId ?? identity.threadId,
+    eventId: response.result?.eventId ?? null,
     objectKey,
     marker: CONTENT_FACTORY_INLINE_IMAGE_SLOT_ID,
     hasPendingImage: INLINE_PENDING_MARKDOWN.includes("pending-image-task://"),
@@ -315,7 +353,12 @@ async function writeInlinePendingEditedDraft({
   });
 }
 
-async function createInlineImageTask({ page, workspace, requestLog, identity }) {
+async function createInlineImageTask({
+  page,
+  workspace,
+  requestLog,
+  identity,
+}) {
   return await invokeAppServerFromPage(
     page,
     APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_IMAGE_CREATE,
@@ -344,7 +387,12 @@ async function createInlineImageTask({ page, workspace, requestLog, identity }) 
   );
 }
 
-async function emitInlineTaskSubmittedEvent({ page, workspace, created, identity }) {
+async function emitInlineTaskSubmittedEvent({
+  page,
+  workspace,
+  created,
+  identity,
+}) {
   const result = created?.result ?? {};
   const payload = {
     task_id: readString(result.task_id, result.taskId),

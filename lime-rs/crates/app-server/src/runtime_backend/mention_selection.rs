@@ -324,6 +324,7 @@ mod tests {
             id: "session-1".to_string(),
             thread_id: Some("thread-1".to_string()),
             turn_id: Some("turn-1".to_string()),
+            forked_from_thread_id: None,
             schedule_id: None,
             max_turns: None,
             provider_token_budget: None,

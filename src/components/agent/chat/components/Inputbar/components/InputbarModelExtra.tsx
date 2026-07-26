@@ -5,6 +5,7 @@ import type { ModelReasoningEffortLevel } from "@/lib/types/modelRegistry";
 
 interface InputbarModelExtraProps {
   isFullscreen?: boolean;
+  disabled?: boolean;
   providerType?: string;
   setProviderType: (type: string) => void;
   model?: string;
@@ -18,6 +19,7 @@ interface InputbarModelExtraProps {
 
 export const InputbarModelExtra: React.FC<InputbarModelExtraProps> = ({
   isFullscreen = false,
+  disabled = false,
   providerType,
   setProviderType,
   model,
@@ -35,6 +37,7 @@ export const InputbarModelExtra: React.FC<InputbarModelExtraProps> = ({
   return (
     <div className="flex items-center flex-wrap gap-2">
       <ChatModelSelector
+        disabled={disabled}
         providerType={providerType ?? ""}
         setProviderType={setProviderType}
         model={model ?? ""}

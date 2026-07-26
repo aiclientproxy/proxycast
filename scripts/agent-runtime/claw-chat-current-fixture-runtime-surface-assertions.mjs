@@ -76,6 +76,8 @@ export function buildLiveTailCommitScenarioAssertions({
     guiLiveTailFirstVisibleBeforeCommit:
       summary.guiLiveTailFirstVisibleBeforeCommit?.hasPrompt === true &&
       summary.guiLiveTailFirstVisibleBeforeCommit?.hasFirstText === true &&
+      summary.guiLiveTailFirstVisibleBeforeCommit?.firstTextOccurrenceCount ===
+        1 &&
       summary.guiLiveTailFirstVisibleBeforeCommit?.hasDoneText === false &&
       summary.guiLiveTailFirstVisibleBeforeCommit?.hasOverflowMarker ===
         false &&
@@ -96,6 +98,14 @@ export function buildLiveTailCommitScenarioAssertions({
       summary.guiLiveTailVisualOracle?.hasTableTail === true &&
       summary.guiLiveTailVisualOracle?.markdownTableRendered === true &&
       summary.guiLiveTailVisualOracle?.firstTextBeforeTableTail === true,
+    guiLiveTailCanonicalRepairExactOnce:
+      summary.guiLiveTailVisualOracle?.expectedItemIdentityVisible === true &&
+      summary.guiLiveTailVisualOracle?.canonicalMarkersExactOnce === true &&
+      summary.guiLiveTailVisualOracle?.firstTextOccurrenceCount === 1 &&
+      summary.guiLiveTailVisualOracle?.overflowMarkerOccurrenceCount === 1 &&
+      summary.guiLiveTailVisualOracle?.tableHeaderOccurrenceCount === 1 &&
+      summary.guiLiveTailVisualOracle?.tableTailOccurrenceCount === 1 &&
+      summary.guiLiveTailVisualOracle?.doneTextOccurrenceCount === 1,
     guiLiveTailScrollAnchorStable:
       summary.guiLiveTailVisualOracle?.scrollAnchorStable === true,
     guiLiveTailCompleted:
@@ -114,9 +124,27 @@ export function buildLiveTailCommitScenarioAssertions({
         true &&
       summary.readModelLiveTailCommitCompleted?.includesTableHeader === true &&
       summary.readModelLiveTailCommitCompleted?.includesTableTail === true &&
-      summary.readModelLiveTailCommitCompleted?.includesAssistantDone === true,
+      summary.readModelLiveTailCommitCompleted?.includesAssistantDone ===
+        true &&
+      summary.readModelLiveTailCommitCompleted
+        ?.canonicalTextMatchesCompletedItem === true &&
+      summary.readModelLiveTailCommitCompleted?.canonicalMarkerExactOnce ===
+        true &&
+      summary.readModelLiveTailCommitCompleted?.identityMatches === true,
     backendLiveTailCommitRecorded:
-      summary.liveTailCommitBackendCompleted?.eventType === "turn.completed" &&
+      summary.liveTailCommitBackendCompleted?.droppedEventType ===
+        "message.delta" &&
+      summary.liveTailCommitBackendCompleted?.repairEventType ===
+        "item.completed" &&
+      summary.liveTailCommitBackendCompleted?.terminalEventType ===
+        "turn.completed" &&
+      JSON.stringify(
+        summary.liveTailCommitBackendCompleted?.emittedEventTypes,
+      ) === JSON.stringify(["item.completed", "turn.completed"]) &&
+      summary.liveTailCommitBackendCompleted?.itemId ===
+        summary.guiLiveTailVisualOracle?.expectedItemId &&
+      summary.liveTailCommitBackendCompleted?.threadId ===
+        summary.readModelLiveTailCommitCompleted?.readModelThreadId &&
       summary.liveTailCommitBackendCompleted?.turnId ===
         liveTailCommitTurnStart?.turnId,
   };

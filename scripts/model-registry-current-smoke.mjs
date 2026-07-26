@@ -435,8 +435,11 @@ function summarizeInvokeEntries(entries) {
     modelSyncStateReadRequestCount: modelSyncStateReadRequests.length,
     modelListResponsesValid:
       modelListResponses.length > 0 &&
-      modelListResponses.every((message) =>
-        Array.isArray(message?.result?.models),
+      modelListResponses.every(
+        (message) =>
+          Array.isArray(message?.result?.data) &&
+          (message.result.nextCursor === null ||
+            typeof message.result.nextCursor === "string"),
       ),
     modelPreferencesListResponsesValid:
       modelPreferencesListResponses.length > 0 &&
@@ -641,7 +644,7 @@ async function run() {
     );
     assert(
       summary.modelListResponsesValid,
-      "model/list response 缺少 models 数组",
+      "model/list response 不符合 { data, nextCursor }",
     );
     assert(
       summary.modelPreferencesListResponsesValid,

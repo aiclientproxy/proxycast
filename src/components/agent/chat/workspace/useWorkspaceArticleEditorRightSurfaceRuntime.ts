@@ -9,8 +9,8 @@ import {
 } from "react";
 import type { CanvasStateUnion } from "@/components/workspace/canvas/canvasUtils";
 import { getMediaTaskArtifact } from "@/lib/api/mediaTasks";
+import { writeAgentRuntimeArtifactSnapshot } from "@/lib/api/agentRuntime/appServerArtifactClient";
 import type { MediaTaskArtifactOutput } from "@/lib/api/agentRuntime/mediaTaskTypes";
-import { updateAgentRuntimeSession } from "@/lib/api/agentRuntime/sessionClient";
 import type { AgentRuntimeThreadReadModel } from "@/lib/api/agentRuntime/sessionTypes";
 import { logAgentDebug } from "@/lib/agentDebug";
 import type { Message } from "../types";
@@ -27,8 +27,8 @@ import {
 } from "./workspaceArticleWorkspaceMessageArtifacts";
 import {
   applyWorkspaceArticleEditedDraft,
+  buildWorkspaceArticleEditedDraftArtifactWriteParams,
   buildWorkspaceArticleEditedDraftFromChange,
-  buildWorkspaceArticleEditedDraftUpdateRequest,
   readWorkspaceArticleObjectMarkdown,
   shouldRejectWorkspaceArticleEditedDraftChange,
   type WorkspaceArticleEditedDraft,
@@ -143,6 +143,7 @@ export function useWorkspaceArticleEditorRightSurfaceRuntime({
         : null,
     [sceneDisplayMessages],
   );
+  const sceneThreadId = sceneThreadRead?.thread_id;
   const rawArticleEditorRightSurface =
     articleWorkspaceFromThreadRead ??
     articleWorkspaceFromMessageArtifacts ??
@@ -207,12 +208,13 @@ export function useWorkspaceArticleEditorRightSurfaceRuntime({
           : editedDraft,
       );
 
-      const request = buildWorkspaceArticleEditedDraftUpdateRequest(
+      const request = buildWorkspaceArticleEditedDraftArtifactWriteParams(
         change,
         editedDraft,
+        sceneThreadId,
       );
       if (request) {
-        void updateAgentRuntimeSession(request).catch((error) => {
+        void writeAgentRuntimeArtifactSnapshot(request).catch((error) => {
           console.warn(
             "[AgentChatWorkspace] Article Editor 配图占位写回失败:",
             error,
@@ -232,6 +234,7 @@ export function useWorkspaceArticleEditorRightSurfaceRuntime({
     baseArticleEditorRightSurface,
     sceneIsPreparingSend,
     sceneIsSending,
+    sceneThreadId,
   ]);
 
   const articleInlineImageTaskSyncResult = useMemo(
@@ -459,18 +462,19 @@ export function useWorkspaceArticleEditorRightSurfaceRuntime({
         : editedDraft,
     );
 
-    const request = buildWorkspaceArticleEditedDraftUpdateRequest(
+    const request = buildWorkspaceArticleEditedDraftArtifactWriteParams(
       change,
       editedDraft,
+      sceneThreadId,
     );
     if (!request) {
       logAgentDebug(
         "AgentChatWorkspace",
         "articleInlineImageSync.persistSkipped",
         {
-          reason: "missing_update_request",
+          reason: "missing_artifact_write_request",
           consumedTaskIds: syncResult.consumedTaskIds,
-          sessionId: articleInlineHostMaterializedRightSurface.sessionId,
+          threadId: sceneThreadId ?? null,
         },
         { level: "warn", throttleMs: 1000 },
       );
@@ -488,11 +492,11 @@ export function useWorkspaceArticleEditorRightSurfaceRuntime({
           /!\[[^\]]*]\((?!pending-image-task:\/\/)(?:https?:\/\/|file:\/\/|asset:\/\/|data:image\/)/i.test(
             syncResult.markdown,
           ),
-        sessionId: request.session_id,
+        threadId: request.threadId,
       },
       { level: "debug", throttleMs: 1000 },
     );
-    void updateAgentRuntimeSession(request).catch((error) => {
+    void writeAgentRuntimeArtifactSnapshot(request).catch((error) => {
       console.warn(
         "[AgentChatWorkspace] Article Editor 配图回填写回失败:",
         error,
@@ -501,6 +505,7 @@ export function useWorkspaceArticleEditorRightSurfaceRuntime({
   }, [
     articleInlineImageTaskSyncResult,
     articleInlineHostMaterializedRightSurface,
+    sceneThreadId,
   ]);
 
   const sceneDisplayMessagesWithoutArticleInlineImageTasks = useMemo(
@@ -546,21 +551,22 @@ export function useWorkspaceArticleEditorRightSurfaceRuntime({
         return;
       }
       setActiveArticleEditedDraft(editedDraft);
-      const request = buildWorkspaceArticleEditedDraftUpdateRequest(
+      const request = buildWorkspaceArticleEditedDraftArtifactWriteParams(
         change,
         editedDraft,
+        sceneThreadId,
       );
       if (!request) {
         return;
       }
-      void updateAgentRuntimeSession(request).catch((error) => {
+      void writeAgentRuntimeArtifactSnapshot(request).catch((error) => {
         console.warn(
           "[AgentChatWorkspace] Article Editor 编辑正文写回失败:",
           error,
         );
       });
     },
-    [activeArticleEditedDraft],
+    [activeArticleEditedDraft, sceneThreadId],
   );
 
   return {

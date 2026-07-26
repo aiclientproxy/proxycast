@@ -17,7 +17,7 @@ use thread_store::{
 };
 use tool_runtime::agent_control::{
     AgentControlCaller, AgentControlCommand, AgentControlGatewayRequest, SpawnAgentForkMode,
-    SubAgentProjectionActivity,
+    SpawnAgentModelOverrides, SubAgentProjectionActivity,
 };
 
 #[path = "agent_control/concurrent.rs"]
@@ -308,6 +308,7 @@ async fn spawn_gateway_returns_before_child_terminal_and_inherits_runtime_reques
                 task_name: "research".to_string(),
                 message: "inspect the current owner".to_string(),
                 fork_mode: SpawnAgentForkMode::None,
+                model_overrides: SpawnAgentModelOverrides::default(),
             },
             cancel_token: None,
         }),
@@ -359,6 +360,16 @@ async fn spawn_gateway_returns_before_child_terminal_and_inherits_runtime_reques
         .await
         .expect("child thread read")
         .expect("child thread");
+    assert_eq!(
+        uuid::Uuid::parse_str(child_identity.thread_id.as_str())
+            .expect("AgentControl child UUID")
+            .get_version_num(),
+        7
+    );
+    assert_eq!(
+        child_thread.session_id.as_str(),
+        child_identity.thread_id.as_str()
+    );
     let message_id = result.output["message_id"].as_str().expect("message id");
     let mailbox_item_id = super::super::agent_mailbox_delivery::mailbox_item_id(message_id);
     assert!(child_thread.turns.iter().any(|child_turn| {
@@ -891,6 +902,7 @@ async fn spawn_gateway_projects_and_starts_the_initial_child_task_before_success
                 task_name: "research".to_string(),
                 message: "inspect the current owner".to_string(),
                 fork_mode: SpawnAgentForkMode::None,
+                model_overrides: SpawnAgentModelOverrides::default(),
             },
             cancel_token: None,
         })
@@ -1361,6 +1373,7 @@ async fn gateway_queue_followup_and_interrupt_keep_the_durable_contract() {
                 task_name: "research".to_string(),
                 message: "inspect the current owner".to_string(),
                 fork_mode: SpawnAgentForkMode::None,
+                model_overrides: SpawnAgentModelOverrides::default(),
             },
             cancel_token: None,
         })

@@ -1,6 +1,7 @@
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { changeLimeLocale } from "@/i18n/createI18n";
+import { buildModelReasoningPolicy } from "@/lib/model/modelReasoningPolicy";
 import {
   cleanupMountedModelSelectors,
   clickBodyButtonByText,
@@ -666,13 +667,11 @@ describe("ModelSelector", () => {
           source: "api",
           capabilities: {
             reasoning: true,
-            reasoning_effort: {
-              supported: true,
-              levels: ["low", "medium", "high"],
-              default: "medium",
-              source: "api",
-            },
           },
+          reasoning_policy: buildModelReasoningPolicy({
+            defaultReasoningLevel: "medium",
+            supportedReasoningLevels: ["low", "medium", "high"],
+          }),
         }),
       ],
       loading: false,
@@ -701,6 +700,153 @@ describe("ModelSelector", () => {
         '[data-testid="model-selector-reasoning-effort"]',
       ),
     ).not.toBeNull();
+  });
+
+  it("provider 未声明默认值时应按 Codex 模型切换语义选择中位档", () => {
+    const setReasoningEffort = vi.fn();
+    mockUseProviderModels.mockReturnValue({
+      modelIds: ["provider-reasoning"],
+      models: [
+        createModelMetadata("provider-reasoning", {
+          source: "api",
+          capabilities: { reasoning: true },
+          reasoning_policy: buildModelReasoningPolicy({
+            supportedReasoningLevels: ["low", "medium", "high"],
+          }),
+        }),
+      ],
+      loading: false,
+      error: null,
+    });
+
+    renderModelSelector({
+      model: "provider-reasoning",
+      reasoningEffort: "",
+      setReasoningEffort,
+    });
+
+    expect(setReasoningEffort).toHaveBeenCalledWith("medium");
+  });
+
+  it("切换模型时应保留新模型支持的当前 reasoning effort", () => {
+    const setModel = vi.fn();
+    const setReasoningEffort = vi.fn();
+    const policy = buildModelReasoningPolicy({
+      supportedReasoningLevels: ["low", "medium", "high"],
+    });
+    mockUseProviderModels.mockReturnValue({
+      modelIds: ["provider-a", "provider-b"],
+      models: [
+        createModelMetadata("provider-a", {
+          capabilities: { reasoning: true },
+          reasoning_policy: policy,
+        }),
+        createModelMetadata("provider-b", {
+          capabilities: { reasoning: true },
+          reasoning_policy: policy,
+        }),
+      ],
+      loading: false,
+      error: null,
+    });
+
+    const { container } = renderModelSelector({
+      model: "provider-a",
+      reasoningEffort: "high",
+      setModel,
+      setReasoningEffort,
+    });
+
+    clickModelSelectorTrigger(container);
+    clickBodyButtonByText("provider-b");
+
+    expect(setModel).toHaveBeenCalledWith("provider-b");
+    expect(setReasoningEffort).toHaveBeenCalledWith("high");
+  });
+
+  it("切换模型时当前档位不受支持应选择新模型 catalog 中位档", () => {
+    const setReasoningEffort = vi.fn();
+    mockUseProviderModels.mockReturnValue({
+      modelIds: ["provider-a", "provider-b"],
+      models: [
+        createModelMetadata("provider-a", {
+          capabilities: { reasoning: true },
+          reasoning_policy: buildModelReasoningPolicy({
+            supportedReasoningLevels: ["low", "xhigh"],
+          }),
+        }),
+        createModelMetadata("provider-b", {
+          capabilities: { reasoning: true },
+          reasoning_policy: buildModelReasoningPolicy({
+            defaultReasoningLevel: "medium",
+            supportedReasoningLevels: ["minimal", "low", "medium", "high"],
+          }),
+        }),
+      ],
+      loading: false,
+      error: null,
+    });
+
+    const { container } = renderModelSelector({
+      model: "provider-a",
+      reasoningEffort: "xhigh",
+      setReasoningEffort,
+    });
+
+    clickModelSelectorTrigger(container);
+    clickBodyButtonByText("provider-b");
+
+    expect(setReasoningEffort).toHaveBeenCalledWith("low");
+  });
+
+  it("展示 grok-build 的 reasoning label，但只提交 canonical wire value", () => {
+    const setReasoningEffort = vi.fn();
+    mockUseProviderModels.mockReturnValue({
+      modelIds: ["grok-4.5"],
+      models: [
+        createModelMetadata("grok-4.5", {
+          source: "api",
+          capabilities: { reasoning: true },
+          reasoning_policy: buildModelReasoningPolicy({
+            defaultReasoningLevel: "balanced",
+            supportedReasoningLevels: [
+              {
+                id: "deep",
+                label: "Deep",
+                value: "xhigh",
+                description: "Maximum reasoning",
+              },
+              {
+                id: "balanced",
+                label: "Balanced",
+                value: "medium",
+              },
+            ],
+          }),
+        }),
+      ],
+      loading: false,
+      error: null,
+    });
+
+    const { container } = renderModelSelector({
+      model: "grok-4.5",
+      reasoningEffort: "medium",
+      setReasoningEffort,
+    });
+
+    clickModelSelectorTrigger(container);
+
+    const panel = document.body.querySelector(
+      '[data-testid="model-selector-reasoning-effort"]',
+    );
+    expect(panel?.textContent).toContain("Deep");
+    expect(panel?.textContent).toContain("Balanced");
+
+    clickBodyButtonByText("Deep");
+
+    expect(setReasoningEffort).toHaveBeenCalledWith("xhigh");
+    expect(setReasoningEffort).not.toHaveBeenCalledWith("deep");
   });
 
   it("未由接口声明 reasoning_effort 时不展示强度选择", () => {

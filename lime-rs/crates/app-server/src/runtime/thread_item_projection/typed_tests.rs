@@ -502,7 +502,18 @@ fn maps_core_families_to_typed_payloads() {
                 6,
                 "context.compaction.completed",
                 "turn-1",
-                json!({"summary": "trimmed"}),
+                json!({
+                    "summary": "trimmed",
+                    "replacementHistory": [{
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "compacted prefix"}]
+                    }],
+                    "windowNumber": 2,
+                    "firstWindowId": "01890f3e-7b12-7cc0-8c2f-2d0fdab7c123",
+                    "previousWindowId": "01890f3e-7b12-7cc0-8c2f-2d0fdab7c124",
+                    "windowId": "01890f3e-7b12-7cc0-8c2f-2d0fdab7c125",
+                    "tailStartTurnId": "turn-1"
+                }),
             ),
         ],
         "session-1",
@@ -534,10 +545,26 @@ fn maps_core_families_to_typed_payloads() {
             ..
         }
     )));
-    assert!(changes
+    let compaction = changes
         .changed_items
         .iter()
-        .any(|item| matches!(item.payload, ThreadItemPayload::ContextCompaction { .. })));
+        .find(|item| matches!(item.payload, ThreadItemPayload::ContextCompaction { .. }))
+        .expect("context compaction item");
+    assert_eq!(
+        compaction.payload,
+        ThreadItemPayload::ContextCompaction {
+            summary: Some("trimmed".to_string()),
+            replacement_history: vec![json!({
+                "role": "user",
+                "content": [{"type": "input_text", "text": "compacted prefix"}]
+            })],
+            window_number: Some(2),
+            first_window_id: Some("01890f3e-7b12-7cc0-8c2f-2d0fdab7c123".to_string()),
+            previous_window_id: Some("01890f3e-7b12-7cc0-8c2f-2d0fdab7c124".to_string()),
+            window_id: Some("01890f3e-7b12-7cc0-8c2f-2d0fdab7c125".to_string()),
+            tail_start_turn_id: Some("turn-1".to_string()),
+        }
+    );
 }
 
 #[test]

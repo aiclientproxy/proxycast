@@ -44,6 +44,8 @@ struct QueuedRuntimeRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     reasoning_effort: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    service_tier: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     thinking_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     approval_policy: Option<String>,
@@ -201,6 +203,10 @@ impl QueuedRuntimeRequest {
                 request.reasoning_effort.as_deref(),
                 "runtimeRequest.reasoningEffort",
             )?,
+            service_tier: bounded_string(
+                request.service_tier.as_deref(),
+                "runtimeRequest.serviceTier",
+            )?,
             thinking_enabled: request.thinking_enabled,
             approval_policy: bounded_string(
                 request.approval_policy.as_deref(),
@@ -249,6 +255,7 @@ impl QueuedRuntimeRequest {
             model_preference: self.model_preference,
             collaboration_mode: self.collaboration_mode,
             reasoning_effort: self.reasoning_effort,
+            service_tier: self.service_tier,
             thinking_enabled: self.thinking_enabled,
             approval_policy: self.approval_policy,
             sandbox_policy: self.sandbox_policy,

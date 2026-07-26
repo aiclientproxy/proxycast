@@ -54,7 +54,7 @@ pub(super) fn resolve_provider_readiness(
         .iter()
         .find(|provider| provider.provider.id == selection.provider)
     {
-        return Ok(readiness_from_configured_provider(provider));
+        return Ok(configured_provider_readiness(provider));
     }
 
     if is_supported_builtin_runtime_provider(&selection.provider) {
@@ -75,7 +75,7 @@ pub(super) fn routing_decision_payload(
     runtime_core::routing_decision_payload(selection, routing, readiness, model_registry.payload())
 }
 
-fn readiness_from_configured_provider(provider: &ProviderWithKeys) -> ProviderReadiness {
+pub(crate) fn configured_provider_readiness(provider: &ProviderWithKeys) -> ProviderReadiness {
     let enabled_key_count = provider.api_keys.iter().filter(|key| key.enabled).count();
     let total_key_count = provider.api_keys.len();
     let provider_type = Some(provider.provider.provider_type.to_string());
@@ -399,5 +399,44 @@ mod tests {
 
         assert!(!readiness.ready);
         assert_eq!(readiness.reason_code, Some("missing_enabled_api_key"));
+    }
+
+    #[test]
+    fn unknown_stored_provider_type_is_not_runtime_ready() {
+        let db = test_db();
+        {
+            let conn = db.lock().expect("lock db");
+            conn.execute(
+                "INSERT INTO api_key_providers (
+                    id, name, type, api_host, is_system, group_name, enabled, sort_order,
+                    custom_models, created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, 0, 'cloud', 1, 0, '[]', ?5, ?5)",
+                rusqlite::params![
+                    "future-route",
+                    "Future Route",
+                    "future-provider",
+                    "https://future.invalid/v1",
+                    "2026-07-26T00:00:00Z",
+                ],
+            )
+            .expect("insert unknown provider type");
+        }
+        let service = ApiKeyProviderService::new();
+
+        let readiness = resolve_provider_readiness(
+            &db,
+            &service,
+            &RuntimeModelSelection {
+                provider: "future-route".to_string(),
+                model: "future-model".to_string(),
+                source: "runtime_request",
+                reasoning_effort: None,
+            },
+            None,
+        )
+        .expect("resolve unknown provider readiness");
+
+        assert!(!readiness.ready);
+        assert_eq!(readiness.reason_code, Some("provider_not_configured"));
     }
 }

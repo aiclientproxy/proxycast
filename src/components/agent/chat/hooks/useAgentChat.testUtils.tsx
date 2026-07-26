@@ -16,7 +16,8 @@ const {
   mockGetAgentRuntimeThreadRead,
   mockReadAgentRuntimeThread,
   mockGenerateAgentRuntimeSessionTitle,
-  mockUpdateAgentRuntimeSession,
+  mockSetAgentRuntimeThreadName,
+  mockUpdateAgentRuntimeThreadSettings,
   mockDeleteAgentRuntimeSession,
   mockCompactAgentRuntimeSession,
   mockInterruptAgentRuntimeTurn,
@@ -61,7 +62,8 @@ const {
     mockGetAgentRuntimeThreadRead: vi.fn(),
     mockReadAgentRuntimeThread: vi.fn(),
     mockGenerateAgentRuntimeSessionTitle: vi.fn(),
-    mockUpdateAgentRuntimeSession: vi.fn(),
+    mockSetAgentRuntimeThreadName: vi.fn(),
+    mockUpdateAgentRuntimeThreadSettings: vi.fn(),
     mockDeleteAgentRuntimeSession: vi.fn(),
     mockCompactAgentRuntimeSession: vi.fn(),
     mockInterruptAgentRuntimeTurn: vi.fn(),
@@ -97,7 +99,8 @@ export {
   mockGetAgentRuntimeThreadRead,
   mockReadAgentRuntimeThread,
   mockGenerateAgentRuntimeSessionTitle,
-  mockUpdateAgentRuntimeSession,
+  mockSetAgentRuntimeThreadName,
+  mockUpdateAgentRuntimeThreadSettings,
   mockDeleteAgentRuntimeSession,
   mockCompactAgentRuntimeSession,
   mockInterruptAgentRuntimeTurn,
@@ -123,7 +126,8 @@ vi.mock("@/lib/api/agentRuntime/clientFactory", () => ({
     getAgentRuntimeThreadRead: mockGetAgentRuntimeThreadRead,
     readAgentRuntimeThread: mockReadAgentRuntimeThread,
     generateAgentRuntimeSessionTitle: mockGenerateAgentRuntimeSessionTitle,
-    updateAgentRuntimeSession: mockUpdateAgentRuntimeSession,
+    setAgentRuntimeThreadName: mockSetAgentRuntimeThreadName,
+    updateAgentRuntimeThreadSettings: mockUpdateAgentRuntimeThreadSettings,
     deleteAgentRuntimeSession: mockDeleteAgentRuntimeSession,
     compactAgentRuntimeSession: mockCompactAgentRuntimeSession,
     interruptAgentRuntimeTurn: mockInterruptAgentRuntimeTurn,
@@ -138,7 +142,8 @@ vi.mock("@/lib/api/agentRuntime/clientFactory", () => ({
   getAgentRuntimeSession: resolveMockAgentRuntimeSession,
   getAgentRuntimeThreadRead: mockGetAgentRuntimeThreadRead,
   generateAgentRuntimeSessionTitle: mockGenerateAgentRuntimeSessionTitle,
-  updateAgentRuntimeSession: mockUpdateAgentRuntimeSession,
+  setAgentRuntimeThreadName: mockSetAgentRuntimeThreadName,
+  updateAgentRuntimeThreadSettings: mockUpdateAgentRuntimeThreadSettings,
   deleteAgentRuntimeSession: mockDeleteAgentRuntimeSession,
   compactAgentRuntimeSession: mockCompactAgentRuntimeSession,
   interruptAgentRuntimeTurn: mockInterruptAgentRuntimeTurn,
@@ -497,7 +502,8 @@ beforeEach(async () => {
   mockGetAgentRuntimeThreadRead.mockReset();
   mockReadAgentRuntimeThread.mockReset();
   mockGenerateAgentRuntimeSessionTitle.mockReset();
-  mockUpdateAgentRuntimeSession.mockReset();
+  mockSetAgentRuntimeThreadName.mockReset();
+  mockUpdateAgentRuntimeThreadSettings.mockReset();
   mockDeleteAgentRuntimeSession.mockReset();
   mockCompactAgentRuntimeSession.mockReset();
   mockInterruptAgentRuntimeTurn.mockReset();
@@ -553,7 +559,8 @@ beforeEach(async () => {
     },
   }));
   mockGenerateAgentRuntimeSessionTitle.mockResolvedValue("");
-  mockUpdateAgentRuntimeSession.mockResolvedValue(undefined);
+  mockSetAgentRuntimeThreadName.mockResolvedValue(undefined);
+  mockUpdateAgentRuntimeThreadSettings.mockResolvedValue(undefined);
   mockDeleteAgentRuntimeSession.mockResolvedValue(undefined);
   mockCompactAgentRuntimeSession.mockResolvedValue(undefined);
   mockInterruptAgentRuntimeTurn.mockResolvedValue(undefined);

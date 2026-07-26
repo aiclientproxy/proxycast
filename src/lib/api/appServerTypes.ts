@@ -152,6 +152,8 @@ export type AppServerThreadListParams = protocol.ThreadListParams;
 export type AppServerThreadListResponse = protocol.ThreadListResponse;
 export type AppServerThreadReadParams = protocol.ThreadReadParams;
 export type AppServerThreadReadResponse = protocol.ThreadReadResponse;
+export type AppServerThreadSetNameParams = protocol.ThreadSetNameParams;
+export type AppServerThreadSetNameResponse = protocol.ThreadSetNameResponse;
 export type AppServerThreadSettingsUpdateParams =
   protocol.ThreadSettingsUpdateParams;
 export type AppServerThreadSettingsUpdateResponse =
@@ -170,26 +172,14 @@ export type AppServerThreadUnarchiveParams = protocol.ThreadUnarchiveParams;
 export type AppServerThreadUnarchiveResponse = protocol.ThreadUnarchiveResponse;
 export type AppServerAgentSessionToolInventoryReadResponse =
   protocol.AgentSessionToolInventoryReadResponse;
-export type AppServerAgentSessionUpdateParams =
-  protocol.AgentSessionUpdateParams;
-export type AppServerAgentSessionUpdateResponse =
-  protocol.AgentSessionUpdateResponse;
 export type AppServerThreadDeleteParams = protocol.ThreadDeleteParams;
 export type AppServerThreadDeleteResponse = protocol.ThreadDeleteResponse;
-export type AppServerAgentSessionCompactParams =
-  protocol.AgentSessionCompactParams;
-export type AppServerAgentSessionCompactResponse =
-  protocol.AgentSessionCompactResponse;
+export type AppServerThreadCompactStartParams =
+  protocol.ThreadCompactStartParams;
+export type AppServerThreadCompactStartResponse =
+  protocol.ThreadCompactStartResponse;
 export type AppServerThreadResumeParams = protocol.ThreadResumeParams;
 export type AppServerThreadResumeResponse = protocol.ThreadResumeResponse;
-export type AppServerAgentSessionQueuedTurnRemoveParams =
-  protocol.AgentSessionQueuedTurnRemoveParams;
-export type AppServerAgentSessionQueuedTurnRemoveResponse =
-  protocol.AgentSessionQueuedTurnRemoveResponse;
-export type AppServerAgentSessionQueuedTurnPromoteParams =
-  protocol.AgentSessionQueuedTurnPromoteParams;
-export type AppServerAgentSessionQueuedTurnPromoteResponse =
-  protocol.AgentSessionQueuedTurnPromoteResponse;
 export type AppServerAgentSessionFileCheckpointListParams =
   protocol.AgentSessionFileCheckpointListParams;
 export type AppServerAgentSessionFileCheckpointGetParams =

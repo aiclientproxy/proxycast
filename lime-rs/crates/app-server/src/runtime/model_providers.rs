@@ -1,5 +1,9 @@
 use super::{RuntimeCore, RuntimeCoreError};
+use app_server_protocol::protocol::v2::ModelProviderCapabilitiesReadResponse;
 use app_server_protocol::*;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
+use lime_core::models::model_registry::{EnhancedModelMetadata, ModelModality, ModelVisibility};
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -78,7 +82,18 @@ impl RuntimeCore {
         &self,
         params: ModelListParams,
     ) -> Result<ModelListResponse, RuntimeCoreError> {
-        self.app_data_source.list_models(params).await
+        model_list_from_catalogs(params, self.model_catalog(None).await?)
+    }
+
+    pub(crate) async fn model_catalog(
+        &self,
+        provider_id: Option<&str>,
+    ) -> Result<Vec<super::ProviderModelCatalog>, RuntimeCoreError> {
+        self.app_data_source
+            .model_catalog(super::ModelCatalogQuery {
+                provider_id: provider_id.map(str::to_string),
+            })
+            .await
     }
 
     pub async fn list_model_preferences(
@@ -97,6 +112,14 @@ impl RuntimeCore {
         &self,
     ) -> Result<ModelProviderListResponse, RuntimeCoreError> {
         self.app_data_source.list_model_providers().await
+    }
+
+    pub async fn read_model_provider_capabilities(
+        &self,
+    ) -> Result<ModelProviderCapabilitiesReadResponse, RuntimeCoreError> {
+        self.app_data_source
+            .read_model_provider_capabilities()
+            .await
     }
 
     pub async fn list_model_provider_catalog(
@@ -238,10 +261,323 @@ impl RuntimeCore {
     }
 }
 
+fn model_list_from_catalogs(
+    params: ModelListParams,
+    catalogs: Vec<super::ProviderModelCatalog>,
+) -> Result<ModelListResponse, RuntimeCoreError> {
+    let ModelListParams {
+        cursor,
+        limit,
+        include_hidden,
+    } = params;
+    let include_hidden = include_hidden.unwrap_or(false);
+    let models = catalogs
+        .into_iter()
+        .flat_map(|catalog| {
+            let provider_id = catalog.provider_id;
+            catalog
+                .models
+                .into_iter()
+                .filter(move |metadata| {
+                    include_hidden || metadata.visibility == ModelVisibility::List
+                })
+                .map(move |metadata| model_from_catalog(&provider_id, metadata))
+        })
+        .collect::<Vec<_>>();
+    let total = models.len();
+
+    if total == 0 {
+        return Ok(ModelListResponse {
+            data: Vec::new(),
+            next_cursor: None,
+        });
+    }
+
+    let effective_limit = limit.unwrap_or(total as u32).max(1) as usize;
+    let effective_limit = effective_limit.min(total);
+    let start = match cursor {
+        Some(cursor) => cursor
+            .parse::<usize>()
+            .map_err(|_| RuntimeCoreError::InvalidRequest(format!("invalid cursor: {cursor}")))?,
+        None => 0,
+    };
+    if start > total {
+        return Err(RuntimeCoreError::InvalidRequest(format!(
+            "cursor {start} exceeds total models {total}"
+        )));
+    }
+
+    let end = start.saturating_add(effective_limit).min(total);
+    let data = models[start..end].to_vec();
+    let next_cursor = (end < total).then(|| end.to_string());
+    Ok(ModelListResponse { data, next_cursor })
+}
+
+fn model_from_catalog(provider_id: &str, metadata: EnhancedModelMetadata) -> Model {
+    let provider_model_id = metadata
+        .provider_model_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .unwrap_or(metadata.id.as_str())
+        .to_string();
+    let reasoning = metadata.capabilities.reasoning_effort.as_ref();
+    let supported_reasoning_efforts = reasoning
+        .map(|support| {
+            if support.options.is_empty() {
+                support
+                    .levels
+                    .iter()
+                    .filter_map(|effort| non_empty(effort))
+                    .map(|effort| ReasoningEffortOption {
+                        reasoning_effort: effort.to_string(),
+                        description: effort.to_string(),
+                    })
+                    .collect()
+            } else {
+                support
+                    .options
+                    .iter()
+                    .filter_map(|option| {
+                        let effort = non_empty(&option.value)?;
+                        let description = option
+                            .description
+                            .as_deref()
+                            .and_then(non_empty)
+                            .or_else(|| non_empty(&option.label))
+                            .unwrap_or(effort);
+                        Some(ReasoningEffortOption {
+                            reasoning_effort: effort.to_string(),
+                            description: description.to_string(),
+                        })
+                    })
+                    .collect()
+            }
+        })
+        .unwrap_or_default();
+    let default_reasoning_effort = reasoning
+        .and_then(|support| support.default.as_deref())
+        .and_then(non_empty)
+        .or_else(|| {
+            reasoning.and_then(|support| {
+                support
+                    .options
+                    .iter()
+                    .find(|option| option.default)
+                    .and_then(|option| non_empty(&option.value))
+            })
+        })
+        .unwrap_or("none")
+        .to_string();
+    let mut input_modalities = metadata
+        .input_modalities
+        .iter()
+        .filter_map(|modality| match modality {
+            ModelModality::Text => Some(InputModality::Text),
+            ModelModality::Image => Some(InputModality::Image),
+            ModelModality::Audio => Some(InputModality::Audio),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if input_modalities.is_empty() {
+        input_modalities.push(InputModality::Text);
+    }
+    let service_tiers = metadata
+        .service_tiers
+        .iter()
+        .map(|tier| ModelServiceTier {
+            id: tier.id.clone(),
+            name: tier.name.clone(),
+            description: tier.description.clone(),
+        })
+        .collect::<Vec<_>>();
+    let default_service_tier = metadata
+        .default_service_tier
+        .filter(|default| service_tiers.iter().any(|tier| tier.id == *default));
+
+    Model {
+        id: encode_model_route_selector(provider_id, &metadata.id),
+        model: provider_model_id,
+        upgrade: None,
+        upgrade_info: None,
+        availability_nux: None,
+        display_name: metadata.display_name,
+        description: metadata.description.unwrap_or_default(),
+        hidden: metadata.visibility != ModelVisibility::List,
+        supported_reasoning_efforts,
+        default_reasoning_effort,
+        input_modalities,
+        supports_personality: false,
+        additional_speed_tiers: Vec::new(),
+        service_tiers,
+        default_service_tier,
+        is_default: false,
+    }
+}
+
+fn encode_model_route_selector(provider_id: &str, model_id: &str) -> String {
+    format!(
+        "route:{}.{}",
+        URL_SAFE_NO_PAD.encode(provider_id.as_bytes()),
+        URL_SAFE_NO_PAD.encode(model_id.as_bytes())
+    )
+}
+
+fn non_empty(value: &str) -> Option<&str> {
+    let value = value.trim();
+    (!value.is_empty()).then_some(value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
+
+    fn model(provider_id: &str, id: &str, visibility: ModelVisibility) -> EnhancedModelMetadata {
+        let mut model = EnhancedModelMetadata::new(
+            id.to_string(),
+            id.to_string(),
+            provider_id.to_string(),
+            provider_id.to_string(),
+        );
+        model.visibility = visibility;
+        model
+    }
+
+    fn catalog(
+        provider_id: &str,
+        sort_order: i32,
+        models: Vec<EnhancedModelMetadata>,
+    ) -> super::super::ProviderModelCatalog {
+        super::super::ProviderModelCatalog {
+            provider_id: provider_id.to_string(),
+            sort_order,
+            models,
+        }
+    }
+
+    #[test]
+    fn model_list_filters_hidden_models_by_default() {
+        let response = model_list_from_catalogs(
+            ModelListParams::default(),
+            vec![catalog(
+                "openai",
+                0,
+                vec![
+                    model("openai", "visible", ModelVisibility::List),
+                    model("openai", "hidden", ModelVisibility::Hide),
+                    model("openai", "disabled", ModelVisibility::None),
+                ],
+            )],
+        )
+        .expect("list visible models");
+
+        assert_eq!(
+            response
+                .data
+                .iter()
+                .map(|model| model.model.as_str())
+                .collect::<Vec<_>>(),
+            vec!["visible"]
+        );
+        assert!(!response.data[0].hidden);
+    }
+
+    #[test]
+    fn model_list_includes_and_marks_hidden_models_when_requested() {
+        let response = model_list_from_catalogs(
+            ModelListParams {
+                include_hidden: Some(true),
+                ..ModelListParams::default()
+            },
+            vec![catalog(
+                "openai",
+                0,
+                vec![
+                    model("openai", "visible", ModelVisibility::List),
+                    model("openai", "hidden", ModelVisibility::Hide),
+                    model("openai", "disabled", ModelVisibility::None),
+                ],
+            )],
+        )
+        .expect("list all models");
+
+        assert_eq!(response.data.len(), 3);
+        assert_eq!(
+            response
+                .data
+                .iter()
+                .map(|model| model.hidden)
+                .collect::<Vec<_>>(),
+            vec![false, true, true]
+        );
+    }
+
+    #[test]
+    fn model_list_uses_codex_offset_pagination_boundaries() {
+        let catalogs = vec![catalog(
+            "openai",
+            0,
+            vec![
+                model("openai", "first", ModelVisibility::List),
+                model("openai", "second", ModelVisibility::List),
+            ],
+        )];
+        let first_page = model_list_from_catalogs(
+            ModelListParams {
+                limit: Some(0),
+                ..ModelListParams::default()
+            },
+            catalogs.clone(),
+        )
+        .expect("zero limit is promoted to one");
+        let terminal_page = model_list_from_catalogs(
+            ModelListParams {
+                cursor: Some("2".to_string()),
+                limit: Some(1),
+                ..ModelListParams::default()
+            },
+            catalogs,
+        )
+        .expect("cursor at total is valid");
+
+        assert_eq!(first_page.data.len(), 1);
+        assert_eq!(first_page.next_cursor.as_deref(), Some("1"));
+        assert!(terminal_page.data.is_empty());
+        assert_eq!(terminal_page.next_cursor, None);
+    }
+
+    #[test]
+    fn model_list_preserves_provider_and_model_catalog_order() {
+        let response = model_list_from_catalogs(
+            ModelListParams::default(),
+            vec![
+                catalog(
+                    "provider-b",
+                    10,
+                    vec![
+                        model("provider-b", "b-2", ModelVisibility::List),
+                        model("provider-b", "b-1", ModelVisibility::List),
+                    ],
+                ),
+                catalog(
+                    "provider-a",
+                    20,
+                    vec![model("provider-a", "a-1", ModelVisibility::List)],
+                ),
+            ],
+        )
+        .expect("list ordered models");
+
+        assert_eq!(
+            response
+                .data
+                .iter()
+                .map(|model| model.model.as_str())
+                .collect::<Vec<_>>(),
+            vec!["b-2", "b-1", "a-1"]
+        );
+    }
 
     #[tokio::test]
     async fn recovery_coalesces_commits_visible_before_the_worker_runs() {

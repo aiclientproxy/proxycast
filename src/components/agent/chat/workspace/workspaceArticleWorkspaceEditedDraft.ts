@@ -1,4 +1,4 @@
-import type { AgentRuntimeUpdateSessionRequest } from "@/lib/api/agentRuntime/requestTypes";
+import type { AppServerArtifactWriteParams } from "@/lib/api/appServer";
 import type {
   WorkspaceArticleObject,
   WorkspaceArticleObjectRef,
@@ -152,26 +152,48 @@ export function readWorkspaceArticleEditedDraftFromUnknown(
   };
 }
 
-export function buildWorkspaceArticleEditedDraftUpdateRequest(
+export function buildWorkspaceArticleEditedDraftArtifactWriteParams(
   change: WorkspaceArticleMarkdownChange,
   editedDraft: WorkspaceArticleEditedDraft | null,
-): AgentRuntimeUpdateSessionRequest | null {
-  const sessionId = change.articleWorkspace.sessionId.trim();
-  if (!sessionId || !editedDraft) {
+  threadId: string | null | undefined,
+): AppServerArtifactWriteParams | null {
+  const normalizedThreadId = threadId?.trim();
+  if (!normalizedThreadId || !editedDraft) {
     return null;
   }
+  const workspacePatch = applyWorkspaceArticleEditedDraft(
+    change.articleWorkspace,
+    editedDraft,
+  );
+  if (!workspacePatch) {
+    return null;
+  }
+  const objectRef = articleObjectRefToUpdatePayload(change.object.ref);
+  const artifactRef =
+    change.object.ref.artifactIds?.find((value) => value.trim())?.trim() ||
+    editedDraft.objectKey;
   return {
-    session_id: sessionId,
-    article_workspace_selected_object_ref: articleObjectRefToUpdatePayload(
-      change.object.ref,
-    ),
-    article_workspace_edited_draft: {
-      objectKey: editedDraft.objectKey,
-      objectRef: articleObjectRefToUpdatePayload(change.object.ref),
-      markdown: editedDraft.markdown,
-      documentText: editedDraft.markdown,
-      finalMarkdown: editedDraft.markdown,
-      updatedAt: editedDraft.updatedAt,
+    threadId: normalizedThreadId,
+    ...(change.object.ref.sourceTurnId
+      ? { turnId: change.object.ref.sourceTurnId }
+      : {}),
+    artifact: {
+      artifactRef,
+      artifactDocumentId: change.object.ref.id,
+      title: change.object.title,
+      kind: "article_workspace_draft",
+      status: "draft",
+      content: editedDraft.markdown,
+      metadata: {
+        articleWorkspace: workspacePatch,
+        workspacePatch,
+        editedDraft: {
+          objectKey: editedDraft.objectKey,
+          objectRef,
+          markdown: editedDraft.markdown,
+          updatedAt: editedDraft.updatedAt,
+        },
+      },
     },
   };
 }

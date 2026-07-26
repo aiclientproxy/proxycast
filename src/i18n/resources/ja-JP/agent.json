@@ -1363,6 +1363,7 @@
   "agentChat.runtimeError.internalRuntime": "ランタイムが内部エラーを返しました。診断用の詳細は保持されています。しばらくしてから再試行するか、プロバイダーとツール接続を確認してください。",
   "agentChat.runtimeError.modelInputCapabilityGap": "現在のモデルは今回の入力メディア種別に対応していません。画像またはファイル入力に対応したモデルに切り替えてから送信してください。",
   "agentChat.runtimeError.modelSelectionRequired": "入力欄下部で利用可能なモデルを選択するか、プロバイダーへのサインインを完了してから送信してください。",
+  "agentChat.modelSettings.updateFailed": "モデル設定の更新に失敗しました：{{message}}",
   "agentChat.runtimeError.providerQuota": "現在のモデルチャネルが課金またはクォータ系のエラーを返しました。Provider/モデルチャネルの課金、クォータ、認可状態を確認するか、別の利用可能なモデルに切り替えてください。",
   "agentChat.runtimeError.providerUnavailable": "現在のモデルチャネルは一時的に利用できません。しばらくしてから再試行してください。失敗が続く場合は Provider の状態を確認するか、別の利用可能なモデルに切り替えてください。",
   "agentChat.runtime.failure.prefix": "実行に失敗しました：",

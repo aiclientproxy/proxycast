@@ -60,7 +60,7 @@ function appServerClientMock(): AppServerSessionRpcClient {
     readThread: vi
       .fn()
       .mockResolvedValue(rpcResult({ thread: canonicalThread() })),
-    updateSession: vi.fn().mockResolvedValue(rpcResult({})),
+    updateThreadSettings: vi.fn().mockResolvedValue(rpcResult({})),
     archiveThread: vi.fn().mockResolvedValue(rpcResult({})),
     unarchiveThread: vi
       .fn()
@@ -270,7 +270,6 @@ describe("appServerSessionClient", () => {
         },
       ],
       turns: [{ id: "turn-completed", status: "completed" }],
-      queued_turns: [{ queued_turn_id: "turn-queued", position: 0 }],
     });
 
     expect(appServerClient.readThread).toHaveBeenCalledWith({
@@ -509,30 +508,21 @@ describe("appServerSessionClient", () => {
     expect(appServerClient.readThread).not.toHaveBeenCalled();
   });
 
-  it("update 应通过 current session metadata 写入状态", async () => {
+  it("tool preferences 应通过 current thread/settings/update 写入", async () => {
     const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.request).mockResolvedValueOnce(
+      rpcResult({ data: [canonicalThread()] }),
+    );
     const client = createAppServerSessionClient({ appServerClient });
 
-    await expect(
-      client.updateAgentRuntimeSession({
-        session_id: " session-1 ",
-        name: "  新标题  ",
-        provider_selector: " custom-provider ",
-        model_name: " gpt-5.4 ",
-        execution_strategy: "react",
-        recent_access_mode: "full-access",
-        recent_preferences: { task: true },
-      }),
-    ).resolves.toBeUndefined();
+    await client.updateAgentRuntimeThreadToolPreferences(" session-1 ", {
+      task: true,
+      subagent: false,
+    });
 
-    expect(appServerClient.updateSession).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      title: "新标题",
-      providerSelector: "custom-provider",
-      modelName: "gpt-5.4",
-      executionStrategy: "react",
-      recentAccessMode: "full-access",
-      recentPreferences: { task: true },
+    expect(appServerClient.updateThreadSettings).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      toolPreferences: { task: true, subagent: false },
     });
   });
 

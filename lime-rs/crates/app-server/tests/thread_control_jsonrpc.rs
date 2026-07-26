@@ -2,9 +2,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use app_server::{
-    ActionRespondRequest, AppServer, CancelExecutionRequest, ExecutionBackend, ExecutionRequest,
-    MockBackend, ProjectionStore, RuntimeCore, RuntimeCoreError, RuntimeEvent, RuntimeEventSink,
-    RuntimeHostContext,
+    ActionRespondRequest, AppServer, CancelExecutionRequest, EventLogWriter, ExecutionBackend,
+    ExecutionRequest, MockBackend, ProjectionStore, RuntimeCore, RuntimeCoreError, RuntimeEvent,
+    RuntimeEventSink, RuntimeHostContext,
 };
 use app_server_protocol::protocol::v2::{
     METHOD_THREAD_MEMORY_MODE_SET, METHOD_THREAD_SETTINGS_UPDATE,
@@ -12,7 +12,8 @@ use app_server_protocol::protocol::v2::{
 use app_server_protocol::{
     error_codes, AgentInput, AgentSessionStartParams, AgentSessionTurnStartParams,
     BusinessObjectRef, METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_ITEMS_LIST,
-    METHOD_THREAD_READ, METHOD_THREAD_START, METHOD_THREAD_TURNS_LIST, PROTOCOL_VERSION,
+    METHOD_THREAD_READ, METHOD_THREAD_RESUME, METHOD_THREAD_START, METHOD_THREAD_TURNS_LIST,
+    METHOD_TURN_START, PROTOCOL_VERSION,
 };
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -92,6 +93,20 @@ async fn settings_update_preserves_the_active_turn_and_only_changes_subsequent_t
                 "providerSelector": "provider-a",
                 "providerName": "provider-a",
                 "modelName": "model-a",
+                "agentControlRoute": {
+                    "schemaVersion": 2,
+                    "providerPreference": "provider-a",
+                    "modelPreference": "model-a",
+                    "providerConfig": {
+                        "providerId": "provider-a",
+                        "providerName": "provider-a",
+                        "modelName": "model-a"
+                    },
+                    "routeProtocol": "openai_responses",
+                    "authKind": "api_key_ref",
+                    "credentialRef": "credential-a",
+                    "effectiveGeneration": 1
+                },
                 "workingDir": "/tmp/settings-a",
                 "approvalPolicy": "on-request",
                 "sandboxPolicy": "workspace-write",
@@ -121,6 +136,7 @@ async fn settings_update_preserves_the_active_turn_and_only_changes_subsequent_t
             serde_json::from_value(json!({
                 "threadId": "thread-settings-inheritance",
                 "model": "model-b",
+                "modelProvider": "provider-b",
                 "cwd": "/tmp/settings-b",
                 "approvalPolicy": "never",
                 "sandboxPolicy": "danger-full-access",
@@ -141,6 +157,7 @@ async fn settings_update_preserves_the_active_turn_and_only_changes_subsequent_t
         .await
         .expect("update active session settings");
     assert_eq!(settings.model, "model-b");
+    assert_eq!(settings.model_provider, "provider-b");
     assert!(
         !first_turn.is_finished(),
         "settings must not interrupt active turn"
@@ -156,6 +173,7 @@ async fn settings_update_preserves_the_active_turn_and_only_changes_subsequent_t
             .and_then(|options| options.runtime_request.as_ref())
             .expect("first runtime request");
         assert_eq!(first.model_preference.as_deref(), Some("model-a"));
+        assert_eq!(first.provider_preference.as_deref(), Some("provider-a"));
         assert_eq!(first.working_dir.as_deref(), Some("/tmp/settings-a"));
         assert_eq!(first.approval_policy.as_deref(), Some("on-request"));
         assert_eq!(first.sandbox_policy.as_deref(), Some("workspace-write"));
@@ -184,6 +202,7 @@ async fn settings_update_preserves_the_active_turn_and_only_changes_subsequent_t
         .and_then(|options| options.runtime_request.as_ref())
         .expect("second runtime request");
     assert_eq!(second.model_preference.as_deref(), Some("model-b"));
+    assert_eq!(second.provider_preference.as_deref(), Some("provider-b"));
     assert_eq!(second.working_dir.as_deref(), Some("/tmp/settings-b"));
     assert_eq!(second.approval_policy.as_deref(), Some("never"));
     assert_eq!(second.sandbox_policy.as_deref(), Some("danger-full-access"));
@@ -221,7 +240,19 @@ fn turn_params(turn_id: &str, text: &str) -> AgentSessionTurnStartParams {
 
 #[tokio::test]
 async fn settings_update_runs_through_the_actor_and_persists_without_items() {
-    let (_temp, store, server) = test_server();
+    let temp = TempDir::new().expect("thread settings persistence temp dir");
+    let store = Arc::new(
+        ProjectionStore::initialize(temp.path().join("projection.sqlite"))
+            .expect("thread settings projection store"),
+    );
+    let event_log_root = temp.path().join("event-log");
+    let server = AppServer::with_runtime(
+        RuntimeCore::with_backend(Arc::new(MockBackend))
+            .with_projection_store(Arc::clone(&store))
+            .with_event_log_writer(Arc::new(
+                EventLogWriter::new(&event_log_root).expect("thread settings event log"),
+            )),
+    );
     initialize_server(&server).await;
     let started = request(
         &server,
@@ -251,6 +282,7 @@ async fn settings_update_runs_through_the_actor_and_persists_without_items() {
             "threadId": thread_id,
             "cwd": "/tmp/thread-control-b",
             "model": "model-b",
+            "modelProvider": "provider-b",
             "serviceTier": null,
             "approvalPolicy": "never",
             "sandboxPolicy": "danger-full-access",
@@ -280,7 +312,7 @@ async fn settings_update_runs_through_the_actor_and_persists_without_items() {
     );
     assert_eq!(
         updated.pointer("/params/threadSettings/modelProvider"),
-        Some(&json!("provider-a"))
+        Some(&json!("provider-b"))
     );
     assert_eq!(
         updated.pointer("/params/threadSettings/cwd"),
@@ -313,8 +345,35 @@ async fn settings_update_runs_through_the_actor_and_persists_without_items() {
     .await;
     assert_eq!(items.pointer("/result/data"), Some(&json!([])));
 
+    let seed_turn = request(
+        &server,
+        40,
+        METHOD_TURN_START,
+        json!({
+            "threadId": thread_id,
+            "input": [{"type": "text", "text": "persist the switched route"}]
+        }),
+    )
+    .await;
+    let seed_turn_id = seed_turn
+        .pointer("/result/turn/id")
+        .and_then(Value::as_str)
+        .expect("seed turn id");
+    wait_for_terminal_turn(&server, &thread_id, seed_turn_id).await;
+
+    let restarted_backend = Arc::new(BlockingCaptureBackend {
+        requests: Mutex::new(Vec::new()),
+        starts: AtomicUsize::new(0),
+        first_started: Notify::new(),
+        release_first: Notify::new(),
+    });
+    restarted_backend.release_first.notify_one();
     let restarted = AppServer::with_runtime(
-        RuntimeCore::with_backend(Arc::new(MockBackend)).with_projection_store(store),
+        RuntimeCore::with_backend(restarted_backend.clone())
+            .with_projection_store(store)
+            .with_event_log_writer(Arc::new(
+                EventLogWriter::new(&event_log_root).expect("restarted thread settings event log"),
+            )),
     );
     initialize_server(&restarted).await;
     let read = request(
@@ -329,6 +388,14 @@ async fn settings_update_runs_through_the_actor_and_persists_without_items() {
         Some(&json!("model-b"))
     );
     assert_eq!(
+        read.pointer("/result/thread/extra/providerSelector"),
+        Some(&json!("provider-b"))
+    );
+    assert_eq!(
+        read.pointer("/result/thread/extra/providerName"),
+        Some(&json!("provider-b"))
+    );
+    assert_eq!(
         read.pointer("/result/thread/extra/workingDir"),
         Some(&json!("/tmp/thread-control-b"))
     );
@@ -341,6 +408,44 @@ async fn settings_update_runs_through_the_actor_and_persists_without_items() {
         Some(&json!("model-b"))
     );
     assert!(read.pointer("/result/thread/extra/serviceTier").is_none());
+
+    request(
+        &restarted,
+        6,
+        METHOD_THREAD_RESUME,
+        json!({"threadId": thread_id}),
+    )
+    .await;
+    request(
+        &restarted,
+        7,
+        METHOD_TURN_START,
+        json!({
+            "threadId": thread_id,
+            "input": [{"type": "text", "text": "use the persisted route"}]
+        }),
+    )
+    .await;
+    timeout(
+        Duration::from_secs(2),
+        restarted_backend.first_started.notified(),
+    )
+    .await
+    .expect("restarted turn must reach backend");
+    let requests = restarted_backend
+        .requests
+        .lock()
+        .expect("restarted requests mutex poisoned");
+    let runtime_request = requests[0]
+        .runtime_options
+        .as_ref()
+        .and_then(|options| options.runtime_request.as_ref())
+        .expect("restarted runtime request");
+    assert_eq!(
+        runtime_request.provider_preference.as_deref(),
+        Some("provider-b")
+    );
+    assert_eq!(runtime_request.model_preference.as_deref(), Some("model-b"));
 }
 
 #[tokio::test]
@@ -501,7 +606,7 @@ async fn thread_control_requests_fail_closed_before_actor_mutation() {
             3,
             METHOD_THREAD_SETTINGS_UPDATE,
             json!({"threadId": thread_id}),
-            error_codes::INVALID_PARAMS,
+            error_codes::INVALID_REQUEST,
         ),
         (
             4,
@@ -511,13 +616,29 @@ async fn thread_control_requests_fail_closed_before_actor_mutation() {
                 "sandboxPolicy": "workspace-write",
                 "permissions": "workspace"
             }),
-            error_codes::INVALID_PARAMS,
+            error_codes::INVALID_REQUEST,
         ),
         (
             5,
             METHOD_THREAD_SETTINGS_UPDATE,
             json!({"threadId": "missing-thread", "model": "model-b"}),
             error_codes::RUNTIME_ERROR,
+        ),
+        (
+            7,
+            METHOD_THREAD_SETTINGS_UPDATE,
+            json!({"threadId": thread_id, "modelProvider": "provider-b"}),
+            error_codes::INVALID_REQUEST,
+        ),
+        (
+            8,
+            METHOD_THREAD_SETTINGS_UPDATE,
+            json!({
+                "threadId": thread_id,
+                "model": "model-b",
+                "modelProvider": " "
+            }),
+            error_codes::INVALID_REQUEST,
         ),
         (
             6,
@@ -624,4 +745,36 @@ fn response_for(lines: &[Value], id: u64) -> &Value {
         .iter()
         .find(|value| value.get("id") == Some(&json!(id)))
         .expect("JSON-RPC response")
+}
+
+async fn wait_for_terminal_turn(server: &AppServer, thread_id: &str, turn_id: &str) {
+    timeout(Duration::from_secs(2), async {
+        loop {
+            let turns = request(
+                server,
+                90,
+                METHOD_THREAD_TURNS_LIST,
+                json!({"threadId": thread_id}),
+            )
+            .await;
+            let terminal = turns
+                .pointer("/result/data")
+                .and_then(Value::as_array)
+                .and_then(|turns| {
+                    turns
+                        .iter()
+                        .find(|turn| turn.pointer("/id").and_then(Value::as_str) == Some(turn_id))
+                })
+                .and_then(|turn| turn.pointer("/status").and_then(Value::as_str))
+                .is_some_and(|status| {
+                    matches!(status, "completed" | "failed" | "interrupted" | "canceled")
+                });
+            if terminal {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("turn {turn_id} did not become terminal"));
 }

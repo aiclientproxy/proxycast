@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "migrationMarkdown": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "model": {
+      "type": "string"
+    },
+    "modelLink": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "upgradeCopy": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "model"
+  ],
+  "title": "ModelUpgradeInfo",
+  "type": "object"
+}

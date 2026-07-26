@@ -21,9 +21,10 @@ const { mockCreateAgentRuntimeClient, mockRuntimeClient } = vi.hoisted(() => {
     resumeThread: vi.fn(),
     respondAgentRuntimeAction: vi.fn(),
     runUserShellCommand: vi.fn(),
+    setAgentRuntimeThreadName: vi.fn(),
     steerAgentRuntimeTurn: vi.fn(),
     submitAgentRuntimeTurn: vi.fn(),
-    updateAgentRuntimeSession: vi.fn(),
+    updateAgentRuntimeThreadSettings: vi.fn(),
   };
 
   return {
@@ -111,6 +112,26 @@ describe("defaultAgentRuntimeAdapter", () => {
     );
   });
 
+  it("renameSession 应只调用 current thread/setName", async () => {
+    const client = {
+      ...mockRuntimeClient,
+      getAgentRuntimeSession: vi.fn().mockResolvedValue({
+        id: "session-9",
+        thread_id: "thread-9",
+        messages: [],
+      }),
+      setAgentRuntimeThreadName: vi.fn().mockResolvedValue(undefined),
+    };
+    const adapter = createAgentRuntimeAdapter({ client });
+
+    await adapter.renameSession("session-9", "新标题");
+
+    expect(client.setAgentRuntimeThreadName).toHaveBeenCalledWith({
+      threadId: "thread-9",
+      name: "新标题",
+    });
+  });
+
   it("listSessions 应透传筛选参数给 runtime client", async () => {
     const client = {
       ...mockRuntimeClient,
@@ -144,14 +165,12 @@ describe("defaultAgentRuntimeAdapter", () => {
       }),
       getAgentRuntimeThreadRead: vi.fn().mockResolvedValue({
         thread_id: "thread-9",
-        queued_turns: [],
       }),
     };
     const adapter = createAgentRuntimeAdapter({ client });
 
     await expect(adapter.getSessionReadModel("session-9")).resolves.toEqual({
       thread_id: "thread-9",
-      queued_turns: [],
     });
     expect(client.getAgentRuntimeSession).toHaveBeenCalledWith("session-9");
     expect(client.getAgentRuntimeThreadRead).toHaveBeenCalledWith("thread-9");
@@ -384,7 +403,15 @@ describe("defaultAgentRuntimeAdapter", () => {
   it("updateSessionMetadata 应把多个会话元数据合并成一次更新", async () => {
     const client = {
       ...mockRuntimeClient,
-      updateAgentRuntimeSession: vi.fn().mockResolvedValue(undefined),
+      getAgentRuntimeSession: vi.fn().mockResolvedValue({
+        id: "session-9",
+        thread_id: "thread-9",
+        messages: [],
+      }),
+      updateAgentRuntimeThreadSettings: vi.fn().mockResolvedValue({
+        result: {},
+        notifications: [],
+      }),
     };
     const adapter = createAgentRuntimeAdapter({
       client,
@@ -397,13 +424,43 @@ describe("defaultAgentRuntimeAdapter", () => {
       executionStrategy: "react",
     });
 
-    expect(client.updateAgentRuntimeSession).toHaveBeenCalledTimes(1);
-    expect(client.updateAgentRuntimeSession).toHaveBeenCalledWith({
-      session_id: "session-9",
-      recent_access_mode: "full-access",
-      provider_selector: "openai",
-      model_name: "gpt-5.4-mini",
-      execution_strategy: "react",
+    expect(client.updateAgentRuntimeThreadSettings).toHaveBeenCalledTimes(1);
+    expect(client.updateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
+      threadId: "thread-9",
+      approvalPolicy: "never",
+      sandboxPolicy: "danger-full-access",
+      modelProvider: "openai",
+      model: "gpt-5.4-mini",
+    });
+  });
+
+  it("setSessionProviderSelection 应原子提交 model/provider/effort 到 current thread", async () => {
+    const client = {
+      ...mockRuntimeClient,
+      getAgentRuntimeSession: vi.fn().mockResolvedValue({
+        id: "session-9",
+        thread_id: "thread-9",
+        messages: [],
+      }),
+      updateAgentRuntimeThreadSettings: vi.fn().mockResolvedValue({
+        result: {},
+        notifications: [],
+      }),
+    };
+    const adapter = createAgentRuntimeAdapter({ client });
+
+    await adapter.setSessionProviderSelection(
+      "session-9",
+      "xai",
+      "grok-4.5",
+      "xhigh",
+    );
+
+    expect(client.updateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
+      threadId: "thread-9",
+      modelProvider: "xai",
+      model: "grok-4.5",
+      effort: "xhigh",
     });
   });
 });

@@ -7,6 +7,7 @@ pub mod message_content;
 pub mod model_context;
 pub mod openai;
 pub mod provider_trace;
+pub mod response_item;
 pub mod session_context;
 pub mod thread;
 pub mod turn_context;
@@ -266,11 +267,12 @@ pub struct RuntimeSnapshot {
 }
 
 pub use message_content::{MessageContentPart, MessageContentReference};
+pub use response_item::ResponseItem;
 pub use thread::{
     ApprovalAction, ApprovalDecision, ApprovalScope, CollabAgentOperation, CollabAgentState,
-    CollabAgentStatus, FileChange, FileChangeKind, FileChangeStatus, ItemKind, ItemStatus, PageCursor, PlanStep,
-    PlanStepStatus, SortDirection, SubAgentActivityKind, Thread, ThreadActiveFlag,
-    ThreadHistoryChange, ThreadHistoryChangeSet, ThreadItem, ThreadItemPayload,
+    CollabAgentStatus, FileChange, FileChangeKind, FileChangeStatus, ItemKind, ItemStatus,
+    PageCursor, PlanStep, PlanStepStatus, SortDirection, SubAgentActivityKind, Thread,
+    ThreadActiveFlag, ThreadHistoryChange, ThreadHistoryChangeSet, ThreadItem, ThreadItemPayload,
     ThreadItemsListParams, ThreadItemsListResponse, ThreadListParams, ThreadListResponse,
     ThreadStatus, ThreadTurnsListParams, ThreadTurnsListResponse, ThreadTurnsView, ToolArgument,
     ToolOutput, Turn, TurnAdmissionState, TurnApprovalState, TurnError, TurnItemsView,

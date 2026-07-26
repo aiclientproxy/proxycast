@@ -198,6 +198,8 @@ pub struct Thread {
     pub preview: String,
     pub ephemeral: bool,
     #[serde(default)]
+    pub is_pinned: bool,
+    #[serde(default)]
     pub history_mode: ThreadHistoryMode,
     pub model_provider: String,
     pub created_at: i64,
@@ -211,6 +213,11 @@ pub struct Thread {
     pub cwd: String,
     pub cli_version: String,
     pub source: String,
+    /// Whether this thread may accept direct input from an App Server client.
+    /// Spawned child threads are parent-owned and must be driven through the
+    /// canonical agent-control route instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub can_accept_direct_input: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thread_source: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

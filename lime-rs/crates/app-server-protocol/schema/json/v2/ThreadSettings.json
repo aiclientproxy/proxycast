@@ -80,7 +80,8 @@
         "string"
       ]
     },
-    "summary": true
+    "summary": true,
+    "toolPreferences": true
   },
   "required": [
     "approvalPolicy",

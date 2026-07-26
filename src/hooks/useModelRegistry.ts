@@ -15,6 +15,8 @@ import type {
 interface UseModelRegistryOptions {
   /** 自动加载 */
   autoLoad?: boolean;
+  /** 包含不在默认模型选择器中展示的目录项 */
+  includeHidden?: boolean;
   /** 过滤的 Provider ID 列表 */
   providerFilter?: string[];
   /** 过滤的服务等级 */
@@ -196,6 +198,7 @@ export function useModelRegistry(
 ): UseModelRegistryReturn {
   const {
     autoLoad = true,
+    includeHidden = false,
     providerFilter,
     tierFilter,
     favoritesOnly = false,
@@ -210,47 +213,52 @@ export function useModelRegistry(
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
 
   // 加载模型数据（带重试机制）
-  const loadModels = useCallback(async (forceRefresh = false) => {
-    setLoading(true);
-    setError(null);
+  const loadModels = useCallback(
+    async (forceRefresh = false) => {
+      setLoading(true);
+      setError(null);
 
-    const maxRetries = 5;
-    const retryDelay = 500; // 500ms
+      const maxRetries = 5;
+      const retryDelay = 500; // 500ms
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const [models, prefs, syncState] = await Promise.all([
-          modelRegistryApi.getModelRegistry(
-            forceRefresh ? { forceRefresh: true } : undefined,
-          ),
-          modelRegistryApi.getModelPreferences(),
-          modelRegistryApi.getModelSyncState(),
-        ]);
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const [models, prefs, syncState] = await Promise.all([
+            modelRegistryApi.getModelRegistry(
+              forceRefresh
+                ? { forceRefresh: true, includeHidden }
+                : { includeHidden },
+            ),
+            modelRegistryApi.getModelPreferences(),
+            modelRegistryApi.getModelSyncState(),
+          ]);
 
-        setAllModels(models);
-        setPreferences(new Map(prefs.map((p) => [p.model_id, p])));
-        setLastSyncAt(syncState.last_sync_at);
-        setLoading(false);
-        return; // 成功，退出
-      } catch (e) {
-        const errorMsg = e instanceof Error ? e.message : String(e);
+          setAllModels(models);
+          setPreferences(new Map(prefs.map((p) => [p.model_id, p])));
+          setLastSyncAt(syncState.last_sync_at);
+          setLoading(false);
+          return; // 成功，退出
+        } catch (e) {
+          const errorMsg = e instanceof Error ? e.message : String(e);
 
-        // 如果是"服务未初始化"错误，且还有重试次数，则等待后重试
-        if (errorMsg.includes("未初始化") && attempt < maxRetries - 1) {
-          console.log(
-            `[ModelRegistry] 服务未初始化，${retryDelay}ms 后重试 (${attempt + 1}/${maxRetries})`,
-          );
-          await new Promise((resolve) => setTimeout(resolve, retryDelay));
-          continue;
+          // 如果是"服务未初始化"错误，且还有重试次数，则等待后重试
+          if (errorMsg.includes("未初始化") && attempt < maxRetries - 1) {
+            console.log(
+              `[ModelRegistry] 服务未初始化，${retryDelay}ms 后重试 (${attempt + 1}/${maxRetries})`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, retryDelay));
+            continue;
+          }
+
+          // 其他错误或已达到最大重试次数
+          setError(errorMsg);
+          setLoading(false);
+          return;
         }
-
-        // 其他错误或已达到最大重试次数
-        setError(errorMsg);
-        setLoading(false);
-        return;
       }
-    }
-  }, []);
+    },
+    [includeHidden],
+  );
 
   // 刷新（强制从内嵌资源重新加载）
   const refresh = useCallback(async () => {

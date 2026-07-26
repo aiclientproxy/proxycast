@@ -74,14 +74,9 @@ pub(super) fn model_effective_event_from_runtime(
     let capability =
         model_capability::resolve_model_capability(model_ref, Some(capability_snapshot));
     let requested_reasoning_effort = requested_selection.reasoning_effort.as_deref();
-    let effective_reasoning_effort = provider_config
-        .reasoning_effort
-        .as_deref()
-        .or(selection.reasoning_effort.as_deref());
-    let reasoning_policy = model_capability::resolve_reasoning_policy(
-        &capability,
-        requested_reasoning_effort.and_then(model_capability::reasoning_level_from_str),
-    );
+    let reasoning_policy =
+        model_capability::resolve_reasoning_policy(&capability, requested_reasoning_effort);
+    let effective_reasoning_effort = reasoning_policy.effective_level.as_deref();
     let mut payload = model_capability::model_effective_payload(&capability, &reasoning_policy);
     if let Some(payload_object) = payload.as_object_mut() {
         payload_object.insert("provider".to_string(), json!(provider_id));

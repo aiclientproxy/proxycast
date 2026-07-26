@@ -81,6 +81,12 @@
         "string"
       ]
     },
+    "modelProvider": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
     "permissions": {
       "type": [
         "null",
@@ -98,7 +104,8 @@
     "summary": true,
     "threadId": {
       "type": "string"
-    }
+    },
+    "toolPreferences": true
   },
   "required": [
     "threadId"

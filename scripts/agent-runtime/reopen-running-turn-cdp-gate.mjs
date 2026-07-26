@@ -24,7 +24,7 @@ import {
   APP_SERVER_METHOD_SESSION_THREAD_RESUME,
   APP_SERVER_METHOD_SESSION_TURN_CANCEL,
   APP_SERVER_METHOD_SESSION_TURN_START,
-  APP_SERVER_METHOD_SESSION_UPDATE,
+  APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE,
   FIXTURE_MODEL,
   FIXTURE_PROVIDER,
   NEWS_PROMPT,
@@ -991,16 +991,14 @@ async function createFixtureSessionForSpec(page, workspace, requestLog, spec) {
   );
   const update = await invokeAppServerFromPage(
     page,
-    APP_SERVER_METHOD_SESSION_UPDATE,
+    APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE,
     {
-      sessionId: spec.sessionId,
-      title: spec.title,
-      providerSelector: FIXTURE_PROVIDER,
-      providerName: FIXTURE_PROVIDER,
-      modelName: FIXTURE_MODEL,
-      executionStrategy: "react",
-      recentAccessMode: "full-access",
-      recentPreferences: {
+      threadId: spec.threadId,
+      modelProvider: FIXTURE_PROVIDER,
+      model: FIXTURE_MODEL,
+      approvalPolicy: "never",
+      sandboxPolicy: "danger-full-access",
+      toolPreferences: {
         searchMode: "auto",
       },
     },

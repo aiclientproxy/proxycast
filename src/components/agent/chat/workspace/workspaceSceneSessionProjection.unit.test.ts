@@ -111,7 +111,6 @@ describe("resolveWorkspaceSceneSessionProjection", () => {
           status: "running",
           active_turn_id: "turn-running",
           pending_requests: [],
-          queued_turns: [],
           turns: [
             {
               turn_id: "turn-running",
@@ -134,12 +133,6 @@ describe("resolveWorkspaceSceneSessionProjection", () => {
           status: "running",
           active_turn_id: null,
           pending_requests: [],
-          queued_turns: [
-            {
-              turn_id: "turn-queued",
-              status: "queued",
-            },
-          ],
           turns: [
             {
               turn_id: "turn-completed",
@@ -165,7 +158,6 @@ describe("resolveWorkspaceSceneSessionProjection", () => {
           status: "running",
           active_turn_id: "turn-orphaned",
           pending_requests: [],
-          queued_turns: [],
           turns: [
             {
               turn_id: "turn-orphaned",

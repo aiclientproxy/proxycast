@@ -11,7 +11,7 @@ use agent_runtime::action_required::{
 use lime_core::database::DbConnection;
 use lime_mcp::{ElicitationRequestRouter, McpRuntimeServerSpec};
 pub(crate) use mcp_runtime::McpThreadRuntime;
-use model_provider::current_client::CurrentProviderError;
+use model_provider::current_client::{CurrentProviderError, CurrentProviderHealthRegistry};
 use model_provider::runtime_provider::RuntimeProviderConfig;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -25,6 +25,7 @@ pub struct AgentRuntimeState {
     initialized: Arc<AtomicBool>,
     cancel_tokens: Arc<RwLock<HashMap<String, CancellationToken>>>,
     credential_bridge: CredentialBridge,
+    provider_health: CurrentProviderHealthRegistry,
     providers: Arc<RwLock<HashMap<String, ConfiguredReplyProvider>>>,
     native_tool_definitions: Arc<RwLock<HashMap<String, RuntimeToolDefinition>>>,
     gateway_tools: RuntimeGatewayToolExecutionRegistry,
@@ -41,6 +42,7 @@ impl Clone for AgentRuntimeState {
             initialized: Arc::clone(&self.initialized),
             cancel_tokens: Arc::clone(&self.cancel_tokens),
             credential_bridge: CredentialBridge::new(),
+            provider_health: self.provider_health.clone(),
             providers: Arc::clone(&self.providers),
             native_tool_definitions: Arc::clone(&self.native_tool_definitions),
             gateway_tools: self.gateway_tools.clone(),
@@ -64,6 +66,7 @@ impl AgentRuntimeState {
             initialized: Arc::new(AtomicBool::new(false)),
             cancel_tokens: Arc::new(RwLock::new(HashMap::new())),
             credential_bridge: CredentialBridge::new(),
+            provider_health: CurrentProviderHealthRegistry::new(),
             providers: Arc::new(RwLock::new(HashMap::new())),
             native_tool_definitions: Arc::new(RwLock::new(HashMap::new())),
             gateway_tools: RuntimeGatewayToolExecutionRegistry::default(),
@@ -99,7 +102,7 @@ impl AgentRuntimeState {
                 return Ok(provider.clone());
             }
         }
-        let provider = create_configured_reply_provider(config)?;
+        let provider = create_configured_reply_provider(config, &self.provider_health)?;
         providers.insert(session_id.to_string(), provider.clone());
         Ok(provider)
     }
@@ -454,8 +457,14 @@ fn require_action_scope(
 #[cfg(test)]
 mod provider_session_tests {
     use super::AgentRuntimeState;
+    use model_provider::current_client::{
+        CurrentProviderContent, CurrentProviderMessage, CurrentProviderRequest,
+    };
     use model_provider::runtime_provider::{RuntimeProviderConfig, RuntimeProviderProtocol};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
 
     fn provider_config(model_name: &str) -> RuntimeProviderConfig {
         RuntimeProviderConfig {
@@ -466,6 +475,7 @@ mod provider_session_tests {
             base_url: Some("https://api.openai.com/v1".to_string()),
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: None,
+            service_tier: None,
             protocol: Some(RuntimeProviderProtocol::Responses),
             supports_websockets: true,
             toolshim: false,
@@ -513,5 +523,87 @@ mod provider_session_tests {
 
         assert!(!Arc::ptr_eq(&first.client(), &replacement.client()));
         assert_eq!(replacement.client().config().model_name, "gpt-5.5");
+    }
+
+    #[tokio::test]
+    async fn route_health_survives_session_route_switch_without_cross_route_blocking() {
+        let (base_url, requests, server) = spawn_health_fixture().await;
+        let state = AgentRuntimeState::new();
+        let mut route = provider_config("gpt-5.4");
+        route.base_url = Some(base_url);
+        route.protocol = Some(RuntimeProviderProtocol::ChatCompletions);
+        route.supports_websockets = false;
+
+        let first = state
+            .install_provider_for_session("session-a", &route)
+            .await
+            .expect("first provider");
+        for _ in 0..10 {
+            let error = match first.client().stream(text_request()).await {
+                Err(error) => error,
+                Ok(_) => panic!("transient route failure should be surfaced"),
+            };
+            assert!(error.message.contains("429"));
+        }
+
+        let mut alternate_route = route.clone();
+        alternate_route.model_name = "gpt-5.5".to_string();
+        let alternate = state
+            .install_provider_for_session("session-a", &alternate_route)
+            .await
+            .expect("alternate provider");
+        let alternate_stream = alternate
+            .client()
+            .stream(text_request())
+            .await
+            .expect("different model route must not inherit open circuit");
+        drop(alternate_stream);
+
+        let restored = state
+            .install_provider_for_session("session-a", &route)
+            .await
+            .expect("restored provider");
+        let error = match restored.client().stream(text_request()).await {
+            Err(error) => error,
+            Ok(_) => panic!("restored route must reuse its open health entry"),
+        };
+        assert!(error.message.contains("health circuit is open"));
+
+        server.await.expect("health fixture");
+        assert_eq!(requests.load(Ordering::SeqCst), 11);
+    }
+
+    fn text_request() -> CurrentProviderRequest {
+        CurrentProviderRequest::new(vec![CurrentProviderMessage::user(vec![
+            CurrentProviderContent::Text("health probe".to_string()),
+        ])])
+    }
+
+    async fn spawn_health_fixture() -> (String, Arc<AtomicUsize>, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind health fixture");
+        let address = listener.local_addr().expect("health fixture address");
+        let requests = Arc::new(AtomicUsize::new(0));
+        let request_count = Arc::clone(&requests);
+        let server = tokio::spawn(async move {
+            for index in 0..11 {
+                let (mut stream, _) = listener.accept().await.expect("accept health request");
+                request_count.fetch_add(1, Ordering::SeqCst);
+                let mut headers = [0_u8; 4096];
+                let _ = stream.read(&mut headers).await;
+                let response = if index < 10 {
+                    "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 4\r\n\r\nrate"
+                } else {
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: 0\r\n\r\n"
+                };
+                stream
+                    .write_all(response.as_bytes())
+                    .await
+                    .expect("write health response");
+                stream.shutdown().await.expect("close health response");
+            }
+        });
+        (format!("http://{address}"), requests, server)
     }
 }

@@ -23,10 +23,12 @@ use tool_runtime::agent_control::{
 
 use super::agent_control_gateway_support::{
     agent_control_path_matches, agent_control_status_from_turn, agent_control_turn_created_at_ms,
-    required_agent_control_id, resolve_agent_control_path, stable_agent_control_digest,
-    stable_agent_control_message_id, validate_agent_control_task_name, ROOT_AGENT_PATH,
+    required_agent_control_id, resolve_agent_control_path, stable_agent_control_message_id,
+    validate_agent_control_task_name, ROOT_AGENT_PATH,
 };
 
+mod spawn_runtime_options;
+pub(super) mod spawn_tool_options;
 mod wait;
 
 #[derive(Clone)]
@@ -99,6 +101,7 @@ impl RuntimeCore {
                 task_name,
                 message,
                 fork_mode,
+                model_overrides,
             } => {
                 let (output, target_thread_id, agent_path) = self
                     .execute_agent_control_spawn(
@@ -106,6 +109,7 @@ impl RuntimeCore {
                         task_name,
                         message,
                         fork_mode,
+                        model_overrides,
                         host,
                         child_runtime_options.clone(),
                     )
@@ -256,32 +260,25 @@ impl RuntimeCore {
         task_name: String,
         message: String,
         fork_mode: tool_runtime::agent_control::SpawnAgentForkMode,
+        model_overrides: tool_runtime::agent_control::SpawnAgentModelOverrides,
         host: &RuntimeHostContext,
         child_runtime_options: Option<RuntimeOptions>,
     ) -> Result<(serde_json::Value, ThreadId, String), RuntimeCoreError> {
         let task_name = validate_agent_control_task_name(task_name)?;
         let message = required_agent_control_id(message, "agent control message is required")?;
         let path = format!("{}/{}", caller.identity.agent_path, task_name);
-        let child_session_id = format!(
-            "agent-{}",
-            stable_agent_control_digest(&[
-                caller.identity.root_thread_id.as_str(),
-                caller.identity.thread_id.as_str(),
-                &caller.turn_id,
-                &caller.call_id,
-                "session",
-            ]),
-        );
-        let child_thread_id = format!(
-            "thread-{}",
-            stable_agent_control_digest(&[
-                caller.identity.root_thread_id.as_str(),
-                caller.identity.thread_id.as_str(),
-                &caller.turn_id,
-                &caller.call_id,
-                "thread",
-            ]),
-        );
+        let child_thread_id = uuid::Uuid::now_v7().to_string();
+        let child_session_id = child_thread_id.clone();
+        let child_runtime_options = spawn_runtime_options::prepare(
+            self,
+            &caller.session,
+            host,
+            &child_session_id,
+            &child_thread_id,
+            child_runtime_options,
+            &model_overrides,
+        )
+        .await?;
         let response = self
             .stage_agent_control_spawn_with_runtime_options(
                 AgentControlSpawnRequest {

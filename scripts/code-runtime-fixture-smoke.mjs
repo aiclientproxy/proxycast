@@ -39,7 +39,7 @@ const DEFAULT_INTERVAL_MS = 1_000;
 const LOG_PREFIX = "[smoke:code-runtime-fixture]";
 const APP_SERVER_HANDLE_JSON_LINES_COMMAND = "app_server_handle_json_lines";
 const APP_SERVER_METHOD_THREAD_START = "thread/start";
-const APP_SERVER_METHOD_AGENT_SESSION_UPDATE = "agentSession/update";
+const APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE = "thread/settings/update";
 const APP_SERVER_METHOD_TURN_START = "turn/start";
 const APP_SERVER_METHOD_THREAD_READ = "thread/read";
 const APP_SERVER_METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST =
@@ -674,16 +674,18 @@ async function runSmoke(options) {
     );
     const sessionId = sessionResult.result?.session?.sessionId;
     assertSmoke(sessionId, "thread/start 未返回 sessionId");
+    const threadId =
+      sessionResult.result?.session?.threadId ??
+      sessionResult.result?.thread?.id ??
+      sessionId;
 
     await invokeAppServer(
       options,
-      APP_SERVER_METHOD_AGENT_SESSION_UPDATE,
+      APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE,
       {
-        sessionId,
-        providerSelector: fixture.provider.providerPreference,
-        providerName: fixture.provider.providerName,
-        modelName: fixture.provider.modelPreference,
-        executionStrategy: "react",
+        threadId,
+        modelProvider: fixture.provider.providerPreference,
+        model: fixture.provider.modelPreference,
       },
       30_000,
     );

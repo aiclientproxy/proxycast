@@ -246,6 +246,7 @@ mod tests {
             base_url: Some(format!("http://{address}")),
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: None,
+            service_tier: None,
             protocol: Some(RuntimeProviderProtocol::Responses),
             supports_websockets: true,
             toolshim: false,

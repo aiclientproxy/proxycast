@@ -143,6 +143,7 @@ async fn resolve_builder_provider_configuration(
         &selection,
         &resolved_route,
         None,
+        None,
     );
     Ok((selection, provider_configuration))
 }

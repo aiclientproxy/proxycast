@@ -1363,6 +1363,7 @@
   "agentChat.runtimeError.internalRuntime": "The runtime returned an internal error. Details are preserved for diagnostics. Try again later, or check the provider and tool connection.",
   "agentChat.runtimeError.modelInputCapabilityGap": "The current model does not support this input media type. Switch to a model that supports image or file input, then send again.",
   "agentChat.runtimeError.modelSelectionRequired": "Choose an available model at the bottom of the input box, or finish provider sign-in before sending.",
+  "agentChat.modelSettings.updateFailed": "Failed to update model settings: {{message}}",
   "agentChat.runtimeError.providerQuota": "The current model channel returned a billing or quota error. Check the provider/model channel billing, quota, or authorization state, or switch to another available model.",
   "agentChat.runtimeError.providerUnavailable": "The current model channel is temporarily unavailable. Try again later; if it keeps failing, check the provider status or switch to another available model.",
   "agentChat.runtime.failure.prefix": "Execution failed: ",

@@ -2,9 +2,10 @@ import path from "node:path";
 
 export const ARCHIVED_LIFECYCLE_SCENARIO_ID = "archived-lifecycle-recovery";
 export const ARCHIVED_LIFECYCLE_REQUIRED_METHODS = [
+  "thread/archive",
+  "thread/unarchive",
   "thread/list",
   "thread/read",
-  "agentSession/update",
 ];
 
 const APP_SERVER_COMMAND = "app_server_handle_json_lines";

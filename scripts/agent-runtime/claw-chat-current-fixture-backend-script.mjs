@@ -36,11 +36,6 @@ import {
   IMAGE_COMMAND_PRESENTATION_INTRO,
   INPUTBAR_RICH_RESTORE_PROMPT,
   INPUTBAR_RICH_RESTORE_SCENARIO,
-  INPUTBAR_PENDING_STEER_ACTIVE_PROMPT,
-  INPUTBAR_PENDING_STEER_ACTIVE_OUTPUT_TEXT,
-  INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO,
-  INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO,
-  INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO,
   LIVE_TAIL_COMMIT_DONE_TEXT,
   LIVE_TAIL_COMMIT_FIRST_TEXT,
   LIVE_TAIL_COMMIT_OVERFLOW_MARKER,
@@ -245,7 +240,7 @@ export function writeFixtureBackend(backendPath, options = {}) {
     `${LIVE_TAIL_COMMIT_TABLE_TAIL}`,
     `${LIVE_TAIL_COMMIT_DONE_TEXT}`,
     "",
-  ].join("\\n");
+  ].join("\n");
   const skillsRuntimeBackendEvents = renderSkillsRuntimeBackendEvents(
     SKILLS_RUNTIME_SCENARIO,
   );
@@ -428,7 +423,6 @@ if (input.kind === "turnStart") {
   const isPlanPrompt = inputText.includes("${PLAN_PROMPT}");
   const isGoalPrompt = inputText.includes("${GOAL_PROMPT}");
   const isInputbarRichRestorePrompt = inputText.includes("${INPUTBAR_RICH_RESTORE_PROMPT}");
-  const isInputbarPendingSteerActivePrompt = inputText.includes("${INPUTBAR_PENDING_STEER_ACTIVE_PROMPT}");
   const isApprovalRequestResumePrompt = inputText.includes("${APPROVAL_REQUEST_RESUME_PROMPT}");
   const isApprovalRequestFullAccessPrompt = inputText.includes("${APPROVAL_REQUEST_FULL_ACCESS_PROMPT}");
   const isApprovalRequestResumeSecondPrompt = inputText.includes("${APPROVAL_REQUEST_RESUME_SECOND_PROMPT}");
@@ -618,8 +612,6 @@ ${renderApprovalRequestResumeTurnStartScript()}
         ? "我先给出计划，不会直接改代码：\\n"
           : isGoalPrompt
             ? "追求目标已进入当前回合：\\n"
-          : isInputbarPendingSteerActivePrompt
-              ? "${INPUTBAR_PENDING_STEER_ACTIVE_OUTPUT_TEXT}\\n"
             : isReasoningFirstVisiblePrompt
               ? ""
             : isLiveTailCommitPrompt
@@ -655,6 +647,29 @@ ${renderApprovalRequestResumeTurnStartScript()}
                             : "以下是今日国际新闻简要整理：\\n";
   const initialEvents = [
     ...approvalSessionCacheEvents(),
+    ...(isLiveTailCommitPrompt
+      ? [
+          {
+            type: "item.started",
+            payload: {
+              item: {
+                id: finalAnswerItemId,
+                item_id: finalAnswerItemId,
+                itemId: finalAnswerItemId,
+                thread_id: currentThreadId(),
+                threadId: currentThreadId(),
+                turn_id: currentTurnId(),
+                turnId: currentTurnId(),
+                type: "agentMessage",
+                kind: "agentMessage",
+                role: "assistant",
+                status: "inProgress",
+                phase: "final"
+              }
+            }
+          }
+        ]
+      : []),
     {
       type: "provider.request.started",
       payload: providerTracePayload("request_started", 0, "running")
@@ -723,12 +738,6 @@ ${renderApprovalRequestResumeTurnStartScript()}
       !isContinuePrompt) ||
     (process.env.CLAW_CHAT_FIXTURE_SCENARIO === "${INPUTBAR_RICH_RESTORE_SCENARIO}" &&
       isInputbarRichRestorePrompt) ||
-    (process.env.CLAW_CHAT_FIXTURE_SCENARIO === "${INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO}" &&
-      isInputbarPendingSteerActivePrompt) ||
-    (process.env.CLAW_CHAT_FIXTURE_SCENARIO === "${INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO}" &&
-      isInputbarPendingSteerActivePrompt) ||
-    (process.env.CLAW_CHAT_FIXTURE_SCENARIO === "${INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO}" &&
-      isInputbarPendingSteerActivePrompt) ||
     (process.env.CLAW_CHAT_FIXTURE_SCENARIO === "${TERMINAL_CANCELED_AFTER_ANSWER_SCENARIO}" &&
       isTerminalCanceledAfterAnswerPrompt);
   if (shouldWaitForCancel) {
@@ -922,20 +931,31 @@ ${renderApprovalRequestResumeTurnStartScript()}
   }
   if (isLiveTailCommitPrompt) {
     await sleep(1400);
-    appendLedgerEntry({
-      kind: "liveTailCommitCompleted",
-      sessionId: input.request?.session?.sessionId,
-      turnId: currentTurnId(),
-      firstText: "${LIVE_TAIL_COMMIT_FIRST_TEXT}",
-      overflowMarker: "${LIVE_TAIL_COMMIT_OVERFLOW_MARKER}",
-      tableHeader: "${LIVE_TAIL_COMMIT_TABLE_HEADER}",
-      tableTail: "${LIVE_TAIL_COMMIT_TABLE_TAIL}",
-      eventType: "turn.completed"
-    });
+    const completedMessageText = (initialMessageText + followupText).trim();
+    const completedAt = new Date().toISOString();
+    const repairEventTypes = ["item.completed", "turn.completed"];
     emitEvents([
       {
-        type: "message.delta",
-        payload: messageDeltaPayload(followupText, "final_answer", finalAnswerItemId)
+        type: "item.completed",
+        payload: {
+          item: {
+            id: finalAnswerItemId,
+            item_id: finalAnswerItemId,
+            itemId: finalAnswerItemId,
+            thread_id: currentThreadId(),
+            threadId: currentThreadId(),
+            turn_id: currentTurnId(),
+            turnId: currentTurnId(),
+            type: "agentMessage",
+            kind: "agentMessage",
+            role: "assistant",
+            status: "completed",
+            text: completedMessageText,
+            phase: "final",
+            completed_at: completedAt,
+            completedAt
+          }
+        }
       },
       {
         type: "turn.completed",
@@ -945,6 +965,26 @@ ${renderApprovalRequestResumeTurnStartScript()}
         }
       }
     ]);
+    appendLedgerEntry({
+      kind: "liveTailCommitCompleted",
+      sessionId: input.request?.session?.sessionId,
+      threadId: currentThreadId(),
+      turnId: currentTurnId(),
+      itemId: finalAnswerItemId,
+      firstText: "${LIVE_TAIL_COMMIT_FIRST_TEXT}",
+      overflowMarker: "${LIVE_TAIL_COMMIT_OVERFLOW_MARKER}",
+      tableHeader: "${LIVE_TAIL_COMMIT_TABLE_HEADER}",
+      tableTail: "${LIVE_TAIL_COMMIT_TABLE_TAIL}",
+      droppedEventType: "message.delta",
+      repairEventType: repairEventTypes[0],
+      terminalEventType: repairEventTypes[1],
+      eventType: "turn.completed",
+      emittedEventTypes: repairEventTypes,
+      completedTextLength: completedMessageText.length,
+      completedTextSha256: createHash("sha256")
+        .update(completedMessageText)
+        .digest("hex")
+    });
     process.exit(0);
   }
   if (isMediaReferencePrompt) {

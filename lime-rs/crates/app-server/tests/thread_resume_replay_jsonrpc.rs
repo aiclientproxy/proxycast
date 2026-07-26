@@ -7,8 +7,9 @@ use app_server::{
     RuntimeEvent, RuntimeEventSink,
 };
 use app_server_protocol::protocol::v2::{
-    METHOD_THREAD_GOAL_SET, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_TOKEN_USAGE_UPDATED,
-    METHOD_TURN_COMPLETED, METHOD_TURN_STARTED,
+    METHOD_THREAD_FORK, METHOD_THREAD_GOAL_CLEAR, METHOD_THREAD_GOAL_CLEARED,
+    METHOD_THREAD_GOAL_SET, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_STARTED,
+    METHOD_THREAD_TOKEN_USAGE_UPDATED, METHOD_TURN_COMPLETED, METHOD_TURN_STARTED,
 };
 use app_server_protocol::{
     METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ, METHOD_THREAD_RESUME,
@@ -73,6 +74,330 @@ impl ExecutionBackend for UsageHistoryBackend {
 struct BlockingContinuationBackend {
     started: Arc<Notify>,
     release: Arc<Notify>,
+}
+
+#[tokio::test]
+async fn fork_orders_restored_usage_before_started_and_replays_it_after_restart() {
+    let temp = TempDir::new().expect("fork usage replay temp dir");
+    let projection_path = temp.path().join("projection.sqlite");
+    let event_log_root = temp.path().join("event-log");
+    let completed = Arc::new(Notify::new());
+    let runtime = || {
+        RuntimeCore::with_backend(Arc::new(UsageHistoryBackend {
+            completed: Arc::clone(&completed),
+        }))
+        .with_projection_store(Arc::new(
+            ProjectionStore::initialize(&projection_path).expect("fork usage projection store"),
+        ))
+        .with_event_log_writer(Arc::new(
+            EventLogWriter::new(&event_log_root).expect("fork usage event log"),
+        ))
+    };
+
+    let server = AppServer::with_runtime(runtime());
+    let (mut input_client, input_server) = tokio::io::duplex(32 * 1024);
+    let (output_server, output_client) = tokio::io::duplex(32 * 1024);
+    let runner = tokio::spawn(run_json_lines(server, input_server, output_server));
+    let mut output_lines = BufReader::new(output_client).lines();
+    initialize_jsonl(&mut input_client, &mut output_lines, 20).await;
+
+    write_message(
+        &mut input_client,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 21,
+            "method": METHOD_THREAD_START,
+            "params": {
+                "model": "fixture-model",
+                "modelProvider": "fixture-provider",
+                "cwd": temp.path()
+            }
+        }),
+    )
+    .await;
+    let started = read_response(&mut output_lines, 21).await;
+    let source_thread_id = required_string(&started, "/result/thread/id", "source thread id");
+
+    write_message(
+        &mut input_client,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 22,
+            "method": METHOD_TURN_START,
+            "params": {
+                "threadId": source_thread_id,
+                "input": [{"type": "text", "text": "persist usage before fork"}],
+                "model": "fixture-model",
+                "approvalPolicy": "never",
+                "sandboxPolicy": "workspace-write"
+            }
+        }),
+    )
+    .await;
+    let turn = read_response(&mut output_lines, 22).await;
+    let source_turn_id = required_string(&turn, "/result/turn/id", "source turn id");
+    timeout(Duration::from_secs(2), completed.notified())
+        .await
+        .expect("source usage turn must complete");
+    read_turn_notification(&mut output_lines, METHOD_TURN_COMPLETED, &source_turn_id).await;
+
+    write_message(
+        &mut input_client,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 23,
+            "method": METHOD_THREAD_GOAL_SET,
+            "params": {
+                "threadId": source_thread_id,
+                "objective": "preserve the paused fork goal",
+                "status": "paused",
+                "tokenBudget": 500
+            }
+        }),
+    )
+    .await;
+    let goal_response = read_response(&mut output_lines, 23).await;
+    let source_goal = goal_response
+        .pointer("/result/goal")
+        .cloned()
+        .expect("source goal snapshot");
+    let goal_notification = next_message(&mut output_lines).await;
+    assert_eq!(
+        goal_notification.get("method"),
+        Some(&json!(METHOD_THREAD_GOAL_UPDATED))
+    );
+    assert_eq!(
+        goal_notification.pointer("/params/goal"),
+        Some(&source_goal)
+    );
+
+    write_message(
+        &mut input_client,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 24,
+            "method": METHOD_THREAD_FORK,
+            "params": {
+                "threadId": source_thread_id,
+                "deferGoalContinuation": true
+            }
+        }),
+    )
+    .await;
+    let mut response_seen = false;
+    let mut usage_seen = false;
+    let mut started_thread_id = None;
+    let fork_thread_id = timeout(Duration::from_secs(2), async {
+        loop {
+            let message = next_message(&mut output_lines).await;
+            if message.get("id") == Some(&json!(24)) {
+                assert!(!response_seen, "fork response must be unique");
+                assert!(!usage_seen, "fork response must lead restored usage");
+                response_seen = true;
+                continue;
+            }
+            match message.get("method").and_then(Value::as_str) {
+                Some(METHOD_THREAD_TOKEN_USAGE_UPDATED) => {
+                    assert!(response_seen, "fork response must precede restored usage");
+                    assert!(!usage_seen, "restored usage must be unique");
+                    assert_eq!(
+                        message.pointer("/params/turnId"),
+                        Some(&json!(source_turn_id))
+                    );
+                    assert_eq!(
+                        message.pointer("/params/tokenUsage/total/inputTokens"),
+                        Some(&json!(120))
+                    );
+                    assert_eq!(
+                        message.pointer("/params/tokenUsage/modelContextWindow"),
+                        Some(&json!(128_000))
+                    );
+                    usage_seen = true;
+                }
+                Some(METHOD_THREAD_STARTED) => {
+                    assert!(usage_seen, "thread/started must follow restored usage");
+                    assert_eq!(message.pointer("/params/thread/turns"), Some(&json!([])));
+                    started_thread_id = Some(required_string(
+                        &message,
+                        "/params/thread/id",
+                        "forked thread id",
+                    ));
+                }
+                Some(METHOD_THREAD_GOAL_UPDATED) => {
+                    let target_thread_id =
+                        required_string(&message, "/params/threadId", "inherited goal thread id");
+                    assert_eq!(
+                        started_thread_id.as_deref(),
+                        Some(target_thread_id.as_str()),
+                        "inherited goal must follow thread/started for the same thread"
+                    );
+                    assert_eq!(message.pointer("/params/turnId"), Some(&Value::Null));
+                    let mut expected_goal = source_goal.clone();
+                    expected_goal
+                        .as_object_mut()
+                        .expect("source goal object")
+                        .insert("threadId".to_string(), json!(target_thread_id));
+                    assert_eq!(message.pointer("/params/goal"), Some(&expected_goal));
+                    break target_thread_id;
+                }
+                _ => {}
+            }
+        }
+    })
+    .await
+    .expect("fork response and notifications timeout");
+
+    write_message(
+        &mut input_client,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 25,
+            "method": METHOD_THREAD_GOAL_CLEAR,
+            "params": {"threadId": source_thread_id}
+        }),
+    )
+    .await;
+    let cleared = read_response(&mut output_lines, 25).await;
+    assert_eq!(cleared.pointer("/result/cleared"), Some(&json!(true)));
+    let cleared_notification = next_message(&mut output_lines).await;
+    assert_eq!(
+        cleared_notification.get("method"),
+        Some(&json!(METHOD_THREAD_GOAL_CLEARED))
+    );
+
+    write_message(
+        &mut input_client,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 26,
+            "method": METHOD_THREAD_FORK,
+            "params": {
+                "threadId": source_thread_id,
+                "excludeTurns": true,
+                "deferGoalContinuation": true
+            }
+        }),
+    )
+    .await;
+    let mut response_seen = false;
+    let excluded_thread_id = timeout(Duration::from_secs(2), async {
+        loop {
+            let message = next_message(&mut output_lines).await;
+            if message.get("id") == Some(&json!(26)) {
+                assert_eq!(message.pointer("/result/thread/turns"), Some(&json!([])));
+                response_seen = true;
+                continue;
+            }
+            assert_ne!(
+                message.get("method"),
+                Some(&json!(METHOD_THREAD_TOKEN_USAGE_UPDATED)),
+                "excludeTurns=true must skip restored usage notification"
+            );
+            if message.get("method") == Some(&json!(METHOD_THREAD_STARTED)) {
+                assert!(
+                    response_seen,
+                    "excluded fork response must lead thread/started"
+                );
+                assert_eq!(message.pointer("/params/thread/turns"), Some(&json!([])));
+                break required_string(&message, "/params/thread/id", "excluded fork thread id");
+            }
+        }
+    })
+    .await
+    .expect("excludeTurns fork response and thread/started timeout");
+
+    write_message(
+        &mut input_client,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 27,
+            "method": METHOD_THREAD_READ,
+            "params": {"threadId": excluded_thread_id, "includeTurns": true}
+        }),
+    )
+    .await;
+    loop {
+        let message = next_message(&mut output_lines).await;
+        assert_ne!(
+            message.get("method"),
+            Some(&json!(METHOD_THREAD_TOKEN_USAGE_UPDATED)),
+            "excludeTurns=true must not emit restored usage"
+        );
+        assert_ne!(
+            message.get("method"),
+            Some(&json!(METHOD_THREAD_GOAL_UPDATED)),
+            "fork without an inherited goal must not emit goal/updated"
+        );
+        assert_ne!(
+            message.get("method"),
+            Some(&json!(METHOD_THREAD_GOAL_CLEARED)),
+            "fork without an inherited goal must not emit goal/cleared"
+        );
+        if message.get("id") == Some(&json!(27)) {
+            break;
+        }
+    }
+
+    drop(input_client);
+    timeout(Duration::from_secs(2), runner)
+        .await
+        .expect("initial JSONL runner should stop")
+        .expect("initial JSONL runner task")
+        .expect("initial JSONL runner result");
+
+    let restarted = AppServer::with_runtime(runtime());
+    let (mut input_client, input_server) = tokio::io::duplex(32 * 1024);
+    let (output_server, output_client) = tokio::io::duplex(32 * 1024);
+    let runner = tokio::spawn(run_json_lines(restarted, input_server, output_server));
+    let mut output_lines = BufReader::new(output_client).lines();
+    initialize_jsonl(&mut input_client, &mut output_lines, 30).await;
+    write_message(
+        &mut input_client,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 31,
+            "method": METHOD_THREAD_RESUME,
+            "params": {"threadId": fork_thread_id}
+        }),
+    )
+    .await;
+
+    let mut response_seen = false;
+    timeout(Duration::from_secs(2), async {
+        loop {
+            let message = next_message(&mut output_lines).await;
+            assert_ne!(
+                message.get("method"),
+                Some(&json!(METHOD_THREAD_STARTED)),
+                "thread/resume must not emit thread/started"
+            );
+            if message.get("id") == Some(&json!(31)) {
+                response_seen = true;
+                continue;
+            }
+            if message.get("method") == Some(&json!(METHOD_THREAD_TOKEN_USAGE_UPDATED)) {
+                assert!(response_seen, "resume response must precede restored usage");
+                assert_eq!(
+                    message.pointer("/params/threadId"),
+                    Some(&json!(fork_thread_id))
+                );
+                assert_eq!(
+                    message.pointer("/params/turnId"),
+                    Some(&json!(source_turn_id))
+                );
+                break;
+            }
+        }
+    })
+    .await
+    .expect("fork usage cold replay timeout");
+
+    drop(input_client);
+    timeout(Duration::from_secs(2), runner)
+        .await
+        .expect("restarted JSONL runner should stop")
+        .expect("restarted JSONL runner task")
+        .expect("restarted JSONL runner result");
 }
 
 #[async_trait]

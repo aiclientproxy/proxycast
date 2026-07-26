@@ -10,6 +10,7 @@ import type { OemCloudRuntimeContext } from "@/lib/api/oemCloudRuntime";
 function createApiKeyProvider(
   overrides: Partial<ProviderWithKeysDisplay> = {},
 ): ProviderWithKeysDisplay {
+  const apiKeyCount = overrides.api_key_count ?? 0;
   return {
     id: "openai",
     name: "OpenAI",
@@ -21,8 +22,21 @@ function createApiKeyProvider(
     sort_order: 0,
     custom_models: [],
     prompt_cache_mode: null,
-    api_key_count: 0,
-    api_keys: [],
+    api_key_count: apiKeyCount,
+    api_keys:
+      apiKeyCount > 0
+        ? [
+            {
+              id: "key-1",
+              provider_id: overrides.id ?? "openai",
+              api_key_masked: "sk-***",
+              enabled: true,
+              usage_count: 0,
+              error_count: 0,
+              created_at: "2026-04-01T00:00:00Z",
+            },
+          ]
+        : [],
     created_at: "2026-04-01T00:00:00Z",
     updated_at: "2026-04-01T00:00:00Z",
     ...overrides,
@@ -81,6 +95,28 @@ describe("buildConfiguredProviders", () => {
         name: "OpenAI",
         type: "openai",
         api_key_count: 0,
+      }),
+    ]);
+
+    expect(providers).toEqual([]);
+  });
+
+  it("API Key 计数非零但所有 Key 已禁用时不应展示", () => {
+    const providers = buildConfiguredProviders([
+      createApiKeyProvider({
+        id: "openai-disabled",
+        api_key_count: 1,
+        api_keys: [
+          {
+            id: "key-disabled",
+            provider_id: "openai-disabled",
+            api_key_masked: "sk-***",
+            enabled: false,
+            usage_count: 0,
+            error_count: 0,
+            created_at: "2026-04-01T00:00:00Z",
+          },
+        ],
       }),
     ]);
 

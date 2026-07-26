@@ -138,7 +138,6 @@ describe("agentSessionState WebTools hydrate", () => {
           updated_at: "2026-06-20T10:00:04.000Z",
         } as Partial<AgentThreadItem>),
       ],
-      queued_turns: [],
     } satisfies AgentSessionDetail;
 
     const result = buildHydratedAgentSessionSnapshot({
@@ -344,7 +343,6 @@ describe("agentSessionState WebTools hydrate", () => {
           updated_at: "2026-06-20T13:00:04.000Z",
         } as Partial<AgentThreadItem>),
       ],
-      queued_turns: [],
     } satisfies AgentSessionDetail;
 
     const result = buildHydratedAgentSessionSnapshot({

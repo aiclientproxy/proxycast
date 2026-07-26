@@ -233,7 +233,7 @@ describe("DeepSWE current-chain adapter", () => {
         modelPreference: "model-1",
         source: "test",
       }),
-      updateSession: async () => {},
+      updateThreadSettings: async () => {},
       startTurn: async (_options, params) => {
         turnStartParams = params;
       },
@@ -445,7 +445,7 @@ describe("DeepSWE current-chain adapter", () => {
         modelPreference: "model-1",
         source: "test",
       }),
-      updateSession: async () => {},
+      updateThreadSettings: async () => {},
       startTurn: async (_options, params) => {
         turnStartParams = params;
         throw new Error("Provider tool call omitted tool name");
@@ -548,7 +548,7 @@ describe("DeepSWE current-chain adapter", () => {
         modelPreference: "model-1",
         source: "test",
       }),
-      updateSession: async () => {},
+      updateThreadSettings: async () => {},
       startTurn: async () => {},
       cancelTurn: async () => {
         canceled = true;
@@ -646,7 +646,7 @@ describe("DeepSWE current-chain adapter", () => {
         modelPreference: "model-1",
         source: "test",
       }),
-      updateSession: async () => {},
+      updateThreadSettings: async () => {},
       startTurn: async () => {},
       cancelTurn: async () => {
         canceled = true;
@@ -757,7 +757,7 @@ describe("DeepSWE current-chain adapter", () => {
         modelPreference: "model-1",
         source: "test",
       }),
-      updateSession: async () => {},
+      updateThreadSettings: async () => {},
       startTurn: async () => {},
       cancelTurn: async () => {
         canceled = true;
@@ -834,7 +834,7 @@ describe("DeepSWE current-chain adapter", () => {
         modelPreference: "model-1",
         source: "test",
       }),
-      updateSession: async () => {},
+      updateThreadSettings: async () => {},
       startTurn: async () => {},
       cancelTurn: async () => {
         canceled = true;

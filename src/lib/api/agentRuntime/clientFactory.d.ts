@@ -85,8 +85,19 @@ export declare function createAgentRuntimeClient({
   ) => Promise<import("./sessionTypes").AgentSessionInfo[]>;
   archiveAgentRuntimeSession: (sessionId: string) => Promise<void>;
   unarchiveAgentRuntimeSession: (sessionId: string) => Promise<void>;
-  updateAgentRuntimeSession: (
-    request: import("./requestTypes").AgentRuntimeUpdateSessionRequest,
+  updateAgentRuntimeThreadToolPreferences: (
+    sessionId: string,
+    preferences: import("../agentExecutionRuntime").AgentSessionExecutionRuntimePreferences,
+  ) => Promise<void>;
+  updateAgentRuntimeThreadSettings: (
+    request: import("../appServer").AppServerThreadSettingsUpdateParams,
+  ) => Promise<
+    import("@limecloud/app-server-client").AppServerRequestResult<
+      import("../appServer").AppServerThreadSettingsUpdateResponse
+    >
+  >;
+  setAgentRuntimeThreadName: (
+    request: import("@limecloud/app-server-client").ThreadSetNameParams,
   ) => Promise<void>;
   getAgentRuntimeToolInventory: (
     request?: import("./toolInventoryTypes").AgentRuntimeToolInventoryRequest,

@@ -1,0 +1,50 @@
+{
+  "$defs": {
+    "ThreadSearchTextRange": {
+      "properties": {
+        "end": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "end",
+        "start"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "itemId": {
+      "type": "string"
+    },
+    "snippet": {
+      "type": "string"
+    },
+    "snippetMatchRange": {
+      "$ref": "#/$defs/ThreadSearchTextRange"
+    },
+    "turnCursor": {
+      "type": "string"
+    },
+    "turnId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "itemId",
+    "snippet",
+    "snippetMatchRange",
+    "turnCursor",
+    "turnId"
+  ],
+  "title": "ThreadSearchOccurrence",
+  "type": "object"
+}

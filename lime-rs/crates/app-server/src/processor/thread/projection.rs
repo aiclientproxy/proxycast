@@ -52,6 +52,41 @@ pub(super) fn lower_thread_list_params(
     })
 }
 
+pub(super) fn lower_thread_search_params(
+    params: &v2::ThreadSearchParams,
+) -> Result<thread_store::SearchThreadsParams, JsonRpcError> {
+    let cursor = params
+        .cursor
+        .clone()
+        .map(thread_store::StoreCursor::new)
+        .transpose()
+        .map_err(invalid_params)?;
+    let source_kinds = match params.source_kinds.as_deref() {
+        None | Some([]) => vec![
+            thread_store::ThreadSearchSourceKind::Cli,
+            thread_store::ThreadSearchSourceKind::VsCode,
+        ],
+        Some(source_kinds) => source_kinds
+            .iter()
+            .copied()
+            .map(lower_thread_search_source_kind)
+            .collect(),
+    };
+    Ok(thread_store::SearchThreadsParams {
+        cursor,
+        page_size: params.limit.unwrap_or(25).clamp(1, 100) as usize,
+        sort_key: match params.sort_key.unwrap_or(v2::ThreadSortKey::CreatedAt) {
+            v2::ThreadSortKey::CreatedAt => thread_store::ThreadSearchSortKey::CreatedAt,
+            v2::ThreadSortKey::UpdatedAt => thread_store::ThreadSearchSortKey::UpdatedAt,
+            v2::ThreadSortKey::RecencyAt => thread_store::ThreadSearchSortKey::RecencyAt,
+        },
+        sort_direction: lower_sort_direction(params.sort_direction),
+        source_kinds,
+        archived: params.archived.unwrap_or(false),
+        search_term: params.search_term.trim().to_string(),
+    })
+}
+
 pub(super) fn lower_thread_turns_list_params(
     params: &v2::ThreadTurnsListParams,
 ) -> Result<canonical::ThreadTurnsListParams, JsonRpcError> {
@@ -106,6 +141,29 @@ pub(super) fn project_thread_list_response(
         data,
         next_cursor: response.next_cursor,
         backwards_cursor: response.backwards_cursor,
+    })
+}
+
+pub(super) fn project_thread_search_response(
+    response: thread_store::ThreadSearchPage,
+) -> Result<v2::ThreadSearchResponse, JsonRpcError> {
+    Ok(v2::ThreadSearchResponse {
+        data: response
+            .data
+            .into_iter()
+            .map(|result| {
+                Ok(v2::ThreadSearchResult {
+                    thread: project_thread(result.thread)?,
+                    snippet: result.snippet,
+                })
+            })
+            .collect::<Result<Vec<_>, JsonRpcError>>()?,
+        next_cursor: response
+            .next_cursor
+            .map(thread_store::StoreCursor::into_string),
+        backwards_cursor: response
+            .backwards_cursor
+            .map(thread_store::StoreCursor::into_string),
     })
 }
 
@@ -170,6 +228,7 @@ where
 }
 
 fn project_thread(thread: canonical::Thread) -> Result<v2::Thread, JsonRpcError> {
+    let can_accept_direct_input = thread.parent_thread_id.is_none();
     let metadata = thread.metadata.clone();
     let cwd = metadata_string(&metadata, &["workingDir", "working_dir", "cwd"]).unwrap_or_default();
     let source = metadata_string(&metadata, &["source", "sourceKind", "source_kind"])
@@ -194,6 +253,7 @@ fn project_thread(thread: canonical::Thread) -> Result<v2::Thread, JsonRpcError>
             .map(|value| value.as_str().to_string()),
         preview: thread.preview,
         ephemeral: metadata_bool(&thread.metadata, &["ephemeral"]).unwrap_or(false),
+        is_pinned: metadata_bool(&thread.metadata, &["isPinned"]).unwrap_or(false),
         history_mode,
         model_provider: thread.model_provider,
         created_at: millis_to_seconds(thread.created_at_ms),
@@ -205,6 +265,7 @@ fn project_thread(thread: canonical::Thread) -> Result<v2::Thread, JsonRpcError>
         cli_version: metadata_string(&thread.metadata, &["cliVersion", "cli_version"])
             .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string()),
         source,
+        can_accept_direct_input: Some(can_accept_direct_input),
         thread_source: metadata_string(&thread.metadata, &["threadSource", "thread_source"]),
         agent_nickname: thread.agent_nickname,
         agent_role: thread.agent_role,
@@ -443,6 +504,11 @@ fn thread_matches_list_filters(thread: &canonical::Thread, params: &v2::ThreadLi
     if thread.archived != params.archived.unwrap_or(false) {
         return false;
     }
+    if params.is_pinned.is_some_and(|is_pinned| {
+        metadata_bool(&thread.metadata, &["isPinned"]).unwrap_or(false) != is_pinned
+    }) {
+        return false;
+    }
     if params.model_providers.as_ref().is_some_and(|providers| {
         !providers
             .iter()
@@ -604,6 +670,29 @@ fn lower_sort_direction(direction: Option<v2::SortDirection>) -> canonical::Sort
     match direction.unwrap_or(v2::SortDirection::Desc) {
         v2::SortDirection::Asc => canonical::SortDirection::Asc,
         v2::SortDirection::Desc => canonical::SortDirection::Desc,
+    }
+}
+
+fn lower_thread_search_source_kind(
+    kind: v2::ThreadSourceKind,
+) -> thread_store::ThreadSearchSourceKind {
+    match kind {
+        v2::ThreadSourceKind::Cli => thread_store::ThreadSearchSourceKind::Cli,
+        v2::ThreadSourceKind::VsCode => thread_store::ThreadSearchSourceKind::VsCode,
+        v2::ThreadSourceKind::Exec => thread_store::ThreadSearchSourceKind::Exec,
+        v2::ThreadSourceKind::AppServer => thread_store::ThreadSearchSourceKind::AppServer,
+        v2::ThreadSourceKind::SubAgent => thread_store::ThreadSearchSourceKind::SubAgent,
+        v2::ThreadSourceKind::SubAgentReview => {
+            thread_store::ThreadSearchSourceKind::SubAgentReview
+        }
+        v2::ThreadSourceKind::SubAgentCompact => {
+            thread_store::ThreadSearchSourceKind::SubAgentCompact
+        }
+        v2::ThreadSourceKind::SubAgentThreadSpawn => {
+            thread_store::ThreadSearchSourceKind::SubAgentThreadSpawn
+        }
+        v2::ThreadSourceKind::SubAgentOther => thread_store::ThreadSearchSourceKind::SubAgentOther,
+        v2::ThreadSourceKind::Unknown => thread_store::ThreadSearchSourceKind::Unknown,
     }
 }
 

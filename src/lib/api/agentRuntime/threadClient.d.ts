@@ -2,12 +2,15 @@ import {
   AppServerClient,
   type AppServerJsonRpcNotification,
   type AppServerThreadReadResponse,
+  type AppServerThreadSettingsUpdateParams,
+  type AppServerThreadSettingsUpdateResponse,
   type AppServerThreadShellCommandParams,
 } from "@/lib/api/appServer";
 import type {
   AppServerRequestResult,
   ThreadResumeParams,
   ThreadResumeResponse,
+  ThreadSetNameParams,
   TurnStartParams,
   TurnSteerParams,
   TurnSteerResponse,
@@ -38,11 +41,13 @@ import type {
 export type AgentRuntimeAppServerClient = Pick<
   AppServerClient,
   | "readThread"
+  | "setThreadName"
+  | "updateThreadSettings"
   | "runThreadShellCommand"
   | "startTurn"
   | "steerTurn"
   | "cancelTurn"
-  | "compactAgentSession"
+  | "startThreadCompaction"
   | "resumeThread"
   | "drainEvents"
   | "listAgentSessionFileCheckpoints"
@@ -84,6 +89,10 @@ export declare function createThreadClient(
     threadId: string,
   ) => Promise<AppServerThreadReadResponse>;
   readThreadSessionId: (threadId: string) => Promise<string>;
+  setAgentRuntimeThreadName: (request: ThreadSetNameParams) => Promise<void>;
+  updateAgentRuntimeThreadSettings: (
+    request: AppServerThreadSettingsUpdateParams,
+  ) => Promise<AppServerRequestResult<AppServerThreadSettingsUpdateResponse>>;
   interruptAgentRuntimeTurn: (
     request: AgentRuntimeInterruptTurnRequest,
   ) => Promise<boolean>;
@@ -139,6 +148,12 @@ export declare const compactAgentRuntimeSession: ReturnType<
   readThreadSessionId: ReturnType<
     typeof createThreadClient
   >["readThreadSessionId"],
+  setAgentRuntimeThreadName: ReturnType<
+    typeof createThreadClient
+  >["setAgentRuntimeThreadName"],
+  updateAgentRuntimeThreadSettings: ReturnType<
+    typeof createThreadClient
+  >["updateAgentRuntimeThreadSettings"],
   interruptAgentRuntimeTurn: ReturnType<
     typeof createThreadClient
   >["interruptAgentRuntimeTurn"],

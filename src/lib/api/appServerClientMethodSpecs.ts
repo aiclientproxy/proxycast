@@ -198,6 +198,11 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
+    name: "setThreadName",
+    method: constants.APP_SERVER_METHOD_THREAD_NAME_SET,
+    params: "required",
+  },
+  {
     name: "updateThreadSettings",
     method: constants.APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE,
     params: "required",
@@ -233,33 +238,18 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "optional-empty",
   },
   {
-    name: "updateSession",
-    method: constants.APP_SERVER_METHOD_AGENT_SESSION_UPDATE,
-    params: "required",
-  },
-  {
     name: "deleteThread",
     method: constants.APP_SERVER_METHOD_THREAD_DELETE,
     params: "required",
   },
   {
-    name: "compactAgentSession",
-    method: constants.APP_SERVER_METHOD_AGENT_SESSION_COMPACT,
+    name: "startThreadCompaction",
+    method: constants.APP_SERVER_METHOD_THREAD_COMPACT_START,
     params: "required",
   },
   {
     name: "resumeThread",
     method: constants.APP_SERVER_METHOD_THREAD_RESUME,
-    params: "required",
-  },
-  {
-    name: "removeAgentSessionQueuedTurn",
-    method: constants.APP_SERVER_METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE,
-    params: "required",
-  },
-  {
-    name: "promoteAgentSessionQueuedTurn",
-    method: constants.APP_SERVER_METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE,
     params: "required",
   },
   {

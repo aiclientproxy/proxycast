@@ -3,8 +3,11 @@ use super::*;
 use agent_protocol::AgentInput as UserInput;
 use agent_runtime::session_loop::{
     RuntimeSessionClosureTask, RuntimeSessionOperation, RuntimeSessionOperationResult,
-    RuntimeSessionOperationSubmission, RuntimeSessionTaskFailure, RuntimeSessionTaskKind,
-    RuntimeSessionTaskOutcome,
+    RuntimeSessionOperationSubmission, RuntimeSessionSubmitResult, RuntimeSessionTaskFailure,
+    RuntimeSessionTaskKind, RuntimeSessionTaskOutcome,
+};
+use app_server_protocol::protocol::v2::{
+    ThreadCompactStartParams, ThreadCompactStartResponse, METHOD_THREAD_COMPACT_START,
 };
 use app_server_protocol::*;
 use serde_json::json;
@@ -40,32 +43,89 @@ fn normalize_session_control_id(value: &str, message: &str) -> Result<String, Ru
 }
 
 impl RuntimeCore {
-    pub async fn compact_agent_session(
+    pub async fn compact_thread(
         &self,
-        params: AgentSessionCompactParams,
-    ) -> Result<RuntimeCoreOutput<AgentSessionCompactResponse>, RuntimeCoreError> {
-        let session_id = normalize_session_control_id(
-            &params.session_id,
-            "sessionId is required for agentSession/compact",
+        params: ThreadCompactStartParams,
+    ) -> Result<RuntimeCoreOutput<ThreadCompactStartResponse>, RuntimeCoreError> {
+        let thread_id = normalize_session_control_id(
+            &params.thread_id,
+            "threadId is required for thread/compact/start",
         )?;
-        self.compact_agent_session_with_trigger(
-            &session_id,
-            params.event_name.as_deref(),
-            "agentSession/compact",
-            "manual",
-            None,
+        let session_id = self
+            .loaded_session_id_for_thread(&thread_id)
+            .ok_or_else(|| {
+                RuntimeCoreError::InvalidRequest(format!("thread not found: {thread_id}"))
+            })?;
+        let runtime = self.clone();
+        let actor_session_id = session_id.clone();
+        let task = RuntimeSessionClosureTask::new(
+            new_id("compact"),
+            Vec::new(),
+            move |context, _input, _cancel| {
+                let runtime = runtime.clone();
+                let session_id = session_id.clone();
+                let turn_id = context.turn_id().to_string();
+                Box::pin(async move {
+                    let output = runtime
+                        .compact_session_now(
+                            &session_id,
+                            &turn_id,
+                            None,
+                            METHOD_THREAD_COMPACT_START,
+                            "manual",
+                            None,
+                        )
+                        .await
+                        .map_err(|error| RuntimeSessionTaskFailure {
+                            message: error.to_string(),
+                            reason_code: None,
+                        })?;
+                    for event in output.events {
+                        runtime.event_hub.publish(event);
+                    }
+                    Ok(())
+                })
+            },
         )
-        .await
+        .with_kind(RuntimeSessionTaskKind::Compact);
+        let session = self.session_loops.get_or_create(&actor_session_id).await;
+        let result = session
+            .dispatch(RuntimeSessionOperationSubmission::new(
+                RuntimeSessionOperation::Compact {
+                    task: Arc::new(task),
+                },
+            ))
+            .await
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+        match result {
+            RuntimeSessionOperationResult::Submission(submission)
+                if matches!(submission.result, RuntimeSessionSubmitResult::Started) =>
+            {
+                Ok(RuntimeCoreOutput {
+                    response: ThreadCompactStartResponse {},
+                    events: Vec::new(),
+                })
+            }
+            RuntimeSessionOperationResult::Submission(submission) => {
+                Err(RuntimeCoreError::Backend(format!(
+                    "compact operation was not started: {:?}",
+                    submission.result
+                )))
+            }
+            _ => Err(RuntimeCoreError::Backend(
+                "compact operation returned an invalid receipt".to_string(),
+            )),
+        }
     }
 
-    pub(in crate::runtime) async fn compact_agent_session_with_trigger(
+    pub(in crate::runtime) async fn compact_session_with_trigger(
         &self,
         session_id: &str,
         event_name: Option<&str>,
         source: &str,
         trigger: &str,
         trigger_context: Option<Value>,
-    ) -> Result<RuntimeCoreOutput<AgentSessionCompactResponse>, RuntimeCoreError> {
+    ) -> Result<RuntimeCoreOutput<ThreadCompactStartResponse>, RuntimeCoreError> {
         self.ensure_current_session_hydrated(session_id).await?;
         let runtime = self.clone();
         let session_id = session_id.to_string();
@@ -78,9 +138,10 @@ impl RuntimeCore {
         let task = RuntimeSessionClosureTask::new(
             new_id("compact"),
             Vec::new(),
-            move |_context, _input, _cancel| {
+            move |context, _input, _cancel| {
                 let runtime = runtime.clone();
                 let session_id = session_id.clone();
+                let turn_id = context.turn_id().to_string();
                 let event_name = event_name.clone();
                 let source = source.clone();
                 let trigger = trigger.clone();
@@ -88,8 +149,9 @@ impl RuntimeCore {
                 let output_tx = Arc::clone(&output_tx);
                 Box::pin(async move {
                     let output = runtime
-                        .compact_agent_session_now(
+                        .compact_session_now(
                             &session_id,
+                            &turn_id,
                             event_name.as_deref(),
                             &source,
                             &trigger,
@@ -149,14 +211,15 @@ impl RuntimeCore {
             .map_err(RuntimeCoreError::Backend)
     }
 
-    async fn compact_agent_session_now(
+    async fn compact_session_now(
         &self,
         session_id: &str,
+        turn_id: &str,
         event_name: Option<&str>,
         source: &str,
         trigger: &str,
         trigger_context: Option<Value>,
-    ) -> Result<RuntimeCoreOutput<AgentSessionCompactResponse>, RuntimeCoreError> {
+    ) -> Result<RuntimeCoreOutput<ThreadCompactStartResponse>, RuntimeCoreError> {
         self.ensure_current_session_hydrated(session_id).await?;
         let (_, turns) = self.session_snapshot(session_id)?;
         let active_turn_ids = turns
@@ -182,10 +245,11 @@ impl RuntimeCore {
             &existing_events,
             self.sidecar_store.as_deref(),
         )?;
+        self.create_compaction_turn(&session.session_id, &session.thread_id, turn_id)?;
         let event_name = event_name
             .map(str::trim)
             .filter(|value| !value.is_empty())
-            .unwrap_or("agentSession/compact");
+            .unwrap_or(METHOD_THREAD_COMPACT_START);
         let mut completed_payload = Map::new();
         completed_payload.insert("source".to_string(), json!(source));
         completed_payload.insert("eventName".to_string(), json!(event_name));
@@ -227,8 +291,10 @@ impl RuntimeCore {
         let events = self.append_runtime_events(
             &session.session_id,
             &session.thread_id,
-            None,
+            Some(turn_id),
             vec![
+                RuntimeEvent::new("turn.accepted", json!({"source": source})),
+                RuntimeEvent::new("turn.started", json!({"source": source})),
                 RuntimeEvent::new(
                     "context.compaction.started",
                     json!({
@@ -251,18 +317,55 @@ impl RuntimeCore {
                     "context.compaction.completed",
                     Value::Object(completed_payload),
                 ),
+                RuntimeEvent::new("turn.completed", json!({"source": source})),
             ],
         )?;
-        let (session, turns) = self.session_snapshot(&session_id)?;
-
         Ok(RuntimeCoreOutput {
-            response: AgentSessionCompactResponse {
-                session,
-                turns,
-                compacted: true,
-            },
+            response: ThreadCompactStartResponse {},
             events,
         })
+    }
+
+    fn create_compaction_turn(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        turn_id: &str,
+    ) -> Result<(), RuntimeCoreError> {
+        let mut state = self
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned");
+        let stored = state
+            .sessions
+            .get_mut(session_id)
+            .ok_or_else(|| RuntimeCoreError::SessionNotFound(session_id.to_string()))?;
+        if stored.session.thread_id != thread_id {
+            return Err(RuntimeCoreError::InvalidRequest(
+                "session/thread identity mismatch for context compaction".to_string(),
+            ));
+        }
+        if stored
+            .turns
+            .iter()
+            .any(|turn| agent_turn_is_active(turn.status))
+        {
+            return Err(RuntimeCoreError::InvalidRequest(
+                "session actor and runtime turn state disagree for context compaction".to_string(),
+            ));
+        }
+        let now = super::timestamp();
+        stored.session.status = AgentSessionStatus::Running;
+        stored.session.updated_at = now.clone();
+        stored.turns.push(AgentTurn {
+            turn_id: turn_id.to_string(),
+            session_id: session_id.to_string(),
+            thread_id: thread_id.to_string(),
+            status: AgentTurnStatus::Accepted,
+            started_at: Some(now),
+            completed_at: None,
+        });
+        Ok(())
     }
 
     pub(in crate::runtime) async fn resume_next_queued_turn_if_idle(
@@ -340,150 +443,6 @@ impl RuntimeCore {
         Ok(QueuedTurnResume::Started {
             queued_turn_id,
             events: output.events,
-        })
-    }
-
-    pub async fn remove_agent_session_queued_turn(
-        &self,
-        params: AgentSessionQueuedTurnRemoveParams,
-    ) -> Result<RuntimeCoreOutput<AgentSessionQueuedTurnRemoveResponse>, RuntimeCoreError> {
-        let session_id = normalize_session_control_id(
-            &params.session_id,
-            "sessionId is required for agentSession/queuedTurn/remove",
-        )?;
-        let queued_turn_id = normalize_session_control_id(
-            &params.queued_turn_id,
-            "queuedTurnId is required for agentSession/queuedTurn/remove",
-        )?;
-        self.ensure_current_session_hydrated(&session_id).await?;
-        let (session, removed) = {
-            let mut state = self
-                .state
-                .lock()
-                .expect("runtime core state mutex poisoned");
-            let stored = state
-                .sessions
-                .get_mut(&session_id)
-                .ok_or_else(|| RuntimeCoreError::SessionNotFound(session_id.clone()))?;
-            let before = stored.turns.len();
-            stored.turns.retain(|turn| {
-                !(turn.turn_id == queued_turn_id && matches!(turn.status, AgentTurnStatus::Queued))
-            });
-            let removed = stored.turns.len() != before;
-            if removed {
-                stored.turn_inputs.remove(&queued_turn_id);
-                stored.turn_runtime_options.remove(&queued_turn_id);
-                stored.session.updated_at = timestamp();
-                if !stored
-                    .turns
-                    .iter()
-                    .any(|turn| agent_turn_is_active(turn.status))
-                {
-                    stored.session.status = AgentSessionStatus::Idle;
-                }
-            }
-            (stored.session.clone(), removed)
-        };
-        let events = if removed {
-            self.append_runtime_events(
-                &session.session_id,
-                &session.thread_id,
-                None,
-                vec![RuntimeEvent::new(
-                    "queue.removed",
-                    json!({
-                        "source": "agentSession/queuedTurn/remove",
-                        "queuedTurnId": queued_turn_id,
-                    }),
-                )],
-            )?
-        } else {
-            Vec::new()
-        };
-        let (session, turns) = self.session_snapshot(&session_id)?;
-
-        Ok(RuntimeCoreOutput {
-            response: AgentSessionQueuedTurnRemoveResponse {
-                session,
-                turns,
-                queued_turn_id,
-                removed,
-            },
-            events,
-        })
-    }
-
-    pub async fn promote_agent_session_queued_turn(
-        &self,
-        params: AgentSessionQueuedTurnPromoteParams,
-    ) -> Result<RuntimeCoreOutput<AgentSessionQueuedTurnPromoteResponse>, RuntimeCoreError> {
-        let session_id = normalize_session_control_id(
-            &params.session_id,
-            "sessionId is required for agentSession/queuedTurn/promote",
-        )?;
-        let queued_turn_id = normalize_session_control_id(
-            &params.queued_turn_id,
-            "queuedTurnId is required for agentSession/queuedTurn/promote",
-        )?;
-        self.ensure_current_session_hydrated(&session_id).await?;
-        let (session, promoted) = {
-            let mut state = self
-                .state
-                .lock()
-                .expect("runtime core state mutex poisoned");
-            let stored = state
-                .sessions
-                .get_mut(&session_id)
-                .ok_or_else(|| RuntimeCoreError::SessionNotFound(session_id.clone()))?;
-            let Some(index) = stored.turns.iter().position(|turn| {
-                turn.turn_id == queued_turn_id && matches!(turn.status, AgentTurnStatus::Queued)
-            }) else {
-                return Ok(RuntimeCoreOutput {
-                    response: AgentSessionQueuedTurnPromoteResponse {
-                        session: stored.session.clone(),
-                        turns: stored.turns.clone(),
-                        queued_turn_id,
-                        promoted: false,
-                    },
-                    events: Vec::new(),
-                });
-            };
-            let turn = stored.turns.remove(index);
-            let insert_at = stored
-                .turns
-                .iter()
-                .position(|turn| matches!(turn.status, AgentTurnStatus::Queued))
-                .unwrap_or(stored.turns.len());
-            stored.turns.insert(insert_at, turn);
-            stored.session.updated_at = timestamp();
-            (stored.session.clone(), true)
-        };
-        let events = if promoted {
-            self.append_runtime_events(
-                &session.session_id,
-                &session.thread_id,
-                None,
-                vec![RuntimeEvent::new(
-                    "queue.promoted",
-                    json!({
-                        "source": "agentSession/queuedTurn/promote",
-                        "queuedTurnId": queued_turn_id,
-                    }),
-                )],
-            )?
-        } else {
-            Vec::new()
-        };
-        let (session, turns) = self.session_snapshot(&session_id)?;
-
-        Ok(RuntimeCoreOutput {
-            response: AgentSessionQueuedTurnPromoteResponse {
-                session,
-                turns,
-                queued_turn_id,
-                promoted,
-            },
-            events,
         })
     }
 

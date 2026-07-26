@@ -83,6 +83,7 @@ interface MockInputbarPlusMenuConfig {
 interface MockInputbarCoreProps {
   text?: string;
   setText?: (value: string) => void;
+  disabled?: boolean;
   onToolClick?: (tool: string) => void;
   activeTools?: Record<string, boolean>;
   onSend?: (metadata?: BaseComposerSendMetadata) => void;
@@ -594,7 +595,9 @@ vi.mock("./components/RuntimeSceneBadge", () => ({
 }));
 
 vi.mock("../ChatModelSelector", () => ({
-  ChatModelSelector: () => <div data-testid="model-selector" />,
+  ChatModelSelector: ({ disabled }: { disabled?: boolean }) => (
+    <button type="button" data-testid="model-selector" disabled={disabled} />
+  ),
 }));
 
 vi.mock("@/lib/dev-bridge", () => ({
@@ -1492,9 +1495,7 @@ describe("Inputbar", () => {
     });
 
     expect(
-      container.querySelector(
-        '[data-testid="thread-goal-inline-panel"]',
-      ),
+      container.querySelector('[data-testid="thread-goal-inline-panel"]'),
     ).toBeTruthy();
   });
 
@@ -1630,6 +1631,42 @@ describe("Inputbar", () => {
     expect(
       trailingMeta?.querySelector('[data-testid="model-selector"]'),
     ).toBeTruthy();
+  });
+
+  it("parent-owned 禁用态应锁定输入、工具与模型设置", async () => {
+    const { container } = renderInputbar({
+      variant: "workspace",
+      disabled: true,
+      disabledPlaceholder: "此子线程由父线程管理，无法直接输入",
+      providerType: "openai",
+      setProviderType: vi.fn(),
+      model: "gpt-5.4",
+      setModel: vi.fn(),
+      accessMode: "default",
+      setAccessMode: vi.fn(),
+      toolStates: { plan: true },
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const coreProps = mockInputbarCore.mock.calls.at(-1)?.[0];
+    const accessSelect = container.querySelector(
+      '[data-testid="inputbar-access-mode-select"]',
+    ) as HTMLSelectElement;
+    const planChip = container.querySelector(
+      '[data-testid="inputbar-task-mode-status"]',
+    ) as HTMLButtonElement;
+    const modelTrigger = container.querySelector(
+      '[data-testid="trailing-meta"] [data-testid="model-selector"]',
+    ) as HTMLButtonElement;
+
+    expect(coreProps?.disabled).toBe(true);
+    expect(coreProps?.placeholder).toBe("此子线程由父线程管理，无法直接输入");
+    expect(accessSelect.disabled).toBe(true);
+    expect(planChip.disabled).toBe(true);
+    expect(modelTrigger.disabled).toBe(true);
   });
 
   it("选择本地安装技能发送时，应把 local:* key 归一到目录 slash key", async () => {

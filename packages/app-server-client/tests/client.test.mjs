@@ -48,6 +48,7 @@ const {
   agentSessionEventNotification,
   agentSessionMediaReadEventNotification,
   createAgentRuntimeClient,
+  decodeModelRouteSelector,
   getAppServerRequestSerializationScope,
   isAppServerServerRequestMethod,
   isAgentSessionEventNotification,
@@ -66,7 +67,6 @@ const {
   METHOD_PLUGIN_UI_RUNTIME_STOP,
   METHOD_AGENT_SESSION_ACTION_RESPOND,
   METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT,
-  METHOD_AGENT_SESSION_COMPACT,
   METHOD_AGENT_SESSION_EVENT,
   METHOD_AGENT_SESSION_FILE_CHECKPOINT_DIFF,
   METHOD_AGENT_SESSION_FILE_CHECKPOINT_GET,
@@ -75,24 +75,34 @@ const {
   METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT,
   METHOD_AGENT_SESSION_MEDIA_READ,
   METHOD_CANCEL_REQUEST,
-  METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE,
-  METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE,
   METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT,
   METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE,
   METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT,
   METHOD_THREAD_START,
   METHOD_THREAD_FORK,
+  METHOD_THREAD_COMPACT_START,
   METHOD_THREAD_RESUME,
   METHOD_AGENT_SESSION_TOOL_INVENTORY_READ,
   METHOD_TURN_INTERRUPT,
   METHOD_TURN_STEER,
   METHOD_TURN_START,
-  METHOD_AGENT_SESSION_UPDATE,
   METHOD_THREAD_ITEMS_LIST,
   METHOD_THREAD_ARCHIVE,
   METHOD_THREAD_DELETE,
   METHOD_THREAD_LIST,
+  METHOD_THREAD_LOADED_LIST,
+  METHOD_THREAD_UNSUBSCRIBE,
+  METHOD_THREAD_INCREMENT_ELICITATION,
+  METHOD_THREAD_DECREMENT_ELICITATION,
+  METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION,
+  METHOD_THREAD_INJECT_ITEMS,
+  METHOD_THREAD_METADATA_UPDATE,
   METHOD_THREAD_READ,
+  METHOD_THREAD_SEARCH,
+  METHOD_THREAD_SEARCH_OCCURRENCES,
+  METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN,
+  METHOD_THREAD_BACKGROUND_TERMINALS_LIST,
+  METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE,
   METHOD_THREAD_TURNS_LIST,
   METHOD_THREAD_UNARCHIVE,
   METHOD_WORKFLOW_CANCEL,
@@ -510,6 +520,36 @@ test("builds capability list requests with empty params", () => {
   });
 });
 
+test("builds Codex v2 model list requests with opaque pagination", () => {
+  const client = new AppServerClient();
+
+  const models = client.listModels({
+    cursor: "opaque-page-2",
+    limit: 25,
+    includeHidden: true,
+  });
+
+  assert.equal(models.id, 1);
+  assert.equal(models.method, METHOD_MODEL_LIST);
+  assert.deepEqual(models.params, {
+    cursor: "opaque-page-2",
+    limit: 25,
+    includeHidden: true,
+  });
+});
+
+test("decodes opaque model route selectors without exposing provider fields in Model", () => {
+  assert.deepEqual(
+    decodeModelRouteSelector("route:bGltZS1odWI.Z3B0LTUuNi1zb2w"),
+    {
+      providerId: "lime-hub",
+      modelId: "gpt-5.6-sol",
+    },
+  );
+  assert.equal(decodeModelRouteSelector("gpt-5.6-sol"), null);
+  assert.equal(decodeModelRouteSelector("route:broken"), null);
+});
+
 test("builds workspace and skill read requests with current methods", () => {
   const client = new AppServerClient();
 
@@ -517,16 +557,6 @@ test("builds workspace and skill read requests with current methods", () => {
     includeArchived: true,
     workspaceId: "workspace-main",
     limit: 20,
-  });
-  const updateSession = client.updateSession({
-    sessionId: "session-main",
-    title: "重命名后的会话",
-    providerSelector: "custom-provider",
-    providerName: "OpenAI Compatible",
-    modelName: "gpt-5.4",
-    executionStrategy: "react",
-    recentAccessMode: "full-access",
-    recentPreferences: { task: true, subagent: false },
   });
   const deleteThread = client.deleteThread({
     threadId: "thread-main",
@@ -614,17 +644,6 @@ test("builds workspace and skill read requests with current methods", () => {
     includeArchived: true,
     workspaceId: "workspace-main",
     limit: 20,
-  });
-  assert.equal(updateSession.method, METHOD_AGENT_SESSION_UPDATE);
-  assert.deepEqual(updateSession.params, {
-    sessionId: "session-main",
-    title: "重命名后的会话",
-    providerSelector: "custom-provider",
-    providerName: "OpenAI Compatible",
-    modelName: "gpt-5.4",
-    executionStrategy: "react",
-    recentAccessMode: "full-access",
-    recentPreferences: { task: true, subagent: false },
   });
   assert.equal(deleteThread.method, METHOD_THREAD_DELETE);
   assert.deepEqual(deleteThread.params, {
@@ -779,6 +798,176 @@ test("builds canonical thread read requests with opaque cursors and views", () =
   assert.equal(items.params.cursor, "opaque:item:8");
 });
 
+test("builds canonical loaded thread list requests", () => {
+  const client = new AppServerClient();
+  const request = client.listLoadedThreads({
+    cursor: "019bf4f0-5080-7000-8000-000000000001",
+    limit: 2,
+  });
+
+  assert.equal(request.method, METHOD_THREAD_LOADED_LIST);
+  assert.deepEqual(request.params, {
+    cursor: "019bf4f0-5080-7000-8000-000000000001",
+    limit: 2,
+  });
+});
+
+test("builds canonical thread occurrence search requests", () => {
+  const client = new AppServerClient();
+  const request = client.searchThreadOccurrences({
+    threadId: "019f9b19-17a2-78b2-84d7-ce881fcf0617",
+    searchTerm: "needle",
+    cursor: "opaque:occurrence:4",
+    limit: 25,
+  });
+
+  assert.equal(request.method, METHOD_THREAD_SEARCH_OCCURRENCES);
+  assert.deepEqual(request.params, {
+    threadId: "019f9b19-17a2-78b2-84d7-ce881fcf0617",
+    searchTerm: "needle",
+    cursor: "opaque:occurrence:4",
+    limit: 25,
+  });
+});
+
+test("builds canonical thread search requests", () => {
+  const client = new AppServerClient();
+  const request = client.searchThreads({
+    cursor: "opaque:thread:4",
+    limit: 25,
+    sortKey: "updated_at",
+    sortDirection: "asc",
+    sourceKinds: ["appServer"],
+    archived: true,
+    searchTerm: "needle",
+  });
+
+  assert.equal(request.method, METHOD_THREAD_SEARCH);
+  assert.deepEqual(request.params, {
+    cursor: "opaque:thread:4",
+    limit: 25,
+    sortKey: "updated_at",
+    sortDirection: "asc",
+    sourceKinds: ["appServer"],
+    archived: true,
+    searchTerm: "needle",
+  });
+});
+
+test("builds canonical thread background terminal requests", () => {
+  const client = new AppServerClient();
+  const threadId = "019f9b19-17a2-78b2-84d7-ce881fcf0617";
+
+  const clean = client.cleanThreadBackgroundTerminals({ threadId });
+  assert.equal(clean.method, METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN);
+  assert.deepEqual(clean.params, { threadId });
+
+  const list = client.listThreadBackgroundTerminals({
+    threadId,
+    cursor: "42",
+    limit: 25,
+  });
+  assert.equal(list.method, METHOD_THREAD_BACKGROUND_TERMINALS_LIST);
+  assert.deepEqual(list.params, { threadId, cursor: "42", limit: 25 });
+
+  const terminate = client.terminateThreadBackgroundTerminal({
+    threadId,
+    processId: "42",
+  });
+  assert.equal(terminate.method, METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE);
+  assert.deepEqual(terminate.params, { threadId, processId: "42" });
+});
+
+test("builds canonical thread unsubscribe requests", () => {
+  const client = new AppServerClient();
+  const request = client.unsubscribeThread({
+    threadId: "019bf4f0-5080-7000-8000-000000000001",
+  });
+
+  assert.equal(request.method, METHOD_THREAD_UNSUBSCRIBE);
+  assert.deepEqual(request.params, {
+    threadId: "019bf4f0-5080-7000-8000-000000000001",
+  });
+});
+
+test("builds canonical thread elicitation accounting requests", () => {
+  const client = new AppServerClient();
+  const threadId = "019f9b19-17a2-78b2-84d7-ce881fcf0617";
+
+  const increment = client.incrementThreadElicitation({ threadId });
+  assert.equal(increment.method, METHOD_THREAD_INCREMENT_ELICITATION);
+  assert.deepEqual(increment.params, { threadId });
+
+  const decrement = client.decrementThreadElicitation({ threadId });
+  assert.equal(decrement.method, METHOD_THREAD_DECREMENT_ELICITATION);
+  assert.deepEqual(decrement.params, { threadId });
+});
+
+test("builds canonical Guardian denied-action approval requests", () => {
+  const client = new AppServerClient();
+  const event = {
+    id: "guardian-review-1",
+    status: "denied",
+    action: {
+      type: "command",
+      source: "shell",
+      command: "git status --short",
+      cwd: "/workspace",
+    },
+  };
+  const request = client.approveGuardianDeniedAction({
+    threadId: "019f9b19-17a2-78b2-84d7-ce881fcf0617",
+    event,
+  });
+
+  assert.equal(request.method, METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION);
+  assert.deepEqual(request.params, {
+    threadId: "019f9b19-17a2-78b2-84d7-ce881fcf0617",
+    event,
+  });
+});
+
+test("builds canonical thread response-item injection requests", () => {
+  const client = new AppServerClient();
+  const item = {
+    type: "message",
+    role: "assistant",
+    content: [{ type: "output_text", text: "injected context" }],
+  };
+  const request = client.injectThreadItems({
+    threadId: "019f9b19-17a2-78b2-84d7-ce881fcf0617",
+    items: [item],
+  });
+
+  assert.equal(request.method, METHOD_THREAD_INJECT_ITEMS);
+  assert.deepEqual(request.params, {
+    threadId: "019f9b19-17a2-78b2-84d7-ce881fcf0617",
+    items: [item],
+  });
+});
+
+test("builds canonical thread metadata update requests", () => {
+  const client = new AppServerClient();
+  const request = client.updateThreadMetadata({
+    threadId: "019bf4f0-5080-7000-8000-000000000001",
+    gitInfo: {
+      sha: "abc123",
+      branch: null,
+    },
+    isPinned: true,
+  });
+
+  assert.equal(request.method, METHOD_THREAD_METADATA_UPDATE);
+  assert.deepEqual(request.params, {
+    threadId: "019bf4f0-5080-7000-8000-000000000001",
+    gitInfo: {
+      sha: "abc123",
+      branch: null,
+    },
+    isPinned: true,
+  });
+});
+
 test("builds session archive and unarchive requests with current App Server methods", () => {
   const client = new AppServerClient();
 
@@ -814,12 +1003,11 @@ test("builds session archive and unarchive requests with current App Server meth
   );
 });
 
-test("builds agent session file checkpoint requests with current App Server methods", () => {
+test("builds thread control requests with current App Server methods", () => {
   const client = new AppServerClient();
 
-  const compact = client.compactAgentSession({
-    sessionId: "sess_1",
-    eventName: "agentSession/event/sess_1",
+  const compact = client.startThreadCompaction({
+    threadId: "thread_1",
   });
   const resume = client.resumeThread({
     threadId: "thread_1",
@@ -830,20 +1018,10 @@ test("builds agent session file checkpoint requests with current App Server meth
       itemsView: "summary",
     },
   });
-  const remove = client.removeAgentSessionQueuedTurn({
-    sessionId: "sess_1",
-    queuedTurnId: "queued-1",
-  });
-  const promote = client.promoteAgentSessionQueuedTurn({
-    sessionId: "sess_1",
-    queuedTurnId: "queued-2",
-  });
-
   assert.equal(compact.id, 1);
-  assert.equal(compact.method, METHOD_AGENT_SESSION_COMPACT);
+  assert.equal(compact.method, METHOD_THREAD_COMPACT_START);
   assert.deepEqual(compact.params, {
-    sessionId: "sess_1",
-    eventName: "agentSession/event/sess_1",
+    threadId: "thread_1",
   });
   assert.equal(resume.id, 2);
   assert.equal(resume.method, METHOD_THREAD_RESUME);
@@ -856,19 +1034,6 @@ test("builds agent session file checkpoint requests with current App Server meth
       itemsView: "summary",
     },
   });
-  assert.equal(remove.id, 3);
-  assert.equal(remove.method, METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE);
-  assert.deepEqual(remove.params, {
-    sessionId: "sess_1",
-    queuedTurnId: "queued-1",
-  });
-  assert.equal(promote.id, 4);
-  assert.equal(promote.method, METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE);
-  assert.deepEqual(promote.params, {
-    sessionId: "sess_1",
-    queuedTurnId: "queued-2",
-  });
-
   const checkpointClient = new AppServerClient();
   const list = checkpointClient.listAgentSessionFileCheckpoints({
     sessionId: "sess_1",

@@ -104,36 +104,23 @@ pub(super) fn apply_app_server_turn_policy(
     }
 }
 
-pub(super) fn selection_with_effective_reasoning(
+pub(super) fn selection_with_capability_reasoning(
     selection: &RuntimeModelSelection,
+    capability_snapshot: &app_server_protocol::CapabilitySnapshot,
 ) -> RuntimeModelSelection {
-    let Some(requested_reasoning_effort) = selection.reasoning_effort.as_deref() else {
-        return RuntimeModelSelection {
-            provider: selection.provider.clone(),
-            model: selection.model.clone(),
-            source: selection.source,
-            reasoning_effort: None,
-        };
-    };
-    let capability = super::model_capability::resolve_basic_model_capability(
+    let capability = super::model_capability::resolve_model_capability(
         super::model_capability::ModelRef::new(selection.provider.clone(), selection.model.clone()),
+        Some(capability_snapshot),
     );
-    let requested_level =
-        super::model_capability::reasoning_level_from_str(requested_reasoning_effort);
-    let policy = super::model_capability::resolve_reasoning_policy(&capability, requested_level);
+    let policy = super::model_capability::resolve_reasoning_policy(
+        &capability,
+        selection.reasoning_effort.as_deref(),
+    );
     RuntimeModelSelection {
         provider: selection.provider.clone(),
         model: selection.model.clone(),
         source: selection.source,
-        reasoning_effort: policy.effective_level.and_then(|level| match level {
-            super::model_capability::ReasoningLevel::None => None,
-            super::model_capability::ReasoningLevel::Minimal => Some("low".to_string()),
-            super::model_capability::ReasoningLevel::Low => Some("low".to_string()),
-            super::model_capability::ReasoningLevel::Medium => Some("medium".to_string()),
-            super::model_capability::ReasoningLevel::High => Some("high".to_string()),
-            super::model_capability::ReasoningLevel::Max => Some("max".to_string()),
-            super::model_capability::ReasoningLevel::XHigh => Some("xhigh".to_string()),
-        }),
+        reasoning_effort: policy.effective_level,
     }
 }
 
@@ -150,9 +137,7 @@ pub(super) fn effective_runtime_options_for_turn(
         &initial_tool_policy,
     );
 
-    let selection = selection_with_effective_reasoning(
-        &resolve_runtime_model_selection(&effective_request).ok()?,
-    );
+    let selection = resolve_runtime_model_selection(&effective_request).ok()?;
     let scope = session_scope_from_request(&effective_request).ok()?;
     let workspace_scope = request_workspace_scope(
         &effective_request,
@@ -354,6 +339,10 @@ pub(super) fn reasoning_effort_from_request(request: &ExecutionRequest) -> Optio
         .and_then(metadata_reasoning_effort)
 }
 
+pub(super) fn service_tier_from_request(request: &ExecutionRequest) -> Option<String> {
+    runtime_request_from_request(request).and_then(|host| non_empty(host.service_tier.as_deref()))
+}
+
 fn runtime_model_metadata_values(request: &ExecutionRequest) -> Vec<&Value> {
     request.runtime_metadata().into_iter().collect()
 }
@@ -452,6 +441,7 @@ pub(super) fn direct_provider_config_from_request(
     selection: &RuntimeModelSelection,
     reasoning_effort: Option<String>,
 ) -> Option<SessionProviderConfig> {
+    let service_tier = host_request.and_then(|host| non_empty(host.service_tier.as_deref()));
     let request = host_request.and_then(host_provider_config)?;
     if request.api_key.is_none() && request.base_url.is_none() {
         return None;
@@ -472,6 +462,7 @@ pub(super) fn direct_provider_config_from_request(
         base_url: request.base_url.clone(),
         credential_uuid: None,
         reasoning_effort,
+        service_tier,
         route_protocol: None,
         toolshim: matches!(
             request.tool_call_strategy,

@@ -16,6 +16,7 @@ fn runtime_config() -> RuntimeProviderConfig {
         base_url: Some("https://example.com/openai".to_string()),
         credential_uuid: "credential-1".to_string(),
         reasoning_effort: Some("medium".to_string()),
+        service_tier: None,
         protocol: Some(RuntimeProviderProtocol::Responses),
         supports_websockets: true,
         toolshim: true,

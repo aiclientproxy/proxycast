@@ -59,6 +59,7 @@ interface InputbarProps extends SkillSelectionSourceProps {
   onStop?: () => void;
   isLoading: boolean;
   disabled?: boolean;
+  disabledPlaceholder?: string;
   /** 输入区上方并排浮层控件 */
   overlayAccessory?: React.ReactNode;
   /** 角色列表（用于 @ 引用） */
@@ -128,6 +129,7 @@ export const Inputbar: React.FC<InputbarProps> = ({
   onStop,
   isLoading,
   disabled,
+  disabledPlaceholder,
   overlayAccessory,
   characters = [],
   skills,
@@ -336,6 +338,7 @@ export const Inputbar: React.FC<InputbarProps> = ({
         onSkillSuggestionsNeeded={onSkillSuggestionsNeeded}
         textareaRef={textareaRef}
         input={input}
+        disabledPlaceholder={disabledPlaceholder}
         onSelectCharacter={onSelectCharacter}
         onSelectInputCapability={handleSelectInputCapability}
         activeCapability={activeCapability}

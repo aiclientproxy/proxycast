@@ -12,6 +12,8 @@ use tokio_util::sync::CancellationToken;
 #[derive(Clone, Debug)]
 pub enum RuntimeSessionInput {
     User(RuntimeReplyInput),
+    Developer(String),
+    RawResponseItem(Value),
     InterAgent(RuntimeSessionInterAgentInput),
 }
 

@@ -332,10 +332,10 @@ function runVitest(args, label, options = {}) {
   return typeof result.status === "number" ? result.status : 1;
 }
 
-function collectTestFiles() {
+function collectTestFiles(listArgs = []) {
   const result = spawnSync(
     process.execPath,
-    [vitestEntrypoint, "list", "--filesOnly", "--json"],
+    [vitestEntrypoint, "list", "--filesOnly", "--json", ...listArgs],
     {
       stdio: ["inherit", "pipe", "inherit"],
       env: process.env,
@@ -687,8 +687,37 @@ function runRelatedMode(args) {
 
 function runChangedMode(args, changedRef) {
   const changedArg = changedRef ? [`--changed=${changedRef}`] : ["--changed"];
-  const status = runVitest([...changedArg, ...args], "运行 changed 测试");
-  process.exit(status);
+  const { files, skippedLiveTestCount } = collectTestFiles([
+    ...changedArg,
+    ...args,
+  ]);
+  if (!includeLiveProviderTests && skippedLiveTestCount > 0) {
+    console.log(
+      `[vitest-smart] changed 模式默认跳过 ${skippedLiveTestCount} 个 live Provider 测试。`,
+    );
+  }
+  if (files.length === 0) {
+    console.log("[vitest-smart] changed 模式没有可运行的 Vitest 测试。");
+    return;
+  }
+  const batches = buildBatches(files);
+  for (const [batchIndex, batch] of batches.entries()) {
+    const status = runVitest(
+      [
+        "--maxWorkers",
+        "1",
+        "--minWorkers",
+        "1",
+        "--no-file-parallelism",
+        ...batch,
+        ...args,
+      ],
+      `运行 changed 批次 ${batchIndex + 1}/${batches.length}`,
+    );
+    if (status !== 0) {
+      process.exit(status);
+    }
+  }
 }
 
 function handleInterrupted(signal) {

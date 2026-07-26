@@ -17,14 +17,6 @@ impl ProjectionStore {
             &projection.session,
             &projection.item_events,
         );
-        let article_workspace = article_workspace_projection::apply_session_selection(
-            article_workspace,
-            &projection.session,
-        );
-        let article_workspace = article_workspace_projection::apply_session_edited_draft(
-            article_workspace,
-            &projection.session,
-        );
         let artifacts =
             artifact_projection::artifact_summaries_for_turn(&projection.item_events, None);
 
@@ -46,7 +38,7 @@ impl ProjectionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use app_server_protocol::{AgentEvent, AgentSessionUpdateParams};
+    use app_server_protocol::AgentEvent;
     use serde_json::json;
 
     #[test]
@@ -98,25 +90,52 @@ mod tests {
             })
             .expect("workspace event");
         store
-            .update_session_overview(
-                AgentSessionUpdateParams {
-                    session_id: "session-1".to_string(),
-                    article_workspace_edited_draft: Some(json!({
-                        "objectKey": "content-factory-app:session-1:articleDraft:article-1",
-                        "objectRef": {
-                            "appId": "content-factory-app",
-                            "kind": "articleDraft",
-                            "id": "article-1",
-                            "sessionId": "session-1"
-                        },
-                        "markdown": "# Edited",
-                        "updatedAt": "2026-07-21T00:01:00Z"
-                    })),
-                    ..AgentSessionUpdateParams::default()
-                },
-                "2026-07-21T00:01:00Z",
-            )
-            .expect("update projection");
+            .apply_event(&AgentEvent {
+                event_id: "artifact-edited-draft".to_string(),
+                sequence: 2,
+                session_id: "session-1".to_string(),
+                thread_id: Some("thread-1".to_string()),
+                turn_id: None,
+                event_type: "artifact.snapshot".to_string(),
+                timestamp: "2026-07-21T00:01:00Z".to_string(),
+                payload: json!({
+                    "artifact": {
+                        "artifactId": "article-1",
+                        "kind": "article_workspace_draft",
+                        "content": "# Edited",
+                        "metadata": {
+                            "workspacePatch": {
+                                "objects": [{
+                                    "ref": {
+                                        "appId": "content-factory-app",
+                                        "kind": "articleDraft",
+                                        "id": "article-1",
+                                        "sessionId": "session-1"
+                                    },
+                                    "source": {
+                                        "documentText": "# Edited",
+                                        "finalMarkdown": "# Edited",
+                                        "edited": true,
+                                        "updatedAt": "2026-07-21T00:01:00Z"
+                                    }
+                                }]
+                            },
+                            "editedDraft": {
+                                "objectKey": "content-factory-app:session-1:articleDraft:article-1",
+                                "objectRef": {
+                                    "appId": "content-factory-app",
+                                    "kind": "articleDraft",
+                                    "id": "article-1",
+                                    "sessionId": "session-1"
+                                },
+                                "markdown": "# Edited",
+                                "updatedAt": "2026-07-21T00:01:00Z"
+                            }
+                        }
+                    }
+                }),
+            })
+            .expect("edited draft event");
 
         let projection = store
             .read_thread_product_projection("session-1")

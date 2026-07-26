@@ -1,3 +1,7 @@
+use super::{
+    REQUEST_KIND_METADATA_KEY, SESSION_ID_METADATA_KEY, THREAD_ID_METADATA_KEY,
+    TURN_ID_METADATA_KEY, X_CODEX_TURN_METADATA_KEY,
+};
 use crate::provider_stream::RuntimeReplyProviderRequestWireShape;
 use crate::runtime_provider::RuntimeProviderConfig;
 use agent_protocol::ImageDetail;
@@ -43,6 +47,7 @@ pub(super) fn chat_completions_request(
     }
     apply_generation_options(&mut object, request, "max_tokens", false);
     apply_reasoning_effort(&mut object, config, false);
+    apply_service_tier(&mut object, config);
     if let Some(enable_thinking) = request
         .provider_options
         .get("enable_thinking")
@@ -102,7 +107,55 @@ pub(super) fn responses_request(
     }
     apply_generation_options(&mut object, request, "max_output_tokens", false);
     apply_reasoning_effort(&mut object, config, true);
+    apply_service_tier(&mut object, config);
+    if let Some(client_metadata) = responses_client_metadata(request) {
+        object.insert(
+            "client_metadata".to_string(),
+            Value::Object(client_metadata),
+        );
+    }
     Value::Object(object)
+}
+
+fn responses_client_metadata(request: &CanonicalRequest) -> Option<Map<String, Value>> {
+    let session_id = request.metadata.get(SESSION_ID_METADATA_KEY)?.as_str()?;
+    let thread_id = request.metadata.get(THREAD_ID_METADATA_KEY)?.as_str()?;
+    let turn_id = request.metadata.get(TURN_ID_METADATA_KEY)?.as_str()?;
+
+    let mut turn_metadata = request
+        .metadata
+        .iter()
+        .filter_map(|(key, value)| {
+            value
+                .as_str()
+                .map(|value| (key.clone(), Value::String(value.to_string())))
+        })
+        .collect::<Map<String, Value>>();
+    turn_metadata.insert(
+        REQUEST_KIND_METADATA_KEY.to_string(),
+        Value::String("turn".to_string()),
+    );
+    let serialized = serde_json::to_string(&turn_metadata).ok()?;
+
+    let client_metadata = Map::from_iter([
+        (
+            SESSION_ID_METADATA_KEY.to_string(),
+            Value::String(session_id.to_string()),
+        ),
+        (
+            THREAD_ID_METADATA_KEY.to_string(),
+            Value::String(thread_id.to_string()),
+        ),
+        (
+            TURN_ID_METADATA_KEY.to_string(),
+            Value::String(turn_id.to_string()),
+        ),
+        (
+            X_CODEX_TURN_METADATA_KEY.to_string(),
+            Value::String(serialized),
+        ),
+    ]);
+    Some(client_metadata)
 }
 
 pub(super) fn anthropic_request(
@@ -187,6 +240,18 @@ fn apply_reasoning_effort(
     } else {
         object.insert("reasoning_effort".to_string(), json!(effort));
     }
+}
+
+fn apply_service_tier(object: &mut Map<String, Value>, config: &RuntimeProviderConfig) {
+    let Some(service_tier) = config
+        .service_tier
+        .as_deref()
+        .map(str::trim)
+        .filter(|service_tier| !service_tier.is_empty())
+    else {
+        return;
+    };
+    object.insert("service_tier".to_string(), json!(service_tier));
 }
 
 fn chat_message(
@@ -324,16 +389,17 @@ fn responses_message(
                 }));
             }
             for part in &message.content {
-                if let ContentPart::ToolCall {
-                    id, name, input, ..
-                } = part
-                {
-                    items.push(json!({
+                match part {
+                    ContentPart::ToolCall {
+                        id, name, input, ..
+                    } => items.push(json!({
                         "type": "function_call",
                         "call_id": id,
                         "name": name,
                         "arguments": input.to_string(),
-                    }));
+                    })),
+                    ContentPart::RawResponseItem { item } => items.push(item.clone()),
+                    _ => {}
                 }
             }
             items
@@ -412,6 +478,7 @@ fn anthropic_message(
                 "tool_use_id": id,
                 "content": tool_result_text(result, error.as_deref()),
             })),
+            ContentPart::RawResponseItem { .. } => None,
         })
         .collect::<Vec<_>>();
     vec![json!({ "role": role, "content": content })]
@@ -582,6 +649,7 @@ mod tests {
             base_url: Some("https://gateway.example.com/v1".to_string()),
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: reasoning_effort.map(str::to_string),
+            service_tier: None,
             protocol: Some(crate::runtime_provider::RuntimeProviderProtocol::ChatCompletions),
             supports_websockets: false,
             toolshim: false,
@@ -611,6 +679,72 @@ mod tests {
     }
 
     #[test]
+    fn responses_only_emits_codex_turn_identity_and_protects_reserved_metadata() {
+        let metadata = super::super::CurrentProviderRequestMetadata::new(
+            "session-1",
+            "thread-1",
+            "turn-1",
+            Some("thread-source".to_string()),
+        )
+        .with_extra(runtime_core::ProviderMetadata::from([
+            ("session_id".to_string(), json!("overridden-session")),
+            (
+                "forked_from_thread_id".to_string(),
+                json!("overridden-source"),
+            ),
+            ("request_kind".to_string(), json!("overridden-kind")),
+            ("workspace_kind".to_string(), json!("local")),
+            ("ignored_object".to_string(), json!({"value": true})),
+        ]));
+        let provider_request = super::super::CurrentProviderRequest::new(vec![
+            super::super::CurrentProviderMessage::user(vec![
+                super::super::CurrentProviderContent::Text("hello".to_string()),
+            ]),
+        ])
+        .with_metadata(metadata);
+        let canonical = provider_request
+            .into_canonical("gpt-5-codex")
+            .expect("canonical request");
+
+        let responses = responses_request(
+            &config(Some("high")),
+            &canonical,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        );
+        let client_metadata = responses["client_metadata"]
+            .as_object()
+            .expect("Responses client_metadata");
+        assert_eq!(client_metadata["session_id"], "session-1");
+        assert_eq!(client_metadata["thread_id"], "thread-1");
+        assert_eq!(client_metadata["turn_id"], "turn-1");
+        assert!(!client_metadata.contains_key("forked_from_thread_id"));
+        let turn_metadata: Value = serde_json::from_str(
+            client_metadata["x-codex-turn-metadata"]
+                .as_str()
+                .expect("serialized turn metadata"),
+        )
+        .expect("valid turn metadata JSON");
+        assert_eq!(turn_metadata["session_id"], "session-1");
+        assert_eq!(turn_metadata["thread_id"], "thread-1");
+        assert_eq!(turn_metadata["turn_id"], "turn-1");
+        assert_eq!(turn_metadata["forked_from_thread_id"], "thread-source");
+        assert_eq!(turn_metadata["request_kind"], "turn");
+        assert_eq!(turn_metadata["workspace_kind"], "local");
+        assert!(turn_metadata.get("ignored_object").is_none());
+
+        let chat = chat_completions_request(
+            &config(Some("high")),
+            &canonical,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        );
+        let anthropic = anthropic_request(&config(None), &canonical, &BTreeMap::new());
+        assert!(chat.get("client_metadata").is_none());
+        assert!(anthropic.get("client_metadata").is_none());
+    }
+
+    #[test]
     fn blank_reasoning_effort_is_omitted() {
         let request = CanonicalRequest::text("gpt-5-codex", "hello");
         let value = chat_completions_request(
@@ -621,6 +755,29 @@ mod tests {
         );
 
         assert!(value.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn openai_service_tier_uses_native_wire_field() {
+        let request = CanonicalRequest::text("gpt-5-codex", "hello");
+        let mut config = config(None);
+        config.service_tier = Some("priority".to_string());
+
+        let chat = chat_completions_request(
+            &config,
+            &request,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        );
+        let responses = responses_request(
+            &config,
+            &request,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        );
+
+        assert_eq!(chat["service_tier"], "priority");
+        assert_eq!(responses["service_tier"], "priority");
     }
 
     #[test]

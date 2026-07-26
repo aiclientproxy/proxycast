@@ -416,9 +416,10 @@ describe("AgentChatWorkspace right surface state boundary", () => {
     );
     expect(ownerSource).toContain("renderWorkspaceRightSurfaceHostRuntime({");
     expect(ownerSource).toContain("submitWorkspaceArticleEditorActionIntent");
-    expect(ownerSource).toContain(
+    expect(ownerSource).not.toContain(
       "buildWorkspaceArticleWorkspaceSelectionUpdateRequest",
     );
+    expect(ownerSource).not.toContain("updateAgentRuntimeSession");
     expect(hostCallSource).toContain("rightSurfaceRuntime,");
     expect(hostCallSource).not.toContain("activePluginSurfaceContainerId,");
     expect(hostCallSource).not.toContain("browserRightSurfaceAvailable,");

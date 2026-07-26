@@ -196,7 +196,6 @@ describe("agentChatHistory missing user recovery", () => {
         ],
         pending_requests: [],
         incidents: [],
-        queued_turns: [],
         diagnostics: {
           latest_turn_status: "failed",
           latest_turn_started_at: "2026-06-07T09:30:00.000Z",

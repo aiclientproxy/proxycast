@@ -557,16 +557,6 @@ describe("agentSessionState", () => {
           arguments: { cmd: "pwd" },
         } as Partial<AgentThreadItem>),
       ],
-      queued_turns: [
-        {
-          queued_turn_id: "queued-1",
-          message_preview: "继续执行",
-          message_text: "继续执行当前任务",
-          created_at: 1700000002000,
-          image_count: 0,
-          position: 1,
-        },
-      ],
     } satisfies AgentSessionDetail;
 
     const result = buildHydratedAgentSessionSnapshot({
@@ -944,7 +934,6 @@ describe("agentSessionState", () => {
         ],
         pending_requests: [],
         incidents: [],
-        queued_turns: [],
         tool_calls: [
           {
             tool_call_id: "tool-webfetch-read",

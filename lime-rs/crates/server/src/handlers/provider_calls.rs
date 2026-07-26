@@ -105,6 +105,7 @@ fn provider_client_for_credential(
         base_url: base_url.clone(),
         credential_uuid: credential.uuid.clone(),
         reasoning_effort: None,
+        service_tier: None,
         protocol: Some(protocol),
         supports_websockets: false,
         toolshim: false,
@@ -474,6 +475,8 @@ fn openai_request_to_current(
         }
         let role = if message.role.eq_ignore_ascii_case("assistant") {
             CurrentProviderRole::Assistant
+        } else if message.role.eq_ignore_ascii_case("developer") {
+            CurrentProviderRole::Developer
         } else if message.role.eq_ignore_ascii_case("tool") {
             CurrentProviderRole::Tool
         } else {

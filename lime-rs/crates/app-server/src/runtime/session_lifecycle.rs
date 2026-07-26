@@ -1,4 +1,3 @@
-use super::article_workspace_edited_draft;
 use super::read_model;
 use super::session_list_scope::normalize_cwd_values;
 use super::session_list_scope::SessionListScope;
@@ -7,7 +6,6 @@ use super::status::resolve_agent_session_runtime_state;
 use super::*;
 use agent_protocol::AgentInput as UserInput;
 use app_server_protocol::*;
-use serde_json::json;
 use std::collections::{HashMap, HashSet};
 
 const DEFAULT_SESSION_LIST_LIMIT: u32 = 100;
@@ -102,145 +100,13 @@ fn first_user_message_from_stored_session(stored: &StoredSession) -> Option<Stri
         })
 }
 
-fn stored_session_hidden_from_user_recents(stored: &StoredSession) -> bool {
+pub(super) fn stored_session_hidden_from_user_recents(stored: &StoredSession) -> bool {
     stored
         .session
         .business_object_ref
         .as_ref()
         .and_then(|reference| reference.metadata.as_ref())
         .is_some_and(metadata_hidden_from_user_recents)
-}
-
-fn update_session_business_object_title(session: &mut AgentSession, title: &str) {
-    let title = title.trim();
-    if title.is_empty() {
-        return;
-    }
-    match session.business_object_ref.as_mut() {
-        Some(reference) => {
-            reference.title = Some(title.to_string());
-            match reference.metadata.take() {
-                Some(serde_json::Value::Object(mut metadata)) => {
-                    metadata.insert(
-                        "title".to_string(),
-                        serde_json::Value::String(title.to_string()),
-                    );
-                    reference.metadata = Some(serde_json::Value::Object(metadata));
-                }
-                Some(metadata) => {
-                    reference.metadata = Some(json!({
-                        "title": title,
-                        "previousMetadata": metadata,
-                    }));
-                }
-                None => {
-                    reference.metadata = Some(json!({ "title": title }));
-                }
-            }
-        }
-        None => {
-            session.business_object_ref = Some(app_server_protocol::BusinessObjectRef {
-                kind: "agent.session".to_string(),
-                id: session.session_id.clone(),
-                title: Some(title.to_string()),
-                uri: None,
-                metadata: Some(json!({ "title": title })),
-            });
-        }
-    }
-}
-
-fn update_session_business_object_metadata(
-    session: &mut AgentSession,
-    params: &AgentSessionUpdateParams,
-) {
-    let existing_article_workspace_edited_draft = session
-        .business_object_ref
-        .as_ref()
-        .and_then(|reference| reference.metadata.as_ref())
-        .and_then(serde_json::Value::as_object)
-        .and_then(article_workspace_edited_draft::metadata_edited_draft);
-    let mut updates = serde_json::Map::new();
-    insert_trimmed_metadata_string(
-        &mut updates,
-        "providerSelector",
-        params.provider_selector.as_deref(),
-    );
-    insert_trimmed_metadata_string(
-        &mut updates,
-        "providerName",
-        params.provider_name.as_deref(),
-    );
-    insert_trimmed_metadata_string(&mut updates, "modelName", params.model_name.as_deref());
-    insert_trimmed_metadata_string(
-        &mut updates,
-        "executionStrategy",
-        params.execution_strategy.as_deref(),
-    );
-    insert_trimmed_metadata_string(
-        &mut updates,
-        "recentAccessMode",
-        params.recent_access_mode.as_deref(),
-    );
-    if let Some(value) = params.recent_preferences.as_ref() {
-        updates.insert("recentPreferences".to_string(), value.clone());
-    }
-    if let Some(value) = params.article_workspace_selected_object_ref.as_ref() {
-        updates.insert(
-            "articleWorkspaceSelectedObjectRef".to_string(),
-            value.clone(),
-        );
-    }
-    if let Some(value) = params.article_workspace_edited_draft.as_ref() {
-        if !article_workspace_edited_draft::should_reject_edited_draft_update(
-            existing_article_workspace_edited_draft,
-            value,
-        ) {
-            updates.insert("articleWorkspaceEditedDraft".to_string(), value.clone());
-        }
-    }
-    if updates.is_empty() {
-        return;
-    }
-
-    let session_id = session.session_id.clone();
-    let reference =
-        session
-            .business_object_ref
-            .get_or_insert_with(|| app_server_protocol::BusinessObjectRef {
-                kind: "agent.session".to_string(),
-                id: session_id,
-                title: None,
-                uri: None,
-                metadata: None,
-            });
-    match reference.metadata.take() {
-        Some(serde_json::Value::Object(mut metadata)) => {
-            metadata.extend(updates);
-            reference.metadata = Some(serde_json::Value::Object(metadata));
-        }
-        Some(metadata) => {
-            updates.insert("previousMetadata".to_string(), metadata);
-            reference.metadata = Some(serde_json::Value::Object(updates));
-        }
-        None => {
-            reference.metadata = Some(serde_json::Value::Object(updates));
-        }
-    }
-}
-
-fn insert_trimmed_metadata_string(
-    metadata: &mut serde_json::Map<String, serde_json::Value>,
-    key: &str,
-    value: Option<&str>,
-) {
-    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
-        return;
-    };
-    metadata.insert(
-        key.to_string(),
-        serde_json::Value::String(value.to_string()),
-    );
 }
 
 fn metadata_hidden_from_user_recents(metadata: &serde_json::Value) -> bool {
@@ -487,72 +353,6 @@ impl RuntimeCore {
             }
         }
         Err(RuntimeCoreError::SessionNotFound(session_id.to_string()))
-    }
-
-    pub async fn update_session_current(
-        &self,
-        params: AgentSessionUpdateParams,
-    ) -> Result<AgentSessionUpdateResponse, RuntimeCoreError> {
-        let normalized_session_id = params.session_id.trim().to_string();
-        if normalized_session_id.is_empty() {
-            return Err(RuntimeCoreError::Backend(
-                "sessionId is required for agentSession/update".to_string(),
-            ));
-        }
-        let runtime_session =
-            self.update_runtime_core_session_overview(params.clone(), &normalized_session_id)?;
-        if let Some(projection_store) = self.projection_store.as_ref() {
-            if let Some(response) = projection_store
-                .update_session_overview(
-                    AgentSessionUpdateParams {
-                        session_id: normalized_session_id.clone(),
-                        title: params.title.clone(),
-                        provider_selector: params.provider_selector.clone(),
-                        provider_name: params.provider_name.clone(),
-                        model_name: params.model_name.clone(),
-                        execution_strategy: params.execution_strategy.clone(),
-                        recent_access_mode: params.recent_access_mode.clone(),
-                        recent_preferences: params.recent_preferences.clone(),
-                        article_workspace_selected_object_ref: params
-                            .article_workspace_selected_object_ref
-                            .clone(),
-                        article_workspace_edited_draft: params
-                            .article_workspace_edited_draft
-                            .clone(),
-                    },
-                    timestamp().as_str(),
-                )
-                .map_err(RuntimeCoreError::Backend)?
-            {
-                return Ok(response);
-            }
-        }
-        if let Some(session) = runtime_session {
-            return Ok(AgentSessionUpdateResponse { session });
-        }
-        Err(RuntimeCoreError::SessionNotFound(normalized_session_id))
-    }
-
-    fn update_runtime_core_session_overview(
-        &self,
-        params: AgentSessionUpdateParams,
-        session_id: &str,
-    ) -> Result<Option<AgentSessionOverview>, RuntimeCoreError> {
-        let mut state = self
-            .state
-            .lock()
-            .expect("runtime core state mutex poisoned");
-        let Some(stored) = state.sessions.get_mut(session_id) else {
-            return Ok(None);
-        };
-        if let Some(title) = params.title.as_deref().map(str::trim) {
-            if !title.is_empty() {
-                update_session_business_object_title(&mut stored.session, title);
-            }
-        }
-        update_session_business_object_metadata(&mut stored.session, &params);
-        stored.session.updated_at = timestamp();
-        Ok(Some(stored_session_to_overview(stored)))
     }
 
     pub(in crate::runtime) async fn ensure_current_session_hydrated(

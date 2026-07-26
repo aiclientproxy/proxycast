@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "ThreadSearchOccurrence": {
+      "properties": {
+        "itemId": {
+          "type": "string"
+        },
+        "snippet": {
+          "type": "string"
+        },
+        "snippetMatchRange": {
+          "$ref": "#/$defs/ThreadSearchTextRange"
+        },
+        "turnCursor": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "itemId",
+        "snippet",
+        "snippetMatchRange",
+        "turnCursor",
+        "turnId"
+      ],
+      "type": "object"
+    },
+    "ThreadSearchTextRange": {
+      "properties": {
+        "end": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "end",
+        "start"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "data": {
+      "items": {
+        "$ref": "#/$defs/ThreadSearchOccurrence"
+      },
+      "type": "array"
+    },
+    "nextCursor": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ],
+  "title": "ThreadSearchOccurrencesResponse",
+  "type": "object"
+}

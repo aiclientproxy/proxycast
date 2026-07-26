@@ -55,6 +55,7 @@ pub(super) fn runtime_provider_config_from_credential(
         base_url,
         credential_uuid: credential.uuid.clone(),
         reasoning_effort: None,
+        service_tier: None,
         protocol: None,
         supports_websockets: resolved_api_type
             .is_some_and(|provider_type| provider_type.runtime_spec().supports_websockets),

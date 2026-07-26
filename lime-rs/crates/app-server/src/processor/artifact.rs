@@ -13,7 +13,9 @@ impl RequestProcessor {
         self.ensure_initialized()?;
         let params: ArtifactWriteParams = parse_params(params)?;
         validate_artifact_write(&params)?;
-        let session_id = self.resolve_v2_thread_session(&params.thread_id).await?;
+        let session_id = self
+            .resolve_persisted_v2_thread_session(&params.thread_id)
+            .await?;
         let payload = artifact_snapshot_payload(&params.artifact);
         let events = self
             .runtime

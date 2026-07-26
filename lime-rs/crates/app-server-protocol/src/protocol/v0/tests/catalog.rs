@@ -46,10 +46,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
             METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT,
             METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT,
             METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE,
-            METHOD_AGENT_SESSION_UPDATE,
-            METHOD_AGENT_SESSION_COMPACT,
-            METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE,
-            METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE,
             METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST,
             METHOD_AGENT_SESSION_FILE_CHECKPOINT_GET,
             METHOD_AGENT_SESSION_FILE_CHECKPOINT_DIFF,
@@ -251,7 +247,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
             METHOD_USAGE_STATS_READ,
             METHOD_USAGE_STATS_MODEL_RANKING_LIST,
             METHOD_USAGE_STATS_DAILY_TRENDS_LIST,
-            METHOD_MODEL_LIST,
             METHOD_MODEL_PREFERENCES_LIST,
             METHOD_MODEL_SYNC_STATE_READ,
             METHOD_MODEL_PROVIDER_LIST,
@@ -335,14 +330,7 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
     assert!(is_app_server_request_method(
         METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE
     ));
-    assert!(is_app_server_request_method(METHOD_AGENT_SESSION_COMPACT));
     assert!(is_app_server_request_method(METHOD_THREAD_RESUME));
-    assert!(is_app_server_request_method(
-        METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE
-    ));
-    assert!(is_app_server_request_method(
-        METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE
-    ));
     assert!(is_app_server_request_method(METHOD_TURN_START));
     assert!(is_app_server_request_method(METHOD_WORKFLOW_READ));
     assert!(is_app_server_request_method(METHOD_WORKFLOW_CANCEL));
@@ -438,6 +426,34 @@ fn app_server_request_serialization_scope_covers_high_risk_methods() {
     assert_eq!(
         app_server_request_serialization_scope(METHOD_THREAD_RESUME),
         Some(AppServerRequestSerializationScope::Thread)
+    );
+    assert_eq!(
+        app_server_request_serialization_scope(
+            crate::protocol::v2::METHOD_THREAD_INCREMENT_ELICITATION
+        ),
+        Some(AppServerRequestSerializationScope::Thread)
+    );
+    assert_eq!(
+        app_server_request_serialization_scope(
+            crate::protocol::v2::METHOD_THREAD_DECREMENT_ELICITATION
+        ),
+        Some(AppServerRequestSerializationScope::Thread)
+    );
+    assert_eq!(
+        app_server_request_access(crate::protocol::v2::METHOD_THREAD_INCREMENT_ELICITATION),
+        AppServerRequestAccess::Exclusive
+    );
+    assert_eq!(
+        app_server_request_access(crate::protocol::v2::METHOD_THREAD_DECREMENT_ELICITATION),
+        AppServerRequestAccess::Exclusive
+    );
+    assert_eq!(
+        app_server_request_serialization_scope(crate::protocol::v2::METHOD_THREAD_INJECT_ITEMS),
+        Some(AppServerRequestSerializationScope::Thread)
+    );
+    assert_eq!(
+        app_server_request_access(crate::protocol::v2::METHOD_THREAD_INJECT_ITEMS),
+        AppServerRequestAccess::Exclusive
     );
     assert_eq!(
         app_server_request_serialization_scope(METHOD_EXECUTION_PROCESS_START),

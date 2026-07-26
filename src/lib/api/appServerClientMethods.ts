@@ -196,6 +196,11 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerThreadReadResponse>
     >;
+    setThreadName(
+      params: appServer.AppServerThreadSetNameParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadSetNameResponse>
+    >;
     updateThreadSettings(
       params: appServer.AppServerThreadSettingsUpdateParams,
     ): Promise<
@@ -232,35 +237,20 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerAgentSessionToolInventoryReadResponse>
     >;
-    updateSession(
-      params: appServer.AppServerAgentSessionUpdateParams,
-    ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerAgentSessionUpdateResponse>
-    >;
     deleteThread(
       params: appServer.AppServerThreadDeleteParams,
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerThreadDeleteResponse>
     >;
-    compactAgentSession(
-      params: appServer.AppServerAgentSessionCompactParams,
+    startThreadCompaction(
+      params: appServer.AppServerThreadCompactStartParams,
     ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerAgentSessionCompactResponse>
+      appServer.AppServerRequestResult<appServer.AppServerThreadCompactStartResponse>
     >;
     resumeThread(
       params: appServer.AppServerThreadResumeParams,
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerThreadResumeResponse>
-    >;
-    removeAgentSessionQueuedTurn(
-      params: appServer.AppServerAgentSessionQueuedTurnRemoveParams,
-    ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerAgentSessionQueuedTurnRemoveResponse>
-    >;
-    promoteAgentSessionQueuedTurn(
-      params: appServer.AppServerAgentSessionQueuedTurnPromoteParams,
-    ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerAgentSessionQueuedTurnPromoteResponse>
     >;
     listAgentSessionFileCheckpoints(
       params: appServer.AppServerAgentSessionFileCheckpointListParams,

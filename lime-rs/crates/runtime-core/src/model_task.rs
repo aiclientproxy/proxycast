@@ -90,7 +90,8 @@ pub fn capability_snapshot_from_model_capabilities(value: &Value) -> CapabilityS
                         .get("reasoningEffort")
                         .or_else(|| capabilities.get("reasoning_effort"))
                 })
-                .cloned(),
+                .cloned()
+                .and_then(|support| serde_json::from_value(support).ok()),
         },
         source: None,
         reason_code: None,

@@ -18,7 +18,11 @@ import {
   writeWorkspaceArticleWorkspaceSelectedObjectKey,
 } from "./workspaceArticleWorkspaceSelection";
 import type { WorkspaceArticleMarkdownChange } from "./workspaceArticleWorkspaceEditedDraft";
-import type { WorkspaceArticleWorkspaceSelectionChange } from "./workspaceArticleWorkspaceSelectionWriteback";
+
+interface WorkspaceArticleWorkspaceSelectionChange {
+  articleWorkspace: WorkspaceArticleWorkspace;
+  object: WorkspaceArticleObject;
+}
 
 interface WorkspaceArticleEditorRightSurfaceProps {
   articleWorkspace: WorkspaceArticleWorkspace;

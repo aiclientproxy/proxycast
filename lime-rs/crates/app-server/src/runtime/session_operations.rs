@@ -103,13 +103,16 @@ impl RuntimeCore {
         self.ensure_current_session_hydrated(&session_id).await?;
 
         let state = Arc::clone(&self.state);
+        let backend = Arc::clone(&self.backend);
         let projection_store = self.projection_store.clone().ok_or_else(|| {
             RuntimeCoreError::Backend(
                 "session metadata persistence requires the projection store".to_string(),
             )
         })?;
         let result = Arc::new(Mutex::new(None));
+        let preflight_error = Arc::new(Mutex::new(None));
         let handler_result = Arc::clone(&result);
+        let handler_preflight_error = Arc::clone(&preflight_error);
         let handler_session_id = session_id.clone();
         let handler_thread_id = thread_id.clone();
         let handler_mutation = mutation.clone();
@@ -120,9 +123,32 @@ impl RuntimeCore {
             let session_id = handler_session_id.clone();
             let thread_id = handler_thread_id.clone();
             let mutation = handler_mutation.clone();
+            let backend = Arc::clone(&backend);
+            let preflight_error = Arc::clone(&handler_preflight_error);
             Box::pin(async move {
                 if context.session_id != session_id {
                     return Err("session actor identity changed during metadata update".to_string());
+                }
+                if let SessionMetadataMutation::ThreadSettings(params) = &mutation {
+                    if thread_settings_require_route_preflight(params) {
+                        let (candidate_session, candidate_settings) =
+                            preview_thread_settings_mutation(
+                                &state,
+                                &session_id,
+                                &thread_id,
+                                params.clone(),
+                            )?;
+                        if let Err(error) = backend
+                            .preflight_thread_settings(&candidate_session, &candidate_settings)
+                            .await
+                        {
+                            let message = error.to_string();
+                            *preflight_error.lock().map_err(|_| {
+                                "thread settings preflight error lock poisoned".to_string()
+                            })? = Some(error);
+                            return Err(message);
+                        }
+                    }
                 }
                 let mutation_result = apply_session_metadata_mutation(
                     &state,
@@ -147,10 +173,26 @@ impl RuntimeCore {
             }
         };
         let session = self.session_loops.get_or_create(&session_id).await;
-        let dispatch_result = session
+        let dispatch_result = match session
             .dispatch(RuntimeSessionOperationSubmission::new(operation))
             .await
-            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+        {
+            Ok(result) => result,
+            Err(error) => {
+                if let Some(error) = preflight_error
+                    .lock()
+                    .map_err(|_| {
+                        RuntimeCoreError::Backend(
+                            "thread settings preflight error lock poisoned".to_string(),
+                        )
+                    })?
+                    .take()
+                {
+                    return Err(error);
+                }
+                return Err(RuntimeCoreError::Backend(error.to_string()));
+            }
+        };
         if !matches!(
             dispatch_result,
             RuntimeSessionOperationResult::Accepted { .. }
@@ -168,6 +210,57 @@ impl RuntimeCore {
             )
         })
     }
+}
+
+fn preview_thread_settings_mutation(
+    state: &Arc<Mutex<RuntimeCoreState>>,
+    session_id: &str,
+    thread_id: &str,
+    params: ThreadSettingsUpdateParams,
+) -> Result<(app_server_protocol::AgentSession, ThreadSettings), String> {
+    let state = state
+        .lock()
+        .map_err(|_| "runtime core state lock poisoned".to_string())?;
+    let stored = state
+        .sessions
+        .get(session_id)
+        .ok_or_else(|| format!("session not found: {session_id}"))?;
+    if stored.session.thread_id != thread_id {
+        return Err(format!(
+            "session/thread identity mismatch for thread {thread_id}"
+        ));
+    }
+
+    let mut candidate_session = stored.session.clone();
+    let metadata = candidate_session
+        .business_object_ref
+        .as_ref()
+        .and_then(|reference| reference.metadata.clone())
+        .unwrap_or_else(|| Value::Object(Default::default()));
+    let mut metadata = metadata
+        .as_object()
+        .cloned()
+        .ok_or_else(|| "thread metadata must be a JSON object".to_string())?;
+    apply_thread_settings_patch(&mut metadata, params)?;
+    let settings = thread_settings_from_metadata(&metadata)?;
+    let reference = candidate_session
+        .business_object_ref
+        .get_or_insert_with(|| app_server_protocol::BusinessObjectRef {
+            kind: "agent.thread".to_string(),
+            id: thread_id.to_string(),
+            title: None,
+            uri: None,
+            metadata: None,
+        });
+    reference.metadata = Some(Value::Object(metadata));
+    Ok((candidate_session, settings))
+}
+
+fn thread_settings_require_route_preflight(params: &ThreadSettingsUpdateParams) -> bool {
+    params.model.is_some()
+        || params.model_provider.is_some()
+        || params.effort.is_some()
+        || params.collaboration_mode.is_some()
 }
 
 fn apply_session_metadata_mutation(
@@ -257,6 +350,12 @@ fn validate_thread_settings(params: &ThreadSettingsUpdateParams) -> Result<(), R
         }
     }
     validate_optional_string(params.model.as_deref(), "model")?;
+    validate_optional_string(params.model_provider.as_deref(), "modelProvider")?;
+    if params.model_provider.is_some() && params.model.is_none() {
+        return Err(RuntimeCoreError::InvalidRequest(
+            "thread/settings/update modelProvider requires model".to_string(),
+        ));
+    }
     validate_optional_string(params.effort.as_deref(), "effort")?;
     if let Some(Some(service_tier)) = params.service_tier.as_ref() {
         normalized_value(service_tier, "serviceTier")?;
@@ -267,6 +366,7 @@ fn validate_thread_settings(params: &ThreadSettingsUpdateParams) -> Result<(), R
         ("sandboxPolicy", params.sandbox_policy.as_ref()),
         ("summary", params.summary.as_ref()),
         ("personality", params.personality.as_ref()),
+        ("toolPreferences", params.tool_preferences.as_ref()),
     ] {
         if let Some(value) = value {
             validate_setting_value(value, name)?;
@@ -287,12 +387,24 @@ fn apply_thread_settings_patch(
     params: ThreadSettingsUpdateParams,
 ) -> Result<(), String> {
     let model_update = params.model.clone();
+    let model_provider_update = params.model_provider.clone();
     let effort_update = params.effort.clone();
+    let collaboration_model_update = params.collaboration_mode.is_some();
     insert_string(metadata, "workingDir", params.cwd);
     insert_value(metadata, "approvalPolicy", params.approval_policy);
     insert_value(metadata, "approvalsReviewer", params.approvals_reviewer);
     insert_value(metadata, "sandboxPolicy", params.sandbox_policy);
     insert_string(metadata, "modelName", params.model);
+    if let Some(model_provider) = params.model_provider {
+        metadata.insert(
+            "providerSelector".to_string(),
+            Value::String(model_provider.clone()),
+        );
+        metadata.insert("providerName".to_string(), Value::String(model_provider));
+    }
+    if model_update.is_some() || model_provider_update.is_some() || collaboration_model_update {
+        metadata.remove("agentControlRoute");
+    }
     if let Some(service_tier) = params.service_tier {
         match service_tier {
             Some(service_tier) => {
@@ -343,6 +455,7 @@ fn apply_thread_settings_patch(
         persist_collaboration_mode(metadata, mode)?;
     }
     insert_value(metadata, "personality", params.personality);
+    insert_value(metadata, "toolPreferences", params.tool_preferences);
     Ok(())
 }
 
@@ -377,6 +490,7 @@ fn thread_settings_from_metadata(metadata: &Map<String, Value>) -> Result<Thread
         summary: metadata_alias(metadata, &["reasoningSummary", "summary"]),
         collaboration_mode,
         personality: metadata_alias(metadata, &["personality"]),
+        tool_preferences: metadata_alias(metadata, &["toolPreferences"]),
     })
 }
 
@@ -465,7 +579,109 @@ fn metadata_string(metadata: &Map<String, Value>, keys: &[&str]) -> Option<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use serde_json::json;
+
+    struct RejectingModelSwitchBackend;
+
+    #[async_trait]
+    impl crate::ExecutionBackend for RejectingModelSwitchBackend {
+        async fn preflight_thread_settings(
+            &self,
+            session: &app_server_protocol::AgentSession,
+            settings: &ThreadSettings,
+        ) -> Result<(), RuntimeCoreError> {
+            Err(RuntimeCoreError::RouteRejected {
+                session_id: session.session_id.clone(),
+                provider: Some(settings.model_provider.clone()),
+                model: Some(settings.model.clone()),
+                category: app_server_protocol::RouteFailureCategory::ModelUnavailable,
+                reason_code: "model_registry_metadata_missing".to_string(),
+            })
+        }
+
+        async fn start_turn(
+            &self,
+            _request: crate::ExecutionRequest,
+            _sink: &mut dyn crate::RuntimeEventSink,
+        ) -> Result<(), RuntimeCoreError> {
+            Ok(())
+        }
+
+        async fn cancel_turn(
+            &self,
+            _request: crate::CancelExecutionRequest,
+            _sink: &mut dyn crate::RuntimeEventSink,
+        ) -> Result<(), RuntimeCoreError> {
+            Ok(())
+        }
+
+        async fn respond_action(
+            &self,
+            _request: crate::ActionRespondRequest,
+            _sink: &mut dyn crate::RuntimeEventSink,
+        ) -> Result<(), RuntimeCoreError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn rejected_model_switch_does_not_persist_candidate_settings() {
+        let temp = tempfile::TempDir::new().expect("thread settings temp dir");
+        let store = Arc::new(
+            crate::ProjectionStore::initialize(temp.path().join("projection.sqlite"))
+                .expect("thread settings projection store"),
+        );
+        let core = RuntimeCore::with_backend(Arc::new(RejectingModelSwitchBackend))
+            .with_projection_store(store);
+        core.start_session(app_server_protocol::AgentSessionStartParams {
+            session_id: Some("session-settings-preflight".to_string()),
+            thread_id: Some("thread-settings-preflight".to_string()),
+            app_id: "agent-chat".to_string(),
+            workspace_id: None,
+            business_object_ref: Some(app_server_protocol::BusinessObjectRef {
+                kind: "agent.thread".to_string(),
+                id: "thread-settings-preflight".to_string(),
+                title: None,
+                uri: None,
+                metadata: Some(json!({
+                    "providerSelector": "provider-a",
+                    "providerName": "provider-a",
+                    "modelName": "model-a"
+                })),
+            }),
+            locale: None,
+        })
+        .expect("start settings preflight session");
+
+        let error = core
+            .update_thread_settings(ThreadSettingsUpdateParams {
+                thread_id: "thread-settings-preflight".to_string(),
+                model: Some("missing-model".to_string()),
+                model_provider: Some("provider-b".to_string()),
+                ..ThreadSettingsUpdateParams::default()
+            })
+            .await
+            .expect_err("model switch must be rejected");
+
+        assert!(matches!(
+            error,
+            RuntimeCoreError::RouteRejected {
+                reason_code,
+                ..
+            } if reason_code == "model_registry_metadata_missing"
+        ));
+        let state = core.state.lock().expect("runtime state");
+        let metadata = state.sessions["session-settings-preflight"]
+            .session
+            .business_object_ref
+            .as_ref()
+            .and_then(|reference| reference.metadata.as_ref())
+            .expect("persisted metadata");
+        assert_eq!(metadata["providerSelector"], "provider-a");
+        assert_eq!(metadata["providerName"], "provider-a");
+        assert_eq!(metadata["modelName"], "model-a");
+    }
 
     #[test]
     fn plain_model_and_effort_updates_refresh_the_active_collaboration_mode() {
@@ -480,6 +696,11 @@ mod tests {
                     "reasoning_effort": "low",
                     "developer_instructions": "Keep the existing plan instructions."
                 }
+            },
+            "agentControlRoute": {
+                "schemaVersion": 2,
+                "providerPreference": "provider-a",
+                "modelPreference": "model-a"
             }
         })
         .as_object()
@@ -491,6 +712,7 @@ mod tests {
             ThreadSettingsUpdateParams {
                 thread_id: "thread-1".to_string(),
                 model: Some("model-b".to_string()),
+                model_provider: Some("provider-b".to_string()),
                 effort: Some("high".to_string()),
                 ..ThreadSettingsUpdateParams::default()
             },
@@ -503,6 +725,9 @@ mod tests {
         assert_eq!(mode.mode, ModeKind::Plan);
         assert_eq!(mode.settings.model, "model-b");
         assert_eq!(mode.settings.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(metadata["providerSelector"], "provider-b");
+        assert_eq!(metadata["providerName"], "provider-b");
+        assert!(metadata.get("agentControlRoute").is_none());
         assert_eq!(
             mode.settings.developer_instructions.as_deref(),
             Some("Keep the existing plan instructions.")

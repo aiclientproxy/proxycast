@@ -11,8 +11,8 @@ import {
   mockGetAgentRuntimeSession,
   mockListAgentRuntimeSessions,
   mockScheduleMinimumDelayIdleTask,
+  mockSetAgentRuntimeThreadName,
   mockSubmitAgentRuntimeTurn,
-  mockUpdateAgentRuntimeSession,
   mountHook,
 } from "../useAgentChat.testUtils";
 
@@ -65,7 +65,6 @@ describe("useAgentChat 兼容接口 - topics", () => {
   it("切换 legacy executionStrategy 且 session 同步未完成时也不随 turn 提交 execution_strategy", async () => {
     const workspaceId = "ws-runtime-strategy-pending-sync";
     const topicId = "topic-runtime-strategy-pending-sync";
-    let resolveStrategySync: (() => void) | null = null;
     mockGetAgentRuntimeSession.mockResolvedValue({
       id: topicId,
       created_at: Date.now(),
@@ -75,15 +74,6 @@ describe("useAgentChat 兼容接口 - topics", () => {
       turns: [],
       items: [],
     });
-    mockUpdateAgentRuntimeSession.mockImplementation((request) => {
-      if (request?.execution_strategy) {
-        return new Promise<void>((resolve) => {
-          resolveStrategySync = resolve;
-        });
-      }
-      return Promise.resolve();
-    });
-
     const harness = mountHook(workspaceId);
 
     try {
@@ -110,7 +100,6 @@ describe("useAgentChat 兼容接口 - topics", () => {
           ?.runtimeRequest?.executionStrategy,
       ).toBeUndefined();
     } finally {
-      (resolveStrategySync as (() => void) | null)?.();
       harness.unmount();
     }
   });
@@ -269,8 +258,8 @@ describe("useAgentChat 兼容接口 - topics", () => {
         await harness.getValue().renameTopic("topic-1", "新标题");
       });
 
-      expect(mockUpdateAgentRuntimeSession).toHaveBeenCalledWith({
-        session_id: "topic-1",
+      expect(mockSetAgentRuntimeThreadName).toHaveBeenCalledWith({
+        threadId: "topic-1",
         name: "新标题",
       });
 
@@ -340,8 +329,8 @@ describe("useAgentChat 兼容接口 - topics", () => {
       });
       await flushEffects();
 
-      expect(mockUpdateAgentRuntimeSession).toHaveBeenCalledWith({
-        session_id: sessionId,
+      expect(mockSetAgentRuntimeThreadName).toHaveBeenCalledWith({
+        threadId: sessionId,
         name: generatedTitle,
       });
       expect(
@@ -393,8 +382,8 @@ describe("useAgentChat 兼容接口 - topics", () => {
           minimumDelayMs: 400,
         }),
       );
-      expect(mockUpdateAgentRuntimeSession).toHaveBeenCalledWith({
-        session_id: sessionId,
+      expect(mockSetAgentRuntimeThreadName).toHaveBeenCalledWith({
+        threadId: sessionId,
         name: generatedTitle,
       });
       expect(

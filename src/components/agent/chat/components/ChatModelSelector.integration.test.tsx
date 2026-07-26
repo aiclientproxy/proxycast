@@ -9,7 +9,7 @@ const {
   mockCreateAgentRuntimeSession,
   mockListAgentRuntimeSessions,
   mockGetAgentRuntimeSession,
-  mockUpdateAgentRuntimeSession,
+  mockUpdateAgentRuntimeThreadSettings,
   mockParseAgentEvent,
   mockSafeListen,
   mockToast,
@@ -26,7 +26,7 @@ const {
   mockCreateAgentRuntimeSession: vi.fn(),
   mockListAgentRuntimeSessions: vi.fn(),
   mockGetAgentRuntimeSession: vi.fn(),
-  mockUpdateAgentRuntimeSession: vi.fn(),
+  mockUpdateAgentRuntimeThreadSettings: vi.fn(),
   mockParseAgentEvent: vi.fn((payload: unknown) => payload),
   mockSafeListen: vi.fn(),
   mockToast: {
@@ -66,7 +66,6 @@ vi.mock("@/lib/api/agentRuntime/sessionClient", async () => {
     createAgentRuntimeSession: mockCreateAgentRuntimeSession,
     listAgentRuntimeSessions: mockListAgentRuntimeSessions,
     getAgentRuntimeSession: mockGetAgentRuntimeSession,
-    updateAgentRuntimeSession: mockUpdateAgentRuntimeSession,
   };
 });
 
@@ -260,42 +259,30 @@ function createRuntimeAdapterFixture(): AgentRuntimeAdapter {
     getThreadTurnControl: unsupported,
     replayRequest: async () => null,
     renameSession: async (sessionId, title) => {
-      await mockUpdateAgentRuntimeSession({
-        session_id: sessionId,
-        name: title,
-      });
+      void sessionId;
+      void title;
     },
     deleteSession: unsupported,
     setSessionExecutionStrategy: async (sessionId, executionStrategy) => {
-      await mockUpdateAgentRuntimeSession({
-        session_id: sessionId,
-        execution_strategy: executionStrategy,
-      });
+      void sessionId;
+      void executionStrategy;
     },
     setSessionAccessMode: async (sessionId, accessMode) => {
-      await mockUpdateAgentRuntimeSession({
-        session_id: sessionId,
-        recent_access_mode: accessMode,
-      });
+      void sessionId;
+      void accessMode;
     },
     setSessionProviderSelection: async (sessionId, providerType, model) => {
-      await mockUpdateAgentRuntimeSession({
-        session_id: sessionId,
-        provider_selector: providerType,
-        model_name: model,
+      await mockUpdateAgentRuntimeThreadSettings({
+        threadId: sessionId,
+        modelProvider: providerType,
+        model,
       });
     },
     updateSessionMetadata: async (sessionId, patch) => {
-      await mockUpdateAgentRuntimeSession({
-        session_id: sessionId,
-        ...(patch.accessMode ? { recent_access_mode: patch.accessMode } : {}),
-        ...(patch.providerType
-          ? { provider_selector: patch.providerType }
-          : {}),
-        ...(patch.model ? { model_name: patch.model } : {}),
-        ...(patch.executionStrategy
-          ? { execution_strategy: patch.executionStrategy }
-          : {}),
+      await mockUpdateAgentRuntimeThreadSettings({
+        threadId: sessionId,
+        ...(patch.providerType ? { modelProvider: patch.providerType } : {}),
+        ...(patch.model ? { model: patch.model } : {}),
       });
     },
     generateSessionTitle: async () => "",
@@ -411,7 +398,7 @@ beforeEach(async () => {
     provider_configured: false,
   });
   mockCreateAgentRuntimeSession.mockResolvedValue("created-session");
-  mockUpdateAgentRuntimeSession.mockResolvedValue(undefined);
+  mockUpdateAgentRuntimeThreadSettings.mockResolvedValue(undefined);
   mockSafeListen.mockResolvedValue(() => {});
   mockApiKeyProvidersGetProviders.mockResolvedValue([]);
   mockGetDefaultProvider.mockResolvedValue("");
@@ -444,7 +431,6 @@ beforeEach(async () => {
     execution_strategy: "react",
     turns: [],
     items: [],
-    queued_turns: [],
   }));
 
   mockUseConfiguredProviders.mockReturnValue({

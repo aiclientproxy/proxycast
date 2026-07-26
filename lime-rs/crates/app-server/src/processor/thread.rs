@@ -1,3 +1,5 @@
+mod guardian;
+mod inject_items;
 pub(super) mod projection;
 
 use super::{
@@ -6,20 +8,25 @@ use super::{
 };
 use app_server_protocol::protocol::v2::{
     ServerNotification, SortDirection, Thread, ThreadArchiveParams, ThreadArchiveResponse,
-    ThreadArchivedNotification, ThreadDeleteParams, ThreadDeleteResponse,
-    ThreadDeletedNotification, ThreadHistoryMode, ThreadItem, ThreadItemsListParams,
-    ThreadListParams, ThreadReadParams, ThreadResumeParams, ThreadResumeResponse,
-    ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadTurnsListParams,
-    ThreadUnarchiveParams, ThreadUnarchiveResponse, ThreadUnarchivedNotification, Turn,
-    TurnItemsView, TurnStatus, TurnsPage,
+    ThreadArchivedNotification, ThreadCompactStartParams, ThreadDecrementElicitationParams,
+    ThreadDecrementElicitationResponse, ThreadDeleteParams, ThreadDeleteResponse,
+    ThreadDeletedNotification, ThreadHistoryMode, ThreadIncrementElicitationParams,
+    ThreadIncrementElicitationResponse, ThreadItem, ThreadItemsListParams, ThreadListParams,
+    ThreadLoadedListParams, ThreadMetadataUpdateParams, ThreadMetadataUpdateResponse,
+    ThreadNameUpdatedNotification, ThreadReadParams, ThreadResumeParams, ThreadResumeResponse,
+    ThreadSearchOccurrencesParams, ThreadSearchParams, ThreadSetNameParams, ThreadStartParams,
+    ThreadStartResponse, ThreadStatus, ThreadTurnsListParams, ThreadUnarchiveParams,
+    ThreadUnarchiveResponse, ThreadUnarchivedNotification, ThreadUnsubscribeParams,
+    ThreadUnsubscribeResponse, ThreadUnsubscribeStatus, Turn, TurnItemsView, TurnStatus, TurnsPage,
 };
 use app_server_protocol::{
     error_codes, AgentSessionStartParams, BusinessObjectRef, JsonRpcError, JsonRpcNotification,
 };
 use projection::{
     lower_thread_items_list_params, lower_thread_list_params, lower_thread_read_params,
-    lower_thread_turns_list_params, project_thread_items_list_response,
-    project_thread_list_response, project_thread_read_response, project_thread_turns_list_response,
+    lower_thread_search_params, lower_thread_turns_list_params, project_thread_items_list_response,
+    project_thread_list_response, project_thread_read_response, project_thread_search_response,
+    project_thread_turns_list_response,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -35,6 +42,176 @@ pub(super) fn project_event(event: &app_server_protocol::AgentEvent) -> Option<P
 }
 
 impl RequestProcessor {
+    pub(super) async fn handle_thread_loaded_list_v2(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: ThreadLoadedListParams = parse_params(params)?;
+        let response = self
+            .runtime
+            .list_loaded_threads(params)
+            .map_err(|error| match error {
+                crate::RuntimeCoreError::InvalidRequest(message) => invalid_request(message),
+                other => to_jsonrpc_error(other),
+            })?;
+        dispatch_result(response)
+    }
+
+    pub(super) async fn handle_thread_unsubscribe_v2(
+        &self,
+        params: Option<serde_json::Value>,
+        connection_request_id: Option<ConnectionRequestId>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: ThreadUnsubscribeParams = parse_params(params)?;
+        let thread_id = required_thread_value(&params.thread_id, "thread/unsubscribe")?;
+        Uuid::parse_str(&thread_id)
+            .map_err(|error| invalid_request(format!("invalid thread id: {error}")))?;
+        let connection_id = connection_request_id
+            .ok_or_else(|| invalid_request("thread/unsubscribe requires transport context"))?
+            .connection_id;
+        let thread_id = agent_protocol::ThreadId::new(thread_id);
+
+        if self
+            .runtime
+            .loaded_session_id_for_thread(thread_id.as_str())
+            .is_none()
+        {
+            self.thread_states.remove_thread(&thread_id).await;
+            return dispatch_result(ThreadUnsubscribeResponse {
+                status: ThreadUnsubscribeStatus::NotLoaded,
+            });
+        }
+
+        let status = if self
+            .thread_states
+            .unsubscribe_connection(&thread_id, connection_id)
+            .await
+        {
+            ThreadUnsubscribeStatus::Unsubscribed
+        } else {
+            ThreadUnsubscribeStatus::NotSubscribed
+        };
+        dispatch_result(ThreadUnsubscribeResponse { status })
+    }
+
+    pub(super) async fn handle_thread_increment_elicitation_v2(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: ThreadIncrementElicitationParams = parse_params(params)?;
+        let thread_id = required_thread_value(&params.thread_id, "thread/increment_elicitation")?;
+        Uuid::parse_str(&thread_id)
+            .map_err(|error| invalid_request(format!("invalid thread id: {error}")))?;
+        let count = self
+            .runtime
+            .increment_thread_elicitation(&thread_id)
+            .map_err(to_jsonrpc_error)?;
+        dispatch_result(ThreadIncrementElicitationResponse {
+            count,
+            paused: count > 0,
+        })
+    }
+
+    pub(super) async fn handle_thread_decrement_elicitation_v2(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: ThreadDecrementElicitationParams = parse_params(params)?;
+        let thread_id = required_thread_value(&params.thread_id, "thread/decrement_elicitation")?;
+        Uuid::parse_str(&thread_id)
+            .map_err(|error| invalid_request(format!("invalid thread id: {error}")))?;
+        let count = self
+            .runtime
+            .decrement_thread_elicitation(&thread_id)
+            .map_err(to_jsonrpc_error)?;
+        dispatch_result(ThreadDecrementElicitationResponse {
+            count,
+            paused: count > 0,
+        })
+    }
+
+    pub(super) async fn handle_thread_name_set_v2(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: ThreadSetNameParams = parse_params(params)?;
+        let thread_id = required_thread_value(&params.thread_id, "thread/name/set")?;
+        let thread_name = params.name.trim().to_string();
+        let response = self
+            .runtime
+            .set_thread_name(ThreadSetNameParams {
+                thread_id: thread_id.clone(),
+                name: thread_name.clone(),
+            })
+            .await
+            .map_err(to_jsonrpc_error)?;
+        let notification: JsonRpcNotification =
+            ServerNotification::ThreadNameUpdated(ThreadNameUpdatedNotification {
+                thread_id,
+                thread_name: Some(thread_name),
+            })
+            .into();
+        Ok(dispatch_result(response)?.with_notification(notification))
+    }
+
+    pub(super) async fn handle_thread_metadata_update_v2(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let mut params: ThreadMetadataUpdateParams = parse_params(params)?;
+        params.thread_id = required_thread_value(&params.thread_id, "thread/metadata/update")?;
+        Uuid::parse_str(&params.thread_id)
+            .map_err(|error| invalid_request(format!("invalid thread id: {error}")))?;
+        if params.git_info.is_none() && params.is_pinned.is_none() {
+            return Err(invalid_request(
+                "thread metadata update must include at least one field",
+            ));
+        }
+        if let Some(git_info) = params.git_info.as_mut() {
+            if git_info.sha.is_none() && git_info.branch.is_none() && git_info.origin_url.is_none()
+            {
+                return Err(invalid_request("gitInfo must include at least one field"));
+            }
+            normalize_git_field(&mut git_info.sha, "gitInfo.sha")?;
+            normalize_git_field(&mut git_info.branch, "gitInfo.branch")?;
+            normalize_git_field(&mut git_info.origin_url, "gitInfo.originUrl")?;
+        }
+        let thread = self
+            .runtime
+            .update_thread_metadata(params)
+            .await
+            .map_err(to_jsonrpc_error)?;
+        let thread =
+            project_thread_read_response(agent_protocol::thread::ThreadReadResponse { thread })?
+                .thread;
+        dispatch_result(ThreadMetadataUpdateResponse { thread })
+    }
+
+    pub(super) async fn handle_thread_compact_start_v2(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: ThreadCompactStartParams = parse_params(params)?;
+        self.ensure_direct_input_allowed(&params.thread_id).await?;
+        let output = self
+            .runtime
+            .compact_thread(params)
+            .await
+            .map_err(|error| match error {
+                crate::RuntimeCoreError::InvalidRequest(message) => invalid_request(message),
+                other => to_jsonrpc_error(other),
+            })?;
+        debug_assert!(output.events.is_empty());
+        dispatch_result(output.response)
+    }
+
     pub(super) async fn handle_thread_delete_v2(
         &self,
         params: Option<serde_json::Value>,
@@ -121,8 +298,8 @@ impl RequestProcessor {
             .thread_source
             .clone()
             .unwrap_or_else(|| "appServer".to_string());
-        let session_id = format!("sess_{}", Uuid::new_v4().simple());
-        let thread_id = format!("thread_{}", Uuid::new_v4().simple());
+        let thread_id = Uuid::now_v7().to_string();
+        let session_id = thread_id.clone();
         let metadata = json!({
             "providerSelector": model_provider.clone(),
             "providerName": model_provider.clone(),
@@ -389,6 +566,45 @@ impl RequestProcessor {
             .map_err(to_jsonrpc_error)?;
         dispatch_result(project_thread_items_list_response(response)?)
     }
+
+    pub(super) async fn handle_thread_search_v2(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: ThreadSearchParams = parse_params(params)?;
+        if params.search_term.trim().is_empty() {
+            return Err(invalid_request(
+                "thread/search requires a non-empty searchTerm",
+            ));
+        }
+        let response = self
+            .runtime
+            .search_threads(lower_thread_search_params(&params)?)
+            .await
+            .map_err(to_jsonrpc_error)?;
+        dispatch_result(project_thread_search_response(response)?)
+    }
+
+    pub(super) async fn handle_thread_search_occurrences_v2(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: ThreadSearchOccurrencesParams = parse_params(params)?;
+        let thread_id = required_thread_value(&params.thread_id, "thread/searchOccurrences")?;
+        Uuid::parse_str(&thread_id)
+            .map_err(|error| invalid_request(format!("invalid thread id: {error}")))?;
+        let response = self
+            .runtime
+            .search_thread_occurrences(ThreadSearchOccurrencesParams {
+                thread_id,
+                ..params
+            })
+            .await
+            .map_err(to_jsonrpc_error)?;
+        dispatch_result(response)
+    }
 }
 
 fn normalize_thread_resume_snapshot(thread: &mut Thread, active_turn_id: Option<&str>) {
@@ -438,6 +654,17 @@ fn required_thread_value(value: &str, method: &str) -> Result<String, JsonRpcErr
         ));
     }
     Ok(value.to_string())
+}
+
+fn normalize_git_field(field: &mut Option<Option<String>>, name: &str) -> Result<(), JsonRpcError> {
+    if let Some(Some(value)) = field {
+        let normalized = value.trim().to_string();
+        if normalized.is_empty() {
+            return Err(invalid_request(format!("{name} must not be empty")));
+        }
+        *value = normalized;
+    }
+    Ok(())
 }
 
 fn validate_thread_resume_params(params: &ThreadResumeParams) -> Result<(), JsonRpcError> {
@@ -564,6 +791,7 @@ mod tests {
             parent_thread_id: None,
             preview: String::new(),
             ephemeral: false,
+            is_pinned: false,
             history_mode: ThreadHistoryMode::Legacy,
             model_provider: "provider".to_string(),
             created_at: 1,
@@ -574,6 +802,7 @@ mod tests {
             cwd: String::new(),
             cli_version: String::new(),
             source: "appServer".to_string(),
+            can_accept_direct_input: Some(true),
             thread_source: None,
             agent_nickname: None,
             agent_role: None,

@@ -71,6 +71,7 @@ interface InputbarComposerSectionProps {
   onSkillSuggestionsNeeded?: () => void;
   textareaRef: React.RefObject<HTMLTextAreaElement>;
   input: string;
+  disabledPlaceholder?: string;
   onSelectCharacter?: (character: Character) => void;
   onSelectInputCapability: SelectInputCapabilityHandler;
   activeCapability?: InputCapabilitySelection | null;
@@ -149,6 +150,7 @@ export const InputbarComposerSection: React.FC<
   onSkillSuggestionsNeeded,
   textareaRef,
   input,
+  disabledPlaceholder,
   onSelectCharacter,
   onSelectInputCapability,
   activeCapability,
@@ -278,7 +280,8 @@ export const InputbarComposerSection: React.FC<
     ? copy.planStatus.model(resolvedModel.trim())
     : copy.planStatus.modelFallback;
   const planStatusReasoningLevel = resolvedReasoningEffort
-    ? copy.planStatus.reasoningLevels[resolvedReasoningEffort]
+    ? (copy.planStatus.reasoningLevels[resolvedReasoningEffort] ??
+      resolvedReasoningEffort)
     : copy.planStatus.reasoningDefault;
   const planStatusReasoningLabel = copy.planStatus.reasoning(
     planStatusReasoningLevel,
@@ -368,6 +371,7 @@ export const InputbarComposerSection: React.FC<
     <>
       <InputbarAccessModeSelect
         isFullscreen={isFullscreen}
+        disabled={inputbarDisabled}
         accessMode={accessMode}
         setAccessMode={setAccessMode}
       />
@@ -377,6 +381,7 @@ export const InputbarComposerSection: React.FC<
           <InputbarModeStatusChip
             label={planModeStatusLabel}
             testId="inputbar-task-mode-status"
+            disabled={inputbarDisabled}
             onRemove={() => handleToolAction("task_mode")}
           />
           <PlanModeContext
@@ -398,6 +403,7 @@ export const InputbarComposerSection: React.FC<
         <InputbarModeStatusChip
           label={objectiveStatusLabel}
           testId="inputbar-objective-status"
+          disabled={inputbarDisabled}
           onRemove={() => handleToolAction("objective_mode")}
         />
       ) : null}
@@ -419,6 +425,7 @@ export const InputbarComposerSection: React.FC<
   const trailingMeta = shouldShowModelControls ? (
     <InputbarModelExtra
       isFullscreen={isFullscreen}
+      disabled={inputbarDisabled}
       providerType={resolvedProviderType}
       setProviderType={resolvedSetProviderType}
       model={resolvedModel}
@@ -514,7 +521,10 @@ export const InputbarComposerSection: React.FC<
         onRemovePathReference={onRemovePathReference}
         onPaste={onPaste}
         isFullscreen={isFullscreen}
-        placeholder={isWorkspaceVariant ? workspacePlaceholder : undefined}
+        placeholder={
+          disabledPlaceholder ||
+          (isWorkspaceVariant ? workspacePlaceholder : undefined)
+        }
         toolMode={isWorkspaceVariant ? "attach-only" : "default"}
         showDragHandle={!isWorkspaceVariant}
         visualVariant={isWorkspaceVariant ? "floating" : "default"}

@@ -1,9 +1,11 @@
 import { logAgentDebug } from "@/lib/agentDebug";
 import { recordAgentUiPerformanceMetric } from "@/lib/agentUiPerformanceMetrics";
 import { normalizeLegacyThreadItem } from "../agentTextNormalization";
-import type { AgentExecutionStrategy } from "../agentExecutionRuntime";
+import type {
+  AgentExecutionStrategy,
+  AgentSessionExecutionRuntimePreferences,
+} from "../agentExecutionRuntime";
 import type { AgentThreadItem } from "../agentProtocol";
-import { normalizeQueuedTurnSnapshots } from "../queuedTurn";
 import {
   createAppServerSessionClient,
   type AppServerSessionClient,
@@ -13,7 +15,6 @@ import { normalizeThreadReadModel } from "./normalizers";
 import type {
   AgentRuntimeCreateSessionOptions,
   AgentRuntimeGetSessionOptions,
-  AgentRuntimeUpdateSessionRequest,
 } from "./requestTypes";
 import type {
   AgentSessionDetail,
@@ -302,9 +303,6 @@ export function createSessionClient({
               normalizeLegacyThreadItem(item as AgentThreadItem),
             )
           : [],
-        queued_turns: normalizeQueuedTurnSnapshots(
-          normalizedDetail?.queued_turns,
-        ),
         thread_read: normalizeThreadReadModel(normalizedDetail?.thread_read),
         todo_items: Array.isArray(normalizedDetail?.todo_items)
           ? normalizedDetail.todo_items
@@ -361,15 +359,14 @@ export function createSessionClient({
     }
   }
 
-  async function updateAgentRuntimeSession(
-    request: AgentRuntimeUpdateSessionRequest,
-    notificationReason: AgentRuntimeSessionsChangedDetail["reason"] = "updated",
+  async function updateAgentRuntimeThreadToolPreferences(
+    sessionId: string,
+    preferences: AgentSessionExecutionRuntimePreferences,
   ): Promise<void> {
-    await appServerSessionClient.updateAgentRuntimeSession(request);
-    notifyAgentRuntimeSessionsChanged({
-      reason: notificationReason,
-      sessionId: request.session_id,
-    });
+    await appServerSessionClient.updateAgentRuntimeThreadToolPreferences(
+      sessionId,
+      preferences,
+    );
   }
 
   async function archiveAgentRuntimeSession(sessionId: string): Promise<void> {
@@ -405,7 +402,7 @@ export function createSessionClient({
     getAgentRuntimeSession,
     listAgentRuntimeSessions,
     unarchiveAgentRuntimeSession,
-    updateAgentRuntimeSession,
+    updateAgentRuntimeThreadToolPreferences,
   };
 }
 
@@ -416,5 +413,5 @@ export const {
   getAgentRuntimeSession,
   listAgentRuntimeSessions,
   unarchiveAgentRuntimeSession,
-  updateAgentRuntimeSession,
+  updateAgentRuntimeThreadToolPreferences,
 } = createSessionClient();

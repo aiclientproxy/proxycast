@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "event": {
+      "description": "Serialized Guardian assessment event. Runtime validation owns the\nGuardian action union so the public wire remains aligned with Codex."
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "event",
+    "threadId"
+  ],
+  "title": "ThreadApproveGuardianDeniedActionParams",
+  "type": "object"
+}

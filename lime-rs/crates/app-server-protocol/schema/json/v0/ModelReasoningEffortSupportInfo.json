@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "ModelReasoningEffortOptionInfo": {
+      "properties": {
+        "default": {
+          "default": false,
+          "type": "boolean"
+        },
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "value"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "default": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "levels": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "options": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+      },
+      "type": "array"
+    },
+    "source": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "supported": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "supported"
+  ],
+  "title": "ModelReasoningEffortSupportInfo",
+  "type": "object"
+}

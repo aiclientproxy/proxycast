@@ -2,19 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { safeInvoke } from "@/lib/dev-bridge";
 import {
   APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-  APP_SERVER_METHOD_AGENT_SESSION_COMPACT,
   APP_SERVER_METHOD_AGENT_SESSION_EVENT,
   APP_SERVER_METHOD_AGENT_SESSION_MEDIA_READ,
   APP_SERVER_METHOD_CANCEL_REQUEST,
-  APP_SERVER_METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE,
-  APP_SERVER_METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE,
   APP_SERVER_METHOD_THREAD_RESUME,
-  APP_SERVER_METHOD_AGENT_SESSION_UPDATE,
   APP_SERVER_METHOD_TURN_INTERRUPT,
   APP_SERVER_METHOD_TURN_START,
   APP_SERVER_METHOD_TURN_STEER,
   APP_SERVER_METHOD_THREAD_ARCHIVE,
+  APP_SERVER_METHOD_THREAD_COMPACT_START,
   APP_SERVER_METHOD_THREAD_LIST,
+  APP_SERVER_METHOD_THREAD_NAME_SET,
   APP_SERVER_METHOD_THREAD_READ,
   APP_SERVER_METHOD_THREAD_SHELL_COMMAND,
   APP_SERVER_METHOD_THREAD_UNARCHIVE,
@@ -190,6 +188,30 @@ describe("App Server API", () => {
         },
       ],
     ]);
+  });
+
+  it("thread rename 应通过 v2 thread/name/set", async () => {
+    vi.mocked(safeInvoke).mockResolvedValueOnce({
+      lines: [line({ id: 1, result: {} })],
+    });
+
+    await new AppServerClient().setThreadName({
+      threadId: "thread-1",
+      name: "新标题",
+    });
+
+    expect(vi.mocked(safeInvoke)).toHaveBeenCalledWith(
+      "app_server_handle_json_lines",
+      expect.objectContaining({
+        request: expect.objectContaining({
+          lines: [
+            expect.stringContaining(
+              `"method":"${APP_SERVER_METHOD_THREAD_NAME_SET}"`,
+            ),
+          ],
+        }),
+      }),
+    );
   });
 
   it("listThreads 应通过 canonical thread/list typed method", async () => {
@@ -1395,25 +1417,13 @@ describe("App Server API", () => {
     });
   });
 
-  it("queue/session control 应通过 App Server JSON-RPC current methods", async () => {
-    const session = {
-      sessionId: "session-1",
-      threadId: "thread-1",
-      appId: "agent-chat",
-      status: "running",
-      createdAt: "2026-06-06T00:00:00.000Z",
-      updatedAt: "2026-06-06T00:00:01.000Z",
-    };
+  it("thread control 应通过 App Server JSON-RPC current methods", async () => {
     vi.mocked(safeInvoke)
       .mockResolvedValueOnce({
         lines: [
           line({
             id: 10,
-            result: {
-              session,
-              turns: [],
-              compacted: true,
-            },
+            result: {},
           }),
         ],
       })
@@ -1429,60 +1439,20 @@ describe("App Server API", () => {
             },
           }),
         ],
-      })
-      .mockResolvedValueOnce({
-        lines: [
-          line({
-            id: 12,
-            result: {
-              session,
-              turns: [],
-              queuedTurnId: "queued-1",
-              removed: true,
-            },
-          }),
-        ],
-      })
-      .mockResolvedValueOnce({
-        lines: [
-          line({
-            id: 13,
-            result: {
-              session,
-              turns: [],
-              queuedTurnId: "queued-2",
-              promoted: true,
-            },
-          }),
-        ],
       });
 
     const client = new AppServerClient({ initialRequestId: 10 });
 
     await expect(
-      client.compactAgentSession({
-        sessionId: "session-1",
-        eventName: "agentSession/event/session-1",
+      client.startThreadCompaction({
+        threadId: "thread-1",
       }),
-    ).resolves.toMatchObject({ result: { compacted: true } });
+    ).resolves.toMatchObject({ result: {} });
     await expect(
       client.resumeThread({ threadId: "thread-1", excludeTurns: true }),
     ).resolves.toMatchObject({
       result: { thread: { id: "thread-1", sessionId: "session-1" } },
     });
-    await expect(
-      client.removeAgentSessionQueuedTurn({
-        sessionId: "session-1",
-        queuedTurnId: "queued-1",
-      }),
-    ).resolves.toMatchObject({ result: { removed: true } });
-    await expect(
-      client.promoteAgentSessionQueuedTurn({
-        sessionId: "session-1",
-        queuedTurnId: "queued-2",
-      }),
-    ).resolves.toMatchObject({ result: { promoted: true } });
-
     expect(safeInvoke).toHaveBeenNthCalledWith(
       1,
       "app_server_handle_json_lines",
@@ -1491,10 +1461,9 @@ describe("App Server API", () => {
           lines: [
             line({
               id: 10,
-              method: APP_SERVER_METHOD_AGENT_SESSION_COMPACT,
+              method: APP_SERVER_METHOD_THREAD_COMPACT_START,
               params: {
-                sessionId: "session-1",
-                eventName: "agentSession/event/session-1",
+                threadId: "thread-1",
               },
             }),
           ],
@@ -1511,36 +1480,6 @@ describe("App Server API", () => {
               id: 11,
               method: APP_SERVER_METHOD_THREAD_RESUME,
               params: { threadId: "thread-1", excludeTurns: true },
-            }),
-          ],
-        },
-      },
-    );
-    expect(safeInvoke).toHaveBeenNthCalledWith(
-      3,
-      "app_server_handle_json_lines",
-      {
-        request: {
-          lines: [
-            line({
-              id: 12,
-              method: APP_SERVER_METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE,
-              params: { sessionId: "session-1", queuedTurnId: "queued-1" },
-            }),
-          ],
-        },
-      },
-    );
-    expect(safeInvoke).toHaveBeenNthCalledWith(
-      4,
-      "app_server_handle_json_lines",
-      {
-        request: {
-          lines: [
-            line({
-              id: 13,
-              method: APP_SERVER_METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE,
-              params: { sessionId: "session-1", queuedTurnId: "queued-2" },
             }),
           ],
         },
@@ -1604,50 +1543,6 @@ describe("App Server API", () => {
               threadId: "thread-1",
               expectedTurnId: "turn-1",
               input: [{ type: "text", text: "follow up" }],
-            },
-          }),
-        ],
-      },
-    });
-  });
-
-  it("updateSession 应通过 App Server JSON-RPC 写 current session 状态", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({
-      lines: [
-        line({
-          id: 9,
-          result: {
-            session: {
-              sessionId: "session-1",
-              title: "新标题",
-              model: "gpt-5.4",
-              createdAt: "2026-06-06T00:00:00.000Z",
-              updatedAt: "2026-06-06T00:00:01.000Z",
-              archivedAt: "2026-06-06T00:00:01.000Z",
-              messagesCount: 2,
-            },
-          },
-        }),
-      ],
-    });
-
-    const client = new AppServerClient({ initialRequestId: 9 });
-    const result = await client.updateSession({
-      sessionId: "session-1",
-      title: "新标题",
-    });
-
-    expect(result.result.session.sessionId).toBe("session-1");
-    expect(result.result.session.archivedAt).toBe("2026-06-06T00:00:01.000Z");
-    expect(safeInvoke).toHaveBeenCalledWith("app_server_handle_json_lines", {
-      request: {
-        lines: [
-          line({
-            id: 9,
-            method: APP_SERVER_METHOD_AGENT_SESSION_UPDATE,
-            params: {
-              sessionId: "session-1",
-              title: "新标题",
             },
           }),
         ],

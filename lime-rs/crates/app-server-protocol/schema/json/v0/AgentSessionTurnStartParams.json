@@ -273,6 +273,12 @@
             }
           ]
         },
+        "serviceTier": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "systemPrompt": {
           "type": [
             "null",

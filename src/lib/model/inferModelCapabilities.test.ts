@@ -27,7 +27,7 @@ describe("inferModelCapabilities", () => {
     ).toBe(false);
   });
 
-  it("应保留 thinking 模型的推理能力推断", () => {
+  it("不应根据 thinking 模型名推断推理能力", () => {
     expect(
       inferModelCapabilities({
         modelId: "gpt-5.4-thinking",
@@ -35,7 +35,7 @@ describe("inferModelCapabilities", () => {
       }),
     ).toMatchObject({
       vision: true,
-      reasoning: true,
+      reasoning: false,
       tools: true,
       streaming: true,
       json_mode: true,
@@ -43,7 +43,7 @@ describe("inferModelCapabilities", () => {
     });
   });
 
-  it("应将 GPT-5 系列识别为支持思考的模型", () => {
+  it("不应根据 GPT-5 名称或 provider 推断推理能力", () => {
     expect(
       inferModelCapabilities({
         modelId: "gpt-5.4-mini",
@@ -51,13 +51,30 @@ describe("inferModelCapabilities", () => {
         capabilities: { reasoning: false },
       }),
     ).toMatchObject({
-      reasoning: true,
+      reasoning: false,
     });
     expect(
       inferModelTaskFamilies({
         modelId: "gpt-5.4-mini",
         providerId: "lime",
         capabilities: { reasoning: false },
+      }),
+    ).not.toContain("reasoning");
+  });
+
+  it("应保留显式 capability 和 runtime feature 声明的推理能力", () => {
+    expect(
+      inferModelCapabilities({
+        modelId: "provider-chat",
+        providerId: "custom-provider",
+        capabilities: { reasoning: true },
+      }),
+    ).toMatchObject({ reasoning: true });
+    expect(
+      inferModelTaskFamilies({
+        modelId: "provider-chat",
+        providerId: "custom-provider",
+        explicitRuntimeFeatures: ["reasoning"],
       }),
     ).toContain("reasoning");
   });

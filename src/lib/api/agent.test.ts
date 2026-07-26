@@ -36,7 +36,6 @@ import {
   APP_SERVER_METHOD_THREAD_START,
   APP_SERVER_METHOD_THREAD_RESUME,
   APP_SERVER_METHOD_AGENT_SESSION_TOOL_INVENTORY_READ,
-  APP_SERVER_METHOD_AGENT_SESSION_UPDATE,
   APP_SERVER_METHOD_TURN_START,
   APP_SERVER_METHOD_EVIDENCE_EXPORT,
 } from "./appServer";
@@ -63,7 +62,6 @@ import {
   deleteAgentRuntimeSession,
   getAgentRuntimeSession,
   listAgentRuntimeSessions,
-  updateAgentRuntimeSession,
 } from "./agentRuntime/sessionClient";
 import {
   getAgentRuntimeThreadRead,
@@ -304,56 +302,6 @@ describe("Agent API 治理护栏", () => {
     });
   });
 
-  it("updateAgentRuntimeSession 应支持 recent_access_mode", async () => {
-    mockAppServerResponse({
-      session: {
-        sessionId: "session-runtime-access",
-        threadId: "session-runtime-access",
-        title: "Session",
-        model: "gpt-5.4",
-        createdAt: "2026-06-06T00:00:00.000Z",
-        updatedAt: "2026-06-06T00:00:01.000Z",
-        messagesCount: 0,
-      },
-    });
-
-    await updateAgentRuntimeSession({
-      session_id: "session-runtime-access",
-      recent_access_mode: "full-access",
-    });
-
-    expectAppServerRequest(1, APP_SERVER_METHOD_AGENT_SESSION_UPDATE, {
-      sessionId: "session-runtime-access",
-      recentAccessMode: "full-access",
-    });
-  });
-
-  it("updateAgentRuntimeSession 应透传 provider_selector", async () => {
-    mockAppServerResponse({
-      session: {
-        sessionId: "session-runtime-provider",
-        threadId: "session-runtime-provider",
-        title: "Session",
-        model: "mimo-v2-pro",
-        createdAt: "2026-06-06T00:00:00.000Z",
-        updatedAt: "2026-06-06T00:00:01.000Z",
-        messagesCount: 0,
-      },
-    });
-
-    await updateAgentRuntimeSession({
-      session_id: "session-runtime-provider",
-      provider_selector: "custom-cae6e762-fb45-4f71-878c-3106510ade78",
-      model_name: "mimo-v2-pro",
-    });
-
-    expectAppServerRequest(1, APP_SERVER_METHOD_AGENT_SESSION_UPDATE, {
-      sessionId: "session-runtime-provider",
-      providerSelector: "custom-cae6e762-fb45-4f71-878c-3106510ade78",
-      modelName: "mimo-v2-pro",
-    });
-  });
-
   it("respondAgentRuntimeAction 缺少 typed pending 时应 fail closed，不发旧 action/respond", async () => {
     await expect(
       respondAgentRuntimeAction({
@@ -410,7 +358,7 @@ describe("Agent API 治理护栏", () => {
     ).resolves.toBeNull();
   });
 
-  it("getAgentRuntimeThreadRead 应经 Electron IPC 调 canonical thread/read 并归一化 queued_turns", async () => {
+  it("getAgentRuntimeThreadRead 应经 Electron IPC 调 canonical thread/read", async () => {
     mockAppServerResponse({
       thread: canonicalThread({
         status: { type: "active", activeFlags: ["waitingOnUserInput"] },
@@ -444,12 +392,6 @@ describe("Agent API 治理护栏", () => {
       status: "waitingAction",
       profile_status: "blocked",
       active_turn_id: "turn-runtime",
-      queued_turns: [
-        expect.objectContaining({
-          queued_turn_id: "queued-turn-1",
-          position: 1,
-        }),
-      ],
     });
 
     expectAppServerRequest(1, APP_SERVER_METHOD_THREAD_READ, {
@@ -496,32 +438,6 @@ describe("Agent API 治理护栏", () => {
         sessionId: "session-runtime-replay-case",
       },
     );
-  });
-
-  it("updateAgentRuntimeSession 应经 Electron IPC 调 App Server", async () => {
-    mockAppServerResponse({
-      session: {
-        sessionId: "session-runtime",
-        threadId: "session-runtime",
-        title: "新标题",
-        model: "gpt-5.4",
-        createdAt: "2026-06-06T00:00:00.000Z",
-        updatedAt: "2026-06-06T00:00:01.000Z",
-        messagesCount: 0,
-      },
-    });
-
-    await updateAgentRuntimeSession({
-      session_id: "session-runtime",
-      name: "新标题",
-      execution_strategy: "react",
-    });
-
-    expectAppServerRequest(1, APP_SERVER_METHOD_AGENT_SESSION_UPDATE, {
-      sessionId: "session-runtime",
-      title: "新标题",
-      executionStrategy: "react",
-    });
   });
 
   it("listAgentRuntimeSessions 应返回现役 runtime 会话列表", async () => {
@@ -684,7 +600,7 @@ describe("Agent API 治理护栏", () => {
     });
   });
 
-  it("getAgentRuntimeSession 应返回现役 runtime 详情并归一 queued_turns", async () => {
+  it("getAgentRuntimeSession 应返回现役 runtime 详情并排除 queued turn 历史", async () => {
     mockAppServerResponse({
       thread: canonicalThread({
         id: "thread-runtime-2",
@@ -754,13 +670,6 @@ describe("Agent API 治理护栏", () => {
       workspace_id: "workspace-2",
       working_dir: "/tmp/workspace-2",
       execution_strategy: "react",
-      queued_turns: [
-        expect.objectContaining({
-          queued_turn_id: "queued-2",
-          message_text: "线程读模型中的排队任务",
-          position: 1,
-        }),
-      ],
       thread_read: {
         thread_id: "thread-runtime-2",
         status: "running",
@@ -1729,7 +1638,7 @@ describe("Agent API 治理护栏", () => {
     );
   });
 
-  it("deleteAgentRuntimeSession / updateAgentRuntimeSession 应走 current 边界，标题生成只做本地投影", async () => {
+  it("deleteAgentRuntimeSession 应走 current 边界，标题生成只做本地投影", async () => {
     mockAppServerResponse({
       data: [
         {
@@ -1749,23 +1658,7 @@ describe("Agent API 治理护栏", () => {
       ],
     });
     mockAppServerResponse({});
-    mockAppServerResponse({
-      session: {
-        sessionId: "session-runtime-3",
-        threadId: "session-runtime-3",
-        title: "重命名后的标题",
-        model: "gpt-5.4",
-        createdAt: "2026-06-06T00:00:00.000Z",
-        updatedAt: "2026-06-06T00:00:01.000Z",
-        messagesCount: 0,
-      },
-    });
-
     await deleteAgentRuntimeSession("session-runtime-3");
-    await updateAgentRuntimeSession({
-      session_id: "session-runtime-3",
-      name: "重命名后的标题",
-    });
     await expect(
       generateAgentRuntimeSessionTitle(
         "session-runtime-3",
@@ -1780,11 +1673,7 @@ describe("Agent API 治理护栏", () => {
     expectAppServerRequest(2, APP_SERVER_METHOD_THREAD_DELETE, {
       threadId: "thread-runtime-3",
     });
-    expectAppServerRequest(3, APP_SERVER_METHOD_AGENT_SESSION_UPDATE, {
-      sessionId: "session-runtime-3",
-      title: "重命名后的标题",
-    });
-    expect(mockSafeInvoke).toHaveBeenCalledTimes(3);
+    expect(mockSafeInvoke).toHaveBeenCalledTimes(2);
   });
 
   it("generateAgentRuntimeTitle 应从图片任务预览文本生成本地标题", async () => {

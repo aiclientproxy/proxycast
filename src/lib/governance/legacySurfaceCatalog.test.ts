@@ -59,6 +59,13 @@ describe("legacySurfaceCatalog", () => {
     expect("legacyHelperSurfaceMonitors" in agentCommandCatalog).toBe(false);
   });
 
+  it("旧 session 写命令应精确映射到 current thread lifecycle", () => {
+    expect(agentCommandCatalog.deprecatedCommandReplacements).toMatchObject({
+      agent_delete_session: "thread/delete",
+      agent_rename_session: "thread/name/set",
+    });
+  });
+
   it("应阻止已删除的 agentSession action replay RPC 回流", () => {
     const frontendMonitor = legacySurfaceCatalogJson.frontendText.find(
       (entry) => entry.id === "frontend-retired-agent-session-action-replay",

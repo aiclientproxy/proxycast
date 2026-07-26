@@ -50,7 +50,7 @@ pub(super) fn session_execution_runtime(session: &AgentSession) -> serde_json::V
         "imported_continuation": metadata_value_alias(metadata, &["importedContinuation", "imported_continuation"]),
         "execution_strategy": session_execution_strategy(session),
         "recent_access_mode": metadata_string_alias(metadata, &["recentAccessMode", "recent_access_mode"]),
-        "recent_preferences": metadata_value_alias(metadata, &["recentPreferences", "recent_preferences"]),
+        "recent_preferences": metadata_value_alias(metadata, &["toolPreferences"]),
         "source": "session_metadata",
         "mode": "current",
     });

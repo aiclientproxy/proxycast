@@ -3,10 +3,10 @@ import type {
   AppServerSessionRpcClient,
 } from "./appServerSessionClient";
 import type { AgentExecutionStrategy } from "../agentExecutionRuntime";
+import type { AgentSessionExecutionRuntimePreferences } from "../agentExecutionRuntime";
 import type {
   AgentRuntimeCreateSessionOptions,
   AgentRuntimeGetSessionOptions,
-  AgentRuntimeUpdateSessionRequest,
 } from "./requestTypes";
 import type {
   AgentRuntimeListSessionsOptions,
@@ -37,8 +37,9 @@ export declare function createSessionClient({
   ) => Promise<AgentSessionInfo[]>;
   archiveAgentRuntimeSession: (sessionId: string) => Promise<void>;
   unarchiveAgentRuntimeSession: (sessionId: string) => Promise<void>;
-  updateAgentRuntimeSession: (
-    request: AgentRuntimeUpdateSessionRequest,
+  updateAgentRuntimeThreadToolPreferences: (
+    sessionId: string,
+    preferences: AgentSessionExecutionRuntimePreferences,
   ) => Promise<void>;
 };
 export declare const archiveAgentRuntimeSession: (
@@ -59,6 +60,7 @@ export declare const archiveAgentRuntimeSession: (
     options?: AgentRuntimeListSessionsOptions,
   ) => Promise<AgentSessionInfo[]>,
   unarchiveAgentRuntimeSession: (sessionId: string) => Promise<void>,
-  updateAgentRuntimeSession: (
-    request: AgentRuntimeUpdateSessionRequest,
+  updateAgentRuntimeThreadToolPreferences: (
+    sessionId: string,
+    preferences: AgentSessionExecutionRuntimePreferences,
   ) => Promise<void>;

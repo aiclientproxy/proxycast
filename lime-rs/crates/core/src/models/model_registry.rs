@@ -24,16 +24,16 @@ pub struct ModelCapabilities {
     pub reasoning_effort: Option<ModelReasoningEffortSupport>,
 }
 
-/// 模型推理强度档位
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "snake_case")]
-pub enum ModelReasoningEffortLevel {
-    None,
-    Minimal,
-    Low,
-    Medium,
-    High,
-    Xhigh,
+/// 模型声明的可选推理强度；id/label 用于菜单，value 用于请求。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModelReasoningEffortOption {
+    pub id: String,
+    pub value: String,
+    pub label: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub default: bool,
 }
 
 /// 推理强度能力来源
@@ -43,7 +43,6 @@ pub enum ModelReasoningEffortSource {
     Api,
     Registry,
     Custom,
-    Inferred,
 }
 
 /// 模型推理强度能力
@@ -53,13 +52,57 @@ pub struct ModelReasoningEffortSupport {
     pub supported: bool,
     /// 支持的档位
     #[serde(default)]
-    pub levels: Vec<ModelReasoningEffortLevel>,
+    pub levels: Vec<String>,
+    /// 模型特定菜单；为空时消费者可从 levels 构造标准菜单。
+    #[serde(default)]
+    pub options: Vec<ModelReasoningEffortOption>,
     /// 默认档位
     #[serde(default)]
-    pub default: Option<ModelReasoningEffortLevel>,
+    pub default: Option<String>,
     /// 能力来源
     #[serde(default)]
     pub source: Option<ModelReasoningEffortSource>,
+}
+
+/// 模型可用的 Provider 服务等级。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModelServiceTier {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+}
+
+/// 模型在选择器和模型覆盖列表中的可见性。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ModelVisibility {
+    #[default]
+    List,
+    Hide,
+    None,
+}
+
+impl std::fmt::Display for ModelVisibility {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::List => formatter.write_str("list"),
+            Self::Hide => formatter.write_str("hide"),
+            Self::None => formatter.write_str("none"),
+        }
+    }
+}
+
+impl std::str::FromStr for ModelVisibility {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "list" => Ok(Self::List),
+            "hide" => Ok(Self::Hide),
+            "none" => Ok(Self::None),
+            _ => Err(format!("Unknown model visibility: {value}")),
+        }
+    }
 }
 
 /// 模型任务族
@@ -320,6 +363,15 @@ pub struct EnhancedModelMetadata {
     pub tier: ModelTier,
     /// 模型能力
     pub capabilities: ModelCapabilities,
+    /// 在模型选择器和 Agent 模型覆盖列表中的可见性
+    #[serde(default)]
+    pub visibility: ModelVisibility,
+    /// Provider 明确声明的服务等级
+    #[serde(default)]
+    pub service_tiers: Vec<ModelServiceTier>,
+    /// Provider catalog 的默认服务等级
+    #[serde(default)]
+    pub default_service_tier: Option<String>,
     /// 任务族
     #[serde(default)]
     pub task_families: Vec<ModelTaskFamily>,
@@ -381,6 +433,9 @@ impl EnhancedModelMetadata {
             family: None,
             tier: ModelTier::Pro,
             capabilities: ModelCapabilities::default(),
+            visibility: ModelVisibility::List,
+            service_tiers: vec![],
+            default_service_tier: None,
             task_families: vec![],
             input_modalities: vec![],
             output_modalities: vec![],
@@ -418,6 +473,30 @@ impl EnhancedModelMetadata {
     pub fn with_capabilities(mut self, capabilities: ModelCapabilities) -> Self {
         self.capabilities = capabilities;
         self
+    }
+
+    /// 设置模型选择器可见性。
+    pub fn with_visibility(mut self, visibility: ModelVisibility) -> Self {
+        self.visibility = visibility;
+        self
+    }
+
+    /// 设置 Provider catalog 明确声明的服务等级。
+    pub fn with_service_tiers(
+        mut self,
+        service_tiers: Vec<ModelServiceTier>,
+        default_service_tier: Option<String>,
+    ) -> Self {
+        self.service_tiers = service_tiers;
+        self.default_service_tier = default_service_tier
+            .filter(|default| self.service_tiers.iter().any(|tier| tier.id == *default));
+        self
+    }
+
+    pub fn supports_service_tier(&self, service_tier: &str) -> bool {
+        self.service_tiers
+            .iter()
+            .any(|tier| tier.id == service_tier)
     }
 
     /// 设置定价信息
@@ -700,6 +779,9 @@ impl ModelsDevModel {
                 reasoning: self.reasoning,
                 reasoning_effort: None,
             },
+            visibility: ModelVisibility::List,
+            service_tiers: vec![],
+            default_service_tier: None,
             task_families: vec![],
             input_modalities: vec![],
             output_modalities: vec![],

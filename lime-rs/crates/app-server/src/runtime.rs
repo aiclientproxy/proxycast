@@ -8,7 +8,6 @@ pub(crate) mod approval_cache;
 mod approval_decision_contract;
 mod article_workspace_action_projection;
 mod article_workspace_artifact_document_projection;
-mod article_workspace_edited_draft;
 mod article_workspace_projection;
 mod artifact_content;
 mod artifact_document_versions;
@@ -17,6 +16,7 @@ mod artifact_reader;
 mod artifact_sidecar;
 mod automation;
 mod backend;
+mod background_terminal;
 mod browser_session;
 mod canonical_rollout;
 mod canonical_thread_store;
@@ -103,11 +103,16 @@ mod soul;
 mod status;
 mod storage_roots;
 mod thread_delete;
+mod thread_elicitation;
 mod thread_fork;
 mod thread_goal;
 mod thread_goal_continuation;
+mod thread_guardian;
+mod thread_inject_items;
 mod thread_item_projection;
 mod thread_read;
+mod thread_search;
+pub(crate) use thread_read::ThreadUnloadResult;
 pub(crate) mod thread_usage;
 mod tool_item_projection;
 mod tool_lifecycle;
@@ -121,7 +126,6 @@ mod value_fields;
 mod voice;
 pub(crate) mod workflow;
 mod workspaces;
-
 use crate::execution_process::ExecutionProcessServer;
 pub use crate::file_checkpoint_snapshot::FileCheckpointSnapshotReadRequest;
 pub use crate::file_checkpoint_snapshot::FileCheckpointSnapshotRecord;
@@ -139,7 +143,6 @@ pub use app_data::KnowledgeAppDataSource;
 pub use app_data::McpAppDataSource;
 pub use app_data::MediaAppDataSource;
 pub use app_data::MemoryAppDataSource;
-pub use app_data::ModelProviderAppDataSource;
 pub use app_data::NoopAppDataSource;
 pub use app_data::PluginDataSource;
 pub use app_data::RightSurfaceAppDataSource;
@@ -151,6 +154,7 @@ pub use app_data::WorkspaceAppDataSource;
 pub use app_data::WorkspaceObjectCanvasSnapshot;
 pub use app_data::WorkspaceObjectCanvasSnapshotListParams;
 pub use app_data::WorkspaceSkillBindingAppDataSource;
+pub use app_data::{ModelCatalogQuery, ModelProviderAppDataSource, ProviderModelCatalog};
 pub use artifact_content::FilesystemArtifactContentProvider;
 pub use artifact_content::InlineArtifactContentProvider;
 pub use backend::MockBackend;
@@ -402,6 +406,14 @@ pub trait ExecutionBackend: Send + Sync {
         Ok(())
     }
 
+    async fn preflight_thread_settings(
+        &self,
+        _session: &AgentSession,
+        _settings: &app_server_protocol::protocol::v2::ThreadSettings,
+    ) -> Result<(), RuntimeCoreError> {
+        Ok(())
+    }
+
     async fn prepare_turn_runtime_options(
         &self,
         request: &ExecutionRequest,
@@ -524,6 +536,7 @@ pub struct RuntimeCoreEventAppender {
 #[derive(Debug, Default)]
 pub(in crate::runtime) struct RuntimeCoreState {
     pub(in crate::runtime) sessions: HashMap<String, StoredSession>,
+    pub(in crate::runtime) thread_elicitation_counts: HashMap<String, i64>,
     pub(in crate::runtime) thread_goal_continuations: HashSet<String>,
     pub(in crate::runtime) import_jobs: HashMap<String, conversation_import::ImportJobRecord>,
     pub(in crate::runtime) session_approval_cache: approval_cache::SessionApprovalCache,

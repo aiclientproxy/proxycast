@@ -19,6 +19,13 @@ import {
   buildSoulStyleFixtureAssistantText,
   summarizeSoulPromptMarkers,
 } from "./claw-chat-current-fixture-soul-style.mjs";
+import {
+  ACTIVE_STEER_DONE_TEXT,
+  ACTIVE_STEER_FINAL_TEXT,
+  ACTIVE_STEER_FIRST_TEXT,
+  ACTIVE_STEER_INITIAL_PROMPT,
+  ACTIVE_STEER_INPUT,
+} from "./claw-chat-current-fixture-active-steer.mjs";
 
 export const LOCAL_IMAGE_SERVER_API_KEY = "pc_claw_image_fixture_local_key";
 export const IMAGE_PROVIDER_FIXTURE_API_KEY = "sk-claw-image-fixture";
@@ -238,6 +245,12 @@ export async function startImageProviderFixtureServer() {
 
 function fixtureTextForChatRequest(body) {
   const serialized = typeof body === "string" ? body : JSON.stringify(body);
+  if (serialized.includes(ACTIVE_STEER_INPUT)) {
+    return `${ACTIVE_STEER_FINAL_TEXT}\n${ACTIVE_STEER_DONE_TEXT}`;
+  }
+  if (serialized.includes(ACTIVE_STEER_INITIAL_PROMPT)) {
+    return ACTIVE_STEER_FIRST_TEXT;
+  }
   const presentationText = JSON.stringify({
     assistant_intro: IMAGE_COMMAND_PRESENTATION_INTRO,
     completion_caption: IMAGE_COMMAND_PRESENTATION_CAPTION,
@@ -328,6 +341,10 @@ function summarizeChatCompletionRequestBody(body, expectedSoulStyle) {
         "Generate user-visible copy for one image generation turn.",
       ) ||
       serialized.includes("image_command_presentation"),
+    bodyIncludesActiveSteerInitialPrompt: serialized.includes(
+      ACTIVE_STEER_INITIAL_PROMPT,
+    ),
+    bodyIncludesActiveSteerInput: serialized.includes(ACTIVE_STEER_INPUT),
     messages: messages.slice(-4).map((message) => ({
       role: message?.role ?? null,
       contentLength: readChatContentText(message?.content).length,
@@ -430,6 +447,7 @@ function openaiModelsBody() {
 
 export async function startTextProviderFixtureServer({
   soulStyleExpectation = null,
+  activeSteerDelayMs = 0,
 } = {}) {
   const requests = [];
   const expectedAuthorization = `Bearer ${TEXT_PROVIDER_FIXTURE_API_KEY}`;
@@ -495,6 +513,35 @@ export async function startTextProviderFixtureServer({
       if (parsedBody.stream === false) {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify(openaiChatCompletionBody(content)));
+        return;
+      }
+
+      if (
+        activeSteerDelayMs > 0 &&
+        body.includes(ACTIVE_STEER_INITIAL_PROMPT) &&
+        !body.includes(ACTIVE_STEER_INPUT)
+      ) {
+        const firstChunk = JSON.stringify(
+          openaiChatCompletionChunk({
+            content: ACTIVE_STEER_FIRST_TEXT,
+            finishReason: null,
+          }),
+        );
+        const finalChunk = JSON.stringify(
+          openaiChatCompletionChunk({ content: "", finishReason: "stop" }),
+        );
+        const usageChunk = JSON.stringify(openaiChatCompletionUsageChunk());
+        response.writeHead(200, {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache",
+          connection: "close",
+        });
+        response.write(`data: ${firstChunk}\n\n`);
+        setTimeout(() => {
+          response.end(
+            `data: ${finalChunk}\n\ndata: ${usageChunk}\n\ndata: [DONE]\n\n`,
+          );
+        }, activeSteerDelayMs);
         return;
       }
 

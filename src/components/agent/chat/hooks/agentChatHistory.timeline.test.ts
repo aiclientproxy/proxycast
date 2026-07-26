@@ -520,7 +520,6 @@ describe("agentChatHistory timeline fallback", () => {
         ],
         pending_requests: [],
         incidents: [],
-        queued_turns: [],
         artifacts: [
           {
             artifactRef: "artifact-ref-1",
@@ -686,7 +685,6 @@ describe("agentChatHistory timeline fallback", () => {
         profile_status: "completed",
         pending_requests: [],
         incidents: [],
-        queued_turns: [],
         article_workspace: {
           schemaVersion: "article-workspace.v1",
           appId: "content-factory-app",

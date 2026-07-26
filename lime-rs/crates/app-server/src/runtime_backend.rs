@@ -61,12 +61,13 @@ use tokio_util::sync::CancellationToken;
 
 mod request_context;
 
+pub(crate) use model_routing::configured_provider_readiness;
 pub(crate) use provider_config::current_agent_runtime_config_metadata;
 use provider_config::{initialize_runtime_database, model_effective_event_from_runtime};
 use request_context::{
     apply_app_server_turn_policy, direct_provider_config_from_request,
     request_tool_policy_from_request, resolve_runtime_model_selection,
-    runtime_request_from_request, selection_with_effective_reasoning, session_config_from_request,
+    runtime_request_from_request, service_tier_from_request, session_config_from_request,
     session_scope_from_request, should_use_compact_tool_surface,
 };
 
@@ -100,6 +101,7 @@ struct ResolvedTurnRoute {
 fn agent_control_route_snapshot_for_resolved_route(
     backend: &RuntimeBackend,
     route: &ResolvedTurnRoute,
+    service_tier: Option<&str>,
 ) -> Result<Value, RuntimeCoreError> {
     let route_protocol = serde_json::to_value(&route.resolution.resolved_route.protocol)
         .map_err(|error| RuntimeCoreError::Backend(format!("serialize route protocol: {error}")))?;
@@ -118,11 +120,18 @@ fn agent_control_route_snapshot_for_resolved_route(
         .unwrap_or_else(|| route.selection.provider.clone());
     let auth = &route.resolution.resolved_route.auth;
     let direct_provider_config = route.direct_provider_config.as_ref();
+    let model_registry = route
+        .resolution
+        .decision_payload
+        .get("modelRegistry")
+        .cloned()
+        .unwrap_or(Value::Null);
 
     Ok(json!({
         "schemaVersion": 2,
         "providerPreference": route.selection.provider,
         "modelPreference": route.selection.model,
+        "serviceTier": service_tier,
         "providerConfig": {
             "providerId": route.selection.provider,
             "providerName": provider_name,
@@ -137,7 +146,8 @@ fn agent_control_route_snapshot_for_resolved_route(
         "routeProtocol": route_protocol,
         "authKind": auth.kind,
         "credentialRef": auth.credential_ref,
-        "effectiveGeneration": route.effective_generation
+        "effectiveGeneration": route.effective_generation,
+        "modelRegistry": model_registry
     }))
 }
 
@@ -308,13 +318,11 @@ impl RuntimeBackend {
     ) -> Result<ResolvedTurnRoute, RuntimeCoreError> {
         let db = initialize_runtime_database(self.db.as_ref())?;
         let requested_selection = resolve_runtime_model_selection(request)?;
-        let effective_requested_selection =
-            selection_with_effective_reasoning(&requested_selection);
         let host_request = runtime_request_from_request(request);
         let direct_provider_config = direct_provider_config_from_request(
             host_request.as_ref(),
-            &effective_requested_selection,
-            effective_requested_selection.reasoning_effort.clone(),
+            &requested_selection,
+            requested_selection.reasoning_effort.clone(),
         );
         let mut retry_credential_binding: Option<(String, String, String)> = None;
         for _ in 0..3 {
@@ -323,11 +331,11 @@ impl RuntimeBackend {
                 &db,
                 &self.api_key_provider_service,
                 request,
-                &effective_requested_selection,
+                &requested_selection,
                 direct_provider_config.as_ref(),
             )
             .map_err(backend_error)?;
-            let prepared_selection = selection_with_effective_reasoning(prepared.selection());
+            let prepared_selection = prepared.selection().clone();
             let durable_credential_ref = if direct_provider_config.is_none() {
                 durable_credential_ref_for_generation(
                     request,
@@ -347,7 +355,7 @@ impl RuntimeBackend {
                 &db,
                 &self.api_key_provider_service,
                 request,
-                &effective_requested_selection,
+                &requested_selection,
                 direct_provider_config.as_ref(),
                 prepared,
                 durable_credential_ref.or(retry_credential_ref),
@@ -381,7 +389,7 @@ impl RuntimeBackend {
                     });
                 continue;
             }
-            let selection = selection_with_effective_reasoning(&resolution.selection);
+            let selection = resolution.selection.clone();
             return Ok(ResolvedTurnRoute {
                 db,
                 requested_selection,
@@ -395,6 +403,14 @@ impl RuntimeBackend {
         Err(RuntimeCoreError::Backend(
             "model route generation changed repeatedly during route resolution".to_string(),
         ))
+    }
+
+    async fn preflight_thread_settings_route(
+        &self,
+        session: &app_server_protocol::AgentSession,
+        settings: &app_server_protocol::protocol::v2::ThreadSettings,
+    ) -> Result<(), RuntimeCoreError> {
+        execution_backend::preflight_thread_settings_route(self, session, settings).await
     }
 
     async fn prepare_turn_route(
@@ -435,7 +451,13 @@ impl RuntimeBackend {
                 route_failure,
             ));
         }
-        let snapshot = agent_control_route_snapshot_for_resolved_route(self, &route)?;
+        let snapshot = agent_control_route_snapshot_for_resolved_route(
+            self,
+            &route,
+            route_request
+                .runtime_request()
+                .and_then(|request| request.service_tier.as_deref()),
+        )?;
         let mut options = request.runtime_options.clone().unwrap_or_default();
         let runtime_request = options.runtime_request_mut();
         let metadata = runtime_request
@@ -602,6 +624,7 @@ impl RuntimeBackend {
                         &selection,
                         &route_resolution.resolved_route,
                         direct_provider_config,
+                        service_tier_from_request(&request),
                     ),
                     credential_ref: route_resolution
                         .resolved_route

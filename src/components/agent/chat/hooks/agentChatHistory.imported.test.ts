@@ -300,7 +300,6 @@ describe("agentChatHistory imported Codex timeline", () => {
         ],
         pending_requests: [],
         incidents: [],
-        queued_turns: [],
         tool_calls: [],
         diagnostics: {
           latest_turn_status: "failed",
@@ -381,7 +380,6 @@ describe("agentChatHistory imported Codex timeline", () => {
         ],
         pending_requests: [],
         incidents: [],
-        queued_turns: [],
         tool_calls: [],
         diagnostics: {
           latest_turn_status: "failed",
@@ -468,7 +466,6 @@ describe("agentChatHistory imported Codex timeline", () => {
         ],
         pending_requests: [],
         incidents: [],
-        queued_turns: [],
         tool_calls: [
           {
             tool_call_id: "tool-webfetch-artifact",

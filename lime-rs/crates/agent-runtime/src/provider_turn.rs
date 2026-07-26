@@ -314,12 +314,27 @@ where
             })
             .collect::<Vec<_>>();
 
-        let request = CurrentProviderRequest::new(initial_messages.clone())
+        let request_metadata = session_config
+            .thread_id
+            .as_ref()
+            .zip(session_config.turn_id.as_ref())
+            .map(|(thread_id, turn_id)| {
+                model_provider::current_client::CurrentProviderRequestMetadata::new(
+                    session_config.id.clone(),
+                    thread_id.clone(),
+                    turn_id.clone(),
+                    session_config.forked_from_thread_id.clone(),
+                )
+            });
+        let mut request = CurrentProviderRequest::new(initial_messages.clone())
             .with_system_prompt(session_config.system_prompt.clone())
             .with_tools(tools.clone())
             .with_generation(generation.clone())
             .with_provider_options(provider_options.clone())
             .with_model_request_policy(model_request_policy.clone());
+        if let Some(metadata) = request_metadata {
+            request = request.with_metadata(metadata);
+        }
         let mut provider_trace_attempt = provider_trace_metadata.as_ref().map(|metadata| {
             RuntimeProviderTraceAttempt::new(
                 metadata.provider_name.clone(),

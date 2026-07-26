@@ -2,18 +2,42 @@ pub use app_server_protocol::app_server_method_catalog;
 pub use app_server_protocol::is_app_server_notification_method;
 pub use app_server_protocol::is_app_server_request_method;
 pub use app_server_protocol::protocol::v2::ServerNotification;
+pub use app_server_protocol::protocol::v2::METHOD_MODEL_PROVIDER_CAPABILITIES_READ;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_ARCHIVE;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_LIST;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_COMPACT_START;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_DECREMENT_ELICITATION;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_INCREMENT_ELICITATION;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_INJECT_ITEMS;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_LOADED_LIST;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH_OCCURRENCES;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_SHELL_COMMAND;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNARCHIVE;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNSUBSCRIBE;
 use app_server_protocol::protocol::v2::NOTIFICATION_METHODS;
 pub use app_server_protocol::protocol::v2::{
-    ThreadArchiveParams, ThreadArchiveResponse, ThreadShellCommandParams,
-    ThreadShellCommandResponse, ThreadUnarchiveParams, ThreadUnarchiveResponse,
+    ModelProviderCapabilitiesReadParams, ModelProviderCapabilitiesReadResponse, SortDirection,
+    ThreadApproveGuardianDeniedActionParams, ThreadApproveGuardianDeniedActionResponse,
+    ThreadArchiveParams, ThreadArchiveResponse, ThreadBackgroundTerminal,
+    ThreadBackgroundTerminalsCleanParams, ThreadBackgroundTerminalsCleanResponse,
+    ThreadBackgroundTerminalsListParams, ThreadBackgroundTerminalsListResponse,
+    ThreadBackgroundTerminalsTerminateParams, ThreadBackgroundTerminalsTerminateResponse,
+    ThreadCompactStartParams, ThreadCompactStartResponse, ThreadDecrementElicitationParams,
+    ThreadDecrementElicitationResponse, ThreadIncrementElicitationParams,
+    ThreadIncrementElicitationResponse, ThreadInjectItemsParams, ThreadInjectItemsResponse,
+    ThreadLoadedListParams, ThreadLoadedListResponse, ThreadSearchOccurrence,
+    ThreadSearchOccurrencesParams, ThreadSearchOccurrencesResponse, ThreadSearchParams,
+    ThreadSearchResponse, ThreadSearchResult, ThreadSearchTextRange, ThreadShellCommandParams,
+    ThreadShellCommandResponse, ThreadSortKey, ThreadSourceKind, ThreadUnarchiveParams,
+    ThreadUnarchiveResponse, ThreadUnsubscribeParams, ThreadUnsubscribeResponse,
+    ThreadUnsubscribeStatus,
 };
 pub use app_server_protocol::AgentSessionAnalysisHandoffExportParams;
 pub use app_server_protocol::AgentSessionAnalysisHandoffExportResponse;
-pub use app_server_protocol::AgentSessionCompactParams;
-pub use app_server_protocol::AgentSessionCompactResponse;
 pub use app_server_protocol::AgentSessionFileCheckpointDetail;
 pub use app_server_protocol::AgentSessionFileCheckpointDiffParams;
 pub use app_server_protocol::AgentSessionFileCheckpointDiffResponse;
@@ -28,10 +52,6 @@ pub use app_server_protocol::AgentSessionHandoffArtifact;
 pub use app_server_protocol::AgentSessionHandoffBundleExportParams;
 pub use app_server_protocol::AgentSessionHandoffBundleExportResponse;
 pub use app_server_protocol::AgentSessionListParams;
-pub use app_server_protocol::AgentSessionQueuedTurnPromoteParams;
-pub use app_server_protocol::AgentSessionQueuedTurnPromoteResponse;
-pub use app_server_protocol::AgentSessionQueuedTurnRemoveParams;
-pub use app_server_protocol::AgentSessionQueuedTurnRemoveResponse;
 pub use app_server_protocol::AgentSessionReadParams;
 pub use app_server_protocol::AgentSessionReplayCaseExportParams;
 pub use app_server_protocol::AgentSessionReplayCaseExportResponse;
@@ -277,15 +297,12 @@ pub use app_server_protocol::WorkspaceRightSurfaceRequestResponse;
 pub use app_server_protocol::WorkspaceSkillBindingsListParams;
 pub use app_server_protocol::WorkspaceSkillBindingsListResponse;
 pub use app_server_protocol::METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT;
-pub use app_server_protocol::METHOD_AGENT_SESSION_COMPACT;
 pub use app_server_protocol::METHOD_AGENT_SESSION_EVENT;
 pub use app_server_protocol::METHOD_AGENT_SESSION_FILE_CHECKPOINT_DIFF;
 pub use app_server_protocol::METHOD_AGENT_SESSION_FILE_CHECKPOINT_GET;
 pub use app_server_protocol::METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST;
 pub use app_server_protocol::METHOD_AGENT_SESSION_FILE_CHECKPOINT_RESTORE;
 pub use app_server_protocol::METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT;
-pub use app_server_protocol::METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE;
-pub use app_server_protocol::METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE;
 pub use app_server_protocol::METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT;
 pub use app_server_protocol::METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE;
 pub use app_server_protocol::METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT;
@@ -629,6 +646,34 @@ impl AppServerClient {
         self.typed_request(typed::list_threads(params))
     }
 
+    pub fn list_loaded_threads(
+        &mut self,
+        params: ThreadLoadedListParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::list_loaded_threads(params))
+    }
+
+    pub fn unsubscribe_thread(
+        &mut self,
+        params: ThreadUnsubscribeParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::unsubscribe_thread(params))
+    }
+
+    pub fn increment_thread_elicitation(
+        &mut self,
+        params: ThreadIncrementElicitationParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::increment_thread_elicitation(params))
+    }
+
+    pub fn decrement_thread_elicitation(
+        &mut self,
+        params: ThreadDecrementElicitationParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::decrement_thread_elicitation(params))
+    }
+
     pub fn archive_thread(
         &mut self,
         params: ThreadArchiveParams,
@@ -650,6 +695,41 @@ impl AppServerClient {
         self.typed_request(typed::run_thread_shell_command(params))
     }
 
+    pub fn approve_guardian_denied_action(
+        &mut self,
+        params: ThreadApproveGuardianDeniedActionParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::approve_guardian_denied_action(params))
+    }
+
+    pub fn inject_thread_items(
+        &mut self,
+        params: ThreadInjectItemsParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::inject_thread_items(params))
+    }
+
+    pub fn clean_thread_background_terminals(
+        &mut self,
+        params: ThreadBackgroundTerminalsCleanParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::clean_thread_background_terminals(params))
+    }
+
+    pub fn list_thread_background_terminals(
+        &mut self,
+        params: ThreadBackgroundTerminalsListParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::list_thread_background_terminals(params))
+    }
+
+    pub fn terminate_thread_background_terminal(
+        &mut self,
+        params: ThreadBackgroundTerminalsTerminateParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::terminate_thread_background_terminal(params))
+    }
+
     pub fn list_thread_turns(
         &mut self,
         params: ThreadTurnsListParams,
@@ -662,6 +742,20 @@ impl AppServerClient {
         params: ThreadItemsListParams,
     ) -> Result<JsonRpcRequest, ClientError> {
         self.typed_request(typed::list_thread_items(params))
+    }
+
+    pub fn search_threads(
+        &mut self,
+        params: ThreadSearchParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::search_threads(params))
+    }
+
+    pub fn search_thread_occurrences(
+        &mut self,
+        params: ThreadSearchOccurrencesParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::search_thread_occurrences(params))
     }
 
     pub fn start_session(
@@ -1493,6 +1587,10 @@ impl AppServerClient {
         self.typed_request(typed::list_model_providers())
     }
 
+    pub fn read_model_provider_capabilities(&mut self) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::read_model_provider_capabilities())
+    }
+
     pub fn list_model_provider_catalog(&mut self) -> Result<JsonRpcRequest, ClientError> {
         self.typed_request(typed::list_model_provider_catalog())
     }
@@ -1676,6 +1774,30 @@ pub mod typed {
         TypedRequest::new(METHOD_THREAD_LIST, params)
     }
 
+    pub fn list_loaded_threads(
+        params: ThreadLoadedListParams,
+    ) -> TypedRequest<ThreadLoadedListParams> {
+        TypedRequest::new(METHOD_THREAD_LOADED_LIST, params)
+    }
+
+    pub fn unsubscribe_thread(
+        params: ThreadUnsubscribeParams,
+    ) -> TypedRequest<ThreadUnsubscribeParams> {
+        TypedRequest::new(METHOD_THREAD_UNSUBSCRIBE, params)
+    }
+
+    pub fn increment_thread_elicitation(
+        params: ThreadIncrementElicitationParams,
+    ) -> TypedRequest<ThreadIncrementElicitationParams> {
+        TypedRequest::new(METHOD_THREAD_INCREMENT_ELICITATION, params)
+    }
+
+    pub fn decrement_thread_elicitation(
+        params: ThreadDecrementElicitationParams,
+    ) -> TypedRequest<ThreadDecrementElicitationParams> {
+        TypedRequest::new(METHOD_THREAD_DECREMENT_ELICITATION, params)
+    }
+
     pub fn archive_thread(params: ThreadArchiveParams) -> TypedRequest<ThreadArchiveParams> {
         TypedRequest::new(METHOD_THREAD_ARCHIVE, params)
     }
@@ -1690,12 +1812,52 @@ pub mod typed {
         TypedRequest::new(METHOD_THREAD_SHELL_COMMAND, params)
     }
 
+    pub fn approve_guardian_denied_action(
+        params: ThreadApproveGuardianDeniedActionParams,
+    ) -> TypedRequest<ThreadApproveGuardianDeniedActionParams> {
+        TypedRequest::new(METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION, params)
+    }
+
+    pub fn inject_thread_items(
+        params: ThreadInjectItemsParams,
+    ) -> TypedRequest<ThreadInjectItemsParams> {
+        TypedRequest::new(METHOD_THREAD_INJECT_ITEMS, params)
+    }
+
+    pub fn clean_thread_background_terminals(
+        params: ThreadBackgroundTerminalsCleanParams,
+    ) -> TypedRequest<ThreadBackgroundTerminalsCleanParams> {
+        TypedRequest::new(METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN, params)
+    }
+
+    pub fn list_thread_background_terminals(
+        params: ThreadBackgroundTerminalsListParams,
+    ) -> TypedRequest<ThreadBackgroundTerminalsListParams> {
+        TypedRequest::new(METHOD_THREAD_BACKGROUND_TERMINALS_LIST, params)
+    }
+
+    pub fn terminate_thread_background_terminal(
+        params: ThreadBackgroundTerminalsTerminateParams,
+    ) -> TypedRequest<ThreadBackgroundTerminalsTerminateParams> {
+        TypedRequest::new(METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE, params)
+    }
+
     pub fn list_thread_turns(params: ThreadTurnsListParams) -> TypedRequest<ThreadTurnsListParams> {
         TypedRequest::new(METHOD_THREAD_TURNS_LIST, params)
     }
 
     pub fn list_thread_items(params: ThreadItemsListParams) -> TypedRequest<ThreadItemsListParams> {
         TypedRequest::new(METHOD_THREAD_ITEMS_LIST, params)
+    }
+
+    pub fn search_threads(params: ThreadSearchParams) -> TypedRequest<ThreadSearchParams> {
+        TypedRequest::new(METHOD_THREAD_SEARCH, params)
+    }
+
+    pub fn search_thread_occurrences(
+        params: ThreadSearchOccurrencesParams,
+    ) -> TypedRequest<ThreadSearchOccurrencesParams> {
+        TypedRequest::new(METHOD_THREAD_SEARCH_OCCURRENCES, params)
     }
 
     pub fn start_session(params: AgentSessionStartParams) -> TypedRequest<AgentSessionStartParams> {
@@ -2408,6 +2570,13 @@ pub mod typed {
         TypedRequest::new(METHOD_MODEL_PROVIDER_LIST, serde_json::json!({}))
     }
 
+    pub fn read_model_provider_capabilities() -> TypedRequest<ModelProviderCapabilitiesReadParams> {
+        TypedRequest::new(
+            METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
+            ModelProviderCapabilitiesReadParams::default(),
+        )
+    }
+
     pub fn list_model_provider_catalog() -> TypedRequest<serde_json::Value> {
         TypedRequest::new(METHOD_MODEL_PROVIDER_CATALOG_LIST, serde_json::json!({}))
     }
@@ -2661,6 +2830,205 @@ mod tests {
                 METHOD_THREAD_TURNS_LIST,
                 METHOD_THREAD_ITEMS_LIST,
             ]
+        );
+    }
+
+    #[test]
+    fn thread_unsubscribe_helper_uses_exact_v2_method() {
+        let mut client = AppServerClient::new();
+        let request = client
+            .unsubscribe_thread(ThreadUnsubscribeParams {
+                thread_id: "019bf4f0-5080-7000-8000-000000000001".to_string(),
+            })
+            .expect("thread/unsubscribe request");
+
+        assert_eq!(request.method, METHOD_THREAD_UNSUBSCRIBE);
+        assert_eq!(
+            request.params.expect("params"),
+            json!({"threadId": "019bf4f0-5080-7000-8000-000000000001"})
+        );
+    }
+
+    #[test]
+    fn thread_elicitation_helpers_use_exact_v2_methods() {
+        let thread_id = "019bf4f0-5080-7000-8000-000000000001".to_string();
+        let mut client = AppServerClient::new();
+
+        let increment = client
+            .increment_thread_elicitation(ThreadIncrementElicitationParams {
+                thread_id: thread_id.clone(),
+            })
+            .expect("thread/increment_elicitation request");
+        assert_eq!(increment.method, METHOD_THREAD_INCREMENT_ELICITATION);
+        assert_eq!(
+            increment.params.expect("params"),
+            json!({"threadId": thread_id})
+        );
+
+        let decrement = client
+            .decrement_thread_elicitation(ThreadDecrementElicitationParams {
+                thread_id: "019bf4f0-5080-7000-8000-000000000001".to_string(),
+            })
+            .expect("thread/decrement_elicitation request");
+        assert_eq!(decrement.method, METHOD_THREAD_DECREMENT_ELICITATION);
+        assert_eq!(
+            decrement.params.expect("params"),
+            json!({"threadId": "019bf4f0-5080-7000-8000-000000000001"})
+        );
+    }
+
+    #[test]
+    fn guardian_approval_helper_preserves_the_opaque_event() {
+        let mut client = AppServerClient::new();
+        let event = json!({
+            "id": "guardian-review-1",
+            "status": "denied",
+            "action": {
+                "type": "command",
+                "source": "shell",
+                "command": "git status --short",
+                "cwd": "/workspace"
+            }
+        });
+        let request = client
+            .approve_guardian_denied_action(ThreadApproveGuardianDeniedActionParams {
+                thread_id: "019bf4f0-5080-7000-8000-000000000001".to_string(),
+                event: event.clone(),
+            })
+            .expect("thread/approveGuardianDeniedAction request");
+
+        assert_eq!(request.method, METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION);
+        assert_eq!(
+            request.params.expect("params"),
+            json!({
+                "threadId": "019bf4f0-5080-7000-8000-000000000001",
+                "event": event,
+            })
+        );
+    }
+
+    #[test]
+    fn thread_inject_items_helper_preserves_raw_response_items() {
+        let mut client = AppServerClient::new();
+        let item = json!({
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": "injected context"}]
+        });
+        let request = client
+            .inject_thread_items(ThreadInjectItemsParams {
+                thread_id: "019bf4f0-5080-7000-8000-000000000001".to_string(),
+                items: vec![item.clone()],
+            })
+            .expect("thread/inject_items request");
+
+        assert_eq!(request.method, METHOD_THREAD_INJECT_ITEMS);
+        assert_eq!(
+            request.params.expect("params"),
+            json!({
+                "threadId": "019bf4f0-5080-7000-8000-000000000001",
+                "items": [item]
+            })
+        );
+    }
+
+    #[test]
+    fn thread_search_occurrences_helper_uses_exact_v2_method() {
+        let mut client = AppServerClient::new();
+        let request = client
+            .search_thread_occurrences(ThreadSearchOccurrencesParams {
+                thread_id: "019f9b19-17a2-78b2-84d7-ce881fcf0617".to_string(),
+                search_term: "needle".to_string(),
+                cursor: Some("opaque:occurrence:4".to_string()),
+                limit: Some(25),
+            })
+            .expect("thread/searchOccurrences request");
+
+        assert_eq!(request.method, METHOD_THREAD_SEARCH_OCCURRENCES);
+        assert_eq!(
+            request.params.expect("params"),
+            json!({
+                "threadId": "019f9b19-17a2-78b2-84d7-ce881fcf0617",
+                "searchTerm": "needle",
+                "cursor": "opaque:occurrence:4",
+                "limit": 25
+            })
+        );
+    }
+
+    #[test]
+    fn thread_search_helper_uses_exact_v2_method() {
+        let mut client = AppServerClient::new();
+        let request = client
+            .search_threads(ThreadSearchParams {
+                cursor: Some("opaque:thread:4".to_string()),
+                limit: Some(25),
+                sort_key: Some(ThreadSortKey::UpdatedAt),
+                sort_direction: Some(SortDirection::Asc),
+                source_kinds: Some(vec![ThreadSourceKind::AppServer]),
+                archived: Some(true),
+                search_term: "needle".to_string(),
+            })
+            .expect("thread/search request");
+
+        assert_eq!(request.method, METHOD_THREAD_SEARCH);
+        assert_eq!(
+            request.params.expect("params"),
+            json!({
+                "cursor": "opaque:thread:4",
+                "limit": 25,
+                "sortKey": "updated_at",
+                "sortDirection": "asc",
+                "sourceKinds": ["appServer"],
+                "archived": true,
+                "searchTerm": "needle"
+            })
+        );
+    }
+
+    #[test]
+    fn thread_background_terminal_helpers_use_exact_v2_methods() {
+        let thread_id = "019f9b19-17a2-78b2-84d7-ce881fcf0617".to_string();
+        let mut client = AppServerClient::new();
+        let request = client
+            .list_thread_background_terminals(ThreadBackgroundTerminalsListParams {
+                thread_id: thread_id.clone(),
+                cursor: None,
+                limit: Some(25),
+            })
+            .expect("thread/backgroundTerminals/list request");
+        assert_eq!(request.method, METHOD_THREAD_BACKGROUND_TERMINALS_LIST);
+        assert_eq!(
+            request.params.expect("params"),
+            json!({"threadId": thread_id, "cursor": null, "limit": 25})
+        );
+
+        let request = client
+            .terminate_thread_background_terminal(ThreadBackgroundTerminalsTerminateParams {
+                thread_id: "019f9b19-17a2-78b2-84d7-ce881fcf0617".to_string(),
+                process_id: "42".to_string(),
+            })
+            .expect("thread/backgroundTerminals/terminate request");
+        assert_eq!(request.method, METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE);
+        assert_eq!(
+            request.params.expect("params"),
+            json!({
+                "threadId": "019f9b19-17a2-78b2-84d7-ce881fcf0617",
+                "processId": "42"
+            })
+        );
+
+        let request = client
+            .clean_thread_background_terminals(ThreadBackgroundTerminalsCleanParams {
+                thread_id: "019f9b19-17a2-78b2-84d7-ce881fcf0617".to_string(),
+            })
+            .expect("thread/backgroundTerminals/clean request");
+        assert_eq!(request.method, METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN);
+        assert_eq!(
+            request.params.expect("params"),
+            json!({
+                "threadId": "019f9b19-17a2-78b2-84d7-ce881fcf0617"
+            })
         );
     }
 
@@ -2996,13 +3364,17 @@ mod tests {
 
         let models = client
             .list_models(ModelListParams {
-                provider_id: Some("openai".to_string()),
-                tier: None,
+                cursor: Some("20".to_string()),
+                limit: Some(10),
+                include_hidden: Some(true),
             })
             .expect("models");
         let preferences = client.list_model_preferences().expect("preferences");
         let sync_state = client.read_model_sync_state().expect("sync state");
         let providers = client.list_model_providers().expect("providers");
+        let provider_capabilities = client
+            .read_model_provider_capabilities()
+            .expect("provider capabilities");
         let catalog = client
             .list_model_provider_catalog()
             .expect("provider catalog");
@@ -3016,11 +3388,16 @@ mod tests {
         assert_eq!(models.method, METHOD_MODEL_LIST);
         assert_eq!(
             models.params.expect("params"),
-            json!({ "providerId": "openai" })
+            json!({ "cursor": "20", "limit": 10, "includeHidden": true })
         );
         assert_eq!(preferences.method, METHOD_MODEL_PREFERENCES_LIST);
         assert_eq!(sync_state.method, METHOD_MODEL_SYNC_STATE_READ);
         assert_eq!(providers.method, METHOD_MODEL_PROVIDER_LIST);
+        assert_eq!(
+            provider_capabilities.method,
+            METHOD_MODEL_PROVIDER_CAPABILITIES_READ
+        );
+        assert_eq!(provider_capabilities.params, Some(json!({})));
         assert_eq!(catalog.method, METHOD_MODEL_PROVIDER_CATALOG_LIST);
         assert_eq!(alias.method, METHOD_MODEL_PROVIDER_ALIAS_READ);
         assert_eq!(

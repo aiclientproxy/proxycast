@@ -53,11 +53,12 @@ const Container = styled.div`
   overflow: hidden;
 `;
 
-const CompactModeBar = styled.div<{ $visible: boolean }>`
+const CompactModeBar = styled.div<{ $visible: boolean; $topInset: string }>`
   display: ${({ $visible }) => ($visible ? "flex" : "none")};
   min-width: 0;
   height: 42px;
   flex: 0 0 42px;
+  margin-top: ${({ $topInset }) => $topInset};
   align-items: center;
   justify-content: flex-start;
   border-bottom: 1px solid var(--lime-surface-border, rgba(226, 232, 240, 0.9));
@@ -318,6 +319,13 @@ export const LayoutTransition: React.FC<LayoutTransitionProps> = memo(
     const shouldRenderCanvas = hasCanvasContent && isCanvasVisible;
     const isCompactChatCanvas =
       compactChatCanvasLayout && effectiveMode === "chat-canvas";
+    const compactModeTopInset = isCompactChatCanvas ? chatPanelTopInset : "0px";
+    const resolvedChatPanelTopInset = isCompactChatCanvas
+      ? "0px"
+      : chatPanelTopInset;
+    const resolvedCanvasPanelTopInset = isCompactChatCanvas
+      ? "0px"
+      : canvasPanelTopInset;
     const shouldRenderResizeHandle =
       effectiveMode === "chat-canvas" &&
       shouldRenderCanvas &&
@@ -449,11 +457,11 @@ export const LayoutTransition: React.FC<LayoutTransitionProps> = memo(
         }
         $transform={canvasStyles.transform as string}
         $opacity={canvasStyles.opacity as number}
-        $topInset={canvasPanelTopInset}
+        $topInset={resolvedCanvasPanelTopInset}
         $duration={parseInt(
           canvasStyles.transition?.match(/\d+/)?.[0] || "300",
         )}
-        data-top-inset={canvasPanelTopInset}
+        data-top-inset={resolvedCanvasPanelTopInset}
         data-testid="layout-canvas-panel"
       >
         {canvasContent}
@@ -484,16 +492,16 @@ export const LayoutTransition: React.FC<LayoutTransitionProps> = memo(
       >
         {chatPanelChrome === "plain" ? (
           <PlainChatPanelInner
-            $topInset={chatPanelTopInset}
-            data-top-inset={chatPanelTopInset}
+            $topInset={resolvedChatPanelTopInset}
+            data-top-inset={resolvedChatPanelTopInset}
             data-testid="layout-chat-panel-plain"
           >
             {chatContent}
           </PlainChatPanelInner>
         ) : (
           <ChatPanelInner
-            $topInset={chatPanelTopInset}
-            data-top-inset={chatPanelTopInset}
+            $topInset={resolvedChatPanelTopInset}
+            data-top-inset={resolvedChatPanelTopInset}
             data-testid="layout-chat-panel-inner"
           >
             {chatContent}
@@ -518,8 +526,10 @@ export const LayoutTransition: React.FC<LayoutTransitionProps> = memo(
       >
         <CompactModeBar
           $visible={isCompactChatCanvas}
+          $topInset={compactModeTopInset}
           data-testid="layout-compact-mode-bar"
           data-visible={isCompactChatCanvas ? "true" : "false"}
+          data-top-inset={compactModeTopInset}
         >
           {isCompactChatCanvas ? (
             <CompactModeControl

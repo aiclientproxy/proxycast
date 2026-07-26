@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "command": {
+      "type": "string"
+    },
+    "cpuPercent": {
+      "format": "double",
+      "type": [
+        "null",
+        "number"
+      ]
+    },
+    "cwd": {
+      "type": "string"
+    },
+    "itemId": {
+      "type": "string"
+    },
+    "osPid": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "processId": {
+      "type": "string"
+    },
+    "rssKb": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "command",
+    "cwd",
+    "itemId",
+    "processId"
+  ],
+  "title": "ThreadBackgroundTerminal",
+  "type": "object"
+}

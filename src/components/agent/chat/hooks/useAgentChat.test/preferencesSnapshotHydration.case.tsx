@@ -56,7 +56,6 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
       }>;
       turns: [];
       items: [];
-      queued_turns: [];
       execution_strategy: "react";
     }>();
 
@@ -102,7 +101,6 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
         messages: [],
         turns: [],
         items: [],
-        queued_turns: [],
         execution_strategy: "react" as const,
       };
     });
@@ -151,7 +149,6 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
           ],
           turns: [],
           items: [],
-          queued_turns: [],
           execution_strategy: "react",
         });
       });
@@ -178,7 +175,6 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
       }>;
       turns: [];
       items: [];
-      queued_turns: [];
       execution_strategy: "react";
     }>();
 
@@ -233,7 +229,6 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
         messages: [],
         turns: [],
         items: [],
-        queued_turns: [],
         execution_strategy: "react" as const,
       };
     });
@@ -279,7 +274,6 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
           ],
           turns: [],
           items: [],
-          queued_turns: [],
           execution_strategy: "react",
         });
       });
@@ -308,7 +302,6 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
       }>;
       turns: [];
       items: [];
-      queued_turns: [];
       execution_strategy: "react";
     }>();
     mockListAgentRuntimeSessions.mockResolvedValue([
@@ -339,7 +332,6 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
         messages: [],
         turns: [],
         items: [],
-        queued_turns: [],
         execution_strategy: "react" as const,
       };
     });
@@ -376,7 +368,6 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
           ],
           turns: [],
           items: [],
-          queued_turns: [],
           execution_strategy: "react",
         });
       });

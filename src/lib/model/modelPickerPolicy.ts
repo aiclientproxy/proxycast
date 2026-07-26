@@ -114,6 +114,16 @@ export function buildModelPickerPolicy(
   };
 }
 
+export function buildCatalogModelPickerPolicy(
+  hidden: boolean,
+  input: Omit<ModelPickerPolicyInput, "visibility"> = {},
+): ModelPickerPolicy {
+  return buildModelPickerPolicy({
+    ...input,
+    visibility: hidden ? "hide" : "list",
+  });
+}
+
 export function resolveModelServiceTierForRequest(
   policy: Pick<ModelPickerPolicy, "supported_service_tier_ids">,
   requestedServiceTier: unknown,

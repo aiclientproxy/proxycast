@@ -43,7 +43,10 @@ mod stream_tests;
 mod transport;
 mod websocket;
 
-use health::{CircuitBreaker, CircuitOpen, CircuitPermit, HealthConfig};
+pub use health::CurrentProviderHealthRegistry;
+#[cfg(test)]
+use health::HealthConfig;
+use health::{CircuitBreaker, CircuitOpen, CircuitPermit};
 use lowering::{anthropic_request, chat_completions_request, responses_request};
 use stream::{anthropic_sse, openai_chat_sse, responses_sse};
 use transport::{
@@ -65,6 +68,82 @@ pub trait CurrentProvider: Send + Sync {
     ) -> BoxFuture<'a, Result<CurrentProviderStream, CurrentProviderError>>;
 }
 
+const SESSION_ID_METADATA_KEY: &str = "session_id";
+const THREAD_ID_METADATA_KEY: &str = "thread_id";
+const TURN_ID_METADATA_KEY: &str = "turn_id";
+const FORKED_FROM_THREAD_ID_METADATA_KEY: &str = "forked_from_thread_id";
+const REQUEST_KIND_METADATA_KEY: &str = "request_kind";
+const X_CODEX_TURN_METADATA_KEY: &str = "x-codex-turn-metadata";
+const RESERVED_TURN_METADATA_KEYS: &[&str] = &[
+    SESSION_ID_METADATA_KEY,
+    THREAD_ID_METADATA_KEY,
+    TURN_ID_METADATA_KEY,
+    FORKED_FROM_THREAD_ID_METADATA_KEY,
+    REQUEST_KIND_METADATA_KEY,
+    X_CODEX_TURN_METADATA_KEY,
+];
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CurrentProviderRequestMetadata {
+    pub session_id: String,
+    pub thread_id: String,
+    pub turn_id: String,
+    pub forked_from_thread_id: Option<String>,
+    extra: ProviderMetadata,
+}
+
+impl CurrentProviderRequestMetadata {
+    pub fn new(
+        session_id: impl Into<String>,
+        thread_id: impl Into<String>,
+        turn_id: impl Into<String>,
+        forked_from_thread_id: Option<String>,
+    ) -> Self {
+        Self {
+            session_id: session_id.into(),
+            thread_id: thread_id.into(),
+            turn_id: turn_id.into(),
+            forked_from_thread_id,
+            extra: ProviderMetadata::new(),
+        }
+    }
+
+    pub fn with_extra(mut self, extra: ProviderMetadata) -> Self {
+        self.extra = extra;
+        self
+    }
+
+    fn canonical_metadata(&self) -> ProviderMetadata {
+        let mut metadata = self
+            .extra
+            .iter()
+            .filter(|(key, value)| {
+                !RESERVED_TURN_METADATA_KEYS.contains(&key.as_str()) && value.is_string()
+            })
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<ProviderMetadata>();
+        metadata.insert(
+            SESSION_ID_METADATA_KEY.to_string(),
+            Value::String(self.session_id.clone()),
+        );
+        metadata.insert(
+            THREAD_ID_METADATA_KEY.to_string(),
+            Value::String(self.thread_id.clone()),
+        );
+        metadata.insert(
+            TURN_ID_METADATA_KEY.to_string(),
+            Value::String(self.turn_id.clone()),
+        );
+        if let Some(forked_from_thread_id) = &self.forked_from_thread_id {
+            metadata.insert(
+                FORKED_FROM_THREAD_ID_METADATA_KEY.to_string(),
+                Value::String(forked_from_thread_id.clone()),
+            );
+        }
+        metadata
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CurrentProviderRequest {
     pub system_prompt: Option<String>,
@@ -72,6 +151,7 @@ pub struct CurrentProviderRequest {
     pub tools: Vec<CurrentProviderTool>,
     pub generation: GenerationOptions,
     pub provider_options: ProviderMetadata,
+    pub metadata: Option<CurrentProviderRequestMetadata>,
     pub model_request_policy: Option<RuntimeReplyModelRequestPolicy>,
 }
 
@@ -83,6 +163,7 @@ impl CurrentProviderRequest {
             tools: Vec::new(),
             generation: GenerationOptions::default(),
             provider_options: ProviderMetadata::new(),
+            metadata: None,
             model_request_policy: None,
         }
     }
@@ -104,6 +185,11 @@ impl CurrentProviderRequest {
 
     pub fn with_provider_options(mut self, provider_options: ProviderMetadata) -> Self {
         self.provider_options = provider_options;
+        self
+    }
+
+    pub fn with_metadata(mut self, metadata: CurrentProviderRequestMetadata) -> Self {
+        self.metadata = Some(metadata);
         self
     }
 
@@ -149,6 +235,9 @@ impl CurrentProviderRequest {
             .collect();
         canonical.generation = self.generation.clone();
         canonical.provider_options = self.provider_options.clone();
+        if let Some(metadata) = &self.metadata {
+            canonical.metadata = metadata.canonical_metadata();
+        }
         Ok(canonical)
     }
 
@@ -179,6 +268,15 @@ impl CurrentProviderRequest {
         }
         Ok(payloads)
     }
+
+    fn contains_raw_response_items(&self) -> bool {
+        self.messages.iter().any(|message| {
+            message
+                .content
+                .iter()
+                .any(|content| matches!(content, CurrentProviderContent::RawResponseItem(_)))
+        })
+    }
 }
 
 fn canonical_message(
@@ -186,6 +284,7 @@ fn canonical_message(
 ) -> Result<runtime_core::CanonicalMessage, CurrentProviderError> {
     let role = match message.role {
         CurrentProviderRole::User => CanonicalRole::User,
+        CurrentProviderRole::Developer => CanonicalRole::Developer,
         CurrentProviderRole::Assistant => CanonicalRole::Assistant,
         CurrentProviderRole::Tool => CanonicalRole::Tool,
     };
@@ -244,6 +343,9 @@ fn canonical_content(
             provider_executed: Some(false),
             metadata: Default::default(),
         }),
+        CurrentProviderContent::RawResponseItem(item) => {
+            Ok(ContentPart::RawResponseItem { item: item.clone() })
+        }
     }
 }
 
@@ -268,17 +370,29 @@ impl CurrentProviderMessage {
         }
     }
 
+    pub fn developer(content: Vec<CurrentProviderContent>) -> Self {
+        Self {
+            role: CurrentProviderRole::Developer,
+            content,
+        }
+    }
+
     pub fn tool(content: Vec<CurrentProviderContent>) -> Self {
         Self {
             role: CurrentProviderRole::Tool,
             content,
         }
     }
+
+    pub fn raw_response_item(item: Value) -> Self {
+        Self::assistant(vec![CurrentProviderContent::RawResponseItem(item)])
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CurrentProviderRole {
     User,
+    Developer,
     Assistant,
     Tool,
 }
@@ -295,6 +409,7 @@ pub enum CurrentProviderContent {
     },
     ToolCall(CurrentProviderToolCall),
     ToolResult(CurrentProviderToolResult),
+    RawResponseItem(Value),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -430,6 +545,13 @@ pub struct CurrentProviderClient {
 
 impl CurrentProviderClient {
     pub fn new(config: RuntimeProviderConfig) -> Result<Self, CurrentProviderError> {
+        Self::new_with_health_registry(config, &CurrentProviderHealthRegistry::new())
+    }
+
+    pub fn new_with_health_registry(
+        config: RuntimeProviderConfig,
+        health_registry: &CurrentProviderHealthRegistry,
+    ) -> Result<Self, CurrentProviderError> {
         runtime_protocol(&config)?;
         let mut client_builder = Client::builder()
             .connect_timeout(Duration::from_secs(30))
@@ -448,19 +570,27 @@ impl CurrentProviderClient {
             CurrentProviderError::new(format!("创建 provider HTTP client 失败: {error}"))
         })?;
         Ok(Self {
+            health: health_registry.circuit_for(&config),
             config,
             client,
-            health: Arc::new(CircuitBreaker::new(HealthConfig::default())),
             http_fallback: Arc::new(AtomicBool::new(false)),
             websocket: Arc::new(Mutex::new(None)),
         })
     }
 
     pub fn with_client(config: RuntimeProviderConfig, client: Client) -> Self {
+        Self::with_client_and_health_registry(config, client, &CurrentProviderHealthRegistry::new())
+    }
+
+    fn with_client_and_health_registry(
+        config: RuntimeProviderConfig,
+        client: Client,
+        health_registry: &CurrentProviderHealthRegistry,
+    ) -> Self {
         Self {
+            health: health_registry.circuit_for(&config),
             config,
             client,
-            health: Arc::new(CircuitBreaker::new(HealthConfig::default())),
             http_fallback: Arc::new(AtomicBool::new(false)),
             websocket: Arc::new(Mutex::new(None)),
         }
@@ -484,6 +614,13 @@ impl CurrentProviderClient {
     ) -> Result<CurrentProviderStream, CurrentProviderError> {
         let protocol = self.protocol()?;
         ensure_supported_protocol(&protocol)?;
+        if request.contains_raw_response_items()
+            && !matches!(protocol, ModelProviderProtocol::Responses)
+        {
+            return Err(CurrentProviderError::invalid_request(
+                "raw Responses API history items require a Responses provider route",
+            ));
+        }
         let mut permit = self.health.acquire().map_err(circuit_open_error)?;
         let media_payloads = request.media_payloads()?;
         let canonical_request = request.into_canonical(&self.config.model_name)?;
@@ -1087,6 +1224,7 @@ mod tests {
             base_url: Some("https://gateway.example.com/v1".to_string()),
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: Some("medium".to_string()),
+            service_tier: None,
             protocol,
             supports_websockets: false,
             toolshim: false,
@@ -1098,6 +1236,53 @@ mod tests {
         CurrentProviderRequest::new(vec![CurrentProviderMessage::user(vec![
             CurrentProviderContent::Text("hello".to_string()),
         ])])
+    }
+
+    #[test]
+    fn raw_response_items_are_preserved_by_responses_lowering() {
+        let item = json!({
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": "injected context"}],
+            "provider_extension": {"keep": true}
+        });
+        let request = CurrentProviderRequest::new(vec![CurrentProviderMessage::raw_response_item(
+            item.clone(),
+        )]);
+        let canonical = request
+            .into_canonical("gpt-5-codex")
+            .expect("canonical raw response item");
+        let payload = responses_request(
+            &config(Some(RuntimeProviderProtocol::Responses)),
+            &canonical,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &Default::default(),
+        );
+
+        assert_eq!(payload["input"], json!([item]));
+    }
+
+    #[tokio::test]
+    async fn raw_response_items_fail_closed_for_non_responses_routes() {
+        let client =
+            CurrentProviderClient::new(config(Some(RuntimeProviderProtocol::ChatCompletions)))
+                .expect("chat client");
+        let request =
+            CurrentProviderRequest::new(vec![CurrentProviderMessage::raw_response_item(json!({
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "injected context"}]
+            }))]);
+
+        let error = match client.stream(request).await {
+            Ok(_) => panic!("raw response item must not reach chat-completions transport"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error.classification,
+            Some(FailureClassification::InvalidRequest)
+        );
+        assert!(error.message.contains("require a Responses provider route"));
     }
 
     async fn stream_error(client: &CurrentProviderClient, scenario: &str) -> CurrentProviderError {

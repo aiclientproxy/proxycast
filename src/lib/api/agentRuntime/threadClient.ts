@@ -8,12 +8,15 @@ import {
   type AppServerCapabilityListParams,
   type AppServerThreadReadParams,
   type AppServerThreadReadResponse,
+  type AppServerThreadSettingsUpdateParams,
+  type AppServerThreadSettingsUpdateResponse,
   type AppServerThreadShellCommandParams,
 } from "@/lib/api/appServer";
 import type {
   AppServerRequestResult,
   ThreadResumeParams,
   ThreadResumeResponse,
+  ThreadSetNameParams,
   TurnInterruptParams,
   TurnStartParams,
   TurnSteerParams,
@@ -63,11 +66,13 @@ import {
 export type AgentRuntimeAppServerClient = Pick<
   AppServerClient,
   | "readThread"
+  | "setThreadName"
+  | "updateThreadSettings"
   | "runThreadShellCommand"
   | "startTurn"
   | "steerTurn"
   | "cancelTurn"
-  | "compactAgentSession"
+  | "startThreadCompaction"
   | "resumeThread"
   | "drainEvents"
   | "listAgentSessionFileCheckpoints"
@@ -178,14 +183,36 @@ export function createThreadClient(deps: AgentRuntimeThreadClientDeps = {}) {
   async function compactAgentRuntimeSession(
     request: AgentRuntimeCompactSessionRequest,
   ): Promise<void> {
-    const result = await appServerClient.compactAgentSession({
-      sessionId: request.session_id,
-      eventName: request.event_name,
+    const threadId = request.session_id.trim();
+    const eventName = request.event_name.trim();
+    if (!threadId) {
+      throw new Error("threadId is required to start context compaction");
+    }
+    if (!eventName) {
+      throw new Error("eventName is required to route context compaction");
+    }
+
+    const route = appServerEventRouter?.register({
+      eventName,
+      sessionId: threadId,
     });
-    publishAppServerAgentSessionNotifications(
-      request.event_name,
-      result.notifications,
-    );
+    try {
+      const result = await appServerClient.startThreadCompaction({ threadId });
+      if (route) {
+        route.publish(result.notifications);
+      } else {
+        publishAppServerAgentSessionNotifications(
+          eventName,
+          result.notifications,
+        );
+      }
+    } catch (error) {
+      publishAppServerRpcErrorNotifications(error, {
+        eventName,
+        sessionId: threadId,
+      });
+      throw error;
+    }
   }
 
   async function resumeThread(
@@ -347,6 +374,35 @@ export function createThreadClient(deps: AgentRuntimeThreadClientDeps = {}) {
     return sessionId;
   }
 
+  async function updateAgentRuntimeThreadSettings(
+    request: AppServerThreadSettingsUpdateParams,
+  ): Promise<AppServerRequestResult<AppServerThreadSettingsUpdateResponse>> {
+    const threadId = request.threadId.trim();
+    if (!threadId) {
+      throw new Error(
+        "threadId is required to update App Server thread settings",
+      );
+    }
+    return appServerClient.updateThreadSettings({
+      ...request,
+      threadId,
+    });
+  }
+
+  async function setAgentRuntimeThreadName(
+    request: ThreadSetNameParams,
+  ): Promise<void> {
+    const threadId = request.threadId.trim();
+    const name = request.name.trim();
+    if (!threadId) {
+      throw new Error("threadId is required to name an App Server thread");
+    }
+    if (!name) {
+      throw new Error("name is required to name an App Server thread");
+    }
+    await appServerClient.setThreadName({ threadId, name });
+  }
+
   async function listAgentRuntimeFileCheckpoints(
     request: AgentRuntimeListFileCheckpointsRequest,
   ): Promise<AgentRuntimeFileCheckpointListResult> {
@@ -400,6 +456,8 @@ export function createThreadClient(deps: AgentRuntimeThreadClientDeps = {}) {
     getAgentRuntimeThreadRead,
     readAgentRuntimeThread,
     readThreadSessionId,
+    setAgentRuntimeThreadName,
+    updateAgentRuntimeThreadSettings,
     interruptAgentRuntimeTurn,
     listAgentRuntimeFileCheckpoints,
     replayAgentRuntimeRequest,
@@ -1011,6 +1069,8 @@ export const {
   getAgentRuntimeThreadRead,
   readAgentRuntimeThread,
   readThreadSessionId,
+  setAgentRuntimeThreadName,
+  updateAgentRuntimeThreadSettings,
   interruptAgentRuntimeTurn,
   listAgentRuntimeFileCheckpoints,
   replayAgentRuntimeRequest,

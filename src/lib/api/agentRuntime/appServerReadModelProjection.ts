@@ -44,7 +44,6 @@ export function projectAppServerSessionReadToThreadReadModel(
         : protocolTurns,
     pending_requests: detailThreadRead?.pending_requests ?? [],
     incidents: detailThreadRead?.incidents ?? [],
-    queued_turns: detailThreadRead?.queued_turns ?? [],
     updated_at: response.session.updatedAt,
   };
   const projectedSessionBusinessObjectRefMetadata =

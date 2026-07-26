@@ -604,6 +604,49 @@
       ],
       "type": "string"
     },
+    "ModelSafetyBufferingUpdatedNotification": {
+      "properties": {
+        "fasterModel": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "showBufferingUi": {
+          "type": "boolean"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "useCases": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "model",
+        "reasons",
+        "showBufferingUi",
+        "threadId",
+        "turnId",
+        "useCases"
+      ],
+      "type": "object"
+    },
     "PatchApplyStatus": {
       "enum": [
         "completed",
@@ -848,6 +891,13 @@
             "string"
           ]
         },
+        "canAcceptDirectInput": {
+          "description": "Whether this thread may accept direct input from an App Server client.\nSpawned child threads are parent-owned and must be driven through the\ncanonical agent-control route instead.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "cliVersion": {
           "type": "string"
         },
@@ -884,6 +934,10 @@
         },
         "id": {
           "type": "string"
+        },
+        "isPinned": {
+          "default": false,
+          "type": "boolean"
         },
         "modelProvider": {
           "type": "string"
@@ -972,6 +1026,17 @@
       "type": "string"
     },
     "ThreadArchivedNotification": {
+      "properties": {
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadClosedNotification": {
       "properties": {
         "threadId": {
           "type": "string"
@@ -1641,6 +1706,23 @@
         }
       ]
     },
+    "ThreadNameUpdatedNotification": {
+      "properties": {
+        "threadId": {
+          "type": "string"
+        },
+        "threadName": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
     "ThreadSettings": {
       "properties": {
         "activePermissionProfile": true,
@@ -1672,7 +1754,8 @@
             "string"
           ]
         },
-        "summary": true
+        "summary": true,
+        "toolPreferences": true
       },
       "required": [
         "approvalPolicy",
@@ -1770,6 +1853,21 @@
           "type": "object"
         }
       ]
+    },
+    "ThreadStatusChangedNotification": {
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/ThreadStatus"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "threadId"
+      ],
+      "type": "object"
     },
     "ThreadTokenUsage": {
       "properties": {
@@ -2191,6 +2289,54 @@
     {
       "properties": {
         "method": {
+          "const": "thread/closed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadClosedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "thread/name/updated",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadNameUpdatedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "thread/status/changed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadStatusChangedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
           "const": "turn/started",
           "type": "string"
         },
@@ -2372,6 +2518,22 @@
         },
         "params": {
           "$ref": "#/$defs/ReasoningTextDeltaNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "model/safetyBuffering/updated",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ModelSafetyBufferingUpdatedNotification"
         }
       },
       "required": [

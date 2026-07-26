@@ -157,7 +157,6 @@ describe("useAgentChat.confirmAction", () => {
           latest_turn_status: "canceled",
           pending_requests: [],
           incidents: [],
-          queued_turns: [],
         },
       });
 
@@ -218,7 +217,6 @@ describe("useAgentChat.confirmAction", () => {
                 status: "running",
                 pending_requests: [],
                 incidents: [],
-                queued_turns: [],
               },
             });
         }),

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCatalogModelPickerPolicy,
   buildModelPickerPolicy,
   resolveModelServiceTierForRequest,
 } from "./modelPickerPolicy";
@@ -32,6 +33,17 @@ describe("modelPickerPolicy", () => {
 
     expect(buildModelPickerPolicy({ visibility: "unknown" })).toMatchObject({
       visibility: "none",
+      show_in_picker: false,
+    });
+  });
+
+  it("在 policy owner 内把 catalog hidden 字段映射为 visibility", () => {
+    expect(buildCatalogModelPickerPolicy(false)).toMatchObject({
+      visibility: "list",
+      show_in_picker: true,
+    });
+    expect(buildCatalogModelPickerPolicy(true)).toMatchObject({
+      visibility: "hide",
       show_in_picker: false,
     });
   });

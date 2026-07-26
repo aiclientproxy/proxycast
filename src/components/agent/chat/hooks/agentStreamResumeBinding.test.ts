@@ -61,12 +61,6 @@ describe("agentStreamResumeBinding", () => {
           thread_id: "thread-1",
           status: "running",
           active_turn_id: null,
-          queued_turns: [
-            {
-              queued_turn_id: "queued-1",
-              message_preview: "排队中",
-            },
-          ],
           turns: [
             {
               turnId: "turn-current-1",
@@ -134,7 +128,7 @@ describe("agentStreamResumeBinding", () => {
     ).toBeNull();
   });
 
-  it("running turn 和 queued turn 同时存在时应优先恢复 active stream", () => {
+  it("running turn 存在时应恢复 active stream", () => {
     expect(
       resolveAgentStreamResumeBindingTarget({
         sessionId: "session-1",

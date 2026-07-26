@@ -548,7 +548,6 @@ describe("agentChatHistory core hydrate", () => {
         ],
         pending_requests: [],
         incidents: [],
-        queued_turns: [],
         tool_calls: [
           {
             tool_call_id: "tool-webfetch-read",
@@ -761,7 +760,6 @@ describe("agentChatHistory core hydrate", () => {
         ],
         pending_requests: [],
         incidents: [],
-        queued_turns: [],
         tool_calls: [
           {
             tool_call_id: "tool-thread-read-image",

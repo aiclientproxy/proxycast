@@ -19,6 +19,8 @@ pub struct ThreadSettingsUpdateParams {
     pub permissions: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_provider: Option<String>,
     #[serde(
         default,
         deserialize_with = "deserialize_double_option",
@@ -33,6 +35,8 @@ pub struct ThreadSettingsUpdateParams {
     pub collaboration_mode: Option<CollaborationMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub personality: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_preferences: Option<Value>,
 }
 
 impl ThreadSettingsUpdateParams {
@@ -43,11 +47,13 @@ impl ThreadSettingsUpdateParams {
             || self.sandbox_policy.is_some()
             || self.permissions.is_some()
             || self.model.is_some()
+            || self.model_provider.is_some()
             || self.service_tier.is_some()
             || self.effort.is_some()
             || self.summary.is_some()
             || self.collaboration_mode.is_some()
             || self.personality.is_some()
+            || self.tool_preferences.is_some()
     }
 }
 
@@ -75,6 +81,8 @@ pub struct ThreadSettings {
     pub collaboration_mode: CollaborationMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub personality: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_preferences: Option<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -110,6 +118,45 @@ pub struct ThreadMemoryModeSetParams {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadMemoryModeSetResponse {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadIncrementElicitationParams {
+    pub thread_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadIncrementElicitationResponse {
+    pub count: i64,
+    pub paused: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadDecrementElicitationParams {
+    pub thread_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadDecrementElicitationResponse {
+    pub count: i64,
+    pub paused: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadApproveGuardianDeniedActionParams {
+    pub thread_id: String,
+    /// Serialized Guardian assessment event. Runtime validation owns the
+    /// Guardian action union so the public wire remains aligned with Codex.
+    pub event: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadApproveGuardianDeniedActionResponse {}
 
 fn deserialize_double_option<'de, D>(deserializer: D) -> Result<Option<Option<String>>, D::Error>
 where

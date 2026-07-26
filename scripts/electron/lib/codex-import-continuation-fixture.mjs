@@ -26,7 +26,7 @@ export const REQUIRED_METHODS = [
   "modelProviderKey/create",
   "thread/read",
   "thread/start",
-  "agentSession/update",
+  "thread/settings/update",
   "turn/start",
 ];
 
@@ -553,13 +553,11 @@ async function createRepositoryProvider(client, provider) {
   return { providerId, model: provider.modelPreference };
 }
 
-async function updateSessionProvider(client, sessionId, route) {
-  return await client.call("agentSession/update", {
-    sessionId,
-    providerSelector: route.providerId,
-    providerName: route.providerId,
-    modelName: route.model,
-    executionStrategy: "react",
+async function updateThreadProvider(client, threadId, route) {
+  return await client.call("thread/settings/update", {
+    threadId,
+    modelProvider: route.providerId,
+    model: route.model,
   });
 }
 
@@ -593,10 +591,17 @@ async function startUnifiedExecTurn(
 
 export async function runImportedAndNormalTurns(
   client,
-  { importedSessionId, importedThreadId, provider, runtimeEnv, command, options },
+  {
+    importedSessionId,
+    importedThreadId,
+    provider,
+    runtimeEnv,
+    command,
+    options,
+  },
 ) {
   const route = await createRepositoryProvider(client, provider);
-  await updateSessionProvider(client, importedSessionId, route);
+  await updateThreadProvider(client, importedThreadId, route);
   const importedTurn = await startUnifiedExecTurn(client, {
     threadId: importedThreadId,
     clientUserMessageId: IMPORTED_TURN_ID,
@@ -605,7 +610,10 @@ export async function runImportedAndNormalTurns(
     runtimeEnv,
   });
   const importedTurnId = String(importedTurn?.turn?.id || "").trim();
-  assert(importedTurnId, "imported turn/start did not return canonical turn.id");
+  assert(
+    importedTurnId,
+    "imported turn/start did not return canonical turn.id",
+  );
   const importedRead = await waitForTurnCompletion(client, {
     threadId: importedThreadId,
     turnId: importedTurnId,

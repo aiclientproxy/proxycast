@@ -20,15 +20,6 @@ describe("agentSessionRefresh", () => {
       status: "queued",
       pending_requests: [],
       incidents: [],
-      queued_turns: [
-        {
-          messagePreview: "继续执行",
-          messageText: "继续执行当前任务",
-          createdAt: 1700000000000,
-          imageCount: 0,
-          position: 1,
-        },
-      ],
     } as never);
 
     expect(snapshot.threadRead).toMatchObject({
@@ -43,7 +34,6 @@ describe("agentSessionRefresh", () => {
       status: "idle" as const,
       pending_requests: [],
       incidents: [],
-      queued_turns: [],
     }));
 
     await expect(
@@ -168,7 +158,6 @@ describe("agentSessionRefresh", () => {
             status: "idle",
             pending_requests: [],
             incidents: [],
-            queued_turns: [],
           })),
         },
         sessionIdRef: {

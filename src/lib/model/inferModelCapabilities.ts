@@ -10,9 +10,6 @@ import type {
 } from "@/lib/types/modelRegistry";
 import { isLikelyImageGenerationSearchText } from "@/lib/imageGen/providerMatchers";
 
-const REASONING_TOKEN_PATTERN = /(^|[._/-])(thinking|reasoning)(?=$|[._/-])/i;
-const OPENAI_REASONING_PATTERN =
-  /\b(?:gpt-5(?:[._/-]|\b)|o[134](?:[._/-]|\b)|o4-mini(?:[._/-]|\b))\b/i;
 const VISION_HINT_PATTERN =
   /\b(vision|multimodal|multi-modal|omni|image-input|image understanding)\b/i;
 const NON_VISION_PATTERN =
@@ -170,14 +167,6 @@ function normalizeRuntimeFeatures(
   );
 }
 
-function inferReasoningCapability(modelId: string): boolean {
-  const normalized = modelId.trim().toLowerCase();
-  return (
-    REASONING_TOKEN_PATTERN.test(normalized) ||
-    OPENAI_REASONING_PATTERN.test(normalized)
-  );
-}
-
 export function inferVisionCapability(params: {
   modelId: string;
   providerId?: string | null;
@@ -267,21 +256,18 @@ function inferBaseSignals(params: InferModelTaxonomyParams) {
   const explicitOutputModalities = normalizeModalities(
     params.explicitOutputModalities,
   );
+  const explicitRuntimeFeatures = normalizeRuntimeFeatures(
+    params.explicitRuntimeFeatures,
+  );
   const hasExplicitImageOutput = explicitOutputModalities.includes("image");
   const hasExplicitImageInput = explicitInputModalities.includes("image");
   const hasExplicitTextOutput =
     explicitOutputModalities.length === 0 ||
     explicitOutputModalities.includes("text");
   const hasExplicitVisionInput = hasExplicitImageInput && hasExplicitTextOutput;
-  const inferredReasoning =
+  const declaredReasoning =
     capabilities.reasoning === true ||
-    inferReasoningCapability(params.modelId) ||
-    (params.providerModelId
-      ? inferReasoningCapability(params.providerModelId)
-      : false) ||
-    (params.canonicalModelId
-      ? inferReasoningCapability(params.canonicalModelId)
-      : false);
+    explicitRuntimeFeatures.includes("reasoning");
   const inferredVisionByName =
     inferVisionCapability({
       modelId: params.modelId,
@@ -326,7 +312,7 @@ function inferBaseSignals(params: InferModelTaxonomyParams) {
     capabilities,
     explicitInputModalities,
     explicitOutputModalities,
-    inferredReasoning,
+    declaredReasoning,
     inferredVision,
     hasExplicitVisionInput,
     isEmbedding,
@@ -348,7 +334,7 @@ export function inferModelTaskFamilies(
 
   const {
     capabilities,
-    inferredReasoning,
+    declaredReasoning,
     inferredVision,
     isEmbedding,
     isRerank,
@@ -386,7 +372,7 @@ export function inferModelTaskFamilies(
   if (inferredVision && (!isImageGeneration || hasExplicitVisionInput)) {
     families.push("vision_understanding");
   }
-  if (inferredReasoning) {
+  if (declaredReasoning) {
     families.push("reasoning");
   }
 
@@ -402,7 +388,7 @@ export function inferModelTaskFamilies(
   if (
     !isSpecializedOnly ||
     inferredVision ||
-    inferredReasoning ||
+    declaredReasoning ||
     capabilities.tools ||
     capabilities.function_calling ||
     capabilities.json_mode
@@ -606,9 +592,6 @@ export function inferModelCapabilities(
   params: InferModelTaxonomyParams,
 ): ModelCapabilities {
   const taskFamilies = inferModelTaskFamilies(params);
-  const providerType = normalize(params.providerType || params.providerId);
-  const supportsReasoningByDefault =
-    taskFamilies.includes("reasoning") || providerType === "codex";
   return {
     vision: taskFamilies.includes("vision_understanding"),
     tools:
@@ -634,7 +617,9 @@ export function inferModelCapabilities(
         "embedding",
         "rerank",
       ].some((family) => taskFamilies.includes(family as ModelTaskFamily)),
-    reasoning: params.capabilities?.reasoning === true || supportsReasoningByDefault,
+    reasoning:
+      params.capabilities?.reasoning === true ||
+      taskFamilies.includes("reasoning"),
   };
 }
 
@@ -688,8 +673,7 @@ export function getModelAliasSource(
 }
 
 export function getModelCapabilitySummary(
-  model: ModelTaxonomyInput &
-    Pick<EnhancedModelMetadata, "limits">,
+  model: ModelTaxonomyInput & Pick<EnhancedModelMetadata, "limits">,
 ): ModelCapabilitySummary {
   const task_families = getModelTaskFamilies(model);
   const input_modalities = getModelInputModalities(model);
@@ -703,7 +687,8 @@ export function getModelCapabilitySummary(
     input_modalities,
     output_modalities,
     runtime_features,
-    supports_tools: capabilities.tools || runtime_features.includes("tool_calling"),
+    supports_tools:
+      capabilities.tools || runtime_features.includes("tool_calling"),
     supports_reasoning:
       capabilities.reasoning ||
       task_families.includes("reasoning") ||
@@ -716,7 +701,9 @@ export function getModelCapabilitySummary(
   };
 }
 
-function modelToTaxonomyParams(model: ModelTaxonomyInput): InferModelTaxonomyParams {
+function modelToTaxonomyParams(
+  model: ModelTaxonomyInput,
+): InferModelTaxonomyParams {
   return {
     modelId: model.id,
     providerId: model.provider_id,

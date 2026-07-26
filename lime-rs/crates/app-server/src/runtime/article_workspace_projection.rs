@@ -4,6 +4,10 @@ use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 
 const DEFAULT_SCHEMA_VERSION: &str = "article-workspace.v1";
+const INLINE_IMAGE_TASK_SLOT_MARKER: &str = "lime:image-task-slot:";
+const INLINE_IMAGE_TASK_PLACEHOLDER: &str = "pending-image-task://";
+const RESOLVED_IMAGE_URL_PREFIXES: [&str; 5] =
+    ["http://", "https://", "file://", "asset://", "data:image/"];
 
 pub(super) fn article_workspace_from_events(
     session: &AgentSession,
@@ -19,82 +23,6 @@ pub(super) fn article_workspace_from_events(
     workspace.into_value()
 }
 
-pub(super) fn apply_session_selection(
-    article_workspace: Option<Value>,
-    session: &AgentSession,
-) -> Option<Value> {
-    let mut article_workspace = article_workspace?;
-    let Some(selected_object_ref) = session_article_workspace_selected_object_ref(session) else {
-        return Some(article_workspace);
-    };
-    if !workspace_contains_object_ref(&article_workspace, &selected_object_ref) {
-        return Some(article_workspace);
-    }
-    if let Some(object) = article_workspace.as_object_mut() {
-        object.insert("selectedObjectRef".to_string(), selected_object_ref);
-    }
-    Some(article_workspace)
-}
-
-pub(super) fn apply_session_edited_draft(
-    article_workspace: Option<Value>,
-    session: &AgentSession,
-) -> Option<Value> {
-    let mut article_workspace = article_workspace?;
-    let Some(edited_draft) = session_article_workspace_edited_draft(session) else {
-        return Some(article_workspace);
-    };
-    let Some(edited_ref) = edited_draft
-        .get("objectRef")
-        .or_else(|| edited_draft.get("object_ref"))
-    else {
-        return Some(article_workspace);
-    };
-    let Some(edited_key) = article_object_ref_key(edited_ref) else {
-        return Some(article_workspace);
-    };
-    let Some(markdown) = string_field(&edited_draft, &["markdown"]) else {
-        return Some(article_workspace);
-    };
-    if markdown.trim().is_empty() {
-        return Some(article_workspace);
-    }
-
-    let updated_at = string_field(&edited_draft, &["updatedAt", "updated_at"]);
-    let Some(objects) = article_workspace
-        .as_object_mut()
-        .and_then(|workspace| workspace.get_mut("objects"))
-        .and_then(Value::as_array_mut)
-    else {
-        return Some(article_workspace);
-    };
-
-    let mut changed = false;
-    for object in objects {
-        let Some(object_key) = article_object_key(object) else {
-            continue;
-        };
-        if object_key != edited_key
-            || article_object_kind(object).as_deref() != Some("articleDraft")
-        {
-            continue;
-        }
-        apply_markdown_to_article_object(object, &markdown, updated_at.as_deref());
-        changed = true;
-    }
-
-    if changed {
-        if let Some(workspace) = article_workspace.as_object_mut() {
-            workspace.insert("editedDraft".to_string(), edited_draft.clone());
-            workspace.insert("edited_draft".to_string(), edited_draft);
-            if let Some(updated_at) = updated_at {
-                workspace.insert("updatedAt".to_string(), json!(updated_at));
-            }
-        }
-    }
-    Some(article_workspace)
-}
-
 struct ArticleWorkspaceBuilder<'a> {
     session: &'a AgentSession,
     app_id: Option<String>,
@@ -102,6 +30,7 @@ struct ArticleWorkspaceBuilder<'a> {
     object_order: Vec<String>,
     primary_object_ref: Option<Value>,
     selected_object_ref: Option<Value>,
+    edited_draft: Option<Value>,
     layout_state: Option<Value>,
     source_artifacts: Vec<Value>,
     worker_evidence: Vec<Value>,
@@ -119,6 +48,7 @@ impl<'a> ArticleWorkspaceBuilder<'a> {
             object_order: Vec::new(),
             primary_object_ref: None,
             selected_object_ref: None,
+            edited_draft: None,
             layout_state: None,
             source_artifacts: Vec::new(),
             worker_evidence: Vec::new(),
@@ -148,6 +78,11 @@ impl<'a> ArticleWorkspaceBuilder<'a> {
             object_ref_field(patch, &["selectedObjectRef", "selected_object_ref"])
         {
             self.selected_object_ref = Some(selected_object_ref);
+        }
+        if let Some(edited_draft) = edited_draft_from_event(event) {
+            if !self.should_reject_edited_draft(&edited_draft) {
+                self.edited_draft = Some(edited_draft);
+            }
         }
         if let Some(layout_state) = patch
             .get("layoutState")
@@ -188,6 +123,22 @@ impl<'a> ArticleWorkspaceBuilder<'a> {
         }
     }
 
+    fn should_reject_edited_draft(&self, edited_draft: &Value) -> bool {
+        let Some(reference) = edited_draft
+            .get("objectRef")
+            .or_else(|| edited_draft.get("object_ref"))
+        else {
+            return false;
+        };
+        let Some(key) = article_object_ref_key(reference) else {
+            return false;
+        };
+        let Some(current) = self.objects.get(&key) else {
+            return false;
+        };
+        should_reject_article_markdown_update(current.get("source"), Some(edited_draft))
+    }
+
     fn into_value(self) -> Option<Value> {
         if self.objects.is_empty() {
             return None;
@@ -219,6 +170,10 @@ impl<'a> ArticleWorkspaceBuilder<'a> {
         }
         if let Some(selected_object_ref) = self.selected_object_ref {
             value.insert("selectedObjectRef".to_string(), selected_object_ref);
+        }
+        if let Some(edited_draft) = self.edited_draft {
+            value.insert("editedDraft".to_string(), edited_draft.clone());
+            value.insert("edited_draft".to_string(), edited_draft);
         }
         value.insert("objects".to_string(), Value::Array(objects));
         value.insert("objectCount".to_string(), json!(self.objects.len()));
@@ -325,6 +280,29 @@ fn artifact_content_patch(artifact: Option<&Value>) -> Option<Value> {
     Some(value)
 }
 
+fn edited_draft_from_event(event: &AgentEvent) -> Option<Value> {
+    let payload = &event.payload;
+    let artifact = payload.get("artifact");
+    let metadata = payload.get("metadata");
+    let artifact_metadata = artifact.and_then(|value| value.get("metadata"));
+    [Some(payload), metadata, artifact, artifact_metadata]
+        .into_iter()
+        .flatten()
+        .find_map(|value| {
+            value
+                .get("editedDraft")
+                .or_else(|| value.get("edited_draft"))
+                .filter(|draft| {
+                    draft
+                        .get("objectRef")
+                        .or_else(|| draft.get("object_ref"))
+                        .is_some_and(article_object_ref_is_valid)
+                        && string_field(draft, &["markdown"]).is_some()
+                })
+                .cloned()
+        })
+}
+
 fn article_object_key(object: &Value) -> Option<String> {
     let reference = object.get("ref").or_else(|| object.get("objectRef"))?;
     article_object_ref_key(reference)
@@ -337,7 +315,11 @@ fn merge_article_object(current: &Value, next: &Value) -> Value {
     let mut merged = current_object.clone();
     for (key, value) in next_object {
         if key == "source" {
-            let source = merge_json_object(current_object.get("source"), value);
+            let current_source = current_object.get("source");
+            let mut source = merge_json_object(current_source, value);
+            if should_reject_article_markdown_update(current_source, Some(value)) {
+                preserve_article_markdown(current_source, &mut source);
+            }
             merged.insert(key.clone(), source);
             continue;
         }
@@ -368,6 +350,70 @@ fn merge_json_object(current: Option<&Value>, next: &Value) -> Value {
         merged.insert(key.clone(), value.clone());
     }
     Value::Object(merged)
+}
+
+fn should_reject_article_markdown_update(current: Option<&Value>, next: Option<&Value>) -> bool {
+    let Some(current_markdown) = current.and_then(article_markdown) else {
+        return false;
+    };
+    let Some(next_markdown) = next.and_then(article_markdown) else {
+        return false;
+    };
+    contains_inline_image_task_marker(current_markdown)
+        && !contains_inline_image_task_marker(next_markdown)
+        && !contains_resolved_markdown_image(next_markdown)
+}
+
+fn preserve_article_markdown(current: Option<&Value>, next: &mut Value) {
+    let (Some(current), Some(next)) = (current.and_then(Value::as_object), next.as_object_mut())
+    else {
+        return;
+    };
+    for key in [
+        "documentText",
+        "document_text",
+        "finalMarkdown",
+        "final_markdown",
+        "updatedAt",
+        "updated_at",
+        "edited",
+    ] {
+        if let Some(value) = current.get(key) {
+            next.insert(key.to_string(), value.clone());
+        }
+    }
+}
+
+fn article_markdown(value: &Value) -> Option<&str> {
+    value
+        .get("markdown")
+        .or_else(|| value.get("documentText"))
+        .or_else(|| value.get("document_text"))
+        .or_else(|| value.get("finalMarkdown"))
+        .or_else(|| value.get("final_markdown"))
+        .and_then(Value::as_str)
+}
+
+fn contains_inline_image_task_marker(markdown: &str) -> bool {
+    markdown.contains(INLINE_IMAGE_TASK_SLOT_MARKER)
+        || markdown.contains(INLINE_IMAGE_TASK_PLACEHOLDER)
+}
+
+fn contains_resolved_markdown_image(markdown: &str) -> bool {
+    markdown.lines().any(|line| {
+        let Some(image_start) = line.find("![") else {
+            return false;
+        };
+        let image = &line[image_start..];
+        let Some(url_start) = image.find("](") else {
+            return false;
+        };
+        let url = &image[url_start + 2..];
+        !url.starts_with(INLINE_IMAGE_TASK_PLACEHOLDER)
+            && RESOLVED_IMAGE_URL_PREFIXES
+                .iter()
+                .any(|prefix| url.starts_with(prefix))
+    })
 }
 
 fn article_object_ref_key(reference: &Value) -> Option<String> {
@@ -421,37 +467,6 @@ fn apply_article_generation_task_statuses(
     }
 }
 
-fn workspace_contains_object_ref(article_workspace: &Value, reference: &Value) -> bool {
-    let Some(reference_key) = article_object_ref_key(reference) else {
-        return false;
-    };
-    article_workspace
-        .get("objects")
-        .and_then(Value::as_array)
-        .is_some_and(|objects| {
-            objects
-                .iter()
-                .filter_map(article_object_key)
-                .any(|object_key| object_key == reference_key)
-        })
-}
-
-fn session_article_workspace_selected_object_ref(session: &AgentSession) -> Option<Value> {
-    session
-        .business_object_ref
-        .as_ref()
-        .and_then(|reference| reference.metadata.as_ref())
-        .and_then(|metadata| {
-            object_ref_field(
-                metadata,
-                &[
-                    "articleWorkspaceSelectedObjectRef",
-                    "article_workspace_selected_object_ref",
-                ],
-            )
-        })
-}
-
 fn object_ref_field(value: &Value, keys: &[&str]) -> Option<Value> {
     keys.iter()
         .find_map(|key| value.get(*key))
@@ -473,41 +488,6 @@ fn article_object_kind(object: &Value) -> Option<String> {
             .or_else(|| object.get("objectRef"))
             .and_then(|reference| string_field(reference, &["kind"]))
     })
-}
-
-fn session_article_workspace_edited_draft(session: &AgentSession) -> Option<Value> {
-    session
-        .business_object_ref
-        .as_ref()
-        .and_then(|reference| reference.metadata.as_ref())
-        .and_then(|metadata| {
-            metadata
-                .get("articleWorkspaceEditedDraft")
-                .or_else(|| metadata.get("article_workspace_edited_draft"))
-        })
-        .filter(|value| value.is_object())
-        .cloned()
-}
-
-fn apply_markdown_to_article_object(object: &mut Value, markdown: &str, updated_at: Option<&str>) {
-    let Some(object_map) = object.as_object_mut() else {
-        return;
-    };
-    let source = object_map
-        .entry("source".to_string())
-        .or_insert_with(|| Value::Object(Map::new()));
-    if !source.is_object() {
-        *source = Value::Object(Map::new());
-    }
-    if let Some(source_map) = source.as_object_mut() {
-        source_map.insert("documentText".to_string(), json!(markdown));
-        source_map.insert("finalMarkdown".to_string(), json!(markdown));
-        source_map.insert("edited".to_string(), json!(true));
-        if let Some(updated_at) = updated_at {
-            source_map.insert("updatedAt".to_string(), json!(updated_at));
-            source_map.insert("updated_at".to_string(), json!(updated_at));
-        }
-    }
 }
 
 fn source_artifact_from_event(event: &AgentEvent) -> Option<Value> {

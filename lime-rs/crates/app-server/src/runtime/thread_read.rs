@@ -1,23 +1,264 @@
-use super::status::agent_turn_blocks_queue_resume;
+use super::session_lifecycle::stored_session_hidden_from_user_recents;
+use super::status::{agent_turn_blocks_queue_resume, agent_turn_is_active};
 use super::{RuntimeCore, RuntimeCoreError};
 use agent_protocol::PageCursor;
+use app_server_protocol::protocol::v2::{
+    ThreadLoadedListParams, ThreadLoadedListResponse, ThreadMetadataGitInfoUpdateParams,
+    ThreadMetadataUpdateParams, ThreadSearchOccurrence, ThreadSearchOccurrencesParams,
+    ThreadSearchOccurrencesResponse, ThreadSearchTextRange, ThreadSetNameParams,
+    ThreadSetNameResponse,
+};
 use app_server_protocol::{
     ThreadItemsListParams, ThreadItemsListResponse, ThreadListParams, ThreadListResponse,
     ThreadReadParams, ThreadReadResponse, ThreadTurnsListParams, ThreadTurnsListResponse,
 };
 use thread_store::{
     ArchiveThreadParams, ListItemsParams, ListThreadsParams, ListTurnsParams, PageRequest,
-    ReadThreadParams, StoreCursor, ThreadStore,
+    ReadThreadParams, SearchThreadOccurrencesParams as StoreSearchThreadOccurrencesParams,
+    StoreCursor, ThreadMetadataPatch, ThreadStore, ThreadStoreErrorKind,
+    UpdateThreadMetadataParams,
 };
 
 const DEFAULT_PAGE_LIMIT: u32 = 100;
+const THREAD_SEARCH_OCCURRENCES_DEFAULT_LIMIT: usize = 50;
+const THREAD_SEARCH_OCCURRENCES_MAX_LIMIT: usize = 250;
 
 pub(crate) struct RuntimeThreadResumeSnapshot {
     pub thread: agent_protocol::Thread,
     pub active_turn_id: Option<agent_protocol::TurnId>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ThreadUnloadResult {
+    Active,
+    NotLoaded,
+    Unloaded,
+}
+
 impl RuntimeCore {
+    pub(crate) fn loaded_session_id_for_thread(&self, thread_id: &str) -> Option<String> {
+        self.state
+            .lock()
+            .expect("runtime core state mutex poisoned")
+            .sessions
+            .values()
+            .find(|stored| stored.session.thread_id == thread_id)
+            .map(|stored| stored.session.session_id.clone())
+    }
+
+    pub(crate) fn loaded_thread_is_active(&self, thread_id: &str) -> Option<bool> {
+        self.state
+            .lock()
+            .expect("runtime core state mutex poisoned")
+            .sessions
+            .values()
+            .find(|stored| stored.session.thread_id == thread_id)
+            .map(|stored| {
+                stored
+                    .turns
+                    .iter()
+                    .any(|turn| agent_turn_is_active(turn.status))
+            })
+    }
+
+    pub(crate) async fn unload_thread_if_idle(
+        &self,
+        thread_id: &str,
+    ) -> Result<ThreadUnloadResult, RuntimeCoreError> {
+        let (session_id, stored) = {
+            let mut state = self
+                .state
+                .lock()
+                .expect("runtime core state mutex poisoned");
+            let Some(session_id) = state
+                .sessions
+                .values()
+                .find(|stored| stored.session.thread_id == thread_id)
+                .map(|stored| stored.session.session_id.clone())
+            else {
+                return Ok(ThreadUnloadResult::NotLoaded);
+            };
+            let is_active = state.sessions.get(&session_id).is_some_and(|stored| {
+                stored
+                    .turns
+                    .iter()
+                    .any(|turn| agent_turn_is_active(turn.status))
+            });
+            if is_active {
+                return Ok(ThreadUnloadResult::Active);
+            }
+            let stored = state
+                .sessions
+                .remove(&session_id)
+                .expect("loaded thread session disappeared while locked");
+            (session_id, stored)
+        };
+
+        if let Err(error) = self.session_loops.shutdown(&session_id).await {
+            self.state
+                .lock()
+                .expect("runtime core state mutex poisoned")
+                .sessions
+                .insert(session_id, stored);
+            return Err(RuntimeCoreError::Backend(error.to_string()));
+        }
+        if let Err(error) = self.backend.close_session(&session_id, thread_id).await {
+            self.state
+                .lock()
+                .expect("runtime core state mutex poisoned")
+                .sessions
+                .insert(session_id, stored);
+            return Err(error);
+        }
+
+        let mut state = self
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned");
+        super::approval_cache::remove_session(&mut state.session_approval_cache, &session_id);
+        state.thread_elicitation_counts.remove(thread_id);
+        state.thread_goal_continuations.remove(&session_id);
+        Ok(ThreadUnloadResult::Unloaded)
+    }
+
+    pub(crate) async fn can_accept_direct_input(
+        &self,
+        thread_id: &str,
+    ) -> Result<bool, RuntimeCoreError> {
+        let thread_id = thread_id.trim();
+        if thread_id.is_empty() {
+            return Err(RuntimeCoreError::InvalidRequest(
+                "threadId is required to check direct-input policy".to_string(),
+            ));
+        }
+        let thread = self
+            .canonical_thread_store()?
+            .read_thread(ReadThreadParams {
+                thread_id: agent_protocol::ThreadId::new(thread_id),
+                include_archived: true,
+                turns_view: agent_protocol::ThreadTurnsView::NotLoaded,
+            })
+            .await
+            .map_err(store_error)?
+            .ok_or_else(|| RuntimeCoreError::Backend(format!("thread not found: {thread_id}")))?;
+        Ok(thread.parent_thread_id.is_none())
+    }
+
+    pub fn list_loaded_threads(
+        &self,
+        params: ThreadLoadedListParams,
+    ) -> Result<ThreadLoadedListResponse, RuntimeCoreError> {
+        let mut data = self
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned")
+            .sessions
+            .values()
+            .filter(|stored| !stored_session_hidden_from_user_recents(stored))
+            .map(|stored| stored.session.thread_id.clone())
+            .collect::<Vec<_>>();
+        if data.is_empty() {
+            return Ok(ThreadLoadedListResponse {
+                data,
+                next_cursor: None,
+            });
+        }
+
+        data.sort_unstable();
+        data.dedup();
+        let total = data.len();
+        let start = match params.cursor {
+            Some(cursor) => {
+                let cursor = uuid::Uuid::parse_str(&cursor)
+                    .map_err(|_| {
+                        RuntimeCoreError::InvalidRequest(format!("invalid cursor: {cursor}"))
+                    })?
+                    .to_string();
+                match data.binary_search(&cursor) {
+                    Ok(index) => index + 1,
+                    Err(index) => index,
+                }
+            }
+            None => 0,
+        };
+        let limit = params.limit.unwrap_or(total as u32).max(1) as usize;
+        let end = start.saturating_add(limit).min(total);
+        let page = data[start..end].to_vec();
+        let next_cursor = page.last().filter(|_| end < total).cloned();
+        Ok(ThreadLoadedListResponse {
+            data: page,
+            next_cursor,
+        })
+    }
+
+    pub async fn set_thread_name(
+        &self,
+        params: ThreadSetNameParams,
+    ) -> Result<ThreadSetNameResponse, RuntimeCoreError> {
+        let thread_id = params.thread_id.trim();
+        if thread_id.is_empty() {
+            return Err(RuntimeCoreError::InvalidRequest(
+                "threadId is required for thread/name/set".to_string(),
+            ));
+        }
+        let name = params.name.trim();
+        if name.is_empty() {
+            return Err(RuntimeCoreError::InvalidRequest(
+                "thread name must not be empty".to_string(),
+            ));
+        }
+        let store = self.canonical_thread_store()?;
+        store
+            .update_thread_metadata(UpdateThreadMetadataParams {
+                thread_id: agent_protocol::ThreadId::new(thread_id.to_string()),
+                patch: ThreadMetadataPatch {
+                    name: Some(Some(name.to_string())),
+                    ..Default::default()
+                },
+                include_archived: false,
+            })
+            .await
+            .map_err(store_error)?;
+        Ok(ThreadSetNameResponse {})
+    }
+
+    pub async fn update_thread_metadata(
+        &self,
+        params: ThreadMetadataUpdateParams,
+    ) -> Result<agent_protocol::Thread, RuntimeCoreError> {
+        let store = self.canonical_thread_store()?;
+        let thread_id = agent_protocol::ThreadId::new(params.thread_id);
+        let current = store
+            .read_thread(ReadThreadParams {
+                thread_id: thread_id.clone(),
+                include_archived: true,
+                turns_view: agent_protocol::ThreadTurnsView::NotLoaded,
+            })
+            .await
+            .map_err(store_error)?
+            .ok_or_else(|| RuntimeCoreError::Backend(format!("thread not found: {thread_id}")))?;
+        let mut metadata = current.metadata;
+        let metadata = metadata_object(&mut metadata);
+        if let Some(git_info) = params.git_info {
+            apply_git_info_patch(metadata, git_info);
+        }
+        if let Some(is_pinned) = params.is_pinned {
+            metadata.remove("is_pinned");
+            metadata.insert("isPinned".to_string(), serde_json::Value::Bool(is_pinned));
+        }
+        store
+            .update_thread_metadata(UpdateThreadMetadataParams {
+                thread_id,
+                patch: ThreadMetadataPatch {
+                    metadata: Some(Some(serde_json::Value::Object(metadata.clone()))),
+                    ..Default::default()
+                },
+                include_archived: true,
+            })
+            .await
+            .map_err(store_error)
+    }
+
     pub async fn archive_thread(
         &self,
         thread_id: agent_protocol::ThreadId,
@@ -32,11 +273,38 @@ impl RuntimeCore {
             .await
             .map_err(store_error)?
             .ok_or_else(|| RuntimeCoreError::Backend(format!("thread not found: {thread_id}")))?;
+        if current.archived {
+            return Ok(false);
+        }
+        let session_id = current.session_id.to_string();
+        let loaded = self
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned")
+            .sessions
+            .contains_key(&session_id);
+        if loaded {
+            self.session_loops
+                .shutdown(&session_id)
+                .await
+                .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+            self.backend
+                .close_session(&session_id, thread_id.as_str())
+                .await?;
+            let mut state = self
+                .state
+                .lock()
+                .expect("runtime core state mutex poisoned");
+            super::approval_cache::remove_session(&mut state.session_approval_cache, &session_id);
+            state.thread_elicitation_counts.remove(thread_id.as_str());
+            state.thread_goal_continuations.remove(&session_id);
+            state.sessions.remove(&session_id);
+        }
         store
             .archive_thread(ArchiveThreadParams { thread_id })
             .await
             .map_err(store_error)?;
-        Ok(!current.archived)
+        Ok(true)
     }
 
     pub async fn unarchive_thread(
@@ -71,15 +339,14 @@ impl RuntimeCore {
             })
             .await?;
         let session_id = response.thread.session_id.clone();
-        if let Err(error) = self
-            .ensure_current_session_hydrated(session_id.as_str())
-            .await
+        if response.thread.forked_from_id.is_some()
+            && response
+                .thread
+                .metadata
+                .get("forkSequence")
+                .and_then(serde_json::Value::as_u64)
+                .is_some()
         {
-            if !matches!(error, RuntimeCoreError::SessionNotFound(_))
-                || response.thread.forked_from_id.is_none()
-            {
-                return Err(error);
-            }
             let canonical = self
                 .read_thread(ThreadReadParams {
                     thread_id: response.thread.thread_id.clone(),
@@ -87,6 +354,9 @@ impl RuntimeCore {
                 })
                 .await?;
             self.hydrate_fork_session_from_canonical(&canonical.thread)?;
+        } else {
+            self.ensure_current_session_hydrated(session_id.as_str())
+                .await?;
         }
         let active_turn_id = self
             .session_loops
@@ -143,41 +413,6 @@ impl RuntimeCore {
             .await
             .map_err(store_error)?
             .ok_or_else(|| RuntimeCoreError::Backend(format!("thread not found: {thread_id}")))?;
-        if thread.forked_from_id.is_some()
-            && thread
-                .metadata
-                .get("forkSequence")
-                .and_then(serde_json::Value::as_u64)
-                .is_some()
-        {
-            if let Err(error) = self
-                .ensure_current_session_hydrated(thread.session_id.as_str())
-                .await
-            {
-                if !matches!(error, RuntimeCoreError::SessionNotFound(_)) {
-                    return Err(error);
-                }
-            }
-            let canonical = if matches!(turns_view, agent_protocol::ThreadTurnsView::Full) {
-                thread.clone()
-            } else {
-                store
-                    .read_thread(ReadThreadParams {
-                        thread_id: thread.thread_id.clone(),
-                        include_archived: true,
-                        turns_view: agent_protocol::ThreadTurnsView::Full,
-                    })
-                    .await
-                    .map_err(store_error)?
-                    .ok_or_else(|| {
-                        RuntimeCoreError::Backend(format!(
-                            "forked thread disappeared during history hydration: {}",
-                            thread.thread_id
-                        ))
-                    })?
-            };
-            self.hydrate_fork_session_from_canonical(&canonical)?;
-        }
         if let Some(product) = self
             .projection_store
             .as_deref()
@@ -273,6 +508,54 @@ impl RuntimeCore {
         })
     }
 
+    pub async fn search_thread_occurrences(
+        &self,
+        params: ThreadSearchOccurrencesParams,
+    ) -> Result<ThreadSearchOccurrencesResponse, RuntimeCoreError> {
+        if params.search_term.trim().is_empty() {
+            return Err(RuntimeCoreError::InvalidRequest(
+                "thread/searchOccurrences requires a non-empty searchTerm".to_string(),
+            ));
+        }
+        let cursor = params
+            .cursor
+            .map(StoreCursor::new)
+            .transpose()
+            .map_err(|error| RuntimeCoreError::InvalidRequest(error.to_string()))?;
+        let page_size = params
+            .limit
+            .map(|value| value as usize)
+            .unwrap_or(THREAD_SEARCH_OCCURRENCES_DEFAULT_LIMIT)
+            .clamp(1, THREAD_SEARCH_OCCURRENCES_MAX_LIMIT);
+        let page = self
+            .canonical_thread_store()?
+            .search_thread_occurrences(StoreSearchThreadOccurrencesParams {
+                thread_id: agent_protocol::ThreadId::new(params.thread_id),
+                search_term: params.search_term,
+                cursor,
+                page_size,
+            })
+            .await
+            .map_err(search_store_error)?;
+        Ok(ThreadSearchOccurrencesResponse {
+            data: page
+                .data
+                .into_iter()
+                .map(|occurrence| ThreadSearchOccurrence {
+                    turn_id: occurrence.turn_id.as_str().to_string(),
+                    item_id: occurrence.item_id.as_str().to_string(),
+                    snippet: occurrence.snippet,
+                    snippet_match_range: ThreadSearchTextRange {
+                        start: occurrence.snippet_match_range.start,
+                        end: occurrence.snippet_match_range.end,
+                    },
+                    turn_cursor: occurrence.turn_cursor.into_string(),
+                })
+                .collect(),
+            next_cursor: page.next_cursor.map(StoreCursor::into_string),
+        })
+    }
+
     fn canonical_thread_store(&self) -> Result<&dyn ThreadStore, RuntimeCoreError> {
         self.projection_store
             .as_deref()
@@ -296,6 +579,50 @@ fn merge_thread_product_projection(metadata: &mut serde_json::Value, product: se
     metadata.extend(product.clone());
 }
 
+fn metadata_object(
+    metadata: &mut serde_json::Value,
+) -> &mut serde_json::Map<String, serde_json::Value> {
+    if !metadata.is_object() {
+        *metadata = serde_json::Value::Object(serde_json::Map::new());
+    }
+    metadata
+        .as_object_mut()
+        .expect("metadata was normalized to an object")
+}
+
+fn apply_git_info_patch(
+    metadata: &mut serde_json::Map<String, serde_json::Value>,
+    patch: ThreadMetadataGitInfoUpdateParams,
+) {
+    let legacy = metadata.remove("git_info");
+    let current = metadata.remove("gitInfo").or(legacy);
+    let mut git_info = current
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    apply_clearable_string(&mut git_info, "sha", patch.sha);
+    apply_clearable_string(&mut git_info, "branch", patch.branch);
+    apply_clearable_string(&mut git_info, "originUrl", patch.origin_url);
+    if !git_info.is_empty() {
+        metadata.insert("gitInfo".to_string(), serde_json::Value::Object(git_info));
+    }
+}
+
+fn apply_clearable_string(
+    object: &mut serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    value: Option<Option<String>>,
+) {
+    match value {
+        Some(Some(value)) => {
+            object.insert(key.to_string(), serde_json::Value::String(value));
+        }
+        Some(None) => {
+            object.remove(key);
+        }
+        None => {}
+    }
+}
+
 fn store_page(page: PageCursor) -> Result<PageRequest, RuntimeCoreError> {
     let cursor = page
         .cursor
@@ -313,6 +640,18 @@ fn store_error(error: thread_store::ThreadStoreError) -> RuntimeCoreError {
     RuntimeCoreError::Backend(error.to_string())
 }
 
+fn search_store_error(error: thread_store::ThreadStoreError) -> RuntimeCoreError {
+    match error.kind() {
+        ThreadStoreErrorKind::InvalidRequest | ThreadStoreErrorKind::ThreadNotFound => {
+            RuntimeCoreError::InvalidRequest(error.to_string())
+        }
+        ThreadStoreErrorKind::Unsupported => RuntimeCoreError::MethodNotFound(error.to_string()),
+        ThreadStoreErrorKind::Internal => {
+            RuntimeCoreError::Backend(format!("failed to search thread occurrences: {error}"))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -322,12 +661,76 @@ mod tests {
         ThreadItem, ThreadItemPayload, ThreadStatus, ThreadTurnsView, Turn, TurnAdmissionState,
         TurnApprovalState, TurnId, TurnItemsView, TurnQueueState, TurnStatus,
     };
-    use app_server_protocol::AgentEvent;
+    use app_server_protocol::{AgentEvent, AgentSessionStartParams, AgentTurn, AgentTurnStatus};
     use serde_json::json;
     use std::sync::Arc;
     use thread_store::{
         ApplyThreadHistoryParams, ArchiveThreadParams, CreateThreadParams, ThreadStore,
     };
+
+    #[tokio::test]
+    async fn idle_unload_refuses_active_turn_then_removes_loaded_session() {
+        let runtime = RuntimeCore::default();
+        runtime
+            .start_session(AgentSessionStartParams {
+                session_id: Some("session-unload".to_string()),
+                thread_id: Some("thread-unload".to_string()),
+                app_id: "test".to_string(),
+                workspace_id: None,
+                business_object_ref: None,
+                locale: None,
+            })
+            .expect("start unload test session");
+        {
+            let mut state = runtime
+                .state
+                .lock()
+                .expect("runtime core state mutex poisoned");
+            state
+                .sessions
+                .get_mut("session-unload")
+                .expect("unload test session")
+                .turns
+                .push(AgentTurn {
+                    turn_id: "turn-unload".to_string(),
+                    session_id: "session-unload".to_string(),
+                    thread_id: "thread-unload".to_string(),
+                    status: AgentTurnStatus::Running,
+                    started_at: None,
+                    completed_at: None,
+                });
+        }
+
+        assert_eq!(
+            runtime
+                .unload_thread_if_idle("thread-unload")
+                .await
+                .expect("active unload check"),
+            ThreadUnloadResult::Active
+        );
+        assert_eq!(
+            runtime.loaded_session_id_for_thread("thread-unload"),
+            Some("session-unload".to_string())
+        );
+
+        runtime
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned")
+            .sessions
+            .get_mut("session-unload")
+            .expect("unload test session")
+            .turns[0]
+            .status = AgentTurnStatus::Completed;
+        assert_eq!(
+            runtime
+                .unload_thread_if_idle("thread-unload")
+                .await
+                .expect("idle unload"),
+            ThreadUnloadResult::Unloaded
+        );
+        assert_eq!(runtime.loaded_session_id_for_thread("thread-unload"), None);
+    }
 
     #[tokio::test]
     async fn canonical_thread_reads_use_the_projection_store_without_session_fallback() {

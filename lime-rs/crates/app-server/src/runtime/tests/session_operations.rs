@@ -1,5 +1,8 @@
-use super::support::{canonical_tool_completed_event, canonical_tool_started_event};
+use super::support::{
+    canonical_tool_completed_event, canonical_tool_started_event, wait_for_runtime_event,
+};
 use super::*;
+use app_server_protocol::protocol::v2::{ThreadCompactStartParams, ThreadCompactStartResponse};
 use serde_json::json;
 use serde_json::Value;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -171,7 +174,12 @@ async fn compact_replaces_active_turn_before_building_the_new_context_window() {
         first_started: Mutex::new(Some(first_started_tx)),
         start_count: AtomicUsize::new(0),
     });
-    let core = RuntimeCore::with_backend(backend.clone());
+    let projection_root = tempfile::tempdir().expect("projection root");
+    let projection_store = Arc::new(
+        ProjectionStore::initialize(projection_root.path().join("projection.sqlite"))
+            .expect("projection store"),
+    );
+    let core = RuntimeCore::with_backend(backend.clone()).with_projection_store(projection_store);
     core.start_session(AgentSessionStartParams {
         session_id: Some("sess_compact_replace".to_string()),
         thread_id: Some("thread_compact_replace".to_string()),
@@ -206,17 +214,18 @@ async fn compact_replaces_active_turn_before_building_the_new_context_window() {
         .expect("first turn should reach backend")
         .expect("first turn observer should remain open");
 
+    let mut runtime_events = core.take_event_receiver().expect("runtime event receiver");
     let compact = timeout(
         Duration::from_secs(1),
-        core.compact_agent_session(AgentSessionCompactParams {
-            session_id: "sess_compact_replace".to_string(),
-            event_name: None,
+        core.compact_thread(ThreadCompactStartParams {
+            thread_id: "thread_compact_replace".to_string(),
         }),
     )
     .await
     .expect("compact should replace the active turn")
     .expect("compact");
-    assert!(compact.response.compacted);
+    assert_eq!(compact.response, ThreadCompactStartResponse {});
+    wait_for_runtime_event(&mut runtime_events, "context.compaction.completed").await;
     let first = timeout(Duration::from_secs(1), turn_task)
         .await
         .expect("replaced turn should finish")

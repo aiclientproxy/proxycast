@@ -37,6 +37,11 @@ pub(super) fn runtime_session_input_message(
                 .collect::<Vec<_>>();
             (!content.is_empty()).then(|| CurrentProviderMessage::user(content))
         }
+        RuntimeSessionInput::Developer(text) => (!text.trim().is_empty())
+            .then(|| CurrentProviderMessage::developer(vec![CurrentProviderContent::Text(text)])),
+        RuntimeSessionInput::RawResponseItem(item) => {
+            Some(CurrentProviderMessage::raw_response_item(item))
+        }
         RuntimeSessionInput::InterAgent(input) => {
             let text = runtime_inter_agent_text(&input);
             (!text.trim().is_empty())
@@ -95,4 +100,44 @@ pub(super) fn runtime_inter_agent_text(input: &RuntimeSessionInterAgentInput) ->
     ));
     lines.push("</inter_agent_message>".to_string());
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use model_provider::current_client::CurrentProviderRole;
+    use serde_json::json;
+
+    #[test]
+    fn developer_input_keeps_provider_role() {
+        let message = runtime_session_input_message(RuntimeSessionInput::Developer(
+            "approve the exact denied action".to_string(),
+        ))
+        .expect("developer message");
+
+        assert_eq!(message.role, CurrentProviderRole::Developer);
+        assert!(matches!(
+            message.content.as_slice(),
+            [CurrentProviderContent::Text(text)] if text == "approve the exact denied action"
+        ));
+    }
+
+    #[test]
+    fn raw_response_item_keeps_exact_provider_value() {
+        let item = json!({
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": "injected"}],
+            "provider_extension": {"keep": true}
+        });
+        let message =
+            runtime_session_input_message(RuntimeSessionInput::RawResponseItem(item.clone()))
+                .expect("raw response item");
+
+        assert_eq!(message.role, CurrentProviderRole::Assistant);
+        assert!(matches!(
+            message.content.as_slice(),
+            [CurrentProviderContent::RawResponseItem(value)] if value == &item
+        ));
+    }
 }

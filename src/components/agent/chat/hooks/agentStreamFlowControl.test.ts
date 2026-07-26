@@ -109,7 +109,7 @@ describe("agentStreamFlowControl", () => {
       sessionIdRef: { current: "session-1" },
       threadId: "thread-1",
       runtime: {
-        getSessionReadModel: vi.fn(async () => ({ queued_turns: [] })),
+        getSessionReadModel: vi.fn(async () => ({})),
         interruptTurn,
       } as never,
       removeStreamListener,
@@ -192,7 +192,7 @@ describe("agentStreamFlowControl", () => {
       threadId: "thread-current-turn",
       currentTurnId: "turn-current",
       runtime: {
-        getSessionReadModel: vi.fn(async () => ({ queued_turns: [] })),
+        getSessionReadModel: vi.fn(async () => ({})),
         interruptTurn,
       } as never,
       removeStreamListener: vi.fn(),
@@ -269,7 +269,7 @@ describe("agentStreamFlowControl", () => {
       sessionIdRef: { current: "session-1" },
       threadId: "thread-1",
       runtime: {
-        getSessionReadModel: vi.fn(async () => ({ queued_turns: [] })),
+        getSessionReadModel: vi.fn(async () => ({})),
         interruptTurn,
       } as never,
       removeStreamListener: vi.fn(),
@@ -354,7 +354,7 @@ describe("agentStreamFlowControl", () => {
       sessionIdRef: { current: "session-1" },
       threadId: "thread-1",
       runtime: {
-        getSessionReadModel: vi.fn(async () => ({ queued_turns: [] })),
+        getSessionReadModel: vi.fn(async () => ({})),
         interruptTurn: vi.fn(async () => true),
       } as never,
       removeStreamListener: vi.fn(),
@@ -436,7 +436,7 @@ describe("agentStreamFlowControl", () => {
       sessionIdRef: { current: "session-1" },
       threadId: "thread-1",
       runtime: {
-        getSessionReadModel: vi.fn(async () => ({ queued_turns: [] })),
+        getSessionReadModel: vi.fn(async () => ({})),
         interruptTurn: vi.fn(async () => true),
       } as never,
       removeStreamListener: vi.fn(),
@@ -552,7 +552,7 @@ describe("agentStreamFlowControl", () => {
       sessionIdRef: { current: "session-1" },
       threadId: "thread-1",
       runtime: {
-        getSessionReadModel: vi.fn(async () => ({ queued_turns: [] })),
+        getSessionReadModel: vi.fn(async () => ({})),
         interruptTurn,
       } as never,
       removeStreamListener: vi.fn(),
@@ -703,7 +703,7 @@ describe("agentStreamFlowControl", () => {
       sessionIdRef: { current: "session-1" },
       threadId: "thread-1",
       runtime: {
-        getSessionReadModel: vi.fn(async () => ({ queued_turns: [] })),
+        getSessionReadModel: vi.fn(async () => ({})),
         interruptTurn: vi.fn(async () => true),
       } as never,
       removeStreamListener: vi.fn(),
@@ -796,7 +796,7 @@ describe("agentStreamFlowControl", () => {
       sessionIdRef: { current: "session-1" },
       threadId: "thread-1",
       runtime: {
-        getSessionReadModel: vi.fn(async () => ({ queued_turns: [] })),
+        getSessionReadModel: vi.fn(async () => ({})),
         interruptTurn: vi.fn(async () => true),
       } as never,
       removeStreamListener: vi.fn(),
@@ -902,7 +902,7 @@ describe("agentStreamFlowControl", () => {
       sessionIdRef: { current: "session-rich-restore" },
       threadId: "thread-rich-restore",
       runtime: {
-        getSessionReadModel: vi.fn(async () => ({ queued_turns: [] })),
+        getSessionReadModel: vi.fn(async () => ({})),
         interruptTurn: vi.fn(async () => true),
       } as never,
       removeStreamListener: vi.fn(),

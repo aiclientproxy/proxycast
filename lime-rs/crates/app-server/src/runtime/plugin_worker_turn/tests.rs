@@ -742,6 +742,7 @@ fn execution_request(metadata: Value) -> ExecutionRequest {
             started_at: Some(timestamp()),
             completed_at: None,
         },
+        forked_from_thread_id: None,
         input: agent_runtime::reply_input::RuntimeReplyInput::text("重新生成配图"),
         runtime_options: Some(app_server_protocol::RuntimeOptions {
             runtime_request: Some(app_server_protocol::RuntimeRequest {

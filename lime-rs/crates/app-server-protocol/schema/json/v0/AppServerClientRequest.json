@@ -628,82 +628,6 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
-          "const": "agentSession/update",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
-          "const": "agentSession/compact",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
-          "const": "agentSession/queuedTurn/remove",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
-          "const": "agentSession/queuedTurn/promote",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
           "const": "agentSession/fileCheckpoint/list",
           "type": "string"
         },
@@ -4486,25 +4410,6 @@
         },
         "method": {
           "const": "usageStats/dailyTrends/list",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
-          "const": "model/list",
           "type": "string"
         },
         "params": {

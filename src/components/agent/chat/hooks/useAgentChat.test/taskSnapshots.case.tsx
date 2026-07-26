@@ -32,7 +32,6 @@ describe("useAgentChat 任务快照", () => {
       messages: [],
       turns: [],
       items: [],
-      queued_turns: [],
     });
 
     const harness = mountHook(workspaceId);
@@ -85,14 +84,12 @@ describe("useAgentChat 任务快照", () => {
       messages: [],
       turns: [],
       items: [],
-      queued_turns: [],
     });
     mockGetAgentRuntimeThreadRead.mockResolvedValue({
       thread_id: "thread-stop-refresh",
       status: "interrupted",
       pending_requests: [],
       incidents: [],
-      queued_turns: [],
       interrupt_state: "interrupted",
     });
 
@@ -147,7 +144,6 @@ describe("useAgentChat 任务快照", () => {
       messages: [],
       turns: [],
       items: [],
-      queued_turns: [],
     }));
 
     const harness = mountHook(workspaceId);
@@ -318,7 +314,6 @@ describe("useAgentChat 任务快照", () => {
       }>;
       turns: [];
       items: [];
-      queued_turns: [];
     }>();
 
     sessionStorage.setItem(
@@ -417,7 +412,6 @@ describe("useAgentChat 任务快照", () => {
           ],
           turns: [],
           items: [],
-          queued_turns: [],
         });
         await deferredDetail.promise;
       });
@@ -461,7 +455,6 @@ describe("useAgentChat 任务快照", () => {
       }>;
       turns: [];
       items: [];
-      queued_turns: [];
     }>();
 
     sessionStorage.setItem(
@@ -640,7 +633,6 @@ describe("useAgentChat 任务快照", () => {
       ],
       turns: [],
       items: [],
-      queued_turns: [],
     });
 
     const harness = mountHook(workspaceId);
@@ -698,7 +690,6 @@ describe("useAgentChat 任务快照", () => {
       ],
       turns: [],
       items: [],
-      queued_turns: [],
     });
     mockListAgentRuntimeSessions.mockResolvedValue([
       {
@@ -756,7 +747,6 @@ describe("useAgentChat 任务快照", () => {
       messages: [],
       turns: [],
       items: [],
-      queued_turns: [],
     });
 
     const harness = mountHook(workspaceId);

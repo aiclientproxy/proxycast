@@ -11,7 +11,16 @@
         "reasoning": {
           "type": "boolean"
         },
-        "reasoningEffort": true,
+        "reasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelReasoningEffortSupportInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "streaming": {
           "type": "boolean"
         },
@@ -29,6 +38,91 @@
         "streaming",
         "tools",
         "vision"
+      ],
+      "type": "object"
+    },
+    "ModelReasoningEffortOptionInfo": {
+      "properties": {
+        "default": {
+          "default": false,
+          "type": "boolean"
+        },
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ModelReasoningEffortSupportInfo": {
+      "properties": {
+        "default": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "levels": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "options": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+          },
+          "type": "array"
+        },
+        "source": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "supported": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "supported"
+      ],
+      "type": "object"
+    },
+    "ModelServiceTierInfo": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "id",
+        "name"
       ],
       "type": "object"
     }
@@ -198,7 +292,9 @@
     },
     "serviceTiers": {
       "default": [],
-      "items": true,
+      "items": {
+        "$ref": "#/$defs/ModelServiceTierInfo"
+      },
       "type": "array"
     },
     "shellType": {

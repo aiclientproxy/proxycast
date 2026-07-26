@@ -134,7 +134,7 @@ describe("ModelCapabilityBadges", () => {
     expect(container.textContent).not.toContain("无思考");
   });
 
-  it("gpt-5.4-mini 旧缓存未写入 reasoning 标记时也应展示为支持思考", () => {
+  it("未显式声明 reasoning 时不应根据模型名推断思考能力", () => {
     const container = renderBadges({
       model: createModel("gpt-5.4-mini", {
         provider_id: "lime",
@@ -142,7 +142,7 @@ describe("ModelCapabilityBadges", () => {
       }),
     });
 
-    expect(container.textContent).toContain("支持思考");
-    expect(container.textContent).not.toContain("无思考");
+    expect(container.textContent).toContain("无思考");
+    expect(container.textContent).not.toContain("支持思考");
   });
 });

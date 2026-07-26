@@ -123,6 +123,8 @@ impl ThreadState {
 struct ThreadEntry {
     state: Arc<Mutex<ThreadState>>,
     connection_ids: HashSet<ConnectionId>,
+    unload_generation: u64,
+    unloading: bool,
 }
 
 #[derive(Default)]
@@ -176,7 +178,8 @@ impl ThreadStateManager {
         if inner.listeners_shutting_down {
             return None;
         }
-        Some(inner.threads.entry(thread_id).or_default().state.clone())
+        let entry = inner.threads.entry(thread_id).or_default();
+        (!entry.unloading).then(|| entry.state.clone())
     }
 
     pub(crate) async fn subscribe_connection(
@@ -193,12 +196,15 @@ impl ThreadStateManager {
             .entry(connection_id)
             .or_default()
             .insert(thread_id.clone());
-        inner
-            .threads
-            .entry(thread_id)
-            .or_default()
-            .connection_ids
-            .insert(connection_id);
+        let entry = inner.threads.entry(thread_id).or_default();
+        if entry.unloading {
+            return false;
+        }
+        entry.unload_generation = entry
+            .unload_generation
+            .checked_add(1)
+            .expect("thread unload generation exhausted");
+        entry.connection_ids.insert(connection_id);
         true
     }
 
@@ -265,6 +271,61 @@ impl ThreadStateManager {
             .get(thread_id)
             .map(|entry| entry.connection_ids.iter().copied().collect())
             .unwrap_or_default()
+    }
+
+    pub(crate) async fn schedule_unload_if_idle(&self, thread_id: &ThreadId) -> Option<u64> {
+        let mut inner = self.inner.lock().await;
+        let entry = inner.threads.get_mut(thread_id)?;
+        if entry.unloading || !entry.connection_ids.is_empty() {
+            return None;
+        }
+        entry.unload_generation = entry
+            .unload_generation
+            .checked_add(1)
+            .expect("thread unload generation exhausted");
+        Some(entry.unload_generation)
+    }
+
+    pub(crate) async fn unload_ticket_is_current(
+        &self,
+        thread_id: &ThreadId,
+        generation: u64,
+    ) -> bool {
+        self.inner
+            .lock()
+            .await
+            .threads
+            .get(thread_id)
+            .is_some_and(|entry| {
+                !entry.unloading
+                    && entry.connection_ids.is_empty()
+                    && entry.unload_generation == generation
+            })
+    }
+
+    pub(crate) async fn begin_unload(&self, thread_id: &ThreadId, generation: u64) -> bool {
+        let mut inner = self.inner.lock().await;
+        let Some(entry) = inner.threads.get_mut(thread_id) else {
+            return false;
+        };
+        if entry.unloading
+            || !entry.connection_ids.is_empty()
+            || entry.unload_generation != generation
+        {
+            return false;
+        }
+        entry.unloading = true;
+        true
+    }
+
+    pub(crate) async fn cancel_unload(&self, thread_id: &ThreadId, generation: u64) {
+        let mut inner = self.inner.lock().await;
+        let Some(entry) = inner.threads.get_mut(thread_id) else {
+            return;
+        };
+        if entry.unload_generation == generation {
+            entry.unloading = false;
+        }
     }
 
     pub(crate) async fn remove_thread(&self, thread_id: &ThreadId) {
@@ -436,6 +497,60 @@ mod tests {
             .subscribed_connection_ids(&thread_id)
             .await
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn resubscribe_invalidates_idle_unload_ticket() {
+        let manager = ThreadStateManager::new();
+        let thread_id = ThreadId::new("thread-idle-unload");
+        let first_connection = ConnectionId(1);
+        let second_connection = ConnectionId(2);
+        manager.connection_initialized(first_connection).await;
+        manager.connection_initialized(second_connection).await;
+        assert!(
+            manager
+                .subscribe_connection(thread_id.clone(), first_connection)
+                .await
+        );
+        assert!(
+            manager
+                .unsubscribe_connection(&thread_id, first_connection)
+                .await
+        );
+        let first_ticket = manager
+            .schedule_unload_if_idle(&thread_id)
+            .await
+            .expect("idle thread unload ticket");
+
+        assert!(
+            manager
+                .subscribe_connection(thread_id.clone(), second_connection)
+                .await
+        );
+        assert!(
+            !manager
+                .unload_ticket_is_current(&thread_id, first_ticket)
+                .await
+        );
+        assert!(!manager.begin_unload(&thread_id, first_ticket).await);
+
+        assert!(
+            manager
+                .unsubscribe_connection(&thread_id, second_connection)
+                .await
+        );
+        let second_ticket = manager
+            .schedule_unload_if_idle(&thread_id)
+            .await
+            .expect("rescheduled idle thread unload ticket");
+        assert_ne!(second_ticket, first_ticket);
+        assert!(manager.begin_unload(&thread_id, second_ticket).await);
+        assert!(manager
+            .thread_state_for_listener(thread_id.clone())
+            .await
+            .is_none());
+        manager.cancel_unload(&thread_id, second_ticket).await;
+        assert!(manager.thread_state_for_listener(thread_id).await.is_some());
     }
 
     #[test]

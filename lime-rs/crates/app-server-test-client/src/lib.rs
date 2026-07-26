@@ -1,25 +1,23 @@
 use app_server_client::AppServerClient;
-use app_server_protocol::protocol::v2::{ThreadArchiveParams, ThreadUnarchiveParams};
+use app_server_protocol::protocol::v2::{
+    ThreadArchiveParams, ThreadSetNameParams, ThreadUnarchiveParams,
+};
 use app_server_protocol::AgentSessionListParams;
 use app_server_protocol::AgentSessionReadParams;
 use app_server_protocol::AgentSessionStartParams;
-use app_server_protocol::AgentSessionUpdateParams;
 use app_server_protocol::CapabilityListParams;
 use app_server_protocol::ClientCapabilities;
 use app_server_protocol::ClientInfo;
 use app_server_protocol::InitializeParams;
-use app_server_protocol::METHOD_AGENT_SESSION_UPDATE;
 
 mod harness;
 
 pub use harness::decode_exchange;
 pub use harness::encode_exchange;
 pub use harness::parse_cli_args;
-pub use harness::run_session_facade_archive_failure_stdio_smoke;
 pub use harness::run_session_facade_stdio_smoke;
 pub use harness::run_stdio_smoke;
 pub use harness::HarnessCommand;
-pub use harness::SessionFacadeArchiveFailureStdioSmokeReport;
 pub use harness::SessionFacadeStdioSmokeReport;
 pub use harness::StdioLaunchConfig;
 pub use harness::StdioSmokeReport;
@@ -90,8 +88,13 @@ pub fn sample_session_facade_lines(client_name: impl Into<String>) -> anyhow::Re
         history_offset: None,
         history_before_message_id: None,
     })?;
-    let update =
-        sample_session_update_request(&mut client, Some(SESSION_FACADE_SAMPLE_UPDATED_TITLE))?;
+    let set_name = client.request(
+        app_server_protocol::protocol::v2::METHOD_THREAD_NAME_SET,
+        ThreadSetNameParams {
+            thread_id: SESSION_FACADE_SAMPLE_THREAD_ID.to_string(),
+            name: SESSION_FACADE_SAMPLE_UPDATED_TITLE.to_string(),
+        },
+    )?;
     let archive = client.archive_thread(ThreadArchiveParams {
         thread_id: SESSION_FACADE_SAMPLE_THREAD_ID.to_string(),
     })?;
@@ -105,7 +108,7 @@ pub fn sample_session_facade_lines(client_name: impl Into<String>) -> anyhow::Re
         AppServerClient::encode_request(start)?,
         AppServerClient::encode_request(list)?,
         AppServerClient::encode_request(read)?,
-        AppServerClient::encode_request(update)?,
+        AppServerClient::encode_request(set_name)?,
         AppServerClient::encode_request(archive)?,
         AppServerClient::encode_request(unarchive)?,
     ])
@@ -129,8 +132,13 @@ pub fn sample_session_facade_stdio_lines(
         history_offset: None,
         history_before_message_id: None,
     })?;
-    let update =
-        sample_session_update_request(&mut client, Some(SESSION_FACADE_SAMPLE_UPDATED_TITLE))?;
+    let set_name = client.request(
+        app_server_protocol::protocol::v2::METHOD_THREAD_NAME_SET,
+        ThreadSetNameParams {
+            thread_id: SESSION_FACADE_SAMPLE_THREAD_ID.to_string(),
+            name: SESSION_FACADE_SAMPLE_UPDATED_TITLE.to_string(),
+        },
+    )?;
 
     Ok(vec![
         AppServerClient::encode_request(client.initialize_request)?,
@@ -138,24 +146,7 @@ pub fn sample_session_facade_stdio_lines(
         AppServerClient::encode_request(start)?,
         AppServerClient::encode_request(list)?,
         AppServerClient::encode_request(read)?,
-        AppServerClient::encode_request(update)?,
-    ])
-}
-
-pub fn sample_session_facade_archive_failure_stdio_lines(
-    client_name: impl Into<String>,
-) -> anyhow::Result<Vec<String>> {
-    let mut client = initialized_session_facade_client(client_name)?;
-    let start = sample_session_start_request(&mut client)?;
-    let archive = client.archive_thread(ThreadArchiveParams {
-        thread_id: SESSION_FACADE_SAMPLE_THREAD_ID.to_string(),
-    })?;
-
-    Ok(vec![
-        AppServerClient::encode_request(client.initialize_request)?,
-        AppServerClient::encode_notification(client.initialized_notification)?,
-        AppServerClient::encode_request(start)?,
-        AppServerClient::encode_request(archive)?,
+        AppServerClient::encode_request(set_name)?,
     ])
 }
 
@@ -213,27 +204,6 @@ fn sample_session_start_request(
     })
 }
 
-fn sample_session_update_request(
-    client: &mut AppServerClient,
-    title: Option<&str>,
-) -> Result<app_server_protocol::JsonRpcRequest, app_server_client::ClientError> {
-    client.request(
-        METHOD_AGENT_SESSION_UPDATE,
-        AgentSessionUpdateParams {
-            session_id: SESSION_FACADE_SAMPLE_SESSION_ID.to_string(),
-            title: title.map(str::to_string),
-            provider_selector: None,
-            provider_name: None,
-            model_name: None,
-            execution_strategy: None,
-            recent_access_mode: None,
-            recent_preferences: None,
-            article_workspace_selected_object_ref: None,
-            article_workspace_edited_draft: None,
-        },
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,7 +255,7 @@ mod tests {
         assert!(lines[4].contains("\"id\":4"));
         assert!(lines[4].contains("\"method\":\"thread/read\""));
         assert!(lines[5].contains("\"id\":5"));
-        assert!(lines[5].contains("\"method\":\"agentSession/update\""));
+        assert!(lines[5].contains("\"method\":\"thread/name/set\""));
         assert!(lines[6].contains("\"id\":6"));
         assert!(lines[6].contains("\"method\":\"thread/archive\""));
         assert!(lines[7].contains("\"id\":7"));
@@ -300,22 +270,6 @@ mod tests {
         assert!(lines[2].contains("\"method\":\"thread/start\""));
         assert!(lines[3].contains("\"method\":\"thread/list\""));
         assert!(lines[4].contains("\"method\":\"thread/read\""));
-        assert!(lines[5].contains("\"method\":\"agentSession/update\""));
-        assert!(!lines[5].contains("\"archived\""));
-    }
-
-    #[test]
-    fn session_facade_archive_failure_stdio_lines_cover_memory_archive_gap() {
-        let lines = sample_session_facade_archive_failure_stdio_lines("fixture").expect("lines");
-
-        assert_eq!(lines.len(), 4);
-        assert!(lines[0].contains("\"id\":1"));
-        assert!(lines[0].contains("\"method\":\"initialize\""));
-        assert!(lines[1].contains("\"method\":\"initialized\""));
-        assert!(!lines[1].contains("\"id\""));
-        assert!(lines[2].contains("\"id\":2"));
-        assert!(lines[2].contains("\"method\":\"thread/start\""));
-        assert!(lines[3].contains("\"id\":3"));
-        assert!(lines[3].contains("\"method\":\"thread/archive\""));
+        assert!(lines[5].contains("\"method\":\"thread/name/set\""));
     }
 }

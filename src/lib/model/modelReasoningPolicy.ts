@@ -17,7 +17,9 @@ export type ModelReasoningEffort =
   | (string & {});
 
 export interface ModelReasoningEffortPreset {
-  effort: ModelReasoningEffort;
+  id: string;
+  label: string;
+  value: ModelReasoningEffort;
   description: string;
 }
 
@@ -64,6 +66,10 @@ function normalizeDescription(value: unknown): string {
   return value.trim();
 }
 
+function normalizeIdentifier(value: unknown): string {
+  return normalizeDescription(value);
+}
+
 export function normalizeModelReasoningEffort(
   value: unknown,
 ): ModelReasoningEffort | null {
@@ -79,18 +85,23 @@ function normalizeReasoningEffortPreset(
 ): ModelReasoningEffortPreset | null {
   if (typeof value === "string") {
     const effort = normalizeModelReasoningEffort(value);
-    return effort ? { effort, description: "" } : null;
+    return effort
+      ? { id: effort, label: "", value: effort, description: "" }
+      : null;
   }
   if (!value || typeof value !== "object") {
     return null;
   }
   const source = value as Record<string, unknown>;
-  const effort = normalizeModelReasoningEffort(source.effort);
-  if (!effort) {
+  const canonicalValue = normalizeModelReasoningEffort(source.value);
+  const id = normalizeIdentifier(source.id) || canonicalValue || "";
+  if (!id || !canonicalValue) {
     return null;
   }
   return {
-    effort,
+    id,
+    label: normalizeDescription(source.label),
+    value: canonicalValue,
     description: normalizeDescription(source.description),
   };
 }
@@ -102,16 +113,40 @@ function normalizeReasoningEffortPresets(
     return [];
   }
   const presets: ModelReasoningEffortPreset[] = [];
-  const seen = new Set<string>();
+  const seenIds = new Set<string>();
+  const seenValues = new Set<string>();
   for (const item of value) {
     const preset = normalizeReasoningEffortPreset(item);
-    if (!preset || seen.has(preset.effort)) {
+    const normalizedId = preset?.id.toLocaleLowerCase("en-US") ?? "";
+    if (
+      !preset ||
+      seenIds.has(normalizedId) ||
+      seenValues.has(preset.value)
+    ) {
       continue;
     }
-    seen.add(preset.effort);
+    seenIds.add(normalizedId);
+    seenValues.add(preset.value);
     presets.push(preset);
   }
   return presets;
+}
+
+function resolveCanonicalReasoningEffort(
+  presets: ModelReasoningEffortPreset[],
+  effort: ModelReasoningEffort | null,
+): ModelReasoningEffort | null {
+  if (!effort) {
+    return null;
+  }
+  const normalizedToken = effort.toLocaleLowerCase("en-US");
+  return (
+    presets.find(
+      (preset) =>
+        preset.id.toLocaleLowerCase("en-US") === normalizedToken ||
+        preset.value === effort,
+    )?.value ?? effort
+  );
 }
 
 function includesSupportedEffort(
@@ -156,12 +191,16 @@ export function buildModelReasoningPolicy(
     ]),
   );
   const supportedReasoningEfforts = supportedReasoningLevels.map(
-    (preset) => preset.effort,
+    (preset) => preset.value,
+  );
+  const canonicalDefaultReasoningLevel = resolveCanonicalReasoningEffort(
+    supportedReasoningLevels,
+    defaultReasoningLevel,
   );
 
   return {
     supports_reasoning_summaries: supportsReasoningSummaries,
-    default_reasoning_level: defaultReasoningLevel,
+    default_reasoning_level: canonicalDefaultReasoningLevel,
     supported_reasoning_levels: supportedReasoningLevels,
     supported_reasoning_efforts: supportedReasoningEfforts,
     can_set_reasoning_effort: supportedReasoningEfforts.length > 0,

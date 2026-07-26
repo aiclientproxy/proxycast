@@ -24,6 +24,125 @@ fn thread_start_uses_v2_camel_case_fields() {
 }
 
 #[test]
+fn thread_elicitation_requests_round_trip_exact_codex_shape() {
+    let thread_id = "019f9b19-17a2-78b2-84d7-ce881fcf0617";
+    let requests = [
+        json!({
+            "id": 41,
+            "method": "thread/increment_elicitation",
+            "params": {"threadId": thread_id}
+        }),
+        json!({
+            "id": 42,
+            "method": "thread/decrement_elicitation",
+            "params": {"threadId": thread_id}
+        }),
+    ];
+    for expected in requests {
+        let request: ClientRequest =
+            serde_json::from_value(expected.clone()).expect("decode elicitation request");
+        assert_eq!(
+            serde_json::to_value(request).expect("encode elicitation request"),
+            expected
+        );
+    }
+    assert_eq!(
+        Method::parse(METHOD_THREAD_INCREMENT_ELICITATION),
+        Some(Method::ThreadIncrementElicitation)
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_DECREMENT_ELICITATION),
+        Some(Method::ThreadDecrementElicitation)
+    );
+    assert_eq!(
+        serde_json::to_value(ThreadIncrementElicitationResponse {
+            count: 2,
+            paused: true,
+        })
+        .expect("encode increment response"),
+        json!({"count": 2, "paused": true})
+    );
+    assert_eq!(
+        serde_json::to_value(ThreadDecrementElicitationResponse {
+            count: 0,
+            paused: false,
+        })
+        .expect("encode decrement response"),
+        json!({"count": 0, "paused": false})
+    );
+}
+
+#[test]
+fn thread_guardian_approval_round_trips_opaque_event_shape() {
+    let expected = json!({
+        "id": 43,
+        "method": "thread/approveGuardianDeniedAction",
+        "params": {
+            "threadId": "019f9b19-17a2-78b2-84d7-ce881fcf0617",
+            "event": {
+                "id": "guardian-review-1",
+                "status": "denied",
+                "action": {
+                    "type": "command",
+                    "source": "shell",
+                    "command": "git status --short",
+                    "cwd": "/workspace"
+                }
+            }
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode Guardian approval request");
+
+    assert_eq!(
+        serde_json::to_value(request).expect("encode Guardian approval request"),
+        expected
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION),
+        Some(Method::ThreadApproveGuardianDeniedAction)
+    );
+    assert_eq!(
+        serde_json::to_value(ThreadApproveGuardianDeniedActionResponse {})
+            .expect("encode Guardian approval response"),
+        json!({})
+    );
+}
+
+#[test]
+fn thread_inject_items_round_trips_raw_response_items() {
+    let expected = json!({
+        "id": 44,
+        "method": "thread/inject_items",
+        "params": {
+            "threadId": "019f9b19-17a2-78b2-84d7-ce881fcf0617",
+            "items": [{
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "injected context"}],
+                "provider_extension": {"keep": true}
+            }]
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode thread/inject_items request");
+
+    assert_eq!(
+        serde_json::to_value(request).expect("encode thread/inject_items request"),
+        expected
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_INJECT_ITEMS),
+        Some(Method::ThreadInjectItems)
+    );
+    assert_eq!(
+        serde_json::to_value(ThreadInjectItemsResponse {})
+            .expect("encode thread/inject_items response"),
+        json!({})
+    );
+}
+
+#[test]
 fn artifact_write_round_trips_typed_snapshot_shape() {
     let expected = json!({
         "id": 4,
@@ -59,6 +178,229 @@ fn artifact_write_round_trips_typed_snapshot_shape() {
 }
 
 #[test]
+fn model_list_round_trips_exact_codex_shape() {
+    let expected = json!({
+        "id": 5,
+        "method": "model/list",
+        "params": {
+            "cursor": "20",
+            "limit": 10,
+            "includeHidden": true
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode model/list request");
+    assert_eq!(request.method(), Method::ModelList);
+    assert_eq!(
+        serde_json::to_value(request).expect("encode model/list request"),
+        expected
+    );
+    assert_eq!(Method::parse(METHOD_MODEL_LIST), Some(Method::ModelList));
+    assert!(METHODS.contains(&METHOD_MODEL_LIST));
+
+    let response = ModelListResponse {
+        data: vec![Model {
+            id: "route:b3BlbmFp.Z3B0LTU".to_string(),
+            model: "gpt-5".to_string(),
+            upgrade: None,
+            upgrade_info: None,
+            availability_nux: None,
+            display_name: "GPT-5".to_string(),
+            description: "Coding model".to_string(),
+            hidden: false,
+            supported_reasoning_efforts: vec![ReasoningEffortOption {
+                reasoning_effort: "high".to_string(),
+                description: "High".to_string(),
+            }],
+            default_reasoning_effort: "high".to_string(),
+            input_modalities: vec![InputModality::Text, InputModality::Image],
+            supports_personality: false,
+            additional_speed_tiers: Vec::new(),
+            service_tiers: Vec::new(),
+            default_service_tier: None,
+            is_default: false,
+        }],
+        next_cursor: None,
+    };
+    assert_eq!(
+        serde_json::to_value(response).expect("encode model/list response"),
+        json!({
+            "data": [{
+                "id": "route:b3BlbmFp.Z3B0LTU",
+                "model": "gpt-5",
+                "upgrade": null,
+                "upgradeInfo": null,
+                "availabilityNux": null,
+                "displayName": "GPT-5",
+                "description": "Coding model",
+                "hidden": false,
+                "supportedReasoningEfforts": [{
+                    "reasoningEffort": "high",
+                    "description": "High"
+                }],
+                "defaultReasoningEffort": "high",
+                "inputModalities": ["text", "image"],
+                "supportsPersonality": false,
+                "additionalSpeedTiers": [],
+                "serviceTiers": [],
+                "defaultServiceTier": null,
+                "isDefault": false
+            }],
+            "nextCursor": null
+        })
+    );
+}
+
+#[test]
+fn thread_search_occurrences_round_trips_exact_codex_shape() {
+    let expected = json!({
+        "id": 6,
+        "method": "thread/searchOccurrences",
+        "params": {
+            "threadId": "019f9b19-17a2-78b2-84d7-ce881fcf0617",
+            "searchTerm": "needle",
+            "cursor": null,
+            "limit": 50
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode thread/searchOccurrences request");
+    assert_eq!(request.method(), Method::ThreadSearchOccurrences);
+    assert_eq!(
+        serde_json::to_value(request).expect("encode thread/searchOccurrences request"),
+        expected
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_SEARCH_OCCURRENCES),
+        Some(Method::ThreadSearchOccurrences)
+    );
+    assert!(METHODS.contains(&METHOD_THREAD_SEARCH_OCCURRENCES));
+
+    let response = ThreadSearchOccurrencesResponse {
+        data: vec![ThreadSearchOccurrence {
+            turn_id: "turn_1".to_string(),
+            item_id: "item_1".to_string(),
+            snippet: "The needle is here.".to_string(),
+            snippet_match_range: ThreadSearchTextRange { start: 4, end: 10 },
+            turn_cursor: "opaque-inclusive-turn-cursor".to_string(),
+        }],
+        next_cursor: None,
+    };
+    assert_eq!(
+        serde_json::to_value(response).expect("encode thread/searchOccurrences response"),
+        json!({
+            "data": [{
+                "turnId": "turn_1",
+                "itemId": "item_1",
+                "snippet": "The needle is here.",
+                "snippetMatchRange": {"start": 4, "end": 10},
+                "turnCursor": "opaque-inclusive-turn-cursor"
+            }],
+            "nextCursor": null
+        })
+    );
+}
+
+#[test]
+fn thread_search_round_trips_exact_codex_request_shape() {
+    let expected = json!({
+        "id": 7,
+        "method": "thread/search",
+        "params": {
+            "cursor": "opaque-thread-cursor",
+            "limit": 25,
+            "sortKey": "updated_at",
+            "sortDirection": "asc",
+            "sourceKinds": ["appServer", "subAgentReview"],
+            "archived": true,
+            "searchTerm": "needle"
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode thread/search request");
+    assert_eq!(request.method(), Method::ThreadSearch);
+    assert_eq!(
+        serde_json::to_value(request).expect("encode thread/search request"),
+        expected
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_SEARCH),
+        Some(Method::ThreadSearch)
+    );
+    assert!(METHODS.contains(&METHOD_THREAD_SEARCH));
+}
+
+#[test]
+fn thread_background_terminals_round_trip_exact_codex_shapes() {
+    let thread_id = "019f9b19-17a2-78b2-84d7-ce881fcf0617";
+    let requests = [
+        json!({
+            "id": 8,
+            "method": "thread/backgroundTerminals/clean",
+            "params": {"threadId": thread_id}
+        }),
+        json!({
+            "id": 9,
+            "method": "thread/backgroundTerminals/list",
+            "params": {"threadId": thread_id, "cursor": null, "limit": 25}
+        }),
+        json!({
+            "id": 10,
+            "method": "thread/backgroundTerminals/terminate",
+            "params": {"threadId": thread_id, "processId": "42"}
+        }),
+    ];
+    for expected in requests {
+        let request: ClientRequest = serde_json::from_value(expected.clone())
+            .expect("decode thread/backgroundTerminals request");
+        assert_eq!(
+            serde_json::to_value(request).expect("encode thread/backgroundTerminals request"),
+            expected
+        );
+    }
+    assert_eq!(
+        Method::parse(METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN),
+        Some(Method::ThreadBackgroundTerminalsClean)
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_BACKGROUND_TERMINALS_LIST),
+        Some(Method::ThreadBackgroundTerminalsList)
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE),
+        Some(Method::ThreadBackgroundTerminalsTerminate)
+    );
+
+    let response = ThreadBackgroundTerminalsListResponse {
+        data: vec![ThreadBackgroundTerminal {
+            item_id: "item_456".to_string(),
+            process_id: "42".to_string(),
+            command: "python3 -m http.server".to_string(),
+            cwd: "/workspace".to_string(),
+            os_pid: None,
+            cpu_percent: None,
+            rss_kb: None,
+        }],
+        next_cursor: None,
+    };
+    assert_eq!(
+        serde_json::to_value(response).expect("encode background terminal list response"),
+        json!({
+            "data": [{
+                "itemId": "item_456",
+                "processId": "42",
+                "command": "python3 -m http.server",
+                "cwd": "/workspace",
+                "osPid": null,
+                "cpuPercent": null,
+                "rssKb": null
+            }],
+            "nextCursor": null
+        })
+    );
+}
+
+#[test]
 fn thread_fork_round_trips_codex_goal_deferral_fields() {
     let expected = json!({
         "id": 2,
@@ -79,6 +421,185 @@ fn thread_fork_round_trips_codex_goal_deferral_fields() {
     );
     assert_eq!(Method::parse(METHOD_THREAD_FORK), Some(Method::ThreadFork));
     assert!(METHODS.contains(&METHOD_THREAD_FORK));
+}
+
+#[test]
+fn thread_compact_start_round_trips_exact_codex_shape() {
+    let expected = json!({
+        "id": 3,
+        "method": "thread/compact/start",
+        "params": {
+            "threadId": "thread_1"
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode thread/compact/start request");
+    assert_eq!(request.method(), Method::ThreadCompactStart);
+    assert_eq!(
+        serde_json::to_value(request).expect("encode thread/compact/start request"),
+        expected
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_COMPACT_START),
+        Some(Method::ThreadCompactStart)
+    );
+    assert!(METHODS.contains(&METHOD_THREAD_COMPACT_START));
+    assert_eq!(
+        serde_json::to_value(ThreadCompactStartResponse {}).expect("encode empty response"),
+        json!({})
+    );
+}
+
+#[test]
+fn thread_name_set_round_trips_exact_codex_shape() {
+    let expected = json!({
+        "id": 4,
+        "method": "thread/name/set",
+        "params": {
+            "threadId": "thread_1",
+            "name": "Renamed thread"
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode thread/name/set request");
+    assert_eq!(request.method(), Method::ThreadSetName);
+    assert_eq!(
+        serde_json::to_value(request).expect("encode thread/name/set request"),
+        expected
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_NAME_SET),
+        Some(Method::ThreadSetName)
+    );
+    assert!(METHODS.contains(&METHOD_THREAD_NAME_SET));
+    assert_eq!(
+        serde_json::to_value(ThreadSetNameResponse {}).expect("encode empty response"),
+        json!({})
+    );
+}
+
+#[test]
+fn thread_metadata_update_round_trips_exact_codex_shape() {
+    let expected = json!({
+        "id": 5,
+        "method": "thread/metadata/update",
+        "params": {
+            "threadId": "019bf4f0-5080-7000-8000-000000000001",
+            "gitInfo": {
+                "sha": "abc123",
+                "branch": null,
+                "originUrl": "https://example.test/repo.git"
+            },
+            "isPinned": true
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode thread/metadata/update request");
+    assert_eq!(request.method(), Method::ThreadMetadataUpdate);
+    assert_eq!(
+        serde_json::to_value(request).expect("encode thread/metadata/update request"),
+        expected
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_METADATA_UPDATE),
+        Some(Method::ThreadMetadataUpdate)
+    );
+    assert!(METHODS.contains(&METHOD_THREAD_METADATA_UPDATE));
+}
+
+#[test]
+fn thread_metadata_git_patch_distinguishes_omission_null_and_value() {
+    let params: ThreadMetadataUpdateParams = serde_json::from_value(json!({
+        "threadId": "019bf4f0-5080-7000-8000-000000000001",
+        "gitInfo": {
+            "sha": null,
+            "branch": "main"
+        }
+    }))
+    .expect("decode git metadata patch");
+    let git_info = params.git_info.expect("gitInfo");
+    assert_eq!(git_info.sha, Some(None));
+    assert_eq!(git_info.branch, Some(Some("main".to_string())));
+    assert_eq!(git_info.origin_url, None);
+}
+
+#[test]
+fn thread_loaded_list_round_trips_exact_codex_shape() {
+    let expected = json!({
+        "id": 5,
+        "method": "thread/loaded/list",
+        "params": {
+            "cursor": "019bf4f0-5080-7000-8000-000000000001",
+            "limit": 20
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode thread/loaded/list request");
+    assert_eq!(request.method(), Method::ThreadLoadedList);
+    assert_eq!(
+        serde_json::to_value(request).expect("encode thread/loaded/list request"),
+        expected
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_LOADED_LIST),
+        Some(Method::ThreadLoadedList)
+    );
+    assert!(METHODS.contains(&METHOD_THREAD_LOADED_LIST));
+}
+
+#[test]
+fn thread_unsubscribe_round_trips_exact_codex_shape() {
+    let expected = json!({
+        "id": 6,
+        "method": "thread/unsubscribe",
+        "params": {
+            "threadId": "019bf4f0-5080-7000-8000-000000000001"
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode thread/unsubscribe request");
+    assert_eq!(request.method(), Method::ThreadUnsubscribe);
+    assert_eq!(
+        serde_json::to_value(request).expect("encode thread/unsubscribe request"),
+        expected
+    );
+    assert_eq!(
+        Method::parse(METHOD_THREAD_UNSUBSCRIBE),
+        Some(Method::ThreadUnsubscribe)
+    );
+    assert!(METHODS.contains(&METHOD_THREAD_UNSUBSCRIBE));
+    assert_eq!(
+        serde_json::to_value(ThreadUnsubscribeResponse {
+            status: ThreadUnsubscribeStatus::NotLoaded,
+        })
+        .expect("encode thread/unsubscribe response"),
+        json!({"status": "notLoaded"})
+    );
+}
+
+#[test]
+fn thread_closed_notification_round_trips_exact_codex_shape() {
+    let expected = json!({
+        "method": "thread/closed",
+        "params": {
+            "threadId": "019bf4f0-5080-7000-8000-000000000001"
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode thread/closed notification");
+    assert_eq!(notification.method(), METHOD_THREAD_CLOSED);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_THREAD_CLOSED);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC thread/closed notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode thread/closed notification"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_THREAD_CLOSED));
 }
 
 #[test]
@@ -147,6 +668,66 @@ fn thread_token_usage_notification_round_trips_codex_shape() {
         serde_json::to_value(notification).expect("encode token usage notification"),
         expected
     );
+}
+
+#[test]
+fn model_safety_buffering_notification_round_trips_codex_shape() {
+    let expected = json!({
+        "method": "model/safetyBuffering/updated",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "model": "gpt-5-codex",
+            "useCases": ["policy"],
+            "reasons": ["buffering"],
+            "showBufferingUi": true,
+            "fasterModel": "gpt-5-mini"
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode safety buffering notification");
+    assert_eq!(notification.method(), METHOD_MODEL_SAFETY_BUFFERING_UPDATED);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_MODEL_SAFETY_BUFFERING_UPDATED);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC safety buffering notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode safety buffering notification"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_MODEL_SAFETY_BUFFERING_UPDATED));
+}
+
+#[test]
+fn thread_status_changed_notification_round_trips_codex_shape() {
+    let expected = json!({
+        "method": "thread/status/changed",
+        "params": {
+            "threadId": "thread_1",
+            "status": {
+                "type": "active",
+                "activeFlags": ["waitingOnApproval", "waitingOnUserInput"]
+            }
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode thread status notification");
+    assert_eq!(notification.method(), METHOD_THREAD_STATUS_CHANGED);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_THREAD_STATUS_CHANGED);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC thread status notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode thread status notification"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_THREAD_STATUS_CHANGED));
 }
 
 #[test]
@@ -800,6 +1381,7 @@ fn lifecycle_notifications_round_trip_only_the_v2_shapes() {
         "sessionId": "session_1",
         "preview": "",
         "ephemeral": false,
+        "isPinned": false,
         "historyMode": "legacy",
         "modelProvider": "openai",
         "createdAt": 10,
@@ -1002,6 +1584,9 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "thread/archived",
             "thread/deleted",
             "thread/unarchived",
+            "thread/closed",
+            "thread/name/updated",
+            "thread/status/changed",
             "turn/started",
             "turn/completed",
             "item/started",
@@ -1014,6 +1599,7 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "item/reasoning/summaryTextDelta",
             "item/reasoning/summaryPartAdded",
             "item/reasoning/textDelta",
+            "model/safetyBuffering/updated",
             "thread/settings/updated",
             "thread/tokenUsage/updated",
             "thread/goal/updated",

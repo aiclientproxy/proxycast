@@ -211,6 +211,13 @@ fn clear_existing_imported_session(
             .lock()
             .expect("runtime core state mutex poisoned");
         super::super::approval_cache::remove_session(&mut state.session_approval_cache, session_id);
+        if let Some(thread_id) = state
+            .sessions
+            .get(session_id)
+            .map(|stored| stored.session.thread_id.clone())
+        {
+            state.thread_elicitation_counts.remove(&thread_id);
+        }
         state.sessions.remove(session_id);
     }
     if let Some(event_log_writer) = core.event_log_writer.as_ref() {

@@ -1,6 +1,6 @@
 use super::{
     dispatch_result, parse_params, thread::projection::project_thread_read_response,
-    to_jsonrpc_error, RequestProcessor, RpcDispatch,
+    thread_goal::goal_updated_notification, to_jsonrpc_error, RequestProcessor, RpcDispatch,
 };
 use app_server_protocol::protocol::v2::{
     ServerNotification, ThreadForkParams, ThreadForkResponse, ThreadStartedNotification,
@@ -15,6 +15,8 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: ThreadForkParams = parse_params(params)?;
+        let include_turns = !params.exclude_turns;
+        let inherit_goal = params.defer_goal_continuation;
         let canonical = self
             .runtime
             .fork_thread(params)
@@ -24,7 +26,22 @@ impl RequestProcessor {
             thread: canonical,
         })?
         .thread;
+        let thread_id = thread.id.clone();
         let metadata = thread.extra.clone().unwrap_or(Value::Null);
+        let token_usage = include_turns
+            .then(|| self.runtime.thread_token_usage_snapshot(&thread_id))
+            .flatten();
+        let inherited_goal = if inherit_goal {
+            match self.runtime.get_thread_goal(&thread_id) {
+                Ok(goal) => goal,
+                Err(error) => {
+                    tracing::warn!(%thread_id, %error, "failed to read inherited thread goal after fork");
+                    None
+                }
+            }
+        } else {
+            None
+        };
         let mut started_thread = thread.clone();
         started_thread.turns.clear();
         let notification: JsonRpcNotification =
@@ -47,7 +64,15 @@ impl RequestProcessor {
             multi_agent_mode: metadata_value(&metadata, "multiAgentMode"),
             thread,
         };
-        Ok(dispatch_result(response)?.with_notification(notification))
+        let mut notifications = Vec::with_capacity(3);
+        if let Some(snapshot) = token_usage {
+            notifications.push(crate::thread_token_usage_notification(&thread_id, snapshot));
+        }
+        notifications.push(notification);
+        if let Some(goal) = inherited_goal {
+            notifications.push(goal_updated_notification(&goal));
+        }
+        Ok(dispatch_result(response)?.with_notifications(notifications))
     }
 }
 

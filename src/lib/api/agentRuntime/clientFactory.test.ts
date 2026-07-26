@@ -81,26 +81,6 @@ function appServerClientMock(): AgentRuntimeAppServerClient {
       messages: [],
       notifications: [],
     }),
-    updateSession: vi.fn().mockResolvedValue({
-      id: 1,
-      result: {
-        session: {
-          sessionId: "session-1",
-          threadId: "thread-1",
-          title: "新标题",
-          model: "gpt-5.4",
-          createdAt: "2026-06-06T00:00:00.000Z",
-          updatedAt: "2026-06-06T00:00:01.000Z",
-          messagesCount: 0,
-        },
-      },
-      response: {
-        id: 1,
-        result: {},
-      },
-      messages: [],
-      notifications: [],
-    }),
     archiveThread: vi.fn().mockResolvedValue({
       id: 1,
       result: {},
@@ -207,20 +187,9 @@ function appServerClientMock(): AgentRuntimeAppServerClient {
     }),
     startTurn: vi.fn().mockResolvedValue({}),
     cancelTurn: vi.fn().mockResolvedValue({}),
-    compactAgentSession: vi.fn().mockResolvedValue({
+    startThreadCompaction: vi.fn().mockResolvedValue({
       id: 1,
-      result: {
-        session: {
-          sessionId: "session-1",
-          threadId: "thread-1",
-          appId: "agent-chat",
-          status: "idle",
-          createdAt: "2026-06-06T00:00:00.000Z",
-          updatedAt: "2026-06-06T00:00:00.000Z",
-        },
-        turns: [],
-        compacted: true,
-      },
+      result: {},
       response: {
         id: 1,
         result: {},
@@ -689,12 +658,6 @@ describe("agentRuntime clientFactory", () => {
       }),
     );
     await expect(
-      client.updateAgentRuntimeSession({
-        session_id: "session-1",
-        name: "新标题",
-      }),
-    ).resolves.toBeUndefined();
-    await expect(
       client.archiveAgentRuntimeSession("session-1"),
     ).resolves.toBeUndefined();
     await expect(client.deleteAgentRuntimeSession("session-1")).resolves.toBe(
@@ -716,10 +679,6 @@ describe("agentRuntime clientFactory", () => {
     expect(appServerClient.readThread).toHaveBeenCalledWith({
       threadId: "session-1",
       includeTurns: false,
-    });
-    expect(appServerClient.updateSession).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      title: "新标题",
     });
     expect(appServerClient.archiveThread).toHaveBeenCalledWith({
       threadId: "thread-1",
@@ -779,7 +738,6 @@ describe("agentRuntime clientFactory", () => {
         },
       ],
       items: [],
-      queued_turns: [],
       todo_items: [],
       thread_read: {
         status: "failed",

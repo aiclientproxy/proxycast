@@ -928,7 +928,7 @@ describe("ElectronHostCommands local file shell facade", () => {
 
   it("get_local_skills_for_app 应透传 App Server skill/list 的本地目录路径", async () => {
     const userDataDir = await createTempUserDataDir();
-    const request = vi.fn(async (method: string) => {
+    const request = vi.fn(async (method: string, _params?: unknown) => {
       if (method === "skill/list") {
         return {
           skills: [
@@ -1437,7 +1437,7 @@ describe("ElectronHostCommands model provider current source", () => {
     expect(request).toHaveBeenCalledWith("modelProvider/list", {});
   });
 
-  it("get_runtime_provider_selection 不应把其他 Provider 的模型拼给当前 Provider", async () => {
+  it("get_runtime_provider_selection 应按 opaque route 选择当前 Provider 模型", async () => {
     const userDataDir = await createTempUserDataDir();
     await createHost(userDataDir).invoke("save_config", {
       config: { default_provider: "retired-provider" },
@@ -1463,12 +1463,45 @@ describe("ElectronHostCommands model provider current source", () => {
       }
       if (method === "model/list") {
         return {
-          models: [
+          data: [
             {
-              id: "deepseek-v4-pro",
-              provider_id: "deepseek",
+              id: "route:ZGVlcHNlZWs.ZGVlcHNlZWstdjQtcHJv",
+              model: "deepseek-v4-pro",
+              upgrade: null,
+              upgradeInfo: null,
+              availabilityNux: null,
+              displayName: "DeepSeek V4 Pro",
+              description: "",
+              hidden: false,
+              supportedReasoningEfforts: [],
+              defaultReasoningEffort: "none",
+              inputModalities: ["text"],
+              supportsPersonality: false,
+              additionalSpeedTiers: [],
+              serviceTiers: [],
+              defaultServiceTier: null,
+              isDefault: false,
+            },
+            {
+              id: "route:bGltZS1odWI.Z3B0LTUuNi1zb2w",
+              model: "gpt-5.6-sol",
+              upgrade: null,
+              upgradeInfo: null,
+              availabilityNux: null,
+              displayName: "GPT-5.6 Sol",
+              description: "",
+              hidden: false,
+              supportedReasoningEfforts: [],
+              defaultReasoningEffort: "none",
+              inputModalities: ["text"],
+              supportsPersonality: false,
+              additionalSpeedTiers: [],
+              serviceTiers: [],
+              defaultServiceTier: null,
+              isDefault: false,
             },
           ],
+          nextCursor: null,
         };
       }
       throw new Error(`unexpected App Server method: ${method}`);
@@ -1481,7 +1514,11 @@ describe("ElectronHostCommands model provider current source", () => {
       provider_configured: true,
       provider_name: "Lime Hub",
       provider_selector: "lime-hub",
-      model_name: undefined,
+      model_name: "gpt-5.6-sol",
+    });
+    expect(request).toHaveBeenCalledWith("modelProvider/list", {});
+    expect(request).toHaveBeenCalledWith("model/list", {
+      includeHidden: true,
     });
   });
 });

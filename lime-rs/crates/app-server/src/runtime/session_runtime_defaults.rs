@@ -114,6 +114,7 @@ fn default_runtime_options_for_session(
                     &["effort", "reasoningEffort", "reasoning_effort"],
                 )
             }),
+        service_tier: string_alias_from_sources(&sources, &["serviceTier", "service_tier"]),
         approval_policy: string_alias_from_sources(
             &sources,
             &["approvalPolicy", "approval_policy"],
@@ -178,6 +179,7 @@ fn merge_runtime_requests(
         model_preference: request.model_preference.or(defaults.model_preference),
         collaboration_mode: request.collaboration_mode.or(defaults.collaboration_mode),
         reasoning_effort: request.reasoning_effort.or(defaults.reasoning_effort),
+        service_tier: request.service_tier.or(defaults.service_tier),
         thinking_enabled: request.thinking_enabled.or(defaults.thinking_enabled),
         approval_policy: request.approval_policy.or(defaults.approval_policy),
         sandbox_policy: request.sandbox_policy.or(defaults.sandbox_policy),

@@ -9,10 +9,6 @@ const CURRENT_OWNER_CONSUMERS = [
     owner: "sessionClient",
   },
   {
-    path: "src/components/agent/chat/workspace/useWorkspaceRightSurfaceHostRuntime.ts",
-    owner: "sessionClient",
-  },
-  {
     path: "src/components/agent/chat/hooks/agentChatActionState.ts",
     owner: "requestTypes",
   },
@@ -22,7 +18,7 @@ const CURRENT_OWNER_CONSUMERS = [
   },
   {
     path: "src/components/agent/chat/workspace/useWorkspaceArticleEditorRightSurfaceRuntime.ts",
-    owner: "sessionClient",
+    owner: "appServerArtifactClient",
   },
 ] as const;
 

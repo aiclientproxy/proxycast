@@ -116,6 +116,7 @@ fn replacement_history_from_compaction(event: &AgentEvent) -> Option<Vec<Current
 fn provider_message_from_replacement_item(item: &Value) -> Option<CurrentProviderMessage> {
     let role = match item.get("role").and_then(Value::as_str)? {
         "user" => CurrentProviderRole::User,
+        "developer" => CurrentProviderRole::Developer,
         "assistant" => CurrentProviderRole::Assistant,
         "tool" => CurrentProviderRole::Tool,
         _ => return None,
@@ -200,6 +201,79 @@ where
                     &mut tool_results,
                     &mut provider_input,
                 )?;
+            }
+            super::thread_fork::FORK_INTERRUPTED_MARKER_EVENT_TYPE => {
+                flush_assistant(
+                    &mut messages,
+                    &mut assistant_content,
+                    &mut assistant_text_by_item,
+                );
+                flush_tool_results(&mut messages, &mut tool_results);
+                let text = event
+                    .payload
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|text| !text.is_empty())
+                    .ok_or_else(|| {
+                        format!(
+                            "fork interrupted marker {} omitted developer text",
+                            event.event_id
+                        )
+                    })?;
+                messages.push(CurrentProviderMessage::developer(vec![
+                    CurrentProviderContent::Text(text.to_string()),
+                ]));
+            }
+            super::thread_guardian::GUARDIAN_APPROVAL_EVENT_TYPE => {
+                flush_assistant(
+                    &mut messages,
+                    &mut assistant_content,
+                    &mut assistant_text_by_item,
+                );
+                flush_tool_results(&mut messages, &mut tool_results);
+                let text = event
+                    .payload
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .filter(|text| !text.trim().is_empty())
+                    .ok_or_else(|| {
+                        format!(
+                            "Guardian approval event {} omitted developer text",
+                            event.event_id
+                        )
+                    })?;
+                messages.push(CurrentProviderMessage::developer(vec![
+                    CurrentProviderContent::Text(text.to_string()),
+                ]));
+            }
+            super::thread_inject_items::RESPONSE_ITEM_INJECTED_EVENT_TYPE => {
+                flush_assistant(
+                    &mut messages,
+                    &mut assistant_content,
+                    &mut assistant_text_by_item,
+                );
+                flush_tool_results(&mut messages, &mut tool_results);
+                let item = event.payload.get("item").cloned().ok_or_else(|| {
+                    format!(
+                        "injected response item event {} omitted item",
+                        event.event_id
+                    )
+                })?;
+                let parsed = serde_json::from_value::<agent_protocol::ResponseItem>(item.clone())
+                    .map_err(|error| {
+                    format!(
+                        "injected response item event {} is invalid: {error}",
+                        event.event_id
+                    )
+                })?;
+                if parsed.contains_remote_image_url() {
+                    return Err(format!(
+                        "injected response item event {} contains a remote image URL",
+                        event.event_id
+                    ));
+                }
+                messages.push(CurrentProviderMessage::raw_response_item(item));
             }
             "message.created" | "thread.goal.continuation" => {
                 flush_assistant(

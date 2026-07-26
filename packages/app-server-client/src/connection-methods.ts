@@ -46,6 +46,32 @@ declare module "./connection.js" {
       params?: protocol.ThreadListParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ThreadListResponse>>;
+    listLoadedThreads(
+      params?: protocol.ThreadLoadedListParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadLoadedListResponse>>;
+    incrementThreadElicitation(
+      params: protocol.ThreadIncrementElicitationParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.ThreadIncrementElicitationResponse>
+    >;
+    decrementThreadElicitation(
+      params: protocol.ThreadDecrementElicitationParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.ThreadDecrementElicitationResponse>
+    >;
+    approveGuardianDeniedAction(
+      params: protocol.ThreadApproveGuardianDeniedActionParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.ThreadApproveGuardianDeniedActionResponse>
+    >;
+    injectThreadItems(
+      params: protocol.ThreadInjectItemsParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadInjectItemsResponse>>;
     archiveThread(
       params: protocol.ThreadArchiveParams,
       options?: AppServerRequestOptions,
@@ -54,6 +80,14 @@ declare module "./connection.js" {
       params: protocol.ThreadUnarchiveParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ThreadUnarchiveResponse>>;
+    setThreadName(
+      params: protocol.ThreadSetNameParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadSetNameResponse>>;
+    updateThreadMetadata(
+      params: protocol.ThreadMetadataUpdateParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadMetadataUpdateResponse>>;
     listThreadTurns(
       params: protocol.ThreadTurnsListParams,
       options?: AppServerRequestOptions,
@@ -62,6 +96,34 @@ declare module "./connection.js" {
       params: protocol.ThreadItemsListParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ThreadItemsListResponse>>;
+    searchThreads(
+      params: protocol.ThreadSearchParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadSearchResponse>>;
+    searchThreadOccurrences(
+      params: protocol.ThreadSearchOccurrencesParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.ThreadSearchOccurrencesResponse>
+    >;
+    cleanThreadBackgroundTerminals(
+      params: protocol.ThreadBackgroundTerminalsCleanParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.ThreadBackgroundTerminalsCleanResponse>
+    >;
+    listThreadBackgroundTerminals(
+      params: protocol.ThreadBackgroundTerminalsListParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.ThreadBackgroundTerminalsListResponse>
+    >;
+    terminateThreadBackgroundTerminal(
+      params: protocol.ThreadBackgroundTerminalsTerminateParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.ThreadBackgroundTerminalsTerminateResponse>
+    >;
     updateThreadSettings(
       params: protocol.ThreadSettingsUpdateParams,
       options?: AppServerRequestOptions,
@@ -70,34 +132,18 @@ declare module "./connection.js" {
       params: protocol.ThreadMemoryModeSetParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ThreadMemoryModeSetResponse>>;
-    updateSession(
-      params: protocol.AgentSessionUpdateParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.AgentSessionUpdateResponse>>;
     deleteThread(
       params: protocol.ThreadDeleteParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ThreadDeleteResponse>>;
-    compactAgentSession(
-      params: protocol.AgentSessionCompactParams,
+    startThreadCompaction(
+      params: protocol.ThreadCompactStartParams,
       options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.AgentSessionCompactResponse>>;
+    ): Promise<AppServerRequestResult<protocol.ThreadCompactStartResponse>>;
     resumeThread(
       params: protocol.ThreadResumeParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ThreadResumeResponse>>;
-    removeAgentSessionQueuedTurn(
-      params: protocol.AgentSessionQueuedTurnRemoveParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.AgentSessionQueuedTurnRemoveResponse>
-    >;
-    promoteAgentSessionQueuedTurn(
-      params: protocol.AgentSessionQueuedTurnPromoteParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.AgentSessionQueuedTurnPromoteResponse>
-    >;
     listAgentSessionFileCheckpoints(
       params: protocol.AgentSessionFileCheckpointListParams,
       options?: AppServerRequestOptions,
@@ -1098,6 +1144,11 @@ declare module "./connection.js" {
     listModelProviders(
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ModelProviderListResponse>>;
+    readModelProviderCapabilities(
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.ModelProviderCapabilitiesReadResponse>
+    >;
     listModelProviderCatalog(
       options?: AppServerRequestOptions,
     ): Promise<

@@ -93,6 +93,195 @@ const rendererQueuedTurnWriteSurfaceForbiddenSnippets = [
   "removeAgentSessionQueuedTurn",
   "onPromoteQueuedTurn",
   "onRemoveQueuedTurn",
+  "QueuedTurnSnapshot",
+  "normalizeQueuedTurnSnapshots",
+  "queued_turns",
+];
+const retiredPublicQueuedTurnSurfaceSpecs = [
+  {
+    file: "lime-rs/crates/app-server-protocol/src/protocol/v0/agent_session.rs",
+    snippets: [
+      "AgentSessionQueuedTurnRemoveParams",
+      "AgentSessionQueuedTurnRemoveResponse",
+      "AgentSessionQueuedTurnPromoteParams",
+      "AgentSessionQueuedTurnPromoteResponse",
+    ],
+  },
+  {
+    file: "lime-rs/crates/app-server-protocol/src/protocol/v0/method_names.rs",
+    snippets: [
+      "AGENT_SESSION_QUEUED_TURN_REMOVE",
+      "AGENT_SESSION_QUEUED_TURN_PROMOTE",
+      '"agentSession/queuedTurn/remove"',
+      '"agentSession/queuedTurn/promote"',
+    ],
+  },
+  {
+    file: "lime-rs/crates/app-server-protocol/src/protocol/v0/client_request.rs",
+    snippets: ["AgentSessionQueuedTurnRemove", "AgentSessionQueuedTurnPromote"],
+  },
+  {
+    file: "lime-rs/crates/app-server-protocol/src/protocol/v0/catalog.rs",
+    snippets: [
+      "AgentSessionQueuedTurnRemove",
+      "AgentSessionQueuedTurnPromote",
+      '"agentSession/queuedTurn/remove"',
+      '"agentSession/queuedTurn/promote"',
+    ],
+  },
+  {
+    file: "lime-rs/crates/app-server-protocol/src/protocol/v0/schema_types.rs",
+    snippets: [
+      "AgentSessionQueuedTurnRemoveParams",
+      "AgentSessionQueuedTurnPromoteParams",
+    ],
+  },
+  {
+    file: "lime-rs/crates/app-server/src/processor/agent_session.rs",
+    snippets: [
+      "handle_agent_session_queued_turn_remove",
+      "handle_agent_session_queued_turn_promote",
+    ],
+  },
+  {
+    file: "lime-rs/crates/app-server/src/runtime/session_control.rs",
+    snippets: [
+      "remove_agent_session_queued_turn",
+      "promote_agent_session_queued_turn",
+      "promote_queued_turn_in_session",
+    ],
+  },
+  {
+    file: "lime-rs/crates/app-server-protocol/src/protocol/v2/turn.rs",
+    snippets: ["queue_if_busy", "TurnQueuePromote"],
+  },
+  {
+    file: "lime-rs/crates/app-server-protocol/src/protocol/v2/common.rs",
+    snippets: ["TurnQueueState", "pub queue:"],
+  },
+  {
+    file: "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs",
+    snippets: ['"turn/queue/promote"', "METHOD_TURN_QUEUE_PROMOTE"],
+  },
+  {
+    file: "lime-rs/crates/app-server-protocol/src/protocol/v2/envelopes.rs",
+    snippets: ["TurnQueuePromote"],
+  },
+  {
+    file: "lime-rs/crates/app-server/src/processor/dispatch.rs",
+    snippets: ["METHOD_TURN_QUEUE_PROMOTE"],
+  },
+  {
+    file: "lime-rs/crates/app-server/src/processor/dispatch/v2_ingress.rs",
+    snippets: ["TurnQueuePromote"],
+  },
+  {
+    file: "lime-rs/crates/app-server/src/processor/turn.rs",
+    snippets: ["handle_turn_queue_promote_v2_impl", "params.queue_if_busy"],
+  },
+  {
+    file: "packages/app-server-client/src/generated/protocol-types.ts",
+    snippets: [
+      '"turn/queue/promote"',
+      "TurnQueuePromote",
+      '"agentSession/queuedTurn/remove"',
+      '"agentSession/queuedTurn/promote"',
+      "AgentSessionQueuedTurnRemove",
+      "AgentSessionQueuedTurnPromote",
+    ],
+  },
+  {
+    file: "packages/app-server-client/src/request-client.ts",
+    snippets: [
+      "promoteQueuedTurn",
+      "TurnQueuePromote",
+      "promoteAgentSessionQueuedTurn",
+      "removeAgentSessionQueuedTurn",
+    ],
+  },
+  {
+    file: "packages/app-server-client/src/request-client-methods.ts",
+    snippets: [
+      "promoteQueuedTurn",
+      "METHOD_TURN_QUEUE_PROMOTE",
+      "promoteAgentSessionQueuedTurn",
+      "removeAgentSessionQueuedTurn",
+    ],
+  },
+  {
+    file: "packages/app-server-client/src/connection-methods.ts",
+    snippets: [
+      "promoteQueuedTurn",
+      "TurnQueuePromote",
+      "promoteAgentSessionQueuedTurn",
+      "removeAgentSessionQueuedTurn",
+    ],
+  },
+  {
+    file: "src/lib/api/appServerConstants.ts",
+    snippets: [
+      "APP_SERVER_METHOD_TURN_QUEUE_PROMOTE",
+      "APP_SERVER_METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE",
+      "APP_SERVER_METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE",
+    ],
+  },
+  {
+    file: "src/lib/api/appServerTypes.ts",
+    snippets: [
+      "AppServerTurnQueuePromote",
+      "AppServerAgentSessionQueuedTurnRemove",
+      "AppServerAgentSessionQueuedTurnPromote",
+    ],
+  },
+  {
+    file: "src/lib/api/appServerClientMethods.ts",
+    snippets: [
+      "promoteQueuedTurn",
+      "promoteAgentSessionQueuedTurn",
+      "removeAgentSessionQueuedTurn",
+    ],
+  },
+  {
+    file: "src/lib/api/appServerClientMethodSpecs.ts",
+    snippets: [
+      "promoteQueuedTurn",
+      "APP_SERVER_METHOD_TURN_QUEUE_PROMOTE",
+      "promoteAgentSessionQueuedTurn",
+      "removeAgentSessionQueuedTurn",
+    ],
+  },
+  {
+    file: "lime-rs/crates/app-server-protocol/schema/json/app_server_protocol.schemas.json",
+    snippets: ['"turn/queue/promote"', "TurnQueuePromote"],
+  },
+  {
+    file: "lime-rs/crates/app-server-protocol/schema/json/manifest.json",
+    snippets: ['"turn/queue/promote"', "TurnQueuePromote"],
+  },
+];
+const retiredPublicQueuedTurnSchemaFiles = [
+  "lime-rs/crates/app-server-protocol/schema/json/v0/AgentSessionQueuedTurnRemoveParams.json",
+  "lime-rs/crates/app-server-protocol/schema/json/v0/AgentSessionQueuedTurnRemoveResponse.json",
+  "lime-rs/crates/app-server-protocol/schema/json/v0/AgentSessionQueuedTurnPromoteParams.json",
+  "lime-rs/crates/app-server-protocol/schema/json/v0/AgentSessionQueuedTurnPromoteResponse.json",
+  "lime-rs/crates/app-server-protocol/schema/json/v2/TurnQueuePromoteParams.json",
+  "lime-rs/crates/app-server-protocol/schema/json/v2/TurnQueuePromoteResponse.json",
+];
+const retiredRendererQueuedTurnFiles = [
+  "src/lib/api/queuedTurn.ts",
+  "src/lib/api/queuedTurn.test.ts",
+  "src/lib/api/queuedTurn.d.ts",
+];
+const retiredPendingSteerFixtureFiles = [
+  "scripts/agent-runtime/claw-chat-current-fixture-inputbar-pending-steer.mjs",
+  "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-gui-actions.mjs",
+  "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-read-model.mjs",
+  "scripts/agent-runtime/claw-chat-current-fixture-pending-steer-assertions.mjs",
+];
+const retiredPendingSteerScenarios = [
+  "inputbar-pending-steer-rich-restore",
+  "inputbar-pending-steer-multi-queue",
+  "inputbar-pending-steer-pop-front-resume",
 ];
 
 function expandContractFiles(files) {
@@ -2186,7 +2375,9 @@ const checks = [
       "METHOD_MODEL_PROVIDER_ALIAS_READ",
       "METHOD_MODEL_PROVIDER_ALIAS_LIST",
       "METHOD_MODEL_PROVIDER_FETCH_MODELS",
-      "App Server model/list did not return models",
+      "App Server model/list did not return data",
+      "response.nextCursor",
+      "includeHidden",
       "App Server modelPreferences/list did not return preferences",
       "App Server modelSyncState/read did not return syncState",
       "App Server modelProviderAlias/list did not return configs",
@@ -2209,7 +2400,10 @@ const checks = [
       "appServerRequestMock",
       'vi.mock("@/lib/api/appServer"',
       "getModelRegistry 应缓存并复用同一轮读取结果",
-      "模型偏好、同步状态、provider 与 tier 读取应走 App Server current",
+      "getModelRegistry 应聚合 model/list 的全部分页",
+      "getModelRegistry 遇到重复 cursor 时应 fail closed",
+      "getModelRegistry 应隔离默认目录与 includeHidden 缓存",
+      "模型偏好与同步状态读取应走 App Server current",
       "单个 provider alias 应通过 App Server 读取并缓存",
       "App Server 模型读链缺少必需 result 时不应回退 legacy",
       '"model/list"',
@@ -2218,7 +2412,9 @@ const checks = [
       '"modelProviderAlias/read"',
       '"modelProviderAlias/list"',
       '"modelProvider/fetchModels"',
-      "App Server model/list did not return models",
+      "App Server model/list did not return data",
+      "App Server model/list repeated cursor: 1",
+      "includeHidden: true",
       "App Server modelPreferences/list did not return preferences",
       "App Server modelSyncState/read did not return syncState",
       "App Server modelProviderAlias/list did not return configs",
@@ -3724,7 +3920,7 @@ const checks = [
       "direct_provider_config_from_request",
       "configure_provider_for_session(",
       "install_provider_for_session(agent_state, request.session_id, &runtime_config).await?",
-      "create_configured_reply_provider(config)?",
+      "create_configured_reply_provider(config, &self.provider_health)?",
       "provider_for_session(request.session_id)",
       "close_provider_session(session_id).await",
       "configure_model_route_provider_for_session_with_provider_and_credential_ref(",
@@ -4416,25 +4612,6 @@ const checks = [
     ],
   },
   {
-    name: "TypeScript protocol exposes typed agentSession/update contract",
-    file: "packages/app-server-client/src/protocol.ts",
-    snippets: [
-      'export const METHOD_AGENT_SESSION_UPDATE = "agentSession/update"',
-      "export type AgentSessionUpdateParams = {",
-      "sessionId: string",
-      "providerSelector?: string",
-      "providerName?: string",
-      "modelName?: string",
-      "executionStrategy?: string",
-      "recentAccessMode?: string",
-      "recentPreferences?: unknown",
-      "articleWorkspaceEditedDraft?: unknown",
-      "export type AgentSessionUpdateResponse = {",
-      "session: AgentSessionOverview",
-    ],
-    absentSnippets: ["recentTeamSelection?: unknown"],
-  },
-  {
     name: "Retired recent Team selection is absent from current session contracts",
     files: [
       "lime-rs/crates/app-server-protocol/src/protocol/v0/session_admin.rs",
@@ -4457,16 +4634,6 @@ const checks = [
     ],
   },
   {
-    name: "TypeScript client wraps typed agentSession/update helper",
-    file: "packages/app-server-client/src/index.ts",
-    snippets: [
-      "METHOD_AGENT_SESSION_UPDATE",
-      "updateSession(params: AgentSessionUpdateParams): JsonRpcRequest",
-      "this.client.updateSession(params)",
-      "Promise<AppServerRequestResult<AgentSessionUpdateResponse>>",
-    ],
-  },
-  {
     name: "TypeScript protocol exposes typed thread archive lifecycle contract",
     file: "packages/app-server-client/src/protocol.ts",
     snippets: [
@@ -4484,7 +4651,7 @@ const checks = [
     ],
   },
   {
-    name: "Retired bulk archive and update archived flag stay absent from current protocol",
+    name: "Retired agent session mutation methods stay absent from current protocol",
     files: [
       ...protocolV0ModuleFiles,
       ...protocolV2ModuleFiles,
@@ -4499,6 +4666,10 @@ const checks = [
       '"agentSession/archiveMany"',
       "AgentSessionArchiveManyParams",
       "AgentSessionArchiveManyResponse",
+      '"agentSession/update"',
+      "METHOD_AGENT_SESSION_UPDATE",
+      "AgentSessionUpdateParams",
+      "AgentSessionUpdateResponse",
     ],
   },
   {
@@ -4600,12 +4771,8 @@ const checks = [
       "METHOD_CAPABILITY_LIST",
       "builds capability list requests with empty params",
       "exports app-server method catalog from checked-in Rust manifest",
-      "METHOD_AGENT_SESSION_UPDATE",
       "METHOD_THREAD_DELETE",
-      "assert.equal(updateSession.method, METHOD_AGENT_SESSION_UPDATE)",
       "assert.equal(deleteThread.method, METHOD_THREAD_DELETE)",
-      'providerSelector: "custom-provider"',
-      'recentAccessMode: "full-access"',
       "isAppServerRequestMethod(METHOD_TURN_START)",
       "isAppServerNotificationMethod(METHOD_AGENT_SESSION_EVENT)",
       "connection wraps capability list response",
@@ -4844,7 +5011,7 @@ const checks = [
       "appServerClient.cancelTurn(",
       "appServerTurnCancelParamsFromRequest(request)",
       "request.turn_id",
-      "appServerClient.compactAgentSession(",
+      "appServerClient.startThreadCompaction(",
       "const params: ThreadResumeParams",
       "appServerClient.resumeThread(params)",
       "findPendingTypedServerRequestAction(",
@@ -5260,7 +5427,9 @@ const checks = [
       "appServerSessionClient.createAgentRuntimeSession(",
       "appServerSessionClient.listAgentRuntimeSessions({",
       "appServerSessionClient.getAgentRuntimeSession(",
-      "appServerSessionClient.updateAgentRuntimeSession(request)",
+      "appServerSessionClient.updateAgentRuntimeThreadToolPreferences(",
+      "appServerSessionClient.archiveAgentRuntimeSession(sessionId)",
+      "appServerSessionClient.unarchiveAgentRuntimeSession(sessionId)",
       "async function deleteAgentRuntimeSession(sessionId: string): Promise<void>",
       "appServerSessionClient.deleteAgentRuntimeSession(sessionId)",
       'reason: "deleted"',
@@ -5279,6 +5448,7 @@ const checks = [
       '"agent_runtime_get_session"',
       '"agent_runtime_update_session"',
       '"agent_runtime_delete_session"',
+      "updateAgentRuntimeSession",
     ],
   },
   {
@@ -5290,7 +5460,7 @@ const checks = [
       "export type AppServerSessionRpcClient = Pick<",
       '| "startSession"',
       '| "readThread"',
-      '| "updateSession"',
+      '| "updateThreadSettings"',
       '| "archiveThread"',
       '| "unarchiveThread"',
       '| "deleteThread"',
@@ -5300,14 +5470,14 @@ const checks = [
       "listCanonicalSessionOverviews(appServerClient, options)",
       "appServerThreadReadParams(threadId, false)",
       "appServerClient.readThread(",
-      "appServerClient.updateSession(",
+      "appServerClient.updateThreadSettings(",
       "appServerClient.archiveThread(",
       "appServerClient.unarchiveThread(",
       "appServerClient.deleteThread(",
-      "appServerSessionUpdateParamsFromRequest(request)",
-      "providerSelector: request.provider_selector?.trim() || undefined",
-      "recentAccessMode: request.recent_access_mode",
-      "recentPreferences: request.recent_preferences",
+      '"thread/settings/update"',
+      '"thread/archive"',
+      '"thread/unarchive"',
+      '"thread/delete"',
     ],
     absentSnippets: [
       "APP_SERVER_METHOD_THREAD_LIST",
@@ -5319,6 +5489,9 @@ const checks = [
       '"agent_runtime_get_session"',
       '"agent_runtime_create_session"',
       '"agent_runtime_update_session"',
+      "appServerClient.updateSession(",
+      "updateAgentRuntimeSession",
+      "appServerSessionUpdateParamsFromRequest",
       "recentTeamSelection",
       "recent_team_selection",
       "archiveManySessions",
@@ -5388,7 +5561,7 @@ const checks = [
       "首条发送创建新会话时不应额外回写 provider/model 或 accessMode",
       "providerSelector: selectedProvider",
       "modelName: selectedModel",
-      "mockUpdateAgentRuntimeSession).not.toHaveBeenCalledWith",
+      "mockUpdateAgentRuntimeThreadSettings).not.toHaveBeenCalled",
     ],
   },
   {
@@ -6546,7 +6719,7 @@ const checks = [
       "listenAgentRuntimeEvent",
       "appServerClient.startTurn",
       "appServerClient.cancelTurn",
-      "appServerClient.compactAgentSession",
+      "appServerClient.startThreadCompaction",
       "appServerClient.resumeThread",
       "findPendingTypedServerRequestAction",
       "respondPendingTypedServerRequest",
@@ -6571,7 +6744,6 @@ const checks = [
     snippets: [
       'expect(call?.[0]).toBe("app_server_handle_json_lines")',
       "APP_SERVER_METHOD_TURN_START",
-      "APP_SERVER_METHOD_AGENT_SESSION_UPDATE",
       "APP_SERVER_METHOD_THREAD_DELETE",
       "APP_SERVER_METHOD_THREAD_RESUME",
       "APP_SERVER_METHOD_EVIDENCE_EXPORT",
@@ -6579,12 +6751,10 @@ const checks = [
       "replayAgentRuntimeRequest 无当前 typed pending 时应 fail closed",
       "respondAgentRuntimeAction 缺少 typed pending 时应 fail closed，不发旧 action/respond",
       "resumeThread 应经 Electron IPC 调 App Server thread/resume",
-      "updateAgentRuntimeSession 应经 Electron IPC 调 App Server",
       "exportAgentRuntimeEvidencePack 应经 Electron IPC 调 App Server evidence/export",
       "mockIsElectronHostCommandAvailable.mockReturnValue(true)",
       "expectAppServerRequest(1, APP_SERVER_METHOD_TURN_START",
       "expectAppServerRequest(2, APP_SERVER_METHOD_THREAD_DELETE",
-      "expectAppServerRequest(3, APP_SERVER_METHOD_AGENT_SESSION_UPDATE",
       "generic agentSession/action/respond is retired",
       "expectAppServerRequest(1, APP_SERVER_METHOD_THREAD_RESUME",
       "expectAppServerRequest(1, APP_SERVER_METHOD_EVIDENCE_EXPORT",
@@ -7312,7 +7482,7 @@ const checks = [
     snippets: [
       'const APP_SERVER_HANDLE_JSON_LINES_COMMAND = "app_server_handle_json_lines"',
       'const APP_SERVER_METHOD_THREAD_START = "thread/start"',
-      'const APP_SERVER_METHOD_AGENT_SESSION_UPDATE = "agentSession/update"',
+      'const APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE = "thread/settings/update"',
       'const APP_SERVER_METHOD_THREAD_READ = "thread/read"',
       'const APP_SERVER_METHOD_THREAD_LIST = "thread/list"',
       "const APP_SERVER_METHOD_TURN_START =",
@@ -7361,7 +7531,7 @@ const checks = [
     snippets: [
       'const APP_SERVER_HANDLE_JSON_LINES_COMMAND = "app_server_handle_json_lines"',
       'const APP_SERVER_METHOD_THREAD_START = "thread/start"',
-      'const APP_SERVER_METHOD_AGENT_SESSION_UPDATE = "agentSession/update"',
+      'const APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE = "thread/settings/update"',
       'const APP_SERVER_METHOD_TURN_START = "turn/start"',
       'const APP_SERVER_METHOD_THREAD_READ = "thread/read"',
       "const APP_SERVER_METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST =",
@@ -7371,7 +7541,7 @@ const checks = [
       'const APP_SERVER_METHOD_EVIDENCE_EXPORT = "evidence/export"',
       "async function invokeAppServer(",
       "APP_SERVER_METHOD_THREAD_START",
-      "APP_SERVER_METHOD_AGENT_SESSION_UPDATE",
+      "APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE",
       "APP_SERVER_METHOD_TURN_START",
       "APP_SERVER_METHOD_THREAD_READ",
       "APP_SERVER_METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST",
@@ -8504,7 +8674,7 @@ checkRetiredPluginRuntimeRendererFacade();
 checkRetiredAgentRuntimeMockFiles();
 checkRetiredAgentRuntimeCommandManifestFiles();
 checkRetiredAgentRuntimeAdapterFiles();
-checkRetiredSessionArchiveMutationSurface();
+checkRetiredAgentSessionUpdateSurface();
 checkRetiredRendererProjectionFiles();
 checkRetiredRendererQueuedTurnProjectionSurface();
 checkRetiredRendererQueuedTurnSecondaryProjectionSurface();
@@ -8518,6 +8688,7 @@ checkRetiredAgentRuntimeSubmitTurnFacadeSurface();
 checkRetiredAgentRuntimeInterruptTurnFacadeSurface();
 checkRetiredAgentRuntimeRespondActionFacadeSurface();
 checkRendererQueuedTurnWriteSurface();
+checkRetiredPublicQueuedTurnSurface();
 checkActiveAipromptsDoNotPromoteRetiredAgentRuntimeCommands();
 checkScriptsDoNotCallRetiredAgentRuntimeCommands();
 checkMcpRuntimeCurrentContracts({ repoRoot, failures });
@@ -9114,6 +9285,59 @@ function checkRendererQueuedTurnWriteSurface() {
   }
 }
 
+function checkRetiredPublicQueuedTurnSurface() {
+  for (const file of retiredPublicQueuedTurnSchemaFiles) {
+    if (fs.existsSync(path.join(repoRoot, file))) {
+      failures.push(
+        `retired public queued-turn schema must stay deleted: ${file}`,
+      );
+    }
+  }
+  for (const file of [
+    ...retiredRendererQueuedTurnFiles,
+    ...retiredPendingSteerFixtureFiles,
+  ]) {
+    if (fs.existsSync(path.join(repoRoot, file))) {
+      failures.push(
+        `retired public queued-turn file must stay deleted: ${file}`,
+      );
+    }
+  }
+  for (const { file, snippets } of retiredPublicQueuedTurnSurfaceSpecs) {
+    const absolutePath = path.join(repoRoot, file);
+    if (!fs.existsSync(absolutePath)) {
+      failures.push(
+        `retired public queued-turn guard missing production file: ${file}`,
+      );
+      continue;
+    }
+    const content = fs.readFileSync(absolutePath, "utf8");
+    for (const snippet of snippets) {
+      if (content.includes(snippet)) {
+        failures.push(
+          `retired public queued-turn surface: ${file} must not contain ${JSON.stringify(snippet)}`,
+        );
+      }
+    }
+  }
+  const agentRuntimeScriptsRoot = path.join(repoRoot, "scripts/agent-runtime");
+  for (const relativePath of walkScriptFiles(agentRuntimeScriptsRoot)) {
+    const content = fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+    for (const snippet of [
+      ...retiredPendingSteerScenarios,
+      "INPUTBAR_PENDING_STEER",
+      "inputbarPendingSteer",
+      "InputbarPendingSteer",
+    ]) {
+      if (content.includes(snippet)) {
+        failures.push(
+          `retired pending-steer fixture surface: ${relativePath} must not contain ${JSON.stringify(snippet)}`,
+        );
+      }
+    }
+  }
+}
+
 function isAgentRuntimeGatewaySource(relativePath) {
   return (
     relativePath.endsWith(".ts") &&
@@ -9245,47 +9469,71 @@ function checkRetiredAgentRuntimeAdapterFiles() {
   }
 }
 
-function checkRetiredSessionArchiveMutationSurface() {
-  const sourceBlocks = [
-    {
-      file: "lime-rs/crates/app-server-protocol/src/protocol/v0/session_admin.rs",
-      pattern: /pub struct AgentSessionUpdateParams\s*\{(?<body>[\s\S]*?)\n\}/u,
-    },
-    {
-      file: "packages/app-server-client/src/protocol.ts",
-      pattern:
-        /export type AgentSessionUpdateParams\s*=\s*\{(?<body>[\s\S]*?)\n\};/u,
-    },
-    {
-      file: "packages/app-server-client/src/generated/protocol-types.ts",
-      pattern:
-        /export interface AgentSessionUpdateParams\s*\{(?<body>[\s\S]*?)\n\}/u,
-    },
+function checkRetiredAgentSessionUpdateSurface() {
+  const retiredSchemaFiles = [
+    "lime-rs/crates/app-server-protocol/schema/json/v0/AgentSessionUpdateParams.json",
+    "lime-rs/crates/app-server-protocol/schema/json/v0/AgentSessionUpdateResponse.json",
+  ];
+  const productionFiles = [
+    "lime-rs/crates/app-server-protocol/src/protocol/v0/method_names.rs",
+    "lime-rs/crates/app-server-protocol/src/protocol/v0/session_admin.rs",
+    "lime-rs/crates/app-server-protocol/src/protocol/v0/client_request.rs",
+    "lime-rs/crates/app-server-protocol/src/protocol/v0/schema_types.rs",
+    "lime-rs/crates/app-server-protocol/src/protocol/v0/catalog.rs",
+    "lime-rs/crates/app-server-protocol/src/schema_export/registry.rs",
+    "lime-rs/crates/app-server-protocol/schema/json/app_server_protocol.schemas.json",
+    "lime-rs/crates/app-server-protocol/schema/json/manifest.json",
+    "lime-rs/crates/app-server/src/processor/agent_session.rs",
+    "lime-rs/crates/app-server/src/processor/dispatch.rs",
+    "lime-rs/crates/app-server/src/runtime/session_lifecycle.rs",
+    "lime-rs/crates/app-server/src/runtime/projection_store.rs",
+    "packages/app-server-client/src/connection-methods.ts",
+    "packages/app-server-client/src/generated/protocol-types.ts",
+    "packages/app-server-client/src/protocol.ts",
+    "packages/app-server-client/src/request-client-methods.ts",
+    "packages/app-server-client/src/request-client.ts",
+    "src/lib/api/appServer.ts",
+    "src/lib/api/agentExecutionRuntime.ts",
+    "src/lib/api/agentRuntime/appServerSessionClient.ts",
+    "src/lib/api/agentRuntime/requestTypes.ts",
+    "src/lib/api/agentRuntime/sessionClient.ts",
+    "src/lib/dev-bridge/commandPolicy.ts",
+    "src/lib/governance/agentCommandCatalog.json",
+  ];
+  const retiredSnippets = [
+    '"agentSession/update"',
+    "METHOD_AGENT_SESSION_UPDATE",
+    "AgentSessionUpdateParams",
+    "AgentSessionUpdateResponse",
+    "updateAgentRuntimeSession",
+    "appServerClient.updateSession(",
+    "update_session_current",
+    "update_session_overview",
   ];
 
-  for (const { file, pattern } of sourceBlocks) {
-    const content = fs.readFileSync(path.join(repoRoot, file), "utf8");
-    const match = content.match(pattern);
-    if (!match?.groups?.body) {
-      failures.push(`missing AgentSessionUpdateParams contract block: ${file}`);
-      continue;
-    }
-    if (/\barchived\b/u.test(match.groups.body)) {
+  for (const file of retiredSchemaFiles) {
+    if (fs.existsSync(path.join(repoRoot, file))) {
       failures.push(
-        `retired AgentSessionUpdateParams.archived must stay deleted: ${file}`,
+        `retired agentSession/update schema must stay deleted: ${file}`,
       );
     }
   }
 
-  const schemaFile =
-    "lime-rs/crates/app-server-protocol/schema/json/v0/AgentSessionUpdateParams.json";
-  const schema = JSON.parse(
-    fs.readFileSync(path.join(repoRoot, schemaFile), "utf8"),
-  );
-  if (Object.hasOwn(schema.properties ?? {}, "archived")) {
-    failures.push(
-      `retired AgentSessionUpdateParams.archived must stay deleted: ${schemaFile}`,
-    );
+  for (const file of productionFiles) {
+    const absolutePath = path.join(repoRoot, file);
+    if (!fs.existsSync(absolutePath)) {
+      continue;
+    }
+    const content = fs.readFileSync(absolutePath, "utf8");
+    for (const snippet of retiredSnippets) {
+      if (content.includes(snippet)) {
+        failures.push(
+          `retired agentSession/update surface: ${file} must not contain ${JSON.stringify(
+            snippet,
+          )}`,
+        );
+      }
+    }
   }
 }
 

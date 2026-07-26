@@ -236,12 +236,14 @@ describe("useAgentContext", () => {
     harness.unmount();
   });
 
-  it("当前会话切换 provider/model 时应合并回写 session provider/model", async () => {
+  it("当前会话切换 provider/model/effort 时应原子回写并在成功后提交 UI", async () => {
     const harness = mountHook("workspace-1", "session-1");
 
     await act(async () => {
       harness.getValue().setProviderType("deepseek");
       harness.getValue().setModel("deepseek-reasoner");
+      harness.getValue().setReasoningEffort("xhigh");
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -250,13 +252,57 @@ describe("useAgentContext", () => {
       "session-1",
       "deepseek",
       "deepseek-reasoner",
+      "xhigh",
     );
+    expect(harness.getValue().providerType).toBe("deepseek");
+    expect(harness.getValue().model).toBe("deepseek-reasoner");
+    expect(harness.getValue().reasoningEffort).toBe("xhigh");
     expect(
       harness.getValue().getSyncedSessionModelPreference("session-1"),
     ).toEqual({
       providerType: "deepseek",
       model: "deepseek-reasoner",
     });
+
+    harness.unmount();
+  });
+
+  it("thread model settings 更新失败时应保留原 UI 和持久化状态", async () => {
+    const error = new Error("provider route unavailable");
+    mockSetSessionProviderSelection.mockRejectedValueOnce(error);
+    const harness = mountHook("workspace-1", "session-1");
+
+    act(() => {
+      harness
+        .getValue()
+        .applySessionModelPreference(
+          "session-1",
+          { providerType: "openai", model: "gpt-5.4-mini" },
+          { markSynced: true },
+        );
+    });
+
+    await act(async () => {
+      harness.getValue().setProviderType("xai");
+      harness.getValue().setModel("grok-4.5");
+      harness.getValue().setReasoningEffort("xhigh");
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(harness.getValue().providerType).toBe("openai");
+    expect(harness.getValue().model).toBe("gpt-5.4-mini");
+    expect(harness.getValue().reasoningEffort).toBe("");
+    expect(
+      JSON.parse(
+        localStorage.getItem("agent_topic_model_pref_workspace-1_session-1") ||
+          "null",
+      ),
+    ).toEqual({ providerType: "openai", model: "gpt-5.4-mini" });
+    expect(mockToastError).toHaveBeenCalledWith(
+      expect.stringContaining("provider route unavailable"),
+    );
 
     harness.unmount();
   });
@@ -275,10 +321,7 @@ describe("useAgentContext", () => {
       "session-1",
       "react",
     );
-    expect(mockTopicsUpdater).toHaveBeenCalledWith(
-      "session-1",
-      "react",
-    );
+    expect(mockTopicsUpdater).toHaveBeenCalledWith("session-1", "react");
     expect(
       harness.getValue().getSyncedSessionExecutionStrategy("session-1"),
     ).toBe("react");

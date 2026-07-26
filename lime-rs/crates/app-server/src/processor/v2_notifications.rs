@@ -9,6 +9,7 @@ mod command;
 mod file_change;
 mod mcp;
 mod plan;
+mod thread_status;
 
 enum EventProjection {
     Direct(Vec<JsonRpcNotification>),
@@ -27,6 +28,7 @@ pub(crate) struct V2NotificationProjector {
     completed_file_change_item_ids: HashSet<String>,
     started_mcp_item_ids: HashSet<String>,
     completed_mcp_item_ids: HashSet<String>,
+    thread_status: thread_status::ThreadStatusProjector,
 }
 
 impl V2NotificationProjector {
@@ -43,7 +45,7 @@ impl V2NotificationProjector {
 
     fn classify(&mut self, event: &AgentEvent) -> EventProjection {
         let notification = match event.event_type.as_str() {
-            "thread.created" | "thread.started" => self.project_thread_started(event),
+            "thread.created" | "thread.started" => return self.project_thread_started(event),
             "turn.accepted" => return EventProjection::Direct(Vec::new()),
             "turn.started" => return self.project_turn_started(event),
             "turn.completed" => {
@@ -55,12 +57,30 @@ impl V2NotificationProjector {
             "turn.canceled" => {
                 return self.project_turn_completed_with_usage(event, v2::TurnStatus::Interrupted)
             }
-            "action.required" | "action.resolved" | "action.canceled" | "action.cancelled"
-            | "action.expired" => return EventProjection::Direct(Vec::new()),
+            "action.required" => {
+                return EventProjection::Direct(
+                    self.thread_status
+                        .project_action_required(event)
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
+                )
+            }
+            "action.resolved" | "action.canceled" | "action.cancelled" | "action.expired" => {
+                return EventProjection::Direct(
+                    self.thread_status
+                        .project_action_terminal(event)
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
+                )
+            }
             "thread.goal.continuation" => return EventProjection::Direct(Vec::new()),
             "provider.usage" => return self.project_token_usage(event),
             "item.started" | "command.started" => self.project_item(event, false),
             "item.completed" | "command.exited" => self.project_item(event, true),
+            "context.compaction.started" => self.project_item(event, false),
+            "context.compaction.completed" => self.project_item(event, true),
             "command.output" => {
                 return command::project_output_delta(
                     &self.started_command_item_ids,
@@ -109,6 +129,7 @@ impl V2NotificationProjector {
             "reasoning.summary" => self.project_reasoning_summary_text_delta(event),
             "reasoning.summary_part_added" => self.project_reasoning_summary_part_added(event),
             "reasoning.delta" => self.project_reasoning_text_delta(event),
+            "provider_safety_buffering" => self.project_model_safety_buffering(event),
             _ => return EventProjection::SideChannel,
         };
         match notification {
@@ -117,13 +138,18 @@ impl V2NotificationProjector {
         }
     }
 
-    fn project_thread_started(&self, event: &AgentEvent) -> Option<ServerNotification> {
-        match project_event(event)? {
-            ProjectedEvent::Thread(thread) => Some(ServerNotification::ThreadStarted(
-                v2::ThreadStartedNotification { thread },
-            )),
-            _ => None,
-        }
+    fn project_thread_started(&mut self, event: &AgentEvent) -> EventProjection {
+        let ProjectedEvent::Thread(thread) = (match project_event(event) {
+            Some(projected) => projected,
+            None => return EventProjection::Reject(projection_error(event)),
+        }) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        self.thread_status.note_thread_started(&thread.id);
+        EventProjection::Direct(vec![ServerNotification::ThreadStarted(
+            v2::ThreadStartedNotification { thread },
+        )
+        .into()])
     }
 
     fn project_turn_started(&mut self, event: &AgentEvent) -> EventProjection {
@@ -134,10 +160,14 @@ impl V2NotificationProjector {
         if !self.started_turn_ids.insert(turn_id) {
             return EventProjection::Direct(Vec::new());
         }
-        EventProjection::Direct(vec![ServerNotification::TurnStarted(
-            v2::TurnStartedNotification { thread_id, turn },
-        )
-        .into()])
+        let mut notifications = Vec::with_capacity(2);
+        if let Some(status) = self.thread_status.project_turn_started(&thread_id) {
+            notifications.push(status.into());
+        }
+        notifications.push(
+            ServerNotification::TurnStarted(v2::TurnStartedNotification { thread_id, turn }).into(),
+        );
+        EventProjection::Direct(notifications)
     }
 
     fn project_turn_completed(
@@ -152,14 +182,23 @@ impl V2NotificationProjector {
     }
 
     fn project_turn_completed_with_usage(
-        &self,
+        &mut self,
         event: &AgentEvent,
         expected_status: v2::TurnStatus,
     ) -> EventProjection {
         let Some(turn_notification) = self.project_turn_completed(event, expected_status) else {
             return EventProjection::Reject(projection_error(event));
         };
-        let mut notifications = Vec::with_capacity(2);
+        let ServerNotification::TurnCompleted(v2::TurnCompletedNotification {
+            ref thread_id, ..
+        }) = turn_notification
+        else {
+            unreachable!("turn completion projector returned a non-turn notification")
+        };
+        let mut notifications = Vec::with_capacity(3);
+        if let Some(status) = self.thread_status.project_turn_terminal(thread_id) {
+            notifications.push(status.into());
+        }
         if let Some(usage_notification) = self.project_token_usage_notification(event) {
             notifications.push(usage_notification.into());
         }
@@ -246,6 +285,37 @@ impl V2NotificationProjector {
                     last,
                     model_context_window,
                 },
+            },
+        ))
+    }
+
+    fn project_model_safety_buffering(&self, event: &AgentEvent) -> Option<ServerNotification> {
+        let thread_id = required_event_id(event.thread_id.as_deref())?;
+        let turn_id = required_event_id(event.turn_id.as_deref())?;
+        let model = payload_string(&event.payload, &["model"])?;
+        let use_cases = payload_string_array(&event.payload, "useCases")?;
+        let reasons = payload_string_array(&event.payload, "reasons")?;
+        let show_buffering_ui = event.payload.get("showBufferingUi")?.as_bool()?;
+        let faster_model = match event.payload.get("retryModel") {
+            None | Some(Value::Null) => None,
+            Some(value) => Some(
+                value
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())?
+                    .to_string(),
+            ),
+        };
+
+        Some(ServerNotification::ModelSafetyBufferingUpdated(
+            v2::ModelSafetyBufferingUpdatedNotification {
+                thread_id,
+                turn_id,
+                model,
+                use_cases,
+                reasons,
+                show_buffering_ui,
+                faster_model,
             },
         ))
     }
@@ -376,6 +446,15 @@ fn payload_string(payload: &Value, keys: &[&str]) -> Option<String> {
 
 fn payload_i64(payload: &Value, key: &str) -> Option<i64> {
     payload.get(key).and_then(Value::as_i64)
+}
+
+fn payload_string_array(payload: &Value, key: &str) -> Option<Vec<String>> {
+    payload
+        .get(key)?
+        .as_array()?
+        .iter()
+        .map(|value| value.as_str().map(str::to_string))
+        .collect()
 }
 
 fn reasoning_identity(event: &AgentEvent) -> Option<(String, String, String)> {
@@ -642,7 +721,7 @@ mod tests {
     }
 
     #[test]
-    fn accepted_is_internal_and_started_emits_one_direct_turn_started() {
+    fn accepted_is_internal_and_started_emits_status_before_turn_started() {
         let mut projector = V2NotificationProjector::default();
         let accepted = projector
             .project(event(
@@ -658,8 +737,13 @@ mod tests {
             .expect("started turn");
 
         assert!(accepted.is_empty());
-        assert_eq!(duplicate.len(), 1);
-        assert_eq!(duplicate[0].method, "turn/started");
+        assert_eq!(duplicate.len(), 2);
+        assert_eq!(duplicate[0].method, "thread/status/changed");
+        assert_eq!(
+            duplicate[0].params.as_ref().expect("status params")["status"],
+            json!({"type": "active", "activeFlags": []})
+        );
+        assert_eq!(duplicate[1].method, "turn/started");
     }
 
     #[test]
@@ -1152,6 +1236,88 @@ mod tests {
             .project(event("provider.request.started", json!({})))
             .expect("side channel");
         assert_eq!(notifications[0].method, "agentSession/event");
+    }
+
+    #[test]
+    fn maps_provider_safety_buffering_to_direct_codex_notification() {
+        let mut projector = V2NotificationProjector::default();
+        let notifications = projector
+            .project(event(
+                "provider_safety_buffering",
+                json!({
+                    "provider": "openai",
+                    "model": "gpt-5-codex",
+                    "useCases": ["policy"],
+                    "reasons": ["buffering"],
+                    "showBufferingUi": true,
+                    "retryModel": "gpt-5-mini"
+                }),
+            ))
+            .expect("direct safety buffering notification");
+
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0].method, "model/safetyBuffering/updated");
+        assert_eq!(
+            notifications[0]
+                .params
+                .as_ref()
+                .expect("notification params"),
+            &json!({
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "model": "gpt-5-codex",
+                "useCases": ["policy"],
+                "reasons": ["buffering"],
+                "showBufferingUi": true,
+                "fasterModel": "gpt-5-mini"
+            })
+        );
+    }
+
+    #[test]
+    fn malformed_provider_safety_buffering_is_rejected_without_side_channel_fallback() {
+        let invalid_payloads = [
+            json!({
+                "useCases": ["policy"],
+                "reasons": ["buffering"],
+                "showBufferingUi": true
+            }),
+            json!({
+                "model": "gpt-5-codex",
+                "useCases": ["policy", 1],
+                "reasons": ["buffering"],
+                "showBufferingUi": true
+            }),
+            json!({
+                "model": "gpt-5-codex",
+                "useCases": ["policy"],
+                "reasons": "buffering",
+                "showBufferingUi": true
+            }),
+        ];
+
+        for payload in invalid_payloads {
+            let mut projector = V2NotificationProjector::default();
+            let error = projector
+                .project(event("provider_safety_buffering", payload))
+                .expect_err("malformed safety buffering must fail closed");
+            assert_eq!(error.code, error_codes::RUNTIME_ERROR);
+            assert!(error.message.contains("provider_safety_buffering"));
+        }
+
+        let mut missing_identity = event(
+            "provider_safety_buffering",
+            json!({
+                "model": "gpt-5-codex",
+                "useCases": [],
+                "reasons": [],
+                "showBufferingUi": false
+            }),
+        );
+        missing_identity.turn_id = None;
+        assert!(V2NotificationProjector::default()
+            .project(missing_identity)
+            .is_err());
     }
 
     #[test]

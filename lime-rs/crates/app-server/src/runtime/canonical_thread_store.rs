@@ -15,9 +15,9 @@ use sha2::{Digest, Sha256};
 use thread_store::{
     AppendThreadItemsParams, ApplyThreadHistoryParams, ApplyThreadHistoryResult,
     ArchiveThreadParams, CreateThreadParams, DeleteThreadParams, ItemPage, ListItemsParams,
-    ListThreadsParams, ListTurnsParams, ReadThreadParams, StoreCursor, ThreadMetadataPatch,
-    ThreadPage, ThreadSpawnEdgeStatus, ThreadStore, ThreadStoreError, ThreadStoreFuture,
-    ThreadStoreResult, TurnPage, UpdateThreadMetadataParams,
+    ListThreadsParams, ListTurnsParams, ReadThreadParams, SearchThreadsParams, StoreCursor,
+    ThreadMetadataPatch, ThreadPage, ThreadSearchPage, ThreadSpawnEdgeStatus, ThreadStore,
+    ThreadStoreError, ThreadStoreFuture, ThreadStoreResult, TurnPage, UpdateThreadMetadataParams,
 };
 
 use super::projection_rebuild::{projected_tables_are_empty, rebuild_projected_thread_snapshot};
@@ -35,6 +35,7 @@ mod goal_rebind;
 mod history_builder;
 mod persistence;
 mod queries;
+mod search;
 
 use history_builder::{normalize_persisted_change_set, normalize_replayed_change_set};
 
@@ -61,6 +62,8 @@ struct CursorValue {
     kind: CursorKind,
     position: i64,
     id: String,
+    #[serde(default)]
+    inclusive: bool,
 }
 
 impl ProjectionStore {
@@ -1028,6 +1031,14 @@ impl ThreadStore for ProjectionStore {
         Box::pin(async move { store.list_threads_sync(params) })
     }
 
+    fn search_threads(
+        &self,
+        params: SearchThreadsParams,
+    ) -> ThreadStoreFuture<'_, ThreadSearchPage> {
+        let store = self.clone();
+        Box::pin(async move { search::search_threads(&store, params) })
+    }
+
     fn append_items(
         &self,
         params: AppendThreadItemsParams,
@@ -1052,6 +1063,14 @@ impl ThreadStore for ProjectionStore {
     fn list_items(&self, params: ListItemsParams) -> ThreadStoreFuture<'_, ItemPage> {
         let store = self.clone();
         Box::pin(async move { store.list_items_sync(params) })
+    }
+
+    fn search_thread_occurrences(
+        &self,
+        params: thread_store::SearchThreadOccurrencesParams,
+    ) -> ThreadStoreFuture<'_, thread_store::ThreadOccurrenceSearchPage> {
+        let store = self.clone();
+        Box::pin(async move { search::search_thread_occurrences(&store, params) })
     }
 
     fn update_thread_metadata(
@@ -1253,10 +1272,20 @@ fn page_limit(limit: u32) -> ThreadStoreResult<u32> {
 }
 
 fn encode_cursor(kind: CursorKind, position: i64, id: &str) -> ThreadStoreResult<StoreCursor> {
+    encode_cursor_with_inclusive(kind, position, id, false)
+}
+
+fn encode_cursor_with_inclusive(
+    kind: CursorKind,
+    position: i64,
+    id: &str,
+    inclusive: bool,
+) -> ThreadStoreResult<StoreCursor> {
     let json = serde_json::to_vec(&CursorValue {
         kind,
         position,
         id: id.to_string(),
+        inclusive,
     })
     .map_err(store_error)?;
     StoreCursor::new(URL_SAFE_NO_PAD.encode(json)).map_err(error)

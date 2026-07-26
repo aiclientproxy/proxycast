@@ -1,6 +1,9 @@
 //! model domain handlers for the App Server processor.
 
 use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, RpcDispatch};
+use app_server_protocol::protocol::v2::{
+    ModelProviderCapabilitiesReadParams, ModelProviderCapabilitiesReadResponse,
+};
 use app_server_protocol::{
     JsonRpcError, ModelListParams, ModelProviderAliasReadParams, ModelProviderConfigExportParams,
     ModelProviderConfigImportParams, ModelProviderCreateParams, ModelProviderDeleteParams,
@@ -56,6 +59,20 @@ impl RequestProcessor {
         let response = self
             .runtime
             .list_model_providers()
+            .await
+            .map_err(to_jsonrpc_error)?;
+        dispatch_result(response)
+    }
+
+    pub(super) async fn handle_model_provider_capabilities_read_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let _: ModelProviderCapabilitiesReadParams = parse_params(params)?;
+        let response: ModelProviderCapabilitiesReadResponse = self
+            .runtime
+            .read_model_provider_capabilities()
             .await
             .map_err(to_jsonrpc_error)?;
         dispatch_result(response)

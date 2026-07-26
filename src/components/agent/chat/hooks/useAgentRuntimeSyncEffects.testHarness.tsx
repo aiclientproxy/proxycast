@@ -127,20 +127,9 @@ export function createAppServerThreadClientMock(): AgentRuntimeAppServerClient {
     }),
     startTurn: vi.fn().mockResolvedValue({}),
     cancelTurn: vi.fn().mockResolvedValue({}),
-    compactAgentSession: vi.fn().mockResolvedValue({
+    startThreadCompaction: vi.fn().mockResolvedValue({
       id: 1,
-      result: {
-        session: {
-          sessionId: "session-1",
-          threadId: "thread-1",
-          appId: "agent-chat",
-          status: "idle",
-          createdAt: "2026-06-06T00:00:00.000Z",
-          updatedAt: "2026-06-06T00:00:00.000Z",
-        },
-        turns: [],
-        compacted: true,
-      },
+      result: {},
       response: {
         id: 1,
         result: {},

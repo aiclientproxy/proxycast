@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "branch": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "originUrl": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "sha": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "title": "ThreadMetadataGitInfoUpdateParams",
+  "type": "object"
+}

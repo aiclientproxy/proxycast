@@ -150,6 +150,7 @@ impl LimeLlmProvider {
             base_url: base_url.map(ToOwned::to_owned),
             credential_uuid: credential.uuid.clone(),
             reasoning_effort: None,
+            service_tier: None,
             protocol: Some(protocol),
             supports_websockets: false,
             toolshim: false,

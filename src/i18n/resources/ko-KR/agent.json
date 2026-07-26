@@ -1363,6 +1363,7 @@
   "agentChat.runtimeError.internalRuntime": "런타임에서 내부 오류를 반환했습니다. 진단용 세부 정보는 보존되었습니다. 잠시 후 다시 시도하거나 공급자 및 도구 연결 상태를 확인하세요.",
   "agentChat.runtimeError.modelInputCapabilityGap": "현재 모델은 이번 입력 미디어 유형을 지원하지 않습니다. 이미지 또는 파일 입력을 지원하는 모델로 전환한 뒤 다시 보내세요.",
   "agentChat.runtimeError.modelSelectionRequired": "입력창 하단에서 사용 가능한 모델을 선택하거나 Provider 로그인을 완료한 뒤 보내세요.",
+  "agentChat.modelSettings.updateFailed": "모델 설정을 업데이트하지 못했습니다: {{message}}",
   "agentChat.runtimeError.providerQuota": "현재 모델 채널이 결제 또는 할당량 관련 오류를 반환했습니다. Provider/모델 채널의 결제, 할당량 또는 권한 상태를 확인하거나 다른 사용 가능한 모델로 전환하세요.",
   "agentChat.runtimeError.providerUnavailable": "현재 모델 채널을 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도하세요. 계속 실패하면 Provider 상태를 확인하거나 다른 사용 가능한 모델로 전환하세요.",
   "agentChat.runtime.failure.prefix": "실행 실패: ",

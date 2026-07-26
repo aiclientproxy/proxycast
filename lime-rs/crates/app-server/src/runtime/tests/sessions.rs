@@ -1,6 +1,7 @@
 use super::support::*;
 use super::*;
 use agent_protocol::{SortDirection, ThreadId, ThreadStatus, ThreadTurnsView, TurnItemsView};
+use app_server_protocol::protocol::v2::{ThreadCompactStartParams, ThreadCompactStartResponse};
 use futures::executor::block_on;
 use thread_store::{
     ListItemsParams, ListThreadsParams, ListTurnsParams, PageRequest, ReadThreadParams, ThreadStore,
@@ -327,11 +328,16 @@ async fn delete_thread_closes_exact_runtime_owner_before_removal() {
 }
 
 #[tokio::test]
-async fn compact_agent_session_writes_session_context_artifact() {
+async fn compact_thread_writes_session_context_artifact() {
     let sidecar_root = tempfile::tempdir().expect("sidecar root");
     let sidecar_store = Arc::new(SidecarStore::new(sidecar_root.path()).expect("sidecar store"));
+    let projection_store = Arc::new(
+        ProjectionStore::initialize(sidecar_root.path().join("projection.sqlite"))
+            .expect("projection store"),
+    );
     let core = RuntimeCore::with_backend(Arc::new(CompletedBackend))
-        .with_sidecar_store(sidecar_store.clone());
+        .with_sidecar_store(sidecar_store.clone())
+        .with_projection_store(projection_store);
     core.start_session(AgentSessionStartParams {
         session_id: Some("sess_compact".to_string()),
         thread_id: Some("thread_compact".to_string()),
@@ -358,20 +364,18 @@ async fn compact_agent_session_writes_session_context_artifact() {
     .await
     .expect("turn");
 
+    let mut runtime_events = core.take_event_receiver().expect("runtime event receiver");
     let output = core
-        .compact_agent_session(AgentSessionCompactParams {
-            session_id: "sess_compact".to_string(),
-            event_name: None,
+        .compact_thread(ThreadCompactStartParams {
+            thread_id: "thread_compact".to_string(),
         })
         .await
         .expect("compact");
 
-    assert!(output.response.compacted);
-    let completed = output
-        .events
-        .iter()
-        .find(|event| event.event_type == "context.compaction.completed")
-        .expect("completed event");
+    assert_eq!(output.response, ThreadCompactStartResponse {});
+    assert!(output.events.is_empty());
+    let completed =
+        wait_for_runtime_event(&mut runtime_events, "context.compaction.completed").await;
     assert_eq!(completed.payload["contextEpoch"].as_u64(), Some(1));
     assert_eq!(
         completed.payload["tailStartTurnId"].as_str(),
@@ -417,13 +421,19 @@ async fn compact_agent_session_writes_session_context_artifact() {
 }
 
 #[tokio::test]
-async fn compact_agent_session_uses_replacement_history_without_duplicate_prompt_context() {
+async fn compact_thread_uses_replacement_history_without_duplicate_prompt_context() {
     let sidecar_root = tempfile::tempdir().expect("sidecar root");
     let sidecar_store = Arc::new(SidecarStore::new(sidecar_root.path()).expect("sidecar store"));
     let backend = Arc::new(TurnCompletedRecordingBackend {
         requests: Mutex::new(Vec::new()),
     });
-    let core = RuntimeCore::with_backend(backend.clone()).with_sidecar_store(sidecar_store.clone());
+    let projection_store = Arc::new(
+        ProjectionStore::initialize(sidecar_root.path().join("projection.sqlite"))
+            .expect("projection store"),
+    );
+    let core = RuntimeCore::with_backend(backend.clone())
+        .with_sidecar_store(sidecar_store.clone())
+        .with_projection_store(projection_store);
     core.start_session(AgentSessionStartParams {
         session_id: Some("sess_compact_next_turn".to_string()),
         thread_id: Some("thread_compact_next_turn".to_string()),
@@ -449,12 +459,13 @@ async fn compact_agent_session_uses_replacement_history_without_duplicate_prompt
     )
     .await
     .expect("first turn");
-    core.compact_agent_session(AgentSessionCompactParams {
-        session_id: "sess_compact_next_turn".to_string(),
-        event_name: None,
+    let mut runtime_events = core.take_event_receiver().expect("runtime event receiver");
+    core.compact_thread(ThreadCompactStartParams {
+        thread_id: "thread_compact_next_turn".to_string(),
     })
     .await
     .expect("compact");
+    wait_for_runtime_event(&mut runtime_events, "context.compaction.completed").await;
 
     core.start_turn(
         AgentSessionTurnStartParams {

@@ -25,7 +25,6 @@ describe("useAgentChat 偏好持久化 - session restore", () => {
       messages: [],
       turns: [],
       items: [],
-      queued_turns: [],
     });
 
     const harness = mountHook(workspaceId);
@@ -130,7 +129,6 @@ describe("useAgentChat 偏好持久化 - session restore", () => {
         },
       ],
       items: [],
-      queued_turns: [],
       thread_read: {
         thread_id: "thread-transient-running",
         status: "running",
@@ -208,7 +206,6 @@ describe("useAgentChat 偏好持久化 - session restore", () => {
         },
       ],
       items: [],
-      queued_turns: [],
       thread_read: {
         thread_id: threadId,
         status: "running",
@@ -570,7 +567,6 @@ describe("useAgentChat 偏好持久化 - session restore", () => {
           ],
           turns: [],
           items: [],
-          queued_turns: [],
           execution_strategy: "react",
         };
       }
@@ -587,7 +583,6 @@ describe("useAgentChat 偏好持久化 - session restore", () => {
         ],
         turns: [],
         items: [],
-        queued_turns: [],
         execution_strategy: "react",
       };
     });

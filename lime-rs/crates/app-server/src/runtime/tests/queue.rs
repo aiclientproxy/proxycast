@@ -3,7 +3,7 @@ use super::*;
 use crate::runtime::session_control::QueuedTurnResume;
 
 #[tokio::test]
-async fn queue_session_controls_use_current_runtime_core_read_model() {
+async fn queued_turn_blocks_then_resumes_after_active_turn_completes() {
     let core = RuntimeCore::default();
     core.start_session(AgentSessionStartParams {
         session_id: Some("sess_queue".to_string()),
@@ -69,19 +69,6 @@ async fn queue_session_controls_use_current_runtime_core_read_model() {
         .iter()
         .any(|event| event.event_type == "queue.added"));
 
-    let promoted = core
-        .promote_agent_session_queued_turn(AgentSessionQueuedTurnPromoteParams {
-            session_id: "sess_queue".to_string(),
-            queued_turn_id: "turn_queued".to_string(),
-        })
-        .await
-        .expect("promote");
-    assert!(promoted.response.promoted);
-    assert_eq!(
-        promoted.response.turns[1].turn_id, "turn_queued",
-        "only one queued turn keeps its position after active turn"
-    );
-
     let blocked_resume = core
         .resume_next_queued_turn_if_idle("sess_queue", RuntimeHostContext::default())
         .await
@@ -112,38 +99,6 @@ async fn queue_session_controls_use_current_runtime_core_read_model() {
             panic!("queued turn helper did not start turn_queued")
         }
     }
-
-    let second_queued = core
-        .start_turn(
-            AgentSessionTurnStartParams {
-                session_id: "sess_queue".to_string(),
-                turn_id: Some("turn_remove".to_string()),
-                input: AgentInput {
-                    text: "remove".to_string(),
-                    attachments: Vec::new(),
-                },
-                runtime_options: None,
-                queue_if_busy: true,
-                skip_pre_submit_resume: false,
-            },
-            RuntimeHostContext::default(),
-        )
-        .await
-        .expect("second queued");
-    assert_eq!(second_queued.response.turn.status, AgentTurnStatus::Queued);
-    let removed = core
-        .remove_agent_session_queued_turn(AgentSessionQueuedTurnRemoveParams {
-            session_id: "sess_queue".to_string(),
-            queued_turn_id: "turn_remove".to_string(),
-        })
-        .await
-        .expect("remove queued");
-    assert!(removed.response.removed);
-    assert!(!removed
-        .response
-        .turns
-        .iter()
-        .any(|turn| turn.turn_id == "turn_remove"));
 }
 
 #[tokio::test]

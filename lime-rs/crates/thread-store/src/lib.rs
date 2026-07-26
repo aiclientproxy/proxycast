@@ -31,19 +31,57 @@ pub use types::{
     AppendThreadItemsParams, ApplyThreadHistoryParams, ApplyThreadHistoryResult,
     ArchiveThreadParams, ClearableField, CreateThreadParams, DeleteThreadParams, ItemPage,
     ListItemsParams, ListThreadsParams, ListTurnsParams, PageRequest, ReadThreadParams,
-    StoreCursor, ThreadMetadataPatch, ThreadPage, TurnPage, UpdateThreadMetadataParams,
+    SearchTextRange, SearchThreadOccurrencesParams, SearchThreadsParams, StoreCursor,
+    StoredThreadOccurrence, StoredThreadSearchResult, ThreadMetadataPatch,
+    ThreadOccurrenceSearchPage, ThreadPage, ThreadSearchPage, ThreadSearchSortKey,
+    ThreadSearchSourceKind, TurnPage, UpdateThreadMetadataParams,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThreadStoreErrorKind {
+    InvalidRequest,
+    Unsupported,
+    ThreadNotFound,
+    Internal,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ThreadStoreError {
+    kind: ThreadStoreErrorKind,
     message: String,
 }
 
 impl ThreadStoreError {
     pub fn new(message: impl Into<String>) -> Self {
         Self {
+            kind: ThreadStoreErrorKind::Internal,
             message: message.into(),
         }
+    }
+
+    pub fn invalid_request(message: impl Into<String>) -> Self {
+        Self {
+            kind: ThreadStoreErrorKind::InvalidRequest,
+            message: message.into(),
+        }
+    }
+
+    pub fn unsupported(message: impl Into<String>) -> Self {
+        Self {
+            kind: ThreadStoreErrorKind::Unsupported,
+            message: message.into(),
+        }
+    }
+
+    pub fn thread_not_found(message: impl Into<String>) -> Self {
+        Self {
+            kind: ThreadStoreErrorKind::ThreadNotFound,
+            message: message.into(),
+        }
+    }
+
+    pub fn kind(&self) -> ThreadStoreErrorKind {
+        self.kind
     }
 }
 

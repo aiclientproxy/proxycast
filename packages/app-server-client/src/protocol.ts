@@ -816,58 +816,6 @@ export type AgentSessionListResponse = {
   sessions: AgentSessionOverview[];
 };
 
-export type AgentSessionUpdateParams = {
-  sessionId: string;
-  title?: string;
-  providerSelector?: string;
-  providerName?: string;
-  modelName?: string;
-  executionStrategy?: string;
-  recentAccessMode?: string;
-  recentPreferences?: unknown;
-  articleWorkspaceSelectedObjectRef?: unknown;
-  articleWorkspaceEditedDraft?: unknown;
-};
-
-export type AgentSessionUpdateResponse = {
-  session: AgentSessionOverview;
-};
-
-export type AgentSessionCompactParams = {
-  sessionId: string;
-  eventName?: string;
-};
-
-export type AgentSessionCompactResponse = {
-  session: AgentSession;
-  turns: AgentTurn[];
-  compacted: boolean;
-};
-
-export type AgentSessionQueuedTurnRemoveParams = {
-  sessionId: string;
-  queuedTurnId: string;
-};
-
-export type AgentSessionQueuedTurnRemoveResponse = {
-  session: AgentSession;
-  turns: AgentTurn[];
-  queuedTurnId: string;
-  removed: boolean;
-};
-
-export type AgentSessionQueuedTurnPromoteParams = {
-  sessionId: string;
-  queuedTurnId: string;
-};
-
-export type AgentSessionQueuedTurnPromoteResponse = {
-  session: AgentSession;
-  turns: AgentTurn[];
-  queuedTurnId: string;
-  promoted: boolean;
-};
-
 export type AgentSessionFileCheckpointListParams = {
   sessionId: string;
 };

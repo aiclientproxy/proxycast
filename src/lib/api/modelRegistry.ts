@@ -22,6 +22,7 @@ import {
   type ModelNativeToolPolicyInput,
 } from "@/lib/model/modelNativeToolPolicy";
 import {
+  buildCatalogModelPickerPolicy,
   buildModelPickerPolicy,
   type ModelPickerPolicyInput,
 } from "@/lib/model/modelPickerPolicy";
@@ -31,6 +32,7 @@ import {
 } from "@/lib/model/modelReasoningOutputPolicy";
 import {
   buildModelReasoningPolicy,
+  type ModelReasoningEffortPreset,
   type ModelReasoningPolicyInput,
 } from "@/lib/model/modelReasoningPolicy";
 import {
@@ -47,11 +49,14 @@ import {
 } from "@/lib/model/modelTruncationPolicy";
 import type {
   EnhancedModelMetadata,
+  ModelReasoningEffortLevel,
+  ModelReasoningEffortSource,
+  ModelReasoningEffortSupport,
   ModelSyncState,
-  ModelTier,
   ProviderAliasConfig,
   UserModelPreference,
 } from "@/lib/types/modelRegistry";
+import { decodeModelRouteSelector } from "../../../packages/app-server-client/src/model-route";
 import {
   METHOD_MODEL_LIST,
   METHOD_MODEL_PREFERENCES_LIST,
@@ -60,6 +65,7 @@ import {
   METHOD_MODEL_PROVIDER_ALIAS_READ,
   METHOD_MODEL_PROVIDER_FETCH_MODELS,
   METHOD_MODEL_SYNC_STATE_READ,
+  type Model,
   type ModelInfo,
   type ModelListParams,
   type ModelListResponse,
@@ -90,6 +96,75 @@ type ModelProviderIdRecord = {
   id?: unknown;
 };
 
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function nonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function reasoningEffortPresetFromUnknown(
+  value: unknown,
+): ModelReasoningEffortPreset | null {
+  const source = recordValue(value);
+  if (!source) {
+    return null;
+  }
+  const canonicalValue = nonEmptyString(source.value);
+  if (!canonicalValue) {
+    return null;
+  }
+  return {
+    id: nonEmptyString(source.id) ?? canonicalValue,
+    value: canonicalValue,
+    label: nonEmptyString(source.label) ?? "",
+    description: nonEmptyString(source.description) ?? "",
+  };
+}
+
+function reasoningEffortSourceFromUnknown(
+  value: unknown,
+): ModelReasoningEffortSource | undefined {
+  return value === "api" || value === "registry" || value === "custom"
+    ? value
+    : undefined;
+}
+
+function reasoningEffortSupportFromUnknown(
+  value: unknown,
+): ModelReasoningEffortSupport | null {
+  const source = recordValue(value);
+  if (!source || typeof source.supported !== "boolean") {
+    return null;
+  }
+  const levels = Array.isArray(source.levels)
+    ? source.levels
+        .map(nonEmptyString)
+        .filter((level): level is ModelReasoningEffortLevel => level !== null)
+    : [];
+  const options = Array.isArray(source.options)
+    ? source.options
+        .map(reasoningEffortPresetFromUnknown)
+        .filter(
+          (option): option is ModelReasoningEffortPreset => option !== null,
+        )
+    : [];
+  return {
+    supported: source.supported,
+    levels,
+    options,
+    default: nonEmptyString(source.default),
+    source: reasoningEffortSourceFromUnknown(source.source),
+  };
+}
+
 function toSnakeModelInfo(model: ModelInfo): EnhancedModelMetadata {
   return {
     id: model.id,
@@ -105,10 +180,9 @@ function toSnakeModelInfo(model: ModelInfo): EnhancedModelMetadata {
       json_mode: Boolean(model.capabilities?.jsonMode),
       function_calling: Boolean(model.capabilities?.functionCalling),
       reasoning: Boolean(model.capabilities?.reasoning),
-      reasoning_effort:
-        (model.capabilities?.reasoningEffort as
-          | EnhancedModelMetadata["capabilities"]["reasoning_effort"]
-          | undefined) ?? null,
+      reasoning_effort: reasoningEffortSupportFromUnknown(
+        model.capabilities?.reasoningEffort,
+      ),
     },
     execution_policy: buildModelExecutionPolicy(
       model as ModelExecutionPolicyInput,
@@ -164,17 +238,114 @@ function toSnakeModelInfo(model: ModelInfo): EnhancedModelMetadata {
   };
 }
 
+function toRegistryModel(model: Model): EnhancedModelMetadata {
+  const route = decodeModelRouteSelector(model.id);
+  if (!route) {
+    throw new Error(
+      `App Server model/list returned invalid model id: ${model.id}`,
+    );
+  }
+  const reasoningOptions = model.supportedReasoningEfforts.map((option) => ({
+    id: option.reasoningEffort,
+    value: option.reasoningEffort,
+    label: option.description,
+    description: option.description,
+  }));
+  const reasoningEfforts = reasoningOptions.map((option) => option.value);
+  const reasoningSupported =
+    reasoningEfforts.some((effort) => effort !== "none") ||
+    model.defaultReasoningEffort !== "none";
+  const inputModalities =
+    model.inputModalities as EnhancedModelMetadata["input_modalities"];
+  const policyInput = {
+    serviceTiers: model.serviceTiers,
+    defaultServiceTier: model.defaultServiceTier,
+    defaultReasoningLevel: model.defaultReasoningEffort,
+    supportedReasoningLevels: reasoningOptions,
+    inputModalities: model.inputModalities,
+  };
+
+  return {
+    id: route.modelId,
+    display_name: model.displayName,
+    provider_id: route.providerId,
+    provider_name: route.providerId,
+    family: null,
+    tier: "pro",
+    capabilities: {
+      vision: model.inputModalities.includes("image"),
+      tools: false,
+      streaming: false,
+      json_mode: false,
+      function_calling: false,
+      reasoning: reasoningSupported,
+      reasoning_effort: {
+        supported: reasoningSupported,
+        levels: reasoningEfforts,
+        options: reasoningOptions,
+        default: model.defaultReasoningEffort,
+        source: "api",
+      },
+    },
+    execution_policy: buildModelExecutionPolicy({}),
+    context_policy: buildModelContextPolicy({}),
+    picker_policy: buildCatalogModelPickerPolicy(model.hidden, policyInput),
+    tool_call_policy: buildModelToolCallPolicy({}),
+    reasoning_policy: buildModelReasoningPolicy(policyInput),
+    reasoning_output_policy: buildModelReasoningOutputPolicy({}),
+    input_modality_policy: buildModelInputModalityPolicy(policyInput),
+    responses_policy: buildModelResponsesPolicy({}),
+    truncation_policy: buildModelTruncationPolicy({}),
+    native_tool_policy: buildModelNativeToolPolicy({}),
+    task_families: [
+      "chat",
+      ...(reasoningSupported ? (["reasoning"] as const) : []),
+      ...(model.inputModalities.includes("image")
+        ? (["vision_understanding"] as const)
+        : []),
+    ],
+    input_modalities: inputModalities,
+    output_modalities: ["text"],
+    runtime_features: [],
+    deployment_source: "user_cloud",
+    management_plane: "local_settings",
+    canonical_model_id: route.modelId,
+    provider_model_id: model.model,
+    alias_source: null,
+    pricing: null,
+    limits: {
+      context_length: null,
+      max_output_tokens: null,
+      requests_per_minute: null,
+      tokens_per_minute: null,
+    },
+    status: "active",
+    release_date: null,
+    is_latest: false,
+    description: model.description || null,
+    source: "api",
+    created_at: 0,
+    updated_at: 0,
+  };
+}
+
 function assertModelInfos(
   models: ModelInfo[] | null | undefined,
   method: string,
 ): EnhancedModelMetadata[] {
   if (!Array.isArray(models)) {
-    if (method === METHOD_MODEL_LIST) {
-      throw new Error("App Server model/list did not return models");
-    }
     throw new Error(`App Server ${method} did not return models`);
   }
   return models.map(toSnakeModelInfo);
+}
+
+function assertCatalogModels(
+  models: Model[] | null | undefined,
+): EnhancedModelMetadata[] {
+  if (!Array.isArray(models)) {
+    throw new Error("App Server model/list did not return data");
+  }
+  return models.map(toRegistryModel);
 }
 
 async function requestModelRegistryAppServer<T>(
@@ -187,17 +358,37 @@ async function requestModelRegistryAppServer<T>(
 }
 
 async function readModelsFromAppServer(
-  params: ModelListParams = {},
+  includeHidden = false,
 ): Promise<EnhancedModelMetadata[]> {
-  const response = await requestModelRegistryAppServer<ModelListResponse>(
-    METHOD_MODEL_LIST,
-    params,
-  );
-  return assertModelInfos(response.models, "model/list");
+  const models: EnhancedModelMetadata[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+
+  do {
+    const params: ModelListParams = {
+      ...(cursor ? { cursor } : {}),
+      ...(includeHidden ? { includeHidden: true } : {}),
+    };
+    const response = await requestModelRegistryAppServer<ModelListResponse>(
+      METHOD_MODEL_LIST,
+      params,
+    );
+    models.push(...assertCatalogModels(response.data));
+    cursor = response.nextCursor ?? null;
+    if (cursor && seenCursors.has(cursor)) {
+      throw new Error(`App Server model/list repeated cursor: ${cursor}`);
+    }
+    if (cursor) {
+      seenCursors.add(cursor);
+    }
+  } while (cursor);
+
+  return models;
 }
 
 interface ModelRegistryQueryOptions {
   forceRefresh?: boolean;
+  includeHidden?: boolean;
 }
 
 export interface FetchProviderModelsResult {
@@ -224,8 +415,11 @@ export function normalizeFetchProviderModelsSource(
   return result.source;
 }
 
-let modelRegistryCache: EnhancedModelMetadata[] | null = null;
-let modelRegistryLoadingPromise: Promise<EnhancedModelMetadata[]> | null = null;
+const modelRegistryCache = new Map<boolean, EnhancedModelMetadata[]>();
+const modelRegistryLoadingPromises = new Map<
+  boolean,
+  Promise<EnhancedModelMetadata[]>
+>();
 let allAliasConfigsCache: Record<string, ProviderAliasConfig> | null = null;
 let allAliasConfigsLoadingPromise: Promise<
   Record<string, ProviderAliasConfig>
@@ -255,8 +449,8 @@ function invalidateAliasConfigCache(): void {
 }
 
 export function invalidateModelRegistryCache(): void {
-  modelRegistryCache = null;
-  modelRegistryLoadingPromise = null;
+  modelRegistryCache.clear();
+  modelRegistryLoadingPromises.clear();
   invalidateAliasConfigCache();
 }
 
@@ -309,27 +503,32 @@ function modelPreferenceMutationUnavailable(operation: string): never {
 export async function getModelRegistry(
   options: ModelRegistryQueryOptions = {},
 ): Promise<EnhancedModelMetadata[]> {
+  const includeHidden = options.includeHidden === true;
   if (options.forceRefresh) {
-    modelRegistryCache = null;
-    modelRegistryLoadingPromise = null;
+    modelRegistryCache.delete(includeHidden);
+    modelRegistryLoadingPromises.delete(includeHidden);
   }
 
-  if (modelRegistryCache) {
-    return cloneValue(modelRegistryCache);
+  const cached = modelRegistryCache.get(includeHidden);
+  if (cached) {
+    return cloneValue(cached);
   }
 
-  if (!modelRegistryLoadingPromise) {
-    modelRegistryLoadingPromise = readModelsFromAppServer()
+  let loadingPromise = modelRegistryLoadingPromises.get(includeHidden);
+  if (!loadingPromise) {
+    loadingPromise = readModelsFromAppServer(includeHidden)
       .then((models) => {
-        modelRegistryCache = cloneValue(models);
-        return modelRegistryCache;
+        const snapshot = cloneValue(models);
+        modelRegistryCache.set(includeHidden, snapshot);
+        return snapshot;
       })
       .finally(() => {
-        modelRegistryLoadingPromise = null;
+        modelRegistryLoadingPromises.delete(includeHidden);
       });
+    modelRegistryLoadingPromises.set(includeHidden, loadingPromise);
   }
 
-  return cloneValue(await modelRegistryLoadingPromise);
+  return cloneValue(await loadingPromise);
 }
 
 export async function getModelRegistryProviderIds(): Promise<string[]> {
@@ -347,8 +546,8 @@ export async function getModelRegistryProviderIds(): Promise<string[]> {
  */
 export async function refreshModelRegistry(): Promise<number> {
   invalidateModelRegistryCache();
-  const models = await readModelsFromAppServer();
-  modelRegistryCache = cloneValue(models);
+  const models = await readModelsFromAppServer(false);
+  modelRegistryCache.set(false, cloneValue(models));
   return models.length;
 }
 
@@ -433,26 +632,6 @@ export async function getModelSyncState(): Promise<ModelSyncState> {
     throw new Error("App Server modelSyncState/read did not return syncState");
   }
   return response.syncState;
-}
-
-/**
- * 按 Provider 获取模型
- * @param providerId Provider ID
- */
-export async function getModelsForProvider(
-  providerId: string,
-): Promise<EnhancedModelMetadata[]> {
-  return readModelsFromAppServer({ providerId });
-}
-
-/**
- * 按服务等级获取模型
- * @param tier 服务等级
- */
-export async function getModelsByTier(
-  tier: ModelTier,
-): Promise<EnhancedModelMetadata[]> {
-  return readModelsFromAppServer({ tier });
 }
 
 export async function fetchProviderModelsAuto(
@@ -586,8 +765,6 @@ export const modelRegistryApi = {
   hideModel,
   recordModelUsage,
   getModelSyncState,
-  getModelsForProvider,
-  getModelsByTier,
   fetchProviderModelsAuto,
   normalizeFetchProviderModelsSource,
   getProviderAliasConfig,

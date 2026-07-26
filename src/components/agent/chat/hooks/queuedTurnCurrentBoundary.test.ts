@@ -24,6 +24,18 @@ const RETIRED_INPUTBAR_QUEUE_PATHS = [
   "src/components/agent/chat/components/Inputbar/components/QueuedTurnsPanel.test.tsx",
   "src/components/agent/chat/components/Inputbar/components/inputbarQueuedTurnsCopy.ts",
 ];
+const CURRENT_STEER_OWNER_PATH =
+  "src/components/agent/chat/hooks/agentStreamSubmitExecution.ts";
+const CURRENT_INPUTBAR_PATHS = [
+  "src/components/agent/chat/components/Inputbar/index.tsx",
+  "src/components/agent/chat/components/Inputbar/components/InputbarCore.tsx",
+  "src/components/agent/chat/components/Inputbar/components/InputbarComposerSection.tsx",
+];
+const RETIRED_QUEUED_TURN_SNAPSHOT_PATHS = [
+  "src/lib/api/queuedTurn.ts",
+  "src/lib/api/queuedTurn.test.ts",
+  "src/lib/api/queuedTurn.d.ts",
+];
 
 describe("queued turn current owner boundary", () => {
   it("已迁出的 Renderer/UI/send surface 不得重新读取 queued snapshot", () => {
@@ -49,5 +61,31 @@ describe("queued turn current owner boundary", () => {
       "utf8",
     );
     expect(inputbarCore).not.toContain("queuedTurns");
+  });
+
+  it("Renderer queued-turn 详细快照保持物理删除", () => {
+    for (const relativePath of RETIRED_QUEUED_TURN_SNAPSHOT_PATHS) {
+      expect(existsSync(join(cwd(), relativePath)), relativePath).toBe(false);
+    }
+  });
+
+  it("active turn 输入只走 typed turn/steer，不恢复 public queue 写平面", () => {
+    const submitExecution = readFileSync(
+      join(cwd(), CURRENT_STEER_OWNER_PATH),
+      "utf8",
+    );
+
+    expect(submitExecution).toContain("expectedTurnId");
+    expect(submitExecution).toContain("runtime.steerTurn(params)");
+    expect(submitExecution).not.toContain("queueIfBusy");
+    expect(submitExecution).not.toContain("promoteQueuedTurn");
+    expect(submitExecution).not.toContain("removeQueuedTurn");
+
+    for (const relativePath of CURRENT_INPUTBAR_PATHS) {
+      const source = readFileSync(join(cwd(), relativePath), "utf8");
+      expect(source, relativePath).not.toContain("inputbar-queued-turn");
+      expect(source, relativePath).not.toContain("onPromoteQueuedTurn");
+      expect(source, relativePath).not.toContain("onRemoveQueuedTurn");
+    }
   });
 });

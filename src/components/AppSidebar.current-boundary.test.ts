@@ -81,27 +81,20 @@ describe("AppSidebar current App Server session boundary", () => {
     expect(archiveHandler).not.toContain("agent_runtime_");
   });
 
-  it("agentRuntime session gateway 不应把 session update / delete 回流到 legacy command", () => {
+  it("agentRuntime session gateway 不应把 delete 回流到 legacy command", () => {
     const source = readSource("src/lib/api/agentRuntime/sessionClient.ts");
-    const updateFunction = sourceBetween(
-      source,
-      "async function updateAgentRuntimeSession(",
-      "async function deleteAgentRuntimeSession(",
-    );
     const deleteFunction = sourceBetween(
       source,
       "async function deleteAgentRuntimeSession(",
       "return {",
     );
 
-    expect(updateFunction).toContain(
-      "appServerSessionClient.updateAgentRuntimeSession(request)",
-    );
     expect(deleteFunction).toContain(
       "appServerSessionClient.deleteAgentRuntimeSession(sessionId)",
     );
     expect(deleteFunction).toContain('reason: "deleted"');
     expect(source).not.toContain('"agent_runtime_update_session"');
+    expect(source).not.toContain("updateAgentRuntimeSession");
     expect(source).not.toContain('"agent_runtime_delete_session"');
     expect(source).not.toContain("invokeCommand(");
   });
@@ -118,11 +111,6 @@ describe("AppSidebar current App Server session boundary", () => {
     const getFunction = sourceBetween(
       source,
       "async function getAgentRuntimeSession(",
-      "async function updateAgentRuntimeSession(",
-    );
-    const updateFunction = sourceBetween(
-      source,
-      "async function updateAgentRuntimeSession(",
       "async function archiveAgentRuntimeSession(",
     );
     const lifecycleFunctions = sourceBetween(
@@ -134,7 +122,7 @@ describe("AppSidebar current App Server session boundary", () => {
     expect(listFunction).toContain("listCanonicalSessionOverviews(");
     expect(source).toContain("METHOD_THREAD_LIST");
     expect(getFunction).toContain("appServerClient.readThread(");
-    expect(updateFunction).toContain("appServerClient.updateSession(");
+    expect(source).not.toContain("appServerClient.updateSession(");
     expect(lifecycleFunctions).toContain("appServerClient.archiveThread(");
     expect(lifecycleFunctions).toContain("appServerClient.unarchiveThread(");
     expect(lifecycleFunctions).toContain("resolveCanonicalThreadId(");

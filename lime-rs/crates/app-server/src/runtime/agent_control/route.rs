@@ -3,6 +3,7 @@ use app_server_protocol::{
     AgentSession, AuthKind, ProtocolKind, RuntimeOptions, RuntimeProviderConfig, RuntimeRequest,
 };
 use serde_json::json;
+use std::collections::HashSet;
 
 pub(super) const AGENT_CONTROL_ROUTE_KEY: &str = "agentControlRoute";
 const AGENT_CONTROL_ROUTE_SCHEMA_VERSION: u64 = 2;
@@ -24,11 +25,13 @@ fn normalize_route_snapshot(value: &serde_json::Value) -> Option<serde_json::Val
         "schemaVersion",
         "providerPreference",
         "modelPreference",
+        "serviceTier",
         "providerConfig",
         "routeProtocol",
         "authKind",
         "credentialRef",
         "effectiveGeneration",
+        "modelRegistry",
     ];
     if object
         .keys()
@@ -76,12 +79,14 @@ fn normalize_route_snapshot(value: &serde_json::Value) -> Option<serde_json::Val
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToString::to_string);
+    let model_registry = normalize_model_registry_snapshot(object.get("modelRegistry"));
     Some(json!({
         "schemaVersion": AGENT_CONTROL_ROUTE_SCHEMA_VERSION,
         "providerPreference": route_string(object, "providerPreference")
             .unwrap_or_else(|| provider_id.clone()),
         "modelPreference": route_string(object, "modelPreference")
             .unwrap_or_else(|| model_name.clone()),
+        "serviceTier": route_string(object, "serviceTier"),
         "providerConfig": {
             "providerId": provider_id,
             "providerName": provider_name,
@@ -96,7 +101,49 @@ fn normalize_route_snapshot(value: &serde_json::Value) -> Option<serde_json::Val
         "routeProtocol": route_protocol,
         "authKind": auth_kind,
         "credentialRef": credential_ref,
-        "effectiveGeneration": effective_generation
+        "effectiveGeneration": effective_generation,
+        "modelRegistry": model_registry
+    }))
+}
+
+fn normalize_model_registry_snapshot(
+    value: Option<&serde_json::Value>,
+) -> Option<serde_json::Value> {
+    let registry = value?.as_object()?;
+    if registry.get("status").and_then(serde_json::Value::as_str) != Some("matched") {
+        return None;
+    }
+    let model = registry.get("model")?.as_object()?;
+    let mut seen = HashSet::new();
+    let service_tiers = model
+        .get("service_tiers")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|tier| {
+            let tier = tier.as_object()?;
+            let id = route_string(tier, "id")?;
+            if !seen.insert(id.clone()) {
+                return None;
+            }
+            let name = route_string(tier, "name").unwrap_or_else(|| id.clone());
+            let description = route_string(tier, "description").unwrap_or_default();
+            Some(json!({
+                "id": id,
+                "name": name,
+                "description": description,
+            }))
+        })
+        .collect::<Vec<_>>();
+    let default_service_tier =
+        route_string(model, "default_service_tier").filter(|default| seen.contains(default));
+
+    Some(json!({
+        "status": "matched",
+        "model": {
+            "service_tiers": service_tiers,
+            "default_service_tier": default_service_tier,
+        }
     }))
 }
 
@@ -181,7 +228,25 @@ mod tests {
                         "routeProtocol": "openai_responses",
                         "authKind": "api_key_ref",
                         "credentialRef": "credential-1",
-                        "effectiveGeneration": 7
+                        "effectiveGeneration": 7,
+                        "modelRegistry": {
+                            "status": "matched",
+                            "endpoint": "https://user:token@example.test/v1?secret=1",
+                            "model": {
+                                "service_tiers": [
+                                    {
+                                        "id": "priority",
+                                        "name": "Priority",
+                                        "description": "Fast queue",
+                                        "apiKey": "catalog-secret"
+                                    },
+                                    { "id": "priority", "name": "Duplicate" },
+                                    { "name": "Missing id" }
+                                ],
+                                "default_service_tier": "priority",
+                                "base_url": "https://catalog-secret.example.test"
+                            }
+                        }
                     }
                 })),
                 ..RuntimeRequest::default()
@@ -195,6 +260,21 @@ mod tests {
         assert!(!encoded.contains("example.test"));
         assert!(!encoded.contains("baseUrl"));
         assert!(!encoded.contains("apiKeyPresent"));
+        assert!(!encoded.contains("catalog-secret"));
+        assert_eq!(
+            snapshot["modelRegistry"],
+            json!({
+                "status": "matched",
+                "model": {
+                    "service_tiers": [{
+                        "id": "priority",
+                        "name": "Priority",
+                        "description": "Fast queue"
+                    }],
+                    "default_service_tier": "priority"
+                }
+            })
+        );
     }
 
     #[test]

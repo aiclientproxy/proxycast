@@ -152,11 +152,11 @@ export async function runRightSurfaceVisualMatrix({
         toggleTestId: "task-center-files-toggle",
         rootTestId: RIGHT_SURFACE_ROOTS.files,
       }),
-    objectCanvas: await clickAndAssertRightSurface(page, options, {
-      surfaceKind: "objectCanvas",
-      toggleTestId: "task-center-object-canvas-toggle",
-      rootTestId: RIGHT_SURFACE_ROOTS.objectCanvas,
-    }),
+      objectCanvas: await clickAndAssertRightSurface(page, options, {
+        surfaceKind: "objectCanvas",
+        toggleTestId: "task-center-object-canvas-toggle",
+        rootTestId: RIGHT_SURFACE_ROOTS.objectCanvas,
+      }),
       expertInfo: await clickAndAssertRightSurface(page, options, {
         surfaceKind: "expertInfo",
         toggleTestId: "task-center-expert-info-toggle",
@@ -175,13 +175,14 @@ export async function runRightSurfaceVisualMatrix({
       }),
     };
   } catch (error) {
-    const toolbarAfterFailure =
-      await captureRightSurfaceToolbarDiagnostics(page).catch((diagnosticError) => ({
-        error:
-          diagnosticError instanceof Error
-            ? diagnosticError.message
-            : String(diagnosticError),
-      }));
+    const toolbarAfterFailure = await captureRightSurfaceToolbarDiagnostics(
+      page,
+    ).catch((diagnosticError) => ({
+      error:
+        diagnosticError instanceof Error
+          ? diagnosticError.message
+          : String(diagnosticError),
+    }));
     const diagnostic = sanitizeJson({
       requests: summarizeRightSurfaceRequests(requests),
       pendingBeforeClicks: summarizePendingList(pendingBeforeClicks.result),
@@ -335,12 +336,12 @@ async function captureRightSurfaceToolbarDiagnostics(page) {
         exists: Boolean(node),
         visible: Boolean(
           node &&
-            rect &&
-            rect.width > 8 &&
-            rect.height > 8 &&
-            style?.display !== "none" &&
-            style?.visibility !== "hidden" &&
-            Number(style?.opacity ?? "1") > 0,
+          rect &&
+          rect.width > 8 &&
+          rect.height > 8 &&
+          style?.display !== "none" &&
+          style?.visibility !== "hidden" &&
+          Number(style?.opacity ?? "1") > 0,
         ),
         rect: rect ? rectToJson(rect) : null,
       };
@@ -370,12 +371,14 @@ export async function clickAndAssertRightSurface(
     toggleTestId,
     rootTestId,
     screenshotName = null,
+    requireCanvasPanelFill = true,
   },
 ) {
   const toggle = await waitForRightSurfaceToggle(page, options, toggleTestId);
   await clickRightSurfaceToggle(page, toggleTestId);
   const opened = await waitForRightSurfaceSnapshot(page, options, {
     activeSurfaceKind,
+    requireCanvasPanelFill,
     surfaceKind,
     rootTestId,
   });
@@ -386,7 +389,12 @@ export async function clickAndAssertRightSurface(
     surfaceKind,
     rootTestId,
   });
-  assertRightSurfaceSnapshot(stable, surfaceKind, activeSurfaceKind);
+  assertRightSurfaceSnapshot(
+    stable,
+    surfaceKind,
+    activeSurfaceKind,
+    requireCanvasPanelFill,
+  );
   const screenshot = screenshotName
     ? await captureRightSurfaceScreenshot(page, options, screenshotName)
     : null;
@@ -504,7 +512,12 @@ async function clickRightSurfaceToggle(page, testId) {
 async function waitForRightSurfaceSnapshot(
   page,
   options,
-  { surfaceKind, activeSurfaceKind = surfaceKind, rootTestId },
+  {
+    surfaceKind,
+    activeSurfaceKind = surfaceKind,
+    requireCanvasPanelFill = true,
+    rootTestId,
+  },
 ) {
   const startedAt = Date.now();
   let lastSnapshot = null;
@@ -514,7 +527,14 @@ async function waitForRightSurfaceSnapshot(
       rootTestId,
     });
     lastSnapshot = snapshot;
-    if (isRightSurfaceSnapshotReady(snapshot, surfaceKind, activeSurfaceKind)) {
+    if (
+      isRightSurfaceSnapshotReady(
+        snapshot,
+        surfaceKind,
+        activeSurfaceKind,
+        requireCanvasPanelFill,
+      )
+    ) {
       return snapshot;
     }
     await sleep(options.intervalMs);
@@ -736,10 +756,12 @@ export function isRightSurfaceSnapshotReady(
   snapshot,
   surfaceKind,
   activeSurfaceKind = surfaceKind,
+  requireCanvasPanelFill = true,
 ) {
   const surfaceViewportReady =
     snapshot?.geometry?.rootFillsSurfaceViewport === true &&
     (surfaceKind === "articleWorkspace" ||
+      requireCanvasPanelFill === false ||
       snapshot?.geometry?.hostFillsCanvasPanel === true);
 
   return (
@@ -757,9 +779,15 @@ function assertRightSurfaceSnapshot(
   snapshot,
   surfaceKind,
   activeSurfaceKind = surfaceKind,
+  requireCanvasPanelFill = true,
 ) {
   assert(
-    isRightSurfaceSnapshotReady(snapshot, surfaceKind, activeSurfaceKind),
+    isRightSurfaceSnapshotReady(
+      snapshot,
+      surfaceKind,
+      activeSurfaceKind,
+      requireCanvasPanelFill,
+    ),
     `Right Surface stable snapshot 未保持目标 surface: ${surfaceKind}; snapshot=${JSON.stringify(
       sanitizeJson(snapshot),
     )}`,

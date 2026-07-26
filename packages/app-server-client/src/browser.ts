@@ -5,3 +5,4 @@ export * from "./request-client-methods.js";
 export * from "./connection.js";
 export * from "./agent-runtime.js";
 export * from "./server-notifications.js";
+export * from "./model-route.js";

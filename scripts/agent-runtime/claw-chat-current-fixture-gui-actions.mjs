@@ -424,6 +424,54 @@ async function clickInputbarSendButton(page, options, constraints = {}) {
   };
 }
 
+async function pressInputbarEnter(page, prompt, options, constraints = {}) {
+  const expectedSessionId = constraints.expectedSessionId ?? null;
+  const inputLocator = expectedSessionId
+    ? page.locator(buildInputSelector(expectedSessionId))
+    : page.locator(buildInputSelector(null)).first();
+  await inputLocator.waitFor({
+    state: "visible",
+    timeout: Math.min(options.timeoutMs, 10_000),
+  });
+  const beforePress = await page.evaluate(
+    ({ expectedPrompt, sessionId }) => {
+      const input = Array.from(
+        document.querySelectorAll('textarea[name="agent-chat-message"]'),
+      ).find(
+        (node) =>
+          node instanceof HTMLTextAreaElement &&
+          (!sessionId || node.dataset.sessionId === sessionId),
+      );
+      return {
+        expectedSessionId: sessionId,
+        textareaSessionId:
+          input instanceof HTMLTextAreaElement
+            ? input.dataset.sessionId || null
+            : null,
+        value: input instanceof HTMLTextAreaElement ? input.value : null,
+        disabled: input instanceof HTMLTextAreaElement ? input.disabled : null,
+      };
+    },
+    { expectedPrompt: prompt, sessionId: expectedSessionId },
+  );
+  assert(
+    beforePress.value === prompt &&
+      beforePress.disabled === false &&
+      (!expectedSessionId ||
+        beforePress.textareaSessionId === expectedSessionId),
+    `输入栏 Enter 提交不可用: ${JSON.stringify(sanitizeJson(beforePress))}`,
+  );
+  const clickedAt = new Date().toISOString();
+  await inputLocator.press("Enter");
+  return {
+    clicked: true,
+    clickedAt,
+    method: "inputbar-textarea-enter",
+    triggerSource: "enter",
+    sessionId: beforePress.textareaSessionId,
+  };
+}
+
 async function sampleInputbarSubmitState(
   page,
   prompt,
@@ -668,16 +716,20 @@ export async function sendPromptFromGui(
       ? await constraints.collectAfterFillStability({ afterFill })
       : null;
 
-  const sendReady = await waitForSendButtonReady(
-    page,
-    prompt,
-    options,
-    constraints,
-  );
+  const submitWithEnter = constraints.submitWithEnter === true;
+  const sendReady = submitWithEnter
+    ? {
+        promptVisibleInTextarea: afterFill.promptVisibleInTextarea,
+        submitMethod: "inputbar-textarea-enter",
+        textareaSessionId: afterFill.textareaSessionId,
+      }
+    : await waitForSendButtonReady(page, prompt, options, constraints);
   if (typeof constraints.beforeClick === "function") {
     await constraints.beforeClick({ afterFill, afterFillStability, sendReady });
   }
-  const clicked = await clickInputbarSendButton(page, options, constraints);
+  const clicked = submitWithEnter
+    ? await pressInputbarEnter(page, prompt, options, constraints)
+    : await clickInputbarSendButton(page, options, constraints);
   if (typeof constraints.afterClick === "function") {
     await constraints.afterClick({
       afterFill,

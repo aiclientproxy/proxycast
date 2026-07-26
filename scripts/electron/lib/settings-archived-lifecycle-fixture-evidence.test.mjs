@@ -24,13 +24,13 @@ function guiRequest(method) {
 function rawEvidence() {
   return {
     sidebarGuiArchive: {
-      requests: [guiRequest("thread/list")],
+      requests: [guiRequest("thread/list"), guiRequest("thread/archive")],
     },
     settingsGuiRestoreArchive: {
-      requests: [guiRequest("agentSession/update")],
+      requests: [guiRequest("thread/list")],
     },
     settingsGuiRestore: {
-      requests: [guiRequest("agentSession/update")],
+      requests: [guiRequest("thread/unarchive")],
     },
     persistedArchive: {
       requests: [{ method: "thread/read" }],
@@ -103,8 +103,13 @@ describe("Settings archived lifecycle Gate B evidence", () => {
     expect(
       summarizeSettingsArchivedLifecycleTrace(rawEvidence()),
     ).toMatchObject({
-      appServerIpcHitCount: 3,
-      methods: ["agentSession/update", "thread/list", "thread/read"],
+      appServerIpcHitCount: 4,
+      methods: [
+        "thread/archive",
+        "thread/list",
+        "thread/read",
+        "thread/unarchive",
+      ],
       missingMethods: [],
       invokeErrorCount: 0,
       legacyCommands: [],

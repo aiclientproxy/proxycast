@@ -30,7 +30,7 @@ import { syncAssistantAgentMessageContentPartFromThreadItem } from "./agentStrea
 import { syncMessageToolCallFromThreadItem } from "./agentStreamToolItemMessageSync";
 import { buildAgentStreamTurnStartedPendingItemUpdate } from "./agentStreamThreadItemController";
 import {
-  bindAssistantMessageToRuntimeTurn,
+  bindSubmissionMessagesToRuntimeTurn,
   extractVisibleTextFromAgentMessage,
 } from "./agentStreamRuntimeHandlerUtils";
 import { resolveAccumulatedFinalContentForCompletion } from "./agentStreamTextDeltaLifecycle";
@@ -185,9 +185,10 @@ export function handleAgentStreamTurnStartedEvent(params: {
   setters: RuntimeHandlerStateSetters;
 }): void {
   params.requestState.currentTurnId = params.event.turn.id;
-  bindAssistantMessageToRuntimeTurn(
+  bindSubmissionMessagesToRuntimeTurn(
     params.setters.setMessages,
     params.assistantMsgId,
+    params.pendingTurnKey,
     params.event.turn.id,
   );
   params.setters.setCurrentTurnId(params.event.turn.id);
@@ -221,16 +222,42 @@ export function handleAgentStreamThreadItemLifecycleEvent(params: {
     { type: "item_started" | "item_completed" | "item_updated" }
   >;
   pendingItemKey: string;
+  pendingTurnKey: string;
   requestState: StreamRequestState;
   shouldPreserveAssistantContent?: boolean;
   setters: RuntimeHandlerStateSetters;
 }): void {
   params.requestState.currentTurnId = params.event.item.turn_id;
-  bindAssistantMessageToRuntimeTurn(
+  bindSubmissionMessagesToRuntimeTurn(
     params.setters.setMessages,
     params.assistantMsgId,
+    params.pendingTurnKey,
     params.event.item.turn_id,
   );
+  params.setters.setCurrentTurnId(params.event.item.turn_id);
+  params.setters.setThreadTurns((prev) => {
+    const pendingTurn = prev.find((turn) => turn.id === params.pendingTurnKey);
+    if (!pendingTurn || pendingTurn.id === params.event.item.turn_id) {
+      return prev;
+    }
+
+    const turnsWithoutPending = removeThreadTurnState(
+      prev,
+      params.pendingTurnKey,
+    );
+    if (
+      turnsWithoutPending.some((turn) => turn.id === params.event.item.turn_id)
+    ) {
+      return turnsWithoutPending;
+    }
+
+    return upsertThreadTurnState(turnsWithoutPending, {
+      ...pendingTurn,
+      id: params.event.item.turn_id,
+      thread_id: params.event.item.thread_id || pendingTurn.thread_id,
+      updated_at: params.event.item.updated_at || pendingTurn.updated_at,
+    });
+  });
   let nextThreadItemsForSync: readonly AgentThreadItem[] =
     params.setters.getThreadItems?.() ?? [];
   params.setters.setThreadItems((prev) => {
@@ -300,9 +327,10 @@ export function handleAgentStreamTurnCompletedEvent(params: {
   toolCallCount: number;
 }): void {
   params.requestState.currentTurnId = params.event.turn.id;
-  bindAssistantMessageToRuntimeTurn(
+  bindSubmissionMessagesToRuntimeTurn(
     params.setters.setMessages,
     params.assistantMsgId,
+    params.pendingTurnKey,
     params.event.turn.id,
   );
   params.setters.setThreadTurns((prev) =>
@@ -392,9 +420,10 @@ export function handleAgentStreamTurnCanceledEvent(params: {
   pendingTurnKey: string;
   setters: RuntimeHandlerStateSetters;
 }): void {
-  bindAssistantMessageToRuntimeTurn(
+  bindSubmissionMessagesToRuntimeTurn(
     params.setters.setMessages,
     params.assistantMsgId,
+    params.pendingTurnKey,
     params.event.turn.id,
   );
   params.setters.setThreadTurns((prev) =>
@@ -420,9 +449,10 @@ export function handleAgentStreamTurnFailedEvent(params: {
   setters: RuntimeHandlerStateSetters;
   toolCallCount: number;
 }): void {
-  bindAssistantMessageToRuntimeTurn(
+  bindSubmissionMessagesToRuntimeTurn(
     params.setters.setMessages,
     params.assistantMsgId,
+    params.pendingTurnKey,
     params.event.turn.id,
   );
   params.setters.setThreadTurns((prev) =>

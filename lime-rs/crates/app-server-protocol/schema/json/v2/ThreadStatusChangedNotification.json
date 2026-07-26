@@ -1,0 +1,86 @@
+{
+  "$defs": {
+    "ThreadActiveFlag": {
+      "enum": [
+        "waitingOnApproval",
+        "waitingOnUserInput"
+      ],
+      "type": "string"
+    },
+    "ThreadStatus": {
+      "description": "Canonical v2 thread status.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "notLoaded",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "idle",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "systemError",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "activeFlags": {
+              "items": {
+                "$ref": "#/$defs/ThreadActiveFlag"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "active",
+              "type": "string"
+            }
+          },
+          "required": [
+            "activeFlags",
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "status": {
+      "$ref": "#/$defs/ThreadStatus"
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "threadId"
+  ],
+  "title": "ThreadStatusChangedNotification",
+  "type": "object"
+}

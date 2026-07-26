@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { AgentRuntimeUpdateSessionRequest } from "@/lib/api/agentRuntime/requestTypes";
+import type { AgentSessionExecutionRuntimePreferences } from "@/lib/api/agentExecutionRuntime";
 import type { Artifact } from "@/lib/artifact/types";
 import {
   normalizeArtifactProtocolPath,
@@ -67,8 +67,8 @@ export interface SessionRecentMetadataSyncOptions {
 }
 
 export type SessionRecentMetadataPatch = Pick<
-  AgentRuntimeUpdateSessionRequest,
-  "recent_preferences"
+  AgentSessionExecutionRuntimePreferences,
+  "webSearch" | "thinking" | "task" | "subagent"
 >;
 
 export interface PendingSessionRecentMetadataSync {

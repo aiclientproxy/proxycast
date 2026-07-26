@@ -909,6 +909,7 @@ fn request_with_metadata(metadata: Value) -> ExecutionRequest {
             started_at: None,
             completed_at: None,
         },
+        forked_from_thread_id: None,
         input: agent_runtime::reply_input::RuntimeReplyInput::text("画一张广州夏天的图"),
         runtime_options: Some(RuntimeOptions {
             stream: true,

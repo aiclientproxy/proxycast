@@ -119,6 +119,7 @@ pub(in crate::runtime_backend) fn session_config_from_request(
         session_id: scope.session_id.clone(),
         thread_id: scope.thread_id.clone(),
         turn_id: scope.turn_id.clone(),
+        forked_from_thread_id: request.forked_from_thread_id.clone(),
         max_turns: harness_max_provider_steps(runtime_metadata),
         provider_token_budget: harness_provider_token_budget(runtime_metadata),
         system_prompt,

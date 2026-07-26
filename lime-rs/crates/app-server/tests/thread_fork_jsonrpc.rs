@@ -13,9 +13,10 @@ use app_server::{
 };
 use app_server_protocol::protocol::v2::{
     METHOD_THREAD_DELETE, METHOD_THREAD_FORK, METHOD_THREAD_GOAL_GET, METHOD_THREAD_GOAL_SET,
+    METHOD_THREAD_LIST,
 };
 use app_server_protocol::{
-    METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ, METHOD_THREAD_RESUME,
+    error_codes, METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ, METHOD_THREAD_RESUME,
     METHOD_THREAD_START, METHOD_TURN_START,
 };
 use async_trait::async_trait;
@@ -224,6 +225,55 @@ fn canonical_tool_payload(
     item.item_id = ItemId::new("source-tool-item");
     item.status = status;
     json!({"item": item})
+}
+
+#[tokio::test]
+async fn thread_fork_rejects_paginated_source_before_creating_target() {
+    let temp = TempDir::new().expect("paginated fork temp dir");
+    let projection_path = temp.path().join("projection.sqlite");
+    let server = AppServer::with_runtime(
+        RuntimeCore::with_backend(Arc::new(ImmediateBackend)).with_projection_store(Arc::new(
+            ProjectionStore::initialize(&projection_path).expect("paginated fork store"),
+        )),
+    );
+    initialize(&server, 1).await;
+
+    let started = request(
+        &server,
+        2,
+        METHOD_THREAD_START,
+        json!({
+            "model": "fixture-model",
+            "modelProvider": "fixture-provider",
+            "cwd": temp.path(),
+            "historyMode": "paginated"
+        }),
+    )
+    .await;
+    let source_thread_id = required_string(&started, "/result/thread/id");
+    let before = request(&server, 3, METHOD_THREAD_LIST, json!({"archived": false})).await;
+
+    let error = request_error(
+        &server,
+        4,
+        METHOD_THREAD_FORK,
+        json!({"threadId": source_thread_id}),
+    )
+    .await;
+    assert_eq!(
+        error.pointer("/error/code"),
+        Some(&json!(error_codes::METHOD_NOT_FOUND))
+    );
+    assert_eq!(
+        error.pointer("/error/message"),
+        Some(&json!("paginated_threads is not supported yet"))
+    );
+
+    let after = request(&server, 5, METHOD_THREAD_LIST, json!({"archived": false})).await;
+    assert_eq!(
+        after.pointer("/result/data"),
+        before.pointer("/result/data")
+    );
 }
 
 #[tokio::test]
@@ -693,9 +743,33 @@ async fn thread_fork_rebuilds_provider_history_across_restarts_without_duplicate
 
     let restarted_again = AppServer::with_runtime(runtime());
     initialize(&restarted_again, 320).await;
-    request(
+    let cold_turn = request_error(
         &restarted_again,
         321,
+        METHOD_TURN_START,
+        json!({
+            "threadId": target_thread_id,
+            "input": [{"type": "text", "text": "second target prompt"}],
+            "model": "fixture-model",
+            "approvalPolicy": "never",
+            "sandboxPolicy": "workspace-write"
+        }),
+    )
+    .await;
+    assert_eq!(
+        cold_turn.pointer("/error/code"),
+        Some(&json!(error_codes::INVALID_REQUEST))
+    );
+    request(
+        &restarted_again,
+        322,
+        METHOD_THREAD_RESUME,
+        json!({"threadId": target_thread_id}),
+    )
+    .await;
+    request(
+        &restarted_again,
+        323,
         METHOD_TURN_START,
         json!({
             "threadId": target_thread_id,

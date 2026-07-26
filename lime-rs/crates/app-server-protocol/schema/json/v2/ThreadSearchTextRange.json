@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "end": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "start": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "end",
+    "start"
+  ],
+  "title": "ThreadSearchTextRange",
+  "type": "object"
+}

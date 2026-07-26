@@ -83,7 +83,7 @@ workflow step / connector / hook / tool / evidence 的审计事实由 Lime 宿�
 
 如果新增业务对象，先扩 `app.workbench.yaml` 的 `productionObjects / objectSurfaces`，再扩 schema 和样例。
 
-`selectedObjectRef` 表示 App 输出 workspace patch 时建议宿主默认打开的对象。用户在 Lime 右侧 Article Workspace 内点击切换对象后，由宿主通过 `agentSession/update.articleWorkspaceSelectedObjectRef` 写回 session metadata；内容工厂 App 不需要也不应该为 UI selection 新增独立命令。
+`selectedObjectRef` 表示 App 输出 workspace patch 时建议宿主默认打开的对象。用户在 Lime 右侧 Article Workspace 内点击切换对象时，瞬时选择由 Renderer 本地维护；需要持久化时，宿主通过 `artifact/write` 写入包含完整 `workspacePatch` 和最新 `selectedObjectRef` 的 artifact snapshot。选择状态不写入 session metadata，内容工厂 App 也不需要为 UI selection 新增独立命令。
 
 ## 右侧预览字段
 

@@ -19,10 +19,6 @@
       "method": "agentSession/analysisHandoff/export"
     },
     {
-      "kind": "request",
-      "method": "agentSession/compact"
-    },
-    {
       "kind": "notification",
       "method": "agentSession/event"
     },
@@ -52,14 +48,6 @@
     },
     {
       "kind": "request",
-      "method": "agentSession/queuedTurn/promote"
-    },
-    {
-      "kind": "request",
-      "method": "agentSession/queuedTurn/remove"
-    },
-    {
-      "kind": "request",
       "method": "agentSession/replayCase/export"
     },
     {
@@ -73,10 +61,6 @@
     {
       "kind": "request",
       "method": "agentSession/toolInventory/read"
-    },
-    {
-      "kind": "request",
-      "method": "agentSession/update"
     },
     {
       "kind": "request",
@@ -647,8 +631,16 @@
       "method": "model/list"
     },
     {
+      "kind": "notification",
+      "method": "model/safetyBuffering/updated"
+    },
+    {
       "kind": "request",
       "method": "modelPreferences/list"
+    },
+    {
+      "kind": "request",
+      "method": "modelProvider/capabilities/read"
     },
     {
       "kind": "request",
@@ -1004,11 +996,39 @@
     },
     {
       "kind": "request",
+      "method": "thread/approveGuardianDeniedAction"
+    },
+    {
+      "kind": "request",
       "method": "thread/archive"
     },
     {
       "kind": "notification",
       "method": "thread/archived"
+    },
+    {
+      "kind": "request",
+      "method": "thread/backgroundTerminals/clean"
+    },
+    {
+      "kind": "request",
+      "method": "thread/backgroundTerminals/list"
+    },
+    {
+      "kind": "request",
+      "method": "thread/backgroundTerminals/terminate"
+    },
+    {
+      "kind": "notification",
+      "method": "thread/closed"
+    },
+    {
+      "kind": "request",
+      "method": "thread/compact/start"
+    },
+    {
+      "kind": "request",
+      "method": "thread/decrement_elicitation"
     },
     {
       "kind": "request",
@@ -1044,6 +1064,14 @@
     },
     {
       "kind": "request",
+      "method": "thread/increment_elicitation"
+    },
+    {
+      "kind": "request",
+      "method": "thread/inject_items"
+    },
+    {
+      "kind": "request",
       "method": "thread/items/list"
     },
     {
@@ -1052,7 +1080,23 @@
     },
     {
       "kind": "request",
+      "method": "thread/loaded/list"
+    },
+    {
+      "kind": "request",
       "method": "thread/memoryMode/set"
+    },
+    {
+      "kind": "request",
+      "method": "thread/metadata/update"
+    },
+    {
+      "kind": "request",
+      "method": "thread/name/set"
+    },
+    {
+      "kind": "notification",
+      "method": "thread/name/updated"
     },
     {
       "kind": "request",
@@ -1061,6 +1105,14 @@
     {
       "kind": "request",
       "method": "thread/resume"
+    },
+    {
+      "kind": "request",
+      "method": "thread/search"
+    },
+    {
+      "kind": "request",
+      "method": "thread/searchOccurrences"
     },
     {
       "kind": "request",
@@ -1084,6 +1136,10 @@
     },
     {
       "kind": "notification",
+      "method": "thread/status/changed"
+    },
+    {
+      "kind": "notification",
       "method": "thread/tokenUsage/updated"
     },
     {
@@ -1097,6 +1153,10 @@
     {
       "kind": "notification",
       "method": "thread/unarchived"
+    },
+    {
+      "kind": "request",
+      "method": "thread/unsubscribe"
     },
     {
       "kind": "notification",
@@ -1298,14 +1358,6 @@
   "protocolVersion": "appserver.v0",
   "requestSerializationScopes": [
     {
-      "method": "agentSession/queuedTurn/promote",
-      "scope": "thread"
-    },
-    {
-      "method": "agentSession/queuedTurn/remove",
-      "scope": "thread"
-    },
-    {
       "method": "artifact/write",
       "scope": "thread"
     },
@@ -1386,7 +1438,31 @@
       "scope": "projectShellSession"
     },
     {
+      "method": "thread/approveGuardianDeniedAction",
+      "scope": "thread"
+    },
+    {
       "method": "thread/archive",
+      "scope": "thread"
+    },
+    {
+      "method": "thread/backgroundTerminals/clean",
+      "scope": "thread"
+    },
+    {
+      "method": "thread/backgroundTerminals/list",
+      "scope": "thread"
+    },
+    {
+      "method": "thread/backgroundTerminals/terminate",
+      "scope": "thread"
+    },
+    {
+      "method": "thread/compact/start",
+      "scope": "thread"
+    },
+    {
+      "method": "thread/decrement_elicitation",
       "scope": "thread"
     },
     {
@@ -1403,6 +1479,14 @@
     },
     {
       "method": "thread/goal/set",
+      "scope": "thread"
+    },
+    {
+      "method": "thread/increment_elicitation",
+      "scope": "thread"
+    },
+    {
+      "method": "thread/inject_items",
       "scope": "thread"
     },
     {
@@ -1435,6 +1519,10 @@
     },
     {
       "method": "thread/unarchive",
+      "scope": "thread"
+    },
+    {
+      "method": "thread/unsubscribe",
       "scope": "thread"
     },
     {
@@ -1471,8 +1559,6 @@
       "AgentSessionActionType",
       "AgentSessionAnalysisHandoffExportParams",
       "AgentSessionAnalysisHandoffExportResponse",
-      "AgentSessionCompactParams",
-      "AgentSessionCompactResponse",
       "AgentSessionEventParams",
       "AgentSessionFileCheckpointDetail",
       "AgentSessionFileCheckpointDiffParams",
@@ -1492,10 +1578,6 @@
       "AgentSessionMediaReadParams",
       "AgentSessionMediaReadResponse",
       "AgentSessionOverview",
-      "AgentSessionQueuedTurnPromoteParams",
-      "AgentSessionQueuedTurnPromoteResponse",
-      "AgentSessionQueuedTurnRemoveParams",
-      "AgentSessionQueuedTurnRemoveResponse",
       "AgentSessionReadParams",
       "AgentSessionReadResponse",
       "AgentSessionReplayCaseExportParams",
@@ -1513,8 +1595,6 @@
       "AgentSessionTurnCancelResponse",
       "AgentSessionTurnStartParams",
       "AgentSessionTurnStartResponse",
-      "AgentSessionUpdateParams",
-      "AgentSessionUpdateResponse",
       "AgentThreadContentReference",
       "AgentThreadMessageContentPart",
       "AgentTurn",
@@ -1778,8 +1858,6 @@
       "MemoryStoreSearchResponse",
       "ModelCapabilitiesInfo",
       "ModelInfo",
-      "ModelListParams",
-      "ModelListResponse",
       "ModelPreferencesListResponse",
       "ModelProviderAliasListResponse",
       "ModelProviderAliasReadParams",
@@ -1814,8 +1892,11 @@
       "ModelProviderUiStateWriteParams",
       "ModelProviderUpdateParams",
       "ModelProviderWriteResponse",
+      "ModelReasoningEffortOptionInfo",
+      "ModelReasoningEffortSupportInfo",
       "ModelRef",
       "ModelRefSource",
+      "ModelServiceTierInfo",
       "ModelSyncStateReadResponse",
       "ModelTaskKind",
       "ModelTaskRequest",
@@ -2110,6 +2191,7 @@
       "HookPromptFragment",
       "ImageGenerationItem",
       "InitializeCapabilities",
+      "InputModality",
       "ItemCompletedNotification",
       "ItemStartedNotification",
       "McpServerElicitationAction",
@@ -2121,9 +2203,19 @@
       "MemoryCitation",
       "MemoryCitationEntry",
       "Method",
+      "Model",
+      "ModelAvailabilityNux",
+      "ModelListParams",
+      "ModelListResponse",
+      "ModelProviderCapabilitiesReadParams",
+      "ModelProviderCapabilitiesReadResponse",
+      "ModelSafetyBufferingUpdatedNotification",
+      "ModelServiceTier",
+      "ModelUpgradeInfo",
       "PatchApplyStatus",
       "PatchChangeKind",
       "PlanDeltaNotification",
+      "ReasoningEffortOption",
       "ReasoningSummaryPartAddedNotification",
       "ReasoningSummaryTextDeltaNotification",
       "ReasoningTextDeltaNotification",
@@ -2135,9 +2227,23 @@
       "SubAgentActivityKind",
       "Thread",
       "ThreadActiveFlag",
+      "ThreadApproveGuardianDeniedActionParams",
+      "ThreadApproveGuardianDeniedActionResponse",
       "ThreadArchiveParams",
       "ThreadArchiveResponse",
       "ThreadArchivedNotification",
+      "ThreadBackgroundTerminal",
+      "ThreadBackgroundTerminalsCleanParams",
+      "ThreadBackgroundTerminalsCleanResponse",
+      "ThreadBackgroundTerminalsListParams",
+      "ThreadBackgroundTerminalsListResponse",
+      "ThreadBackgroundTerminalsTerminateParams",
+      "ThreadBackgroundTerminalsTerminateResponse",
+      "ThreadClosedNotification",
+      "ThreadCompactStartParams",
+      "ThreadCompactStartResponse",
+      "ThreadDecrementElicitationParams",
+      "ThreadDecrementElicitationResponse",
       "ThreadDeleteParams",
       "ThreadDeleteResponse",
       "ThreadDeletedNotification",
@@ -2154,6 +2260,10 @@
       "ThreadGoalStatus",
       "ThreadGoalUpdatedNotification",
       "ThreadHistoryMode",
+      "ThreadIncrementElicitationParams",
+      "ThreadIncrementElicitationResponse",
+      "ThreadInjectItemsParams",
+      "ThreadInjectItemsResponse",
       "ThreadItem",
       "ThreadItemEntry",
       "ThreadItemsListParams",
@@ -2161,14 +2271,29 @@
       "ThreadListCwdFilter",
       "ThreadListParams",
       "ThreadListResponse",
+      "ThreadLoadedListParams",
+      "ThreadLoadedListResponse",
       "ThreadMemoryMode",
       "ThreadMemoryModeSetParams",
       "ThreadMemoryModeSetResponse",
+      "ThreadMetadataGitInfoUpdateParams",
+      "ThreadMetadataUpdateParams",
+      "ThreadMetadataUpdateResponse",
+      "ThreadNameUpdatedNotification",
       "ThreadReadParams",
       "ThreadReadResponse",
       "ThreadResumeInitialTurnsPageParams",
       "ThreadResumeParams",
       "ThreadResumeResponse",
+      "ThreadSearchOccurrence",
+      "ThreadSearchOccurrencesParams",
+      "ThreadSearchOccurrencesResponse",
+      "ThreadSearchParams",
+      "ThreadSearchResponse",
+      "ThreadSearchResult",
+      "ThreadSearchTextRange",
+      "ThreadSetNameParams",
+      "ThreadSetNameResponse",
       "ThreadSettings",
       "ThreadSettingsUpdateParams",
       "ThreadSettingsUpdateResponse",
@@ -2182,6 +2307,7 @@
       "ThreadStartSource",
       "ThreadStartedNotification",
       "ThreadStatus",
+      "ThreadStatusChangedNotification",
       "ThreadTokenUsage",
       "ThreadTokenUsageUpdatedNotification",
       "ThreadTurnsListParams",
@@ -2189,6 +2315,9 @@
       "ThreadUnarchiveParams",
       "ThreadUnarchiveResponse",
       "ThreadUnarchivedNotification",
+      "ThreadUnsubscribeParams",
+      "ThreadUnsubscribeResponse",
+      "ThreadUnsubscribeStatus",
       "TokenUsageBreakdown",
       "ToolRequestUserInputAnswer",
       "ToolRequestUserInputOption",

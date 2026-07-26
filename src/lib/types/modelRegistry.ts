@@ -10,7 +10,11 @@ import type { ModelInputModalityPolicy } from "@/lib/model/modelInputModalityPol
 import type { ModelNativeToolPolicy } from "@/lib/model/modelNativeToolPolicy";
 import type { ModelPickerPolicy } from "@/lib/model/modelPickerPolicy";
 import type { ModelReasoningOutputPolicy } from "@/lib/model/modelReasoningOutputPolicy";
-import type { ModelReasoningPolicy } from "@/lib/model/modelReasoningPolicy";
+import type {
+  ModelReasoningEffort,
+  ModelReasoningEffortPreset,
+  ModelReasoningPolicy,
+} from "@/lib/model/modelReasoningPolicy";
 import type { ModelResponsesPolicy } from "@/lib/model/modelResponsesPolicy";
 import type { ModelToolCallPolicy } from "@/lib/model/modelToolCallPolicy";
 import type { ModelTruncationPolicy } from "@/lib/model/modelTruncationPolicy";
@@ -34,20 +38,13 @@ export interface ModelCapabilities {
 }
 
 /** 模型推理强度档位 */
-export type ModelReasoningEffortLevel =
-  | "none"
-  | "minimal"
-  | "low"
-  | "medium"
-  | "high"
-  | "xhigh";
+export type ModelReasoningEffortLevel = ModelReasoningEffort;
 
 /** 推理强度能力来源 */
 export type ModelReasoningEffortSource =
   | "api"
   | "registry"
-  | "custom"
-  | "inferred";
+  | "custom";
 
 /** 模型推理强度能力 */
 export interface ModelReasoningEffortSupport {
@@ -55,6 +52,8 @@ export interface ModelReasoningEffortSupport {
   supported: boolean;
   /** 支持的档位 */
   levels: ModelReasoningEffortLevel[];
+  /** 模型声明的菜单项；value 是唯一可提交的 provider wire value */
+  options: ModelReasoningEffortPreset[];
   /** 默认档位 */
   default?: ModelReasoningEffortLevel | null;
   /** 能力来源 */

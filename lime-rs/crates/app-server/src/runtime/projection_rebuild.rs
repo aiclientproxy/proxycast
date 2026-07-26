@@ -240,7 +240,9 @@ fn projected_item_payload(item: &ThreadItem) -> (&'static str, Value) {
                 "canonical": identity,
             }),
         ),
-        ThreadItemPayload::ContextCompaction { summary, window_id } => (
+        ThreadItemPayload::ContextCompaction {
+            summary, window_id, ..
+        } => (
             "context.compaction.completed",
             json!({
                 "text": summary,

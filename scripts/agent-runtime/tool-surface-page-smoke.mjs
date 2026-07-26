@@ -70,7 +70,7 @@ const APP_SERVER_DRAIN_EVENTS_COMMAND = "app_server_drain_events";
 const APP_SERVER_METHOD_INITIALIZE = "initialize";
 const APP_SERVER_METHOD_INITIALIZED = "initialized";
 const APP_SERVER_METHOD_THREAD_START = "thread/start";
-const APP_SERVER_METHOD_AGENT_SESSION_UPDATE = "agentSession/update";
+const APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE = "thread/settings/update";
 const APP_SERVER_METHOD_THREAD_READ = "thread/read";
 const APP_SERVER_METHOD_THREAD_LIST = "thread/list";
 const APP_SERVER_METHOD_TURN_START = "turn/start";
@@ -919,6 +919,29 @@ function buildCodeRuntimeModelFixture() {
   };
 }
 
+function buildCodeRuntimeCatalogModelFixture() {
+  const encodeRoutePart = (value) =>
+    Buffer.from(value, "utf8").toString("base64url");
+  return {
+    id: `route:${encodeRoutePart(CODE_FIXTURE_PROVIDER_ID)}.${encodeRoutePart(CODE_FIXTURE_MODEL_ID)}`,
+    model: CODE_FIXTURE_MODEL_ID,
+    upgrade: null,
+    upgradeInfo: null,
+    availabilityNux: null,
+    displayName: "GPT-5 Reasoning Smoke",
+    description: "Smoke fixture model for natural-language code runtime.",
+    hidden: false,
+    supportedReasoningEfforts: [],
+    defaultReasoningEffort: "none",
+    inputModalities: ["text", "image"],
+    supportsPersonality: false,
+    additionalSpeedTiers: [],
+    serviceTiers: [],
+    defaultServiceTier: null,
+    isDefault: false,
+  };
+}
+
 function deriveBridgeEventsUrl(invokeUrl) {
   const url = new URL(invokeUrl);
   if (url.pathname.endsWith("/invoke")) {
@@ -1382,7 +1405,8 @@ async function installCodeRuntimeDevBridgeFixture(page, options) {
         });
       case "model/list":
         return buildAppServerJsonRpcResult(message.id, {
-          models: [modelFixture],
+          data: [buildCodeRuntimeCatalogModelFixture()],
+          nextCursor: null,
         });
       case "modelPreferences/list":
         return buildAppServerJsonRpcResult(message.id, {
@@ -1424,10 +1448,8 @@ async function installCodeRuntimeDevBridgeFixture(page, options) {
           session: buildAppServerSessionFromFixture(fixture, "idle"),
         });
       }
-      case APP_SERVER_METHOD_AGENT_SESSION_UPDATE:
-        return buildAppServerJsonRpcResult(message.id, {
-          session: buildAppServerSessionOverviewFromFixture(fixture),
-        });
+      case APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE:
+        return buildAppServerJsonRpcResult(message.id, {});
       case APP_SERVER_METHOD_THREAD_LIST:
         return buildAppServerJsonRpcResult(message.id, {
           sessions: sessionCreated
@@ -2805,10 +2827,7 @@ async function main() {
         async () => {
           const diagnostics = fixtureRuntime.getDiagnostics();
           if (
-            hasAppServerMethodCount(
-              diagnostics,
-              APP_SERVER_METHOD_TURN_START,
-            )
+            hasAppServerMethodCount(diagnostics, APP_SERVER_METHOD_TURN_START)
           ) {
             return {
               ok: true,
@@ -2856,10 +2875,7 @@ async function main() {
         submitDiagnostics.submitTurnRequests.length - 1
       ] || null;
     assert(
-      hasAppServerMethodCount(
-        submitDiagnostics,
-        APP_SERVER_METHOD_TURN_START,
-      ),
+      hasAppServerMethodCount(submitDiagnostics, APP_SERVER_METHOD_TURN_START),
       `自然语言任务未提交到 App Server JSON-RPC: ${JSON.stringify(
         submitCommand ?? null,
       )}`,

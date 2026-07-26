@@ -13,6 +13,7 @@ impl RequestProcessor {
         self.ensure_initialized()?;
         let params: ThreadSettingsUpdateParams = parse_params(params)?;
         let thread_id = params.thread_id.clone();
+        self.ensure_direct_input_allowed(&thread_id).await?;
         let thread_settings = self
             .runtime
             .update_thread_settings(params)
@@ -34,6 +35,7 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: ThreadMemoryModeSetParams = parse_params(params)?;
+        self.ensure_direct_input_allowed(&params.thread_id).await?;
         let response = self
             .runtime
             .set_thread_memory_mode(params)
@@ -48,6 +50,7 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: ThreadShellCommandParams = parse_params(params)?;
+        self.ensure_direct_input_allowed(&params.thread_id).await?;
         let response = self
             .runtime
             .run_thread_shell_command(params)

@@ -267,7 +267,6 @@ describe("useAgentChat 偏好持久化 - storage cleanup", () => {
       messages: [],
       turns: [],
       items: [],
-      queued_turns: [],
     });
     localStorage.setItem(
       `agent_session_workspace_${sessionId}`,
@@ -347,7 +346,6 @@ describe("useAgentChat 偏好持久化 - storage cleanup", () => {
         messages: [],
         turns: [],
         items: [],
-        queued_turns: [],
       };
     });
 

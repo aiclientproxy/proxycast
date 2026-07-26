@@ -13,6 +13,8 @@ import {
   METHOD_WORKSPACE_PROJECTS_ROOT_READ,
   METHOD_WORKSPACE_PROJECT_PATH_RESOLVE,
   METHOD_WORKSPACE_READ,
+  decodeModelRouteSelector,
+  type Model,
   type ModelListResponse,
   type ModelProviderListResponse,
   type WorkspaceEnsureProjectResponse,
@@ -392,15 +394,12 @@ export class ElectronHostCommands {
     const selectedModel = selectedProviderId
       ? models.find((model) => {
           const providerId = normalizeProviderIdentity(
-            readString(model, "provider_id") ?? readString(model, "providerId"),
+            decodeModelRouteSelector(model.id)?.providerId,
           );
           return providerId === normalizedSelectedProviderId;
         })
       : undefined;
-    const modelName =
-      readString(selectedModel, "id") ??
-      readString(selectedModel, "model_id") ??
-      readString(selectedModel, "modelId");
+    const modelName = selectedModel?.model;
 
     return {
       provider_configured: selectedProvider
@@ -449,12 +448,28 @@ export class ElectronHostCommands {
     return response.providers ?? [];
   }
 
-  async #listModels(params: AppServerParams = {}): Promise<unknown[]> {
-    const response = await this.#appServerRequest<ModelListResponse>(
-      METHOD_MODEL_LIST,
-      params,
-    );
-    return response.models ?? [];
+  async #listModels(
+    params: AppServerParams = { includeHidden: true },
+  ): Promise<Model[]> {
+    const models: Model[] = [];
+    const seenCursors = new Set<string>();
+    let cursor: string | null = null;
+    do {
+      const response: ModelListResponse =
+        await this.#appServerRequest<ModelListResponse>(METHOD_MODEL_LIST, {
+          ...params,
+          ...(cursor ? { cursor } : {}),
+        });
+      models.push(...response.data);
+      cursor = response.nextCursor ?? null;
+      if (cursor && seenCursors.has(cursor)) {
+        throw new Error(`model/list repeated cursor: ${cursor}`);
+      }
+      if (cursor) {
+        seenCursors.add(cursor);
+      }
+    } while (cursor);
+    return models;
   }
 
   async #listWorkspaces(): Promise<unknown[]> {

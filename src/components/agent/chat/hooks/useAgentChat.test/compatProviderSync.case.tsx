@@ -6,7 +6,7 @@ import {
   mockGetAgentRuntimeSession,
   mockScheduleMinimumDelayIdleTask,
   mockSubmitAgentRuntimeTurn,
-  mockUpdateAgentRuntimeSession,
+  mockUpdateAgentRuntimeThreadSettings,
   mountHook,
 } from "../useAgentChat.testUtils";
 
@@ -135,7 +135,7 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
     }
   });
 
-  it("同 provider 切模型但 session 同步未完成时仍应提交 model 偏好", async () => {
+  it("同 provider 切模型时应只通过 thread settings 同步，不随 turn 重复提交", async () => {
     const workspaceId = "ws-runtime-model-switch-pending-sync";
     const selectedProvider = "openai";
     const currentModel = "gpt-5.4-mini";
@@ -165,8 +165,8 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
       turns: [],
       items: [],
     });
-    mockUpdateAgentRuntimeSession.mockImplementation((request) => {
-      if (request?.provider_name || request?.model_name) {
+    mockUpdateAgentRuntimeThreadSettings.mockImplementation((request) => {
+      if (request?.modelProvider || request?.model) {
         return new Promise<void>((resolve) => {
           resolveProviderSync = resolve;
         });
@@ -202,9 +202,15 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
           );
       });
 
+      expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
+        threadId: "topic-runtime-model-switch-pending-sync",
+        modelProvider: selectedProvider,
+        model: nextModel,
+        effort: null,
+      });
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(getSubmittedTurnStart()).not.toHaveProperty("provider");
-      expect(getSubmittedTurnStart()?.model).toBe(nextModel);
+      expect(getSubmittedTurnStart()).not.toHaveProperty("model");
     } finally {
       (resolveProviderSync as (() => void) | null)?.();
       harness.unmount();

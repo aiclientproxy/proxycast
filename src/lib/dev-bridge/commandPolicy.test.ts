@@ -572,9 +572,13 @@ describe("commandPolicy", () => {
         request: {
           lines: [
             JSON.stringify({
-              id: "session-update",
-              method: "agentSession/update",
-              params: { sessionId: "session-1" },
+              id: "thread-settings-update",
+              method: "thread/settings/update",
+              params: {
+                threadId: "thread-1",
+                model: "gpt-5.4",
+                modelProvider: "openai",
+              },
             }),
             JSON.stringify({
               id: "session-start",

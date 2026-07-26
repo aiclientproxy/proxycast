@@ -165,13 +165,7 @@ async fn memory_store_reset_does_not_delete_persisted_session_history() {
         ""
     );
 
-    let recent = request(
-        &app.server,
-        4,
-        METHOD_THREAD_LIST,
-        json!({}),
-    )
-    .await;
+    let recent = request(&app.server, 4, METHOD_THREAD_LIST, json!({})).await;
     assert_eq!(thread_ids(&recent), vec![THREAD_ID.to_string()]);
 
     let read = request(

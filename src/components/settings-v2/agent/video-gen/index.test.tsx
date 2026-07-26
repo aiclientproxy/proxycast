@@ -46,6 +46,7 @@ vi.mock("@/hooks/useApiKeyProvider", () => ({
         name: "Doubao Video",
         enabled: true,
         api_key_count: 1,
+        api_keys: [{ enabled: true }],
         custom_models: ["seedance-1-5-pro-251215"],
       },
     ],

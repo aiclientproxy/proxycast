@@ -495,7 +495,7 @@ describe("http-client", () => {
     expect(fetchMock.mock.calls[3]?.[0]).toBe("http://127.0.0.1:3030/invoke");
   });
 
-  it("App Server 会话更新应使用 current read 超时，不回退旧 session facade", async () => {
+  it("App Server thread settings 更新应使用 current read 超时", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(electronHostHealthResponse())
@@ -506,9 +506,13 @@ describe("http-client", () => {
       request: {
         lines: [
           JSON.stringify({
-            id: "update-session",
-            method: "agentSession/update",
-            params: { sessionId: "session-1", title: "新标题" },
+            id: "update-thread-settings",
+            method: "thread/settings/update",
+            params: {
+              threadId: "thread-1",
+              model: "gpt-5.4",
+              modelProvider: "openai",
+            },
           }),
         ],
       },

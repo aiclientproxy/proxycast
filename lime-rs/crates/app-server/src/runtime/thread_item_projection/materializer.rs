@@ -361,7 +361,10 @@ fn turn_snapshot(
     default_thread_id: &str,
     turn_id: &str,
 ) -> Turn {
-    if event.event_type == super::super::thread_fork::FORK_CANONICAL_ITEM_EVENT_TYPE {
+    if matches!(
+        event.event_type.as_str(),
+        super::super::thread_fork::FORK_CANONICAL_ITEM_EVENT_TYPE | "context.compaction.completed"
+    ) {
         if let Some(mut turn) = event
             .payload
             .get("forkTurn")

@@ -124,6 +124,7 @@ async fn concurrent_children_keep_mailbox_routes_and_terminal_state_isolated() {
             task_name: task_name.to_string(),
             message: format!("inspect {task_name}"),
             fork_mode: SpawnAgentForkMode::None,
+            model_overrides: SpawnAgentModelOverrides::default(),
         },
         cancel_token: None,
     };
@@ -460,6 +461,7 @@ async fn one_failed_child_does_not_pollute_a_completed_sibling() {
             task_name: task_name.to_string(),
             message: format!("run {task_name}"),
             fork_mode: SpawnAgentForkMode::None,
+            model_overrides: SpawnAgentModelOverrides::default(),
         },
         cancel_token: None,
     };

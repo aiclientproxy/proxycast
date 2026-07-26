@@ -24,6 +24,21 @@ pub const LIST_AGENTS_TOOL_NAME: &str = "list_agents";
 const DEFAULT_WAIT_TIMEOUT_MS: u64 = 30_000;
 const MIN_WAIT_TIMEOUT_MS: u64 = 10_000;
 const MAX_WAIT_TIMEOUT_MS: u64 = 3_600_000;
+const MAX_SPAWN_AGENT_MODEL_OVERRIDES: usize = 5;
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SpawnAgentModelOption {
+    pub model: String,
+    pub description: String,
+    pub supported_reasoning_efforts: Vec<String>,
+    pub default_reasoning_effort: Option<String>,
+    pub service_tiers: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SpawnAgentToolOptions {
+    pub available_models: Vec<SpawnAgentModelOption>,
+}
 
 pub fn is_agent_control_tool_name(name: &str) -> bool {
     matches!(
@@ -38,10 +53,20 @@ pub fn is_agent_control_tool_name(name: &str) -> bool {
 }
 
 pub fn agent_control_tool_definitions() -> Vec<RuntimeToolDefinition> {
+    agent_control_tool_definitions_with_options(&SpawnAgentToolOptions::default())
+}
+
+pub fn agent_control_tool_definitions_with_options(
+    options: &SpawnAgentToolOptions,
+) -> Vec<RuntimeToolDefinition> {
+    let spawn_description = format!(
+        "Spawn a child agent in the current durable agent tree.\n\n{}",
+        spawn_agent_models_description(&options.available_models)
+    );
     vec![
         RuntimeToolDefinition::new(
             SPAWN_AGENT_TOOL_NAME,
-            "Spawn a child agent in the current durable agent tree.",
+            spawn_description,
             json!({
                 "type": "object",
                 "additionalProperties": false,
@@ -54,6 +79,18 @@ pub fn agent_control_tool_definitions() -> Vec<RuntimeToolDefinition> {
                     "fork_turns": {
                         "type": "string",
                         "description": "Optional number of turns to fork. Defaults to `all`. Use `none`, `all`, or a positive integer string such as `3`."
+                    },
+                    "model": {
+                        "type": "string",
+                        "description": "Model override for the new agent. Omit to inherit the parent model."
+                    },
+                    "reasoning_effort": {
+                        "type": "string",
+                        "description": "Reasoning effort override for the new agent. Omit to inherit the parent effort."
+                    },
+                    "service_tier": {
+                        "type": "string",
+                        "description": "Service tier override for the new agent. Omit to inherit the parent tier."
                     }
                 },
                 "required": ["task_name", "message"]
@@ -103,6 +140,49 @@ pub fn agent_control_tool_definitions() -> Vec<RuntimeToolDefinition> {
     ]
 }
 
+fn spawn_agent_models_description(models: &[SpawnAgentModelOption]) -> String {
+    if models.is_empty() {
+        return "No picker-visible model overrides are currently loaded.".to_string();
+    }
+    let model_descriptions = models
+        .iter()
+        .take(MAX_SPAWN_AGENT_MODEL_OVERRIDES)
+        .map(|model| {
+            let reasoning_efforts = model
+                .supported_reasoning_efforts
+                .iter()
+                .map(|effort| {
+                    if model.default_reasoning_effort.as_deref() == Some(effort.as_str()) {
+                        format!("{effort} (default)")
+                    } else {
+                        effort.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let reasoning_suffix = if reasoning_efforts.is_empty() {
+                String::new()
+            } else {
+                format!(" Reasoning efforts: {reasoning_efforts}.")
+            };
+            let service_tiers = model.service_tiers.join(", ");
+            let service_tier_suffix = if service_tiers.is_empty() {
+                String::new()
+            } else {
+                format!(" Service tiers: {service_tiers}.")
+            };
+            format!(
+                "- `{}`: {}{reasoning_suffix}{service_tier_suffix}",
+                model.model, model.description
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Available model overrides (optional; inherited parent model is preferred):\n{model_descriptions}"
+    )
+}
+
 fn message_input_schema() -> Value {
     json!({
         "type": "object",
@@ -141,12 +221,20 @@ pub enum SpawnAgentForkMode {
     LastNTurns(usize),
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SpawnAgentModelOverrides {
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
+    pub service_tier: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AgentControlCommand {
     SpawnAgent {
         task_name: String,
         message: String,
         fork_mode: SpawnAgentForkMode,
+        model_overrides: SpawnAgentModelOverrides,
     },
     SendMessage {
         target: String,
@@ -228,15 +316,30 @@ pub trait AgentControlGateway: Send + Sync {
 }
 
 #[derive(Clone)]
-pub struct AgentControlGatewayHandle(Arc<dyn AgentControlGateway>);
+pub struct AgentControlGatewayHandle {
+    gateway: Arc<dyn AgentControlGateway>,
+    tool_options: SpawnAgentToolOptions,
+}
 
 impl AgentControlGatewayHandle {
     pub fn new(gateway: Arc<dyn AgentControlGateway>) -> Self {
-        Self(gateway)
+        Self {
+            gateway,
+            tool_options: SpawnAgentToolOptions::default(),
+        }
+    }
+
+    pub fn with_tool_options(mut self, tool_options: SpawnAgentToolOptions) -> Self {
+        self.tool_options = tool_options;
+        self
     }
 
     pub fn gateway(&self) -> &dyn AgentControlGateway {
-        self.0.as_ref()
+        self.gateway.as_ref()
+    }
+
+    pub fn tool_definitions(&self) -> Vec<RuntimeToolDefinition> {
+        agent_control_tool_definitions_with_options(&self.tool_options)
     }
 }
 
@@ -366,6 +469,11 @@ fn parse_spawn(params: &Value) -> Result<AgentControlCommand, RuntimeToolExecuti
         task_name,
         message: required_nonempty(input.message, "message")?,
         fork_mode: parse_spawn_fork_mode(input.fork_turns)?,
+        model_overrides: SpawnAgentModelOverrides {
+            model: optional_nonempty(input.model, "model")?,
+            reasoning_effort: optional_nonempty(input.reasoning_effort, "reasoning_effort")?,
+            service_tier: optional_nonempty(input.service_tier, "service_tier")?,
+        },
     })
 }
 
@@ -462,6 +570,15 @@ fn required_nonempty(value: String, field: &str) -> Result<String, RuntimeToolEx
     })
 }
 
+fn optional_nonempty(
+    value: Option<String>,
+    field: &str,
+) -> Result<Option<String>, RuntimeToolExecutionError> {
+    value
+        .map(|value| required_nonempty(value, field))
+        .transpose()
+}
+
 fn agent_control_execution_error(
     message: impl Into<String>,
     code: &str,
@@ -480,6 +597,9 @@ struct SpawnAgentInput {
     task_name: String,
     message: String,
     fork_turns: Option<String>,
+    model: Option<String>,
+    reasoning_effort: Option<String>,
+    service_tier: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -581,10 +701,42 @@ mod tests {
         assert!(!is_agent_control_tool_name("TeamCreate"));
     }
 
+    #[test]
+    fn spawn_description_uses_catalog_model_effort_and_service_tiers() {
+        let definitions = agent_control_tool_definitions_with_options(&SpawnAgentToolOptions {
+            available_models: vec![SpawnAgentModelOption {
+                model: "gpt-5.6-sol".to_string(),
+                description: "Latest frontier agentic coding model.".to_string(),
+                supported_reasoning_efforts: vec!["low".to_string(), "high".to_string()],
+                default_reasoning_effort: Some("low".to_string()),
+                service_tiers: vec!["priority".to_string()],
+            }],
+        });
+        let spawn = definitions
+            .iter()
+            .find(|definition| definition.name == SPAWN_AGENT_TOOL_NAME)
+            .expect("spawn definition");
+
+        assert!(spawn.description.contains(
+            "Available model overrides (optional; inherited parent model is preferred):"
+        ));
+        assert!(spawn.description.contains("`gpt-5.6-sol`"));
+        assert!(spawn
+            .description
+            .contains("Reasoning efforts: low (default), high."));
+        assert!(spawn.description.contains("Service tiers: priority."));
+    }
+
     #[tokio::test]
     async fn dispatches_typed_spawn_without_legacy_aliases() {
         let gateway = RecordingGateway::default();
-        let params = json!({ "task_name": "research", "message": "inspect the plan" });
+        let params = json!({
+            "task_name": "research",
+            "message": "inspect the plan",
+            "model": "gpt-5.6-sol",
+            "reasoning_effort": "high",
+            "service_tier": "priority",
+        });
         let context = context();
 
         let result = execute_agent_control_tool(
@@ -614,6 +766,11 @@ mod tests {
                 task_name: "research".to_string(),
                 message: "inspect the plan".to_string(),
                 fork_mode: SpawnAgentForkMode::FullHistory,
+                model_overrides: SpawnAgentModelOverrides {
+                    model: Some("gpt-5.6-sol".to_string()),
+                    reasoning_effort: Some("high".to_string()),
+                    service_tier: Some("priority".to_string()),
+                },
             }
         );
         assert!(requests[0].cancel_token.is_none());
@@ -664,6 +821,7 @@ mod tests {
                     task_name: "research".to_string(),
                     message: "inspect the plan".to_string(),
                     fork_mode: expected,
+                    model_overrides: SpawnAgentModelOverrides::default(),
                 }
             );
         }

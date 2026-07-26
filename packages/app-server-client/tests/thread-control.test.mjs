@@ -8,6 +8,7 @@ test("typed client exposes the two session control requests", () => {
     client.updateThreadSettings({
       threadId: "thread-1",
       model: "model-b",
+      modelProvider: "provider-b",
       serviceTier: null,
     }),
     {
@@ -16,6 +17,7 @@ test("typed client exposes the two session control requests", () => {
       params: {
         threadId: "thread-1",
         model: "model-b",
+        modelProvider: "provider-b",
         serviceTier: null,
       },
     },

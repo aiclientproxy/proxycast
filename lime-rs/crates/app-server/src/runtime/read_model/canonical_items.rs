@@ -284,7 +284,9 @@ fn canonical_payload_to_agent_detail(
             }
             "subagent_activity"
         }
-        ThreadItemPayload::ContextCompaction { summary, window_id } => {
+        ThreadItemPayload::ContextCompaction {
+            summary, window_id, ..
+        } => {
             detail.insert("stage".to_string(), json!("completed"));
             if let Some(summary) = summary {
                 detail.insert("detail".to_string(), json!(summary));

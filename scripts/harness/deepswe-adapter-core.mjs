@@ -11,7 +11,7 @@ import {
   resolveProviderPreference,
   sleep,
   startAgentSessionTurnCurrent,
-  updateAgentSessionRuntimeCurrent,
+  updateAgentThreadSettingsCurrent,
   waitForHealth,
 } from "../lib/agent-runtime-smoke-core.mjs";
 
@@ -756,8 +756,8 @@ export function createCurrentChainRpc({
     startTurn: (options, params) =>
       startAgentSessionTurnCurrent(options, params, invoke),
     cancelTurn: (options, params) => invoke(options, "turn/interrupt", params),
-    updateSession: (options, params) =>
-      updateAgentSessionRuntimeCurrent(options, params, invoke),
+    updateThreadSettings: (options, params) =>
+      updateAgentThreadSettingsCurrent(options, params, invoke),
     sleep,
   };
 }
@@ -829,10 +829,9 @@ export async function runCurrentChainTask({
   if (actualSessionId !== sessionId) {
     throw new Error("thread/start did not return requested sessionId");
   }
-  await rpc.updateSession(options, {
-    sessionId,
+  await rpc.updateThreadSettings(options, {
+    threadId: sessionId,
     provider,
-    executionStrategy: "react",
   });
   const startedAt = new Date().toISOString();
   let startTurnSettled = false;

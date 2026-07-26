@@ -6,6 +6,8 @@ pub struct ExecutionRequest {
     pub host: RuntimeHostContext,
     pub session: app_server_protocol::AgentSession,
     pub turn: app_server_protocol::AgentTurn,
+    /// Canonical Thread lineage captured at turn admission.
+    pub forked_from_thread_id: Option<String>,
     pub input: RuntimeReplyInput,
     pub runtime_options: Option<app_server_protocol::RuntimeOptions>,
     pub expected_output: Option<serde_json::Value>,

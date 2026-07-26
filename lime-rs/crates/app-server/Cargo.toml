@@ -45,6 +45,7 @@ jsonschema.workspace = true
 opentelemetry.workspace = true
 opentelemetry-otlp.workspace = true
 opentelemetry_sdk.workspace = true
+pulldown-cmark.workspace = true
 reqwest.workspace = true
 rmcp.workspace = true
 rusqlite.workspace = true

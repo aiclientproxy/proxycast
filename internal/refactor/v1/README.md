@@ -31,6 +31,7 @@ Codex 对齐的是上图从协议到恢复的语义；grok-build 对齐的是 `m
 | [05-verification-and-guardrails.md](05-verification-and-guardrails.md)                                               | 测试、Gate B 证据、治理扫描和回流守卫                      |
 | [07-second-audit-gap-register.md](07-second-audit-gap-register.md)                                                   | 第二轮查缺、P0 阻塞项、删除顺序和回流守卫                  |
 | [08-third-audit-gap-register.md](08-third-audit-gap-register.md)                                                     | 第三轮协议、恢复、provider protocol 与产品范围补充审计     |
+| [11-codex-method-product-scope-matrix.md](11-codex-method-product-scope-matrix.md)                                   | Codex App Server method 三态产品范围矩阵与守卫             |
 | [../../exec-plans/codex-alignment-v1-coordination-plan.md](../../exec-plans/codex-alignment-v1-coordination-plan.md) | 多进程窄写集、交接顺序、删除闸门和统一验证                 |
 | [../data/01-storage-alignment-plan.md](../data/01-storage-alignment-plan.md)                                         | 只对照实际 `~/.codex` 的存储职责、平台根和分阶段方案       |
 | [../data/03-one-to-one-storage-alignment-plan.md](../data/03-one-to-one-storage-alignment-plan.md)                   | Codex 56 项、Lime AppData 63 项、`~/.lime` 12 项的一一账本 |

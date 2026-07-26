@@ -906,11 +906,11 @@ async fn reconnect_claims_thread_request_and_orders_resume_replay_before_live_ev
     )
     .await;
     assert!(
-        !server
+        server
             .thread_states
             .contains_thread(&agent_protocol::ThreadId::new(&thread_id))
             .await,
-        "idle thread listener must unload after its last connection closes"
+        "idle thread listener must stay loaded during the unload grace period"
     );
     assert_eq!(
         server.server_requests.current_owner(&pending_request_id),

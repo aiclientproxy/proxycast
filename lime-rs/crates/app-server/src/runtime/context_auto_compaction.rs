@@ -77,7 +77,7 @@ impl RuntimeCore {
         };
 
         let output = self
-            .compact_agent_session_with_trigger(
+            .compact_session_with_trigger(
                 session_id,
                 Some(AUTO_COMPACT_EVENT_NAME),
                 AUTO_COMPACT_SOURCE,

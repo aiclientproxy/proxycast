@@ -1,3 +1,4 @@
+use app_server_protocol::protocol::v2::ThreadBackgroundTerminal;
 use app_server_protocol::{
     ExecutionProcessDrainOutputParams, ExecutionProcessDrainOutputResponse,
     ExecutionProcessEmptyResponse, ExecutionProcessIdParams, ExecutionProcessOutputDelta,
@@ -39,17 +40,40 @@ pub struct ExecutionProcessServer {
     inner: Arc<Mutex<ExecutionProcessState>>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct ExecutionProcessState {
     processes: HashMap<String, ExecutionProcessEntry>,
     output: VecDeque<ExecutionProcessOutputDelta>,
     output_bytes: usize,
+    next_background_process_id: u64,
 }
 
 #[derive(Debug)]
 struct ExecutionProcessEntry {
     handle: Option<LocalExecutionProcessControlHandle>,
     final_snapshot: Option<ExecutionProcessSnapshot>,
+    background: Option<BackgroundTerminalEntry>,
+}
+
+#[derive(Debug, Clone)]
+struct BackgroundTerminalEntry {
+    thread_id: String,
+    public_process_id: u64,
+    item_id: String,
+    command: String,
+    cwd: String,
+    listed: bool,
+}
+
+impl Default for ExecutionProcessState {
+    fn default() -> Self {
+        Self {
+            processes: HashMap::new(),
+            output: VecDeque::new(),
+            output_bytes: 0,
+            next_background_process_id: 1,
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -107,6 +131,7 @@ impl ExecutionProcessServer {
             ExecutionProcessEntry {
                 handle: if is_terminal { None } else { Some(handle) },
                 final_snapshot: if is_terminal { Some(snapshot) } else { None },
+                background: None,
             },
         );
         Ok(())
@@ -142,6 +167,30 @@ impl ExecutionProcessServer {
 
     pub async fn start_process(
         &self,
+        params: ExecutionProcessStartParams,
+    ) -> Result<ExecutionProcessStartResponse, ExecutionProcessError> {
+        self.start_process_inner(None, params).await
+    }
+
+    pub async fn start_thread_process(
+        &self,
+        thread_id: &str,
+        display_command: &str,
+        params: ExecutionProcessStartParams,
+    ) -> Result<ExecutionProcessStartResponse, ExecutionProcessError> {
+        let thread_id = thread_id.trim();
+        if thread_id.is_empty() {
+            return Err(ExecutionProcessError::Control(
+                "background terminal thread id must not be empty".to_string(),
+            ));
+        }
+        self.start_process_inner(Some((thread_id, display_command)), params)
+            .await
+    }
+
+    async fn start_process_inner(
+        &self,
+        thread_scope: Option<(&str, &str)>,
         params: ExecutionProcessStartParams,
     ) -> Result<ExecutionProcessStartResponse, ExecutionProcessError> {
         if params.command.is_empty() {
@@ -201,13 +250,6 @@ impl ExecutionProcessServer {
         )
         .map_err(ExecutionProcessError::Policy)?;
 
-        {
-            let state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
-            if state.processes.contains_key(&params.process_id) {
-                return Err(ExecutionProcessError::ProcessExists(params.process_id));
-            }
-        }
-
         let command = if decision.workspace_sandbox_backend_enforced() {
             prepare_sandbox_command(SandboxCommandRequest {
                 backend: decision.sandbox_backend().ok_or_else(|| {
@@ -223,8 +265,37 @@ impl ExecutionProcessServer {
         } else {
             params.command
         };
+        let process_id = params.process_id.clone();
+        let background = thread_scope.map(|(thread_id, display_command)| BackgroundTerminalEntry {
+            thread_id: thread_id.to_string(),
+            public_process_id: 0,
+            item_id: params.tool_id.clone(),
+            command: display_command.trim().to_string(),
+            cwd: working_directory.to_string_lossy().to_string(),
+            listed: true,
+        });
+        {
+            let mut state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
+            if state.processes.contains_key(&process_id) {
+                return Err(ExecutionProcessError::ProcessExists(process_id));
+            }
+            let background = background.map(|mut background| {
+                background.public_process_id = state.next_background_process_id;
+                state.next_background_process_id =
+                    state.next_background_process_id.saturating_add(1);
+                background
+            });
+            state.processes.insert(
+                process_id.clone(),
+                ExecutionProcessEntry {
+                    handle: None,
+                    final_snapshot: None,
+                    background,
+                },
+            );
+        }
         let request = LocalExecutionRequest {
-            process_id: params.process_id.clone(),
+            process_id: process_id.clone(),
             tool_id: params.tool_id,
             tool_name: canonical_tool_name.to_string(),
             command,
@@ -232,22 +303,26 @@ impl ExecutionProcessServer {
             env: params.env,
             tty: params.tty,
         };
-        let mut handle = start_local_execution_process(request)
-            .map_err(|error| ExecutionProcessError::Start(error.to_string()))?;
+        let mut handle = match start_local_execution_process(request) {
+            Ok(handle) => handle,
+            Err(error) => {
+                if let Ok(mut state) = self.inner.lock() {
+                    state.processes.remove(&process_id);
+                }
+                return Err(ExecutionProcessError::Start(error.to_string()));
+            }
+        };
         let snapshot = map_snapshot(handle.status());
-        let process_id = params.process_id.clone();
         let control_handle = handle.control_handle();
         let inner = Arc::clone(&self.inner);
 
         {
             let mut state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
-            state.processes.insert(
-                params.process_id,
-                ExecutionProcessEntry {
-                    handle: Some(control_handle),
-                    final_snapshot: None,
-                },
-            );
+            let entry = state
+                .processes
+                .get_mut(&process_id)
+                .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.clone()))?;
+            entry.handle = Some(control_handle);
         }
 
         tokio::spawn(async move {
@@ -266,6 +341,109 @@ impl ExecutionProcessServer {
         });
 
         Ok(ExecutionProcessStartResponse { snapshot })
+    }
+
+    pub fn list_background_terminals(
+        &self,
+        thread_id: &str,
+    ) -> Result<Vec<ThreadBackgroundTerminal>, ExecutionProcessError> {
+        let state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
+        let mut terminals = state
+            .processes
+            .values()
+            .filter_map(|entry| {
+                let background = entry.background.as_ref()?;
+                let handle = entry.handle.as_ref()?;
+                if background.thread_id != thread_id
+                    || !background.listed
+                    || runtime_status_is_terminal(handle.status().status)
+                {
+                    return None;
+                }
+                Some((
+                    background.public_process_id,
+                    ThreadBackgroundTerminal {
+                        item_id: background.item_id.clone(),
+                        process_id: background.public_process_id.to_string(),
+                        command: background.command.clone(),
+                        cwd: background.cwd.clone(),
+                        os_pid: None,
+                        cpu_percent: None,
+                        rss_kb: None,
+                    },
+                ))
+            })
+            .collect::<Vec<_>>();
+        terminals.sort_by_key(|(process_id, _)| *process_id);
+        Ok(terminals
+            .into_iter()
+            .map(|(_, terminal)| terminal)
+            .collect())
+    }
+
+    pub fn terminate_background_terminal(
+        &self,
+        thread_id: &str,
+        public_process_id: u64,
+    ) -> Result<bool, ExecutionProcessError> {
+        let process = {
+            let mut state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
+            let Some((process_id, entry)) = state.processes.iter_mut().find(|(_, entry)| {
+                entry.background.as_ref().is_some_and(|background| {
+                    background.thread_id == thread_id
+                        && background.public_process_id == public_process_id
+                        && background.listed
+                })
+            }) else {
+                return Ok(false);
+            };
+            let Some(background) = entry.background.as_mut() else {
+                return Ok(false);
+            };
+            background.listed = false;
+            (
+                process_id.clone(),
+                entry.handle.as_ref().and_then(|handle| {
+                    (!runtime_status_is_terminal(handle.status().status)).then(|| handle.clone())
+                }),
+            )
+        };
+        tool_runtime::unified_exec::forget_process_session(&process.0);
+        let Some(handle) = process.1 else {
+            return Ok(false);
+        };
+        Ok(handle.terminate().is_ok())
+    }
+
+    pub fn clean_background_terminals(&self, thread_id: &str) -> Result<(), ExecutionProcessError> {
+        let processes = {
+            let mut state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
+            state
+                .processes
+                .iter_mut()
+                .filter_map(|(process_id, entry)| {
+                    let background = entry.background.as_mut()?;
+                    if background.thread_id != thread_id || !background.listed {
+                        return None;
+                    }
+                    background.listed = false;
+                    Some((
+                        process_id.clone(),
+                        entry.handle.as_ref().and_then(|handle| {
+                            (!runtime_status_is_terminal(handle.status().status))
+                                .then(|| handle.clone())
+                        }),
+                    ))
+                })
+                .collect::<Vec<_>>()
+        };
+        for (process_id, handle) in processes {
+            tool_runtime::unified_exec::forget_process_session(&process_id);
+            if let Some(handle) = handle {
+                let _ = handle.terminate();
+            }
+        }
+        Ok(())
     }
 
     pub fn write_stdin(
@@ -531,6 +709,16 @@ fn map_status(status: RuntimeExecutionProcessStatus) -> ExecutionProcessStatus {
         RuntimeExecutionProcessStatus::Terminated => ExecutionProcessStatus::Terminated,
         RuntimeExecutionProcessStatus::Failed => ExecutionProcessStatus::Failed,
     }
+}
+
+fn runtime_status_is_terminal(status: RuntimeExecutionProcessStatus) -> bool {
+    matches!(
+        status,
+        RuntimeExecutionProcessStatus::Exited
+            | RuntimeExecutionProcessStatus::Interrupted
+            | RuntimeExecutionProcessStatus::Terminated
+            | RuntimeExecutionProcessStatus::Failed
+    )
 }
 
 fn map_output_kind(kind: RuntimeExecutionOutputKind) -> ExecutionProcessOutputKind {

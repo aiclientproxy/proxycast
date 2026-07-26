@@ -26,7 +26,7 @@ import {
   summarizeEvidencePack,
   summarizeThreadRead,
   threadSettled,
-  updateAgentSessionRuntimeCurrent,
+  updateAgentThreadSettingsCurrent,
   waitForHealth,
 } from "../lib/agent-runtime-smoke-core.mjs";
 import { workspaceIdFromDefaultProject } from "../lib/agent-runtime-smoke-support.mjs";
@@ -659,10 +659,9 @@ async function executeLiveRuntime(options) {
       },
     },
   });
-  await updateAgentSessionRuntimeCurrent(options, {
-    sessionId,
+  await updateAgentThreadSettingsCurrent(options, {
+    threadId: sessionId,
     provider,
-    executionStrategy: "react",
   });
 
   const turnId = `expert-skills-live-${Date.now()}-${process.pid}`;

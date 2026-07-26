@@ -61,11 +61,36 @@ pub struct UsageStatsDailyTrendsListResponse {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct ModelListParams {
+pub struct ModelReasoningEffortOptionInfo {
+    pub id: String,
+    pub value: String,
+    pub label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_id: Option<String>,
+    pub description: Option<String>,
+    #[serde(default)]
+    pub default: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelReasoningEffortSupportInfo {
+    pub supported: bool,
+    #[serde(default)]
+    pub levels: Vec<String>,
+    #[serde(default)]
+    pub options: Vec<ModelReasoningEffortOptionInfo>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tier: Option<String>,
+    pub default: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelServiceTierInfo {
+    pub id: String,
+    pub name: String,
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -78,7 +103,7 @@ pub struct ModelCapabilitiesInfo {
     pub function_calling: bool,
     pub reasoning: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_effort: Option<serde_json::Value>,
+    pub reasoning_effort: Option<ModelReasoningEffortSupportInfo>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -116,7 +141,7 @@ pub struct ModelInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub visibility: Option<String>,
     #[serde(default)]
-    pub service_tiers: Vec<serde_json::Value>,
+    pub service_tiers: Vec<ModelServiceTierInfo>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_service_tier: Option<String>,
     #[serde(default)]
@@ -494,13 +519,6 @@ pub struct ProviderKeyInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_used_at: Option<String>,
     pub created_at: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelListResponse {
-    #[serde(default)]
-    pub models: Vec<ModelInfo>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]

@@ -196,6 +196,7 @@ impl RuntimeToolExecutor for CurrentTurnToolExecutor {
                     tool_runtime::unified_exec::RuntimeUnifiedExecToolRequest {
                         tool_name: request.tool_name,
                         params: request.params,
+                        thread_id: self.thread_id.as_str(),
                         working_directory: request.context.working_directory().clone(),
                         environment: request.context.environment().clone(),
                         tool_call_id: identity.call_id().to_string(),

@@ -46,7 +46,18 @@ impl RuntimeCore {
     ) -> Result<AgentSession, RuntimeCoreError> {
         let defaults = agent_control_session_defaults(runtime_options);
         let route_snapshot = agent_control_route_snapshot(runtime_options);
-        if defaults.is_none() && route_snapshot.is_none() {
+        let service_tier = runtime_options
+            .and_then(RuntimeOptions::runtime_request)
+            .and_then(|request| trimmed_option(request.service_tier.as_deref()))
+            .or_else(|| {
+                route_snapshot.as_ref().and_then(|snapshot| {
+                    snapshot
+                        .get("serviceTier")
+                        .and_then(serde_json::Value::as_str)
+                        .and_then(|value| trimmed_option(Some(value)))
+                })
+            });
+        if defaults.is_none() && route_snapshot.is_none() && service_tier.is_none() {
             return self
                 .session_snapshot(session_id)
                 .map(|(session, _)| session);
@@ -97,6 +108,12 @@ impl RuntimeCore {
         }
         if let Some(route_snapshot) = route_snapshot {
             metadata.insert(AGENT_CONTROL_ROUTE_KEY.to_string(), route_snapshot);
+        }
+        if let Some(service_tier) = service_tier {
+            metadata.insert(
+                "serviceTier".to_string(),
+                serde_json::Value::String(service_tier),
+            );
         }
         reference.metadata = Some(serde_json::Value::Object(metadata));
         stored.session.updated_at = timestamp();
@@ -509,6 +526,13 @@ impl RuntimeCore {
             .lock()
             .expect("runtime core state mutex poisoned");
         super::approval_cache::remove_session(&mut state.session_approval_cache, &child_session_id);
+        if let Some(thread_id) = state
+            .sessions
+            .get(&child_session_id)
+            .map(|stored| stored.session.thread_id.clone())
+        {
+            state.thread_elicitation_counts.remove(&thread_id);
+        }
         state.sessions.remove(&child_session_id);
         if cleanup_errors.is_empty() {
             Ok(())
@@ -545,8 +569,15 @@ pub(in crate::runtime) fn runtime_options_with_agent_control_session_defaults(
 ) -> Option<RuntimeOptions> {
     let defaults = agent_control_session_default_values(session);
     let route_snapshot = route::agent_control_route_snapshot_from_session(session);
+    let session_service_tier = session
+        .business_object_ref
+        .as_ref()
+        .and_then(|reference| reference.metadata.as_ref())
+        .and_then(|metadata| metadata.get("serviceTier"))
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| trimmed_option(Some(value)));
     let has_route_snapshot = route_snapshot.is_some();
-    if defaults.is_none() && route_snapshot.is_none() {
+    if defaults.is_none() && route_snapshot.is_none() && session_service_tier.is_none() {
         return runtime_options;
     }
 
@@ -576,6 +607,13 @@ pub(in crate::runtime) fn runtime_options_with_agent_control_session_defaults(
         {
             request.model_preference = Some(model);
         }
+        request.service_tier = route_snapshot
+            .get("serviceTier")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|value| trimmed_option(Some(value)))
+            .or(session_service_tier.clone());
+    } else if request.service_tier.is_none() {
+        request.service_tier = session_service_tier;
     }
 
     let Some((provider_selector, model_name)) = defaults else {

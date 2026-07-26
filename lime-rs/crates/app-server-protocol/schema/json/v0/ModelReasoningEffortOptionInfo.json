@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "default": {
+      "default": false,
+      "type": "boolean"
+    },
+    "description": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "id": {
+      "type": "string"
+    },
+    "label": {
+      "type": "string"
+    },
+    "value": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "label",
+    "value"
+  ],
+  "title": "ModelReasoningEffortOptionInfo",
+  "type": "object"
+}

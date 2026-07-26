@@ -8,9 +8,6 @@ import {
   EXPERT_PLAZA_SKILLS_RUNTIME_ASSERTION_KEYS,
   EXPERT_SKILLS_RUNTIME_ASSERTION_KEYS,
   IMAGE_COMMAND_ASSERTION_KEYS,
-  INPUTBAR_PENDING_STEER_MULTI_QUEUE_ASSERTION_KEYS,
-  INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_ASSERTION_KEYS,
-  INPUTBAR_PENDING_STEER_RICH_RESTORE_ASSERTION_KEYS,
   INPUTBAR_RICH_RESTORE_ASSERTION_KEYS,
   LIVE_TAIL_COMMIT_ASSERTION_KEYS,
   MCP_STRUCTURED_CONTENT_ASSERTION_KEYS,
@@ -23,6 +20,7 @@ import {
   WEB_TOOLS_RENDERING_ASSERTION_KEYS,
 } from "./claw-chat-current-fixture-constants.mjs";
 import { MEDIA_REFERENCE_ASSERTION_KEYS } from "./claw-chat-current-fixture-media-reference.mjs";
+import { ACTIVE_STEER_ASSERTION_KEYS } from "./claw-chat-current-fixture-active-steer.mjs";
 
 export function buildNotApplicableAssertions(context) {
   const {
@@ -38,10 +36,8 @@ export function buildNotApplicableAssertions(context) {
     isExpertPlazaSkillsRuntimeScenario,
     isGoalScenario,
     isImageCommandScenario,
-    isInputbarPendingSteerMultiQueueScenario,
-    isInputbarPendingSteerPopFrontResumeScenario,
-    isInputbarPendingSteerRichRestoreScenario,
     isInputbarRichRestoreScenario,
+    isActiveSteerScenario,
     isLiveTailCommitScenario,
     isMediaReferenceScenario,
     isMcpStructuredContentScenario,
@@ -103,8 +99,6 @@ export function buildNotApplicableAssertions(context) {
       ...MEDIA_REFERENCE_ASSERTION_KEYS,
       ...IMAGE_COMMAND_ASSERTION_KEYS,
       ...INPUTBAR_RICH_RESTORE_ASSERTION_KEYS,
-      ...INPUTBAR_PENDING_STEER_RICH_RESTORE_ASSERTION_KEYS,
-      ...INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_ASSERTION_KEYS,
       ...SKILLS_RUNTIME_ASSERTION_KEYS,
       ...EXPERT_SKILLS_RUNTIME_ASSERTION_KEYS,
       ...EXPERT_PLAZA_SKILLS_RUNTIME_ASSERTION_KEYS,
@@ -181,9 +175,6 @@ export function buildNotApplicableAssertions(context) {
           ...MEDIA_REFERENCE_ASSERTION_KEYS,
           ...IMAGE_COMMAND_ASSERTION_KEYS,
           ...INPUTBAR_RICH_RESTORE_ASSERTION_KEYS,
-          ...INPUTBAR_PENDING_STEER_RICH_RESTORE_ASSERTION_KEYS,
-          ...INPUTBAR_PENDING_STEER_MULTI_QUEUE_ASSERTION_KEYS,
-          ...INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_ASSERTION_KEYS,
           ...SKILLS_RUNTIME_ASSERTION_KEYS,
           ...APPROVAL_REQUEST_DECISION_ASSERTION_KEYS,
         ]
@@ -222,9 +213,6 @@ export function buildNotApplicableAssertions(context) {
             ...MEDIA_REFERENCE_ASSERTION_KEYS,
             ...IMAGE_COMMAND_ASSERTION_KEYS,
             ...INPUTBAR_RICH_RESTORE_ASSERTION_KEYS,
-            ...INPUTBAR_PENDING_STEER_RICH_RESTORE_ASSERTION_KEYS,
-            ...INPUTBAR_PENDING_STEER_MULTI_QUEUE_ASSERTION_KEYS,
-            ...INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_ASSERTION_KEYS,
             ...SKILLS_RUNTIME_ASSERTION_KEYS,
             ...APPROVAL_REQUEST_RESUME_ASSERTION_KEYS,
           ]
@@ -264,18 +252,8 @@ export function buildNotApplicableAssertions(context) {
               ...IMAGE_COMMAND_ASSERTION_KEYS,
               ...SKILLS_RUNTIME_ASSERTION_KEYS,
             ]
-          : isInputbarPendingSteerRichRestoreScenario
+          : isCancelThenContinueScenario
             ? [
-                "usedCurrentTurnCancel",
-                "externalFixtureCancelUsed",
-                "fixtureCancelReachedBackend",
-                "guiStopClicked",
-                "readModelCanceled",
-                "continuePromptReachedBackend",
-                "guiContinueInputSubmitted",
-                "guiContinueCompleted",
-                "readModelContinueCompleted",
-                "backendRecordedCancelThenContinue",
                 "noEpochFallbackTitle",
                 "readModelCompleted",
                 "eventReadProbeObserved",
@@ -298,24 +276,25 @@ export function buildNotApplicableAssertions(context) {
                 ...MCP_STRUCTURED_CONTENT_ASSERTION_KEYS,
                 ...MEDIA_REFERENCE_ASSERTION_KEYS,
                 ...IMAGE_COMMAND_ASSERTION_KEYS,
-                ...INPUTBAR_RICH_RESTORE_ASSERTION_KEYS,
                 ...SKILLS_RUNTIME_ASSERTION_KEYS,
               ]
-            : isCancelThenContinueScenario
+            : isPlanScenario
               ? [
+                  "usedCurrentTurnCancel",
+                  "externalFixtureCancelUsed",
+                  "fixtureCancelReachedBackend",
+                  "guiStopClicked",
+                  "readModelCanceled",
+                  "continuePromptReachedBackend",
+                  "guiContinueInputSubmitted",
+                  "guiContinueCompleted",
+                  "readModelContinueCompleted",
+                  "backendRecordedCancelThenContinue",
                   "noEpochFallbackTitle",
                   "readModelCompleted",
                   "eventReadProbeObserved",
                   "readModelEventReadAligned",
                   "readModelToolCallAligned",
-                  "planModeEnabledInGui",
-                  "planPromptReachedBackend",
-                  "planCollaborationModeReachedBackend",
-                  "guiPlanRailVisible",
-                  "guiPlanStepsVisible",
-                  "guiPlanDecisionDrawerVisible",
-                  "readModelPlanCompleted",
-                  "proposedPlanVisible",
                   "goalModeEnabledInGui",
                   "goalPromptReachedBackend",
                   "goalObjectiveTextReachedBackend",
@@ -327,7 +306,7 @@ export function buildNotApplicableAssertions(context) {
                   ...IMAGE_COMMAND_ASSERTION_KEYS,
                   ...SKILLS_RUNTIME_ASSERTION_KEYS,
                 ]
-              : isPlanScenario
+              : isGoalScenario
                 ? [
                     "usedCurrentTurnCancel",
                     "externalFixtureCancelUsed",
@@ -344,18 +323,21 @@ export function buildNotApplicableAssertions(context) {
                     "eventReadProbeObserved",
                     "readModelEventReadAligned",
                     "readModelToolCallAligned",
-                    "goalModeEnabledInGui",
-                    "goalPromptReachedBackend",
-                    "goalObjectiveTextReachedBackend",
-                    "guiGoalCompleted",
-                    "readModelGoalCompleted",
+                    "planModeEnabledInGui",
+                    "planPromptReachedBackend",
+                    "planCollaborationModeReachedBackend",
+                    "guiPlanRailVisible",
+                    "guiPlanStepsVisible",
+                    "guiPlanDecisionDrawerVisible",
+                    "readModelPlanCompleted",
+                    "proposedPlanVisible",
                     ...WEB_TOOLS_RENDERING_ASSERTION_KEYS,
                     ...MCP_STRUCTURED_CONTENT_ASSERTION_KEYS,
                     ...MEDIA_REFERENCE_ASSERTION_KEYS,
                     ...IMAGE_COMMAND_ASSERTION_KEYS,
                     ...SKILLS_RUNTIME_ASSERTION_KEYS,
                   ]
-                : isGoalScenario
+                : isImageCommandScenario
                   ? [
                       "usedCurrentTurnCancel",
                       "externalFixtureCancelUsed",
@@ -380,13 +362,17 @@ export function buildNotApplicableAssertions(context) {
                       "guiPlanDecisionDrawerVisible",
                       "readModelPlanCompleted",
                       "proposedPlanVisible",
+                      "goalModeEnabledInGui",
+                      "goalPromptReachedBackend",
+                      "goalObjectiveTextReachedBackend",
+                      "guiGoalCompleted",
+                      "readModelGoalCompleted",
                       ...WEB_TOOLS_RENDERING_ASSERTION_KEYS,
                       ...MCP_STRUCTURED_CONTENT_ASSERTION_KEYS,
                       ...MEDIA_REFERENCE_ASSERTION_KEYS,
-                      ...IMAGE_COMMAND_ASSERTION_KEYS,
                       ...SKILLS_RUNTIME_ASSERTION_KEYS,
                     ]
-                  : isImageCommandScenario
+                  : isWebToolsRenderingScenario
                     ? [
                         "usedCurrentTurnCancel",
                         "externalFixtureCancelUsed",
@@ -416,12 +402,10 @@ export function buildNotApplicableAssertions(context) {
                         "goalObjectiveTextReachedBackend",
                         "guiGoalCompleted",
                         "readModelGoalCompleted",
-                        ...WEB_TOOLS_RENDERING_ASSERTION_KEYS,
+                        ...IMAGE_COMMAND_ASSERTION_KEYS,
                         ...MCP_STRUCTURED_CONTENT_ASSERTION_KEYS,
-                        ...MEDIA_REFERENCE_ASSERTION_KEYS,
-                        ...SKILLS_RUNTIME_ASSERTION_KEYS,
                       ]
-                    : isWebToolsRenderingScenario
+                    : isMcpStructuredContentScenario
                       ? [
                           "usedCurrentTurnCancel",
                           "externalFixtureCancelUsed",
@@ -451,10 +435,12 @@ export function buildNotApplicableAssertions(context) {
                           "goalObjectiveTextReachedBackend",
                           "guiGoalCompleted",
                           "readModelGoalCompleted",
+                          ...WEB_TOOLS_RENDERING_ASSERTION_KEYS,
                           ...IMAGE_COMMAND_ASSERTION_KEYS,
-                          ...MCP_STRUCTURED_CONTENT_ASSERTION_KEYS,
+                          ...MEDIA_REFERENCE_ASSERTION_KEYS,
+                          ...SKILLS_RUNTIME_ASSERTION_KEYS,
                         ]
-                      : isMcpStructuredContentScenario
+                      : isSkillsRuntimeScenario
                         ? [
                             "usedCurrentTurnCancel",
                             "externalFixtureCancelUsed",
@@ -485,11 +471,11 @@ export function buildNotApplicableAssertions(context) {
                             "guiGoalCompleted",
                             "readModelGoalCompleted",
                             ...WEB_TOOLS_RENDERING_ASSERTION_KEYS,
-                            ...IMAGE_COMMAND_ASSERTION_KEYS,
+                            ...MCP_STRUCTURED_CONTENT_ASSERTION_KEYS,
                             ...MEDIA_REFERENCE_ASSERTION_KEYS,
-                            ...SKILLS_RUNTIME_ASSERTION_KEYS,
+                            ...IMAGE_COMMAND_ASSERTION_KEYS,
                           ]
-                        : isSkillsRuntimeScenario
+                        : isSoulStyleScenario
                           ? [
                               "usedCurrentTurnCancel",
                               "externalFixtureCancelUsed",
@@ -501,8 +487,6 @@ export function buildNotApplicableAssertions(context) {
                               "guiContinueCompleted",
                               "readModelContinueCompleted",
                               "backendRecordedCancelThenContinue",
-                              "noEpochFallbackTitle",
-                              "readModelCompleted",
                               "eventReadProbeObserved",
                               "readModelEventReadAligned",
                               "readModelToolCallAligned",
@@ -511,7 +495,6 @@ export function buildNotApplicableAssertions(context) {
                               "planCollaborationModeReachedBackend",
                               "guiPlanRailVisible",
                               "guiPlanStepsVisible",
-                              "guiPlanDecisionDrawerVisible",
                               "readModelPlanCompleted",
                               "proposedPlanVisible",
                               "goalModeEnabledInGui",
@@ -523,68 +506,36 @@ export function buildNotApplicableAssertions(context) {
                               ...MCP_STRUCTURED_CONTENT_ASSERTION_KEYS,
                               ...MEDIA_REFERENCE_ASSERTION_KEYS,
                               ...IMAGE_COMMAND_ASSERTION_KEYS,
+                              ...SKILLS_RUNTIME_ASSERTION_KEYS,
                             ]
-                          : isSoulStyleScenario
-                            ? [
-                                "usedCurrentTurnCancel",
-                                "externalFixtureCancelUsed",
-                                "fixtureCancelReachedBackend",
-                                "guiStopClicked",
-                                "readModelCanceled",
-                                "continuePromptReachedBackend",
-                                "guiContinueInputSubmitted",
-                                "guiContinueCompleted",
-                                "readModelContinueCompleted",
-                                "backendRecordedCancelThenContinue",
-                                "eventReadProbeObserved",
-                                "readModelEventReadAligned",
-                                "readModelToolCallAligned",
-                                "planModeEnabledInGui",
-                                "planPromptReachedBackend",
-                                "planCollaborationModeReachedBackend",
-                                "guiPlanRailVisible",
-                                "guiPlanStepsVisible",
-                                "readModelPlanCompleted",
-                                "proposedPlanVisible",
-                                "goalModeEnabledInGui",
-                                "goalPromptReachedBackend",
-                                "goalObjectiveTextReachedBackend",
-                                "guiGoalCompleted",
-                                "readModelGoalCompleted",
-                                ...WEB_TOOLS_RENDERING_ASSERTION_KEYS,
-                                ...MCP_STRUCTURED_CONTENT_ASSERTION_KEYS,
-                                ...MEDIA_REFERENCE_ASSERTION_KEYS,
-                                ...IMAGE_COMMAND_ASSERTION_KEYS,
-                                ...SKILLS_RUNTIME_ASSERTION_KEYS,
-                              ]
-                            : [
-                                "usedCurrentTurnCancel",
-                                "externalFixtureCancelUsed",
-                                "fixtureCancelReachedBackend",
-                                "guiStopClicked",
-                                "readModelCanceled",
-                                "continuePromptReachedBackend",
-                                "guiContinueInputSubmitted",
-                                "guiContinueCompleted",
-                                "readModelContinueCompleted",
-                                "backendRecordedCancelThenContinue",
-                                "planModeEnabledInGui",
-                                "planPromptReachedBackend",
-                                "planCollaborationModeReachedBackend",
-                                "guiPlanRailVisible",
-                                "guiPlanStepsVisible",
-                                "readModelPlanCompleted",
-                                "proposedPlanVisible",
-                                "goalModeEnabledInGui",
-                                "goalPromptReachedBackend",
-                                "goalObjectiveTextReachedBackend",
-                                "guiGoalCompleted",
-                                "readModelGoalCompleted",
-                                ...WEB_TOOLS_RENDERING_ASSERTION_KEYS,
-                                ...MCP_STRUCTURED_CONTENT_ASSERTION_KEYS,
-                                ...IMAGE_COMMAND_ASSERTION_KEYS,
-                                ...SKILLS_RUNTIME_ASSERTION_KEYS,
-                              ];
+                          : [
+                              "usedCurrentTurnCancel",
+                              "externalFixtureCancelUsed",
+                              "fixtureCancelReachedBackend",
+                              "guiStopClicked",
+                              "readModelCanceled",
+                              "continuePromptReachedBackend",
+                              "guiContinueInputSubmitted",
+                              "guiContinueCompleted",
+                              "readModelContinueCompleted",
+                              "backendRecordedCancelThenContinue",
+                              "planModeEnabledInGui",
+                              "planPromptReachedBackend",
+                              "planCollaborationModeReachedBackend",
+                              "guiPlanRailVisible",
+                              "guiPlanStepsVisible",
+                              "readModelPlanCompleted",
+                              "proposedPlanVisible",
+                              "goalModeEnabledInGui",
+                              "goalPromptReachedBackend",
+                              "goalObjectiveTextReachedBackend",
+                              "guiGoalCompleted",
+                              "readModelGoalCompleted",
+                              ...WEB_TOOLS_RENDERING_ASSERTION_KEYS,
+                              ...MCP_STRUCTURED_CONTENT_ASSERTION_KEYS,
+                              ...IMAGE_COMMAND_ASSERTION_KEYS,
+                              ...SKILLS_RUNTIME_ASSERTION_KEYS,
+                            ];
   const notApplicableAssertions = isAnyExpertSkillsRuntimeScenario
     ? [
         "usedCurrentTurnCancel",
@@ -622,7 +573,6 @@ export function buildNotApplicableAssertions(context) {
         ...SKILLS_RUNTIME_ASSERTION_KEYS,
         ...APPROVAL_REQUEST_RESUME_ASSERTION_KEYS,
         ...INPUTBAR_RICH_RESTORE_ASSERTION_KEYS,
-        ...INPUTBAR_PENDING_STEER_RICH_RESTORE_ASSERTION_KEYS,
         ...(isExpertPlazaSkillsRuntimeScenario ||
         isExpertPanelSkillsRuntimeScenario
           ? []
@@ -643,19 +593,10 @@ export function buildNotApplicableAssertions(context) {
     ...notApplicableAssertions,
     ...RIGHT_SURFACE_VISUAL_MATRIX_ASSERTION_KEYS,
     ...CONTENT_FACTORY_ARTICLE_WORKSPACE_ASSERTION_KEYS,
-    ...(isInputbarRichRestoreScenario ||
-    isInputbarPendingSteerRichRestoreScenario
+    ...(isInputbarRichRestoreScenario
       ? []
       : INPUTBAR_RICH_RESTORE_ASSERTION_KEYS),
-    ...(isInputbarPendingSteerRichRestoreScenario
-      ? []
-      : INPUTBAR_PENDING_STEER_RICH_RESTORE_ASSERTION_KEYS),
-    ...(isInputbarPendingSteerMultiQueueScenario
-      ? []
-      : INPUTBAR_PENDING_STEER_MULTI_QUEUE_ASSERTION_KEYS),
-    ...(isInputbarPendingSteerPopFrontResumeScenario
-      ? []
-      : INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_ASSERTION_KEYS),
+    ...(isActiveSteerScenario ? [] : ACTIVE_STEER_ASSERTION_KEYS),
     ...(isReasoningFirstVisibleScenario
       ? []
       : REASONING_FIRST_VISIBLE_ASSERTION_KEYS),

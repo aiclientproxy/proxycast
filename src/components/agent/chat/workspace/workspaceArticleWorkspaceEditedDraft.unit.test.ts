@@ -4,7 +4,7 @@ import {
   applyWorkspaceArticleEditedDraft,
   buildWorkspaceArticleEditedDraftFromChange,
   buildWorkspaceArticleEditedDraftKey,
-  buildWorkspaceArticleEditedDraftUpdateRequest,
+  buildWorkspaceArticleEditedDraftArtifactWriteParams,
   markdownContainsWorkspaceArticleInlineImageTask,
   shouldRejectWorkspaceArticleEditedDraftChange,
 } from "./workspaceArticleWorkspaceEditedDraft";
@@ -85,7 +85,7 @@ describe("workspaceArticleWorkspaceEditedDraft", () => {
     expect(nextWorkspace?.objects[1]).toBe(articleWorkspace.objects[1]);
   });
 
-  it("应把 Article Editor 编辑正文投影为 agentSession/update request", () => {
+  it("应把 Article Editor 编辑正文投影为 artifact/write request", () => {
     const articleObject = articleWorkspace.objects[0]!;
     const change = {
       articleWorkspace,
@@ -98,29 +98,44 @@ describe("workspaceArticleWorkspaceEditedDraft", () => {
     );
 
     expect(
-      buildWorkspaceArticleEditedDraftUpdateRequest(change, editedDraft),
-    ).toEqual({
-      session_id: "session-main",
-      article_workspace_selected_object_ref: {
-        appId: "content-factory-app",
-        kind: "articleDraft",
-        id: "article-1",
-        sessionId: "session-main",
-        artifactIds: ["artifact-article-1"],
-      },
-      article_workspace_edited_draft: {
-        objectKey: buildWorkspaceArticleEditedDraftKey(articleObject),
-        objectRef: {
-          appId: "content-factory-app",
-          kind: "articleDraft",
-          id: "article-1",
-          sessionId: "session-main",
-          artifactIds: ["artifact-article-1"],
+      buildWorkspaceArticleEditedDraftArtifactWriteParams(
+        change,
+        editedDraft,
+        " thread-main ",
+      ),
+    ).toMatchObject({
+      threadId: "thread-main",
+      artifact: {
+        artifactRef: "artifact-article-1",
+        artifactDocumentId: "article-1",
+        title: "公众号文章草稿",
+        kind: "article_workspace_draft",
+        status: "draft",
+        content: "# 新正文\n\n这是用户编辑后的正文。",
+        metadata: {
+          editedDraft: {
+            objectKey: buildWorkspaceArticleEditedDraftKey(articleObject),
+            objectRef: {
+              appId: "content-factory-app",
+              kind: "articleDraft",
+              id: "article-1",
+              sessionId: "session-main",
+              artifactIds: ["artifact-article-1"],
+            },
+            markdown: "# 新正文\n\n这是用户编辑后的正文。",
+            updatedAt: "2026-06-29T10:00:00.000Z",
+          },
+          workspacePatch: {
+            objects: [
+              expect.objectContaining({
+                source: expect.objectContaining({
+                  documentText: "# 新正文\n\n这是用户编辑后的正文。",
+                }),
+              }),
+              expect.any(Object),
+            ],
+          },
         },
-        markdown: "# 新正文\n\n这是用户编辑后的正文。",
-        documentText: "# 新正文\n\n这是用户编辑后的正文。",
-        finalMarkdown: "# 新正文\n\n这是用户编辑后的正文。",
-        updatedAt: "2026-06-29T10:00:00.000Z",
       },
     });
   });

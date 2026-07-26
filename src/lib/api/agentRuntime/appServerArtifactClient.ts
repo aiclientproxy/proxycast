@@ -156,10 +156,19 @@ export function createAppServerArtifactClient({
     };
   }
 
+  async function writeAgentRuntimeArtifactSnapshot(
+    params: AppServerArtifactWriteParams,
+  ): Promise<AppServerArtifactWriteResponse> {
+    const response = await appServerClient.writeArtifact(params);
+    assertArtifactWriteResponse(response.result);
+    return response.result;
+  }
+
   return {
     readAgentRuntimeArtifactPreviewContent,
     readAgentRuntimeTimelineArtifactContent,
     saveAgentRuntimeArtifactDocumentSnapshot,
+    writeAgentRuntimeArtifactSnapshot,
   };
 }
 
@@ -633,6 +642,9 @@ export const readAgentRuntimeArtifactPreviewContent =
 
 export const saveAgentRuntimeArtifactDocumentSnapshot =
   defaultAppServerArtifactClient.saveAgentRuntimeArtifactDocumentSnapshot;
+
+export const writeAgentRuntimeArtifactSnapshot =
+  defaultAppServerArtifactClient.writeAgentRuntimeArtifactSnapshot;
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)

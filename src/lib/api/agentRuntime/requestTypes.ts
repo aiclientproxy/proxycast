@@ -1,8 +1,3 @@
-import type {
-  AgentExecutionStrategy,
-  AgentSessionExecutionRuntimeAccessMode,
-  AgentSessionExecutionRuntimePreferences,
-} from "../agentExecutionRuntime";
 export interface AgentRuntimeCreateSessionOptions {
   runStartHooks?: boolean;
   workingDir?: string | null;
@@ -108,17 +103,4 @@ export interface AgentRuntimeReplayedActionRequiredView {
     thread_id?: string;
     turn_id?: string;
   };
-}
-
-export interface AgentRuntimeUpdateSessionRequest {
-  session_id: string;
-  name?: string;
-  provider_selector?: string;
-  provider_name?: string;
-  model_name?: string;
-  execution_strategy?: AgentExecutionStrategy;
-  recent_access_mode?: AgentSessionExecutionRuntimeAccessMode;
-  recent_preferences?: AgentSessionExecutionRuntimePreferences;
-  article_workspace_selected_object_ref?: Record<string, unknown> | null;
-  article_workspace_edited_draft?: Record<string, unknown> | null;
 }

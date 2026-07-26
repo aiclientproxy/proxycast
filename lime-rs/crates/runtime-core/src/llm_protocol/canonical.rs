@@ -92,6 +92,8 @@ pub enum ContentPart {
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         metadata: ProviderMetadata,
     },
+    /// A validated Responses API item that must retain its exact provider wire shape.
+    RawResponseItem { item: Value },
 }
 
 impl ContentPart {

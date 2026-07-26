@@ -87,18 +87,17 @@ function findPendingApprovalServerRequest(lifecycleEntries) {
     return null;
   }
   const request = entries[requestIndex];
-  const settled = entries.slice(requestIndex + 1).some(
-    (entry) =>
-      entry?.id === request.id &&
-      (entry?.kind === "response" || entry?.kind === "resolved"),
-  );
+  const settled = entries
+    .slice(requestIndex + 1)
+    .some(
+      (entry) =>
+        entry?.id === request.id &&
+        (entry?.kind === "response" || entry?.kind === "resolved"),
+    );
   return settled ? null : request;
 }
 
-export function summarizeApprovalPendingReadModel(
-  readModel,
-  lifecycleEntries,
-) {
+export function summarizeApprovalPendingReadModel(readModel, lifecycleEntries) {
   const readModelPendingRequests = collectPendingRequests(readModel);
   const request = findPendingApprovalServerRequest(lifecycleEntries);
   const readModelSerialized = JSON.stringify(readModel || {});

@@ -109,12 +109,14 @@ export function resolveVisibleTextDeltaAfterSnapshotPrefill(params: {
   return { nextReplayOffset: null, textDelta: params.deltaText };
 }
 
-export function bindAssistantMessageToRuntimeTurn(
+export function bindSubmissionMessagesToRuntimeTurn(
   setMessages: Dispatch<SetStateAction<Message[]>>,
   assistantMsgId: string,
+  pendingTurnKey: string,
   turnId?: string | null,
 ) {
   const normalizedTurnId = turnId?.trim();
+  const normalizedPendingTurnKey = pendingTurnKey.trim();
   if (!normalizedTurnId) {
     return;
   }
@@ -123,9 +125,13 @@ export function bindAssistantMessageToRuntimeTurn(
     let changed = false;
     const next = prev.map((message) => {
       if (
-        message.id !== assistantMsgId ||
-        message.runtimeTurnId === normalizedTurnId
+        message.id !== assistantMsgId &&
+        (!normalizedPendingTurnKey ||
+          message.runtimeTurnId !== normalizedPendingTurnKey)
       ) {
+        return message;
+      }
+      if (message.runtimeTurnId === normalizedTurnId) {
         return message;
       }
       changed = true;

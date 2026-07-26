@@ -10,7 +10,6 @@ import type {
   AgentRuntimeProfileStatus,
   AgentSessionDetail,
 } from "./sessionTypes";
-import type { QueuedTurnSnapshot } from "../queuedTurn";
 import { readCanonicalThreadItem } from "./appServerCanonicalItemReader";
 
 export interface CanonicalThreadListProjectionOptions {
@@ -93,6 +92,11 @@ function readCanonicalThreadOverview(
     sessionId,
     threadId,
     parentThreadId: readOptionalStringField(thread, "parentThreadId"),
+    canAcceptDirectInput: readOptionalBooleanField(
+      thread,
+      "canAcceptDirectInput",
+      "can_accept_direct_input",
+    ),
     title,
     businessObjectRefMetadata: metadata,
     model,
@@ -183,7 +187,6 @@ export function readCanonicalThreadDetail(
     return null;
   }
   const messages = canonicalItemsToMessages(items);
-  const queuedTurns = canonicalQueuedTurns(rawTurns, updatedAtMs);
   const threadStatus = canonicalThreadStatus(thread.status);
   if (!threadStatus) {
     return null;
@@ -219,9 +222,13 @@ export function readCanonicalThreadDetail(
     messages,
     turns,
     items,
-    queued_turns: queuedTurns,
     thread_read: {
       thread_id: threadId,
+      can_accept_direct_input: readOptionalBooleanField(
+        thread,
+        "canAcceptDirectInput",
+        "can_accept_direct_input",
+      ),
       status: threadStatus,
       profile_status: profileStatus,
       active_turn_id: turns.find((turn) => turn.status === "running")?.id,
@@ -230,7 +237,6 @@ export function readCanonicalThreadDetail(
         status: canonicalProfileStatus(turn.status),
         native_status: turn.status,
       })),
-      queued_turns: queuedTurns,
       session_business_object_ref_metadata: metadata,
       article_workspace: articleWorkspace,
       articleWorkspace,
@@ -297,62 +303,11 @@ function canonicalThreadItems(
   return items;
 }
 
-function canonicalQueuedTurns(
-  turns: unknown[],
-  fallbackTimestampMs: number,
-): QueuedTurnSnapshot[] {
-  return turns.flatMap((turn, index) => {
-    if (!isRecord(turn) || !isQueuedTurn(turn)) {
-      return [];
-    }
-    const queuedTurnId = canonicalTurnId(turn);
-    if (!queuedTurnId) {
-      return [];
-    }
-    const position =
-      (isRecord(turn.queue)
-        ? readNumberField(turn.queue, "position")
-        : undefined) ?? index;
-    const createdAt =
-      canonicalThreadTime(turn, "createdAt") ??
-      canonicalThreadTime(turn, "startedAt") ??
-      fallbackTimestampMs;
-    const messageText = queuedTurnMessageText(turn);
-    return [
-      {
-        queued_turn_id: queuedTurnId,
-        message_preview: messageText || "排队回合",
-        message_text: messageText,
-        created_at: createdAt,
-        image_count: 0,
-        position,
-      },
-    ];
-  });
-}
-
 function isQueuedTurn(value: unknown): boolean {
   return (
     isRecord(value) &&
     isRecord(value.queue) &&
     readStringField(value.queue, "state") === "queued"
-  );
-}
-
-function queuedTurnMessageText(turn: Record<string, unknown>): string {
-  if (Array.isArray(turn.items)) {
-    const userItem = turn.items.find(
-      (item) =>
-        isRecord(item) && readStringField(item, "type") === "userMessage",
-    );
-    if (isRecord(userItem)) {
-      return userInputText(userItem.content);
-    }
-  }
-  return (
-    readOptionalStringField(turn, "prompt") ||
-    readOptionalStringField(turn, "message") ||
-    ""
   );
 }
 
@@ -677,6 +632,15 @@ function readNumberField(
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
+}
+
+function readOptionalBooleanField(
+  record: Record<string, unknown>,
+  camelKey: string,
+  snakeKey?: string,
+): boolean | undefined {
+  const value = readField(record, camelKey, snakeKey);
+  return typeof value === "boolean" ? value : undefined;
 }
 
 function readOptionalObjectField(

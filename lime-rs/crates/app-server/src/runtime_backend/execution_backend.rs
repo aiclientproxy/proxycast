@@ -6,7 +6,7 @@ use super::{
 use crate::runtime::ToolInventoryReadRequest;
 use crate::{
     ActionRespondRequest, AppDataSource, CancelExecutionRequest, ExecutionBackend,
-    ExecutionRequest, RuntimeCoreError, RuntimeEvent, RuntimeEventSink,
+    ExecutionRequest, RuntimeCoreError, RuntimeEvent, RuntimeEventSink, RuntimeHostContext,
 };
 use agent_runtime::action_required::{ActionTerminalStatus, PendingActionRestoreOutcome};
 use agent_runtime::session_loop::RuntimeSessionInputHandle;
@@ -15,6 +15,72 @@ use model_provider::current_client::CurrentProviderMessage;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+
+pub(super) async fn preflight_thread_settings_route(
+    backend: &RuntimeBackend,
+    session: &app_server_protocol::AgentSession,
+    settings: &app_server_protocol::protocol::v2::ThreadSettings,
+) -> Result<(), RuntimeCoreError> {
+    let mut runtime_options = app_server_protocol::RuntimeOptions::default();
+    let runtime_request = runtime_options.runtime_request_mut();
+    runtime_request.provider_preference = Some(settings.model_provider.clone());
+    runtime_request.model_preference = Some(settings.model.clone());
+    runtime_request.reasoning_effort = settings.effort.clone();
+    let request = ExecutionRequest {
+        host: RuntimeHostContext::default(),
+        session: session.clone(),
+        turn: app_server_protocol::AgentTurn {
+            turn_id: "thread-settings-preflight".to_string(),
+            session_id: session.session_id.clone(),
+            thread_id: session.thread_id.clone(),
+            status: app_server_protocol::AgentTurnStatus::Accepted,
+            started_at: None,
+            completed_at: None,
+        },
+        forked_from_thread_id: None,
+        input: agent_runtime::reply_input::RuntimeReplyInput::text(
+            "thread settings route preflight",
+        ),
+        runtime_options: Some(runtime_options),
+        expected_output: None,
+        structured_output: None,
+        output_schema: None,
+        event_name: None,
+        queued_turn_id: None,
+        queue_if_busy: false,
+        skip_pre_submit_resume: false,
+        agent_control_gateway: None,
+    };
+    let route = backend.resolve_turn_route(&request).await?;
+    if let Some(failure) = route.resolution.resolved_route.failure.as_ref() {
+        return Err(super::runtime_error_from_route_failure(
+            &session.session_id,
+            &route.selection,
+            failure,
+        ));
+    }
+    if route.selection.provider != settings.model_provider
+        || route.selection.model != settings.model
+    {
+        return Err(RuntimeCoreError::RouteRejected {
+            session_id: session.session_id.clone(),
+            provider: Some(settings.model_provider.clone()),
+            model: Some(settings.model.clone()),
+            category: app_server_protocol::RouteFailureCategory::NoCandidate,
+            reason_code: "model_switch_fallback_not_allowed".to_string(),
+        });
+    }
+    if settings.effort.is_some() && route.selection.reasoning_effort != settings.effort {
+        return Err(RuntimeCoreError::RouteRejected {
+            session_id: session.session_id.clone(),
+            provider: Some(settings.model_provider.clone()),
+            model: Some(settings.model.clone()),
+            category: app_server_protocol::RouteFailureCategory::CapabilityGap,
+            reason_code: "reasoning_effort_unsupported".to_string(),
+        });
+    }
+    Ok(())
+}
 
 #[async_trait]
 impl ExecutionBackend for RuntimeBackend {
@@ -54,6 +120,15 @@ impl ExecutionBackend for RuntimeBackend {
         self.prepare_turn_route(request, first_sampling_turn)
             .await
             .map(|_| ())
+    }
+
+    async fn preflight_thread_settings(
+        &self,
+        session: &app_server_protocol::AgentSession,
+        settings: &app_server_protocol::protocol::v2::ThreadSettings,
+    ) -> Result<(), RuntimeCoreError> {
+        self.preflight_thread_settings_route(session, settings)
+            .await
     }
 
     async fn prepare_turn_runtime_options(

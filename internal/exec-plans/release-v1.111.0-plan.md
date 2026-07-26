@@ -1,6 +1,6 @@
 # Lime v1.111.0 发布执行计划
 
-状态：post-release-fix-validated-awaiting-commit
+状态：post-release-fix-complete
 日期：2026-07-24
 目标版本：`1.111.0`
 目标 tag：`v1.111.0`
@@ -12,7 +12,7 @@
 ## 当前阶段与下一刀
 
 - 当前阶段：release candidate 已完成版本事实源、双语 release notes、current contract 迁移、i18n dead key 清理与全部发布前只读门禁。
-- 下一刀：复核补丁候选集，取得 Git 写操作确认后创建修复提交并推送 `main`；不重打、不覆盖已发布的 `v1.111.0`。
+- 下一刀：补丁版本 `v1.111.1` 的独立发布计划见 `release-v1.111.1-plan.md`。
 
 ## Release Candidate
 
@@ -82,4 +82,4 @@
 - 版本与远端事实：`v1.111.0` 已发布，现有 release commit `94b784718`、`main` 与 tag 不重写；本轮只创建 post-release fix commit 推送 `main`。
 - 验证结果：定向 workspace/helper 与 boundary 测试通过；`npm test -- --resume` 完成 `112/112`；`npm run lint`、`npm run typecheck`、`npm run verify:app-version`、`npm run test:contracts`、`npm run governance:legacy-report`、`npm run governance:scripts`、`npm run governance:electron-release-workflow`、`git diff --check`、`cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server`、`npm run smoke:agent-runtime-current-fixture` 与 `npm run verify:gui-smoke` 均通过。
 - `npm run verify:local`：未通过；smart 全量从第 1 批执行至第 4 批时，既有 `src/components/agent/chat/index.projectRestore.test.tsx` 出现漂移的异步超时 / workspace 断言失败，单文件复现同样会在不同测试间漂移。本轮未修改该无关业务/测试基础设施，也未将其写成通过。
-- 退出条件：上述定向与跨层门禁通过，`verify:local` 的基线异步失败已记录；剩余动作仅为显式暂存候选、创建修复提交、推送 `main` 与远端复核。
+- 退出条件：上述定向与跨层门禁通过，`verify:local` 的基线异步失败已记录；补充修复提交 `114455c39` 已推送到 `main`，`v1.111.0` tag 未改写。

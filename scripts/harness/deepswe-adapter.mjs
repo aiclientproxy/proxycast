@@ -217,7 +217,7 @@ function runContextBase(options, runId, task) {
       appServerMethods: [
         "workspace/ensure",
         "thread/start",
-        "agentSession/update",
+        "thread/settings/update",
         "turn/start",
         "thread/read",
         "evidence/export",

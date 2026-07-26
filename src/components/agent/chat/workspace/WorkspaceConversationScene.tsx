@@ -67,6 +67,7 @@ interface WorkspaceChatContentParams {
   compactChrome: boolean;
   taskCenterSurface: boolean;
   contextWorkspaceEnabled: boolean;
+  showFloatingInputOverlay: boolean;
   generalWorkbenchMessageViewportBottomPadding?: string;
   messageListProps: MessageListProps;
   showWorkspaceAlert: boolean;
@@ -121,6 +122,7 @@ function renderWorkspaceChatContent({
   compactChrome,
   taskCenterSurface,
   contextWorkspaceEnabled,
+  showFloatingInputOverlay,
   generalWorkbenchMessageViewportBottomPadding,
   messageListProps,
   showWorkspaceAlert,
@@ -163,11 +165,22 @@ function renderWorkspaceChatContent({
       placement="message"
     />
   ) : null;
+  const floatingInputTailSpacer =
+    contextWorkspaceEnabled && showFloatingInputOverlay ? (
+      <div
+        aria-hidden="true"
+        className="h-8 shrink-0 max-[960px]:h-16"
+        data-testid="message-list-floating-input-spacer"
+      />
+    ) : null;
   const trailingMessageContent =
-    messageListProps.trailingContent || pendingA2UIMessageTail ? (
+    messageListProps.trailingContent ||
+    pendingA2UIMessageTail ||
+    floatingInputTailSpacer ? (
       <>
         {messageListProps.trailingContent}
         {pendingA2UIMessageTail}
+        {floatingInputTailSpacer}
       </>
     ) : null;
 
@@ -437,6 +450,7 @@ export function WorkspaceConversationScene({
     compactChrome,
     taskCenterSurface: navbarContextVariant === "task-center",
     contextWorkspaceEnabled,
+    showFloatingInputOverlay,
     generalWorkbenchMessageViewportBottomPadding,
     messageListProps,
     showWorkspaceAlert: workspaceAlertVisible,

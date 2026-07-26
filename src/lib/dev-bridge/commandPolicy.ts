@@ -167,7 +167,7 @@ const APP_SERVER_CURRENT_METHODS = new Set([
   "workflow/cancel",
   "workflow/retry",
   "workflow/respond",
-  "agentSession/update",
+  "thread/settings/update",
   "thread/archive",
   "thread/unarchive",
   "skill/list",

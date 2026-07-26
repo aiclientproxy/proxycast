@@ -777,6 +777,19 @@ pub struct ProviderWithKeys {
 
 pub struct ApiKeyProviderDao;
 
+fn parse_provider_type_column(
+    value: &str,
+    column_index: usize,
+) -> Result<ApiProviderType, rusqlite::Error> {
+    value.parse().map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            column_index,
+            rusqlite::types::Type::Text,
+            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, error)),
+        )
+    })
+}
+
 impl ApiKeyProviderDao {
     // ==================== Provider 操作 ====================
 
@@ -955,7 +968,7 @@ impl ApiKeyProviderDao {
         let created_at_str: String = row.get(14)?;
         let updated_at_str: String = row.get(15)?;
 
-        let provider_type: ApiProviderType = type_str.parse().unwrap_or(ApiProviderType::Openai);
+        let provider_type = parse_provider_type_column(&type_str, 2)?;
         let group: ProviderGroup = group_str.parse().unwrap_or(ProviderGroup::Custom);
 
         let created_at = DateTime::parse_from_rfc3339(&created_at_str)
@@ -1102,10 +1115,7 @@ impl ApiKeyProviderDao {
             let provider = ApiKeyProvider {
                 id: row.get(9)?,
                 name: row.get(10)?,
-                provider_type: row
-                    .get::<_, String>(11)?
-                    .parse()
-                    .unwrap_or(ApiProviderType::Openai),
+                provider_type: parse_provider_type_column(&row.get::<_, String>(11)?, 11)?,
                 api_host: row.get(12)?,
                 is_system: row.get(13)?,
                 group: row

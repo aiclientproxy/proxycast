@@ -31,12 +31,24 @@ fn canonical_thread_projects_to_v2_shape_and_seconds() {
     assert_eq!(projected.created_at, 1_700_000_000);
     assert_eq!(projected.updated_at, 1_700_000_002);
     assert_eq!(projected.cwd, "/workspace");
+    assert_eq!(projected.can_accept_direct_input, Some(true));
     assert_eq!(projected.history_mode, v2::ThreadHistoryMode::Paginated);
     assert_eq!(projected.turns.len(), 1);
     assert!(matches!(
         projected.turns[0].items[0],
         v2::ThreadItem::UserMessage { .. }
     ));
+}
+
+#[test]
+fn spawned_child_thread_projects_as_parent_owned() {
+    let mut thread = canonical_thread(false);
+    thread.parent_thread_id = Some(canonical::ThreadId::new("thread-parent"));
+
+    let projected = project_thread(thread).expect("project parent-owned thread");
+
+    assert_eq!(projected.parent_thread_id.as_deref(), Some("thread-parent"));
+    assert_eq!(projected.can_accept_direct_input, Some(false));
 }
 
 #[test]

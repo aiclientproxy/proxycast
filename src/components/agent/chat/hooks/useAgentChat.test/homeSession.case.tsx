@@ -13,7 +13,7 @@ import {
   mockResolveClawWorkspaceProviderSelection,
   mockScheduleMinimumDelayIdleTask,
   mockSubmitAgentRuntimeTurn,
-  mockUpdateAgentRuntimeSession,
+  mockUpdateAgentRuntimeThreadSettings,
   mountHook,
   seedSession,
 } from "../useAgentChat.testUtils";
@@ -91,7 +91,6 @@ describe("useAgentChat 首页新会话", () => {
         },
       ],
       items: [],
-      queued_turns: [],
       thread_read: {
         thread_id: threadId,
         status: "running",
@@ -196,7 +195,6 @@ describe("useAgentChat 首页新会话", () => {
         },
       ],
       items: [],
-      queued_turns: [],
       thread_read: {
         thread_id: threadId,
         status: "running",
@@ -462,7 +460,6 @@ describe("useAgentChat 首页新会话", () => {
       ],
       turns: [],
       items: [],
-      queued_turns: [],
     });
 
     const harness = mountHook(workspaceId);
@@ -1022,7 +1019,6 @@ describe("useAgentChat 首页新会话", () => {
       messages: [],
       turns: [],
       items: [],
-      queued_turns: [],
     });
 
     const harness = mountHook(workspaceId);
@@ -1093,11 +1089,13 @@ describe("useAgentChat 首页新会话", () => {
           .getValue()
           .topics.some((topic) => topic.id === "session-live-missing"),
       ).toBe(true);
-      expect(mockUpdateAgentRuntimeSession).not.toHaveBeenCalledWith({
-        session_id: "session-live-missing",
-        provider_name: harness.getValue().providerType,
-        model_name: harness.getValue().model,
-      });
+      expect(mockUpdateAgentRuntimeThreadSettings).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "session-live-missing",
+          modelProvider: harness.getValue().providerType,
+          model: harness.getValue().model,
+        }),
+      );
       expect(mockGetAgentRuntimeSession).toHaveBeenCalledWith(
         "session-live-missing",
         expect.objectContaining({ historyLimit: 40 }),
@@ -1151,7 +1149,6 @@ describe("useAgentChat 首页新会话", () => {
         messages: [],
         turns: [],
         items: [],
-        queued_turns: [],
       };
     });
 

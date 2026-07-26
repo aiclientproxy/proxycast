@@ -111,21 +111,14 @@ function hasConfiguredKeylessAccess(
 function isConfiguredApiKeyProvider(
   provider: ProviderWithKeysDisplay,
 ): boolean {
-  return (
-    provider.enabled &&
-    (provider.api_key_count > 0 || hasConfiguredKeylessAccess(provider))
-  );
+  return provider.enabled && hasProviderModelApiAccess(provider);
 }
 
 function hasProviderModelApiAccess(provider: ProviderWithKeysDisplay): boolean {
-  if (Array.isArray(provider.api_keys)) {
-    return (
-      provider.api_keys.some((apiKey) => apiKey.enabled !== false) ||
-      hasConfiguredKeylessAccess(provider)
-    );
-  }
-
-  return provider.api_key_count > 0 || hasConfiguredKeylessAccess(provider);
+  return (
+    provider.api_keys.some((apiKey) => apiKey.enabled) ||
+    hasConfiguredKeylessAccess(provider)
+  );
 }
 
 function isLimeHubProvider(provider: ProviderWithKeysDisplay): boolean {

@@ -106,6 +106,20 @@ function appServerClientMock(): AgentRuntimeAppServerClient {
       messages: [],
       notifications: [],
     }),
+    setThreadName: vi.fn().mockResolvedValue({
+      id: 6,
+      result: {},
+      response: { id: 6, result: {} },
+      messages: [],
+      notifications: [],
+    }),
+    updateThreadSettings: vi.fn().mockResolvedValue({
+      id: 5,
+      result: {},
+      response: { id: 5, result: {} },
+      messages: [],
+      notifications: [],
+    }),
     runThreadShellCommand: vi.fn().mockResolvedValue({
       id: 4,
       result: {},
@@ -122,20 +136,9 @@ function appServerClientMock(): AgentRuntimeAppServerClient {
       notifications: [],
     }),
     cancelTurn: vi.fn().mockResolvedValue({}),
-    compactAgentSession: vi.fn().mockResolvedValue({
+    startThreadCompaction: vi.fn().mockResolvedValue({
       id: 1,
-      result: {
-        session: {
-          sessionId: "session-1",
-          threadId: "thread-1",
-          appId: "agent-chat",
-          status: "idle",
-          createdAt: "2026-06-06T00:00:00.000Z",
-          updatedAt: "2026-06-06T00:00:00.000Z",
-        },
-        turns: [],
-        compacted: true,
-      },
+      result: {},
       response: {
         id: 1,
         result: {},
@@ -483,9 +486,8 @@ describe("agentRuntime threadClient", () => {
         thread: { id: "thread-1" },
       },
     });
-    expect(appServerClient.compactAgentSession).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      eventName: "agentSession/event/session-1",
+    expect(appServerClient.startThreadCompaction).toHaveBeenCalledWith({
+      threadId: "session-1",
     });
     expect(appServerClient.resumeThread).toHaveBeenCalledWith({
       threadId: "thread-1",
@@ -816,6 +818,41 @@ describe("agentRuntime threadClient", () => {
     await expect(client.readAgentRuntimeThread(" ")).rejects.toThrow(
       "threadId is required",
     );
+  });
+
+  it("model selection 应只提交一次 current thread/settings/update", async () => {
+    const appServerClient = appServerClientMock();
+    const client = createThreadClient({ appServerClient });
+
+    await client.updateAgentRuntimeThreadSettings({
+      threadId: " thread-1 ",
+      modelProvider: "xai",
+      model: "grok-4.5",
+      effort: "xhigh",
+    });
+
+    expect(appServerClient.updateThreadSettings).toHaveBeenCalledTimes(1);
+    expect(appServerClient.updateThreadSettings).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      modelProvider: "xai",
+      model: "grok-4.5",
+      effort: "xhigh",
+    });
+  });
+
+  it("thread rename 应只提交 current thread/setName", async () => {
+    const appServerClient = appServerClientMock();
+    const client = createThreadClient({ appServerClient });
+
+    await client.setAgentRuntimeThreadName({
+      threadId: " thread-1 ",
+      name: " 新标题 ",
+    });
+
+    expect(appServerClient.setThreadName).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      name: "新标题",
+    });
   });
 
   it("canonical child Thread 导航应只读取身份并严格解析 sessionId", async () => {

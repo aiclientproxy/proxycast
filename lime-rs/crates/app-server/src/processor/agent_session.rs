@@ -1,34 +1,17 @@
 //! agent_session domain handlers for the App Server processor.
 
 use super::{
-    dispatch_result, dispatch_result_with_events, parse_params,
-    project_event_notifications_jsonrpc, to_jsonrpc_error,
+    dispatch_result, parse_params, project_event_notifications_jsonrpc, to_jsonrpc_error,
     v2_notifications::V2NotificationProjector, RequestProcessor, RpcDispatch,
 };
 use app_server_protocol::{
-    AgentSessionCompactParams, AgentSessionFileCheckpointDiffParams,
-    AgentSessionFileCheckpointGetParams, AgentSessionFileCheckpointListParams,
-    AgentSessionFileCheckpointRestoreParams, AgentSessionMediaReadParams,
-    AgentSessionQueuedTurnPromoteParams, AgentSessionQueuedTurnRemoveParams,
-    AgentSessionToolInventoryReadParams, AgentSessionUpdateParams, JsonRpcError, JsonRpcMessage,
+    AgentSessionFileCheckpointDiffParams, AgentSessionFileCheckpointGetParams,
+    AgentSessionFileCheckpointListParams, AgentSessionFileCheckpointRestoreParams,
+    AgentSessionMediaReadParams, AgentSessionToolInventoryReadParams, JsonRpcError, JsonRpcMessage,
     RequestId,
 };
 
 impl RequestProcessor {
-    pub(super) async fn handle_session_update_impl(
-        &self,
-        params: Option<serde_json::Value>,
-    ) -> Result<RpcDispatch, JsonRpcError> {
-        self.ensure_initialized()?;
-        let params: AgentSessionUpdateParams = parse_params(params)?;
-        let response = self
-            .runtime
-            .update_session_current(params)
-            .await
-            .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
-    }
-
     pub(super) async fn handle_session_media_read_impl(
         &self,
         request_id: &RequestId,
@@ -75,48 +58,6 @@ impl RequestProcessor {
                 .map_err(to_jsonrpc_error)?
         };
         dispatch_result(response)
-    }
-
-    pub(super) async fn handle_session_compact_impl(
-        &self,
-        params: Option<serde_json::Value>,
-    ) -> Result<RpcDispatch, JsonRpcError> {
-        self.ensure_initialized()?;
-        let params: AgentSessionCompactParams = parse_params(params)?;
-        let output = self
-            .runtime
-            .compact_agent_session(params)
-            .await
-            .map_err(to_jsonrpc_error)?;
-        dispatch_result_with_events(output.response, output.events)
-    }
-
-    pub(super) async fn handle_session_queued_turn_remove_impl(
-        &self,
-        params: Option<serde_json::Value>,
-    ) -> Result<RpcDispatch, JsonRpcError> {
-        self.ensure_initialized()?;
-        let params: AgentSessionQueuedTurnRemoveParams = parse_params(params)?;
-        let output = self
-            .runtime
-            .remove_agent_session_queued_turn(params)
-            .await
-            .map_err(to_jsonrpc_error)?;
-        dispatch_result_with_events(output.response, output.events)
-    }
-
-    pub(super) async fn handle_session_queued_turn_promote_impl(
-        &self,
-        params: Option<serde_json::Value>,
-    ) -> Result<RpcDispatch, JsonRpcError> {
-        self.ensure_initialized()?;
-        let params: AgentSessionQueuedTurnPromoteParams = parse_params(params)?;
-        let output = self
-            .runtime
-            .promote_agent_session_queued_turn(params)
-            .await
-            .map_err(to_jsonrpc_error)?;
-        dispatch_result_with_events(output.response, output.events)
     }
 
     pub(super) async fn handle_file_checkpoint_list_impl(

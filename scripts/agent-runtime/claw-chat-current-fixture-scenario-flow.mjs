@@ -21,9 +21,6 @@ import {
   HOME_HOTPATH_GREETING_SCENARIO,
   HOME_HOTPATH_SCENARIO,
   IMAGE_COMMAND_SCENARIO,
-  INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO,
-  INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO,
-  INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO,
   INPUTBAR_RICH_RESTORE_SCENARIO,
   LIVE_TAIL_COMMIT_SCENARIO,
   MCP_STRUCTURED_CONTENT_DONE_TEXT,
@@ -62,10 +59,9 @@ import {
 } from "./claw-chat-current-fixture-gui-input-modes.mjs";
 import { runInputbarRichRestoreScenario } from "./claw-chat-current-fixture-inputbar-rich-restore.mjs";
 import {
-  runInputbarPendingSteerMultiQueueScenario,
-  runInputbarPendingSteerPopFrontResumeScenario,
-  runInputbarPendingSteerRichRestoreScenario,
-} from "./claw-chat-current-fixture-inputbar-pending-steer.mjs";
+  ACTIVE_STEER_SCENARIO,
+  runActiveSteerScenario,
+} from "./claw-chat-current-fixture-active-steer.mjs";
 import { runLiveTailCommitScenario } from "./claw-chat-current-fixture-live-tail.mjs";
 import { runElectronResizeReflowScenario } from "./claw-chat-current-fixture-resize-reflow.mjs";
 import {
@@ -292,6 +288,7 @@ export async function executeScenarioFlow({
   summary,
   appServerRequests,
   runtimeEnv,
+  readTextProviderRequests,
 }) {
   const isImageIntentScenario =
     options.scenario === IMAGE_COMMAND_SCENARIO ||
@@ -418,51 +415,23 @@ export async function executeScenarioFlow({
             : "decline",
       }),
     );
+  } else if (options.scenario === ACTIVE_STEER_SCENARIO) {
+    logStage("run-inputbar-active-steer");
+    Object.assign(
+      summary,
+      await runActiveSteerScenario({
+        page,
+        options,
+        summary,
+        appServerRequests,
+        readTextProviderRequests,
+      }),
+    );
   } else if (options.scenario === INPUTBAR_RICH_RESTORE_SCENARIO) {
     logStage("run-inputbar-rich-restore");
     Object.assign(
       summary,
       await runInputbarRichRestoreScenario({
-        page,
-        options,
-        summary,
-        appServerRequests,
-        runtimeEnv,
-      }),
-    );
-  } else if (
-    options.scenario === INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO
-  ) {
-    logStage("run-inputbar-pending-steer-rich-restore");
-    Object.assign(
-      summary,
-      await runInputbarPendingSteerRichRestoreScenario({
-        page,
-        options,
-        summary,
-        appServerRequests,
-        runtimeEnv,
-      }),
-    );
-  } else if (options.scenario === INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO) {
-    logStage("run-inputbar-pending-steer-multi-queue");
-    Object.assign(
-      summary,
-      await runInputbarPendingSteerMultiQueueScenario({
-        page,
-        options,
-        summary,
-        appServerRequests,
-        runtimeEnv,
-      }),
-    );
-  } else if (
-    options.scenario === INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO
-  ) {
-    logStage("run-inputbar-pending-steer-pop-front-resume");
-    Object.assign(
-      summary,
-      await runInputbarPendingSteerPopFrontResumeScenario({
         page,
         options,
         summary,
@@ -910,9 +879,7 @@ export async function executeScenarioFlow({
     options.scenario !== "expert-panel-skills-runtime" &&
     options.scenario !== RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO &&
     options.scenario !== INPUTBAR_RICH_RESTORE_SCENARIO &&
-    options.scenario !== INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO &&
-    options.scenario !== INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO &&
-    options.scenario !== INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO &&
+    options.scenario !== ACTIVE_STEER_SCENARIO &&
     options.scenario !== CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO &&
     options.scenario !== CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO
   ) {

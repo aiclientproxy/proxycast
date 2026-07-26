@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { updateAgentRuntimeSession } from "@/lib/api/agentRuntime/sessionClient";
+import { updateAgentRuntimeThreadToolPreferences } from "@/lib/api/agentRuntime/sessionClient";
 import { logAgentDebug } from "@/lib/agentDebug";
 import { scheduleMinimumDelayIdleTask } from "@/lib/utils/scheduleMinimumDelayIdleTask";
 import {
@@ -90,10 +90,7 @@ export function useSessionRecentMetadataSyncRuntime() {
         return;
       }
 
-      void updateAgentRuntimeSession({
-        session_id: sessionId,
-        ...pending.patch,
-      })
+      void updateAgentRuntimeThreadToolPreferences(sessionId, pending.patch)
         .then(() => {
           pending.resolvers.forEach((resolve) => resolve());
         })
@@ -211,10 +208,7 @@ export function useSessionRecentMetadataSyncRuntime() {
     ) => {
       await enqueueSessionRecentMetadataSync(
         sessionId,
-        {
-          recent_preferences:
-            createSessionRecentPreferencesFromChatToolPreferences(preferences),
-        },
+        createSessionRecentPreferencesFromChatToolPreferences(preferences),
         options,
       );
     },

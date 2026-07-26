@@ -14,6 +14,7 @@ pub struct SessionProviderConfig {
     pub base_url: Option<String>,
     pub credential_uuid: Option<String>,
     pub reasoning_effort: Option<String>,
+    pub service_tier: Option<String>,
     pub route_protocol: Option<ProtocolKind>,
     pub toolshim: bool,
     pub toolshim_model: Option<String>,
@@ -27,6 +28,7 @@ struct ProviderConfigurationRequest<'a> {
     pub provider: &'a str,
     pub model: &'a str,
     pub reasoning_effort: Option<String>,
+    pub service_tier: Option<String>,
     pub route_protocol: Option<ProtocolKind>,
     pub credential_ref: Option<&'a str>,
     pub direct_provider_config: Option<SessionProviderConfig>,
@@ -50,6 +52,7 @@ impl ConfiguredSessionProvider {
 #[derive(Debug, Clone)]
 pub struct ModelRouteProviderConfiguration {
     pub turn_provider: TurnProviderConfiguration,
+    pub service_tier: Option<String>,
     pub route_protocol: Option<ProtocolKind>,
     pub credential_ref: Option<String>,
     pub direct_provider_config: Option<SessionProviderConfig>,
@@ -75,6 +78,7 @@ async fn configure_provider_for_session(
             }
         }
         config.route_protocol = request.route_protocol.or(config.route_protocol);
+        config.service_tier = request.service_tier.or(config.service_tier);
         let runtime_config =
             session_provider_config_to_runtime_provider_config(&config, request.session_id);
         let provider =
@@ -93,6 +97,7 @@ async fn configure_provider_for_session(
         .await
         .map_err(|error| format!("从 API Key Provider 选择凭证失败: {error}"))?;
     runtime_config.reasoning_effort = request.reasoning_effort;
+    runtime_config.service_tier = request.service_tier;
     runtime_config.protocol = runtime_provider_protocol_from_route_protocol(request.route_protocol);
 
     let provider =
@@ -112,6 +117,7 @@ async fn configure_provider_for_session(
         base_url: runtime_config.base_url,
         credential_uuid: Some(runtime_config.credential_uuid),
         reasoning_effort: runtime_config.reasoning_effort,
+        service_tier: runtime_config.service_tier,
         route_protocol: route_protocol_from_runtime_provider_protocol(runtime_config.protocol),
         toolshim: runtime_config.toolshim,
         toolshim_model: runtime_config.toolshim_model,
@@ -147,6 +153,7 @@ pub(crate) async fn configure_model_route_provider_for_session_with_provider_and
             provider: configuration.turn_provider.route.provider.as_str(),
             model: configuration.turn_provider.route.model.as_str(),
             reasoning_effort: configuration.turn_provider.reasoning_effort,
+            service_tier: configuration.service_tier,
             route_protocol: configuration.route_protocol,
             credential_ref,
             direct_provider_config: configuration.direct_provider_config,
@@ -239,6 +246,7 @@ fn session_provider_config_to_runtime_provider_config(
             .clone()
             .unwrap_or_else(|| format!("manual:{session_id}")),
         reasoning_effort: config.reasoning_effort.clone(),
+        service_tier: config.service_tier.clone(),
         protocol: runtime_provider_protocol_from_route_protocol(config.route_protocol.clone()),
         supports_websockets: config.supports_websockets,
         toolshim: config.toolshim,
@@ -292,6 +300,7 @@ mod tests {
                 model,
                 reasoning_effort,
             ),
+            service_tier: None,
             route_protocol,
             credential_ref: None,
             direct_provider_config: None,
@@ -394,6 +403,7 @@ mod tests {
             base_url: Some("https://api.anthropic.com".to_string()),
             credential_uuid: Some("credential-anthropic".to_string()),
             reasoning_effort: Some("medium".to_string()),
+            service_tier: None,
             route_protocol: Some(ProtocolKind::AnthropicMessages),
             toolshim: false,
             toolshim_model: None,
@@ -426,6 +436,7 @@ mod tests {
             base_url: None,
             credential_uuid: None,
             reasoning_effort: None,
+            service_tier: None,
             route_protocol: Some(ProtocolKind::OpenaiResponses),
             toolshim: false,
             toolshim_model: None,

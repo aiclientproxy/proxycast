@@ -164,7 +164,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn custom_provider_declared_model_becomes_routing_metadata() {
+    async fn custom_provider_declared_model_does_not_infer_reasoning_from_name() {
         let db = test_db();
         let provider_service = ApiKeyProviderService::new();
         let provider = provider_service
@@ -223,8 +223,9 @@ mod tests {
                 .payload()
                 .pointer("/modelCapabilities/capabilities/reasoning")
                 .and_then(Value::as_bool),
-            Some(true)
+            Some(false)
         );
+        assert!(metadata.payload()["reasoning"]["reasoningEffort"].is_null());
         assert_eq!(
             metadata
                 .payload()
@@ -256,6 +257,7 @@ mod tests {
                 base_url: Some("http://127.0.0.1:56599".to_string()),
                 credential_uuid: None,
                 reasoning_effort: None,
+                service_tier: None,
                 route_protocol: None,
                 toolshim: false,
                 toolshim_model: None,

@@ -2,7 +2,6 @@
 
 mod v2_ingress;
 use super::thread_resume_context::request_id_for_thread_resume;
-
 use super::{
     event_notifications, v2_notifications::V2NotificationProjector, ConnectionRequestId,
     JsonRpcError, RequestProcessor,
@@ -159,17 +158,12 @@ impl RequestProcessor {
             METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE => {
                 self.handle_review_decision_save(params).boxed()
             }
-            METHOD_AGENT_SESSION_UPDATE => self.handle_session_update_impl(params).boxed(),
-            METHOD_AGENT_SESSION_COMPACT => self.handle_session_compact_impl(params).boxed(),
+            app_server_protocol::protocol::v2::METHOD_THREAD_COMPACT_START => {
+                self.handle_thread_compact_start_v2(params).boxed()
+            }
             METHOD_THREAD_RESUME => self
                 .handle_thread_resume_v2(params, thread_resume_request_id)
                 .boxed(),
-            METHOD_AGENT_SESSION_QUEUED_TURN_REMOVE => {
-                self.handle_session_queued_turn_remove_impl(params).boxed()
-            }
-            METHOD_AGENT_SESSION_QUEUED_TURN_PROMOTE => {
-                self.handle_session_queued_turn_promote_impl(params).boxed()
-            }
             METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST => {
                 self.handle_file_checkpoint_list_impl(params).boxed()
             }
@@ -201,6 +195,18 @@ impl RequestProcessor {
             }
             METHOD_THREAD_READ => self.handle_thread_read_impl(params).boxed(),
             METHOD_THREAD_LIST => self.handle_thread_list_impl(params).boxed(),
+            app_server_protocol::protocol::v2::METHOD_THREAD_LOADED_LIST => {
+                self.handle_thread_loaded_list_v2(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_THREAD_UNSUBSCRIBE => self
+                .handle_thread_unsubscribe_v2(params, connection_request_id)
+                .boxed(),
+            app_server_protocol::protocol::v2::METHOD_THREAD_INCREMENT_ELICITATION => {
+                self.handle_thread_increment_elicitation_v2(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_THREAD_DECREMENT_ELICITATION => {
+                self.handle_thread_decrement_elicitation_v2(params).boxed()
+            }
             app_server_protocol::protocol::v2::METHOD_THREAD_ARCHIVE => {
                 self.handle_thread_archive_v2(params).boxed()
             }
@@ -210,8 +216,23 @@ impl RequestProcessor {
             app_server_protocol::protocol::v2::METHOD_THREAD_UNARCHIVE => {
                 self.handle_thread_unarchive_v2(params).boxed()
             }
+            app_server_protocol::protocol::v2::METHOD_THREAD_NAME_SET => {
+                self.handle_thread_name_set_v2(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_THREAD_METADATA_UPDATE => {
+                self.handle_thread_metadata_update_v2(params).boxed()
+            }
             METHOD_THREAD_TURNS_LIST => self.handle_thread_turns_list_impl(params).boxed(),
             METHOD_THREAD_ITEMS_LIST => self.handle_thread_items_list_impl(params).boxed(),
+            app_server_protocol::protocol::v2::METHOD_THREAD_INJECT_ITEMS => {
+                self.handle_thread_inject_items_v2(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH => {
+                self.handle_thread_search_v2(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH_OCCURRENCES => {
+                self.handle_thread_search_occurrences_v2(params).boxed()
+            }
             app_server_protocol::protocol::v2::METHOD_THREAD_SETTINGS_UPDATE => {
                 self.handle_thread_settings_update_impl(params).boxed()
             }
@@ -221,6 +242,18 @@ impl RequestProcessor {
             app_server_protocol::protocol::v2::METHOD_THREAD_SHELL_COMMAND => {
                 self.handle_thread_shell_command_impl(params).boxed()
             }
+            app_server_protocol::protocol::v2::METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION => self
+                .handle_thread_approve_guardian_denied_action_v2(params)
+                .boxed(),
+            app_server_protocol::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN => self
+                .handle_thread_background_terminals_clean_v2(params)
+                .boxed(),
+            app_server_protocol::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_LIST => self
+                .handle_thread_background_terminals_list_v2(params)
+                .boxed(),
+            app_server_protocol::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE => self
+                .handle_thread_background_terminals_terminate_v2(params)
+                .boxed(),
             app_server_protocol::protocol::v2::METHOD_THREAD_GOAL_SET => {
                 self.handle_thread_goal_set(params).boxed()
             }
@@ -655,6 +688,9 @@ impl RequestProcessor {
             METHOD_MODEL_PREFERENCES_LIST => self.handle_model_preferences_list_impl().boxed(),
             METHOD_MODEL_SYNC_STATE_READ => self.handle_model_sync_state_read_impl().boxed(),
             METHOD_MODEL_PROVIDER_LIST => self.handle_model_provider_list_impl().boxed(),
+            app_server_protocol::protocol::v2::METHOD_MODEL_PROVIDER_CAPABILITIES_READ => self
+                .handle_model_provider_capabilities_read_impl(params)
+                .boxed(),
             METHOD_MODEL_PROVIDER_CATALOG_LIST => {
                 self.handle_model_provider_catalog_list_impl().boxed()
             }

@@ -29,24 +29,100 @@ describe("modelReasoningPolicy", () => {
         supports_reasoning_summary_parameter: true,
         default_reasoning_level: "medium",
         supported_reasoning_levels: [
-          { effort: "low", description: "Small budget" },
-          { effort: "low", description: "duplicate" },
-          { effort: "max", description: "Max budget" },
+          {
+            id: "low",
+            value: "low",
+            label: "",
+            description: "Small budget",
+          },
+          {
+            id: "low",
+            value: "low",
+            label: "",
+            description: "duplicate",
+          },
+          {
+            id: "max",
+            value: "max",
+            label: "",
+            description: "Max budget",
+          },
           "future-effort",
-          { effort: "", description: "invalid" },
+          { id: "invalid", value: "", label: "", description: "invalid" },
         ],
       }),
     ).toEqual({
       supports_reasoning_summaries: true,
       default_reasoning_level: "medium",
       supported_reasoning_levels: [
-        { effort: "low", description: "Small budget" },
-        { effort: "max", description: "Max budget" },
-        { effort: "future-effort", description: "" },
+        {
+          id: "low",
+          label: "",
+          value: "low",
+          description: "Small budget",
+        },
+        {
+          id: "max",
+          label: "",
+          value: "max",
+          description: "Max budget",
+        },
+        {
+          id: "future-effort",
+          label: "",
+          value: "future-effort",
+          description: "",
+        },
       ],
       supported_reasoning_efforts: ["low", "max", "future-effort"],
       can_set_reasoning_effort: true,
     });
+  });
+
+  it("保留 grok-build 菜单 id/label，并把 default 与可提交值归一到 canonical wire value", () => {
+    const policy = buildModelReasoningPolicy({
+      defaultReasoningLevel: "deep",
+      supportedReasoningLevels: [
+        {
+          id: "deep",
+          label: "Deep",
+          value: "xhigh",
+          description: "Maximum reasoning",
+        },
+        {
+          id: "balanced",
+          label: "Balanced",
+          value: "medium",
+        },
+      ],
+    });
+
+    expect(policy).toEqual({
+      supports_reasoning_summaries: false,
+      default_reasoning_level: "xhigh",
+      supported_reasoning_levels: [
+        {
+          id: "deep",
+          label: "Deep",
+          value: "xhigh",
+          description: "Maximum reasoning",
+        },
+        {
+          id: "balanced",
+          label: "Balanced",
+          value: "medium",
+          description: "",
+        },
+      ],
+      supported_reasoning_efforts: ["xhigh", "medium"],
+      can_set_reasoning_effort: true,
+    });
+    expect(resolveModelReasoningEffortForRequest(policy, "xhigh")).toBe(
+      "xhigh",
+    );
+    expect(resolveModelReasoningEffortForRequest(policy, "deep")).toBe(
+      "xhigh",
+    );
   });
 
   it("request effort 只有请求档位受支持时才透传，缺省走 model default", () => {
@@ -54,9 +130,9 @@ describe("modelReasoningPolicy", () => {
       supportsReasoningSummaryParameter: false,
       defaultReasoningLevel: "medium",
       supportedReasoningLevels: [
-        { effort: "low", description: "" },
-        { effort: "medium", description: "" },
-        { effort: "high", description: "" },
+        { id: "low", value: "low", label: "", description: "" },
+        { id: "medium", value: "medium", label: "", description: "" },
+        { id: "high", value: "high", label: "", description: "" },
       ],
     });
 
@@ -80,10 +156,10 @@ describe("modelReasoningPolicy", () => {
       supports_reasoning_summary_parameter: false,
       default_reasoning_level: "medium",
       supported_reasoning_levels: [
-        { effort: "minimal", description: "" },
-        { effort: "low", description: "" },
-        { effort: "medium", description: "" },
-        { effort: "high", description: "" },
+        { id: "minimal", value: "minimal", label: "", description: "" },
+        { id: "low", value: "low", label: "", description: "" },
+        { id: "medium", value: "medium", label: "", description: "" },
+        { id: "high", value: "high", label: "", description: "" },
       ],
     });
 

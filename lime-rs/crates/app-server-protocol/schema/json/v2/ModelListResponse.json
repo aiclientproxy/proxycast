@@ -1,0 +1,205 @@
+{
+  "$defs": {
+    "InputModality": {
+      "enum": [
+        "audio",
+        "image",
+        "text"
+      ],
+      "type": "string"
+    },
+    "Model": {
+      "properties": {
+        "additionalSpeedTiers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "availabilityNux": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelAvailabilityNux"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defaultReasoningEffort": {
+          "type": "string"
+        },
+        "defaultServiceTier": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "inputModalities": {
+          "items": {
+            "$ref": "#/$defs/InputModality"
+          },
+          "type": "array"
+        },
+        "isDefault": {
+          "type": "boolean"
+        },
+        "model": {
+          "type": "string"
+        },
+        "serviceTiers": {
+          "items": {
+            "$ref": "#/$defs/ModelServiceTier"
+          },
+          "type": "array"
+        },
+        "supportedReasoningEfforts": {
+          "items": {
+            "$ref": "#/$defs/ReasoningEffortOption"
+          },
+          "type": "array"
+        },
+        "supportsPersonality": {
+          "type": "boolean"
+        },
+        "upgrade": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "upgradeInfo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelUpgradeInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "additionalSpeedTiers",
+        "defaultReasoningEffort",
+        "description",
+        "displayName",
+        "hidden",
+        "id",
+        "inputModalities",
+        "isDefault",
+        "model",
+        "serviceTiers",
+        "supportedReasoningEfforts",
+        "supportsPersonality"
+      ],
+      "type": "object"
+    },
+    "ModelAvailabilityNux": {
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    },
+    "ModelServiceTier": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "ModelUpgradeInfo": {
+      "properties": {
+        "migrationMarkdown": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "modelLink": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "upgradeCopy": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "type": "object"
+    },
+    "ReasoningEffortOption": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "reasoningEffort": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "reasoningEffort"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "data": {
+      "items": {
+        "$ref": "#/$defs/Model"
+      },
+      "type": "array"
+    },
+    "nextCursor": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ],
+  "title": "ModelListResponse",
+  "type": "object"
+}

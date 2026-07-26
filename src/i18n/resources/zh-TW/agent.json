@@ -1363,6 +1363,7 @@
   "agentChat.runtimeError.internalRuntime": "執行階段返回內部錯誤，已保留詳情供排查。請稍後重試，或檢查服務商與工具連線狀態。",
   "agentChat.runtimeError.modelInputCapabilityGap": "目前模型不支援本次輸入的媒體類型，請切換到支援圖片或檔案輸入的模型後再傳送。",
   "agentChat.runtimeError.modelSelectionRequired": "請先在輸入框底部選擇可用模型，或完成服務商登入後再傳送。",
+  "agentChat.modelSettings.updateFailed": "模型設定更新失敗：{{message}}",
   "agentChat.runtimeError.providerQuota": "目前模型通道返回了計費或額度類錯誤，請檢查該 Provider/模型通道的計費、配額或授權狀態，或切換到其他可用模型後重試。",
   "agentChat.runtimeError.providerUnavailable": "目前模型通道暫時不可用，請稍後重試；如果持續失敗，請檢查 Provider 狀態或切換到其他可用模型。",
   "agentChat.runtime.failure.prefix": "執行失敗：",

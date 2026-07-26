@@ -27,10 +27,6 @@ import {
   HOME_HOTPATH_GREETING_SCENARIO,
   HOME_HOTPATH_SCENARIO,
   IMAGE_COMMAND_SCENARIO,
-  INPUTBAR_PENDING_STEER_ACTIVE_PROMPT,
-  INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO,
-  INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO,
-  INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO,
   INPUTBAR_RICH_RESTORE_PROMPT,
   INPUTBAR_RICH_RESTORE_SCENARIO,
   LIVE_TAIL_COMMIT_PROMPT,
@@ -87,6 +83,10 @@ import {
   MEDIA_REFERENCE_SCENARIO,
 } from "./claw-chat-current-fixture-media-reference.mjs";
 import {
+  ACTIVE_STEER_INITIAL_PROMPT,
+  ACTIVE_STEER_SCENARIO,
+} from "./claw-chat-current-fixture-active-steer.mjs";
+import {
   DEFAULT_SOUL_STYLE_FIXTURE_PROFILE_ID,
   createSoulStyleFixtureOverrides,
   createSoulStyleFixtureSelection,
@@ -132,7 +132,7 @@ Claw Chat Current Electron Fixture Smoke
   --evidence-dir <path>  证据目录
   --prefix <name>        证据文件前缀
   --run-id <id>          Gate 项目 run-id；也可通过 LIME_GATE_RUN_ID 注入
-  --scenario <name>      complete | home-hotpath | home-hotpath-greeting | cancel | cancel-then-continue | inputbar-rich-restore | inputbar-pending-steer-rich-restore | inputbar-pending-steer-multi-queue | inputbar-pending-steer-pop-front-resume | plan | goal | soul-style | image-command | plain-image-intent | media-reference | reasoning-first-visible | live-tail-commit | electron-resize-reflow | approval-request-resume | approval-request-decline | approval-request-cancel | approval-request-host-interrupt | approval-request-full-access | terminal-failed-after-answer | terminal-canceled-after-answer | terminal-stale-guard | web-tools-rendering | mcp-structured-content | skills-runtime | expert-plaza-skills-runtime | expert-panel-skills-runtime | right-surface-visual-matrix | content-factory-article-workspace | content-factory-inline-image-article-workspace，默认 complete
+  --scenario <name>      complete | home-hotpath | home-hotpath-greeting | cancel | cancel-then-continue | inputbar-rich-restore | inputbar-active-steer | plan | goal | soul-style | image-command | plain-image-intent | media-reference | reasoning-first-visible | live-tail-commit | electron-resize-reflow | approval-request-resume | approval-request-decline | approval-request-cancel | approval-request-host-interrupt | approval-request-full-access | terminal-failed-after-answer | terminal-canceled-after-answer | terminal-stale-guard | web-tools-rendering | mcp-structured-content | skills-runtime | expert-plaza-skills-runtime | expert-panel-skills-runtime | right-surface-visual-matrix | content-factory-article-workspace | content-factory-inline-image-article-workspace，默认 complete
   --prompt <text>        仅 home-hotpath 场景可用，覆盖默认新闻输入
   --soul-style-profile <id>   soul-style 场景使用的 profile，默认 ${DEFAULT_SOUL_STYLE_FIXTURE_PROFILE_ID}
   --cdp-port <port>      可选 Electron remote debugging port；传入后通过 CDP renderer 执行 GUI 动作
@@ -249,9 +249,7 @@ function parseArgs(argv) {
     "cancel",
     "cancel-then-continue",
     INPUTBAR_RICH_RESTORE_SCENARIO,
-    INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO,
-    INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO,
-    INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO,
+    ACTIVE_STEER_SCENARIO,
     "plan",
     "goal",
     SOUL_STYLE_SCENARIO,
@@ -318,9 +316,7 @@ function shouldUseTextProviderFixture(scenario) {
     isImageWorkflowScenario(scenario) ||
     scenario === SOUL_STYLE_SCENARIO ||
     scenario === INPUTBAR_RICH_RESTORE_SCENARIO ||
-    scenario === INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO ||
-    scenario === INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO ||
-    scenario === INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO
+    scenario === ACTIVE_STEER_SCENARIO
   );
 }
 
@@ -329,9 +325,6 @@ function scenarioWaitsForExternalBackendCancel(scenario) {
     scenario === "cancel" ||
     scenario === "cancel-then-continue" ||
     scenario === INPUTBAR_RICH_RESTORE_SCENARIO ||
-    scenario === INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO ||
-    scenario === INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO ||
-    scenario === INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO ||
     scenario === TERMINAL_CANCELED_AFTER_ANSWER_SCENARIO ||
     scenario === APPROVAL_REQUEST_HOST_INTERRUPT_SCENARIO
   );
@@ -348,6 +341,7 @@ function resolveScenarioBackendEnv(options, runtimeEnv) {
   }
   if (
     options.scenario === SOUL_STYLE_SCENARIO ||
+    options.scenario === ACTIVE_STEER_SCENARIO ||
     options.scenario === CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO ||
     options.scenario === CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO
   ) {
@@ -531,11 +525,8 @@ async function run() {
       options.promptOverride ||
       (options.scenario === INPUTBAR_RICH_RESTORE_SCENARIO
         ? INPUTBAR_RICH_RESTORE_PROMPT
-        : options.scenario === INPUTBAR_PENDING_STEER_RICH_RESTORE_SCENARIO ||
-            options.scenario === INPUTBAR_PENDING_STEER_MULTI_QUEUE_SCENARIO ||
-            options.scenario ===
-              INPUTBAR_PENDING_STEER_POP_FRONT_RESUME_SCENARIO
-          ? INPUTBAR_PENDING_STEER_ACTIVE_PROMPT
+        : options.scenario === ACTIVE_STEER_SCENARIO
+          ? ACTIVE_STEER_INITIAL_PROMPT
           : options.scenario === MEDIA_REFERENCE_SCENARIO
             ? MEDIA_REFERENCE_PROMPT
             : options.scenario === REASONING_FIRST_VISIBLE_SCENARIO
@@ -601,25 +592,7 @@ async function run() {
     inputbarRichRestoreStopClick: null,
     inputbarRichRestoreGuiCanceled: null,
     inputbarRichRestoreReadModelCanceled: null,
-    inputbarPendingSteerSkill: null,
-    inputbarPendingSteerActiveInputSend: null,
-    inputbarPendingSteerActiveBackendTurnStart: null,
-    inputbarPendingSteerActiveStreaming: null,
-    inputbarPendingSteerDraftPrepared: null,
-    inputbarPendingSteerInputDefer: null,
-    inputbarPendingSteerSecondInputDefer: null,
-    inputbarPendingSteerQueuedReadModel: null,
-    inputbarPendingSteerBackendBeforeCancel: null,
-    inputbarPendingSteerStopClick: null,
-    inputbarPendingSteerBackendCancel: null,
-    inputbarPendingSteerGuiCanceled: null,
-    inputbarPendingSteerPopFrontGuiPromote: null,
-    inputbarPendingSteerPopFrontAfterGuiPromote: null,
-    inputbarPendingSteerPopFrontActiveCancel: null,
-    inputbarPendingSteerPopFrontBackendCancel: null,
-    inputbarPendingSteerPopFrontRichBackendTurnStart: null,
-    inputbarPendingSteerPopFrontReadModelAfterResume: null,
-    inputbarPendingSteerPopFrontGuiHydrated: null,
+    activeSteer: null,
     homeHotpath: null,
     continueInputSend: null,
     guiContinueCompleted: null,
@@ -770,6 +743,8 @@ async function run() {
     if (shouldUseTextProviderFixture(options.scenario)) {
       textProviderFixtureServer = await startTextProviderFixtureServer({
         soulStyleExpectation: soulStyleSelection,
+        activeSteerDelayMs:
+          options.scenario === ACTIVE_STEER_SCENARIO ? 30_000 : 0,
       });
       summary.textProviderFixtureServer = sanitizeJson({
         baseUrl: textProviderFixtureServer.baseUrl,
@@ -1078,6 +1053,9 @@ async function run() {
       summary,
       appServerRequests,
       runtimeEnv,
+      readTextProviderRequests: textProviderFixtureServer
+        ? () => textProviderFixtureServer.requests()
+        : null,
     });
     collectedInvokeTraceMessages = await invokeTraceCollector.stop();
     invokeTraceCollector = null;

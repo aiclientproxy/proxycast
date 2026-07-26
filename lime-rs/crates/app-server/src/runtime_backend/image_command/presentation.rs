@@ -5,7 +5,6 @@ use crate::runtime_backend::{
     backend_error, current_agent_runtime_config_metadata, direct_provider_config_from_request,
     initialize_runtime_database, model_route_contract, model_route_resolver,
     request_context::{self, RuntimeModelSelection},
-    selection_with_effective_reasoning,
     tool_process_metadata::SoulStyleMetadata,
 };
 use crate::{ExecutionRequest, RuntimeCoreError};
@@ -78,10 +77,8 @@ pub(super) async fn generate_image_task_presentation(
     let db = initialize_runtime_database(runtime_backend.db.as_ref())?;
     runtime_backend.ensure_agent_initialized(&db).await?;
     let requested_selection = resolve_presentation_model_selection(request)?;
-    let effective_requested_selection = selection_with_effective_reasoning(&requested_selection);
     let host_request = request_context::runtime_request_from_request(request);
-    let host_selection = request_context::selection_from_host_provider_config(request)
-        .map(|selection| selection_with_effective_reasoning(&selection));
+    let host_selection = request_context::selection_from_host_provider_config(request);
     let host_direct_provider_config = host_selection.as_ref().and_then(|selection| {
         direct_provider_config_from_request(
             host_request.as_ref(),
@@ -91,7 +88,7 @@ pub(super) async fn generate_image_task_presentation(
     });
     let direct_provider_config = if host_selection
         .as_ref()
-        .is_some_and(|selection| same_provider_model(selection, &effective_requested_selection))
+        .is_some_and(|selection| same_provider_model(selection, &requested_selection))
     {
         host_direct_provider_config
     } else {
@@ -104,8 +101,8 @@ pub(super) async fn generate_image_task_presentation(
                     workflow_run_id = %workflow_run_id(&intent.scope),
                     host_provider = %selection.provider,
                     host_model = %selection.model,
-                    selected_provider = %effective_requested_selection.provider,
-                    selected_model = %effective_requested_selection.model,
+                    selected_provider = %requested_selection.provider,
+                    selected_model = %requested_selection.model,
                     reason_code = "presentation_direct_config_skipped_for_non_text_selection",
                     "[RuntimeBackend] ImageCommandWorkflow presentation skipped host direct provider config"
                 );
@@ -117,12 +114,12 @@ pub(super) async fn generate_image_task_presentation(
         &db,
         &runtime_backend.api_key_provider_service,
         request,
-        &effective_requested_selection,
+        &requested_selection,
         direct_provider_config.as_ref(),
     )
     .await
     .map_err(backend_error)?;
-    let selection = selection_with_effective_reasoning(&route_resolution.selection);
+    let selection = route_resolution.selection.clone();
     if let Some(route_failure) = route_resolution.resolved_route.failure.as_ref() {
         return Err(RuntimeCoreError::Backend(format!(
             "presentation_text_route_unavailable: {}",
@@ -135,6 +132,7 @@ pub(super) async fn generate_image_task_presentation(
         &selection,
         &route_resolution.resolved_route,
         direct_provider_config,
+        request_context::service_tier_from_request(request),
     );
 
     let config_metadata = current_agent_runtime_config_metadata();

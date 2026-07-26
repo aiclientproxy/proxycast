@@ -9,7 +9,7 @@ use super::turn_start::{
 };
 use super::workflow::events::{WORKFLOW_RUN_RESUMING, WORKFLOW_STEP_RESUMING};
 use super::*;
-use agent_protocol::{ItemStatus, ThreadItem, ThreadItemPayload};
+use agent_protocol::{ItemStatus, ThreadId, ThreadItem, ThreadItemPayload, ThreadTurnsView};
 use agent_runtime::session_loop::{
     RuntimeSessionClosureTask, RuntimeSessionHandle, RuntimeSessionInput,
     RuntimeSessionInputHandle, RuntimeSessionLoopError, RuntimeSessionSubmitResult,
@@ -22,6 +22,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use thread_store::ReadThreadParams;
 use tokio::sync::{mpsc, oneshot, Notify};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -1047,10 +1048,25 @@ impl RuntimeCore {
         let runtime_options = params.runtime_options.clone();
         let request_host = host.clone();
         let agent_control_host = host.clone();
+        let forked_from_thread_id = self
+            .projection_store
+            .as_deref()
+            .map(|store| {
+                store.read_thread_sync(ReadThreadParams {
+                    thread_id: ThreadId::new(session.thread_id.clone()),
+                    include_archived: true,
+                    turns_view: ThreadTurnsView::NotLoaded,
+                })
+            })
+            .transpose()
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?
+            .flatten()
+            .and_then(|thread| thread.forked_from_id.map(|id| id.to_string()));
         let mut request = ExecutionRequest {
             host,
             session: session.clone(),
             turn: turn.clone(),
+            forked_from_thread_id,
             input: provider_input,
             event_name: params
                 .runtime_options
@@ -1101,6 +1117,17 @@ impl RuntimeCore {
                 return Err(error);
             }
         };
+        let agent_control_tool_options = if self.projection_store.is_some() {
+            Some(
+                super::agent_control_gateway::spawn_tool_options::load(
+                    self,
+                    prepared_runtime_options.as_ref(),
+                )
+                .await,
+            )
+        } else {
+            None
+        };
         request.runtime_options = prepared_runtime_options.clone();
         if prepared_runtime_options.is_none() && self.backend.requires_provider_selection() {
             let error = RuntimeCoreError::pending_route_for_session(
@@ -1134,10 +1161,10 @@ impl RuntimeCore {
                 }
             }
         }
-        request.agent_control_gateway = self
-            .projection_store
-            .as_ref()
-            .map(|_| self.agent_control_gateway_for_turn(&session, &turn, agent_control_host));
+        request.agent_control_gateway = self.projection_store.as_ref().map(|_| {
+            self.agent_control_gateway_for_turn(&session, &turn, agent_control_host)
+                .with_tool_options(agent_control_tool_options.unwrap_or_default())
+        });
 
         let mailbox_delivery = match if self.backend.requires_provider_selection() {
             // The provider-backed backend drains QueueOnly at the first post-step mailbox

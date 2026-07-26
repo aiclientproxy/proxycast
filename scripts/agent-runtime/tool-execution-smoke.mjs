@@ -19,7 +19,7 @@ import {
   summarizeEvidencePack,
   summarizeThreadRead,
   threadSettled,
-  updateAgentSessionRuntimeCurrent,
+  updateAgentThreadSettingsCurrent,
   waitForHealth,
 } from "../lib/agent-runtime-smoke-core.mjs";
 import {
@@ -2122,10 +2122,9 @@ async function runSmoke(options) {
     });
     assertSmoke(sessionId, "thread/start 未返回 sessionId");
 
-    await updateAgentSessionRuntimeCurrent(options, {
-      sessionId,
+    await updateAgentThreadSettingsCurrent(options, {
+      threadId: sessionId,
       provider: fixture.provider,
-      executionStrategy: "react",
     });
 
     console.log(`${LOG_PREFIX} stage=submit-turn session=${sessionId}`);

@@ -6,7 +6,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "1.111.0"
+version = "1.112.0"
 edition = "2021"
 authors = ["coso"]
 repository = "https://github.com/aiclientproxy/lime"
@@ -97,6 +97,7 @@ cron = "0.15"
 # 工具库
 dirs = "5"
 regex = "1"
+pulldown-cmark = { version = "0.10", default-features = false }
 semver = "1"
 md5 = "0.7"
 jsonwebtoken = "9.3.1"

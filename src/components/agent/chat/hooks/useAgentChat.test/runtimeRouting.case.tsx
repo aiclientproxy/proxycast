@@ -190,7 +190,6 @@ describe("useAgentChat runtime routing", () => {
       status: "idle",
       pending_requests: [],
       incidents: [],
-      queued_turns: [],
     });
     mockReadAgentRuntimeThread.mockResolvedValue({
       thread: {

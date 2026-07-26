@@ -8,7 +8,6 @@ import {
   APP_SERVER_METHOD_ARTIFACT_WRITE,
   APP_SERVER_METHOD_SESSION_READ,
   APP_SERVER_METHOD_SESSION_START,
-  APP_SERVER_METHOD_SESSION_UPDATE,
   APP_SERVER_METHOD_WORKSPACE_RIGHT_SURFACE_REQUEST,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_IMAGE_ARTIFACT_ID,
@@ -52,7 +51,6 @@ const FORBIDDEN_CONTENT_FACTORY_ARTICLE_TEMPLATE_MARKERS = [
   "从基础语法到工程实战",
   "## 请求摘要",
   "## 资料检索",
-  "## 正文草稿",
   "## 交付检查",
   "targetObjectKind",
   "outputField",
@@ -347,21 +345,50 @@ async function updateContentFactoryArticleWorkspaceEditedDraft(
     markdown: CONTENT_FACTORY_ARTICLE_WORKSPACE_EDITED_DRAFT_MARKDOWN,
     updatedAt: CONTENT_FACTORY_ARTICLE_WORKSPACE_EDITED_DRAFT_UPDATED_AT,
   };
+  const artifactRef =
+    objectRef.artifactIds?.find(
+      (value) => typeof value === "string" && value.trim(),
+    ) || editedDraft.objectKey;
+  const workspacePatch = {
+    objects: [
+      {
+        ref: objectRef,
+        title: "Article Editor edited draft",
+        status: "draft",
+        source: {
+          documentText: editedDraft.markdown,
+          finalMarkdown: editedDraft.markdown,
+          updatedAt: editedDraft.updatedAt,
+        },
+      },
+    ],
+    updatedAt: editedDraft.updatedAt,
+  };
   const response = await invokeAppServerFromPage(
     page,
-    APP_SERVER_METHOD_SESSION_UPDATE,
+    APP_SERVER_METHOD_ARTIFACT_WRITE,
     {
-      sessionId: identity.sessionId,
-      articleWorkspaceEditedDraft: editedDraft,
+      threadId: identity.threadId,
+      artifact: {
+        artifactRef,
+        artifactDocumentId: objectRef.id,
+        title: "Article Editor edited draft",
+        kind: "article_workspace_draft",
+        status: "draft",
+        content: editedDraft.markdown,
+        metadata: {
+          workspacePatch,
+          editedDraft,
+        },
+      },
     },
     requestLog,
   );
 
   return sanitizeJson({
-    sessionId:
-      response.result?.session?.sessionId ??
-      response.result?.session?.session_id ??
-      identity.sessionId,
+    sessionId: identity.sessionId,
+    threadId: response.result?.threadId ?? identity.threadId,
+    eventId: response.result?.eventId ?? null,
     objectKey: editedDraft.objectKey,
     objectRef,
     markdownMarker: CONTENT_FACTORY_ARTICLE_WORKSPACE_EDITED_DRAFT_MARKER,
@@ -1860,7 +1887,6 @@ function summarizeContentFactoryArticleWorkspaceReadModel(result, identity) {
           markdownIncludesEditedDraftMarker: workerArticleSourceText.includes(
             CONTENT_FACTORY_ARTICLE_WORKSPACE_EDITED_DRAFT_MARKER,
           ),
-          sourceEdited: readBoolean(workerArticleSource.edited),
           hostManagedGenerationStatus: readString(
             workerArticleHostManagedGeneration.status,
           ),
@@ -2072,8 +2098,11 @@ function summarizeContentFactoryArtifactRead(result) {
     ),
     contentIncludesArticleTitle: Boolean(readString(document?.title)),
     richTextHasForbiddenTemplate,
-    contentIncludesWorkerArticle:
+    contentIncludesCanonicalArticle:
       richTextMarkdown.length > 160 && !richTextHasForbiddenTemplate,
+    contentIncludesEditedDraftMarker: richTextMarkdown.includes(
+      CONTENT_FACTORY_ARTICLE_WORKSPACE_EDITED_DRAFT_MARKER,
+    ),
   });
 }
 

@@ -2,6 +2,7 @@ pub mod canonical;
 pub mod current_client;
 pub mod http;
 pub mod lowering;
+pub mod provider_capabilities;
 pub mod provider_stream;
 pub mod runtime_provider;
 pub mod safety;

@@ -1,4 +1,6 @@
-use model_provider::current_client::{CurrentProviderClient, CurrentProviderError};
+use model_provider::current_client::{
+    CurrentProviderClient, CurrentProviderError, CurrentProviderHealthRegistry,
+};
 use model_provider::provider_stream::RuntimeReplyProviderHandle;
 use model_provider::runtime_provider::RuntimeProviderConfig;
 use std::sync::Arc;
@@ -21,8 +23,9 @@ impl ConfiguredReplyProvider {
 
 pub(crate) fn create_configured_reply_provider(
     config: &RuntimeProviderConfig,
+    health_registry: &CurrentProviderHealthRegistry,
 ) -> Result<ConfiguredReplyProvider, CurrentProviderError> {
-    let client = CurrentProviderClient::new(config.clone())?;
+    let client = CurrentProviderClient::new_with_health_registry(config.clone(), health_registry)?;
     let runtime_handle = client.runtime_handle();
     Ok(ConfiguredReplyProvider {
         client: Arc::new(client),

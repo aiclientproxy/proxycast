@@ -22,6 +22,8 @@ struct FixtureProcess {
 impl RuntimeLiveExecutionGateway for FixtureGateway {
     async fn start_process(
         &self,
+        _thread_id: &str,
+        _display_command: &str,
         params: ExecutionProcessStartParams,
     ) -> Result<ExecutionProcessStartResponse, String> {
         self.starts.lock().unwrap().push(params.clone());
@@ -60,13 +62,21 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
         let process = state
             .get_mut(&params.process_id)
             .ok_or_else(|| "missing fixture process".to_string())?;
+        if params.data.is_empty() {
+            return Ok(ExecutionProcessEmptyResponse {});
+        }
         process.snapshot.status = ExecutionProcessStatus::Exited;
         process.snapshot.exit_code = Some(0);
         process.snapshot.retained_output.push_str("finished\n");
+        let sequence = process
+            .deltas
+            .last()
+            .map(|delta| delta.sequence.saturating_add(1))
+            .unwrap_or(1);
         process.deltas.push(ExecutionProcessOutputDelta {
             process_id: params.process_id,
             tool_id: process.snapshot.tool_id.clone(),
-            sequence: 2,
+            sequence,
             kind: ExecutionProcessOutputKind::Stdout,
             delta: "finished\n".to_string(),
             bytes: 17,
@@ -135,6 +145,33 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
     }
 }
 
+impl FixtureGateway {
+    fn append_output_to_only_process(&self, output: &str) {
+        let mut state = self.state.lock().unwrap();
+        let process = state
+            .values_mut()
+            .next()
+            .expect("fixture should contain one process");
+        let sequence = process
+            .deltas
+            .last()
+            .map(|delta| delta.sequence.saturating_add(1))
+            .unwrap_or(1);
+        process.snapshot.retained_output.push_str(output);
+        process.snapshot.output_bytes = process.snapshot.retained_output.len() as u64;
+        process.deltas.push(ExecutionProcessOutputDelta {
+            process_id: process.snapshot.process_id.clone(),
+            tool_id: process.snapshot.tool_id.clone(),
+            sequence,
+            kind: ExecutionProcessOutputKind::Stdout,
+            delta: output.to_string(),
+            bytes: process.snapshot.output_bytes,
+            omitted_bytes: 0,
+            truncated: false,
+        });
+    }
+}
+
 fn snapshot(
     params: &ExecutionProcessStartParams,
     status: ExecutionProcessStatus,
@@ -181,6 +218,7 @@ fn request<'a>(
     RuntimeUnifiedExecToolRequest {
         tool_name,
         params,
+        thread_id: "thread-1",
         working_directory: std::env::current_dir().unwrap(),
         environment: HashMap::new(),
         tool_call_id: call_id.to_string(),
@@ -224,6 +262,8 @@ async fn exec_command_returns_terminal_output_for_short_process() {
     let structured = result.structured_content.expect("structured output");
     assert_eq!(structured["exit_code"], json!(0));
     assert_eq!(structured["output"], json!("completed\n"));
+    assert_eq!(structured["observation"]["kind"], json!("terminal"));
+    assert_eq!(structured["observation"]["process_active"], json!(false));
     assert!(structured.get("session_id").is_none());
     assert_eq!(
         result.metadata.get("exec_command_call_id"),
@@ -290,8 +330,177 @@ async fn write_stdin_resumes_and_completes_original_exec_command() {
     let structured = completed.structured_content.expect("structured output");
     assert_eq!(structured["exit_code"], json!(0));
     assert_eq!(structured["output"], json!("finished\n"));
+    assert_eq!(structured["observation"]["kind"], json!("terminal"));
     assert_eq!(
         completed.metadata.get("exec_command_call_id"),
         Some(&json!("call-long"))
     );
+}
+
+#[tokio::test]
+async fn write_stdin_rejects_a_session_owned_by_another_thread() {
+    let gateway = Arc::new(FixtureGateway::default());
+    let exec_params = json!({
+        "cmd": "long-running",
+        "login": false,
+        "yield_time_ms": 250
+    });
+    let running = execute_runtime_unified_exec_tool(
+        gateway.clone(),
+        request(EXEC_COMMAND_TOOL_NAME, &exec_params, "call-thread-scoped"),
+    )
+    .await
+    .expect("running command result");
+    let session_id = running
+        .structured_content
+        .as_ref()
+        .and_then(|value| value.get("session_id"))
+        .and_then(Value::as_i64)
+        .expect("session id") as i32;
+    let write_params = json!({
+        "session_id": session_id,
+        "chars": "continue\n",
+        "yield_time_ms": 250
+    });
+    let mut wrong_thread = request(WRITE_STDIN_TOOL_NAME, &write_params, "cross-thread-write");
+    wrong_thread.thread_id = "thread-2";
+    let error = execute_runtime_unified_exec_tool(gateway.clone(), wrong_thread)
+        .await
+        .expect_err("cross-thread write must fail closed");
+    assert!(error
+        .message()
+        .contains("does not belong to thread thread-2"));
+
+    execute_runtime_unified_exec_tool(
+        gateway,
+        request(WRITE_STDIN_TOOL_NAME, &write_params, "owning-thread-write"),
+    )
+    .await
+    .expect("owning thread completes session");
+}
+
+#[tokio::test]
+async fn empty_polls_are_structured_and_aggregate_for_active_process() {
+    let gateway = Arc::new(FixtureGateway::default());
+    let exec_params = json!({
+        "cmd": "long-running",
+        "login": false,
+        "yield_time_ms": 250
+    });
+    let running = execute_runtime_unified_exec_tool(
+        gateway.clone(),
+        request(EXEC_COMMAND_TOOL_NAME, &exec_params, "call-wait"),
+    )
+    .await
+    .expect("running command result");
+    let session_id = running.structured_content.as_ref().unwrap()["session_id"]
+        .as_i64()
+        .expect("session id") as i32;
+
+    for expected_count in [1, 2] {
+        let poll_params = json!({
+            "session_id": session_id,
+            "chars": "",
+            "yield_time_ms": 250
+        });
+        let poll = execute_runtime_unified_exec_tool(
+            gateway.clone(),
+            request(WRITE_STDIN_TOOL_NAME, &poll_params, "poll-call"),
+        )
+        .await
+        .expect("empty poll result");
+        let structured = poll.structured_content.expect("structured poll");
+
+        assert_eq!(structured["output"], json!(""));
+        assert_eq!(structured["session_id"], json!(session_id));
+        assert_eq!(structured["observation"]["kind"], json!("waiting"));
+        assert_eq!(
+            structured["observation"]["empty_poll_count"],
+            json!(expected_count)
+        );
+        assert_eq!(
+            poll.metadata.get("unified_exec_observation"),
+            Some(&json!("waiting"))
+        );
+    }
+}
+
+#[tokio::test]
+async fn output_breaks_wait_streak_before_terminal_output() {
+    let gateway = Arc::new(FixtureGateway::default());
+    let exec_params = json!({
+        "cmd": "long-running",
+        "login": false,
+        "yield_time_ms": 250
+    });
+    let running = execute_runtime_unified_exec_tool(
+        gateway.clone(),
+        request(EXEC_COMMAND_TOOL_NAME, &exec_params, "call-later-output"),
+    )
+    .await
+    .expect("running command result");
+    let session_id = running.structured_content.as_ref().unwrap()["session_id"]
+        .as_i64()
+        .expect("session id") as i32;
+    let empty_poll = json!({
+        "session_id": session_id,
+        "chars": "",
+        "yield_time_ms": 250
+    });
+
+    execute_runtime_unified_exec_tool(
+        gateway.clone(),
+        request(WRITE_STDIN_TOOL_NAME, &empty_poll, "poll-before-output"),
+    )
+    .await
+    .expect("empty poll result");
+    gateway.append_output_to_only_process("later\n");
+
+    let with_output = execute_runtime_unified_exec_tool(
+        gateway.clone(),
+        request(WRITE_STDIN_TOOL_NAME, &empty_poll, "poll-with-output"),
+    )
+    .await
+    .expect("output poll result");
+    let structured = with_output
+        .structured_content
+        .expect("structured output poll");
+    assert_eq!(structured["output"], json!("later\n"));
+    assert_eq!(structured["observation"]["kind"], json!("output"));
+    assert_eq!(structured["observation"]["empty_poll_count"], json!(0));
+
+    let finish_params = json!({
+        "session_id": session_id,
+        "chars": "continue\n",
+        "yield_time_ms": 250
+    });
+    let terminal = execute_runtime_unified_exec_tool(
+        gateway,
+        request(WRITE_STDIN_TOOL_NAME, &finish_params, "finish-call"),
+    )
+    .await
+    .expect("terminal result");
+    let structured = terminal.structured_content.expect("structured terminal");
+    assert_eq!(structured["output"], json!("finished\n"));
+    assert_eq!(structured["observation"]["kind"], json!("terminal"));
+    assert_eq!(structured["observation"]["process_active"], json!(false));
+}
+
+#[tokio::test]
+async fn unknown_session_fails_without_waiting_observation() {
+    let gateway = Arc::new(FixtureGateway::default());
+    let params = json!({
+        "session_id": i32::MAX,
+        "chars": "",
+        "yield_time_ms": 250
+    });
+
+    let error = execute_runtime_unified_exec_tool(
+        gateway,
+        request(WRITE_STDIN_TOOL_NAME, &params, "unknown-session"),
+    )
+    .await
+    .expect_err("unknown session should fail");
+
+    assert!(error.message().contains("unified exec session not found"));
 }

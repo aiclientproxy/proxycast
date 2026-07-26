@@ -3,8 +3,6 @@ use app_server_protocol::AgentEvent;
 use app_server_protocol::AgentSession;
 use app_server_protocol::AgentSessionListParams;
 use app_server_protocol::AgentSessionOverview;
-use app_server_protocol::AgentSessionUpdateParams;
-use app_server_protocol::AgentSessionUpdateResponse;
 use app_server_protocol::AgentTurn;
 use rusqlite::params;
 use rusqlite::Connection;
@@ -15,7 +13,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use super::article_workspace_edited_draft;
 use super::canonical_rollout::RolloutStore;
 use super::projection_item_events::query_projected_session_item_events;
 use super::projection_payload_summary::bounded_payload_summary;
@@ -673,60 +670,6 @@ impl ProjectionStore {
             &scope,
             params.limit.map(|value| value as usize),
         )
-    }
-
-    pub fn update_session_overview(
-        &self,
-        params: AgentSessionUpdateParams,
-        updated_at: &str,
-    ) -> Result<Option<AgentSessionUpdateResponse>, String> {
-        let session_id = params.session_id.trim();
-        if session_id.is_empty() {
-            return Err("sessionId is required for agentSession/update".to_string());
-        }
-        let mut conn = self.open_projection_store()?;
-        let tx = conn
-            .transaction()
-            .map_err(|error| format!("无法开始 Projection DB 事务: {error}"))?;
-        let Some(existing) = query_projected_session(&tx, session_id)? else {
-            return Ok(None);
-        };
-        let title = normalized_text(params.title.as_deref());
-        let model = normalized_text(params.model_name.as_deref());
-        let execution_strategy = normalized_text(params.execution_strategy.as_deref());
-        let metadata_json = merge_projected_session_metadata_json(
-            existing.metadata_json.as_deref(),
-            &params,
-            title.as_deref(),
-            model.as_deref(),
-            execution_strategy.as_deref(),
-        )?;
-        tx.execute(
-            r#"
-            UPDATE projected_sessions
-            SET
-                title = COALESCE(?1, title),
-                model = COALESCE(?2, model),
-                execution_strategy = COALESCE(?3, execution_strategy),
-                metadata_json = COALESCE(?4, metadata_json),
-                updated_at = ?5
-            WHERE session_id = ?6
-            "#,
-            params![
-                title,
-                model,
-                execution_strategy,
-                metadata_json,
-                updated_at,
-                session_id,
-            ],
-        )
-        .map_err(|error| format!("无法更新 projected_sessions: {error}"))?;
-        let session = query_projected_session(&tx, session_id)?
-            .map(|row| projected_session_overview(&tx, row));
-        tx.commit()
-            .map_err(|error| format!("无法提交 Projection DB 事务: {error}"))?;
-        Ok(session.map(|session| AgentSessionUpdateResponse { session }))
     }
 }
 
@@ -1555,65 +1498,6 @@ fn projected_session_fields_from_event(event: &AgentEvent) -> ProjectedSessionFi
     }
 }
 
-fn merge_projected_session_metadata_json(
-    existing: Option<&str>,
-    params: &AgentSessionUpdateParams,
-    title: Option<&str>,
-    model: Option<&str>,
-    execution_strategy: Option<&str>,
-) -> Result<Option<String>, String> {
-    let mut metadata = match existing {
-        Some(existing) => serde_json::from_str::<Value>(existing)
-            .ok()
-            .and_then(|value| value.as_object().cloned())
-            .unwrap_or_default(),
-        None => serde_json::Map::new(),
-    };
-    let before = metadata.clone();
-    insert_metadata_string(&mut metadata, "title", title);
-    insert_metadata_string(&mut metadata, "model", model);
-    insert_metadata_string(&mut metadata, "modelName", model);
-    insert_metadata_string(&mut metadata, "executionStrategy", execution_strategy);
-    insert_metadata_string(
-        &mut metadata,
-        "providerSelector",
-        params.provider_selector.as_deref(),
-    );
-    insert_metadata_string(
-        &mut metadata,
-        "providerName",
-        params.provider_name.as_deref(),
-    );
-    insert_metadata_string(
-        &mut metadata,
-        "recentAccessMode",
-        params.recent_access_mode.as_deref(),
-    );
-    if let Some(value) = params.recent_preferences.as_ref() {
-        metadata.insert("recentPreferences".to_string(), value.clone());
-    }
-    if let Some(value) = params.article_workspace_selected_object_ref.as_ref() {
-        metadata.insert(
-            "articleWorkspaceSelectedObjectRef".to_string(),
-            value.clone(),
-        );
-    }
-    if let Some(value) = params.article_workspace_edited_draft.as_ref() {
-        if !article_workspace_edited_draft::should_reject_edited_draft_update(
-            article_workspace_edited_draft::metadata_edited_draft(&metadata),
-            value,
-        ) {
-            metadata.insert("articleWorkspaceEditedDraft".to_string(), value.clone());
-        }
-    }
-    if metadata == before {
-        return Ok(None);
-    }
-    serde_json::to_string(&Value::Object(metadata))
-        .map(Some)
-        .map_err(|error| format!("无法序列化 projected session metadata: {error}"))
-}
-
 fn normalize_metadata_value(value: &Value) -> Result<String, String> {
     let metadata = match value {
         Value::String(raw) => {
@@ -1623,17 +1507,6 @@ fn normalize_metadata_value(value: &Value) -> Result<String, String> {
     };
     serde_json::to_string(&metadata)
         .map_err(|error| format!("无法序列化 projected session metadata: {error}"))
-}
-
-fn insert_metadata_string(
-    metadata: &mut serde_json::Map<String, Value>,
-    key: &str,
-    value: Option<&str>,
-) {
-    let Some(value) = normalized_text(value) else {
-        return;
-    };
-    metadata.insert(key.to_string(), Value::String(value));
 }
 
 fn normalized_text(value: Option<&str>) -> Option<String> {

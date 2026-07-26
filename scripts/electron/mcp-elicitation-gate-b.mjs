@@ -48,7 +48,7 @@ const REQUIRED_METHODS = [
   "mcpServer/start",
   "mcpTool/list",
   "thread/start",
-  "agentSession/update",
+  "thread/settings/update",
   "turn/start",
   "thread/read",
 ];
@@ -291,12 +291,12 @@ rl.on("line", (line) => {
 
 async function cleanupMcpServer(page, server) {
   if (!page || !server?.id) return;
-  await appServerCallFromPage(page, "mcpServer/stop", { name: server.name }).catch(
-    () => undefined,
-  );
-  await appServerCallFromPage(page, "mcpServer/delete", { id: server.id }).catch(
-    () => undefined,
-  );
+  await appServerCallFromPage(page, "mcpServer/stop", {
+    name: server.name,
+  }).catch(() => undefined);
+  await appServerCallFromPage(page, "mcpServer/delete", {
+    id: server.id,
+  }).catch(() => undefined);
 }
 
 async function waitForTool(page, expectedToolName, options, observedMethods) {
@@ -305,15 +305,23 @@ async function waitForTool(page, expectedToolName, options, observedMethods) {
   while (Date.now() - startedAt < options.timeoutMs) {
     latest = await appServerCallFromPage(page, "mcpTool/list", {});
     observedMethods.add(latest.method);
-    const tools = Array.isArray(latest.result?.tools) ? latest.result.tools : [];
+    const tools = Array.isArray(latest.result?.tools)
+      ? latest.result.tools
+      : [];
     if (tools.some((tool) => tool?.name === expectedToolName)) return latest;
     await sleep(options.intervalMs);
   }
-  throw new Error(`MCP tool 未就绪: ${expectedToolName}; latest=${JSON.stringify(latest?.result)}`);
+  throw new Error(
+    `MCP tool 未就绪: ${expectedToolName}; latest=${JSON.stringify(latest?.result)}`,
+  );
 }
 
 async function ensureWorkspace(page, observedMethods) {
-  const response = await appServerCallFromPage(page, "workspace/default/ensure", {});
+  const response = await appServerCallFromPage(
+    page,
+    "workspace/default/ensure",
+    {},
+  );
   observedMethods.add(response.method);
   const workspaceId = String(response.result?.workspace?.id || "").trim();
   assert(workspaceId, "workspace/default/ensure 未返回 workspace.id");
@@ -346,12 +354,10 @@ async function startRuntimeTurn(
     },
   });
   observedMethods.add(start.method);
-  const update = await appServerCallFromPage(page, "agentSession/update", {
-    sessionId,
-    providerSelector: fixture.provider.providerPreference,
-    providerName: fixture.provider.providerName,
-    modelName: fixture.provider.modelPreference,
-    executionStrategy: "react",
+  const update = await appServerCallFromPage(page, "thread/settings/update", {
+    threadId,
+    modelProvider: fixture.provider.providerPreference,
+    model: fixture.provider.modelPreference,
   });
   observedMethods.add(update.method);
   const turn = await appServerCallFromPage(page, "turn/start", {
@@ -510,10 +516,14 @@ function electronEvidence(traceRaw, observedMethods) {
   const methods = Array.from(
     new Set([
       ...observedMethods,
-      ...parseJsonRpcRequestsFromInvokeTrace(traceRaw).map((item) => item.method),
+      ...parseJsonRpcRequestsFromInvokeTrace(traceRaw).map(
+        (item) => item.method,
+      ),
     ]),
   );
-  const commands = Array.from(new Set(trace.map((item) => item?.command).filter(Boolean)));
+  const commands = Array.from(
+    new Set(trace.map((item) => item?.command).filter(Boolean)),
+  );
   return {
     appServerHandleJsonLinesSeen: commands.includes(
       APP_SERVER_HANDLE_JSON_LINES_COMMAND,
@@ -531,9 +541,15 @@ function electronEvidence(traceRaw, observedMethods) {
 async function run() {
   const options = parseArgs(process.argv.slice(2));
   fs.mkdirSync(options.evidenceDir, { recursive: true });
-  const summaryPath = path.join(options.evidenceDir, `${options.prefix}-summary.json`);
+  const summaryPath = path.join(
+    options.evidenceDir,
+    `${options.prefix}-summary.json`,
+  );
   const rawPath = path.join(options.evidenceDir, `${options.prefix}-raw.json`);
-  const screenshotPath = path.join(options.evidenceDir, `${options.prefix}.png`);
+  const screenshotPath = path.join(
+    options.evidenceDir,
+    `${options.prefix}.png`,
+  );
   const failureScreenshotPath = path.join(
     options.evidenceDir,
     `${options.prefix}-failure.png`,
@@ -610,7 +626,8 @@ async function run() {
     app = handle.app;
     page = handle.page;
     summary.electronPreloadBridge =
-      handle.rendererSnapshot.electron && handle.rendererSnapshot.hasInvokeBridge;
+      handle.rendererSnapshot.electron &&
+      handle.rendererSnapshot.hasInvokeBridge;
 
     logStage("create-and-start-mcp-server");
     const serverId = `mcp-elicitation-${Date.now()}-${process.pid}`;
@@ -661,7 +678,11 @@ async function run() {
     summary.rendererFormVisible = true;
     await page.screenshot({ path: screenshotPath, fullPage: true });
     summary.screenshot = screenshotPath;
-    summary.dialogClosedAfterResolved = await submitElicitation(page, dialog, options);
+    summary.dialogClosedAfterResolved = await submitElicitation(
+      page,
+      dialog,
+      options,
+    );
     summary.rendererConfirmedSubmitted = true;
 
     logStage("wait-provider-final");
@@ -675,12 +696,16 @@ async function run() {
     );
     raw.completion = sanitizeJson(completion.read);
     raw.mcpLedger = sanitizeJson(completion.ledger);
-    raw.mcpInitializeCapabilityEvidence = sanitizeJson(completion.capabilityEvidence);
-    summary.capabilityMissingCount = completion.capabilityEvidence.capabilityMissingCount;
+    raw.mcpInitializeCapabilityEvidence = sanitizeJson(
+      completion.capabilityEvidence,
+    );
+    summary.capabilityMissingCount =
+      completion.capabilityEvidence.capabilityMissingCount;
     summary.managementElicitationCapabilityAbsent =
       completion.capabilityEvidence.managementElicitationCapabilityAbsent;
     summary.runtimeClientCapabilities =
-      completion.capabilityEvidence.runtimeInitialize?.clientCapabilities ?? null;
+      completion.capabilityEvidence.runtimeInitialize?.clientCapabilities ??
+      null;
     summary.runtimeInitializeProtocolVersion =
       completion.capabilityEvidence.runtimeInitialize?.protocolVersion ?? null;
     const providerRequests = providerRequestSummary(fixture.requests);
@@ -690,19 +715,23 @@ async function run() {
       (entry) =>
         entry?.action === "accept" && entry?.content?.confirmed === true,
     );
-    summary.providerFinalTextObserved = JSON.stringify(completion.read.result).includes(
-      FINAL_TEXT,
-    );
+    summary.providerFinalTextObserved = JSON.stringify(
+      completion.read.result,
+    ).includes(FINAL_TEXT);
     const traceRaw = completion.read.traceRaw;
     const evidence = electronEvidence(traceRaw, observedMethods);
-    summary.appServerHandleJsonLinesSeen = evidence.appServerHandleJsonLinesSeen;
+    summary.appServerHandleJsonLinesSeen =
+      evidence.appServerHandleJsonLinesSeen;
     summary.missingRequiredMethods = evidence.missingRequiredMethods;
     summary.legacyMcpCommandsSeen = evidence.legacyMcpCommandsSeen;
     raw.electronEvidence = sanitizeJson(evidence);
     summary.consoleErrors = [...consoleErrors];
 
     assert(summary.electronPreloadBridge, "Electron preload bridge 未就绪");
-    assert(summary.appServerHandleJsonLinesSeen, "未观察到 app_server_handle_json_lines");
+    assert(
+      summary.appServerHandleJsonLinesSeen,
+      "未观察到 app_server_handle_json_lines",
+    );
     assert(
       summary.missingRequiredMethods.length === 0,
       `缺少 App Server current method: ${summary.missingRequiredMethods.join(", ")}`,
@@ -715,11 +744,26 @@ async function run() {
       providerRequests[0]?.toolNames?.includes(expectedToolName),
       `首个 provider request 未携带 scoped MCP tool: ${expectedToolName}`,
     );
-    assert(providerRequests.length >= 2, "provider 未完成 tool result 后的第二次请求");
-    assert(summary.rendererConfirmedSubmitted, "Renderer 未提交 confirmed=true");
-    assert(summary.mcpLedgerAccepted, "MCP fixture 未收到 accept confirmed=true");
-    assert(summary.providerFinalTextObserved, "provider final text 未进入 current read model");
-    assert(summary.dialogClosedAfterResolved, "serverRequest/resolved 后表单未关闭");
+    assert(
+      providerRequests.length >= 2,
+      "provider 未完成 tool result 后的第二次请求",
+    );
+    assert(
+      summary.rendererConfirmedSubmitted,
+      "Renderer 未提交 confirmed=true",
+    );
+    assert(
+      summary.mcpLedgerAccepted,
+      "MCP fixture 未收到 accept confirmed=true",
+    );
+    assert(
+      summary.providerFinalTextObserved,
+      "provider final text 未进入 current read model",
+    );
+    assert(
+      summary.dialogClosedAfterResolved,
+      "serverRequest/resolved 后表单未关闭",
+    );
     assert(
       completion.capabilityEvidence.runtimeProtocolCurrent &&
         completion.capabilityEvidence.runtimeCapabilityExact,
@@ -733,13 +777,20 @@ async function run() {
       summary.capabilityMissingCount === 0,
       `存在未广告 capability 的 runtime tool call: ${summary.capabilityMissingCount}`,
     );
-    assert(consoleErrors.length === 0, `Renderer console error: ${JSON.stringify(consoleErrors)}`);
+    assert(
+      consoleErrors.length === 0,
+      `Renderer console error: ${JSON.stringify(consoleErrors)}`,
+    );
     summary.ok = true;
   } catch (error) {
-    summary.error = sanitizeText(error instanceof Error ? error.stack || error.message : String(error));
+    summary.error = sanitizeText(
+      error instanceof Error ? error.stack || error.message : String(error),
+    );
     summary.consoleErrors = [...consoleErrors];
     if (page) {
-      await page.screenshot({ path: failureScreenshotPath, fullPage: true }).catch(() => undefined);
+      await page
+        .screenshot({ path: failureScreenshotPath, fullPage: true })
+        .catch(() => undefined);
       summary.failureScreenshot = failureScreenshotPath;
     }
     throw error;
@@ -760,6 +811,8 @@ async function run() {
 }
 
 run().catch((error) => {
-  console.error(`${LOG_PREFIX} failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(
+    `${LOG_PREFIX} failed: ${error instanceof Error ? error.message : String(error)}`,
+  );
   process.exitCode = 1;
 });

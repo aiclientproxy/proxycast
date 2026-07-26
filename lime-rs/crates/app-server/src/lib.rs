@@ -168,6 +168,7 @@ pub use runtime::McpAppDataSource;
 pub use runtime::MediaAppDataSource;
 pub use runtime::MemoryAppDataSource;
 pub use runtime::MockBackend;
+pub use runtime::ModelCatalogQuery;
 pub use runtime::ModelProviderAppDataSource;
 pub use runtime::NoopAppDataSource;
 pub use runtime::NoopEvidenceExportProvider;
@@ -180,6 +181,7 @@ pub use runtime::OutputSnapshotStore;
 pub use runtime::PluginDataSource;
 pub use runtime::ProjectionRepair;
 pub use runtime::ProjectionStore;
+pub use runtime::ProviderModelCatalog;
 pub use runtime::RightSurfaceAppDataSource;
 pub use runtime::RuntimeCore;
 pub use runtime::RuntimeCoreError;
@@ -218,6 +220,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 use thiserror::Error;
 use tokio::io;
 use tokio::io::AsyncRead;
@@ -229,6 +232,8 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 const OUTBOUND_MESSAGE_CAPACITY: usize = 1024;
+const DEFAULT_THREAD_UNLOADING_DELAY: Duration = Duration::from_secs(30 * 60);
+const THREAD_UNLOAD_ACTIVITY_POLL_INTERVAL: Duration = Duration::from_millis(250);
 type TransportWriter = mpsc::Sender<QueuedOutgoingMessage>;
 type TransportWriters = Arc<Mutex<HashMap<ConnectionId, TransportWriter>>>;
 type TransportDisconnects = Arc<Mutex<HashMap<ConnectionId, CancellationToken>>>;
@@ -275,6 +280,7 @@ pub struct AppServer {
     transport_disconnects: TransportDisconnects,
     transport_initialized: TransportInitialized,
     transport_notification_opt_out: TransportNotificationOptOut,
+    thread_unloading_delay: Duration,
     server_requests: server_request::ServerRequestRouter,
     mcp_elicitation_requests: mcp_elicitation::ElicitationRequestSource,
 }
@@ -326,7 +332,8 @@ impl AppServer {
                 })
             });
         Self {
-            processor: RequestProcessor::new(runtime).with_turn_interrupt_hook(turn_interrupt_hook),
+            processor: RequestProcessor::new_with_thread_states(runtime, thread_states.clone())
+                .with_turn_interrupt_hook(turn_interrupt_hook),
             thread_states,
             runtime_event_receiver,
             runtime_event_pump_started: Arc::new(AtomicBool::new(false)),
@@ -335,6 +342,7 @@ impl AppServer {
             transport_disconnects,
             transport_initialized,
             transport_notification_opt_out,
+            thread_unloading_delay: DEFAULT_THREAD_UNLOADING_DELAY,
             server_requests,
             mcp_elicitation_requests: mcp_elicitation::ElicitationRequestSource::default(),
         }
@@ -347,6 +355,11 @@ impl AppServer {
         self.mcp_elicitation_requests =
             mcp_elicitation::ElicitationRequestSource::subscribe(router)?;
         Ok(self)
+    }
+
+    pub fn with_thread_unloading_delay(mut self, delay: Duration) -> Self {
+        self.thread_unloading_delay = delay;
+        self
     }
 
     pub fn subscribe_outbound_messages(&self) -> broadcast::Receiver<JsonRpcMessage> {
@@ -434,6 +447,113 @@ impl AppServer {
             transport_initialized: self.transport_initialized.clone(),
             transport_notification_opt_out: self.transport_notification_opt_out.clone(),
         }
+    }
+
+    fn schedule_thread_unload(&self, thread_id: agent_protocol::ThreadId) {
+        let server = self.clone();
+        tokio::spawn(async move {
+            let Some(generation) = server
+                .thread_states
+                .schedule_unload_if_idle(&thread_id)
+                .await
+            else {
+                return;
+            };
+            let poll_interval = server
+                .thread_unloading_delay
+                .min(THREAD_UNLOAD_ACTIVITY_POLL_INTERVAL)
+                .max(Duration::from_millis(1));
+            let mut idle_since = None;
+
+            loop {
+                if !server
+                    .thread_states
+                    .unload_ticket_is_current(&thread_id, generation)
+                    .await
+                {
+                    return;
+                }
+                match server
+                    .processor
+                    .runtime()
+                    .loaded_thread_is_active(thread_id.as_str())
+                {
+                    None => {
+                        server.thread_states.remove_thread(&thread_id).await;
+                        return;
+                    }
+                    Some(true) => idle_since = None,
+                    Some(false) => {
+                        let since = idle_since.get_or_insert_with(tokio::time::Instant::now);
+                        if since.elapsed() >= server.thread_unloading_delay {
+                            break;
+                        }
+                    }
+                }
+                tokio::time::sleep(poll_interval).await;
+            }
+
+            if !server
+                .thread_states
+                .begin_unload(&thread_id, generation)
+                .await
+            {
+                return;
+            }
+            match server
+                .processor
+                .runtime()
+                .unload_thread_if_idle(thread_id.as_str())
+                .await
+            {
+                Ok(runtime::ThreadUnloadResult::Unloaded) => {
+                    let bridge = server.event_bridge();
+                    server
+                        .server_requests
+                        .abort_for_threads(&bridge, &[thread_id.to_string()], "thread closed")
+                        .await;
+                    server.thread_states.remove_thread(&thread_id).await;
+                    let status: JsonRpcNotification =
+                        app_server_protocol::protocol::v2::ServerNotification::ThreadStatusChanged(
+                            app_server_protocol::protocol::v2::ThreadStatusChangedNotification {
+                                thread_id: thread_id.to_string(),
+                                status: app_server_protocol::protocol::v2::ThreadStatus::NotLoaded,
+                            },
+                        )
+                        .into();
+                    bridge
+                        .broadcast_message(JsonRpcMessage::Notification(status))
+                        .await;
+                    let closed: JsonRpcNotification =
+                        app_server_protocol::protocol::v2::ServerNotification::ThreadClosed(
+                            app_server_protocol::protocol::v2::ThreadClosedNotification {
+                                thread_id: thread_id.to_string(),
+                            },
+                        )
+                        .into();
+                    bridge
+                        .broadcast_message(JsonRpcMessage::Notification(closed))
+                        .await;
+                }
+                Ok(runtime::ThreadUnloadResult::NotLoaded) => {
+                    server.thread_states.remove_thread(&thread_id).await;
+                }
+                Ok(runtime::ThreadUnloadResult::Active) => {
+                    server
+                        .thread_states
+                        .cancel_unload(&thread_id, generation)
+                        .await;
+                    server.schedule_thread_unload(thread_id);
+                }
+                Err(error) => {
+                    server
+                        .thread_states
+                        .cancel_unload(&thread_id, generation)
+                        .await;
+                    tracing::warn!(%thread_id, %error, "failed to unload idle thread");
+                }
+            }
+        });
     }
 
     #[cfg(test)]
@@ -859,6 +979,29 @@ pub fn spawn_image_task_worker_scheduler(
 }
 
 impl AppServerEventBridge {
+    async fn broadcast_message(&self, message: JsonRpcMessage) {
+        let _ = self.outbound_messages.send(message.clone());
+        let connection_ids = self
+            .transport_writers
+            .lock()
+            .expect("app-server transport writer mutex poisoned")
+            .keys()
+            .copied()
+            .collect::<Vec<_>>();
+        for connection_id in connection_ids {
+            if let Err(error) = self
+                .send_messages_to_connection(connection_id, std::slice::from_ref(&message))
+                .await
+            {
+                tracing::warn!(
+                    %connection_id,
+                    %error,
+                    "failed to broadcast App Server message"
+                );
+            }
+        }
+    }
+
     async fn send_messages_to_connection(
         &self,
         connection_id: ConnectionId,
@@ -1060,7 +1203,7 @@ async fn run_transport_events(
                                 .disconnect_connection(connection_id)
                                 .await;
                             for thread_id in idle_thread_ids {
-                                server.thread_states.remove_thread(&thread_id).await;
+                                server.schedule_thread_unload(thread_id);
                             }
                             server.unregister_transport_writer(connection_id);
                             server.server_requests.cancel_owner(
@@ -1245,10 +1388,23 @@ fn response_thread_id(messages: &[JsonRpcMessage]) -> Option<String> {
     })
 }
 
+fn thread_unsubscribe_succeeded(messages: &[JsonRpcMessage]) -> bool {
+    messages.iter().any(|message| {
+        let JsonRpcMessage::Response(response) = message else {
+            return false;
+        };
+        response
+            .result
+            .get("status")
+            .and_then(serde_json::Value::as_str)
+            == Some("unsubscribed")
+    })
+}
+
 fn thread_token_usage_notification(
     thread_id: &str,
     snapshot: runtime::thread_usage::ThreadTokenUsageSnapshot,
-) -> JsonRpcMessage {
+) -> JsonRpcNotification {
     let breakdown = |usage: runtime::thread_usage::TokenUsageSnapshot| {
         app_server_protocol::protocol::v2::TokenUsageBreakdown {
             total_tokens: usage.total_tokens,
@@ -1271,7 +1427,7 @@ fn thread_token_usage_notification(
                 },
             },
         );
-    JsonRpcMessage::Notification(notification.into())
+    notification.into()
 }
 
 fn transport_is_initialized(
@@ -1448,6 +1604,20 @@ fn spawn_transport_request(
             JsonRpcMessage::Request(request)
                 if request.method == app_server_protocol::protocol::v2::METHOD_THREAD_DELETE
         );
+        let thread_unsubscribe_id = match &message {
+            JsonRpcMessage::Request(request)
+                if request.method
+                    == app_server_protocol::protocol::v2::METHOD_THREAD_UNSUBSCRIBE =>
+            {
+                request
+                    .params
+                    .as_ref()
+                    .and_then(|params| params.get("threadId"))
+                    .and_then(serde_json::Value::as_str)
+                    .map(agent_protocol::ThreadId::new)
+            }
+            _ => None,
+        };
         let goal_mutation_thread_id = thread_goal_mutation_thread_id(&message);
         let subscription_method = match &message {
             JsonRpcMessage::Request(request)
@@ -1504,7 +1674,9 @@ fn spawn_transport_request(
                             .runtime()
                             .thread_token_usage_snapshot(&thread_id)
                         {
-                            messages.push(thread_token_usage_notification(&thread_id, snapshot));
+                            messages.push(JsonRpcMessage::Notification(
+                                thread_token_usage_notification(&thread_id, snapshot),
+                            ));
                         }
                         match bridge
                             .runtime_events
@@ -1658,8 +1830,13 @@ fn spawn_transport_request(
                         return;
                     }
                 }
+                let schedule_unload =
+                    thread_unsubscribe_id.filter(|_| thread_unsubscribe_succeeded(&messages));
                 for message in messages {
                     let _ = streamed_tx.send(Ok((connection_id, message)));
+                }
+                if let Some(thread_id) = schedule_unload {
+                    server.schedule_thread_unload(thread_id);
                 }
             }
             Err(error) => {
@@ -3265,7 +3442,7 @@ mod tests {
             "item/tool/requestUserInput",
             Some(json!({ "threadId": thread_id.as_str() })),
         ));
-        let usage = thread_token_usage_notification(
+        let usage = JsonRpcMessage::Notification(thread_token_usage_notification(
             thread_id.as_str(),
             runtime::thread_usage::ThreadTokenUsageSnapshot {
                 turn_id: "turn-usage".to_string(),
@@ -3288,7 +3465,7 @@ mod tests {
                 model_context_window: Some(128_000),
                 source_sequence: 7,
             },
-        );
+        ));
         let goal = JsonRpcMessage::Notification(
             app_server_protocol::protocol::v2::ServerNotification::ThreadGoalUpdated(
                 app_server_protocol::protocol::v2::ThreadGoalUpdatedNotification {

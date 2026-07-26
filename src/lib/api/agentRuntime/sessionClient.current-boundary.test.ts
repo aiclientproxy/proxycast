@@ -23,6 +23,13 @@ function appServerClientMock(): AppServerSessionRpcClient {
   return {
     startSession: vi.fn(),
     readThread: vi.fn(),
+    updateThreadSettings: vi.fn().mockResolvedValue({
+      id: 1,
+      result: {},
+      response: { id: 1, result: {} },
+      notifications: [],
+      messages: [],
+    }),
     request: vi.fn().mockResolvedValue({
       id: 1,
       result: {
@@ -33,20 +40,6 @@ function appServerClientMock(): AppServerSessionRpcClient {
           canonicalThread("session-created", "thread-created"),
           canonicalThread("session-deleted", "thread-deleted"),
         ],
-      },
-      response: { id: 1, result: {} },
-      notifications: [],
-      messages: [],
-    }),
-    updateSession: vi.fn().mockResolvedValue({
-      id: 1,
-      result: {
-        session: {
-          sessionId: "session-1",
-          threadId: "thread-1",
-          archivedAt: "2026-06-07T00:00:00.000Z",
-          updatedAt: "2026-06-07T00:00:00.000Z",
-        },
       },
       response: { id: 1, result: {} },
       notifications: [],
@@ -79,27 +72,16 @@ function appServerClientMock(): AppServerSessionRpcClient {
 }
 
 describe("agentRuntime sessionClient current App Server boundary", () => {
-  it("session metadata update 不再承载 archive 状态", async () => {
+  it("delete 使用 canonical thread/delete，不承载 metadata 更新", async () => {
     const appServerClient = appServerClientMock();
     const client = createSessionClient({
       appServerClient,
     });
 
     await expect(
-      client.updateAgentRuntimeSession({
-        session_id: " session-recent ",
-        name: "重命名",
-      }),
-    ).resolves.toBeUndefined();
-    await expect(
       client.deleteAgentRuntimeSession(" session-deleted "),
     ).resolves.toBeUndefined();
 
-    expect(appServerClient.updateSession).toHaveBeenCalledWith({
-      sessionId: "session-recent",
-      title: "重命名",
-    });
-    expect(appServerClient.updateSession).toHaveBeenCalledTimes(1);
     expect(appServerClient.deleteThread).toHaveBeenCalledWith({
       threadId: "thread-deleted",
     });
@@ -122,7 +104,6 @@ describe("agentRuntime sessionClient current App Server boundary", () => {
     expect(appServerClient.archiveThread).toHaveBeenCalledWith({
       threadId: "thread-bulk",
     });
-    expect(appServerClient.updateSession).not.toHaveBeenCalled();
   });
 
   it("unarchive projection must use thread/unarchive", async () => {
@@ -158,7 +139,6 @@ describe("agentRuntime sessionClient current App Server boundary", () => {
     expect(appServerClient.unarchiveThread).toHaveBeenCalledWith({
       threadId: "thread-archived",
     });
-    expect(appServerClient.updateSession).not.toHaveBeenCalled();
   });
 
   it("delete projection must resolve canonical id and use thread/delete", async () => {
@@ -174,7 +154,6 @@ describe("agentRuntime sessionClient current App Server boundary", () => {
     expect(appServerClient.deleteThread).toHaveBeenCalledWith({
       threadId: "thread-deleted",
     });
-    expect(appServerClient.updateSession).not.toHaveBeenCalled();
     expect(appServerClient.request).toHaveBeenCalledWith("thread/list", {
       archived: false,
       limit: 100,
@@ -214,10 +193,6 @@ describe("agentRuntime sessionClient current App Server boundary", () => {
           },
         },
       );
-      await client.updateAgentRuntimeSession({
-        session_id: "session-created",
-        name: "已更新",
-      });
       await client.archiveAgentRuntimeSession("session-created");
       await client.unarchiveAgentRuntimeSession("session-created");
       await client.deleteAgentRuntimeSession("session-created");
@@ -228,12 +203,12 @@ describe("agentRuntime sessionClient current App Server boundary", () => {
       );
     }
 
-    expect(listener).toHaveBeenCalledTimes(5);
+    expect(listener).toHaveBeenCalledTimes(4);
     expect(
       listener.mock.calls.map(([event]) =>
         event instanceof CustomEvent ? event.detail.reason : null,
       ),
-    ).toEqual(["created", "updated", "archived", "unarchived", "deleted"]);
+    ).toEqual(["created", "archived", "unarchived", "deleted"]);
   });
 
   it("cwd-only session create event must not publish an empty legacy workspaceId", async () => {
