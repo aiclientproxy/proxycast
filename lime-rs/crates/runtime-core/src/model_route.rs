@@ -65,7 +65,7 @@ pub fn resolved_route_from_task(
         .unwrap_or(false);
 
     let capability_snapshot = capability_snapshot(routing_payload);
-    let has_capability_snapshot = has_declared_capability_snapshot(routing_payload);
+    let has_capability_snapshot = has_authoritative_capability_snapshot(routing_payload);
     let protocol = resolve_protocol(
         task_request,
         &capability_snapshot,
@@ -267,7 +267,7 @@ fn protocol_from_provider_type(provider_type: &str) -> ProtocolKind {
         Some("gemini") => ProtocolKind::GeminiGenerateContent,
         Some("vertexai") | Some("vertex_ai") | Some("gcpvertexai") => ProtocolKind::VertexGemini,
         Some("aws_bedrock") | Some("bedrock") => ProtocolKind::BedrockConverse,
-        Some("ollama") => ProtocolKind::OllamaChat,
+        Some("ollama") => ProtocolKind::OpenaiResponses,
         Some("fal") => ProtocolKind::Fal,
         Some("openai") | Some("azure_openai") | Some("newapi") | Some("new_api")
         | Some("gateway") => ProtocolKind::OpenaiChat,
@@ -313,7 +313,7 @@ pub fn protocol_from_provider_name(provider: &str) -> ProtocolKind {
             ProtocolKind::VertexGemini
         }
         Some("aws_bedrock") | Some("bedrock") => ProtocolKind::BedrockConverse,
-        Some("ollama") => ProtocolKind::OllamaChat,
+        Some("ollama") => ProtocolKind::OpenaiResponses,
         Some("fal") => ProtocolKind::Fal,
         Some("openai") | Some("azure_openai") | Some("newapi") | Some("new_api")
         | Some("gateway") => ProtocolKind::OpenaiChat,
@@ -538,13 +538,14 @@ fn unsupported_protocol_route_failure(
 
 fn protocol_supported_for_task(task_kind: ModelTaskKind, protocol: &ProtocolKind) -> bool {
     match task_kind {
-        // Current agent turns are backed by model-provider's three wire adapters. Other
+        // Current agent turns are backed only by model-provider's registered wire adapters. Other
         // ProtocolKind variants must not be silently lowered to Custom/ChatCompletions.
         ModelTaskKind::Chat => matches!(
             protocol,
             ProtocolKind::OpenaiChat
                 | ProtocolKind::OpenaiResponses
                 | ProtocolKind::AnthropicMessages
+                | ProtocolKind::GeminiGenerateContent
                 | ProtocolKind::CodexResponses
         ),
         // Media tasks have dedicated lowerings and are validated by their own execution owner.
@@ -603,14 +604,16 @@ fn route_failure_category(reason_code: &str) -> RouteFailureCategory {
     }
 }
 
-fn has_declared_capability_snapshot(routing_payload: &Value) -> bool {
+fn has_authoritative_capability_snapshot(routing_payload: &Value) -> bool {
     model_registry(routing_payload)
         .and_then(|registry| {
             registry
                 .get("modelCapabilities")
                 .or_else(|| registry.get("model_capabilities"))
         })
-        .is_some_and(Value::is_object)
+        .and_then(|snapshot| snapshot.get("provenance"))
+        .and_then(Value::as_str)
+        .is_some_and(|provenance| matches!(provenance, "canonical" | "provider_explicit"))
 }
 
 fn model_registry(routing_payload: &Value) -> Option<&Value> {
@@ -621,7 +624,6 @@ fn model_registry(routing_payload: &Value) -> Option<&Value> {
 
 fn framing_for_protocol(protocol: &ProtocolKind) -> FramingKind {
     match protocol {
-        ProtocolKind::OllamaChat => FramingKind::Ndjson,
         ProtocolKind::Unknown => FramingKind::Json,
         _ => FramingKind::Sse,
     }
@@ -789,6 +791,7 @@ mod tests {
                     "status": "matched",
                     "reasonCode": "matched_direct_provider_config",
                     "modelCapabilities": {
+                        "provenance": "provider_explicit",
                         "taskFamilies": ["chat"],
                         "inputModalities": ["text"],
                         "outputModalities": ["text"],
@@ -812,7 +815,7 @@ mod tests {
     }
 
     #[test]
-    fn known_non_chat_wire_protocol_fails_closed_for_agent_turns() {
+    fn gemini_generate_content_is_admitted_for_agent_turns() {
         let task_request = chat_task_request("gemini", "gemini-pro");
         let route = resolved_route_from_task(
             &task_request,
@@ -832,6 +835,7 @@ mod tests {
                     "status": "matched",
                     "reasonCode": "matched_model",
                     "modelCapabilities": {
+                        "provenance": "provider_explicit",
                         "taskFamilies": ["chat"],
                         "inputModalities": ["text"],
                         "outputModalities": ["text"],
@@ -859,9 +863,67 @@ mod tests {
         );
 
         assert_eq!(route.protocol, ProtocolKind::GeminiGenerateContent);
-        let failure = route.failure.expect("unsupported chat protocol failure");
-        assert_eq!(failure.category, RouteFailureCategory::UnsupportedProtocol);
-        assert_eq!(failure.reason_code, "unsupported_protocol");
+        assert!(route.failure.is_none());
+    }
+
+    #[test]
+    fn ollama_inferred_capability_hint_is_not_route_authority() {
+        let task_request = chat_task_request("ollama", "qwen3:14b");
+        let route = resolved_route_from_task(
+            &task_request,
+            ModelRouteSelection {
+                provider_id: "ollama",
+                model_id: "qwen3:14b",
+                model_ref_source: ModelRefSource::RuntimeRequest,
+                reasoning_effort: None,
+            },
+            &json!({
+                "providerReadiness": {
+                    "ready": true,
+                    "status": "ready"
+                },
+                "modelRegistry": {
+                    "source": "provider_declared_model",
+                    "status": "matched",
+                    "reasonCode": "matched_provider_models",
+                    "modelCapabilities": {
+                        "provenance": "inferred_hint",
+                        "taskFamilies": ["chat"],
+                        "inputModalities": ["text"],
+                        "outputModalities": ["text"],
+                        "runtimeFeatures": ["streaming"],
+                        "capabilities": {
+                            "streaming": true
+                        }
+                    }
+                }
+            }),
+            Some(&ModelRouteProvider {
+                provider_id: "ollama",
+                provider_type: Cow::Borrowed("ollama"),
+                base_url: Some("http://127.0.0.1:11434"),
+                api_version: None,
+                project: None,
+                location: None,
+                region: None,
+                credential_ref: None,
+                auth_header: "Authorization",
+                auth_prefix: Some("Bearer"),
+                prompt_cache_mode: None,
+            }),
+            None,
+        );
+
+        assert_eq!(route.protocol, ProtocolKind::OpenaiResponses);
+        assert_eq!(route.auth.kind, AuthKind::NoAuth);
+        assert_eq!(route.framing, FramingKind::Sse);
+        let failure = route.failure.expect("inferred hint must fail closed");
+        assert_eq!(failure.category, RouteFailureCategory::CapabilityGap);
+        assert_eq!(failure.reason_code, "capability_snapshot_missing");
+        assert_eq!(
+            failure.capability_gap.as_deref(),
+            Some("capability_snapshot:missing")
+        );
     }
 
     #[test]
@@ -896,8 +958,9 @@ mod tests {
             "serviceModelSlot": "image_generation_model",
             "modelRegistry": {
                 "source": "provider_declared_model",
-                "reasonCode": "matched_provider_custom_models",
+                "reasonCode": "matched_provider_models",
                 "modelCapabilities": {
+                    "provenance": "provider_explicit",
                     "capabilities": {
                         "vision": false,
                         "streaming": true
@@ -1002,6 +1065,7 @@ mod tests {
                         "outputPerMillion": 8.0
                     },
                     "modelCapabilities": {
+                        "provenance": "canonical",
                         "taskFamilies": ["chat"],
                         "inputModalities": ["text"],
                         "outputModalities": ["text"],
@@ -1073,6 +1137,7 @@ mod tests {
                     "source": "api",
                     "reasonCode": "matched_media_task_model",
                     "modelCapabilities": {
+                        "provenance": "provider_explicit",
                         "taskFamilies": ["image_generation"],
                         "inputModalities": ["text"],
                         "outputModalities": ["image"],
@@ -1133,6 +1198,7 @@ mod tests {
                     "source": "api",
                     "reasonCode": "matched_media_task_model",
                     "modelCapabilities": {
+                        "provenance": "provider_explicit",
                         "taskFamilies": ["image_generation"],
                         "inputModalities": ["text"],
                         "outputModalities": ["image"],
@@ -1206,6 +1272,7 @@ mod tests {
                     "source": "api",
                     "reasonCode": "matched_media_task_model",
                     "modelCapabilities": {
+                        "provenance": "provider_explicit",
                         "taskFamilies": ["image_generation"],
                         "inputModalities": ["text"],
                         "outputModalities": ["image"],
@@ -1267,6 +1334,7 @@ mod tests {
                     "source": "api",
                     "reasonCode": "matched_model",
                     "modelCapabilities": {
+                        "provenance": "provider_explicit",
                         "taskFamilies": ["chat"],
                         "inputModalities": ["text"],
                         "outputModalities": ["text"],
@@ -1486,6 +1554,7 @@ mod tests {
                     "source": "api",
                     "reasonCode": "matched_model",
                     "modelCapabilities": {
+                        "provenance": "canonical",
                         "taskFamilies": ["chat"],
                         "inputModalities": ["text"],
                         "outputModalities": ["text"],
@@ -1507,6 +1576,7 @@ mod tests {
                 "source": "api",
                 "reasonCode": "matched_model",
                 "modelCapabilities": {
+                    "provenance": "canonical",
                     "taskFamilies": ["chat"],
                     "inputModalities": ["text"],
                     "outputModalities": ["text"],

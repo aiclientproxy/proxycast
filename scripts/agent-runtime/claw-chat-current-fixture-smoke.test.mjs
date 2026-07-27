@@ -6,6 +6,7 @@ import {
   APPROVAL_REQUEST_RESUME_REQUEST_ID,
   HOME_HOTPATH_GREETING_SCENARIO,
   HOME_HOTPATH_SCENARIO,
+  IMAGE_FIXTURE_MODEL,
   TEXT_PROVIDER_FIXTURE_API_KEY,
 } from "./claw-chat-current-fixture-constants.mjs";
 import {
@@ -49,7 +50,11 @@ import {
 } from "./claw-chat-current-fixture-home-hotpath.mjs";
 import { runtimeEventFromDirectNotification } from "./claw-chat-current-fixture-rpc.mjs";
 import { isGuiChatCompletedSnapshotReady } from "./claw-chat-current-fixture-gui-completion-waits.mjs";
-import { startTextProviderFixtureServer } from "./claw-chat-current-fixture-backend-file.mjs";
+import {
+  IMAGE_PROVIDER_FIXTURE_API_KEY,
+  startImageProviderFixtureServer,
+  startTextProviderFixtureServer,
+} from "./claw-chat-current-fixture-backend-file.mjs";
 import {
   ACTIVE_STEER_DONE_TEXT,
   ACTIVE_STEER_FINAL_TEXT,
@@ -1416,7 +1421,7 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain("INPUTBAR_RICH_RESTORE_ASSERTION_KEYS");
     expect(content).toContain("shouldUseTextProviderFixture");
     expect(content).toContain("modelProvider/fetchModels");
-    expect(content).toContain("customModels: []");
+    expect(content).toContain("models: []");
     expect(content).toContain('["/models", "/v1/models"]');
     expect(content).toContain('input_modalities: ["text", "image"]');
     expect(content).toContain("fixtureModelInputModalities");
@@ -2057,6 +2062,39 @@ describe("claw chat current Electron fixture smoke guard", () => {
       expect(fixture.requests()).toEqual([
         expect.objectContaining({ authorization: "missing" }),
         expect.objectContaining({ authorization: "present" }),
+      ]);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it("advertises explicit image capabilities for provider discovery", async () => {
+    const fixture = await startImageProviderFixtureServer();
+    try {
+      const response = await fetch(`${fixture.baseUrl}/models`, {
+        headers: {
+          Authorization: `Bearer ${IMAGE_PROVIDER_FIXTURE_API_KEY}`,
+        },
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        data: [
+          {
+            id: IMAGE_FIXTURE_MODEL,
+            task_families: ["image_generation", "image_edit"],
+            input_modalities: ["text", "image"],
+            output_modalities: ["image"],
+            runtime_features: ["images_api"],
+          },
+        ],
+      });
+      expect(fixture.requests()).toEqual([
+        expect.objectContaining({
+          method: "GET",
+          url: "/v1/models",
+          authorization: "present",
+        }),
       ]);
     } finally {
       await fixture.close();

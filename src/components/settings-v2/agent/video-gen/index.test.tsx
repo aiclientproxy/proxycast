@@ -47,7 +47,7 @@ vi.mock("@/hooks/useApiKeyProvider", () => ({
         enabled: true,
         api_key_count: 1,
         api_keys: [{ enabled: true }],
-        custom_models: ["seedance-1-5-pro-251215"],
+        models: [{ id: "seedance-1-5-pro-251215" }],
       },
     ],
     loading: false,

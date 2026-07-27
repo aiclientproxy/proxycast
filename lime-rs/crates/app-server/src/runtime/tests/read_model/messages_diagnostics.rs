@@ -577,7 +577,7 @@ async fn read_session_projects_model_routing_into_thread_read() {
     );
     assert_eq!(
         routing["modelRegistry"]["reasonCode"].as_str(),
-        Some("matched_provider_custom_models")
+        Some("matched_provider_models")
     );
     assert_eq!(
         routing["modelRegistry"]["modelCapabilities"]["capabilities"]["reasoning"].as_bool(),

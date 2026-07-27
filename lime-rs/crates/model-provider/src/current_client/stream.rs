@@ -10,6 +10,10 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
 
+mod hosted_tools;
+
+use hosted_tools::{hosted_tool_events, HostedToolState};
+
 pub(super) const DEFAULT_STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
 const OPENAI_FINISH_TRAILER_TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -231,6 +235,7 @@ fn take_openai_calls(state: &mut OpenAiStreamState) -> Result<Vec<LlmEvent>, Cur
             name: tool_call.name,
             input: tool_call.arguments,
             provider_executed: None,
+            provider_metadata: Default::default(),
         });
     }
     Ok(events)
@@ -293,6 +298,7 @@ struct ResponsesStreamState {
     response_id: Option<String>,
     calls: HashMap<String, ToolCallAccumulator>,
     emitted_calls: HashSet<String>,
+    hosted_tools: HostedToolState,
     emitted_tool_call: bool,
     usage: Option<Usage>,
     text_ids: HashSet<String>,
@@ -414,6 +420,11 @@ impl ResponsesEventReducer {
                 if let Some(item) = payload.get("item") {
                     observe_active_responses_reasoning_item(item, &mut self.state);
                     absorb_responses_call(item, &mut self.state);
+                    events.extend(hosted_tool_events(
+                        item,
+                        &mut self.state.hosted_tools,
+                        false,
+                    )?);
                 }
             }
             "response.function_call_arguments.delta" => {
@@ -466,6 +477,11 @@ impl ResponsesEventReducer {
                 if let Some(item) = payload.get("item") {
                     clear_active_responses_reasoning_item(item, &mut self.state);
                     absorb_responses_call(item, &mut self.state);
+                    events.extend(hosted_tool_events(
+                        item,
+                        &mut self.state.hosted_tools,
+                        true,
+                    )?);
                     if item.get("type").and_then(Value::as_str) == Some("function_call") {
                         let key = response_call_key(item);
                         events.extend(take_responses_call(&mut self.state, &key)?);
@@ -492,6 +508,11 @@ impl ResponsesEventReducer {
                     .flatten()
                 {
                     absorb_responses_call(item, &mut self.state);
+                    events.extend(hosted_tool_events(
+                        item,
+                        &mut self.state.hosted_tools,
+                        true,
+                    )?);
                 }
                 events.extend(take_responses_calls(&mut self.state)?);
                 events.extend(
@@ -692,6 +713,7 @@ fn take_responses_call(
             name: call.name,
             input: call.arguments,
             provider_executed: None,
+            provider_metadata: Default::default(),
         });
     }
     Ok(events)
@@ -923,7 +945,7 @@ pub(super) fn anthropic_sse(
                     {
                         state.emitted_tool_call = true;
                         yield LlmEvent::ToolInputEnd { id: call.id.clone(), name: call.name.clone() };
-                        yield LlmEvent::ToolCall { id: call.id, name: call.name, input: call.arguments, provider_executed: None };
+                        yield LlmEvent::ToolCall { id: call.id, name: call.name, input: call.arguments, provider_executed: None, provider_metadata: Default::default() };
                     }
                 }
                 anthropic::AnthropicStreamEvent::MessageDelta { delta, usage } => {

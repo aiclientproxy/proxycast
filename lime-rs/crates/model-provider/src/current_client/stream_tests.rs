@@ -1,5 +1,5 @@
 use super::{
-    stream::{anthropic_sse, openai_chat_sse, responses_sse},
+    stream::{anthropic_sse, openai_chat_sse, responses_sse, ResponsesEventReducer},
     CurrentProviderError,
 };
 use futures::{Stream, StreamExt};
@@ -175,6 +175,127 @@ async fn responses_verification_is_ignored_for_untrusted_routes() {
     assert!(!events
         .iter()
         .any(|event| matches!(event, CanonicalLlmEvent::ModelVerification { .. })));
+}
+
+#[tokio::test]
+async fn responses_projects_hosted_web_search_without_local_tool_finish_reason() {
+    let events = collect_responses_events(concat!(
+        "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"ws_1\",\"type\":\"web_search_call\",\"status\":\"in_progress\",\"action\":{\"type\":\"search\",\"query\":\"Rust release\"}}}\n\n",
+        "data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"ws_1\",\"type\":\"web_search_call\",\"status\":\"completed\",\"action\":{\"type\":\"search\",\"query\":\"Rust release\"}}}\n\n",
+        "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"delta\":\"Rust 1.90\"}\n\n",
+        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-search\",\"output\":[]}}\n\n",
+    ))
+    .await;
+
+    let calls = events
+        .iter()
+        .filter_map(|event| match event {
+            CanonicalLlmEvent::ToolCall {
+                id,
+                name,
+                input,
+                provider_executed,
+                provider_metadata,
+            } => Some((id, name, input, provider_executed, provider_metadata)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, "ws_1");
+    assert_eq!(calls[0].1, "web_search");
+    assert_eq!(calls[0].2["query"], "Rust release");
+    assert_eq!(*calls[0].3, Some(true));
+    assert_eq!(calls[0].4["raw_response_item"]["type"], "web_search_call");
+    assert!(events.iter().any(|event| matches!(
+        event,
+        CanonicalLlmEvent::ToolResult {
+            id,
+            provider_executed: Some(true),
+            ..
+        } if id == "ws_1"
+    )));
+    assert!(events.iter().any(|event| matches!(
+        event,
+        CanonicalLlmEvent::Finish {
+            reason: runtime_core::FinishReason::Stop,
+            ..
+        }
+    )));
+}
+
+#[tokio::test]
+async fn responses_projects_hosted_image_generation_exactly_once_and_finishes_stop() {
+    let events = collect_responses_events(concat!(
+        "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"ig_1\",\"type\":\"image_generation_call\",\"status\":\"in_progress\",\"revised_prompt\":\"a blue square\"}}\n\n",
+        "data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"ig_1\",\"type\":\"image_generation_call\",\"status\":\"completed\",\"revised_prompt\":\"a blue square\",\"result\":\"Zm9v\"}}\n\n",
+        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-image\",\"output\":[{\"id\":\"ig_1\",\"type\":\"image_generation_call\",\"status\":\"completed\",\"revised_prompt\":\"a blue square\",\"result\":\"Zm9v\"}]}}\n\n",
+    ))
+    .await;
+
+    let calls = events
+        .iter()
+        .filter_map(|event| match event {
+            CanonicalLlmEvent::ToolCall {
+                id,
+                name,
+                input,
+                provider_executed,
+                provider_metadata,
+            } => Some((id, name, input, provider_executed, provider_metadata)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, "ig_1");
+    assert_eq!(calls[0].1, "image_generation");
+    assert_eq!(calls[0].2["revised_prompt"], "a blue square");
+    assert_eq!(*calls[0].3, Some(true));
+    assert_eq!(
+        calls[0].4["raw_response_item"]["type"],
+        "image_generation_call"
+    );
+
+    let results = events
+        .iter()
+        .filter_map(|event| match event {
+            CanonicalLlmEvent::ToolResult {
+                id,
+                result: runtime_core::ToolResultValue::Json { value },
+                provider_executed: Some(true),
+                ..
+            } => Some((id, value)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].0, "ig_1");
+    assert_eq!(results[0].1["result"], "Zm9v");
+    assert!(events.iter().any(|event| matches!(
+        event,
+        CanonicalLlmEvent::Finish {
+            reason: runtime_core::FinishReason::Stop,
+            ..
+        }
+    )));
+}
+
+#[test]
+fn responses_rejects_completed_image_generation_without_result() {
+    let mut reducer = ResponsesEventReducer::new(None, true);
+    let error = match reducer.push(&serde_json::json!({
+        "type": "response.output_item.done",
+        "item": {
+            "id": "ig_missing",
+            "type": "image_generation_call",
+            "status": "completed",
+            "revised_prompt": "missing bytes"
+        }
+    })) {
+        Ok(_) => panic!("completed image generation must include result"),
+        Err(error) => error,
+    };
+
+    assert!(error.message.contains("completed without a string result"));
 }
 
 async fn assert_finish_releases_http_body(

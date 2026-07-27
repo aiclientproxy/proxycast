@@ -318,7 +318,6 @@
         "codex_responses",
         "fal",
         "gemini_generate_content",
-        "ollama_chat",
         "openai_chat",
         "openai_images",
         "openai_responses",

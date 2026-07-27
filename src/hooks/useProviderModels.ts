@@ -83,7 +83,7 @@ function mergeConfiguredAndFetchedModels(
   const configuredModels = buildProviderModelsFromBackendModelIds(
     selectedProvider,
     registryModels,
-    selectedProvider.customModels ?? [],
+    selectedProvider.models ?? [],
   );
   const seenModelIds = new Set<string>();
 
@@ -101,7 +101,7 @@ function hasDeclaredProviderModels(
   selectedProvider: ConfiguredProvider | undefined | null,
 ): boolean {
   return Boolean(
-    selectedProvider?.customModels?.some((modelId) => modelId.trim()),
+    selectedProvider?.models?.some((modelId) => modelId.trim()),
   );
 }
 

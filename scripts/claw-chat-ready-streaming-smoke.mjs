@@ -895,8 +895,6 @@ function pickModelPreference(provider) {
   const candidates = [
     provider?.default_model,
     provider?.defaultModel,
-    ...(Array.isArray(provider?.custom_models) ? provider.custom_models : []),
-    ...(Array.isArray(provider?.customModels) ? provider.customModels : []),
     ...(Array.isArray(provider?.models) ? provider.models : []),
   ]
     .map((value) =>
@@ -1129,7 +1127,7 @@ async function resolveProviderPreference(options, agentStatus, providers) {
       options,
       statusProviderRecord || {
         id: statusProvider,
-        custom_models: [statusModel],
+        models: [{ id: statusModel }],
       },
       statusModel,
       "agent-status",

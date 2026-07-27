@@ -260,6 +260,7 @@ fn model_provider_protocol_wire_value(protocol: &ModelProviderProtocol) -> Strin
         ModelProviderProtocol::Responses => "responses".to_string(),
         ModelProviderProtocol::ChatCompletions => "chat_completions".to_string(),
         ModelProviderProtocol::AnthropicMessages => "anthropic_messages".to_string(),
+        ModelProviderProtocol::GeminiGenerateContent => "gemini_generate_content".to_string(),
         ModelProviderProtocol::Custom(value) => value.clone(),
     }
 }

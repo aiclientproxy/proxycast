@@ -20,7 +20,7 @@ function createApiKeyProvider(
     group: "cloud",
     enabled: true,
     sort_order: 0,
-    custom_models: [],
+    models: [],
     prompt_cache_mode: null,
     api_key_count: apiKeyCount,
     api_keys:
@@ -132,7 +132,7 @@ describe("buildConfiguredProviders", () => {
           type: "openai",
           api_host: "https://llm.limeai.run",
           api_key_count: 0,
-          custom_models: [],
+          models: [],
         }),
       ],
       {
@@ -146,7 +146,7 @@ describe("buildConfiguredProviders", () => {
         providerId: "lime-hub",
         label: "Lime 云端",
         authStatus: "login_required",
-        customModels: [],
+        models: [],
       }),
     ]);
   });
@@ -160,7 +160,7 @@ describe("buildConfiguredProviders", () => {
           type: "openai",
           api_host: "https://llm.limeai.run#lime_tenant_id=tenant-0001",
           api_key_count: 0,
-          custom_models: ["agnes-2.0-flash"],
+          models: [{ id: "agnes-2.0-flash" }],
         }),
       ],
       {
@@ -174,7 +174,7 @@ describe("buildConfiguredProviders", () => {
         providerId: "lime-hub",
         label: "Lime 云端",
         authStatus: "ready",
-        customModels: ["agnes-2.0-flash"],
+        models: ["agnes-2.0-flash"],
       }),
     ]);
   });
@@ -212,7 +212,7 @@ describe("buildConfiguredProviders", () => {
           type: "openai",
           api_host: "https://llm.limeai.run#lime_tenant_id=tenant-0001",
           api_key_count: 0,
-          custom_models: [],
+          models: [],
         }),
       ],
       {
@@ -226,7 +226,7 @@ describe("buildConfiguredProviders", () => {
         providerId: "lime-hub",
         label: "Lime Hub",
         authStatus: "ready",
-        customModels: ["gpt-5.2-pro"],
+        models: ["gpt-5.2-pro"],
       }),
     ]);
   });
@@ -240,7 +240,7 @@ describe("buildConfiguredProviders", () => {
           type: "openai",
           api_host: "https://llm.limeai.run#lime_tenant_id=tenant-0001",
           api_key_count: 0,
-          custom_models: [],
+          models: [],
         }),
       ],
       {
@@ -253,7 +253,7 @@ describe("buildConfiguredProviders", () => {
         key: "lime-hub",
         providerId: "lime-hub",
         authStatus: "ready",
-        customModels: ["gpt-5.2-pro"],
+        models: ["gpt-5.2-pro"],
       }),
     ]);
   });

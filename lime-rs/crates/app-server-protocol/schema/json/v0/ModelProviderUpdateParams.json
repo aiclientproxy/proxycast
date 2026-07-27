@@ -1,4 +1,184 @@
 {
+  "$defs": {
+    "ModelCapabilitiesInfo": {
+      "properties": {
+        "functionCalling": {
+          "type": "boolean"
+        },
+        "jsonMode": {
+          "type": "boolean"
+        },
+        "reasoning": {
+          "type": "boolean"
+        },
+        "reasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelReasoningEffortSupportInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "streaming": {
+          "type": "boolean"
+        },
+        "tools": {
+          "type": "boolean"
+        },
+        "vision": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "functionCalling",
+        "jsonMode",
+        "reasoning",
+        "streaming",
+        "tools",
+        "vision"
+      ],
+      "type": "object"
+    },
+    "ModelReasoningEffortOptionInfo": {
+      "properties": {
+        "default": {
+          "default": false,
+          "type": "boolean"
+        },
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ModelReasoningEffortSupportInfo": {
+      "properties": {
+        "default": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "levels": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "options": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+          },
+          "type": "array"
+        },
+        "source": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "supported": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "supported"
+      ],
+      "type": "object"
+    },
+    "ProviderModelCapability": {
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/ModelCapabilitiesInfo",
+          "default": {
+            "functionCalling": false,
+            "jsonMode": false,
+            "reasoning": false,
+            "streaming": false,
+            "tools": false,
+            "vision": false
+          }
+        },
+        "inputModalities": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "outputModalities": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "runtimeFeatures": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "taskFamilies": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "ProviderModelConfig": {
+      "properties": {
+        "capability": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderModelCapability"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "displayName": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "apiHost": {
@@ -13,15 +193,6 @@
         "string"
       ]
     },
-    "customModels": {
-      "items": {
-        "type": "string"
-      },
-      "type": [
-        "array",
-        "null"
-      ]
-    },
     "enabled": {
       "type": [
         "boolean",
@@ -32,6 +203,15 @@
       "type": [
         "null",
         "string"
+      ]
+    },
+    "models": {
+      "items": {
+        "$ref": "#/$defs/ProviderModelConfig"
+      },
+      "type": [
+        "array",
+        "null"
       ]
     },
     "name": {

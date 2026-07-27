@@ -1,6 +1,7 @@
 use super::request_context::RuntimeModelSelection;
 use lime_agent::SessionProviderConfig;
 use lime_core::database::DbConnection;
+use lime_core::models::model_registry::{EnhancedModelMetadata, ModelCapabilityProvenance};
 use lime_core::models::RuntimeProviderCredential;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
 use lime_services::model_registry_service::{ModelRegistryService, ProviderModelCacheAccess};
@@ -31,10 +32,8 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
 ) -> Result<RuntimeModelRegistryMetadata, String> {
     if let Some(config) = direct_provider_config {
         let model_capabilities = config.model_capabilities.as_ref().map(|value| {
-            serde_json::to_value(runtime_core::capability_snapshot_from_model_capabilities(
-                value,
-            ))
-            .unwrap_or_else(|_| json!({}))
+            let snapshot = runtime_core::capability_snapshot_from_model_capabilities(value);
+            capability_payload(&snapshot, ModelCapabilityProvenance::ProviderExplicit)
         });
         return Ok(RuntimeModelRegistryMetadata {
             payload: json!({
@@ -87,19 +86,7 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
         .map(serde_json::to_value)
         .transpose()
         .map_err(|error| format!("序列化模型注册 metadata 失败: {error}"))?;
-    let model_capabilities = metadata.model.as_ref().map(|model| {
-        json!({
-            "capabilities": model.capabilities,
-            "taskFamilies": model.task_families,
-            "task_families": model.task_families,
-            "runtimeFeatures": model.runtime_features,
-            "runtime_features": model.runtime_features,
-            "inputModalities": model.input_modalities,
-            "input_modalities": model.input_modalities,
-            "outputModalities": model.output_modalities,
-            "output_modalities": model.output_modalities,
-        })
-    });
+    let model_capabilities = metadata.model.as_ref().map(model_capability_payload);
     let model_alias = metadata.model.as_ref().map(|model| {
         json!({
             "canonicalModelId": model.canonical_model_id,
@@ -145,6 +132,35 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
             "model_alias": model_alias,
             "reasoning": reasoning,
         }),
+    })
+}
+
+fn model_capability_payload(model: &EnhancedModelMetadata) -> Value {
+    json!({
+        "provenance": model.capability_provenance,
+        "capabilities": model.capabilities,
+        "taskFamilies": model.task_families,
+        "task_families": model.task_families,
+        "runtimeFeatures": model.runtime_features,
+        "runtime_features": model.runtime_features,
+        "inputModalities": model.input_modalities,
+        "input_modalities": model.input_modalities,
+        "outputModalities": model.output_modalities,
+        "output_modalities": model.output_modalities,
+    })
+}
+
+fn capability_payload(
+    snapshot: &app_server_protocol::CapabilitySnapshot,
+    provenance: ModelCapabilityProvenance,
+) -> Value {
+    json!({
+        "provenance": provenance,
+        "capabilities": snapshot.capabilities,
+        "taskFamilies": snapshot.task_families,
+        "runtimeFeatures": snapshot.runtime_features,
+        "inputModalities": snapshot.input_modalities,
+        "outputModalities": snapshot.output_modalities,
     })
 }
 
@@ -194,7 +210,11 @@ mod tests {
                 None,
                 None,
                 None,
-                Some(vec!["coder-reasoning-large".to_string()]),
+                Some(vec![
+                    lime_core::models::model_registry::ProviderModelConfig::hint(
+                        "coder-reasoning-large",
+                    ),
+                ]),
             )
             .expect("set custom models");
 
@@ -218,6 +238,13 @@ mod tests {
             Some("provider_declared_model")
         );
         assert_eq!(metadata.payload()["status"].as_str(), Some("matched"));
+        assert_eq!(
+            metadata
+                .payload()
+                .pointer("/modelCapabilities/provenance")
+                .and_then(Value::as_str),
+            Some("inferred_hint")
+        );
         assert_eq!(
             metadata
                 .payload()
@@ -284,6 +311,13 @@ mod tests {
         assert_eq!(
             metadata.payload()["reasonCode"].as_str(),
             Some("direct_provider_config_not_in_registry")
+        );
+        assert_eq!(
+            metadata
+                .payload()
+                .pointer("/modelCapabilities/provenance")
+                .and_then(Value::as_str),
+            Some("provider_explicit")
         );
         assert!(metadata.payload()["model"].is_null());
         assert_eq!(

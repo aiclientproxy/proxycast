@@ -5,7 +5,7 @@ use agent_protocol::{
     ToolArgument, ToolOutput, TurnId,
 };
 use lime_core::database::dao::agent_timeline::AgentThreadTurn;
-use model_provider::current_client::ModelVerification;
+use model_provider::current_client::{ModelRerouteReason, ModelVerification};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -420,6 +420,13 @@ pub enum AgentEvent {
     #[serde(rename = "server_model")]
     ServerModel { model: String },
 
+    #[serde(rename = "model_reroute")]
+    ModelReroute {
+        from_model: String,
+        to_model: String,
+        reason: ModelRerouteReason,
+    },
+
     #[serde(rename = "model_verification")]
     ModelVerification {
         verifications: Vec<ModelVerification>,
@@ -582,6 +589,7 @@ pub(crate) fn canonical_tool_item_event(
         call_id,
         tool_name,
         arguments,
+        provider_metadata,
         environments,
         phase,
         output,
@@ -598,6 +606,12 @@ pub(crate) fn canonical_tool_item_event(
     let raw_arguments = arguments.clone();
     let arguments = canonical_tool_arguments(arguments);
     let mut metadata = serde_json::Map::new();
+    if provider_metadata
+        .as_object()
+        .is_some_and(|metadata| !metadata.is_empty())
+    {
+        metadata.insert("provider_metadata".to_string(), provider_metadata);
+    }
     metadata.insert(
         "environments".to_string(),
         Value::Array(
@@ -928,6 +942,7 @@ mod tests {
                 call_id: "call-aborted".to_string(),
                 tool_name: "sleep".to_string(),
                 arguments: serde_json::json!({}),
+                provider_metadata: Value::Null,
                 environments: Vec::new(),
                 phase: ToolLifecyclePhase::Completed,
                 output: Some(NormalizedToolOutput {
@@ -965,6 +980,7 @@ mod tests {
                 call_id: "exec-call".to_string(),
                 tool_name: "exec_command".to_string(),
                 arguments: serde_json::json!({ "cmd": "printf done" }),
+                provider_metadata: Value::Null,
                 environments: Vec::new(),
                 phase: ToolLifecyclePhase::Started,
                 output: None,
@@ -983,6 +999,7 @@ mod tests {
                 call_id: "exec-call".to_string(),
                 tool_name: "exec_command".to_string(),
                 arguments: serde_json::json!({ "cmd": "printf done" }),
+                provider_metadata: Value::Null,
                 environments: Vec::new(),
                 phase: ToolLifecyclePhase::Completed,
                 output: Some(unified_exec_output(true)),
@@ -1005,6 +1022,7 @@ mod tests {
                 call_id: "write-call".to_string(),
                 tool_name: "write_stdin".to_string(),
                 arguments: serde_json::json!({ "session_id": 1001, "chars": "" }),
+                provider_metadata: Value::Null,
                 environments: Vec::new(),
                 phase: ToolLifecyclePhase::Started,
                 output: None,
@@ -1019,6 +1037,7 @@ mod tests {
                 call_id: "write-call".to_string(),
                 tool_name: "write_stdin".to_string(),
                 arguments: serde_json::json!({ "session_id": 1001, "chars": "" }),
+                provider_metadata: Value::Null,
                 environments: Vec::new(),
                 phase: ToolLifecyclePhase::Completed,
                 output: Some(unified_exec_output(false)),
@@ -1166,6 +1185,17 @@ mod tests {
         .expect("serialize server model");
         assert_eq!(server_model["type"], "server_model");
         assert_eq!(server_model["model"], "gpt-5-codex");
+
+        let reroute = serde_json::to_value(AgentEvent::ModelReroute {
+            from_model: "gpt-5-codex".to_string(),
+            to_model: "gpt-5.1-codex".to_string(),
+            reason: ModelRerouteReason::HighRiskCyberActivity,
+        })
+        .expect("serialize model reroute");
+        assert_eq!(reroute["type"], "model_reroute");
+        assert_eq!(reroute["from_model"], "gpt-5-codex");
+        assert_eq!(reroute["to_model"], "gpt-5.1-codex");
+        assert_eq!(reroute["reason"], "high_risk_cyber_activity");
 
         let verification = serde_json::to_value(AgentEvent::ModelVerification {
             verifications: vec![ModelVerification::TrustedAccessForCyber],

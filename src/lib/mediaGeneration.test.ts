@@ -15,9 +15,9 @@ import {
 } from "./mediaGeneration";
 
 const providers = [
-  { id: "doubao-video", type: "openai", customModels: [] },
-  { id: "openai-tts", type: "openai", customModels: ["gpt-4o-mini-tts"] },
-  { id: "qwen-video", type: "openai", customModels: [] },
+  { id: "doubao-video", type: "openai", models: [] },
+  { id: "openai-tts", type: "openai", models: ["gpt-4o-mini-tts"] },
+  { id: "qwen-video", type: "openai", models: [] },
 ];
 
 describe("mediaGeneration", () => {

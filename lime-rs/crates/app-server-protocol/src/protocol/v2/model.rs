@@ -89,6 +89,22 @@ pub struct ModelProviderCapabilitiesReadResponse {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+pub enum ModelRerouteReason {
+    HighRiskCyberActivity,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelReroutedNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub from_model: String,
+    pub to_model: String,
+    pub reason: ModelRerouteReason,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub enum ModelVerification {
     TrustedAccessForCyber,
 }

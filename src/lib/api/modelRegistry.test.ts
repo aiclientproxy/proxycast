@@ -126,7 +126,7 @@ function createProviderInfo(overrides: Record<string, unknown> = {}) {
     project: null,
     location: null,
     region: null,
-    customModels: [],
+    models: [],
     promptCacheMode: null,
     apiKeyCount: 0,
     apiKeys: [],
@@ -254,7 +254,9 @@ describe("modelRegistry API", () => {
       nextCursor: null,
     });
 
-    await expect(getModelRegistry()).resolves.toEqual([
+    const models = await getModelRegistry();
+
+    expect(models).toEqual([
       expect.objectContaining({
         id: "gpt-5.6-sol",
         provider_id: "openai",
@@ -331,6 +333,20 @@ describe("modelRegistry API", () => {
         },
       }),
     ]);
+    const [model] = models;
+    expect(model.capability_provenance).toBe("inferred_hint");
+    expect(model.capabilities).not.toHaveProperty("tools");
+    expect(model.capabilities).not.toHaveProperty("streaming");
+    expect(model.capabilities).not.toHaveProperty("json_mode");
+    expect(model.capabilities).not.toHaveProperty("function_calling");
+    expect(model).not.toHaveProperty("execution_policy");
+    expect(model).not.toHaveProperty("context_policy");
+    expect(model).not.toHaveProperty("tool_call_policy");
+    expect(model).not.toHaveProperty("reasoning_output_policy");
+    expect(model).not.toHaveProperty("responses_policy");
+    expect(model).not.toHaveProperty("truncation_policy");
+    expect(model).not.toHaveProperty("native_tool_policy");
+    expect(model).not.toHaveProperty("runtime_features");
 
     expectAppServerRequest(1, "model/list", {});
     expect(safeInvoke).not.toHaveBeenCalled();

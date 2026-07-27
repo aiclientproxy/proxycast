@@ -12,8 +12,8 @@ pub use context_fragments::{
 };
 pub use llm_protocol::canonical::{
     ContentPart, FailureClassification, FinishReason, GenerationOptions,
-    LlmEvent as CanonicalLlmEvent, Message as CanonicalMessage, ModelVerification,
-    ProviderMetadata, Request as CanonicalRequest, Role as CanonicalRole,
+    LlmEvent as CanonicalLlmEvent, Message as CanonicalMessage, ModelRerouteReason,
+    ModelVerification, ProviderMetadata, Request as CanonicalRequest, Role as CanonicalRole,
     ToolDefinition as CanonicalToolDefinition, ToolResultValue, Usage,
 };
 pub use model_route::{

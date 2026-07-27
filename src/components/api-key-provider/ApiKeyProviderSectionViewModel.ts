@@ -24,7 +24,7 @@ export type DeleteProviderConfigPlan =
       type: "reset-system";
       providerId: string;
       apiKeyIds: string[];
-      update: Pick<UpdateProviderRequest, "enabled" | "custom_models">;
+      update: Pick<UpdateProviderRequest, "enabled" | "models">;
       clearSelection: boolean;
     };
 
@@ -40,8 +40,8 @@ function hasAnyApiKey(provider: ProviderWithKeysDisplay): boolean {
 }
 
 function hasConfiguredModel(provider: ProviderWithKeysDisplay): boolean {
-  return (provider.custom_models ?? []).some(
-    (modelId) => modelId.trim().length > 0,
+  return (provider.models ?? []).some(
+    (model) => model.id.trim().length > 0,
   );
 }
 
@@ -142,7 +142,7 @@ export function planDeleteProviderConfig({
     apiKeyIds: (targetProvider.api_keys ?? []).map((apiKey) => apiKey.id),
     update: {
       enabled: false,
-      custom_models: [],
+      models: [],
     },
     clearSelection: selectedProviderId === providerId,
   };

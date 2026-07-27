@@ -27,6 +27,7 @@ mod plugin_worker_generation;
 mod proposed_plan_parser;
 mod provider_config;
 mod reasoning_events;
+mod route_support;
 mod skill_runtime_enable;
 mod tool_events;
 mod tool_inventory;
@@ -46,7 +47,6 @@ use crate::RuntimeCoreError;
 use crate::RuntimeEvent;
 use crate::RuntimeEventSink;
 use agent_runtime::session_loop::RuntimeSessionInputHandle;
-use app_server_protocol::{RouteFailure, RouteFailureCategory};
 use lime_agent::{
     run_agent_turn_with_policy, AgentRuntimeState, AgentTurnExecutionRequest,
     AgentTurnProviderConfiguration,
@@ -56,6 +56,7 @@ use lime_services::api_key_provider_service::ApiKeyProviderService;
 use model_provider::current_client::CurrentProviderMessage;
 use runtime_core::ModelRouteExclusion;
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tokio_util::sync::CancellationToken;
@@ -71,6 +72,10 @@ use request_context::{
     runtime_request_from_request, service_tier_from_request, session_config_from_request,
     session_scope_from_request, should_use_compact_tool_surface,
 };
+use route_support::{
+    agent_control_route_snapshot_for_resolved_route, durable_credential_ref_for_generation,
+    read_route_generation, runtime_error_from_route_failure, runtime_route_exclusion,
+};
 
 #[cfg(test)]
 use app_server_protocol::AgentSessionActionType;
@@ -79,6 +84,7 @@ use event_mapper::emit_runtime_agent_event_with_coding_mirror;
 use event_mapper::{
     emit_agent_message_finish, emit_reasoning_finish,
     emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_soul_style,
+    ModelRouteEvidence,
 };
 
 #[derive(Default)]
@@ -97,175 +103,6 @@ struct ResolvedTurnRoute {
     direct_provider_config: Option<lime_agent::SessionProviderConfig>,
     resolution: model_route_resolver::ChatModelRouteResolution,
     effective_generation: u64,
-}
-
-fn agent_control_route_snapshot_for_resolved_route(
-    backend: &RuntimeBackend,
-    route: &ResolvedTurnRoute,
-    service_tier: Option<&str>,
-) -> Result<Value, RuntimeCoreError> {
-    let route_protocol = serde_json::to_value(&route.resolution.resolved_route.protocol)
-        .map_err(|error| RuntimeCoreError::Backend(format!("serialize route protocol: {error}")))?;
-    let provider_name = route
-        .direct_provider_config
-        .as_ref()
-        .map(|config| config.provider_name.clone())
-        .or_else(|| {
-            backend
-                .api_key_provider_service
-                .get_provider(&route.db, &route.selection.provider)
-                .ok()
-                .flatten()
-                .map(|provider| provider.provider.name)
-        })
-        .unwrap_or_else(|| route.selection.provider.clone());
-    let auth = &route.resolution.resolved_route.auth;
-    let direct_provider_config = route.direct_provider_config.as_ref();
-    let model_registry = route
-        .resolution
-        .decision_payload
-        .get("modelRegistry")
-        .cloned()
-        .unwrap_or(Value::Null);
-
-    Ok(json!({
-        "schemaVersion": 2,
-        "providerPreference": route.selection.provider,
-        "modelPreference": route.selection.model,
-        "serviceTier": service_tier,
-        "providerConfig": {
-            "providerId": route.selection.provider,
-            "providerName": provider_name,
-            "modelName": route.selection.model,
-            "reasoningEffort": route.selection.reasoning_effort,
-            "toolshim": direct_provider_config.map(|config| config.toolshim),
-            "toolshimModel": direct_provider_config
-                .and_then(|config| config.toolshim_model.as_deref()),
-            "supportsWebsockets": direct_provider_config
-                .map(|config| config.supports_websockets)
-        },
-        "routeProtocol": route_protocol,
-        "authKind": auth.kind,
-        "credentialRef": auth.credential_ref,
-        "effectiveGeneration": route.effective_generation,
-        "modelRegistry": model_registry
-    }))
-}
-
-fn read_route_generation(db: &DbConnection) -> Result<u64, RuntimeCoreError> {
-    let connection = db
-        .lock()
-        .map_err(|_| RuntimeCoreError::Backend("runtime database lock poisoned".to_string()))?;
-    lime_core::database::dao::route_state::RouteStateDao::read_generation(&connection)
-        .map_err(|error| RuntimeCoreError::Backend(format!("read route generation: {error}")))
-}
-
-fn durable_credential_ref_for_generation<'a>(
-    request: &'a ExecutionRequest,
-    selection: &request_context::RuntimeModelSelection,
-    generation: u64,
-) -> Option<&'a str> {
-    let route = request
-        .runtime_request()?
-        .metadata
-        .as_ref()?
-        .get("agentControlRoute")?;
-    (route.get("schemaVersion").and_then(Value::as_u64) == Some(2)
-        && route.get("effectiveGeneration").and_then(Value::as_u64) == Some(generation)
-        && route.get("providerPreference").and_then(Value::as_str)
-            == Some(selection.provider.as_str())
-        && route.get("modelPreference").and_then(Value::as_str) == Some(selection.model.as_str()))
-    .then(|| route.get("credentialRef").and_then(Value::as_str))
-    .flatten()
-    .map(str::trim)
-    .filter(|value| !value.is_empty())
-}
-
-fn runtime_error_from_route_failure(
-    session_id: &str,
-    selection: &request_context::RuntimeModelSelection,
-    failure: &RouteFailure,
-) -> RuntimeCoreError {
-    let pending_after_route_generation_change = match &failure.category {
-        RouteFailureCategory::NoCandidate => {
-            matches!(
-                failure.reason_code.as_str(),
-                "no_candidate" | "routing_no_candidate"
-            )
-        }
-        RouteFailureCategory::CapabilityGap => false,
-        RouteFailureCategory::ProviderNeedsSetup => {
-            failure.reason_code == "provider_not_configured"
-        }
-        RouteFailureCategory::ProviderDisabled => failure.reason_code == "provider_disabled",
-        RouteFailureCategory::MissingCredential => failure.reason_code == "missing_enabled_api_key",
-        RouteFailureCategory::ModelUnavailable => matches!(
-            failure.reason_code.as_str(),
-            "model_registry_metadata_missing" | "provider_models_cache_missing_requested_model"
-        ),
-        RouteFailureCategory::UnsupportedProtocol
-        | RouteFailureCategory::UnsupportedEndpoint
-        | RouteFailureCategory::InternalError => false,
-    };
-    if pending_after_route_generation_change {
-        return RuntimeCoreError::PendingRoute {
-            session_id: session_id.to_string(),
-            provider: failure
-                .provider_id
-                .clone()
-                .or_else(|| Some(selection.provider.clone())),
-            model: failure
-                .model_id
-                .clone()
-                .or_else(|| Some(selection.model.clone())),
-            reason_code: failure.reason_code.clone(),
-        };
-    }
-
-    if matches!(
-        &failure.category,
-        RouteFailureCategory::CapabilityGap
-            | RouteFailureCategory::UnsupportedProtocol
-            | RouteFailureCategory::UnsupportedEndpoint
-    ) {
-        return RuntimeCoreError::RouteRejected {
-            session_id: session_id.to_string(),
-            provider: failure
-                .provider_id
-                .clone()
-                .or_else(|| Some(selection.provider.clone())),
-            model: failure
-                .model_id
-                .clone()
-                .or_else(|| Some(selection.model.clone())),
-            category: failure.category.clone(),
-            reason_code: failure.reason_code.clone(),
-        };
-    }
-
-    RuntimeCoreError::Backend(format!(
-        "App Server runtime backend route resolution failed: category={:?}, reason={}, provider={:?}, model={:?}, capability_gap={:?}",
-        failure.category,
-        failure.reason_code,
-        failure.provider_id,
-        failure.model_id,
-        failure.capability_gap,
-    ))
-}
-
-fn runtime_route_exclusion(
-    selection: &request_context::RuntimeModelSelection,
-    direct_request: bool,
-    error: &lime_agent::ReplyAttemptError,
-) -> Option<ModelRouteExclusion> {
-    if direct_request || !error.is_reroutable_provider_failure() {
-        return None;
-    }
-    Some(ModelRouteExclusion::new(
-        selection.provider.clone(),
-        selection.model.clone(),
-        error.classification()?,
-    ))
 }
 
 impl RuntimeBackend {
@@ -579,7 +416,9 @@ impl RuntimeBackend {
         let mut proposed_plan_parser = proposed_plan_parser::ProposedPlanParser::default();
         let mut reasoning_event_state = reasoning_events::ReasoningEventState::default();
         let mut turn_usage = None;
+        let mut model_reroute_emitted = false;
         let mut model_verification_emitted = false;
+        let mut server_model_evidence_keys = HashSet::new();
         let mut runtime_initialized = false;
         let (
             turn_execution,
@@ -659,6 +498,12 @@ impl RuntimeBackend {
             )
             .and_then(|policy| policy.context_policy)
             .and_then(|policy| policy.model_context_window);
+            let model_route_evidence = ModelRouteEvidence {
+                provider: selection.provider.clone(),
+                requested_model: requested_selection.model.clone(),
+                selected_model: selection.model.clone(),
+                route_attempt: excluded_routes.len() + 1,
+            };
             let execution_result = run_agent_turn_with_policy(
                 &self.agent_state,
                 AgentTurnExecutionRequest {
@@ -697,6 +542,23 @@ impl RuntimeBackend {
                         }
                         model_verification_emitted = true;
                     }
+                    if matches!(event, lime_agent::AgentEvent::ModelReroute { .. }) {
+                        if model_reroute_emitted {
+                            return;
+                        }
+                        model_reroute_emitted = true;
+                    }
+                    if let lime_agent::AgentEvent::ServerModel { model } = event {
+                        let key = (
+                            model_route_evidence.provider.clone(),
+                            model_route_evidence.selected_model.clone(),
+                            model_route_evidence.route_attempt,
+                            model.to_ascii_lowercase(),
+                        );
+                        if !server_model_evidence_keys.insert(key) {
+                            return;
+                        }
+                    }
                     if emit_error.is_some() {
                         return;
                     }
@@ -708,6 +570,7 @@ impl RuntimeBackend {
                             &mut proposed_plan_parser,
                             &mut reasoning_event_state,
                             soul_style.as_ref(),
+                            Some(&model_route_evidence),
                         )
                     {
                         emit_error = Some(error);

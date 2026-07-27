@@ -19,12 +19,10 @@ use futures::future::BoxFuture;
 use futures::Stream;
 use reqwest::{Client, Response, StatusCode};
 pub use runtime_core::{
-    CanonicalLlmEvent, FailureClassification, FinishReason, GenerationOptions, ModelVerification,
-    ProviderMetadata, Usage,
+    CanonicalLlmEvent, FailureClassification, FinishReason, GenerationOptions, ModelRerouteReason,
+    ModelVerification, ProviderMetadata, ToolResultValue, Usage,
 };
-use runtime_core::{
-    CanonicalRequest, CanonicalRole, CanonicalToolDefinition, ContentPart, ToolResultValue,
-};
+use runtime_core::{CanonicalRequest, CanonicalRole, CanonicalToolDefinition, ContentPart};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -37,8 +35,15 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::{HeaderName, HeaderValue};
 use tokio_tungstenite::tungstenite::Error as WebSocketError;
 
+mod gemini;
+#[cfg(test)]
+mod gemini_tests;
 mod health;
+#[cfg(test)]
+mod hosted_web_search_tests;
 mod lowering;
+#[cfg(test)]
+mod ollama_responses_tests;
 mod stream;
 #[cfg(test)]
 mod stream_tests;
@@ -327,7 +332,7 @@ fn canonical_content(
             name: call.name.clone(),
             input: call.arguments.clone(),
             provider_executed: None,
-            metadata: Default::default(),
+            metadata: call.provider_metadata.clone(),
         }),
         CurrentProviderContent::ToolResult(result) => Ok(ContentPart::ToolResult {
             id: result.call_id.clone(),
@@ -421,6 +426,7 @@ pub struct CurrentProviderToolCall {
     pub name: String,
     pub arguments: Value,
     pub raw_arguments: String,
+    pub provider_metadata: ProviderMetadata,
 }
 
 impl CurrentProviderToolCall {
@@ -431,6 +437,7 @@ impl CurrentProviderToolCall {
             name: name.into(),
             arguments,
             raw_arguments,
+            provider_metadata: ProviderMetadata::new(),
         }
     }
 
@@ -455,7 +462,13 @@ impl CurrentProviderToolCall {
             name: name.to_string(),
             arguments,
             raw_arguments,
+            provider_metadata: ProviderMetadata::new(),
         })
+    }
+
+    pub fn with_provider_metadata(mut self, provider_metadata: ProviderMetadata) -> Self {
+        self.provider_metadata = provider_metadata;
+        self
     }
 }
 
@@ -639,24 +652,29 @@ impl CurrentProviderClient {
             request.model_request_policy.as_ref(),
         );
         let payload = match protocol {
-            ModelProviderProtocol::Responses => responses_request(
+            ModelProviderProtocol::Responses => Ok(responses_request(
                 &self.config,
                 &canonical_request,
                 &wire_shape,
                 &media_payloads,
-            ),
-            ModelProviderProtocol::AnthropicMessages => {
-                anthropic_request(&self.config, &canonical_request, &media_payloads)
+            )),
+            ModelProviderProtocol::AnthropicMessages => Ok(anthropic_request(
+                &self.config,
+                &canonical_request,
+                &media_payloads,
+            )),
+            ModelProviderProtocol::GeminiGenerateContent => {
+                gemini::request(&canonical_request, &media_payloads)
             }
             ModelProviderProtocol::ChatCompletions | ModelProviderProtocol::Custom(_) => {
-                chat_completions_request(
+                Ok(chat_completions_request(
                     &self.config,
                     &canonical_request,
                     &wire_shape,
                     &media_payloads,
-                )
+                ))
             }
-        };
+        }?;
         if matches!(protocol, ModelProviderProtocol::Responses)
             && self.responses_websocket_enabled()
         {
@@ -699,6 +717,7 @@ impl CurrentProviderClient {
                 self.trusts_openai_response_metadata(),
             )),
             ModelProviderProtocol::AnthropicMessages => Box::pin(anthropic_sse(response)),
+            ModelProviderProtocol::GeminiGenerateContent => Box::pin(gemini::stream(response)),
             ModelProviderProtocol::ChatCompletions | ModelProviderProtocol::Custom(_) => {
                 Box::pin(openai_chat_sse(response))
             }
@@ -711,8 +730,11 @@ impl CurrentProviderClient {
         mut stream: CurrentProviderStream,
         permit: CircuitPermit,
     ) -> CurrentProviderStream {
+        let requested_model = self.config.model_name.clone();
+        let trust_server_model = self.trusts_openai_response_metadata();
         Box::pin(stream! {
             let mut permit = Some(permit);
+            let mut model_reroute_emitted = false;
             while let Some(item) = futures::StreamExt::next(&mut stream).await {
                 match &item {
                     Ok(CanonicalLlmEvent::Finish { .. }) => {
@@ -744,7 +766,25 @@ impl CurrentProviderClient {
                     }
                     Ok(_) => {}
                 }
+                let reroute = match &item {
+                    Ok(CanonicalLlmEvent::ServerModel { model })
+                        if trust_server_model
+                            && !model_reroute_emitted
+                            && !requested_model.eq_ignore_ascii_case(model) =>
+                    {
+                        model_reroute_emitted = true;
+                        Some(CanonicalLlmEvent::ModelReroute {
+                            from_model: requested_model.clone(),
+                            to_model: model.clone(),
+                            reason: ModelRerouteReason::HighRiskCyberActivity,
+                        })
+                    }
+                    _ => None,
+                };
                 yield item;
+                if let Some(reroute) = reroute {
+                    yield Ok(reroute);
+                }
             }
             if let Some(mut permit) = permit {
                 permit.failure();
@@ -771,6 +811,7 @@ impl CurrentProviderClient {
                         emitted_replay_sensitive_event |= !matches!(
                             &event,
                             CanonicalLlmEvent::ServerModel { .. }
+                                | CanonicalLlmEvent::ModelReroute { .. }
                                 | CanonicalLlmEvent::ModelVerification { .. }
                         );
                         yield Ok(event);
@@ -907,7 +948,11 @@ impl CurrentProviderClient {
         wire_shape: &RuntimeReplyProviderRequestWireShape,
     ) -> Result<Response, CurrentProviderError> {
         let api_key = self.request_api_key()?;
-        let urls = provider_urls(protocol, self.config.base_url.as_deref());
+        let urls = provider_urls(
+            protocol,
+            self.config.base_url.as_deref(),
+            Some(&self.config.model_name),
+        );
         let mut last_response = None;
         let mut attempts = 0;
 
@@ -927,6 +972,9 @@ impl CurrentProviderClient {
                     request = match protocol {
                         ModelProviderProtocol::AnthropicMessages => {
                             request.header("x-api-key", api_key)
+                        }
+                        ModelProviderProtocol::GeminiGenerateContent => {
+                            request.header("x-goog-api-key", api_key)
                         }
                         _ => request.header("Authorization", format!("Bearer {api_key}")),
                     };
@@ -1116,6 +1164,9 @@ fn runtime_protocol(
         Some(RuntimeProviderProtocol::ChatCompletions) => {
             Ok(ModelProviderProtocol::ChatCompletions)
         }
+        Some(RuntimeProviderProtocol::GeminiGenerateContent) => {
+            Ok(ModelProviderProtocol::GeminiGenerateContent)
+        }
         None => Err(CurrentProviderError::invalid_request(format!(
             "provider route for `{}` is missing an explicit protocol",
             config
@@ -1127,7 +1178,7 @@ fn runtime_protocol(
 }
 
 fn responses_websocket_url(base_url: Option<&str>) -> Result<url::Url, CurrentProviderError> {
-    let http_url = provider_urls(&ModelProviderProtocol::Responses, base_url)
+    let http_url = provider_urls(&ModelProviderProtocol::Responses, base_url, None)
         .into_iter()
         .next()
         .ok_or_else(|| CurrentProviderError::invalid_request("Provider 未生成 Responses 地址"))?;
@@ -1179,17 +1230,28 @@ fn ensure_supported_protocol(protocol: &ModelProviderProtocol) -> Result<(), Cur
     Ok(())
 }
 
-fn provider_urls(protocol: &ModelProviderProtocol, base_url: Option<&str>) -> Vec<String> {
+fn provider_urls(
+    protocol: &ModelProviderProtocol,
+    base_url: Option<&str>,
+    model: Option<&str>,
+) -> Vec<String> {
+    if matches!(protocol, ModelProviderProtocol::GeminiGenerateContent) {
+        return vec![gemini::endpoint(base_url, model.unwrap_or_default())];
+    }
     let base_url = base_url
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| match protocol {
             ModelProviderProtocol::AnthropicMessages => "https://api.anthropic.com",
+            ModelProviderProtocol::GeminiGenerateContent => {
+                "https://generativelanguage.googleapis.com/v1beta"
+            }
             _ => "https://api.openai.com",
         });
     let endpoint = match protocol {
         ModelProviderProtocol::Responses => "responses",
         ModelProviderProtocol::AnthropicMessages => "messages",
+        ModelProviderProtocol::GeminiGenerateContent => unreachable!("handled above"),
         ModelProviderProtocol::ChatCompletions | ModelProviderProtocol::Custom(_) => {
             "chat/completions"
         }
@@ -1202,7 +1264,7 @@ fn provider_urls(protocol: &ModelProviderProtocol, base_url: Option<&str>) -> Ve
 /// 图片编排等非回合消费者也必须复用 current provider 的 endpoint 规则，不能重新
 /// 按 current provider 的 Responses 路径规则构造 endpoint。
 pub fn responses_endpoint(base_url: &str) -> String {
-    provider_urls(&ModelProviderProtocol::Responses, Some(base_url))
+    provider_urls(&ModelProviderProtocol::Responses, Some(base_url), None)
         .into_iter()
         .next()
         .unwrap_or_else(|| format!("{}/v1/responses", base_url.trim_end_matches('/')))
@@ -2570,6 +2632,82 @@ mod tests {
         );
         assert!(eof_stream.collect::<Vec<_>>().await.is_empty());
         assert!(eof_client.health.acquire().is_err());
+    }
+
+    #[tokio::test]
+    async fn tracked_stream_emits_one_reroute_for_trusted_model_mismatch() {
+        let mut runtime_config = config(Some(RuntimeProviderProtocol::Responses));
+        runtime_config.base_url = Some("https://api.openai.com/v1".to_string());
+        let client = CurrentProviderClient::with_client(runtime_config, Client::new());
+        let stream = client.tracked_stream(
+            Box::pin(futures::stream::iter([
+                Ok(CanonicalLlmEvent::ServerModel {
+                    model: "gpt-5.1-codex".to_string(),
+                }),
+                Ok(CanonicalLlmEvent::ServerModel {
+                    model: "gpt-5.1-codex".to_string(),
+                }),
+                Ok(CanonicalLlmEvent::Finish {
+                    reason: FinishReason::Stop,
+                    usage: None,
+                    response_id: None,
+                }),
+            ])),
+            client.health.acquire().expect("trusted route permit"),
+        );
+        let events = stream
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .expect("tracked events");
+
+        let reroutes = events
+            .iter()
+            .filter_map(|event| match event {
+                CanonicalLlmEvent::ModelReroute {
+                    from_model,
+                    to_model,
+                    reason,
+                } => Some((from_model, to_model, reason)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(reroutes.len(), 1);
+        assert_eq!(reroutes[0].0, "gpt-5-codex");
+        assert_eq!(reroutes[0].1, "gpt-5.1-codex");
+        assert_eq!(*reroutes[0].2, ModelRerouteReason::HighRiskCyberActivity);
+    }
+
+    #[tokio::test]
+    async fn tracked_stream_ignores_case_only_match_and_untrusted_gateway() {
+        for (base_url, server_model) in [
+            ("https://api.openai.com/v1", "gpt-5-codex"),
+            ("https://api.openai.com/v1", "GPT-5-CODEX"),
+            ("https://gateway.example.com/v1", "gpt-5.1-codex"),
+        ] {
+            let mut runtime_config = config(Some(RuntimeProviderProtocol::Responses));
+            runtime_config.provider_selector = Some("codex".to_string());
+            runtime_config.base_url = Some(base_url.to_string());
+            let client = CurrentProviderClient::with_client(runtime_config, Client::new());
+            let stream = client.tracked_stream(
+                Box::pin(futures::stream::iter([
+                    Ok(CanonicalLlmEvent::ServerModel {
+                        model: server_model.to_string(),
+                    }),
+                    Ok(CanonicalLlmEvent::Finish {
+                        reason: FinishReason::Stop,
+                        usage: None,
+                        response_id: None,
+                    }),
+                ])),
+                client.health.acquire().expect("route permit"),
+            );
+            let events = stream.collect::<Vec<_>>().await;
+            assert!(!events
+                .iter()
+                .any(|event| matches!(event, Ok(CanonicalLlmEvent::ModelReroute { .. }))));
+        }
     }
 
     #[tokio::test]

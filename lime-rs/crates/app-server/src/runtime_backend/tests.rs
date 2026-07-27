@@ -45,6 +45,7 @@ mod workspace_scope_context;
 #[derive(Default)]
 struct TestRuntimeEventSink {
     events: Vec<RuntimeEvent>,
+    transient_events: Vec<RuntimeEvent>,
 }
 
 impl RuntimeEventSink for TestRuntimeEventSink {
@@ -52,6 +53,61 @@ impl RuntimeEventSink for TestRuntimeEventSink {
         self.events.push(event);
         Ok(())
     }
+
+    fn emit_transient(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
+        self.transient_events.push(event);
+        Ok(())
+    }
+}
+
+#[test]
+fn model_events_preserve_route_evidence_and_reroute_is_transient() {
+    let mut sink = TestRuntimeEventSink::default();
+    let mut coding_event_mirror = coding_events::CodingEventMirror::default();
+    let mut proposed_plan_parser = proposed_plan_parser::ProposedPlanParser::default();
+    let mut reasoning_event_state = reasoning_events::ReasoningEventState::default();
+    let evidence = ModelRouteEvidence {
+        provider: "openai".to_string(),
+        requested_model: "gpt-5-codex".to_string(),
+        selected_model: "gpt-5-codex".to_string(),
+        route_attempt: 2,
+    };
+
+    emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_soul_style(
+        &RuntimeAgentEvent::ServerModel {
+            model: "gpt-5.1-codex".to_string(),
+        },
+        &mut sink,
+        &mut coding_event_mirror,
+        &mut proposed_plan_parser,
+        &mut reasoning_event_state,
+        None,
+        Some(&evidence),
+    )
+    .expect("server model evidence");
+    emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_soul_style(
+        &RuntimeAgentEvent::ModelReroute {
+            from_model: "gpt-5-codex".to_string(),
+            to_model: "gpt-5.1-codex".to_string(),
+            reason: model_provider::current_client::ModelRerouteReason::HighRiskCyberActivity,
+        },
+        &mut sink,
+        &mut coding_event_mirror,
+        &mut proposed_plan_parser,
+        &mut reasoning_event_state,
+        None,
+        Some(&evidence),
+    )
+    .expect("model reroute notification event");
+
+    assert_eq!(sink.events.len(), 1);
+    assert_eq!(sink.events[0].event_type, "model.server_reported");
+    assert_eq!(sink.events[0].payload["provider"], "openai");
+    assert_eq!(sink.events[0].payload["requestedModel"], "gpt-5-codex");
+    assert_eq!(sink.events[0].payload["selectedModel"], "gpt-5-codex");
+    assert_eq!(sink.events[0].payload["routeAttempt"], 2);
+    assert_eq!(sink.transient_events.len(), 1);
+    assert_eq!(sink.transient_events[0].event_type, "model.rerouted");
 }
 
 #[test]

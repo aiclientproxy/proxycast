@@ -164,9 +164,9 @@ function sanitizeProviders(providers) {
     type: provider.type,
     enabled: provider.enabled,
     api_key_count: provider.api_key_count,
-    custom_models: Array.isArray(provider.custom_models)
-      ? provider.custom_models.slice(0, 8)
-      : provider.custom_models,
+    models: Array.isArray(provider.models)
+      ? provider.models.slice(0, 8)
+      : provider.models,
   }));
 }
 

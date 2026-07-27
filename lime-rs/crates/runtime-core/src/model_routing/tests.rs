@@ -129,9 +129,10 @@ fn routing_payload_keeps_review_fast_local_as_diagnostics_only() {
     let model_registry = json!({
         "source": "provider_declared_model",
         "status": "matched",
-        "reasonCode": "matched_provider_custom_models",
-        "reason_code": "matched_provider_custom_models",
+        "reasonCode": "matched_provider_models",
+        "reason_code": "matched_provider_models",
         "modelCapabilities": {
+            "provenance": "inferred_hint",
             "capabilities": {
                 "tools": true,
                 "streaming": true,
@@ -165,7 +166,7 @@ fn routing_payload_keeps_review_fast_local_as_diagnostics_only() {
     assert!(payload["fallbackChain"].as_array().unwrap().is_empty());
     assert_eq!(
         payload["modelRegistry"]["reasonCode"].as_str(),
-        Some("matched_provider_custom_models")
+        Some("matched_provider_models")
     );
     assert_eq!(
         payload["modelRegistry"]["modelCapabilities"]["capabilities"]["reasoning"].as_bool(),

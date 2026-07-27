@@ -793,15 +793,28 @@ export function buildScenarioAssertions(context) {
                           summary.imageFixtureProvider?.providerId &&
                         (summary.imageCommandTaskCreateRequest?.model ??
                           null) === IMAGE_FIXTURE_MODEL &&
-                        summary.imageProviderFixtureServer?.requestCount ===
-                          1 &&
-                        summary.imageProviderFixtureServer?.requests?.[0]
-                          ?.headerProviderId ===
+                        summary.imageProviderFixtureServer?.requests?.some(
+                          (request) =>
+                            request?.method === "GET" &&
+                            request?.url === "/v1/models" &&
+                            request?.authorization === "present",
+                        ) === true &&
+                        summary.imageProviderFixtureServer?.requests?.find(
+                          (request) =>
+                            request?.method === "POST" &&
+                            request?.url === "/v1/images/generations",
+                        )?.headerProviderId ===
                           summary.imageFixtureProvider?.providerId &&
-                        summary.imageProviderFixtureServer?.requests?.[0]
-                          ?.model === IMAGE_FIXTURE_MODEL &&
-                        summary.imageProviderFixtureServer?.requests?.[0]
-                          ?.bodyIncludesModel === true,
+                        summary.imageProviderFixtureServer?.requests?.find(
+                          (request) =>
+                            request?.method === "POST" &&
+                            request?.url === "/v1/images/generations",
+                        )?.model === IMAGE_FIXTURE_MODEL &&
+                        summary.imageProviderFixtureServer?.requests?.find(
+                          (request) =>
+                            request?.method === "POST" &&
+                            request?.url === "/v1/images/generations",
+                        )?.bodyIncludesModel === true,
                       imageCommandWorkflowToolObserved:
                         summary.readModelImageCommandCompleted
                           ?.includesWorkflowSource === true ||

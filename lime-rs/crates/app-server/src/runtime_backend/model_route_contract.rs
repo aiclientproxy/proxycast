@@ -9,8 +9,8 @@ use app_server_protocol::{
     ProtocolKind, ResolvedModelRoute,
 };
 use lime_agent::{
-    route_protocol_from_session_provider_config, ModelRouteProviderConfiguration,
-    SessionProviderConfig,
+    route_protocol_from_session_provider_config, supports_direct_route,
+    ModelRouteProviderConfiguration, SessionProviderConfig,
 };
 use lime_core::database::dao::api_key_provider::ProviderWithKeys;
 use model_provider::runtime_provider::RuntimeProviderAuth;
@@ -145,7 +145,7 @@ fn no_auth_direct_provider_config_from_route(
         return None;
     }
 
-    let provider_name = no_auth_provider_name_from_protocol(&resolved_route.protocol)?;
+    supports_direct_route(&selection.provider, &resolved_route.protocol).then_some(())?;
     let base_url = resolved_route
         .endpoint
         .base_url
@@ -153,7 +153,7 @@ fn no_auth_direct_provider_config_from_route(
         .and_then(|value| non_empty(Some(value)))?;
 
     Some(SessionProviderConfig {
-        provider_name: provider_name.to_string(),
+        provider_name: selection.provider.clone(),
         provider_selector: Some(selection.provider.clone()),
         model_name: selection.model.clone(),
         api_key: None,
@@ -167,13 +167,6 @@ fn no_auth_direct_provider_config_from_route(
         model_capabilities: Some(serde_json::to_value(&resolved_route.capability_snapshot).ok()?),
         supports_websockets: false,
     })
-}
-
-fn no_auth_provider_name_from_protocol(protocol: &ProtocolKind) -> Option<&'static str> {
-    match protocol {
-        ProtocolKind::OpenaiChat | ProtocolKind::OpenaiResponses => Some("openai"),
-        _ => None,
-    }
 }
 
 fn model_ref_source(source: &str) -> ModelRefSource {
@@ -193,6 +186,7 @@ fn model_provider_protocol_from_route_protocol(protocol: &ProtocolKind) -> Model
             ModelProviderProtocol::Responses
         }
         ProtocolKind::OpenaiChat => ModelProviderProtocol::ChatCompletions,
+        ProtocolKind::GeminiGenerateContent => ModelProviderProtocol::GeminiGenerateContent,
         other => ModelProviderProtocol::Custom(route_protocol_name(other).to_string()),
     }
 }
@@ -204,7 +198,6 @@ fn route_protocol_name(protocol: &ProtocolKind) -> &'static str {
         ProtocolKind::OpenaiImages => "openai_images",
         ProtocolKind::AnthropicMessages => "anthropic_messages",
         ProtocolKind::GeminiGenerateContent => "gemini_generate_content",
-        ProtocolKind::OllamaChat => "ollama_chat",
         ProtocolKind::Fal => "fal",
         ProtocolKind::BedrockConverse => "bedrock_converse",
         ProtocolKind::VertexGemini => "vertex_gemini",
@@ -359,6 +352,7 @@ mod tests {
                 "source": "api",
                 "reasonCode": "matched",
                 "modelCapabilities": {
+                    "provenance": "provider_explicit",
                     "capabilities": {
                         "vision": false,
                         "tools": true,
@@ -395,7 +389,7 @@ mod tests {
     }
 
     #[test]
-    fn resolved_route_blocks_unknown_capability_snapshot() {
+    fn resolved_route_blocks_inferred_capability_snapshot() {
         let selection = RuntimeModelSelection {
             provider: "fixture-openai".to_string(),
             model: "fixture-model".to_string(),
@@ -427,9 +421,20 @@ mod tests {
                 "status": "ready"
             },
             "modelRegistry": {
-                "source": "direct_provider_config",
-                "reasonCode": "direct_provider_config_not_in_registry",
-                "modelCapabilities": null
+                "source": "provider_declared_model",
+                "status": "matched",
+                "reasonCode": "matched_provider_models",
+                "modelCapabilities": {
+                    "provenance": "inferred_hint",
+                    "capabilities": {
+                        "vision": true,
+                        "streaming": true
+                    },
+                    "taskFamilies": ["chat", "vision_understanding"],
+                    "inputModalities": ["text", "image"],
+                    "outputModalities": ["text"],
+                    "runtimeFeatures": ["streaming"]
+                }
             }
         });
         let route = resolved_route_from_runtime(
@@ -491,6 +496,7 @@ mod tests {
                 "source": "api",
                 "reasonCode": "matched",
                 "modelCapabilities": {
+                    "provenance": "provider_explicit",
                     "capabilities": {
                         "vision": false,
                         "tools": true,
@@ -561,8 +567,9 @@ mod tests {
             },
             "modelRegistry": {
                 "source": "provider_declared_model",
-                "reasonCode": "matched_provider_custom_models",
+                "reasonCode": "matched_provider_models",
                 "modelCapabilities": {
+                    "provenance": "provider_explicit",
                     "capabilities": {
                         "streaming": true
                     },
@@ -605,7 +612,7 @@ mod tests {
 
         assert_eq!(resolved_route.auth.kind, AuthKind::NoAuth);
         assert_eq!(configuration.auth, RuntimeProviderAuth::NoAuth);
-        assert_eq!(direct_config.provider_name, "openai");
+        assert_eq!(direct_config.provider_name, "lime-hub");
         assert_eq!(direct_config.provider_selector.as_deref(), Some("lime-hub"));
         assert_eq!(direct_config.model_name, "agnes-2.0-flash");
         assert!(direct_config.api_key.is_none());

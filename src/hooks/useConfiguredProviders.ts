@@ -5,7 +5,10 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { apiKeyProviderApi } from "@/lib/api/apiKeyProvider";
+import {
+  apiKeyProviderApi,
+  providerModelIds,
+} from "@/lib/api/apiKeyProvider";
 import type { ProviderWithKeysDisplay } from "@/lib/api/apiKeyProvider";
 import { useApiKeyProvider } from "./useApiKeyProvider";
 import { getRegistryIdFromType } from "@/lib/constants/providerMappings";
@@ -54,7 +57,7 @@ export interface ConfiguredProvider {
   /** Provider 声明的 Prompt Cache 模式 */
   promptCacheMode?: ProviderDeclaredPromptCacheMode | null;
   /** 自定义模型列表（用于 API Key Provider） */
-  customModels?: string[];
+  models?: string[];
   /** 当前 Provider 是否具备可直接调用需要凭证的模型接口的条件 */
   hasApiKey?: boolean;
   /** 需要登录或授权时，供模型选择器展示明确状态 */
@@ -151,11 +154,9 @@ function shouldExposeLimeHubLoginPrompt(
 function resolveConfiguredProviderCustomModels(
   provider: ProviderWithKeysDisplay,
 ): string[] {
-  const customModels = (provider.custom_models ?? [])
-    .map((modelId) => modelId.trim())
-    .filter(Boolean);
-  if (customModels.length > 0) {
-    return Array.from(new Set(customModels));
+  const models = providerModelIds(provider.models);
+  if (models.length > 0) {
+    return Array.from(new Set(models));
   }
   if (isLimeHubProvider(provider) && hasConfiguredKeylessAccess(provider)) {
     return [DEFAULT_OEM_LIME_HUB_CHAT_MODEL];
@@ -177,7 +178,7 @@ function buildConfiguredProviderFromApiKeyProvider(
     providerId: provider.id,
     apiHost: provider.api_host,
     promptCacheMode: provider.prompt_cache_mode,
-    customModels: resolveConfiguredProviderCustomModels(provider),
+    models: resolveConfiguredProviderCustomModels(provider),
     hasApiKey: hasProviderModelApiAccess(provider),
     authStatus,
   };
@@ -196,7 +197,7 @@ function buildSyntheticLimeHubLoginProvider(
     providerId: OEM_LIME_HUB_PROVIDER_ID,
     apiHost: buildOemLimeHubApiHost(runtime) ?? runtime.gatewayBaseUrl,
     promptCacheMode: null,
-    customModels: [DEFAULT_OEM_LIME_HUB_CHAT_MODEL],
+    models: [DEFAULT_OEM_LIME_HUB_CHAT_MODEL],
     hasApiKey: false,
     authStatus: "login_required",
   };

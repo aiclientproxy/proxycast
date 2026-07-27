@@ -51,8 +51,9 @@ impl ExecutionBackend for RoutingDecisionReadModelBackend {
                 "modelRegistry": {
                     "source": "provider_declared_model",
                     "status": "matched",
-                    "reasonCode": "matched_provider_custom_models",
+                    "reasonCode": "matched_provider_models",
                     "modelCapabilities": {
+                        "provenance": "inferred_hint",
                         "capabilities": {
                             "tools": true,
                             "streaming": true,
@@ -126,7 +127,7 @@ impl ExecutionBackend for RoutingDecisionReadModelBackend {
                             "reasoning": true
                         },
                         "source": "provider_declared_model",
-                        "reasonCode": "matched_provider_custom_models"
+                        "reasonCode": "matched_provider_models"
                     },
                     "decision": {
                         "routingMode": "profile_slot",

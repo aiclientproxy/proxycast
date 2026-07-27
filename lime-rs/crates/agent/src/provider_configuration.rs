@@ -185,6 +185,14 @@ pub fn route_protocol_from_session_provider_config(
     config.route_protocol.clone()
 }
 
+pub fn supports_provider_type(provider_type: &str) -> bool {
+    RuntimeProviderProtocol::from_provider_type(provider_type).is_some()
+}
+
+pub fn supports_direct_route(provider_name: &str, protocol: &ProtocolKind) -> bool {
+    RuntimeProviderProtocol::from_direct_route(provider_name, protocol).is_some()
+}
+
 fn ensure_supported_route_protocol(protocol: Option<&ProtocolKind>) -> Result<(), String> {
     let Some(protocol) = protocol else {
         return Err(
@@ -253,6 +261,9 @@ fn route_protocol_from_model_provider_protocol(
         Some(model_provider::ModelProviderProtocol::AnthropicMessages) => {
             Some(ProtocolKind::AnthropicMessages)
         }
+        Some(model_provider::ModelProviderProtocol::GeminiGenerateContent) => {
+            Some(ProtocolKind::GeminiGenerateContent)
+        }
         Some(model_provider::ModelProviderProtocol::Custom(_)) | None => None,
     }
 }
@@ -312,14 +323,18 @@ mod tests {
             runtime_provider_protocol_from_route_protocol(Some(ProtocolKind::AnthropicMessages)),
             Some(RuntimeProviderProtocol::AnthropicMessages)
         );
+        assert_eq!(
+            runtime_provider_protocol_from_route_protocol(Some(
+                ProtocolKind::GeminiGenerateContent
+            )),
+            Some(RuntimeProviderProtocol::GeminiGenerateContent)
+        );
     }
 
     #[test]
     fn non_openai_route_protocols_do_not_invent_runtime_adapter_protocol() {
         for protocol in [
             ProtocolKind::OpenaiImages,
-            ProtocolKind::GeminiGenerateContent,
-            ProtocolKind::OllamaChat,
             ProtocolKind::Fal,
             ProtocolKind::BedrockConverse,
             ProtocolKind::VertexGemini,
@@ -337,8 +352,6 @@ mod tests {
     fn unsupported_route_protocols_fail_closed_before_provider_selection() {
         for protocol in [
             ProtocolKind::OpenaiImages,
-            ProtocolKind::GeminiGenerateContent,
-            ProtocolKind::OllamaChat,
             ProtocolKind::Fal,
             ProtocolKind::BedrockConverse,
             ProtocolKind::VertexGemini,
@@ -435,15 +448,15 @@ mod tests {
     #[test]
     fn no_auth_direct_config_projects_without_synthetic_credential() {
         let config = SessionProviderConfig {
-            provider_name: "openai".to_string(),
-            provider_selector: Some("local-openai".to_string()),
-            model_name: "local-model".to_string(),
+            provider_name: "ollama".to_string(),
+            provider_selector: Some("ollama".to_string()),
+            model_name: "qwen3:14b".to_string(),
             api_key: None,
-            base_url: Some("http://127.0.0.1:11434/v1".to_string()),
+            base_url: Some("http://127.0.0.1:11434".to_string()),
             credential_uuid: None,
             reasoning_effort: None,
             service_tier: None,
-            route_protocol: Some(ProtocolKind::OpenaiChat),
+            route_protocol: Some(ProtocolKind::OpenaiResponses),
             toolshim: false,
             toolshim_model: None,
             model_capabilities: None,
@@ -456,6 +469,11 @@ mod tests {
         );
 
         assert_eq!(runtime_config.auth, RuntimeProviderAuth::NoAuth);
+        assert_eq!(runtime_config.provider_name, "ollama");
+        assert_eq!(
+            runtime_config.protocol,
+            Some(RuntimeProviderProtocol::Responses)
+        );
         assert!(runtime_config.api_key.is_none());
         assert!(runtime_config.credential_uuid.is_empty());
     }

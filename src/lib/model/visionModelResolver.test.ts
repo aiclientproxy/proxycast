@@ -217,6 +217,31 @@ describe("resolveVisionModel", () => {
     });
   });
 
+  it("未声明工具能力时不应把未知误当成显式 false", () => {
+    const models = [
+      createModel("provider-image-preview", {
+        capability_provenance: "inferred_hint",
+        capabilities: {
+          vision: true,
+          reasoning: false,
+        },
+        input_modalities: ["text", "image"],
+        output_modalities: ["text"],
+      }),
+    ];
+
+    expect(
+      resolveVisionModel({
+        currentModelId: "provider-image-preview",
+        models,
+      }),
+    ).toEqual({
+      targetModelId: "provider-image-preview",
+      switched: false,
+      reason: "already_vision",
+    });
+  });
+
   it("显式 vision_understanding 任务族应优先于 capabilities.vision 的缺省值", () => {
     const models = [
       createModel("hub-vlm", {

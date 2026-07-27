@@ -339,47 +339,39 @@ mod tests {
     async fn builder_route_resolves_protocol_and_exact_credential() {
         let db = test_db();
         let service = ApiKeyProviderService::new();
+        service
+            .initialize_system_providers(&db)
+            .expect("initialize providers");
         let provider = service
-            .add_custom_provider(
+            .update_provider(
                 &db,
-                "Knowledge Builder Gateway".to_string(),
-                ApiProviderType::Openai,
-                "https://builder.example.com/v1".to_string(),
+                "openai",
+                Some("Knowledge Builder Gateway".to_string()),
+                Some(ApiProviderType::Openai),
+                Some("https://builder.example.com/v1".to_string()),
+                Some(true),
                 None,
                 None,
                 None,
                 None,
                 None,
+                None,
+                Some(vec![
+                    lime_core::models::model_registry::ProviderModelConfig::hint("gpt-4.1-mini"),
+                ]),
             )
-            .expect("create provider");
+            .expect("configure provider");
         let key = service
             .add_api_key(&db, &provider.id, "sk-builder", None, false)
             .expect("add credential");
-        service
-            .update_provider(
-                &db,
-                &provider.id,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some(vec!["builder-model".to_string()]),
-            )
-            .expect("declare model");
-        let plan = plan(Some(&provider.id), Some("builder-model"));
+        let plan = plan(Some(&provider.id), Some("gpt-4.1-mini"));
 
         let (selection, configuration) = resolve_builder_provider_configuration(&db, &plan)
             .await
             .expect("resolve route");
 
         assert_eq!(selection.provider, provider.id);
-        assert_eq!(selection.model, "builder-model");
+        assert_eq!(selection.model, "gpt-4.1-mini");
         assert_eq!(configuration.route_protocol, Some(ProtocolKind::OpenaiChat));
         assert_eq!(
             configuration

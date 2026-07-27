@@ -472,8 +472,8 @@ export function VoiceSettings() {
 
   const polishModelWarning =
     voiceConfig?.processor.polish_model &&
-    polishProvider?.customModels?.length &&
-    !polishProvider.customModels.includes(voiceConfig.processor.polish_model)
+    polishProvider?.models?.length &&
+    !polishProvider.models.includes(voiceConfig.processor.polish_model)
       ? t("settings.voice.processing.warning.modelUnavailable", {
           provider: polishProvider.label,
           model: voiceConfig.processor.polish_model,
@@ -600,7 +600,7 @@ export function VoiceSettings() {
       preferredProviderId,
     );
     const nextModels = nextProvider
-      ? getTtsModelsForProvider(nextProvider.customModels)
+      ? getTtsModelsForProvider(nextProvider.models)
       : [];
     void persistGlobalVoicePreference((current) => ({
       preferredProviderId,
@@ -1208,7 +1208,7 @@ export function VoiceSettings() {
           isTtsProvider(provider.providerId ?? provider.key, provider.type)
         }
         modelFilter={(model, provider) =>
-          getTtsModelsForProvider(provider.customModels).includes(model.id)
+          getTtsModelsForProvider(provider.models).includes(model.id)
         }
         allowFallback={globalVoicePreference.allowFallback ?? true}
         onAllowFallbackChange={handleFallbackChange}

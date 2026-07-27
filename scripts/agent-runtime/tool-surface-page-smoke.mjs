@@ -850,7 +850,7 @@ function buildCodeRuntimeProviderFixture() {
     group: "custom",
     enabled: true,
     sort_order: 0,
-    custom_models: [CODE_FIXTURE_MODEL_ID],
+    models: [{ id: CODE_FIXTURE_MODEL_ID }],
     prompt_cache_mode: null,
     api_key_count: 1,
     created_at: nowIso,

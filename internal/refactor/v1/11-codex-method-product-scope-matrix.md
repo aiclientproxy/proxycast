@@ -17,12 +17,12 @@ legacy 同义命令冒充协议对齐。矩阵覆盖 `clientRequest`、`serverRe
 
 ## 当前盘点
 
-| 状态                     | 数量 | 裁决                                                                                                                                                                                                                                         |
-| ------------------------ | ---: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `implemented`            |   70 | 连接握手、核心 Thread/Turn/Item、thread subscription/lifecycle/content search/raw item injection/background terminals/elicitation/Guardian continuation、typed approval/MCP server request 与 model control plane（含 `model/verification`） |
-| `planned`                |  110 | process/fs、config、`model/rerouted`、Hooks、Skills/Plugins/Apps、review 与 Windows sandbox                                                                                                                                                  |
-| `product-scope-excluded` |   34 | Codex account/commerce、attestation、remote control、test-only、internal raw response 和 deprecated surface                                                                                                                                  |
-| 合计                     |  214 | `130` client request、`11` server request、`72` server notification、`1` client notification                                                                                                                                                 |
+| 状态                     | 数量 | 裁决                                                                                                                                                                                                                                                           |
+| ------------------------ | ---: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `implemented`            |   71 | 连接握手、核心 Thread/Turn/Item、thread subscription/lifecycle/content search/raw item injection/background terminals/elicitation/Guardian continuation、typed approval/MCP server request 与 model control plane（含 `model/verification`、`model/rerouted`） |
+| `planned`                |  109 | process/fs、config、Hooks、Skills/Plugins/Apps、review 与 Windows sandbox                                                                                                                                                                                      |
+| `product-scope-excluded` |   34 | Codex account/commerce、attestation、remote control、test-only、internal raw response 和 deprecated surface                                                                                                                                                    |
+| 合计                     |  214 | `130` client request、`11` server request、`72` server notification、`1` client notification                                                                                                                                                                   |
 
 `implemented` 只说明 method boundary 已存在并接入 current owner，不代表字段、恢复、GUI 或 Gate B 已全面 parity。
 字段和 lifecycle 缺口继续由 Item inventory、gap register 与对应执行切片管理。
@@ -51,12 +51,15 @@ legacy 同义命令冒充协议对齐。矩阵覆盖 `clientRequest`、`serverRe
 session actor delivery、durable provider-only history、Responses exact lowering 与非 Responses fail-closed。
 Guardian reviewer producer/lifecycle 和 elicitation provider active-time pause consumer 仍是 runtime lifecycle
 blocker，但不影响这两个 method boundary 的 implemented 分类。多模型控制平面的
-`model/verification` 已接入可信 Responses metadata producer、Turn 级去重、exact v2 notification、schema 与
-generated client；普通 provider fallback 继续只产生 `routing.fallback.applied`。下一刀只补可信
-requested/server model mismatch 的 `model/rerouted` producer，再处理 provider adapter/hosted tool 闭环、
+`model/verification` 与 `model/rerouted` 已接入可信 Responses metadata producer、Turn 级去重、exact v2
+notification、schema 与 generated client。reroute 只接受 first-party requested/server mismatch，使用
+`highRiskCyberActivity`，并通过 transient sink 实时投影而不进入 EventLog/resume item replay；普通 provider
+fallback 继续只产生 `routing.fallback.applied`。下一刀处理 provider adapter/hosted tool 闭环、
 Skills/Plugins/Apps watcher/readiness 与 Hook lifecycle。每完成一个
 method，必须同步 exact protocol、handler、typed client、fixture/evidence，再将其移入 `implemented`。
 Codex 已明确将 `thread/rollback` 标记为即将删除，Lime 不新增该公开方法。当前产品范围完成度为
-`70 / 180 = 38.9%`。分母较上一 revision 增加 `1`，来自 Codex HEAD 新增的
+`71 / 180 = 39.4%`。分母较上一 revision 增加 `1`，来自 Codex HEAD 新增的
 `externalAgentConfig/import/recordHistory`；该 P4 config-import method 已进入 `planned`，没有冒充 Lime
-现有配置导入能力或恢复 compat。
+现有配置导入能力或恢复 compat。Gemini GenerateContent transport 虽已完成 request/stream/tool/history
+闭环，但没有新增 exact Codex App Server method，因此不改变本矩阵计数；不得把 `39.4%` 解释成多模型或
+整个 Codex 对齐工程的完成度。

@@ -24,7 +24,7 @@ export type ImageCapabilityTransport =
 export interface ImageCapabilitySelectionCandidate {
   id: string;
   type: string;
-  custom_models?: string[];
+  models?: string[];
   api_host?: string;
 }
 
@@ -341,9 +341,9 @@ export function resolveImageCapabilityModels(
 ): ImageGenModel[] {
   const entry = resolveImageCapabilityProviderEntry(candidate);
   const builtinModels = entry?.models ?? [];
-  const customModels =
-    candidate.custom_models && candidate.custom_models.length > 0
-      ? candidate.custom_models
+  const models =
+    candidate.models && candidate.models.length > 0
+      ? candidate.models
           .filter((modelId) =>
             isFalImageProviderLike(candidate)
               ? isLikelyFalImageModelId(modelId)
@@ -352,9 +352,9 @@ export function resolveImageCapabilityModels(
           .map(normalizeGeneratedModel)
       : [];
 
-  if (customModels.length > 0) {
+  if (models.length > 0) {
     const mergedModels = new Map(
-      customModels.map((model) => [model.id, model]),
+      models.map((model) => [model.id, model]),
     );
     for (const model of builtinModels) {
       mergedModels.set(model.id, model);
@@ -413,8 +413,8 @@ export function isImageCapabilityProvider(
   }
 
   return Boolean(
-    Array.isArray(candidate.custom_models) &&
-    candidate.custom_models.some((modelId) =>
+    Array.isArray(candidate.models) &&
+    candidate.models.some((modelId) =>
       isImageGenerationModelId(modelId, candidate.id, candidate.type),
     ),
   );

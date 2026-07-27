@@ -551,6 +551,15 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
             object: "model",
             created: 1_770_000_000,
             owned_by: "lime-fixture",
+            task_families: ["chat"],
+            input_modalities: ["text"],
+            output_modalities: ["text"],
+            runtime_features: ["streaming", "tool_calling"],
+            capabilities: {
+              tools: true,
+              streaming: true,
+              function_calling: true,
+            },
           },
         ],
       });

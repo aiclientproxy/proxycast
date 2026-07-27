@@ -20,6 +20,7 @@ enum EventProjection {
 #[derive(Default)]
 pub(crate) struct V2NotificationProjector {
     started_turn_ids: HashSet<String>,
+    model_reroute_turn_ids: HashSet<String>,
     model_verification_turn_ids: HashSet<String>,
     started_plan_item_ids: HashSet<String>,
     completed_plan_item_ids: HashSet<String>,
@@ -77,6 +78,7 @@ impl V2NotificationProjector {
                 )
             }
             "thread.goal.continuation" => return EventProjection::Direct(Vec::new()),
+            "thread.settings.updated" => return self.project_thread_settings_updated(event),
             "provider.usage" => return self.project_token_usage(event),
             "item.started" | "command.started" => self.project_item(event, false),
             "item.completed" | "command.exited" => self.project_item(event, true),
@@ -131,6 +133,7 @@ impl V2NotificationProjector {
             "reasoning.summary_part_added" => self.project_reasoning_summary_part_added(event),
             "reasoning.delta" => self.project_reasoning_text_delta(event),
             "model.server_reported" => return EventProjection::Direct(Vec::new()),
+            "model.rerouted" => return self.project_model_rerouted(event),
             "model.verification" => return self.project_model_verification(event),
             "provider_safety_buffering" => self.project_model_safety_buffering(event),
             _ => return EventProjection::SideChannel,
@@ -151,6 +154,25 @@ impl V2NotificationProjector {
         self.thread_status.note_thread_started(&thread.id);
         EventProjection::Direct(vec![ServerNotification::ThreadStarted(
             v2::ThreadStartedNotification { thread },
+        )
+        .into()])
+    }
+
+    fn project_thread_settings_updated(&self, event: &AgentEvent) -> EventProjection {
+        let Some(thread_id) = required_event_id(event.thread_id.as_deref()) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let Some(settings) = event.payload.get("threadSettings") else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let Ok(thread_settings) = serde_json::from_value(settings.clone()) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        EventProjection::Direct(vec![ServerNotification::ThreadSettingsUpdated(
+            v2::ThreadSettingsUpdatedNotification {
+                thread_id,
+                thread_settings,
+            },
         )
         .into()])
     }
@@ -353,6 +375,41 @@ impl V2NotificationProjector {
                 thread_id,
                 turn_id,
                 verifications,
+            },
+        )
+        .into()])
+    }
+
+    fn project_model_rerouted(&mut self, event: &AgentEvent) -> EventProjection {
+        let Some(thread_id) = required_event_id(event.thread_id.as_deref()) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let Some(turn_id) = required_event_id(event.turn_id.as_deref()) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let Some(from_model) = payload_string(&event.payload, &["from_model"]) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let Some(to_model) = payload_string(&event.payload, &["to_model"]) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let Some(reason) = event.payload.get("reason").and_then(Value::as_str) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let reason = match reason {
+            "high_risk_cyber_activity" => v2::ModelRerouteReason::HighRiskCyberActivity,
+            _ => return EventProjection::Reject(projection_error(event)),
+        };
+        if !self.model_reroute_turn_ids.insert(turn_id.clone()) {
+            return EventProjection::Direct(Vec::new());
+        }
+        EventProjection::Direct(vec![ServerNotification::ModelRerouted(
+            v2::ModelReroutedNotification {
+                thread_id,
+                turn_id,
+                from_model,
+                to_model,
+                reason,
             },
         )
         .into()])
@@ -755,6 +812,37 @@ mod tests {
         assert_eq!(
             notifications[0].params.as_ref().expect("params")["thread"]["id"],
             "thread-1"
+        );
+    }
+
+    #[test]
+    fn maps_runtime_model_reconciliation_to_thread_settings_updated() {
+        let mut projector = V2NotificationProjector::default();
+        let notifications = projector
+            .project(event(
+                "thread.settings.updated",
+                json!({
+                    "threadSettings": {
+                        "cwd": "",
+                        "approvalPolicy": null,
+                        "approvalsReviewer": null,
+                        "sandboxPolicy": null,
+                        "model": "model-b",
+                        "modelProvider": "provider-b",
+                        "collaborationMode": {
+                            "mode": "default",
+                            "settings": { "model": "model-b" }
+                        }
+                    }
+                }),
+            ))
+            .expect("thread settings update");
+
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0].method, "thread/settings/updated");
+        assert_eq!(
+            notifications[0].params.as_ref().expect("settings params")["threadSettings"]["model"],
+            "model-b"
         );
     }
 
@@ -1313,6 +1401,39 @@ mod tests {
     }
 
     #[test]
+    fn maps_model_reroute_once_per_turn_to_direct_codex_notification() {
+        let mut projector = V2NotificationProjector::default();
+        let model_event = event(
+            "model.rerouted",
+            json!({
+                "from_model": "gpt-5-codex",
+                "to_model": "gpt-5.1-codex",
+                "reason": "high_risk_cyber_activity"
+            }),
+        );
+        let notifications = projector
+            .project(model_event.clone())
+            .expect("direct model reroute notification");
+
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0].method, "model/rerouted");
+        assert_eq!(
+            notifications[0].params.as_ref().expect("reroute params"),
+            &json!({
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "fromModel": "gpt-5-codex",
+                "toModel": "gpt-5.1-codex",
+                "reason": "highRiskCyberActivity"
+            })
+        );
+        assert!(projector
+            .project(model_event)
+            .expect("duplicate reroute is ignored")
+            .is_empty());
+    }
+
+    #[test]
     fn maps_model_verification_once_per_turn_to_direct_codex_notification() {
         let mut projector = V2NotificationProjector::default();
         let model_event = event(
@@ -1344,6 +1465,26 @@ mod tests {
 
     #[test]
     fn model_verification_and_server_model_fail_closed_at_v2_boundary() {
+        for payload in [
+            json!({}),
+            json!({
+                "from_model": "",
+                "to_model": "gpt-5.1-codex",
+                "reason": "high_risk_cyber_activity"
+            }),
+            json!({
+                "from_model": "gpt-5-codex",
+                "to_model": "gpt-5.1-codex",
+                "reason": "unknown"
+            }),
+        ] {
+            let error = V2NotificationProjector::default()
+                .project(event("model.rerouted", payload))
+                .expect_err("malformed reroute must fail closed");
+            assert_eq!(error.code, error_codes::RUNTIME_ERROR);
+            assert!(error.message.contains("model.rerouted"));
+        }
+
         for payload in [
             json!({}),
             json!({"verifications": []}),

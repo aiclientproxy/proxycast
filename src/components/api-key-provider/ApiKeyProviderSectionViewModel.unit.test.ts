@@ -20,7 +20,7 @@ function createProvider(
     enabled: true,
     sort_order: 1,
     api_key_count: 1,
-    custom_models: ["deepseek-chat"],
+    models: [{ id: "deepseek-chat" }],
     prompt_cache_mode: null,
     created_at: "2026-03-15T00:00:00.000Z",
     updated_at: "2026-03-15T00:00:00.000Z",
@@ -46,7 +46,7 @@ describe("ApiKeyProviderSectionViewModel", () => {
       name: "Lime Hub",
       api_key_count: 0,
       api_keys: [],
-      custom_models: [],
+      models: [],
     });
 
     expect(
@@ -61,7 +61,7 @@ describe("ApiKeyProviderSectionViewModel", () => {
           id: "lime-hub",
           api_key_count: undefined as unknown as number,
           api_keys: [],
-          custom_models: [],
+          models: [],
         }),
         exposeOemLoginPrompt: true,
       }),
@@ -87,7 +87,7 @@ describe("ApiKeyProviderSectionViewModel", () => {
           id: "lime-hub",
           api_key_count: 0,
           api_keys: [],
-          custom_models: ["gpt-5.2-pro"],
+          models: [{ id: "gpt-5.2-pro" }],
         }),
         exposeOemLoginPrompt: true,
       }),
@@ -101,7 +101,7 @@ describe("ApiKeyProviderSectionViewModel", () => {
       sort_order: 0,
       api_key_count: 0,
       api_keys: [],
-      custom_models: [],
+      models: [],
     });
     const deepseek = createProvider({ sort_order: 1 });
 
@@ -227,7 +227,7 @@ describe("ApiKeyProviderSectionViewModel", () => {
       apiKeyIds: ["key-1"],
       update: {
         enabled: false,
-        custom_models: [],
+        models: [],
       },
       clearSelection: true,
     });

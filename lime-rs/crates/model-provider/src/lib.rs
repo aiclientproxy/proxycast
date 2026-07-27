@@ -17,6 +17,7 @@ pub enum ModelProviderProtocol {
     Responses,
     ChatCompletions,
     AnthropicMessages,
+    GeminiGenerateContent,
     Custom(String),
 }
 

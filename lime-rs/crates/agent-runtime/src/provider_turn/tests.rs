@@ -760,6 +760,11 @@ async fn provider_metadata_is_deduplicated_across_sampling_steps() {
             Ok(CanonicalLlmEvent::ServerModel {
                 model: "gpt-5-codex".to_string(),
             }),
+            Ok(CanonicalLlmEvent::ModelReroute {
+                from_model: "gpt-5-codex".to_string(),
+                to_model: "gpt-5.1-codex".to_string(),
+                reason: model_provider::current_client::ModelRerouteReason::HighRiskCyberActivity,
+            }),
             Ok(CanonicalLlmEvent::ModelVerification {
                 verifications: vec![ModelVerification::TrustedAccessForCyber],
             }),
@@ -772,6 +777,7 @@ async fn provider_metadata_is_deduplicated_across_sampling_steps() {
             name: "Read".to_string(),
             input: serde_json::json!({ "path": "README.md" }),
             provider_executed: None,
+            provider_metadata: Default::default(),
         }),
         Ok(CanonicalLlmEvent::Finish {
             reason: FinishReason::ToolCall,
@@ -837,6 +843,13 @@ async fn provider_metadata_is_deduplicated_across_sampling_steps() {
     assert_eq!(
         events
             .iter()
+            .filter(|event| matches!(event, CurrentProviderTurnEvent::ModelReroute { .. }))
+            .count(),
+        1
+    );
+    assert_eq!(
+        events
+            .iter()
             .filter(|event| matches!(event, CurrentProviderTurnEvent::ModelVerification { .. }))
             .count(),
         1
@@ -862,6 +875,7 @@ async fn reasoning_summary_and_content_share_item_but_only_content_enters_provid
                 name: "Read".to_string(),
                 input: serde_json::json!({ "path": "README.md" }),
                 provider_executed: None,
+                provider_metadata: Default::default(),
             }),
             Ok(CanonicalLlmEvent::Finish {
                 reason: FinishReason::ToolCall,
@@ -967,6 +981,7 @@ async fn each_sampling_attempt_emits_independent_provider_phase_trace() {
                 name: "Read".to_string(),
                 input: serde_json::json!({ "path": "README.md" }),
                 provider_executed: None,
+                provider_metadata: Default::default(),
             }),
             Ok(CanonicalLlmEvent::Finish {
                 reason: FinishReason::ToolCall,
@@ -1179,6 +1194,7 @@ async fn max_turns_stops_before_starting_an_extra_provider_request() {
                 name: "Read".to_string(),
                 input: serde_json::json!({ "path": "README.md" }),
                 provider_executed: None,
+                provider_metadata: Default::default(),
             }),
             Ok(CanonicalLlmEvent::Finish {
                 reason: FinishReason::ToolCall,
@@ -1272,6 +1288,7 @@ async fn provider_token_budget_stops_before_tool_execution_and_next_sampling() {
             name: "Read".to_string(),
             input: serde_json::json!({ "path": "README.md" }),
             provider_executed: None,
+            provider_metadata: Default::default(),
         }),
         Ok(CanonicalLlmEvent::Finish {
             reason: FinishReason::ToolCall,
@@ -1375,6 +1392,7 @@ async fn turn_executes_tool_then_continues_with_tool_result_transcript() {
                 name: "Read".to_string(),
                 input: serde_json::json!({ "path": "README.md" }),
                 provider_executed: None,
+                provider_metadata: Default::default(),
             }),
             Ok(CanonicalLlmEvent::Finish {
                 reason: FinishReason::ToolCall,
@@ -1467,6 +1485,140 @@ async fn turn_executes_tool_then_continues_with_tool_result_transcript() {
 }
 
 #[tokio::test]
+async fn provider_executed_web_search_emits_item_without_local_execution() {
+    let started_raw_item = serde_json::json!({
+        "id": "ws_1",
+        "type": "web_search_call",
+        "status": "in_progress",
+        "action": { "type": "search", "query": "Rust release" },
+    });
+    let completed_raw_item = serde_json::json!({
+        "id": "ws_1",
+        "type": "web_search_call",
+        "status": "completed",
+        "action": { "type": "search", "query": "Rust release" },
+    });
+    let provider = Arc::new(ScriptedProvider::new(vec![vec![
+        Ok(CanonicalLlmEvent::ToolCall {
+            id: "ws_1".to_string(),
+            name: "web_search".to_string(),
+            input: serde_json::json!({ "type": "search", "query": "Rust release" }),
+            provider_executed: Some(true),
+            provider_metadata: ProviderMetadata::from([(
+                "raw_response_item".to_string(),
+                started_raw_item,
+            )]),
+        }),
+        Ok(CanonicalLlmEvent::ToolResult {
+            id: "ws_1".to_string(),
+            name: "web_search".to_string(),
+            result: ToolResultValue::Json {
+                value: completed_raw_item,
+            },
+            provider_executed: Some(true),
+        }),
+        Ok(CanonicalLlmEvent::TextDelta {
+            id: "text-0".to_string(),
+            text: "Rust 1.90".to_string(),
+        }),
+        Ok(CanonicalLlmEvent::Finish {
+            reason: FinishReason::Stop,
+            usage: None,
+            response_id: Some("response-search".to_string()),
+        }),
+    ]]));
+    let requests = Arc::clone(&provider.requests);
+    let local_tool = Arc::new(CountingTool::default());
+    let lifecycle_emitter = Arc::new(RecordingLifecycleEmitter::default());
+
+    let execution = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-1")
+                .turn_id("turn-1")
+                .max_turns(2)
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("search the web".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    vec![RuntimeToolDefinition::new(
+                        "WebSearch",
+                        "search",
+                        serde_json::json!({ "type": "object" }),
+                    )],
+                    RuntimeToolExecutorHandle::new(local_tool.clone()),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: lifecycle_emitter.clone(),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect("provider-executed search turn");
+
+    assert_eq!(execution.text_output, "Rust 1.90");
+    assert_eq!(requests.lock().expect("provider requests").len(), 1);
+    assert_eq!(local_tool.calls.load(Ordering::SeqCst), 0);
+    let lifecycle_events = lifecycle_emitter.events();
+    assert_eq!(lifecycle_events.len(), 2);
+    assert_eq!(lifecycle_events[0].phase, ToolLifecyclePhase::Started);
+    assert_eq!(lifecycle_events[0].call_id, "ws_1");
+    assert_eq!(lifecycle_events[0].tool_name, "web_search");
+    assert_eq!(
+        lifecycle_events[0].environments[0].environment_id,
+        "provider"
+    );
+    assert_eq!(lifecycle_events[1].phase, ToolLifecyclePhase::Completed);
+    assert_eq!(
+        lifecycle_events[1].provider_metadata["raw_response_item"]["status"],
+        "completed"
+    );
+    assert_eq!(
+        lifecycle_events[1]
+            .output
+            .as_ref()
+            .and_then(|output| output.structured_content.as_ref())
+            .and_then(|value| value.get("type"))
+            .and_then(serde_json::Value::as_str),
+        Some("web_search_call")
+    );
+}
+
+#[test]
+fn provider_executed_raw_response_history_keeps_terminal_item() {
+    let mut content = vec![CurrentProviderContent::RawResponseItem(serde_json::json!({
+        "id": "ig_1",
+        "type": "image_generation_call",
+        "status": "in_progress"
+    }))];
+
+    upsert_raw_response_item(
+        &mut content,
+        serde_json::json!({
+            "id": "ig_1",
+            "type": "image_generation_call",
+            "status": "completed",
+            "revised_prompt": "a blue square",
+            "result": "Zm9v"
+        }),
+    );
+
+    assert!(matches!(
+        content.as_slice(),
+        [CurrentProviderContent::RawResponseItem(item)]
+            if item["status"] == "completed" && item["result"] == "Zm9v"
+    ));
+}
+
+#[tokio::test]
 async fn each_sampling_step_uses_a_fresh_definition_and_executor_snapshot() {
     let provider = Arc::new(ScriptedProvider::new(vec![
         vec![
@@ -1475,6 +1627,7 @@ async fn each_sampling_step_uses_a_fresh_definition_and_executor_snapshot() {
                 name: "FirstTool".to_string(),
                 input: serde_json::json!({}),
                 provider_executed: None,
+                provider_metadata: Default::default(),
             }),
             Ok(CanonicalLlmEvent::Finish {
                 reason: FinishReason::ToolCall,
@@ -1575,7 +1728,11 @@ async fn mcp_tool_lifecycle_uses_captured_environment_identity() {
             "call-1",
             "docs__search",
             serde_json::json!({ "query": "snapshot" }),
-        )],
+        )
+        .with_provider_metadata(ProviderMetadata::from([(
+            "google".to_string(),
+            serde_json::json!({ "thoughtSignature": "sig" }),
+        )]))],
         false,
     )
     .await;
@@ -1588,6 +1745,7 @@ async fn mcp_tool_lifecycle_uses_captured_environment_identity() {
         assert_eq!(event.environments.len(), 1);
         assert_eq!(event.environments[0].environment_id, "remote-tools");
         assert_eq!(event.environments[0].cwd, PathBuf::from("/host/workspace"));
+        assert_eq!(event.provider_metadata["google"]["thoughtSignature"], "sig");
     }
 }
 
@@ -1600,12 +1758,14 @@ async fn unadvertised_native_and_mcp_calls_fail_without_reaching_step_executor()
                 name: "apply_patch".to_string(),
                 input: serde_json::json!({ "patch": "hidden" }),
                 provider_executed: None,
+                provider_metadata: Default::default(),
             }),
             Ok(CanonicalLlmEvent::ToolCall {
                 id: "call-mcp".to_string(),
                 name: "mcp__hidden__unknown".to_string(),
                 input: serde_json::json!({}),
                 provider_executed: None,
+                provider_metadata: Default::default(),
             }),
             Ok(CanonicalLlmEvent::Finish {
                 reason: FinishReason::ToolCall,
@@ -1704,12 +1864,14 @@ async fn turn_executes_same_response_tool_batch_in_parallel_when_policy_allows()
                 name: "Read".to_string(),
                 input: serde_json::json!({ "path": "README.md" }),
                 provider_executed: None,
+                provider_metadata: Default::default(),
             }),
             Ok(CanonicalLlmEvent::ToolCall {
                 id: "call-2".to_string(),
                 name: "Glob".to_string(),
                 input: serde_json::json!({ "pattern": "*.rs" }),
                 provider_executed: None,
+                provider_metadata: Default::default(),
             }),
             Ok(CanonicalLlmEvent::Finish {
                 reason: FinishReason::ToolCall,

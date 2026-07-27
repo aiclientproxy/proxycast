@@ -707,6 +707,7 @@ mod tests {
                     "source": "api",
                     "reasonCode": "matched_media_task_model",
                     "modelCapabilities": {
+                        "provenance": "provider_explicit",
                         "capabilities": {
                             "vision": false,
                             "streaming": false

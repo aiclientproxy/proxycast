@@ -5,6 +5,7 @@
 //! **Feature: provider-ui-refactor**
 //! **Validates: Requirements 7.3, 9.1, 9.2, 9.3**
 
+use crate::model_registry_service::ModelRegistryService;
 use crate::provider_type_mapping::{
     api_provider_type_to_runtime_provider_type, is_custom_provider_id,
     resolve_runtime_provider_type, runtime_provider_type_to_api_type,
@@ -20,6 +21,7 @@ use lime_core::database::dao::api_key_provider::{
 use lime_core::database::dao::route_state::RouteStateDao;
 use lime_core::database::system_providers::{get_system_providers, to_api_key_provider};
 use lime_core::database::DbConnection;
+use lime_core::models::model_registry::ProviderModelConfig;
 use lime_core::models::runtime_provider_model::{
     runtime_api_key_credential_uuid, runtime_api_key_id_from_credential_uuid,
     ProviderPromptCacheMode, RuntimeCredentialData, RuntimeProviderCredential, RuntimeProviderType,
@@ -73,6 +75,7 @@ mod tests {
     };
     use lime_core::database::dao::route_state::RouteStateDao;
     use lime_core::database::{init_database, migration, schema, DbConnection};
+    use lime_core::models::model_registry::ProviderModelConfig;
     use lime_core::models::{runtime_api_key_credential_uuid, RuntimeCredentialData};
     use rusqlite::Connection;
     use rusqlite::OptionalExtension;
@@ -171,21 +174,21 @@ mod tests {
     fn test_pick_test_model_priority() {
         let with_explicit = ApiKeyProviderService::pick_test_model(
             Some("explicit-model".to_string()),
-            &["custom-model".to_string()],
+            &[ProviderModelConfig::hint("custom-model")],
             &["fallback-model".to_string(), "fallback-mini".to_string()],
         );
         assert_eq!(with_explicit.as_deref(), Some("explicit-model"));
 
         let with_custom = ApiKeyProviderService::pick_test_model(
             None,
-            &["custom-model".to_string()],
+            &[ProviderModelConfig::hint("custom-model")],
             &["fallback-model".to_string(), "fallback-mini".to_string()],
         );
         assert_eq!(with_custom.as_deref(), Some("fallback-mini"));
 
         let with_matching_custom = ApiKeyProviderService::pick_test_model(
             None,
-            &["MiniMax-M2.7".to_string()],
+            &[ProviderModelConfig::hint("MiniMax-M2.7")],
             &["MiniMax-M2.7".to_string(), "MiniMax-M2.5".to_string()],
         );
         assert_eq!(with_matching_custom.as_deref(), Some("MiniMax-M2.7"));
@@ -214,9 +217,9 @@ mod tests {
         let candidates = ApiKeyProviderService::pick_test_model_candidates(
             Some("stale-chat".to_string()),
             &[
-                "stable-chat".to_string(),
-                "stale-chat".to_string(),
-                "preview-chat".to_string(),
+                ProviderModelConfig::hint("stable-chat"),
+                ProviderModelConfig::hint("stale-chat"),
+                ProviderModelConfig::hint("preview-chat"),
             ],
             &["fallback-mini".to_string()],
         );
@@ -845,11 +848,9 @@ mod tests {
         let service = ApiKeyProviderService::new();
 
         for provider_type in [
-            ApiProviderType::Gemini,
             ApiProviderType::AzureOpenai,
             ApiProviderType::Vertexai,
             ApiProviderType::AwsBedrock,
-            ApiProviderType::Ollama,
             ApiProviderType::Fal,
         ] {
             let provider = service
@@ -901,6 +902,45 @@ mod tests {
                 connection.error
             );
         }
+    }
+
+    #[test]
+    fn keyless_ollama_provider_tests_use_responses_without_credential() {
+        let db = init_test_database();
+        let service = ApiKeyProviderService::new();
+        let provider = service
+            .add_custom_provider(
+                &db,
+                "Ollama Responses".to_string(),
+                ApiProviderType::Ollama,
+                "http://127.0.0.1:11434".to_string(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create Ollama provider");
+
+        assert_eq!(
+            ApiKeyProviderService::current_provider_protocol(
+                ApiProviderType::Ollama,
+                &provider.api_host,
+            )
+            .expect("Ollama current protocol"),
+            model_provider::runtime_provider::RuntimeProviderProtocol::Responses
+        );
+        assert_eq!(
+            service
+                .provider_test_api_key(
+                    &db,
+                    &provider.id,
+                    &provider.api_host,
+                    ApiProviderType::Ollama,
+                )
+                .expect("Ollama keyless provider test credential"),
+            None
+        );
     }
 
     async fn spawn_single_response_server(
@@ -1356,7 +1396,7 @@ impl ApiKeyProviderService {
             || previous.project != current.project
             || previous.location != current.location
             || previous.region != current.region
-            || previous.custom_models != current.custom_models
+            || previous.models != current.models
             || previous.prompt_cache_mode != current.prompt_cache_mode
     }
 
@@ -1517,6 +1557,22 @@ impl ApiKeyProviderService {
             })
     }
 
+    fn provider_test_api_key(
+        &self,
+        db: &DbConnection,
+        provider_id: &str,
+        api_host: &str,
+        provider_type: ApiProviderType,
+    ) -> Result<Option<String>, String> {
+        if !ModelRegistryService::requires_api_key_for_runtime(provider_id, api_host, provider_type)
+        {
+            return Ok(None);
+        }
+        self.get_next_api_key(db, provider_id)?
+            .map(Some)
+            .ok_or_else(|| "没有可用的 API Key".to_string())
+    }
+
     pub async fn test_chat_with_fallback_models(
         &self,
         db: &DbConnection,
@@ -1544,12 +1600,15 @@ impl ApiKeyProviderService {
             });
         }
 
-        let api_key = self
-            .get_next_api_key(db, provider_id)?
-            .ok_or_else(|| "没有可用的 API Key".to_string())?;
+        let api_key = self.provider_test_api_key(
+            db,
+            provider_id,
+            &provider.api_host,
+            effective_provider_type,
+        )?;
 
         let test_models =
-            Self::pick_test_model_candidates(model_name, &provider.custom_models, &fallback_models);
+            Self::pick_test_model_candidates(model_name, &provider.models, &fallback_models);
         if test_models.is_empty() {
             return Err("缺少模型名称：请在自定义模型中填写一个模型名".to_string());
         }
@@ -1563,7 +1622,7 @@ impl ApiKeyProviderService {
                 // Codex 协议直接走 /responses 端点
                 ApiProviderType::Codex => {
                     self.test_codex_responses_endpoint(
-                        &api_key,
+                        api_key.as_deref(),
                         &provider.api_host,
                         test_model,
                         &prompt,
@@ -1574,17 +1633,18 @@ impl ApiKeyProviderService {
                 // OpenAI Responses API 走 /v1/responses
                 provider_type if Self::uses_openai_responses_protocol(provider_type) => {
                     self.test_openai_responses_once(
-                        &api_key,
+                        api_key.as_deref(),
                         &provider.api_host,
                         test_model,
                         &prompt,
+                        effective_provider_type,
                     )
                     .await
                 }
                 // Anthropic / AnthropicCompatible 统一走 /v1/messages
                 provider_type if Self::uses_anthropic_protocol(provider_type) => {
                     self.test_anthropic_chat_once(
-                        &api_key,
+                        api_key.as_deref(),
                         &provider.api_host,
                         test_model,
                         &prompt,
@@ -1596,7 +1656,7 @@ impl ApiKeyProviderService {
                 // 其余默认 OpenAI 兼容
                 _ => {
                     self.test_openai_chat_once(
-                        &api_key,
+                        api_key.as_deref(),
                         &provider.api_host,
                         test_model,
                         &prompt,
@@ -1645,7 +1705,10 @@ impl ApiKeyProviderService {
 
     #[inline]
     fn uses_openai_responses_protocol(provider_type: ApiProviderType) -> bool {
-        matches!(provider_type, ApiProviderType::OpenaiResponse)
+        matches!(
+            provider_type,
+            ApiProviderType::OpenaiResponse | ApiProviderType::Ollama
+        )
     }
 
     #[inline]
@@ -1671,7 +1734,7 @@ impl ApiKeyProviderService {
 
     fn pick_test_model(
         model_name: Option<String>,
-        custom_models: &[String],
+        models: &[ProviderModelConfig],
         fallback_models: &[String],
     ) -> Option<String> {
         let explicit_model = model_name.and_then(|model| {
@@ -1688,8 +1751,8 @@ impl ApiKeyProviderService {
             .filter(|model| !model.is_empty())
             .collect();
 
-        let matching_custom_model = custom_models.iter().find_map(|model| {
-            let normalized = model.trim();
+        let matching_custom_model = models.iter().find_map(|model| {
+            let normalized = model.id.trim();
             (!normalized.is_empty() && fallback_model_set.contains(&normalized.to_lowercase()))
                 .then(|| normalized.to_string())
         });
@@ -1697,8 +1760,8 @@ impl ApiKeyProviderService {
         matching_custom_model
             .or_else(|| Self::pick_preferred_fallback_model(fallback_models))
             .or_else(|| {
-                custom_models.iter().find_map(|model| {
-                    let normalized = model.trim();
+                models.iter().find_map(|model| {
+                    let normalized = model.id.trim();
                     (!normalized.is_empty()).then(|| normalized.to_string())
                 })
             })
@@ -1721,7 +1784,7 @@ impl ApiKeyProviderService {
 
     fn pick_test_model_candidates(
         model_name: Option<String>,
-        custom_models: &[String],
+        models: &[ProviderModelConfig],
         fallback_models: &[String],
     ) -> Vec<String> {
         let mut candidates = Vec::new();
@@ -1731,12 +1794,12 @@ impl ApiKeyProviderService {
             Self::push_unique_test_model(&mut candidates, &mut seen, explicit_model);
         }
 
-        if let Some(primary_model) = Self::pick_test_model(None, custom_models, fallback_models) {
+        if let Some(primary_model) = Self::pick_test_model(None, models, fallback_models) {
             Self::push_unique_test_model(&mut candidates, &mut seen, &primary_model);
         }
 
-        for model in custom_models {
-            Self::push_unique_test_model(&mut candidates, &mut seen, model);
+        for model in models {
+            Self::push_unique_test_model(&mut candidates, &mut seen, &model.id);
         }
 
         if let Some(preferred_fallback) = Self::pick_preferred_fallback_model(fallback_models) {
@@ -1799,6 +1862,8 @@ impl ApiKeyProviderService {
                 Ok(RuntimeProviderProtocol::ChatCompletions)
             }
             ApiProviderType::Openai => Ok(RuntimeProviderProtocol::Responses),
+            ApiProviderType::Gemini => Ok(RuntimeProviderProtocol::GeminiGenerateContent),
+            ApiProviderType::Ollama => Ok(RuntimeProviderProtocol::Responses),
             unsupported => Err(format!(
                 "当前 model-provider 不支持 provider 协议: {unsupported}"
             )),
@@ -1807,25 +1872,47 @@ impl ApiKeyProviderService {
 
     async fn stream_current_provider(
         &self,
-        api_key: &str,
+        api_key: Option<&str>,
         api_host: &str,
         model: &str,
         prompt: &str,
         provider_type: ApiProviderType,
     ) -> Result<(String, String), String> {
         let protocol = Self::current_provider_protocol(provider_type, api_host)?;
+        let no_auth = api_key.is_none();
+        let api_key = if no_auth {
+            None
+        } else {
+            Some(
+                api_key
+                    .ok_or_else(|| "Provider API key 未配置".to_string())?
+                    .to_string(),
+            )
+        };
         let client = CurrentProviderClient::new(RuntimeProviderConfig {
-            provider_name: match protocol {
-                RuntimeProviderProtocol::AnthropicMessages => "anthropic",
-                _ => "openai",
+            provider_name: match provider_type {
+                ApiProviderType::Ollama => "ollama",
+                _ => match protocol {
+                    RuntimeProviderProtocol::AnthropicMessages => "anthropic",
+                    RuntimeProviderProtocol::GeminiGenerateContent => "google",
+                    _ => "openai",
+                },
             }
             .to_string(),
             provider_selector: Some(provider_type.to_string()),
             model_name: model.to_string(),
-            api_key: Some(api_key.to_string()),
-            auth: RuntimeProviderAuth::ApiKey,
+            api_key,
+            auth: if no_auth {
+                RuntimeProviderAuth::NoAuth
+            } else {
+                RuntimeProviderAuth::ApiKey
+            },
             base_url: Some(api_host.to_string()),
-            credential_uuid: format!("api-key-provider:{provider_type}"),
+            credential_uuid: if no_auth {
+                String::new()
+            } else {
+                format!("api-key-provider:{provider_type}")
+            },
             reasoning_effort: None,
             service_tier: None,
             protocol: Some(protocol),
@@ -1862,7 +1949,7 @@ impl ApiKeyProviderService {
 
     async fn test_openai_chat_once(
         &self,
-        api_key: &str,
+        api_key: Option<&str>,
         api_host: &str,
         model: &str,
         prompt: &str,
@@ -1874,7 +1961,7 @@ impl ApiKeyProviderService {
 
     async fn test_anthropic_chat_once(
         &self,
-        api_key: &str,
+        api_key: Option<&str>,
         api_host: &str,
         model: &str,
         prompt: &str,
@@ -1887,25 +1974,20 @@ impl ApiKeyProviderService {
 
     async fn test_openai_responses_once(
         &self,
-        api_key: &str,
+        api_key: Option<&str>,
         api_host: &str,
         model: &str,
         prompt: &str,
+        provider_type: ApiProviderType,
     ) -> Result<(String, String), String> {
-        self.stream_current_provider(
-            api_key,
-            api_host,
-            model,
-            prompt,
-            ApiProviderType::OpenaiResponse,
-        )
-        .await
+        self.stream_current_provider(api_key, api_host, model, prompt, provider_type)
+            .await
     }
 
     /// 测试 Codex /responses 端点（用于不支持 messages 参数的上游）
     async fn test_codex_responses_endpoint(
         &self,
-        api_key: &str,
+        api_key: Option<&str>,
         api_host: &str,
         model: &str,
         prompt: &str,
@@ -1944,10 +2026,10 @@ impl ApiKeyProviderService {
                         should_update = true;
                     }
                     if provider.is_system
-                        && provider.custom_models.is_empty()
-                        && !default_provider.custom_models.is_empty()
+                        && provider.models.is_empty()
+                        && !default_provider.models.is_empty()
                     {
-                        provider.custom_models = default_provider.custom_models;
+                        provider.models = default_provider.models;
                         should_update = true;
                     }
                     if should_update {
@@ -2074,7 +2156,7 @@ impl ApiKeyProviderService {
             project,
             location,
             region,
-            custom_models: Vec::new(),
+            models: Vec::new(),
             prompt_cache_mode: normalized_prompt_cache_mode,
             created_at: now,
             updated_at: now,
@@ -2106,7 +2188,7 @@ impl ApiKeyProviderService {
         location: Option<String>,
         region: Option<String>,
         prompt_cache_mode: Option<ApiProviderPromptCacheMode>,
-        custom_models: Option<Vec<String>>,
+        models: Option<Vec<ProviderModelConfig>>,
     ) -> Result<ApiKeyProvider, String> {
         let mut conn = lime_core::database::lock_db(db)?;
         let tx = conn
@@ -2145,8 +2227,8 @@ impl ApiKeyProviderService {
         if let Some(r) = region {
             provider.region = if r.is_empty() { None } else { Some(r) };
         }
-        if let Some(models) = custom_models {
-            provider.custom_models = models;
+        if let Some(models) = models {
+            provider.models = models;
         }
         provider.provider_type =
             Self::normalize_custom_provider_type(provider.provider_type, &provider.api_host);
@@ -3249,10 +3331,12 @@ impl ApiKeyProviderService {
             });
         }
 
-        // 获取一个可用的 API Key
-        let api_key = self
-            .get_next_api_key(db, provider_id)?
-            .ok_or_else(|| "没有可用的 API Key".to_string())?;
+        let api_key = self.provider_test_api_key(
+            db,
+            provider_id,
+            &provider.api_host,
+            effective_provider_type,
+        )?;
 
         let start_time = Instant::now();
 
@@ -3260,16 +3344,13 @@ impl ApiKeyProviderService {
         let result = match effective_provider_type {
             provider_type if Self::uses_anthropic_protocol(provider_type) => {
                 // Anthropic / AnthropicCompatible 不支持 /models，统一发送 /messages 测试请求
-                let test_model = Self::pick_test_model(
-                    model_name.clone(),
-                    &provider.custom_models,
-                    &fallback_models,
-                )
-                .unwrap_or_else(|| "claude-3-haiku-20240307".to_string());
+                let test_model =
+                    Self::pick_test_model(model_name.clone(), &provider.models, &fallback_models)
+                        .unwrap_or_else(|| "claude-3-haiku-20240307".to_string());
 
                 match self
                     .test_anthropic_connection(
-                        &api_key,
+                        api_key.as_deref(),
                         &provider.api_host,
                         &test_model,
                         provider.supports_automatic_prompt_cache(),
@@ -3289,18 +3370,15 @@ impl ApiKeyProviderService {
                 }
             }
             ApiProviderType::Codex => {
-                let test_model = Self::pick_test_model(
-                    model_name.clone(),
-                    &provider.custom_models,
-                    &fallback_models,
-                )
-                .ok_or_else(|| "缺少模型名称：请在自定义模型中填写一个模型名".to_string())?;
+                let test_model =
+                    Self::pick_test_model(model_name.clone(), &provider.models, &fallback_models)
+                        .ok_or_else(|| "缺少模型名称：请在自定义模型中填写一个模型名".to_string())?;
 
                 if Self::looks_like_openai_image_model(&test_model) {
                     Err("当前 model-provider 不支持图片连接探测".to_string())
                 } else {
                     self.test_codex_responses_endpoint(
-                        &api_key,
+                        api_key.as_deref(),
                         &provider.api_host,
                         &test_model,
                         "hi",
@@ -3314,21 +3392,19 @@ impl ApiKeyProviderService {
                 if Self::uses_openai_responses_protocol(provider_type)
                     || Self::prefers_openai_responses_endpoint(&provider.api_host) =>
             {
-                let test_model = Self::pick_test_model(
-                    model_name.clone(),
-                    &provider.custom_models,
-                    &fallback_models,
-                );
+                let test_model =
+                    Self::pick_test_model(model_name.clone(), &provider.models, &fallback_models);
 
                 if let Some(test_model) = test_model {
                     if Self::looks_like_openai_image_model(&test_model) {
                         Err("当前 model-provider 不支持图片连接探测".to_string())
                     } else {
                         self.test_openai_responses_once(
-                            &api_key,
+                            api_key.as_deref(),
                             &provider.api_host,
                             &test_model,
                             "hi",
+                            effective_provider_type,
                         )
                         .await
                         .map(|_| vec![test_model])
@@ -3345,27 +3421,21 @@ impl ApiKeyProviderService {
             _ => {
                 // Current provider 只接受显式模型，不再通过旧 /models provider 探测。
                 tracing::debug!("[TEST_CONNECTION] model_name param: {model_name:?}");
-                tracing::debug!(
-                    "[TEST_CONNECTION] provider.custom_models: {:?}",
-                    provider.custom_models
-                );
+                tracing::debug!("[TEST_CONNECTION] provider.models: {:?}", provider.models);
                 tracing::debug!(
                     "[TEST_CONNECTION] local_fallback_models_count: {}",
                     fallback_models.len()
                 );
 
-                let test_model = Self::pick_test_model(
-                    model_name.clone(),
-                    &provider.custom_models,
-                    &fallback_models,
-                );
+                let test_model =
+                    Self::pick_test_model(model_name.clone(), &provider.models, &fallback_models);
                 match test_model {
                     Some(test_model) if Self::looks_like_openai_image_model(&test_model) => {
                         Err("当前 model-provider 不支持图片连接探测".to_string())
                     }
                     Some(test_model) => self
                         .test_openai_chat_once(
-                            &api_key,
+                            api_key.as_deref(),
                             &provider.api_host,
                             &test_model,
                             "hi",
@@ -3407,7 +3477,7 @@ impl ApiKeyProviderService {
     ) -> Result<(), String> {
         match self
             .stream_current_provider(
-                api_key,
+                Some(api_key),
                 api_host,
                 "claude-3-haiku-20240307",
                 "hi",
@@ -3426,7 +3496,7 @@ impl ApiKeyProviderService {
     /// 测试 Anthropic 连接
     async fn test_anthropic_connection(
         &self,
-        api_key: &str,
+        api_key: Option<&str>,
         api_host: &str,
         model: &str,
         _enable_automatic_prompt_cache: bool,

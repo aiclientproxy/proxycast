@@ -303,16 +303,29 @@
         "id": {
           "type": "string"
         },
-        "result": true,
-        "status": {
+        "result": {
+          "type": "string"
+        },
+        "revisedPrompt": {
           "type": [
             "null",
             "string"
           ]
+        },
+        "savedPath": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "status": {
+          "type": "string"
         }
       },
       "required": [
-        "id"
+        "id",
+        "result",
+        "status"
       ],
       "type": "object"
     },

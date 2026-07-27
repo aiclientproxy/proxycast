@@ -8828,6 +8828,25 @@ function checkRetiredRuntimeCoreMapperSurface() {
     }
   }
 
+  const currentOllamaProtocolFiles = [
+    "lime-rs/crates/app-server-protocol/src/protocol/v0/model.rs",
+    "lime-rs/crates/runtime-core/src/model_route.rs",
+    "lime-rs/crates/model-provider/src/runtime_provider.rs",
+    "lime-rs/crates/agent/src/provider_configuration.rs",
+    "lime-rs/crates/app-server/src/runtime_backend/model_route_contract.rs",
+    "lime-rs/crates/app-server/src/runtime_backend/model_routing.rs",
+  ];
+  for (const relativePath of currentOllamaProtocolFiles) {
+    const content = fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+    for (const snippet of ["OllamaChat", "ollama_chat"]) {
+      if (content.includes(snippet)) {
+        failures.push(
+          `retired Ollama chat protocol must stay absent: ${relativePath} contains ${JSON.stringify(snippet)}`,
+        );
+      }
+    }
+  }
+
   const loweringRoot = path.join(
     repoRoot,
     "lime-rs/crates/model-provider/src/lowering",

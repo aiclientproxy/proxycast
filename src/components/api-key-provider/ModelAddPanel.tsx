@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   apiKeyProviderApi,
+  reconcileProviderModels,
   type AddCustomProviderRequest,
   type ProviderDisplay,
   type ProviderWithKeysDisplay,
@@ -1242,14 +1243,14 @@ export const ModelAddPanel: React.FC<ModelAddPanelProps> = ({
           api_host: request.api_host,
           enabled: true,
           prompt_cache_mode: request.prompt_cache_mode,
-          custom_models: state.models,
+          models: reconcileProviderModels(existingProvider?.models, state.models),
         });
       } else {
         const created = await onAddProvider(request);
         providerId = created.id;
         await onUpdateProvider(providerId, {
           enabled: true,
-          custom_models: state.models,
+          models: reconcileProviderModels([], state.models),
         });
       }
 
@@ -1515,7 +1516,10 @@ export const ModelAddPanel: React.FC<ModelAddPanelProps> = ({
           api_host: request.api_host,
           enabled: true,
           prompt_cache_mode: request.prompt_cache_mode,
-          custom_models: normalizedFormState.models,
+          models: reconcileProviderModels(
+            existingProvider?.models,
+            normalizedFormState.models,
+          ),
         });
       } else {
         const created = await onAddProvider(request);
@@ -1523,7 +1527,7 @@ export const ModelAddPanel: React.FC<ModelAddPanelProps> = ({
         setDraftProviderId(providerId);
         await onUpdateProvider(providerId, {
           enabled: true,
-          custom_models: normalizedFormState.models,
+          models: reconcileProviderModels([], normalizedFormState.models),
         });
       }
 

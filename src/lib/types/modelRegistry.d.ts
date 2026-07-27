@@ -21,26 +21,28 @@ import type { ModelTruncationPolicy } from "@/lib/model/modelTruncationPolicy";
 export interface ModelCapabilities {
   /** 是否支持视觉输入 */
   vision: boolean;
-  /** 是否支持工具调用 */
-  tools: boolean;
-  /** 是否支持流式输出 */
-  streaming: boolean;
-  /** 是否支持 JSON 模式 */
-  json_mode: boolean;
-  /** 是否支持函数调用 */
-  function_calling: boolean;
+  /** 是否支持工具调用；未声明表示未知，不得按 false 处理 */
+  tools?: boolean;
+  /** 是否支持流式输出；未声明表示未知，不得按 false 处理 */
+  streaming?: boolean;
+  /** 是否支持 JSON 模式；未声明表示未知，不得按 false 处理 */
+  json_mode?: boolean;
+  /** 是否支持函数调用；未声明表示未知，不得按 false 处理 */
+  function_calling?: boolean;
   /** 是否支持推理/思考 */
   reasoning: boolean;
   /** 是否支持可选推理强度；仅当模型接口明确声明时填充 */
   reasoning_effort?: ModelReasoningEffortSupport | null;
 }
+/** 模型能力快照来源；inferred_hint 只能用于目录展示。 */
+export type ModelCapabilityProvenance =
+  | "canonical"
+  | "provider_explicit"
+  | "inferred_hint";
 /** 模型推理强度档位 */
 export type ModelReasoningEffortLevel = ModelReasoningEffort;
 /** 推理强度能力来源 */
-export type ModelReasoningEffortSource =
-  | "api"
-  | "registry"
-  | "custom";
+export type ModelReasoningEffortSource = "api" | "registry" | "custom";
 /** 模型推理强度能力 */
 export interface ModelReasoningEffortSupport {
   /** 是否支持 reasoning_effort 参数 */
@@ -151,6 +153,8 @@ export interface EnhancedModelMetadata {
   tier: ModelTier;
   /** 模型能力 */
   capabilities: ModelCapabilities;
+  /** 能力快照来源；Renderer 不得把 inferred_hint 当作 route 授权。 */
+  capability_provenance?: ModelCapabilityProvenance;
   /** 运行时执行策略；缺少后端字段时按 fail-closed policy 处理 */
   execution_policy?: ModelExecutionPolicy;
   /** 上下文窗口与自动压缩策略 */

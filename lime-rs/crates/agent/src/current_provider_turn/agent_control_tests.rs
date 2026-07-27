@@ -13,6 +13,7 @@ fn terminal_event(tool_name: &str, activity: SubAgentProjectionActivity) -> Tool
         call_id: format!("{tool_name}-call"),
         tool_name: tool_name.to_string(),
         arguments: serde_json::json!({ "target": "research" }),
+        provider_metadata: serde_json::Value::Null,
         environments: Vec::new(),
         phase: ToolLifecyclePhase::Completed,
         output: Some(NormalizedToolOutput {

@@ -296,7 +296,7 @@ function buildApiKeyProviderSummary(
       is_system: provider.is_system,
       api_key_count: provider.api_keys.length,
       enabled_api_key_count: enabledApiKeyCount,
-      custom_model_count: provider.custom_models?.length ?? 0,
+      custom_model_count: provider.models?.length ?? 0,
     };
   });
 

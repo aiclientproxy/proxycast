@@ -446,6 +446,44 @@ describe("readCanonicalThreadItem", () => {
     });
   });
 
+  it("projects canonical image generation as a dedicated read-model item", () => {
+    expect(
+      readCanonicalThreadItem(
+        item({
+          type: "imageGeneration",
+          status: "completed",
+          revisedPrompt: "a blue square",
+          result: "Zm9v",
+          savedPath: "/tmp/blue-square.png",
+        }),
+        { ...event, type: "item.completed" },
+      ),
+    ).toMatchObject({
+      id: "item-1",
+      type: "image_generation",
+      status: "completed",
+      generation_status: "completed",
+      revised_prompt: "a blue square",
+      result: "Zm9v",
+      saved_path: "/tmp/blue-square.png",
+    });
+  });
+
+  it("rejects image generation items without required status or result", () => {
+    expect(
+      readCanonicalThreadItem(
+        item({ type: "imageGeneration", result: "Zm9v" }),
+        event,
+      ),
+    ).toBeNull();
+    expect(
+      readCanonicalThreadItem(
+        item({ type: "imageGeneration", status: "completed" }),
+        event,
+      ),
+    ).toBeNull();
+  });
+
   it("takes routing, sequence, and lifecycle timestamps from the raw event envelope", () => {
     const projected = readCanonicalThreadItem(
       item({ type: "agentMessage", text: "answer" }),

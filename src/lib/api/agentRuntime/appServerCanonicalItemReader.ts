@@ -176,9 +176,23 @@ export function readCanonicalThreadItem(
     }
     case "webSearch":
       return readCanonicalWebSearchThreadItem(item, event, status);
+    case "imageGeneration": {
+      const generationStatus = readString(item, "status");
+      const result = readString(item, "result");
+      if (!generationStatus || result === undefined) {
+        return null;
+      }
+      return {
+        ...base,
+        type: "image_generation",
+        generation_status: generationStatus,
+        revised_prompt: readString(item, "revisedPrompt"),
+        result,
+        saved_path: readString(item, "savedPath"),
+      };
+    }
     case "hookPrompt":
     case "sleep":
-    case "imageGeneration":
     case "enteredReviewMode":
     case "exitedReviewMode":
       return {

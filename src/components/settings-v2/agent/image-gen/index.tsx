@@ -117,7 +117,7 @@ export function ImageGenSettings() {
           isImageCapabilityProvider({
             id: provider.providerId ?? provider.key,
             type: provider.type,
-            custom_models: provider.customModels,
+            models: provider.models,
             api_host: provider.apiHost,
           }),
       ),
@@ -141,7 +141,7 @@ export function ImageGenSettings() {
     return resolveImageCapabilityModelIds({
       id: selectedProvider.providerId ?? selectedProvider.key,
       type: selectedProvider.type,
-      custom_models: selectedProvider.customModels,
+      models: selectedProvider.models,
       api_host: selectedProvider.apiHost,
     });
   }, [selectedProvider]);
@@ -153,12 +153,12 @@ export function ImageGenSettings() {
         apiHost: selectedProvider?.apiHost,
         hasApiKey: selectedProvider?.hasApiKey,
         hasDeclaredModels: Boolean(
-          selectedProvider?.customModels?.some((modelId) => modelId.trim()),
+          selectedProvider?.models?.some((modelId) => modelId.trim()),
         ),
       }),
     [
       selectedProvider?.apiHost,
-      selectedProvider?.customModels,
+      selectedProvider?.models,
       selectedProvider?.hasApiKey,
       selectedProvider?.providerId,
       selectedProvider?.type,
@@ -184,7 +184,7 @@ export function ImageGenSettings() {
           {
             id: selectedProvider.providerId ?? selectedProvider.key,
             type: selectedProvider.type,
-            custom_models: selectedProvider.customModels,
+            models: selectedProvider.models,
             api_host: selectedProvider.apiHost,
           },
           model,
@@ -242,7 +242,7 @@ export function ImageGenSettings() {
       ? resolveImageCapabilityModelIds({
           id: nextProvider.providerId ?? nextProvider.key,
           type: nextProvider.type,
-          custom_models: nextProvider.customModels,
+          models: nextProvider.models,
           api_host: nextProvider.apiHost,
         })
       : [];
@@ -294,7 +294,7 @@ export function ImageGenSettings() {
     const catalogModels = resolveImageCapabilityModels({
       id: provider.providerId ?? provider.key,
       type: provider.type,
-      custom_models: provider.customModels,
+      models: provider.models,
       api_host: provider.apiHost,
     });
     return catalogModels.map((model) =>
@@ -326,7 +326,7 @@ export function ImageGenSettings() {
           isImageCapabilityProvider({
             id: provider.providerId ?? provider.key,
             type: provider.type,
-            custom_models: provider.customModels,
+            models: provider.models,
             api_host: provider.apiHost,
           })
         }
@@ -335,7 +335,7 @@ export function ImageGenSettings() {
             {
               id: provider.providerId ?? provider.key,
               type: provider.type,
-              custom_models: provider.customModels,
+              models: provider.models,
               api_host: provider.apiHost,
             },
             model,

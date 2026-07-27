@@ -25,7 +25,7 @@ export function createProvider(
     enabled: true,
     sort_order: 1,
     api_key_count: 1,
-    custom_models: ["deepseek-chat"],
+    models: [{ id: "deepseek-chat" }],
     prompt_cache_mode: null,
     created_at: new Date("2026-03-15T00:00:00.000Z").toISOString(),
     updated_at: new Date("2026-03-15T00:00:00.000Z").toISOString(),
@@ -57,7 +57,7 @@ export function createApiKeyProviderHookState(
     name: "OpenAI",
     enabled: false,
     sort_order: 2,
-    custom_models: [],
+    models: [],
     api_keys: [],
     api_key_count: 0,
   });

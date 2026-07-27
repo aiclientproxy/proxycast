@@ -95,6 +95,7 @@ pub(super) fn runtime_event_type_from_raw(raw_type: &str) -> &'static str {
         "turn_context" => "turn.context",
         "model_change" => "model.changed",
         "server_model" => "model.server_reported",
+        "model_reroute" => "model.rerouted",
         "model_verification" => "model.verification",
         "provider_trace" => "provider.trace",
         "provider_usage" => "provider.usage",
@@ -262,6 +263,17 @@ mod tests {
         .expect("server model event");
         assert_eq!(server_model[0].event_type, "model.server_reported");
         assert_eq!(server_model[0].payload["model"], "gpt-5-codex");
+
+        let reroute = runtime_events_from_agent_event(&RuntimeAgentEvent::ModelReroute {
+            from_model: "gpt-5-codex".to_string(),
+            to_model: "gpt-5.1-codex".to_string(),
+            reason: model_provider::current_client::ModelRerouteReason::HighRiskCyberActivity,
+        })
+        .expect("model reroute event");
+        assert_eq!(reroute[0].event_type, "model.rerouted");
+        assert_eq!(reroute[0].payload["from_model"], "gpt-5-codex");
+        assert_eq!(reroute[0].payload["to_model"], "gpt-5.1-codex");
+        assert_eq!(reroute[0].payload["reason"], "high_risk_cyber_activity");
 
         let verification = runtime_events_from_agent_event(&RuntimeAgentEvent::ModelVerification {
             verifications: vec![

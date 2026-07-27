@@ -25,6 +25,7 @@ pub struct ToolCall {
     call_id: String,
     tool_name: String,
     arguments: Value,
+    provider_metadata: Value,
     environments: Vec<ToolEnvironment>,
     lifecycle_emitter: Arc<dyn ToolLifecycleEmitter>,
 }
@@ -43,6 +44,7 @@ impl ToolCall {
             call_id: call_id.into(),
             tool_name: tool_name.into(),
             arguments,
+            provider_metadata: Value::Null,
             environments,
             lifecycle_emitter,
         }
@@ -62,6 +64,15 @@ impl ToolCall {
 
     pub fn arguments(&self) -> &Value {
         &self.arguments
+    }
+
+    pub fn provider_metadata(&self) -> &Value {
+        &self.provider_metadata
+    }
+
+    pub fn with_provider_metadata(mut self, provider_metadata: Value) -> Self {
+        self.provider_metadata = provider_metadata;
+        self
     }
 
     pub fn environments(&self) -> &[ToolEnvironment] {
@@ -89,6 +100,7 @@ impl std::fmt::Debug for ToolCall {
             .field("call_id", &self.call_id)
             .field("tool_name", &self.tool_name)
             .field("arguments", &self.arguments)
+            .field("provider_metadata", &self.provider_metadata)
             .field("environments", &self.environments)
             .field("lifecycle_emitter", &"<host lifecycle emitter>")
             .finish()

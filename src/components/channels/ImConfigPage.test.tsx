@@ -235,7 +235,7 @@ describe("ImConfigPage", () => {
           label: "OpenAI",
           type: "openai",
           registryId: "openai",
-          customModels: ["gpt-4.1"],
+          models: ["gpt-4.1"],
         },
       ],
       loading: false,

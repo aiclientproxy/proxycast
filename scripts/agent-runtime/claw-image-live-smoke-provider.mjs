@@ -100,7 +100,7 @@ export async function ensureLiveAgnesProviderFromEnv(
     {
       providerId,
       enabled: true,
-      customModels: [options.modelPreference],
+      models: [{ id: options.modelPreference }],
       sortOrder: 1,
     },
     requestLog,

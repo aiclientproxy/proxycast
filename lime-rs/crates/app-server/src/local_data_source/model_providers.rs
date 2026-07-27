@@ -40,6 +40,7 @@ use app_server_protocol::ModelProviderUiStateWriteParams;
 use app_server_protocol::ModelProviderUpdateParams;
 use app_server_protocol::ModelProviderWriteResponse;
 use app_server_protocol::ModelSyncStateReadResponse;
+use app_server_protocol::ProviderModelConfig as ProtocolProviderModelConfig;
 use lime_core::database::dao::api_key_provider::ApiKeyEntry;
 use lime_core::database::dao::api_key_provider::ApiKeyProvider;
 use lime_core::database::dao::api_key_provider::ApiProviderPromptCacheMode;
@@ -50,9 +51,16 @@ use lime_core::database::system_providers::get_system_providers;
 use lime_core::database::system_providers::SystemProviderDef;
 use lime_core::database::DbConnection;
 use lime_core::models::model_registry::EnhancedModelMetadata;
+use lime_core::models::model_registry::{
+    ModelCapabilities as CoreModelCapabilities, ModelReasoningEffortOption,
+    ModelReasoningEffortSupport, ProviderModelCapability as CoreProviderModelCapability,
+    ProviderModelConfig as CoreProviderModelConfig,
+};
+use lime_core::models::runtime_api_key_credential_uuid;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
-use lime_services::model_registry_service::FetchModelsResult;
-use lime_services::model_registry_service::ModelRegistryService;
+use lime_services::model_registry_service::{
+    FetchModelsResult, ModelRegistryService, ProviderModelCacheAccess,
+};
 use serde_json::json;
 use serde_json::Map;
 use serde_json::Value;
@@ -90,7 +98,7 @@ pub(crate) fn model_catalog(
         let mut models = Vec::new();
         let mut seen = HashSet::new();
 
-        for model_id in &provider.provider.custom_models {
+        for model_id in &provider.provider.models {
             append_model(
                 &mut models,
                 &mut seen,
@@ -98,26 +106,14 @@ pub(crate) fn model_catalog(
             );
         }
 
-        let provider_type = provider.provider.effective_provider_type();
-        match model_registry_service.get_cached_provider_models(
-            provider_id,
-            &provider.provider.api_host,
-            Some(provider_type),
-        ) {
-            Ok(Some(result)) => {
-                for model in result.models {
-                    append_model(&mut models, &mut seen, model);
-                }
-            }
-            Ok(None) => {}
-            Err(error) => {
-                tracing::warn!(
-                    "[ModelProvider] 读取 Provider 模型缓存失败，跳过缓存模型: provider={}, error={}",
-                    provider_id,
-                    error
-                );
-            }
-        }
+        append_cached_provider_models(
+            db,
+            api_key_provider_service,
+            model_registry_service,
+            &provider,
+            &mut models,
+            &mut seen,
+        );
         catalogs.push(crate::ProviderModelCatalog {
             provider_id: provider_id.to_string(),
             sort_order: provider.provider.sort_order,
@@ -141,6 +137,97 @@ fn append_model(
     let key = model_dedupe_key(&model);
     if seen.insert(key) {
         models.push(model);
+    }
+}
+
+fn append_cached_provider_models(
+    db: &DbConnection,
+    api_key_provider_service: &ApiKeyProviderService,
+    model_registry_service: &ModelRegistryService,
+    provider: &ProviderWithKeys,
+    models: &mut Vec<EnhancedModelMetadata>,
+    seen: &mut HashSet<String>,
+) {
+    let provider_id = provider.provider.id.as_str();
+    let api_host = provider.provider.api_host.as_str();
+    let provider_type = provider.provider.effective_provider_type();
+    let enabled_keys = provider.api_keys.iter().filter(|key| key.enabled);
+    let mut has_enabled_key = false;
+
+    for key in enabled_keys {
+        has_enabled_key = true;
+        let credential_ref = runtime_api_key_credential_uuid(&key.id);
+        let credential = match api_key_provider_service.select_runtime_credential_by_ref(
+            db,
+            provider_id,
+            &credential_ref,
+        ) {
+            Ok(Some(credential)) => credential,
+            Ok(None) => continue,
+            Err(error) => {
+                tracing::warn!(
+                    "[ModelProvider] 读取 Provider scoped 模型缓存凭证失败: provider={}, key_id={}, error={}",
+                    provider_id,
+                    key.id,
+                    error
+                );
+                continue;
+            }
+        };
+        append_cached_models_for_access(
+            model_registry_service,
+            provider_id,
+            api_host,
+            provider_type,
+            ProviderModelCacheAccess::Credential(&credential),
+            models,
+            seen,
+        );
+    }
+
+    if !has_enabled_key
+        && !ModelRegistryService::requires_api_key_for_runtime(provider_id, api_host, provider_type)
+    {
+        append_cached_models_for_access(
+            model_registry_service,
+            provider_id,
+            api_host,
+            provider_type,
+            ProviderModelCacheAccess::Keyless,
+            models,
+            seen,
+        );
+    }
+}
+
+fn append_cached_models_for_access(
+    model_registry_service: &ModelRegistryService,
+    provider_id: &str,
+    api_host: &str,
+    provider_type: ApiProviderType,
+    cache_access: ProviderModelCacheAccess<'_>,
+    models: &mut Vec<EnhancedModelMetadata>,
+    seen: &mut HashSet<String>,
+) {
+    match model_registry_service.get_cached_provider_models_for_access(
+        provider_id,
+        api_host,
+        Some(provider_type),
+        cache_access,
+    ) {
+        Ok(Some(result)) => {
+            for model in result.models {
+                append_model(models, seen, model);
+            }
+        }
+        Ok(None) => {}
+        Err(error) => {
+            tracing::warn!(
+                "[ModelProvider] 读取 Provider 模型缓存失败，跳过缓存模型: provider={}, error={}",
+                provider_id,
+                error
+            );
+        }
     }
 }
 
@@ -220,8 +307,9 @@ fn resolve_model_provider_capabilities(
     }
     let provider_type = provider.provider.effective_provider_type().to_string();
     let Some(capabilities) =
-        model_provider::provider_capabilities::ProviderCapabilities::from_provider_type(
+        model_provider::provider_capabilities::ProviderCapabilities::from_provider_route(
             &provider_type,
+            Some(&provider.provider.api_host),
         )
     else {
         return Ok(unavailable());
@@ -296,6 +384,15 @@ pub(crate) fn update_model_provider(
         .map(|value| value.parse::<ApiProviderType>())
         .transpose()
         .map_err(data_error)?;
+    let models = params
+        .models
+        .map(|models| {
+            models
+                .into_iter()
+                .map(provider_model_config_to_core)
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
     let provider = api_key_provider_service
         .update_provider(
             db,
@@ -310,7 +407,7 @@ pub(crate) fn update_model_provider(
             params.location,
             params.region,
             parse_prompt_cache_mode(params.prompt_cache_mode)?,
-            params.custom_models,
+            models,
         )
         .map_err(data_error)?;
     let api_key_count = api_key_provider_service
@@ -321,6 +418,101 @@ pub(crate) fn update_model_provider(
     let provider = provider_to_value(&provider, api_key_count);
     Ok(ModelProviderWriteResponse {
         provider: provider_info_from_value(&provider),
+    })
+}
+
+fn provider_model_config_to_core(
+    model: ProtocolProviderModelConfig,
+) -> Result<CoreProviderModelConfig, RuntimeCoreError> {
+    Ok(CoreProviderModelConfig {
+        id: model.id,
+        display_name: model.display_name,
+        capability: model
+            .capability
+            .map(|capability| {
+                Ok(CoreProviderModelCapability {
+                    task_families: parse_provider_capability_values(
+                        "taskFamilies",
+                        capability.task_families,
+                    )?,
+                    input_modalities: parse_provider_capability_values(
+                        "inputModalities",
+                        capability.input_modalities,
+                    )?,
+                    output_modalities: parse_provider_capability_values(
+                        "outputModalities",
+                        capability.output_modalities,
+                    )?,
+                    runtime_features: parse_provider_capability_values(
+                        "runtimeFeatures",
+                        capability.runtime_features,
+                    )?,
+                    capabilities: CoreModelCapabilities {
+                        vision: capability.capabilities.vision,
+                        tools: capability.capabilities.tools,
+                        streaming: capability.capabilities.streaming,
+                        json_mode: capability.capabilities.json_mode,
+                        function_calling: capability.capabilities.function_calling,
+                        reasoning: capability.capabilities.reasoning,
+                        reasoning_effort: capability
+                            .capabilities
+                            .reasoning_effort
+                            .map(|support| {
+                                Ok(ModelReasoningEffortSupport {
+                                    supported: support.supported,
+                                    levels: support.levels,
+                                    options: support
+                                        .options
+                                        .into_iter()
+                                        .map(|option| ModelReasoningEffortOption {
+                                            id: option.id,
+                                            value: option.value,
+                                            label: option.label,
+                                            description: option.description,
+                                            default: option.default,
+                                        })
+                                        .collect(),
+                                    default: support.default,
+                                    source: support
+                                        .source
+                                        .map(|source| {
+                                            parse_provider_capability_value(
+                                                "reasoningEffort.source",
+                                                source,
+                                            )
+                                        })
+                                        .transpose()?,
+                                })
+                            })
+                            .transpose()?,
+                    },
+                })
+            })
+            .transpose()?,
+    })
+}
+
+fn parse_provider_capability_values<T>(
+    field: &str,
+    values: Vec<String>,
+) -> Result<Vec<T>, RuntimeCoreError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    values
+        .into_iter()
+        .map(|value| parse_provider_capability_value(field, value))
+        .collect()
+}
+
+fn parse_provider_capability_value<T>(field: &str, value: String) -> Result<T, RuntimeCoreError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    serde_json::from_value(Value::String(value.clone())).map_err(|error| {
+        data_error(format!(
+            "Provider model capability {field} contains invalid value `{value}`: {error}"
+        ))
     })
 }
 
@@ -468,7 +660,7 @@ pub(crate) async fn fetch_model_provider_models(
             &api_host,
             &api_key,
             Some(provider_type),
-            &provider.provider.custom_models,
+            &provider.provider.models,
         )
         .await
         .map_err(data_error)?;
@@ -600,7 +792,7 @@ fn provider_with_keys_to_value(
         "project": provider.project,
         "location": provider.location,
         "region": provider.region,
-        "custom_models": provider.custom_models,
+        "models": provider.models,
         "prompt_cache_mode": provider.effective_prompt_cache_mode().map(|mode| mode.to_string()),
         "api_key_count": provider_with_keys.api_keys.len(),
         "created_at": provider.created_at.to_rfc3339(),
@@ -623,7 +815,7 @@ fn provider_to_value(provider: &ApiKeyProvider, api_key_count: usize) -> Value {
         "project": provider.project,
         "location": provider.location,
         "region": provider.region,
-        "custom_models": provider.custom_models,
+        "models": provider.models,
         "prompt_cache_mode": provider.effective_prompt_cache_mode().map(|mode| mode.to_string()),
         "api_key_count": api_key_count,
         "created_at": provider.created_at.to_rfc3339(),
@@ -781,13 +973,107 @@ mod tests {
         (format!("http://{address}"), server)
     }
 
-    fn insert_provider(
-        db: &DbConnection,
-        provider_id: &str,
-        enabled: bool,
-        custom_models: &[&str],
-    ) {
-        insert_typed_provider(db, provider_id, "openai", enabled, custom_models);
+    #[test]
+    fn provider_model_config_to_core_preserves_explicit_capability() {
+        let model: ProtocolProviderModelConfig = serde_json::from_value(serde_json::json!({
+            "id": "grok-4.5",
+            "displayName": "Grok 4.5",
+            "capability": {
+                "taskFamilies": ["chat", "reasoning"],
+                "inputModalities": ["text", "image"],
+                "outputModalities": ["text"],
+                "runtimeFeatures": ["streaming", "tool_calling"],
+                "capabilities": {
+                    "vision": true,
+                    "tools": true,
+                    "streaming": true,
+                    "jsonMode": true,
+                    "functionCalling": true,
+                    "reasoning": true,
+                    "reasoningEffort": {
+                        "supported": true,
+                        "levels": ["medium", "xhigh"],
+                        "options": [{
+                            "id": "deep",
+                            "value": "xhigh",
+                            "label": "Deep",
+                            "description": "Maximum reasoning",
+                            "default": true
+                        }],
+                        "default": "xhigh",
+                        "source": "api"
+                    }
+                }
+            }
+        }))
+        .expect("deserialize typed provider model");
+
+        let model = provider_model_config_to_core(model).expect("convert provider model");
+
+        assert_eq!(model.id, "grok-4.5");
+        assert_eq!(model.display_name.as_deref(), Some("Grok 4.5"));
+        assert_eq!(
+            serde_json::to_value(model.capability.expect("explicit capability"))
+                .expect("serialize capability"),
+            serde_json::json!({
+                "task_families": ["chat", "reasoning"],
+                "input_modalities": ["text", "image"],
+                "output_modalities": ["text"],
+                "runtime_features": ["streaming", "tool_calling"],
+                "capabilities": {
+                    "vision": true,
+                    "tools": true,
+                    "streaming": true,
+                    "json_mode": true,
+                    "function_calling": true,
+                    "reasoning": true,
+                    "reasoning_effort": {
+                        "supported": true,
+                        "levels": ["medium", "xhigh"],
+                        "options": [{
+                            "id": "deep",
+                            "value": "xhigh",
+                            "label": "Deep",
+                            "description": "Maximum reasoning",
+                            "default": true
+                        }],
+                        "default": "xhigh",
+                        "source": "api"
+                    }
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn provider_model_config_to_core_rejects_unknown_capability_taxonomy() {
+        let model: ProtocolProviderModelConfig = serde_json::from_value(serde_json::json!({
+            "id": "unknown-model",
+            "capability": {
+                "taskFamilies": ["unknown_task"],
+                "inputModalities": [],
+                "outputModalities": [],
+                "runtimeFeatures": [],
+                "capabilities": {
+                    "vision": false,
+                    "tools": false,
+                    "streaming": false,
+                    "jsonMode": false,
+                    "functionCalling": false,
+                    "reasoning": false
+                }
+            }
+        }))
+        .expect("deserialize protocol model");
+
+        let error = provider_model_config_to_core(model).expect_err("reject unknown taxonomy");
+        let message = error.to_string();
+        assert!(message.contains("taskFamilies"));
+        assert!(message.contains("unknown_task"));
+    }
+
+    fn insert_provider(db: &DbConnection, provider_id: &str, enabled: bool, models: &[&str]) {
+        insert_typed_provider(db, provider_id, "openai", enabled, models);
     }
 
     fn insert_typed_provider(
@@ -795,7 +1081,7 @@ mod tests {
         provider_id: &str,
         provider_type: &str,
         enabled: bool,
-        custom_models: &[&str],
+        models: &[&str],
     ) {
         insert_typed_provider_with_host(
             db,
@@ -803,7 +1089,7 @@ mod tests {
             provider_type,
             "https://llm.limeai.run#lime_tenant_id=tenant-0001",
             enabled,
-            custom_models,
+            models,
         );
     }
 
@@ -813,14 +1099,18 @@ mod tests {
         provider_type: &str,
         api_host: &str,
         enabled: bool,
-        custom_models: &[&str],
+        models: &[&str],
     ) {
-        let custom_models = serde_json::to_string(custom_models).expect("serialize models");
+        let models = models
+            .iter()
+            .map(|model| CoreProviderModelConfig::hint(*model))
+            .collect::<Vec<_>>();
+        let models = serde_json::to_string(&models).expect("serialize models");
         let conn = db.lock().expect("lock db");
         conn.execute(
             "INSERT INTO api_key_providers (
                 id, name, type, api_host, is_system, group_name, enabled, sort_order,
-                custom_models, created_at, updated_at
+                models, created_at, updated_at
              ) VALUES (?1, ?2, ?3, ?4, 0, 'cloud', ?5, 0, ?6, ?7, ?7)",
             params![
                 provider_id,
@@ -828,7 +1118,7 @@ mod tests {
                 provider_type,
                 api_host,
                 if enabled { 1 } else { 0 },
-                custom_models,
+                models,
                 "2026-07-06T00:00:00Z",
             ],
         )
@@ -856,6 +1146,39 @@ mod tests {
             .expect("read current provider capabilities");
 
         assert!(!response.namespace_tools);
+        assert!(!response.image_generation);
+        assert!(!response.web_search);
+
+        insert_typed_provider_with_host(
+            &db,
+            "responses-route",
+            "openai-response",
+            "https://api.openai.com/v1",
+            true,
+            &[],
+        );
+        service
+            .add_api_key(&db, "responses-route", "sk-test", None, true)
+            .expect("add enabled Responses key");
+        let response = resolve_model_provider_capabilities(&db, &service, "responses-route")
+            .expect("read official Responses capabilities");
+        assert!(!response.namespace_tools);
+        assert!(response.image_generation);
+        assert!(response.web_search);
+
+        insert_typed_provider_with_host(
+            &db,
+            "custom-responses-route",
+            "openai-response",
+            "https://gateway.example.com/v1",
+            true,
+            &[],
+        );
+        service
+            .add_api_key(&db, "custom-responses-route", "sk-test", None, true)
+            .expect("add custom Responses key");
+        let response = resolve_model_provider_capabilities(&db, &service, "custom-responses-route")
+            .expect("read custom Responses capabilities");
         assert!(!response.image_generation);
         assert!(!response.web_search);
 
@@ -1053,7 +1376,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn model_catalog_skips_keyless_ollama_without_current_adapter() {
+    async fn model_catalog_includes_gemini_with_enabled_key() {
+        let db = setup_model_provider_db();
+        insert_typed_provider_with_host(
+            &db,
+            "ready-gemini-route",
+            "gemini",
+            "https://generativelanguage.googleapis.com",
+            true,
+            &["gemini-2.5-flash"],
+        );
+        let api_key_provider_service = ApiKeyProviderService::new();
+        api_key_provider_service
+            .add_api_key(&db, "ready-gemini-route", "gemini-test", None, true)
+            .expect("add enabled Gemini key");
+        let model_registry_service = ModelRegistryService::new(db.clone());
+
+        let catalogs = model_catalog(
+            &db,
+            &api_key_provider_service,
+            &model_registry_service,
+            crate::ModelCatalogQuery {
+                provider_id: Some("ready-gemini-route".to_string()),
+            },
+        )
+        .expect("list Gemini models with enabled key");
+
+        assert_eq!(catalogs.len(), 1);
+        assert_eq!(catalogs[0].models.len(), 1);
+        assert_eq!(catalogs[0].models[0].id, "gemini-2.5-flash");
+    }
+
+    #[tokio::test]
+    async fn model_catalog_includes_keyless_ollama_responses_adapter() {
         let db = setup_model_provider_db();
         insert_typed_provider_with_host(
             &db,
@@ -1076,14 +1431,16 @@ mod tests {
         )
         .expect("list keyless Ollama models");
 
-        assert!(catalogs.is_empty());
+        assert_eq!(catalogs.len(), 1);
+        assert_eq!(catalogs[0].provider_id, "local-ollama");
+        assert_eq!(catalogs[0].models.len(), 1);
+        assert_eq!(catalogs[0].models[0].id, "qwen3:14b");
     }
 
     #[tokio::test]
     async fn model_catalog_skips_non_chat_and_unknown_provider_types() {
         let db = setup_model_provider_db();
         insert_typed_provider(&db, "media-route", "fal", true, &["fal-image"]);
-        insert_typed_provider(&db, "gemini-route", "gemini", true, &["gemini-model"]);
         insert_typed_provider(&db, "azure-route", "azure-openai", true, &["azure-model"]);
         insert_typed_provider(&db, "vertex-route", "vertexai", true, &["vertex-model"]);
         insert_typed_provider(
@@ -1093,7 +1450,6 @@ mod tests {
             true,
             &["bedrock-model"],
         );
-        insert_typed_provider(&db, "ollama-route", "ollama", true, &["ollama-model"]);
         insert_typed_provider(
             &db,
             "unknown-route",
@@ -1170,6 +1526,23 @@ mod tests {
         assert!(cached.from_cache);
         assert_eq!(cached.models.len(), 1);
         assert_eq!(cached.models[0].id, "qwen3:14b");
+
+        let catalogs = model_catalog(
+            &db,
+            &api_key_provider_service,
+            &model_registry_service,
+            crate::ModelCatalogQuery {
+                provider_id: Some(provider.id.clone()),
+            },
+        )
+        .expect("credential-scoped discovery should enter model catalog");
+        assert_eq!(catalogs.len(), 1);
+        assert_eq!(catalogs[0].models.len(), 1);
+        assert_eq!(catalogs[0].models[0].id, "qwen3:14b");
+        assert_eq!(
+            catalogs[0].models[0].capability_provenance,
+            lime_core::models::model_registry::ModelCapabilityProvenance::InferredHint
+        );
     }
 
     #[tokio::test]

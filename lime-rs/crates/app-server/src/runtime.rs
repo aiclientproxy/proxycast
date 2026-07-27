@@ -33,6 +33,7 @@ mod conversation_import;
 mod diagnostics;
 mod error;
 mod event_log;
+mod event_sink;
 mod event_store;
 mod evidence_provider;
 mod execution_request;
@@ -162,6 +163,7 @@ pub use backend::UnavailableBackend;
 pub use error::RuntimeCoreError;
 pub use event_log::EventLogRecord;
 pub use event_log::EventLogWriter;
+pub use event_sink::RuntimeEventSink;
 pub use evidence_provider::BasicEvidenceExportProvider;
 pub use evidence_provider::NoopEvidenceExportProvider;
 pub use execution_request::ExecutionRequest;
@@ -284,19 +286,6 @@ impl RuntimeEvent {
             event_type: event_type.into(),
             payload,
         }
-    }
-}
-
-pub trait RuntimeEventSink: Send {
-    fn emit(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError>;
-
-    /// Forward an event that was already persisted by an external runtime boundary.
-    ///
-    /// The default is intentionally a no-op for sinks that only collect backend events. The
-    /// app-server sink overrides this to notify the current request without writing a duplicate
-    /// event to the session log.
-    fn emit_preappended(&mut self, _event: AgentEvent) -> Result<(), RuntimeCoreError> {
-        Ok(())
     }
 }
 

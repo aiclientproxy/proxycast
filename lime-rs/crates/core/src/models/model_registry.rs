@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 /// 模型能力
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ModelCapabilities {
     /// 是否支持视觉输入
     pub vision: bool,
@@ -22,6 +22,51 @@ pub struct ModelCapabilities {
     /// 是否支持可选推理强度；仅当模型接口明确声明时填充
     #[serde(default)]
     pub reasoning_effort: Option<ModelReasoningEffortSupport>,
+}
+
+/// 模型能力快照的事实来源。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelCapabilityProvenance {
+    Canonical,
+    ProviderExplicit,
+    #[default]
+    InferredHint,
+}
+
+/// Provider 配置中可作为执行事实的模型能力快照。
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct ProviderModelCapability {
+    #[serde(default)]
+    pub task_families: Vec<ModelTaskFamily>,
+    #[serde(default)]
+    pub input_modalities: Vec<ModelModality>,
+    #[serde(default)]
+    pub output_modalities: Vec<ModelModality>,
+    #[serde(default)]
+    pub runtime_features: Vec<ModelRuntimeFeature>,
+    #[serde(default)]
+    pub capabilities: ModelCapabilities,
+}
+
+/// Provider 下的模型配置。没有 capability 的记录只能作为 catalog hint。
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct ProviderModelConfig {
+    pub id: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub capability: Option<ProviderModelCapability>,
+}
+
+impl ProviderModelConfig {
+    pub fn hint(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            display_name: None,
+            capability: None,
+        }
+    }
 }
 
 /// 模型声明的可选推理强度；id/label 用于菜单，value 用于请求。
@@ -363,6 +408,9 @@ pub struct EnhancedModelMetadata {
     pub tier: ModelTier,
     /// 模型能力
     pub capabilities: ModelCapabilities,
+    /// 能力快照来源；启发式结果只能用于 catalog 展示，不能授权 runtime route。
+    #[serde(default)]
+    pub capability_provenance: ModelCapabilityProvenance,
     /// 在模型选择器和 Agent 模型覆盖列表中的可见性
     #[serde(default)]
     pub visibility: ModelVisibility,
@@ -433,6 +481,7 @@ impl EnhancedModelMetadata {
             family: None,
             tier: ModelTier::Pro,
             capabilities: ModelCapabilities::default(),
+            capability_provenance: ModelCapabilityProvenance::InferredHint,
             visibility: ModelVisibility::List,
             service_tiers: vec![],
             default_service_tier: None,
@@ -472,6 +521,11 @@ impl EnhancedModelMetadata {
     /// 设置模型能力
     pub fn with_capabilities(mut self, capabilities: ModelCapabilities) -> Self {
         self.capabilities = capabilities;
+        self
+    }
+
+    pub fn with_capability_provenance(mut self, provenance: ModelCapabilityProvenance) -> Self {
+        self.capability_provenance = provenance;
         self
     }
 
@@ -779,6 +833,7 @@ impl ModelsDevModel {
                 reasoning: self.reasoning,
                 reasoning_effort: None,
             },
+            capability_provenance: ModelCapabilityProvenance::ProviderExplicit,
             visibility: ModelVisibility::List,
             service_tiers: vec![],
             default_service_tier: None,

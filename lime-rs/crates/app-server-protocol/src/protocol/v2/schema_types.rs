@@ -42,6 +42,8 @@ pub const V2_SCHEMA_TYPE_NAMES: &[&str] = &[
     "ModelListResponse",
     "ModelProviderCapabilitiesReadParams",
     "ModelProviderCapabilitiesReadResponse",
+    "ModelRerouteReason",
+    "ModelReroutedNotification",
     "ModelVerification",
     "ModelVerificationNotification",
     "ModelSafetyBufferingUpdatedNotification",

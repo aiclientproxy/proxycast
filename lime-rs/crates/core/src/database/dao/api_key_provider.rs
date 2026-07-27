@@ -5,6 +5,7 @@
 //! **Feature: provider-ui-refactor**
 //! **Validates: Requirements 9.1**
 
+use crate::models::model_registry::ProviderModelConfig;
 use crate::provider_prompt_cache_support::is_known_automatic_anthropic_compatible_host;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
@@ -348,7 +349,7 @@ mod tests {
             project: None,
             location: None,
             region: None,
-            custom_models: Vec::new(),
+            models: Vec::new(),
             prompt_cache_mode: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -671,10 +672,9 @@ pub struct ApiKeyProvider {
     pub project: Option<String>,
     pub location: Option<String>,
     pub region: Option<String>,
-    /// 自定义模型列表（JSON 数组格式存储）
-    /// 用于不支持 /models 接口的 Provider（如智谱）
+    /// Provider 模型配置（JSON 数组格式存储）。
     #[serde(default)]
-    pub custom_models: Vec<String>,
+    pub models: Vec<ProviderModelConfig>,
     /// Provider 显式声明的 Prompt Cache 模式（仅在需要覆盖类型默认值时设置）
     #[serde(default)]
     pub prompt_cache_mode: Option<ApiProviderPromptCacheMode>,
@@ -797,7 +797,7 @@ impl ApiKeyProviderDao {
     pub fn get_all_providers(conn: &Connection) -> Result<Vec<ApiKeyProvider>, rusqlite::Error> {
         let mut stmt = conn.prepare(
             "SELECT id, name, type, api_host, is_system, group_name, enabled, sort_order,
-                    api_version, project, location, region, custom_models, prompt_cache_mode,
+                    api_version, project, location, region, models, prompt_cache_mode,
                     created_at, updated_at
              FROM api_key_providers
              ORDER BY sort_order ASC, created_at ASC",
@@ -818,7 +818,7 @@ impl ApiKeyProviderDao {
     ) -> Result<Option<ApiKeyProvider>, rusqlite::Error> {
         let mut stmt = conn.prepare(
             "SELECT id, name, type, api_host, is_system, group_name, enabled, sort_order,
-                    api_version, project, location, region, custom_models, prompt_cache_mode,
+                    api_version, project, location, region, models, prompt_cache_mode,
                     created_at, updated_at
              FROM api_key_providers
              WHERE id = ?1",
@@ -839,7 +839,7 @@ impl ApiKeyProviderDao {
     ) -> Result<Vec<ApiKeyProvider>, rusqlite::Error> {
         let mut stmt = conn.prepare(
             "SELECT id, name, type, api_host, is_system, group_name, enabled, sort_order,
-                    api_version, project, location, region, custom_models, prompt_cache_mode,
+                    api_version, project, location, region, models, prompt_cache_mode,
                     created_at, updated_at
              FROM api_key_providers
              WHERE group_name = ?1
@@ -859,17 +859,17 @@ impl ApiKeyProviderDao {
         conn: &Connection,
         provider: &ApiKeyProvider,
     ) -> Result<(), rusqlite::Error> {
-        let custom_models_json = if provider.custom_models.is_empty() {
+        let models_json = if provider.models.is_empty() {
             None
         } else {
-            Some(serde_json::to_string(&provider.custom_models).unwrap_or_default())
+            Some(serde_json::to_string(&provider.models).unwrap_or_default())
         };
         let prompt_cache_mode = provider.prompt_cache_mode.map(|value| value.to_string());
 
         conn.execute(
             "INSERT INTO api_key_providers
              (id, name, type, api_host, is_system, group_name, enabled, sort_order,
-              api_version, project, location, region, custom_models, prompt_cache_mode, created_at, updated_at)
+              api_version, project, location, region, models, prompt_cache_mode, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 provider.id,
@@ -884,7 +884,7 @@ impl ApiKeyProviderDao {
                 provider.project,
                 provider.location,
                 provider.region,
-                custom_models_json,
+                models_json,
                 prompt_cache_mode,
                 provider.created_at.to_rfc3339(),
                 provider.updated_at.to_rfc3339(),
@@ -898,10 +898,10 @@ impl ApiKeyProviderDao {
         conn: &Connection,
         provider: &ApiKeyProvider,
     ) -> Result<(), rusqlite::Error> {
-        let custom_models_json = if provider.custom_models.is_empty() {
+        let models_json = if provider.models.is_empty() {
             None
         } else {
-            Some(serde_json::to_string(&provider.custom_models).unwrap_or_default())
+            Some(serde_json::to_string(&provider.models).unwrap_or_default())
         };
         let prompt_cache_mode = provider.prompt_cache_mode.map(|value| value.to_string());
 
@@ -909,7 +909,7 @@ impl ApiKeyProviderDao {
             "UPDATE api_key_providers SET
              name = ?2, type = ?3, api_host = ?4, is_system = ?5, group_name = ?6,
              enabled = ?7, sort_order = ?8, api_version = ?9, project = ?10,
-             location = ?11, region = ?12, custom_models = ?13, prompt_cache_mode = ?14, updated_at = ?15
+             location = ?11, region = ?12, models = ?13, prompt_cache_mode = ?14, updated_at = ?15
              WHERE id = ?1",
             params![
                 provider.id,
@@ -924,7 +924,7 @@ impl ApiKeyProviderDao {
                 provider.project,
                 provider.location,
                 provider.region,
-                custom_models_json,
+                models_json,
                 prompt_cache_mode,
                 provider.updated_at.to_rfc3339(),
             ],
@@ -963,7 +963,7 @@ impl ApiKeyProviderDao {
         let project: Option<String> = row.get(9)?;
         let location: Option<String> = row.get(10)?;
         let region: Option<String> = row.get(11)?;
-        let custom_models_json: Option<String> = row.get(12)?;
+        let models_json: Option<String> = row.get(12)?;
         let prompt_cache_mode_str: Option<String> = row.get(13)?;
         let created_at_str: String = row.get(14)?;
         let updated_at_str: String = row.get(15)?;
@@ -978,8 +978,7 @@ impl ApiKeyProviderDao {
             .map(|dt| dt.with_timezone(&Utc))
             .unwrap_or_else(|_| Utc::now());
 
-        // 解析自定义模型列表
-        let custom_models: Vec<String> = custom_models_json
+        let models: Vec<ProviderModelConfig> = models_json
             .and_then(|json| serde_json::from_str(&json).ok())
             .unwrap_or_default();
         let prompt_cache_mode = prompt_cache_mode_str
@@ -998,7 +997,7 @@ impl ApiKeyProviderDao {
             project,
             location,
             region,
-            custom_models,
+            models,
             prompt_cache_mode,
             created_at,
             updated_at,
@@ -1061,7 +1060,7 @@ impl ApiKeyProviderDao {
                     k.usage_count, k.error_count, k.last_used_at, k.created_at,
                     p.id, p.name, p.type, p.api_host, p.is_system, p.group_name, p.enabled,
                     p.sort_order, p.api_version, p.project, p.location, p.region,
-                    p.custom_models, p.prompt_cache_mode, p.created_at, p.updated_at
+                    p.models, p.prompt_cache_mode, p.created_at, p.updated_at
              FROM api_keys k
              JOIN api_key_providers p ON k.provider_id = p.id
              WHERE p.type = ?1 AND k.enabled = 1 AND p.enabled = 1
@@ -1094,7 +1093,7 @@ impl ApiKeyProviderDao {
             };
 
             // 解析 Provider
-            let custom_models_json: Option<String> = row.get(21)?;
+            let models_json: Option<String> = row.get(21)?;
             let prompt_cache_mode_str: Option<String> = row.get(22)?;
             let provider_created_at_str: String = row.get(23)?;
             let provider_updated_at_str: String = row.get(24)?;
@@ -1105,8 +1104,7 @@ impl ApiKeyProviderDao {
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(|_| Utc::now());
 
-            // 解析自定义模型列表
-            let custom_models: Vec<String> = custom_models_json
+            let models: Vec<ProviderModelConfig> = models_json
                 .and_then(|json| serde_json::from_str(&json).ok())
                 .unwrap_or_default();
             let prompt_cache_mode = prompt_cache_mode_str
@@ -1128,7 +1126,7 @@ impl ApiKeyProviderDao {
                 project: row.get(18)?,
                 location: row.get(19)?,
                 region: row.get(20)?,
-                custom_models,
+                models,
                 prompt_cache_mode,
                 created_at: provider_created_at,
                 updated_at: provider_updated_at,
@@ -1349,7 +1347,7 @@ impl ApiKeyProviderDao {
     ) -> Result<Vec<ProviderWithKeys>, rusqlite::Error> {
         let mut stmt = conn.prepare(
             "SELECT id, name, type, api_host, is_system, group_name, enabled, sort_order,
-                    api_version, project, location, region, custom_models, created_at, updated_at
+                    api_version, project, location, region, models, created_at, updated_at
              FROM api_key_providers
              WHERE enabled = 1
              ORDER BY sort_order ASC, created_at ASC",

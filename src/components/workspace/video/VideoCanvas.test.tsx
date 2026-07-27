@@ -110,14 +110,14 @@ describe("VideoCanvas 全局默认模型", () => {
         name: "豆包视频",
         enabled: true,
         api_key_count: 1,
-        custom_models: ["seedance-1-5-pro-251215"],
+        models: [{ id: "seedance-1-5-pro-251215" }],
       },
       {
         id: "openai",
         name: "OpenAI Video",
         enabled: true,
         api_key_count: 1,
-        custom_models: ["sora-2", "sora-2-pro"],
+        models: [{ id: "sora-2" }, { id: "sora-2-pro" }],
       },
     ]);
   });

@@ -206,6 +206,7 @@ mod tests {
                 call_id: "mcp-call-1".to_string(),
                 tool_name: "docs__search".to_string(),
                 arguments: serde_json::json!({ "query": "lime" }),
+                provider_metadata: serde_json::Value::Null,
                 environments: vec![ToolEnvironment::new("local", PathBuf::from("/workspace"))],
                 phase: ToolLifecyclePhase::Started,
                 output: None,

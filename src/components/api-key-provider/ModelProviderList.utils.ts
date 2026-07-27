@@ -23,7 +23,7 @@ function getProviderDefaultModel(
   provider: ProviderWithKeysDisplay,
 ): string | null {
   return (
-    provider.custom_models?.find((model) => model.trim().length > 0)?.trim() ??
+    provider.models?.find((model) => model.id.trim().length > 0)?.id.trim() ??
     null
   );
 }

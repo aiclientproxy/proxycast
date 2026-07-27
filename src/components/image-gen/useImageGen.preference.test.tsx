@@ -235,7 +235,7 @@ describe("useImageGen 项目偏好", () => {
         enabled: true,
         api_key_count: 1,
         api_host: "https://airgate.k8ray.com/v1",
-        custom_models: ["gpt-images-2"],
+        models: [{ id: "gpt-images-2" }],
       },
     ];
     mockUseApiKeyProvider.mockImplementation(

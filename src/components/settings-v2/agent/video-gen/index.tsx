@@ -69,7 +69,7 @@ export function VideoGenSettings() {
     }
     return getVideoModelsForProvider(
       selectedProvider.providerId ?? selectedProvider.key,
-      selectedProvider.customModels,
+      selectedProvider.models,
     );
   }, [selectedProvider]);
 
@@ -120,7 +120,7 @@ export function VideoGenSettings() {
     const nextModels = nextProvider
       ? getVideoModelsForProvider(
           nextProvider.providerId ?? nextProvider.key,
-          nextProvider.customModels,
+          nextProvider.models,
         )
       : [];
     void savePreference((current) => ({
@@ -192,7 +192,7 @@ export function VideoGenSettings() {
         modelFilter={(model, provider) =>
           getVideoModelsForProvider(
             provider.providerId ?? provider.key,
-            provider.customModels,
+            provider.models,
           ).includes(model.id)
         }
         allowFallback={videoPreference.allowFallback ?? true}

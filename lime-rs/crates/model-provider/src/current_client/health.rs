@@ -38,6 +38,7 @@ impl RouteHealthKey {
                 Some(RuntimeProviderProtocol::ChatCompletions) => "chat_completions",
                 Some(RuntimeProviderProtocol::Responses) => "responses",
                 Some(RuntimeProviderProtocol::AnthropicMessages) => "anthropic_messages",
+                Some(RuntimeProviderProtocol::GeminiGenerateContent) => "gemini_generate_content",
                 None => "missing",
             },
             credential_scope: credential_scope(config),
@@ -105,6 +106,9 @@ impl Default for CurrentProviderHealthRegistry {
 fn normalized_base_url(config: &RuntimeProviderConfig) -> String {
     let fallback = match config.protocol {
         Some(RuntimeProviderProtocol::AnthropicMessages) => "https://api.anthropic.com",
+        Some(RuntimeProviderProtocol::GeminiGenerateContent) => {
+            "https://generativelanguage.googleapis.com/v1beta"
+        }
         _ => "https://api.openai.com",
     };
     let value = config

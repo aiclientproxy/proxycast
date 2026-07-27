@@ -20,7 +20,7 @@ const PROVIDER_COLUMNS: &[&str] = &[
     "project",
     "location",
     "region",
-    "custom_models",
+    "models",
     "prompt_cache_mode",
     "created_at",
     "updated_at",

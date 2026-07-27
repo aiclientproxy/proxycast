@@ -40,6 +40,7 @@ import {
   type ModelProviderWriteResponse as AppServerModelProviderWriteResponse,
   type ProviderInfo,
   type ProviderKeyInfo,
+  type ProviderModelConfig as AppServerProviderModelConfig,
 } from "../../../packages/app-server-client/src/protocol";
 
 type ApiKeyProviderAppServerClient = Pick<AppServerClient, "request">;
@@ -51,6 +52,77 @@ interface ProviderQueryOptions {
 
 let providersCache: ProviderWithKeysDisplay[] | null = null;
 let providersLoadingPromise: Promise<ProviderWithKeysDisplay[]> | null = null;
+
+export type ProviderModelConfig = AppServerProviderModelConfig;
+
+function cloneProviderModel(model: ProviderModelConfig): ProviderModelConfig {
+  const capability = model.capability;
+  return {
+    ...model,
+    capability: capability
+      ? {
+          ...capability,
+          taskFamilies: [...(capability.taskFamilies ?? [])],
+          inputModalities: [...(capability.inputModalities ?? [])],
+          outputModalities: [...(capability.outputModalities ?? [])],
+          runtimeFeatures: [...(capability.runtimeFeatures ?? [])],
+          capabilities: capability.capabilities
+            ? {
+                ...capability.capabilities,
+                reasoningEffort: capability.capabilities.reasoningEffort
+                  ? {
+                      ...capability.capabilities.reasoningEffort,
+                      levels: [
+                        ...(capability.capabilities.reasoningEffort.levels ?? []),
+                      ],
+                      options: (
+                        capability.capabilities.reasoningEffort.options ?? []
+                      ).map((option) => ({ ...option })),
+                    }
+                  : capability.capabilities.reasoningEffort,
+              }
+            : capability.capabilities,
+        }
+      : capability,
+  };
+}
+
+export function providerModelIds(
+  models: readonly ProviderModelConfig[] | null | undefined,
+): string[] {
+  return Array.from(
+    new Set(
+      (models ?? [])
+        .map((model) => model.id.trim())
+        .filter((modelId) => modelId.length > 0),
+    ),
+  );
+}
+
+export function reconcileProviderModels(
+  existingModels: readonly ProviderModelConfig[] | null | undefined,
+  modelIds: readonly string[],
+): ProviderModelConfig[] {
+  const existingById = new Map(
+    (existingModels ?? []).map((model) => [
+      model.id.trim().toLowerCase(),
+      model,
+    ]),
+  );
+  const seen = new Set<string>();
+  const models: ProviderModelConfig[] = [];
+  for (const value of modelIds) {
+    const id = value.trim();
+    const normalized = id.toLowerCase();
+    if (!id || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    const existing = existingById.get(normalized);
+    models.push(existing ? cloneProviderModel(existing) : { id });
+  }
+  return models;
+}
 
 async function requestApiKeyProviderAppServer<T>(
   method: string,
@@ -69,8 +141,8 @@ function cloneProviderList(
     api_keys: Array.isArray(provider.api_keys)
       ? provider.api_keys.map((apiKey) => ({ ...apiKey }))
       : [],
-    custom_models: Array.isArray(provider.custom_models)
-      ? [...provider.custom_models]
+    models: Array.isArray(provider.models)
+      ? provider.models.map(cloneProviderModel)
       : [],
     prompt_cache_mode: provider.prompt_cache_mode ?? null,
   }));
@@ -90,7 +162,7 @@ function toProviderDisplay(provider: ProviderInfo): ProviderDisplay {
     project: provider.project ?? undefined,
     location: provider.location ?? undefined,
     region: provider.region ?? undefined,
-    custom_models: [...(provider.customModels ?? [])],
+    models: (provider.models ?? []).map(cloneProviderModel),
     prompt_cache_mode:
       (provider.promptCacheMode as ProviderDeclaredPromptCacheMode | null) ??
       null,
@@ -216,7 +288,7 @@ function toUpdateProviderParams(id: string, request: UpdateProviderRequest) {
     location: request.location,
     region: request.region,
     promptCacheMode: request.prompt_cache_mode,
-    customModels: request.custom_models,
+    models: request.models,
   };
 }
 
@@ -394,8 +466,8 @@ export interface UpdateProviderRequest {
   location?: string;
   region?: string;
   prompt_cache_mode?: ProviderDeclaredPromptCacheMode | null;
-  /** 自定义模型列表 */
-  custom_models?: string[];
+  /** Provider 模型配置 */
+  models?: ProviderModelConfig[];
 }
 
 /**
@@ -429,8 +501,8 @@ export interface ProviderDisplay {
   project?: string;
   location?: string;
   region?: string;
-  /** 自定义模型列表 */
-  custom_models?: string[];
+  /** Provider 模型配置 */
+  models?: ProviderModelConfig[];
   /** Provider 当前生效的 Prompt Cache 模式（已包含官方兼容端点推断与类型回退） */
   prompt_cache_mode?: ProviderDeclaredPromptCacheMode | null;
   api_key_count: number;

@@ -19,7 +19,7 @@ interface ProviderModelsCatalogProvider {
   label: string;
   registryId: string;
   fallbackRegistryId?: string;
-  customModels?: string[];
+  models?: string[];
 }
 
 interface BuiltProviderModelsResult {
@@ -240,16 +240,16 @@ function buildLocalProviderModels(
   let allModelIds: string[] = [];
 
   if (
-    selectedProvider.customModels &&
-    selectedProvider.customModels.length > 0
+    selectedProvider.models &&
+    selectedProvider.models.length > 0
   ) {
-    const customModels = convertCustomModelsToMetadata(
-      selectedProvider.customModels,
+    const models = convertCustomModelsToMetadata(
+      selectedProvider.models,
       selectedProvider.key,
       selectedProvider.label,
     );
-    allModels = [...customModels];
-    allModelIds = [...selectedProvider.customModels];
+    allModels = [...models];
+    allModelIds = [...selectedProvider.models];
   }
 
   const findModelIndexById = (modelId: string): number => {

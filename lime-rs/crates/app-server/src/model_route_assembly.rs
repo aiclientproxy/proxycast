@@ -88,8 +88,9 @@ mod tests {
             "serviceModelSlot": "image_generation_model",
             "modelRegistry": {
                 "source": "provider_declared_model",
-                "reasonCode": "matched_provider_custom_models",
+                "reasonCode": "matched_provider_models",
                 "modelCapabilities": {
+                    "provenance": "provider_explicit",
                     "capabilities": {
                         "vision": false,
                         "streaming": true
@@ -176,6 +177,7 @@ mod tests {
                     "source": "api",
                     "reasonCode": "matched_media_task_model",
                     "modelCapabilities": {
+                        "provenance": "provider_explicit",
                         "taskFamilies": ["image_generation"],
                         "inputModalities": ["text"],
                         "outputModalities": ["image"],
@@ -237,6 +239,7 @@ mod tests {
                     "source": "api",
                     "reasonCode": "matched_media_task_model",
                     "modelCapabilities": {
+                        "provenance": "provider_explicit",
                         "taskFamilies": ["image_generation"],
                         "inputModalities": ["text"],
                         "outputModalities": ["image"],

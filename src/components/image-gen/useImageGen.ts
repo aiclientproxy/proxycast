@@ -7,6 +7,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApiKeyProvider } from "@/hooks/useApiKeyProvider";
 import {
+  providerModelIds,
+  type ProviderModelConfig,
+} from "@/lib/api/apiKeyProvider";
+import {
   findDefaultImageCapabilityProvider,
   isImageCapabilityProvider,
   resolveImageCapabilityModels,
@@ -36,13 +40,13 @@ function imageGenDebugLog(...args: unknown[]): void {
 function isImageGenProvider(provider: {
   id: string;
   type: string;
-  custom_models?: string[];
+  models?: ProviderModelConfig[];
   api_host?: string;
 }): boolean {
   return isImageCapabilityProvider({
     id: provider.id,
     type: provider.type,
-    custom_models: provider.custom_models,
+    models: providerModelIds(provider.models),
     api_host: provider.api_host,
   });
 }
@@ -149,7 +153,7 @@ export function useImageGen(options: UseImageGenOptions = {}) {
         ? resolveImageCapabilityModels({
             id: selectedProvider.id,
             type: selectedProvider.type,
-            custom_models: selectedProvider.custom_models,
+            models: providerModelIds(selectedProvider.models),
             api_host: selectedProvider.api_host,
           })
         : [],
@@ -210,7 +214,14 @@ export function useImageGen(options: UseImageGenOptions = {}) {
     const nextProvider = preferredProvider
       ? preferredProvider
       : allowFallback
-        ? findDefaultImageCapabilityProvider(availableProviders)
+        ? findDefaultImageCapabilityProvider(
+            availableProviders.map((provider) => ({
+              id: provider.id,
+              type: provider.type,
+              models: providerModelIds(provider.models),
+              api_host: provider.api_host,
+            })),
+          )
         : undefined;
     if (nextProvider) {
       hasManualProviderSelectionRef.current = false;
@@ -263,7 +274,7 @@ export function useImageGen(options: UseImageGenOptions = {}) {
         ? resolveImageCapabilityModels({
             id: provider.id,
             type: provider.type,
-            custom_models: provider.custom_models,
+            models: providerModelIds(provider.models),
             api_host: provider.api_host,
           })[0]
         : undefined;

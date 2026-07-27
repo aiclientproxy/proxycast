@@ -313,6 +313,14 @@ export interface AgentThreadMediaItem extends AgentThreadItemBase {
   preview?: string;
 }
 
+export interface AgentThreadImageGenerationItem extends AgentThreadItemBase {
+  type: "image_generation";
+  generation_status: string;
+  revised_prompt?: string;
+  result: string;
+  saved_path?: string;
+}
+
 export interface AgentThreadExtensionItem extends AgentThreadItemBase {
   type: "extension";
   name: string;
@@ -375,6 +383,7 @@ export type AgentThreadItem =
   | AgentThreadRequestUserInputItem
   | AgentThreadFileArtifactItem
   | AgentThreadMediaItem
+  | AgentThreadImageGenerationItem
   | AgentThreadExtensionItem
   | AgentThreadSubagentActivityItem
   | AgentThreadExpertProfileSwitchItem

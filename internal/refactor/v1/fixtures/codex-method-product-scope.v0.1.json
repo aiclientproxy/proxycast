@@ -20,9 +20,9 @@
       "clientNotification": 1
     },
     "byStatus": {
-      "implemented": 70,
+      "implemented": 71,
       "product-scope-excluded": 34,
-      "planned": 110
+      "planned": 109
     }
   },
   "groups": [
@@ -798,15 +798,20 @@
       "methods": ["model/verification"]
     },
     {
-      "id": "model-rerouted-notification-planned",
+      "id": "model-rerouted-notification-current",
       "direction": "serverNotification",
       "productArea": "model",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
-      "owner": "model-provider + agent-runtime + app-server notification projector",
-      "counterpartRule": "none",
-      "gap": "The trusted server-model mismatch producer for highRiskCyberActivity is not implemented; ordinary provider fallback remains routing.fallback.applied.",
-      "evidence": ["internal/refactor/v1/02-multi-model-grok-build.md"],
+      "owner": "runtime-core + model-provider + agent-runtime + app-server v2 notification projector",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/runtime-core/src/llm_protocol/canonical.rs",
+        "lime-rs/crates/model-provider/src/current_client.rs",
+        "lime-rs/crates/agent-runtime/src/provider_turn.rs",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/model.rs",
+        "lime-rs/crates/app-server/src/processor/v2_notifications.rs"
+      ],
       "methods": ["model/rerouted"]
     },
     {

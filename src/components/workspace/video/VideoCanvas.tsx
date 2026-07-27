@@ -7,7 +7,10 @@ import { VideoCanvasProps } from "./types";
 import { VideoSidebar, type VideoProviderOption } from "./VideoSidebar";
 import { VideoWorkspace } from "./VideoWorkspace";
 import { useGlobalMediaGenerationDefaults } from "@/hooks/useGlobalMediaGenerationDefaults";
-import { apiKeyProviderApi } from "@/lib/api/apiKeyProvider";
+import {
+  apiKeyProviderApi,
+  providerModelIds,
+} from "@/lib/api/apiKeyProvider";
 import {
   ackCanvasImageInsertRequest,
   emitCanvasImageInsertAck,
@@ -60,8 +63,8 @@ function isVideoProvider(providerId: string): boolean {
 }
 
 function resolveProviderModels(provider: VideoProviderOption): string[] {
-  if (provider.customModels.length > 0) {
-    return provider.customModels;
+  if (provider.models.length > 0) {
+    return provider.models;
   }
 
   const normalizedId = provider.id.toLowerCase();
@@ -283,7 +286,7 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = memo(
             .map((provider) => ({
               id: provider.id,
               name: provider.name,
-              customModels: provider.custom_models ?? [],
+              models: providerModelIds(provider.models),
             }));
 
           setProviders(availableProviders);

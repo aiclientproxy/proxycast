@@ -296,7 +296,6 @@ pub enum ProtocolKind {
     OpenaiImages,
     AnthropicMessages,
     GeminiGenerateContent,
-    OllamaChat,
     Fal,
     BedrockConverse,
     VertexGemini,
@@ -407,6 +406,31 @@ pub struct CapabilitySnapshot {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct ProviderModelCapability {
+    #[serde(default)]
+    pub task_families: Vec<String>,
+    #[serde(default)]
+    pub input_modalities: Vec<String>,
+    #[serde(default)]
+    pub output_modalities: Vec<String>,
+    #[serde(default)]
+    pub runtime_features: Vec<String>,
+    #[serde(default)]
+    pub capabilities: ModelCapabilitiesInfo,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelConfig {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capability: Option<ProviderModelCapability>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct RoutingDecision {
     pub routing_mode: String,
     pub decision_source: String,
@@ -491,7 +515,7 @@ pub struct ProviderInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub region: Option<String>,
     #[serde(default)]
-    pub custom_models: Vec<String>,
+    pub models: Vec<ProviderModelConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt_cache_mode: Option<String>,
     pub api_key_count: usize,
@@ -610,7 +634,7 @@ pub struct ModelProviderUpdateParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt_cache_mode: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub custom_models: Option<Vec<String>>,
+    pub models: Option<Vec<ProviderModelConfig>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

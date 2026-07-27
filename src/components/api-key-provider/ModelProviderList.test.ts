@@ -18,7 +18,7 @@ function createProvider(
     enabled: true,
     sort_order: 2,
     api_key_count: 1,
-    custom_models: ["deepseek-chat"],
+    models: [{ id: "deepseek-chat" }],
     prompt_cache_mode: null,
     created_at: new Date("2026-03-15T00:00:00.000Z").toISOString(),
     updated_at: new Date("2026-03-15T00:00:00.000Z").toISOString(),
@@ -44,13 +44,13 @@ describe("ModelProviderList helpers", () => {
       id: "openai",
       name: "OpenAI",
       enabled: false,
-      custom_models: [],
+      models: [],
       api_keys: [],
     });
     const unconfigured = createProvider({
       id: "anthropic",
       name: "Anthropic",
-      custom_models: [],
+      models: [],
       api_keys: [],
     });
 
@@ -64,7 +64,7 @@ describe("ModelProviderList helpers", () => {
       id: "lime-hub",
       name: "Lime Hub",
       sort_order: 0,
-      custom_models: [],
+      models: [],
       api_keys: [],
       api_key_count: 0,
     });

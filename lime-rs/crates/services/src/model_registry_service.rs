@@ -3,7 +3,7 @@
 //! 管理运行期模型数据和 Provider 实时模型读取。
 //!
 //! 旧的本地模型资源目录已下线；模型列表以 Provider 实时接口和用户
-//! 显式配置的 `custom_models` 为准。
+//! 显式配置的 `models` 为准。
 
 use lime_core::api_host_utils::{
     is_openai_responses_compatible_host, normalize_openai_model_discovery_host,
@@ -13,10 +13,11 @@ use lime_core::database::dao::route_state::RouteStateDao;
 use lime_core::database::DbConnection;
 use lime_core::image_generation_matcher::is_likely_image_generation_search_text;
 use lime_core::models::model_registry::{
-    EnhancedModelMetadata, ModelAliasSource, ModelCapabilities, ModelDeploymentSource, ModelLimits,
-    ModelManagementPlane, ModelModality, ModelReasoningEffortOption, ModelReasoningEffortSource,
-    ModelReasoningEffortSupport, ModelRuntimeFeature, ModelServiceTier, ModelSource, ModelStatus,
-    ModelSyncState, ModelTaskFamily, ModelTier, ModelVisibility, ProviderAliasConfig,
+    EnhancedModelMetadata, ModelAliasSource, ModelCapabilities, ModelCapabilityProvenance,
+    ModelDeploymentSource, ModelLimits, ModelManagementPlane, ModelModality,
+    ModelReasoningEffortOption, ModelReasoningEffortSource, ModelReasoningEffortSupport,
+    ModelRuntimeFeature, ModelServiceTier, ModelSource, ModelStatus, ModelSyncState,
+    ModelTaskFamily, ModelTier, ModelVisibility, ProviderAliasConfig, ProviderModelConfig,
     UserModelPreference,
 };
 use model_provider::canonical::{maybe_get_canonical_model, CanonicalModel};
@@ -2162,14 +2163,14 @@ impl ModelRegistryService {
     /// 从 Provider API 获取模型列表。
     ///
     /// 本地模型目录已下线：有效缓存未命中且 API 不可用时直接返回错误来源，
-    /// 不再展示 `custom_models` 或内置厂商目录作为“接口获取”的结果。
+    /// 不再展示 `models` 或内置厂商目录作为“接口获取”的结果。
     pub async fn fetch_models_from_api_with_hints(
         &self,
         provider_id: &str,
         api_host: &str,
         api_key: &str,
         provider_type: Option<ApiProviderType>,
-        custom_models: &[String],
+        models: &[ProviderModelConfig],
     ) -> Result<FetchModelsResult, String> {
         tracing::info!(
             "[ModelRegistry] 从 API 获取模型: provider={}, host={}",
@@ -2193,7 +2194,7 @@ impl ModelRegistryService {
 
         if Self::is_xiaomi_like_model_fetch(provider_id, api_host, provider_type) {
             let now = chrono::Utc::now().timestamp();
-            let models = self.build_declared_models(provider_id, custom_models, now);
+            let models = self.build_declared_models(provider_id, models, now);
 
             if models.is_empty() {
                 return Ok(FetchModelsResult {
@@ -2240,7 +2241,7 @@ impl ModelRegistryService {
 
         if Self::uses_declared_models_for_model_fetch(provider_id, api_host, provider_type) {
             let now = chrono::Utc::now().timestamp();
-            let models = self.build_fal_declared_models(provider_id, custom_models, now);
+            let models = self.build_fal_declared_models(provider_id, models, now);
 
             if !models.is_empty() {
                 if let Err(error) = self.save_provider_models_cache_scoped(
@@ -2289,8 +2290,7 @@ impl ModelRegistryService {
             Self::resolve_model_fetch_protocol(provider_id, api_host, provider_type);
         if fetch_protocol == ModelFetchProtocol::ResponsesCompatible {
             let now = chrono::Utc::now().timestamp();
-            let models =
-                self.build_responses_compatible_declared_models(provider_id, custom_models, now);
+            let models = self.build_responses_compatible_declared_models(provider_id, models, now);
 
             if !models.is_empty() {
                 if let Err(error) = self.save_provider_models_cache_scoped(
@@ -3238,6 +3238,13 @@ impl ModelRegistryService {
                 .to_string()
         });
         let canonical_model = maybe_get_canonical_model(provider_id, &model.id);
+        let capability_provenance = if canonical_model.is_some() {
+            ModelCapabilityProvenance::Canonical
+        } else if api_model_has_explicit_capability_snapshot(&model) {
+            ModelCapabilityProvenance::ProviderExplicit
+        } else {
+            ModelCapabilityProvenance::InferredHint
+        };
         let mut api_task_families = parse_task_families_value(model.task_families.as_ref());
         let mut api_input_modalities = parse_modalities_value(model.input_modalities.as_ref());
         let mut api_output_modalities = parse_modalities_value(model.output_modalities.as_ref());
@@ -3332,6 +3339,7 @@ impl ModelRegistryService {
             family: model.family,
             tier: ModelTier::Pro,
             capabilities,
+            capability_provenance,
             visibility,
             service_tiers,
             default_service_tier,
@@ -3363,60 +3371,70 @@ impl ModelRegistryService {
 
     fn build_provider_declared_model(
         &self,
-        model_id: &str,
+        model: &ProviderModelConfig,
         provider_id: &str,
         now: i64,
     ) -> EnhancedModelMetadata {
-        self.convert_api_model(
-            ApiModelResponse {
-                id: model_id.to_string(),
-                display_name: None,
-                provider_name: Some(provider_id.to_string()),
-                family: None,
-                context_length: None,
-                task_families: None,
-                input_modalities: None,
-                output_modalities: None,
-                modalities: None,
-                runtime_features: None,
-                vision_supported: None,
-                capabilities: None,
-                supported_parameters: None,
-                reasoning: None,
-                reasoning_effort: None,
-                reasoning_effort_levels: None,
-                reasoning_efforts: None,
-                supported_reasoning_efforts: None,
-                visibility: None,
-                service_tiers: None,
-                default_service_tier: None,
-            },
-            provider_id,
-            now,
-        )
-        .with_source(ModelSource::Custom)
+        let model_id = model.id.trim();
+        let mut metadata = self
+            .convert_api_model(
+                ApiModelResponse {
+                    id: model_id.to_string(),
+                    display_name: model.display_name.clone(),
+                    provider_name: Some(provider_id.to_string()),
+                    family: None,
+                    context_length: None,
+                    task_families: None,
+                    input_modalities: None,
+                    output_modalities: None,
+                    modalities: None,
+                    runtime_features: None,
+                    vision_supported: None,
+                    capabilities: None,
+                    supported_parameters: None,
+                    reasoning: None,
+                    reasoning_effort: None,
+                    reasoning_effort_levels: None,
+                    reasoning_efforts: None,
+                    supported_reasoning_efforts: None,
+                    visibility: None,
+                    service_tiers: None,
+                    default_service_tier: None,
+                },
+                provider_id,
+                now,
+            )
+            .with_source(ModelSource::Custom);
+        if let Some(capability) = model.capability.as_ref() {
+            metadata.task_families = capability.task_families.clone();
+            metadata.input_modalities = capability.input_modalities.clone();
+            metadata.output_modalities = capability.output_modalities.clone();
+            metadata.runtime_features = capability.runtime_features.clone();
+            metadata.capabilities = capability.capabilities.clone();
+            metadata.capability_provenance = ModelCapabilityProvenance::ProviderExplicit;
+        }
+        metadata
     }
 
     pub fn build_declared_model_metadata(
         &self,
         provider_id: &str,
-        model_id: &str,
+        model: &ProviderModelConfig,
     ) -> EnhancedModelMetadata {
-        self.build_provider_declared_model(model_id, provider_id, chrono::Utc::now().timestamp())
+        self.build_provider_declared_model(model, provider_id, chrono::Utc::now().timestamp())
     }
 
     fn build_declared_models(
         &self,
         provider_id: &str,
-        custom_models: &[String],
+        models: &[ProviderModelConfig],
         now: i64,
     ) -> Vec<EnhancedModelMetadata> {
         let mut seen = std::collections::HashSet::new();
-        custom_models
+        models
             .iter()
-            .map(|model| model.trim())
-            .filter(|model| !model.is_empty())
-            .filter(|model| seen.insert(model.to_ascii_lowercase()))
+            .filter(|model| !model.id.trim().is_empty())
+            .filter(|model| seen.insert(model.id.trim().to_ascii_lowercase()))
             .map(|model| self.build_provider_declared_model(model, provider_id, now))
             .collect()
     }
@@ -3448,10 +3466,10 @@ impl ModelRegistryService {
     fn build_fal_declared_models(
         &self,
         provider_id: &str,
-        custom_models: &[String],
+        models: &[ProviderModelConfig],
         now: i64,
     ) -> Vec<EnhancedModelMetadata> {
-        self.build_declared_models(provider_id, custom_models, now)
+        self.build_declared_models(provider_id, models, now)
             .into_iter()
             .filter(|model| Self::is_likely_fal_declared_model(&model.id))
             .collect()
@@ -3460,10 +3478,10 @@ impl ModelRegistryService {
     fn build_responses_compatible_declared_models(
         &self,
         provider_id: &str,
-        custom_models: &[String],
+        models: &[ProviderModelConfig],
         now: i64,
     ) -> Vec<EnhancedModelMetadata> {
-        self.build_declared_models(provider_id, custom_models, now)
+        self.build_declared_models(provider_id, models, now)
             .into_iter()
             .filter(|model| {
                 model
@@ -3587,6 +3605,41 @@ struct ApiModelResponse {
     service_tiers: Option<serde_json::Value>,
     #[serde(default, alias = "defaultServiceTier")]
     default_service_tier: Option<String>,
+}
+
+fn api_model_has_explicit_capability_snapshot(model: &ApiModelResponse) -> bool {
+    model.vision_supported.is_some()
+        || [
+            model.task_families.as_ref(),
+            model.input_modalities.as_ref(),
+            model.output_modalities.as_ref(),
+            model.runtime_features.as_ref(),
+            model.capabilities.as_ref(),
+            model.reasoning.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .any(json_value_declares_capability)
+        || resolve_api_reasoning_effort_support(model).is_some()
+        || explicit_reasoning_effort_disabled(model.reasoning_effort.as_ref())
+        || model.modalities.as_ref().is_some_and(|modalities| {
+            modalities
+                .input
+                .as_ref()
+                .into_iter()
+                .chain(modalities.output.as_ref())
+                .any(json_value_declares_capability)
+        })
+}
+
+fn json_value_declares_capability(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Null => false,
+        serde_json::Value::String(value) => !value.trim().is_empty(),
+        serde_json::Value::Array(values) => !values.is_empty(),
+        serde_json::Value::Object(values) => !values.is_empty(),
+        serde_json::Value::Bool(_) | serde_json::Value::Number(_) => true,
+    }
 }
 
 #[derive(Debug)]
@@ -3713,8 +3766,9 @@ mod tests {
     use lime_core::database::dao::route_state::RouteStateDao;
     use lime_core::database::DbConnection;
     use lime_core::models::model_registry::{
-        EnhancedModelMetadata, ModelCapabilities, ModelModality, ModelReasoningEffortSource,
-        ModelRuntimeFeature, ModelSource, ModelTaskFamily, ModelVisibility,
+        EnhancedModelMetadata, ModelCapabilities, ModelCapabilityProvenance, ModelModality,
+        ModelReasoningEffortSource, ModelRuntimeFeature, ModelSource, ModelTaskFamily,
+        ModelVisibility, ProviderModelConfig,
     };
     use rusqlite::{params, Connection};
     use std::sync::{Arc, Mutex};
@@ -3924,6 +3978,10 @@ mod tests {
             .task_families
             .contains(&ModelTaskFamily::VisionUnderstanding));
         assert!(model.capabilities.vision);
+        assert_eq!(
+            model.capability_provenance,
+            ModelCapabilityProvenance::ProviderExplicit
+        );
     }
 
     #[test]
@@ -4231,6 +4289,10 @@ mod tests {
 
         assert!(!model.capabilities.reasoning);
         assert!(model.capabilities.reasoning_effort.is_none());
+        assert_eq!(
+            model.capability_provenance,
+            ModelCapabilityProvenance::InferredHint
+        );
         assert!(!model.task_families.contains(&ModelTaskFamily::Reasoning));
         assert!(!model
             .runtime_features
@@ -4256,6 +4318,10 @@ mod tests {
 
         assert!(model.capabilities.reasoning);
         assert!(model.capabilities.reasoning_effort.is_none());
+        assert_eq!(
+            model.capability_provenance,
+            ModelCapabilityProvenance::ProviderExplicit
+        );
     }
 
     #[test]
@@ -4276,6 +4342,10 @@ mod tests {
             service.convert_api_model(response.into_iter().next().expect("model"), "gateway", 0);
 
         assert!(model.capabilities.reasoning_effort.is_none());
+        assert_eq!(
+            model.capability_provenance,
+            ModelCapabilityProvenance::InferredHint
+        );
     }
 
     #[test]
@@ -4299,6 +4369,10 @@ mod tests {
             service.convert_api_model(response.into_iter().next().expect("model"), "gateway", 0);
 
         assert!(model.capabilities.reasoning_effort.is_none());
+        assert_eq!(
+            model.capability_provenance,
+            ModelCapabilityProvenance::InferredHint
+        );
     }
 
     #[test]
@@ -4319,6 +4393,10 @@ mod tests {
             service.convert_api_model(response.into_iter().next().expect("model"), "gateway", 0);
 
         assert!(model.capabilities.reasoning_effort.is_none());
+        assert_eq!(
+            model.capability_provenance,
+            ModelCapabilityProvenance::ProviderExplicit
+        );
     }
 
     #[test]
@@ -4360,9 +4438,23 @@ mod tests {
     #[test]
     fn test_declared_agnes_models_keep_input_and_output_capabilities_distinct() {
         let (service, _db) = setup_cache_service();
-        let chat = service.build_declared_model_metadata("custom-provider", "agnes-2.0-flash");
-        let image =
-            service.build_declared_model_metadata("custom-provider", "agnes-image-2.1-flash");
+        let chat = service.build_declared_model_metadata(
+            "custom-provider",
+            &ProviderModelConfig::hint("agnes-2.0-flash"),
+        );
+        let image = service.build_declared_model_metadata(
+            "custom-provider",
+            &ProviderModelConfig::hint("agnes-image-2.1-flash"),
+        );
+
+        assert_eq!(
+            chat.capability_provenance,
+            ModelCapabilityProvenance::InferredHint
+        );
+        assert_eq!(
+            image.capability_provenance,
+            ModelCapabilityProvenance::InferredHint
+        );
 
         assert!(chat.capabilities.vision);
         assert!(chat
@@ -4709,7 +4801,7 @@ mod tests {
                 RESPONSES_IMAGE_TEST_HOST,
                 "sk-test",
                 Some(ApiProviderType::Openai),
-                &["gpt-images-2".to_string()],
+                &[ProviderModelConfig::hint("gpt-images-2")],
             )
             .await
             .expect("responses declared image models should resolve");
@@ -4780,7 +4872,7 @@ mod tests {
                 "https://api.openai.com/v1",
                 "sk-test",
                 Some(ApiProviderType::OpenaiResponse),
-                &["gpt-images-2".to_string()],
+                &[ProviderModelConfig::hint("gpt-images-2")],
             )
             .await
             .expect("openai-response declared image models should resolve");
@@ -4805,7 +4897,7 @@ mod tests {
                 "https://fal.run/fal-ai",
                 "",
                 Some(ApiProviderType::Openai),
-                &["fal-ai/nano-banana-pro".to_string()],
+                &[ProviderModelConfig::hint("fal-ai/nano-banana-pro")],
             )
             .await
             .expect("fal declared models should resolve");
@@ -4844,7 +4936,10 @@ mod tests {
                 "https://token-plan-sgp.xiaomimimo.com/anthropic",
                 "sk-test",
                 Some(ApiProviderType::Openai),
-                &["mimo-v2.5-flash".to_string(), "mimo-v2.5-pro".to_string()],
+                &[
+                    ProviderModelConfig::hint("mimo-v2.5-flash"),
+                    ProviderModelConfig::hint("mimo-v2.5-pro"),
+                ],
             )
             .await
             .expect("mimo declared models should resolve without /models");
@@ -4937,7 +5032,7 @@ mod tests {
                 "https://fal.run/fal-ai",
                 "",
                 Some(ApiProviderType::Openai),
-                &["gpt-5.2-pro".to_string()],
+                &[ProviderModelConfig::hint("gpt-5.2-pro")],
             )
             .await
             .expect("fal non-image declared models should return structured result");

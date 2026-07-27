@@ -7,7 +7,7 @@
 export interface MediaProviderCandidate {
   id: string;
   type?: string;
-  customModels?: string[];
+  models?: string[];
 }
 
 export interface MediaGenerationPreference {
@@ -174,10 +174,10 @@ export function isVideoProvider(providerId: string): boolean {
 
 export function getVideoModelsForProvider(
   providerId: string,
-  customModels?: string[],
+  models?: string[],
 ): string[] {
-  if (customModels && customModels.length > 0) {
-    return customModels;
+  if (models && models.length > 0) {
+    return models;
   }
 
   const normalizedId = providerId.toLowerCase();
@@ -273,9 +273,9 @@ export function findTtsProviderForSelection<T extends MediaProviderCandidate>(
   return safeProviders[0] ?? null;
 }
 
-export function getTtsModelsForProvider(customModels?: string[]): string[] {
-  if (customModels && customModels.length > 0) {
-    return customModels;
+export function getTtsModelsForProvider(models?: string[]): string[] {
+  if (models && models.length > 0) {
+    return models;
   }
   return ["gpt-4o-mini-tts"];
 }

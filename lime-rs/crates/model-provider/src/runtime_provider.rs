@@ -9,6 +9,7 @@ pub enum RuntimeProviderProtocol {
     ChatCompletions,
     Responses,
     AnthropicMessages,
+    GeminiGenerateContent,
 }
 
 impl RuntimeProviderProtocol {
@@ -21,6 +22,7 @@ impl RuntimeProviderProtocol {
             Self::ChatCompletions => ModelProviderProtocol::ChatCompletions,
             Self::Responses => ModelProviderProtocol::Responses,
             Self::AnthropicMessages => ModelProviderProtocol::AnthropicMessages,
+            Self::GeminiGenerateContent => ModelProviderProtocol::GeminiGenerateContent,
         }
     }
 
@@ -29,9 +31,8 @@ impl RuntimeProviderProtocol {
             ProtocolKind::OpenaiChat => Some(Self::ChatCompletions),
             ProtocolKind::OpenaiResponses | ProtocolKind::CodexResponses => Some(Self::Responses),
             ProtocolKind::AnthropicMessages => Some(Self::AnthropicMessages),
+            ProtocolKind::GeminiGenerateContent => Some(Self::GeminiGenerateContent),
             ProtocolKind::OpenaiImages
-            | ProtocolKind::GeminiGenerateContent
-            | ProtocolKind::OllamaChat
             | ProtocolKind::Fal
             | ProtocolKind::BedrockConverse
             | ProtocolKind::VertexGemini
@@ -42,11 +43,13 @@ impl RuntimeProviderProtocol {
     pub fn from_provider_type(provider_type: &str) -> Option<Self> {
         match normalize_provider_type(provider_type).as_str() {
             "openai" | "new_api" | "gateway" => Some(Self::ChatCompletions),
-            "openai_response" | "openai_responses" | "responses" | "codex" => Some(Self::Responses),
+            "openai_response" | "openai_responses" | "responses" | "codex" | "ollama" => {
+                Some(Self::Responses)
+            }
             "anthropic" | "anthropic_compatible" => Some(Self::AnthropicMessages),
-            "azure" | "azure_openai" | "gemini" | "gemini_api_key" | "google" | "vertex"
-            | "vertexai" | "vertex_ai" | "gcpvertexai" | "aws_bedrock" | "bedrock" | "ollama"
-            | "fal" => None,
+            "gemini" | "gemini_api_key" | "google" => Some(Self::GeminiGenerateContent),
+            "azure" | "azure_openai" | "vertex" | "vertexai" | "vertex_ai" | "gcpvertexai"
+            | "aws_bedrock" | "bedrock" | "fal" => None,
             _ => None,
         }
     }
@@ -54,6 +57,19 @@ impl RuntimeProviderProtocol {
     pub fn from_direct_route(provider_name: &str, protocol: &ProtocolKind) -> Option<Self> {
         let normalized = normalize_provider_type(provider_name);
         if matches!(normalized.as_str(), "azure" | "azure_openai") {
+            return None;
+        }
+        if normalized == "ollama"
+            && !matches!(
+                protocol,
+                ProtocolKind::OpenaiResponses | ProtocolKind::CodexResponses
+            )
+        {
+            return None;
+        }
+        if matches!(protocol, ProtocolKind::GeminiGenerateContent)
+            && !matches!(normalized.as_str(), "gemini" | "gemini_api_key" | "google")
+        {
             return None;
         }
         Self::from_route_protocol(protocol)
@@ -155,11 +171,13 @@ mod tests {
             RuntimeProviderProtocol::from_route_protocol(&ProtocolKind::AnthropicMessages),
             Some(RuntimeProviderProtocol::AnthropicMessages)
         );
+        assert_eq!(
+            RuntimeProviderProtocol::from_route_protocol(&ProtocolKind::GeminiGenerateContent),
+            Some(RuntimeProviderProtocol::GeminiGenerateContent)
+        );
 
         for protocol in [
             ProtocolKind::OpenaiImages,
-            ProtocolKind::GeminiGenerateContent,
-            ProtocolKind::OllamaChat,
             ProtocolKind::Fal,
             ProtocolKind::BedrockConverse,
             ProtocolKind::VertexGemini,
@@ -181,10 +199,17 @@ mod tests {
             ("gateway", RuntimeProviderProtocol::ChatCompletions),
             ("openai-response", RuntimeProviderProtocol::Responses),
             ("codex", RuntimeProviderProtocol::Responses),
+            ("ollama", RuntimeProviderProtocol::Responses),
             (
                 "anthropic-compatible",
                 RuntimeProviderProtocol::AnthropicMessages,
             ),
+            ("gemini", RuntimeProviderProtocol::GeminiGenerateContent),
+            (
+                "gemini-api-key",
+                RuntimeProviderProtocol::GeminiGenerateContent,
+            ),
+            ("google", RuntimeProviderProtocol::GeminiGenerateContent),
         ] {
             assert_eq!(
                 RuntimeProviderProtocol::from_provider_type(provider_type),
@@ -193,14 +218,7 @@ mod tests {
             );
         }
 
-        for provider_type in [
-            "azure-openai",
-            "gemini",
-            "vertexai",
-            "aws-bedrock",
-            "ollama",
-            "fal",
-        ] {
+        for provider_type in ["azure-openai", "vertexai", "aws-bedrock", "fal"] {
             assert_eq!(
                 RuntimeProviderProtocol::from_provider_type(provider_type),
                 None,
@@ -212,6 +230,30 @@ mod tests {
             RuntimeProviderProtocol::from_direct_route("azure_openai", &ProtocolKind::OpenaiChat,),
             None,
             "OpenAI-shaped bodies do not satisfy Azure auth/query requirements"
+        );
+        assert_eq!(
+            RuntimeProviderProtocol::from_direct_route("ollama", &ProtocolKind::OpenaiResponses,),
+            Some(RuntimeProviderProtocol::Responses)
+        );
+        assert_eq!(
+            RuntimeProviderProtocol::from_direct_route("ollama", &ProtocolKind::OpenaiChat),
+            None,
+            "Ollama chat wire was removed; Ollama is Responses-only"
+        );
+        assert_eq!(
+            RuntimeProviderProtocol::from_direct_route(
+                "google",
+                &ProtocolKind::GeminiGenerateContent,
+            ),
+            Some(RuntimeProviderProtocol::GeminiGenerateContent)
+        );
+        assert_eq!(
+            RuntimeProviderProtocol::from_direct_route(
+                "openai",
+                &ProtocolKind::GeminiGenerateContent,
+            ),
+            None,
+            "Gemini wire must not be admitted under an unrelated direct provider identity"
         );
     }
 

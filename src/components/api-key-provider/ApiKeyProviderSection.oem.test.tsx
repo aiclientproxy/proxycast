@@ -35,7 +35,7 @@ function createProvider(
     enabled: true,
     sort_order: 1,
     api_key_count: 0,
-    custom_models: [],
+    models: [],
     prompt_cache_mode: null,
     created_at: "2026-03-15T00:00:00.000Z",
     updated_at: "2026-03-15T00:00:00.000Z",

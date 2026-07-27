@@ -81,7 +81,7 @@ vi.mock("@/hooks/useConfiguredProviders", () => ({
         registryId: "openai",
         type: "openai",
         providerId: "openai",
-        customModels: ["gpt-4.1-mini", "gpt-4o-mini-tts"],
+        models: ["gpt-4.1-mini", "gpt-4o-mini-tts"],
       },
     ],
     loading: false,

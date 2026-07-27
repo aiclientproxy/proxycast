@@ -31,13 +31,19 @@ vi.mock("@/hooks/useModelRegistry", () => ({
   useModelRegistry: mockUseModelRegistry,
 }));
 
-vi.mock("@/lib/api/apiKeyProvider", () => ({
-  apiKeyProviderApi: {
-    getSystemProviderCatalog: mockGetSystemProviderCatalog,
-    testConnection: mockTestConnection,
-    testChat: mockTestChat,
-  },
-}));
+vi.mock("@/lib/api/apiKeyProvider", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/api/apiKeyProvider")>();
+  return {
+    ...actual,
+    apiKeyProviderApi: {
+      ...actual.apiKeyProviderApi,
+      getSystemProviderCatalog: mockGetSystemProviderCatalog,
+      testConnection: mockTestConnection,
+      testChat: mockTestChat,
+    },
+  };
+});
 
 vi.mock("@/lib/api/modelRegistry", () => ({
   fetchProviderModelsAuto: (...args: unknown[]) =>
@@ -129,7 +135,7 @@ vi.mock("./ProviderSetting", () => ({
             data-testid="provider-setting-test-chat-stub"
             onClick={() => {
               void props.onTestConnection?.(props.provider!.id, {
-                modelName: props.provider!.custom_models?.[0],
+                modelName: props.provider!.models?.[0]?.id,
                 requireChatReady: true,
                 prompt: "试跑",
               });
@@ -364,7 +370,7 @@ describe("ApiKeyProviderSection 模型管理布局", () => {
       id: "custom-coder",
       name: "Custom Coder",
       sort_order: 3,
-      custom_models: ["coder-small"],
+      models: [{ id: "coder-small" }],
       api_keys: [],
       api_key_count: 0,
     });
@@ -399,7 +405,7 @@ describe("ApiKeyProviderSection 模型管理布局", () => {
       id: "coding-provider",
       name: "Coding Provider",
       sort_order: 3,
-      custom_models: ["coder-large"],
+      models: [{ id: "coder-large" }],
     });
     const hookState = createHookState({
       providers: [createProvider(), codingProvider],
@@ -426,7 +432,7 @@ describe("ApiKeyProviderSection 模型管理布局", () => {
       name: "Lime 云端",
       group: "cloud",
       sort_order: 0,
-      custom_models: [],
+      models: [],
       api_keys: [],
       api_key_count: 0,
     });
@@ -514,7 +520,7 @@ describe("ApiKeyProviderSection 模型管理布局", () => {
     });
     const deepseek = createProvider({
       enabled: false,
-      custom_models: [],
+      models: [],
       api_keys: [],
       api_key_count: 0,
     });
@@ -560,7 +566,7 @@ describe("ApiKeyProviderSection 模型管理布局", () => {
         type: "openai",
         api_host: "https://api.deepseek.com",
         enabled: true,
-        custom_models: [],
+        models: [],
       }),
     );
     expect(hookState.addApiKey).toHaveBeenCalledWith(
@@ -631,7 +637,7 @@ describe("ApiKeyProviderSection 模型管理布局", () => {
     expect(hookState.deleteApiKey).toHaveBeenCalledWith("key-1");
     expect(hookState.updateProvider).toHaveBeenCalledWith("deepseek", {
       enabled: false,
-      custom_models: [],
+      models: [],
     });
     expect(hookState.selectProvider).toHaveBeenCalledWith(null);
     expect(hookState.deleteCustomProvider).not.toHaveBeenCalled();
@@ -772,7 +778,7 @@ describe("ApiKeyProviderSection 模型管理布局", () => {
       "custom-1",
       expect.objectContaining({
         enabled: true,
-        custom_models: ["agnes-image-2.1-flash"],
+        models: [{ id: "agnes-image-2.1-flash" }],
       }),
     );
     expect(mockTestConnection).toHaveBeenCalledWith(
@@ -854,7 +860,7 @@ describe("ApiKeyProviderSection 模型管理布局", () => {
       "custom-1",
       expect.objectContaining({
         enabled: true,
-        custom_models: ["my-model"],
+        models: [{ id: "my-model" }],
       }),
     );
     expect(hookState.addApiKey).toHaveBeenCalledWith(
@@ -911,7 +917,7 @@ describe("ApiKeyProviderSection 模型管理布局", () => {
       "custom-1",
       expect.objectContaining({
         enabled: true,
-        custom_models: ["my-model"],
+        models: [{ id: "my-model" }],
       }),
     );
     expect(mockTestConnection).toHaveBeenCalledWith("custom-1", "my-model");

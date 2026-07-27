@@ -4,6 +4,8 @@ use app_server_protocol::ModelReasoningEffortSupportInfo;
 use app_server_protocol::ModelServiceTierInfo;
 use app_server_protocol::ProviderInfo;
 use app_server_protocol::ProviderKeyInfo;
+use app_server_protocol::ProviderModelCapability;
+use app_server_protocol::ProviderModelConfig;
 use serde_json::Value;
 
 pub(super) fn model_info_from_value(value: &Value) -> ModelInfo {
@@ -126,7 +128,7 @@ pub(super) fn provider_info_from_value(value: &Value) -> ProviderInfo {
         project: string_field(value, "project"),
         location: string_field(value, "location"),
         region: string_field(value, "region"),
-        custom_models: string_vec_field(value, "custom_models"),
+        models: provider_model_configs_field(value, "models"),
         prompt_cache_mode: string_field(value, "prompt_cache_mode"),
         api_key_count: usize_field(value, "api_key_count").unwrap_or_default(),
         api_keys: field_value(value, "api_keys")
@@ -136,6 +138,49 @@ pub(super) fn provider_info_from_value(value: &Value) -> ProviderInfo {
         legacy_ids: string_vec_field(value, "legacy_ids"),
         created_at: string_field(value, "created_at"),
         updated_at: string_field(value, "updated_at"),
+    }
+}
+
+fn provider_model_configs_field(value: &Value, key: &str) -> Vec<ProviderModelConfig> {
+    field_value(value, key)
+        .and_then(Value::as_array)
+        .map(|models| {
+            models
+                .iter()
+                .map(provider_model_config_from_value)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn provider_model_config_from_value(value: &Value) -> ProviderModelConfig {
+    ProviderModelConfig {
+        id: string_field(value, "id").unwrap_or_default(),
+        display_name: string_field(value, "display_name"),
+        capability: field_value(value, "capability")
+            .filter(|capability| !capability.is_null())
+            .map(provider_model_capability_from_value),
+    }
+}
+
+fn provider_model_capability_from_value(value: &Value) -> ProviderModelCapability {
+    let capabilities = field_value(value, "capabilities");
+    ProviderModelCapability {
+        task_families: string_vec_field(value, "task_families"),
+        input_modalities: string_vec_field(value, "input_modalities"),
+        output_modalities: string_vec_field(value, "output_modalities"),
+        runtime_features: string_vec_field(value, "runtime_features"),
+        capabilities: ModelCapabilitiesInfo {
+            vision: bool_field(capabilities, "vision").unwrap_or(false),
+            tools: bool_field(capabilities, "tools").unwrap_or(false),
+            streaming: bool_field(capabilities, "streaming").unwrap_or(false),
+            json_mode: bool_field(capabilities, "json_mode").unwrap_or(false),
+            function_calling: bool_field(capabilities, "function_calling").unwrap_or(false),
+            reasoning: bool_field(capabilities, "reasoning").unwrap_or(false),
+            reasoning_effort: capabilities
+                .and_then(|capabilities| field_value(capabilities, "reasoning_effort"))
+                .and_then(|support| serde_json::from_value(support.clone()).ok()),
+        },
     }
 }
 
@@ -267,6 +312,7 @@ fn to_camel_case(key: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::model_info_from_value;
+    use super::provider_info_from_value;
 
     #[test]
     fn model_info_from_value_preserves_extended_policy_fields() {
@@ -415,5 +461,73 @@ mod tests {
                 })
             ]
         );
+    }
+
+    #[test]
+    fn provider_info_from_value_preserves_typed_model_capability() {
+        let value = serde_json::json!({
+            "id": "xai",
+            "name": "xAI",
+            "type": "openai-response",
+            "apiHost": "https://api.x.ai/v1",
+            "models": [{
+                "id": "grok-4.5",
+                "displayName": "Grok 4.5",
+                "capability": {
+                    "taskFamilies": ["chat", "reasoning"],
+                    "inputModalities": ["text", "image"],
+                    "outputModalities": ["text"],
+                    "runtimeFeatures": ["streaming", "tool_calling"],
+                    "capabilities": {
+                        "vision": true,
+                        "tools": true,
+                        "streaming": true,
+                        "jsonMode": true,
+                        "functionCalling": true,
+                        "reasoning": true,
+                        "reasoningEffort": {
+                            "supported": true,
+                            "levels": ["medium", "xhigh"],
+                            "options": [{
+                                "id": "deep",
+                                "value": "xhigh",
+                                "label": "Deep",
+                                "default": true
+                            }],
+                            "default": "xhigh",
+                            "source": "api"
+                        }
+                    }
+                }
+            }]
+        });
+
+        let provider = provider_info_from_value(&value);
+        let model = provider.models.first().expect("typed provider model");
+        let capability = model.capability.as_ref().expect("provider capability");
+
+        assert_eq!(model.id, "grok-4.5");
+        assert_eq!(model.display_name.as_deref(), Some("Grok 4.5"));
+        assert_eq!(capability.task_families, vec!["chat", "reasoning"]);
+        assert_eq!(capability.input_modalities, vec!["text", "image"]);
+        assert_eq!(capability.output_modalities, vec!["text"]);
+        assert_eq!(
+            capability.runtime_features,
+            vec!["streaming", "tool_calling"]
+        );
+        assert!(capability.capabilities.vision);
+        assert!(capability.capabilities.tools);
+        assert!(capability.capabilities.streaming);
+        assert!(capability.capabilities.json_mode);
+        assert!(capability.capabilities.function_calling);
+        assert!(capability.capabilities.reasoning);
+        let reasoning = capability
+            .capabilities
+            .reasoning_effort
+            .as_ref()
+            .expect("reasoning effort");
+        assert_eq!(reasoning.default.as_deref(), Some("xhigh"));
+        assert_eq!(reasoning.source.as_deref(), Some("api"));
+        assert_eq!(reasoning.options[0].id, "deep");
     }
 }

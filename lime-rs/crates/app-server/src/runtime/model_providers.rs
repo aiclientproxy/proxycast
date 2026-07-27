@@ -3,7 +3,10 @@ use app_server_protocol::protocol::v2::ModelProviderCapabilitiesReadResponse;
 use app_server_protocol::*;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use lime_core::models::model_registry::{EnhancedModelMetadata, ModelModality, ModelVisibility};
+use lime_core::models::model_registry::{
+    EnhancedModelMetadata, ModelCapabilityProvenance, ModelModality, ModelTaskFamily,
+    ModelVisibility,
+};
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -83,6 +86,113 @@ impl RuntimeCore {
         params: ModelListParams,
     ) -> Result<ModelListResponse, RuntimeCoreError> {
         model_list_from_catalogs(params, self.model_catalog(None).await?)
+    }
+
+    pub(crate) async fn reconcile_thread_model_selection(
+        &self,
+        thread_id: &str,
+    ) -> Result<Option<app_server_protocol::protocol::v2::ThreadSettings>, RuntimeCoreError> {
+        self.reconcile_thread_model_selection_for_turn(thread_id, None)
+            .await
+    }
+
+    pub(in crate::runtime) async fn reconcile_thread_model_selection_for_turn(
+        &self,
+        thread_id: &str,
+        runtime_options: Option<&RuntimeOptions>,
+    ) -> Result<Option<app_server_protocol::protocol::v2::ThreadSettings>, RuntimeCoreError> {
+        const MAX_GENERATION_ATTEMPTS: usize = 3;
+        if !self.backend.requires_provider_selection()
+            || !self.app_data_source.model_catalog_reconciliation_enabled()
+            || runtime_options_has_direct_provider_config(runtime_options)
+        {
+            return Ok(None);
+        }
+        let mut reconciled_settings = None;
+
+        for _ in 0..MAX_GENERATION_ATTEMPTS {
+            let generation = self.app_data_source.read_model_route_generation().await?;
+            let Some((session_id, current, has_direct_route)) =
+                self.loaded_thread_settings(thread_id)?
+            else {
+                return Ok(None);
+            };
+            if has_direct_route {
+                return Ok(None);
+            }
+            let catalogs = self.model_catalog(None).await?;
+            if self.app_data_source.read_model_route_generation().await? != generation {
+                continue;
+            }
+
+            let candidates = selectable_chat_models(&catalogs);
+            let current_candidate = candidates.iter().find(|candidate| {
+                candidate.provider == current.model_provider
+                    && candidate.matches_model(&current.model)
+            });
+            let mut last_route_error = None;
+            if current_candidate.is_some() {
+                let session = self.session_snapshot(&session_id)?.0;
+                match self
+                    .backend
+                    .preflight_thread_settings(&session, &current)
+                    .await
+                {
+                    Ok(()) => return Ok(reconciled_settings),
+                    Err(error @ RuntimeCoreError::RouteRejected { .. }) => {
+                        last_route_error = Some(error);
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+
+            let mut candidates = candidates;
+            candidates.sort_by_key(|candidate| candidate.provider != current.model_provider);
+
+            let mut changed_settings = None;
+            for candidate in candidates {
+                let mut collaboration_mode = current.collaboration_mode.clone();
+                collaboration_mode.settings.model = candidate.model.clone();
+                collaboration_mode.settings.reasoning_effort = candidate.reasoning_effort.clone();
+                let params = app_server_protocol::protocol::v2::ThreadSettingsUpdateParams {
+                    thread_id: thread_id.to_string(),
+                    model: Some(candidate.model),
+                    model_provider: Some(candidate.provider),
+                    service_tier: Some(candidate.default_service_tier),
+                    collaboration_mode: Some(collaboration_mode),
+                    ..Default::default()
+                };
+                match self.update_thread_settings(params).await {
+                    Ok(settings) => {
+                        reconciled_settings = Some(settings.clone());
+                        changed_settings = Some(settings);
+                        break;
+                    }
+                    Err(error @ RuntimeCoreError::RouteRejected { .. }) => {
+                        last_route_error = Some(error);
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+
+            let Some(_) = changed_settings else {
+                return Err(last_route_error.unwrap_or(RuntimeCoreError::RouteRejected {
+                    session_id,
+                    provider: Some(current.model_provider),
+                    model: Some(current.model),
+                    category: app_server_protocol::RouteFailureCategory::ModelUnavailable,
+                    reason_code: "model_catalog_has_no_executable_selection".to_string(),
+                }));
+            };
+            if self.app_data_source.read_model_route_generation().await? == generation {
+                return Ok(reconciled_settings);
+            }
+        }
+
+        Err(RuntimeCoreError::Backend(
+            "model route generation changed repeatedly during model selection reconciliation"
+                .to_string(),
+        ))
     }
 
     pub(crate) async fn model_catalog(
@@ -261,6 +371,88 @@ impl RuntimeCore {
     }
 }
 
+fn runtime_options_has_direct_provider_config(runtime_options: Option<&RuntimeOptions>) -> bool {
+    runtime_options
+        .and_then(RuntimeOptions::runtime_request)
+        .and_then(|request| request.provider_config.as_ref())
+        .is_some_and(|config| config.api_key.is_some() || config.base_url.is_some())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SelectableModel {
+    provider: String,
+    model: String,
+    aliases: Vec<String>,
+    reasoning_effort: Option<String>,
+    default_service_tier: Option<String>,
+}
+
+impl SelectableModel {
+    fn matches_model(&self, model: &str) -> bool {
+        self.model == model || self.aliases.iter().any(|alias| alias == model)
+    }
+}
+
+fn selectable_chat_models(catalogs: &[super::ProviderModelCatalog]) -> Vec<SelectableModel> {
+    catalogs
+        .iter()
+        .flat_map(|catalog| {
+            catalog.models.iter().filter_map(|metadata| {
+                if metadata.visibility != ModelVisibility::List
+                    || metadata.capability_provenance == ModelCapabilityProvenance::InferredHint
+                    || (!metadata.task_families.is_empty()
+                        && !metadata.task_families.iter().any(|family| {
+                            matches!(family, ModelTaskFamily::Chat | ModelTaskFamily::Reasoning)
+                        }))
+                {
+                    return None;
+                }
+                let model = effective_provider_model_id(metadata);
+                let mut aliases = vec![metadata.id.clone()];
+                if let Some(canonical) = metadata
+                    .canonical_model_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty() && *value != model)
+                {
+                    aliases.push(canonical.to_string());
+                }
+                let reasoning_effort =
+                    metadata
+                        .capabilities
+                        .reasoning_effort
+                        .as_ref()
+                        .and_then(|support| {
+                            support.default.clone().or_else(|| {
+                                support
+                                    .options
+                                    .iter()
+                                    .find(|option| option.default)
+                                    .map(|option| option.value.clone())
+                            })
+                        });
+                Some(SelectableModel {
+                    provider: catalog.provider_id.clone(),
+                    model,
+                    aliases,
+                    reasoning_effort,
+                    default_service_tier: metadata.default_service_tier.clone(),
+                })
+            })
+        })
+        .collect()
+}
+
+fn effective_provider_model_id(metadata: &EnhancedModelMetadata) -> String {
+    metadata
+        .provider_model_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .unwrap_or(metadata.id.as_str())
+        .to_string()
+}
+
 fn model_list_from_catalogs(
     params: ModelListParams,
     catalogs: Vec<super::ProviderModelCatalog>,
@@ -314,13 +506,7 @@ fn model_list_from_catalogs(
 }
 
 fn model_from_catalog(provider_id: &str, metadata: EnhancedModelMetadata) -> Model {
-    let provider_model_id = metadata
-        .provider_model_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|model| !model.is_empty())
-        .unwrap_or(metadata.id.as_str())
-        .to_string();
+    let provider_model_id = effective_provider_model_id(&metadata);
     let reasoning = metadata.capabilities.reasoning_effort.as_ref();
     let supported_reasoning_efforts = reasoning
         .map(|support| {

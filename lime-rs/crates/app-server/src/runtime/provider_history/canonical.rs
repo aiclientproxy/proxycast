@@ -143,6 +143,17 @@ fn tool_call_from_item(item: &ThreadItem) -> Option<CurrentProviderToolCall> {
         name,
         arguments,
         raw_arguments,
+        provider_metadata: item
+            .metadata
+            .get("provider_metadata")
+            .and_then(Value::as_object)
+            .map(|metadata| {
+                metadata
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect()
+            })
+            .unwrap_or_default(),
     })
 }
 
@@ -297,5 +308,23 @@ mod tests {
             assert_eq!(call.arguments, serde_json::json!({"query": "fork"}));
             assert_eq!(result.output, "found");
         }
+    }
+
+    #[test]
+    fn tool_item_restores_provider_metadata_for_history_lowering() {
+        let mut item = mcp_item("search");
+        item.metadata = serde_json::json!({
+            "provider_metadata": {
+                "google": { "thoughtSignature": "sig" }
+            }
+        });
+
+        let call = tool_call_from_item(&item).expect("tool call with provider metadata");
+        assert_eq!(
+            call.provider_metadata
+                .get("google")
+                .and_then(|value| value.get("thoughtSignature")),
+            Some(&serde_json::json!("sig"))
+        );
     }
 }

@@ -141,6 +141,7 @@ impl OpenAiStreamEncoder {
             | CanonicalLlmEvent::ToolResult { .. }
             | CanonicalLlmEvent::ToolError { .. }
             | CanonicalLlmEvent::ServerModel { .. }
+            | CanonicalLlmEvent::ModelReroute { .. }
             | CanonicalLlmEvent::ModelVerification { .. }
             | CanonicalLlmEvent::StepStart { .. }
             | CanonicalLlmEvent::ToolCall { .. }
@@ -311,6 +312,7 @@ impl AnthropicStreamEncoder {
             CanonicalLlmEvent::ToolResult { .. }
             | CanonicalLlmEvent::ToolError { .. }
             | CanonicalLlmEvent::ServerModel { .. }
+            | CanonicalLlmEvent::ModelReroute { .. }
             | CanonicalLlmEvent::ModelVerification { .. }
             | CanonicalLlmEvent::StepStart { .. }
             | CanonicalLlmEvent::TextDelta { .. }

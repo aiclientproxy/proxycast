@@ -18,9 +18,9 @@ import {
 } from "@/lib/model/modelInputSendPolicy";
 
 function hasDeclaredProviderModels(
-  provider: { customModels?: string[] } | null | undefined,
+  provider: { models?: string[] } | null | undefined,
 ): boolean {
-  return Boolean(provider?.customModels?.some((modelId) => modelId.trim()));
+  return Boolean(provider?.models?.some((modelId) => modelId.trim()));
 }
 
 interface InputbarVisionCapabilityNoticeProps {

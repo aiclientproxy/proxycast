@@ -35,7 +35,7 @@ vi.mock("@/components/input-kit", () => ({
       type: string;
       providerId?: string;
       apiHost?: string;
-      customModels?: string[];
+      models?: string[];
       authStatus?: "ready" | "login_required";
     }) => boolean;
     modelFilter?: (
@@ -48,7 +48,7 @@ vi.mock("@/components/input-kit", () => ({
         type: string;
         providerId?: string;
         apiHost?: string;
-        customModels?: string[];
+        models?: string[];
       },
     ) => boolean;
     getFallbackModels?: (provider: {
@@ -59,7 +59,7 @@ vi.mock("@/components/input-kit", () => ({
       type: string;
       providerId?: string;
       apiHost?: string;
-      customModels?: string[];
+      models?: string[];
     }) => Array<{ id: string }>;
   }) => {
     mockModelSelectorRender(props);
@@ -78,7 +78,7 @@ vi.mock("@/components/input-kit", () => ({
         registryId: "relay-openai",
         type: "openai",
         providerId: "relay-openai",
-        customModels: ["gpt-images-2"],
+        models: ["gpt-images-2"],
       },
       {
         key: "fal",
@@ -88,7 +88,7 @@ vi.mock("@/components/input-kit", () => ({
         type: "openai",
         providerId: "fal",
         apiHost: "https://fal.run/fal-ai",
-        customModels: ["gpt-5.2-pro"],
+        models: ["gpt-5.2-pro"],
       },
       {
         key: "agnes",
@@ -97,7 +97,7 @@ vi.mock("@/components/input-kit", () => ({
         type: "openai",
         providerId: "agnes",
         apiHost: "https://agnes.example.test/v1",
-        customModels: [
+        models: [
           "agnes-2.0-flash",
           "agnes-image-2.1-flash",
           "agnes-image-2.0-flash",
@@ -167,7 +167,7 @@ vi.mock("@/hooks/useApiKeyProvider", () => ({
         enabled: true,
         api_key_count: 1,
         api_keys: [{ enabled: true }],
-        custom_models: ["gpt-images-2"],
+        models: [{ id: "gpt-images-2" }],
       },
       {
         id: "fal",
@@ -177,7 +177,7 @@ vi.mock("@/hooks/useApiKeyProvider", () => ({
         api_key_count: 1,
         api_keys: [{ enabled: true }],
         api_host: "https://fal.run/fal-ai",
-        custom_models: ["gpt-5.2-pro"],
+        models: [{ id: "gpt-5.2-pro" }],
       },
       {
         id: "agnes",
@@ -187,10 +187,10 @@ vi.mock("@/hooks/useApiKeyProvider", () => ({
         api_key_count: 1,
         api_keys: [{ enabled: true }],
         api_host: "https://agnes.example.test/v1",
-        custom_models: [
-          "agnes-2.0-flash",
-          "agnes-image-2.1-flash",
-          "agnes-image-2.0-flash",
+        models: [
+          { id: "agnes-2.0-flash" },
+          { id: "agnes-image-2.1-flash" },
+          { id: "agnes-image-2.0-flash" },
         ],
       },
       {
@@ -200,7 +200,7 @@ vi.mock("@/hooks/useApiKeyProvider", () => ({
         enabled: true,
         api_key_count: 1,
         api_keys: [{ enabled: true }],
-        custom_models: ["gpt-4o-mini-tts"],
+        models: [{ id: "gpt-4o-mini-tts" }],
       },
     ],
     loading: false,

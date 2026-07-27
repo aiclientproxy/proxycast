@@ -19,7 +19,7 @@ use model_provider::current_client::{
     CurrentProviderMessage, CurrentProviderRequest, CurrentProviderRole, CurrentProviderStream,
     CurrentProviderTool, CurrentProviderToolCall, CurrentProviderToolResult, CurrentProviderUsage,
     FailureClassification, FinishReason, GenerationOptions, ModelVerification, ProviderMetadata,
-    Usage,
+    ToolResultValue, Usage,
 };
 use model_provider::provider_stream::RuntimeReplyModelRequestPolicy;
 use model_provider::provider_stream::RuntimeReplyProviderTraceMetadata;
@@ -53,6 +53,7 @@ use output_lifecycle::{
 use tool_runtime::tool_result_projection::NormalizedToolOutput;
 
 const LOCAL_TOOL_ENVIRONMENT_ID: &str = "local";
+const PROVIDER_TOOL_ENVIRONMENT_ID: &str = "provider";
 const DEFAULT_FIRST_VISIBLE_OUTPUT_TIMEOUT: Duration = Duration::from_secs(60);
 const DEFAULT_PROVIDER_STEP_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -241,6 +242,11 @@ pub enum CurrentProviderTurnEvent {
     ServerModel {
         model: String,
     },
+    ModelReroute {
+        from_model: String,
+        to_model: String,
+        reason: model_provider::current_client::ModelRerouteReason,
+    },
     ModelVerification {
         verifications: Vec<ModelVerification>,
     },
@@ -295,6 +301,7 @@ where
     let mut consumed_pending_input = false;
     let mut provider_budget_tokens_used = 0_u64;
     let mut last_server_model = None;
+    let mut model_reroute_emitted = false;
     let mut model_verification_emitted = false;
     let (generation, provider_options) = provider_request_controls(&session_config);
     let first_visible_output_timeout = first_visible_output_timeout(&session_config);
@@ -515,6 +522,7 @@ where
         };
         let mut assistant_content = Vec::new();
         let mut calls = Vec::new();
+        let mut provider_executed_calls = HashMap::<String, ToolCall>::new();
         let mut completed = false;
         let mut tool_arguments = HashMap::<String, String>::new();
         let mut active_text_item_id = None;
@@ -807,14 +815,78 @@ where
                     });
                 }
                 CanonicalLlmEvent::ToolCall {
-                    id, name, input, ..
+                    id,
+                    name,
+                    input,
+                    provider_executed,
+                    provider_metadata,
                 } => {
                     has_user_visible_output = true;
                     emitted_any = true;
                     emitted_tool_call = true;
-                    let call = CurrentProviderToolCall::new(id, name, input);
+                    if provider_executed == Some(true) {
+                        if let Some(raw_item) = provider_metadata.get("raw_response_item") {
+                            assistant_content
+                                .push(CurrentProviderContent::RawResponseItem(raw_item.clone()));
+                        }
+                        let provider_metadata = serde_json::Value::Object(
+                            provider_metadata.clone().into_iter().collect(),
+                        );
+                        let call = ToolCall::new(
+                            turn_id.clone(),
+                            id.clone(),
+                            name,
+                            input,
+                            vec![ToolEnvironment::new(
+                                PROVIDER_TOOL_ENVIRONMENT_ID,
+                                working_directory.clone(),
+                            )],
+                            tool_lifecycle_emitter.clone(),
+                        )
+                        .with_provider_metadata(provider_metadata);
+                        call.emit_started().await;
+                        provider_executed_calls.insert(id, call);
+                        continue;
+                    }
+                    let call = CurrentProviderToolCall::new(id, name, input)
+                        .with_provider_metadata(provider_metadata);
                     assistant_content.push(CurrentProviderContent::ToolCall(call.clone()));
                     calls.push(call);
+                }
+                CanonicalLlmEvent::ToolResult {
+                    id,
+                    name,
+                    result,
+                    provider_executed: Some(true),
+                } => {
+                    emitted_any = true;
+                    has_user_visible_output = true;
+                    let terminal_raw_item = provider_executed_raw_response_item(&result).cloned();
+                    if let Some(raw_item) = terminal_raw_item.as_ref() {
+                        upsert_raw_response_item(&mut assistant_content, raw_item.clone());
+                    }
+                    let mut call = provider_executed_calls.remove(&id).unwrap_or_else(|| {
+                        ToolCall::new(
+                            turn_id.clone(),
+                            id,
+                            name,
+                            serde_json::json!({}),
+                            vec![ToolEnvironment::new(
+                                PROVIDER_TOOL_ENVIRONMENT_ID,
+                                working_directory.clone(),
+                            )],
+                            tool_lifecycle_emitter.clone(),
+                        )
+                    });
+                    if let Some(raw_item) = terminal_raw_item {
+                        let provider_metadata = provider_metadata_with_raw_response_item(
+                            call.provider_metadata(),
+                            raw_item,
+                        );
+                        call = call.with_provider_metadata(provider_metadata);
+                    }
+                    call.emit_completed(provider_executed_tool_output(result))
+                        .await;
                 }
                 CanonicalLlmEvent::Usage { usage } => {
                     let usage = current_provider_usage(usage);
@@ -825,6 +897,20 @@ where
                     if last_server_model.as_deref() != Some(model.as_str()) {
                         last_server_model = Some(model.clone());
                         on_event(CurrentProviderTurnEvent::ServerModel { model });
+                    }
+                }
+                CanonicalLlmEvent::ModelReroute {
+                    from_model,
+                    to_model,
+                    reason,
+                } => {
+                    if !model_reroute_emitted {
+                        model_reroute_emitted = true;
+                        on_event(CurrentProviderTurnEvent::ModelReroute {
+                            from_model,
+                            to_model,
+                            reason,
+                        });
                     }
                 }
                 CanonicalLlmEvent::ModelVerification { verifications } => {
@@ -1425,6 +1511,91 @@ fn finish_reason_name(reason: FinishReason) -> &'static str {
     }
 }
 
+fn provider_executed_tool_output(result: ToolResultValue) -> NormalizedToolOutput {
+    let (success, text, structured_content, error) = match result {
+        ToolResultValue::Json { value } => (
+            true,
+            "Provider executed the hosted tool".to_string(),
+            Some(value),
+            None,
+        ),
+        ToolResultValue::Text { value } => (true, value, None, None),
+        ToolResultValue::Error { value } => {
+            let message = value
+                .as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| value.to_string());
+            (false, message.clone(), Some(value), Some(message))
+        }
+        ToolResultValue::Content { value } => {
+            let structured = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
+            (
+                true,
+                "Provider executed the hosted tool".to_string(),
+                Some(structured),
+                None,
+            )
+        }
+    };
+    NormalizedToolOutput {
+        success,
+        text,
+        structured_content,
+        error,
+        duration_ms: 0,
+        truncation: None,
+        sidecar_reference: None,
+        metadata: HashMap::from([(
+            "provider_executed".to_string(),
+            serde_json::Value::Bool(true),
+        )]),
+        agent_control_projection_facts: Vec::new(),
+    }
+}
+
+fn provider_executed_raw_response_item(result: &ToolResultValue) -> Option<&serde_json::Value> {
+    match result {
+        ToolResultValue::Json { value } if raw_response_item_identity(value).is_some() => {
+            Some(value)
+        }
+        _ => None,
+    }
+}
+
+fn provider_metadata_with_raw_response_item(
+    metadata: &serde_json::Value,
+    raw_item: serde_json::Value,
+) -> serde_json::Value {
+    let mut metadata = metadata.as_object().cloned().unwrap_or_default();
+    metadata.insert("raw_response_item".to_string(), raw_item);
+    serde_json::Value::Object(metadata)
+}
+
+fn upsert_raw_response_item(
+    content: &mut Vec<CurrentProviderContent>,
+    raw_item: serde_json::Value,
+) {
+    let Some((item_type, item_id)) = raw_response_item_identity(&raw_item) else {
+        return;
+    };
+    let existing = content.iter().position(|content| match content {
+        CurrentProviderContent::RawResponseItem(candidate) => raw_response_item_identity(candidate)
+            .is_some_and(|identity| identity == (item_type, item_id)),
+        _ => false,
+    });
+    if let Some(index) = existing {
+        content[index] = CurrentProviderContent::RawResponseItem(raw_item);
+    } else {
+        content.push(CurrentProviderContent::RawResponseItem(raw_item));
+    }
+}
+
+fn raw_response_item_identity(value: &serde_json::Value) -> Option<(&str, &str)> {
+    let item_type = value.get("type")?.as_str()?.trim();
+    let item_id = value.get("id")?.as_str()?.trim();
+    (!item_type.is_empty() && !item_id.is_empty()).then_some((item_type, item_id))
+}
+
 async fn execute_calls(
     tool_step_snapshot: &RuntimeToolStepSnapshot,
     turn_id: &str,
@@ -1564,6 +1735,8 @@ async fn execute_call(
         cancel_token,
         workspace_sandbox: None,
     });
+    let provider_metadata =
+        serde_json::Value::Object(call.provider_metadata.clone().into_iter().collect());
     let tool_call = ToolCall::new(
         turn_id,
         call.id.clone(),
@@ -1571,7 +1744,8 @@ async fn execute_call(
         call.arguments.clone(),
         vec![ToolEnvironment::new(environment_id, working_directory)],
         lifecycle_emitter,
-    );
+    )
+    .with_provider_metadata(provider_metadata);
     let runtime_tool = executor.bind(definition, RuntimeToolExposure::Direct);
     let output = runtime_tool
         .execute_call(&tool_call, &context, turn_context.as_ref())

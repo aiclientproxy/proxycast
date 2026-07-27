@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils";
 import { useApiKeyProvider } from "@/hooks/useApiKeyProvider";
 import {
   apiKeyProviderApi,
+  providerModelIds,
+  type ProviderModelConfig,
   type UpdateProviderRequest,
 } from "@/lib/api/apiKeyProvider";
 import { ProviderSetting } from "./ProviderSetting";
@@ -77,7 +79,7 @@ function buildProviderFocusKey(
 }
 
 function resolveProviderFocusTargetId(
-  providers: Array<{ id: string; custom_models?: string[] | null }>,
+  providers: Array<{ id: string; models?: ProviderModelConfig[] | null }>,
   focus: ProviderSettingsFocusContext | null | undefined,
 ): string | null {
   if (!focus) {
@@ -97,8 +99,8 @@ function resolveProviderFocusTargetId(
 
   return (
     providers.find((provider) =>
-      provider.custom_models?.some(
-        (modelId) => modelId.toLowerCase() === normalizedModelId,
+      provider.models?.some(
+        (model) => model.id.toLowerCase() === normalizedModelId,
       ),
     )?.id ?? null
   );
@@ -240,10 +242,10 @@ export const ApiKeyProviderSection = forwardRef<
         "custom-models",
       ) as HTMLInputElement | null;
       return resolveProviderTestModel(
-        selectedProvider?.custom_models,
+        providerModelIds(selectedProvider?.models),
         input?.value ?? "",
       );
-    }, [selectedProvider?.custom_models]);
+    }, [selectedProvider?.models]);
 
     // ===== 包装回调函数以匹配 ProviderSetting 的类型要求 =====
 

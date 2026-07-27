@@ -107,7 +107,7 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
             project TEXT,
             location TEXT,
             region TEXT,
-            custom_models TEXT,
+            models TEXT,
             prompt_cache_mode TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -115,11 +115,8 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
         [],
     )?;
 
-    // Migration: 添加 custom_models 列（如果不存在）
-    let _ = conn.execute(
-        "ALTER TABLE api_key_providers ADD COLUMN custom_models TEXT",
-        [],
-    );
+    // Migration: 添加 models 列（如果不存在）
+    let _ = conn.execute("ALTER TABLE api_key_providers ADD COLUMN models TEXT", []);
     let _ = conn.execute(
         "ALTER TABLE api_key_providers ADD COLUMN prompt_cache_mode TEXT",
         [],

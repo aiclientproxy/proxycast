@@ -6,6 +6,7 @@
 //! **Validates: Requirements 3.1-3.6**
 
 use crate::database::dao::api_key_provider::{ApiKeyProvider, ApiProviderType, ProviderGroup};
+use crate::models::model_registry::ProviderModelConfig;
 use chrono::Utc;
 
 /// 系统 Provider 配置定义
@@ -896,17 +897,17 @@ pub fn to_api_key_provider(def: &SystemProviderDef) -> ApiKeyProvider {
         project: None,
         location: None,
         region: None,
-        custom_models: default_custom_models_for_system_provider(def.id),
+        models: default_models_for_system_provider(def.id),
         prompt_cache_mode: None,
         created_at: now,
         updated_at: now,
     }
 }
 
-fn default_custom_models_for_system_provider(provider_id: &str) -> Vec<String> {
+fn default_models_for_system_provider(provider_id: &str) -> Vec<ProviderModelConfig> {
     match provider_id {
-        "lime-hub" => vec!["gpt-5.2-pro".to_string()],
-        "airgate-openai-images" => vec!["gpt-images-2".to_string()],
+        "lime-hub" => vec![ProviderModelConfig::hint("gpt-5.2-pro")],
+        "airgate-openai-images" => vec![ProviderModelConfig::hint("gpt-images-2")],
         _ => Vec::new(),
     }
 }
@@ -934,7 +935,7 @@ mod tests {
             .expect("airgate system provider should exist");
         let api_provider = to_api_key_provider(&provider);
 
-        assert_eq!(api_provider.custom_models, vec!["gpt-images-2".to_string()]);
+        assert_eq!(api_provider.models[0].id, "gpt-images-2");
     }
 
     #[test]
@@ -945,6 +946,6 @@ mod tests {
             .expect("lime-hub system provider should exist");
         let api_provider = to_api_key_provider(&provider);
 
-        assert_eq!(api_provider.custom_models, vec!["gpt-5.2-pro".to_string()]);
+        assert_eq!(api_provider.models[0].id, "gpt-5.2-pro");
     }
 }

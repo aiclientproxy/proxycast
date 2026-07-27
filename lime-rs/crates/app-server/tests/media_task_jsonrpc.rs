@@ -14,6 +14,10 @@ use lime_core::database::dao::api_key_provider::{
 };
 use lime_core::database::schema::create_tables;
 use lime_core::database::{lock_db, DbConnection};
+use lime_core::models::model_registry::{
+    ModelCapabilities, ModelModality, ModelRuntimeFeature, ModelTaskFamily,
+    ProviderModelCapability, ProviderModelConfig,
+};
 use lime_services::api_key_provider_service::ApiKeyProviderService;
 use rusqlite::Connection;
 use serde_json::json;
@@ -641,7 +645,17 @@ fn insert_image_provider_with_key(db: &DbConnection, provider_id: &str, model: &
         project: None,
         location: None,
         region: None,
-        custom_models: vec![model.to_string()],
+        models: vec![ProviderModelConfig {
+            id: model.to_string(),
+            display_name: None,
+            capability: Some(ProviderModelCapability {
+                task_families: vec![ModelTaskFamily::ImageGeneration],
+                input_modalities: vec![ModelModality::Text],
+                output_modalities: vec![ModelModality::Image],
+                runtime_features: vec![ModelRuntimeFeature::ImagesApi],
+                capabilities: ModelCapabilities::default(),
+            }),
+        }],
         prompt_cache_mode: None,
         created_at: now,
         updated_at: now,

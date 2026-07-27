@@ -21,6 +21,10 @@ pub struct ProviderModelCatalog {
 
 #[async_trait]
 pub trait ModelProviderAppDataSource: Send + Sync {
+    fn model_catalog_reconciliation_enabled(&self) -> bool {
+        false
+    }
+
     async fn read_model_route_generation(&self) -> Result<u64, RuntimeCoreError> {
         Err(unavailable("modelProvider/routeGeneration/read"))
     }

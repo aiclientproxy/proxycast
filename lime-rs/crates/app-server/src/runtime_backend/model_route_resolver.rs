@@ -565,7 +565,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn declared_capability_gap_blocks_image_chat_before_provider_call() {
+    async fn inferred_capability_hint_blocks_image_chat_before_provider_call() {
         let db = test_db();
         let service = ApiKeyProviderService::new();
         let provider = service
@@ -598,7 +598,9 @@ mod tests {
                 None,
                 None,
                 None,
-                Some(vec!["text-only-model".to_string()]),
+                Some(vec![
+                    lime_core::models::model_registry::ProviderModelConfig::hint("text-only-model"),
+                ]),
             )
             .expect("declared model");
         let mut request = request_for_test("看图", None, None);
@@ -621,12 +623,15 @@ mod tests {
         .await
         .expect("route");
 
-        let failure = route.resolved_route.failure.expect("capability gap");
+        let failure = route
+            .resolved_route
+            .failure
+            .expect("inferred capability hint failure");
         assert_eq!(failure.category, RouteFailureCategory::CapabilityGap);
-        assert_eq!(failure.reason_code, "capability_gap");
+        assert_eq!(failure.reason_code, "capability_snapshot_missing");
         assert_eq!(
             failure.capability_gap.as_deref(),
-            Some("task_family:vision_understanding")
+            Some("capability_snapshot:missing")
         );
         assert_eq!(
             route
@@ -642,12 +647,12 @@ mod tests {
                 .as_ref()
                 .and_then(|payload| payload.pointer("/routeFailure/capabilityGap"))
                 .and_then(|value| value.as_str()),
-            Some("task_family:vision_understanding")
+            Some("capability_snapshot:missing")
         );
     }
 
     #[tokio::test]
-    async fn declared_agnes_vision_model_accepts_image_chat_route() {
+    async fn declared_agnes_vision_hint_does_not_authorize_image_chat_route() {
         let db = test_db();
         let service = ApiKeyProviderService::new();
         let provider = service
@@ -680,7 +685,9 @@ mod tests {
                 None,
                 None,
                 None,
-                Some(vec!["agnes-2.0-flash".to_string()]),
+                Some(vec![
+                    lime_core::models::model_registry::ProviderModelConfig::hint("agnes-2.0-flash"),
+                ]),
             )
             .expect("declared model");
         let mut request = request_for_test("看图", None, None);
@@ -703,14 +710,21 @@ mod tests {
         .await
         .expect("route");
 
-        assert!(route.resolved_route.failure.is_none());
+        assert_eq!(
+            route
+                .resolved_route
+                .failure
+                .as_ref()
+                .map(|failure| failure.reason_code.as_str()),
+            Some("capability_snapshot_missing")
+        );
         assert!(route.resolved_route.capability_snapshot.capabilities.vision);
         assert!(route
             .resolved_route
             .capability_snapshot
             .input_modalities
             .contains(&"image".to_string()));
-        assert!(route.not_possible_payload.is_none());
+        assert!(route.not_possible_payload.is_some());
     }
 
     #[tokio::test]
@@ -747,7 +761,9 @@ mod tests {
                 None,
                 None,
                 None,
-                Some(vec!["claude-sonnet-4".to_string()]),
+                Some(vec![
+                    lime_core::models::model_registry::ProviderModelConfig::hint("claude-sonnet-4"),
+                ]),
             )
             .expect("declared model");
         let request = request_for_test("hello", None, None);
@@ -762,7 +778,14 @@ mod tests {
         .await
         .expect("route");
 
-        assert!(route.resolved_route.failure.is_none());
+        assert_eq!(
+            route
+                .resolved_route
+                .failure
+                .as_ref()
+                .map(|failure| failure.reason_code.as_str()),
+            Some("capability_snapshot_missing")
+        );
         assert_eq!(
             route.resolved_route.protocol,
             ProtocolKind::AnthropicMessages
@@ -813,7 +836,9 @@ mod tests {
                 None,
                 None,
                 None,
-                Some(vec!["agnes-2.0-flash".to_string()]),
+                Some(vec![
+                    lime_core::models::model_registry::ProviderModelConfig::hint("agnes-2.0-flash"),
+                ]),
             )
             .expect("declared model");
         let request = request_for_test("hello", None, None);
@@ -828,7 +853,14 @@ mod tests {
         .await
         .expect("route");
 
-        assert!(route.resolved_route.failure.is_none());
+        assert_eq!(
+            route
+                .resolved_route
+                .failure
+                .as_ref()
+                .map(|failure| failure.reason_code.as_str()),
+            Some("capability_snapshot_missing")
+        );
         assert_eq!(route.resolved_route.protocol, ProtocolKind::OpenaiChat);
         assert_eq!(
             route.resolved_route.endpoint.kind,
@@ -885,7 +917,9 @@ mod tests {
                 None,
                 None,
                 None,
-                Some(vec!["gpt-4.1-mini".to_string()]),
+                Some(vec![
+                    lime_core::models::model_registry::ProviderModelConfig::hint("gpt-4.1-mini"),
+                ]),
             )
             .expect("declared base model");
         let request = request_for_test(
@@ -966,7 +1000,11 @@ mod tests {
                 api_host,
                 "scope-key-b",
                 Some(ApiProviderType::Openai),
-                &["scoped-route-model".to_string()],
+                &[
+                    lime_core::models::model_registry::ProviderModelConfig::hint(
+                        "scoped-route-model",
+                    ),
+                ],
             )
             .await
             .expect("seed key B scoped cache");
@@ -997,7 +1035,14 @@ mod tests {
         .await
         .expect("assemble key B route");
 
-        assert!(route_b.resolved_route.failure.is_none());
+        assert_eq!(
+            route_b
+                .resolved_route
+                .failure
+                .as_ref()
+                .map(|failure| failure.reason_code.as_str()),
+            Some("capability_snapshot_missing")
+        );
         assert_eq!(
             route_b.resolved_route.auth.credential_ref.as_deref(),
             Some(ref_b.as_str())

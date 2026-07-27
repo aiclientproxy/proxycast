@@ -407,7 +407,7 @@ typed runtime request
   -> RuntimeEvent
 ```
 
-`ProtocolKind` 不能把未实现的 Gemini/Bedrock/Fal/Vertex/Ollama 等协议伪装为
+`ProtocolKind` 不能把未实现的 Bedrock/Fal/Vertex/Azure 等协议伪装为
 `Custom` 再走 Chat Completions。若 `model-provider` 没有完整 lowering/stream/retry
 实现，route resolver 必须返回 typed `UnsupportedProtocol`；协议声明、能力快照和真实
 网络实现必须一一对应。
@@ -426,9 +426,13 @@ provider capability upper bound 必须委托同一 adapter availability，禁止
 白名单而产生 ready/capability 漂移。`namespace_tools`、hosted `image_generation` 与 hosted `web_search`
 只有在 canonical schema、request lowering、stream reducer 和 route gate 全部可执行后才能置为 true；普通
 function/client tool 支持不能代替这些 provider capability。
-Gemini、Vertex、Bedrock、Ollama、Fal 和 Azure OpenAI 在完整 lowering/auth/query/stream adapter 落地前均
-返回 `unsupported_protocol`，不得进入 `model/list` selectable catalog、当前 provider capability read、profile fallback
-或 connection/chat probe。Azure 不能因 body 近似 OpenAI Chat 而放行：current transport 尚未消费其
+Gemini GenerateContent 与 Ollama Responses 已是 current adapter。Ollama provider type/name 只解析为
+`OpenaiResponses`，使用 `NoAuth` 和 `/v1/responses`；`/api/tags` 只归模型发现，不参与 agent turn。独立
+`OllamaChat` protocol、NDJSON turn adapter 与 Chat Completions fallback 均为
+`dead / deleted / forbidden-to-restore`。Vertex、Bedrock、Fal 和 Azure OpenAI 在完整
+lowering/auth/query/stream adapter 落地前均返回 `unsupported_protocol`，不得进入 `model/list` selectable
+catalog、当前 provider capability read、profile fallback 或 connection/chat probe。Azure 不能因 body 近似
+OpenAI Chat 而放行：current transport 尚未消费其
 `api-key` header 与 `api-version`。Store 未命中的 provider 名称不得生成 builtin ready；唯一无 Store 旁路
 是带完整 route/config/capability 的 explicit direct request。direct request 与当前 selection 绑定，只允许
 一次 admission，不复用同一 endpoint/credential 参与 profile fallback。
@@ -1070,3 +1074,232 @@ completed/failed/canceled 已幂等入账，`provider.usage` 中间快照已覆�
 跨重启 provider history lowering、outbox crash-drain 和 Codex
 thread-scoped first-terminal MCP 语义仍是明确 follow-up，不能把本切片报告为完整 Codex resume
 parity。
+
+## 15. Model Reroute Transient Notification Boundary
+
+Codex `model/rerouted` 只表达 first-party Responses 服务端因高风险网络安全活动改变实际模型，不能复用
+普通 provider retry/fallback。current 数据流为：
+
+```text
+trusted OpenAI Responses server-model metadata
+  -> model-provider requested/server ASCII case-insensitive comparison
+  -> RuntimeCore canonical ModelReroute
+  -> Agent Runtime Turn-level de-duplication
+  -> App Server cross-route Turn-level de-duplication
+  -> transient RuntimeEvent sink (no state/EventLog append)
+  -> exact v2 model/rerouted notification
+  -> transport/GUI consumer
+```
+
+`model.server_reported` 继续走 durable diagnostic evidence，并包含 provider、requested model、selected model
+与 route attempt；它不直接投影为公开通知。普通 runtime provider failure 仍只产生
+`routing.fallback.applied`。selector、展示名、第三方兼容 endpoint 与 `response.model` 均不能建立 reroute
+信任。App Server transient sink 只绕过持久化，不绕过 thread/turn identity 与 v2 typed projector；因此 cold
+resume 不重放 reroute，畸形 payload 也不会回退 deprecated side channel。
+
+Architecture impact: major; this adds an explicit non-durable branch to the existing runtime event pipeline while
+preserving `model-provider` as the network trust owner, Agent Runtime/App Server as Turn orchestration owners, and the
+v2 projector as the public protocol owner.
+
+Architecture diagram updated: this section and the canonical chain above.
+
+Responsible developer confirmation: root, 2026-07-27.
+
+Confirmation: trusted mismatch, case-only equality, third-party endpoint rejection, sampling/route de-duplication,
+ordinary provider fallback isolation, transient publication and exact v2 round-trip were checked against Codex current
+semantics. No Renderer/Electron, compatibility wrapper or second provider backend was added.
+
+## 16. Gemini GenerateContent Current Transport
+
+Gemini API Key chat uses the same multi-model control plane and provider owner as OpenAI/Anthropic; OpenCode supplies
+the wire/lowering reference, while RuntimeCore and Thread/Turn/Item ownership remain aligned with Codex:
+
+```text
+provider store/catalog/readiness
+  -> RuntimeCore GeminiGenerateContent route admission
+  -> model-provider canonical request lowering
+  -> Google streamGenerateContent SSE
+  -> canonical text/reasoning/tool/usage/finish events
+  -> Agent Runtime tool loop
+  -> ToolLifecycleEvent provider metadata
+  -> ThreadItem.metadata persistence
+  -> provider history lowering for later Turns
+```
+
+The current wire is `POST /v1beta/models/{model}:streamGenerateContent?alt=sse` with `x-goog-api-key`; Bearer auth is
+forbidden. Canonical lowering covers system instruction, user/model roles, inline base64 images, function declarations,
+function calls/results and generation controls. Remote HTTP media, unsupported content parts, blocked prompts, malformed
+tool calls and truncated streams fail closed. Gemini `thoughtSignature` remains provider metadata: it is preserved on the
+assistant function call, copied through generic tool lifecycle metadata, stored on the canonical Thread item and restored
+when historical tool calls are lowered into a later provider request. It is not promoted to a product-level field.
+
+`GeminiGenerateContent` is `current`. Vertex Gemini, Azure OpenAI, Bedrock Converse and Fal chat remain unsupported and
+must not be admitted through aliases or custom protocol strings. Ollama Chat is deleted; Ollama now shares the current
+Responses algebra described below. No compatibility adapter or parallel provider backend exists.
+
+Architecture impact: major; this extends the current provider transport union and durable tool-history contract without
+changing owner direction. Architecture diagram updated: this section and the provider/runtime chain above. Responsible
+developer confirmation: root, 2026-07-27.
+
+## 17. Ollama Responses Current Transport
+
+Codex HEAD removed `wire_api = "chat"` and the `ollama-chat` provider. Lime follows the same single transport algebra:
+
+```text
+Ollama provider store + /api/tags discovery
+  -> RuntimeCore OpenaiResponses route + NoAuth
+  -> model-provider canonical Responses request
+  -> POST /v1/responses without Authorization
+  -> shared Responses SSE reducer
+  -> Agent Runtime Thread/Turn/Item chain
+```
+
+Provider identity remains the resolved selection/provider id; the App Server does not relabel a keyless Ollama route as
+`openai`. `ProtocolKind::OllamaChat`, `ollama_chat`, NDJSON agent turns and Ollama-specific lowering are
+`dead / deleted / forbidden-to-restore`. `/api/tags` remains the independent model-discovery endpoint and must not become
+a second execution transport. Hosted OpenAI verification/reroute evidence remains disabled because an Ollama route is not
+a trusted first-party OpenAI endpoint.
+
+Architecture impact: major; this removes a public protocol variant and admits Ollama through the existing Responses
+owner without adding a provider-specific wire owner. Architecture diagram updated: this section and the provider/runtime
+chain above. Responsible developer confirmation: root, 2026-07-27.
+
+## 18. Official Responses Hosted Web Search
+
+Hosted web search follows the Codex Responses item lifecycle without creating a second network or tool-execution owner:
+
+```text
+official OpenAI/Codex Responses route + exact api.openai.com host
+  -> canonical WebSearch tool definition
+  -> model-provider { type: "web_search", external_web_access: true } lowering
+  -> Responses web_search_call item
+  -> canonical provider-executed ToolCall / ToolResult
+  -> Agent Runtime provider tool lifecycle
+  -> Thread/Turn/Item projection + exact raw Responses item history
+```
+
+The hosted capability is true only when the resolved provider type selects the Responses protocol and the final endpoint
+host is exactly `api.openai.com`. OpenAI-compatible gateways, Ollama, Chat Completions and unknown routes retain no hosted
+capability and cannot promote a function tool to `web_search`. Only the current canonical `WebSearch` definition is
+eligible; legacy aliases and MCP-shaped names remain ordinary function tools. A `provider_executed=true` search emits
+started/completed Item lifecycle with environment `provider`, preserves the raw response item for later Responses
+history, and never enters the local `WebSearch` executor or changes the response finish reason to a local tool call.
+
+The official request lowering, Responses reducer, provider-executed lifecycle and capability projection are `current`.
+Provider-name-only capability guesses, third-party hosted promotion, alias-based promotion and provider-executed search
+falling through to local execution are `dead / forbidden-to-restore`; no `compat/deprecated` path exists.
+
+Architecture impact: major; this adds a provider-executed tool branch to the existing provider/runtime chain while
+preserving `model-provider` as network owner and `tool-runtime`/Agent Runtime as lifecycle owners. Architecture diagram
+updated: this section and the provider/runtime chain above. Responsible developer confirmation: root, 2026-07-27.
+
+## 19. Model Capability Provenance And Route Admission
+
+Model catalog hints and executable route facts have separate trust levels:
+
+```text
+canonical registry / provider-explicit capability fields / typed direct config
+  -> EnhancedModelMetadata capability_provenance
+  -> App Server modelRegistry.modelCapabilities.provenance
+  -> RuntimeCore authoritative snapshot admission
+  -> capability gap check + resolved provider route
+
+provider name / model name / models[] entry without capability
+  -> inferred_hint catalog metadata
+  -> picker/search diagnostics only
+  -> capability_snapshot_missing
+```
+
+The only authoritative provenance values are `canonical` and `provider_explicit`. `inferred_hint` remains useful for
+catalog grouping and display, but RuntimeCore must reject it before provider execution even when the inferred object is
+non-empty. Direct runtime config is authoritative only when it carries an explicit capability snapshot. Renderer
+`model/list` projection preserves Codex picker, reasoning-effort and input-modality fields, marks the local projection as
+`inferred_hint`, and does not synthesize tools, streaming, JSON mode, function calling, runtime features, execution,
+context, tool-call, Responses, truncation or native-tool policy.
+
+Provider configuration has one shape: `Provider.models[]` entries contain `id`, optional `displayName` and optional
+`capability`. Entries with capability become `provider_explicit`; entries without it remain `inferred_hint` and fail
+closed. Protocol, endpoint and authentication can still be resolved for diagnostics, but an id-only entry cannot
+authorize a Turn. In particular, the Ollama Responses transport remains the single current wire owner while its
+discovered id-only model entries are not execution-ready until provider configuration supplies a typed capability
+snapshot. The deleted `custom_models/customModels` fields, name-based route authorization and Renderer false/default
+capability fabrication are `dead / deleted / forbidden-to-restore`; no `compat/deprecated` path exists.
+
+Architecture impact: major; this changes the trust boundary between model discovery, App Server route metadata and
+RuntimeCore admission without adding a second catalog or execution owner. Architecture diagram updated: this section and
+the model-provider/runtime chain above. Responsible developer confirmation: root, 2026-07-27.
+
+## 20. Model Catalog Refresh And Turn Selection Reconciliation
+
+Catalog refresh and durable Thread selection use one admission path:
+
+```text
+provider store mutation -> model_route_generation
+  -> ready provider-scoped catalog
+  -> RuntimeCore::start_turn_inner reconciliation
+  -> visible + authoritative + chat-capable candidates
+  -> current route preflight
+       | valid: keep current selection
+       | rejected/missing: same-provider candidate, then catalog order
+  -> session actor thread-settings preflight + durable metadata update
+  -> thread/settings/updated
+  -> Turn admission with the reconciled provider/model/effort/service tier
+```
+
+Every production Turn entry, including public `turn/start`, synchronous RuntimeCore callers, queued resume, ThreadGoal
+continuation, workflow retry and mailbox TriggerTurn, reaches the same reconciliation boundary before provider execution.
+The boundary reads the route generation before and after catalog construction and retries at most three times; continuous
+generation churn or the absence of an executable candidate fails closed. Candidate ordering preserves the current provider
+first and then catalog order. Hidden models, `inferred_hint` capability records and explicit non-chat task families cannot
+be selected. A catalog-present current selection is still checked by route preflight so stale credential, effort or service
+tier state cannot bypass normal admission.
+
+Typed direct provider config is outside catalog replacement. An explicit request with a direct API key/base URL is retained,
+and a durable AgentControl route records `routeSource=direct_provider_config`; neither is rewritten merely because the model
+is absent from the provider catalog. A catalog route records `routeSource=catalog`. When reconciliation changes selection,
+the previous route snapshot/provider config is removed, model/reasoning/service-tier defaults come from the chosen catalog
+entry, and the existing session actor `thread/settings/update` preflight remains the only persistence gate.
+
+Foreground `turn/start` returns exactly one `thread/settings/updated` notification in its response dispatch. Reconciliation
+performed by background/internal Turn entry publishes the same exact notification through a transient RuntimeEvent and the
+single v2 projector; it is not appended to EventLog and is not replayed by cold resume. The catalog, durable Thread settings,
+RuntimeCore route preflight and v2 notification remain `current`. Silent fallback, inferred capability authorization,
+catalog replacement of direct routes, stale route reuse and a second model-selection store are
+`dead / forbidden-to-restore`; no `compat/deprecated` path exists.
+
+Architecture impact: major; this adds a generation-aware admission stage and a transient settings-notification branch while
+preserving the existing provider, session actor, Thread metadata and v2 projector owners. Architecture diagram updated: this
+section and the RuntimeCore Turn admission chain above. Responsible developer confirmation: root, 2026-07-27.
+
+## 21. Official Responses Hosted Image Generation
+
+Hosted image generation reuses the same provider-executed lifecycle as hosted web search and projects the Codex exact Item:
+
+```text
+official OpenAI/Codex Responses route + exact api.openai.com host
+  -> canonical ImageGeneration tool definition
+  -> model-provider { type: "image_generation" } lowering
+  -> Responses image_generation_call item
+  -> canonical provider-executed ToolCall / ToolResult
+  -> Agent Runtime terminal raw-item history upsert
+  -> App Server ImageGenerationItem
+  -> Renderer image_generation read model
+```
+
+Only the canonical `ImageGeneration` definition is promoted. OpenAI-compatible gateways, Ollama, Chat Completions,
+aliases such as `ImageGenerationTool`, and the local `lime_create_image_generation_task` tool remain ordinary function
+tools. Provider-executed image calls never enter the local executor and do not change the final provider finish reason.
+The reducer de-duplicates added/done/completed events by response item identity and rejects a completed item without a
+string `result`. Agent Runtime replaces an earlier `in_progress` raw response item with the terminal item before durable
+provider history is reused.
+
+App Server projects provider metadata with `type=image_generation_call` to the exact Codex item shape: required `id`,
+`status` and string `result`, plus optional `revisedPrompt` and `savedPath`. Renderer consumes that dedicated item and
+fails closed on malformed required fields; it does not downgrade hosted image state into a generic extension. The hosted
+request/reducer/lifecycle/history/protocol/read-model chain is `current`. Third-party promotion, alias promotion, local
+media-task promotion, local re-execution and the previous loose `result?: Value/status?: String` DTO are
+`dead / deleted / forbidden-to-restore`; no `compat/deprecated` path exists.
+
+Architecture impact: major; this adds one provider-executed item variant while preserving `model-provider` as network
+owner, Agent Runtime as lifecycle/history owner, and App Server as Thread/Turn/Item projection owner. Architecture diagram
+updated: this section and the provider/runtime chain above. Responsible developer confirmation: root, 2026-07-27.

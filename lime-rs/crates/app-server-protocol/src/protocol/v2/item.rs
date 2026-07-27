@@ -342,10 +342,12 @@ pub struct SleepItem {
 #[serde(rename_all = "camelCase")]
 pub struct ImageGenerationItem {
     pub id: String,
+    pub status: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
+    pub revised_prompt: Option<String>,
+    pub result: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
+    pub saved_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

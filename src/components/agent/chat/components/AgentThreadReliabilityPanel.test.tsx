@@ -322,7 +322,7 @@ describe("AgentThreadReliabilityPanel", () => {
           modelRegistry: {
             source: "provider_declared_model",
             status: "matched",
-            reasonCode: "matched_provider_custom_models",
+            reasonCode: "matched_provider_models",
             matchedModelId: "coder-large",
             modelCapabilities: {
               capabilities: {
@@ -353,7 +353,7 @@ describe("AgentThreadReliabilityPanel", () => {
 
     expect(container.textContent).toContain("模型注册事实");
     expect(container.textContent).toContain("provider_declared_model");
-    expect(container.textContent).toContain("matched_provider_custom_models");
+    expect(container.textContent).toContain("matched_provider_models");
     expect(container.textContent).toContain("模型能力");
     expect(container.textContent).toContain("tools");
     expect(container.textContent).toContain("tool_calling");

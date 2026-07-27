@@ -3,6 +3,8 @@ import { safeInvoke } from "@/lib/dev-bridge";
 import {
   apiKeyProviderApi,
   invalidateApiKeyProviderCache,
+  providerModelIds,
+  reconcileProviderModels,
 } from "./apiKeyProvider";
 
 const appServerRequestMock = vi.hoisted(() => vi.fn());
@@ -43,7 +45,7 @@ function createProviderInfo(overrides: Record<string, unknown> = {}) {
     project: null,
     location: null,
     region: null,
-    customModels: [],
+    models: [],
     promptCacheMode: null,
     apiKeyCount: 1,
     apiKeys: [createProviderKeyInfo()],
@@ -74,6 +76,60 @@ describe("apiKeyProvider API", () => {
     vi.clearAllMocks();
     appServerRequestMock.mockReset();
     invalidateApiKeyProviderCache();
+  });
+
+  it("模型 ID 投影与编辑应保留已有 typed capability", () => {
+    const existingModels = [
+      {
+        id: "grok-4.5",
+        displayName: "Grok 4.5",
+        capability: {
+          taskFamilies: ["chat", "reasoning"],
+          inputModalities: ["text", "image"],
+          outputModalities: ["text"],
+          runtimeFeatures: ["streaming", "tool_calling"],
+          capabilities: {
+            vision: true,
+            tools: true,
+            streaming: true,
+            jsonMode: true,
+            functionCalling: true,
+            reasoning: true,
+            reasoningEffort: {
+              supported: true,
+              levels: ["medium", "xhigh"],
+              options: [
+                {
+                  id: "deep",
+                  value: "xhigh",
+                  label: "Deep",
+                  default: true,
+                },
+              ],
+              default: "xhigh",
+              source: "api",
+            },
+          },
+        },
+      },
+    ];
+
+    expect(providerModelIds(existingModels)).toEqual(["grok-4.5"]);
+    const reconciled = reconcileProviderModels(existingModels, [
+      " GROK-4.5 ",
+      "new-model",
+      "new-model",
+    ]);
+
+    expect(reconciled).toEqual([
+      { ...existingModels[0], id: "grok-4.5" },
+      { id: "new-model" },
+    ]);
+    expect(reconciled[0]).not.toBe(existingModels[0]);
+    expect(reconciled[0].capability).not.toBe(existingModels[0].capability);
+    expect(reconciled[0].capability?.capabilities.reasoningEffort).not.toBe(
+      existingModels[0].capability.capabilities.reasoningEffort,
+    );
   });
 
   it("Provider 列表应通过 App Server modelProvider/list 读取", async () => {
@@ -172,7 +228,7 @@ describe("apiKeyProvider API", () => {
         apiHost: "https://api.example.com/v2",
         isSystem: false,
         apiKeyCount: 0,
-        customModels: ["custom-model"],
+        models: [{ id: "custom-model" }],
         apiKeys: [],
       }),
     });
@@ -189,10 +245,10 @@ describe("apiKeyProvider API", () => {
       apiKeyProviderApi.updateProvider("custom", {
         name: "Custom Renamed",
         api_host: "https://api.example.com/v2",
-        custom_models: ["custom-model"],
+        models: [{ id: "custom-model" }],
       }),
     ).resolves.toEqual(
-      expect.objectContaining({ custom_models: ["custom-model"] }),
+      expect.objectContaining({ models: [{ id: "custom-model" }] }),
     );
 
     expectAppServerRequest(1, "modelProvider/create", {
@@ -217,7 +273,7 @@ describe("apiKeyProvider API", () => {
       location: undefined,
       region: undefined,
       promptCacheMode: undefined,
-      customModels: ["custom-model"],
+      models: [{ id: "custom-model" }],
     });
   });
 
@@ -288,7 +344,7 @@ describe("apiKeyProvider API", () => {
         createProviderInfo({
           id: "custom-openai-images",
           name: "OpenAI-gpt-images-2",
-          customModels: ["gpt-images-2"],
+          models: [{ id: "gpt-images-2" }],
           apiKeys: [],
         }),
       ],
@@ -297,7 +353,7 @@ describe("apiKeyProvider API", () => {
     await expect(apiKeyProviderApi.getProviders()).resolves.toEqual([
       expect.objectContaining({
         id: "custom-openai-images",
-        custom_models: ["gpt-images-2"],
+        models: [{ id: "gpt-images-2" }],
       }),
     ]);
     expect(appServerRequestMock).toHaveBeenCalledTimes(2);

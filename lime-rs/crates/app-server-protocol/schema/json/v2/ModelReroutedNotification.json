@@ -1,0 +1,37 @@
+{
+  "$defs": {
+    "ModelRerouteReason": {
+      "enum": [
+        "highRiskCyberActivity"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "fromModel": {
+      "type": "string"
+    },
+    "reason": {
+      "$ref": "#/$defs/ModelRerouteReason"
+    },
+    "threadId": {
+      "type": "string"
+    },
+    "toModel": {
+      "type": "string"
+    },
+    "turnId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "fromModel",
+    "reason",
+    "threadId",
+    "toModel",
+    "turnId"
+  ],
+  "title": "ModelReroutedNotification",
+  "type": "object"
+}

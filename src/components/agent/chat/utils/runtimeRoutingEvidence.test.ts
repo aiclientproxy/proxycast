@@ -152,7 +152,7 @@ describe("runtimeRoutingEvidence", () => {
           modelRegistry: {
             source: "provider_declared_model",
             status: "matched",
-            reasonCode: "matched_provider_custom_models",
+            reasonCode: "matched_provider_models",
             matchedModelId: "coder-large",
             modelCapabilities: {
               capabilities: {
@@ -186,7 +186,7 @@ describe("runtimeRoutingEvidence", () => {
       shouldRender: true,
       modelRegistrySource: "provider_declared_model",
       modelRegistryStatus: "matched",
-      modelRegistryReason: "matched_provider_custom_models",
+      modelRegistryReason: "matched_provider_models",
       modelRegistryMatchedModel: "coder-large",
       modelRegistryCapabilityTags: [
         "tools",
@@ -204,7 +204,7 @@ describe("runtimeRoutingEvidence", () => {
     const lines = buildRuntimeRoutingEvidenceLines(evidence, EN_LINE_TEXT);
     const text = lines.join("\n");
     expect(text).toContain(
-      "Model registry facts: provider_declared_model · matched · matched_provider_custom_models · coder-large",
+      "Model registry facts: provider_declared_model · matched · matched_provider_models · coder-large",
     );
     expect(text).toContain(
       "Model capabilities: tools, streaming, reasoning, chat, tool_calling",

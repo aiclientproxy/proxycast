@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   apiKeyProviderApi,
+  providerModelIds,
+  reconcileProviderModels,
   type UpdateProviderRequest,
 } from "@/lib/api/apiKeyProvider";
 import {
@@ -37,7 +39,7 @@ interface ManagedLimeHubProviderSyncCopy {
 
 function buildSyncSignature(
   runtime: ReturnType<typeof resolveOemCloudRuntimeContext>,
-  customModels: string[],
+  models: string[],
   localApiKeyReady: boolean,
 ): string {
   return JSON.stringify({
@@ -45,7 +47,7 @@ function buildSyncSignature(
     hubProviderName: runtime?.hubProviderName ?? null,
     tenantId: runtime?.tenantId ?? null,
     sessionToken: runtime?.sessionToken ?? null,
-    customModels,
+    models,
     localApiKeyReady,
   });
 }
@@ -130,11 +132,11 @@ async function resolveSyncedCustomModels(
 
 function buildManagedKeyModelsState(input: {
   tenantId: string;
-  customModels: string[];
+  models: string[];
 }): string {
   return JSON.stringify({
     tenantId: input.tenantId,
-    models: input.customModels,
+    models: input.models,
   });
 }
 
@@ -177,20 +179,20 @@ function canSyncLimeHubProvider(): boolean {
 
 async function ensureLocalLimeHubApiKey(input: {
   runtime: NonNullable<ReturnType<typeof resolveOemCloudRuntimeContext>>;
-  customModels: string[];
+  models: string[];
   localApiKeyReady: boolean;
   apiKeys: Array<{ id?: string; alias?: string | null; enabled?: boolean }>;
   copy: ManagedLimeHubProviderSyncCopy;
 }): Promise<boolean> {
-  const { runtime, customModels, localApiKeyReady, apiKeys, copy } = input;
-  if (!runtime.sessionToken || customModels.length === 0) {
+  const { runtime, models, localApiKeyReady, apiKeys, copy } = input;
+  if (!runtime.sessionToken || models.length === 0) {
     return localApiKeyReady;
   }
 
   if (localApiKeyReady) {
     const expectedState = buildManagedKeyModelsState({
       tenantId: runtime.tenantId,
-      customModels,
+      models,
     });
     try {
       const currentState = await apiKeyProviderApi.getUiState(
@@ -207,7 +209,7 @@ async function ensureLocalLimeHubApiKey(input: {
   const response = await createClientAccessToken(runtime.tenantId, {
     name: copy.cloudTokenName,
     scopes: ["llm:invoke"],
-    allowedModels: customModels,
+    allowedModels: models,
   });
   const apiKey = response.apiKey || response.rawToken;
   if (!apiKey) {
@@ -236,7 +238,7 @@ async function ensureLocalLimeHubApiKey(input: {
       MANAGED_LIME_HUB_KEY_MODELS_STATE,
       buildManagedKeyModelsState({
         tenantId: runtime.tenantId,
-        customModels,
+        models,
       }),
     );
   } catch {
@@ -293,9 +295,7 @@ export function useOemLimeHubProviderSync() {
 
         const nextProviderName = resolveOemLimeHubProviderName(runtime);
         const nextApiHost = buildOemLimeHubApiHost(runtime);
-        const currentCustomModels = Array.isArray(limeHubProvider.custom_models)
-          ? limeHubProvider.custom_models
-          : [];
+        const currentCustomModels = providerModelIds(limeHubProvider.models);
         let nextCustomModels: string[] = [];
         try {
           nextCustomModels = await resolveSyncedCustomModels(
@@ -340,13 +340,16 @@ export function useOemLimeHubProviderSync() {
         if (limeHubProvider.sort_order !== 0) {
           updateRequest.sort_order = 0;
         }
-        const customModelsChanged =
+        const modelsChanged =
           currentCustomModels.length !== nextCustomModels.length ||
           currentCustomModels.some(
             (modelId, index) => modelId !== nextCustomModels[index],
           );
-        if (customModelsChanged) {
-          updateRequest.custom_models = nextCustomModels;
+        if (modelsChanged) {
+          updateRequest.models = reconcileProviderModels(
+            limeHubProvider.models,
+            nextCustomModels,
+          );
         }
 
         if (Object.keys(updateRequest).length > 0) {
@@ -358,7 +361,7 @@ export function useOemLimeHubProviderSync() {
 
         const nextLocalApiKeyReady = await ensureLocalLimeHubApiKey({
           runtime,
-          customModels: nextCustomModels,
+          models: nextCustomModels,
           localApiKeyReady,
           apiKeys: limeHubProvider.api_keys ?? [],
           copy,

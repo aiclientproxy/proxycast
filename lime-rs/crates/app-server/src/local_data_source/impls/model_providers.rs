@@ -5,6 +5,10 @@ use async_trait::async_trait;
 
 #[async_trait]
 impl ModelProviderAppDataSource for LocalAppDataSource {
+    fn model_catalog_reconciliation_enabled(&self) -> bool {
+        true
+    }
+
     async fn read_model_route_generation(&self) -> Result<u64, RuntimeCoreError> {
         model_providers::read_model_route_generation(&self.db)
     }

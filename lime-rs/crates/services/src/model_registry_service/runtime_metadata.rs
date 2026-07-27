@@ -1,6 +1,6 @@
-use super::ModelRegistryService;
+use super::{FetchModelsResult, ModelRegistryService};
 use lime_core::database::dao::api_key_provider::ProviderWithKeys;
-use lime_core::models::model_registry::EnhancedModelMetadata;
+use lime_core::models::model_registry::{EnhancedModelMetadata, ProviderModelConfig};
 use lime_core::models::{RuntimeCredentialData, RuntimeProviderCredential};
 use serde::Serialize;
 
@@ -64,6 +64,28 @@ impl ProviderModelRegistryMetadata {
 }
 
 impl ModelRegistryService {
+    pub fn get_cached_provider_models_for_access(
+        &self,
+        provider_id: &str,
+        api_host: &str,
+        provider_type: Option<lime_core::database::dao::api_key_provider::ApiProviderType>,
+        cache_access: ProviderModelCacheAccess<'_>,
+    ) -> Result<Option<FetchModelsResult>, String> {
+        let credential_fingerprint = match cache_access {
+            ProviderModelCacheAccess::Credential(credential) => {
+                Self::credential_cache_fingerprint(runtime_credential_api_key(credential))
+            }
+            ProviderModelCacheAccess::Keyless => None,
+            ProviderModelCacheAccess::Unavailable => return Ok(None),
+        };
+        self.get_cached_provider_models_scoped(
+            provider_id,
+            api_host,
+            provider_type,
+            credential_fingerprint.as_deref(),
+        )
+    }
+
     pub fn resolve_provider_model_metadata(
         &self,
         provider: Option<&ProviderWithKeys>,
@@ -84,30 +106,18 @@ impl ModelRegistryService {
         let requested_model_id = model_id.trim();
         let provider_type = provider.provider.effective_provider_type();
         let api_host = provider.provider.api_host.trim();
-        let credential_fingerprint = match cache_access {
-            ProviderModelCacheAccess::Credential(credential) => {
-                Self::credential_cache_fingerprint(runtime_credential_api_key(credential))
-            }
-            ProviderModelCacheAccess::Keyless | ProviderModelCacheAccess::Unavailable => None,
-        };
         if !api_host.is_empty() {
-            let cached = match cache_access {
-                ProviderModelCacheAccess::Credential(_) => self.get_cached_provider_models_scoped(
+            let cached = if matches!(cache_access, ProviderModelCacheAccess::Keyless)
+                && Self::requires_api_key_for_runtime(provider_id, api_host, provider_type)
+            {
+                None
+            } else {
+                self.get_cached_provider_models_for_access(
                     provider_id,
                     api_host,
                     Some(provider_type),
-                    credential_fingerprint.as_deref(),
-                )?,
-                ProviderModelCacheAccess::Keyless
-                    if !Self::requires_api_key_for_runtime(
-                        provider_id,
-                        api_host,
-                        provider_type,
-                    ) =>
-                {
-                    self.get_cached_provider_models(provider_id, api_host, Some(provider_type))?
-                }
-                ProviderModelCacheAccess::Keyless | ProviderModelCacheAccess::Unavailable => None,
+                    cache_access,
+                )?
             };
             if let Some(cached) = cached {
                 let cached_model_count = Some(cached.models.len());
@@ -136,13 +146,13 @@ impl ModelRegistryService {
             }
         }
 
-        if let Some(model_id) = find_declared_model_id(&provider.provider.custom_models, model_id) {
-            let model = self.build_declared_model_metadata(provider_id, model_id);
+        if let Some(model_config) = find_declared_model(&provider.provider.models, model_id) {
+            let model = self.build_declared_model_metadata(provider_id, model_config);
             return Ok(ProviderModelRegistryMetadata {
                 provider_id: provider_id.to_string(),
                 requested_model_id: requested_model_id.to_string(),
                 source: ProviderModelRegistryMetadataSource::ProviderDeclaredModel,
-                reason_code: "matched_provider_custom_models",
+                reason_code: "matched_provider_models",
                 matched_model_id: Some(model.id.clone()),
                 cached_model_count: None,
                 from_cache: false,
@@ -194,12 +204,14 @@ fn model_id_candidates(model: &EnhancedModelMetadata) -> Vec<String> {
     candidates
 }
 
-fn find_declared_model_id<'a>(models: &'a [String], requested_model_id: &str) -> Option<&'a str> {
+fn find_declared_model<'a>(
+    models: &'a [ProviderModelConfig],
+    requested_model_id: &str,
+) -> Option<&'a ProviderModelConfig> {
     let requested = normalized_model_id(requested_model_id)?;
     models
         .iter()
-        .map(|model| model.trim())
-        .find(|model| normalized_model_id(model).as_deref() == Some(requested.as_str()))
+        .find(|model| normalized_model_id(&model.id).as_deref() == Some(requested.as_str()))
 }
 
 fn normalized_model_id(value: &str) -> Option<String> {
@@ -244,7 +256,7 @@ mod tests {
                 project: None,
                 location: None,
                 region: None,
-                custom_models: Vec::new(),
+                models: Vec::new(),
                 prompt_cache_mode: None,
                 created_at: now,
                 updated_at: now,

@@ -81,9 +81,9 @@ function looksLikeImageGenerationModel(model: EnhancedModelMetadata): boolean {
 
   return (
     model.capabilities.vision &&
-    !model.capabilities.tools &&
-    !model.capabilities.function_calling &&
-    !model.capabilities.json_mode
+    model.capabilities.tools === false &&
+    model.capabilities.function_calling === false &&
+    model.capabilities.json_mode === false
   );
 }
 

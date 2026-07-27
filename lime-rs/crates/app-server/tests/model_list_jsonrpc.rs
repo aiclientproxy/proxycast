@@ -5,6 +5,7 @@ use app_server_protocol::{
     METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_MODEL_LIST, PROTOCOL_VERSION,
 };
 use lime_core::database::schema::create_tables;
+use lime_core::models::model_registry::ProviderModelConfig;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use tempfile::TempDir;
@@ -27,16 +28,20 @@ async fn model_list_app_server() -> ModelListAppServer {
         ("missing-key-provider", true, vec!["missing-key-model"]),
         ("disabled-provider", false, vec!["disabled-model"]),
     ] {
+        let models = model_ids
+            .into_iter()
+            .map(ProviderModelConfig::hint)
+            .collect::<Vec<_>>();
         conn.execute(
             "INSERT INTO api_key_providers (
                 id, name, type, api_host, is_system, group_name, enabled, sort_order,
-                custom_models, created_at, updated_at
+                models, created_at, updated_at
              ) VALUES (?1, ?1, 'openai', ?2, 0, 'cloud', ?3, 0, ?4, ?5, ?5)",
             params![
                 provider_id,
                 format!("https://{provider_id}.invalid/v1"),
                 enabled,
-                serde_json::to_string(&model_ids).expect("serialize declared models"),
+                serde_json::to_string(&models).expect("serialize declared models"),
                 "2026-07-25T00:00:00Z",
             ],
         )

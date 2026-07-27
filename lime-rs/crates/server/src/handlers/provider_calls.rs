@@ -67,8 +67,7 @@ struct CollectedToolCall {
 
 /// 根据凭证建立唯一 current provider client。
 ///
-/// Gemini/Vertex 旧专用 wire 尚未属于 current client，直接在边界返回错误，避免
-/// 把旧 provider crate 重新带回 server。
+/// Provider 类型没有 current wire adapter 时直接在边界返回错误。
 fn provider_client_for_credential(
     credential: &RuntimeProviderCredential,
     model: &str,
@@ -87,11 +86,14 @@ fn provider_client_for_credential(
             api_key,
             base_url,
         ),
-        RuntimeCredentialData::GeminiApiKey { .. } => {
-            return Err(CurrentProviderError::invalid_request(
-                "Gemini API key credential has no current provider wire",
-            ));
-        }
+        RuntimeCredentialData::GeminiApiKey {
+            api_key, base_url, ..
+        } => (
+            "google",
+            RuntimeProviderProtocol::GeminiGenerateContent,
+            api_key,
+            base_url,
+        ),
         RuntimeCredentialData::VertexKey { .. } => {
             return Err(CurrentProviderError::invalid_request(
                 "Vertex credential has no current provider wire",
@@ -218,6 +220,7 @@ async fn collect_provider_output(
             | CanonicalLlmEvent::ToolResult { .. }
             | CanonicalLlmEvent::ToolError { .. }
             | CanonicalLlmEvent::ServerModel { .. }
+            | CanonicalLlmEvent::ModelReroute { .. }
             | CanonicalLlmEvent::ModelVerification { .. }
             | CanonicalLlmEvent::StepStart { .. } => {}
         }
@@ -762,7 +765,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_gemini_credential_fails_closed() {
+    fn gemini_credential_uses_current_generate_content_adapter() {
         let credential = RuntimeProviderCredential::new(
             lime_core::models::RuntimeProviderType::GeminiApiKey,
             RuntimeCredentialData::GeminiApiKey {
@@ -771,11 +774,13 @@ mod tests {
                 excluded_models: Vec::new(),
             },
         );
-        let error = match provider_client_for_credential(&credential, "gemini-image") {
-            Ok(_) => panic!("unsupported credential unexpectedly produced a client"),
-            Err(error) => error,
-        };
-        assert!(error.message.contains("no current provider wire"));
+        let client = provider_client_for_credential(&credential, "gemini-2.5-flash")
+            .expect("Gemini current provider client");
+        assert_eq!(client.config().provider_name, "google");
+        assert_eq!(
+            client.protocol().expect("Gemini protocol"),
+            model_provider::ModelProviderProtocol::GeminiGenerateContent
+        );
     }
 
     #[tokio::test]
@@ -981,6 +986,7 @@ mod tests {
                 name: "lookup".to_string(),
                 input: json!({}),
                 provider_executed: None,
+                provider_metadata: Default::default(),
             }),
             Ok(CanonicalLlmEvent::Finish {
                 reason: FinishReason::ToolCall,

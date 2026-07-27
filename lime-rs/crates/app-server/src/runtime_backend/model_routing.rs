@@ -1,12 +1,11 @@
 use super::model_registry_metadata::RuntimeModelRegistryMetadata;
 use super::request_context::RuntimeModelSelection;
 use crate::ExecutionRequest;
-use lime_agent::SessionProviderConfig;
+use lime_agent::{supports_direct_route, supports_provider_type, SessionProviderConfig};
 use lime_core::database::dao::api_key_provider::ProviderWithKeys;
 use lime_core::database::DbConnection;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
 use lime_services::model_registry_service::ModelRegistryService;
-use model_provider::runtime_provider::RuntimeProviderProtocol;
 use runtime_core::{
     resolve_ready_model_routing_with_exclusions, ModelRouteExclusion, ModelRoutingDecision,
     ProviderReadiness, RoutingAttempt, RoutingResolution,
@@ -104,7 +103,7 @@ pub(crate) fn configured_provider_readiness(provider: &ProviderWithKeys) -> Prov
     let total_key_count = provider.api_keys.len();
     let effective_provider_type = provider.provider.effective_provider_type().to_string();
     let provider_type = Some(effective_provider_type.clone());
-    if RuntimeProviderProtocol::from_provider_type(&effective_provider_type).is_none() {
+    if !supports_provider_type(&effective_provider_type) {
         return ProviderReadiness::provider_store_blocked(
             "unsupported_protocol",
             provider_type,
@@ -152,7 +151,7 @@ fn direct_provider_readiness(config: &SessionProviderConfig) -> ProviderReadines
         .route_protocol
         .clone()
         .unwrap_or_else(|| runtime_core::protocol_from_provider_name(&config.provider_name));
-    if RuntimeProviderProtocol::from_direct_route(&config.provider_name, &protocol).is_some() {
+    if supports_direct_route(&config.provider_name, &protocol) {
         ProviderReadiness::direct_request_ready()
     } else {
         ProviderReadiness::direct_request_blocked("unsupported_protocol")
@@ -260,9 +259,10 @@ mod tests {
         let model_registry = RuntimeModelRegistryMetadata::from_payload(json!({
             "source": "provider_declared_model",
             "status": "matched",
-            "reasonCode": "matched_provider_custom_models",
-            "reason_code": "matched_provider_custom_models",
+            "reasonCode": "matched_provider_models",
+            "reason_code": "matched_provider_models",
             "modelCapabilities": {
+                "provenance": "inferred_hint",
                 "capabilities": {
                     "tools": true,
                     "streaming": true,
@@ -296,7 +296,7 @@ mod tests {
         assert!(payload["fallbackChain"].as_array().unwrap().is_empty());
         assert_eq!(
             payload["modelRegistry"]["reasonCode"].as_str(),
-            Some("matched_provider_custom_models")
+            Some("matched_provider_models")
         );
         assert_eq!(
             payload["modelRegistry"]["modelCapabilities"]["capabilities"]["reasoning"].as_bool(),
@@ -379,13 +379,13 @@ mod tests {
     }
 
     #[test]
-    fn ready_routing_skips_configured_provider_without_current_adapter() {
+    fn ready_routing_uses_configured_gemini_adapter() {
         let db = test_db();
         let service = ApiKeyProviderService::new();
         let unsupported = service
             .add_custom_provider(
                 &db,
-                "Gemini without adapter".to_string(),
+                "Gemini route".to_string(),
                 ApiProviderType::Gemini,
                 "https://generativelanguage.googleapis.com".to_string(),
                 None,
@@ -427,13 +427,10 @@ mod tests {
         let resolution = resolve_ready_routing(&db, &service, &request, &requested, None, &[])
             .expect("routing resolution");
 
-        assert_eq!(resolution.selection.provider, "openai");
-        assert_eq!(resolution.routing.service_model_slot, "base");
-        assert_eq!(resolution.attempted.len(), 2);
-        assert_eq!(
-            resolution.attempted[0].readiness.reason_code,
-            Some("unsupported_protocol")
-        );
+        assert_eq!(resolution.selection.provider, unsupported.id);
+        assert_eq!(resolution.selection.model, "gemini-2.5-pro");
+        assert_eq!(resolution.routing.service_model_slot, "coding");
+        assert_eq!(resolution.attempted.len(), 1);
         assert!(resolution.readiness.ready);
     }
 
@@ -468,7 +465,11 @@ mod tests {
                 None,
                 None,
                 None,
-                Some(vec!["pending-route-model".to_string()]),
+                Some(vec![
+                    lime_core::models::model_registry::ProviderModelConfig::hint(
+                        "pending-route-model",
+                    ),
+                ]),
             )
             .expect("declared model");
 
@@ -490,7 +491,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_readiness_rejects_protocols_without_current_adapters() {
+    fn direct_ollama_responses_route_is_ready_without_api_key() {
         let direct = SessionProviderConfig {
             provider_name: "ollama".to_string(),
             provider_selector: Some("local-ollama".to_string()),
@@ -500,7 +501,7 @@ mod tests {
             credential_uuid: None,
             reasoning_effort: None,
             service_tier: None,
-            route_protocol: Some(app_server_protocol::ProtocolKind::OllamaChat),
+            route_protocol: Some(app_server_protocol::ProtocolKind::OpenaiResponses),
             toolshim: false,
             toolshim_model: None,
             model_capabilities: Some(json!({
@@ -512,14 +513,14 @@ mod tests {
         };
 
         let direct_readiness = direct_provider_readiness(&direct);
-        assert!(!direct_readiness.ready);
+        assert!(direct_readiness.ready);
         assert_eq!(direct_readiness.source, "direct_provider_config");
-        assert_eq!(direct_readiness.reason_code, Some("unsupported_protocol"));
+        assert_eq!(direct_readiness.reason_code, None);
         assert!(direct_readiness.direct_request_config);
     }
 
     #[test]
-    fn unsupported_direct_route_does_not_reuse_config_for_profile_fallbacks() {
+    fn ready_direct_ollama_route_stays_on_requested_selection() {
         let db = test_db();
         let service = ApiKeyProviderService::new();
         let request = request_for_test(
@@ -550,7 +551,7 @@ mod tests {
             credential_uuid: None,
             reasoning_effort: None,
             service_tier: None,
-            route_protocol: Some(app_server_protocol::ProtocolKind::OllamaChat),
+            route_protocol: Some(app_server_protocol::ProtocolKind::OpenaiResponses),
             toolshim: false,
             toolshim_model: None,
             model_capabilities: Some(json!({
@@ -566,11 +567,8 @@ mod tests {
                 .expect("direct routing resolution");
 
         assert_eq!(resolution.selection, selection);
-        assert!(!resolution.readiness.ready);
-        assert_eq!(
-            resolution.readiness.reason_code,
-            Some("unsupported_protocol")
-        );
+        assert!(resolution.readiness.ready);
+        assert_eq!(resolution.readiness.reason_code, None);
         assert_eq!(resolution.attempted.len(), 1);
         assert_eq!(resolution.attempted[0].provider, "local-ollama");
         assert_eq!(
@@ -585,11 +583,9 @@ mod tests {
         let service = ApiKeyProviderService::new();
 
         for (provider_type, label) in [
-            (ApiProviderType::Gemini, "Gemini"),
             (ApiProviderType::AzureOpenai, "Azure OpenAI"),
             (ApiProviderType::Vertexai, "Vertex"),
             (ApiProviderType::AwsBedrock, "Bedrock"),
-            (ApiProviderType::Ollama, "Ollama"),
             (ApiProviderType::Fal, "Fal"),
         ] {
             let provider = service
@@ -621,6 +617,61 @@ mod tests {
     }
 
     #[test]
+    fn configured_keyless_ollama_provider_is_runtime_ready() {
+        let db = test_db();
+        let service = ApiKeyProviderService::new();
+        let provider = service
+            .add_custom_provider(
+                &db,
+                "Ollama route".to_string(),
+                ApiProviderType::Ollama,
+                "http://127.0.0.1:11434".to_string(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create Ollama provider route");
+        let provider = service
+            .get_provider(&db, &provider.id)
+            .expect("read Ollama provider")
+            .expect("stored Ollama provider");
+
+        let readiness = configured_provider_readiness(&provider);
+        assert!(readiness.ready);
+        assert_eq!(readiness.reason_code, None);
+        assert_eq!(readiness.enabled_key_count, Some(0));
+    }
+
+    #[test]
+    fn configured_gemini_requires_an_enabled_api_key() {
+        let db = test_db();
+        let service = ApiKeyProviderService::new();
+        let provider = service
+            .add_custom_provider(
+                &db,
+                "Gemini route".to_string(),
+                ApiProviderType::Gemini,
+                "https://generativelanguage.googleapis.com".to_string(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create Gemini provider route");
+        let provider = service
+            .get_provider(&db, &provider.id)
+            .expect("read Gemini provider")
+            .expect("stored Gemini provider");
+
+        let readiness = configured_provider_readiness(&provider);
+        assert!(!readiness.ready);
+        assert_eq!(readiness.reason_code, Some("missing_enabled_api_key"));
+    }
+
+    #[test]
     fn unknown_stored_provider_type_is_not_runtime_ready() {
         let db = test_db();
         {
@@ -628,7 +679,7 @@ mod tests {
             conn.execute(
                 "INSERT INTO api_key_providers (
                     id, name, type, api_host, is_system, group_name, enabled, sort_order,
-                    custom_models, created_at, updated_at
+                    models, created_at, updated_at
                  ) VALUES (?1, ?2, ?3, ?4, 0, 'cloud', 1, 0, '[]', ?5, ?5)",
                 rusqlite::params![
                     "future-route",

@@ -593,7 +593,7 @@ function ModelSelect({
         <option value="">跟随全局默认</option>
         {loading ? <option disabled>加载中...</option> : null}
         {providers.map((provider) => {
-          const models = provider.customModels ?? [];
+          const models = provider.models ?? [];
           const { compatibleModels } = filterProviderModelsByCompatibility(
             {
               providerType: provider.type,

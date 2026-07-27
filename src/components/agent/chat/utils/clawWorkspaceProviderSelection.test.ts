@@ -356,7 +356,7 @@ describe("resolveClawWorkspaceProviderSelection", () => {
         providerId: "lime-hub",
         apiHost: "https://llm.limeai.run#lime_tenant_id=tenant-0001",
         authStatus: "login_required",
-        customModels: ["agnes-2.0-flash"],
+        models: ["agnes-2.0-flash"],
       }),
       createProvider({
         key: "deepseek",

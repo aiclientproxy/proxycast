@@ -594,7 +594,7 @@ export async function ensureFixtureImageProvider(
     {
       providerId,
       enabled: true,
-      customModels: [IMAGE_FIXTURE_MODEL],
+      models: [],
       sortOrder: 1,
     },
     requestLog,
@@ -609,6 +609,22 @@ export async function ensureFixtureImageProvider(
       replaceExisting: true,
     },
     requestLog,
+  );
+  const modelFetch = await invokeAppServerFromPage(
+    page,
+    "modelProvider/fetchModels",
+    { providerId },
+    requestLog,
+  );
+  const fetchedModels = Array.isArray(modelFetch.result?.models)
+    ? modelFetch.result.models
+    : [];
+  const fixtureModel = fetchedModels.find(
+    (model) => model?.id === IMAGE_FIXTURE_MODEL,
+  );
+  assert(
+    fixtureModel,
+    "fixture 图片 Provider 未通过 modelProvider/fetchModels 返回显式模型能力",
   );
 
   const configBinding = await page.evaluate(
@@ -701,6 +717,19 @@ export async function ensureFixtureImageProvider(
     providerName: provider?.name ?? IMAGE_FIXTURE_PROVIDER_NAME,
     apiHost,
     modelId: IMAGE_FIXTURE_MODEL,
+    modelFetch: {
+      source: modelFetch.result?.source ?? null,
+      modelCount: fetchedModels.length,
+      hasFixtureModel: true,
+      taskFamilies:
+        fixtureModel?.taskFamilies ?? fixtureModel?.task_families ?? null,
+      outputModalities:
+        fixtureModel?.outputModalities ??
+        fixtureModel?.output_modalities ??
+        null,
+      runtimeFeatures:
+        fixtureModel?.runtimeFeatures ?? fixtureModel?.runtime_features ?? null,
+    },
     configBinding,
   });
 }
@@ -738,7 +767,7 @@ export async function ensureFixtureTextProvider(
     {
       providerId,
       enabled: true,
-      customModels: [],
+      models: [],
       sortOrder: 0,
     },
     requestLog,

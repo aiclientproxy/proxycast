@@ -23,6 +23,7 @@ fn normalize_route_snapshot(value: &serde_json::Value) -> Option<serde_json::Val
     let object = value.as_object()?;
     const TOP_LEVEL_KEYS: &[&str] = &[
         "schemaVersion",
+        "routeSource",
         "providerPreference",
         "modelPreference",
         "serviceTier",
@@ -43,6 +44,8 @@ fn normalize_route_snapshot(value: &serde_json::Value) -> Option<serde_json::Val
     if schema_version != AGENT_CONTROL_ROUTE_SCHEMA_VERSION {
         return None;
     }
+    let route_source = route_string(object, "routeSource")
+        .filter(|source| matches!(source.as_str(), "catalog" | "direct_provider_config"));
     let provider_config = object.get("providerConfig")?.as_object()?;
     const PROVIDER_CONFIG_KEYS: &[&str] = &[
         "providerId",
@@ -82,6 +85,7 @@ fn normalize_route_snapshot(value: &serde_json::Value) -> Option<serde_json::Val
     let model_registry = normalize_model_registry_snapshot(object.get("modelRegistry"));
     Some(json!({
         "schemaVersion": AGENT_CONTROL_ROUTE_SCHEMA_VERSION,
+        "routeSource": route_source,
         "providerPreference": route_string(object, "providerPreference")
             .unwrap_or_else(|| provider_id.clone()),
         "modelPreference": route_string(object, "modelPreference")
@@ -159,6 +163,15 @@ pub(super) fn has_complete_agent_control_route_snapshot(
                 .and_then(serde_json::Value::as_u64)
                 == Some(AGENT_CONTROL_ROUTE_SCHEMA_VERSION)
         })
+}
+
+pub(super) fn agent_control_route_snapshot_is_direct(route_snapshot: &serde_json::Value) -> bool {
+    normalize_route_snapshot(route_snapshot).is_some_and(|snapshot| {
+        snapshot
+            .get("routeSource")
+            .and_then(serde_json::Value::as_str)
+            == Some("direct_provider_config")
+    })
 }
 
 pub(super) fn agent_control_route_snapshot_from_session(

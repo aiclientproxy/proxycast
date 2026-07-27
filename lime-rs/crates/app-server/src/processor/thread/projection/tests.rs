@@ -207,6 +207,106 @@ fn canonical_mcp_output_projects_codex_result_shape_when_only_truncation_remains
 }
 
 #[test]
+fn provider_image_generation_projects_exact_codex_item() {
+    let mut thread = canonical_thread(false);
+    thread.turns[0].items[0] = canonical::ThreadItem {
+        session_id: canonical::SessionId::new("session-1"),
+        thread_id: canonical::ThreadId::new("thread-1"),
+        turn_id: canonical::TurnId::new("turn-1"),
+        item_id: canonical::ItemId::new("ig_1"),
+        sequence: 1,
+        ordinal: 1,
+        created_at_ms: 1_700_000_000_500,
+        updated_at_ms: 1_700_000_001_000,
+        completed_at_ms: Some(1_700_000_001_000),
+        kind: canonical::ItemKind::Tool,
+        status: canonical::ItemStatus::Completed,
+        payload: canonical::ThreadItemPayload::Tool {
+            call_id: "ig_1".to_string(),
+            name: "image_generation".to_string(),
+            arguments: Vec::new(),
+            output: None,
+        },
+        metadata: json!({
+            "provider_metadata": {
+                "raw_response_item": {
+                    "id": "ig_1",
+                    "type": "image_generation_call",
+                    "status": "completed",
+                    "revised_prompt": "a blue square",
+                    "result": "Zm9v"
+                }
+            }
+        }),
+    };
+
+    let projected = project_thread(thread).expect("project image generation");
+    assert_eq!(
+        projected.turns[0].items[0],
+        v2::ThreadItem::ImageGeneration(v2::ImageGenerationItem {
+            id: "ig_1".to_string(),
+            status: "completed".to_string(),
+            revised_prompt: Some("a blue square".to_string()),
+            result: "Zm9v".to_string(),
+            saved_path: None,
+        })
+    );
+}
+
+#[test]
+fn interrupted_provider_image_generation_projects_failed_status() {
+    let mut thread = canonical_thread(false);
+    thread.turns[0].items[0].kind = canonical::ItemKind::Tool;
+    thread.turns[0].items[0].status = canonical::ItemStatus::Interrupted;
+    thread.turns[0].items[0].payload = canonical::ThreadItemPayload::Tool {
+        call_id: "ig_interrupted".to_string(),
+        name: "image_generation".to_string(),
+        arguments: Vec::new(),
+        output: None,
+    };
+    thread.turns[0].items[0].metadata = json!({
+        "provider_metadata": {
+            "raw_response_item": {
+                "id": "ig_interrupted",
+                "type": "image_generation_call"
+            }
+        }
+    });
+
+    let projected = project_thread(thread).expect("project interrupted image generation");
+    let v2::ThreadItem::ImageGeneration(item) = &projected.turns[0].items[0] else {
+        panic!("expected image generation item");
+    };
+    assert_eq!(item.status, "failed");
+    assert!(item.result.is_empty());
+}
+
+#[test]
+fn completed_provider_image_generation_without_result_fails_closed() {
+    let mut thread = canonical_thread(false);
+    thread.turns[0].items[0].kind = canonical::ItemKind::Tool;
+    thread.turns[0].items[0].status = canonical::ItemStatus::Completed;
+    thread.turns[0].items[0].payload = canonical::ThreadItemPayload::Tool {
+        call_id: "ig_missing".to_string(),
+        name: "image_generation".to_string(),
+        arguments: Vec::new(),
+        output: None,
+    };
+    thread.turns[0].items[0].metadata = json!({
+        "provider_metadata": {
+            "raw_response_item": {
+                "id": "ig_missing",
+                "type": "image_generation_call",
+                "status": "completed"
+            }
+        }
+    });
+
+    let error = project_thread(thread).expect_err("missing image result must fail");
+    assert!(error.message.contains("omitted string result"));
+}
+
+#[test]
 fn file_change_projects_complete_batch_and_move_identity() {
     let mut thread = canonical_thread(false);
     thread.turns[0].items[0] = canonical::ThreadItem {

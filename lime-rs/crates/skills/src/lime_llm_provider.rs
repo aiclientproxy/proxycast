@@ -79,22 +79,6 @@ impl LimeLlmProvider {
         self.preferred_provider.as_deref()
     }
 
-    /// 将 Skill 的 provider 字段映射到 RuntimeProviderType
-    ///
-    /// # Arguments
-    /// * `provider` - Provider 名称字符串
-    ///
-    /// # Returns
-    /// 对应的 RuntimeProviderType，未知类型返回 None
-    #[cfg(test)]
-    fn map_skill_provider_to_runtime_provider_type(provider: &str) -> Option<RuntimeProviderType> {
-        match provider.to_lowercase().as_str() {
-            "openai" | "gpt" => Some(RuntimeProviderType::OpenAI),
-            "anthropic" | "claude" => Some(RuntimeProviderType::Claude),
-            _ => None,
-        }
-    }
-
     /// 根据凭证调用 LLM API
     ///
     /// # Arguments
@@ -118,8 +102,10 @@ impl LimeLlmProvider {
             | RuntimeCredentialData::AnthropicKey { api_key, base_url } => {
                 (api_key.as_str(), base_url.as_deref())
             }
-            RuntimeCredentialData::GeminiApiKey { .. }
-            | RuntimeCredentialData::VertexKey { .. } => {
+            RuntimeCredentialData::GeminiApiKey {
+                api_key, base_url, ..
+            } => (api_key.as_str(), base_url.as_deref()),
+            RuntimeCredentialData::VertexKey { .. } => {
                 return Err(SkillError::ProviderError(format!(
                     "当前 model-provider 不支持 runtime credential: {:?}",
                     credential.provider_type
@@ -134,6 +120,7 @@ impl LimeLlmProvider {
                 RuntimeProviderProtocol::AnthropicMessages
             }
             RuntimeProviderType::OpenAI => RuntimeProviderProtocol::ChatCompletions,
+            RuntimeProviderType::GeminiApiKey => RuntimeProviderProtocol::GeminiGenerateContent,
             unsupported => {
                 return Err(SkillError::ProviderError(format!(
                     "当前 model-provider 不支持 runtime provider: {unsupported}"
@@ -144,6 +131,7 @@ impl LimeLlmProvider {
         let client = CurrentProviderClient::new(RuntimeProviderConfig {
             provider_name: match protocol {
                 RuntimeProviderProtocol::AnthropicMessages => "anthropic".to_string(),
+                RuntimeProviderProtocol::GeminiGenerateContent => "google".to_string(),
                 _ => "openai".to_string(),
             },
             provider_selector: Some(credential.provider_type.to_string()),
@@ -276,62 +264,6 @@ impl LlmProvider for LimeLlmProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_map_skill_provider_openai() {
-        assert_eq!(
-            LimeLlmProvider::map_skill_provider_to_runtime_provider_type("openai"),
-            Some(RuntimeProviderType::OpenAI)
-        );
-        assert_eq!(
-            LimeLlmProvider::map_skill_provider_to_runtime_provider_type("gpt"),
-            Some(RuntimeProviderType::OpenAI)
-        );
-        assert_eq!(
-            LimeLlmProvider::map_skill_provider_to_runtime_provider_type("OPENAI"),
-            Some(RuntimeProviderType::OpenAI)
-        );
-    }
-
-    #[test]
-    fn test_map_skill_provider_claude() {
-        assert_eq!(
-            LimeLlmProvider::map_skill_provider_to_runtime_provider_type("claude"),
-            Some(RuntimeProviderType::Claude)
-        );
-        assert_eq!(
-            LimeLlmProvider::map_skill_provider_to_runtime_provider_type("anthropic"),
-            Some(RuntimeProviderType::Claude)
-        );
-        assert_eq!(
-            LimeLlmProvider::map_skill_provider_to_runtime_provider_type("CLAUDE"),
-            Some(RuntimeProviderType::Claude)
-        );
-    }
-
-    #[test]
-    fn test_map_skill_provider_unsupported_is_fail_closed() {
-        assert_eq!(
-            LimeLlmProvider::map_skill_provider_to_runtime_provider_type("gemini"),
-            None
-        );
-        assert_eq!(
-            LimeLlmProvider::map_skill_provider_to_runtime_provider_type("google"),
-            None
-        );
-    }
-
-    #[test]
-    fn test_map_skill_provider_unknown() {
-        assert_eq!(
-            LimeLlmProvider::map_skill_provider_to_runtime_provider_type("unknown_provider"),
-            None
-        );
-        assert_eq!(
-            LimeLlmProvider::map_skill_provider_to_runtime_provider_type(""),
-            None
-        );
-    }
 
     #[test]
     fn test_skill_error_display() {

@@ -2276,6 +2276,318 @@ route + reported model 去重键；随后才实现可信 requested/server mismat
 增强不改变本节 `model/verification` method 的 implemented 分类，也不得把普通 provider fallback 改名为
 `model/rerouted`。
 
+### 2026-07-27 model/rerouted 与 route-aware server evidence
+
+目标与写集：完成上一节声明的多模型 P1 下一刀。写集限定为 RuntimeCore canonical event、
+`model-provider` trust boundary、Agent Runtime/Lime Agent 传播、App Server route evidence/transient sink/v2
+projector、协议/schema/generated client、范围矩阵、架构与本计划；不修改 Renderer/Electron，不增加 warning
+文案，不实现缺失 adapter/hosted tool。
+
+完成结果与分类：`CurrentProviderClient` 只在 Responses、resolved provider 为 `openai|codex` 且 endpoint host
+为 exact `api.openai.com` 时信任 server-model metadata。requested/server model 按 ASCII 大小写不敏感比较；
+首次 mismatch 产生 canonical `ModelReroute { from_model, to_model,
+HighRiskCyberActivity }`，相同或仅大小写不同不产生。transport replay 与 tool-loop sampling 由 provider stream、
+Agent Runtime 和 App Server 三层收敛为每 Turn 最多一次；跨 provider route 继续只保留第一次 cyber reroute。
+App Server 通过 transient sink 发布 exact camelCase v2 `model/rerouted`，不追加 state/EventLog，不进入 cold
+resume item replay；缺 identity、空 model、未知 reason 均 fail closed，不回退 `agentSession/event`。
+`model.server_reported` durable evidence 同步增加 provider、requestedModel、selectedModel、routeAttempt，并以
+Turn 内 route + reported model 去重。普通 retryable 503 route fallback 仍只有
+`routing.fallback.applied`，没有 `model/rerouted`。以上 producer、canonical event、transient boundary、v2
+DTO/method/envelope/schema/client/projector 均为 `current`；selector/展示名建立信任、第三方 endpoint 伪造、
+普通 fallback 冒充 cyber reroute、durable/resume reroute 为 `dead / forbidden-to-restore`；无
+`compat/deprecated`。
+
+验证与进度：`cargo check -p app-server --tests` 通过；model-provider tracked stream `4/4`、Agent Runtime
+sampling 去重 `1/1`、App Server protocol exact round-trip `1/1`、App Server reroute/route evidence/fallback
+隔离 `4/4` 通过。schema fixture 与 generated TypeScript 已由唯一生成入口重建，为 `815` definitions / `807`
+protocol types。范围矩阵将 exact `model/rerouted` 从 planned 移入 implemented，计数为
+`71 implemented / 109 planned / 34 product-scope-excluded`，产品范围完成度 `71 / 180 = 39.4%`。架构影响：
+重大，新增既有 runtime event pipeline 的明确 transient 分支；责任开发者确认：`root, 2026-07-27`。
+最终门禁：`npm run test:contracts` 通过（`284` 个 client contract checks，schema/generated client 零漂移）；
+Codex method scope 守卫直接 Vitest `4/4` 通过（smart related 入口先遇到 Vite `EISDIR .../electron`，未将该
+工具入口错误冒充测试结果）；`npm run governance:legacy-report` 为 `0` 零引用候选 / `1` 个既有 deprecated
+分类漂移 / `0` 边界违规；`npm run smoke:agent-runtime-current-fixture` 完整通过，覆盖真实 Electron、
+preload/IPC、App Server、runtime/read model 与 GUI，`liveProviderUsed=false`；workspace rustfmt 与全树 diff
+check 通过。live provider 未执行，本刀信任/去重语义由受控 provider stream 与 HTTP fixture 验证，不接触
+真实凭证。
+
+下一刀：优先补 Grok/OpenCode 参考下仍 fail closed 的 provider adapter 与 hosted web/image request + reducer +
+Item 闭环；或按产品范围优先级实现 Skills/Plugins/Apps watcher/readiness。不得继续用近似 model fallback、
+function tool 或 provider 名称冒充 capability/runtime parity。
+
+### 2026-07-27 Gemini GenerateContent transport 与工具历史闭环
+
+目标与写集：完成上一节多模型 P1 的第一个新增 transport。provider/model control plane 继续参考
+`grok-build`，Gemini endpoint、canonical lowering、tool schema 和 SSE reducer 参考 OpenCode；写集限定为
+`model-provider`、RuntimeCore route、Agent Runtime/tool lifecycle、App Server readiness/catalog/provider history、
+services/skills current client 接线、架构与本计划。未修改 Renderer/Electron，不新增 provider crate、compat
+wrapper 或生产 mock。
+
+完成结果与分类：新增 dedicated `GeminiGenerateContent` protocol，从 provider store、catalog、enabled API key
+readiness、RuntimeCore Chat admission、App Server route lowering 到 `CurrentProviderClient` 使用同一 current
+事实源。wire 固定为 Google `streamGenerateContent?alt=sse` 和 `x-goog-api-key`，禁止 Bearer；request lowering
+覆盖 system instruction、text、inline base64 image、assistant function call、function response、generation config
+与 Gemini tool-schema projection。SSE reducer 覆盖 text/reasoning/tool lifecycle、usage trailer、finish reason、
+prompt blocked、malformed part 和 truncated EOF。`thoughtSignature` 经 canonical `provider_metadata`、Agent tool
+call、通用 `ToolLifecycleEvent`、`ThreadItem.metadata` 与 provider history lowering 跨 Turn 保留，不新增 Gemini
+专属持久化 schema。Gemini 为 `current`；Vertex/Azure/Bedrock/Ollama/Fal chat 仍 fail closed；旧的“Gemini
+unsupported/non-chat”测试和 Skills 测试专用 mapper 为 `dead / deleted`；无 `compat/deprecated`。
+
+验证：跨 crate `cargo check` 覆盖 `tool-runtime/model-provider/agent-runtime/lime-agent/lime-services/lime-skills/
+app-server --tests` 并通过；Gemini request-capture/reducer `4/4`、Agent Runtime metadata propagation `1/1`、
+Lime Agent item projection `1/1`、App Server routing `11/11`、Gemini catalog `1/1`、provider-history restore
+`1/1`、services unsupported fail-before-network `1/1` 均通过。`npm run test:rust:related -- ...` 完整通过，
+其中 Agent Runtime `180`、App Server `1560`、model-provider `203`、RuntimeCore `51`、tool-runtime `306`，并
+覆盖全部推导出的反向依赖 crate。`npm run smoke:agent-runtime-current-fixture` 完整通过，覆盖真实 Electron、
+preload/IPC、App Server、runtime/read model 与 GUI，最终闭合到内容工厂 Article Editor / `articleDraft` 场景，
+`liveProviderUsed=false`。`npm run test:contracts` 通过（`815` 个 schema definitions、`807` 个 generated
+protocol types、`284` 个 client contract checks，生成文件零漂移）；`npm run governance:legacy-report` 为 `0`
+零引用候选 / `1` 个既有 deprecated 分类漂移 / `0` 边界违规；workspace rustfmt、三份范围/架构 Markdown
+Prettier 与全树 diff check 均通过。live provider 未执行，不读取真实凭证；wire 证据来自隔离 loopback
+fixture，未把受控 fixture 冒充真实 Gemini 网络调用。
+
+进度口径：本刀没有新增 Codex App Server method，因此 method 产品范围仍为
+`71 implemented / 109 planned / 34 product-scope-excluded`，即 `71 / 180 = 39.4%`；该百分比只衡量 exact
+method boundary，不代表多模型 transport 总完成度。多模型 transport 本刀新增了 Gemini request/stream/tool/
+history 的完整切片。
+
+下一刀：按控制面优先级实现 hosted web/image 的 request + reducer + Item 闭环，或选择下一条 provider
+transport；不得把 Vertex Gemini、Azure、Bedrock、Ollama 或 Fal 通过 Gemini alias 放行。Ollama 后续仅允许
+按 Codex current 的 Responses transport 独立收敛，不恢复 Ollama Chat。
+
+### 2026-07-27 Ollama Chat 删除与 Responses 收敛
+
+目标与写集：Codex HEAD 已删除 `wire_api = "chat"` 与 `ollama-chat`，内建 Ollama 使用 keyless Responses。
+本刀删除 Lime 的 `OllamaChat` protocol surface，把 provider route/readiness/catalog/config/test probe 收敛到
+现有 `OpenaiResponses` + `NoAuth` owner；`/api/tags` 继续只做模型发现。写集限定为 protocol/schema/generated
+client、RuntimeCore、model-provider、Agent provider config、App Server route/catalog、services、contract guard、
+架构与本计划；未修改 Renderer/Electron，不新增 compat、provider crate 或生产 mock。
+
+完成结果与分类：Ollama provider type/name 解析为 `OpenaiResponses`，framing 为 SSE，base host
+`http://127.0.0.1:11434` 由统一 endpoint builder 生成 `/v1/responses`。stored/direct keyless route 均 ready，
+catalog 保留 Ollama 模型；provider config 保留实际 resolved provider identity，认证显式为 `NoAuth`，connection/
+chat probe 不再强制选择 API key。专用 loopback fixture 捕获 canonical system/user/tool call/tool result/tool
+definition request，证明 POST `/v1/responses`、无 Authorization、Responses SSE text/usage/finish 闭环。
+`OpenaiResponses` adapter、Ollama keyless readiness/catalog/probe 为 `current`；`ProtocolKind::OllamaChat`、
+`ollama_chat`、NDJSON agent turn、专用 lowering 与 Chat Completions fallback 为
+`dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。
+
+验证：Ollama model-provider loopback `1/1`、RuntimeCore route `1/1`、Agent no-auth config `1/1`、App Server
+Ollama route/readiness/catalog `4/4`、services keyless credential/protocol `1/1`、既有 unsupported provider 负向
+集合 `1/1` 均通过。`npm run test:rust:related -- ...` 完整通过，其中 Agent Runtime `180`、App Server
+`1561`、model-provider `204`、RuntimeCore `52`、tool-runtime `306`，并覆盖全部推导出的反向依赖 crate。
+`npm run test:contracts` 通过（`815` 个 schema definitions、`807` 个 generated protocol types、`284` 个 client
+contract checks，生成文件零漂移）；`npm run governance:legacy-report` 为 `0` 零引用候选 / `1` 个既有
+deprecated 分类漂移 / `0` 边界违规。`npm run smoke:agent-runtime-current-fixture` 完整通过，覆盖真实
+Electron、preload/IPC、`app_server_handle_json_lines`、App Server、runtime/read model 与 GUI，最终闭合到内容
+工厂 Article Editor / `articleDraft` 场景，`liveProviderUsed=false`。live provider 未执行，不读取真实凭证；
+Ollama wire 证据来自隔离 loopback HTTP fixture，未把受控 fixture 冒充真实 Ollama 网络调用。
+
+进度口径：本刀不新增 Codex App Server method，因此 method 产品范围仍为
+`71 implemented / 109 planned / 34 product-scope-excluded`，即 `71 / 180 = 39.4%`；该百分比只衡量 exact
+method boundary，不代表多模型 transport 总完成度。本刀推进的是 Ollama Responses transport 和 keyless
+control-plane readiness。
+
+下一刀：优先实现 hosted web/image 的 request + reducer + Item 闭环，或选择 Vertex/Bedrock/Azure/Fal 中一条
+完整 adapter；不得以 provider alias、Chat Completions 或恢复 `OllamaChat` 冒充支持。
+
+### 2026-07-27 Official Responses hosted web search 闭环
+
+目标与写集：按 Codex hosted `WebSearch` tool spec 与 `web_search_call` item 语义，完成官方 Responses 的
+request lowering、stream reducer、provider-executed Item lifecycle 与 capability read；Grok/OpenCode 继续只作
+多模型分层参考。写集限定为 `model-provider`、Agent Runtime provider turn、App Server provider capability、
+架构与本计划；未修改公共 JSON-RPC/schema、Renderer/Electron，不新增 provider crate、compat wrapper 或生产
+mock。
+
+完成结果与分类：resolved provider 必须是 OpenAI/Codex Responses 且 endpoint host exact
+`api.openai.com`，canonical `WebSearch` 才 lower 为 `{ type: "web_search", external_web_access: true }`。
+Responses reducer 将 `web_search_call` 收敛为 `provider_executed=true` 的 ToolCall/ToolResult，原始 response item
+进入 provider metadata/history；Agent Runtime 只发出 environment=`provider` 的 started/completed lifecycle，
+不调用本地 `WebSearch` executor，也不把 Finish 错判为本地 ToolCall。第三方 Responses、Ollama、Chat
+Completions、未知 route 与非 canonical 别名均不获得 hosted capability/promotion。官方 request/reducer/
+provider-executed lifecycle/capability projection 为 `current`；provider 名称猜测、第三方 hosted promotion、
+`WebSearchTool`/`mcp.system.WebSearch` 别名提升和 provider-executed 搜索回落本地执行为
+`dead / forbidden-to-restore`；无 `compat/deprecated`。
+
+验证：`cargo check -p model-provider -p agent-runtime -p app-server --tests` 通过；model-provider hosted search
+request/capability/reducer `5/5`、Agent Runtime provider-executed no-local-execution `1/1`、App Server capability
+read `1/1` 通过；`npm run test:rust:related -- ...` 完整通过，覆盖 Agent Runtime、App Server、
+model-provider、tool-runtime 及全部推导出的反向依赖 crate；`npm run governance:legacy-report` 为 `0` 零引用
+候选 / `1` 个既有 deprecated 分类漂移 / `0` 边界违规。`npm run smoke:agent-runtime-current-fixture`
+完整通过，覆盖真实 Electron、preload/IPC、App Server、runtime/read model 与 GUI，最终闭合到内容工厂
+Article Editor / `articleDraft` 场景，`liveProviderUsed=false`。workspace rustfmt、两份 Markdown Prettier 与
+全树 diff check 通过。live provider 未执行，不读取真实凭证；hosted wire 语义由受控 reducer/request fixture
+验证，未把 current fixture 冒充 live OpenAI 证据。
+
+进度口径：本刀不新增 Codex App Server method，method 产品范围仍为
+`71 implemented / 109 planned / 34 product-scope-excluded`，即 `71 / 180 = 39.4%`；该百分比只衡量 exact
+method boundary，不代表多模型 transport 总完成度。本刀推进的是 hosted Responses tool 与 Item 生命周期。
+
+下一刀：优先收敛 model capability provenance，把 `canonical/provider_explicit/inferred_hint` 变成 route
+admission 的显式事实；启发式 catalog hint 不得授权执行，Renderer 不得继续生成假 capability。随后再实现
+hosted image 或下一条完整 provider adapter。
+
+### 2026-07-27 model capability provenance 与 admission 收口
+
+目标与窄写集：按 Codex fail-closed runtime admission 与 Grok/OpenCode 多模型 capability 分层，把 catalog hint
+和 executable snapshot 拆成显式 provenance。写集限定为 Core/Services model registry、App Server route
+metadata、RuntimeCore admission、Renderer `model/list` projection、架构与本计划；不修改公共 JSON-RPC method、
+Electron bridge、Gemini/provider streaming、verification/reroute 或生产 mock。
+
+完成结果与分类：`EnhancedModelMetadata` 新增 `canonical/provider_explicit/inferred_hint`；canonical registry、API
+明确 capability 字段和 typed direct config 属于权威快照，App Server 将 provenance 投影到 route metadata，
+RuntimeCore 只允许前两者授权 route。裸 `custom_models`、仅名称推断和无 capability 字段的 provider model list
+保留为 catalog hint，但统一返回 `capability_snapshot_missing`，即使其推断对象非空也不触网。Renderer Codex
+`model/list` 投影保留真实 picker/reasoning-effort/input-modality 字段并标记 `inferred_hint`，删除硬编码
+`tools/streaming/json_mode/function_calling=false`、空 execution/context/tool-call/reasoning-output/Responses/
+truncation/native-tool policy 和空 runtime feature。权威 provenance 与 admission 为 `current`；名称启发式 route
+授权、对象存在即放行和 Renderer 假能力为 `dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。
+
+行为影响：Ollama Responses transport、keyless readiness 和协议解析仍为 `current`，但 `/api/tags` 与裸字符串
+模型不构成 capability authority，因此当前会 fail closed。下一刀必须直接把 `custom_models: Vec<String>` 替换为
+携带显式 capability snapshot 的 typed model config，并让 Ollama/自定义 provider 的真实 model discovery 产出
+provider-explicit snapshot；不得重新放行名称启发式或增加双轨配置。
+
+架构影响：重大；模型发现、App Server route metadata 与 RuntimeCore admission 之间新增显式信任边界，但 owner
+与依赖方向不变。架构图确认：已核对 `architecture.md` 第 19 节的 provenance 数据流、Renderer 非授权边界与
+fail-closed 退出条件；责任开发者确认：`root, 2026-07-27`。本刀不新增 Codex App Server method，method 产品范围
+仍为 `71 / 180 = 39.4%`；该比例不代表多模型 transport 完成度。
+
+验证与 Gate B 收尾：App Server model route 聚合 `23/23`、metadata provenance `2/2`、全量单元
+`1561/1561` 通过；`npm run test:rust:related -- <本刀 Rust 写集>` 完整覆盖 20 个反向依赖 crate 并通过，
+workspace rustfmt 与 `git diff --check` 通过。Renderer 定向测试 `35/35`、TypeScript typecheck、Prettier、
+`npm run test:contracts`（`815` schema definitions / `807` generated protocol types / `284` client checks，生成物
+零漂移）和 `npm run governance:legacy-report`（零引用候选 `0`、既有 deprecated 分类漂移 `1`、边界违规 `0`）
+通过。聚合 `npm run smoke:agent-runtime-current-fixture` 已通过历史恢复、stream terminal、Electron guards、
+Renderer/sidecar build、Claw 首页与短问候、Coding Workbench，随后在图片场景发现 fixture 仍以裸
+`customModels` 充当 route authority；该旧 fixture 已直接替换为带显式 capability 的 `/v1/models` discovery，
+不恢复 inferred hint 放行。fixture 定向测试 `83/83`、scoped Prettier 和单场景真实 Electron
+`npm run smoke:claw-chat-current-fixture -- --scenario image-command` 通过；evidence 显示带 Authorization 的
+model discovery 后，同一 provider/model 进入 `/v1/images/generations`，worker task 终态 `succeeded`、结果图
+`1`，`imageCommandWorkerUsedFixtureProviderAndModel` 与 `imageCommandTaskArtifactTerminal` 均为 `true`。该 Gate B
+覆盖 Electron、preload/IPC、`app_server_handle_json_lines`、App Server、provider discovery、resolved route、
+media worker、read model 与 GUI；使用受控 external provider，不冒充 live provider 证据。
+
+### 2026-07-27 Provider typed models[] 配置闭环
+
+目标与写集：完成上一节的退出条件，直接把 Provider 模型配置从裸字符串替换为唯一 typed 形态
+`Provider.models[] = { id, displayName?, capability? }`。写集限定为 Core provider DAO/schema/system defaults、
+Services model registry、App Server v0 protocol/local data source、图片/视频 provider model 读取、generated
+client、Renderer provider gateway/设置与媒体消费者、current smoke fixture、数据库/架构事实源和本计划；不保留
+旧字段、不新增 compat wrapper，不改变 Codex method 产品范围。
+
+完成结果与分类：Provider 持久化、App Server `modelProvider/list|read|update` 和 Renderer 公共 gateway 统一消费
+typed records。带 `capability` 的配置进入 registry 时标记 `provider_explicit`；id-only 配置只生成
+`inferred_hint` 并在 RuntimeCore admission fail closed。App Server 双向转换保留 task/input/output/runtime、基础
+capabilities 与 reasoning-effort menu/source；非法 taxonomy 直接返回结构化错误。Renderer 编辑模型 ID 时保留
+已有 display name/capability，新 ID 只创建 `{ id }`，图片、视频和脚本只在明确需要 ID 投影时读取 `.id`。
+`Provider.models[]`、`canonical/provider_explicit` authority 和 typed JSON-RPC/client 为 `current`；无新增
+`compat/deprecated`；`custom_models/customModels`、字符串数组持久化合同、名称启发式执行授权和 Renderer 假
+capability 为 `dead / deleted / forbidden-to-restore`。生产源码、Renderer、packages 与 scripts 对旧字段扫描为
+零匹配。
+
+验证：跨 Core/Services/App Server/Server 的 `cargo check --tests` 通过；Core system provider `3/3`、Services
+model registry `59/59`、App Server provider/projection `17/17`、media route `10/10`、Server image provider
+`45/45`、公共 `model/list` JSON-RPC `2/2` 通过。Renderer/provider/media 显式集合 `120/120` 通过，包含
+capability 保留和 UI 添加/聊天试跑边界；TypeScript typecheck 通过。`npm run test:contracts` 通过（`817`
+schema definitions、`809` generated protocol types、`284` client checks，生成物零漂移）；scripts governance
+通过；legacy governance 为零引用候选 `0`、既有 deprecated 分类漂移 `1`、边界违规 `0`；workspace rustfmt
+与 `git diff --check` 通过。图片场景 Gate B 已在上一节完成，本节收尾只增加 typed conversion/UI 回归和文档，
+不重复启动 Electron。
+
+进度口径：本次 Provider typed config 切片完成度为 `100%`。Codex method 产品范围没有新增 method，仍为
+`71 implemented / 109 planned / 34 product-scope-excluded`，即 `71 / 180 = 39.4%`；该百分比只衡量 method
+边界，不能代表本切片或整体多模型 transport 完成度。架构影响：重大，Provider capability 从配置到 route
+admission 建立了单一 typed 事实链；架构图确认：已更新 `architecture.md` 第 19 节；责任开发者确认：`root,
+2026-07-27`。
+
+### 2026-07-27 Catalog refresh 与 Turn 选择协调闭环
+
+目标与写集：按 Grok 多模型控制面的 catalog refresh/current selection 语义，在 Codex 单一 Turn admission owner
+内完成 provider/model 自动协调。写集限定为 App Server model catalog、session settings、Turn admission、direct
+route snapshot、v2 notification projector、公共 JSON-RPC 回归、架构与本计划；不新增 selection store、私有
+JSON-RPC method、compat wrapper 或生产 mock。
+
+完成结果与分类：所有生产 `start_turn_inner` 入口在 provider execution 前消费同一 catalog generation。当前选择
+仍为 visible、authoritative、chat-capable 且 route preflight 通过时保持不变；失效时先选同 Provider，再按 catalog
+顺序选择其他 ready Provider，并通过既有 `thread/settings/update` actor preflight 后持久化模型、默认 effort 与
+service tier。generation 最多重试三次，持续变化或无可执行模型 fail closed。显式 direct provider config 与带
+`routeSource=direct_provider_config` 的 durable route 不参与 catalog 替换；选择变化会清除旧 provider config/
+`agentControlRoute`，阻止内部 continuation、queued resume、workflow retry 和 mailbox 复用旧 route。前台
+`turn/start` 在同一 dispatch 中恰好发送一次 exact `thread/settings/updated`；后台入口通过 transient runtime event
+进入同一 v2 projector，不写 EventLog、不参与 resume replay。该 generation/reconcile/actor/notification 链为
+`current`；silent fallback、`inferred_hint` 执行授权、direct route catalog 替换、旧 route 继续执行和第二套 selection
+store 为 `dead / forbidden-to-restore`；无 `compat/deprecated`。
+
+执行边界：catalog reconciliation 只在 `ExecutionBackend::requires_provider_selection()` 为 `true` 时进入。
+provider-backed RuntimeBackend 必须经过同一 selection/admission；受控 external fixture backend 不承担生产
+provider 选择，因此不会为了测试数据再造第二套 catalog。该 guard 同时适用于前台 `turn/start`、内部
+continuation、queued resume、workflow retry 与 mailbox 恢复，避免不同入口各自猜测模型。
+
+Gate B 收尾时发现 discovery cache 的事实源断裂：`/v1/models` 已按 API Key 指纹写入 credential-scoped cache，
+但 `model_catalog()` 只读 unscoped cache；fixture provider 的静态 `models[]` 为空时，Turn admission 因此得到
+`model_catalog_has_no_executable_selection`。Services 现提供统一的 scoped cache read，App Server catalog 遍历
+Provider 的 enabled keys，通过 durable credential ref 读取对应 cache，并在同一 Provider 内合并去重；只有无
+enabled key 且运行时不要求 API Key 的 keyless Provider 才读取 keyless cache。未把 discovery 结果回写静态
+`models[]`，也未放宽 `inferred_hint` admission。无 scope cache 冒充 credential authority 的旧读取方式归
+`dead / forbidden-to-restore`。
+
+已完成验证：`cargo check -p app-server --tests` 通过；catalog owner 回归 `4/4`、统一 RuntimeCore Turn 入口
+`1/1`、direct route snapshot `1/1`、后台 exact settings notification projector `1/1`、公共
+`model_selection_refresh_jsonrpc` `1/1` 通过；公共回归同时证明 selection notification 恰好一次、持久化设置与
+`thread/read` 一致。workspace rustfmt 与 `git diff --check` 通过；旧 `custom_models/customModels` 及字符串模型
+序列化扫描为零匹配。credential-scoped cache 回归为 Services `4/4`、App Server provider/catalog `14/14`，
+catalog refresh/reconcile `5/5`、公共 JSON-RPC `1/1`；`npm run test:rust:related -- <本刀 Rust 写集>` 完整通过。
+通用 OpenAI-compatible fixture 的 `/v1/models` 现返回它实际支持的显式 chat/text/stream/tool capability，fixture
+单测 `13/13`，不再靠模型名推断授权执行。
+
+真实 Electron Gate B 已闭合两条 provider-backed 路径。图片命令 evidence
+`.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-image-command-regression-summary.json`
+证明带 Authorization 的 `GET /v1/models` 后进入同 Provider/model 的 `POST /v1/images/generations`，task
+终态 `succeeded`、结果图 `1`、legacy/mock 命中 `0`。Content Factory 原失败场景定向复跑通过，session
+`019fa3de-6518-7ed2-b2e8-75ac380b2673`；最终完整 `npm run smoke:agent-runtime-current-fixture` 退出 `0`，末场景
+session `019fa3e4-47da-78b2-8fa1-cdaf26bdabf8`，覆盖 Electron/preload/IPC、App Server、credential-scoped
+discovery、provider-backed `turn/start`、read model 与 Article Editor 可见终态。两条证据均使用受控 fixture，
+`liveProviderUsed=false`，不冒充 live provider。架构影响：重大，已更新 `architecture.md` 第 20 节；责任开发者
+确认：`root, 2026-07-27`。
+
+进度口径：catalog refresh/current selection 切片完成度为 `100%`。本刀不新增 Codex App Server method，method
+产品范围仍为 `71 implemented / 109 planned / 34 product-scope-excluded`，即 `71 / 180 = 39.4%`；该百分比只
+衡量 exact method boundary，不代表本切片或整体多模型 transport 完成度。
+
+### 2026-07-27 Official Responses hosted image generation 闭环
+
+目标与写集：沿用 hosted web 的 provider-executed lifecycle，完成 official Responses
+`image_generation` request、stream reducer、terminal history、App Server exact Item 和 Renderer read model。
+写集限定为 `model-provider`、Agent Runtime provider turn、App Server protocol/projection、generated schema/client、
+Renderer canonical item reader、架构与本计划；不把本地 `lime_create_image_generation_task` 提升为 hosted tool，
+不新增 Electron command、provider backend 或 compat DTO。
+
+完成结果与分类：仅 official OpenAI/Codex Responses route 且 endpoint host 精确为 `api.openai.com` 时暴露 hosted
+image capability，并且只把 canonical `ImageGeneration` lowering 为 `{ type: "image_generation" }`。第三方
+Responses gateway、Ollama、Chat Completions、别名和本地 media task tool 保持普通 function。Responses reducer
+消费 `image_generation_call` 的 added/done/completed，按 item identity exactly-once 发出 provider-executed
+ToolCall/ToolResult，completed 缺字符串 `result` 时 fail closed，最终 finish reason 保持 `Stop`。Agent Runtime
+不走本地 executor，并按 `type + id` 用 terminal raw item 覆盖 history 中的 `in_progress` item。
+
+App Server 将 terminal provider metadata 投影为 Codex exact `ImageGenerationItem`：`id/status/result` required，
+`revisedPrompt/savedPath` optional；Renderer 投影为 dedicated `image_generation` read-model item，缺 required 字段
+直接拒绝，不再降级 generic extension。以上 request/reducer/lifecycle/history/protocol/read model 为 `current`；
+loose `result?: Value/status?: String` DTO、alias/第三方 hosted promotion、本地工具重复执行与 generic extension
+降级为 `dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。
+
+当前验证：model-provider hosted image `2/2`、Agent Runtime provider-executed history `2/2`、App Server image
+projection `6/6`、Renderer canonical item reader `22/22` 已通过；workspace rustfmt 已修正。协议 schema 已在独立
+临时目录生成并机械同步，generated TypeScript client 显示 required string `result/status` 与 optional
+`revisedPrompt/savedPath`。`npm run test:related` 因 Vite 将仓库 `electron/` 目录当文件读取而报 `EISDIR`，改用
+精确 Vitest 文件入口通过。收尾仍需重跑新增 Renderer 断言、`npm run test:contracts`、current runtime fixture、
+legacy governance、rustfmt check 与 diff check；live provider 不执行，不读取真实凭证。
+
+进度口径：本切片实现骨架完成度为 `90%`，剩余是聚合门禁与真实 current fixture 证据。本刀不新增 Codex App
+Server method，method 产品范围仍为 `71 / 180 = 39.4%`；该百分比只衡量 exact method boundary，不能代表 hosted
+image 或多模型 transport 完成度。架构影响：重大，已更新 `architecture.md` 第 21 节；责任开发者确认：
+`root, 2026-07-27`。
+
 ## 8. 完成定义
 
 本计划完成不等于“所有 Codex 产品面都复制”。完成定义是：

@@ -303,6 +303,12 @@ pub enum ModelVerification {
     TrustedAccessForCyber,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelRerouteReason {
+    HighRiskCyberActivity,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum LlmEvent {
@@ -358,6 +364,8 @@ pub enum LlmEvent {
         input: Value,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         provider_executed: Option<bool>,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        provider_metadata: ProviderMetadata,
     },
     ToolResult {
         id: String,
@@ -378,6 +386,11 @@ pub enum LlmEvent {
     },
     ServerModel {
         model: String,
+    },
+    ModelReroute {
+        from_model: String,
+        to_model: String,
+        reason: ModelRerouteReason,
     },
     ModelVerification {
         verifications: Vec<ModelVerification>,

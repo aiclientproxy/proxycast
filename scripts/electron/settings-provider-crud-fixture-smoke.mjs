@@ -412,8 +412,8 @@ async function run() {
       page,
       options,
       (provider) =>
-        Array.isArray(provider?.customModels) &&
-        provider.customModels.includes(FIXTURE_MODEL) &&
+        Array.isArray(provider?.models) &&
+        provider.models.some((model) => model?.id === FIXTURE_MODEL) &&
         provider.apiKeyCount >= 1,
       "Provider Settings did not persist the configured model and key",
     );
@@ -441,8 +441,8 @@ async function run() {
       page,
       options,
       (provider) =>
-        Array.isArray(provider?.customModels) &&
-        provider.customModels.includes(FIXTURE_MODEL) &&
+        Array.isArray(provider?.models) &&
+        provider.models.some((model) => model?.id === FIXTURE_MODEL) &&
         provider.apiKeyCount >= 1,
       "Provider Settings restart did not recover the provider",
     );
@@ -524,8 +524,8 @@ async function run() {
         fixture.state.unauthorizedRequestCount > 0 &&
         fixture.state.authorizedRequestCount > 0,
       modelSelected:
-        configured.provider?.customModels?.includes(FIXTURE_MODEL) === true &&
-        recovered.provider?.customModels?.includes(FIXTURE_MODEL) === true,
+        configured.provider?.models?.some((model) => model?.id === FIXTURE_MODEL) === true &&
+        recovered.provider?.models?.some((model) => model?.id === FIXTURE_MODEL) === true,
       connectionReady,
       restartReadback: Boolean(recovered.provider),
       guiDeleted: trace.methods.includes("modelProvider/delete"),

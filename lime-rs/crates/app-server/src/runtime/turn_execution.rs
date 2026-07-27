@@ -205,6 +205,7 @@ impl RuntimeEventSink for CollectingRuntimeEventSink {
 
 enum SessionLoopEvent {
     Runtime(RuntimeEvent),
+    Transient(RuntimeEvent),
     Preappended(AgentEvent),
 }
 
@@ -299,6 +300,14 @@ impl RuntimeEventSink for ChannelRuntimeEventSink {
     fn emit(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
         self.sender
             .send(SessionLoopEvent::Runtime(event))
+            .map_err(|_| {
+                RuntimeCoreError::Backend("runtime session event receiver closed".to_string())
+            })
+    }
+
+    fn emit_transient(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
+        self.sender
+            .send(SessionLoopEvent::Transient(event))
             .map_err(|_| {
                 RuntimeCoreError::Backend("runtime session event receiver closed".to_string())
             })
@@ -432,6 +441,10 @@ impl RuntimeEventSink for TerminalDeferringRuntimeEventSink<'_> {
 
     fn emit_preappended(&mut self, event: AgentEvent) -> Result<(), RuntimeCoreError> {
         self.inner.emit_preappended(event)
+    }
+
+    fn emit_transient(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
+        self.inner.emit_transient(event)
     }
 }
 
@@ -623,6 +636,19 @@ impl RuntimeEventSink for AppendingRuntimeEventSink<'_> {
             self.flush_deferred_hub_events()?;
         }
         Ok(())
+    }
+
+    fn emit_transient(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
+        self.target.publish(AgentEvent {
+            event_id: format!("transient-{}", Uuid::new_v4()),
+            sequence: 0,
+            session_id: self.session_id.clone(),
+            thread_id: Some(self.thread_id.clone()),
+            turn_id: Some(self.turn_id.clone()),
+            event_type: event.event_type,
+            timestamp: super::value_fields::timestamp(),
+            payload: event.payload,
+        })
     }
 }
 
@@ -819,6 +845,24 @@ impl RuntimeCore {
         self.ensure_current_session_hydrated(&params.session_id)
             .await?;
         validate_user_input(&params.input).map_err(RuntimeCoreError::InvalidRequest)?;
+
+        let thread_id = self.session_snapshot(&params.session_id)?.0.thread_id;
+        if let Some(settings) = self
+            .reconcile_thread_model_selection_for_turn(&thread_id, params.runtime_options.as_ref())
+            .await?
+        {
+            apply_reconciled_thread_model_selection(&mut params.runtime_options, &settings);
+            self.event_hub.publish(AgentEvent {
+                event_id: new_id("event"),
+                sequence: 0,
+                session_id: params.session_id.clone(),
+                thread_id: Some(thread_id.clone()),
+                turn_id: None,
+                event_type: "thread.settings.updated".to_string(),
+                timestamp: timestamp(),
+                payload: json!({ "threadSettings": settings }),
+            });
+        }
 
         if let Some(defaults) = self.session_runtime_defaults(&params.session_id)? {
             params.runtime_options =
@@ -1874,6 +1918,7 @@ impl RuntimeCore {
                     if let Some(event) = event {
                         let result = match event {
                             SessionLoopEvent::Runtime(event) => sink.emit(event),
+                            SessionLoopEvent::Transient(event) => sink.emit_transient(event),
                             SessionLoopEvent::Preappended(event) => sink.emit_preappended(event),
                         };
                         if let Err(error) = result {
@@ -1886,6 +1931,7 @@ impl RuntimeCore {
                     while let Ok(event) = submission.event_receiver.try_recv() {
                         match event {
                             SessionLoopEvent::Runtime(event) => sink.emit(event)?,
+                            SessionLoopEvent::Transient(event) => sink.emit_transient(event)?,
                             SessionLoopEvent::Preappended(event) => sink.emit_preappended(event)?,
                         }
                     }
@@ -2575,6 +2621,24 @@ impl RuntimeCore {
             turn_id,
             runtime_events,
         )
+    }
+}
+
+fn apply_reconciled_thread_model_selection(
+    runtime_options: &mut Option<RuntimeOptions>,
+    settings: &app_server_protocol::protocol::v2::ThreadSettings,
+) {
+    let request = runtime_options
+        .get_or_insert_with(RuntimeOptions::default)
+        .runtime_request_mut();
+    request.provider_config = None;
+    request.provider_preference = Some(settings.model_provider.clone());
+    request.model_preference = Some(settings.model.clone());
+    request.reasoning_effort = settings.effort.clone();
+    request.service_tier = settings.service_tier.clone();
+    request.collaboration_mode = Some(settings.collaboration_mode.clone());
+    if let Some(metadata) = request.metadata.as_mut().and_then(Value::as_object_mut) {
+        metadata.remove("agentControlRoute");
     }
 }
 

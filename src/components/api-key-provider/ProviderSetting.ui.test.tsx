@@ -198,7 +198,10 @@ describe("ProviderSetting", () => {
     });
 
     expect(onUpdate).toHaveBeenCalledWith("deepseek", {
-      custom_models: ["deepseek-chat", "deepseek-coder-large"],
+      models: [
+        { id: "deepseek-chat" },
+        { id: "deepseek-coder-large" },
+      ],
     });
   });
 
@@ -240,7 +243,7 @@ describe("ProviderSetting", () => {
         name: "Mimo",
         type: "anthropic-compatible",
         api_host: "https://token-plan-cn.xiaomimimo.com/anthropic",
-        custom_models: ["mimo-v2.5-pro"],
+        models: [{ id: "mimo-v2.5-pro" }],
       }),
       {
         onUpdate,
@@ -299,7 +302,7 @@ describe("ProviderSetting", () => {
         name: "Mimo",
         type: "anthropic-compatible",
         api_host: "https://token-plan-cn.xiaomimimo.com/anthropic",
-        custom_models: ["mimo-v2.5-pro"],
+        models: [{ id: "mimo-v2.5-pro" }],
       }),
       {
         onUpdate,
@@ -351,7 +354,7 @@ describe("ProviderSetting", () => {
       createProvider({
         id: "lime-hub",
         name: "Lime 云端",
-        custom_models: [],
+        models: [],
         api_keys: [],
         api_key_count: 0,
       }),
@@ -379,9 +382,9 @@ describe("ProviderSetting", () => {
     expect(onLogin).toHaveBeenCalledTimes(1);
   });
 
-  it("手动添加模型应直接更新 custom_models", async () => {
+  it("手动添加模型应直接更新 models", async () => {
     const onUpdate = vi.fn().mockResolvedValue(undefined);
-    const container = renderSetting(createProvider({ custom_models: [] }), {
+    const container = renderSetting(createProvider({ models: [] }), {
       onUpdate,
     });
     await flushEffects();
@@ -406,7 +409,7 @@ describe("ProviderSetting", () => {
     });
 
     expect(onUpdate).toHaveBeenCalledWith("deepseek", {
-      custom_models: ["deepseek-reasoner"],
+      models: [{ id: "deepseek-reasoner" }],
     });
     expect(container.textContent ?? "").toContain("deepseek-reasoner");
   });
@@ -417,7 +420,7 @@ describe("ProviderSetting", () => {
       models: [{ id: "wrong-fallback-model" }],
       error: "API 获取失败，本地模型兜底已下线。",
     });
-    const container = renderSetting(createProvider({ custom_models: [] }));
+    const container = renderSetting(createProvider({ models: [] }));
     await flushEffects();
 
     const button = byTestId<HTMLButtonElement>(
@@ -444,7 +447,7 @@ describe("ProviderSetting", () => {
         name: "OpenAI Images",
         type: "openai",
         api_host: "https://api.openai.com/v1",
-        custom_models: ["gpt-images-2"],
+        models: [{ id: "gpt-images-2" }],
       }),
     );
     await flushEffects();
@@ -503,7 +506,7 @@ describe("ProviderSetting", () => {
         name: "agnes",
         type: "openai",
         api_host: "https://agnes.example.test/v1",
-        custom_models: ["agnes-image-2.1-flash"],
+        models: [{ id: "agnes-image-2.1-flash" }],
       }),
     );
     await flushEffects();
@@ -569,7 +572,7 @@ describe("ProviderSetting", () => {
         api_host: "https://fal.run/fal-ai",
         api_key_count: 0,
         api_keys: [],
-        custom_models: ["fal-ai/nano-banana-pro"],
+        models: [{ id: "fal-ai/nano-banana-pro" }],
       }),
     );
     await flushEffects();
@@ -608,7 +611,7 @@ describe("ProviderSetting", () => {
       models: [{ id: "deepseek-chat" }, { id: "deepseek-reasoner" }],
       error: null,
     });
-    const container = renderSetting(createProvider({ custom_models: [] }), {
+    const container = renderSetting(createProvider({ models: [] }), {
       onUpdate,
     });
     await flushEffects();
@@ -639,7 +642,7 @@ describe("ProviderSetting", () => {
     });
 
     expect(onUpdate).toHaveBeenCalledWith("deepseek", {
-      custom_models: ["deepseek-chat"],
+      models: [{ id: "deepseek-chat" }],
     });
   });
 
@@ -652,7 +655,7 @@ describe("ProviderSetting", () => {
       models: apiModels,
       error: null,
     });
-    const container = renderSetting(createProvider({ custom_models: [] }));
+    const container = renderSetting(createProvider({ models: [] }));
     await flushEffects();
 
     await act(async () => {

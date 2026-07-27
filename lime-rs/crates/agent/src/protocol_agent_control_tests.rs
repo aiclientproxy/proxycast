@@ -20,6 +20,7 @@ fn wait_lifecycle_event(
         call_id: "wait-call".to_string(),
         tool_name: tool_runtime::agent_control::WAIT_AGENT_TOOL_NAME.to_string(),
         arguments: serde_json::json!({ "timeout_ms": 1000 }),
+        provider_metadata: serde_json::Value::Null,
         environments: Vec::new(),
         phase,
         output,
@@ -41,6 +42,7 @@ fn targeted_lifecycle_event(
         call_id: format!("{tool_name}-call"),
         tool_name: tool_name.to_string(),
         arguments: serde_json::json!({ "target": "research" }),
+        provider_metadata: serde_json::Value::Null,
         environments: Vec::new(),
         phase: ToolLifecyclePhase::Completed,
         output: Some(NormalizedToolOutput {

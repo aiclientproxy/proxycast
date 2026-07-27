@@ -21,7 +21,7 @@ use lime_core::database::dao::api_key_provider::{
     ApiKeyProvider, ApiProviderType, ProviderProtocolFamily, ProviderWithKeys,
 };
 use lime_core::database::DbConnection;
-use lime_core::models::model_registry::EnhancedModelMetadata;
+use lime_core::models::model_registry::{EnhancedModelMetadata, ModelCapabilityProvenance};
 use lime_services::api_key_provider_service::ApiKeyProviderService;
 use lime_services::model_registry_service::{ModelRegistryService, ProviderModelRegistryMetadata};
 use serde_json::{json, Value};
@@ -271,10 +271,10 @@ fn image_provider_is_ready(provider: &ProviderWithKeys) -> bool {
 
 fn first_image_model_for_provider(provider: &ApiKeyProvider) -> Option<String> {
     provider
-        .custom_models
+        .models
         .iter()
         .find_map(|model| {
-            let model = normalize_optional_task_field(Some(model.clone()))?;
+            let model = normalize_optional_task_field(Some(model.id.clone()))?;
             image_provider_has_supported_endpoint(provider, Some(&model)).then_some(model)
         })
         .or_else(|| default_image_model_for_provider(provider))
@@ -289,9 +289,9 @@ fn default_image_model_for_provider(provider: &ApiKeyProvider) -> Option<String>
         | ApiProviderType::Gateway => Some("gpt-images-2".to_string()),
         ApiProviderType::Gemini => Some("gemini-2.5-flash-image".to_string()),
         ApiProviderType::Fal => provider
-            .custom_models
+            .models
             .iter()
-            .find_map(|model| normalize_optional_task_field(Some(model.clone()))),
+            .find_map(|model| normalize_optional_task_field(Some(model.id.clone()))),
         _ => None,
     }
 }
@@ -333,8 +333,8 @@ fn is_zhipu_image_provider(provider: &ApiKeyProvider) -> bool {
         || provider_name.contains("zhipu")
         || provider_name.contains("智谱")
         || api_host.contains("bigmodel.cn/api/paas");
-    let has_zhipu_model = provider.custom_models.iter().any(|model| {
-        let normalized = model.trim().to_ascii_lowercase();
+    let has_zhipu_model = provider.models.iter().any(|model| {
+        let normalized = model.id.trim().to_ascii_lowercase();
         matches!(
             normalized.as_str(),
             "glm-image" | "cogview-4-250304" | "cogview-4" | "cogview-3-flash"
@@ -360,9 +360,9 @@ fn is_dashscope_image_provider(provider: &ApiKeyProvider, model_id: Option<&str>
         || api_host.contains("maas.aliyuncs.com");
     let has_dashscope_image_model = model_id.map(is_dashscope_image_model_id).unwrap_or(false)
         || provider
-            .custom_models
+            .models
             .iter()
-            .any(|model| is_dashscope_image_model_id(model));
+            .any(|model| is_dashscope_image_model_id(&model.id));
     has_dashscope_identity && has_dashscope_image_model
 }
 
@@ -523,21 +523,25 @@ async fn assess_media_route(
 }
 
 fn model_has_declared_capability_snapshot(model: &EnhancedModelMetadata) -> bool {
-    !model.task_families.is_empty()
-        || !model.input_modalities.is_empty()
-        || !model.output_modalities.is_empty()
-        || !model.runtime_features.is_empty()
-        || model.capabilities.vision
-        || model.capabilities.tools
-        || model.capabilities.streaming
-        || model.capabilities.json_mode
-        || model.capabilities.function_calling
-        || model.capabilities.reasoning
-        || model.capabilities.reasoning_effort.is_some()
+    matches!(
+        model.capability_provenance,
+        ModelCapabilityProvenance::Canonical | ModelCapabilityProvenance::ProviderExplicit
+    )
 }
 
 fn model_capabilities_value(model: &EnhancedModelMetadata) -> Value {
-    serde_json::to_value(model).unwrap_or(Value::Null)
+    json!({
+        "provenance": model.capability_provenance,
+        "capabilities": model.capabilities,
+        "taskFamilies": model.task_families,
+        "task_families": model.task_families,
+        "runtimeFeatures": model.runtime_features,
+        "runtime_features": model.runtime_features,
+        "inputModalities": model.input_modalities,
+        "input_modalities": model.input_modalities,
+        "outputModalities": model.output_modalities,
+        "output_modalities": model.output_modalities,
+    })
 }
 
 fn media_route_payload(
@@ -645,6 +649,10 @@ mod tests {
         ApiKeyEntry, ApiKeyProvider, ApiProviderType, ProviderGroup,
     };
     use lime_core::database::schema::create_tables;
+    use lime_core::models::model_registry::{
+        ModelCapabilities, ModelModality, ModelRuntimeFeature, ModelTaskFamily,
+        ProviderModelCapability, ProviderModelConfig,
+    };
     use lime_core::models::runtime_api_key_credential_uuid;
     use lime_services::model_registry_service::ProviderModelCacheAccess;
     use rusqlite::Connection;
@@ -656,6 +664,20 @@ mod tests {
             project_root_path: "/tmp/project".to_string(),
             prompt: "画一张广州夏天的图".to_string(),
             ..MediaTaskArtifactImageCreateParams::default()
+        }
+    }
+
+    fn explicit_image_model(id: &str) -> ProviderModelConfig {
+        ProviderModelConfig {
+            id: id.to_string(),
+            display_name: None,
+            capability: Some(ProviderModelCapability {
+                task_families: vec![ModelTaskFamily::ImageGeneration],
+                input_modalities: vec![ModelModality::Text],
+                output_modalities: vec![ModelModality::Image],
+                runtime_features: vec![ModelRuntimeFeature::ImagesApi],
+                capabilities: ModelCapabilities::default(),
+            }),
         }
     }
 
@@ -1055,7 +1077,7 @@ mod tests {
             project: None,
             location: None,
             region: None,
-            custom_models: vec![model.to_string()],
+            models: vec![explicit_image_model(model)],
             prompt_cache_mode: None,
             created_at: now,
             updated_at: now,

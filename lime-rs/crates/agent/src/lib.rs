@@ -98,8 +98,8 @@ pub use protocol::{
 };
 pub use protocol_projection::{project_item_runtime, project_turn_runtime};
 pub use provider_configuration::{
-    route_protocol_from_session_provider_config, ModelRouteProviderConfiguration,
-    SessionProviderConfig,
+    route_protocol_from_session_provider_config, supports_direct_route, supports_provider_type,
+    ModelRouteProviderConfiguration, SessionProviderConfig,
 };
 pub use provider_continuation_state::{
     ProviderContinuationCapability, ProviderContinuationCapable, ProviderContinuationState,

@@ -42,21 +42,21 @@ function expectNoInlineFalProviderMatcher(source: string): void {
 }
 
 const providers: ImageCapabilitySelectionCandidate[] = [
-  { id: "new-api", type: "openai", custom_models: ["gpt-images-2"] },
+  { id: "new-api", type: "openai", models: ["gpt-images-2"] },
   {
     id: "gemini",
     type: "gemini",
-    custom_models: ["gemini-3.1-flash-image"],
+    models: ["gemini-3.1-flash-image"],
     api_host: "https://generativelanguage.googleapis.com",
   },
-  { id: "zhipuai", type: "zhipuai", custom_models: ["glm-image"] },
+  { id: "zhipuai", type: "zhipuai", models: ["glm-image"] },
   {
     id: "alibaba",
     type: "openai",
-    custom_models: ["qwen-image-plus"],
+    models: ["qwen-image-plus"],
     api_host: "https://dashscope.aliyuncs.com/compatible-mode/v1",
   },
-  { id: "fal", type: "fal", custom_models: ["fal-ai/nano-banana-pro"] },
+  { id: "fal", type: "fal", models: ["fal-ai/nano-banana-pro"] },
 ];
 
 describe("imageGen/catalog", () => {
@@ -119,7 +119,7 @@ describe("imageGen/catalog", () => {
         id: "airgate-openai-images",
         type: "openai",
         api_host: "https://airgate.k8ray.com/v1",
-        custom_models: ["gpt-images-2"],
+        models: ["gpt-images-2"],
       })[0]?.id,
     ).toBe("gpt-images-2");
   });
@@ -130,7 +130,7 @@ describe("imageGen/catalog", () => {
         id: "agnes",
         type: "openai",
         api_host: "https://agnes.example.test/v1",
-        custom_models: [
+        models: [
           "agnes-2.0-flash",
           "agnes-image-2.1-flash",
           "agnes-image-2.0-flash",
@@ -172,7 +172,7 @@ describe("imageGen/catalog", () => {
         id: "custom-alibaba-provider",
         type: "openai",
         api_host: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-        custom_models: ["qwen3.5-72b", "qwen-image-2.0", "qwen-image-plus"],
+        models: ["qwen3.5-72b", "qwen-image-2.0", "qwen-image-plus"],
       }),
     ).toEqual(expect.arrayContaining(["qwen-image-2.0", "qwen-image-plus"]));
   });

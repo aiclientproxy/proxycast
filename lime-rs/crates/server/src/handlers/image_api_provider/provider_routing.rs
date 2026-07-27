@@ -3,6 +3,7 @@ use lime_core::database::dao::api_key_provider::{ApiKeyProvider, ApiProviderType
 use lime_core::image_generation_matcher::{
     is_likely_fal_image_model_id, is_likely_image_generation_model_id,
 };
+use lime_core::models::model_registry::ProviderModelConfig;
 use lime_core::models::openai::ImageGenerationRequest;
 
 use super::{ConfiguredImageProviderKind, ImageProviderRoutingConfig};
@@ -28,7 +29,7 @@ pub(super) fn resolve_configured_image_provider_kind(
         && resolve_compatible_image_model(
             request.model.as_str(),
             routing.preferred_model_id.as_deref(),
-            &provider.custom_models,
+            &provider.models,
         )
         .is_some()
     {
@@ -73,7 +74,7 @@ pub(super) fn supports_openai_compatible_image_provider(provider: &ApiKeyProvide
 pub(super) fn resolve_compatible_image_model(
     request_model: &str,
     preferred_model_id: Option<&str>,
-    custom_models: &[String],
+    models: &[ProviderModelConfig],
 ) -> Option<String> {
     let normalized_request_model = request_model.trim();
     if is_likely_image_generation_model_id(normalized_request_model) {
@@ -87,9 +88,9 @@ pub(super) fn resolve_compatible_image_model(
         return Some(preferred_model.to_string());
     }
 
-    custom_models
+    models
         .iter()
-        .map(|model| model.trim())
+        .map(|model| model.id.trim())
         .find(|model| is_likely_image_generation_model_id(model))
         .map(|model| model.to_string())
 }
@@ -119,9 +120,9 @@ pub(super) fn resolve_openai_responses_image_orchestration_model(
     }
 
     provider
-        .custom_models
+        .models
         .iter()
-        .map(String::as_str)
+        .map(|model| model.id.as_str())
         .map(str::trim)
         .find(|candidate| !candidate.is_empty() && !is_likely_image_generation_model_id(candidate))
         .map(ToString::to_string)

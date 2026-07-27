@@ -341,6 +341,9 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             output,
             ..
         } => {
+            if let Some(image) = project_image_generation_item(&id, status, &metadata)? {
+                return Ok(v2::ThreadItem::ImageGeneration(image));
+            }
             let duration_ms = output.as_ref().and_then(|value| value.duration_ms);
             let success = output
                 .as_ref()
@@ -718,6 +721,63 @@ fn project_dynamic_tool_status(status: canonical::ItemStatus) -> v2::DynamicTool
         canonical::ItemStatus::Failed
         | canonical::ItemStatus::Interrupted
         | canonical::ItemStatus::Cancelled => v2::DynamicToolCallStatus::Failed,
+    }
+}
+
+fn project_image_generation_item(
+    item_id: &str,
+    item_status: canonical::ItemStatus,
+    metadata: &Value,
+) -> Result<Option<v2::ImageGenerationItem>, JsonRpcError> {
+    let Some(raw_item) = metadata.pointer("/provider_metadata/raw_response_item") else {
+        return Ok(None);
+    };
+    if raw_item.get("type").and_then(Value::as_str) != Some("image_generation_call") {
+        return Ok(None);
+    }
+
+    let status = raw_item
+        .get("status")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| canonical_image_generation_status(item_status).to_string());
+    let result = raw_item
+        .get("result")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    if status == "completed" && result.is_none() {
+        return Err(projection_error(
+            "completed image_generation_call omitted string result",
+        ));
+    }
+
+    Ok(Some(v2::ImageGenerationItem {
+        id: raw_item
+            .get("id")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or(item_id)
+            .to_string(),
+        status,
+        revised_prompt: raw_item
+            .get("revised_prompt")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        result: result.unwrap_or_default(),
+        saved_path: raw_item
+            .get("saved_path")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+    }))
+}
+
+fn canonical_image_generation_status(status: canonical::ItemStatus) -> &'static str {
+    match status {
+        canonical::ItemStatus::Completed => "completed",
+        canonical::ItemStatus::Failed
+        | canonical::ItemStatus::Interrupted
+        | canonical::ItemStatus::Cancelled => "failed",
+        canonical::ItemStatus::Pending | canonical::ItemStatus::InProgress => "in_progress",
     }
 }
 

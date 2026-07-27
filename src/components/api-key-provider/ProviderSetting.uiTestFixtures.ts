@@ -48,7 +48,7 @@ export function createProvider(
     enabled: true,
     sort_order: 1,
     api_key_count: 1,
-    custom_models: ["deepseek-chat"],
+    models: [{ id: "deepseek-chat" }],
     created_at: new Date("2026-03-15T00:00:00.000Z").toISOString(),
     updated_at: new Date("2026-03-15T00:00:00.000Z").toISOString(),
     api_keys: [

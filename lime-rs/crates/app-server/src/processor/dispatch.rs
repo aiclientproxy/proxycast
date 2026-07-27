@@ -1,17 +1,14 @@
 //! JSON-RPC method dispatch for the App Server processor.
 
+mod response;
 mod v2_ingress;
 use super::thread_resume_context::request_id_for_thread_resume;
-use super::{
-    event_notifications, v2_notifications::V2NotificationProjector, ConnectionRequestId,
-    JsonRpcError, RequestProcessor,
-};
+use super::{ConnectionRequestId, JsonRpcError, RequestProcessor};
 use crate::AppServerError;
 use app_server_protocol::error_codes;
 use app_server_protocol::JsonRpcErrorResponse;
 use app_server_protocol::JsonRpcMessage;
 use app_server_protocol::JsonRpcRequest;
-use app_server_protocol::JsonRpcResponse;
 use app_server_protocol::*;
 use futures::future::ready;
 use futures::FutureExt;
@@ -779,27 +776,6 @@ impl RequestProcessor {
         .await;
 
         self.clear_request_cancel_state(&id);
-        match result {
-            Ok(dispatch) => {
-                let mut messages =
-                    Vec::with_capacity(dispatch.events.len() + dispatch.notifications.len() + 1);
-                messages.push(JsonRpcMessage::Response(JsonRpcResponse {
-                    id,
-                    result: dispatch.result,
-                }));
-                let mut event_projector = V2NotificationProjector::default();
-                for event in dispatch.events {
-                    messages.extend(event_notifications(&mut event_projector, event)?);
-                }
-                for notification in dispatch.notifications {
-                    messages.push(JsonRpcMessage::Notification(notification));
-                }
-                Ok(messages)
-            }
-            Err(error) => Ok(vec![JsonRpcMessage::Error(JsonRpcErrorResponse {
-                id,
-                error,
-            })]),
-        }
+        response::into_messages(id, result)
     }
 }

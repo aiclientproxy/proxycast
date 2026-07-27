@@ -173,7 +173,7 @@ function usage(): string {
     "  --base-url <Responses 网关基址，通常到 /v1>",
     "  --lime-local-image-gateway <复用本地 Lime /v1/images/generations 配图网关>",
     "  --provider-id <本地 Lime API Key Provider ID；也可传 auto>",
-    "  --auto-provider <通过 DevBridge 自动选择 custom_models 命中图片模型且有启用 key 的 provider>",
+    "  --auto-provider <通过 DevBridge 自动选择 models 命中图片模型且有启用 key 的 provider>",
     "  --dev-bridge-invoke-url <DevBridge invoke URL，默认 http://127.0.0.1:3030/invoke>",
     "  --allow-external-image-generation <确认会调用真实图片接口并可能消耗额度>",
     "  --lime-config <本地 Lime config.yaml 路径>",
@@ -626,18 +626,23 @@ interface LocalProviderCandidate {
   api_key_count?: unknown;
   apiKeys?: unknown;
   api_keys?: unknown;
-  custom_models?: unknown;
-  customModels?: unknown;
+  models?: unknown;
 }
 
 function normalizeProviderModelToken(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function readProviderCustomModels(provider: LocalProviderCandidate): string[] {
-  const raw = provider.custom_models ?? provider.customModels;
+function readProviderModels(provider: LocalProviderCandidate): string[] {
+  const raw = provider.models;
   return Array.isArray(raw)
-    ? raw.filter((item): item is string => typeof item === "string")
+    ? raw.flatMap((item) => {
+        if (typeof item !== "object" || item === null) {
+          return [];
+        }
+        const id = "id" in item && typeof item.id === "string" ? item.id.trim() : "";
+        return id ? [id] : [];
+      })
     : [];
 }
 
@@ -660,7 +665,7 @@ function providerMatchesImageModel(
   imageModel: string,
 ): boolean {
   const target = normalizeProviderModelToken(imageModel);
-  return readProviderCustomModels(provider).some((model) => {
+  return readProviderModels(provider).some((model) => {
     const normalized = normalizeProviderModelToken(model);
     return normalized === target || normalized.endsWith(`/${target}`);
   });
@@ -776,7 +781,7 @@ async function resolveAutoLocalImageProviderId(options: CliOptions): Promise<str
   const selectedId = typeof selected?.id === "string" ? selected.id.trim() : "";
   if (!selectedId) {
     throw new Error(
-      `未找到 custom_models 包含 ${options.imageModel} 且有启用 API Key 的本地图片 provider，请传 --provider-id`,
+      `未找到 models 包含 ${options.imageModel} 且有启用 API Key 的本地图片 provider，请传 --provider-id`,
     );
   }
   return selectedId;

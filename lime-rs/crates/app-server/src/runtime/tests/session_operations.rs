@@ -1,8 +1,12 @@
 use super::support::{
     canonical_tool_completed_event, canonical_tool_started_event, wait_for_runtime_event,
+    TestSessionDataSource,
 };
 use super::*;
 use app_server_protocol::protocol::v2::{ThreadCompactStartParams, ThreadCompactStartResponse};
+use lime_core::models::model_registry::{
+    EnhancedModelMetadata, ModelCapabilityProvenance, ModelTaskFamily, ModelVisibility,
+};
 use serde_json::json;
 use serde_json::Value;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -17,6 +21,11 @@ struct ReplaceBlockingBackend {
 
 struct LiveActionBackend {
     response: Mutex<Option<Value>>,
+}
+
+#[derive(Default)]
+struct ModelSelectionCaptureBackend {
+    selection: Mutex<Option<(String, String)>>,
 }
 
 #[async_trait]
@@ -147,6 +156,50 @@ impl ExecutionBackend for ReplaceBlockingBackend {
             let _ = first_started.send(());
             std::future::pending::<()>().await;
         }
+        sink.emit(RuntimeEvent::new("turn.completed", json!({})))
+    }
+
+    async fn cancel_turn(
+        &self,
+        _request: CancelExecutionRequest,
+        _sink: &mut dyn RuntimeEventSink,
+    ) -> Result<(), RuntimeCoreError> {
+        Ok(())
+    }
+
+    async fn respond_action(
+        &self,
+        _request: ActionRespondRequest,
+        _sink: &mut dyn RuntimeEventSink,
+    ) -> Result<(), RuntimeCoreError> {
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl ExecutionBackend for ModelSelectionCaptureBackend {
+    fn requires_provider_selection(&self) -> bool {
+        true
+    }
+
+    async fn start_turn(
+        &self,
+        request: ExecutionRequest,
+        sink: &mut dyn RuntimeEventSink,
+    ) -> Result<(), RuntimeCoreError> {
+        let runtime_request = request.runtime_request().ok_or_else(|| {
+            RuntimeCoreError::Backend("captured turn requires runtime request".to_string())
+        })?;
+        let provider = runtime_request
+            .provider_preference
+            .clone()
+            .ok_or_else(|| RuntimeCoreError::Backend("captured provider is missing".to_string()))?;
+        let model = runtime_request
+            .model_preference
+            .clone()
+            .ok_or_else(|| RuntimeCoreError::Backend("captured model is missing".to_string()))?;
+        *self.selection.lock().expect("selection mutex poisoned") = Some((provider, model));
+        sink.emit(RuntimeEvent::new("turn.started", json!({})))?;
         sink.emit(RuntimeEvent::new("turn.completed", json!({})))
     }
 
@@ -487,4 +540,304 @@ async fn approval_cancel_interrupts_without_delivering_a_decline_response() {
             "patch.declined" | "patch.failed" | "patch.applied"
         )
     }));
+}
+
+#[tokio::test]
+async fn catalog_refresh_preserves_current_selectable_model() {
+    let (_temp, core) = model_selection_core(vec![model_catalog(
+        "provider-a",
+        vec![chat_model("provider-a", "model-a")],
+    )]);
+
+    let changed = core
+        .reconcile_thread_model_selection("thread-model-refresh")
+        .await
+        .expect("reconcile current model");
+
+    assert!(changed.is_none());
+    let (_, settings, _) = core
+        .loaded_thread_settings("thread-model-refresh")
+        .expect("read current settings")
+        .expect("persisted settings");
+    assert_eq!(settings.model_provider, "provider-a");
+    assert_eq!(settings.model, "model-a");
+    assert_eq!(settings.effort.as_deref(), Some("high"));
+}
+
+#[tokio::test]
+async fn catalog_refresh_reselects_same_provider_before_next_provider() {
+    let mut hidden = chat_model("provider-a", "hidden-model");
+    hidden.visibility = ModelVisibility::Hide;
+    let mut inferred = chat_model("provider-a", "inferred-model");
+    inferred.capability_provenance = ModelCapabilityProvenance::InferredHint;
+    let mut image = chat_model("provider-a", "image-model");
+    image.task_families = vec![ModelTaskFamily::ImageGeneration];
+    let (_temp, core) = model_selection_core(vec![
+        model_catalog("provider-b", vec![chat_model("provider-b", "model-c")]),
+        model_catalog(
+            "provider-a",
+            vec![hidden, inferred, image, chat_model("provider-a", "model-b")],
+        ),
+    ]);
+
+    let changed = core
+        .reconcile_thread_model_selection("thread-model-refresh")
+        .await
+        .expect("reselect model")
+        .expect("selection changed");
+
+    assert_eq!(changed.model_provider, "provider-a");
+    assert_eq!(changed.model, "model-b");
+    assert_eq!(changed.effort.as_deref(), Some("medium"));
+    assert_eq!(
+        changed.collaboration_mode.settings.model, "model-b",
+        "collaboration settings must follow the durable model selection"
+    );
+    assert_eq!(
+        changed
+            .collaboration_mode
+            .settings
+            .reasoning_effort
+            .as_deref(),
+        Some("medium")
+    );
+    let (_, persisted, _) = core
+        .loaded_thread_settings("thread-model-refresh")
+        .expect("read reselected settings")
+        .expect("persisted settings");
+    assert_eq!(persisted, changed);
+}
+
+#[tokio::test]
+async fn catalog_refresh_without_executable_model_fails_closed() {
+    let mut inferred = chat_model("provider-a", "inferred-model");
+    inferred.capability_provenance = ModelCapabilityProvenance::InferredHint;
+    let mut image = chat_model("provider-b", "image-model");
+    image.task_families = vec![ModelTaskFamily::ImageGeneration];
+    let (_temp, core) = model_selection_core(vec![
+        model_catalog("provider-a", vec![inferred]),
+        model_catalog("provider-b", vec![image]),
+    ]);
+
+    let error = core
+        .reconcile_thread_model_selection("thread-model-refresh")
+        .await
+        .expect_err("catalog without executable chat model must fail");
+
+    assert!(matches!(
+        error,
+        RuntimeCoreError::RouteRejected {
+            reason_code,
+            ..
+        } if reason_code == "model_catalog_has_no_executable_selection"
+    ));
+    let (_, settings, _) = core
+        .loaded_thread_settings("thread-model-refresh")
+        .expect("read unchanged settings")
+        .expect("persisted settings");
+    assert_eq!(settings.model_provider, "provider-a");
+    assert_eq!(settings.model, "model-a");
+}
+
+#[tokio::test]
+async fn catalog_refresh_skips_backend_without_provider_selection() {
+    let (_temp, core) = model_selection_core_with_metadata_and_backend(
+        vec![model_catalog(
+            "provider-b",
+            vec![chat_model("provider-b", "model-b")],
+        )],
+        default_model_selection_metadata(),
+        Arc::new(MockBackend),
+    );
+
+    let changed = core
+        .reconcile_thread_model_selection("thread-model-refresh")
+        .await
+        .expect("backend without provider selection must bypass catalog reconciliation");
+
+    assert!(changed.is_none());
+    let (_, settings, _) = core
+        .loaded_thread_settings("thread-model-refresh")
+        .expect("read unchanged settings")
+        .expect("persisted settings");
+    assert_eq!(settings.model_provider, "provider-a");
+    assert_eq!(settings.model, "model-a");
+}
+
+#[tokio::test]
+async fn catalog_refresh_preserves_durable_direct_provider_route() {
+    let (_temp, core) = model_selection_core_with_metadata(
+        vec![model_catalog(
+            "provider-b",
+            vec![chat_model("provider-b", "model-b")],
+        )],
+        json!({
+            "providerSelector": "provider-direct",
+            "providerName": "provider-direct",
+            "modelName": "model-direct",
+            "collaborationMode": {
+                "mode": "default",
+                "settings": { "model": "model-direct" }
+            },
+            "agentControlRoute": {
+                "schemaVersion": 2,
+                "routeSource": "direct_provider_config",
+                "providerPreference": "provider-direct",
+                "modelPreference": "model-direct",
+                "providerConfig": {
+                    "providerId": "provider-direct",
+                    "providerName": "provider-direct",
+                    "modelName": "model-direct"
+                },
+                "routeProtocol": "openai_responses",
+                "authKind": "direct_api_key",
+                "effectiveGeneration": 1
+            }
+        }),
+    );
+
+    let changed = core
+        .reconcile_thread_model_selection("thread-model-refresh")
+        .await
+        .expect("preserve direct route");
+
+    assert!(changed.is_none());
+    let (_, settings, direct) = core
+        .loaded_thread_settings("thread-model-refresh")
+        .expect("read direct settings")
+        .expect("persisted direct settings");
+    assert!(direct);
+    assert_eq!(settings.model_provider, "provider-direct");
+    assert_eq!(settings.model, "model-direct");
+}
+
+#[tokio::test]
+async fn runtime_turn_entry_uses_reconciled_model_selection() {
+    let backend = Arc::new(ModelSelectionCaptureBackend::default());
+    let (_temp, core) = model_selection_core_with_metadata_and_backend(
+        vec![model_catalog(
+            "provider-a",
+            vec![chat_model("provider-a", "model-b")],
+        )],
+        default_model_selection_metadata(),
+        backend.clone(),
+    );
+
+    core.start_turn(
+        AgentSessionTurnStartParams {
+            session_id: "session-model-refresh".to_string(),
+            turn_id: None,
+            input: AgentInput {
+                text: "continue with refreshed model".to_string(),
+                attachments: Vec::new(),
+            },
+            runtime_options: None,
+            queue_if_busy: false,
+            skip_pre_submit_resume: false,
+        },
+        RuntimeHostContext::default(),
+    )
+    .await
+    .expect("start reconciled runtime turn");
+
+    assert_eq!(
+        backend
+            .selection
+            .lock()
+            .expect("selection mutex poisoned")
+            .clone(),
+        Some(("provider-a".to_string(), "model-b".to_string()))
+    );
+}
+
+fn model_selection_core(catalogs: Vec<ProviderModelCatalog>) -> (tempfile::TempDir, RuntimeCore) {
+    model_selection_core_with_metadata(catalogs, default_model_selection_metadata())
+}
+
+fn default_model_selection_metadata() -> Value {
+    json!({
+        "providerSelector": "provider-a",
+        "providerName": "provider-a",
+        "modelName": "model-a",
+        "reasoningEffort": "high",
+        "collaborationMode": {
+            "mode": "default",
+            "settings": {
+                "model": "model-a",
+                "reasoning_effort": "high"
+            }
+        }
+    })
+}
+
+fn model_selection_core_with_metadata(
+    catalogs: Vec<ProviderModelCatalog>,
+    metadata: Value,
+) -> (tempfile::TempDir, RuntimeCore) {
+    model_selection_core_with_metadata_and_backend(
+        catalogs,
+        metadata,
+        Arc::new(ModelSelectionCaptureBackend::default()),
+    )
+}
+
+fn model_selection_core_with_metadata_and_backend(
+    catalogs: Vec<ProviderModelCatalog>,
+    metadata: Value,
+    backend: Arc<dyn ExecutionBackend>,
+) -> (tempfile::TempDir, RuntimeCore) {
+    let temp = tempfile::tempdir().expect("model selection temp dir");
+    let projection_store = Arc::new(
+        ProjectionStore::initialize(temp.path().join("projection.sqlite"))
+            .expect("model selection projection store"),
+    );
+    let data_source = Arc::new(TestSessionDataSource::new().with_model_catalogs(catalogs));
+    let core = RuntimeCore::with_backend(backend)
+        .with_projection_store(projection_store)
+        .with_app_data_source(data_source);
+    core.start_session(AgentSessionStartParams {
+        session_id: Some("session-model-refresh".to_string()),
+        thread_id: Some("thread-model-refresh".to_string()),
+        app_id: "agent-chat".to_string(),
+        workspace_id: None,
+        business_object_ref: Some(app_server_protocol::BusinessObjectRef {
+            kind: "agent.thread".to_string(),
+            id: "thread-model-refresh".to_string(),
+            title: None,
+            uri: None,
+            metadata: Some(metadata),
+        }),
+        locale: None,
+    })
+    .expect("start model selection session");
+    (temp, core)
+}
+
+fn model_catalog(provider: &str, models: Vec<EnhancedModelMetadata>) -> ProviderModelCatalog {
+    ProviderModelCatalog {
+        provider_id: provider.to_string(),
+        sort_order: 0,
+        models,
+    }
+}
+
+fn chat_model(provider: &str, model: &str) -> EnhancedModelMetadata {
+    let mut metadata = EnhancedModelMetadata::new(
+        model.to_string(),
+        model.to_string(),
+        provider.to_string(),
+        provider.to_string(),
+    );
+    metadata.capability_provenance = ModelCapabilityProvenance::ProviderExplicit;
+    metadata.task_families = vec![ModelTaskFamily::Chat];
+    metadata.capabilities.reasoning_effort = Some(
+        lime_core::models::model_registry::ModelReasoningEffortSupport {
+            supported: true,
+            levels: vec!["low".to_string(), "medium".to_string(), "high".to_string()],
+            options: Vec::new(),
+            default: Some("medium".to_string()),
+            source: None,
+        },
+    );
+    metadata
 }

@@ -8,14 +8,15 @@ use super::{
 use crate::processor::config_warning::ConfigWarningScope;
 use agent_protocol::{AgentInput, ThreadId, ThreadTurnsView};
 use app_server_protocol::protocol::v2::{
-    AdditionalContextKind, Turn as V2Turn, TurnInterruptParams, TurnInterruptResponse,
+    AdditionalContextKind, ServerNotification as V2ServerNotification,
+    ThreadSettingsUpdatedNotification, Turn as V2Turn, TurnInterruptParams, TurnInterruptResponse,
     TurnStartParams, TurnStartResponse, TurnStatus as V2TurnStatus, TurnSteerParams,
     TurnSteerResponse, UserInput,
 };
 use app_server_protocol::{
     error_codes, AgentSessionTurnCancelParams, AgentSessionTurnStartResponse, AgentTurn,
-    AgentTurnStatus, JsonRpcError, JsonRpcMessage, RuntimeOptions, RuntimeRequest,
-    ThreadReadParams,
+    AgentTurnStatus, JsonRpcError, JsonRpcMessage, JsonRpcNotification, RuntimeOptions,
+    RuntimeRequest, ThreadReadParams,
 };
 use serde_json::{Map, Value};
 
@@ -37,7 +38,22 @@ impl RequestProcessor {
         self.ensure_direct_input_allowed(&params.thread_id).await?;
         let runtime_params = lower_turn_start_params(&params, session_id)?;
         let host = self.runtime_host_context();
-        let config_warnings = self.config_warning_notifications(ConfigWarningScope::TurnStart);
+        let mut notifications: Vec<JsonRpcNotification> = Vec::new();
+        if let Some(thread_settings) = self
+            .runtime
+            .reconcile_thread_model_selection(&params.thread_id)
+            .await
+            .map_err(to_jsonrpc_error)?
+        {
+            notifications.push(
+                V2ServerNotification::ThreadSettingsUpdated(ThreadSettingsUpdatedNotification {
+                    thread_id: params.thread_id.clone(),
+                    thread_settings,
+                })
+                .into(),
+            );
+        }
+        notifications.extend(self.config_warning_notifications(ConfigWarningScope::TurnStart));
 
         let _ = event_callback;
         let output = self
@@ -46,7 +62,7 @@ impl RequestProcessor {
             .await
             .map_err(to_jsonrpc_error)?;
         let response = v2_start_response(output.response);
-        Ok(dispatch_result(response)?.with_notifications(config_warnings))
+        Ok(dispatch_result(response)?.with_notifications(notifications))
     }
 
     /// v2 `turn/interrupt` boundary. The thread lookup is deliberately

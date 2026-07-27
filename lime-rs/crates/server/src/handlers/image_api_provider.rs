@@ -9,6 +9,7 @@ use futures::StreamExt;
 use lime_core::api_host_utils::normalize_openai_compatible_api_host;
 use lime_core::config::ConfigManager;
 use lime_core::database::dao::api_key_provider::{ApiKeyProvider, ApiKeyProviderDao};
+use lime_core::models::model_registry::ProviderModelConfig;
 use lime_core::models::openai::{ImageData, ImageGenerationRequest, ImageGenerationResponse};
 use model_provider::current_client::responses_endpoint;
 use reqwest::{header::CONTENT_TYPE, Client};
@@ -182,7 +183,7 @@ pub(crate) async fn try_generate_with_configured_provider(
             let Some(request_model) = resolve_gemini_image_model(
                 request.model.as_str(),
                 routing.preferred_model_id.as_deref(),
-                &provider.custom_models,
+                &provider.models,
             ) else {
                 return handle_routing_failure(
                     state,
@@ -206,7 +207,7 @@ pub(crate) async fn try_generate_with_configured_provider(
             let Some(request_model) = resolve_zhipu_image_model(
                 request.model.as_str(),
                 routing.preferred_model_id.as_deref(),
-                &provider.custom_models,
+                &provider.models,
             ) else {
                 return handle_routing_failure(
                     state,
@@ -230,7 +231,7 @@ pub(crate) async fn try_generate_with_configured_provider(
             let Some(request_model) = resolve_compatible_image_model(
                 request.model.as_str(),
                 routing.preferred_model_id.as_deref(),
-                &provider.custom_models,
+                &provider.models,
             ) else {
                 return handle_routing_failure(
                     state,
@@ -465,7 +466,7 @@ fn looks_like_zhipu_image_model(model: &str) -> bool {
 fn resolve_zhipu_image_model(
     request_model: &str,
     preferred_model_id: Option<&str>,
-    custom_models: &[String],
+    models: &[ProviderModelConfig],
 ) -> Option<String> {
     let trimmed = request_model.trim();
     if looks_like_zhipu_image_model(trimmed) {
@@ -479,10 +480,9 @@ fn resolve_zhipu_image_model(
         return Some(preferred_model.to_string());
     }
 
-    custom_models
+    models
         .iter()
-        .map(String::as_str)
-        .map(str::trim)
+        .map(|model| model.id.trim())
         .find(|candidate| looks_like_zhipu_image_model(candidate))
         .map(ToString::to_string)
 }
@@ -2005,6 +2005,7 @@ mod tests {
         ApiKeyProvider, ApiProviderType, ProviderGroup,
     };
     use lime_core::image_generation_matcher::is_likely_image_generation_model_id;
+    use lime_core::models::model_registry::ProviderModelConfig;
     use lime_core::models::openai::ImageGenerationRequest;
     use reqwest::Client;
     use serde_json::{json, Value};
@@ -2166,7 +2167,10 @@ mod tests {
             resolve_compatible_image_model(
                 "gpt-5.2",
                 None,
-                &["gpt-images-2".to_string(), "gpt-5.2".to_string()],
+                &[
+                    ProviderModelConfig::hint("gpt-images-2"),
+                    ProviderModelConfig::hint("gpt-5.2"),
+                ],
             ),
             Some("gpt-images-2".to_string())
         );
@@ -2179,8 +2183,8 @@ mod tests {
                 "claude-sonnet-4-5",
                 None,
                 &[
-                    "black-forest-labs/FLUX.1-schnell".to_string(),
-                    "glm-5".to_string(),
+                    ProviderModelConfig::hint("black-forest-labs/FLUX.1-schnell"),
+                    ProviderModelConfig::hint("glm-5"),
                 ],
             ),
             Some("black-forest-labs/FLUX.1-schnell".to_string())
@@ -2194,7 +2198,7 @@ mod tests {
             id: &str,
             provider_type: ApiProviderType,
             api_host: &str,
-            custom_models: Vec<String>,
+            models: Vec<ProviderModelConfig>,
         ) -> ApiKeyProvider {
             ApiKeyProvider {
                 id: id.to_string(),
@@ -2209,7 +2213,7 @@ mod tests {
                 project: None,
                 location: None,
                 region: None,
-                custom_models,
+                models,
                 prompt_cache_mode: None,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
@@ -2238,7 +2242,7 @@ mod tests {
             "gemini",
             ApiProviderType::Gemini,
             "https://generativelanguage.googleapis.com",
-            vec!["gemini-3.1-flash-image".to_string()],
+            vec![ProviderModelConfig::hint("gemini-3.1-flash-image")],
         );
 
         assert!(is_gemini_image_provider(&gemini_provider));
@@ -2251,7 +2255,7 @@ mod tests {
             "zhipuai",
             ApiProviderType::Openai,
             "https://open.bigmodel.cn/api/paas/v4",
-            vec!["cogview-4-250304".to_string()],
+            vec![ProviderModelConfig::hint("cogview-4-250304")],
         );
         assert!(matches!(
             resolve_configured_image_provider_kind(&zhipu_provider, &request, &routing),
@@ -2262,7 +2266,9 @@ mod tests {
             "siliconflow",
             ApiProviderType::Openai,
             "https://api.siliconflow.cn/v1",
-            vec!["black-forest-labs/FLUX.1-schnell".to_string()],
+            vec![ProviderModelConfig::hint(
+                "black-forest-labs/FLUX.1-schnell",
+            )],
         )));
         assert!(matches!(
             resolve_configured_image_provider_kind(
@@ -2270,7 +2276,7 @@ mod tests {
                     "google-vertex",
                     ApiProviderType::Vertexai,
                     "",
-                    vec!["gemini-3.1-flash-image".to_string()],
+                    vec![ProviderModelConfig::hint("gemini-3.1-flash-image")],
                 ),
                 &request,
                 &routing,
@@ -2285,7 +2291,7 @@ mod tests {
             resolve_zhipu_image_model(
                 "gpt-images-2",
                 Some("cogview-4-250304"),
-                &["glm-image".to_string()]
+                &[ProviderModelConfig::hint("glm-image")]
             ),
             Some("cogview-4-250304".to_string())
         );
@@ -2294,7 +2300,7 @@ mod tests {
             Some("glm-image".to_string())
         );
         assert_eq!(
-            resolve_zhipu_image_model("gpt-5.2", None, &["glm-image".to_string()]),
+            resolve_zhipu_image_model("gpt-5.2", None, &[ProviderModelConfig::hint("glm-image")],),
             Some("glm-image".to_string())
         );
     }
@@ -2713,7 +2719,10 @@ data: {"response":{"created_at":1777000001,"output":[]}}
             project: None,
             location: None,
             region: None,
-            custom_models: vec!["gpt-images-2".to_string(), "gpt-5.4".to_string()],
+            models: vec![
+                ProviderModelConfig::hint("gpt-images-2"),
+                ProviderModelConfig::hint("gpt-5.4"),
+            ],
             prompt_cache_mode: None,
             created_at: now,
             updated_at: now,
@@ -2861,7 +2870,7 @@ data: {"response":{"created_at":1777000001,"output":[]}}
             project: None,
             location: None,
             region: None,
-            custom_models: vec!["gpt-images-2".to_string()],
+            models: vec![ProviderModelConfig::hint("gpt-images-2")],
             prompt_cache_mode: None,
             created_at: now,
             updated_at: now,
@@ -2936,7 +2945,7 @@ data: {"response":{"created_at":1777000001,"output":[]}}
             project: None,
             location: None,
             region: None,
-            custom_models: vec!["gpt-images-2".to_string()],
+            models: vec![ProviderModelConfig::hint("gpt-images-2")],
             prompt_cache_mode: None,
             created_at: now,
             updated_at: now,
@@ -3013,7 +3022,7 @@ data: {"response":{"created_at":1777000001,"output":[]}}
             project: None,
             location: None,
             region: None,
-            custom_models: vec!["gpt-images-2".to_string()],
+            models: vec![ProviderModelConfig::hint("gpt-images-2")],
             prompt_cache_mode: None,
             created_at: now,
             updated_at: now,
@@ -3082,7 +3091,7 @@ data: {"type":"response.output_item.done","output_index":0,"item":{"type":"image
             project: None,
             location: None,
             region: None,
-            custom_models: vec!["gpt-images-2".to_string()],
+            models: vec![ProviderModelConfig::hint("gpt-images-2")],
             prompt_cache_mode: None,
             created_at: now,
             updated_at: now,

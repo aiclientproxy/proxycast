@@ -82,6 +82,33 @@ describe("openai-compatible-fixture-server", () => {
     });
   });
 
+  it("模型发现应返回可执行的显式 chat capability", async () => {
+    const fixture = await startFixture();
+    const response = await fetch(`${fixture.baseUrl}/v1/models`, {
+      headers: {
+        authorization: `Bearer ${DEFAULT_FIXTURE_API_KEY}`,
+      },
+    });
+
+    expect(response.ok).toBe(true);
+    await expect(response.json()).resolves.toMatchObject({
+      data: [
+        {
+          id: DEFAULT_FIXTURE_MODEL,
+          task_families: ["chat"],
+          input_modalities: ["text"],
+          output_modalities: ["text"],
+          runtime_features: ["streaming", "tool_calling"],
+          capabilities: {
+            tools: true,
+            streaming: true,
+            function_calling: true,
+          },
+        },
+      ],
+    });
+  });
+
   it("应支持 OpenAI-compatible streaming chat completions", async () => {
     const fixture = await startFixture({ content: "MO_OK_STREAM" });
     const response = await fetch(`${fixture.baseUrl}/v1/chat/completions`, {

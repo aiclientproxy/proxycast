@@ -9,7 +9,7 @@ import { formatNumber } from "@/i18n/format";
 export interface VideoProviderOption {
   id: string;
   name: string;
-  customModels: string[];
+  models: string[];
 }
 
 interface VideoSidebarProps {
@@ -1018,8 +1018,8 @@ export const VideoSidebar: React.FC<VideoSidebarProps> = memo(
       const seenKeys = new Set<string>();
       for (const provider of providers) {
         const providerModels =
-          provider.customModels.length > 0
-            ? provider.customModels
+          provider.models.length > 0
+            ? provider.models
             : provider.id === state.providerId
               ? availableModels
               : [];

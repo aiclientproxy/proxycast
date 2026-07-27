@@ -38,6 +38,14 @@ pub(crate) struct AgentControlSpawnResponse {
 
 use route::{agent_control_route_snapshot, AGENT_CONTROL_ROUTE_KEY};
 
+pub(in crate::runtime) fn session_metadata_has_direct_provider_route(
+    metadata: &serde_json::Map<String, serde_json::Value>,
+) -> bool {
+    metadata
+        .get(AGENT_CONTROL_ROUTE_KEY)
+        .is_some_and(route::agent_control_route_snapshot_is_direct)
+}
+
 impl RuntimeCore {
     pub(in crate::runtime) fn persist_agent_control_session_defaults(
         &self,

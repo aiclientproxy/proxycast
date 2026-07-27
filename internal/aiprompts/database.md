@@ -31,12 +31,16 @@ CREATE TABLE api_key_providers (
     group_name TEXT NOT NULL,
     enabled INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
-    custom_models TEXT,
+    models TEXT,
     prompt_cache_mode TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
 ```
+
+`models` 保存 `ProviderModelConfig[]` JSON，每项唯一形态为 `id`、可选 `displayName` 与可选
+`capability`。带 `capability` 的记录是 `provider_explicit` 执行事实；只有 `id` 的记录仅用于 catalog hint，
+不得授权 RuntimeCore route。旧 `custom_models/customModels` 已删除，不存在兼容读写路径。
 
 ### api_keys
 
@@ -116,12 +120,12 @@ impl ApiKeyProviderDao {
 ```rust
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     let version = get_schema_version(conn)?;
-    
+
     if version < 1 {
         conn.execute_batch(include_str!("migrations/001_initial.sql"))?;
     }
     run_startup_migrations(conn)?;
-    
+
     set_schema_version(conn, CURRENT_VERSION)?;
     Ok(())
 }

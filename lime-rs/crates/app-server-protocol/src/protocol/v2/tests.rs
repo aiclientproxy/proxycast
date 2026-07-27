@@ -702,6 +702,35 @@ fn model_safety_buffering_notification_round_trips_codex_shape() {
 }
 
 #[test]
+fn model_rerouted_notification_round_trips_codex_shape() {
+    let expected = json!({
+        "method": "model/rerouted",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "fromModel": "gpt-5-codex",
+            "toModel": "gpt-5.1-codex",
+            "reason": "highRiskCyberActivity"
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode model rerouted notification");
+    assert_eq!(notification.method(), METHOD_MODEL_REROUTED);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_MODEL_REROUTED);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC model rerouted notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode model rerouted notification"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_MODEL_REROUTED));
+}
+
+#[test]
 fn model_verification_notification_round_trips_codex_shape() {
     let expected = json!({
         "method": "model/verification",
@@ -1652,6 +1681,7 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "item/reasoning/summaryTextDelta",
             "item/reasoning/summaryPartAdded",
             "item/reasoning/textDelta",
+            "model/rerouted",
             "model/verification",
             "model/safetyBuffering/updated",
             "thread/settings/updated",

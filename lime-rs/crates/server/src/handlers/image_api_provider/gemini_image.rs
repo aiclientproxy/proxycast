@@ -1,5 +1,6 @@
 use axum::http::header::CONTENT_TYPE;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use lime_core::models::model_registry::ProviderModelConfig;
 use lime_core::models::openai::{ImageData, ImageGenerationRequest, ImageGenerationResponse};
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -24,7 +25,7 @@ fn looks_like_gemini_image_model(model: &str) -> bool {
 pub(super) fn resolve_gemini_image_model(
     request_model: &str,
     preferred_model_id: Option<&str>,
-    custom_models: &[String],
+    models: &[ProviderModelConfig],
 ) -> Option<String> {
     let request_model = request_model.trim();
     if looks_like_gemini_image_model(request_model) {
@@ -38,10 +39,9 @@ pub(super) fn resolve_gemini_image_model(
         return Some(preferred_model.to_string());
     }
 
-    custom_models
+    models
         .iter()
-        .map(String::as_str)
-        .map(str::trim)
+        .map(|model| model.id.trim())
         .find(|model| looks_like_gemini_image_model(model))
         .map(ToString::to_string)
 }
@@ -511,6 +511,7 @@ mod tests {
         routing::{get, post},
         Router,
     };
+    use lime_core::models::model_registry::ProviderModelConfig;
     use lime_core::models::openai::ImageGenerationRequest;
     use serde_json::json;
     use std::sync::{Arc, Mutex};
@@ -538,7 +539,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_gemini_image_model_prefers_request_then_preference_then_custom_models() {
+    fn resolve_gemini_image_model_prefers_request_then_preference_then_models() {
         assert_eq!(
             resolve_gemini_image_model("gemini-3.1-flash-image", None, &[]),
             Some("gemini-3.1-flash-image".to_string())
@@ -547,12 +548,16 @@ mod tests {
             resolve_gemini_image_model(
                 "gpt-5.2",
                 Some("gemini-3-pro-image"),
-                &["gemini-2.5-flash-image".to_string()],
+                &[ProviderModelConfig::hint("gemini-2.5-flash-image")],
             ),
             Some("gemini-3-pro-image".to_string())
         );
         assert_eq!(
-            resolve_gemini_image_model("gpt-5.2", None, &["gemini-2.5-flash-image".to_string()],),
+            resolve_gemini_image_model(
+                "gpt-5.2",
+                None,
+                &[ProviderModelConfig::hint("gemini-2.5-flash-image")],
+            ),
             Some("gemini-2.5-flash-image".to_string())
         );
         assert_eq!(
@@ -560,8 +565,8 @@ mod tests {
                 "gpt-5.2",
                 None,
                 &[
-                    "gemini-3.1-flash-image".to_string(),
-                    "gemini-3-pro-image".to_string(),
+                    ProviderModelConfig::hint("gemini-3.1-flash-image"),
+                    ProviderModelConfig::hint("gemini-3-pro-image"),
                 ],
             ),
             Some("gemini-3.1-flash-image".to_string())

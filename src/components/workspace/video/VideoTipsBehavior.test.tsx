@@ -289,7 +289,7 @@ describe("视频工作台 tips 收口", () => {
           {
             id: "openai",
             name: "OpenAI",
-            customModels: ["sora-2-pro"],
+            models: ["sora-2-pro"],
           },
         ],
         availableModels: [],

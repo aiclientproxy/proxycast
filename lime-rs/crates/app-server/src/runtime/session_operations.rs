@@ -63,6 +63,46 @@ impl RuntimeCore {
         }
     }
 
+    pub(in crate::runtime) fn loaded_thread_settings(
+        &self,
+        thread_id: &str,
+    ) -> Result<Option<(String, ThreadSettings, bool)>, RuntimeCoreError> {
+        let state = self
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned");
+        let stored = state
+            .sessions
+            .values()
+            .find(|stored| stored.session.thread_id == thread_id)
+            .ok_or_else(|| RuntimeCoreError::SessionNotFound(thread_id.to_string()))?;
+        let Some(metadata) = stored
+            .session
+            .business_object_ref
+            .as_ref()
+            .and_then(|reference| reference.metadata.as_ref())
+            .and_then(Value::as_object)
+        else {
+            return Ok(None);
+        };
+        if metadata_string(metadata, &["modelName", "model"]).is_none()
+            || metadata_string(
+                metadata,
+                &["providerSelector", "providerName", "modelProvider"],
+            )
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let settings =
+            thread_settings_from_metadata(metadata).map_err(RuntimeCoreError::Backend)?;
+        Ok(Some((
+            stored.session.session_id.clone(),
+            settings,
+            super::agent_control::session_metadata_has_direct_provider_route(metadata),
+        )))
+    }
+
     pub async fn set_thread_memory_mode(
         &self,
         params: ThreadMemoryModeSetParams,

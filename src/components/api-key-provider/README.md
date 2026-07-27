@@ -60,7 +60,7 @@ function ProviderSettingsPage() {
 为避免“改一处坏一片”，Provider/模型映射采用分层策略：
 
 1. **框架层（agent-rust）**：负责 Provider 工厂与别名归一，支持 `AGENT_PROVIDER_ALIAS_OVERRIDES` 做运行时覆盖。
-2. **应用后端层（App Server）**：Provider 列表、系统 Provider Catalog、Provider 读写、Key 管理、连接测试、UI state 与实时模型抓取统一由 App Server `modelProvider/*`、`modelProviderKey/*`、`modelProviderUiState/*` 提供；Desktop Host 不再暴露旧 Provider compat facade。Provider 模型列表只来自实时 `/models` 接口或用户显式 `custom_models`。实时 `/models` 成功结果允许缓存 10 天，读取时先查缓存再访问上游，但缓存只保存接口结果，不恢复本地 catalog 兜底。`get_model_registry_provider_ids` 仅兼容返回空集合。
+2. **应用后端层（App Server）**：Provider 列表、系统 Provider Catalog、Provider 读写、Key 管理、连接测试、UI state 与实时模型抓取统一由 App Server `modelProvider/*`、`modelProviderKey/*`、`modelProviderUiState/*` 提供；Desktop Host 不再暴露旧 Provider compat facade。Provider 模型列表只来自实时 `/models` 接口或用户显式 `models`。实时 `/models` 成功结果允许缓存 10 天，读取时先查缓存再访问上游，但缓存只保存接口结果，不恢复本地 catalog 兜底。`get_model_registry_provider_ids` 仅兼容返回空集合。
 3. **应用前端层（UI）**：设置页只接受接口返回模型和用户手动添加模型；已下线的本地模型目录不再参与添加页发现或右侧配置页兜底。
 
 ### 解析优先级

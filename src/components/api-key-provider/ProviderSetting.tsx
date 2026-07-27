@@ -28,6 +28,8 @@ import {
 import { ProviderIcon } from "@/icons/providers";
 import {
   apiKeyProviderApi,
+  providerModelIds,
+  reconcileProviderModels,
   type ProviderWithKeysDisplay,
   type UpdateProviderRequest,
 } from "@/lib/api/apiKeyProvider";
@@ -383,7 +385,7 @@ const ProviderSettingBody: React.FC<ProviderSettingBodyProps> = ({
 }) => {
   const { t } = useTranslation("settings");
   const [modelList, setModelList] = useState<string[]>(
-    provider?.custom_models ?? [],
+    providerModelIds(provider.models),
   );
   const [modelDraft, setModelDraft] = useState("");
   const [apiModelIds, setApiModelIds] = useState<string[]>([]);
@@ -419,7 +421,7 @@ const ProviderSettingBody: React.FC<ProviderSettingBodyProps> = ({
   const [skillCatalogRevision, setSkillCatalogRevision] = useState(0);
 
   useEffect(() => {
-    setModelList(provider?.custom_models ?? []);
+    setModelList(providerModelIds(provider.models));
     setModelDraft("");
     setApiModelIds([]);
     setApiModelQuery("");
@@ -437,7 +439,7 @@ const ProviderSettingBody: React.FC<ProviderSettingBodyProps> = ({
     setShowApiKey(false);
     setImageCommandDraft(null);
     setImageCommandStatus(null);
-  }, [provider.id, provider.api_host, provider.custom_models]);
+  }, [provider.id, provider.api_host, provider.models]);
 
   useEffect(() => {
     return subscribeSkillCatalogChanged(() => {
@@ -742,10 +744,12 @@ const ProviderSettingBody: React.FC<ProviderSettingBodyProps> = ({
       setConnectionStatus(null);
 
       if (onUpdate) {
-        await onUpdate(provider.id, { custom_models: dedupedModels });
+        await onUpdate(provider.id, {
+          models: reconcileProviderModels(provider.models, dedupedModels),
+        });
       }
     },
-    [onUpdate, provider.id],
+    [onUpdate, provider.id, provider.models],
   );
 
   const addModels = useCallback(

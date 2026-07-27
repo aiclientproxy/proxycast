@@ -2,6 +2,7 @@ use super::{
     REQUEST_KIND_METADATA_KEY, SESSION_ID_METADATA_KEY, THREAD_ID_METADATA_KEY,
     TURN_ID_METADATA_KEY, X_CODEX_TURN_METADATA_KEY,
 };
+use crate::provider_capabilities::ProviderCapabilities;
 use crate::provider_stream::RuntimeReplyProviderRequestWireShape;
 use crate::runtime_provider::RuntimeProviderConfig;
 use agent_protocol::ImageDetail;
@@ -84,7 +85,11 @@ pub(super) fn responses_request(
         || (wire_shape.use_responses_lite && wire_shape.instructions_location.is_none());
     let tools_in_input = wire_shape.tools_location.as_deref() == Some("input_prefix")
         || (wire_shape.use_responses_lite && wire_shape.tools_location.is_none());
-    let response_tools = request.tools.iter().map(responses_tool).collect::<Vec<_>>();
+    let response_tools = request
+        .tools
+        .iter()
+        .map(|tool| responses_tool(config, tool))
+        .collect::<Vec<_>>();
     let mut input_prefix = Vec::new();
     if tools_in_input {
         input_prefix.push(json!({
@@ -417,7 +422,20 @@ fn chat_tool(tool: &runtime_core::CanonicalToolDefinition) -> Value {
     })
 }
 
-fn responses_tool(tool: &runtime_core::CanonicalToolDefinition) -> Value {
+fn responses_tool(
+    config: &RuntimeProviderConfig,
+    tool: &runtime_core::CanonicalToolDefinition,
+) -> Value {
+    let capabilities = ProviderCapabilities::from_runtime_config(config);
+    if capabilities.web_search && is_web_search_tool_name(&tool.name) {
+        return json!({
+            "type": "web_search",
+            "external_web_access": true,
+        });
+    }
+    if capabilities.image_generation && is_image_generation_tool_name(&tool.name) {
+        return json!({ "type": "image_generation" });
+    }
     json!({
         "type": "function",
         "name": tool.name,
@@ -425,6 +443,14 @@ fn responses_tool(tool: &runtime_core::CanonicalToolDefinition) -> Value {
         "parameters": tool.input_schema,
         "strict": false,
     })
+}
+
+fn is_web_search_tool_name(name: &str) -> bool {
+    name == "WebSearch"
+}
+
+fn is_image_generation_tool_name(name: &str) -> bool {
+    name == "ImageGeneration"
 }
 
 fn strip_responses_lite_image_details(value: &mut Value) {

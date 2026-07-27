@@ -541,7 +541,7 @@ async function createRepositoryProvider(client, provider) {
     providerId,
     enabled: true,
     sortOrder: 1,
-    customModels: [provider.modelPreference],
+    models: [{ id: provider.modelPreference }],
   });
   const key = await client.call("modelProviderKey/create", {
     providerId,

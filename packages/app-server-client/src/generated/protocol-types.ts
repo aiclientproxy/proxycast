@@ -207,6 +207,7 @@ export const METHOD_MEMORY_STORE_REVIEW_LIST = "memoryStore/review/list";
 export const METHOD_MEMORY_STORE_REVIEW_RESOLVE = "memoryStore/review/resolve";
 export const METHOD_MEMORY_STORE_SEARCH = "memoryStore/search";
 export const METHOD_MODEL_LIST = "model/list";
+export const METHOD_MODEL_REROUTED = "model/rerouted";
 export const METHOD_MODEL_SAFETY_BUFFERING_UPDATED =
   "model/safetyBuffering/updated";
 export const METHOD_MODEL_VERIFICATION = "model/verification";
@@ -1045,6 +1046,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "model/list",
+  },
+  {
+    kind: "notification",
+    method: "model/rerouted",
   },
   {
     kind: "notification",
@@ -5520,8 +5525,10 @@ export interface HookPromptFragment {
 
 export interface ImageGenerationItem {
   id: string;
-  result?: unknown;
-  status?: null | string;
+  result: string;
+  revisedPrompt?: null | string;
+  savedPath?: null | string;
+  status: string;
 }
 
 export interface ImageStoryboardSlotInput {
@@ -6629,9 +6636,9 @@ export interface ModelProviderUiStateWriteParams {
 export interface ModelProviderUpdateParams {
   apiHost?: null | string;
   apiVersion?: null | string;
-  customModels?: string[] | null;
   enabled?: boolean | null;
   location?: null | string;
+  models?: ProviderModelConfig[] | null;
   name?: null | string;
   project?: null | string;
   promptCacheMode?: null | string;
@@ -6679,6 +6686,16 @@ export type ModelRefSource =
   | "runtime_request"
   | "session_default"
   | "task";
+
+export type ModelRerouteReason = "highRiskCyberActivity";
+
+export interface ModelReroutedNotification {
+  fromModel: string;
+  reason: ModelRerouteReason;
+  threadId: string;
+  toModel: string;
+  turnId: string;
+}
 
 export interface ModelSafetyBufferingUpdatedNotification {
   fasterModel?: null | string;
@@ -7332,7 +7349,6 @@ export type ProtocolKind =
   | "codex_responses"
   | "fal"
   | "gemini_generate_content"
-  | "ollama_chat"
   | "openai_chat"
   | "openai_images"
   | "openai_responses"
@@ -7345,13 +7361,13 @@ export interface ProviderInfo {
   apiKeys?: ProviderKeyInfo[];
   apiVersion?: null | string;
   createdAt?: null | string;
-  customModels?: string[];
   enabled: boolean;
   group: string;
   id: string;
   isSystem: boolean;
   legacyIds?: string[];
   location?: null | string;
+  models?: ProviderModelConfig[];
   name: string;
   project?: null | string;
   promptCacheMode?: null | string;
@@ -7623,6 +7639,10 @@ export type ServerNotification =
   | {
       method: "item/reasoning/textDelta";
       params: ReasoningTextDeltaNotification;
+    }
+  | {
+      method: "model/rerouted";
+      params: ModelReroutedNotification;
     }
   | {
       method: "model/verification";
@@ -9580,6 +9600,20 @@ export type MultiAgentMode =
 export interface TextElement {
   byteRange: ByteRange;
   placeholder?: null | string;
+}
+
+export interface ProviderModelCapability {
+  capabilities?: ModelCapabilitiesInfo;
+  inputModalities?: string[];
+  outputModalities?: string[];
+  runtimeFeatures?: string[];
+  taskFamilies?: string[];
+}
+
+export interface ProviderModelConfig {
+  capability?: ProviderModelCapability | null;
+  displayName?: null | string;
+  id: string;
 }
 
 export interface PluginReadinessIssueCategorySummary {

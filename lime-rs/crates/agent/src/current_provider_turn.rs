@@ -393,6 +393,19 @@ fn handle_provider_event<F>(
         CurrentProviderTurnEvent::ServerModel { model } => {
             emit_with_artifacts(artifact_events, AgentEvent::ServerModel { model }, on_event)
         }
+        CurrentProviderTurnEvent::ModelReroute {
+            from_model,
+            to_model,
+            reason,
+        } => emit_with_artifacts(
+            artifact_events,
+            AgentEvent::ModelReroute {
+                from_model,
+                to_model,
+                reason,
+            },
+            on_event,
+        ),
         CurrentProviderTurnEvent::ModelVerification { verifications } => emit_with_artifacts(
             artifact_events,
             AgentEvent::ModelVerification { verifications },
@@ -554,6 +567,9 @@ mod tests {
                 call_id: "call-1".to_string(),
                 tool_name: "Read".to_string(),
                 arguments: serde_json::json!({ "path": "README.md" }),
+                provider_metadata: serde_json::json!({
+                    "google": { "thoughtSignature": "sig" }
+                }),
                 environments: vec![ToolEnvironment::new("local", PathBuf::from("/workspace"))],
                 phase: ToolLifecyclePhase::Started,
                 output: None,
@@ -581,6 +597,10 @@ mod tests {
         assert_eq!(arguments[0].name, "path");
         assert_eq!(arguments[0].value, "README.md");
         assert!(output.is_none());
+        assert_eq!(
+            started.metadata["provider_metadata"]["google"]["thoughtSignature"],
+            "sig"
+        );
 
         let projected = emitter
             .project(ToolLifecycleEvent {
@@ -588,6 +608,9 @@ mod tests {
                 call_id: "call-1".to_string(),
                 tool_name: "Read".to_string(),
                 arguments: serde_json::json!({ "path": "README.md" }),
+                provider_metadata: serde_json::json!({
+                    "google": { "thoughtSignature": "sig" }
+                }),
                 environments: vec![ToolEnvironment::new("local", PathBuf::from("/workspace"))],
                 phase: ToolLifecyclePhase::Completed,
                 output: Some(NormalizedToolOutput {
@@ -665,6 +688,10 @@ mod tests {
         );
         assert_eq!(metadata["environments"][0]["environmentId"], "local");
         assert_eq!(metadata["environments"][0]["cwd"], "/workspace");
+        assert_eq!(
+            metadata["provider_metadata"]["google"]["thoughtSignature"],
+            "sig"
+        );
     }
 
     #[test]
@@ -682,6 +709,7 @@ mod tests {
                 call_id: "call-failed".to_string(),
                 tool_name: "exec_command".to_string(),
                 arguments: serde_json::json!({ "command": "false" }),
+                provider_metadata: serde_json::Value::Null,
                 environments: Vec::new(),
                 phase: ToolLifecyclePhase::Completed,
                 output: Some(NormalizedToolOutput {
@@ -729,6 +757,7 @@ mod tests {
                 call_id: "call-1".to_string(),
                 tool_name: "Read".to_string(),
                 arguments: serde_json::json!({ "path": "README.md" }),
+                provider_metadata: serde_json::Value::Null,
                 environments: environment.clone(),
                 phase: ToolLifecyclePhase::Started,
                 output: None,
@@ -748,6 +777,7 @@ mod tests {
                 call_id: "call-1".to_string(),
                 tool_name: "Read".to_string(),
                 arguments: serde_json::json!({ "path": "README.md" }),
+                provider_metadata: serde_json::Value::Null,
                 environments: environment,
                 phase: ToolLifecyclePhase::Completed,
                 output: Some(NormalizedToolOutput {

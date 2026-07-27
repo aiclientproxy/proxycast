@@ -632,6 +632,10 @@
     },
     {
       "kind": "notification",
+      "method": "model/rerouted"
+    },
+    {
+      "kind": "notification",
       "method": "model/safetyBuffering/updated"
     },
     {
@@ -2213,6 +2217,8 @@
       "ModelListResponse",
       "ModelProviderCapabilitiesReadParams",
       "ModelProviderCapabilitiesReadResponse",
+      "ModelRerouteReason",
+      "ModelReroutedNotification",
       "ModelSafetyBufferingUpdatedNotification",
       "ModelServiceTier",
       "ModelUpgradeInfo",

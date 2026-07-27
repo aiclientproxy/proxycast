@@ -27,7 +27,7 @@ function normalizeValue(value?: string | null): string {
 }
 
 function hasDeclaredProviderModels(provider: ConfiguredProvider): boolean {
-  return Boolean(provider.customModels?.some((modelId) => modelId.trim()));
+  return Boolean(provider.models?.some((modelId) => modelId.trim()));
 }
 
 function isSelectableProvider(provider: ConfiguredProvider): boolean {

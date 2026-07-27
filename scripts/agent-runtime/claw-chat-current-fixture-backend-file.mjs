@@ -167,6 +167,27 @@ export async function startImageProviderFixtureServer() {
         body,
       });
 
+      if (request.method === "GET" && request.url === "/v1/models") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            object: "list",
+            data: [
+              {
+                id: IMAGE_FIXTURE_MODEL,
+                object: "model",
+                display_name: IMAGE_FIXTURE_MODEL,
+                task_families: ["image_generation", "image_edit"],
+                input_modalities: ["text", "image"],
+                output_modalities: ["image"],
+                runtime_features: ["images_api"],
+              },
+            ],
+          }),
+        );
+        return;
+      }
+
       if (
         request.method !== "POST" ||
         request.url !== "/v1/images/generations"

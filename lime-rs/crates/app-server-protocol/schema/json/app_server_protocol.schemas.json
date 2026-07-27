@@ -22596,16 +22596,29 @@
         "id": {
           "type": "string"
         },
-        "result": true,
-        "status": {
+        "result": {
+          "type": "string"
+        },
+        "revisedPrompt": {
           "type": [
             "null",
             "string"
           ]
+        },
+        "savedPath": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "status": {
+          "type": "string"
         }
       },
       "required": [
-        "id"
+        "id",
+        "result",
+        "status"
       ],
       "title": "ImageGenerationItem",
       "type": "object"
@@ -23207,16 +23220,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -24413,16 +24439,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -30751,6 +30790,113 @@
     },
     "ModelProviderCatalogListResponse": {
       "$defs": {
+        "ModelCapabilitiesInfo": {
+          "properties": {
+            "functionCalling": {
+              "type": "boolean"
+            },
+            "jsonMode": {
+              "type": "boolean"
+            },
+            "reasoning": {
+              "type": "boolean"
+            },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelReasoningEffortSupportInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "streaming": {
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "boolean"
+            },
+            "vision": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "functionCalling",
+            "jsonMode",
+            "reasoning",
+            "streaming",
+            "tools",
+            "vision"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortOptionInfo": {
+          "properties": {
+            "default": {
+              "default": false,
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "value"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortSupportInfo": {
+          "properties": {
+            "default": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "levels": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "options": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+              },
+              "type": "array"
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "supported": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "supported"
+          ],
+          "type": "object"
+        },
         "ProviderInfo": {
           "properties": {
             "apiHost": {
@@ -30780,13 +30926,6 @@
                 "string"
               ]
             },
-            "customModels": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
             "enabled": {
               "type": "boolean"
             },
@@ -30811,6 +30950,13 @@
                 "null",
                 "string"
               ]
+            },
+            "models": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ProviderModelConfig"
+              },
+              "type": "array"
             },
             "name": {
               "type": "string"
@@ -30906,6 +31052,77 @@
             "id",
             "providerId",
             "usageCount"
+          ],
+          "type": "object"
+        },
+        "ProviderModelCapability": {
+          "properties": {
+            "capabilities": {
+              "$ref": "#/$defs/ModelCapabilitiesInfo",
+              "default": {
+                "functionCalling": false,
+                "jsonMode": false,
+                "reasoning": false,
+                "streaming": false,
+                "tools": false,
+                "vision": false
+              }
+            },
+            "inputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "outputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "runtimeFeatures": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "taskFamilies": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "ProviderModelConfig": {
+          "properties": {
+            "capability": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ProviderModelCapability"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "displayName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
           ],
           "type": "object"
         }
@@ -31679,6 +31896,113 @@
     },
     "ModelProviderListResponse": {
       "$defs": {
+        "ModelCapabilitiesInfo": {
+          "properties": {
+            "functionCalling": {
+              "type": "boolean"
+            },
+            "jsonMode": {
+              "type": "boolean"
+            },
+            "reasoning": {
+              "type": "boolean"
+            },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelReasoningEffortSupportInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "streaming": {
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "boolean"
+            },
+            "vision": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "functionCalling",
+            "jsonMode",
+            "reasoning",
+            "streaming",
+            "tools",
+            "vision"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortOptionInfo": {
+          "properties": {
+            "default": {
+              "default": false,
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "value"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortSupportInfo": {
+          "properties": {
+            "default": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "levels": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "options": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+              },
+              "type": "array"
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "supported": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "supported"
+          ],
+          "type": "object"
+        },
         "ProviderInfo": {
           "properties": {
             "apiHost": {
@@ -31708,13 +32032,6 @@
                 "string"
               ]
             },
-            "customModels": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
             "enabled": {
               "type": "boolean"
             },
@@ -31739,6 +32056,13 @@
                 "null",
                 "string"
               ]
+            },
+            "models": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ProviderModelConfig"
+              },
+              "type": "array"
             },
             "name": {
               "type": "string"
@@ -31834,6 +32158,77 @@
             "id",
             "providerId",
             "usageCount"
+          ],
+          "type": "object"
+        },
+        "ProviderModelCapability": {
+          "properties": {
+            "capabilities": {
+              "$ref": "#/$defs/ModelCapabilitiesInfo",
+              "default": {
+                "functionCalling": false,
+                "jsonMode": false,
+                "reasoning": false,
+                "streaming": false,
+                "tools": false,
+                "vision": false
+              }
+            },
+            "inputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "outputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "runtimeFeatures": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "taskFamilies": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "ProviderModelConfig": {
+          "properties": {
+            "capability": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ProviderModelCapability"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "displayName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
           ],
           "type": "object"
         }
@@ -31871,6 +32266,113 @@
     },
     "ModelProviderReadResponse": {
       "$defs": {
+        "ModelCapabilitiesInfo": {
+          "properties": {
+            "functionCalling": {
+              "type": "boolean"
+            },
+            "jsonMode": {
+              "type": "boolean"
+            },
+            "reasoning": {
+              "type": "boolean"
+            },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelReasoningEffortSupportInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "streaming": {
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "boolean"
+            },
+            "vision": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "functionCalling",
+            "jsonMode",
+            "reasoning",
+            "streaming",
+            "tools",
+            "vision"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortOptionInfo": {
+          "properties": {
+            "default": {
+              "default": false,
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "value"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortSupportInfo": {
+          "properties": {
+            "default": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "levels": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "options": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+              },
+              "type": "array"
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "supported": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "supported"
+          ],
+          "type": "object"
+        },
         "ProviderInfo": {
           "properties": {
             "apiHost": {
@@ -31900,13 +32402,6 @@
                 "string"
               ]
             },
-            "customModels": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
             "enabled": {
               "type": "boolean"
             },
@@ -31931,6 +32426,13 @@
                 "null",
                 "string"
               ]
+            },
+            "models": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ProviderModelConfig"
+              },
+              "type": "array"
             },
             "name": {
               "type": "string"
@@ -32026,6 +32528,77 @@
             "id",
             "providerId",
             "usageCount"
+          ],
+          "type": "object"
+        },
+        "ProviderModelCapability": {
+          "properties": {
+            "capabilities": {
+              "$ref": "#/$defs/ModelCapabilitiesInfo",
+              "default": {
+                "functionCalling": false,
+                "jsonMode": false,
+                "reasoning": false,
+                "streaming": false,
+                "tools": false,
+                "vision": false
+              }
+            },
+            "inputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "outputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "runtimeFeatures": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "taskFamilies": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "ProviderModelConfig": {
+          "properties": {
+            "capability": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ProviderModelCapability"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "displayName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
           ],
           "type": "object"
         }
@@ -32257,6 +32830,186 @@
       "type": "object"
     },
     "ModelProviderUpdateParams": {
+      "$defs": {
+        "ModelCapabilitiesInfo": {
+          "properties": {
+            "functionCalling": {
+              "type": "boolean"
+            },
+            "jsonMode": {
+              "type": "boolean"
+            },
+            "reasoning": {
+              "type": "boolean"
+            },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelReasoningEffortSupportInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "streaming": {
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "boolean"
+            },
+            "vision": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "functionCalling",
+            "jsonMode",
+            "reasoning",
+            "streaming",
+            "tools",
+            "vision"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortOptionInfo": {
+          "properties": {
+            "default": {
+              "default": false,
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "value"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortSupportInfo": {
+          "properties": {
+            "default": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "levels": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "options": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+              },
+              "type": "array"
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "supported": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "supported"
+          ],
+          "type": "object"
+        },
+        "ProviderModelCapability": {
+          "properties": {
+            "capabilities": {
+              "$ref": "#/$defs/ModelCapabilitiesInfo",
+              "default": {
+                "functionCalling": false,
+                "jsonMode": false,
+                "reasoning": false,
+                "streaming": false,
+                "tools": false,
+                "vision": false
+              }
+            },
+            "inputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "outputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "runtimeFeatures": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "taskFamilies": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "ProviderModelConfig": {
+          "properties": {
+            "capability": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ProviderModelCapability"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "displayName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        }
+      },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "apiHost": {
@@ -32271,15 +33024,6 @@
             "string"
           ]
         },
-        "customModels": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
         "enabled": {
           "type": [
             "boolean",
@@ -32290,6 +33034,15 @@
           "type": [
             "null",
             "string"
+          ]
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/ProviderModelConfig"
+          },
+          "type": [
+            "array",
+            "null"
           ]
         },
         "name": {
@@ -32341,6 +33094,113 @@
     },
     "ModelProviderWriteResponse": {
       "$defs": {
+        "ModelCapabilitiesInfo": {
+          "properties": {
+            "functionCalling": {
+              "type": "boolean"
+            },
+            "jsonMode": {
+              "type": "boolean"
+            },
+            "reasoning": {
+              "type": "boolean"
+            },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelReasoningEffortSupportInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "streaming": {
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "boolean"
+            },
+            "vision": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "functionCalling",
+            "jsonMode",
+            "reasoning",
+            "streaming",
+            "tools",
+            "vision"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortOptionInfo": {
+          "properties": {
+            "default": {
+              "default": false,
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "value"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortSupportInfo": {
+          "properties": {
+            "default": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "levels": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "options": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+              },
+              "type": "array"
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "supported": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "supported"
+          ],
+          "type": "object"
+        },
         "ProviderInfo": {
           "properties": {
             "apiHost": {
@@ -32370,13 +33230,6 @@
                 "string"
               ]
             },
-            "customModels": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
             "enabled": {
               "type": "boolean"
             },
@@ -32401,6 +33254,13 @@
                 "null",
                 "string"
               ]
+            },
+            "models": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ProviderModelConfig"
+              },
+              "type": "array"
             },
             "name": {
               "type": "string"
@@ -32496,6 +33356,77 @@
             "id",
             "providerId",
             "usageCount"
+          ],
+          "type": "object"
+        },
+        "ProviderModelCapability": {
+          "properties": {
+            "capabilities": {
+              "$ref": "#/$defs/ModelCapabilitiesInfo",
+              "default": {
+                "functionCalling": false,
+                "jsonMode": false,
+                "reasoning": false,
+                "streaming": false,
+                "tools": false,
+                "vision": false
+              }
+            },
+            "inputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "outputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "runtimeFeatures": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "taskFamilies": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "ProviderModelConfig": {
+          "properties": {
+            "capability": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ProviderModelCapability"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "displayName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
           ],
           "type": "object"
         }
@@ -32677,6 +33608,51 @@
       ],
       "title": "ModelRefSource",
       "type": "string"
+    },
+    "ModelRerouteReason": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "highRiskCyberActivity"
+      ],
+      "title": "ModelRerouteReason",
+      "type": "string"
+    },
+    "ModelReroutedNotification": {
+      "$defs": {
+        "ModelRerouteReason": {
+          "enum": [
+            "highRiskCyberActivity"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "fromModel": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/ModelRerouteReason"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "toModel": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fromModel",
+        "reason",
+        "threadId",
+        "toModel",
+        "turnId"
+      ],
+      "title": "ModelReroutedNotification",
+      "type": "object"
     },
     "ModelSafetyBufferingUpdatedNotification": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -37196,7 +38172,6 @@
         "codex_responses",
         "fal",
         "gemini_generate_content",
-        "ollama_chat",
         "openai_chat",
         "openai_images",
         "openai_responses",
@@ -37208,6 +38183,113 @@
     },
     "ProviderInfo": {
       "$defs": {
+        "ModelCapabilitiesInfo": {
+          "properties": {
+            "functionCalling": {
+              "type": "boolean"
+            },
+            "jsonMode": {
+              "type": "boolean"
+            },
+            "reasoning": {
+              "type": "boolean"
+            },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelReasoningEffortSupportInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "streaming": {
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "boolean"
+            },
+            "vision": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "functionCalling",
+            "jsonMode",
+            "reasoning",
+            "streaming",
+            "tools",
+            "vision"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortOptionInfo": {
+          "properties": {
+            "default": {
+              "default": false,
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "value"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortSupportInfo": {
+          "properties": {
+            "default": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "levels": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "options": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+              },
+              "type": "array"
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "supported": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "supported"
+          ],
+          "type": "object"
+        },
         "ProviderKeyInfo": {
           "properties": {
             "alias": {
@@ -37256,6 +38338,77 @@
             "usageCount"
           ],
           "type": "object"
+        },
+        "ProviderModelCapability": {
+          "properties": {
+            "capabilities": {
+              "$ref": "#/$defs/ModelCapabilitiesInfo",
+              "default": {
+                "functionCalling": false,
+                "jsonMode": false,
+                "reasoning": false,
+                "streaming": false,
+                "tools": false,
+                "vision": false
+              }
+            },
+            "inputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "outputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "runtimeFeatures": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "taskFamilies": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "ProviderModelConfig": {
+          "properties": {
+            "capability": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ProviderModelCapability"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "displayName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
         }
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -37287,13 +38440,6 @@
             "string"
           ]
         },
-        "customModels": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
         "enabled": {
           "type": "boolean"
         },
@@ -37318,6 +38464,13 @@
             "null",
             "string"
           ]
+        },
+        "models": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ProviderModelConfig"
+          },
+          "type": "array"
         },
         "name": {
           "type": "string"
@@ -37855,7 +39008,6 @@
             "codex_responses",
             "fal",
             "gemini_generate_content",
-            "ollama_chat",
             "openai_chat",
             "openai_images",
             "openai_responses",
@@ -39770,16 +40922,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -39958,6 +41123,39 @@
             "plan"
           ],
           "type": "string"
+        },
+        "ModelRerouteReason": {
+          "enum": [
+            "highRiskCyberActivity"
+          ],
+          "type": "string"
+        },
+        "ModelReroutedNotification": {
+          "properties": {
+            "fromModel": {
+              "type": "string"
+            },
+            "reason": {
+              "$ref": "#/$defs/ModelRerouteReason"
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "toModel": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fromModel",
+            "reason",
+            "threadId",
+            "toModel",
+            "turnId"
+          ],
+          "type": "object"
         },
         "ModelSafetyBufferingUpdatedNotification": {
           "properties": {
@@ -41901,6 +43099,22 @@
             },
             "params": {
               "$ref": "#/$defs/ReasoningTextDeltaNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "model/rerouted",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ModelReroutedNotification"
             }
           },
           "required": [
@@ -45421,16 +46635,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -47388,16 +48615,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -49432,16 +50672,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -50614,16 +51867,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -51863,16 +53129,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -53271,16 +54550,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -54971,16 +56263,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -56529,16 +57834,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -58255,16 +59573,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -60144,16 +61475,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -61697,16 +63041,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -63856,16 +65213,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -65461,16 +66831,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -67327,16 +68710,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -68663,16 +70059,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -70481,16 +71890,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -71755,16 +73177,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -73533,16 +74968,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -74818,16 +76266,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -76370,16 +77831,29 @@
             "id": {
               "type": "string"
             },
-            "result": true,
-            "status": {
+            "result": {
+              "type": "string"
+            },
+            "revisedPrompt": {
               "type": [
                 "null",
                 "string"
               ]
+            },
+            "savedPath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "type": "string"
             }
           },
           "required": [
-            "id"
+            "id",
+            "result",
+            "status"
           ],
           "type": "object"
         },
@@ -81436,6 +82910,7 @@
               "item/reasoning/summaryTextDelta",
               "item/reasoning/textDelta",
               "item/started",
+              "model/rerouted",
               "model/safetyBuffering/updated",
               "model/verification",
               "serverRequest/resolved",

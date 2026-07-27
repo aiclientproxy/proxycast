@@ -12,6 +12,7 @@ pub(in crate::runtime::tests) struct TestSessionDataSource {
     object_canvas_snapshots: Mutex<Vec<WorkspaceObjectCanvasSnapshot>>,
     media_task_artifacts: Mutex<Vec<MediaTaskArtifactResponse>>,
     media_task_list_requests: Mutex<Vec<MediaTaskArtifactListParams>>,
+    model_catalogs: Vec<ProviderModelCatalog>,
 }
 
 impl TestSessionDataSource {
@@ -27,6 +28,7 @@ impl TestSessionDataSource {
             object_canvas_snapshots: Mutex::new(Vec::new()),
             media_task_artifacts: Mutex::new(Vec::new()),
             media_task_list_requests: Mutex::new(Vec::new()),
+            model_catalogs: Vec::new(),
         }
     }
 
@@ -78,6 +80,16 @@ impl TestSessionDataSource {
             .lock()
             .expect("test media task artifacts mutex poisoned") = tasks;
         self
+    }
+
+    pub(in crate::runtime::tests) fn with_model_catalogs(
+        self,
+        model_catalogs: Vec<ProviderModelCatalog>,
+    ) -> Self {
+        Self {
+            model_catalogs,
+            ..self
+        }
     }
 
     pub(in crate::runtime::tests) fn knowledge_compile_requests(
@@ -278,7 +290,23 @@ impl MemoryAppDataSource for TestSessionDataSource {
 }
 impl DiagnosticsAppDataSource for TestSessionDataSource {}
 impl UsageStatsAppDataSource for TestSessionDataSource {}
-impl ModelProviderAppDataSource for TestSessionDataSource {}
+#[async_trait]
+impl ModelProviderAppDataSource for TestSessionDataSource {
+    fn model_catalog_reconciliation_enabled(&self) -> bool {
+        true
+    }
+
+    async fn read_model_route_generation(&self) -> Result<u64, RuntimeCoreError> {
+        Ok(1)
+    }
+
+    async fn model_catalog(
+        &self,
+        _query: ModelCatalogQuery,
+    ) -> Result<Vec<ProviderModelCatalog>, RuntimeCoreError> {
+        Ok(self.model_catalogs.clone())
+    }
+}
 impl ConnectAppDataSource for TestSessionDataSource {}
 
 #[async_trait]

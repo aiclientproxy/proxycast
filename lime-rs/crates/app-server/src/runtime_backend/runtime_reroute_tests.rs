@@ -14,8 +14,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 use tokio::time::{timeout, Duration};
 
-const PRIMARY_MODEL: &str = "fixture-primary-model";
-const BACKUP_MODEL: &str = "fixture-backup-model";
+const PRIMARY_MODEL: &str = "gpt-4.1-mini";
+const BACKUP_MODEL: &str = "openai/gpt-4.1-mini";
 
 #[derive(Default)]
 struct RecordingSink {
@@ -122,9 +122,14 @@ async fn retryable_provider_failure_reroutes_to_ready_profile_candidate() {
     let fixture = RuntimeRerouteFixture::start().await;
     let db = test_db();
     let backend = RuntimeBackend::with_db(db.clone());
+    backend
+        .api_key_provider_service
+        .initialize_system_providers(&db)
+        .expect("initialize providers");
     let primary_provider = add_provider(
         &backend.api_key_provider_service,
         &db,
+        "openai",
         "Primary",
         &fixture.base_url,
         PRIMARY_MODEL,
@@ -132,6 +137,7 @@ async fn retryable_provider_failure_reroutes_to_ready_profile_candidate() {
     let backup_provider = add_provider(
         &backend.api_key_provider_service,
         &db,
+        "openrouter",
         "Backup",
         &fixture.base_url,
         BACKUP_MODEL,
@@ -189,48 +195,42 @@ async fn retryable_provider_failure_reroutes_to_ready_profile_candidate() {
         .events
         .iter()
         .all(|event| event.event_type != "routing.not_possible"));
+    assert!(sink
+        .events
+        .iter()
+        .all(|event| event.event_type != "model.rerouted"));
 }
 
 fn add_provider(
     service: &ApiKeyProviderService,
     db: &DbConnection,
+    provider_id: &str,
     name: &str,
     base_url: &str,
     model: &str,
 ) -> String {
     let provider = service
-        .add_custom_provider(
+        .update_provider(
             db,
-            name.to_string(),
-            ApiProviderType::Openai,
-            base_url.to_string(),
+            provider_id,
+            Some(name.to_string()),
+            Some(ApiProviderType::Openai),
+            Some(base_url.to_string()),
+            Some(true),
             None,
             None,
             None,
             None,
             None,
+            None,
+            Some(vec![
+                lime_core::models::model_registry::ProviderModelConfig::hint(model),
+            ]),
         )
-        .expect("custom provider");
+        .expect("configure provider");
     service
         .add_api_key(db, &provider.id, &format!("{name}-key"), None, true)
         .expect("provider api key");
-    service
-        .update_provider(
-            db,
-            &provider.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(vec![model.to_string()]),
-        )
-        .expect("provider model");
     provider.id
 }
 

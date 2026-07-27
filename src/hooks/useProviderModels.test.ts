@@ -161,7 +161,7 @@ describe("loadProviderModels", () => {
         registryId: "siliconflow-cn",
         providerId: "siliconflow-cn",
         apiHost: "https://api.siliconflow.cn/v1",
-        customModels: ["deepseek-ai/DeepSeek-V4-Flash"],
+        models: ["deepseek-ai/DeepSeek-V4-Flash"],
       }),
       {
         liveFetchOnly: true,
@@ -257,7 +257,7 @@ describe("loadProviderModels", () => {
         providerId: "custom-minimax",
         type: "anthropic-compatible" as ConfiguredProvider["type"],
         apiHost: "https://api.minimaxi.com/anthropic",
-        customModels: ["MiniMax-M2.7"],
+        models: ["MiniMax-M2.7"],
       }),
       {
         liveFetchOnly: true,
@@ -271,7 +271,7 @@ describe("loadProviderModels", () => {
   it("实时目录无 API Key 时不触发后台模型拉取", async () => {
     const models = await loadProviderModels(
       createProvider({
-        customModels: ["manual-model"],
+        models: ["manual-model"],
       }),
       {
         liveFetchOnly: true,
@@ -335,7 +335,7 @@ describe("loadProviderModels", () => {
     const models = await loadProviderModels(
       createLimeHubProvider({
         authStatus: "login_required",
-        customModels: ["gpt-5.2-pro"],
+        models: ["gpt-5.2-pro"],
       }),
       {
         liveFetchOnly: true,

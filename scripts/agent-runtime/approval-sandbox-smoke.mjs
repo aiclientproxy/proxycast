@@ -315,8 +315,6 @@ function providerEnabled(provider) {
 
 function pickModelPreference(provider) {
   const candidates = [
-    ...(Array.isArray(provider?.custom_models) ? provider.custom_models : []),
-    ...(Array.isArray(provider?.customModels) ? provider.customModels : []),
     ...(Array.isArray(provider?.models) ? provider.models : []),
   ]
     .map((value) =>

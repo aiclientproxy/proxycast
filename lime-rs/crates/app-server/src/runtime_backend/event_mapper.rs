@@ -8,6 +8,13 @@ use crate::RuntimeEventSink;
 use lime_agent::AgentEvent as RuntimeAgentEvent;
 use serde_json::json;
 
+pub(super) struct ModelRouteEvidence {
+    pub provider: String,
+    pub requested_model: String,
+    pub selected_model: String,
+    pub route_attempt: usize,
+}
+
 #[cfg(test)]
 pub(super) fn emit_runtime_agent_event_with_coding_mirror(
     event: &RuntimeAgentEvent,
@@ -40,6 +47,7 @@ pub(super) fn emit_runtime_agent_event_with_coding_mirror_and_plan_parser(
         proposed_plan_parser,
         reasoning_event_state,
         None,
+        None,
     )
 }
 
@@ -50,6 +58,7 @@ pub(super) fn emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_s
     proposed_plan_parser: &mut proposed_plan_parser::ProposedPlanParser,
     reasoning_event_state: &mut reasoning_events::ReasoningEventState,
     soul_style: Option<&SoulStyleMetadata>,
+    model_route_evidence: Option<&ModelRouteEvidence>,
 ) -> Result<(), RuntimeCoreError> {
     let coding_events = coding_event_mirror.process_event(event);
     for event in coding_events.before_raw {
@@ -84,7 +93,13 @@ pub(super) fn emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_s
             {
                 sink.emit(event)?;
             }
-            emit_presentation_events(event, soul_style, proposed_plan_parser, sink)?;
+            emit_presentation_events(
+                event,
+                soul_style,
+                model_route_evidence,
+                proposed_plan_parser,
+                sink,
+            )?;
         }
         RuntimeAgentEvent::ReasoningSummaryPartAdded {
             item_id,
@@ -96,7 +111,13 @@ pub(super) fn emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_s
             {
                 sink.emit(event)?;
             }
-            emit_presentation_events(event, soul_style, proposed_plan_parser, sink)?;
+            emit_presentation_events(
+                event,
+                soul_style,
+                model_route_evidence,
+                proposed_plan_parser,
+                sink,
+            )?;
         }
         RuntimeAgentEvent::ReasoningContentDelta {
             item_id,
@@ -109,7 +130,13 @@ pub(super) fn emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_s
             {
                 sink.emit(event)?;
             }
-            emit_presentation_events(event, soul_style, proposed_plan_parser, sink)?;
+            emit_presentation_events(
+                event,
+                soul_style,
+                model_route_evidence,
+                proposed_plan_parser,
+                sink,
+            )?;
         }
         RuntimeAgentEvent::ReasoningEnd { item_id } => {
             for event in reasoning_event_state
@@ -119,7 +146,13 @@ pub(super) fn emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_s
                 sink.emit(event)?;
             }
         }
-        _ => emit_presentation_events(event, soul_style, proposed_plan_parser, sink)?,
+        _ => emit_presentation_events(
+            event,
+            soul_style,
+            model_route_evidence,
+            proposed_plan_parser,
+            sink,
+        )?,
     }
     for event in coding_events.after_raw {
         sink.emit(event)?;
@@ -130,12 +163,35 @@ pub(super) fn emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_s
 fn emit_presentation_events(
     event: &RuntimeAgentEvent,
     soul_style: Option<&SoulStyleMetadata>,
+    model_route_evidence: Option<&ModelRouteEvidence>,
     proposed_plan_parser: &mut proposed_plan_parser::ProposedPlanParser,
     sink: &mut dyn RuntimeEventSink,
 ) -> Result<(), RuntimeCoreError> {
-    for event in tool_events::runtime_events_from_agent_event_with_soul_style(event, soul_style)? {
+    for mut event in
+        tool_events::runtime_events_from_agent_event_with_soul_style(event, soul_style)?
+    {
+        if event.event_type == "model.server_reported" {
+            if let (Some(evidence), Some(payload)) =
+                (model_route_evidence, event.payload.as_object_mut())
+            {
+                payload.insert("provider".to_string(), evidence.provider.clone().into());
+                payload.insert(
+                    "requestedModel".to_string(),
+                    evidence.requested_model.clone().into(),
+                );
+                payload.insert(
+                    "selectedModel".to_string(),
+                    evidence.selected_model.clone().into(),
+                );
+                payload.insert("routeAttempt".to_string(), evidence.route_attempt.into());
+            }
+        }
         for event in proposed_plan_parser::split_runtime_event(event, proposed_plan_parser) {
-            sink.emit(event)?;
+            if event.event_type == "model.rerouted" {
+                sink.emit_transient(event)?;
+            } else {
+                sink.emit(event)?;
+            }
         }
     }
     Ok(())

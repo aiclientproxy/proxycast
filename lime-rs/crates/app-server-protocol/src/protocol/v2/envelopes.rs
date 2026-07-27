@@ -4,20 +4,20 @@ use super::{
     FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, ItemCompletedNotification,
     ItemStartedNotification, McpServerElicitationRequestParams, McpToolCallProgressNotification,
     Method, ModelListParams, ModelProviderCapabilitiesReadParams,
-    ModelProviderCapabilitiesReadResponse, ModelSafetyBufferingUpdatedNotification,
-    ModelVerificationNotification, PlanDeltaNotification, ReasoningSummaryPartAddedNotification,
-    ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification,
-    ServerRequestResolvedNotification, ThreadApproveGuardianDeniedActionParams,
-    ThreadApproveGuardianDeniedActionResponse, ThreadArchiveParams, ThreadArchiveResponse,
-    ThreadArchivedNotification, ThreadBackgroundTerminalsCleanParams,
-    ThreadBackgroundTerminalsCleanResponse, ThreadBackgroundTerminalsListParams,
-    ThreadBackgroundTerminalsListResponse, ThreadBackgroundTerminalsTerminateParams,
-    ThreadBackgroundTerminalsTerminateResponse, ThreadClosedNotification, ThreadCompactStartParams,
-    ThreadCompactStartResponse, ThreadDecrementElicitationParams,
-    ThreadDecrementElicitationResponse, ThreadDeleteParams, ThreadDeleteResponse,
-    ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse, ThreadGoalClearParams,
-    ThreadGoalClearResponse, ThreadGoalClearedNotification, ThreadGoalGetParams,
-    ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
+    ModelProviderCapabilitiesReadResponse, ModelReroutedNotification,
+    ModelSafetyBufferingUpdatedNotification, ModelVerificationNotification, PlanDeltaNotification,
+    ReasoningSummaryPartAddedNotification, ReasoningSummaryTextDeltaNotification,
+    ReasoningTextDeltaNotification, ServerRequestResolvedNotification,
+    ThreadApproveGuardianDeniedActionParams, ThreadApproveGuardianDeniedActionResponse,
+    ThreadArchiveParams, ThreadArchiveResponse, ThreadArchivedNotification,
+    ThreadBackgroundTerminalsCleanParams, ThreadBackgroundTerminalsCleanResponse,
+    ThreadBackgroundTerminalsListParams, ThreadBackgroundTerminalsListResponse,
+    ThreadBackgroundTerminalsTerminateParams, ThreadBackgroundTerminalsTerminateResponse,
+    ThreadClosedNotification, ThreadCompactStartParams, ThreadCompactStartResponse,
+    ThreadDecrementElicitationParams, ThreadDecrementElicitationResponse, ThreadDeleteParams,
+    ThreadDeleteResponse, ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse,
+    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalClearedNotification,
+    ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
     ThreadGoalUpdatedNotification, ThreadIncrementElicitationParams,
     ThreadIncrementElicitationResponse, ThreadInjectItemsParams, ThreadInjectItemsResponse,
     ThreadItemsListParams, ThreadItemsListResponse, ThreadListParams, ThreadListResponse,
@@ -37,7 +37,7 @@ use super::{
     METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_FILE_CHANGE_PATCH_UPDATED,
     METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL, METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
     METHOD_ITEM_TOOL_REQUEST_USER_INPUT, METHOD_MCP_SERVER_ELICITATION_REQUEST,
-    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
+    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_REROUTED, METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
     METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA, METHOD_REASONING_SUMMARY_PART_ADDED,
     METHOD_REASONING_SUMMARY_TEXT_DELTA, METHOD_REASONING_TEXT_DELTA,
     METHOD_SERVER_REQUEST_RESOLVED, METHOD_THREAD_CLOSED, METHOD_THREAD_GOAL_CLEARED,
@@ -623,6 +623,8 @@ pub enum ServerNotification {
     ReasoningSummaryPartAdded(ReasoningSummaryPartAddedNotification),
     #[serde(rename = "item/reasoning/textDelta")]
     ReasoningTextDelta(ReasoningTextDeltaNotification),
+    #[serde(rename = "model/rerouted")]
+    ModelRerouted(ModelReroutedNotification),
     #[serde(rename = "model/verification")]
     ModelVerification(ModelVerificationNotification),
     #[serde(rename = "model/safetyBuffering/updated")]
@@ -661,6 +663,7 @@ impl ServerNotification {
             Self::ReasoningSummaryTextDelta(_) => METHOD_REASONING_SUMMARY_TEXT_DELTA,
             Self::ReasoningSummaryPartAdded(_) => METHOD_REASONING_SUMMARY_PART_ADDED,
             Self::ReasoningTextDelta(_) => METHOD_REASONING_TEXT_DELTA,
+            Self::ModelRerouted(_) => METHOD_MODEL_REROUTED,
             Self::ModelVerification(_) => METHOD_MODEL_VERIFICATION,
             Self::ModelSafetyBufferingUpdated(_) => METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
             Self::ThreadSettingsUpdated(_) => "thread/settings/updated",
@@ -734,6 +737,9 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             METHOD_REASONING_TEXT_DELTA => serde_json::from_value(params)
                 .map(Self::ReasoningTextDelta)
+                .map_err(|error| error.to_string()),
+            METHOD_MODEL_REROUTED => serde_json::from_value(params)
+                .map(Self::ModelRerouted)
                 .map_err(|error| error.to_string()),
             METHOD_MODEL_VERIFICATION => serde_json::from_value(params)
                 .map(Self::ModelVerification)
@@ -816,6 +822,9 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::ReasoningTextDelta(params) => {
                 jsonrpc_notification(METHOD_REASONING_TEXT_DELTA, params)
+            }
+            ServerNotification::ModelRerouted(params) => {
+                jsonrpc_notification(METHOD_MODEL_REROUTED, params)
             }
             ServerNotification::ModelVerification(params) => {
                 jsonrpc_notification(METHOD_MODEL_VERIFICATION, params)

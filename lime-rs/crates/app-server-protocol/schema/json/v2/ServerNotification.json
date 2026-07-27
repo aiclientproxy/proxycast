@@ -415,16 +415,29 @@
         "id": {
           "type": "string"
         },
-        "result": true,
-        "status": {
+        "result": {
+          "type": "string"
+        },
+        "revisedPrompt": {
           "type": [
             "null",
             "string"
           ]
+        },
+        "savedPath": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "status": {
+          "type": "string"
         }
       },
       "required": [
-        "id"
+        "id",
+        "result",
+        "status"
       ],
       "type": "object"
     },
@@ -603,6 +616,39 @@
         "plan"
       ],
       "type": "string"
+    },
+    "ModelRerouteReason": {
+      "enum": [
+        "highRiskCyberActivity"
+      ],
+      "type": "string"
+    },
+    "ModelReroutedNotification": {
+      "properties": {
+        "fromModel": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/ModelRerouteReason"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "toModel": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fromModel",
+        "reason",
+        "threadId",
+        "toModel",
+        "turnId"
+      ],
+      "type": "object"
     },
     "ModelSafetyBufferingUpdatedNotification": {
       "properties": {
@@ -2546,6 +2592,22 @@
         },
         "params": {
           "$ref": "#/$defs/ReasoningTextDeltaNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "model/rerouted",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ModelReroutedNotification"
         }
       },
       "required": [

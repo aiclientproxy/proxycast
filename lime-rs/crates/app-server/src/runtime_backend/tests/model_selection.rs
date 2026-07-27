@@ -1,5 +1,7 @@
 use super::*;
 
+const CANONICAL_CHAT_MODEL: &str = "gpt-4.1-mini";
+
 fn reasoning_capability_snapshot(levels: &[&str]) -> app_server_protocol::CapabilitySnapshot {
     app_server_protocol::CapabilitySnapshot {
         runtime_features: vec!["streaming".to_string(), "reasoning".to_string()],
@@ -47,59 +49,51 @@ fn thread_settings(
     }
 }
 
-fn configured_model_switch_backend(model: &str) -> (RuntimeBackend, String) {
+fn configured_model_switch_backend() -> (RuntimeBackend, String) {
     let connection = rusqlite::Connection::open_in_memory().expect("open database");
     lime_core::database::schema::create_tables(&connection).expect("create schema");
     let db = std::sync::Arc::new(std::sync::Mutex::new(connection));
     let backend = RuntimeBackend::with_db(db.clone());
+    backend
+        .api_key_provider_service
+        .initialize_system_providers(&db)
+        .expect("initialize providers");
     let provider = backend
         .api_key_provider_service
-        .add_custom_provider(
+        .update_provider(
             &db,
-            "Model Switch Fixture".to_string(),
-            lime_core::database::dao::api_key_provider::ApiProviderType::Openai,
-            "https://example.invalid/v1".to_string(),
+            "openai",
+            Some("Model Switch Fixture".to_string()),
+            Some(lime_core::database::dao::api_key_provider::ApiProviderType::Openai),
+            Some("https://example.invalid/v1".to_string()),
+            Some(true),
             None,
             None,
             None,
             None,
             None,
+            None,
+            Some(vec![
+                lime_core::models::model_registry::ProviderModelConfig::hint(CANONICAL_CHAT_MODEL),
+            ]),
         )
-        .expect("custom provider");
+        .expect("configure provider");
     backend
         .api_key_provider_service
         .add_api_key(&db, &provider.id, "fixture-key", None, true)
         .expect("provider key");
-    backend
-        .api_key_provider_service
-        .update_provider(
-            &db,
-            &provider.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(vec![model.to_string()]),
-        )
-        .expect("declared model");
     (backend, provider.id)
 }
 
 #[tokio::test]
 async fn model_switch_preflight_requires_ready_catalog_model_and_supported_effort() {
-    let (backend, provider_id) = configured_model_switch_backend("switch-model");
+    let (backend, provider_id) = configured_model_switch_backend();
     let session = request_for_test("preflight", None, None).session;
 
     backend
         .preflight_thread_settings_route(
             &session,
-            &thread_settings(&provider_id, "switch-model", None),
+            &thread_settings(&provider_id, CANONICAL_CHAT_MODEL, None),
         )
         .await
         .expect("declared model is executable");
@@ -120,7 +114,7 @@ async fn model_switch_preflight_requires_ready_catalog_model_and_supported_effor
     let unsupported_effort = backend
         .preflight_thread_settings_route(
             &session,
-            &thread_settings(&provider_id, "switch-model", Some("ultra")),
+            &thread_settings(&provider_id, CANONICAL_CHAT_MODEL, Some("ultra")),
         )
         .await
         .expect_err("unsupported effort must fail before settings persistence");
@@ -140,20 +134,30 @@ async fn prepared_route_pins_the_round_robin_credential_for_execution() {
     lime_core::database::schema::create_tables(&connection).expect("create schema");
     let db = std::sync::Arc::new(std::sync::Mutex::new(connection));
     let backend = RuntimeBackend::with_db(db.clone());
+    backend
+        .api_key_provider_service
+        .initialize_system_providers(&db)
+        .expect("initialize providers");
     let provider = backend
         .api_key_provider_service
-        .add_custom_provider(
+        .update_provider(
             &db,
-            "Route Pin Fixture".to_string(),
-            lime_core::database::dao::api_key_provider::ApiProviderType::Openai,
-            "https://example.invalid/v1".to_string(),
+            "openai",
+            Some("Route Pin Fixture".to_string()),
+            Some(lime_core::database::dao::api_key_provider::ApiProviderType::Openai),
+            Some("https://example.invalid/v1".to_string()),
+            Some(true),
             None,
             None,
             None,
             None,
             None,
+            None,
+            Some(vec![
+                lime_core::models::model_registry::ProviderModelConfig::hint(CANONICAL_CHAT_MODEL),
+            ]),
         )
-        .expect("custom provider");
+        .expect("configure provider");
     let first_key = backend
         .api_key_provider_service
         .add_api_key(
@@ -174,24 +178,6 @@ async fn prepared_route_pins_the_round_robin_credential_for_execution() {
             false,
         )
         .expect("second key");
-    backend
-        .api_key_provider_service
-        .update_provider(
-            &db,
-            &provider.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(vec!["route-pin-model".to_string()]),
-        )
-        .expect("declared model");
     assert_eq!(
         backend
             .api_key_provider_service
@@ -228,7 +214,7 @@ async fn prepared_route_pins_the_round_robin_credential_for_execution() {
         .expect("runtime options")
         .runtime_request_mut();
     runtime_request.provider_preference = Some(provider.id.clone());
-    runtime_request.model_preference = Some("route-pin-model".to_string());
+    runtime_request.model_preference = Some(CANONICAL_CHAT_MODEL.to_string());
 
     let prepared = backend
         .prepare_turn_route(&request, true)
@@ -584,6 +570,15 @@ async fn prepared_direct_route_persists_non_secret_provider_defaults() {
         .and_then(|request| request.metadata.as_ref())
         .and_then(|metadata| metadata.pointer("/agentControlRoute/providerConfig"))
         .expect("durable provider config");
+
+    assert_eq!(
+        prepared
+            .runtime_request
+            .as_ref()
+            .and_then(|request| request.metadata.as_ref())
+            .and_then(|metadata| metadata.pointer("/agentControlRoute/routeSource")),
+        Some(&json!("direct_provider_config"))
+    );
 
     assert_eq!(provider_config["providerId"], "fixture-openai");
     assert_eq!(provider_config["modelName"], "gpt-5.4");

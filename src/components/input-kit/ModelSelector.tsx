@@ -71,7 +71,7 @@ function resolveProviderSelectionValue(provider: ConfiguredProvider): string {
 
 function resolveInitialProviderModel(provider: ConfiguredProvider): string {
   return (
-    provider.customModels?.find((modelId) => modelId.trim().length > 0) ?? ""
+    provider.models?.find((modelId) => modelId.trim().length > 0) ?? ""
   );
 }
 
@@ -109,7 +109,7 @@ function resolveProviderSelectionModel(params: {
     buildProviderModelsFromBackendModelIds(
       params.provider,
       [],
-      params.provider.customModels ?? [],
+      params.provider.models ?? [],
     );
   const compatibleModels = fallbackModels.filter((model) =>
     params.modelFilter?.(model, params.provider),

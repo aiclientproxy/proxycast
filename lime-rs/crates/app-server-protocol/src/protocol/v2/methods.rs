@@ -57,6 +57,7 @@ pub const METHOD_MCP_TOOL_CALL_PROGRESS: &str = "item/mcpToolCall/progress";
 pub const METHOD_REASONING_SUMMARY_TEXT_DELTA: &str = "item/reasoning/summaryTextDelta";
 pub const METHOD_REASONING_SUMMARY_PART_ADDED: &str = "item/reasoning/summaryPartAdded";
 pub const METHOD_REASONING_TEXT_DELTA: &str = "item/reasoning/textDelta";
+pub const METHOD_MODEL_REROUTED: &str = "model/rerouted";
 pub const METHOD_MODEL_VERIFICATION: &str = "model/verification";
 pub const METHOD_MODEL_SAFETY_BUFFERING_UPDATED: &str = "model/safetyBuffering/updated";
 pub const METHOD_THREAD_SETTINGS_UPDATED: &str = "thread/settings/updated";
@@ -297,6 +298,7 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_REASONING_SUMMARY_TEXT_DELTA,
     METHOD_REASONING_SUMMARY_PART_ADDED,
     METHOD_REASONING_TEXT_DELTA,
+    METHOD_MODEL_REROUTED,
     METHOD_MODEL_VERIFICATION,
     METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
     METHOD_THREAD_SETTINGS_UPDATED,

@@ -407,7 +407,7 @@ async function updateRepositoryProvider(page, providerId, requestLog) {
       providerId,
       enabled: true,
       sortOrder: 1,
-      customModels: [MODEL_NAME],
+      models: [{ id: MODEL_NAME }],
     },
     requestLog,
   );

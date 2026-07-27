@@ -28,7 +28,24 @@ const desktopRuntimeMocks = vi.hoisted(() => ({
   hasDesktopHostRuntimeMarkers: vi.fn(() => false),
 }));
 
+function providerModels(...ids: string[]) {
+  return ids.map((id) => ({ id }));
+}
+
 vi.mock("@/lib/api/apiKeyProvider", () => ({
+  providerModelIds: (models: Array<{ id: string }> = []) =>
+    models.map((model) => model.id),
+  reconcileProviderModels: (
+    existingModels: Array<{ id: string }> = [],
+    modelIds: string[],
+  ) => {
+    const existingById = new Map(
+      existingModels.map((model) => [model.id.toLowerCase(), model]),
+    );
+    return modelIds.map(
+      (id) => existingById.get(id.toLowerCase()) ?? { id },
+    );
+  },
   apiKeyProviderApi: {
     addApiKey: apiKeyProviderMocks.addApiKey,
     getProviders: apiKeyProviderMocks.getProviders,
@@ -105,7 +122,7 @@ describe("useOemLimeHubProviderSync", () => {
         type: "anthropic",
         enabled: false,
         sort_order: 9,
-        custom_models: [],
+        models: [],
         api_keys: [],
       },
     ]);
@@ -195,7 +212,7 @@ describe("useOemLimeHubProviderSync", () => {
     expect(apiKeyProviderMocks.updateProvider).toHaveBeenCalledWith(
       "lime-hub",
       expect.objectContaining({
-        custom_models: ["gpt-5.2-pro"],
+        models: providerModels("gpt-5.2-pro"),
       }),
     );
     expect(
@@ -340,7 +357,7 @@ describe("useOemLimeHubProviderSync", () => {
         type: "openai",
         enabled: true,
         sort_order: 0,
-        custom_models: [
+        models: providerModels(
           "gpt-5.2-pro",
           "gpt-5.2-fast",
           "gpt-5.5",
@@ -358,7 +375,7 @@ describe("useOemLimeHubProviderSync", () => {
           "minimax-coding-plan",
           "mimo-coding-plan",
           "deepseek-coding-plan",
-        ],
+        ),
       },
     );
     expect(controlPlaneMocks.createClientAccessToken).toHaveBeenCalledWith(
@@ -436,7 +453,7 @@ describe("useOemLimeHubProviderSync", () => {
         type: "openai",
         enabled: true,
         sort_order: 0,
-        custom_models: ["gpt-5.2-pro", "gpt-5.2-fast"],
+        models: providerModels("gpt-5.2-pro", "gpt-5.2-fast"),
         api_key_count: 1,
         api_keys: [{ enabled: true }],
       },
@@ -509,7 +526,7 @@ describe("useOemLimeHubProviderSync", () => {
         type: "openai",
         enabled: true,
         sort_order: 0,
-        custom_models: ["gpt-5.2-pro", "gpt-5.2-fast"],
+        models: providerModels("gpt-5.2-pro", "gpt-5.2-fast"),
         api_key_count: 1,
         api_keys: [
           {
@@ -594,7 +611,7 @@ describe("useOemLimeHubProviderSync", () => {
         type: "openai",
         enabled: true,
         sort_order: 0,
-        custom_models: ["gpt-5.2-pro", "gpt-5.2-fast"],
+        models: providerModels("gpt-5.2-pro", "gpt-5.2-fast"),
         api_key_count: 1,
         api_keys: [{ enabled: false }],
       },
@@ -676,7 +693,7 @@ describe("useOemLimeHubProviderSync", () => {
     expect(apiKeyProviderMocks.updateProvider).toHaveBeenCalledWith(
       "lime-hub",
       expect.objectContaining({
-        custom_models: ["gpt-5.5", "minimax-coding-plan"],
+        models: providerModels("gpt-5.5", "minimax-coding-plan"),
       }),
     );
     expect(apiKeyProviderMocks.addApiKey).toHaveBeenCalledWith(
@@ -715,7 +732,7 @@ describe("useOemLimeHubProviderSync", () => {
         type: "openai",
         enabled: true,
         sort_order: 0,
-        custom_models: ["stale-model"],
+        models: providerModels("stale-model"),
         api_keys: [],
       },
     ]);
@@ -739,7 +756,7 @@ describe("useOemLimeHubProviderSync", () => {
       {
         api_host:
           "https://gateway-api.limeai.run/root#lime_tenant_id=tenant-0001",
-        custom_models: [],
+        models: [],
       },
     );
     expect(controlPlaneMocks.createClientAccessToken).not.toHaveBeenCalled();
