@@ -3,8 +3,7 @@ use super::{
     CommandExecutionOutputDeltaNotification, CommandExecutionRequestApprovalParams,
     FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, ItemCompletedNotification,
     ItemStartedNotification, McpServerElicitationRequestParams, McpToolCallProgressNotification,
-    Method, ModelListParams, ModelProviderCapabilitiesReadParams,
-    ModelProviderCapabilitiesReadResponse, ModelReroutedNotification,
+    Method, ModelListParams, ModelListUpdatedNotification, ModelReroutedNotification,
     ModelSafetyBufferingUpdatedNotification, ModelVerificationNotification, PlanDeltaNotification,
     ReasoningSummaryPartAddedNotification, ReasoningSummaryTextDeltaNotification,
     ReasoningTextDeltaNotification, ServerRequestResolvedNotification,
@@ -37,12 +36,12 @@ use super::{
     METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_FILE_CHANGE_PATCH_UPDATED,
     METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL, METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
     METHOD_ITEM_TOOL_REQUEST_USER_INPUT, METHOD_MCP_SERVER_ELICITATION_REQUEST,
-    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_REROUTED, METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
-    METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA, METHOD_REASONING_SUMMARY_PART_ADDED,
-    METHOD_REASONING_SUMMARY_TEXT_DELTA, METHOD_REASONING_TEXT_DELTA,
-    METHOD_SERVER_REQUEST_RESOLVED, METHOD_THREAD_CLOSED, METHOD_THREAD_GOAL_CLEARED,
-    METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED, METHOD_THREAD_STATUS_CHANGED,
-    METHOD_THREAD_TOKEN_USAGE_UPDATED,
+    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_LIST_UPDATED, METHOD_MODEL_REROUTED,
+    METHOD_MODEL_SAFETY_BUFFERING_UPDATED, METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA,
+    METHOD_REASONING_SUMMARY_PART_ADDED, METHOD_REASONING_SUMMARY_TEXT_DELTA,
+    METHOD_REASONING_TEXT_DELTA, METHOD_SERVER_REQUEST_RESOLVED, METHOD_THREAD_CLOSED,
+    METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED,
+    METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED,
 };
 use crate::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use schemars::JsonSchema;
@@ -222,11 +221,6 @@ pub enum ClientRequest {
         id: RequestId,
         params: ModelListParams,
     },
-    #[serde(rename = "modelProvider/capabilities/read")]
-    ModelProviderCapabilitiesRead {
-        id: RequestId,
-        params: ModelProviderCapabilitiesReadParams,
-    },
     #[serde(rename = "turn/start")]
     TurnStart {
         id: RequestId,
@@ -279,7 +273,6 @@ impl ClientRequest {
             | Self::ThreadGoalClear { id, .. }
             | Self::ArtifactWrite { id, .. }
             | Self::ModelList { id, .. }
-            | Self::ModelProviderCapabilitiesRead { id, .. }
             | Self::TurnStart { id, .. }
             | Self::TurnSteer { id, .. }
             | Self::TurnInterrupt { id, .. } => id,
@@ -324,7 +317,6 @@ impl ClientRequest {
             Self::ThreadGoalClear { .. } => Method::ThreadGoalClear,
             Self::ArtifactWrite { .. } => Method::ArtifactWrite,
             Self::ModelList { .. } => Method::ModelList,
-            Self::ModelProviderCapabilitiesRead { .. } => Method::ModelProviderCapabilitiesRead,
             Self::TurnStart { .. } => Method::TurnStart,
             Self::TurnSteer { .. } => Method::TurnSteer,
             Self::TurnInterrupt { .. } => Method::TurnInterrupt,
@@ -376,7 +368,6 @@ pub enum ClientResponsePayload {
     ThreadGoalGet(ThreadGoalGetResponse),
     ThreadGoalClear(ThreadGoalClearResponse),
     ArtifactWrite(ArtifactWriteResponse),
-    ModelProviderCapabilitiesRead(ModelProviderCapabilitiesReadResponse),
     TurnStart(TurnStartResponse),
     TurnSteer(TurnSteerResponse),
     TurnInterrupt(TurnInterruptResponse),
@@ -418,7 +409,6 @@ impl ClientResponsePayload {
             Self::ThreadGoalGet(_) => Method::ThreadGoalGet,
             Self::ThreadGoalClear(_) => Method::ThreadGoalClear,
             Self::ArtifactWrite(_) => Method::ArtifactWrite,
-            Self::ModelProviderCapabilitiesRead(_) => Method::ModelProviderCapabilitiesRead,
             Self::TurnStart(_) => Method::TurnStart,
             Self::TurnSteer(_) => Method::TurnSteer,
             Self::TurnInterrupt(_) => Method::TurnInterrupt,
@@ -458,7 +448,6 @@ impl ClientResponsePayload {
             Self::ThreadGoalGet(response) => serde_json::to_value(response)?,
             Self::ThreadGoalClear(response) => serde_json::to_value(response)?,
             Self::ArtifactWrite(response) => serde_json::to_value(response)?,
-            Self::ModelProviderCapabilitiesRead(response) => serde_json::to_value(response)?,
             Self::TurnStart(response) => serde_json::to_value(response)?,
             Self::TurnSteer(response) => serde_json::to_value(response)?,
             Self::TurnInterrupt(response) => serde_json::to_value(response)?,
@@ -625,6 +614,8 @@ pub enum ServerNotification {
     ReasoningTextDelta(ReasoningTextDeltaNotification),
     #[serde(rename = "model/rerouted")]
     ModelRerouted(ModelReroutedNotification),
+    #[serde(rename = "model/list/updated")]
+    ModelListUpdated(ModelListUpdatedNotification),
     #[serde(rename = "model/verification")]
     ModelVerification(ModelVerificationNotification),
     #[serde(rename = "model/safetyBuffering/updated")]
@@ -664,6 +655,7 @@ impl ServerNotification {
             Self::ReasoningSummaryPartAdded(_) => METHOD_REASONING_SUMMARY_PART_ADDED,
             Self::ReasoningTextDelta(_) => METHOD_REASONING_TEXT_DELTA,
             Self::ModelRerouted(_) => METHOD_MODEL_REROUTED,
+            Self::ModelListUpdated(_) => METHOD_MODEL_LIST_UPDATED,
             Self::ModelVerification(_) => METHOD_MODEL_VERIFICATION,
             Self::ModelSafetyBufferingUpdated(_) => METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
             Self::ThreadSettingsUpdated(_) => "thread/settings/updated",
@@ -740,6 +732,9 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             METHOD_MODEL_REROUTED => serde_json::from_value(params)
                 .map(Self::ModelRerouted)
+                .map_err(|error| error.to_string()),
+            METHOD_MODEL_LIST_UPDATED => serde_json::from_value(params)
+                .map(Self::ModelListUpdated)
                 .map_err(|error| error.to_string()),
             METHOD_MODEL_VERIFICATION => serde_json::from_value(params)
                 .map(Self::ModelVerification)
@@ -825,6 +820,9 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::ModelRerouted(params) => {
                 jsonrpc_notification(METHOD_MODEL_REROUTED, params)
+            }
+            ServerNotification::ModelListUpdated(params) => {
+                jsonrpc_notification(METHOD_MODEL_LIST_UPDATED, params)
             }
             ServerNotification::ModelVerification(params) => {
                 jsonrpc_notification(METHOD_MODEL_VERIFICATION, params)

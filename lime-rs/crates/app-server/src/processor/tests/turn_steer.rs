@@ -15,6 +15,9 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::time::{timeout, Duration};
 
+const INLINE_PNG_DATA_URL: &str =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+
 struct BlockingTurnBackend {
     started: Arc<Notify>,
     release: Arc<Notify>,
@@ -146,7 +149,10 @@ async fn turn_steer_dispatches_v2_input_to_the_active_turn() {
         started: started.clone(),
         release: release.clone(),
     }))
-    .with_projection_store(store);
+    .with_projection_store(store)
+    .with_sidecar_store(Arc::new(
+        crate::SidecarStore::new(temp.path().join("sidecar")).expect("sidecar store"),
+    ));
     start_session(&runtime, "session-steer-active", "thread-steer-active");
     let processor = RequestProcessor::new(runtime);
     initialize_processor(&processor).await;
@@ -179,7 +185,8 @@ async fn turn_steer_dispatches_v2_input_to_the_active_turn() {
                 "clientUserMessageId": "client-steer-1",
                 "input": [
                     {"type": "text", "text": "clarify"},
-                    {"type": "text", "text": "the result"}
+                    {"type": "text", "text": "the result"},
+                    {"type": "image", "url": INLINE_PNG_DATA_URL, "detail": "auto"}
                 ]
             })),
         ))
@@ -214,10 +221,46 @@ async fn turn_steer_dispatches_v2_input_to_the_active_turn() {
     assert_eq!(event["payload"]["source"], "turn/steer");
     assert_eq!(event["payload"]["clientId"], "client-steer-1");
     assert_eq!(event["payload"]["content"]["text"], "clarify\nthe result");
+    let durable_uri = event["payload"]["input"][2]["uri"]
+        .as_str()
+        .expect("steer canonical image URI");
+    assert!(durable_uri.starts_with("sidecar://media/input-"));
+    assert_eq!(event["payload"]["outputRefs"][0]["ref"], durable_uri);
+    assert!(
+        !serde_json::to_string(event)
+            .expect("serialize steer event")
+            .contains("base64,"),
+        "turn/steer event leaked inline media"
+    );
+
+    let read_messages = processor
+        .handle_request(JsonRpcRequest::new(
+            RequestId::Integer(4),
+            METHOD_THREAD_READ,
+            Some(json!({
+                "threadId": "thread-steer-active",
+                "includeTurns": true
+            })),
+        ))
+        .await
+        .expect("thread/read after steer");
+    let read_response = read_messages
+        .iter()
+        .find_map(|message| match message {
+            JsonRpcMessage::Response(response) => Some(response),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("expected thread/read response, got {read_messages:?}"));
+    let read_json = serde_json::to_string(&read_response.result).expect("serialize thread/read");
+    assert!(
+        !read_json.contains("base64,"),
+        "thread/read leaked inline media"
+    );
+    assert!(read_json.contains(durable_uri));
 
     let interrupt = processor
         .handle_request(JsonRpcRequest::new(
-            RequestId::Integer(4),
+            RequestId::Integer(5),
             METHOD_TURN_INTERRUPT,
             Some(json!({
                 "threadId": "thread-steer-active",

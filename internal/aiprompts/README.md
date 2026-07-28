@@ -9,7 +9,7 @@
 2. **先读对应文档再改代码** - 尤其是命令边界、GUI 主路径、迁移收口、Provider 与凭证
 3. **GUI 改动优先看质量链路** - Lime 是 GUI 桌面产品，先看 `quality-workflow.md` 与 `playwright-e2e.md`
 4. **新旧并存问题先看治理文档** - 避免在 compat / deprecated 路径上继续长新表面
-5. **Agent 重构默认 Codex-first** - 除多模型 / 多模态 provider capability、media part、模型能力矩阵和 provider lowering 参考 opencode 外，Thread / Turn / Item、App Server、runtime、tool lifecycle、MCP、Skills、Multi-Agent、history hydrate、projection、测试护栏和命名默认按 `/Users/coso/Documents/dev/rust/codex` 收敛；已退役 runtime 没有迁移路线，能力缺口只能在 current owner 重建
+5. **Agent 重构按领域选择事实源** - Thread / Turn / Item、App Server、runtime、tool lifecycle、MCP、Skills、Multi-Agent、history hydrate、projection、测试护栏和命名按 `/Users/coso/Documents/dev/rust/codex` 收敛；多模型 catalog/default/switch、provider capability/readiness、retry/circuit breaker 与多模态 sampling 按 `/Users/coso/Documents/dev/rust/grok-build` 收敛；OpenCode 仅辅助 provider wire、canonical content 与媒体 lowering；已退役 runtime 没有迁移路线，能力缺口只能在 current owner 重建
 6. **新增命名不要加品牌前缀** - 新程序、目录、crate/package、Electron IPC channel、App Server 方法、API 网关、类型、模块和脚本默认使用简洁领域名，不要加 `Lime` / `lime_` / `lime-`，也不要把已退役 runtime 名称或 `agent_runtime_*` 带入 current API；只有对外品牌、历史兼容或生态固定命名才例外，并在计划里说明
 7. **新增 Agent 逻辑默认走 App Server** - 新 AI Agent、runtime、host integration、跨 App 复用能力先落到 `app-server` crates、JSON-RPC 协议、client 与 RuntimeCore；Electron 只作为 Desktop Host bridge，负责 IPC 和桌面壳能力，不是第二套后端或业务 adapter；旧 `agent_runtime_*` 只允许作为 retired guard / 历史 evidence，已退役 runtime 不得恢复为受控迁移残留
 8. `lime-rs/src/**` 已删除，不得恢复 - 业务逻辑、领域服务、runtime 分支、API adapter、数据访问或跨 App 复用能力一律进入 `lime-rs/crates/**` 下的 App Server / RuntimeCore / services / core / agent / 协议 client crates，桌面壳能力进 Electron Desktop Host

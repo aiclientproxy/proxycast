@@ -11,7 +11,6 @@ import type {
   AgentExecutionStrategy,
   AgentSessionExecutionRuntime,
 } from "@/lib/api/agentExecutionRuntime";
-import { getDefaultProvider } from "@/lib/api/appConfig";
 import { isLikelyImageGenerationModelId } from "@/lib/imageGen/providerMatchers";
 import { scheduleMinimumDelayIdleTask } from "@/lib/utils/scheduleMinimumDelayIdleTask";
 import {
@@ -267,24 +266,12 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
         return;
       }
 
-      let defaultProvider = "";
-      if (!hasPersistedWorkspacePreference && !usableRuntimeProviderType) {
-        try {
-          defaultProvider = (await getDefaultProvider()).trim();
-        } catch (error) {
-          console.warn(
-            "[AgentChat] 读取默认 Provider 失败，继续从已配置 Provider 解析模型:",
-            error,
-          );
-        }
-      }
-
       try {
         if (!isCurrentWorkspace()) {
           return;
         }
         const fallbackProviderType =
-          usableRuntimeProviderType || currentProviderType || defaultProvider;
+          usableRuntimeProviderType || currentProviderType;
         const fallbackModel =
           !usableRuntimeProviderType || currentProviderMatchesRuntime
             ? currentModel

@@ -8,21 +8,25 @@ use crate::ModelProviderProtocol;
 pub enum RuntimeProviderProtocol {
     ChatCompletions,
     Responses,
+    AzureResponses,
     AnthropicMessages,
     GeminiGenerateContent,
+    VertexGemini,
 }
 
 impl RuntimeProviderProtocol {
     pub fn uses_responses_api(self) -> bool {
-        matches!(self, Self::Responses)
+        matches!(self, Self::Responses | Self::AzureResponses)
     }
 
     pub fn to_model_provider_protocol(self) -> ModelProviderProtocol {
         match self {
             Self::ChatCompletions => ModelProviderProtocol::ChatCompletions,
-            Self::Responses => ModelProviderProtocol::Responses,
+            Self::Responses | Self::AzureResponses => ModelProviderProtocol::Responses,
             Self::AnthropicMessages => ModelProviderProtocol::AnthropicMessages,
-            Self::GeminiGenerateContent => ModelProviderProtocol::GeminiGenerateContent,
+            Self::GeminiGenerateContent | Self::VertexGemini => {
+                ModelProviderProtocol::GeminiGenerateContent
+            }
         }
     }
 
@@ -32,10 +36,11 @@ impl RuntimeProviderProtocol {
             ProtocolKind::OpenaiResponses | ProtocolKind::CodexResponses => Some(Self::Responses),
             ProtocolKind::AnthropicMessages => Some(Self::AnthropicMessages),
             ProtocolKind::GeminiGenerateContent => Some(Self::GeminiGenerateContent),
+            ProtocolKind::VertexGemini => Some(Self::VertexGemini),
             ProtocolKind::OpenaiImages
             | ProtocolKind::Fal
+            | ProtocolKind::XaiVideo
             | ProtocolKind::BedrockConverse
-            | ProtocolKind::VertexGemini
             | ProtocolKind::Unknown => None,
         }
     }
@@ -48,8 +53,9 @@ impl RuntimeProviderProtocol {
             }
             "anthropic" | "anthropic_compatible" => Some(Self::AnthropicMessages),
             "gemini" | "gemini_api_key" | "google" => Some(Self::GeminiGenerateContent),
-            "azure" | "azure_openai" | "vertex" | "vertexai" | "vertex_ai" | "gcpvertexai"
-            | "aws_bedrock" | "bedrock" | "fal" => None,
+            "azure" | "azure_openai" => Some(Self::AzureResponses),
+            "vertex" | "vertexai" | "vertex_ai" | "gcpvertexai" => Some(Self::VertexGemini),
+            "aws_bedrock" | "bedrock" | "fal" => None,
             _ => None,
         }
     }
@@ -57,7 +63,11 @@ impl RuntimeProviderProtocol {
     pub fn from_direct_route(provider_name: &str, protocol: &ProtocolKind) -> Option<Self> {
         let normalized = normalize_provider_type(provider_name);
         if matches!(normalized.as_str(), "azure" | "azure_openai") {
-            return None;
+            return matches!(
+                protocol,
+                ProtocolKind::OpenaiResponses | ProtocolKind::CodexResponses
+            )
+            .then_some(Self::AzureResponses);
         }
         if normalized == "ollama"
             && !matches!(
@@ -69,6 +79,14 @@ impl RuntimeProviderProtocol {
         }
         if matches!(protocol, ProtocolKind::GeminiGenerateContent)
             && !matches!(normalized.as_str(), "gemini" | "gemini_api_key" | "google")
+        {
+            return None;
+        }
+        if matches!(protocol, ProtocolKind::VertexGemini)
+            && !matches!(
+                normalized.as_str(),
+                "vertex" | "vertexai" | "vertex_ai" | "gcpvertexai"
+            )
         {
             return None;
         }
@@ -103,6 +121,8 @@ pub struct RuntimeProviderConfig {
     pub auth: RuntimeProviderAuth,
     /// Base URL
     pub base_url: Option<String>,
+    /// Provider API version query value when the wire adapter requires one.
+    pub api_version: Option<String>,
     /// 凭证 UUID（用于记录使用和健康状态）
     pub credential_uuid: String,
     /// 当前回合显式推理强度
@@ -175,12 +195,15 @@ mod tests {
             RuntimeProviderProtocol::from_route_protocol(&ProtocolKind::GeminiGenerateContent),
             Some(RuntimeProviderProtocol::GeminiGenerateContent)
         );
+        assert_eq!(
+            RuntimeProviderProtocol::from_route_protocol(&ProtocolKind::VertexGemini),
+            Some(RuntimeProviderProtocol::VertexGemini)
+        );
 
         for protocol in [
             ProtocolKind::OpenaiImages,
             ProtocolKind::Fal,
             ProtocolKind::BedrockConverse,
-            ProtocolKind::VertexGemini,
             ProtocolKind::Unknown,
         ] {
             assert_eq!(
@@ -200,6 +223,8 @@ mod tests {
             ("openai-response", RuntimeProviderProtocol::Responses),
             ("codex", RuntimeProviderProtocol::Responses),
             ("ollama", RuntimeProviderProtocol::Responses),
+            ("azure-openai", RuntimeProviderProtocol::AzureResponses),
+            ("vertexai", RuntimeProviderProtocol::VertexGemini),
             (
                 "anthropic-compatible",
                 RuntimeProviderProtocol::AnthropicMessages,
@@ -218,7 +243,7 @@ mod tests {
             );
         }
 
-        for provider_type in ["azure-openai", "vertexai", "aws-bedrock", "fal"] {
+        for provider_type in ["aws-bedrock", "fal"] {
             assert_eq!(
                 RuntimeProviderProtocol::from_provider_type(provider_type),
                 None,
@@ -227,13 +252,28 @@ mod tests {
         }
 
         assert_eq!(
-            RuntimeProviderProtocol::from_direct_route("azure_openai", &ProtocolKind::OpenaiChat,),
+            RuntimeProviderProtocol::from_direct_route(
+                "azure_openai",
+                &ProtocolKind::OpenaiResponses,
+            ),
+            Some(RuntimeProviderProtocol::AzureResponses)
+        );
+        assert_eq!(
+            RuntimeProviderProtocol::from_direct_route("azure_openai", &ProtocolKind::OpenaiChat),
             None,
-            "OpenAI-shaped bodies do not satisfy Azure auth/query requirements"
+            "Azure chat-completions URLs require a separate explicit adapter"
         );
         assert_eq!(
             RuntimeProviderProtocol::from_direct_route("ollama", &ProtocolKind::OpenaiResponses,),
             Some(RuntimeProviderProtocol::Responses)
+        );
+        assert_eq!(
+            RuntimeProviderProtocol::from_direct_route("gcpvertexai", &ProtocolKind::VertexGemini,),
+            Some(RuntimeProviderProtocol::VertexGemini)
+        );
+        assert_eq!(
+            RuntimeProviderProtocol::from_direct_route("google", &ProtocolKind::VertexGemini,),
+            None
         );
         assert_eq!(
             RuntimeProviderProtocol::from_direct_route("ollama", &ProtocolKind::OpenaiChat),

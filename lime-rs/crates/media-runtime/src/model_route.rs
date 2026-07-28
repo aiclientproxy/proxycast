@@ -306,5 +306,15 @@ pub(crate) fn supports_image_generation_route_protocol(protocol: Option<&str>) -
 }
 
 pub(crate) fn supports_video_generation_route_protocol(protocol: Option<&str>) -> bool {
-    matches!(normalized_token(protocol).as_deref(), None | Some("fal"))
+    video_executor_mode_from_route_protocol(protocol).is_some()
+}
+
+pub(crate) fn video_executor_mode_from_route_protocol(
+    protocol: Option<&str>,
+) -> Option<&'static str> {
+    match normalized_token(protocol)?.as_str() {
+        "fal" => Some("fal_video_generation"),
+        "xai_video" => Some("xai_video_generation"),
+        _ => None,
+    }
 }

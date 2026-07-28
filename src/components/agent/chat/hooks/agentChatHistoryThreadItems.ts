@@ -50,6 +50,7 @@ import {
   readThreadItemText,
 } from "./agentChatHistoryTimelineBasics";
 import {
+  imageGenerationContentPartFromThreadItem,
   mediaReferenceContentPartFromThreadItem,
   messageContentPartsFromAgentThreadItem,
 } from "./agentThreadMessageContentParts";
@@ -440,6 +441,19 @@ export function hydrateSessionDetailMessagesFromThreadItems(
       }
       const draft = ensureAssistantDraft(item);
       draft.contentParts = [...(draft.contentParts || []), mediaPart];
+      draft.timestamp = parseHistoryTimestamp(
+        item.completed_at || item.updated_at || item.started_at,
+      );
+      continue;
+    }
+
+    if (item.type === "image_generation") {
+      const imagePart = imageGenerationContentPartFromThreadItem(item);
+      if (!imagePart) {
+        continue;
+      }
+      const draft = ensureAssistantDraft(item);
+      draft.contentParts = [...(draft.contentParts || []), imagePart];
       draft.timestamp = parseHistoryTimestamp(
         item.completed_at || item.updated_at || item.started_at,
       );

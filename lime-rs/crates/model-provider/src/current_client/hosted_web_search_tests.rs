@@ -14,6 +14,7 @@ fn config(provider_name: &str, base_url: Option<&str>) -> RuntimeProviderConfig 
         api_key: Some("sk-test".to_string()),
         auth: RuntimeProviderAuth::ApiKey,
         base_url: base_url.map(str::to_string),
+        api_version: None,
         credential_uuid: "credential-1".to_string(),
         reasoning_effort: None,
         service_tier: None,

@@ -11,7 +11,9 @@ use agent_runtime::action_required::{
 use lime_core::database::DbConnection;
 use lime_mcp::{ElicitationRequestRouter, McpRuntimeServerSpec};
 pub(crate) use mcp_runtime::McpThreadRuntime;
-use model_provider::current_client::{CurrentProviderError, CurrentProviderHealthRegistry};
+use model_provider::current_client::{
+    CurrentProviderError, CurrentProviderHealthRegistry, CurrentProviderHealthSnapshot,
+};
 use model_provider::runtime_provider::RuntimeProviderConfig;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -112,6 +114,13 @@ impl AgentRuntimeState {
         session_id: &str,
     ) -> Option<ConfiguredReplyProvider> {
         self.providers.read().await.get(session_id).cloned()
+    }
+
+    pub fn provider_health_snapshot(
+        &self,
+        config: &RuntimeProviderConfig,
+    ) -> Option<CurrentProviderHealthSnapshot> {
+        self.provider_health.snapshot_for(config)
     }
 
     pub async fn close_provider_session(&self, session_id: &str) {
@@ -474,6 +483,7 @@ mod provider_session_tests {
             api_key: Some("test-key".to_string()),
             auth: model_provider::runtime_provider::RuntimeProviderAuth::ApiKey,
             base_url: Some("https://api.openai.com/v1".to_string()),
+            api_version: None,
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: None,
             service_tier: None,
@@ -508,6 +518,34 @@ mod provider_session_tests {
         state.close_provider_session("session-a").await;
         assert!(state.provider_for_session("session-a").await.is_none());
         assert!(state.provider_for_session("session-b").await.is_some());
+    }
+
+    #[tokio::test]
+    async fn provider_health_snapshot_uses_the_cloned_runtime_registry() {
+        let state = AgentRuntimeState::new();
+        let observer = state.clone();
+        let route = provider_config("gpt-5.4");
+        let mut different_route = route.clone();
+        different_route.model_name = "gpt-5.5".to_string();
+
+        assert!(observer.provider_health_snapshot(&route).is_none());
+        state
+            .install_provider_for_session("session-a", &route)
+            .await
+            .expect("install provider");
+
+        let snapshot = observer
+            .provider_health_snapshot(&route)
+            .expect("shared route health snapshot");
+        assert_eq!(
+            snapshot.state,
+            model_provider::current_client::CurrentProviderHealthState::Closed
+        );
+        assert_eq!(snapshot.window_sample_count, Some(0));
+        assert_eq!(snapshot.window_failure_count, Some(0));
+        assert!(observer
+            .provider_health_snapshot(&different_route)
+            .is_none());
     }
 
     #[tokio::test]
@@ -546,6 +584,14 @@ mod provider_session_tests {
             };
             assert!(error.message.contains("429"));
         }
+        let opened_snapshot = state
+            .provider_health_snapshot(&route)
+            .expect("opened route snapshot");
+        assert_eq!(
+            opened_snapshot.state,
+            model_provider::current_client::CurrentProviderHealthState::Open
+        );
+        assert!(opened_snapshot.retry_after.is_some());
 
         let mut alternate_route = route.clone();
         alternate_route.model_name = "gpt-5.5".to_string();

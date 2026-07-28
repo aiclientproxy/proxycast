@@ -1,6 +1,6 @@
-use std::sync::Arc;
+mod support;
 
-use app_server::{AppServer, AppServerRuntimeFactory, ProjectionStore, RuntimeCore};
+use app_server::{AppServer, RuntimeCore};
 use app_server_protocol::protocol::v2::{
     METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN, METHOD_THREAD_BACKGROUND_TERMINALS_LIST,
     METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE, METHOD_THREAD_SHELL_COMMAND,
@@ -15,11 +15,7 @@ use tokio::time::{timeout, Duration};
 #[tokio::test]
 async fn background_terminals_are_thread_scoped_and_control_real_processes() {
     let temp = TempDir::new().expect("background terminal JSON-RPC temp dir");
-    let store = Arc::new(
-        ProjectionStore::initialize(temp.path().join("projection.sqlite"))
-            .expect("background terminal projection store"),
-    );
-    let core = AppServerRuntimeFactory::runtime_backend_core().with_projection_store(store);
+    let core = support::runtime_core_with_chat_provider(&temp, "provider-test", "model-test");
     let server = AppServer::with_runtime(core.clone());
     initialize_server(&server).await;
 

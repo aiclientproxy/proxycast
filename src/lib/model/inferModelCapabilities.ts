@@ -47,6 +47,7 @@ const TASK_FAMILY_SET = new Set<ModelTaskFamily>([
   "vision_understanding",
   "image_generation",
   "image_edit",
+  "video_generation",
   "speech_to_text",
   "text_to_speech",
   "embedding",
@@ -383,7 +384,8 @@ export function inferModelTaskFamilies(
     families.includes("speech_to_text") ||
     families.includes("text_to_speech") ||
     families.includes("image_generation") ||
-    families.includes("image_edit");
+    families.includes("image_edit") ||
+    families.includes("video_generation");
 
   if (
     !isSpecializedOnly ||
@@ -474,6 +476,9 @@ export function inferOutputModalities(
   ) {
     modalities.push("image");
   }
+  if (taskFamilies.includes("video_generation")) {
+    modalities.push("video");
+  }
   if (isTextToSpeech) {
     modalities.push("audio");
   }
@@ -514,10 +519,14 @@ export function inferRuntimeFeatures(
   if (capabilities.reasoning || taskFamilies.includes("reasoning")) {
     features.push("reasoning");
   }
-  if (providerType === "openai-response" || providerType === "codex") {
+  if (
+    providerType === "openai-response" ||
+    providerType === "codex" ||
+    providerType === "azure-openai"
+  ) {
     features.push("responses_api");
   }
-  if (["openai", "new-api", "azure-openai", "gateway"].includes(providerType)) {
+  if (["openai", "new-api", "gateway"].includes(providerType)) {
     features.push("chat_completions_api");
   }
   if (
@@ -595,13 +604,17 @@ export function inferModelCapabilities(
   return {
     vision: taskFamilies.includes("vision_understanding"),
     tools:
-      params.capabilities?.tools ?? !taskFamilies.includes("image_generation"),
+      params.capabilities?.tools ??
+      !["image_generation", "image_edit", "video_generation"].some(
+        (family) => taskFamilies.includes(family as ModelTaskFamily),
+      ),
     streaming: params.capabilities?.streaming ?? true,
     json_mode:
       params.capabilities?.json_mode ??
       ![
         "image_generation",
         "image_edit",
+        "video_generation",
         "speech_to_text",
         "text_to_speech",
         "embedding",
@@ -612,6 +625,7 @@ export function inferModelCapabilities(
       ![
         "image_generation",
         "image_edit",
+        "video_generation",
         "speech_to_text",
         "text_to_speech",
         "embedding",

@@ -90,6 +90,13 @@ use request_serialization::{resolve_request_serialization_scope, RequestSerializ
 
 pub(crate) type TurnInterruptHook =
     Arc<dyn Fn(String, String) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
+pub(crate) type ServerNotificationHook = Arc<
+    dyn Fn(
+            app_server_protocol::protocol::v2::ServerNotification,
+        ) -> futures::future::BoxFuture<'static, ()>
+        + Send
+        + Sync,
+>;
 
 #[derive(Clone)]
 pub struct RequestProcessor {
@@ -101,6 +108,7 @@ pub struct RequestProcessor {
     config_warning_provider: ConfigWarningProvider,
     request_serialization_queues: RequestSerializationQueues,
     turn_interrupt_hook: Option<TurnInterruptHook>,
+    server_notification_hook: Option<ServerNotificationHook>,
 }
 
 #[derive(Debug, Default)]
@@ -148,12 +156,27 @@ impl RequestProcessor {
             config_warning_provider: config_warning::default_config_warning_provider(),
             request_serialization_queues: RequestSerializationQueues::default(),
             turn_interrupt_hook: None,
+            server_notification_hook: None,
         }
     }
 
     pub(crate) fn with_turn_interrupt_hook(mut self, hook: TurnInterruptHook) -> Self {
         self.turn_interrupt_hook = Some(hook);
         self
+    }
+
+    pub(crate) fn with_server_notification_hook(mut self, hook: ServerNotificationHook) -> Self {
+        self.server_notification_hook = Some(hook);
+        self
+    }
+
+    pub(super) async fn publish_server_notification(
+        &self,
+        notification: app_server_protocol::protocol::v2::ServerNotification,
+    ) {
+        if let Some(hook) = self.server_notification_hook.as_ref() {
+            hook(notification).await;
+        }
     }
 
     pub(super) async fn abort_server_requests_for_turn(&self, thread_id: String, turn_id: String) {

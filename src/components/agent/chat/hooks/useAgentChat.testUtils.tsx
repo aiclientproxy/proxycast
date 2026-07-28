@@ -28,7 +28,6 @@ const {
   mockSafeListen,
   mockToast,
   mockWechatChannelSetRuntimeModel,
-  mockGetDefaultProvider,
   mockResolveClawWorkspaceProviderSelection,
   mockScheduleMinimumDelayIdleTask,
   mockAgentSessionDetailByThreadId,
@@ -79,7 +78,6 @@ const {
       warning: vi.fn(),
     },
     mockWechatChannelSetRuntimeModel: vi.fn(async () => undefined),
-    mockGetDefaultProvider: vi.fn(),
     mockResolveClawWorkspaceProviderSelection: vi.fn(),
     mockScheduleMinimumDelayIdleTask: vi.fn((task: () => void) => {
       task();
@@ -111,7 +109,6 @@ export {
   mockSafeListen,
   mockToast,
   mockWechatChannelSetRuntimeModel,
-  mockGetDefaultProvider,
   mockResolveClawWorkspaceProviderSelection,
   mockScheduleMinimumDelayIdleTask,
 };
@@ -174,10 +171,6 @@ vi.mock("sonner", () => ({
 
 vi.mock("@/lib/api/channelsRuntime", () => ({
   wechatChannelSetRuntimeModel: mockWechatChannelSetRuntimeModel,
-}));
-
-vi.mock("@/lib/api/appConfig", () => ({
-  getDefaultProvider: mockGetDefaultProvider,
 }));
 
 vi.mock("@/lib/desktop-runtime", () => ({
@@ -513,7 +506,6 @@ beforeEach(async () => {
   mockParseAgentEvent.mockReset();
   mockSafeListen.mockReset();
   mockWechatChannelSetRuntimeModel.mockReset();
-  mockGetDefaultProvider.mockReset();
   mockResolveClawWorkspaceProviderSelection.mockReset();
   mockScheduleMinimumDelayIdleTask.mockReset();
   mockScheduleMinimumDelayIdleTask.mockImplementation((task: () => void) => {
@@ -573,7 +565,6 @@ beforeEach(async () => {
   mockRespondAgentRuntimeAction.mockResolvedValue(undefined);
   mockParseAgentEvent.mockImplementation((payload: unknown) => payload);
   mockSafeListen.mockResolvedValue(() => {});
-  mockGetDefaultProvider.mockResolvedValue("openai");
   mockResolveClawWorkspaceProviderSelection.mockImplementation(
     async (input?: {
       currentProviderType?: string | null;

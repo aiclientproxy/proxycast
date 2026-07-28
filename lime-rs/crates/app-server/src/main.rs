@@ -101,8 +101,8 @@ async fn build_app_server(config: &CliConfig) -> anyhow::Result<AppServer> {
                 .map_err(|error| anyhow::anyhow!("failed to initialize sidecar store: {error}"))
         })
         .transpose()?;
-    let _image_task_worker_scheduler =
-        app_server::spawn_image_task_worker_scheduler(db.clone(), sidecar_store.clone());
+    let _media_task_worker_scheduler =
+        app_server::spawn_media_task_worker_scheduler(db.clone(), sidecar_store.clone());
     let (app_data_root, data_root) = match initialized.storage_roots.as_ref() {
         Some(storage_roots) => (
             storage_roots.app_data_root.clone(),

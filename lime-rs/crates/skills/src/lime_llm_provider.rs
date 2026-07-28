@@ -105,12 +105,9 @@ impl LimeLlmProvider {
             RuntimeCredentialData::GeminiApiKey {
                 api_key, base_url, ..
             } => (api_key.as_str(), base_url.as_deref()),
-            RuntimeCredentialData::VertexKey { .. } => {
-                return Err(SkillError::ProviderError(format!(
-                    "当前 model-provider 不支持 runtime credential: {:?}",
-                    credential.provider_type
-                )));
-            }
+            RuntimeCredentialData::VertexKey {
+                api_key, base_url, ..
+            } => (api_key.as_str(), base_url.as_deref()),
         };
 
         let protocol = match credential.provider_type {
@@ -120,7 +117,9 @@ impl LimeLlmProvider {
                 RuntimeProviderProtocol::AnthropicMessages
             }
             RuntimeProviderType::OpenAI => RuntimeProviderProtocol::ChatCompletions,
+            RuntimeProviderType::AzureOpenai => RuntimeProviderProtocol::AzureResponses,
             RuntimeProviderType::GeminiApiKey => RuntimeProviderProtocol::GeminiGenerateContent,
+            RuntimeProviderType::Vertex => RuntimeProviderProtocol::VertexGemini,
             unsupported => {
                 return Err(SkillError::ProviderError(format!(
                     "当前 model-provider 不支持 runtime provider: {unsupported}"
@@ -132,6 +131,8 @@ impl LimeLlmProvider {
             provider_name: match protocol {
                 RuntimeProviderProtocol::AnthropicMessages => "anthropic".to_string(),
                 RuntimeProviderProtocol::GeminiGenerateContent => "google".to_string(),
+                RuntimeProviderProtocol::VertexGemini => "gcpvertexai".to_string(),
+                RuntimeProviderProtocol::AzureResponses => "azure".to_string(),
                 _ => "openai".to_string(),
             },
             provider_selector: Some(credential.provider_type.to_string()),
@@ -139,6 +140,7 @@ impl LimeLlmProvider {
             api_key: Some(api_key.to_string()),
             auth: RuntimeProviderAuth::ApiKey,
             base_url: base_url.map(ToOwned::to_owned),
+            api_version: None,
             credential_uuid: credential.uuid.clone(),
             reasoning_effort: None,
             service_tier: None,

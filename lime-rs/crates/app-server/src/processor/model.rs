@@ -1,17 +1,21 @@
 //! model domain handlers for the App Server processor.
 
 use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, RpcDispatch};
-use app_server_protocol::protocol::v2::{
-    ModelProviderCapabilitiesReadParams, ModelProviderCapabilitiesReadResponse,
-};
+use app_server_protocol::protocol::v2::ServerNotification as V2ServerNotification;
 use app_server_protocol::{
-    JsonRpcError, ModelListParams, ModelProviderAliasReadParams, ModelProviderConfigExportParams,
-    ModelProviderConfigImportParams, ModelProviderCreateParams, ModelProviderDeleteParams,
-    ModelProviderFetchModelsParams, ModelProviderKeyCreateParams, ModelProviderKeyDeleteParams,
-    ModelProviderKeyUpdateParams, ModelProviderReadParams, ModelProviderSortOrdersUpdateParams,
-    ModelProviderTestChatParams, ModelProviderTestConnectionParams, ModelProviderUiStateReadParams,
+    JsonRpcError, ModelListParams, ModelListUpdatedNotification, ModelProviderAliasReadParams,
+    ModelProviderConfigExportParams, ModelProviderConfigImportParams, ModelProviderCreateParams,
+    ModelProviderDeleteParams, ModelProviderFetchModelsParams, ModelProviderFetchModelsResponse,
+    ModelProviderKeyCreateParams, ModelProviderKeyDeleteParams, ModelProviderKeyUpdateParams,
+    ModelProviderReadParams, ModelProviderSortOrdersUpdateParams, ModelProviderTestChatParams,
+    ModelProviderTestConnectionParams, ModelProviderUiStateReadParams,
     ModelProviderUiStateWriteParams, ModelProviderUpdateParams,
 };
+use std::time::Duration;
+
+const MODEL_CATALOG_RETRY_MAX_ATTEMPTS: u32 = 5;
+const MODEL_CATALOG_RETRY_BASE_DELAY: Duration = Duration::from_secs(5);
+const MODEL_CATALOG_RETRY_MAX_DELAY: Duration = Duration::from_secs(60);
 
 impl RequestProcessor {
     pub(super) async fn handle_model_list_impl(
@@ -64,20 +68,6 @@ impl RequestProcessor {
         dispatch_result(response)
     }
 
-    pub(super) async fn handle_model_provider_capabilities_read_impl(
-        &self,
-        params: Option<serde_json::Value>,
-    ) -> Result<RpcDispatch, JsonRpcError> {
-        self.ensure_initialized()?;
-        let _: ModelProviderCapabilitiesReadParams = parse_params(params)?;
-        let response: ModelProviderCapabilitiesReadResponse = self
-            .runtime
-            .read_model_provider_capabilities()
-            .await
-            .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
-    }
-
     pub(super) async fn handle_model_provider_catalog_list_impl(
         &self,
     ) -> Result<RpcDispatch, JsonRpcError> {
@@ -115,6 +105,8 @@ impl RequestProcessor {
             .create_model_provider(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        self.publish_model_list_updated(Some(response.provider.id.clone()))
+            .await;
         self.runtime
             .schedule_pending_route_recovery(self.runtime_host_context());
         dispatch_result(response)
@@ -131,6 +123,8 @@ impl RequestProcessor {
             .update_model_provider(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        self.publish_model_list_updated(Some(response.provider.id.clone()))
+            .await;
         self.runtime
             .schedule_pending_route_recovery(self.runtime_host_context());
         dispatch_result(response)
@@ -147,6 +141,7 @@ impl RequestProcessor {
             .delete_model_provider(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        self.publish_model_list_updated(None).await;
         self.runtime
             .schedule_pending_route_recovery(self.runtime_host_context());
         dispatch_result(response)
@@ -163,6 +158,7 @@ impl RequestProcessor {
             .update_model_provider_sort_orders(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        self.publish_model_list_updated(None).await;
         dispatch_result(response)
     }
 
@@ -191,6 +187,7 @@ impl RequestProcessor {
             .import_model_provider_config(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        self.publish_model_list_updated(None).await;
         self.runtime
             .schedule_pending_route_recovery(self.runtime_host_context());
         dispatch_result(response)
@@ -230,11 +227,13 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: ModelProviderFetchModelsParams = parse_params(params)?;
+        let provider_id = params.provider_id.clone();
         let response = self
             .runtime
             .fetch_model_provider_models(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        self.publish_model_list_updated(Some(provider_id)).await;
         self.runtime
             .schedule_pending_route_recovery(self.runtime_host_context());
         dispatch_result(response)
@@ -251,6 +250,8 @@ impl RequestProcessor {
             .create_model_provider_key(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        self.refresh_model_catalog_after_credential_change(&response.key.provider_id)
+            .await;
         self.runtime
             .schedule_pending_route_recovery(self.runtime_host_context());
         dispatch_result(response)
@@ -262,11 +263,19 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: ModelProviderKeyUpdateParams = parse_params(params)?;
+        let catalog_changed = params.enabled.is_some();
         let response = self
             .runtime
             .update_model_provider_key(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        if catalog_changed && response.key.enabled {
+            self.refresh_model_catalog_after_credential_change(&response.key.provider_id)
+                .await;
+        } else if catalog_changed {
+            self.publish_model_list_updated(Some(response.key.provider_id.clone()))
+                .await;
+        }
         self.runtime
             .schedule_pending_route_recovery(self.runtime_host_context());
         dispatch_result(response)
@@ -278,11 +287,31 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: ModelProviderKeyDeleteParams = parse_params(params)?;
+        let provider_id = self
+            .runtime
+            .list_model_providers()
+            .await
+            .ok()
+            .and_then(|response| {
+                response.providers.into_iter().find_map(|provider| {
+                    provider
+                        .api_keys
+                        .iter()
+                        .any(|key| key.id == params.key_id)
+                        .then_some(provider.id)
+                })
+            });
         let response = self
             .runtime
             .delete_model_provider_key(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        if let Some(provider_id) = provider_id {
+            self.refresh_model_catalog_after_credential_change(&provider_id)
+                .await;
+        } else {
+            self.publish_model_list_updated(None).await;
+        }
         self.runtime
             .schedule_pending_route_recovery(self.runtime_host_context());
         dispatch_result(response)
@@ -340,5 +369,216 @@ impl RequestProcessor {
             .await
             .map_err(to_jsonrpc_error)?;
         dispatch_result(response)
+    }
+
+    async fn refresh_model_catalog_after_credential_change(&self, provider_id: &str) {
+        let result = self
+            .runtime
+            .refresh_model_provider_catalog(provider_id)
+            .await;
+        let should_retry = match &result {
+            Ok(response) => model_catalog_response_is_retryable(response),
+            Err(_) => false,
+        };
+        match result {
+            Ok(response) if response.source == "Api" => {}
+            Ok(response) => tracing::warn!(
+                provider_id,
+                error = response
+                    .error
+                    .as_deref()
+                    .unwrap_or("model catalog refresh failed"),
+                "credential changed but provider model catalog refresh did not succeed"
+            ),
+            Err(error) => tracing::warn!(
+                provider_id,
+                error = %error,
+                "credential changed but provider model catalog refresh could not run"
+            ),
+        }
+        self.publish_model_list_updated(Some(provider_id.to_string()))
+            .await;
+        if should_retry {
+            self.schedule_model_catalog_retry(provider_id).await;
+        }
+    }
+
+    async fn schedule_model_catalog_retry(&self, provider_id: &str) {
+        match self
+            .runtime
+            .has_model_provider_last_success(provider_id)
+            .await
+        {
+            Ok(true) => return,
+            Ok(false) => {}
+            Err(error) => {
+                tracing::warn!(
+                    provider_id,
+                    error = %error,
+                    "model catalog retry skipped because last-success state could not be read"
+                );
+                return;
+            }
+        }
+        let Some(permit) = self
+            .runtime
+            .acquire_model_provider_catalog_retry(provider_id)
+            .await
+        else {
+            tracing::debug!(provider_id, "model catalog retry already in flight");
+            return;
+        };
+
+        let processor = self.clone();
+        let provider_id = provider_id.to_string();
+        tokio::spawn(async move {
+            let _permit = permit;
+            for attempt in 1..=MODEL_CATALOG_RETRY_MAX_ATTEMPTS {
+                match processor
+                    .runtime
+                    .has_model_provider_last_success(&provider_id)
+                    .await
+                {
+                    Ok(true) => return,
+                    Ok(false) => {}
+                    Err(error) => {
+                        tracing::warn!(
+                            provider_id,
+                            error = %error,
+                            "model catalog retry stopped because last-success state could not be read"
+                        );
+                        return;
+                    }
+                }
+
+                let response = match processor
+                    .runtime
+                    .refresh_model_provider_catalog(&provider_id)
+                    .await
+                {
+                    Ok(response) if response.source == "Api" => {
+                        tracing::info!(provider_id, attempt, "model catalog retry succeeded");
+                        processor
+                            .publish_model_list_updated(Some(provider_id.clone()))
+                            .await;
+                        processor
+                            .runtime
+                            .schedule_pending_route_recovery(processor.runtime_host_context());
+                        return;
+                    }
+                    Ok(response) => response,
+                    Err(error) => {
+                        tracing::warn!(
+                            provider_id,
+                            attempt,
+                            error = %error,
+                            "model catalog retry stopped after runtime failure"
+                        );
+                        return;
+                    }
+                };
+
+                if !model_catalog_response_is_retryable(&response)
+                    || attempt == MODEL_CATALOG_RETRY_MAX_ATTEMPTS
+                {
+                    tracing::warn!(
+                        provider_id,
+                        attempt,
+                        error_kind = response.error_kind.as_deref().unwrap_or("unknown"),
+                        "model catalog retry stopped without a successful catalog"
+                    );
+                    return;
+                }
+
+                let delay = model_catalog_retry_delay(attempt);
+                tracing::warn!(
+                    provider_id,
+                    attempt,
+                    max_attempts = MODEL_CATALOG_RETRY_MAX_ATTEMPTS,
+                    delay_ms = delay.as_millis(),
+                    "model catalog retry scheduled"
+                );
+                tokio::time::sleep(delay).await;
+            }
+        });
+    }
+
+    async fn publish_model_list_updated(&self, provider_id: Option<String>) {
+        let generation = match self.runtime.model_catalog_generation().await {
+            Ok(generation) => generation,
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    "model catalog changed but its committed generation could not be read"
+                );
+                return;
+            }
+        };
+        self.publish_server_notification(V2ServerNotification::ModelListUpdated(
+            ModelListUpdatedNotification {
+                generation,
+                provider_id,
+            },
+        ))
+        .await;
+    }
+}
+
+fn model_catalog_response_is_retryable(response: &ModelProviderFetchModelsResponse) -> bool {
+    match response.error_kind.as_deref() {
+        Some("network" | "invalid_response") => true,
+        Some("other") => response.request_url.is_some(),
+        _ => false,
+    }
+}
+
+fn model_catalog_retry_delay(attempt: u32) -> Duration {
+    let exponent = attempt.saturating_sub(1).min(31);
+    MODEL_CATALOG_RETRY_BASE_DELAY
+        .saturating_mul(2_u32.saturating_pow(exponent))
+        .min(MODEL_CATALOG_RETRY_MAX_DELAY)
+}
+
+#[cfg(test)]
+mod retry_tests {
+    use super::*;
+
+    #[test]
+    fn catalog_retry_classification_is_transient_only() {
+        let response =
+            |kind: Option<&str>, request_url: Option<&str>| ModelProviderFetchModelsResponse {
+                source: "Error".to_string(),
+                error_kind: kind.map(str::to_string),
+                request_url: request_url.map(str::to_string),
+                ..ModelProviderFetchModelsResponse::default()
+            };
+
+        assert!(model_catalog_response_is_retryable(&response(
+            Some("network"),
+            None
+        )));
+        assert!(model_catalog_response_is_retryable(&response(
+            Some("invalid_response"),
+            None
+        )));
+        assert!(model_catalog_response_is_retryable(&response(
+            Some("other"),
+            Some("https://api.example.com/v1/models")
+        )));
+        for kind in ["not_found", "unauthorized", "forbidden", "other"] {
+            assert!(!model_catalog_response_is_retryable(&response(
+                Some(kind),
+                None
+            )));
+        }
+    }
+
+    #[test]
+    fn catalog_retry_delay_is_exponential_and_bounded() {
+        assert_eq!(model_catalog_retry_delay(1), Duration::from_secs(5));
+        assert_eq!(model_catalog_retry_delay(2), Duration::from_secs(10));
+        assert_eq!(model_catalog_retry_delay(3), Duration::from_secs(20));
+        assert_eq!(model_catalog_retry_delay(5), Duration::from_secs(60));
+        assert_eq!(model_catalog_retry_delay(99), Duration::from_secs(60));
     }
 }

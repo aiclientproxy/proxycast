@@ -11,7 +11,6 @@ use crate::{
 use agent_runtime::action_required::{ActionTerminalStatus, PendingActionRestoreOutcome};
 use agent_runtime::session_loop::RuntimeSessionInputHandle;
 use async_trait::async_trait;
-use model_provider::current_client::CurrentProviderMessage;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -26,6 +25,7 @@ pub(super) async fn preflight_thread_settings_route(
     runtime_request.provider_preference = Some(settings.model_provider.clone());
     runtime_request.model_preference = Some(settings.model.clone());
     runtime_request.reasoning_effort = settings.effort.clone();
+    runtime_request.service_tier = settings.service_tier.clone();
     let request = ExecutionRequest {
         host: RuntimeHostContext::default(),
         session: session.clone(),
@@ -79,7 +79,34 @@ pub(super) async fn preflight_thread_settings_route(
             reason_code: "reasoning_effort_unsupported".to_string(),
         });
     }
+    if let Some(service_tier) = settings.service_tier.as_deref() {
+        if !route_supports_service_tier(&route.resolution.decision_payload, service_tier) {
+            return Err(RuntimeCoreError::RouteRejected {
+                session_id: session.session_id.clone(),
+                provider: Some(settings.model_provider.clone()),
+                model: Some(settings.model.clone()),
+                category: app_server_protocol::RouteFailureCategory::CapabilityGap,
+                reason_code: "service_tier_unsupported".to_string(),
+            });
+        }
+    }
     Ok(())
+}
+
+fn route_supports_service_tier(decision_payload: &Value, requested: &str) -> bool {
+    [
+        "/modelRegistry/model/service_tiers",
+        "/modelRegistry/model/serviceTiers",
+    ]
+    .into_iter()
+    .find_map(|pointer| decision_payload.pointer(pointer).and_then(Value::as_array))
+    .is_some_and(|tiers| {
+        tiers.iter().any(|tier| {
+            tier.as_str()
+                .or_else(|| tier.get("id").and_then(Value::as_str))
+                .is_some_and(|id| id == requested)
+        })
+    })
 }
 
 #[async_trait]
@@ -150,7 +177,7 @@ impl ExecutionBackend for RuntimeBackend {
     async fn start_turn_with_provider_history(
         &self,
         request: ExecutionRequest,
-        provider_history: Vec<CurrentProviderMessage>,
+        provider_history: crate::runtime::provider_history::ProviderTurnHistory,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
         self.handle_turn_start_with_provider_history(request, provider_history, None, None, sink)
@@ -160,7 +187,7 @@ impl ExecutionBackend for RuntimeBackend {
     async fn start_turn_with_provider_history_and_session_input(
         &self,
         request: ExecutionRequest,
-        provider_history: Vec<CurrentProviderMessage>,
+        provider_history: crate::runtime::provider_history::ProviderTurnHistory,
         pending_input: Option<RuntimeSessionInputHandle>,
         cancellation_token: Option<CancellationToken>,
         sink: &mut dyn RuntimeEventSink,
@@ -310,5 +337,30 @@ fn action_response_error(code: &str, request_id: &str) -> RuntimeCoreError {
     RuntimeCoreError::ActionResponse {
         code: code.to_string(),
         request_id: request_id.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::route_supports_service_tier;
+    use serde_json::json;
+
+    #[test]
+    fn service_tier_preflight_uses_exact_catalog_ids() {
+        let decision = json!({
+            "modelRegistry": {
+                "model": {
+                    "service_tiers": [
+                        {"id": "priority", "name": "Priority"},
+                        "flex"
+                    ]
+                }
+            }
+        });
+
+        assert!(route_supports_service_tier(&decision, "priority"));
+        assert!(route_supports_service_tier(&decision, "flex"));
+        assert!(!route_supports_service_tier(&decision, "default"));
+        assert!(!route_supports_service_tier(&json!({}), "priority"));
     }
 }

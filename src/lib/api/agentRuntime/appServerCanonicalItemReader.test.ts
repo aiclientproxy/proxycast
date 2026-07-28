@@ -37,6 +37,33 @@ describe("readCanonicalThreadItem", () => {
     }
   });
 
+  it("projects an unknown canonical v2 item without retaining raw values", () => {
+    const projected = readCanonicalThreadItem(
+      item({
+        type: "futureCapability",
+        label: "safe-but-unsupported-value",
+        password: "secret-value",
+        metadata: { rawPayload: "must-not-survive" },
+        "invalid field": "must-not-survive-either",
+      }),
+      event,
+    );
+
+    expect(projected).toMatchObject({
+      id: "item-1",
+      type: "unknown_item",
+      upstream_type: "futureCapability",
+      field_names: ["[redacted]", "label", "metadata"],
+      status: "in_progress",
+    });
+    expect(projected).not.toHaveProperty("metadata");
+    expect(JSON.stringify(projected)).not.toContain(
+      "safe-but-unsupported-value",
+    );
+    expect(JSON.stringify(projected)).not.toContain("secret-value");
+    expect(JSON.stringify(projected)).not.toContain("must-not-survive");
+  });
+
   it.each([
     [
       "userMessage",
@@ -608,7 +635,6 @@ describe("readCanonicalThreadItem", () => {
         query: "Codex",
         results: { title: "invalid" },
       },
-      { id: "item-1", type: "unknown" },
     ]) {
       expect(readCanonicalThreadItem(malformed, event)).toBeNull();
     }

@@ -1,11 +1,14 @@
 use std::sync::{Arc, Mutex};
 
-use app_server::{AppServer, LocalAppDataSource, MockBackend, RuntimeCore};
+use app_server::{AppServer, LocalAppDataSource, MockBackend, ProjectionStore, RuntimeCore};
 use app_server_protocol::{
-    METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_MODEL_LIST, PROTOCOL_VERSION,
+    METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_MODEL_LIST, METHOD_THREAD_START, PROTOCOL_VERSION,
 };
 use lime_core::database::schema::create_tables;
-use lime_core::models::model_registry::ProviderModelConfig;
+use lime_core::models::model_registry::{
+    ModelCapabilities, ModelModality, ModelRuntimeFeature, ModelTaskFamily,
+    ProviderModelCapability, ProviderModelConfig,
+};
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use tempfile::TempDir;
@@ -19,19 +22,28 @@ async fn model_list_app_server() -> ModelListAppServer {
     let temp = TempDir::new().expect("create model list fixture temp dir");
     let conn = Connection::open_in_memory().expect("open in-memory product db");
     create_tables(&conn).expect("create product schema");
-    for (provider_id, enabled, model_ids) in [
+    for (provider_id, enabled, models) in [
         (
             "enabled-provider",
             true,
-            vec!["enabled-model", "enabled-model-2"],
+            vec![
+                chat_model("enabled-model"),
+                ProviderModelConfig::hint("inferred-hint-model"),
+                image_model("image-generation-model"),
+                chat_model("enabled-model-2"),
+            ],
         ),
-        ("missing-key-provider", true, vec!["missing-key-model"]),
-        ("disabled-provider", false, vec!["disabled-model"]),
+        (
+            "missing-key-provider",
+            true,
+            vec![chat_model("missing-key-model")],
+        ),
+        (
+            "disabled-provider",
+            false,
+            vec![chat_model("disabled-model")],
+        ),
     ] {
-        let models = model_ids
-            .into_iter()
-            .map(ProviderModelConfig::hint)
-            .collect::<Vec<_>>();
         conn.execute(
             "INSERT INTO api_key_providers (
                 id, name, type, api_host, is_system, group_name, enabled, sort_order,
@@ -79,12 +91,62 @@ async fn model_list_app_server() -> ModelListAppServer {
     )
     .await
     .expect("local app data source");
+    let projection_store = Arc::new(
+        ProjectionStore::initialize(temp.path().join("projection.sqlite"))
+            .expect("model list projection store"),
+    );
     let runtime = RuntimeCore::with_backend(Arc::new(MockBackend))
-        .with_app_data_source(Arc::new(app_data_source));
+        .with_app_data_source(Arc::new(app_data_source))
+        .with_projection_store(projection_store);
 
     ModelListAppServer {
         _temp: temp,
         server: AppServer::with_runtime(runtime),
+    }
+}
+
+fn chat_model(id: &str) -> ProviderModelConfig {
+    ProviderModelConfig {
+        id: id.to_string(),
+        display_name: None,
+        capability: Some(ProviderModelCapability {
+            task_families: vec![ModelTaskFamily::Chat, ModelTaskFamily::VisionUnderstanding],
+            input_modalities: vec![
+                ModelModality::Text,
+                ModelModality::Image,
+                ModelModality::Audio,
+                ModelModality::Video,
+                ModelModality::File,
+            ],
+            output_modalities: vec![ModelModality::Text, ModelModality::Json],
+            runtime_features: vec![
+                ModelRuntimeFeature::Streaming,
+                ModelRuntimeFeature::ToolCalling,
+                ModelRuntimeFeature::JsonSchema,
+            ],
+            capabilities: ModelCapabilities {
+                vision: true,
+                tools: true,
+                streaming: true,
+                json_mode: true,
+                function_calling: true,
+                ..ModelCapabilities::default()
+            },
+        }),
+    }
+}
+
+fn image_model(id: &str) -> ProviderModelConfig {
+    ProviderModelConfig {
+        id: id.to_string(),
+        display_name: None,
+        capability: Some(ProviderModelCapability {
+            task_families: vec![ModelTaskFamily::ImageGeneration],
+            input_modalities: vec![ModelModality::Text],
+            output_modalities: vec![ModelModality::Image],
+            runtime_features: vec![],
+            capabilities: ModelCapabilities::default(),
+        }),
     }
 }
 
@@ -100,6 +162,10 @@ async fn model_list_uses_exact_v2_shape_and_runtime_ready_catalog() {
         .expect("model/list models");
     assert_eq!(models.len(), 1);
     assert_eq!(models[0].get("model"), Some(&json!("enabled-model")));
+    assert_eq!(
+        models[0].get("providerId"),
+        Some(&json!("enabled-provider"))
+    );
     assert!(models[0]
         .get("id")
         .and_then(Value::as_str)
@@ -109,6 +175,36 @@ async fn model_list_uses_exact_v2_shape_and_runtime_ready_catalog() {
         models[0].get("defaultReasoningEffort"),
         Some(&json!("none"))
     );
+    assert_eq!(
+        models[0].get("inputModalities"),
+        Some(&json!(["text", "image"]))
+    );
+    assert_eq!(
+        models[0].pointer("/capabilitySnapshot/source"),
+        Some(&json!("provider_explicit"))
+    );
+    assert_eq!(
+        models[0].pointer("/capabilitySnapshot/taskFamilies"),
+        Some(&json!(["chat", "vision_understanding"]))
+    );
+    assert_eq!(
+        models[0].pointer("/capabilitySnapshot/outputModalities"),
+        Some(&json!(["text", "json"]))
+    );
+    assert_eq!(
+        models[0].pointer("/capabilitySnapshot/inputModalities"),
+        Some(&json!(["text", "image"]))
+    );
+    assert_eq!(
+        models[0].pointer("/capabilitySnapshot/runtimeFeatures"),
+        Some(&json!(["streaming", "tool_calling", "json_schema"]))
+    );
+    assert_eq!(
+        models[0].pointer("/capabilitySnapshot/capabilities/tools"),
+        Some(&json!(true))
+    );
+    assert_eq!(models[0].get("contextWindow"), Some(&Value::Null));
+    assert_eq!(models[0].get("maxOutputTokens"), Some(&Value::Null));
     assert_eq!(response.pointer("/result/nextCursor"), Some(&json!("1")));
 
     let second_page = request(
@@ -127,14 +223,34 @@ async fn model_list_uses_exact_v2_shape_and_runtime_ready_catalog() {
         Some(&Value::Null)
     );
 
-    let all_models = second_page
+    let full_list = request(
+        &app.server,
+        4,
+        METHOD_MODEL_LIST,
+        json!({ "includeHidden": true }),
+    )
+    .await;
+    let all_models = full_list
         .pointer("/result/data")
         .and_then(Value::as_array)
-        .expect("second page data");
+        .expect("full model/list data");
+    assert_eq!(
+        all_models
+            .iter()
+            .filter_map(|model| model.get("model").and_then(Value::as_str))
+            .collect::<Vec<_>>(),
+        vec!["enabled-model", "enabled-model-2"]
+    );
     assert!(!all_models.iter().any(|model| {
         matches!(
             model.get("model").and_then(Value::as_str),
-            Some("disabled-model" | "missing-key-model" | "stale-registry-model")
+            Some(
+                "disabled-model"
+                    | "missing-key-model"
+                    | "stale-registry-model"
+                    | "inferred-hint-model"
+                    | "image-generation-model"
+            )
         )
     }));
 }
@@ -155,6 +271,32 @@ async fn model_list_rejects_invalid_cursor() {
     assert_eq!(
         response.pointer("/error/message"),
         Some(&json!("invalid cursor: invalid"))
+    );
+}
+
+#[tokio::test]
+async fn thread_start_without_explicit_route_uses_model_list_default() {
+    let app = model_list_app_server().await;
+    initialize_server(&app.server).await;
+
+    let listed = request(
+        &app.server,
+        2,
+        METHOD_MODEL_LIST,
+        json!({ "includeHidden": false }),
+    )
+    .await;
+    let default = listed
+        .pointer("/result/data")
+        .and_then(Value::as_array)
+        .and_then(|models| models.iter().find(|model| model["isDefault"] == true))
+        .expect("model/list default");
+    let started = request(&app.server, 3, METHOD_THREAD_START, json!({})).await;
+
+    assert_eq!(started.pointer("/result/model"), default.get("model"));
+    assert_eq!(
+        started.pointer("/result/modelProvider"),
+        default.get("providerId")
     );
 }
 
@@ -210,8 +352,11 @@ async fn request_raw(server: &AppServer, id: u64, method: &str, params: Value) -
         )
         .await
         .expect("handle JSON-RPC request");
-    assert_eq!(lines.len(), 1, "{method} should return one response");
-    let response: Value = serde_json::from_str(&lines[0]).expect("decode JSON-RPC response");
+    let response = lines
+        .iter()
+        .map(|line| serde_json::from_str::<Value>(line).expect("decode JSON-RPC message"))
+        .find(|message| message.get("id") == Some(&json!(id)))
+        .unwrap_or_else(|| panic!("{method} should return the matching response: {lines:#?}"));
     assert_eq!(response.get("id"), Some(&json!(id)));
     response
 }

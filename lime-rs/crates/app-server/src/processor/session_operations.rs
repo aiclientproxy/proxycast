@@ -55,7 +55,12 @@ impl RequestProcessor {
             .runtime
             .run_thread_shell_command(params)
             .await
-            .map_err(to_jsonrpc_error)?;
+            .map_err(|error| match error {
+                crate::RuntimeCoreError::InvalidRequest(message) => {
+                    JsonRpcError::new(error_codes::INVALID_PARAMS, message)
+                }
+                other => to_jsonrpc_error(other),
+            })?;
         dispatch_result(response)
     }
 }

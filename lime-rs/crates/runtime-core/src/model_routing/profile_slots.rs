@@ -46,7 +46,8 @@ where
     for candidate in candidates {
         let mut routing = resolve_model_routing_for_candidate(metadata_values, &candidate);
         if let Some(runtime_failure) = excluded_routes.iter().find(|excluded| {
-            excluded.provider == candidate.provider && excluded.model == candidate.model
+            excluded.excludes_entire_route()
+                && excluded.matches_route(&candidate.provider, &candidate.model)
         }) {
             let readiness = ProviderReadiness::runtime_failure(runtime_failure.reason_code);
             attempted.push(RoutingAttempt {

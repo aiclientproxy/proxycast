@@ -1627,6 +1627,7 @@
   "agentChat.threadTimeline.turnSummary.title.completed": "現在の進捗",
   "agentChat.threadTimeline.turnSummary.title.running": "処理中",
   "agentChat.threadTimeline.unsupportedItem.description": "この実行記録はまだ会話カードに対応していないため、低レベルのプロトコル詳細は非表示にしています。",
+  "agentChat.threadTimeline.unsupportedItem.fields": "記録フィールド: {{fields}}",
   "agentChat.threadTimeline.unsupportedItem.title": "{{type}} を記録しました",
   "agentChat.tokenUsage.inputOutput": "入力 {{input}} / 出力 {{output}}",
   "agentChat.tokenUsage.promptCache.read": "キャッシュ {{count}}",

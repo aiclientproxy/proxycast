@@ -8,7 +8,7 @@
 2. 根文件只保留仓库级约束和导航；领域规则放在 `internal/aiprompts/`，执行进度放在 `internal/exec-plans/`。
 3. 每种能力只能有一个继续演进的 owner。`current` 可扩展；`compat` 只能委托；`deprecated` 只能迁出；`dead` 应删除并补回流守卫。
 4. Agent runtime 的唯一产品链是 `Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI`。Electron 不承接第二套业务后端。
-5. Agent loop、状态机、Thread/Turn/Item、工具生命周期、MCP、Skills、Multi-Agent、历史恢复和 GUI 护栏对齐 `/Users/coso/Documents/dev/rust/codex`。多模型、多模态 message part、provider capability 与 provider lowering 对齐 `/Users/coso/Documents/dev/js/opencode`。
+5. Agent loop、状态机、Thread/Turn/Item、工具生命周期、MCP、Skills、Multi-Agent、历史恢复和 GUI 护栏对齐 `/Users/coso/Documents/dev/rust/codex`。多模型控制面的 catalog、默认选择、model switch、provider capability/readiness、retry/circuit breaker 与多模态 sampling 对齐 `/Users/coso/Documents/dev/rust/grok-build`；provider wire、canonical content 与媒体 lowering 可辅助参考 `/Users/coso/Documents/dev/js/opencode`。
 6. Rust 后端只能落在 `lime-rs/crates/**` 的既有领域 owner。
 7. Provider 网络边界归 `model-provider`；工具定义、权限和执行归 `tool-runtime`；会话/回合编排归 `agent-runtime` 与 App Server；投影和持久化归 App Server、`thread-store` 与对应 repository。
 8. 新命名使用短的领域词。禁止把产品品牌、已退役 runtime 名称或冗长实现词带进新的 crate、命令、API、类型、模块和脚本。

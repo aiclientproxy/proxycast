@@ -77,9 +77,6 @@ pub(super) fn into_parts(
         ClientRequest::ThreadGoalClear { id, params } => parts(id, Method::ThreadGoalClear, params),
         ClientRequest::ArtifactWrite { id, params } => parts(id, Method::ArtifactWrite, params),
         ClientRequest::ModelList { id, params } => parts(id, Method::ModelList, params),
-        ClientRequest::ModelProviderCapabilitiesRead { id, params } => {
-            parts(id, Method::ModelProviderCapabilitiesRead, params)
-        }
         ClientRequest::ThreadSettingsUpdate { id, params } => {
             parts(id, Method::ThreadSettingsUpdate, params)
         }

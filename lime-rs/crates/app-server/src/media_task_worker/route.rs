@@ -1,8 +1,9 @@
-use super::ImageTaskWorkerContext;
+use super::MediaTaskWorkerContext;
 use lime_core::models::{runtime_api_key_id_from_credential_uuid, RuntimeCredentialData};
 use lime_media_runtime::{
     patch_task_artifact, ImageGenerationRequestBodyFormat, ImageGenerationRunnerConfig,
-    TaskArtifactPatch, IMAGE_TASK_RUNNER_WORKER_ID,
+    TaskArtifactPatch, VideoGenerationRunnerConfig, IMAGE_TASK_RUNNER_WORKER_ID,
+    VIDEO_TASK_RUNNER_WORKER_ID,
 };
 use lime_services::api_key_provider_service::ApiKeyProviderService;
 use serde_json::Value;
@@ -11,7 +12,7 @@ use std::path::Path;
 pub(super) fn image_generation_runner_config_from_resolved_route(
     workspace_root: &Path,
     task_id: &str,
-    context: &ImageTaskWorkerContext,
+    context: &MediaTaskWorkerContext,
 ) -> Result<Option<ImageGenerationRunnerConfig>, String> {
     let task = lime_media_runtime::load_task_output(workspace_root, task_id, None)
         .map_err(|error| error.to_string())?;
@@ -37,16 +38,12 @@ pub(super) fn image_generation_runner_config_from_resolved_route(
     let api_key_service = ApiKeyProviderService::new();
     let (key_id, api_key) =
         image_api_key_from_resolved_route(route, &context.db, &api_key_service, &provider_id)?;
-    if let Some(key_id) = key_id {
-        if let Err(error) = api_key_service.record_usage(&context.db, &key_id) {
-            tracing::warn!(
-                provider_id = %provider_id,
-                key_id = %key_id,
-                error = %error,
-                "failed to record image provider api key usage"
-            );
-        }
-    }
+    record_credential_usage(
+        &context.db,
+        &api_key_service,
+        &provider_id,
+        key_id.as_deref(),
+    );
 
     patch_task_artifact(
         workspace_root,
@@ -72,29 +69,136 @@ pub(super) fn image_generation_runner_config_from_resolved_route(
     }))
 }
 
+pub(super) fn video_generation_runner_config_from_resolved_route(
+    workspace_root: &Path,
+    task_id: &str,
+    context: &MediaTaskWorkerContext,
+) -> Result<Option<VideoGenerationRunnerConfig>, String> {
+    let task = lime_media_runtime::load_task_output(workspace_root, task_id, None)
+        .map_err(|error| error.to_string())?;
+    let Some(route) = task.record.payload.get("resolved_route") else {
+        return Ok(None);
+    };
+    if route_failure_present(&task.record.payload) {
+        return Ok(None);
+    }
+    let Some(provider_id) = route_model_ref_string(route, &["providerId", "provider_id"]) else {
+        return Ok(None);
+    };
+    let Some(model_id) = route_model_ref_string(route, &["modelId", "model_id"]) else {
+        return Ok(None);
+    };
+    let Some(protocol) = read_value_string(route, &["protocol"]) else {
+        return Ok(None);
+    };
+    let Some(endpoint) = video_generation_endpoint_from_route(route, &protocol, &model_id) else {
+        return Ok(None);
+    };
+    let api_key_service = ApiKeyProviderService::new();
+    let credential = route_credential_from_resolved_route(
+        route,
+        &context.db,
+        &api_key_service,
+        &provider_id,
+        "视频",
+    )?;
+    record_credential_usage(
+        &context.db,
+        &api_key_service,
+        &provider_id,
+        credential.key_id.as_deref(),
+    );
+
+    let executor_mode = match protocol.as_str() {
+        "fal" => "fal_video_generation",
+        "xai_video" => "xai_video_generation",
+        _ => return Ok(None),
+    };
+    patch_task_artifact(
+        workspace_root,
+        task_id,
+        None,
+        TaskArtifactPatch {
+            payload_patch: Some(serde_json::json!({
+                "executor_mode": executor_mode,
+                "provider_id": provider_id,
+                "model": model_id,
+            })),
+            current_attempt_worker_id: Some(Some(VIDEO_TASK_RUNNER_WORKER_ID.to_string())),
+            ..TaskArtifactPatch::default()
+        },
+    )
+    .map_err(|error| error.to_string())?;
+
+    Ok(Some(match protocol.as_str() {
+        "fal" => VideoGenerationRunnerConfig::fal(
+            endpoint,
+            credential.api_key,
+            credential.auth_header,
+            credential.auth_prefix,
+        ),
+        "xai_video" => VideoGenerationRunnerConfig::xai(
+            endpoint,
+            credential.api_key,
+            credential.auth_header,
+            credential.auth_prefix,
+        ),
+        _ => unreachable!("video protocol was admitted above"),
+    }))
+}
+
 fn image_api_key_from_resolved_route(
     route: &Value,
     db: &lime_core::database::DbConnection,
     api_key_service: &ApiKeyProviderService,
     provider_id: &str,
 ) -> Result<(Option<String>, String), String> {
-    let auth = route
-        .get("auth")
-        .ok_or_else(|| format!("图片 Provider {provider_id} 的 resolved route 缺少 auth"))?;
+    let credential =
+        route_credential_from_resolved_route(route, db, api_key_service, provider_id, "图片")?;
+    Ok((credential.key_id, credential.api_key))
+}
+
+struct ResolvedRouteCredential {
+    key_id: Option<String>,
+    api_key: String,
+    auth_header: String,
+    auth_prefix: Option<String>,
+}
+
+fn route_credential_from_resolved_route(
+    route: &Value,
+    db: &lime_core::database::DbConnection,
+    api_key_service: &ApiKeyProviderService,
+    provider_id: &str,
+    task_label: &str,
+) -> Result<ResolvedRouteCredential, String> {
+    let auth = route.get("auth").ok_or_else(|| {
+        format!("{task_label} Provider {provider_id} 的 resolved route 缺少 auth")
+    })?;
+    let auth_header = read_value_string(auth, &["headerName", "header_name"])
+        .unwrap_or_else(|| "Authorization".to_string());
+    let auth_prefix = read_value_string(auth, &["headerPrefix", "header_prefix"]);
     let credential_ref = read_value_string(auth, &["credentialRef", "credential_ref"]);
     if credential_ref.is_none() && read_value_string(auth, &["kind"]).as_deref() == Some("no_auth")
     {
-        return Ok((None, String::new()));
+        return Ok(ResolvedRouteCredential {
+            key_id: None,
+            api_key: String::new(),
+            auth_header,
+            auth_prefix,
+        });
     }
     let credential_ref = credential_ref.ok_or_else(|| {
-        format!("图片 Provider {provider_id} 的 resolved route 缺少 credentialRef")
+        format!("{task_label} Provider {provider_id} 的 resolved route 缺少 credentialRef")
     })?;
     let credential = api_key_service
         .select_runtime_credential_by_ref(db, provider_id, &credential_ref)
-        .map_err(|error| format!("读取图片 Provider 精确凭证失败: {error}"))?
-        .ok_or_else(|| format!("图片 Provider {provider_id} 的 resolved credential 不可用"))?;
+        .map_err(|error| format!("读取{task_label} Provider 精确凭证失败: {error}"))?
+        .ok_or_else(|| {
+            format!("{task_label} Provider {provider_id} 的 resolved credential 不可用")
+        })?;
     let key_id = runtime_api_key_id_from_credential_uuid(&credential.uuid)
-        .ok_or_else(|| "图片 Provider resolved credentialRef 格式无效".to_string())?
+        .ok_or_else(|| format!("{task_label} Provider resolved credentialRef 格式无效"))?
         .to_string();
     let api_key = match credential.credential {
         RuntimeCredentialData::OpenAIKey { api_key, .. }
@@ -103,7 +207,31 @@ fn image_api_key_from_resolved_route(
         | RuntimeCredentialData::GeminiApiKey { api_key, .. }
         | RuntimeCredentialData::AnthropicKey { api_key, .. } => api_key,
     };
-    Ok((Some(key_id), api_key))
+    Ok(ResolvedRouteCredential {
+        key_id: Some(key_id),
+        api_key,
+        auth_header,
+        auth_prefix,
+    })
+}
+
+fn record_credential_usage(
+    db: &lime_core::database::DbConnection,
+    api_key_service: &ApiKeyProviderService,
+    provider_id: &str,
+    key_id: Option<&str>,
+) {
+    let Some(key_id) = key_id else {
+        return;
+    };
+    if let Err(error) = api_key_service.record_usage(db, key_id) {
+        tracing::warn!(
+            provider_id = %provider_id,
+            key_id = %key_id,
+            error = %error,
+            "failed to record media provider api key usage"
+        );
+    }
 }
 
 fn route_failure_present(payload: &Value) -> bool {
@@ -174,6 +302,46 @@ fn image_generation_endpoint_from_openai_base(base_url: &str) -> String {
         format!("{normalized}/images/generations")
     } else {
         format!("{normalized}/v1/images/generations")
+    }
+}
+
+fn video_generation_endpoint_from_route(
+    route: &Value,
+    protocol: &str,
+    model_id: &str,
+) -> Option<String> {
+    let base_url = route
+        .get("endpoint")
+        .and_then(|endpoint| read_value_string(endpoint, &["baseUrl", "base_url"]))?;
+    let normalized = normalize_urlish_base(&base_url);
+    if normalized.is_empty() {
+        return None;
+    }
+    match protocol {
+        "fal" => {
+            if normalized.ends_with("/videos/generations") || normalized.ends_with(model_id) {
+                return Some(normalized);
+            }
+            Some(format!(
+                "{}/{}",
+                normalized.trim_end_matches('/'),
+                model_id.trim_start_matches('/')
+            ))
+        }
+        "xai_video" => Some(xai_video_generation_endpoint(&normalized)),
+        _ => None,
+    }
+}
+
+fn xai_video_generation_endpoint(base_url: &str) -> String {
+    let normalized = base_url.trim().trim_end_matches('/');
+    if normalized.ends_with("/videos/generations") {
+        return normalized.to_string();
+    }
+    if normalized.ends_with("/v1") {
+        format!("{normalized}/videos/generations")
+    } else {
+        format!("{normalized}/v1/videos/generations")
     }
 }
 
@@ -532,6 +700,85 @@ mod tests {
             image_generation_endpoint_from_openai_base("https://gateway.example.com/proxy"),
             "https://gateway.example.com/proxy/v1/images/generations"
         );
+    }
+
+    #[test]
+    fn video_generation_endpoint_uses_fal_model_path_or_explicit_generation_endpoint() {
+        let fal_route = serde_json::json!({
+            "endpoint": { "baseUrl": "https://fal.run" }
+        });
+        assert_eq!(
+            video_generation_endpoint_from_route(
+                &fal_route,
+                "fal",
+                "fal-ai/kling-video/v2.1/master/image-to-video"
+            )
+            .as_deref(),
+            Some("https://fal.run/fal-ai/kling-video/v2.1/master/image-to-video")
+        );
+
+        let explicit_route = serde_json::json!({
+            "endpoint": { "baseUrl": "https://video.example/v1/videos/generations" }
+        });
+        assert_eq!(
+            video_generation_endpoint_from_route(&explicit_route, "fal", "video-model").as_deref(),
+            Some("https://video.example/v1/videos/generations")
+        );
+        assert!(
+            video_generation_endpoint_from_route(&fal_route, "openai_chat", "video-model")
+                .is_none()
+        );
+
+        let xai_route = serde_json::json!({
+            "endpoint": { "baseUrl": "https://api.x.ai/v1" }
+        });
+        assert_eq!(
+            video_generation_endpoint_from_route(&xai_route, "xai_video", "grok-imagine-video")
+                .as_deref(),
+            Some("https://api.x.ai/v1/videos/generations")
+        );
+    }
+
+    #[test]
+    fn resolved_route_credential_preserves_provider_auth_shape() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        create_tables(&conn).expect("create schema");
+        let db = Arc::new(Mutex::new(conn));
+        let service = ApiKeyProviderService::new();
+        let provider = service
+            .add_custom_provider(
+                &db,
+                "Fal Video".to_string(),
+                ApiProviderType::Openai,
+                "https://fal.run".to_string(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create provider");
+        service
+            .add_api_key(&db, &provider.id, "fal-key-a", None, false)
+            .expect("add key A");
+        let key = service
+            .add_api_key(&db, &provider.id, "fal-key-b", None, false)
+            .expect("add key B");
+        let route = serde_json::json!({
+            "auth": {
+                "credentialRef": runtime_api_key_credential_uuid(&key.id),
+                "headerName": "Authorization",
+                "headerPrefix": "Key"
+            }
+        });
+
+        let credential =
+            route_credential_from_resolved_route(&route, &db, &service, &provider.id, "视频")
+                .expect("video credential");
+
+        assert_eq!(credential.api_key, "fal-key-b");
+        assert_eq!(credential.auth_header, "Authorization");
+        assert_eq!(credential.auth_prefix.as_deref(), Some("Key"));
     }
 
     #[test]

@@ -14,6 +14,7 @@ pub struct SessionProviderConfig {
     pub model_name: String,
     pub api_key: Option<String>,
     pub base_url: Option<String>,
+    pub api_version: Option<String>,
     pub credential_uuid: Option<String>,
     pub reasoning_effort: Option<String>,
     pub service_tier: Option<String>,
@@ -35,6 +36,7 @@ struct ProviderConfigurationRequest<'a> {
     pub credential_ref: Option<&'a str>,
     pub direct_provider_config: Option<SessionProviderConfig>,
     pub auth: RuntimeProviderAuth,
+    pub api_version: Option<String>,
 }
 
 pub(crate) struct ConfiguredSessionProvider {
@@ -56,6 +58,7 @@ impl ConfiguredSessionProvider {
 pub struct ModelRouteProviderConfiguration {
     pub turn_provider: TurnProviderConfiguration,
     pub service_tier: Option<String>,
+    pub api_version: Option<String>,
     pub route_protocol: Option<ProtocolKind>,
     pub credential_ref: Option<String>,
     pub direct_provider_config: Option<SessionProviderConfig>,
@@ -87,6 +90,7 @@ async fn configure_provider_for_session(
         }
         config.route_protocol = request.route_protocol.or(config.route_protocol);
         config.service_tier = request.service_tier.or(config.service_tier);
+        config.api_version = request.api_version.or(config.api_version);
         let runtime_config =
             session_provider_config_to_runtime_provider_config(&config, request.auth);
         let provider =
@@ -114,7 +118,11 @@ async fn configure_provider_for_session(
         .map_err(|error| format!("从 API Key Provider 选择凭证失败: {error}"))?;
     runtime_config.reasoning_effort = request.reasoning_effort;
     runtime_config.service_tier = request.service_tier;
-    runtime_config.protocol = runtime_provider_protocol_from_route_protocol(request.route_protocol);
+    runtime_config.api_version = request.api_version.or(runtime_config.api_version);
+    runtime_config.protocol = runtime_provider_protocol_from_route_protocol(
+        &runtime_config.provider_name,
+        request.route_protocol,
+    );
 
     let provider =
         install_provider_for_session(agent_state, request.session_id, &runtime_config).await?;
@@ -131,6 +139,7 @@ async fn configure_provider_for_session(
         model_name: runtime_config.model_name,
         api_key: runtime_config.api_key,
         base_url: runtime_config.base_url,
+        api_version: runtime_config.api_version,
         credential_uuid: Some(runtime_config.credential_uuid),
         reasoning_effort: runtime_config.reasoning_effort,
         service_tier: runtime_config.service_tier,
@@ -174,6 +183,7 @@ pub(crate) async fn configure_model_route_provider_for_session_with_provider_and
             credential_ref,
             direct_provider_config: configuration.direct_provider_config,
             auth: configuration.auth,
+            api_version: configuration.api_version,
         },
     )
     .await
@@ -209,16 +219,20 @@ fn ensure_supported_route_protocol(protocol: Option<&ProtocolKind>) -> Result<()
 }
 
 fn runtime_provider_protocol_from_route_protocol(
+    provider_name: &str,
     protocol: Option<ProtocolKind>,
 ) -> Option<RuntimeProviderProtocol> {
     protocol
         .as_ref()
-        .and_then(RuntimeProviderProtocol::from_route_protocol)
+        .and_then(|protocol| RuntimeProviderProtocol::from_direct_route(provider_name, protocol))
 }
 
 fn route_protocol_from_runtime_provider_protocol(
     protocol: Option<RuntimeProviderProtocol>,
 ) -> Option<ProtocolKind> {
+    if protocol == Some(RuntimeProviderProtocol::VertexGemini) {
+        return Some(ProtocolKind::VertexGemini);
+    }
     route_protocol_from_model_provider_protocol(
         protocol.map(RuntimeProviderProtocol::to_model_provider_protocol),
     )
@@ -238,10 +252,14 @@ fn session_provider_config_to_runtime_provider_config(
         },
         auth,
         base_url: config.base_url.clone(),
+        api_version: config.api_version.clone(),
         credential_uuid: config.credential_uuid.clone().unwrap_or_default(),
         reasoning_effort: config.reasoning_effort.clone(),
         service_tier: config.service_tier.clone(),
-        protocol: runtime_provider_protocol_from_route_protocol(config.route_protocol.clone()),
+        protocol: runtime_provider_protocol_from_route_protocol(
+            &config.provider_name,
+            config.route_protocol.clone(),
+        ),
         supports_websockets: config.supports_websockets,
         toolshim: config.toolshim,
         toolshim_model: config.toolshim_model.clone(),
@@ -298,6 +316,7 @@ mod tests {
                 reasoning_effort,
             ),
             service_tier: None,
+            api_version: None,
             route_protocol,
             credential_ref: None,
             direct_provider_config: None,
@@ -308,26 +327,50 @@ mod tests {
     #[test]
     fn model_provider_protocol_is_projected_to_runtime_adapter_protocol() {
         assert_eq!(
-            runtime_provider_protocol_from_route_protocol(Some(ProtocolKind::OpenaiResponses)),
+            runtime_provider_protocol_from_route_protocol(
+                "openai",
+                Some(ProtocolKind::OpenaiResponses),
+            ),
             Some(RuntimeProviderProtocol::Responses)
         );
         assert_eq!(
-            runtime_provider_protocol_from_route_protocol(Some(ProtocolKind::CodexResponses)),
+            runtime_provider_protocol_from_route_protocol(
+                "codex",
+                Some(ProtocolKind::CodexResponses),
+            ),
             Some(RuntimeProviderProtocol::Responses)
         );
         assert_eq!(
-            runtime_provider_protocol_from_route_protocol(Some(ProtocolKind::OpenaiChat)),
+            runtime_provider_protocol_from_route_protocol("openai", Some(ProtocolKind::OpenaiChat)),
             Some(RuntimeProviderProtocol::ChatCompletions)
         );
         assert_eq!(
-            runtime_provider_protocol_from_route_protocol(Some(ProtocolKind::AnthropicMessages)),
+            runtime_provider_protocol_from_route_protocol(
+                "anthropic",
+                Some(ProtocolKind::AnthropicMessages),
+            ),
             Some(RuntimeProviderProtocol::AnthropicMessages)
         );
         assert_eq!(
-            runtime_provider_protocol_from_route_protocol(Some(
-                ProtocolKind::GeminiGenerateContent
-            )),
+            runtime_provider_protocol_from_route_protocol(
+                "google",
+                Some(ProtocolKind::GeminiGenerateContent),
+            ),
             Some(RuntimeProviderProtocol::GeminiGenerateContent)
+        );
+        assert_eq!(
+            runtime_provider_protocol_from_route_protocol(
+                "azure",
+                Some(ProtocolKind::OpenaiResponses),
+            ),
+            Some(RuntimeProviderProtocol::AzureResponses)
+        );
+        assert_eq!(
+            runtime_provider_protocol_from_route_protocol(
+                "gcpvertexai",
+                Some(ProtocolKind::VertexGemini),
+            ),
+            Some(RuntimeProviderProtocol::VertexGemini)
         );
     }
 
@@ -336,12 +379,12 @@ mod tests {
         for protocol in [
             ProtocolKind::OpenaiImages,
             ProtocolKind::Fal,
+            ProtocolKind::XaiVideo,
             ProtocolKind::BedrockConverse,
-            ProtocolKind::VertexGemini,
             ProtocolKind::Unknown,
         ] {
             assert_eq!(
-                runtime_provider_protocol_from_route_protocol(Some(protocol.clone())),
+                runtime_provider_protocol_from_route_protocol("openai", Some(protocol.clone())),
                 None,
                 "{protocol:?} must stay route metadata until a matching runtime adapter exists"
             );
@@ -353,8 +396,8 @@ mod tests {
         for protocol in [
             ProtocolKind::OpenaiImages,
             ProtocolKind::Fal,
+            ProtocolKind::XaiVideo,
             ProtocolKind::BedrockConverse,
-            ProtocolKind::VertexGemini,
             ProtocolKind::Unknown,
         ] {
             let error = ensure_supported_route_protocol(Some(&protocol))
@@ -381,6 +424,7 @@ mod tests {
             model_name: "claude-sonnet-4-5".to_string(),
             api_key: Some("sk-test".to_string()),
             base_url: Some("https://api.anthropic.com".to_string()),
+            api_version: None,
             credential_uuid: Some("credential-anthropic".to_string()),
             reasoning_effort: Some("medium".to_string()),
             service_tier: None,
@@ -409,6 +453,39 @@ mod tests {
     }
 
     #[test]
+    fn azure_session_config_projects_to_dedicated_runtime_adapter() {
+        let config = SessionProviderConfig {
+            provider_name: "azure".to_string(),
+            provider_selector: Some("azure-openai".to_string()),
+            model_name: "gpt-5.4".to_string(),
+            api_key: Some("azure-test-key".to_string()),
+            base_url: Some("https://resource.openai.azure.com".to_string()),
+            api_version: Some("2025-04-01-preview".to_string()),
+            credential_uuid: Some("runtime-api-key:azure-key".to_string()),
+            reasoning_effort: Some("high".to_string()),
+            service_tier: None,
+            route_protocol: Some(ProtocolKind::OpenaiResponses),
+            toolshim: false,
+            toolshim_model: None,
+            model_capabilities: None,
+            supports_websockets: true,
+        };
+
+        let runtime_config = session_provider_config_to_runtime_provider_config(
+            &config,
+            RuntimeProviderAuth::ApiKey,
+        );
+
+        assert_eq!(
+            runtime_config.protocol,
+            Some(RuntimeProviderProtocol::AzureResponses)
+        );
+        assert_eq!(runtime_config.api_version, config.api_version);
+        assert_eq!(runtime_config.base_url, config.base_url);
+        assert_eq!(runtime_config.auth, RuntimeProviderAuth::ApiKey);
+    }
+
+    #[test]
     fn provider_config_protocol_projects_to_route_protocol() {
         let mut config = SessionProviderConfig {
             provider_name: "openai".to_string(),
@@ -416,6 +493,7 @@ mod tests {
             model_name: "gpt-4.1".to_string(),
             api_key: Some("must-be-discarded".to_string()),
             base_url: None,
+            api_version: None,
             credential_uuid: None,
             reasoning_effort: None,
             service_tier: None,
@@ -453,6 +531,7 @@ mod tests {
             model_name: "qwen3:14b".to_string(),
             api_key: None,
             base_url: Some("http://127.0.0.1:11434".to_string()),
+            api_version: None,
             credential_uuid: None,
             reasoning_effort: None,
             service_tier: None,

@@ -87,6 +87,8 @@ mod tests {
             "gemini",
             "gemini-api-key",
             "google",
+            "azure-openai",
+            "vertexai",
         ] {
             assert_eq!(
                 ProviderCapabilities::from_provider_type(provider_type),
@@ -128,11 +130,18 @@ mod tests {
             ProviderCapabilities::from_provider_route("ollama", Some("http://127.0.0.1:11434"),),
             Some(ProviderCapabilities::NONE)
         );
+        assert_eq!(
+            ProviderCapabilities::from_provider_route(
+                "azure-openai",
+                Some("https://resource.openai.azure.com"),
+            ),
+            Some(ProviderCapabilities::NONE)
+        );
     }
 
     #[test]
     fn providers_without_current_chat_adapters_have_no_capability_snapshot() {
-        for provider_type in ["azure-openai", "vertexai", "aws-bedrock", "fal"] {
+        for provider_type in ["aws-bedrock", "fal"] {
             assert_eq!(
                 ProviderCapabilities::from_provider_type(provider_type),
                 None,

@@ -25,6 +25,11 @@ export type RuntimeServerNotification = Extract<
   }
 >;
 
+export type ModelListUpdatedServerNotification = Extract<
+  ServerNotification,
+  { method: "model/list/updated" }
+>;
+
 export type ServerNotificationFor<
   Method extends RuntimeServerNotification["method"],
 > = Extract<RuntimeServerNotification, { method: Method }>;
@@ -106,6 +111,39 @@ export function isServerNotification(
   message: JsonRpcMessage,
 ): message is RuntimeServerNotification {
   return serverNotification(message) !== undefined;
+}
+
+export function modelListUpdatedServerNotification(
+  message: JsonRpcMessage,
+): ModelListUpdatedServerNotification | undefined {
+  if (
+    !isJsonRpcNotification(message) ||
+    message.method !== "model/list/updated"
+  ) {
+    return undefined;
+  }
+  const params = record(message.params);
+  if (
+    !params ||
+    !Number.isSafeInteger(params.generation) ||
+    (params.generation as number) < 0
+  ) {
+    return undefined;
+  }
+  if (
+    params.providerId !== undefined &&
+    params.providerId !== null &&
+    !hasString(params, "providerId")
+  ) {
+    return undefined;
+  }
+  return message as ModelListUpdatedServerNotification;
+}
+
+export function isModelListUpdatedNotification(
+  message: JsonRpcMessage,
+): message is ModelListUpdatedServerNotification {
+  return modelListUpdatedServerNotification(message) !== undefined;
 }
 
 export function isThreadStartedNotification(

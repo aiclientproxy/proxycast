@@ -792,12 +792,7 @@ pub(super) fn v2_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<v2::ReasoningEffortOption>("ReasoningEffortOption"),
         typed_schema::<v2::Model>("Model"),
         typed_schema::<v2::ModelListResponse>("ModelListResponse"),
-        typed_schema::<v2::ModelProviderCapabilitiesReadParams>(
-            "ModelProviderCapabilitiesReadParams",
-        ),
-        typed_schema::<v2::ModelProviderCapabilitiesReadResponse>(
-            "ModelProviderCapabilitiesReadResponse",
-        ),
+        typed_schema::<v2::ModelListUpdatedNotification>("ModelListUpdatedNotification"),
         typed_schema::<v2::ModelRerouteReason>("ModelRerouteReason"),
         typed_schema::<v2::ModelReroutedNotification>("ModelReroutedNotification"),
         typed_schema::<v2::ModelVerification>("ModelVerification"),

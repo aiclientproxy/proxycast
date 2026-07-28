@@ -1627,6 +1627,7 @@
   "agentChat.threadTimeline.turnSummary.title.completed": "Current progress",
   "agentChat.threadTimeline.turnSummary.title.running": "Processing",
   "agentChat.threadTimeline.unsupportedItem.description": "This runtime record is not adapted into a conversation card yet, so low-level protocol details are hidden.",
+  "agentChat.threadTimeline.unsupportedItem.fields": "Recorded fields: {{fields}}",
   "agentChat.threadTimeline.unsupportedItem.title": "Recorded {{type}}",
   "agentChat.tokenUsage.inputOutput": "Input {{input}} / Output {{output}}",
   "agentChat.tokenUsage.promptCache.read": "Cache {{count}}",

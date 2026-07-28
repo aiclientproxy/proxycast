@@ -6,6 +6,7 @@ pub mod provider_capabilities;
 pub mod provider_stream;
 pub mod runtime_provider;
 pub mod safety;
+pub mod video;
 
 use agent_protocol::ModelId;
 use serde::{Deserialize, Serialize};

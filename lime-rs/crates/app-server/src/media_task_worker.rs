@@ -11,6 +11,7 @@ use tokio::task::JoinHandle;
 
 mod route;
 mod scheduler;
+mod video;
 use route::image_generation_runner_config_from_resolved_route;
 use scheduler::should_execute_pending_image_task;
 #[cfg(test)]
@@ -20,16 +21,21 @@ use scheduler::{
     IMAGE_TASK_WORKER_STALE_RUNNING_SECS,
 };
 pub(crate) use scheduler::{
-    spawn_image_task_worker_scheduler, spawn_pending_image_task_workers_for_workspace,
+    spawn_media_task_worker_scheduler, spawn_pending_image_task_workers_for_workspace,
+};
+pub(crate) use video::spawn_video_task_worker_for_created_task;
+use video::{
+    should_execute_pending_video_task, should_recover_stale_running_video_task,
+    spawn_video_task_worker_for_existing_task,
 };
 
 #[derive(Clone)]
-pub(crate) struct ImageTaskWorkerContext {
+pub(crate) struct MediaTaskWorkerContext {
     db: DbConnection,
     sidecar_store: Option<Arc<crate::runtime::SidecarStore>>,
 }
 
-impl ImageTaskWorkerContext {
+impl MediaTaskWorkerContext {
     pub(crate) fn new(db: DbConnection) -> Self {
         Self {
             db,
@@ -57,7 +63,7 @@ pub(crate) fn should_execute_created_image_task(task: &MediaTaskArtifactResponse
 
 pub(crate) fn spawn_image_task_worker_for_created_task(
     task: &MediaTaskArtifactResponse,
-    context: ImageTaskWorkerContext,
+    context: MediaTaskWorkerContext,
 ) -> Option<JoinHandle<Result<MediaTaskOutput, String>>> {
     if !should_execute_created_image_task(task) {
         tracing::info!(
@@ -131,7 +137,7 @@ pub(super) fn mark_stale_running_image_task_failed_for_retry(
 pub(super) fn spawn_image_task_worker_for_existing_task(
     workspace_root: &Path,
     task: &MediaTaskArtifactResponse,
-    context: ImageTaskWorkerContext,
+    context: MediaTaskWorkerContext,
 ) -> Option<JoinHandle<Result<MediaTaskOutput, String>>> {
     if !should_execute_pending_image_task(task) {
         tracing::info!(
@@ -163,7 +169,7 @@ pub(super) fn spawn_image_task_worker_for_existing_task(
 pub(super) async fn execute_image_task(
     workspace_root: PathBuf,
     task_id: String,
-    context: &ImageTaskWorkerContext,
+    context: &MediaTaskWorkerContext,
 ) -> Result<MediaTaskOutput, String> {
     tracing::info!(
         task_id = %task_id,
@@ -741,7 +747,7 @@ mod tests {
         let result = execute_image_task(
             workspace.path().to_path_buf(),
             created.task_id.clone(),
-            &ImageTaskWorkerContext::new(db.clone()),
+            &MediaTaskWorkerContext::new(db.clone()),
         )
         .await
         .expect("mark route-less image task failed");
@@ -786,7 +792,7 @@ mod tests {
         let result = execute_image_task(
             workspace.path().to_path_buf(),
             created.task_id.clone(),
-            &ImageTaskWorkerContext::new(db),
+            &MediaTaskWorkerContext::new(db),
         )
         .await
         .expect("mark task failed");

@@ -7,7 +7,6 @@ import {
   getSubmittedTurnStart,
   mockCreateAgentRuntimeSession,
   mockGetAgentRuntimeSession,
-  mockGetDefaultProvider,
   mockGetRuntimeProviderSelection,
   mockListAgentRuntimeSessions,
   mockResolveClawWorkspaceProviderSelection,
@@ -240,7 +239,6 @@ describe("useAgentChat 首页新会话", () => {
     mockGetRuntimeProviderSelection.mockResolvedValue({
       provider_configured: false,
     });
-    mockGetDefaultProvider.mockResolvedValue("deepseek");
     mockResolveClawWorkspaceProviderSelection.mockResolvedValue({
       providerType: "deepseek",
       model: "deepseek-v4-flash",
@@ -261,7 +259,7 @@ describe("useAgentChat 首页新会话", () => {
 
       expect(mockGetRuntimeProviderSelection).toHaveBeenCalledTimes(1);
       expect(mockResolveClawWorkspaceProviderSelection).toHaveBeenCalledWith({
-        currentProviderType: "deepseek",
+        currentProviderType: undefined,
         currentModel: null,
         theme: "general",
       });
@@ -292,7 +290,6 @@ describe("useAgentChat 首页新会话", () => {
     mockGetRuntimeProviderSelection.mockResolvedValue({
       provider_configured: false,
     });
-    mockGetDefaultProvider.mockResolvedValue("deepseek");
     mockResolveClawWorkspaceProviderSelection.mockResolvedValue({
       providerType: "deepseek",
       model: "deepseek-v4-flash",
@@ -331,13 +328,10 @@ describe("useAgentChat 首页新会话", () => {
     }
   });
 
-  it("无工作区显式发送读取默认 Provider 失败时仍应从已配置 Provider 解析模型", async () => {
+  it("无工作区显式发送时应直接消费 App Server 默认模型", async () => {
     mockGetRuntimeProviderSelection.mockResolvedValue({
       provider_configured: false,
     });
-    mockGetDefaultProvider.mockRejectedValue(
-      new Error("get_default_provider 未返回有效默认 Provider"),
-    );
     mockResolveClawWorkspaceProviderSelection.mockResolvedValue({
       providerType: "openai",
       model: "gpt-5.4-mini",
@@ -845,7 +839,6 @@ describe("useAgentChat 首页新会话", () => {
       await flushEffects();
       await flushEffects();
 
-      expect(mockGetDefaultProvider).not.toHaveBeenCalled();
       expect(mockResolveClawWorkspaceProviderSelection).toHaveBeenCalledWith({
         currentProviderType: "lime-hub",
         currentModel: null,
@@ -907,12 +900,11 @@ describe("useAgentChat 首页新会话", () => {
     }
   });
 
-  it("Provider 配置读取未返回模型时应回退到后端默认 provider 解析真实工作区模型", async () => {
+  it("Provider 配置读取未返回模型时应消费 App Server 默认模型", async () => {
     const workspaceId = "ws-init-fallback-runtime-model";
     mockGetRuntimeProviderSelection.mockResolvedValue({
       provider_configured: false,
     });
-    mockGetDefaultProvider.mockResolvedValue("deepseek");
     mockResolveClawWorkspaceProviderSelection.mockResolvedValue({
       providerType: "openai",
       model: "gpt-5.4",
@@ -924,9 +916,8 @@ describe("useAgentChat 首页新会话", () => {
       await flushEffects();
       await flushEffects();
 
-      expect(mockGetDefaultProvider).toHaveBeenCalledTimes(1);
       expect(mockResolveClawWorkspaceProviderSelection).toHaveBeenCalledWith({
-        currentProviderType: "deepseek",
+        currentProviderType: undefined,
         currentModel: null,
         theme: "general",
       });
@@ -947,7 +938,7 @@ describe("useAgentChat 首页新会话", () => {
     }
   });
 
-  it("已有工作区持久化偏好时应优先按当前偏好解析真实可用模型，不再读取默认 provider", async () => {
+  it("已有工作区持久化偏好时应优先按当前偏好解析真实可用模型", async () => {
     const workspaceId = "ws-init-prefer-persisted-selection";
     localStorage.setItem(
       `agent_pref_provider_${workspaceId}`,
@@ -971,7 +962,6 @@ describe("useAgentChat 首页新会话", () => {
       await flushEffects();
       await flushEffects();
 
-      expect(mockGetDefaultProvider).not.toHaveBeenCalled();
       expect(mockResolveClawWorkspaceProviderSelection).toHaveBeenCalledWith({
         currentProviderType: "gemini",
         currentModel: "gemini-2.5-pro",

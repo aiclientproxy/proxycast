@@ -70,6 +70,7 @@ export type ModelTaskFamily =
   | "vision_understanding"
   | "image_generation"
   | "image_edit"
+  | "video_generation"
   | "speech_to_text"
   | "text_to_speech"
   | "embedding"
@@ -165,6 +166,8 @@ export interface EnhancedModelMetadata {
   provider_id: string;
   /** Provider 显示名称 */
   provider_name: string;
+  /** 是否为 App Server 在当前 ready catalog 中解析出的唯一默认模型 */
+  is_default?: boolean;
   /** 模型家族 (如 "sonnet", "gpt-4", "qwen") */
   family: string | null;
   /** 服务等级 */

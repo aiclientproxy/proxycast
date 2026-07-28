@@ -1,17 +1,17 @@
 # 多模型多模态统一运行时实现计划
 
-> 状态：in progress
-> 更新时间：2026-07-22
+> 状态：in progress / video execution skeleton current
+> 更新时间：2026-07-28
 > Owner：Runtime / Model Registry / App Server / Media Task 主链
 > 关联 PRD：`internal/roadmap/models/prd.md`
 
 ## 目标
 
-把 Lime 的多模型、多模态能力统一收敛到 App Server JSON-RPC / RuntimeCore current 主链。首期先建立 typed model/provider contract，再逐步落 RouteResolver、canonical LLM request/event、协议 mapper 和媒体任务复用链路。
+把 Lime 的多模型、多模态能力统一收敛到 App Server JSON-RPC / RuntimeCore current 主链。Agent loop 与 Thread/Turn/Item 服从 Codex；model catalog、default/switch、capability 与媒体产品语义以 `grok-build` 为主参考；OpenCode 只补 provider wire、canonical content 与媒体 lowering。首期先建立 typed model/provider contract，再逐步落 RouteResolver、canonical LLM request/event、协议 mapper 和媒体任务复用链路。
 
 ## 事实源分类
 
-- `current`：`model/list`、`modelProvider/*`、`modelProviderKey/*` App Server JSON-RPC methods，`ModelRegistryService`，`lime-rs/crates/core/src/models/model_registry.rs`，RuntimeCore / App Server protocol。
+- `current`：`model/list`、`modelProvider/*`、`modelProviderKey/*` App Server JSON-RPC methods，`ModelRegistryService`，`lime-rs/crates/core/src/models/model_registry.rs`，RuntimeCore / App Server protocol，以及由统一 catalog admission 驱动的图片/视频 media task worker。
 - `compat`：服务端内部从现有 service / DAO JSON projection 读取并投影成 protocol DTO 的适配函数；它只允许停留在 App Server local data source 边界，不出现在 App Server JSON-RPC 合同里。
 - `deprecated`：Agent `CredentialBridge` 中 provider/model 字符串映射。后续只能委托 `ResolvedModelRoute`，不能继续长 provider-specific 规则。
 - `dead`：旧 Tauri Provider facade、`lime-rs/src/**`、`lime-rs/resources/models` 本地 catalog、旧 `get_api_key_providers` / `get_system_provider_catalog` 命令族。
@@ -32,6 +32,7 @@
 - [x] 服务端在 `local_data_source/model_projection.rs` 把现有 service / DAO JSON projection 收敛成 protocol DTO；JSON 只停留在内部适配边界。
 - [x] 前端 API 网关从 App Server camelCase DTO 投影到现有 UI snake_case view model，不再把 raw App Server 对象透传给 UI。
 - [x] 同步 JSON schema、TS client 生成物、手写 protocol 类型和 API 网关定向测试。
+- [x] 完成 `model/list/updated` typed 全局失效事件：Provider/Key/目录 mutation 经 App Server event bridge 广播，Renderer 模型注册表失效缓存并刷新已挂载视图。
 
 ### Phase 2：RouteResolver 合同
 
@@ -41,24 +42,24 @@
 - [x] 聊天 runtime 已基于 `ModelTaskRequest.requirements` 与注册表 `CapabilitySnapshot` 产出 `capability_gap`，并在 capability gap 时通过 `RouteFailure(category=capability_gap)` 阻断执行。
 - [x] 新增通用 `model_route_assembly`，把 provider / endpoint / auth / protocol / route defaults / capability snapshot / `RouteFailure` 组装从聊天模块抽出，聊天内部 `model_route_resolver` 只负责 ready candidate、registry metadata、provider record 和 evidence 编排。
 - [x] 媒体 task 创建链路在 provider record、enabled key、registry declared model 都明确时，复用 `model_route_assembly` 写入真实 `resolved_route` / `resolvedRoute`，并保留 capability gap fail-closed 语义。
-- [ ] 把 RouteResolver 从 App Server 内部模块提升为可复用 RuntimeCore resolver，并覆盖音频 / 转写 / embedding 等非 chat task 的 worker 执行；当前 `ResolvedModelRoute` 组装、route evidence bundle、decision/fallback/not_possible evidence 生成已在 RuntimeCore，App Server 只保留 provider record / readiness / registry metadata 适配；图片 worker 已消费 `resolved_route` 的 endpoint/protocol 与 durable `credentialRef`，通过 App Server media task worker 精确取凭证后由 media-runtime 直连 Provider；音频当前只保留 `ModelTaskRequest` / capability evidence，不写可执行 `resolved_route`，直到 audio worker 或 RuntimeCore 级 provider protocol mapper 落地。
+- [ ] 把 RouteResolver 从 App Server 内部模块提升为可复用 RuntimeCore resolver，并覆盖音频 / 转写 / embedding 等非 chat task 的 worker 执行；当前 `ResolvedModelRoute` 组装、route evidence bundle、decision/fallback/not_possible evidence 生成已在 RuntimeCore，App Server 只保留 provider record / readiness / registry metadata 适配；图片、Fal 视频和 xAI 视频 worker 已消费 `resolved_route` 的 endpoint/protocol 与 durable `credentialRef`，通过 App Server media task worker 精确取凭证后进入 `model-provider` 网络边界；音频当前只保留 `ModelTaskRequest` / capability evidence，不写可执行 `resolved_route`。
 - [x] 媒体 task 创建链路在 registry 明确声明能力快照时写入 `route_failure` / `model_route_assessment`，并在 `capability_gap` 时标记任务为 blocked。
-- [x] 图片 worker 消费 task payload 中的 `failure_code=capability_gap` 并 fail closed，不再请求 provider；视频 task 没有产品 worker，不生成 ready execution binding。
+- [x] 图片/视频 worker 消费 task payload 中的 capability/route failure 并 fail closed，不再请求 provider；只有 catalog 显式声明 `image_generation` / `video_generation` 和对应输出模态时才生成 ready execution binding。
 - [x] 拆出 `media_task_payload.rs`，让媒体 payload / `ModelTaskRequest` 构建离开超过 `1000` 行的 `media_task.rs`。
 - [x] 图片 worker 消费 `resolved_route` 的 provider / model / protocol / endpoint 安全投影，并消费通用 `route_failure` fail closed；旧 route-only task artifact 按 current execution binding 幂等补齐。
-- [x] App Server 为图片任务写入不含 secret 的 `model_route_execution` / `modelRouteExecution` 执行绑定，worker 按 durable `credentialRef` 精确取凭证，再由 media-runtime 直连 resolved Provider endpoint。
-- [ ] 实现 RuntimeCore 级 provider protocol mapper；OpenAI Images API、Responses image-generation 与 Fal video-generation 的请求体 mapper 已进入 RuntimeCore，图片 worker 已复用对应 body builder；视频 mapper 仍只是库级能力，没有 App Server 产品 worker 消费者，不作为 current 视频执行证据。
+- [x] App Server 为图片和视频任务写入不含 secret 的 `model_route_execution` / `modelRouteExecution` 执行绑定，worker 按 durable `credentialRef` 精确取凭证，再由 media-runtime 执行 resolved Provider route。
+- [ ] 补齐剩余 provider protocol coverage；OpenAI Images API、Responses image-generation、Fal video-generation 与 xAI video-generation lowering/transport 已进入 `model-provider`。xAI current worker 已覆盖 start、durable request id、poll、done/failed/expired/timeout/cancelled，并可在重启后从 request id 恢复 poll；普通 OpenAI 视频声明继续 fail closed。
 
 ### Phase 3：Canonical LLM Runtime
 
-- [x] 定义 `LlmRequest` / `LlmInputPart` / `LlmOutputPart` / `LlmEvent`。
-- [x] 增加 OpenAI Chat、OpenAI Responses、Anthropic Messages、Gemini、Ollama、OpenAI Images、Responses image-generation、Fal video-generation 的 protocol mapper 边界。
+- [x] 定义 canonical `Request` / `Message` / `ContentPart` / `LlmEvent`。
+- [x] 增加 OpenAI Chat、OpenAI Responses、Anthropic Messages、Gemini、Ollama、OpenAI Images、Responses image-generation、Fal video-generation 与 xAI video-generation 的 protocol mapper 边界。
 - [x] Agent adapter 降级为 compat backend adapter，只做合同转换和事件投影。
 
 ### Phase 4：媒体任务复用
 
 - [x] 图片任务通过 RouteResolver 选择模型和协议，并由 App Server worker + media-runtime 消费 `resolved_route` / `model_route_execution` 的 direct-provider 执行绑定。
-- [ ] 视频任务尚无产品 worker；不得把 media-runtime 库级 video runner 或 artifact route metadata 记作 current 产品执行链。
+- [x] Fal 与 xAI 视频任务通过 public `mediaTaskArtifact/video/create`、统一 catalog admission、exact credential route、App Server worker、`model-provider` transport 和 media-runtime durable artifact 进入 terminal；xAI 任务持久化 request id/status，恢复时只 poll 不重复 start。
 - [ ] 音频 / 转写任务通过 RouteResolver 选择模型和协议；当前音频仍是 metadata-only task artifact + App Server complete 回写，没有独立 worker，转写 worker 也未接入 RuntimeCore mapper。
 - [x] 图片 / 视频 media task artifact 持久化 `resolved_route`、`llm_events`、`provider_diagnostics`，同时保留 snake/camel 双字段便于 current UI / evidence 消费。
 - [ ] 音频 / 转写 media task artifact 持久化 executable `resolved_route` / `llm_events` / `provider_diagnostics`；退出条件是 audio / transcription worker 或 RuntimeCore provider protocol mapper 能真实执行对应 provider wire。
@@ -66,18 +67,18 @@
 
 ## 本轮当前刀
 
-本轮快速完成 Phase 4 的图片媒体任务 direct-provider 闭环，并明确视频只停留在库级能力：
+本轮快速完成 Phase 4 的视频媒体任务产品执行骨架，并保持图片 current 闭环：
 
-1. 在 `runtime-core` 保持 canonical `LlmRequest` / `LlmInputPart` / `LlmOutputPart` / `LlmEvent` 为模型协议唯一输入边界。
-2. 把 OpenAI Chat、OpenAI Responses、Anthropic Messages、Gemini、Ollama、OpenAI Images、Responses image-generation、Fal video-generation 的协议映射集中到 `llm_protocol/mapper/`。
-3. 图片 worker 请求体构建复用 RuntimeCore body builder，不再在 `media-runtime` 维护第二套 Images API / Responses image-generation body shape；Fal video mapper 保留为库级能力，不伪造产品 worker。
-4. 图片 worker 在 running / succeeded / failed 状态写入 RuntimeCore canonical LLM event 投影，并把 provider/model/protocol/transport/credential 诊断持久化到 task payload。
+1. 在 `runtime-core::llm_protocol::canonical` 保持 `Request` / `Message` / `ContentPart` / `LlmEvent` 为模型协议唯一输入边界。
+2. 把 OpenAI Chat、OpenAI Responses、Anthropic Messages、Gemini、Ollama、OpenAI Images、Responses image-generation、Fal/xAI video-generation 的协议映射集中到 `model-provider`。
+3. 图片和视频 worker 请求体构建及 Provider HTTP 复用 `model-provider`，不在 `media-runtime` 维护第二套 Images API / Responses image-generation / video wire。
+4. 图片和视频 worker 在 running / succeeded / failed 状态写入 canonical LLM event 投影，并把 provider/model/protocol/transport/credential 诊断持久化到 task payload。
 5. 只做纯协议映射，不在 mapper 里承接数据库、认证、transport 或 GUI 逻辑。
 6. App Server 保留 provider record、credential 和 readiness facade，media-runtime 只执行 App Server 已解析的 endpoint/protocol，并使用按 durable ref 精确取得的凭证。
-7. 视频 / 音频 / 转写不伪造可执行复用；继续停留在库级 mapper 或 metadata-only / typed request evidence，等待产品 worker 落地。
+7. 音频 / 转写不伪造可执行复用；视频只允许 Fal/xAI 明确协议，普通 OpenAI 视频声明继续 fail closed。
 8. 通过定向 Rust 测试和全文扫描确认协议层与媒体 evidence 已经收口。
 
-这样做的主线收益是：模型输入/输出、工具调用、图片/文件 parts、provider wire body 和图片任务 evidence 已经有统一协议边界；图片 worker 的 provider-specific body shape 和任务事件语义已开始从 `media-runtime` 下沉到 RuntimeCore，后续新增协议只需要补 mapper / event projector，不需要在 App Server、worker、前端三处重复补特判。
+这样做的主线收益是：模型输入/输出、工具调用、图片/文件 parts、provider wire body 和图片/视频任务 evidence 已经有统一协议边界；专用媒体模型不会混入 chat picker，后续新增协议只需要补 catalog capability、mapper 和 dedicated worker，不需要在 App Server、worker、前端三处重复补特判。
 
 ## 验证计划
 
@@ -94,6 +95,8 @@
 - `cargo test --manifest-path "lime-rs/Cargo.toml" -p lime-media-runtime model_route -- --nocapture`
 - `cargo test --manifest-path "lime-rs/Cargo.toml" -p lime-media-runtime --test model_route_execution -- --nocapture`
 - `cargo test --manifest-path "lime-rs/Cargo.toml" -p lime-media-runtime capability_gap -- --nocapture`
+- `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server --test media_task_jsonrpc xai_video_task_start_and_poll_run_from_public_jsonrpc`
+- `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server --test media_task_jsonrpc video_task_create_executes_current_worker_from_public_jsonrpc`
 - `npm run check:protocol-types`
 - `npm run test:contracts`
 
@@ -105,11 +108,17 @@
 - `customModels` 等可空数组依赖 schema 生成器正确保留数组 item 类型；生成器已补 `type: ["array", "null"]` 支持，后续必须由 `npm run check:protocol-types` 守住。
 - 本轮没有修改 Provider 数据库存储 schema，也没有改旧数据格式；旧 Provider / API Key 数据由投影层自动映射到 typed response，route evidence 只进入事件 / artifact payload，因此无需新增数据迁移脚本。后续若 Phase 2/4 引入新的持久化 route / model binding 字段，必须补启动期迁移或 scripts 迁移入口。
 - 当前能力门禁只在注册表明确返回能力快照时阻断；direct provider config、registry 缺失或模型没有声明任务族 / 模态 / 能力时不按未知能力失败。退出条件是 RouteResolver 具备显式的 `unknown / inferred / declared` 能力置信度，并能把用户可行动错误返回给 GUI。
-- 媒体任务目前写入 `model_task_request` 与 capability assessment，并只在最终 provider/model、credential-scoped metadata 与 capability snapshot 明确时为图片写入 ready `resolved_route` 与 `model_route_execution`。图片 worker 以 `media_task_worker + resolved_route_credential_ref` 校验执行绑定，按同一 durable ref 精确取 key，并由 media-runtime 对 resolved endpoint 执行 Provider HTTP；route-only task artifact 会执行期按同一 current 合同补齐顶层 binding。视频和音频都没有产品 worker，不能把库级 runner、route metadata 或 `audio/complete` 回写伪装成可执行 current 路径。退出条件是 video/audio worker 采用同一 exact-ref execution，并把剩余 provider protocol mapper 收敛到 current owner。
+- 媒体任务写入 `model_task_request` 与 capability assessment，并只在最终 provider/model、credential-scoped metadata 与 capability snapshot 明确时为图片/视频写入 ready `resolved_route` 与 `model_route_execution`。worker 以 `media_task_worker + resolved_route_credential_ref` 校验执行绑定，按同一 durable ref 精确取 key；route-only task artifact 会执行期按同一 current 合同补齐顶层 binding。音频仍没有产品 worker；视频 current 骨架覆盖 Fal 同步响应和 xAI 异步 start/poll/terminal/recovery，live provider 证据与 GUI/history projection 仍是退出条件。
 - `runtime_contract` 仍是 App Server protocol 和 TS client 中的 JSON/unknown 字段，因为前端工作台、Skill launch、ImageTaskViewer 和历史 task payload 都在消费它；本轮只把 App Server 默认生成和列表投影收敛到单一模块，不做全协议 typed 化。退出条件是同步 protocol schema、TS generated/client、前端 view model、mock/fixture 后，把 `runtimeContract?: unknown` 升级为 typed display/runtime metadata DTO。
 - `runtime_backend/model_routing.rs` 仍超过 `1000` 行，本轮没有继续往里追加业务逻辑，只删除了迁移后未使用的 `service_model_slot()` helper。退出条件是后续把 profile slot 解析、readiness、payload projection 分拆成独立小模块。
 
 ## 进度日志
+
+### 2026-07-28
+
+- 视频 transport 从 `media-runtime` 收回唯一网络 owner `model-provider`：Fal 同步 POST；xAI `POST /videos/generations -> request_id -> GET /videos/{id}`，覆盖 done/failed/expired/timeout/cancelled，并严格使用 resolved auth header/prefix。
+- `media-runtime` 只持久化 `provider_task.protocol/request_id/status` 与 terminal artifact；App Server media scheduler 仅恢复 stale、已有 request id 的 xAI running task，恢复只 poll、不重复 POST。普通 OpenAI 视频声明在路由和 lowering 两侧 fail closed。
+- 公共 JSON-RPC xAI start/poll 与 Fal 回归均通过；`model-provider` lowering/transport、media-runtime start/poll/resume 和 App Server scheduler 定向测试已通过。最终 `npm run test:contracts` 通过 `808` generated protocol types、`284` client checks 及 modality/scripts/Electron release/docs guards；workspace rustfmt、`git diff --check` 与 legacy governance 通过，治理摘要为零引用候选 `0`、边界违规 `0`、既有 deprecated 分类漂移 `1`。分类：上述为 `current`；media-runtime 直接发视频 HTTP、把所有视频诊断写成 Fal、普通 OpenAI 视频 fallback 为 `dead / deleted / forbidden-to-restore`；无新增 `compat/deprecated`。
 
 ### 2026-07-22
 

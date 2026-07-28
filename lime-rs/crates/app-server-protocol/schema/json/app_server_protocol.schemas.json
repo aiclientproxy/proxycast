@@ -11298,9 +11298,6 @@
           },
           "type": "object"
         },
-        "ModelProviderCapabilitiesReadParams": {
-          "type": "object"
-        },
         "MultiAgentMode": {
           "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
           "oneOf": [
@@ -13462,26 +13459,6 @@
             },
             "params": {
               "$ref": "#/$defs/ModelListParams"
-            }
-          },
-          "required": [
-            "id",
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "modelProvider/capabilities/read",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/ModelProviderCapabilitiesReadParams"
             }
           },
           "required": [
@@ -22931,7 +22908,6 @@
     "InputModality": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
-        "audio",
         "image",
         "text"
       ],
@@ -29747,7 +29723,6 @@
       "enum": [
         "artifact/write",
         "model/list",
-        "modelProvider/capabilities/read",
         "thread/approveGuardianDeniedAction",
         "thread/archive",
         "thread/backgroundTerminals/clean",
@@ -29787,9 +29762,64 @@
     },
     "Model": {
       "$defs": {
+        "CapabilitySnapshot": {
+          "properties": {
+            "capabilities": {
+              "$ref": "#/$defs/ModelCapabilitiesInfo",
+              "default": {
+                "functionCalling": false,
+                "jsonMode": false,
+                "reasoning": false,
+                "streaming": false,
+                "tools": false,
+                "vision": false
+              }
+            },
+            "inputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "outputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "reasonCode": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "runtimeFeatures": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "taskFamilies": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
         "InputModality": {
           "enum": [
-            "audio",
             "image",
             "text"
           ],
@@ -29803,6 +29833,113 @@
           },
           "required": [
             "message"
+          ],
+          "type": "object"
+        },
+        "ModelCapabilitiesInfo": {
+          "properties": {
+            "functionCalling": {
+              "type": "boolean"
+            },
+            "jsonMode": {
+              "type": "boolean"
+            },
+            "reasoning": {
+              "type": "boolean"
+            },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelReasoningEffortSupportInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "streaming": {
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "boolean"
+            },
+            "vision": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "functionCalling",
+            "jsonMode",
+            "reasoning",
+            "streaming",
+            "tools",
+            "vision"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortOptionInfo": {
+          "properties": {
+            "default": {
+              "default": false,
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "value"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortSupportInfo": {
+          "properties": {
+            "default": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "levels": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "options": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+              },
+              "type": "array"
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "supported": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "supported"
           ],
           "type": "object"
         },
@@ -29888,6 +30025,17 @@
             }
           ]
         },
+        "capabilitySnapshot": {
+          "$ref": "#/$defs/CapabilitySnapshot"
+        },
+        "contextWindow": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "defaultReasoningEffort": {
           "type": "string"
         },
@@ -29918,7 +30066,18 @@
         "isDefault": {
           "type": "boolean"
         },
+        "maxOutputTokens": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "model": {
+          "type": "string"
+        },
+        "providerId": {
           "type": "string"
         },
         "serviceTiers": {
@@ -29955,6 +30114,7 @@
       },
       "required": [
         "additionalSpeedTiers",
+        "capabilitySnapshot",
         "defaultReasoningEffort",
         "description",
         "displayName",
@@ -29963,6 +30123,7 @@
         "inputModalities",
         "isDefault",
         "model",
+        "providerId",
         "serviceTiers",
         "supportedReasoningEfforts",
         "supportsPersonality"
@@ -30514,9 +30675,64 @@
     },
     "ModelListResponse": {
       "$defs": {
+        "CapabilitySnapshot": {
+          "properties": {
+            "capabilities": {
+              "$ref": "#/$defs/ModelCapabilitiesInfo",
+              "default": {
+                "functionCalling": false,
+                "jsonMode": false,
+                "reasoning": false,
+                "streaming": false,
+                "tools": false,
+                "vision": false
+              }
+            },
+            "inputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "outputModalities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "reasonCode": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "runtimeFeatures": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "taskFamilies": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
         "InputModality": {
           "enum": [
-            "audio",
             "image",
             "text"
           ],
@@ -30538,6 +30754,17 @@
                 {
                   "type": "null"
                 }
+              ]
+            },
+            "capabilitySnapshot": {
+              "$ref": "#/$defs/CapabilitySnapshot"
+            },
+            "contextWindow": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
               ]
             },
             "defaultReasoningEffort": {
@@ -30570,7 +30797,18 @@
             "isDefault": {
               "type": "boolean"
             },
+            "maxOutputTokens": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "model": {
+              "type": "string"
+            },
+            "providerId": {
               "type": "string"
             },
             "serviceTiers": {
@@ -30607,6 +30845,7 @@
           },
           "required": [
             "additionalSpeedTiers",
+            "capabilitySnapshot",
             "defaultReasoningEffort",
             "description",
             "displayName",
@@ -30615,6 +30854,7 @@
             "inputModalities",
             "isDefault",
             "model",
+            "providerId",
             "serviceTiers",
             "supportedReasoningEfforts",
             "supportsPersonality"
@@ -30629,6 +30869,113 @@
           },
           "required": [
             "message"
+          ],
+          "type": "object"
+        },
+        "ModelCapabilitiesInfo": {
+          "properties": {
+            "functionCalling": {
+              "type": "boolean"
+            },
+            "jsonMode": {
+              "type": "boolean"
+            },
+            "reasoning": {
+              "type": "boolean"
+            },
+            "reasoningEffort": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelReasoningEffortSupportInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "streaming": {
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "boolean"
+            },
+            "vision": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "functionCalling",
+            "jsonMode",
+            "reasoning",
+            "streaming",
+            "tools",
+            "vision"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortOptionInfo": {
+          "properties": {
+            "default": {
+              "default": false,
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "value"
+          ],
+          "type": "object"
+        },
+        "ModelReasoningEffortSupportInfo": {
+          "properties": {
+            "default": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "levels": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "options": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+              },
+              "type": "array"
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "supported": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "supported"
           ],
           "type": "object"
         },
@@ -30717,6 +31064,27 @@
       "title": "ModelListResponse",
       "type": "object"
     },
+    "ModelListUpdatedNotification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "providerId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "generation"
+      ],
+      "title": "ModelListUpdatedNotification",
+      "type": "object"
+    },
     "ModelPreferencesListResponse": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -30760,32 +31128,6 @@
         "config": true
       },
       "title": "ModelProviderAliasReadResponse",
-      "type": "object"
-    },
-    "ModelProviderCapabilitiesReadParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "title": "ModelProviderCapabilitiesReadParams",
-      "type": "object"
-    },
-    "ModelProviderCapabilitiesReadResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "imageGeneration": {
-          "type": "boolean"
-        },
-        "namespaceTools": {
-          "type": "boolean"
-        },
-        "webSearch": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "imageGeneration",
-        "namespaceTools",
-        "webSearch"
-      ],
-      "title": "ModelProviderCapabilitiesReadResponse",
       "type": "object"
     },
     "ModelProviderCatalogListResponse": {
@@ -38176,7 +38518,8 @@
         "openai_images",
         "openai_responses",
         "unknown",
-        "vertex_gemini"
+        "vertex_gemini",
+        "xai_video"
       ],
       "title": "ProtocolKind",
       "type": "string"
@@ -39012,7 +39355,8 @@
             "openai_images",
             "openai_responses",
             "unknown",
-            "vertex_gemini"
+            "vertex_gemini",
+            "xai_video"
           ],
           "type": "string"
         },
@@ -41124,6 +41468,25 @@
           ],
           "type": "string"
         },
+        "ModelListUpdatedNotification": {
+          "properties": {
+            "generation": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "providerId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "generation"
+          ],
+          "type": "object"
+        },
         "ModelRerouteReason": {
           "enum": [
             "highRiskCyberActivity"
@@ -43115,6 +43478,22 @@
             },
             "params": {
               "$ref": "#/$defs/ModelReroutedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "model/list/updated",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ModelListUpdatedNotification"
             }
           },
           "required": [
@@ -82910,6 +83289,7 @@
               "item/reasoning/summaryTextDelta",
               "item/reasoning/textDelta",
               "item/started",
+              "model/list/updated",
               "model/rerouted",
               "model/safetyBuffering/updated",
               "model/verification",
@@ -83074,7 +83454,6 @@
               "memoryStore/search",
               "model/list",
               "modelPreferences/list",
-              "modelProvider/capabilities/read",
               "modelProvider/catalog/list",
               "modelProvider/create",
               "modelProvider/delete",

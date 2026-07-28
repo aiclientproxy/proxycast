@@ -10,7 +10,8 @@
     "openai_images",
     "openai_responses",
     "unknown",
-    "vertex_gemini"
+    "vertex_gemini",
+    "xai_video"
   ],
   "title": "ProtocolKind",
   "type": "string"

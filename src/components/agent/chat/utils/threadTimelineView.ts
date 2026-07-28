@@ -135,10 +135,6 @@ function shouldHideConversationThreadItem(item: AgentThreadItem): boolean {
     return shouldHideTurnSummaryFromConversation(item);
   }
 
-  if (item.type === "context_compaction") {
-    return true;
-  }
-
   if (item.type !== "warning") {
     return false;
   }

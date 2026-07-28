@@ -3,7 +3,6 @@
   "enum": [
     "artifact/write",
     "model/list",
-    "modelProvider/capabilities/read",
     "thread/approveGuardianDeniedAction",
     "thread/archive",
     "thread/backgroundTerminals/clean",

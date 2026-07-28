@@ -8,8 +8,8 @@ use agent_protocol::{
 };
 use app_server::{
     ActionRespondRequest, AppServer, CancelExecutionRequest, EventLogWriter, ExecutionBackend,
-    ExecutionRequest, ProjectionStore, RuntimeCore, RuntimeCoreError, RuntimeEvent,
-    RuntimeEventSink, SidecarStore,
+    ExecutionRequest, ProjectionStore, ProviderTurnHistory, RuntimeCore, RuntimeCoreError,
+    RuntimeEvent, RuntimeEventSink, SidecarStore,
 };
 use app_server_protocol::protocol::v2::{
     METHOD_THREAD_DELETE, METHOD_THREAD_FORK, METHOD_THREAD_GOAL_GET, METHOD_THREAD_GOAL_SET,
@@ -135,21 +135,21 @@ impl ExecutionBackend for HistoryCaptureBackend {
         request: ExecutionRequest,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
-        self.start_turn_with_provider_history(request, Vec::new(), sink)
+        self.start_turn_with_provider_history(request, ProviderTurnHistory::default(), sink)
             .await
     }
 
     async fn start_turn_with_provider_history(
         &self,
         request: ExecutionRequest,
-        provider_history: Vec<CurrentProviderMessage>,
+        provider_history: ProviderTurnHistory,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
         let call = self.calls.fetch_add(1, Ordering::SeqCst);
         self.histories
             .lock()
             .expect("fork history capture mutex poisoned")
-            .push(provider_history);
+            .push(provider_history.messages_for_route("fixture-provider", "fixture-model"));
         sink.emit(RuntimeEvent::new("turn.started", json!({})))?;
         if call == 0 {
             sink.emit(RuntimeEvent::new(
@@ -687,10 +687,11 @@ async fn thread_fork_rebuilds_provider_history_across_restarts_without_duplicate
         json!({"threadId": source_thread_id, "includeTurns": true}),
     )
     .await;
-    assert_eq!(
-        source_read.pointer("/result/thread/turns/0/items/0/content"),
-        Some(&source_input)
-    );
+    let source_content = source_read
+        .pointer("/result/thread/turns/0/items/0/content")
+        .cloned()
+        .expect("canonical source user content");
+    assert_canonical_multimodal_input(&source_content);
     assert_eq!(
         source_read.pointer("/result/thread/turns/0/items/0/clientId"),
         Some(&json!("client-1"))
@@ -703,6 +704,16 @@ async fn thread_fork_rebuilds_provider_history_across_restarts_without_duplicate
     )
     .await;
     let target_thread_id = required_string(&forked, "/result/thread/id");
+    let canonical_file_name = source_content[2]["url"]
+        .as_str()
+        .and_then(|uri| uri.strip_prefix("sidecar://media/"))
+        .expect("canonical input media URI");
+    assert!(sidecar_root
+        .join("sessions")
+        .join(&target_thread_id)
+        .join("media")
+        .join(canonical_file_name)
+        .is_file());
     drop(server);
 
     let restarted = AppServer::with_runtime(runtime());
@@ -723,7 +734,7 @@ async fn thread_fork_rebuilds_provider_history_across_restarts_without_duplicate
     .await;
     assert_eq!(
         target_read.pointer("/result/thread/turns/0/items/0/content"),
-        Some(&source_input)
+        Some(&source_content)
     );
     request(
         &restarted,
@@ -799,6 +810,22 @@ async fn thread_fork_rebuilds_provider_history_across_restarts_without_duplicate
             [CurrentProviderContent::Text(text)] if text == "first target prompt"
         )
     ));
+}
+
+fn assert_canonical_multimodal_input(content: &Value) {
+    let parts = content.as_array().expect("canonical input parts");
+    assert_eq!(parts.len(), 5);
+    assert_eq!(parts[0]["type"], "text");
+    assert_eq!(parts[0]["text"], "source user prompt");
+    assert_eq!(parts[1]["type"], "image");
+    assert_eq!(parts[1]["url"], "https://example.com/remote.png");
+    assert_eq!(parts[2]["type"], "image");
+    assert!(parts[2]["url"]
+        .as_str()
+        .is_some_and(|url| url.starts_with("sidecar://media/input-") && url.ends_with(".png")));
+    assert!(parts[2].get("path").is_none());
+    assert_eq!(parts[3]["type"], "skill");
+    assert_eq!(parts[4]["type"], "mention");
 }
 
 fn assert_source_provider_history(history: &[CurrentProviderMessage]) {

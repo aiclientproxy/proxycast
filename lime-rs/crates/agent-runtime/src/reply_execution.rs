@@ -5,6 +5,7 @@
 
 use crate::reply_host::RuntimeReplyStartError;
 use model_provider::current_client::FailureClassification;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum RuntimeReplyAttemptErrorKind {
@@ -19,6 +20,7 @@ pub struct RuntimeReplyAttemptError {
     pub emitted_any: bool,
     classification: Option<FailureClassification>,
     retryable: bool,
+    retry_after: Option<Duration>,
     reroute_safe: bool,
     kind: RuntimeReplyAttemptErrorKind,
 }
@@ -30,6 +32,7 @@ impl RuntimeReplyAttemptError {
             emitted_any,
             classification: None,
             retryable: false,
+            retry_after: None,
             reroute_safe: false,
             kind: RuntimeReplyAttemptErrorKind::Execution,
         }
@@ -41,6 +44,7 @@ impl RuntimeReplyAttemptError {
             emitted_any,
             classification: None,
             retryable: false,
+            retry_after: None,
             reroute_safe: false,
             kind: RuntimeReplyAttemptErrorKind::UsageLimitExceeded,
         }
@@ -57,6 +61,7 @@ impl RuntimeReplyAttemptError {
             emitted_any,
             classification,
             retryable,
+            retry_after: None,
             reroute_safe: true,
             kind: if classification == Some(FailureClassification::Quota) {
                 RuntimeReplyAttemptErrorKind::UsageLimitExceeded
@@ -82,6 +87,15 @@ impl RuntimeReplyAttemptError {
         self.retryable
     }
 
+    pub fn with_retry_after(mut self, retry_after: Option<Duration>) -> Self {
+        self.retry_after = retry_after.filter(|duration| !duration.is_zero());
+        self
+    }
+
+    pub fn retry_after(&self) -> Option<Duration> {
+        self.retry_after
+    }
+
     pub fn suppress_reroute(mut self) -> Self {
         self.reroute_safe = false;
         self
@@ -95,6 +109,22 @@ impl RuntimeReplyAttemptError {
                 self.classification,
                 Some(
                     FailureClassification::RateLimit
+                        | FailureClassification::ProviderInternal
+                        | FailureClassification::Transport
+                )
+            )
+    }
+
+    pub fn is_credential_reroutable_provider_failure(&self) -> bool {
+        !self.emitted_any
+            && self.reroute_safe
+            && matches!(
+                self.classification,
+                Some(
+                    FailureClassification::Authentication
+                        | FailureClassification::Permission
+                        | FailureClassification::Quota
+                        | FailureClassification::RateLimit
                         | FailureClassification::ProviderInternal
                         | FailureClassification::Transport
                 )
@@ -254,6 +284,56 @@ mod tests {
         );
         assert!(error.retryable());
         assert!(error.is_reroutable_provider_failure());
+    }
+
+    #[test]
+    fn reply_attempt_error_preserves_provider_retry_window() {
+        let error = RuntimeReplyAttemptError::provider_failure(
+            "rate limited",
+            false,
+            Some(FailureClassification::RateLimit),
+            true,
+        )
+        .with_retry_after(Some(Duration::from_secs(45)));
+
+        assert_eq!(error.retry_after(), Some(Duration::from_secs(45)));
+    }
+
+    #[test]
+    fn credential_reroute_accepts_key_specific_rejections_without_visible_output() {
+        for classification in [
+            FailureClassification::Authentication,
+            FailureClassification::Permission,
+            FailureClassification::Quota,
+            FailureClassification::RateLimit,
+            FailureClassification::ProviderInternal,
+            FailureClassification::Transport,
+        ] {
+            let error = RuntimeReplyAttemptError::provider_failure(
+                "provider rejected credential",
+                false,
+                Some(classification),
+                false,
+            );
+            assert!(error.is_credential_reroutable_provider_failure());
+        }
+
+        let partial = RuntimeReplyAttemptError::provider_failure(
+            "partial output",
+            true,
+            Some(FailureClassification::Transport),
+            true,
+        );
+        assert!(!partial.is_credential_reroutable_provider_failure());
+
+        let consumed_input = RuntimeReplyAttemptError::provider_failure(
+            "consumed pending input",
+            false,
+            Some(FailureClassification::Authentication),
+            false,
+        )
+        .suppress_reroute();
+        assert!(!consumed_input.is_credential_reroutable_provider_failure());
     }
 
     #[test]

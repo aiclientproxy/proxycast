@@ -250,6 +250,7 @@ mod tests {
             api_key: Some("test-key".to_string()),
             auth: crate::runtime_provider::RuntimeProviderAuth::ApiKey,
             base_url: Some(format!("http://{address}")),
+            api_version: None,
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: None,
             service_tier: None,

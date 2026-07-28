@@ -1,0 +1,214 @@
+{
+  "version": "0.1",
+  "kind": "codex-render-projection-coverage",
+  "upstream": {
+    "repository": "/Users/coso/Documents/dev/rust/codex",
+    "revision": "4c43465133428898aa84f0bfc02c306ed65fb66a",
+    "itemSource": "codex-rs/app-server-protocol/src/protocol/v2/item.rs",
+    "methodSource": "codex-rs/app-server-protocol/src/protocol/common.rs"
+  },
+  "factSources": {
+    "itemInventory": "internal/refactor/v1/fixtures/item-inventory.v0.1.json",
+    "methodScope": "internal/refactor/v1/fixtures/codex-method-product-scope.v0.1.json"
+  },
+  "expected": {
+    "items": 18,
+    "notifications": 72,
+    "serverRequests": 11
+  },
+  "items": [
+    { "type": "userMessage", "outlet": "timeline" },
+    { "type": "hookPrompt", "outlet": "timeline" },
+    { "type": "agentMessage", "outlet": "timeline" },
+    { "type": "plan", "outlet": "timeline" },
+    { "type": "reasoning", "outlet": "timeline" },
+    { "type": "commandExecution", "outlet": "timeline" },
+    { "type": "fileChange", "outlet": "timeline" },
+    { "type": "mcpToolCall", "outlet": "timeline" },
+    { "type": "dynamicToolCall", "outlet": "timeline" },
+    { "type": "collabAgentToolCall", "outlet": "timeline" },
+    { "type": "subAgentActivity", "outlet": "timeline" },
+    { "type": "webSearch", "outlet": "timeline" },
+    { "type": "imageView", "outlet": "timeline" },
+    { "type": "sleep", "outlet": "timeline" },
+    { "type": "imageGeneration", "outlet": "timeline" },
+    { "type": "enteredReviewMode", "outlet": "timeline" },
+    { "type": "exitedReviewMode", "outlet": "timeline" },
+    { "type": "contextCompaction", "outlet": "timeline" }
+  ],
+  "notifications": [
+    { "method": "error", "outlets": ["turnPanel", "header"] },
+    { "method": "thread/started", "outlets": ["header"] },
+    {
+      "method": "thread/status/changed",
+      "outlets": ["header", "pendingInteraction"]
+    },
+    { "method": "thread/archived", "outlets": ["globalNotice", "header"] },
+    { "method": "thread/deleted", "outlets": ["globalNotice"] },
+    { "method": "thread/unarchived", "outlets": ["globalNotice", "header"] },
+    { "method": "thread/closed", "outlets": ["header"] },
+    { "method": "skills/changed", "outlets": ["globalNotice"] },
+    { "method": "thread/name/updated", "outlets": ["header"] },
+    { "method": "thread/goal/updated", "outlets": ["header"] },
+    { "method": "thread/goal/cleared", "outlets": ["header"] },
+    { "method": "thread/environment/connected", "outlets": ["header"] },
+    { "method": "thread/environment/disconnected", "outlets": ["header"] },
+    { "method": "thread/settings/updated", "outlets": ["header"] },
+    {
+      "method": "thread/tokenUsage/updated",
+      "outlets": ["turnPanel", "header"]
+    },
+    { "method": "turn/started", "outlets": ["timeline", "turnPanel"] },
+    { "method": "hook/started", "outlets": ["timeline", "header"] },
+    { "method": "turn/completed", "outlets": ["timeline", "turnPanel"] },
+    { "method": "hook/completed", "outlets": ["timeline"] },
+    { "method": "turn/diff/updated", "outlets": ["turnPanel"] },
+    { "method": "turn/plan/updated", "outlets": ["turnPanel"] },
+    { "method": "item/started", "outlets": ["timeline"] },
+    {
+      "method": "item/autoApprovalReview/started",
+      "outlets": ["pendingInteraction", "timeline"]
+    },
+    {
+      "method": "item/autoApprovalReview/completed",
+      "outlets": ["pendingInteraction", "timeline"]
+    },
+    { "method": "item/completed", "outlets": ["timeline"] },
+    { "method": "rawResponseItem/completed", "outlets": ["diagnostics"] },
+    { "method": "rawResponse/completed", "outlets": ["diagnostics"] },
+    { "method": "item/agentMessage/delta", "outlets": ["timeline"] },
+    { "method": "item/plan/delta", "outlets": ["timeline"] },
+    {
+      "method": "command/exec/outputDelta",
+      "outlets": ["diagnostics", "globalNotice"]
+    },
+    {
+      "method": "process/outputDelta",
+      "outlets": ["diagnostics", "globalNotice"]
+    },
+    { "method": "process/exited", "outlets": ["diagnostics", "globalNotice"] },
+    { "method": "item/commandExecution/outputDelta", "outlets": ["timeline"] },
+    {
+      "method": "item/commandExecution/terminalInteraction",
+      "outlets": ["timeline", "diagnostics"]
+    },
+    { "method": "item/fileChange/outputDelta", "outlets": ["diagnostics"] },
+    {
+      "method": "item/fileChange/patchUpdated",
+      "outlets": ["timeline", "turnPanel"]
+    },
+    { "method": "serverRequest/resolved", "outlets": ["pendingInteraction"] },
+    { "method": "item/mcpToolCall/progress", "outlets": ["timeline"] },
+    {
+      "method": "mcpServer/oauthLogin/completed",
+      "outlets": ["globalNotice", "pendingInteraction"]
+    },
+    {
+      "method": "mcpServer/startupStatus/updated",
+      "outlets": ["header", "globalNotice"]
+    },
+    { "method": "account/updated", "outlets": ["globalNotice"] },
+    {
+      "method": "account/rateLimits/updated",
+      "outlets": ["header", "globalNotice"]
+    },
+    { "method": "app/list/updated", "outlets": ["globalNotice"] },
+    { "method": "remoteControl/status/changed", "outlets": ["globalNotice"] },
+    {
+      "method": "externalAgentConfig/import/progress",
+      "outlets": ["globalNotice"]
+    },
+    {
+      "method": "externalAgentConfig/import/completed",
+      "outlets": ["globalNotice"]
+    },
+    { "method": "fs/changed", "outlets": ["globalNotice", "diagnostics"] },
+    { "method": "item/reasoning/summaryTextDelta", "outlets": ["timeline"] },
+    { "method": "item/reasoning/summaryPartAdded", "outlets": ["timeline"] },
+    { "method": "item/reasoning/textDelta", "outlets": ["timeline"] },
+    { "method": "thread/compacted", "outlets": ["timeline", "diagnostics"] },
+    { "method": "model/rerouted", "outlets": ["timeline", "header"] },
+    { "method": "model/verification", "outlets": ["header", "diagnostics"] },
+    { "method": "turn/moderationMetadata", "outlets": ["diagnostics"] },
+    { "method": "model/safetyBuffering/updated", "outlets": ["header"] },
+    { "method": "warning", "outlets": ["header", "globalNotice"] },
+    { "method": "guardianWarning", "outlets": ["header", "timeline"] },
+    { "method": "deprecationNotice", "outlets": ["globalNotice"] },
+    { "method": "configWarning", "outlets": ["globalNotice"] },
+    {
+      "method": "fuzzyFileSearch/sessionUpdated",
+      "outlets": ["pendingInteraction"]
+    },
+    {
+      "method": "fuzzyFileSearch/sessionCompleted",
+      "outlets": ["pendingInteraction"]
+    },
+    {
+      "method": "thread/realtime/started",
+      "outlets": ["header", "pendingInteraction"]
+    },
+    { "method": "thread/realtime/itemAdded", "outlets": ["timeline"] },
+    {
+      "method": "thread/realtime/transcript/delta",
+      "outlets": ["timeline", "pendingInteraction"]
+    },
+    { "method": "thread/realtime/transcript/done", "outlets": ["timeline"] },
+    {
+      "method": "thread/realtime/outputAudio/delta",
+      "outlets": ["pendingInteraction"]
+    },
+    { "method": "thread/realtime/sdp", "outlets": ["diagnostics"] },
+    {
+      "method": "thread/realtime/error",
+      "outlets": ["header", "pendingInteraction"]
+    },
+    {
+      "method": "thread/realtime/closed",
+      "outlets": ["header", "pendingInteraction"]
+    },
+    { "method": "windows/worldWritableWarning", "outlets": ["globalNotice"] },
+    {
+      "method": "windowsSandbox/setupCompleted",
+      "outlets": ["globalNotice", "pendingInteraction"]
+    },
+    {
+      "method": "account/login/completed",
+      "outlets": ["globalNotice", "pendingInteraction"]
+    }
+  ],
+  "serverRequests": [
+    {
+      "method": "item/commandExecution/requestApproval",
+      "owner": "pendingInteraction"
+    },
+    {
+      "method": "item/fileChange/requestApproval",
+      "owner": "pendingInteraction"
+    },
+    { "method": "item/tool/requestUserInput", "owner": "pendingInteraction" },
+    {
+      "method": "mcpServer/elicitation/request",
+      "owner": "pendingInteraction"
+    },
+    { "method": "currentTime/read", "owner": "hostCapability" },
+    {
+      "method": "item/permissions/requestApproval",
+      "owner": "pendingInteraction"
+    },
+    { "method": "item/tool/call", "owner": "toolHost" },
+    {
+      "method": "account/chatgptAuthTokens/refresh",
+      "owner": "credentialBroker"
+    },
+    { "method": "attestation/generate", "owner": "hostCapability" },
+    { "method": "applyPatchApproval", "owner": "deprecatedDiagnostic" },
+    { "method": "execCommandApproval", "owner": "deprecatedDiagnostic" }
+  ],
+  "limeExtensions": [
+    {
+      "method": "model/list/updated",
+      "owner": "model-provider + App Server",
+      "outlets": ["header", "globalNotice"]
+    }
+  ]
+}

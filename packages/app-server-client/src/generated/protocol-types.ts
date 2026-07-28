@@ -207,13 +207,12 @@ export const METHOD_MEMORY_STORE_REVIEW_LIST = "memoryStore/review/list";
 export const METHOD_MEMORY_STORE_REVIEW_RESOLVE = "memoryStore/review/resolve";
 export const METHOD_MEMORY_STORE_SEARCH = "memoryStore/search";
 export const METHOD_MODEL_LIST = "model/list";
+export const METHOD_MODEL_LIST_UPDATED = "model/list/updated";
 export const METHOD_MODEL_REROUTED = "model/rerouted";
 export const METHOD_MODEL_SAFETY_BUFFERING_UPDATED =
   "model/safetyBuffering/updated";
 export const METHOD_MODEL_VERIFICATION = "model/verification";
 export const METHOD_MODEL_PREFERENCES_LIST = "modelPreferences/list";
-export const METHOD_MODEL_PROVIDER_CAPABILITIES_READ =
-  "modelProvider/capabilities/read";
 export const METHOD_MODEL_PROVIDER_CATALOG_LIST = "modelProvider/catalog/list";
 export const METHOD_MODEL_PROVIDER_CREATE = "modelProvider/create";
 export const METHOD_MODEL_PROVIDER_DELETE = "modelProvider/delete";
@@ -1049,6 +1048,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "notification",
+    method: "model/list/updated",
+  },
+  {
+    kind: "notification",
     method: "model/rerouted",
   },
   {
@@ -1062,10 +1065,6 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "modelPreferences/list",
-  },
-  {
-    kind: "request",
-    method: "modelProvider/capabilities/read",
   },
   {
     kind: "request",
@@ -4582,11 +4581,6 @@ export type ClientRequest =
     }
   | {
       id: number | string;
-      method: "modelProvider/capabilities/read";
-      params: ModelProviderCapabilitiesReadParams;
-    }
-  | {
-      id: number | string;
       method: "turn/start";
       params: TurnStartParams;
     }
@@ -5572,7 +5566,7 @@ export interface InitializeResponse {
   serverInfo: ServerInfo;
 }
 
-export type InputModality = "audio" | "image" | "text";
+export type InputModality = "image" | "text";
 
 export interface ItemCompletedNotification {
   completedAtMs: number;
@@ -6334,7 +6328,6 @@ export interface MemoryStoreSearchResponse {
 export type Method =
   | "artifact/write"
   | "model/list"
-  | "modelProvider/capabilities/read"
   | "thread/approveGuardianDeniedAction"
   | "thread/archive"
   | "thread/backgroundTerminals/clean"
@@ -6372,6 +6365,8 @@ export type Method =
 export interface Model {
   additionalSpeedTiers: string[];
   availabilityNux?: ModelAvailabilityNux | null;
+  capabilitySnapshot: CapabilitySnapshot;
+  contextWindow?: number | null;
   defaultReasoningEffort: string;
   defaultServiceTier?: null | string;
   description: string;
@@ -6380,7 +6375,9 @@ export interface Model {
   id: string;
   inputModalities: InputModality[];
   isDefault: boolean;
+  maxOutputTokens?: number | null;
   model: string;
+  providerId: string;
   serviceTiers: ModelServiceTier[];
   supportedReasoningEfforts: ReasoningEffortOption[];
   supportsPersonality: boolean;
@@ -6464,6 +6461,11 @@ export interface ModelListResponse {
   nextCursor?: null | string;
 }
 
+export interface ModelListUpdatedNotification {
+  generation: number;
+  providerId?: null | string;
+}
+
 export interface ModelPreferencesListResponse {
   preferences?: unknown[];
 }
@@ -6478,14 +6480,6 @@ export interface ModelProviderAliasReadParams {
 
 export interface ModelProviderAliasReadResponse {
   config?: unknown;
-}
-
-export type ModelProviderCapabilitiesReadParams = Record<string, unknown>;
-
-export interface ModelProviderCapabilitiesReadResponse {
-  imageGeneration: boolean;
-  namespaceTools: boolean;
-  webSearch: boolean;
 }
 
 export interface ModelProviderCatalogListResponse {
@@ -7353,7 +7347,8 @@ export type ProtocolKind =
   | "openai_images"
   | "openai_responses"
   | "unknown"
-  | "vertex_gemini";
+  | "vertex_gemini"
+  | "xai_video";
 
 export interface ProviderInfo {
   apiHost: string;
@@ -7643,6 +7638,10 @@ export type ServerNotification =
   | {
       method: "model/rerouted";
       params: ModelReroutedNotification;
+    }
+  | {
+      method: "model/list/updated";
+      params: ModelListUpdatedNotification;
     }
   | {
       method: "model/verification";

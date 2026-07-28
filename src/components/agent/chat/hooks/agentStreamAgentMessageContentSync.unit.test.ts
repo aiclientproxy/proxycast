@@ -200,6 +200,51 @@ describe("agentStreamAgentMessageContentSync", () => {
     ]);
   });
 
+  it("hosted image completed item 应实时且 exactly once 合并到当前 Turn", () => {
+    const item: AgentThreadItem = {
+      id: "image-generation-hosted",
+      thread_id: "thread-1",
+      turn_id: "turn-image",
+      type: "image_generation",
+      status: "completed",
+      generation_status: "completed",
+      sequence: 21,
+      revised_prompt: "a green circle",
+      result: "aW1hZ2U=",
+      saved_path: "/tmp/green-circle.png",
+      started_at: "2026-07-27T10:01:00.000Z",
+      updated_at: "2026-07-27T10:01:01.000Z",
+      completed_at: "2026-07-27T10:01:01.000Z",
+    };
+    const initial: Message["contentParts"] = [
+      { type: "text", text: "图片已生成。" },
+    ];
+    const first = mergeAssistantAgentMessageContentPartsFromThreadItems({
+      items: [item],
+      parts: initial,
+      turnId: "turn-image",
+    });
+    const second = mergeAssistantAgentMessageContentPartsFromThreadItems({
+      items: [item],
+      parts: first,
+      turnId: "turn-image",
+    });
+
+    expect(second?.filter((part) => part.type === "media_reference")).toEqual([
+      expect.objectContaining({
+        reference: expect.objectContaining({
+          uri: "data:image/png;base64,aW1hZ2U=",
+          caption: "a green circle",
+          sourcePath: "/tmp/green-circle.png",
+        }),
+        metadata: expect.objectContaining({
+          source: "hosted_image_generation",
+          threadItemId: "image-generation-hosted",
+        }),
+      }),
+    ]);
+  });
+
   it("同步 content part 无实际变化时应保留 messages 数组引用", () => {
     const item: AgentThreadItem = {
       id: "agent-message-final",

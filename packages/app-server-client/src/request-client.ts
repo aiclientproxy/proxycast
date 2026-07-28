@@ -703,7 +703,6 @@ export interface AppServerClient {
   listModelPreferences(): protocol.JsonRpcRequest;
   readModelSyncState(): protocol.JsonRpcRequest;
   listModelProviders(): protocol.JsonRpcRequest;
-  readModelProviderCapabilities(): protocol.JsonRpcRequest;
   listModelProviderCatalog(): protocol.JsonRpcRequest;
   readModelProvider(
     params: protocol.ModelProviderReadParams,

@@ -10,6 +10,7 @@ import {
   readContentPartSequence,
 } from "../utils/contentPartTimeline";
 import {
+  imageGenerationContentPartFromThreadItem,
   mediaReferenceContentPartFromThreadItem,
   messageContentPartsFromAgentThreadItem,
 } from "./agentThreadMessageContentParts";
@@ -156,8 +157,11 @@ function upsertAgentMessageContentPart(params: {
   parts: MessageContentParts;
   threadItems?: readonly AgentThreadItem[];
 }): MessageContentParts {
-  if (params.item.type === "media") {
-    const nextPart = mediaReferenceContentPartFromThreadItem(params.item);
+  if (params.item.type === "media" || params.item.type === "image_generation") {
+    const nextPart =
+      params.item.type === "media"
+        ? mediaReferenceContentPartFromThreadItem(params.item)
+        : imageGenerationContentPartFromThreadItem(params.item);
     if (!nextPart) {
       return params.parts;
     }
@@ -254,6 +258,7 @@ export function mergeAssistantAgentMessageContentPartsFromThreadItems(params: {
     (item) =>
       (!normalizedTurnId || item.turn_id === normalizedTurnId) &&
       (item.type === "media" ||
+        item.type === "image_generation" ||
         (item.type === "agent_message" &&
           shouldSyncAgentMessageContentPartPhase(item.phase))),
   );

@@ -27,6 +27,53 @@ struct BlockingTurnBackend {
     release: Arc<Notify>,
 }
 
+struct RejectingThreadStartBackend;
+
+#[async_trait]
+impl ExecutionBackend for RejectingThreadStartBackend {
+    fn requires_provider_selection(&self) -> bool {
+        true
+    }
+
+    async fn preflight_thread_settings(
+        &self,
+        session: &app_server_protocol::AgentSession,
+        settings: &app_server_protocol::protocol::v2::ThreadSettings,
+    ) -> Result<(), RuntimeCoreError> {
+        Err(RuntimeCoreError::RouteRejected {
+            session_id: session.session_id.clone(),
+            provider: Some(settings.model_provider.clone()),
+            model: Some(settings.model.clone()),
+            category: app_server_protocol::RouteFailureCategory::ModelUnavailable,
+            reason_code: "provider_not_ready".to_string(),
+        })
+    }
+
+    async fn start_turn(
+        &self,
+        _request: ExecutionRequest,
+        _sink: &mut dyn RuntimeEventSink,
+    ) -> Result<(), RuntimeCoreError> {
+        Ok(())
+    }
+
+    async fn cancel_turn(
+        &self,
+        _request: CancelExecutionRequest,
+        _sink: &mut dyn RuntimeEventSink,
+    ) -> Result<(), RuntimeCoreError> {
+        Ok(())
+    }
+
+    async fn respond_action(
+        &self,
+        _request: ActionRespondRequest,
+        _sink: &mut dyn RuntimeEventSink,
+    ) -> Result<(), RuntimeCoreError> {
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl ExecutionBackend for BlockingTurnBackend {
     async fn start_turn(
@@ -142,7 +189,7 @@ async fn thread_start_returns_the_v2_thread_envelope() {
 }
 
 #[tokio::test]
-async fn thread_start_requires_an_explicit_model_and_provider() {
+async fn thread_start_rejects_partial_or_blank_explicit_route() {
     let (_temp, server) = test_server();
     initialize_server(&server).await;
 
@@ -158,6 +205,32 @@ async fn thread_start_requires_an_explicit_model_and_provider() {
         );
         assert!(response.get("result").is_none());
     }
+}
+
+#[tokio::test]
+async fn thread_start_preflights_route_before_persisting_thread() {
+    let temp = TempDir::new().expect("thread preflight temp dir");
+    let projection_store = Arc::new(
+        ProjectionStore::initialize(temp.path().join("projection.sqlite"))
+            .expect("thread preflight projection store"),
+    );
+    let runtime = RuntimeCore::with_backend(Arc::new(RejectingThreadStartBackend))
+        .with_projection_store(projection_store);
+    let server = AppServer::with_runtime(runtime);
+    initialize_server(&server).await;
+
+    let response = request_raw(
+        &server,
+        2,
+        METHOD_THREAD_START,
+        json!({"model": "model-a", "modelProvider": "provider-a"}),
+    )
+    .await;
+    assert!(response.get("error").is_some());
+    assert!(response.get("result").is_none());
+
+    let listed = request(&server, 3, METHOD_THREAD_LIST, json!({})).await;
+    assert_eq!(listed.pointer("/result/data"), Some(&json!([])));
 }
 
 #[tokio::test]

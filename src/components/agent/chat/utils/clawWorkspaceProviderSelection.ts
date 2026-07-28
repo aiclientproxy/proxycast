@@ -1,14 +1,7 @@
-import {
-  findConfiguredProviderBySelection,
-  loadConfiguredProviders,
-  type ConfiguredProvider,
-} from "@/hooks/useConfiguredProviders";
-import { loadProviderModels } from "@/hooks/useProviderModels";
+import { modelRegistryApi } from "@/lib/api/modelRegistry";
 import { isLikelyImageGenerationModelId } from "@/lib/imageGen/providerMatchers";
-import { resolveProviderModelLoadOptions } from "@/lib/model/providerModelLoadOptions";
 import { type EnhancedModelMetadata } from "@/lib/types/modelRegistry";
 import { filterModelsByTheme } from "./modelThemePolicy";
-import { resolveProviderModelCompatibility } from "./providerModelCompatibility";
 
 export interface ResolveClawWorkspaceProviderSelectionInput {
   currentProviderType?: string | null;
@@ -24,17 +17,6 @@ export interface ClawWorkspaceProviderSelection {
 
 function normalizeValue(value?: string | null): string {
   return (value || "").trim().toLowerCase();
-}
-
-function hasDeclaredProviderModels(provider: ConfiguredProvider): boolean {
-  return Boolean(provider.models?.some((modelId) => modelId.trim()));
-}
-
-function isSelectableProvider(provider: ConfiguredProvider): boolean {
-  return (
-    provider.authStatus !== "login_required" ||
-    hasDeclaredProviderModels(provider)
-  );
 }
 
 function isTextChatCandidateModel(model: EnhancedModelMetadata): boolean {
@@ -53,69 +35,6 @@ function isTextChatCandidateModel(model: EnhancedModelMetadata): boolean {
   return !isImageTaskModel || outputModalities.includes("text");
 }
 
-function resolveExactModelId(
-  models: EnhancedModelMetadata[],
-  targetModelId?: string | null,
-): string | null {
-  const normalizedTarget = normalizeValue(targetModelId);
-  if (!normalizedTarget) {
-    return null;
-  }
-
-  const matchedModel = models.find(
-    (model) => normalizeValue(model.id) === normalizedTarget,
-  );
-  return matchedModel?.id ?? null;
-}
-
-function resolvePreferredModelId(
-  provider: ConfiguredProvider,
-  models: EnhancedModelMetadata[],
-  currentModel?: string | null,
-  theme?: string,
-): string | null {
-  if (models.length === 0) {
-    return null;
-  }
-
-  const themedModels = filterModelsByTheme(theme, models).models;
-  const candidateModels = (
-    themedModels.length > 0 ? themedModels : models
-  ).filter(isTextChatCandidateModel);
-
-  if (candidateModels.length === 0) {
-    return null;
-  }
-
-  const resolveCompatibleModelId = (modelId?: string | null): string | null => {
-    const exactModelId = resolveExactModelId(candidateModels, modelId);
-    const compatibilityResult = resolveProviderModelCompatibility({
-      providerType: provider.key,
-      configuredProviderType: provider.type,
-      model: exactModelId ?? modelId ?? "",
-    });
-
-    return (
-      resolveExactModelId(candidateModels, compatibilityResult.model) ??
-      exactModelId
-    );
-  };
-
-  const retainedCurrentModel = resolveCompatibleModelId(currentModel);
-  if (retainedCurrentModel) {
-    return retainedCurrentModel;
-  }
-
-  for (const candidateModel of candidateModels) {
-    const compatibleModelId = resolveCompatibleModelId(candidateModel.id);
-    if (compatibleModelId) {
-      return compatibleModelId;
-    }
-  }
-
-  return candidateModels[0]?.id ?? null;
-}
-
 export async function resolveClawWorkspaceProviderSelection(
   input: ResolveClawWorkspaceProviderSelectionInput,
 ): Promise<ClawWorkspaceProviderSelection | null> {
@@ -125,57 +44,34 @@ export async function resolveClawWorkspaceProviderSelection(
     theme,
     allowProviderFallback = true,
   } = input;
-  const configuredProviders = await loadConfiguredProviders();
-  const executableProviders = configuredProviders.filter(isSelectableProvider);
-
-  if (executableProviders.length === 0) {
+  const catalog = await modelRegistryApi.getModelRegistry();
+  const themedModels = filterModelsByTheme(theme, catalog).models;
+  const candidates = (themedModels.length > 0 ? themedModels : catalog).filter(
+    isTextChatCandidateModel,
+  );
+  if (candidates.length === 0) {
     return null;
   }
 
-  const currentProvider = findConfiguredProviderBySelection(
-    executableProviders,
-    currentProviderType,
+  const normalizedProvider = normalizeValue(currentProviderType);
+  const normalizedModel = normalizeValue(currentModel);
+  const providerCandidates = normalizedProvider
+    ? candidates.filter(
+        (model) => normalizeValue(model.provider_id) === normalizedProvider,
+      )
+    : [];
+  const retained = providerCandidates.find(
+    (model) => normalizeValue(model.id) === normalizedModel,
   );
-  const orderedProviders = currentProvider
-    ? allowProviderFallback
-      ? [
-          currentProvider,
-          ...executableProviders.filter(
-            (provider) => provider.key !== currentProvider.key,
-          ),
-        ]
-      : [currentProvider]
-    : allowProviderFallback || !currentProviderType?.trim()
-      ? executableProviders
-      : [];
+  const selected =
+    retained ??
+    providerCandidates.find((model) => model.is_default) ??
+    providerCandidates[0] ??
+    (allowProviderFallback || !normalizedProvider
+      ? (candidates.find((model) => model.is_default) ?? candidates[0])
+      : null);
 
-  for (const provider of orderedProviders) {
-    const providerModels = await loadProviderModels(
-      provider,
-      resolveProviderModelLoadOptions({
-        providerId: provider.providerId,
-        providerType: provider.type,
-        apiHost: provider.apiHost,
-        hasApiKey: provider.hasApiKey,
-        hasDeclaredModels: hasDeclaredProviderModels(provider),
-      }),
-    );
-    const preferredModel = resolvePreferredModelId(
-      provider,
-      providerModels,
-      provider.key === currentProvider?.key ? currentModel : null,
-      theme,
-    );
-
-    if (!preferredModel) {
-      continue;
-    }
-
-    return {
-      providerType: provider.providerId ?? provider.key,
-      model: preferredModel,
-    };
-  }
-
-  return null;
+  return selected
+    ? { providerType: selected.provider_id, model: selected.id }
+    : null;
 }

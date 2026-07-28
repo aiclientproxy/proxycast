@@ -136,52 +136,35 @@ function imageDataUrl(imagePath) {
 }
 
 function turnFromRead(read, turnId) {
-  const turns = Array.isArray(read?.turns)
-    ? read.turns
-    : Array.isArray(read?.detail?.thread_read?.turns)
-      ? read.detail.thread_read.turns
-      : [];
-  return (
-    turns.find((turn) => (turn?.turnId || turn?.turn_id) === turnId) || null
-  );
+  const turns = Array.isArray(read?.thread?.turns) ? read.thread.turns : [];
+  return turns.find((turn) => turn?.id === turnId) || null;
 }
 
-async function waitForTerminal(
-  transport,
-  options,
-  sessionId,
-  turnId,
-  turnPromise,
-) {
+async function waitForTerminal(transport, options, threadId, turnId) {
   const startedAt = Date.now();
   let latestRead = null;
-  let startError = null;
-  void turnPromise.catch((error) => {
-    startError = error;
-  });
   while (Date.now() - startedAt < options.timeoutMs) {
     latestRead = await transport.invoke(options, "thread/read", {
-      sessionId,
-      historyLimit: 100,
+      threadId,
+      includeTurns: true,
     });
     const turn = turnFromRead(latestRead, turnId);
     const status = String(turn?.status || "").toLowerCase();
     if (TERMINAL_STATUSES.has(status)) return { read: latestRead, status };
-    if (startError) throw startError;
     await new Promise((resolve) => setTimeout(resolve, options.intervalMs));
   }
   let cancelStatus = "not_requested";
   try {
     await transport.invoke(options, "turn/interrupt", {
-      sessionId,
+      threadId,
       turnId,
     });
     cancelStatus = "requested";
     const cancelDeadline = Date.now() + 10_000;
     while (Date.now() < cancelDeadline) {
       latestRead = await transport.invoke(options, "thread/read", {
-        sessionId,
-        historyLimit: 100,
+        threadId,
+        includeTurns: true,
       });
       const status = String(
         turnFromRead(latestRead, turnId)?.status || "",
@@ -201,7 +184,7 @@ async function waitForTerminal(
     turnFromRead(latestRead, turnId)?.status || "missing",
   ).toLowerCase();
   throw new Error(
-    `multimodal turn timeout: session=${sessionId} turn=${turnId} expected=terminal actual=${actualStatus} timeoutMs=${options.timeoutMs} cancelStatus=${cancelStatus}`,
+    `multimodal turn timeout: thread=${threadId} turn=${turnId} expected=terminal actual=${actualStatus} timeoutMs=${options.timeoutMs} cancelStatus=${cancelStatus}`,
   );
 }
 
@@ -224,6 +207,64 @@ function providerWithImageInput(provider) {
   };
 }
 
+async function registerFixtureProvider(transport, options, fixture, suffix) {
+  const descriptor = providerWithImageInput(fixture.provider);
+  const created = await transport.invoke(options, "modelProvider/create", {
+    name: `Multimodal capture ${suffix}`,
+    providerType: "openai",
+    apiHost: descriptor.providerConfig.baseUrl,
+  });
+  const providerId = String(created?.provider?.id || "").trim();
+  assert(providerId, "modelProvider/create did not return provider.id");
+
+  await transport.invoke(options, "modelProvider/update", {
+    providerId,
+    enabled: true,
+    sortOrder: 0,
+    models: [
+      {
+        id: descriptor.modelPreference,
+        capability: descriptor.providerConfig.modelCapabilities,
+      },
+    ],
+  });
+  await transport.invoke(options, "modelProviderKey/create", {
+    providerId,
+    apiKey: descriptor.providerConfig.apiKey,
+    alias: "multimodal-capture-fixture",
+    replaceExisting: true,
+  });
+
+  return {
+    modelPreference: descriptor.modelPreference,
+    providerPreference: providerId,
+    providerName: descriptor.providerName,
+  };
+}
+
+async function assertCatalogRoute(transport, options, provider) {
+  const catalog = await transport.invoke(options, "model/list", {
+    includeHidden: true,
+    limit: 500,
+  });
+  const models = Array.isArray(catalog?.data) ? catalog.data : [];
+  const selected = models.find(
+    (model) =>
+      model?.providerId === provider.providerPreference &&
+      model?.model === provider.modelPreference,
+  );
+  assert(
+    selected,
+    `model/list did not expose provider=${provider.providerPreference} model=${provider.modelPreference}`,
+  );
+  assert(
+    Array.isArray(selected.inputModalities) &&
+      selected.inputModalities.includes("image"),
+    "model/list did not expose image input capability",
+  );
+  return selected;
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const workspaceRoot = fs.mkdtempSync(
@@ -239,14 +280,13 @@ async function main() {
         content: "MULTIMODAL_CAPTURE_OK",
       });
     }
-    const provider = liveProviderUsed
+    let provider = liveProviderUsed
       ? {
           providerPreference: options.providerPreference,
           providerName: options.providerPreference,
           modelPreference: options.modelPreference,
-          providerConfig: null,
         }
-      : providerWithImageInput(fixture.provider);
+      : null;
     const image = liveProviderUsed
       ? imageDataUrl(options.imagePath)
       : { dataUrl: PNG_DATA_URL, mediaType: "image/png" };
@@ -277,94 +317,55 @@ async function main() {
     assert(workspaceId, "workspace/ensure did not return workspace id");
 
     const suffix = `${Date.now()}-${process.pid}`;
-    const sessionId = `multimodal-capture-${suffix}`;
-    const turnId = `multimodal-capture-turn-${suffix}`;
-    await transport.invoke(options, "thread/start", {
-      sessionId,
-      threadId: sessionId,
-      appId: "desktop",
-      workspaceId,
-      workingDir: workspaceRoot,
-      businessObjectRef: {
-        kind: "agent.session",
-        id: `agent-session:${workspaceId}:${sessionId}`,
-        title: "Multimodal provider capture",
-        metadata: {
-          title: "Multimodal provider capture",
-          executionStrategy: "react",
-          runStartHooks: false,
-          harness: {
-            source: "smoke:agent-runtime-multimodal-capture",
-            scenarioId,
-          },
-        },
-      },
-    });
-    await transport.invoke(options, "thread/settings/update", {
-      threadId: sessionId,
-      modelProvider: provider.providerPreference,
+    if (!provider) {
+      provider = await registerFixtureProvider(
+        transport,
+        options,
+        fixture,
+        suffix,
+      );
+    }
+    const catalogModel = await assertCatalogRoute(transport, options, provider);
+    const started = await transport.invoke(options, "thread/start", {
+      cwd: workspaceRoot,
+      historyMode: "paginated",
       model: provider.modelPreference,
+      modelProvider: provider.providerPreference,
+      runtimeWorkspaceRoots: [workspaceRoot],
+      serviceName: "Multimodal provider capture",
+      threadSource: "appServer",
     });
+    const threadId = String(started?.thread?.id || "").trim();
+    const sessionId = String(started?.thread?.sessionId || "").trim();
+    assert(
+      threadId && sessionId,
+      "thread/start did not return canonical identity",
+    );
 
-    const turnPromise = transport.invoke(options, "turn/start", {
-      sessionId,
-      turnId,
-      input: {
-        text: prompt,
-        attachments: [
-          {
-            kind: "image",
-            uri: image.dataUrl,
-            metadata: { mediaType: image.mediaType },
-          },
-        ],
+    const turnResponse = await transport.invoke(options, "turn/start", {
+      threadId,
+      clientUserMessageId: `multimodal-capture-${suffix}`,
+      input: [
+        { type: "text", text: prompt },
+        { type: "image", url: image.dataUrl, detail: "auto" },
+      ],
+      cwd: workspaceRoot,
+      runtimeWorkspaceRoots: [workspaceRoot],
+      approvalPolicy: "never",
+      sandboxPolicy: "danger-full-access",
+      responsesapiClientMetadata: {
+        source: "smoke:agent-runtime-multimodal-capture",
+        scenarioId,
       },
-      runtimeOptions: {
-        stream: true,
-        eventName: `multimodal_capture_${suffix}`,
-        runtimeRequest: {
-          providerPreference: provider.providerPreference,
-          modelPreference: provider.modelPreference,
-          ...(provider.providerConfig
-            ? { providerConfig: provider.providerConfig }
-            : {}),
-          approvalPolicy: "never",
-          sandboxPolicy: "danger-full-access",
-          executionStrategy: "react",
-          workingDir: workspaceRoot,
-          workspaceRoot,
-          projectRoot: workspaceRoot,
-          webSearch: false,
-          searchMode: "disabled",
-          metadata: {
-            harness: {
-              source: "smoke:agent-runtime-multimodal-capture",
-              scenarioId,
-              provider_budget: {
-                max_provider_steps: 1,
-              },
-              generation: {
-                max_output_tokens: 128,
-                enable_thinking: false,
-              },
-              turn_policy: {
-                tool_surface: "direct_answer",
-              },
-            },
-          },
-        },
-      },
-      queueIfBusy: false,
-      skipPreSubmitResume: true,
     });
+    const turnId = String(turnResponse?.turn?.id || "").trim();
+    assert(turnId, "turn/start did not return canonical turn.id");
     const terminal = await waitForTerminal(
       transport,
       options,
-      sessionId,
+      threadId,
       turnId,
-      turnPromise,
     );
-    await turnPromise;
     const evidence = await transport.invoke(options, "evidence/export", {
       sessionId,
       turnId,
@@ -397,6 +398,8 @@ async function main() {
     let providerToolCount = null;
     let providerMaxOutputTokens = null;
     let providerThinkingEnabled = null;
+    let historyImagePayloadObserved = null;
+    let followUpTurnId = null;
     if (liveProviderUsed) {
       const visibleText = stringValues(terminal.read).join("\n");
       const normalized = visibleText.toLowerCase().replaceAll(/\s+/g, " ");
@@ -407,12 +410,48 @@ async function main() {
         `Agnes response did not identify the visible object and color: ${visibleText.slice(-2000)}`,
       );
     } else {
+      const followUp = await transport.invoke(options, "turn/start", {
+        threadId,
+        clientUserMessageId: `multimodal-follow-up-${suffix}`,
+        input: [
+          {
+            type: "text",
+            text: "Use the prior image context and answer with one short sentence.",
+          },
+        ],
+        cwd: workspaceRoot,
+        runtimeWorkspaceRoots: [workspaceRoot],
+        approvalPolicy: "never",
+        sandboxPolicy: "danger-full-access",
+        responsesapiClientMetadata: {
+          source: "smoke:agent-runtime-multimodal-capture",
+          scenarioId: `${scenarioId}-history`,
+        },
+      });
+      followUpTurnId = String(followUp?.turn?.id || "").trim();
+      assert(followUpTurnId, "follow-up turn/start did not return turn.id");
+      const followUpTerminal = await waitForTerminal(
+        transport,
+        options,
+        threadId,
+        followUpTurnId,
+      );
       assert(
-        fixture.requests.length === 1,
+        followUpTerminal.status === "completed",
+        `follow-up turn terminal status=${followUpTerminal.status}`,
+      );
+      assert(
+        !JSON.stringify(followUpTerminal.read).includes("base64,"),
+        "follow-up thread/read leaked hydrated history image payload",
+      );
+      assert(
+        fixture.requests.length === 2,
         `provider request count=${fixture.requests.length}`,
       );
       const urls = imageUrls(fixture.requests[0]?.body);
+      const historyUrls = imageUrls(fixture.requests[1]?.body);
       providerImagePayloadObserved = urls.includes(PNG_DATA_URL);
+      historyImagePayloadObserved = historyUrls.includes(PNG_DATA_URL);
       providerRequestPath = fixture.requests[0]?.path || null;
       providerToolCount = Array.isArray(fixture.requests[0]?.body?.tools)
         ? fixture.requests[0].body.tools.length
@@ -426,16 +465,8 @@ async function main() {
         "provider wire request did not contain hydrated image data",
       );
       assert(
-        providerToolCount === 0,
-        `direct-answer provider request exposed ${providerToolCount} tools`,
-      );
-      assert(
-        providerMaxOutputTokens === 128,
-        `provider max_tokens=${providerMaxOutputTokens}`,
-      );
-      assert(
-        providerThinkingEnabled === false,
-        `provider enable_thinking=${providerThinkingEnabled}`,
+        historyImagePayloadObserved,
+        "follow-up provider request did not hydrate the canonical history image",
       );
     }
 
@@ -450,11 +481,17 @@ async function main() {
           liveProviderUsed,
           provider: provider.providerPreference,
           model: provider.modelPreference,
+          catalogModelId: catalogModel.id,
+          threadId,
+          sessionId,
+          turnId,
           providerRequestPath,
           providerImagePayloadObserved,
           providerToolCount,
           providerMaxOutputTokens,
           providerThinkingEnabled,
+          historyImagePayloadObserved,
+          followUpTurnId,
           liveVisionAnswerObserved,
           canonicalSidecarReferenceObserved: true,
           readModelInlinePayloadAbsent: true,

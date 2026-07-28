@@ -14,7 +14,7 @@ use lime_core::models::anthropic::AnthropicMessagesRequest;
 use lime_core::models::openai::{
     ChatCompletionRequest, ChatMessage, ContentPart as OpenAiContentPart, MessageContent,
 };
-use lime_core::models::{RuntimeCredentialData, RuntimeProviderCredential};
+use lime_core::models::{RuntimeCredentialData, RuntimeProviderCredential, RuntimeProviderType};
 use model_provider::current_client::{
     CanonicalLlmEvent, CurrentProviderClient, CurrentProviderContent, CurrentProviderError,
     CurrentProviderMessage, CurrentProviderRequest, CurrentProviderRole, CurrentProviderTool,
@@ -73,12 +73,23 @@ fn provider_client_for_credential(
     model: &str,
 ) -> Result<CurrentProviderClient, CurrentProviderError> {
     let (provider_name, protocol, api_key, base_url) = match &credential.credential {
-        RuntimeCredentialData::OpenAIKey { api_key, base_url } => (
-            "openai",
-            RuntimeProviderProtocol::ChatCompletions,
-            api_key,
-            base_url,
-        ),
+        RuntimeCredentialData::OpenAIKey { api_key, base_url } => {
+            if credential.provider_type == RuntimeProviderType::AzureOpenai {
+                (
+                    "azure",
+                    RuntimeProviderProtocol::AzureResponses,
+                    api_key,
+                    base_url,
+                )
+            } else {
+                (
+                    "openai",
+                    RuntimeProviderProtocol::ChatCompletions,
+                    api_key,
+                    base_url,
+                )
+            }
+        }
         RuntimeCredentialData::ClaudeKey { api_key, base_url }
         | RuntimeCredentialData::AnthropicKey { api_key, base_url } => (
             "anthropic",
@@ -94,11 +105,14 @@ fn provider_client_for_credential(
             api_key,
             base_url,
         ),
-        RuntimeCredentialData::VertexKey { .. } => {
-            return Err(CurrentProviderError::invalid_request(
-                "Vertex credential has no current provider wire",
-            ));
-        }
+        RuntimeCredentialData::VertexKey {
+            api_key, base_url, ..
+        } => (
+            "gcpvertexai",
+            RuntimeProviderProtocol::VertexGemini,
+            api_key,
+            base_url,
+        ),
     };
 
     CurrentProviderClient::new(RuntimeProviderConfig {
@@ -108,6 +122,7 @@ fn provider_client_for_credential(
         api_key: Some(api_key.clone()),
         auth: RuntimeProviderAuth::ApiKey,
         base_url: base_url.clone(),
+        api_version: None,
         credential_uuid: credential.uuid.clone(),
         reasoning_effort: None,
         service_tier: None,
@@ -206,6 +221,7 @@ async fn collect_provider_output(
                     status: None,
                     classification,
                     retryable: retryable.unwrap_or(false),
+                    retry_after: None,
                 });
             }
             CanonicalLlmEvent::TextStart { .. }
@@ -1033,6 +1049,7 @@ mod tests {
                 status: None,
                 classification: Some(FailureClassification::Transport),
                 retryable: true,
+                retry_after: None,
             })])),
             "claude-sonnet",
             OutputFormat::Anthropic,

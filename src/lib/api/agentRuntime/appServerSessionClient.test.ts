@@ -104,14 +104,17 @@ describe("appServerSessionClient", () => {
     });
   });
 
-  it("create 缺少 current provider/model route 时应在 gateway fail closed", async () => {
+  it("create 缺少显式 route 时应由 App Server 解析 ready default", async () => {
     const appServerClient = appServerClientMock();
     const client = createAppServerSessionClient({ appServerClient });
 
-    await expect(client.createAgentRuntimeSession()).rejects.toThrow(
-      "thread/start requires current providerSelector and modelName",
-    );
-    expect(appServerClient.startSession).not.toHaveBeenCalled();
+    await expect(client.createAgentRuntimeSession()).resolves.toBe("session-1");
+    expect(appServerClient.startSession).toHaveBeenCalledWith({
+      cwd: undefined,
+      serviceName: "新对话",
+      threadSource: "appServer",
+      historyMode: "paginated",
+    });
   });
 
   it("create 收到半截 session 时应 fail closed", async () => {

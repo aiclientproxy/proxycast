@@ -617,6 +617,25 @@
       ],
       "type": "string"
     },
+    "ModelListUpdatedNotification": {
+      "properties": {
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "providerId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "generation"
+      ],
+      "type": "object"
+    },
     "ModelRerouteReason": {
       "enum": [
         "highRiskCyberActivity"
@@ -2608,6 +2627,22 @@
         },
         "params": {
           "$ref": "#/$defs/ModelReroutedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "model/list/updated",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ModelListUpdatedNotification"
         }
       },
       "required": [

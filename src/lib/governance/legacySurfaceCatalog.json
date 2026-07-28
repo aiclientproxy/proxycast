@@ -18,9 +18,7 @@
       "id": "retired-managed-project-path-migration-surface",
       "classification": "dead",
       "description": "已删除的非模型 managed project 启动迁移；旧 projects、workspace 与 session path 不导入、不复制、不回填",
-      "targets": [
-        "lime-rs/crates/core/src/database/migration_v6.rs"
-      ],
+      "targets": ["lime-rs/crates/core/src/database/migration_v6.rs"],
       "allowedPaths": []
     },
     {
@@ -2981,6 +2979,18 @@
       "allowedPaths": []
     },
     {
+      "id": "frontend-retired-model-provider-capabilities-read-method",
+      "classification": "dead",
+      "description": "不得恢复读取全局默认 Provider 静态能力的孤立客户端契约；多模型能力必须绑定 executable model 与当前 thread route",
+      "patterns": [
+        "modelProvider/capabilities/read",
+        "readModelProviderCapabilities",
+        "ModelProviderCapabilitiesRead"
+      ],
+      "includePathPrefixes": ["packages/app-server-client/src", "src/lib"],
+      "allowedPaths": []
+    },
+    {
       "id": "voice-audio-device-list-helper-surface",
       "classification": "dead",
       "description": "asrProvider 不得恢复无产品消费者的麦克风设备列表 helper；Inputbar dictation 直接使用 renderer mediaDevices 完成录音",
@@ -4839,6 +4849,23 @@
         "modelProviderKey/error/record"
       ],
       "includePathPrefixes": ["lime-rs/crates/app-server"],
+      "allowedPaths": []
+    },
+    {
+      "id": "rust-retired-model-provider-capabilities-read-method",
+      "classification": "dead",
+      "description": "App Server 不得恢复把全局默认 Provider 的静态能力冒充 per-thread route capability 的孤立方法",
+      "patterns": [
+        "modelProvider/capabilities/read",
+        "read_model_provider_capabilities",
+        "resolve_model_provider_capabilities",
+        "ModelProviderCapabilitiesRead"
+      ],
+      "includePathPrefixes": [
+        "lime-rs/crates/app-server-protocol",
+        "lime-rs/crates/app-server",
+        "lime-rs/crates/app-server-client"
+      ],
       "allowedPaths": []
     },
     {

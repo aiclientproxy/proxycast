@@ -79,12 +79,44 @@ fn protocol_support_rejects_chat_for_media_tasks() {
         Some("dashscope_images")
     );
     assert!(supports_video_generation_route_protocol(Some("fal")));
+    assert!(supports_video_generation_route_protocol(Some("xai_video")));
+    assert_eq!(
+        video_executor_mode_from_route_protocol(Some("fal")),
+        Some("fal_video_generation")
+    );
+    assert_eq!(
+        video_executor_mode_from_route_protocol(Some("xai_video")),
+        Some("xai_video_generation")
+    );
     assert!(!supports_image_generation_route_protocol(Some(
         "openai_chat"
     )));
     assert!(!supports_video_generation_route_protocol(Some(
         "openai_chat"
     )));
+}
+
+#[test]
+fn video_route_preflight_accepts_xai_video_protocol() {
+    let preflight = video_route_payload_preflight(&json!({
+        "resolvedRoute": {
+            "modelRef": {
+                "providerId": "xai-video",
+                "modelId": "grok-imagine-video"
+            },
+            "protocol": "xai_video"
+        }
+    }));
+
+    assert!(preflight.failure.is_none());
+    assert_eq!(
+        preflight
+            .payload_patch
+            .as_ref()
+            .and_then(|patch| patch.pointer("/modelRouteExecution/route/protocol"))
+            .and_then(Value::as_str),
+        Some("xai_video")
+    );
 }
 
 #[test]

@@ -20,8 +20,8 @@
       "clientNotification": 1
     },
     "byStatus": {
-      "implemented": 71,
-      "product-scope-excluded": 34,
+      "implemented": 70,
+      "product-scope-excluded": 35,
       "planned": 109
     }
   },
@@ -493,18 +493,18 @@
       "methods": ["memory/reset"]
     },
     {
-      "id": "model-provider-capabilities-current",
+      "id": "model-provider-capabilities-excluded",
       "direction": "clientRequest",
       "productArea": "model",
-      "status": "implemented",
-      "priority": "P1",
-      "owner": "model-provider + app-server protocol/v2 + app-server",
-      "counterpartRule": "same-name",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "model catalog + per-thread route capability owner",
+      "counterpartRule": "none",
       "evidence": [
-        "lime-rs/crates/model-provider/src/provider_capabilities.rs",
-        "lime-rs/crates/app-server-protocol/src/protocol/v2/model.rs",
-        "lime-rs/crates/app-server/tests/model_provider_capabilities_jsonrpc.rs"
+        "lime-rs/crates/app-server/src/runtime/model_providers.rs",
+        "internal/exec-plans/codex-alignment-v1-coordination-plan.md"
       ],
+      "rationale": "Codex reads one global configured provider. Lime selects provider/model per thread route, so a parameterless global capability read is ambiguous, had no product consumer, and would expose static metadata as current route truth.",
       "methods": ["modelProvider/capabilities/read"]
     },
     {

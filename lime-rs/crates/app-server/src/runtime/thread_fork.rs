@@ -137,12 +137,27 @@ impl RuntimeCore {
         durable_events.extend(token_usage_event);
         target_stored.events = merge_fork_history_events(target_stored.events, durable_events)?;
 
-        store
+        let copy_media_result = copy_fork_input_media(
+            &history,
+            self.sidecar_store.as_deref(),
+            &source_session_id,
+            &target_session_id,
+        );
+        if let Err(error) = copy_media_result {
+            clear_fork_sidecar(self.sidecar_store.as_deref(), &target_session_id);
+            return Err(error);
+        }
+
+        if let Err(error) = store
             .create_thread(CreateThreadParams {
                 thread: target.clone(),
             })
             .await
-            .map_err(store_error)?;
+            .map_err(store_error)
+        {
+            clear_fork_sidecar(self.sidecar_store.as_deref(), &target_session_id);
+            return Err(error);
+        }
         let persist_result = async {
             if let Some(changes) = history.changes.clone() {
                 store
@@ -169,6 +184,7 @@ impl RuntimeCore {
         .await;
         if let Err(error) = persist_result {
             let _ = store.delete_session_data(&target_session_id);
+            clear_fork_sidecar(self.sidecar_store.as_deref(), &target_session_id);
             return Err(error);
         }
 
@@ -329,6 +345,37 @@ fn is_paginated_history(metadata: &Value) -> bool {
         .or_else(|| metadata.get("history_mode"))
         .and_then(Value::as_str)
         .is_some_and(|mode| mode == "paginated")
+}
+
+fn copy_fork_input_media(
+    history: &ForkHistory,
+    sidecar_store: Option<&super::SidecarStore>,
+    source_session_id: &str,
+    target_session_id: &str,
+) -> Result<(), RuntimeCoreError> {
+    for item in history
+        .changes
+        .iter()
+        .flat_map(|changes| changes.changed_items.iter())
+    {
+        let ThreadItemPayload::UserMessage { content, .. } = &item.payload else {
+            continue;
+        };
+        super::input_media::copy_canonical_input_media_for_fork(
+            content,
+            sidecar_store,
+            source_session_id,
+            target_session_id,
+        )
+        .map_err(RuntimeCoreError::Backend)?;
+    }
+    Ok(())
+}
+
+fn clear_fork_sidecar(sidecar_store: Option<&super::SidecarStore>, target_session_id: &str) {
+    if let Some(store) = sidecar_store {
+        let _ = store.clear_session(target_session_id);
+    }
 }
 
 fn fork_token_usage_event(

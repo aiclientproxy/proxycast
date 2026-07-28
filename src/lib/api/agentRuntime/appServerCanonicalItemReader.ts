@@ -13,6 +13,33 @@ import {
 type ItemStatus = "in_progress" | "completed" | "failed";
 
 const TERMINAL_ITEM_STATUSES = new Set(["completed", "failed"]);
+const CANONICAL_ITEM_TYPE_RE = /^[a-z][A-Za-z0-9]*$/u;
+const SAFE_UNKNOWN_FIELD_NAME_RE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
+const SENSITIVE_UNKNOWN_FIELD_NAME_RE =
+  /(authorization|cookie|credential|password|secret|token|api[_-]?key)/iu;
+const UNKNOWN_ITEM_FIELD_NAME_LIMIT = 12;
+const INTERNAL_THREAD_ITEM_TYPES = new Set([
+  "agent_message",
+  "approval_request",
+  "command_execution",
+  "context_compaction",
+  "error",
+  "expert_profile_switch",
+  "extension",
+  "file_artifact",
+  "hook",
+  "image_generation",
+  "media",
+  "patch",
+  "request_user_input",
+  "subagent_activity",
+  "tool_call",
+  "turn_summary",
+  "unknown_item",
+  "user_message",
+  "warning",
+  "web_search",
+]);
 const TOOL_ITEM_TYPES = new Set([
   "mcpToolCall",
   "dynamicToolCall",
@@ -39,7 +66,7 @@ export function readCanonicalThreadItem(
   if (!status) {
     return null;
   }
-  const base = {
+  const lifecycle = {
     id,
     thread_id: route.threadId,
     turn_id: route.turnId,
@@ -48,6 +75,9 @@ export function readCanonicalThreadItem(
     started_at: event.timestamp,
     updated_at: event.timestamp,
     ...(isTerminalItemStatus(status) ? { completed_at: event.timestamp } : {}),
+  };
+  const base = {
+    ...lifecycle,
     ...(item.metadata && typeof item.metadata === "object"
       ? { metadata: item.metadata }
       : {}),
@@ -202,8 +232,28 @@ export function readCanonicalThreadItem(
         data: item,
       };
     default:
-      return null;
+      return CANONICAL_ITEM_TYPE_RE.test(type) &&
+        !INTERNAL_THREAD_ITEM_TYPES.has(type)
+        ? {
+            ...lifecycle,
+            type: "unknown_item",
+            upstream_type: type,
+            field_names: readUnknownItemFieldNames(item),
+          }
+        : null;
   }
+}
+
+function readUnknownItemFieldNames(item: Record<string, unknown>): string[] {
+  const names = Object.keys(item)
+    .filter((name) => name !== "id" && name !== "type")
+    .map((name) =>
+      SAFE_UNKNOWN_FIELD_NAME_RE.test(name) &&
+      !SENSITIVE_UNKNOWN_FIELD_NAME_RE.test(name)
+        ? name
+        : "[redacted]",
+    );
+  return [...new Set(names)].sort().slice(0, UNKNOWN_ITEM_FIELD_NAME_LIMIT);
 }
 
 function canonicalPlanMetadata(

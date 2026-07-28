@@ -1622,12 +1622,6 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "none",
     },
     {
-      name: "readModelProviderCapabilities",
-      method: protocol.METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
-      kind: "request",
-      params: "none",
-    },
-    {
       name: "listModelProviderCatalog",
       method: protocol.METHOD_MODEL_PROVIDER_CATALOG_LIST,
       kind: "request",

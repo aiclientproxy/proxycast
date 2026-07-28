@@ -27,7 +27,7 @@ impl MediaAppDataSource for LocalAppDataSource {
             .map_err(data_error)?;
         let _ = crate::media_task_worker::spawn_image_task_worker_for_created_task(
             &response,
-            crate::media_task_worker::ImageTaskWorkerContext::new(self.db.clone())
+            crate::media_task_worker::MediaTaskWorkerContext::new(self.db.clone())
                 .with_sidecar_store(self.sidecar_store.clone()),
         );
         Ok(response)
@@ -52,7 +52,13 @@ impl MediaAppDataSource for LocalAppDataSource {
         )
         .await
         .map_err(data_error)?;
-        media_tasks::create_video_media_task_artifact(params, route_assessment).map_err(data_error)
+        let response = media_tasks::create_video_media_task_artifact(params, route_assessment)
+            .map_err(data_error)?;
+        let _ = crate::media_task_worker::spawn_video_task_worker_for_created_task(
+            &response,
+            crate::media_task_worker::MediaTaskWorkerContext::new(self.db.clone()),
+        );
+        Ok(response)
     }
 
     async fn complete_audio_media_task_artifact(

@@ -1627,6 +1627,7 @@
   "agentChat.threadTimeline.turnSummary.title.completed": "현재 진행 상황",
   "agentChat.threadTimeline.turnSummary.title.running": "처리 중",
   "agentChat.threadTimeline.unsupportedItem.description": "이 실행 기록은 아직 대화 카드로 변환되지 않아 하위 프로토콜 상세 정보는 숨겼습니다.",
+  "agentChat.threadTimeline.unsupportedItem.fields": "기록 필드: {{fields}}",
   "agentChat.threadTimeline.unsupportedItem.title": "{{type}} 기록됨",
   "agentChat.tokenUsage.inputOutput": "입력 {{input}} / 출력 {{output}}",
   "agentChat.tokenUsage.promptCache.read": "캐시 {{count}}",

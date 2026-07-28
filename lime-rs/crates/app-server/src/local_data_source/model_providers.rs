@@ -5,7 +5,6 @@ use super::model_projection::provider_key_info_from_value;
 use super::values_from_serializable_vec;
 use crate::runtime_backend::configured_provider_readiness;
 use crate::RuntimeCoreError;
-use app_server_protocol::protocol::v2::ModelProviderCapabilitiesReadResponse;
 use app_server_protocol::ModelPreferencesListResponse;
 use app_server_protocol::ModelProviderAliasListResponse;
 use app_server_protocol::ModelProviderAliasReadParams;
@@ -129,6 +128,33 @@ pub(crate) fn model_catalog(
     Ok(catalogs)
 }
 
+pub(crate) fn has_model_provider_last_success(
+    db: &DbConnection,
+    api_key_provider_service: &ApiKeyProviderService,
+    model_registry_service: &ModelRegistryService,
+    provider_id: &str,
+) -> Result<bool, RuntimeCoreError> {
+    let Some(provider) = api_key_provider_service
+        .get_provider(db, provider_id)
+        .map_err(data_error)?
+    else {
+        return Ok(false);
+    };
+    let provider_id = provider.provider.id.as_str();
+    let api_host = provider.provider.api_host.as_str();
+    if api_host.trim().is_empty() {
+        return Ok(false);
+    }
+    model_registry_service
+        .get_cached_provider_models(
+            provider_id,
+            api_host,
+            Some(provider.provider.effective_provider_type()),
+        )
+        .map(|cached| cached.is_some())
+        .map_err(data_error)
+}
+
 fn append_model(
     models: &mut Vec<EnhancedModelMetadata>,
     seen: &mut HashSet<String>,
@@ -185,9 +211,21 @@ fn append_cached_provider_models(
         );
     }
 
-    if !has_enabled_key
-        && !ModelRegistryService::requires_api_key_for_runtime(provider_id, api_host, provider_type)
-    {
+    if has_enabled_key {
+        append_cached_models_for_access(
+            model_registry_service,
+            provider_id,
+            api_host,
+            provider_type,
+            ProviderModelCacheAccess::Keyless,
+            models,
+            seen,
+        );
+    } else if !ModelRegistryService::requires_api_key_for_runtime(
+        provider_id,
+        api_host,
+        provider_type,
+    ) {
         append_cached_models_for_access(
             model_registry_service,
             provider_id,
@@ -268,58 +306,6 @@ pub(crate) fn list_model_providers(
         .map(|provider| provider_info_from_value(&provider))
         .collect();
     Ok(ModelProviderListResponse { providers })
-}
-
-pub(crate) fn read_model_provider_capabilities(
-    db: &DbConnection,
-    api_key_provider_service: &ApiKeyProviderService,
-) -> Result<ModelProviderCapabilitiesReadResponse, RuntimeCoreError> {
-    let config = lime_core::config::load_config().map_err(data_error)?;
-    resolve_model_provider_capabilities(
-        db,
-        api_key_provider_service,
-        config.default_provider.trim(),
-    )
-}
-
-fn resolve_model_provider_capabilities(
-    db: &DbConnection,
-    api_key_provider_service: &ApiKeyProviderService,
-    provider_id: &str,
-) -> Result<ModelProviderCapabilitiesReadResponse, RuntimeCoreError> {
-    let unavailable = || ModelProviderCapabilitiesReadResponse {
-        namespace_tools: false,
-        image_generation: false,
-        web_search: false,
-    };
-    let provider_id = provider_id.trim();
-    if provider_id.is_empty() {
-        return Ok(unavailable());
-    }
-    let Some(provider) = api_key_provider_service
-        .get_provider(db, provider_id)
-        .map_err(data_error)?
-    else {
-        return Ok(unavailable());
-    };
-    if !configured_provider_readiness(&provider).ready {
-        return Ok(unavailable());
-    }
-    let provider_type = provider.provider.effective_provider_type().to_string();
-    let Some(capabilities) =
-        model_provider::provider_capabilities::ProviderCapabilities::from_provider_route(
-            &provider_type,
-            Some(&provider.provider.api_host),
-        )
-    else {
-        return Ok(unavailable());
-    };
-
-    Ok(ModelProviderCapabilitiesReadResponse {
-        namespace_tools: capabilities.namespace_tools,
-        image_generation: capabilities.image_generation,
-        web_search: capabilities.web_search,
-    })
 }
 
 pub(crate) fn list_model_provider_catalog(
@@ -1125,104 +1111,6 @@ mod tests {
         .expect("insert provider");
     }
 
-    #[test]
-    fn provider_capabilities_read_current_configured_provider_only() {
-        let db = setup_model_provider_db();
-        insert_typed_provider(&db, "bedrock-route", "aws-bedrock", true, &[]);
-        insert_typed_provider_with_host(
-            &db,
-            "openai-route",
-            "openai",
-            "https://api.openai.com/v1",
-            true,
-            &[],
-        );
-        let service = ApiKeyProviderService::new();
-        service
-            .add_api_key(&db, "openai-route", "sk-test", None, true)
-            .expect("add enabled OpenAI key");
-
-        let response = resolve_model_provider_capabilities(&db, &service, "openai-route")
-            .expect("read current provider capabilities");
-
-        assert!(!response.namespace_tools);
-        assert!(!response.image_generation);
-        assert!(!response.web_search);
-
-        insert_typed_provider_with_host(
-            &db,
-            "responses-route",
-            "openai-response",
-            "https://api.openai.com/v1",
-            true,
-            &[],
-        );
-        service
-            .add_api_key(&db, "responses-route", "sk-test", None, true)
-            .expect("add enabled Responses key");
-        let response = resolve_model_provider_capabilities(&db, &service, "responses-route")
-            .expect("read official Responses capabilities");
-        assert!(!response.namespace_tools);
-        assert!(response.image_generation);
-        assert!(response.web_search);
-
-        insert_typed_provider_with_host(
-            &db,
-            "custom-responses-route",
-            "openai-response",
-            "https://gateway.example.com/v1",
-            true,
-            &[],
-        );
-        service
-            .add_api_key(&db, "custom-responses-route", "sk-test", None, true)
-            .expect("add custom Responses key");
-        let response = resolve_model_provider_capabilities(&db, &service, "custom-responses-route")
-            .expect("read custom Responses capabilities");
-        assert!(!response.image_generation);
-        assert!(!response.web_search);
-
-        let response = resolve_model_provider_capabilities(&db, &service, "bedrock-route")
-            .expect("read unsupported current provider capabilities");
-
-        assert!(!response.namespace_tools);
-        assert!(!response.image_generation);
-        assert!(!response.web_search);
-    }
-
-    #[test]
-    fn provider_capabilities_fail_closed_without_a_ready_current_provider() {
-        let db = setup_model_provider_db();
-        insert_typed_provider(&db, "bedrock-route", "aws-bedrock", true, &[]);
-        insert_typed_provider_with_host(
-            &db,
-            "missing-key-route",
-            "openai",
-            "https://api.openai.com/v1",
-            true,
-            &[],
-        );
-        insert_typed_provider(&db, "disabled-route", "openai", false, &[]);
-        insert_typed_provider(&db, "media-route", "fal", true, &[]);
-        let service = ApiKeyProviderService::new();
-
-        for provider_id in [
-            "",
-            "missing-route",
-            "missing-key-route",
-            "disabled-route",
-            "bedrock-route",
-            "media-route",
-        ] {
-            let response = resolve_model_provider_capabilities(&db, &service, provider_id)
-                .expect("read unavailable current provider capabilities");
-
-            assert!(!response.namespace_tools, "provider_id={provider_id}");
-            assert!(!response.image_generation, "provider_id={provider_id}");
-            assert!(!response.web_search, "provider_id={provider_id}");
-        }
-    }
-
     #[tokio::test]
     async fn model_catalog_includes_enabled_provider_declared_models() {
         let db = setup_model_provider_db();
@@ -1408,6 +1296,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn model_catalog_includes_azure_responses_with_enabled_key() {
+        let db = setup_model_provider_db();
+        insert_typed_provider_with_host(
+            &db,
+            "ready-azure-route",
+            "azure-openai",
+            "https://resource.openai.azure.com",
+            true,
+            &["gpt-5.4"],
+        );
+        let api_key_provider_service = ApiKeyProviderService::new();
+        api_key_provider_service
+            .add_api_key(&db, "ready-azure-route", "azure-test", None, true)
+            .expect("add enabled Azure key");
+        let model_registry_service = ModelRegistryService::new(db.clone());
+
+        let catalogs = model_catalog(
+            &db,
+            &api_key_provider_service,
+            &model_registry_service,
+            crate::ModelCatalogQuery {
+                provider_id: Some("ready-azure-route".to_string()),
+            },
+        )
+        .expect("list Azure models with enabled key");
+
+        assert_eq!(catalogs.len(), 1);
+        assert_eq!(catalogs[0].models.len(), 1);
+        assert_eq!(catalogs[0].models[0].id, "gpt-5.4");
+    }
+
+    #[tokio::test]
     async fn model_catalog_includes_keyless_ollama_responses_adapter() {
         let db = setup_model_provider_db();
         insert_typed_provider_with_host(
@@ -1441,8 +1361,6 @@ mod tests {
     async fn model_catalog_skips_non_chat_and_unknown_provider_types() {
         let db = setup_model_provider_db();
         insert_typed_provider(&db, "media-route", "fal", true, &["fal-image"]);
-        insert_typed_provider(&db, "azure-route", "azure-openai", true, &["azure-model"]);
-        insert_typed_provider(&db, "vertex-route", "vertexai", true, &["vertex-model"]);
         insert_typed_provider(
             &db,
             "bedrock-route",
@@ -1472,7 +1390,62 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn keyless_fetch_models_uses_enabled_key_and_scopes_cache() {
+    async fn model_catalog_includes_ready_vertex_declared_models() {
+        let db = setup_model_provider_db();
+        let api_key_provider_service = ApiKeyProviderService::new();
+        let provider = api_key_provider_service
+            .add_custom_provider(
+                &db,
+                "Vertex route".to_string(),
+                ApiProviderType::Vertexai,
+                String::new(),
+                None,
+                Some("project-alpha".to_string()),
+                Some("us-central1".to_string()),
+                None,
+                None,
+            )
+            .expect("create Vertex provider");
+        api_key_provider_service
+            .update_provider(
+                &db,
+                &provider.id,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(vec![CoreProviderModelConfig::hint("gemini-2.5-flash")]),
+            )
+            .expect("declare Vertex model");
+        api_key_provider_service
+            .add_api_key(&db, &provider.id, "vertex-token", None, true)
+            .expect("add Vertex access token");
+        let model_registry_service = ModelRegistryService::new(db.clone());
+
+        let catalogs = model_catalog(
+            &db,
+            &api_key_provider_service,
+            &model_registry_service,
+            crate::ModelCatalogQuery {
+                provider_id: Some(provider.id.clone()),
+            },
+        )
+        .expect("list Vertex models");
+
+        assert_eq!(catalogs.len(), 1);
+        assert_eq!(catalogs[0].provider_id, provider.id);
+        assert_eq!(catalogs[0].models.len(), 1);
+        assert_eq!(catalogs[0].models[0].id, "gemini-2.5-flash");
+    }
+
+    #[tokio::test]
+    async fn keyless_fetch_models_uses_enabled_key_and_preserves_last_success() {
         let db = setup_model_provider_db();
         let api_key_provider_service = ApiKeyProviderService::new();
         let model_registry_service = ModelRegistryService::new(db.clone());
@@ -1509,10 +1482,13 @@ mod tests {
         assert_eq!(response.models.len(), 1);
         assert_eq!(response.models[0].id, "qwen3:14b");
         assert!(request.contains("scope-keyless-cache"));
-        assert!(model_registry_service
+        let last_success = model_registry_service
             .get_cached_provider_models(&provider.id, &api_host, Some(ApiProviderType::Ollama))
             .expect("read unscoped keyless cache")
-            .is_none());
+            .expect("provider last-success cache");
+        assert!(last_success.from_cache);
+        assert_eq!(last_success.models.len(), 1);
+        assert_eq!(last_success.models[0].id, "qwen3:14b");
         let cached = model_registry_service
             .fetch_models_from_api_with_hints(
                 &provider.id,

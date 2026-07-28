@@ -24,6 +24,7 @@ fn gemini_config(base_url: String) -> RuntimeProviderConfig {
         api_key: Some("gemini-test-key".to_string()),
         auth: RuntimeProviderAuth::ApiKey,
         base_url: Some(base_url),
+        api_version: None,
         credential_uuid: "credential-gemini".to_string(),
         reasoning_effort: None,
         service_tier: None,

@@ -297,6 +297,7 @@ pub enum ProtocolKind {
     AnthropicMessages,
     GeminiGenerateContent,
     Fal,
+    XaiVideo,
     BedrockConverse,
     VertexGemini,
     CodexResponses,

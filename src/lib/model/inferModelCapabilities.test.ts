@@ -5,6 +5,8 @@ import {
   getModelTaskFamilies,
   inferModelCapabilities,
   inferModelTaskFamilies,
+  inferOutputModalities,
+  inferRuntimeFeatures,
   inferVisionCapability,
 } from "./inferModelCapabilities";
 
@@ -79,6 +81,17 @@ describe("inferModelCapabilities", () => {
     ).toContain("reasoning");
   });
 
+  it("Azure OpenAI 应声明 Responses 而不是 Chat Completions", () => {
+    const features = inferRuntimeFeatures({
+      modelId: "gpt-5.4",
+      providerId: "azure-openai",
+      providerType: "azure-openai",
+    });
+
+    expect(features).toContain("responses_api");
+    expect(features).not.toContain("chat_completions_api");
+  });
+
   it("应将 gpt-images-2 识别为图片生成模型而非视觉理解模型", () => {
     expect(
       inferModelTaskFamilies({
@@ -117,6 +130,25 @@ describe("inferModelCapabilities", () => {
         output_modalities: ["image"],
       }),
     ).toEqual(["image"]);
+  });
+
+  it("应保留显式视频生成 taxonomy 且不伪装为聊天工具模型", () => {
+    const params = {
+      modelId: "fal-ai/video-test",
+      providerId: "fal",
+      explicitTaskFamilies: ["video_generation" as const],
+      explicitInputModalities: ["text" as const, "image" as const],
+      explicitOutputModalities: ["video" as const],
+    };
+
+    expect(inferModelTaskFamilies(params)).toEqual(["video_generation"]);
+    expect(inferOutputModalities(params)).toEqual(["video"]);
+    expect(inferModelCapabilities(params)).toMatchObject({
+      vision: false,
+      tools: false,
+      json_mode: false,
+      function_calling: false,
+    });
   });
 
   it("缺少显式 schema 时仍应把多模态聊天模型识别为视觉理解 + 对话", () => {

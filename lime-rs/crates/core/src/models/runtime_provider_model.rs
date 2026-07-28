@@ -127,6 +127,8 @@ pub enum RuntimeCredentialData {
     VertexKey {
         api_key: String,
         base_url: Option<String>,
+        project: String,
+        location: String,
         #[serde(default)]
         model_aliases: std::collections::HashMap<String, String>,
     },

@@ -23,6 +23,7 @@ fn ollama_config(base_url: String) -> RuntimeProviderConfig {
         api_key: None,
         auth: RuntimeProviderAuth::NoAuth,
         base_url: Some(base_url),
+        api_version: None,
         credential_uuid: String::new(),
         reasoning_effort: None,
         service_tier: None,

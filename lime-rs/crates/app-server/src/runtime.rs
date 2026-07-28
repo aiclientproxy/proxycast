@@ -82,6 +82,8 @@ mod projection_store;
 #[cfg(test)]
 mod projection_store_tests;
 pub(crate) mod provider_history;
+#[doc(hidden)]
+pub use provider_history::ProviderTurnHistory;
 mod queued_turn_intent;
 mod read_model;
 mod read_model_turn_usage;
@@ -211,7 +213,6 @@ use async_trait::async_trait;
 use lime_browser_runtime::{BrowserProfileScope, BrowserRuntimeManager};
 use lime_infra::telemetry::RequestLog;
 use lime_infra::telemetry::TelemetryStore;
-use model_provider::current_client::CurrentProviderMessage;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -423,7 +424,7 @@ pub trait ExecutionBackend: Send + Sync {
     async fn start_turn_with_provider_history(
         &self,
         request: ExecutionRequest,
-        _provider_history: Vec<CurrentProviderMessage>,
+        _provider_history: ProviderTurnHistory,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
         self.start_turn(request, sink).await
@@ -432,7 +433,7 @@ pub trait ExecutionBackend: Send + Sync {
     async fn start_turn_with_provider_history_and_session_input(
         &self,
         request: ExecutionRequest,
-        provider_history: Vec<CurrentProviderMessage>,
+        provider_history: ProviderTurnHistory,
         _pending_input: Option<RuntimeSessionInputHandle>,
         _cancellation_token: Option<CancellationToken>,
         sink: &mut dyn RuntimeEventSink,
@@ -494,6 +495,7 @@ pub struct RuntimeCore {
     pub(in crate::runtime) turn_driver_completions: turn_execution::RuntimeTurnDriverCompletions,
     mailbox_trigger_flights: agent_mailbox_delivery::MailboxTriggerFlights,
     route_recovery: model_providers::RouteRecoveryCoordinator,
+    catalog_refresh: model_providers::CatalogRefreshCoordinator,
     backend: Arc<dyn ExecutionBackend>,
     capability_source: Arc<dyn CapabilitySource>,
     pub(in crate::runtime) artifact_content_provider: Arc<dyn ArtifactContentProvider>,
@@ -598,6 +600,7 @@ impl RuntimeCore {
             turn_driver_completions: turn_execution::RuntimeTurnDriverCompletions::default(),
             mailbox_trigger_flights: agent_mailbox_delivery::MailboxTriggerFlights::default(),
             route_recovery: model_providers::RouteRecoveryCoordinator::default(),
+            catalog_refresh: model_providers::CatalogRefreshCoordinator::default(),
             backend,
             capability_source,
             artifact_content_provider,

@@ -46,6 +46,9 @@ fn media_task_binding_for_task(task_kind: ModelTaskKind) -> Option<MediaTaskBind
         ModelTaskKind::ImageGenerate => Some(MediaTaskBinding {
             binding_key: "mediaTaskArtifact/image/create",
         }),
+        ModelTaskKind::VideoGenerate => Some(MediaTaskBinding {
+            binding_key: "mediaTaskArtifact/video/create",
+        }),
         _ => None,
     }
 }
@@ -74,7 +77,7 @@ mod tests {
     };
 
     #[test]
-    fn image_route_execution_binding_delegates_to_current_media_worker() {
+    fn media_route_execution_binding_delegates_supported_tasks_to_current_worker() {
         let route = ResolvedModelRoute {
             model_ref: ModelRef {
                 provider_id: "openai-images".to_string(),
@@ -153,7 +156,7 @@ mod tests {
         assert!(binding["executor"].get("baseUrl").is_none());
         assert!(binding["executor"].get("path").is_none());
 
-        assert!(media_route_execution_binding(
+        let video_binding = media_route_execution_binding(
             &json!({
                 "model_task_request": {
                     "taskKind": "video_generate"
@@ -161,6 +164,10 @@ mod tests {
             }),
             &route,
         )
-        .is_none());
+        .expect("video binding");
+        assert_eq!(
+            video_binding["executor"]["bindingKey"].as_str(),
+            Some("mediaTaskArtifact/video/create")
+        );
     }
 }

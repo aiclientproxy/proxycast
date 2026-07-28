@@ -632,6 +632,10 @@
     },
     {
       "kind": "notification",
+      "method": "model/list/updated"
+    },
+    {
+      "kind": "notification",
       "method": "model/rerouted"
     },
     {
@@ -645,10 +649,6 @@
     {
       "kind": "request",
       "method": "modelPreferences/list"
-    },
-    {
-      "kind": "request",
-      "method": "modelProvider/capabilities/read"
     },
     {
       "kind": "request",
@@ -2215,8 +2215,7 @@
       "ModelAvailabilityNux",
       "ModelListParams",
       "ModelListResponse",
-      "ModelProviderCapabilitiesReadParams",
-      "ModelProviderCapabilitiesReadResponse",
+      "ModelListUpdatedNotification",
       "ModelRerouteReason",
       "ModelReroutedNotification",
       "ModelSafetyBufferingUpdatedNotification",

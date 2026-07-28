@@ -2,7 +2,6 @@ pub use app_server_protocol::app_server_method_catalog;
 pub use app_server_protocol::is_app_server_notification_method;
 pub use app_server_protocol::is_app_server_request_method;
 pub use app_server_protocol::protocol::v2::ServerNotification;
-pub use app_server_protocol::protocol::v2::METHOD_MODEL_PROVIDER_CAPABILITIES_READ;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_ARCHIVE;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN;
@@ -20,13 +19,13 @@ pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNARCHIVE;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNSUBSCRIBE;
 use app_server_protocol::protocol::v2::NOTIFICATION_METHODS;
 pub use app_server_protocol::protocol::v2::{
-    ModelProviderCapabilitiesReadParams, ModelProviderCapabilitiesReadResponse, SortDirection,
-    ThreadApproveGuardianDeniedActionParams, ThreadApproveGuardianDeniedActionResponse,
-    ThreadArchiveParams, ThreadArchiveResponse, ThreadBackgroundTerminal,
-    ThreadBackgroundTerminalsCleanParams, ThreadBackgroundTerminalsCleanResponse,
-    ThreadBackgroundTerminalsListParams, ThreadBackgroundTerminalsListResponse,
-    ThreadBackgroundTerminalsTerminateParams, ThreadBackgroundTerminalsTerminateResponse,
-    ThreadCompactStartParams, ThreadCompactStartResponse, ThreadDecrementElicitationParams,
+    SortDirection, ThreadApproveGuardianDeniedActionParams,
+    ThreadApproveGuardianDeniedActionResponse, ThreadArchiveParams, ThreadArchiveResponse,
+    ThreadBackgroundTerminal, ThreadBackgroundTerminalsCleanParams,
+    ThreadBackgroundTerminalsCleanResponse, ThreadBackgroundTerminalsListParams,
+    ThreadBackgroundTerminalsListResponse, ThreadBackgroundTerminalsTerminateParams,
+    ThreadBackgroundTerminalsTerminateResponse, ThreadCompactStartParams,
+    ThreadCompactStartResponse, ThreadDecrementElicitationParams,
     ThreadDecrementElicitationResponse, ThreadIncrementElicitationParams,
     ThreadIncrementElicitationResponse, ThreadInjectItemsParams, ThreadInjectItemsResponse,
     ThreadLoadedListParams, ThreadLoadedListResponse, ThreadSearchOccurrence,
@@ -1587,10 +1586,6 @@ impl AppServerClient {
         self.typed_request(typed::list_model_providers())
     }
 
-    pub fn read_model_provider_capabilities(&mut self) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::read_model_provider_capabilities())
-    }
-
     pub fn list_model_provider_catalog(&mut self) -> Result<JsonRpcRequest, ClientError> {
         self.typed_request(typed::list_model_provider_catalog())
     }
@@ -2570,13 +2565,6 @@ pub mod typed {
         TypedRequest::new(METHOD_MODEL_PROVIDER_LIST, serde_json::json!({}))
     }
 
-    pub fn read_model_provider_capabilities() -> TypedRequest<ModelProviderCapabilitiesReadParams> {
-        TypedRequest::new(
-            METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
-            ModelProviderCapabilitiesReadParams::default(),
-        )
-    }
-
     pub fn list_model_provider_catalog() -> TypedRequest<serde_json::Value> {
         TypedRequest::new(METHOD_MODEL_PROVIDER_CATALOG_LIST, serde_json::json!({}))
     }
@@ -3372,9 +3360,6 @@ mod tests {
         let preferences = client.list_model_preferences().expect("preferences");
         let sync_state = client.read_model_sync_state().expect("sync state");
         let providers = client.list_model_providers().expect("providers");
-        let provider_capabilities = client
-            .read_model_provider_capabilities()
-            .expect("provider capabilities");
         let catalog = client
             .list_model_provider_catalog()
             .expect("provider catalog");
@@ -3393,11 +3378,6 @@ mod tests {
         assert_eq!(preferences.method, METHOD_MODEL_PREFERENCES_LIST);
         assert_eq!(sync_state.method, METHOD_MODEL_SYNC_STATE_READ);
         assert_eq!(providers.method, METHOD_MODEL_PROVIDER_LIST);
-        assert_eq!(
-            provider_capabilities.method,
-            METHOD_MODEL_PROVIDER_CAPABILITIES_READ
-        );
-        assert_eq!(provider_capabilities.params, Some(json!({})));
         assert_eq!(catalog.method, METHOD_MODEL_PROVIDER_CATALOG_LIST);
         assert_eq!(alias.method, METHOD_MODEL_PROVIDER_ALIAS_READ);
         assert_eq!(

@@ -24,21 +24,37 @@ struct RouteHealthKey {
     provider: String,
     model: String,
     base_url: String,
+    api_version: String,
     protocol: &'static str,
     credential_scope: String,
 }
 
 impl RouteHealthKey {
     fn from_config(config: &RuntimeProviderConfig) -> Self {
+        let default_api_version =
+            if config.protocol == Some(RuntimeProviderProtocol::AzureResponses) {
+                "v1"
+            } else {
+                "default"
+            };
         Self {
             provider: config.provider_name.trim().to_ascii_lowercase(),
             model: config.model_name.trim().to_string(),
             base_url: normalized_base_url(config),
+            api_version: config
+                .api_version
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or(default_api_version)
+                .to_string(),
             protocol: match config.protocol {
                 Some(RuntimeProviderProtocol::ChatCompletions) => "chat_completions",
                 Some(RuntimeProviderProtocol::Responses) => "responses",
+                Some(RuntimeProviderProtocol::AzureResponses) => "azure_responses",
                 Some(RuntimeProviderProtocol::AnthropicMessages) => "anthropic_messages",
                 Some(RuntimeProviderProtocol::GeminiGenerateContent) => "gemini_generate_content",
+                Some(RuntimeProviderProtocol::VertexGemini) => "vertex_gemini",
                 None => "missing",
             },
             credential_scope: credential_scope(config),
@@ -85,6 +101,22 @@ impl CurrentProviderHealthRegistry {
         }
     }
 
+    /// Reads the health state for an exact resolved route without creating a
+    /// synthetic closed entry when the route has never executed.
+    pub fn snapshot_for(
+        &self,
+        config: &RuntimeProviderConfig,
+    ) -> Option<CurrentProviderHealthSnapshot> {
+        let key = RouteHealthKey::from_config(config);
+        let breaker = self
+            .breakers
+            .lock()
+            .expect("provider health registry mutex poisoned")
+            .get(&key)
+            .cloned()?;
+        Some(breaker.snapshot())
+    }
+
     #[cfg(test)]
     fn with_config(config: HealthConfig) -> Self {
         Self {
@@ -109,6 +141,8 @@ fn normalized_base_url(config: &RuntimeProviderConfig) -> String {
         Some(RuntimeProviderProtocol::GeminiGenerateContent) => {
             "https://generativelanguage.googleapis.com/v1beta"
         }
+        Some(RuntimeProviderProtocol::VertexGemini) => "vertex-project-endpoint-required",
+        Some(RuntimeProviderProtocol::AzureResponses) => "azure-resource-url-required",
         _ => "https://api.openai.com",
     };
     let value = config
@@ -197,6 +231,38 @@ enum CircuitState {
     HalfOpen,
 }
 
+/// Runtime circuit state for one exact provider route.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CurrentProviderHealthState {
+    Closed,
+    Open,
+    HalfOpen,
+}
+
+impl From<CircuitState> for CurrentProviderHealthState {
+    fn from(state: CircuitState) -> Self {
+        match state {
+            CircuitState::Closed => Self::Closed,
+            CircuitState::Open => Self::Open,
+            CircuitState::HalfOpen => Self::HalfOpen,
+        }
+    }
+}
+
+/// Sanitized runtime health facts for one exact provider route.
+///
+/// Window counts are available while the circuit is closed. The current
+/// breaker intentionally discards that window when it opens, so open and
+/// half-open snapshots report them as unknown instead of fabricating data.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CurrentProviderHealthSnapshot {
+    pub state: CurrentProviderHealthState,
+    pub window_sample_count: Option<usize>,
+    pub window_failure_count: Option<usize>,
+    pub probe_in_flight: bool,
+    pub retry_after: Option<Duration>,
+}
+
 impl CircuitState {
     fn as_str(self) -> &'static str {
         match self {
@@ -253,7 +319,6 @@ impl CircuitBreaker {
     }
 
     pub(crate) fn acquire(self: &Arc<Self>) -> Result<CircuitPermit, CircuitOpen> {
-        const HALF_OPEN_PROBE_BACKOFF: Duration = Duration::from_millis(50);
         let (result, transition, probe_admission, rejected_state) = {
             let mut inner = self
                 .inner
@@ -342,6 +407,50 @@ impl CircuitBreaker {
         result
     }
 
+    fn snapshot(&self) -> CurrentProviderHealthSnapshot {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("provider health circuit mutex poisoned");
+        let now = Instant::now();
+        let window_duration = inner.config.window_duration;
+        if let State::Closed { outcomes } = &mut inner.state {
+            prune_outcomes(outcomes, window_duration, now);
+        }
+
+        match &inner.state {
+            State::Closed { outcomes } => CurrentProviderHealthSnapshot {
+                state: CircuitState::Closed.into(),
+                window_sample_count: Some(outcomes.len()),
+                window_failure_count: Some(
+                    outcomes.iter().filter(|outcome| outcome.failed).count(),
+                ),
+                probe_in_flight: false,
+                retry_after: None,
+            },
+            State::Open { opened_at } => CurrentProviderHealthSnapshot {
+                state: CircuitState::Open.into(),
+                window_sample_count: None,
+                window_failure_count: None,
+                probe_in_flight: false,
+                retry_after: Some(
+                    inner
+                        .config
+                        .open_duration
+                        .saturating_sub(now.saturating_duration_since(*opened_at)),
+                ),
+            },
+            State::HalfOpen { probe_in_flight } => CurrentProviderHealthSnapshot {
+                state: CircuitState::HalfOpen.into(),
+                window_sample_count: None,
+                window_failure_count: None,
+                probe_in_flight: *probe_in_flight,
+                retry_after: probe_in_flight
+                    .then_some(HALF_OPEN_PROBE_BACKOFF.min(inner.config.open_duration)),
+            },
+        }
+    }
+
     fn record(&self, mode: PermitMode, success: bool) {
         let (transition, state) = {
             let mut inner = self
@@ -421,6 +530,8 @@ impl CircuitBreaker {
         }
     }
 }
+
+const HALF_OPEN_PROBE_BACKOFF: Duration = Duration::from_millis(50);
 
 fn prune_outcomes(outcomes: &mut VecDeque<Outcome>, window: Duration, now: Instant) {
     while outcomes
@@ -516,6 +627,7 @@ mod tests {
             api_key: Some("test-key".to_string()),
             auth: RuntimeProviderAuth::ApiKey,
             base_url: base_url.map(str::to_string),
+            api_version: None,
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: None,
             service_tier: None,
@@ -814,6 +926,90 @@ mod tests {
     }
 
     #[test]
+    fn registry_snapshot_is_exact_route_read_only_and_sanitized() {
+        let registry = CurrentProviderHealthRegistry::with_config(HealthConfig {
+            min_samples: 3,
+            error_rate_threshold: 1.0,
+            ..HealthConfig::default()
+        });
+        let mut route = route_config(
+            "openai",
+            "gpt-5-codex",
+            Some("https://gateway.example.com/v1?token=endpoint-secret"),
+            RuntimeProviderProtocol::Responses,
+        );
+        route.credential_uuid.clear();
+        route.api_key = Some("direct-key-secret".to_string());
+        let mut different_model = route.clone();
+        different_model.model_name = "gpt-5.5".to_string();
+
+        assert!(registry.snapshot_for(&route).is_none());
+        assert!(registry.snapshot_for(&different_model).is_none());
+        assert!(
+            registry
+                .breakers
+                .lock()
+                .expect("read breaker registry")
+                .is_empty(),
+            "snapshot must not create a synthetic closed route"
+        );
+
+        let breaker = registry.circuit_for(&route);
+        succeed(&breaker);
+        fail(&breaker);
+        let snapshot = registry.snapshot_for(&route).expect("known route snapshot");
+
+        assert_eq!(snapshot.state, CurrentProviderHealthState::Closed);
+        assert_eq!(snapshot.window_sample_count, Some(2));
+        assert_eq!(snapshot.window_failure_count, Some(1));
+        assert!(!snapshot.probe_in_flight);
+        assert_eq!(snapshot.retry_after, None);
+        assert!(registry.snapshot_for(&different_model).is_none());
+
+        let rendered = format!("{snapshot:?}");
+        assert!(!rendered.contains("gateway.example.com"));
+        assert!(!rendered.contains("endpoint-secret"));
+        assert!(!rendered.contains("direct-key-secret"));
+    }
+
+    #[test]
+    fn registry_snapshot_reports_open_and_half_open_retry_state() {
+        let registry = CurrentProviderHealthRegistry::with_config(HealthConfig {
+            min_samples: 1,
+            error_rate_threshold: 1.0,
+            open_duration: Duration::from_millis(80),
+            ..HealthConfig::default()
+        });
+        let route = route_config(
+            "openai",
+            "gpt-5-codex",
+            Some("https://api.openai.com/v1"),
+            RuntimeProviderProtocol::Responses,
+        );
+        let breaker = registry.circuit_for(&route);
+        fail(&breaker);
+
+        let open = registry.snapshot_for(&route).expect("open route snapshot");
+        assert_eq!(open.state, CurrentProviderHealthState::Open);
+        assert_eq!(open.window_sample_count, None);
+        assert_eq!(open.window_failure_count, None);
+        assert!(!open.probe_in_flight);
+        assert!(open
+            .retry_after
+            .is_some_and(|retry_after| retry_after <= Duration::from_millis(80)));
+
+        thread::sleep(Duration::from_millis(90));
+        let probe = breaker.acquire().expect("half-open probe");
+        let half_open = registry
+            .snapshot_for(&route)
+            .expect("half-open route snapshot");
+        assert_eq!(half_open.state, CurrentProviderHealthState::HalfOpen);
+        assert!(half_open.probe_in_flight);
+        assert_eq!(half_open.retry_after, Some(Duration::from_millis(50)));
+        drop(probe);
+    }
+
+    #[test]
     fn registry_reuses_breaker_for_normalized_route() {
         let registry = CurrentProviderHealthRegistry::with_config(HealthConfig {
             min_samples: 1,
@@ -836,6 +1032,30 @@ mod tests {
         let second_breaker = registry.circuit_for(&second);
 
         assert!(Arc::ptr_eq(&first_breaker, &second_breaker));
+    }
+
+    #[test]
+    fn azure_default_api_version_shares_health_with_explicit_v1() {
+        let registry = CurrentProviderHealthRegistry::with_config(HealthConfig::default());
+        let implicit = route_config(
+            "azure",
+            "gpt-5.4",
+            Some("https://resource.openai.azure.com"),
+            RuntimeProviderProtocol::AzureResponses,
+        );
+        let mut explicit = implicit.clone();
+        explicit.api_version = Some("v1".to_string());
+        let mut preview = implicit.clone();
+        preview.api_version = Some("2025-04-01-preview".to_string());
+
+        assert!(Arc::ptr_eq(
+            &registry.circuit_for(&implicit),
+            &registry.circuit_for(&explicit)
+        ));
+        assert!(!Arc::ptr_eq(
+            &registry.circuit_for(&implicit),
+            &registry.circuit_for(&preview)
+        ));
     }
 
     #[test]
@@ -877,6 +1097,37 @@ mod tests {
         assert!(registry.circuit_for(&different_model).acquire().is_ok());
         assert!(registry.circuit_for(&different_base).acquire().is_ok());
         assert!(registry.circuit_for(&different_protocol).acquire().is_ok());
+    }
+
+    #[test]
+    fn registry_does_not_share_health_between_gemini_api_key_and_vertex_protocols() {
+        let registry = CurrentProviderHealthRegistry::with_config(HealthConfig {
+            min_samples: 1,
+            error_rate_threshold: 1.0,
+            ..HealthConfig::default()
+        });
+        let gemini = route_config(
+            "google",
+            "gemini-2.5-pro",
+            Some("https://gateway.example.com"),
+            RuntimeProviderProtocol::GeminiGenerateContent,
+        );
+        let vertex = route_config(
+            "google",
+            "gemini-2.5-pro",
+            Some("https://gateway.example.com"),
+            RuntimeProviderProtocol::VertexGemini,
+        );
+        let gemini_breaker = registry.circuit_for(&gemini);
+        let mut permit = gemini_breaker
+            .acquire()
+            .expect("Gemini API key route starts closed");
+        permit.failure();
+
+        let vertex_breaker = registry.circuit_for(&vertex);
+        assert!(gemini_breaker.acquire().is_err());
+        assert!(vertex_breaker.acquire().is_ok());
+        assert!(!Arc::ptr_eq(&gemini_breaker, &vertex_breaker));
     }
 
     #[test]

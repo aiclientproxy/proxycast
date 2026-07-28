@@ -1,6 +1,5 @@
 use super::super::*;
 use crate::{ModelCatalogQuery, ProviderModelCatalog};
-use app_server_protocol::protocol::v2::ModelProviderCapabilitiesReadResponse;
 use async_trait::async_trait;
 
 #[async_trait]
@@ -25,6 +24,18 @@ impl ModelProviderAppDataSource for LocalAppDataSource {
         )
     }
 
+    async fn has_model_provider_last_success(
+        &self,
+        provider_id: &str,
+    ) -> Result<bool, RuntimeCoreError> {
+        model_providers::has_model_provider_last_success(
+            &self.db,
+            &self.api_key_provider_service,
+            &self.model_registry_service,
+            provider_id,
+        )
+    }
+
     async fn list_model_preferences(
         &self,
     ) -> Result<ModelPreferencesListResponse, RuntimeCoreError> {
@@ -37,12 +48,6 @@ impl ModelProviderAppDataSource for LocalAppDataSource {
 
     async fn list_model_providers(&self) -> Result<ModelProviderListResponse, RuntimeCoreError> {
         model_providers::list_model_providers(&self.db, &self.api_key_provider_service)
-    }
-
-    async fn read_model_provider_capabilities(
-        &self,
-    ) -> Result<ModelProviderCapabilitiesReadResponse, RuntimeCoreError> {
-        model_providers::read_model_provider_capabilities(&self.db, &self.api_key_provider_service)
     }
 
     async fn list_model_provider_catalog(

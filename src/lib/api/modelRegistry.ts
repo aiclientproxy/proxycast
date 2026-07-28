@@ -5,6 +5,7 @@
  */
 
 import { AppServerClient } from "@/lib/api/appServer";
+import { subscribeAppServerNotifications } from "@/lib/api/appServerEventBus";
 import {
   buildModelContextPolicy,
   type ModelContextPolicyInput,
@@ -49,6 +50,7 @@ import {
 } from "@/lib/model/modelTruncationPolicy";
 import type {
   EnhancedModelMetadata,
+  ModelCapabilityProvenance,
   ModelReasoningEffortLevel,
   ModelReasoningEffortSource,
   ModelReasoningEffortSupport,
@@ -57,6 +59,7 @@ import type {
   UserModelPreference,
 } from "@/lib/types/modelRegistry";
 import { decodeModelRouteSelector } from "../../../packages/app-server-client/src/model-route";
+import { modelListUpdatedServerNotification } from "../../../packages/app-server-client/src/server-notifications";
 import {
   METHOD_MODEL_LIST,
   METHOD_MODEL_PREFERENCES_LIST,
@@ -165,6 +168,22 @@ function reasoningEffortSupportFromUnknown(
   };
 }
 
+function capabilityProvenanceFromSnapshot(
+  value: unknown,
+  modelId: string,
+): ModelCapabilityProvenance {
+  if (
+    value === "canonical" ||
+    value === "provider_explicit" ||
+    value === "inferred_hint"
+  ) {
+    return value;
+  }
+  throw new Error(
+    `App Server model/list returned invalid capability source for ${modelId}`,
+  );
+}
+
 function toSnakeModelInfo(model: ModelInfo): EnhancedModelMetadata {
   return {
     id: model.id,
@@ -246,57 +265,70 @@ function toRegistryModel(model: Model): EnhancedModelMetadata {
       `App Server model/list returned invalid model id: ${model.id}`,
     );
   }
+  if (route.providerId !== model.providerId) {
+    throw new Error(
+      `App Server model/list returned mismatched provider for ${model.id}: ${model.providerId}`,
+    );
+  }
+  const snapshot = model.capabilitySnapshot;
+  if (!snapshot.capabilities) {
+    throw new Error(
+      `App Server model/list returned missing capabilities for ${model.id}`,
+    );
+  }
   const reasoningOptions = model.supportedReasoningEfforts.map((option) => ({
     id: option.reasoningEffort,
     value: option.reasoningEffort,
     label: option.description,
     description: option.description,
   }));
-  const reasoningEfforts = reasoningOptions.map((option) => option.value);
-  const reasoningSupported =
-    reasoningEfforts.some((effort) => effort !== "none") ||
-    model.defaultReasoningEffort !== "none";
-  const inputModalities =
-    model.inputModalities as EnhancedModelMetadata["input_modalities"];
+  const reasoningEffort = reasoningEffortSupportFromUnknown(
+    snapshot.capabilities.reasoningEffort,
+  );
+  const taskFamilies = (snapshot.taskFamilies ??
+    []) as EnhancedModelMetadata["task_families"];
+  const inputModalities = (snapshot.inputModalities ??
+    []) as EnhancedModelMetadata["input_modalities"];
+  const outputModalities = (snapshot.outputModalities ??
+    []) as EnhancedModelMetadata["output_modalities"];
+  const runtimeFeatures = (snapshot.runtimeFeatures ??
+    []) as EnhancedModelMetadata["runtime_features"];
   const policyInput = {
     serviceTiers: model.serviceTiers,
     defaultServiceTier: model.defaultServiceTier,
     defaultReasoningLevel: model.defaultReasoningEffort,
     supportedReasoningLevels: reasoningOptions,
-    inputModalities: model.inputModalities,
+    inputModalities,
   };
 
   return {
     id: route.modelId,
     display_name: model.displayName,
-    provider_id: route.providerId,
-    provider_name: route.providerId,
+    provider_id: model.providerId,
+    provider_name: model.providerId,
+    is_default: model.isDefault,
     family: null,
     tier: "pro",
     capabilities: {
-      vision: model.inputModalities.includes("image"),
-      reasoning: reasoningSupported,
-      reasoning_effort: {
-        supported: reasoningSupported,
-        levels: reasoningEfforts,
-        options: reasoningOptions,
-        default: model.defaultReasoningEffort,
-        source: "api",
-      },
+      vision: snapshot.capabilities.vision,
+      tools: snapshot.capabilities.tools,
+      streaming: snapshot.capabilities.streaming,
+      json_mode: snapshot.capabilities.jsonMode,
+      function_calling: snapshot.capabilities.functionCalling,
+      reasoning: snapshot.capabilities.reasoning,
+      reasoning_effort: reasoningEffort,
     },
-    capability_provenance: "inferred_hint",
+    capability_provenance: capabilityProvenanceFromSnapshot(
+      snapshot.source,
+      model.id,
+    ),
     picker_policy: buildCatalogModelPickerPolicy(model.hidden, policyInput),
     reasoning_policy: buildModelReasoningPolicy(policyInput),
     input_modality_policy: buildModelInputModalityPolicy(policyInput),
-    task_families: [
-      "chat",
-      ...(reasoningSupported ? (["reasoning"] as const) : []),
-      ...(model.inputModalities.includes("image")
-        ? (["vision_understanding"] as const)
-        : []),
-    ],
+    task_families: taskFamilies,
     input_modalities: inputModalities,
-    output_modalities: ["text"],
+    output_modalities: outputModalities,
+    runtime_features: runtimeFeatures,
     deployment_source: "user_cloud",
     management_plane: "local_settings",
     canonical_model_id: route.modelId,
@@ -304,8 +336,8 @@ function toRegistryModel(model: Model): EnhancedModelMetadata {
     alias_source: null,
     pricing: null,
     limits: {
-      context_length: null,
-      max_output_tokens: null,
+      context_length: model.contextWindow ?? null,
+      max_output_tokens: model.maxOutputTokens ?? null,
       requests_per_minute: null,
       tokens_per_minute: null,
     },
@@ -442,6 +474,27 @@ export function invalidateModelRegistryCache(): void {
   modelRegistryCache.clear();
   modelRegistryLoadingPromises.clear();
   invalidateAliasConfigCache();
+}
+
+export function subscribeModelRegistryUpdates(
+  onUpdate: (update: { generation: number; providerId: string | null }) => void,
+): () => void {
+  return subscribeAppServerNotifications({
+    onNotifications: (notifications) => {
+      let update: ReturnType<typeof modelListUpdatedServerNotification>;
+      for (const notification of notifications) {
+        update = modelListUpdatedServerNotification(notification) ?? update;
+      }
+      if (!update) {
+        return;
+      }
+      invalidateModelRegistryCache();
+      onUpdate({
+        generation: update.params.generation,
+        providerId: update.params.providerId ?? null,
+      });
+    },
+  });
 }
 
 function assertModelProviderIds(
@@ -755,6 +808,7 @@ export const modelRegistryApi = {
   hideModel,
   recordModelUsage,
   getModelSyncState,
+  subscribeModelRegistryUpdates,
   fetchProviderModelsAuto,
   normalizeFetchProviderModelsSource,
   getProviderAliasConfig,

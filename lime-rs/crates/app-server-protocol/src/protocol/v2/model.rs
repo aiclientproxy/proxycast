@@ -1,6 +1,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::protocol::v0::CapabilitySnapshot;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelListParams {
@@ -14,7 +16,6 @@ pub struct ModelListParams {
 pub enum InputModality {
     Text,
     Image,
-    Audio,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -47,10 +48,11 @@ pub struct ReasoningEffortOption {
     pub description: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Model {
     pub id: String,
+    pub provider_id: String,
     pub model: String,
     pub upgrade: Option<String>,
     pub upgrade_info: Option<ModelUpgradeInfo>,
@@ -61,6 +63,9 @@ pub struct Model {
     pub supported_reasoning_efforts: Vec<ReasoningEffortOption>,
     pub default_reasoning_effort: String,
     pub input_modalities: Vec<InputModality>,
+    pub capability_snapshot: CapabilitySnapshot,
+    pub context_window: Option<u32>,
+    pub max_output_tokens: Option<u32>,
     pub supports_personality: bool,
     pub additional_speed_tiers: Vec<String>,
     pub service_tiers: Vec<ModelServiceTier>,
@@ -68,7 +73,7 @@ pub struct Model {
     pub is_default: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelListResponse {
     pub data: Vec<Model>,
@@ -77,14 +82,9 @@ pub struct ModelListResponse {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct ModelProviderCapabilitiesReadParams {}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelProviderCapabilitiesReadResponse {
-    pub namespace_tools: bool,
-    pub image_generation: bool,
-    pub web_search: bool,
+pub struct ModelListUpdatedNotification {
+    pub generation: u64,
+    pub provider_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

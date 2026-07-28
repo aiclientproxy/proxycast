@@ -549,6 +549,7 @@ export function MessageListItem({
 
             <MessageImageAttachments
               images={msg.images}
+              sessionId={sessionId}
               onOpenImage={
                 onOpenMessagePreview
                   ? (attachment, index) =>

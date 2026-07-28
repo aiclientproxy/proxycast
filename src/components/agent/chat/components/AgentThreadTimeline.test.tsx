@@ -397,6 +397,37 @@ describe("AgentThreadTimeline", () => {
     expect(container.textContent).not.toContain("jsonrpc");
     expect(container.textContent).not.toContain("turn/start");
   });
+  it("未知 canonical Item 应显示上游类型和脱敏字段名", () => {
+    const container = renderTimeline([
+      {
+        ...createBaseItem("unknown-item-1", 1),
+        type: "unknown_item",
+        upstream_type: "futureCapability",
+        field_names: ["[redacted]", "label", "status"],
+      },
+    ]);
+
+    expect(container.textContent).toContain("记录了 futureCapability");
+    expect(container.textContent).toContain(
+      "记录字段：[redacted], label, status",
+    );
+    expect(container.textContent).not.toContain("unknown_item");
+  });
+  it("上下文整理项应作为低干扰信息行显示", () => {
+    const container = renderTimeline([
+      {
+        ...createBaseItem("context-compaction-1", 1),
+        type: "context_compaction",
+        stage: "completed",
+        trigger: "auto",
+        detail: "已整理较早的对话内容。",
+      },
+    ]);
+
+    expect(container.textContent).toContain("压了上下文");
+    expect(container.textContent).toContain("自动压缩");
+    expect(container.textContent).toContain("已整理较早的对话内容。");
+  });
   it("应把专家 profile switch 渲染为当前 Thread 内的运行事实", () => {
     const container = renderTimeline([
       {

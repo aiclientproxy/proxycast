@@ -2519,10 +2519,6 @@ pub const APP_SERVER_REQUEST_ACCESSES: &[AppServerRequestAccessSpec] = &[
         method: crate::protocol::v2::METHOD_THREAD_GOAL_GET,
         access: AppServerRequestAccess::SharedRead,
     },
-    AppServerRequestAccessSpec {
-        method: crate::protocol::v2::METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
-        access: AppServerRequestAccess::SharedRead,
-    },
 ];
 
 pub fn app_server_request_access(method: &str) -> AppServerRequestAccess {

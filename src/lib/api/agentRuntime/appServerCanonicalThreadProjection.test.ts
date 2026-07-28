@@ -333,32 +333,40 @@ describe("appServerCanonicalThreadProjection", () => {
     });
   });
 
-  it("遇到未知 Codex ThreadItem 时整个 thread/read fail closed", () => {
-    expect(
-      readCanonicalThreadDetail({
-        thread: {
-          id: "thread-unknown-item",
-          sessionId: "session-unknown-item",
-          createdAt: CREATED_AT_SECONDS,
-          updatedAt: CREATED_AT_SECONDS,
-          status: { type: "idle" },
-          turns: [
-            {
-              id: "turn-unknown-item",
-              status: "completed",
-              startedAt: CREATED_AT_SECONDS,
-              completedAt: CREATED_AT_SECONDS,
-              items: [
-                {
-                  id: "item-unknown",
-                  type: "futureUnknownItem",
-                },
-              ],
-            },
-          ],
-        },
+  it("遇到未知 Codex ThreadItem 时保留 thread/read 并投影安全诊断", () => {
+    const detail = readCanonicalThreadDetail({
+      thread: {
+        id: "thread-unknown-item",
+        sessionId: "session-unknown-item",
+        createdAt: CREATED_AT_SECONDS,
+        updatedAt: CREATED_AT_SECONDS,
+        status: { type: "idle" },
+        turns: [
+          {
+            id: "turn-unknown-item",
+            status: "completed",
+            startedAt: CREATED_AT_SECONDS,
+            completedAt: CREATED_AT_SECONDS,
+            items: [
+              {
+                id: "item-unknown",
+                type: "futureUnknownItem",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(detail?.items).toEqual([
+      expect.objectContaining({
+        id: "item-unknown",
+        type: "unknown_item",
+        upstream_type: "futureUnknownItem",
+        field_names: [],
       }),
-    ).toBeNull();
+    ]);
+    expect(detail?.messages).toEqual([]);
   });
 
   it("从 v2 Thread.extra 投影文章工作台与用户可见 artifacts", () => {

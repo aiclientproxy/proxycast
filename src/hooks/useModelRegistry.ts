@@ -391,11 +391,17 @@ export function useModelRegistry(
     return groups;
   }, [models]);
 
-  // 自动加载
+  // 自动加载并在模型目录变更后刷新已挂载视图
   useEffect(() => {
-    if (autoLoad) {
-      void loadModels();
+    if (!autoLoad) {
+      return;
     }
+
+    const unsubscribe = modelRegistryApi.subscribeModelRegistryUpdates(() => {
+      void loadModels(true);
+    });
+    void loadModels();
+    return unsubscribe;
   }, [autoLoad, loadModels]);
 
   return {

@@ -1,6 +1,6 @@
-use std::sync::Arc;
+mod support;
 
-use app_server::{AppServer, AppServerRuntimeFactory, ProjectionStore};
+use app_server::AppServer;
 use app_server_protocol::protocol::v2::{METHOD_THREAD_ARCHIVE, METHOD_THREAD_SHELL_COMMAND};
 use app_server_protocol::{
     error_codes, JsonRpcMessage, METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ,
@@ -13,41 +13,13 @@ use tokio::time::{sleep, timeout, Duration};
 #[tokio::test]
 async fn shell_command_runs_through_jsonrpc_and_projects_user_shell_items() {
     let temp = TempDir::new().expect("shell JSON-RPC temp dir");
-    let store = Arc::new(
-        ProjectionStore::initialize(temp.path().join("projection.sqlite"))
-            .expect("shell JSON-RPC projection store"),
-    );
-    let core = AppServerRuntimeFactory::runtime_backend_core().with_projection_store(store);
+    let core = support::runtime_core_with_chat_provider(&temp, "provider-test", "model-test");
     let server = AppServer::with_runtime(core.clone());
     initialize_server(&server).await;
 
-    let empty = request_raw(
-        &server,
-        2,
-        METHOD_THREAD_SHELL_COMMAND,
-        json!({"threadId": "missing", "command": "   "}),
-    )
-    .await;
-    assert_eq!(
-        empty.pointer("/error/code"),
-        Some(&json!(error_codes::INVALID_PARAMS))
-    );
-
-    let unknown = request_raw(
-        &server,
-        3,
-        METHOD_THREAD_SHELL_COMMAND,
-        json!({"threadId": "missing", "command": "printf unreachable"}),
-    )
-    .await;
-    assert_eq!(
-        unknown.pointer("/error/code"),
-        Some(&json!(error_codes::RUNTIME_ERROR))
-    );
-
     let started = request(
         &server,
-        4,
+        2,
         METHOD_THREAD_START,
         json!({
             "model": "model-test",
@@ -67,6 +39,30 @@ async fn shell_command_runs_through_jsonrpc_and_projects_user_shell_items() {
         .and_then(Value::as_str)
         .expect("session id")
         .to_string();
+
+    let empty = request_raw(
+        &server,
+        3,
+        METHOD_THREAD_SHELL_COMMAND,
+        json!({"threadId": thread_id, "command": "   "}),
+    )
+    .await;
+    assert_eq!(
+        empty.pointer("/error/code"),
+        Some(&json!(error_codes::INVALID_PARAMS))
+    );
+
+    let unknown = request_raw(
+        &server,
+        4,
+        METHOD_THREAD_SHELL_COMMAND,
+        json!({"threadId": "missing", "command": "printf unreachable"}),
+    )
+    .await;
+    assert_eq!(
+        unknown.pointer("/error/code"),
+        Some(&json!(error_codes::RUNTIME_ERROR))
+    );
 
     let mut outbound = server.subscribe_outbound_messages();
     let shell_lines = request_lines(

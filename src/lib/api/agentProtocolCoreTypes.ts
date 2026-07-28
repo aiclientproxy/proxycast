@@ -391,6 +391,12 @@ export interface AgentThreadContextCompactionItem extends AgentThreadItemBase {
   detail?: string;
 }
 
+export interface AgentThreadUnknownItem extends AgentThreadItemBase {
+  type: "unknown_item";
+  upstream_type: string;
+  field_names: string[];
+}
+
 export interface AgentThreadErrorItem extends AgentThreadItemBase {
   type: "error";
   message: string;
@@ -422,6 +428,7 @@ export type AgentThreadItem =
   | AgentThreadExpertProfileSwitchItem
   | AgentThreadWarningItem
   | AgentThreadContextCompactionItem
+  | AgentThreadUnknownItem
   | AgentThreadErrorItem
   | AgentThreadTurnSummaryItem;
 

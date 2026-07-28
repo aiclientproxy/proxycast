@@ -2,6 +2,9 @@ use super::support::*;
 use super::*;
 use crate::runtime::session_control::QueuedTurnResume;
 
+const INLINE_PNG_DATA_URL: &str =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+
 #[tokio::test]
 async fn queued_turn_blocks_then_resumes_after_active_turn_completes() {
     let core = RuntimeCore::default();
@@ -405,7 +408,7 @@ async fn read_session_projects_queued_turn_input_snapshot() {
                 text: "请继续执行排队任务，并保留完整输入".to_string(),
                 attachments: vec![AgentAttachment {
                     kind: "image".to_string(),
-                    uri: Some("file://queued.png".to_string()),
+                    uri: Some("https://example.com/queued.png".to_string()),
                     metadata: Some(json!({
                         "mediaType": "image/png",
                         "sourcePath": "/project/queued.png"
@@ -469,7 +472,10 @@ async fn read_session_projects_queued_turn_input_snapshot() {
     );
     assert_eq!(queued["image_count"], 1);
     assert_eq!(queued["attachments"][0]["kind"], "image");
-    assert_eq!(queued["attachments"][0]["uri"], "file://queued.png");
+    assert_eq!(
+        queued["attachments"][0]["uri"],
+        "https://example.com/queued.png"
+    );
     assert_eq!(
         queued["input_attachments"][0]["detail"],
         serde_json::Value::Null
@@ -484,6 +490,150 @@ async fn read_session_projects_queued_turn_input_snapshot() {
     assert_eq!(queued["inputCapabilityRoute"]["skillName"], "Code Review");
     assert_eq!(queued["position"], 0);
     assert_eq!(detail["thread_read"]["queued_turns"][0], *queued);
+}
+
+#[tokio::test]
+async fn queued_multimodal_input_stays_durable_and_hydrates_for_provider_resume() {
+    let backend = Arc::new(RecordingBackend::default());
+    let sidecar_root = tempfile::tempdir().expect("sidecar root");
+    let core = RuntimeCore::with_backend(backend.clone()).with_sidecar_store(Arc::new(
+        SidecarStore::new(sidecar_root.path()).expect("sidecar store"),
+    ));
+    core.start_session(AgentSessionStartParams {
+        session_id: Some("sess_queue_multimodal".to_string()),
+        thread_id: Some("thread_queue_multimodal".to_string()),
+        app_id: "agent-chat".to_string(),
+        workspace_id: Some("workspace-current".to_string()),
+        business_object_ref: None,
+        locale: None,
+    })
+    .expect("session");
+
+    core.start_turn(
+        AgentSessionTurnStartParams {
+            session_id: "sess_queue_multimodal".to_string(),
+            turn_id: Some("turn_active".to_string()),
+            input: AgentInput {
+                text: "active".to_string(),
+                attachments: Vec::new(),
+            },
+            runtime_options: None,
+            queue_if_busy: false,
+            skip_pre_submit_resume: false,
+        },
+        RuntimeHostContext::default(),
+    )
+    .await
+    .expect("active turn");
+
+    let queued = core
+        .start_turn(
+            AgentSessionTurnStartParams {
+                session_id: "sess_queue_multimodal".to_string(),
+                turn_id: Some("turn_queued_image".to_string()),
+                input: AgentInput {
+                    text: "inspect the queued image".to_string(),
+                    attachments: vec![AgentAttachment {
+                        kind: "image".to_string(),
+                        uri: Some(INLINE_PNG_DATA_URL.to_string()),
+                        metadata: Some(json!({"mediaType": "image/png"})),
+                    }],
+                },
+                runtime_options: None,
+                queue_if_busy: true,
+                skip_pre_submit_resume: false,
+            },
+            RuntimeHostContext::default(),
+        )
+        .await
+        .expect("queued image turn");
+    assert_eq!(queued.response.turn.status, AgentTurnStatus::Queued);
+
+    let read = core
+        .read_session_current(AgentSessionReadParams {
+            session_id: "sess_queue_multimodal".to_string(),
+            history_limit: None,
+            history_offset: None,
+            history_before_message_id: None,
+        })
+        .await
+        .expect("read queued image turn");
+    let read_value = serde_json::to_value(&read).expect("serialize queued read model");
+    let read_json = read_value.to_string();
+    assert!(
+        !read_json.contains("base64,"),
+        "read model leaked inline media"
+    );
+    let queued_snapshot = &read_value["detail"]["queued_turns"][0];
+    let durable_uri = queued_snapshot["attachments"][0]["uri"]
+        .as_str()
+        .expect("queued canonical image URI")
+        .to_string();
+    assert!(durable_uri.starts_with("sidecar://media/input-"));
+
+    let queued_events = core
+        .events_for_session("sess_queue_multimodal")
+        .expect("queued events");
+    assert!(
+        !serde_json::to_string(&queued_events)
+            .expect("serialize queued events")
+            .contains("base64,"),
+        "queued event stream leaked inline media"
+    );
+
+    core.append_external_runtime_events(
+        "sess_queue_multimodal",
+        Some("turn_active"),
+        vec![RuntimeEvent::new("turn.completed", json!({}))],
+    )
+    .expect("complete active turn");
+    let resumed = core
+        .resume_next_queued_turn_if_idle("sess_queue_multimodal", RuntimeHostContext::default())
+        .await
+        .expect("resume queued image turn");
+    assert!(matches!(
+        resumed,
+        QueuedTurnResume::Started { ref queued_turn_id, .. }
+            if queued_turn_id == "turn_queued_image"
+    ));
+
+    let requests = backend
+        .requests
+        .lock()
+        .expect("test backend requests mutex poisoned");
+    let provider_request = requests
+        .iter()
+        .find(|request| request.turn.turn_id == "turn_queued_image")
+        .expect("resumed provider request");
+    let provider_image = provider_request
+        .input
+        .images()
+        .next()
+        .expect("hydrated provider image");
+    assert_eq!(provider_image.uri, durable_uri);
+    assert_eq!(
+        provider_image.provider_data.as_deref(),
+        Some(INLINE_PNG_DATA_URL)
+    );
+    drop(requests);
+
+    let events = core
+        .events_for_session("sess_queue_multimodal")
+        .expect("resumed events");
+    let user_message = events
+        .iter()
+        .find(|event| {
+            event.turn_id.as_deref() == Some("turn_queued_image")
+                && event.event_type == "message.created"
+        })
+        .expect("durable queued user message");
+    let event_json = serde_json::to_string(user_message).expect("serialize user message");
+    assert!(
+        !event_json.contains("base64,"),
+        "durable event leaked inline media"
+    );
+    assert_eq!(user_message.payload["input"][1]["uri"], durable_uri);
+    assert_eq!(user_message.payload["outputRefs"][0]["ref"], durable_uri);
 }
 
 #[tokio::test]

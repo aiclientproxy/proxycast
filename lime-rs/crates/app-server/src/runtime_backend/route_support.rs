@@ -167,14 +167,27 @@ pub(super) fn runtime_error_from_route_failure(
 pub(super) fn runtime_route_exclusion(
     selection: &RuntimeModelSelection,
     direct_request: bool,
+    credential_ref: Option<&str>,
     error: &lime_agent::ReplyAttemptError,
 ) -> Option<ModelRouteExclusion> {
-    if direct_request || !error.is_reroutable_provider_failure() {
+    if direct_request {
         return None;
     }
-    Some(ModelRouteExclusion::new(
-        selection.provider.clone(),
-        selection.model.clone(),
-        error.classification()?,
-    ))
+    let classification = error.classification()?;
+    match credential_ref {
+        Some(credential_ref) if error.is_credential_reroutable_provider_failure() => {
+            Some(ModelRouteExclusion::for_credential(
+                selection.provider.clone(),
+                selection.model.clone(),
+                credential_ref,
+                classification,
+            ))
+        }
+        None if error.is_reroutable_provider_failure() => Some(ModelRouteExclusion::new(
+            selection.provider.clone(),
+            selection.model.clone(),
+            classification,
+        )),
+        _ => None,
+    }
 }

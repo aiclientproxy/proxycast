@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use app_server::{
     ActionRespondRequest, AppServer, CancelExecutionRequest, EventLogWriter, ExecutionBackend,
-    ExecutionRequest, ProjectionStore, RuntimeCore, RuntimeCoreError, RuntimeEvent,
-    RuntimeEventSink,
+    ExecutionRequest, ProjectionStore, ProviderTurnHistory, RuntimeCore, RuntimeCoreError,
+    RuntimeEvent, RuntimeEventSink,
 };
 use app_server_protocol::protocol::v2::{METHOD_THREAD_COMPACT_START, METHOD_THREAD_FORK};
 use app_server_protocol::{
@@ -32,21 +32,21 @@ impl ExecutionBackend for CompactionForkBackend {
         request: ExecutionRequest,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
-        self.start_turn_with_provider_history(request, Vec::new(), sink)
+        self.start_turn_with_provider_history(request, ProviderTurnHistory::default(), sink)
             .await
     }
 
     async fn start_turn_with_provider_history(
         &self,
         request: ExecutionRequest,
-        provider_history: Vec<CurrentProviderMessage>,
+        provider_history: ProviderTurnHistory,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
         let call = self.calls.fetch_add(1, Ordering::SeqCst);
         self.histories
             .lock()
             .expect("compaction fork histories mutex poisoned")
-            .push(provider_history);
+            .push(provider_history.messages_for_route("fixture-provider", "fixture-model"));
         let item_id = format!("answer-{}", request.turn.turn_id);
         let text = format!("source assistant {call}");
         sink.emit(RuntimeEvent::new("turn.started", json!({})))?;

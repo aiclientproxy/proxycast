@@ -11,6 +11,60 @@ import {
 import { orderStreamingContentPartsForDisplay } from "../components/streamingContentPartOrder";
 
 describe("agentChatHistoryThreadItems", () => {
+  it("只有 hosted image item 的历史也应恢复 assistant 图片消息", () => {
+    const messages = hydrateSessionDetailMessagesFromThreadItems(
+      {
+        id: "hosted-image-history",
+        created_at: 1,
+        updated_at: 2,
+        messages: [],
+        turns: [
+          {
+            id: "turn-hosted-image",
+            thread_id: "thread-hosted-image",
+            status: "completed",
+          },
+        ],
+        items: [
+          {
+            id: "image-generation-hosted",
+            type: "image_generation",
+            thread_id: "thread-hosted-image",
+            turn_id: "turn-hosted-image",
+            sequence: 1,
+            status: "completed",
+            generation_status: "completed",
+            revised_prompt: "a green circle",
+            result: "aW1hZ2U=",
+            saved_path: "/tmp/green-circle.png",
+            started_at: "2026-07-27T10:00:00.000Z",
+            updated_at: "2026-07-27T10:00:01.000Z",
+            completed_at: "2026-07-27T10:00:01.000Z",
+          },
+        ],
+      } as unknown as AgentSessionDetail,
+      "hosted-image-history",
+    );
+
+    expect(messages).toEqual([
+      expect.objectContaining({
+        role: "assistant",
+        content: "",
+        runtimeTurnId: "turn-hosted-image",
+        contentParts: [
+          expect.objectContaining({
+            type: "media_reference",
+            reference: expect.objectContaining({
+              uri: "data:image/png;base64,aW1hZ2U=",
+              caption: "a green circle",
+              sourcePath: "/tmp/green-circle.png",
+            }),
+          }),
+        ],
+      }),
+    ]);
+  });
+
   it("canonical declined FileChange 历史应保留精确 batch 与拒绝状态", () => {
     const messages = hydrateSessionDetailMessagesFromThreadItems(
       {

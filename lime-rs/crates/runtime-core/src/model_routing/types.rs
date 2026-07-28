@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use std::fmt;
 
 use crate::FailureClassification;
 
@@ -62,13 +63,14 @@ pub struct RoutingAttempt {
     pub runtime_failure: Option<ModelRouteExclusion>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ModelRouteExclusion {
     pub provider: String,
     pub model: String,
     pub reason_code: &'static str,
     pub classification: FailureClassification,
     pub retryable: bool,
+    credential_ref: Option<String>,
 }
 
 impl ProviderReadiness {
@@ -235,10 +237,39 @@ impl ModelRouteExclusion {
             reason_code: runtime_failure_reason_code(classification),
             classification,
             retryable: true,
+            credential_ref: None,
         }
     }
 
-    fn to_payload(&self) -> Value {
+    pub fn for_credential(
+        provider: impl Into<String>,
+        model: impl Into<String>,
+        credential_ref: impl Into<String>,
+        classification: FailureClassification,
+    ) -> Self {
+        Self {
+            provider: provider.into(),
+            model: model.into(),
+            reason_code: runtime_failure_reason_code(classification),
+            classification,
+            retryable: true,
+            credential_ref: Some(credential_ref.into()),
+        }
+    }
+
+    pub fn matches_route(&self, provider: &str, model: &str) -> bool {
+        self.provider == provider && self.model == model
+    }
+
+    pub fn excludes_entire_route(&self) -> bool {
+        self.credential_ref.is_none()
+    }
+
+    pub fn credential_ref(&self) -> Option<&str> {
+        self.credential_ref.as_deref()
+    }
+
+    pub(super) fn to_payload(&self) -> Value {
         json!({
             "provider": self.provider,
             "model": self.model,
@@ -247,6 +278,27 @@ impl ModelRouteExclusion {
             "classification": self.classification,
             "retryable": self.retryable,
         })
+    }
+}
+
+impl fmt::Debug for ModelRouteExclusion {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ModelRouteExclusion")
+            .field("provider", &self.provider)
+            .field("model", &self.model)
+            .field("reason_code", &self.reason_code)
+            .field("classification", &self.classification)
+            .field("retryable", &self.retryable)
+            .field(
+                "scope",
+                &if self.credential_ref.is_some() {
+                    "credential"
+                } else {
+                    "route"
+                },
+            )
+            .finish()
     }
 }
 

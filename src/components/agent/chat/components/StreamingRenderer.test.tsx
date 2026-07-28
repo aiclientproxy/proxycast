@@ -340,6 +340,36 @@ describe("StreamingRenderer", () => {
     );
   });
 
+  it("hosted image media reference 应直接展示图片且不泄露 base64 文本", () => {
+    const uri = "data:image/png;base64,aW1hZ2U=";
+    const { container } = renderHarness({
+      content: "",
+      contentParts: [
+        {
+          type: "media_reference",
+          reference: {
+            kind: "image",
+            uri,
+            mimeType: "image/png",
+            caption: "a green circle",
+          },
+          metadata: {
+            source: "hosted_image_generation",
+            threadItemId: "image-generation-hosted",
+          },
+        },
+      ],
+    });
+
+    expect(
+      container
+        .querySelector('[data-testid="streaming-media-reference-image"]')
+        ?.getAttribute("src"),
+    ).toBe(uri);
+    expect(container.textContent).toContain("a green circle");
+    expect(container.textContent).not.toContain(uri);
+  });
+
   it("应过滤 assistant 正文中的工具协议残留", () => {
     const { container } = renderHarness({
       content:

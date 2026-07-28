@@ -561,12 +561,17 @@ function renderGroupItemDetails(
     );
   }
 
+  const unsupportedType =
+    item.type === "unknown_item" ? item.upstream_type : item.type;
+  const unknownFieldNames =
+    item.type === "unknown_item" ? item.field_names : [];
+
   return (
-    <div className="py-1.5">
+    <div className="py-1.5" data-testid="timeline-unsupported-item">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-sm font-medium text-foreground">
           {t("agentChat.threadTimeline.unsupportedItem.title", {
-            type: item.type,
+            type: unsupportedType,
           })}
         </span>
         <Badge
@@ -579,6 +584,13 @@ function renderGroupItemDetails(
       <div className="text-sm leading-6 text-muted-foreground">
         {t("agentChat.threadTimeline.unsupportedItem.description")}
       </div>
+      {unknownFieldNames.length > 0 ? (
+        <div className="mt-1 text-xs leading-5 text-muted-foreground">
+          {t("agentChat.threadTimeline.unsupportedItem.fields", {
+            fields: unknownFieldNames.join(", "),
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -184,6 +184,7 @@ mod tests {
                 reasoning_effort: None,
             },
             service_tier: None,
+            api_version: None,
             route_protocol: None,
             credential_ref: None,
             direct_provider_config: None,

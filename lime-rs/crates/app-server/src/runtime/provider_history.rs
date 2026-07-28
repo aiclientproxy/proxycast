@@ -18,13 +18,65 @@ use std::collections::HashMap;
 
 const PROVIDER_TOOL_OUTPUT_MAX_BYTES: usize = 10_000;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProviderRouteIdentity {
+    provider: String,
+    model: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ProviderTurnHistory {
+    messages: Vec<CurrentProviderMessage>,
+    previous_route: Option<ProviderRouteIdentity>,
+}
+
+impl ProviderTurnHistory {
+    pub fn messages_for_route(&self, provider: &str, model: &str) -> Vec<CurrentProviderMessage> {
+        let mut messages = self.messages.clone();
+        let Some(previous) = self.previous_route.as_ref() else {
+            return messages;
+        };
+        let current = ProviderRouteIdentity {
+            provider: provider.to_string(),
+            model: model.to_string(),
+        };
+        if previous != &current {
+            messages.push(model_switch_message(previous, &current));
+        }
+        messages
+    }
+
+    #[cfg(test)]
+    pub(crate) fn into_messages(self) -> Vec<CurrentProviderMessage> {
+        self.messages
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.messages.is_empty()
+    }
+}
+
 /// Current turn input is supplied separately to the provider. It remains durable and visible in
 /// the canonical Item log, but must not be submitted twice in the same provider request.
+#[cfg(test)]
 pub(in crate::runtime) fn provider_history_excluding_current_turn_input(
     stored: &StoredSession,
     sidecar_store: Option<&super::SidecarStore>,
     turn_id: &str,
 ) -> Result<Vec<CurrentProviderMessage>, super::RuntimeCoreError> {
+    let history =
+        provider_turn_history_excluding_current_turn_input(stored, sidecar_store, turn_id)?;
+    let Some(current) = current_turn_provider_route(stored, turn_id) else {
+        return Ok(history.into_messages());
+    };
+    Ok(history.messages_for_route(&current.provider, &current.model))
+}
+
+pub(in crate::runtime) fn provider_turn_history_excluding_current_turn_input(
+    stored: &StoredSession,
+    sidecar_store: Option<&super::SidecarStore>,
+    turn_id: &str,
+) -> Result<ProviderTurnHistory, super::RuntimeCoreError> {
     let (replacement_history, events) = provider_history_source(stored);
     let events = events
         .into_iter()
@@ -47,7 +99,113 @@ pub(in crate::runtime) fn provider_history_excluding_current_turn_input(
         })
         .map_err(super::RuntimeCoreError::Backend)?,
     );
-    Ok(messages)
+    Ok(ProviderTurnHistory {
+        messages,
+        previous_route: latest_completed_provider_route(&stored.events, turn_id),
+    })
+}
+
+fn model_switch_message(
+    previous: &ProviderRouteIdentity,
+    current: &ProviderRouteIdentity,
+) -> CurrentProviderMessage {
+    CurrentProviderMessage::developer(vec![CurrentProviderContent::Text(render_model_switch(
+        previous, current,
+    ))])
+}
+
+fn latest_completed_provider_route(
+    events: &[AgentEvent],
+    current_turn_id: &str,
+) -> Option<ProviderRouteIdentity> {
+    for terminal in events.iter().rev().filter(|event| {
+        event.event_type == "turn.completed" && event.turn_id.as_deref() != Some(current_turn_id)
+    }) {
+        let Some(turn_id) = terminal.turn_id.as_deref() else {
+            continue;
+        };
+        if let Some(route) = events
+            .iter()
+            .rev()
+            .find(|event| {
+                event.event_type == "routing.decision.made"
+                    && event.turn_id.as_deref() == Some(turn_id)
+                    && event.sequence <= terminal.sequence
+            })
+            .and_then(provider_route_from_routing_event)
+        {
+            return Some(route);
+        }
+    }
+    None
+}
+
+fn provider_route_from_routing_event(event: &AgentEvent) -> Option<ProviderRouteIdentity> {
+    let decision = event
+        .payload
+        .get("routingDecision")
+        .unwrap_or(&event.payload);
+    provider_route_from_fields(decision, "selectedProvider", "selectedModel")
+}
+
+#[cfg(test)]
+fn current_turn_provider_route(
+    stored: &StoredSession,
+    turn_id: &str,
+) -> Option<ProviderRouteIdentity> {
+    let route = stored
+        .turn_runtime_options
+        .get(turn_id)?
+        .runtime_metadata()?
+        .get("agentControlRoute")?;
+    if route.get("schemaVersion").and_then(Value::as_u64) != Some(2) {
+        return None;
+    }
+    provider_route_from_fields(route, "providerPreference", "modelPreference")
+}
+
+fn provider_route_from_fields(
+    value: &Value,
+    provider_key: &str,
+    model_key: &str,
+) -> Option<ProviderRouteIdentity> {
+    let field = |key| {
+        value
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+    };
+    Some(ProviderRouteIdentity {
+        provider: field(provider_key)?,
+        model: field(model_key)?,
+    })
+}
+
+fn render_model_switch(
+    previous: &ProviderRouteIdentity,
+    current: &ProviderRouteIdentity,
+) -> String {
+    format!(
+        "<model_switch>\n\
+The user was previously using a different model. Please continue the conversation according to the following instructions:\n\n\
+Continue to follow the current system and developer instructions.\n\
+<previous_route>\n  <provider>{}</provider>\n  <model>{}</model>\n</previous_route>\n\
+<current_route>\n  <provider>{}</provider>\n  <model>{}</model>\n</current_route>\n\
+</model_switch>",
+        escape_xml_text(&previous.provider),
+        escape_xml_text(&previous.model),
+        escape_xml_text(&current.provider),
+        escape_xml_text(&current.model),
+    )
+}
+
+fn escape_xml_text(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 fn provider_history_source(
@@ -562,6 +720,47 @@ mod tests {
         }
     }
 
+    fn turn_event(sequence: u64, turn_id: &str, event_type: &str, payload: Value) -> AgentEvent {
+        let mut event = event(sequence, event_type, payload);
+        event.turn_id = Some(turn_id.to_string());
+        event
+    }
+
+    fn route_options(provider: &str, model: &str) -> app_server_protocol::RuntimeOptions {
+        app_server_protocol::RuntimeOptions {
+            runtime_request: Some(app_server_protocol::RuntimeRequest {
+                metadata: Some(json!({
+                    "agentControlRoute": {
+                        "schemaVersion": 2,
+                        "providerPreference": provider,
+                        "modelPreference": model
+                    }
+                })),
+                ..app_server_protocol::RuntimeRequest::default()
+            }),
+            ..app_server_protocol::RuntimeOptions::default()
+        }
+    }
+
+    fn routing_decision(sequence: u64, turn_id: &str, provider: &str, model: &str) -> AgentEvent {
+        turn_event(
+            sequence,
+            turn_id,
+            "routing.decision.made",
+            json!({
+                "selectedProvider": provider,
+                "selectedModel": model
+            }),
+        )
+    }
+
+    fn message_text(message: &CurrentProviderMessage) -> &str {
+        let [CurrentProviderContent::Text(text)] = &message.content[..] else {
+            panic!("expected one text content part");
+        };
+        text
+    }
+
     #[test]
     fn replacement_history_is_used_before_bounded_tail() {
         let mut tail = event(
@@ -650,6 +849,144 @@ mod tests {
             &future[0].content[..],
             [CurrentProviderContent::Text(text)] if text == "continue the active goal"
         ));
+    }
+
+    #[test]
+    fn completed_route_switch_appends_codex_developer_context_after_durable_history() {
+        let mut stored = stored_with_events(vec![
+            turn_event(
+                1,
+                "turn-1",
+                "message.created",
+                json!({"input": [{"type": "text", "text": "old input"}]}),
+            ),
+            routing_decision(2, "turn-1", "provider<&", "model-a>"),
+            turn_event(3, "turn-1", "turn.completed", json!({})),
+        ]);
+        stored.turn_runtime_options.insert(
+            "turn-2".to_string(),
+            route_options("provider-b>", "model<&b"),
+        );
+
+        let history = provider_history_excluding_current_turn_input(&stored, None, "turn-2")
+            .expect("provider history");
+
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].role, CurrentProviderRole::User);
+        assert_eq!(history[1].role, CurrentProviderRole::Developer);
+        let text = message_text(&history[1]);
+        assert!(
+            text.starts_with("<model_switch>\nThe user was previously using a different model.")
+        );
+        assert!(text.contains("<provider>provider&lt;&amp;</provider>"));
+        assert!(text.contains("<model>model-a&gt;</model>"));
+        assert!(text.contains("<provider>provider-b&gt;</provider>"));
+        assert!(text.contains("<model>model&lt;&amp;b</model>"));
+        assert!(text.ends_with("</model_switch>"));
+    }
+
+    #[test]
+    fn same_route_does_not_inject_for_effort_or_service_tier_changes() {
+        let mut stored = stored_with_events(vec![
+            routing_decision(1, "turn-1", "provider-a", "model-a"),
+            turn_event(2, "turn-1", "turn.completed", json!({})),
+        ]);
+        let mut options = route_options("provider-a", "model-a");
+        let request = options.runtime_request_mut();
+        request.reasoning_effort = Some("high".to_string());
+        request.service_tier = Some("fast".to_string());
+        stored
+            .turn_runtime_options
+            .insert("turn-2".to_string(), options);
+
+        let history = provider_history_excluding_current_turn_input(&stored, None, "turn-2")
+            .expect("provider history");
+
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn failed_turn_route_never_becomes_previous_model_truth() {
+        let mut stored = stored_with_events(vec![
+            routing_decision(1, "turn-1", "provider-a", "model-a"),
+            turn_event(2, "turn-1", "turn.completed", json!({})),
+            routing_decision(3, "turn-2", "provider-b", "model-b"),
+            turn_event(4, "turn-2", "turn.failed", json!({})),
+        ]);
+        stored
+            .turn_runtime_options
+            .insert("turn-3".to_string(), route_options("provider-a", "model-a"));
+
+        let history = provider_history_excluding_current_turn_input(&stored, None, "turn-3")
+            .expect("provider history");
+
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn typed_history_retargets_model_switch_for_each_actual_route_attempt() {
+        let stored = stored_with_events(vec![
+            routing_decision(1, "turn-1", "provider-a", "model-a"),
+            turn_event(2, "turn-1", "turn.completed", json!({})),
+        ]);
+        let history = provider_turn_history_excluding_current_turn_input(&stored, None, "turn-2")
+            .expect("typed provider history");
+
+        assert!(history
+            .messages_for_route("provider-a", "model-a")
+            .is_empty());
+        let rerouted = history.messages_for_route("provider-b", "model-b");
+        assert_eq!(rerouted.len(), 1);
+        let text = message_text(&rerouted[0]);
+        assert!(text.contains("<previous_route>"));
+        assert!(text.contains("<provider>provider-a</provider>"));
+        assert!(text.contains("<current_route>"));
+        assert!(text.contains("<provider>provider-b</provider>"));
+        assert!(text.contains("<model>model-b</model>"));
+    }
+
+    #[test]
+    fn model_switch_context_is_not_repeated_after_switched_turn_completes() {
+        let mut stored = stored_with_events(vec![
+            routing_decision(1, "turn-1", "provider-a", "model-a"),
+            turn_event(2, "turn-1", "turn.completed", json!({})),
+        ]);
+        stored
+            .turn_runtime_options
+            .insert("turn-2".to_string(), route_options("provider-b", "model-b"));
+        assert_eq!(
+            provider_history_excluding_current_turn_input(&stored, None, "turn-2")
+                .expect("switch history")
+                .len(),
+            1
+        );
+
+        stored
+            .events
+            .push(routing_decision(3, "turn-2", "provider-b", "model-b"));
+        stored
+            .events
+            .push(turn_event(4, "turn-2", "turn.completed", json!({})));
+        stored
+            .turn_runtime_options
+            .insert("turn-3".to_string(), route_options("provider-b", "model-b"));
+
+        let history = provider_history_excluding_current_turn_input(&stored, None, "turn-3")
+            .expect("post-switch history");
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn first_turn_without_completed_route_does_not_inject_model_switch_context() {
+        let mut stored = stored_with_events(Vec::new());
+        stored
+            .turn_runtime_options
+            .insert("turn-1".to_string(), route_options("provider-a", "model-a"));
+
+        let history = provider_history_excluding_current_turn_input(&stored, None, "turn-1")
+            .expect("first turn history");
+
+        assert!(history.is_empty());
     }
 
     fn canonical_tool_event(
@@ -1012,13 +1349,22 @@ mod tests {
         let root = tempfile::tempdir().expect("sidecar root");
         let store =
             super::super::sidecar_store::SidecarStore::new(root.path()).expect("sidecar store");
-        let input = vec![
-            AgentInput::text("describe it"),
-            AgentInput::Image {
-                uri: PNG_DATA_URL.to_string(),
-                detail: None,
-            },
-        ];
+        let input = super::super::input_media::prepare_runtime_input(
+            vec![
+                AgentInput::text("describe it"),
+                AgentInput::Image {
+                    uri: PNG_DATA_URL.to_string(),
+                    detail: None,
+                },
+            ],
+            Some(&store),
+            "session-1",
+        )
+        .expect("prepare durable image input")
+        .durable;
+        assert!(!serde_json::to_string(&input)
+            .expect("serialize durable image input")
+            .contains("base64,"));
         let messages = messages_from_events_with_provider_input(
             &[event(1, "message.created", json!({ "input": input }))],
             |input| {

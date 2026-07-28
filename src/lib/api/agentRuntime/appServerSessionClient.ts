@@ -79,15 +79,11 @@ export function createAppServerSessionClient({
     const sessionScope = normalizeCreateSessionScope(workspaceId, options);
     const normalizedName = name?.trim() || "新对话";
     const route = readThreadStartRoute(options?.metadata);
-    if (!route) {
-      throw new Error(
-        "thread/start requires current providerSelector and modelName",
-      );
-    }
     const response = await appServerClient.startSession({
       cwd: sessionScope.workingDir,
-      model: route.model,
-      modelProvider: route.modelProvider,
+      ...(route
+        ? { model: route.model, modelProvider: route.modelProvider }
+        : {}),
       serviceName: normalizedName,
       threadSource: "appServer",
       historyMode: "paginated",

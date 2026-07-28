@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { safeInvoke } from "@/lib/dev-bridge";
+import type { AppServerEventBusSubscription } from "@/lib/api/appServerEventBus";
 import {
   getAllAliasConfigs,
   getModelRegistry,
@@ -13,15 +14,21 @@ import {
   recordModelUsage,
   refreshModelRegistry,
   searchModels,
+  subscribeModelRegistryUpdates,
   toggleModelFavorite,
 } from "./modelRegistry";
 
 const appServerRequestMock = vi.hoisted(() => vi.fn());
+const subscribeAppServerNotificationsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api/appServer", () => ({
   AppServerClient: vi.fn(() => ({
     request: appServerRequestMock,
   })),
+}));
+
+vi.mock("@/lib/api/appServerEventBus", () => ({
+  subscribeAppServerNotifications: subscribeAppServerNotificationsMock,
 }));
 
 vi.mock("@/lib/dev-bridge", () => ({
@@ -93,6 +100,7 @@ function createCatalogModel(
 ) {
   return {
     id: `route:${routePart(providerId)}.${routePart(modelId)}`,
+    providerId,
     model: modelId,
     upgrade: null,
     upgradeInfo: null,
@@ -103,6 +111,25 @@ function createCatalogModel(
     supportedReasoningEfforts: [],
     defaultReasoningEffort: "none",
     inputModalities: ["text"],
+    capabilitySnapshot: {
+      taskFamilies: ["chat"],
+      inputModalities: ["text"],
+      outputModalities: ["text"],
+      runtimeFeatures: ["streaming"],
+      capabilities: {
+        vision: false,
+        tools: false,
+        streaming: true,
+        jsonMode: false,
+        functionCalling: false,
+        reasoning: false,
+        reasoningEffort: null,
+      },
+      source: "provider_explicit",
+      reasonCode: null,
+    },
+    contextWindow: null,
+    maxOutputTokens: null,
     supportsPersonality: false,
     additionalSpeedTiers: [],
     serviceTiers: [],
@@ -183,6 +210,21 @@ describe("modelRegistry API", () => {
     expectAppServerRequest(2, "model/list", { cursor: "1" });
   });
 
+  it("model/list 的 provider 与 opaque route 不一致时应 fail closed", async () => {
+    resolveAppServerRequest({
+      data: [
+        createCatalogModel("openai", "gpt-5.6-sol", {
+          providerId: "anthropic",
+        }),
+      ],
+      nextCursor: null,
+    });
+
+    await expect(getModelRegistry()).rejects.toThrow(
+      "App Server model/list returned mismatched provider",
+    );
+  });
+
   it("getModelRegistry 遇到重复 cursor 时应 fail closed", async () => {
     resolveAppServerRequest({ data: [], nextCursor: "1" });
     resolveAppServerRequest({ data: [], nextCursor: "1" });
@@ -224,6 +266,7 @@ describe("modelRegistry API", () => {
           displayName: "GPT-5.6 Sol",
           description: "Frontier coding model",
           hidden: false,
+          isDefault: true,
           serviceTiers: [
             {
               id: "default",
@@ -248,7 +291,50 @@ describe("modelRegistry API", () => {
               description: "Deep",
             },
           ],
-          inputModalities: ["text", "image"],
+          inputModalities: ["text", "image", "video", "file"],
+          capabilitySnapshot: {
+            taskFamilies: ["chat", "reasoning", "vision_understanding"],
+            inputModalities: ["text", "image", "video", "file"],
+            outputModalities: ["text", "json"],
+            runtimeFeatures: [
+              "streaming",
+              "tool_calling",
+              "json_schema",
+              "reasoning",
+            ],
+            capabilities: {
+              vision: true,
+              tools: true,
+              streaming: true,
+              jsonMode: true,
+              functionCalling: true,
+              reasoning: true,
+              reasoningEffort: {
+                supported: true,
+                levels: ["low", "high"],
+                options: [
+                  {
+                    id: "low",
+                    value: "low",
+                    label: "Fast",
+                    description: "Fast",
+                  },
+                  {
+                    id: "high",
+                    value: "high",
+                    label: "Deep",
+                    description: "Deep",
+                  },
+                ],
+                default: "high",
+                source: "api",
+              },
+            },
+            source: "provider_explicit",
+            reasonCode: null,
+          },
+          contextWindow: 400_000,
+          maxOutputTokens: 128_000,
         }),
       ],
       nextCursor: null,
@@ -260,6 +346,7 @@ describe("modelRegistry API", () => {
       expect.objectContaining({
         id: "gpt-5.6-sol",
         provider_id: "openai",
+        is_default: true,
         canonical_model_id: "gpt-5.6-sol",
         provider_model_id: "gpt-5.6-sol-wire",
         picker_policy: {
@@ -301,6 +388,12 @@ describe("modelRegistry API", () => {
           can_set_reasoning_effort: true,
         },
         capabilities: expect.objectContaining({
+          vision: true,
+          tools: true,
+          streaming: true,
+          json_mode: true,
+          function_calling: true,
+          reasoning: true,
           reasoning_effort: {
             supported: true,
             levels: ["low", "high"],
@@ -323,22 +416,33 @@ describe("modelRegistry API", () => {
           },
         }),
         input_modality_policy: {
-          input_modalities: ["text", "image"],
-          send_gate_modalities: ["text", "image"],
+          input_modalities: ["text", "image", "video", "file"],
+          send_gate_modalities: ["text", "image", "video", "file"],
           unknown_input_modalities: [],
           supports_text_input: true,
           supports_media_input: true,
           supports_image_input: true,
           source: "explicit",
         },
+        task_families: ["chat", "reasoning", "vision_understanding"],
+        input_modalities: ["text", "image", "video", "file"],
+        output_modalities: ["text", "json"],
+        runtime_features: [
+          "streaming",
+          "tool_calling",
+          "json_schema",
+          "reasoning",
+        ],
+        limits: {
+          context_length: 400_000,
+          max_output_tokens: 128_000,
+          requests_per_minute: null,
+          tokens_per_minute: null,
+        },
       }),
     ]);
     const [model] = models;
-    expect(model.capability_provenance).toBe("inferred_hint");
-    expect(model.capabilities).not.toHaveProperty("tools");
-    expect(model.capabilities).not.toHaveProperty("streaming");
-    expect(model.capabilities).not.toHaveProperty("json_mode");
-    expect(model.capabilities).not.toHaveProperty("function_calling");
+    expect(model.capability_provenance).toBe("provider_explicit");
     expect(model).not.toHaveProperty("execution_policy");
     expect(model).not.toHaveProperty("context_policy");
     expect(model).not.toHaveProperty("tool_call_policy");
@@ -346,7 +450,6 @@ describe("modelRegistry API", () => {
     expect(model).not.toHaveProperty("responses_policy");
     expect(model).not.toHaveProperty("truncation_policy");
     expect(model).not.toHaveProperty("native_tool_policy");
-    expect(model).not.toHaveProperty("runtime_features");
 
     expectAppServerRequest(1, "model/list", {});
     expect(safeInvoke).not.toHaveBeenCalled();
@@ -401,6 +504,47 @@ describe("modelRegistry API", () => {
     expectAppServerRequest(1, "model/list", {});
     expectAppServerRequest(2, "model/list", {});
     expect(safeInvoke).not.toHaveBeenCalled();
+  });
+
+  it("model/list/updated 应失效缓存并投影 typed 更新", async () => {
+    let onNotifications: AppServerEventBusSubscription["onNotifications"];
+    const unsubscribe = vi.fn();
+    subscribeAppServerNotificationsMock.mockImplementationOnce(
+      (subscription) => {
+        onNotifications = subscription.onNotifications;
+        return unsubscribe;
+      },
+    );
+    resolveAppServerRequest({
+      data: [createCatalogModel("openai", "gpt-4.1")],
+      nextCursor: null,
+    });
+    resolveAppServerRequest({
+      data: [createCatalogModel("openai", "gpt-5")],
+      nextCursor: null,
+    });
+    await getModelRegistry();
+    const onUpdate = vi.fn();
+    const stop = subscribeModelRegistryUpdates(onUpdate);
+
+    onNotifications?.([
+      { method: "thread/started", params: { thread: { id: "thread-1" } } },
+      {
+        method: "model/list/updated",
+        params: { generation: 17, providerId: "openai" },
+      },
+    ]);
+
+    expect(onUpdate).toHaveBeenCalledWith({
+      generation: 17,
+      providerId: "openai",
+    });
+    await expect(getModelRegistry()).resolves.toEqual([
+      expect.objectContaining({ id: "gpt-5" }),
+    ]);
+    stop();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(appServerRequestMock).toHaveBeenCalledTimes(2);
   });
 
   it("searchModels 应基于 App Server current 模型列表做前端过滤", async () => {

@@ -45,21 +45,44 @@ pub(crate) async fn resolve_route_credential(
     provider: Option<&ProviderWithKeys>,
     direct_provider_config: Option<&SessionProviderConfig>,
     preferred_credential_ref: Option<&str>,
+    excluded_credential_refs: &[String],
 ) -> Result<RouteCredential, String> {
     if direct_provider_config.is_some() || provider.is_some_and(provider_is_keyless) {
         return Ok(RouteCredential::unavailable());
     }
 
+    let preferred_credential_ref = preferred_credential_ref.filter(|credential_ref| {
+        !excluded_credential_refs
+            .iter()
+            .any(|excluded| excluded == credential_ref)
+    });
+    let preferred_credential_ref = match preferred_credential_ref {
+        Some(credential_ref) if service.runtime_credential_is_cooling(credential_ref)? => None,
+        preferred => preferred,
+    };
     let runtime_credential = match preferred_credential_ref {
         Some(credential_ref) => service
             .select_runtime_credential_by_ref(db, provider_id, credential_ref)?
             .ok_or_else(|| "resolved_credential_unavailable".to_string())?,
         None => {
+            let excluded_credential_refs = excluded_credential_refs
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
             let selected = service
-                .select_credential_for_provider(db, provider_id, Some(provider_id), None)
+                .select_credential_for_provider_excluding(
+                    db,
+                    provider_id,
+                    Some(provider_id),
+                    None,
+                    &excluded_credential_refs,
+                )
                 .await?;
             let Some(selected) = selected else {
-                return Ok(RouteCredential::unavailable());
+                return match provider {
+                    Some(_) => Err("resolved_credential_unavailable".to_string()),
+                    None => Ok(RouteCredential::unavailable()),
+                };
             };
             service
                 .select_runtime_credential_by_ref(db, provider_id, &selected.uuid)?

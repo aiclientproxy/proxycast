@@ -63,6 +63,7 @@ export type ModelTaskFamily =
   | "vision_understanding"
   | "image_generation"
   | "image_edit"
+  | "video_generation"
   | "speech_to_text"
   | "text_to_speech"
   | "embedding"

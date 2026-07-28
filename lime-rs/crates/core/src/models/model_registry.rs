@@ -159,6 +159,7 @@ pub enum ModelTaskFamily {
     VisionUnderstanding,
     ImageGeneration,
     ImageEdit,
+    VideoGeneration,
     SpeechToText,
     TextToSpeech,
     Embedding,

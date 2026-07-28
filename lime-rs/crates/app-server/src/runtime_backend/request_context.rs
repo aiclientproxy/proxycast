@@ -460,6 +460,7 @@ pub(super) fn direct_provider_config_from_request(
         model_name,
         api_key: request.api_key.clone(),
         base_url: request.base_url.clone(),
+        api_version: None,
         credential_uuid: None,
         reasoning_effort,
         service_tier,

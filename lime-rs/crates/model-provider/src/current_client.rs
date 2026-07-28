@@ -35,6 +35,8 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::{HeaderName, HeaderValue};
 use tokio_tungstenite::tungstenite::Error as WebSocketError;
 
+#[cfg(test)]
+mod azure_responses_tests;
 mod gemini;
 #[cfg(test)]
 mod gemini_tests;
@@ -48,17 +50,21 @@ mod stream;
 #[cfg(test)]
 mod stream_tests;
 mod transport;
+#[cfg(test)]
+mod vertex_gemini_tests;
 mod websocket;
 
-pub use health::CurrentProviderHealthRegistry;
 #[cfg(test)]
 use health::HealthConfig;
 use health::{CircuitBreaker, CircuitOpen, CircuitPermit};
+pub use health::{
+    CurrentProviderHealthRegistry, CurrentProviderHealthSnapshot, CurrentProviderHealthState,
+};
 use lowering::{anthropic_request, chat_completions_request, responses_request};
 use stream::{anthropic_sse, openai_chat_sse, responses_sse};
 use transport::{
-    observed_retry_delay, request_failure, request_retry_reason,
-    should_retry_stream_request_status, MAX_STREAM_REQUEST_ATTEMPTS,
+    observed_retry_delay, provider_retry_after, request_failure, request_retry_reason,
+    server_disallows_retry, should_retry_stream_request_status, MAX_STREAM_REQUEST_ATTEMPTS,
 };
 use websocket::{responses_websocket, ResponsesSocket};
 
@@ -502,6 +508,7 @@ pub struct CurrentProviderError {
     pub status: Option<u16>,
     pub classification: Option<FailureClassification>,
     pub retryable: bool,
+    pub retry_after: Option<Duration>,
 }
 
 impl CurrentProviderError {
@@ -511,6 +518,7 @@ impl CurrentProviderError {
             status: None,
             classification: None,
             retryable: false,
+            retry_after: None,
         }
     }
 
@@ -520,15 +528,21 @@ impl CurrentProviderError {
             status: None,
             classification: Some(FailureClassification::InvalidRequest),
             retryable: false,
+            retry_after: None,
         }
     }
 
-    fn with_status(status: StatusCode, message: impl Into<String>) -> Self {
+    fn with_status(
+        status: StatusCode,
+        message: impl Into<String>,
+        retry_after: Option<Duration>,
+    ) -> Self {
         Self {
             message: message.into(),
             status: Some(status.as_u16()),
             classification: Some(classification_from_status(status)),
             retryable: status_failure_is_retryable(status),
+            retry_after,
         }
     }
 
@@ -538,6 +552,7 @@ impl CurrentProviderError {
             status: None,
             classification: Some(FailureClassification::Transport),
             retryable: true,
+            retry_after: None,
         }
     }
 }
@@ -793,7 +808,11 @@ impl CurrentProviderClient {
     }
 
     pub fn responses_websocket_enabled(&self) -> bool {
-        self.config.supports_websockets && !self.http_fallback.load(Ordering::Acquire)
+        !matches!(
+            self.config.protocol,
+            Some(RuntimeProviderProtocol::AzureResponses | RuntimeProviderProtocol::VertexGemini)
+        ) && self.config.supports_websockets
+            && !self.http_fallback.load(Ordering::Acquire)
     }
 
     fn websocket_with_http_fallback(
@@ -916,6 +935,9 @@ impl CurrentProviderClient {
                 {
                     return Err(websocket_connect_error(error));
                 }
+                Err(error) if websocket_error_disallows_retry(&error) => {
+                    return Err(websocket_connect_error(error));
+                }
                 Err(error) if attempts < MAX_STREAM_REQUEST_ATTEMPTS => {
                     let delay = observed_retry_delay(
                         &self.health,
@@ -948,11 +970,29 @@ impl CurrentProviderClient {
         wire_shape: &RuntimeReplyProviderRequestWireShape,
     ) -> Result<Response, CurrentProviderError> {
         let api_key = self.request_api_key()?;
-        let urls = provider_urls(
-            protocol,
-            self.config.base_url.as_deref(),
-            Some(&self.config.model_name),
-        );
+        let urls = match self.config.protocol {
+            Some(RuntimeProviderProtocol::AzureResponses) => vec![azure_responses_endpoint(
+                self.config.base_url.as_deref().ok_or_else(|| {
+                    CurrentProviderError::invalid_request(
+                        "Azure OpenAI provider requires a resource base URL",
+                    )
+                })?,
+                self.config.api_version.as_deref(),
+            )?],
+            Some(RuntimeProviderProtocol::VertexGemini) => vec![gemini::endpoint(
+                Some(self.config.base_url.as_deref().ok_or_else(|| {
+                    CurrentProviderError::invalid_request(
+                        "Vertex Gemini provider requires a resolved project endpoint",
+                    )
+                })?),
+                &self.config.model_name,
+            )],
+            _ => provider_urls(
+                protocol,
+                self.config.base_url.as_deref(),
+                Some(&self.config.model_name),
+            ),
+        };
         let mut last_response = None;
         let mut attempts = 0;
 
@@ -973,8 +1013,18 @@ impl CurrentProviderClient {
                         ModelProviderProtocol::AnthropicMessages => {
                             request.header("x-api-key", api_key)
                         }
+                        _ if self.config.protocol
+                            == Some(RuntimeProviderProtocol::VertexGemini) =>
+                        {
+                            request.header("Authorization", format!("Bearer {api_key}"))
+                        }
                         ModelProviderProtocol::GeminiGenerateContent => {
                             request.header("x-goog-api-key", api_key)
+                        }
+                        _ if self.config.protocol
+                            == Some(RuntimeProviderProtocol::AzureResponses) =>
+                        {
+                            request.header("api-key", api_key)
                         }
                         _ => request.header("Authorization", format!("Bearer {api_key}")),
                     };
@@ -1004,6 +1054,7 @@ impl CurrentProviderClient {
                     break;
                 }
                 if should_retry_stream_request_status(response.status())
+                    && !server_disallows_retry(response.headers())
                     && attempts < MAX_STREAM_REQUEST_ATTEMPTS
                 {
                     let delay = observed_retry_delay(
@@ -1029,6 +1080,20 @@ impl CurrentProviderClient {
 
     fn request_api_key(&self) -> Result<Option<&str>, CurrentProviderError> {
         match self.config.auth {
+            RuntimeProviderAuth::NoAuth
+                if self.config.protocol == Some(RuntimeProviderProtocol::AzureResponses) =>
+            {
+                return Err(CurrentProviderError::invalid_request(
+                    "Azure OpenAI Responses requires API-key authentication",
+                ));
+            }
+            RuntimeProviderAuth::NoAuth
+                if self.config.protocol == Some(RuntimeProviderProtocol::VertexGemini) =>
+            {
+                return Err(CurrentProviderError::invalid_request(
+                    "Vertex Gemini requires Bearer access-token authentication",
+                ));
+            }
             RuntimeProviderAuth::NoAuth => return Ok(None),
             RuntimeProviderAuth::OemManaged => {
                 return Err(CurrentProviderError::invalid_request(
@@ -1101,6 +1166,9 @@ fn health_failure(
     retryable: Option<bool>,
     unknown_is_failure: bool,
 ) -> bool {
+    if retryable == Some(false) {
+        return false;
+    }
     match classification {
         Some(
             FailureClassification::Authentication
@@ -1125,10 +1193,16 @@ async fn ensure_success_response(response: Response) -> Result<Response, Current
         return Ok(response);
     }
     let status = response.status();
-    Err(CurrentProviderError::with_status(
+    let retry_after = provider_retry_after(response.headers());
+    let mut error = CurrentProviderError::with_status(
         status,
         format!("Provider 请求失败 ({status})"),
-    ))
+        retry_after,
+    );
+    if server_disallows_retry(response.headers()) {
+        error.retryable = false;
+    }
+    Err(error)
 }
 
 fn classification_from_status(status: StatusCode) -> FailureClassification {
@@ -1158,6 +1232,7 @@ fn runtime_protocol(
 ) -> Result<ModelProviderProtocol, CurrentProviderError> {
     match config.protocol {
         Some(RuntimeProviderProtocol::Responses) => Ok(ModelProviderProtocol::Responses),
+        Some(RuntimeProviderProtocol::AzureResponses) => Ok(ModelProviderProtocol::Responses),
         Some(RuntimeProviderProtocol::AnthropicMessages) => {
             Ok(ModelProviderProtocol::AnthropicMessages)
         }
@@ -1165,6 +1240,9 @@ fn runtime_protocol(
             Ok(ModelProviderProtocol::ChatCompletions)
         }
         Some(RuntimeProviderProtocol::GeminiGenerateContent) => {
+            Ok(ModelProviderProtocol::GeminiGenerateContent)
+        }
+        Some(RuntimeProviderProtocol::VertexGemini) => {
             Ok(ModelProviderProtocol::GeminiGenerateContent)
         }
         None => Err(CurrentProviderError::invalid_request(format!(
@@ -1211,12 +1289,27 @@ fn websocket_error_status(error: &WebSocketError) -> Option<StatusCode> {
     StatusCode::from_u16(response.status().as_u16()).ok()
 }
 
+fn websocket_error_disallows_retry(error: &WebSocketError) -> bool {
+    let WebSocketError::Http(response) = error else {
+        return false;
+    };
+    server_disallows_retry(response.headers())
+}
+
 fn websocket_connect_error(error: WebSocketError) -> CurrentProviderError {
+    let retryable = !websocket_error_disallows_retry(&error);
     if let Some(status) = websocket_error_status(&error) {
-        return CurrentProviderError::with_status(
+        let retry_after = match &error {
+            WebSocketError::Http(response) => provider_retry_after(response.headers()),
+            _ => None,
+        };
+        let mut error = CurrentProviderError::with_status(
             status,
             format!("Responses WebSocket upgrade 失败 ({status})"),
+            retry_after,
         );
+        error.retryable &= retryable;
+        return error;
     }
     CurrentProviderError::transport("Responses WebSocket 连接失败")
 }
@@ -1257,6 +1350,147 @@ fn provider_urls(
         }
     };
     endpoint_urls(base_url, endpoint)
+}
+
+pub fn azure_responses_endpoint(
+    base_url: &str,
+    api_version: Option<&str>,
+) -> Result<String, CurrentProviderError> {
+    let base_url = base_url.trim();
+    if base_url.is_empty() {
+        return Err(CurrentProviderError::invalid_request(
+            "Azure OpenAI provider requires a resource base URL",
+        ));
+    }
+    let mut url = url::Url::parse(base_url).map_err(|error| {
+        CurrentProviderError::invalid_request(format!(
+            "Azure OpenAI resource base URL is invalid ({base_url}): {error}"
+        ))
+    })?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(CurrentProviderError::invalid_request(format!(
+            "Azure OpenAI resource base URL uses unsupported scheme `{}`",
+            url.scheme()
+        )));
+    }
+    if url.host_str().is_none() {
+        return Err(CurrentProviderError::invalid_request(
+            "Azure OpenAI resource base URL requires a host",
+        ));
+    }
+    url.set_fragment(None);
+
+    let path = match url.path().trim_end_matches('/') {
+        "" => "/openai/v1/responses",
+        "/openai" => "/openai/v1/responses",
+        "/openai/v1" => "/openai/v1/responses",
+        "/openai/v1/responses" => "/openai/v1/responses",
+        path => {
+            return Err(CurrentProviderError::invalid_request(format!(
+                "Azure OpenAI resource base URL has unsupported path `{path}`; expected resource root or /openai/v1"
+            )))
+        }
+    };
+    url.set_path(path);
+    let existing_query = url
+        .query_pairs()
+        .filter(|(name, _)| !name.eq_ignore_ascii_case("api-version"))
+        .map(|(name, value)| (name.into_owned(), value.into_owned()))
+        .collect::<Vec<_>>();
+    url.set_query(None);
+    let api_version = api_version
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("v1");
+    {
+        let mut query = url.query_pairs_mut();
+        for (name, value) in existing_query {
+            query.append_pair(&name, &value);
+        }
+        query.append_pair("api-version", api_version);
+    }
+    Ok(url.to_string())
+}
+
+pub fn vertex_gemini_base_url(
+    base_url: Option<&str>,
+    project: Option<&str>,
+    location: Option<&str>,
+) -> Result<String, CurrentProviderError> {
+    let project = required_vertex_context("project", project)?;
+    let location = required_vertex_context("location", location)?;
+    if !location
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    {
+        return Err(CurrentProviderError::invalid_request(
+            "Vertex Gemini location contains unsupported characters",
+        ));
+    }
+    let default_base = if location.eq_ignore_ascii_case("global") {
+        "https://aiplatform.googleapis.com".to_string()
+    } else {
+        format!("https://{location}-aiplatform.googleapis.com")
+    };
+    let base_url = base_url
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(&default_base);
+    let mut url = url::Url::parse(base_url).map_err(|error| {
+        CurrentProviderError::invalid_request(format!(
+            "Vertex Gemini base URL is invalid ({base_url}): {error}"
+        ))
+    })?;
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+        return Err(CurrentProviderError::invalid_request(
+            "Vertex Gemini base URL requires an HTTP(S) host",
+        ));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(CurrentProviderError::invalid_request(
+            "Vertex Gemini base URL must not contain query or fragment components",
+        ));
+    }
+    if !url.path().trim_matches('/').is_empty() {
+        return Err(CurrentProviderError::invalid_request(format!(
+            "Vertex Gemini base URL has unsupported path `{}`; expected an origin URL",
+            url.path()
+        )));
+    }
+    {
+        let mut segments = url.path_segments_mut().map_err(|_| {
+            CurrentProviderError::invalid_request(
+                "Vertex Gemini base URL cannot carry path segments",
+            )
+        })?;
+        segments.clear();
+        for segment in [
+            "v1",
+            "projects",
+            project,
+            "locations",
+            location,
+            "publishers",
+            "google",
+        ] {
+            segments.push(segment);
+        }
+    }
+    Ok(url.to_string().trim_end_matches('/').to_string())
+}
+
+fn required_vertex_context<'a>(
+    field: &str,
+    value: Option<&'a str>,
+) -> Result<&'a str, CurrentProviderError> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            CurrentProviderError::invalid_request(format!(
+                "Vertex Gemini provider requires {field}"
+            ))
+        })
 }
 
 /// 返回 Responses API 的首选 endpoint。
@@ -1333,6 +1567,7 @@ mod tests {
             api_key: Some("test".to_string()),
             auth: RuntimeProviderAuth::ApiKey,
             base_url: Some("https://gateway.example.com/v1".to_string()),
+            api_version: None,
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: Some("medium".to_string()),
             service_tier: None,
@@ -2341,6 +2576,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn responses_websocket_respects_explicit_server_retry_false() {
+        let body = "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-http\",\"output\":[]}}\n\n";
+        let responses = vec![
+            fixture_response(
+                "503 Service Unavailable",
+                "X-Should-Retry: false\r\n",
+                "upgrade failed",
+            ),
+            fixture_response("200 OK", "Content-Type: text/event-stream\r\n", body),
+        ];
+        let (base_url, methods, server) = spawn_http_method_fixture(responses).await;
+        let mut runtime_config = config(Some(RuntimeProviderProtocol::Responses));
+        runtime_config.base_url = Some(base_url);
+        runtime_config.supports_websockets = true;
+        let client = CurrentProviderClient::with_client(
+            runtime_config,
+            Client::builder().no_proxy().build().expect("HTTP client"),
+        );
+
+        client
+            .stream(text_request())
+            .await
+            .expect("HTTP replay stream")
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .expect("HTTP replay events");
+
+        server.await.expect("fixture server");
+        assert_eq!(
+            methods.lock().expect("method capture").as_slice(),
+            ["GET", "POST"]
+        );
+    }
+
+    #[tokio::test]
     async fn responses_websocket_close_before_output_replays_over_http() {
         let (base_url, methods, server) = spawn_websocket_drop_then_http_fixture().await;
         let mut runtime_config = config(Some(RuntimeProviderProtocol::Responses));
@@ -2498,6 +2770,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stream_request_respects_explicit_server_retry_false() {
+        for status in ["503 Service Unavailable", "429 Too Many Requests"] {
+            let (base_url, requests, server) = spawn_http_fixture(vec![fixture_response(
+                status,
+                "X-Should-Retry: false\r\n",
+                "do not retry",
+            )])
+            .await;
+            let mut runtime_config = config(Some(RuntimeProviderProtocol::ChatCompletions));
+            runtime_config.base_url = Some(base_url);
+            let client = CurrentProviderClient::with_client(
+                runtime_config,
+                Client::builder().no_proxy().build().expect("HTTP client"),
+            );
+
+            let error = stream_error(&client, "explicit retry false must fail immediately").await;
+
+            assert!(!error.retryable, "status={status}");
+            server.await.expect("fixture server");
+            assert_eq!(requests.load(Ordering::SeqCst), 1, "status={status}");
+        }
+    }
+
+    #[tokio::test]
     async fn stream_request_shares_retry_budget_with_compatible_endpoint_probe() {
         let (base_url, requests, server) = spawn_http_fixture(vec![
             fixture_response("404 Not Found", "", "not found"),
@@ -2563,6 +2859,13 @@ mod tests {
             Some(true),
             false
         ));
+        for classification in [
+            FailureClassification::RateLimit,
+            FailureClassification::ProviderInternal,
+            FailureClassification::Transport,
+        ] {
+            assert!(!health_failure(Some(classification), Some(false), false));
+        }
         assert!(!health_failure(
             Some(FailureClassification::Authentication),
             Some(false),

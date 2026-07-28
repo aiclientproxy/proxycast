@@ -7,7 +7,10 @@
 
 use crate::provider_trace::RuntimeProviderTraceAttempt;
 use crate::reply_execution::{RuntimeReplyAttemptError, RuntimeReplyExecution};
-use crate::reply_loop::{RuntimeReplyLoop, RuntimeReplyLoopStep, MAX_REPLY_TURNS_REACHED_MESSAGE};
+use crate::reply_loop::{
+    RuntimeEmptyResponseStep, RuntimeReplyLoop, RuntimeReplyLoopStep,
+    MAX_REPLY_TURNS_REACHED_MESSAGE,
+};
 use crate::session_config::AgentSessionConfig;
 use crate::session_loop::RuntimeSessionInputHandle;
 use agent_protocol::provider_trace::{ProviderTraceEvent, ProviderTraceFailure};
@@ -294,10 +297,11 @@ where
     let world_state = resolve_world_state(&session_config, &working_directory)?;
     insert_world_state_before_current_user(&mut initial_messages, &world_state);
     let mut loop_state = RuntimeReplyLoop::new(session_config.max_turns);
+    let mut retry_empty_response = false;
+    let mut retry_tool_step_snapshot = None;
     let mut text_output = String::new();
     let mut errors = Vec::new();
     let mut emitted_any = false;
-    let mut emitted_tool_call = false;
     let mut consumed_pending_input = false;
     let mut provider_budget_tokens_used = 0_u64;
     let mut last_server_model = None;
@@ -317,88 +321,108 @@ where
                 true,
             ));
         }
-        let attempt = match loop_state.next_attempt() {
-            RuntimeReplyLoopStep::Continue { attempt } => attempt,
-            RuntimeReplyLoopStep::MaxTurnsReached { .. } => {
-                if let Some(input) = pending_input.as_ref() {
-                    input.mark_mailbox_delivery_for_next_turn().await;
-                    input.mark_finishing().await;
+        let is_empty_response_retry = std::mem::take(&mut retry_empty_response);
+        let attempt = if is_empty_response_retry {
+            loop_state.next_retry_attempt()
+        } else {
+            match loop_state.next_attempt() {
+                RuntimeReplyLoopStep::Continue { attempt } => attempt,
+                RuntimeReplyLoopStep::MaxTurnsReached { .. } => {
+                    if let Some(input) = pending_input.as_ref() {
+                        input.mark_mailbox_delivery_for_next_turn().await;
+                        input.mark_finishing().await;
+                    }
+                    if !text_output.is_empty() {
+                        text_output.push('\n');
+                    }
+                    text_output.push_str(MAX_REPLY_TURNS_REACHED_MESSAGE);
+                    let item_id = format!("text-{turn_id}-max-turns");
+                    on_event(CurrentProviderTurnEvent::TextStart {
+                        item_id: item_id.clone(),
+                    });
+                    on_event(CurrentProviderTurnEvent::TextDelta {
+                        item_id: item_id.clone(),
+                        text: MAX_REPLY_TURNS_REACHED_MESSAGE.to_string(),
+                    });
+                    on_event(CurrentProviderTurnEvent::TextEnd {
+                        item_id,
+                        phase: CurrentProviderTextPhase::FinalAnswer,
+                    });
+                    return Ok(RuntimeReplyExecution::new(
+                        text_output,
+                        errors,
+                        true,
+                        attempts_summary(&loop_state),
+                        false,
+                    ));
                 }
-                if !text_output.is_empty() {
-                    text_output.push('\n');
-                }
-                text_output.push_str(MAX_REPLY_TURNS_REACHED_MESSAGE);
-                let item_id = format!("text-{turn_id}-max-turns");
-                on_event(CurrentProviderTurnEvent::TextStart {
-                    item_id: item_id.clone(),
-                });
-                on_event(CurrentProviderTurnEvent::TextDelta {
-                    item_id: item_id.clone(),
-                    text: MAX_REPLY_TURNS_REACHED_MESSAGE.to_string(),
-                });
-                on_event(CurrentProviderTurnEvent::TextEnd {
-                    item_id,
-                    phase: CurrentProviderTextPhase::FinalAnswer,
-                });
-                return Ok(RuntimeReplyExecution::new(
-                    text_output,
-                    errors,
-                    true,
-                    attempts_summary(&loop_state),
-                    false,
-                ));
             }
         };
 
-        if let Some(input) = pending_input.as_ref() {
-            // Context, tool inventory and mailbox phase are captured once per sampling step.
-            // The provider request remains immutable for the lifetime of this attempt.
-            let _step_context = input.capture_step_context().await;
+        if !is_empty_response_retry {
+            if let Some(input) = pending_input.as_ref() {
+                // Context, tool inventory and mailbox phase are captured once per sampling step.
+                // Empty-response retries reuse the same immutable step snapshot.
+                let _step_context = input.capture_step_context().await;
+            }
         }
 
-        let mut tool_step_snapshot = tool_step_snapshot_source
-            .capture()
-            .await
-            .map_err(|message| RuntimeReplyAttemptError::new(message, emitted_any))?;
-
-        // Hook 门控：捕获 Hook snapshot，构造 RuntimeTurnSnapshot，并包装 executor。
-        if let Some(ref hook_source) = hook_snapshot_source {
-            let hook_snapshots = hook_source
+        let mut tool_step_snapshot = if is_empty_response_retry {
+            retry_tool_step_snapshot.take().ok_or_else(|| {
+                RuntimeReplyAttemptError::new(
+                    "Empty-response retry lost its provider step snapshot",
+                    emitted_any,
+                )
+            })?
+        } else {
+            tool_step_snapshot_source
                 .capture()
                 .await
-                .map_err(|message| RuntimeReplyAttemptError::new(message, emitted_any))?;
-            if !hook_snapshots.is_empty() {
-                let tool_snapshots = tool_step_snapshot
-                    .definitions
-                    .iter()
-                    .map(|def| {
-                        RuntimeToolSnapshot::new(
-                            RuntimeToolIdentity::plain(&def.name),
-                            def.clone(),
-                            RuntimeToolExposure::Direct,
-                            false,
-                            true,
+                .map_err(|message| RuntimeReplyAttemptError::new(message, emitted_any))?
+        };
+
+        // Hook 门控：捕获 Hook snapshot，构造 RuntimeTurnSnapshot，并包装 executor。
+        if !is_empty_response_retry {
+            if let Some(ref hook_source) = hook_snapshot_source {
+                let hook_snapshots = hook_source
+                    .capture()
+                    .await
+                    .map_err(|message| RuntimeReplyAttemptError::new(message, emitted_any))?;
+                if !hook_snapshots.is_empty() {
+                    let tool_snapshots = tool_step_snapshot
+                        .definitions
+                        .iter()
+                        .map(|def| {
+                            RuntimeToolSnapshot::new(
+                                RuntimeToolIdentity::plain(&def.name),
+                                def.clone(),
+                                RuntimeToolExposure::Direct,
+                                false,
+                                true,
+                            )
+                        })
+                        .collect();
+                    if let Ok(turn_snapshot) =
+                        tool_runtime::turn_snapshot::RuntimeTurnSnapshot::try_new(
+                            tool_snapshots,
+                            hook_snapshots,
                         )
-                    })
-                    .collect();
-                if let Ok(turn_snapshot) = tool_runtime::turn_snapshot::RuntimeTurnSnapshot::try_new(
-                    tool_snapshots,
-                    hook_snapshots,
-                ) {
-                    use tool_runtime::hook_gated_executor::{
-                        hook_gated_executor, FixedHookReporter,
-                    };
-                    use tool_runtime::tool_executor::RuntimeToolExecutorHandle;
-                    // TODO: 替换为真实的 HookReporter 实现，当前用占位 reporter。
-                    let reporter = Arc::new(FixedHookReporter::new(None));
-                    // 克隆原 executor 的内部 Arc，用 hook 包装后重新构造 handle。
-                    let original_executor = tool_step_snapshot.executor.clone();
-                    let gated = hook_gated_executor(
-                        original_executor.inner_executor(),
-                        Arc::new(turn_snapshot),
-                        reporter,
-                    );
-                    tool_step_snapshot.executor = RuntimeToolExecutorHandle::new(gated);
+                    {
+                        use tool_runtime::hook_gated_executor::{
+                            hook_gated_executor, FixedHookReporter,
+                        };
+                        use tool_runtime::tool_executor::RuntimeToolExecutorHandle;
+                        // TODO: 替换为真实的 HookReporter 实现，当前用占位 reporter。
+                        let reporter = Arc::new(FixedHookReporter::new(None));
+                        // 克隆原 executor 的内部 Arc，用 hook 包装后重新构造 handle。
+                        let original_executor = tool_step_snapshot.executor.clone();
+                        let gated = hook_gated_executor(
+                            original_executor.inner_executor(),
+                            Arc::new(turn_snapshot),
+                            reporter,
+                        );
+                        tool_step_snapshot.executor = RuntimeToolExecutorHandle::new(gated);
+                    }
                 }
             }
         }
@@ -516,6 +540,7 @@ where
                     emitted_any,
                     error.classification,
                     error.retryable,
+                    error.retry_after,
                     consumed_pending_input,
                 ));
             }
@@ -533,6 +558,8 @@ where
         let mut step_reasoning_output_chars = 0_u64;
         let mut step_usage = None;
         let mut has_user_visible_output = false;
+        let mut step_has_user_visible_text = false;
+        let mut step_emitted_tool_call = false;
 
         loop {
             let event = match next_provider_event(
@@ -642,6 +669,7 @@ where
                         emitted_any,
                         error.classification,
                         error.retryable,
+                        error.retry_after,
                         consumed_pending_input,
                     ));
                 }
@@ -665,7 +693,9 @@ where
                     )?;
                 }
                 CanonicalLlmEvent::TextDelta { id, text } => {
-                    has_user_visible_output |= !text.trim().is_empty();
+                    let visible_text = !text.trim().is_empty();
+                    has_user_visible_output |= visible_text;
+                    step_has_user_visible_text |= visible_text;
                     let id =
                         provider_output_item_id(&turn_id, attempt, ProviderOutputFamily::Text, &id);
                     if let Some(event) = provider_trace_attempt
@@ -823,7 +853,7 @@ where
                 } => {
                     has_user_visible_output = true;
                     emitted_any = true;
-                    emitted_tool_call = true;
+                    step_emitted_tool_call = true;
                     if provider_executed == Some(true) {
                         if let Some(raw_item) = provider_metadata.get("raw_response_item") {
                             assistant_content
@@ -955,6 +985,7 @@ where
                         emitted_any,
                         classification,
                         retryable.unwrap_or(false),
+                        None,
                         consumed_pending_input,
                     ));
                 }
@@ -993,7 +1024,7 @@ where
         on_event(CurrentProviderTurnEvent::ProviderStep {
             attempt,
             completed,
-            finish_reason,
+            finish_reason: finish_reason.clone(),
             text_output_chars: step_text_output_chars,
             reasoning_output_chars: step_reasoning_output_chars,
             tool_call_count: calls.len().min(u32::MAX as usize) as u32,
@@ -1007,7 +1038,8 @@ where
                 .unwrap_or_default(),
         );
 
-        if !assistant_content.is_empty() {
+        let assistant_message_pushed = !assistant_content.is_empty();
+        if assistant_message_pushed {
             initial_messages.push(CurrentProviderMessage::assistant(assistant_content));
         }
         if calls.is_empty() {
@@ -1029,6 +1061,78 @@ where
                 initial_messages.extend(pending_messages);
                 continue;
             }
+            let current_step_is_empty = !step_has_user_visible_text && !step_emitted_tool_call;
+            if completed && current_step_is_empty {
+                match finish_reason.as_deref() {
+                    Some("content_filter") => {}
+                    Some("length") => {
+                        if let Some(input) = pending_input.as_ref() {
+                            input.mark_finishing().await;
+                        }
+                        return Err(RuntimeReplyAttemptError::new(
+                            "Provider reached its output limit without user-visible output",
+                            emitted_any,
+                        ));
+                    }
+                    Some("error") => {
+                        if let Some(input) = pending_input.as_ref() {
+                            input.mark_finishing().await;
+                        }
+                        return Err(RuntimeReplyAttemptError::new(
+                            "Provider completed with an error and no user-visible output",
+                            emitted_any,
+                        ));
+                    }
+                    _ => {
+                        if let Some(message) = provider_budget_exhaustion_message(
+                            session_config.provider_token_budget,
+                            provider_budget_tokens_used,
+                            attempt,
+                        ) {
+                            if let Some(input) = pending_input.as_ref() {
+                                input.mark_finishing().await;
+                            }
+                            errors.push(message);
+                            return Ok(RuntimeReplyExecution::new(
+                                text_output,
+                                errors,
+                                emitted_any,
+                                attempts_summary(&loop_state),
+                                true,
+                            ));
+                        }
+                        match loop_state.request_empty_response_retry() {
+                            RuntimeEmptyResponseStep::Retry { retry, max_retries } => {
+                                if assistant_message_pushed {
+                                    let removed = initial_messages.pop();
+                                    debug_assert!(removed.as_ref().is_some_and(|message| {
+                                        message.role == CurrentProviderRole::Assistant
+                                    }));
+                                }
+                                debug_assert!(retry <= max_retries);
+                                retry_tool_step_snapshot = Some(tool_step_snapshot.clone());
+                                retry_empty_response = true;
+                                continue;
+                            }
+                            RuntimeEmptyResponseStep::Exhausted {
+                                retries,
+                                max_retries,
+                            } => {
+                                if let Some(input) = pending_input.as_ref() {
+                                    input.mark_finishing().await;
+                                }
+                                return Err(RuntimeReplyAttemptError::new(
+                                    format!(
+                                        "Provider completed without user-visible output after {} attempts (empty response retries exhausted: {retries}/{max_retries})",
+                                        loop_state.attempts_taken()
+                                    ),
+                                    emitted_any,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
             if let Some(input) = pending_input.as_ref() {
                 if !input.mark_finishing().await {
                     let steer = input
@@ -1044,9 +1148,9 @@ where
             if !completed {
                 errors.push("Provider stream ended without completion event".to_string());
             }
-            if text_output.trim().is_empty() && !emitted_tool_call {
+            if !completed && current_step_is_empty {
                 return Err(RuntimeReplyAttemptError::new(
-                    "Provider completed without user-visible output",
+                    "Provider stream ended without a completion event or user-visible output",
                     emitted_any,
                 ));
             }
@@ -1059,22 +1163,22 @@ where
             ));
         }
 
-        if let Some(limit) = session_config.provider_token_budget {
-            if provider_budget_tokens_used >= limit {
-                if let Some(input) = pending_input.as_ref() {
-                    input.mark_finishing().await;
-                }
-                errors.push(format!(
-                    "Provider token budget exhausted after attempt {attempt}: used={provider_budget_tokens_used} limit={limit}"
-                ));
-                return Ok(RuntimeReplyExecution::new(
-                    text_output,
-                    errors,
-                    emitted_any,
-                    attempts_summary(&loop_state),
-                    true,
-                ));
+        if let Some(message) = provider_budget_exhaustion_message(
+            session_config.provider_token_budget,
+            provider_budget_tokens_used,
+            attempt,
+        ) {
+            if let Some(input) = pending_input.as_ref() {
+                input.mark_finishing().await;
             }
+            errors.push(message);
+            return Ok(RuntimeReplyExecution::new(
+                text_output,
+                errors,
+                emitted_any,
+                attempts_summary(&loop_state),
+                true,
+            ));
         }
 
         let pending_messages = match pending_input.as_ref() {
@@ -1236,10 +1340,12 @@ fn provider_attempt_error(
     emitted_any: bool,
     classification: Option<FailureClassification>,
     retryable: bool,
+    retry_after: Option<Duration>,
     consumed_pending_input: bool,
 ) -> RuntimeReplyAttemptError {
     let error =
-        RuntimeReplyAttemptError::provider_failure(message, emitted_any, classification, retryable);
+        RuntimeReplyAttemptError::provider_failure(message, emitted_any, classification, retryable)
+            .with_retry_after(retry_after);
     if consumed_pending_input {
         error.suppress_reroute()
     } else {
@@ -1481,6 +1587,19 @@ fn provider_budget_tokens(usage: &CurrentProviderUsage) -> u64 {
             .saturating_sub(usage.cached_input_tokens.unwrap_or_default()),
     )
     .saturating_add(u64::from(usage.output_tokens))
+}
+
+fn provider_budget_exhaustion_message(
+    limit: Option<u64>,
+    used: u64,
+    attempt: u32,
+) -> Option<String> {
+    let limit = limit?;
+    (used >= limit).then(|| {
+        format!(
+            "Provider token budget exhausted after attempt {attempt}: used={used} limit={limit}"
+        )
+    })
 }
 
 async fn record_session_token_usage(

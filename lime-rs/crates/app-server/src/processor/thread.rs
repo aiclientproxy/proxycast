@@ -289,9 +289,18 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: ThreadStartParams = parse_params(params)?;
-        let model = required_thread_start_value(params.model.as_deref(), "model")?;
-        let model_provider =
-            required_thread_start_value(params.model_provider.as_deref(), "modelProvider")?;
+        let selection = self
+            .runtime
+            .resolve_thread_start_model_selection(
+                params.model.as_deref(),
+                params.model_provider.as_deref(),
+                params.service_tier.clone(),
+            )
+            .await
+            .map_err(to_jsonrpc_error)?;
+        let model = selection.model;
+        let model_provider = selection.model_provider;
+        let service_tier = selection.service_tier;
         let cwd = params.cwd.clone().unwrap_or_default();
         let history_mode = params.history_mode.clone().unwrap_or_default();
         let source = params
@@ -310,7 +319,7 @@ impl RequestProcessor {
             "threadSource": params.thread_source,
             "ephemeral": params.ephemeral.unwrap_or(false),
             "runtimeWorkspaceRoots": params.runtime_workspace_roots,
-            "serviceTier": params.service_tier,
+            "serviceTier": service_tier,
             "approvalPolicy": params.approval_policy,
             "approvalsReviewer": params.approvals_reviewer,
             "sandbox": params.sandbox,
@@ -327,21 +336,26 @@ impl RequestProcessor {
             "experimentalRawEvents": params.experimental_raw_events,
             "cliVersion": env!("CARGO_PKG_VERSION"),
         });
+        let start_params = AgentSessionStartParams {
+            session_id: Some(session_id.clone()),
+            thread_id: Some(thread_id.clone()),
+            app_id: "agent-chat".to_string(),
+            workspace_id: None,
+            business_object_ref: Some(BusinessObjectRef {
+                kind: "agent.thread".to_string(),
+                id: thread_id.clone(),
+                title: params.service_name.clone(),
+                uri: None,
+                metadata: Some(metadata.clone()),
+            }),
+            locale: None,
+        };
         self.runtime
-            .start_session(AgentSessionStartParams {
-                session_id: Some(session_id.clone()),
-                thread_id: Some(thread_id.clone()),
-                app_id: "agent-chat".to_string(),
-                workspace_id: None,
-                business_object_ref: Some(BusinessObjectRef {
-                    kind: "agent.thread".to_string(),
-                    id: thread_id.clone(),
-                    title: params.service_name.clone(),
-                    uri: None,
-                    metadata: Some(metadata.clone()),
-                }),
-                locale: None,
-            })
+            .preflight_thread_start(&start_params)
+            .await
+            .map_err(to_jsonrpc_error)?;
+        self.runtime
+            .start_session(start_params)
             .map_err(to_jsonrpc_error)?;
         let thread = self
             .runtime
@@ -626,19 +640,6 @@ fn normalize_resume_turns(turns: &mut [Turn], active_turn_id: Option<&str>) {
             turn.status = TurnStatus::Interrupted;
         }
     }
-}
-
-fn required_thread_start_value(value: Option<&str>, field: &str) -> Result<String, JsonRpcError> {
-    value
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-        .ok_or_else(|| {
-            JsonRpcError::new(
-                error_codes::INVALID_PARAMS,
-                format!("thread/start requires a non-empty {field}"),
-            )
-        })
 }
 
 fn required_thread_value(value: &str, method: &str) -> Result<String, JsonRpcError> {

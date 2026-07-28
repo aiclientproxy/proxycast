@@ -53,7 +53,6 @@ use lime_agent::{
 };
 use lime_core::database::DbConnection;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
-use model_provider::current_client::CurrentProviderMessage;
 use runtime_core::ModelRouteExclusion;
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -340,14 +339,20 @@ impl RuntimeBackend {
         request: ExecutionRequest,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
-        self.handle_turn_start_with_provider_history(request, Vec::new(), None, None, sink)
-            .await
+        self.handle_turn_start_with_provider_history(
+            request,
+            crate::runtime::provider_history::ProviderTurnHistory::default(),
+            None,
+            None,
+            sink,
+        )
+        .await
     }
 
     async fn handle_turn_start_with_provider_history(
         &self,
         mut request: ExecutionRequest,
-        provider_history: Vec<CurrentProviderMessage>,
+        provider_history: crate::runtime::provider_history::ProviderTurnHistory,
         pending_input: Option<RuntimeSessionInputHandle>,
         cancellation_token: Option<CancellationToken>,
         sink: &mut dyn RuntimeEventSink,
@@ -509,7 +514,8 @@ impl RuntimeBackend {
                 AgentTurnExecutionRequest {
                     session_id: &session_scope.session_id,
                     input: request.input.clone(),
-                    initial_messages: provider_history.clone(),
+                    initial_messages: provider_history
+                        .messages_for_route(&selection.provider, &selection.model),
                     session_config,
                     request_tool_policy: &request_tool_policy,
                     provider_configuration: Some(AgentTurnProviderConfiguration {
@@ -605,12 +611,24 @@ impl RuntimeBackend {
                     let Some(exclusion) = runtime_route_exclusion(
                         &selection,
                         direct_provider_config.is_some(),
+                        route_resolution
+                            .resolved_route
+                            .auth
+                            .credential_ref
+                            .as_deref(),
                         &error,
                     ) else {
                         emit_reasoning_finish(&mut reasoning_event_state, "failed", sink)?;
                         emit_agent_message_finish(&mut proposed_plan_parser, "failed", sink)?;
                         return Err(runtime_error_from_reply_attempt(error));
                     };
+                    if let (Some(credential_ref), Some(retry_after)) =
+                        (exclusion.credential_ref(), error.retry_after())
+                    {
+                        self.api_key_provider_service
+                            .cooldown_runtime_credential(credential_ref, retry_after)
+                            .map_err(backend_error)?;
+                    }
                     excluded_routes.push(exclusion);
                     previous_reply_error = Some(error);
                     resolved_turn_route = match self

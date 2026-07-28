@@ -416,7 +416,17 @@ fn append_runtime_events_to_stored_session(
         return Ok(Vec::new());
     }
     let runtime_events = deduplicate_mailbox_runtime_events(stored, runtime_events);
-    let runtime_events = runtime_events_with_turn_input(stored, turn_id, runtime_events);
+    let mut runtime_events = runtime_events_with_turn_input(stored, turn_id, runtime_events);
+    for event in &mut runtime_events {
+        if turn_input_events::runtime_event_is_provider_input(event) {
+            super::input_media::attach_input_media_output_refs(
+                &mut event.payload,
+                sidecar_store,
+                session_id,
+            )
+            .map_err(RuntimeCoreError::Backend)?;
+        }
+    }
     let runtime_events = with_canonical_message_reasoning_lifecycle(
         &stored.events,
         turn_id,

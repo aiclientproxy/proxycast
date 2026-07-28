@@ -183,6 +183,8 @@ pub use runtime::PluginDataSource;
 pub use runtime::ProjectionRepair;
 pub use runtime::ProjectionStore;
 pub use runtime::ProviderModelCatalog;
+#[doc(hidden)]
+pub use runtime::ProviderTurnHistory;
 pub use runtime::RightSurfaceAppDataSource;
 pub use runtime::RuntimeCore;
 pub use runtime::RuntimeCoreError;
@@ -322,6 +324,7 @@ impl AppServer {
             transport_notification_opt_out: transport_notification_opt_out.clone(),
         };
         let interrupt_router = server_requests.clone();
+        let notification_bridge = interrupt_bridge.clone();
         let turn_interrupt_hook: processor::TurnInterruptHook =
             Arc::new(move |thread_id, turn_id| {
                 let bridge = interrupt_bridge.clone();
@@ -332,9 +335,19 @@ impl AppServer {
                         .await;
                 })
             });
+        let server_notification_hook: processor::ServerNotificationHook =
+            Arc::new(move |notification| {
+                let bridge = notification_bridge.clone();
+                Box::pin(async move {
+                    bridge
+                        .broadcast_message(JsonRpcMessage::Notification(notification.into()))
+                        .await;
+                })
+            });
         Self {
             processor: RequestProcessor::new_with_thread_states(runtime, thread_states.clone())
-                .with_turn_interrupt_hook(turn_interrupt_hook),
+                .with_turn_interrupt_hook(turn_interrupt_hook)
+                .with_server_notification_hook(server_notification_hook),
             thread_states,
             runtime_event_receiver,
             runtime_event_pump_started: Arc::new(AtomicBool::new(false)),
@@ -970,12 +983,12 @@ impl AppServer {
     }
 }
 
-pub fn spawn_image_task_worker_scheduler(
+pub fn spawn_media_task_worker_scheduler(
     db: lime_core::database::DbConnection,
     sidecar_store: Option<Arc<SidecarStore>>,
 ) -> tokio::task::JoinHandle<()> {
-    media_task_worker::spawn_image_task_worker_scheduler(
-        media_task_worker::ImageTaskWorkerContext::new(db).with_sidecar_store(sidecar_store),
+    media_task_worker::spawn_media_task_worker_scheduler(
+        media_task_worker::MediaTaskWorkerContext::new(db).with_sidecar_store(sidecar_store),
     )
 }
 
@@ -3410,6 +3423,80 @@ mod tests {
             )),
         );
         assert!(queued.recv().await.is_some());
+    }
+
+    #[tokio::test]
+    async fn model_list_updated_broadcast_reaches_initialized_subscribers_only() {
+        let server = AppServer::new();
+        let subscribed_a = ConnectionId(110);
+        let subscribed_b = ConnectionId(111);
+        let opted_out = ConnectionId(112);
+        let uninitialized = ConnectionId(113);
+        let (writer_a, mut messages_a) = mpsc::channel(4);
+        let (writer_b, mut messages_b) = mpsc::channel(4);
+        let (writer_opted_out, mut messages_opted_out) = mpsc::channel(4);
+        let (writer_uninitialized, mut messages_uninitialized) = mpsc::channel(4);
+        server.register_transport_writer(subscribed_a, writer_a, None);
+        server.register_transport_writer(subscribed_b, writer_b, None);
+        server.register_transport_writer(opted_out, writer_opted_out, None);
+        server.register_transport_writer(uninitialized, writer_uninitialized, None);
+        server.mark_transport_initialized(subscribed_a);
+        server.mark_transport_initialized(subscribed_b);
+        server.set_transport_notification_opt_out(
+            opted_out,
+            Some(vec![
+                app_server_protocol::protocol::v2::METHOD_MODEL_LIST_UPDATED.to_string(),
+            ]),
+        );
+        server.mark_transport_initialized(opted_out);
+        let mut outbound = server.subscribe_outbound_messages();
+
+        server
+            .processor
+            .publish_server_notification(
+                app_server_protocol::protocol::v2::ServerNotification::ModelListUpdated(
+                    app_server_protocol::protocol::v2::ModelListUpdatedNotification {
+                        generation: 17,
+                        provider_id: Some("openai".to_string()),
+                    },
+                ),
+            )
+            .await;
+
+        let expected = JsonRpcMessage::Notification(JsonRpcNotification::new(
+            app_server_protocol::protocol::v2::METHOD_MODEL_LIST_UPDATED,
+            Some(json!({ "generation": 17, "providerId": "openai" })),
+        ));
+        assert_eq!(
+            outbound.recv().await.expect("in-process notification"),
+            expected
+        );
+        assert_eq!(
+            messages_a
+                .recv()
+                .await
+                .expect("first subscribed notification")
+                .message
+                .into_json_rpc_message(),
+            expected
+        );
+        assert_eq!(
+            messages_b
+                .recv()
+                .await
+                .expect("second subscribed notification")
+                .message
+                .into_json_rpc_message(),
+            expected
+        );
+        assert!(matches!(
+            messages_opted_out.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+        assert!(matches!(
+            messages_uninitialized.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
     }
 
     #[tokio::test]

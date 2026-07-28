@@ -62,7 +62,7 @@ pub(crate) fn video_running_payload_patch(payload: &Value) -> Value {
     media_payload_patch(
         payload,
         "video_generation",
-        "fal_video_generation",
+        video_executor_mode(payload),
         vec![message_started_event()],
         json!({
             "status": "running",
@@ -74,7 +74,7 @@ pub(crate) fn video_completed_payload_patch(payload: &Value, video_url: Option<&
     media_payload_patch(
         payload,
         "video_generation",
-        "fal_video_generation",
+        video_executor_mode(payload),
         vec![
             text_delta_event("video_generation_completed"),
             turn_completed_event(),
@@ -87,7 +87,22 @@ pub(crate) fn video_completed_payload_patch(payload: &Value, video_url: Option<&
 }
 
 pub(crate) fn video_failed_payload_patch(payload: &Value, error: &TaskErrorRecord) -> Value {
-    failed_payload_patch(payload, "video_generation", "fal_video_generation", error)
+    failed_payload_patch(
+        payload,
+        "video_generation",
+        video_executor_mode(payload),
+        error,
+    )
+}
+
+fn video_executor_mode(payload: &Value) -> &str {
+    model_route::resolved_model_route_from_payload(payload)
+        .as_ref()
+        .and_then(|route| {
+            model_route::video_executor_mode_from_route_protocol(route.protocol.as_deref())
+        })
+        .or_else(|| string_field(payload, &["executor_mode", "executorMode"]))
+        .unwrap_or("fal_video_generation")
 }
 
 fn failed_payload_patch(

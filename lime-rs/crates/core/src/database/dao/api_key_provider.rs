@@ -107,7 +107,7 @@ impl ApiProviderType {
             },
             ApiProviderType::Vertexai => ProviderRuntimeSpec {
                 protocol_family: ProviderProtocolFamily::Vertexai,
-                default_api_host: "https://api.openai.com",
+                default_api_host: "",
                 auth_header: "Authorization",
                 auth_prefix: Some("Bearer"),
                 extra_headers: &NO_EXTRA_HEADERS,
@@ -484,7 +484,7 @@ mod tests {
             (
                 ApiProviderType::Vertexai,
                 ProviderProtocolFamily::Vertexai,
-                "https://api.openai.com",
+                "",
                 "Authorization",
                 Some("Bearer"),
                 "gcpvertexai",

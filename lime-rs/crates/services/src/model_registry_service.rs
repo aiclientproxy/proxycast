@@ -236,6 +236,9 @@ fn parse_task_family(value: &str) -> Option<ModelTaskFamily> {
         "image_edit" | "edit" | "img2img" | "inpaint" | "outpaint" => {
             Some(ModelTaskFamily::ImageEdit)
         }
+        "video" | "video_generation" | "text_to_video" | "image_to_video" => {
+            Some(ModelTaskFamily::VideoGeneration)
+        }
         "speech_to_text" | "stt" | "asr" | "transcribe" | "transcription" => {
             Some(ModelTaskFamily::SpeechToText)
         }
@@ -1160,6 +1163,7 @@ fn infer_model_task_families(
                 | ModelTaskFamily::TextToSpeech
                 | ModelTaskFamily::ImageGeneration
                 | ModelTaskFamily::ImageEdit
+                | ModelTaskFamily::VideoGeneration
         )
     });
 
@@ -1184,6 +1188,7 @@ fn infer_model_capabilities(task_families: &[ModelTaskFamily]) -> ModelCapabilit
             family,
             ModelTaskFamily::ImageGeneration
                 | ModelTaskFamily::ImageEdit
+                | ModelTaskFamily::VideoGeneration
                 | ModelTaskFamily::SpeechToText
                 | ModelTaskFamily::TextToSpeech
                 | ModelTaskFamily::Embedding
@@ -1193,11 +1198,14 @@ fn infer_model_capabilities(task_families: &[ModelTaskFamily]) -> ModelCapabilit
 
     ModelCapabilities {
         vision: task_families.contains(&ModelTaskFamily::VisionUnderstanding),
-        tools: !task_families.contains(&ModelTaskFamily::ImageGeneration),
+        tools: !task_families.contains(&ModelTaskFamily::ImageGeneration)
+            && !task_families.contains(&ModelTaskFamily::ImageEdit)
+            && !task_families.contains(&ModelTaskFamily::VideoGeneration),
         streaming: true,
         json_mode: !specialized_only,
         function_calling: !task_families.contains(&ModelTaskFamily::ImageGeneration)
             && !task_families.contains(&ModelTaskFamily::ImageEdit)
+            && !task_families.contains(&ModelTaskFamily::VideoGeneration)
             && !task_families.contains(&ModelTaskFamily::SpeechToText)
             && !task_families.contains(&ModelTaskFamily::TextToSpeech)
             && !task_families.contains(&ModelTaskFamily::Embedding)
@@ -1223,6 +1231,7 @@ fn infer_input_modalities(
         push_unique(&mut modalities, ModelModality::Audio);
     }
     if task_families.contains(&ModelTaskFamily::ImageEdit)
+        || task_families.contains(&ModelTaskFamily::VideoGeneration)
         || task_families.contains(&ModelTaskFamily::VisionUnderstanding)
     {
         push_unique(&mut modalities, ModelModality::Image);
@@ -1270,6 +1279,9 @@ fn infer_output_modalities(
     {
         push_unique(&mut modalities, ModelModality::Image);
     }
+    if task_families.contains(&ModelTaskFamily::VideoGeneration) {
+        push_unique(&mut modalities, ModelModality::Video);
+    }
     if task_families.contains(&ModelTaskFamily::TextToSpeech) {
         push_unique(&mut modalities, ModelModality::Audio);
     }
@@ -1314,13 +1326,10 @@ fn infer_runtime_features(
     {
         push_unique(&mut features, ModelRuntimeFeature::Reasoning);
     }
-    if provider_key == "codex" {
+    if matches!(provider_key.as_str(), "codex" | "azure-openai") {
         push_unique(&mut features, ModelRuntimeFeature::ResponsesApi);
     }
-    if matches!(
-        provider_key.as_str(),
-        "openai" | "new-api" | "azure-openai" | "gateway"
-    ) {
+    if matches!(provider_key.as_str(), "openai" | "new-api" | "gateway") {
         push_unique(&mut features, ModelRuntimeFeature::ChatCompletionsApi);
     }
     if task_families.contains(&ModelTaskFamily::ImageGeneration)
@@ -2047,52 +2056,73 @@ impl ModelRegistryService {
         fetched_at: i64,
         credential_fingerprint: Option<&str>,
     ) -> Result<(), String> {
-        if models.is_empty() {
-            return Ok(());
-        }
-
-        let cache_key = Self::provider_models_cache_key_scoped(
+        let scoped_cache_key = Self::provider_models_cache_key_scoped(
             provider_id,
             api_host,
             provider_type,
             credential_fingerprint,
         );
-        let payload = ProviderModelsCachePayload {
-            taxonomy_version: PROVIDER_MODELS_CACHE_TAXONOMY_VERSION,
-            provider_id: provider_id.trim().to_string(),
-            api_host: api_host.trim().to_string(),
-            provider_type: provider_type.map(|provider_type| provider_type.to_string()),
-            request_url,
-            fetched_at,
-            expires_at: fetched_at + PROVIDER_MODELS_CACHE_TTL_SECONDS,
-            models: models.to_vec(),
+        let mut cache_keys = vec![scoped_cache_key];
+        if credential_fingerprint.is_some() {
+            let last_success_cache_key =
+                Self::provider_models_cache_key_scoped(provider_id, api_host, provider_type, None);
+            if cache_keys[0] != last_success_cache_key {
+                cache_keys.push(last_success_cache_key);
+            }
+        }
+        let payload = if models.is_empty() {
+            None
+        } else {
+            Some(
+                serde_json::to_string(&ProviderModelsCachePayload {
+                    taxonomy_version: PROVIDER_MODELS_CACHE_TAXONOMY_VERSION,
+                    provider_id: provider_id.trim().to_string(),
+                    api_host: api_host.trim().to_string(),
+                    provider_type: provider_type.map(|provider_type| provider_type.to_string()),
+                    request_url,
+                    fetched_at,
+                    expires_at: fetched_at + PROVIDER_MODELS_CACHE_TTL_SECONDS,
+                    models: models.to_vec(),
+                })
+                .map_err(|e| format!("序列化 Provider 模型缓存失败: {e}"))?,
+            )
         };
-        let payload = serde_json::to_string(&payload)
-            .map_err(|e| format!("序列化 Provider 模型缓存失败: {e}"))?;
 
         let mut conn = self.db.lock().map_err(|e| e.to_string())?;
         let tx = conn
             .transaction()
             .map_err(|e| format!("开始 Provider 模型缓存事务失败: {e}"))?;
-        let existing_payload: Option<String> = tx
-            .query_row(
-                "SELECT value FROM settings WHERE key = ?1",
-                params![cache_key],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|e| format!("读取 Provider 模型缓存失败: {e}"))?;
-
-        if existing_payload.as_deref() == Some(payload.as_str()) {
-            return Ok(());
+        let mut changed = false;
+        for cache_key in cache_keys {
+            let existing_payload: Option<String> = tx
+                .query_row(
+                    "SELECT value FROM settings WHERE key = ?1",
+                    params![&cache_key],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(|e| format!("读取 Provider 模型缓存失败: {e}"))?;
+            match payload.as_deref() {
+                Some(payload) if existing_payload.as_deref() != Some(payload) => {
+                    tx.execute(
+                        "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+                        params![&cache_key, payload],
+                    )
+                    .map_err(|e| format!("写入 Provider 模型缓存失败: {e}"))?;
+                    changed = true;
+                }
+                None if existing_payload.is_some() => {
+                    tx.execute("DELETE FROM settings WHERE key = ?1", params![&cache_key])
+                        .map_err(|e| format!("删除 Provider 模型缓存失败: {e}"))?;
+                    changed = true;
+                }
+                _ => {}
+            }
         }
-
-        tx.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
-            params![cache_key, payload],
-        )
-        .map_err(|e| format!("写入 Provider 模型缓存失败: {e}"))?;
-        RouteStateDao::advance_generation(&tx).map_err(|e| format!("推进模型路由代际失败: {e}"))?;
+        if changed {
+            RouteStateDao::advance_generation(&tx)
+                .map_err(|e| format!("推进模型路由代际失败: {e}"))?;
+        }
         tx.commit()
             .map_err(|e| format!("提交 Provider 模型缓存事务失败: {e}"))?;
 
@@ -3758,9 +3788,10 @@ pub struct FetchModelsResult {
 #[cfg(test)]
 mod tests {
     use super::{
-        infer_model_capabilities, infer_model_taxonomy, infer_vision_capability,
-        ModelFetchErrorKind, ModelFetchProtocol, ModelFetchSource, ModelRegistryService,
-        ModelTaxonomyInput, LIME_TENANT_HEADER, PROVIDER_MODELS_CACHE_TTL_SECONDS,
+        infer_model_capabilities, infer_model_taxonomy, infer_runtime_features,
+        infer_vision_capability, ModelFetchErrorKind, ModelFetchProtocol, ModelFetchSource,
+        ModelRegistryService, ModelTaxonomyInput, LIME_TENANT_HEADER,
+        PROVIDER_MODELS_CACHE_TTL_SECONDS,
     };
     use lime_core::database::dao::api_key_provider::ApiProviderType;
     use lime_core::database::dao::route_state::RouteStateDao;
@@ -3828,6 +3859,15 @@ mod tests {
             .task_families
             .contains(&ModelTaskFamily::VisionUnderstanding));
         assert!(capabilities.vision);
+    }
+
+    #[test]
+    fn test_azure_openai_infers_responses_runtime_feature() {
+        let features =
+            infer_runtime_features(Some("azure-openai"), None, &[ModelTaskFamily::Chat], &[]);
+
+        assert!(features.contains(&ModelRuntimeFeature::ResponsesApi));
+        assert!(!features.contains(&ModelRuntimeFeature::ChatCompletionsApi));
     }
 
     #[test]
@@ -4678,6 +4718,105 @@ mod tests {
                 now,
             )
             .expect("changed cache should be saved");
+        assert_eq!(route_generation(&db), 2);
+    }
+
+    #[test]
+    fn credential_scoped_catalog_keeps_one_last_success_snapshot() {
+        let (service, db) = setup_cache_service();
+        let now = chrono::Utc::now().timestamp();
+        let provider_id = "openai";
+        let api_host = "https://api.openai.com/v1";
+        let provider_type = Some(ApiProviderType::Openai);
+
+        service
+            .save_provider_models_cache_scoped(
+                provider_id,
+                api_host,
+                provider_type,
+                &[create_cached_model("gpt-5.6")],
+                None,
+                now,
+                Some("credential-a"),
+            )
+            .expect("credential catalog should be saved");
+
+        let scoped = service
+            .get_cached_provider_models_scoped(
+                provider_id,
+                api_host,
+                provider_type,
+                Some("credential-a"),
+            )
+            .expect("scoped cache read")
+            .expect("scoped cache");
+        let last_success = service
+            .get_cached_provider_models(provider_id, api_host, provider_type)
+            .expect("last success cache read")
+            .expect("last success cache");
+        assert_eq!(scoped.models[0].id, "gpt-5.6");
+        assert_eq!(last_success.models[0].id, "gpt-5.6");
+        assert_eq!(route_generation(&db), 1);
+    }
+
+    #[test]
+    fn successful_empty_catalog_clears_last_success_without_touching_old_scope() {
+        let (service, db) = setup_cache_service();
+        let now = chrono::Utc::now().timestamp();
+        let provider_id = "openai";
+        let api_host = "https://api.openai.com/v1";
+        let provider_type = Some(ApiProviderType::Openai);
+
+        service
+            .save_provider_models_cache_scoped(
+                provider_id,
+                api_host,
+                provider_type,
+                &[create_cached_model("gpt-5.6")],
+                None,
+                now,
+                Some("credential-a"),
+            )
+            .expect("first credential catalog should be saved");
+        service
+            .save_provider_models_cache_scoped(
+                provider_id,
+                api_host,
+                provider_type,
+                &[],
+                None,
+                now + 1,
+                Some("credential-b"),
+            )
+            .expect("empty catalog should replace last success");
+
+        assert!(service
+            .get_cached_provider_models(provider_id, api_host, provider_type)
+            .expect("last success cache read")
+            .is_none());
+        assert!(service
+            .get_cached_provider_models_scoped(
+                provider_id,
+                api_host,
+                provider_type,
+                Some("credential-b"),
+            )
+            .expect("new scoped cache read")
+            .is_none());
+        assert_eq!(
+            service
+                .get_cached_provider_models_scoped(
+                    provider_id,
+                    api_host,
+                    provider_type,
+                    Some("credential-a"),
+                )
+                .expect("old scoped cache read")
+                .expect("old scoped cache")
+                .models[0]
+                .id,
+            "gpt-5.6"
+        );
         assert_eq!(route_generation(&db), 2);
     }
 

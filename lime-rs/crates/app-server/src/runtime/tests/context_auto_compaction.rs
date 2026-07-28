@@ -56,10 +56,10 @@ impl ExecutionBackend for AutoCompactionUsageBackend {
     async fn start_turn_with_provider_history(
         &self,
         request: ExecutionRequest,
-        provider_history: Vec<model_provider::current_client::CurrentProviderMessage>,
+        provider_history: crate::runtime::provider_history::ProviderTurnHistory,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
-        self.complete_turn(request, provider_history, sink)
+        self.complete_turn(request, provider_history.into_messages(), sink)
     }
 
     async fn cancel_turn(

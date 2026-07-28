@@ -759,6 +759,7 @@ mod tests {
             api_key: Some("test".to_string()),
             auth: crate::runtime_provider::RuntimeProviderAuth::ApiKey,
             base_url: Some("https://gateway.example.com/v1".to_string()),
+            api_version: None,
             credential_uuid: "credential-1".to_string(),
             reasoning_effort: reasoning_effort.map(str::to_string),
             service_tier: None,

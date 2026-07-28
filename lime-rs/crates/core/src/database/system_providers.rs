@@ -336,7 +336,7 @@ pub fn get_system_providers() -> Vec<SystemProviderDef> {
             api_host: "",
             group: ProviderGroup::Cloud,
             sort_order: 26,
-            api_version: Some("2024-02-15-preview"),
+            api_version: Some("v1"),
         },
         SystemProviderDef {
             id: "google-vertex",

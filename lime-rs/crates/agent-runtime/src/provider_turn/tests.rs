@@ -1635,11 +1635,17 @@ async fn each_sampling_step_uses_a_fresh_definition_and_executor_snapshot() {
                 response_id: Some("response-1".to_string()),
             }),
         ],
-        vec![Ok(CanonicalLlmEvent::Finish {
-            reason: FinishReason::Stop,
-            usage: None,
-            response_id: Some("response-2".to_string()),
-        })],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-final".to_string(),
+                text: "done".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: Some("response-2".to_string()),
+            }),
+        ],
     ]));
     let requests = Arc::clone(&provider.requests);
     let source =
@@ -1773,11 +1779,17 @@ async fn unadvertised_native_and_mcp_calls_fail_without_reaching_step_executor()
                 response_id: Some("response-1".to_string()),
             }),
         ],
-        vec![Ok(CanonicalLlmEvent::Finish {
-            reason: FinishReason::Stop,
-            usage: None,
-            response_id: Some("response-2".to_string()),
-        })],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-final".to_string(),
+                text: "done".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: Some("response-2".to_string()),
+            }),
+        ],
     ]));
     let requests = Arc::clone(&provider.requests);
     let step_executor = Arc::new(CountingTool::default());
@@ -1879,11 +1891,17 @@ async fn turn_executes_same_response_tool_batch_in_parallel_when_policy_allows()
                 response_id: Some("response-1".to_string()),
             }),
         ],
-        vec![Ok(CanonicalLlmEvent::Finish {
-            reason: FinishReason::Stop,
-            usage: None,
-            response_id: Some("response-2".to_string()),
-        })],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-final".to_string(),
+                text: "done".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: Some("response-2".to_string()),
+            }),
+        ],
     ]));
     let probe = Arc::new(ParallelProbe::default());
     let policy = RuntimeReplyModelRequestPolicy {
@@ -2161,37 +2179,62 @@ async fn provider_quota_error_preserves_usage_limit_kind() {
 }
 
 #[tokio::test]
-async fn turn_fails_when_provider_completes_with_reasoning_but_no_user_visible_output() {
-    let provider = Arc::new(ScriptedProvider::new(vec![vec![
-        Ok(CanonicalLlmEvent::ReasoningContentDelta {
-            id: "reasoning-1".to_string(),
-            text: "I need to think about this first.".to_string(),
-            content_index: 0,
-        }),
-        Ok(CanonicalLlmEvent::Finish {
-            reason: FinishReason::Stop,
-            usage: None,
-            response_id: Some("response-1".to_string()),
-        }),
-    ]]));
+async fn turn_resamples_reasoning_only_response_with_same_sampling_snapshot() {
+    let provider = Arc::new(ScriptedProvider::new(vec![
+        vec![
+            Ok(CanonicalLlmEvent::ReasoningContentDelta {
+                id: "reasoning-1".to_string(),
+                text: "I need to think about this first.".to_string(),
+                content_index: 0,
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: Some(Usage {
+                    input_tokens: Some(10),
+                    output_tokens: Some(4),
+                    ..Usage::default()
+                }),
+                response_id: Some("response-1".to_string()),
+            }),
+        ],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-2".to_string(),
+                text: "done".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: Some(Usage {
+                    input_tokens: Some(10),
+                    output_tokens: Some(1),
+                    ..Usage::default()
+                }),
+                response_id: Some("response-2".to_string()),
+            }),
+        ],
+    ]));
+    let requests = Arc::clone(&provider.requests);
+    let snapshot_source =
+        RuntimeToolStepSnapshotSourceHandle::new(Arc::new(SequencedToolStepSnapshotSource {
+            snapshots: Mutex::new(VecDeque::from([RuntimeToolStepSnapshot::new(
+                Vec::new(),
+                RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+            )])),
+        }));
 
     let mut events = Vec::new();
-    let error = run_current_provider_turn(
+    let execution = run_current_provider_turn(
         CurrentProviderTurnInput {
             provider,
             provider_trace_metadata: None,
             session_config: crate::session_config::SessionConfigBuilder::new("session-1")
                 .turn_id("turn-1")
+                .max_turns(1)
                 .build(),
             initial_messages: vec![CurrentProviderMessage::user(vec![
                 CurrentProviderContent::Text("hello".to_string()),
             ])],
-            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
-                RuntimeToolStepSnapshot::new(
-                    Vec::new(),
-                    RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
-                ),
-            ),
+            tool_step_snapshot_source: snapshot_source,
             hook_snapshot_source: None,
             model_request_policy: None,
             tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
@@ -2202,7 +2245,13 @@ async fn turn_fails_when_provider_completes_with_reasoning_but_no_user_visible_o
         |event| events.push(event),
     )
     .await
-    .expect_err("reasoning-only completion must fail the turn");
+    .expect("reasoning-only completion should be resampled");
+
+    assert_eq!(execution.text_output, "done");
+    assert_eq!(execution.attempts_summary, "attempts=2");
+    let requests = requests.lock().expect("provider requests");
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0], requests[1]);
 
     assert_eq!(
         events
@@ -2226,12 +2275,246 @@ async fn turn_fails_when_provider_completes_with_reasoning_but_no_user_visible_o
             ("end", "provider:turn-1:1:reasoning:reasoning-1"),
         ]
     );
+    assert_eq!(
+        events
+            .iter()
+            .filter_map(|event| match event {
+                CurrentProviderTurnEvent::ProviderStep { attempt, .. } => Some(*attempt),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+}
+
+#[tokio::test]
+async fn empty_response_retry_budget_is_bounded_and_does_not_spend_max_turns() {
+    let empty = || {
+        vec![Ok(CanonicalLlmEvent::Finish {
+            reason: FinishReason::Stop,
+            usage: None,
+            response_id: None,
+        })]
+    };
+    let provider = Arc::new(ScriptedProvider::new(vec![empty(), empty(), empty()]));
+    let requests = Arc::clone(&provider.requests);
+
+    let error = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-1")
+                .turn_id("turn-1")
+                .max_turns(1)
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("hello".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect_err("empty response retries must be bounded");
+
+    assert_eq!(requests.lock().expect("provider requests").len(), 3);
+    assert_eq!(
+        error.message,
+        "Provider completed without user-visible output after 3 attempts (empty response retries exhausted: 2/2)"
+    );
+}
+
+#[tokio::test]
+async fn empty_final_after_tool_call_resamples_without_spending_max_turns() {
+    let provider = Arc::new(ScriptedProvider::new(vec![
+        vec![
+            Ok(CanonicalLlmEvent::ToolCall {
+                id: "call-1".to_string(),
+                name: "Read".to_string(),
+                input: serde_json::json!({ "path": "README.md" }),
+                provider_executed: None,
+                provider_metadata: Default::default(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::ToolCall,
+                usage: None,
+                response_id: Some("response-1".to_string()),
+            }),
+        ],
+        vec![Ok(CanonicalLlmEvent::Finish {
+            reason: FinishReason::Stop,
+            usage: None,
+            response_id: Some("response-empty".to_string()),
+        })],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-final".to_string(),
+                text: "done".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: Some("response-3".to_string()),
+            }),
+        ],
+    ]));
+    let requests = Arc::clone(&provider.requests);
+
+    let execution = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-1")
+                .turn_id("turn-1")
+                .max_turns(2)
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("inspect it".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    vec![RuntimeToolDefinition::new(
+                        "Read",
+                        "read files",
+                        serde_json::json!({}),
+                    )],
+                    RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect("empty final answer after a tool call should be resampled");
+
+    assert_eq!(execution.text_output, "done");
+    assert_eq!(execution.attempts_summary, "attempts=3");
+    assert!(!execution
+        .text_output
+        .contains(MAX_REPLY_TURNS_REACHED_MESSAGE));
+
+    let requests = requests.lock().expect("provider requests");
+    assert_eq!(requests.len(), 3);
+    assert_eq!(requests[1], requests[2]);
+    assert!(requests[2].messages.iter().any(|message| {
+        message.role == CurrentProviderRole::Tool
+            && message.content.iter().any(|part| {
+                matches!(part, CurrentProviderContent::ToolResult(result)
+                    if result.output == "executed Read")
+            })
+    }));
+    assert!(requests[2]
+        .messages
+        .iter()
+        .all(|message| !(message.role == CurrentProviderRole::Assistant
+            && message.content.is_empty())));
+}
+
+#[tokio::test]
+async fn content_filtered_empty_response_completes_without_resampling() {
+    let provider = Arc::new(ScriptedProvider::new(vec![vec![Ok(
+        CanonicalLlmEvent::Finish {
+            reason: FinishReason::ContentFilter,
+            usage: None,
+            response_id: Some("response-refusal".to_string()),
+        },
+    )]]));
+    let requests = Arc::clone(&provider.requests);
+
+    let execution = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-1")
+                .turn_id("turn-1")
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("blocked request".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect("content-filtered response is a legitimate terminal");
+
+    assert!(execution.text_output.is_empty());
+    assert_eq!(execution.attempts_summary, "attempts=1");
+    assert_eq!(requests.lock().expect("provider requests").len(), 1);
+}
+
+#[tokio::test]
+async fn empty_length_response_fails_without_resampling() {
+    let provider = Arc::new(ScriptedProvider::new(vec![vec![Ok(
+        CanonicalLlmEvent::Finish {
+            reason: FinishReason::Length,
+            usage: None,
+            response_id: Some("response-truncated".to_string()),
+        },
+    )]]));
+    let requests = Arc::clone(&provider.requests);
+
+    let error = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-1")
+                .turn_id("turn-1")
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("long response".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect_err("empty max-token response is deterministic");
 
     assert_eq!(
         error.message,
-        "Provider completed without user-visible output"
+        "Provider reached its output limit without user-visible output"
     );
-    assert!(error.emitted_any);
+    assert_eq!(requests.lock().expect("provider requests").len(), 1);
 }
 
 #[tokio::test]

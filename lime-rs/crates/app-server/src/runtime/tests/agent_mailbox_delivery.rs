@@ -134,7 +134,7 @@ impl ExecutionBackend for RecordingBackend {
     async fn start_turn_with_provider_history(
         &self,
         request: ExecutionRequest,
-        provider_history: Vec<model_provider::current_client::CurrentProviderMessage>,
+        provider_history: crate::runtime::provider_history::ProviderTurnHistory,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
         self.requests
@@ -144,7 +144,7 @@ impl ExecutionBackend for RecordingBackend {
         self.histories
             .lock()
             .expect("histories mutex poisoned")
-            .push(provider_history);
+            .push(provider_history.into_messages());
         sink.emit(RuntimeEvent::new("turn.accepted", json!({})))
     }
 

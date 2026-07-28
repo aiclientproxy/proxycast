@@ -94,6 +94,7 @@ async fn resolve_builder_provider_configuration(
             provider.as_ref(),
             None,
             None,
+            &[],
         )
         .await
         .map_err(RuntimeCoreError::Backend)?

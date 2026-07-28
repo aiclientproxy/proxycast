@@ -4,6 +4,10 @@ import { buildAgentTextDeltaContentPartMetadata } from "../utils/contentPartTime
 
 type AgentMessageItem = Extract<AgentThreadItem, { type: "agent_message" }>;
 type MediaItem = Extract<AgentThreadItem, { type: "media" }>;
+type ImageGenerationItem = Extract<
+  AgentThreadItem,
+  { type: "image_generation" }
+>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -30,7 +34,7 @@ function normalizeNonInlineSourceReference(value: unknown): string | null {
 }
 
 function buildBaseMetadata(
-  item: AgentMessageItem | MediaItem,
+  item: AgentMessageItem | MediaItem | ImageGenerationItem,
   index: number,
 ): Record<string, unknown> {
   return {
@@ -267,6 +271,51 @@ export function mediaReferenceContentPartFromThreadItem(
       referenceUri: uri,
       mediaKind,
       ...(mimeType ? { mimeType } : {}),
+      ...(sourcePath ? { sourcePath } : {}),
+    },
+  };
+}
+
+export function imageGenerationContentPartFromThreadItem(
+  item: ImageGenerationItem,
+): ContentPart | null {
+  const generationStatus = normalizeString(
+    item.generation_status,
+  )?.toLowerCase();
+  const result = normalizeString(item.result);
+  if (
+    item.status !== "completed" ||
+    generationStatus !== "completed" ||
+    !result
+  ) {
+    return null;
+  }
+
+  const caption = normalizeString(item.revised_prompt);
+  const sourcePath = normalizeString(item.saved_path);
+  const title = sourcePath ? mediaTitleFromUri(sourcePath) : null;
+  const uri = `data:image/png;base64,${result}`;
+  return {
+    type: "media_reference",
+    reference: buildMediaReference({
+      caption,
+      title,
+      uri,
+      refId: null,
+      mimeType: "image/png",
+      mediaKind: "image",
+      sourceUri: null,
+      sourcePath,
+      previewUrl: null,
+      sha256: null,
+    }),
+    metadata: {
+      ...buildBaseMetadata(item, 0),
+      source: "hosted_image_generation",
+      generationStatus,
+      mediaKind: "image",
+      mimeType: "image/png",
+      ...(caption ? { caption } : {}),
       ...(sourcePath ? { sourcePath } : {}),
     },
   };

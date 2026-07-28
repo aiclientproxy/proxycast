@@ -1,4 +1,5 @@
 use super::*;
+use crate::{CapabilitySnapshot, JsonRpcNotification, ModelCapabilitiesInfo};
 use schemars::schema_for;
 use serde_json::json;
 
@@ -178,7 +179,7 @@ fn artifact_write_round_trips_typed_snapshot_shape() {
 }
 
 #[test]
-fn model_list_round_trips_exact_codex_shape() {
+fn model_list_keeps_codex_fields_with_multimodel_extensions() {
     let expected = json!({
         "id": 5,
         "method": "model/list",
@@ -201,6 +202,7 @@ fn model_list_round_trips_exact_codex_shape() {
     let response = ModelListResponse {
         data: vec![Model {
             id: "route:b3BlbmFp.Z3B0LTU".to_string(),
+            provider_id: "openai".to_string(),
             model: "gpt-5".to_string(),
             upgrade: None,
             upgrade_info: None,
@@ -214,6 +216,23 @@ fn model_list_round_trips_exact_codex_shape() {
             }],
             default_reasoning_effort: "high".to_string(),
             input_modalities: vec![InputModality::Text, InputModality::Image],
+            capability_snapshot: CapabilitySnapshot {
+                task_families: vec!["chat".to_string(), "reasoning".to_string()],
+                input_modalities: vec!["text".to_string(), "image".to_string()],
+                output_modalities: vec!["text".to_string()],
+                runtime_features: vec!["streaming".to_string(), "tool_calling".to_string()],
+                capabilities: ModelCapabilitiesInfo {
+                    vision: true,
+                    tools: true,
+                    streaming: true,
+                    reasoning: true,
+                    ..ModelCapabilitiesInfo::default()
+                },
+                source: Some("provider_explicit".to_string()),
+                reason_code: None,
+            },
+            context_window: Some(400_000),
+            max_output_tokens: Some(128_000),
             supports_personality: false,
             additional_speed_tiers: Vec::new(),
             service_tiers: Vec::new(),
@@ -227,6 +246,7 @@ fn model_list_round_trips_exact_codex_shape() {
         json!({
             "data": [{
                 "id": "route:b3BlbmFp.Z3B0LTU",
+                "providerId": "openai",
                 "model": "gpt-5",
                 "upgrade": null,
                 "upgradeInfo": null,
@@ -240,6 +260,23 @@ fn model_list_round_trips_exact_codex_shape() {
                 }],
                 "defaultReasoningEffort": "high",
                 "inputModalities": ["text", "image"],
+                "capabilitySnapshot": {
+                    "taskFamilies": ["chat", "reasoning"],
+                    "inputModalities": ["text", "image"],
+                    "outputModalities": ["text"],
+                    "runtimeFeatures": ["streaming", "tool_calling"],
+                    "capabilities": {
+                        "vision": true,
+                        "tools": true,
+                        "streaming": true,
+                        "jsonMode": false,
+                        "functionCalling": false,
+                        "reasoning": true
+                    },
+                    "source": "provider_explicit"
+                },
+                "contextWindow": 400000,
+                "maxOutputTokens": 128000,
                 "supportsPersonality": false,
                 "additionalSpeedTiers": [],
                 "serviceTiers": [],
@@ -249,6 +286,29 @@ fn model_list_round_trips_exact_codex_shape() {
             "nextCursor": null
         })
     );
+}
+
+#[test]
+fn model_list_updated_notification_round_trips_typed_generation() {
+    let notification = ServerNotification::ModelListUpdated(ModelListUpdatedNotification {
+        generation: 17,
+        provider_id: Some("openai".to_string()),
+    });
+    let jsonrpc: JsonRpcNotification = notification.clone().into();
+
+    assert_eq!(jsonrpc.method, METHOD_MODEL_LIST_UPDATED);
+    assert_eq!(
+        jsonrpc.params,
+        Some(json!({
+            "generation": 17,
+            "providerId": "openai"
+        }))
+    );
+    assert_eq!(
+        ServerNotification::try_from(jsonrpc).expect("typed model list update"),
+        notification
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_MODEL_LIST_UPDATED));
 }
 
 #[test]
@@ -1682,6 +1742,7 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "item/reasoning/summaryPartAdded",
             "item/reasoning/textDelta",
             "model/rerouted",
+            "model/list/updated",
             "model/verification",
             "model/safetyBuffering/updated",
             "thread/settings/updated",

@@ -2,9 +2,12 @@ use std::path::Path;
 use std::time::Duration;
 
 use chrono::Utc;
-use model_provider::lowering::{build_fal_video_generation_body, ProtocolMappingError};
+use model_provider::video::{
+    execute_video_generation, VideoProtocol, VideoProviderConfig, VideoProviderError,
+    VideoProviderProgress, VideoProviderRequest,
+};
 use runtime_core::CanonicalRequest;
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 
 use super::model_route;
 use super::task_artifact::read_payload_string;
@@ -15,11 +18,53 @@ use super::{
 
 pub const VIDEO_TASK_RUNNER_WORKER_ID: &str = "media-video-api-worker";
 const VIDEO_TASK_RUNNER_TIMEOUT_SECS: u64 = 300;
+const XAI_VIDEO_POLL_INTERVAL_SECS: u64 = 5;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VideoGenerationRunnerConfig {
+    pub protocol: VideoProtocol,
     pub endpoint: String,
     pub api_key: String,
+    pub auth_header: String,
+    pub auth_prefix: Option<String>,
+    pub poll_interval: Duration,
+    pub overall_timeout: Duration,
+}
+
+impl VideoGenerationRunnerConfig {
+    pub fn fal(
+        endpoint: String,
+        api_key: String,
+        auth_header: String,
+        auth_prefix: Option<String>,
+    ) -> Self {
+        Self {
+            protocol: VideoProtocol::Fal,
+            endpoint,
+            api_key,
+            auth_header,
+            auth_prefix,
+            poll_interval: Duration::from_secs(XAI_VIDEO_POLL_INTERVAL_SECS),
+            overall_timeout: Duration::from_secs(VIDEO_TASK_RUNNER_TIMEOUT_SECS),
+        }
+    }
+
+    pub fn xai(
+        endpoint: String,
+        api_key: String,
+        auth_header: String,
+        auth_prefix: Option<String>,
+    ) -> Self {
+        Self {
+            protocol: VideoProtocol::Xai,
+            endpoint,
+            api_key,
+            auth_header,
+            auth_prefix,
+            poll_interval: Duration::from_secs(XAI_VIDEO_POLL_INTERVAL_SECS),
+            overall_timeout: Duration::from_secs(VIDEO_TASK_RUNNER_TIMEOUT_SECS),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -127,38 +172,57 @@ where
     )?;
     on_update(&running_output);
 
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .timeout(Duration::from_secs(VIDEO_TASK_RUNNER_TIMEOUT_SECS))
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
-
-    let response_body = match request_video_generation_for_executor(
-        &client,
-        runner_config,
-        &prepared_input,
-        task_id,
+    let provider_config = VideoProviderConfig {
+        protocol: runner_config.protocol,
+        endpoint: runner_config.endpoint.clone(),
+        api_key: runner_config.api_key.clone(),
+        auth_header: runner_config.auth_header.clone(),
+        auth_prefix: runner_config.auth_prefix.clone(),
+        provider_id: prepared_input.provider_id.clone(),
+        poll_interval: runner_config.poll_interval,
+        overall_timeout: runner_config.overall_timeout,
+    };
+    let provider_request = VideoProviderRequest {
+        model_id: prepared_input.model.clone().unwrap_or_default(),
+        request: video_generation_llm_request(&prepared_input, task_id),
+        resume_request_id: provider_request_id_from_payload(&running_output.record.payload),
+    };
+    let provider_output = match execute_video_generation(
+        &provider_config,
+        &provider_request,
+        |progress| {
+            let output = persist_video_provider_progress(
+                workspace_root,
+                task_id,
+                runner_config.protocol,
+                progress,
+            )
+            .map_err(|error| error.to_string())?;
+            on_update(&output);
+            Ok(())
+        },
+        || {
+            load_current_video_task(workspace_root, task_id)
+                .map(|output| output.normalized_status == "cancelled")
+                .unwrap_or(false)
+        },
     )
     .await
     {
-        Ok(response_body) => response_body,
-        Err(task_error) => {
-            return mark_video_task_failed(workspace_root, task_id, task_error, &mut on_update);
+        Ok(output) => output,
+        Err(error) if error.is_cancelled() => {
+            return load_current_video_task(workspace_root, task_id);
         }
-    };
-
-    let video = match extract_generated_video(&response_body) {
-        Some(video) => video,
-        None => {
-            let task_error = build_video_task_error(
-                "video_result_empty",
-                "视频服务未返回可用结果",
-                false,
-                "result",
+        Err(error) => {
+            return mark_video_task_failed(
+                workspace_root,
+                task_id,
+                video_provider_task_error(error),
+                &mut on_update,
             );
-            return mark_video_task_failed(workspace_root, task_id, task_error, &mut on_update);
         }
     };
+    let video = provider_output.video;
 
     let latest = load_current_video_task(workspace_root, task_id)?;
     if latest.normalized_status == "cancelled" {
@@ -177,7 +241,8 @@ where
             result: Some(Some(build_video_task_result_value(
                 &prepared_input,
                 video,
-                response_body,
+                provider_output.response,
+                provider_output.provider_request_id,
             ))),
             last_error: Some(None),
             progress: Some(build_video_task_progress(
@@ -304,82 +369,64 @@ fn apply_video_route_preflight(
     Ok(Ok(migrated))
 }
 
-async fn request_video_generation_for_executor(
-    client: &reqwest::Client,
-    runner_config: &VideoGenerationRunnerConfig,
-    prepared_input: &PreparedVideoTaskInput,
+fn persist_video_provider_progress(
+    workspace_root: &Path,
     task_id: &str,
-) -> Result<Value, TaskErrorRecord> {
-    let endpoint = runner_config.endpoint.trim();
-    if endpoint.is_empty() {
-        return Err(build_video_task_error(
-            "video_endpoint_missing",
-            "视频服务 endpoint 不能为空",
-            false,
-            "request",
-        ));
-    }
-
-    let mut request = client
-        .post(endpoint)
-        .bearer_auth(runner_config.api_key.trim())
-        .json(&build_video_generation_request_body(
-            prepared_input,
-            task_id,
-        )?);
-    if let Some(provider_id) = prepared_input.provider_id.as_deref() {
-        request = request.header("X-Provider-Id", provider_id);
-    }
-
-    let response = request.send().await.map_err(|error| {
-        build_video_task_error(
-            "video_provider_request_error",
-            format!("请求视频服务失败: {error}"),
-            true,
-            "request",
-        )
-    })?;
-    let status = response.status();
-    let response_text = response.text().await.map_err(|error| {
-        build_video_task_error(
-            "video_provider_response_read_error",
-            format!("读取视频服务响应失败: {error}"),
-            true,
-            "response",
-        )
-    })?;
-
-    if !status.is_success() {
-        return Err(build_video_task_provider_error(
-            "video_provider_request_failed",
-            format!(
-                "视频服务返回 HTTP {}: {}",
-                status.as_u16(),
-                summarize_provider_body(&response_text)
-            ),
-            status.is_server_error(),
-            "request",
-            Some(status.as_u16().to_string()),
-        ));
-    }
-
-    serde_json::from_str::<Value>(&response_text).map_err(|error| {
-        build_video_task_error(
-            "video_provider_response_invalid",
-            format!("解析视频服务响应失败: {error}"),
-            false,
-            "response",
-        )
-    })
+    protocol: VideoProtocol,
+    progress: VideoProviderProgress,
+) -> Result<MediaTaskOutput, MediaRuntimeError> {
+    let (request_id, provider_status, message, percent) = match progress {
+        VideoProviderProgress::Started { request_id } => (
+            request_id,
+            "submitted".to_string(),
+            "视频请求已提交，正在等待 Provider 生成。".to_string(),
+            Some(5),
+        ),
+        VideoProviderProgress::Polling { request_id, status } => {
+            let status = if status.is_empty() {
+                "pending".to_string()
+            } else {
+                status
+            };
+            (
+                request_id,
+                status.clone(),
+                format!("视频 Provider 状态：{status}"),
+                None,
+            )
+        }
+    };
+    patch_video_task(
+        workspace_root,
+        task_id,
+        TaskArtifactPatch {
+            payload_patch: Some(json!({
+                "provider_task": {
+                    "protocol": video_protocol_name(protocol),
+                    "request_id": request_id,
+                    "status": provider_status,
+                    "updated_at": Utc::now().to_rfc3339(),
+                }
+            })),
+            progress: Some(build_video_task_progress("running", message, percent)),
+            current_attempt_worker_id: Some(Some(VIDEO_TASK_RUNNER_WORKER_ID.to_string())),
+            ..TaskArtifactPatch::default()
+        },
+    )
 }
 
-fn build_video_generation_request_body(
-    prepared_input: &PreparedVideoTaskInput,
-    task_id: &str,
-) -> Result<Value, TaskErrorRecord> {
-    let request = video_generation_llm_request(prepared_input, task_id);
-    build_fal_video_generation_body(prepared_input.model.as_deref().unwrap_or(""), &request)
-        .map_err(|error| video_request_mapping_error(error))
+fn provider_request_id_from_payload(payload: &Value) -> Option<String> {
+    payload
+        .get("provider_task")
+        .or_else(|| payload.get("providerTask"))
+        .and_then(|provider_task| read_payload_string(provider_task, &["request_id", "requestId"]))
+}
+
+fn video_protocol_name(protocol: VideoProtocol) -> &'static str {
+    match protocol {
+        VideoProtocol::Fal => "fal",
+        VideoProtocol::Xai => "xai_video",
+    }
 }
 
 fn video_generation_llm_request(
@@ -434,61 +481,11 @@ fn video_generation_llm_request(
     request
 }
 
-fn video_request_mapping_error(error: ProtocolMappingError) -> TaskErrorRecord {
-    build_video_task_error(
-        "video_request_mapping_failed",
-        format!("构建视频生成请求失败: {error}"),
-        false,
-        "request",
-    )
-}
-
-fn extract_generated_video(response_body: &Value) -> Option<Value> {
-    response_body
-        .get("data")
-        .and_then(Value::as_array)
-        .and_then(|items| items.iter().find_map(extract_video_from_candidate))
-        .or_else(|| {
-            response_body
-                .get("video")
-                .and_then(extract_video_from_candidate)
-        })
-        .or_else(|| extract_video_from_candidate(response_body))
-}
-
-fn extract_video_from_candidate(candidate: &Value) -> Option<Value> {
-    let record = candidate.as_object()?;
-    let url = record
-        .get("url")
-        .or_else(|| record.get("video_url"))
-        .or_else(|| record.get("videoUrl"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())?;
-
-    let mut video = Map::new();
-    video.insert("url".to_string(), json!(url));
-    for key in [
-        "id",
-        "mime_type",
-        "mimeType",
-        "duration",
-        "width",
-        "height",
-        "thumbnail_url",
-        "thumbnailUrl",
-    ] {
-        if let Some(value) = record.get(key) {
-            video.insert(key.to_string(), value.clone());
-        }
-    }
-    Some(Value::Object(video))
-}
-
 fn build_video_task_result_value(
     prepared_input: &PreparedVideoTaskInput,
     video: Value,
     response_body: Value,
+    provider_request_id: Option<String>,
 ) -> Value {
     json!({
         "prompt": prepared_input.prompt,
@@ -496,7 +493,21 @@ fn build_video_task_result_value(
         "model": prepared_input.model,
         "video": video,
         "response": response_body,
+        "provider_request_id": provider_request_id,
     })
+}
+
+fn video_provider_task_error(error: VideoProviderError) -> TaskErrorRecord {
+    let provider_code = error
+        .provider_code
+        .or_else(|| error.status.map(|status| status.to_string()));
+    build_video_task_provider_error(
+        error.code,
+        error.message,
+        error.retryable,
+        error.stage,
+        provider_code,
+    )
 }
 
 fn build_video_task_progress(phase: &str, message: String, percent: Option<u32>) -> TaskProgress {
@@ -572,14 +583,4 @@ fn read_payload_scalar(payload: &Value, keys: &[&str]) -> Option<Value> {
             other => Some(other.clone()),
         }
     })
-}
-
-fn summarize_provider_body(raw: &str) -> String {
-    let trimmed = raw.trim();
-    if trimmed.chars().count() <= 240 {
-        return trimmed.to_string();
-    }
-
-    let summary: String = trimmed.chars().take(240).collect();
-    format!("{summary}...")
 }

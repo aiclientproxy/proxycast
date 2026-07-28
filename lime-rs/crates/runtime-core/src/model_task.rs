@@ -224,6 +224,14 @@ fn capability_satisfied(required: &str, snapshot: &CapabilitySnapshot) -> bool {
                     .iter()
                     .any(|modality| modality == "image")
         }
+        "video_generation" => {
+            normalized_values(&snapshot.task_families)
+                .iter()
+                .any(|family| family == "video_generation")
+                && normalized_values(&snapshot.output_modalities)
+                    .iter()
+                    .any(|modality| modality == "video")
+        }
         _ => false,
     }
 }
@@ -456,6 +464,36 @@ mod tests {
             "taskFamilies": ["image_generation"],
             "inputModalities": ["text"],
             "outputModalities": ["image"]
+        }));
+
+        assert_eq!(route_capability_gap(&request, &snapshot), None);
+    }
+
+    #[test]
+    fn video_generation_capability_uses_declared_task_and_output_modality() {
+        let request = build_model_task_request(ModelTaskRequestInput {
+            task_kind: ModelTaskKind::VideoGenerate,
+            source: ModelTaskSource::MediaTaskArtifact,
+            provider_id: Some("fal".to_string()),
+            model_id: Some("fal-ai/video".to_string()),
+            model_ref_source: ModelRefSource::Task,
+            modality_contract_key: Some("video_generation".to_string()),
+            routing_slot: Some("video_generation_model".to_string()),
+            task_families: vec!["video_generation".to_string()],
+            input_modalities: vec!["text".to_string(), "image".to_string()],
+            output_modalities: vec!["video".to_string()],
+            runtime_features: Vec::new(),
+            capabilities: vec!["video_generation".to_string()],
+            session_id: None,
+            thread_id: None,
+            turn_id: None,
+            content_id: None,
+            trace_id: None,
+        });
+        let snapshot = capability_snapshot_from_model_capabilities(&json!({
+            "taskFamilies": ["video_generation"],
+            "inputModalities": ["text", "image"],
+            "outputModalities": ["video"]
         }));
 
         assert_eq!(route_capability_gap(&request, &snapshot), None);

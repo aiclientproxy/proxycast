@@ -316,7 +316,9 @@ function shouldUseTextProviderFixture(scenario) {
     isImageWorkflowScenario(scenario) ||
     scenario === SOUL_STYLE_SCENARIO ||
     scenario === INPUTBAR_RICH_RESTORE_SCENARIO ||
-    scenario === ACTIVE_STEER_SCENARIO
+    scenario === ACTIVE_STEER_SCENARIO ||
+    scenario === CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO ||
+    scenario === CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO
   );
 }
 

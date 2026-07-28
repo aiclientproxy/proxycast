@@ -24,6 +24,7 @@ use serde_json::json;
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::broadcast;
 use tokio::time::{timeout, Duration};
 
@@ -35,7 +36,68 @@ struct MediaTaskAppServer {
     server: AppServer,
 }
 
+async fn read_fixture_http_request(stream: &mut tokio::net::TcpStream) -> (String, Value) {
+    let mut bytes = Vec::new();
+    let header_end = loop {
+        let mut chunk = [0_u8; 1024];
+        let read = stream.read(&mut chunk).await.expect("read fixture request");
+        assert!(read > 0, "fixture request closed before headers completed");
+        bytes.extend_from_slice(&chunk[..read]);
+        if let Some(position) = bytes.windows(4).position(|item| item == b"\r\n\r\n") {
+            break position + 4;
+        }
+    };
+    let headers = String::from_utf8_lossy(&bytes[..header_end]).to_string();
+    let content_length = headers
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case("content-length")
+                .then(|| value.trim().parse::<usize>().ok())
+                .flatten()
+        })
+        .unwrap_or(0);
+    while bytes.len() < header_end + content_length {
+        let mut chunk = vec![0_u8; content_length.max(1024)];
+        let read = stream
+            .read(&mut chunk)
+            .await
+            .expect("read fixture request body");
+        assert!(read > 0, "fixture request body ended early");
+        bytes.extend_from_slice(&chunk[..read]);
+    }
+    let body = if content_length == 0 {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes[header_end..header_end + content_length])
+            .expect("decode fixture request body")
+    };
+    (headers, body)
+}
+
+async fn write_fixture_json_response(stream: &mut tokio::net::TcpStream, body: Value) {
+    let body = body.to_string();
+    let response = format!(
+        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    stream
+        .write_all(response.as_bytes())
+        .await
+        .expect("write fixture response");
+}
+
 async fn media_task_app_server() -> MediaTaskAppServer {
+    build_media_task_app_server(|db| {
+        insert_image_provider_with_key(db, "provider-image", "gpt-image-test");
+    })
+    .await
+}
+
+async fn build_media_task_app_server(
+    configure_providers: impl FnOnce(&DbConnection),
+) -> MediaTaskAppServer {
     let temp = TempDir::new().expect("create media task fixture temp dir");
     let data_root = temp.path().join("app-server-data");
     let workspace_root = temp.path().join("workspace").to_string_lossy().to_string();
@@ -44,7 +106,7 @@ async fn media_task_app_server() -> MediaTaskAppServer {
     let conn = Connection::open_in_memory().expect("open in-memory product db");
     create_tables(&conn).expect("create product schema");
     let db = Arc::new(Mutex::new(conn));
-    insert_image_provider_with_key(&db, "provider-image", "gpt-image-test");
+    configure_providers(&db);
     let event_log_writer =
         Arc::new(EventLogWriter::new(temp.path().join("events")).expect("event log writer"));
     let sidecar_store =
@@ -64,6 +126,300 @@ async fn media_task_app_server() -> MediaTaskAppServer {
         workspace_root,
         server: AppServer::with_runtime(runtime),
     }
+}
+
+#[tokio::test]
+async fn video_task_create_executes_current_worker_from_public_jsonrpc() {
+    let captured_request = Arc::new(Mutex::new(None::<String>));
+    let captured_body = Arc::new(Mutex::new(None::<Value>));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind video provider");
+    let address = listener.local_addr().expect("video provider address");
+    let captured_request_for_server = Arc::clone(&captured_request);
+    let captured_body_for_server = Arc::clone(&captured_body);
+    let provider_server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.expect("accept video request");
+        let mut bytes = Vec::new();
+        let mut header_end = None;
+        loop {
+            let mut chunk = [0_u8; 1024];
+            let read = stream.read(&mut chunk).await.expect("read video request");
+            if read == 0 {
+                break;
+            }
+            bytes.extend_from_slice(&chunk[..read]);
+            if let Some(position) = bytes.windows(4).position(|item| item == b"\r\n\r\n") {
+                header_end = Some(position + 4);
+                break;
+            }
+        }
+        let header_end = header_end.expect("video request headers");
+        let headers = String::from_utf8_lossy(&bytes[..header_end]).to_string();
+        let content_length = headers
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().ok())
+                    .flatten()
+            })
+            .unwrap_or(0);
+        while bytes.len() < header_end + content_length {
+            let mut chunk = vec![0_u8; content_length.max(1024)];
+            let read = stream
+                .read(&mut chunk)
+                .await
+                .expect("read video request body");
+            if read == 0 {
+                break;
+            }
+            bytes.extend_from_slice(&chunk[..read]);
+        }
+        let body: Value = serde_json::from_slice(&bytes[header_end..header_end + content_length])
+            .expect("decode video request body");
+        *captured_request_for_server.lock().expect("capture request") = Some(headers);
+        *captured_body_for_server.lock().expect("capture body") = Some(body);
+
+        let response_body = json!({
+            "data": [{
+                "id": "video-result-1",
+                "url": "https://cdn.example.test/video-result-1.mp4",
+                "mime_type": "video/mp4",
+                "duration": 6
+            }]
+        })
+        .to_string();
+        let response = format!(
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+            response_body.len(),
+            response_body
+        );
+        stream
+            .write_all(response.as_bytes())
+            .await
+            .expect("write video response");
+    });
+
+    let api_host = format!("http://{address}/v1/videos/generations");
+    let app = build_media_task_app_server(|db| {
+        insert_video_provider_with_key(db, "provider-video", "fal-ai/video-test", &api_host);
+    })
+    .await;
+    initialize_server(&app.server, 1, "media-task-video-create-test").await;
+
+    let created = request(
+        &app.server,
+        2,
+        METHOD_MEDIA_TASK_ARTIFACT_VIDEO_CREATE,
+        json!({
+            "projectRootPath": app.workspace_root,
+            "prompt": "生成一段青柠实验室视频",
+            "providerId": "provider-video",
+            "model": "fal-ai/video-test",
+            "duration": 6,
+            "aspectRatio": "16:9"
+        }),
+    )
+    .await;
+    let task_id = created
+        .pointer("/result/task_id")
+        .and_then(Value::as_str)
+        .expect("created video task id")
+        .to_string();
+    assert_eq!(
+        created.pointer("/result/record/payload/model_route_execution/executor/bindingKey"),
+        Some(&json!("mediaTaskArtifact/video/create"))
+    );
+
+    let completed = timeout(Duration::from_secs(5), async {
+        let mut request_id = 3;
+        loop {
+            let task = request(
+                &app.server,
+                request_id,
+                METHOD_MEDIA_TASK_ARTIFACT_GET,
+                json!({
+                    "projectRootPath": app.workspace_root,
+                    "taskRef": task_id
+                }),
+            )
+            .await;
+            request_id += 1;
+            if matches!(
+                task.pointer("/result/normalized_status")
+                    .and_then(Value::as_str),
+                Some("succeeded" | "failed" | "cancelled")
+            ) {
+                break task;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("video task terminal");
+
+    assert_eq!(
+        completed.pointer("/result/normalized_status"),
+        Some(&json!("succeeded"))
+    );
+    assert_eq!(
+        completed.pointer("/result/record/result/video/url"),
+        Some(&json!("https://cdn.example.test/video-result-1.mp4"))
+    );
+    assert_eq!(
+        captured_request
+            .lock()
+            .expect("captured request")
+            .as_deref()
+            .is_some_and(|headers| headers
+                .lines()
+                .any(|line| line.eq_ignore_ascii_case("authorization: Key test-key"))),
+        true
+    );
+    assert_eq!(
+        captured_body
+            .lock()
+            .expect("captured body")
+            .as_ref()
+            .and_then(|body| body.get("model")),
+        Some(&json!("fal-ai/video-test"))
+    );
+
+    provider_server.abort();
+}
+
+#[tokio::test]
+async fn xai_video_task_start_and_poll_run_from_public_jsonrpc() {
+    let captured_requests = Arc::new(Mutex::new(Vec::<String>::new()));
+    let captured_start_body = Arc::new(Mutex::new(None::<Value>));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind xAI video provider");
+    let address = listener.local_addr().expect("xAI video provider address");
+    let requests_for_server = Arc::clone(&captured_requests);
+    let body_for_server = Arc::clone(&captured_start_body);
+    let provider_server = tokio::spawn(async move {
+        let (mut start_stream, _) = listener.accept().await.expect("accept xAI video start");
+        let (start_headers, start_body) = read_fixture_http_request(&mut start_stream).await;
+        requests_for_server
+            .lock()
+            .expect("capture xAI start")
+            .push(start_headers);
+        *body_for_server.lock().expect("capture xAI start body") = Some(start_body);
+        write_fixture_json_response(
+            &mut start_stream,
+            json!({ "request_id": "xai-jsonrpc-request-1" }),
+        )
+        .await;
+
+        let (mut poll_stream, _) = listener.accept().await.expect("accept xAI video poll");
+        let (poll_headers, poll_body) = read_fixture_http_request(&mut poll_stream).await;
+        assert!(poll_body.is_null());
+        requests_for_server
+            .lock()
+            .expect("capture xAI poll")
+            .push(poll_headers);
+        write_fixture_json_response(
+            &mut poll_stream,
+            json!({
+                "status": "done",
+                "video": { "url": "https://cdn.example.test/xai-jsonrpc.mp4" }
+            }),
+        )
+        .await;
+    });
+
+    let api_host = format!("http://{address}/v1");
+    let app = build_media_task_app_server(|db| {
+        insert_xai_video_provider_with_key(db, "xai-video", "grok-imagine-video", &api_host);
+    })
+    .await;
+    initialize_server(&app.server, 1, "media-task-xai-video-create-test").await;
+
+    let created = request(
+        &app.server,
+        2,
+        METHOD_MEDIA_TASK_ARTIFACT_VIDEO_CREATE,
+        json!({
+            "projectRootPath": app.workspace_root,
+            "prompt": "生成一段 Grok 青柠实验室视频",
+            "providerId": "xai-video",
+            "model": "grok-imagine-video",
+            "duration": 6,
+            "resolution": "720p",
+            "aspectRatio": "16:9",
+            "imageUrl": "https://example.test/lime.png"
+        }),
+    )
+    .await;
+    let task_id = created
+        .pointer("/result/task_id")
+        .and_then(Value::as_str)
+        .expect("created xAI video task id")
+        .to_string();
+    assert_eq!(
+        created.pointer("/result/record/payload/resolved_route/protocol"),
+        Some(&json!("xai_video"))
+    );
+
+    let completed = timeout(Duration::from_secs(10), async {
+        let mut request_id = 3;
+        loop {
+            let task = request(
+                &app.server,
+                request_id,
+                METHOD_MEDIA_TASK_ARTIFACT_GET,
+                json!({
+                    "projectRootPath": app.workspace_root,
+                    "taskRef": task_id
+                }),
+            )
+            .await;
+            request_id += 1;
+            if matches!(
+                task.pointer("/result/normalized_status")
+                    .and_then(Value::as_str),
+                Some("succeeded" | "failed" | "cancelled")
+            ) {
+                break task;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("xAI video task terminal");
+
+    assert_eq!(
+        completed.pointer("/result/normalized_status"),
+        Some(&json!("succeeded")),
+        "xAI video terminal response: {completed}"
+    );
+    assert_eq!(
+        completed.pointer("/result/record/payload/provider_task/request_id"),
+        Some(&json!("xai-jsonrpc-request-1"))
+    );
+    assert_eq!(
+        completed.pointer("/result/record/result/video/url"),
+        Some(&json!("https://cdn.example.test/xai-jsonrpc.mp4"))
+    );
+
+    let requests = captured_requests.lock().expect("captured xAI requests");
+    assert_eq!(requests.len(), 2);
+    assert!(requests[0].starts_with("POST /v1/videos/generations HTTP/1.1"));
+    assert!(requests[1].starts_with("GET /v1/videos/xai-jsonrpc-request-1 HTTP/1.1"));
+    assert!(requests.iter().all(|headers| headers
+        .lines()
+        .any(|line| line.eq_ignore_ascii_case("authorization: Bearer test-key"))));
+    let body = captured_start_body
+        .lock()
+        .expect("captured xAI start body")
+        .clone()
+        .expect("xAI start body");
+    assert_eq!(body["model"], "grok-imagine-video");
+    assert_eq!(body["image"]["url"], "https://example.test/lime.png");
+
+    provider_server.abort();
 }
 
 #[tokio::test]
@@ -674,6 +1030,108 @@ fn insert_image_provider_with_key(db: &DbConnection, provider_id: &str, model: &
     let conn = lock_db(db).expect("lock product db");
     ApiKeyProviderDao::insert_provider(&conn, &provider).expect("insert image provider");
     ApiKeyProviderDao::insert_api_key(&conn, &key).expect("insert image provider api key");
+}
+
+fn insert_video_provider_with_key(
+    db: &DbConnection,
+    provider_id: &str,
+    model: &str,
+    api_host: &str,
+) {
+    let now = Utc::now();
+    let provider = ApiKeyProvider {
+        id: provider_id.to_string(),
+        name: provider_id.to_string(),
+        provider_type: ApiProviderType::Fal,
+        api_host: api_host.to_string(),
+        is_system: false,
+        group: ProviderGroup::Custom,
+        enabled: true,
+        sort_order: 1,
+        api_version: None,
+        project: None,
+        location: None,
+        region: None,
+        models: vec![ProviderModelConfig {
+            id: model.to_string(),
+            display_name: None,
+            capability: Some(ProviderModelCapability {
+                task_families: vec![ModelTaskFamily::VideoGeneration],
+                input_modalities: vec![ModelModality::Text, ModelModality::Image],
+                output_modalities: vec![ModelModality::Video],
+                runtime_features: Vec::new(),
+                capabilities: ModelCapabilities::default(),
+            }),
+        }],
+        prompt_cache_mode: None,
+        created_at: now,
+        updated_at: now,
+    };
+    let key = ApiKeyEntry {
+        id: format!("{provider_id}-key"),
+        provider_id: provider_id.to_string(),
+        api_key_encrypted: ApiKeyProviderService::new().encrypt_api_key("test-key"),
+        alias: None,
+        enabled: true,
+        usage_count: 0,
+        error_count: 0,
+        last_used_at: None,
+        created_at: now,
+    };
+    let conn = lock_db(db).expect("lock product db");
+    ApiKeyProviderDao::insert_provider(&conn, &provider).expect("insert video provider");
+    ApiKeyProviderDao::insert_api_key(&conn, &key).expect("insert video provider api key");
+}
+
+fn insert_xai_video_provider_with_key(
+    db: &DbConnection,
+    provider_id: &str,
+    model: &str,
+    api_host: &str,
+) {
+    let now = Utc::now();
+    let provider = ApiKeyProvider {
+        id: provider_id.to_string(),
+        name: provider_id.to_string(),
+        provider_type: ApiProviderType::Openai,
+        api_host: api_host.to_string(),
+        is_system: false,
+        group: ProviderGroup::Custom,
+        enabled: true,
+        sort_order: 1,
+        api_version: None,
+        project: None,
+        location: None,
+        region: None,
+        models: vec![ProviderModelConfig {
+            id: model.to_string(),
+            display_name: None,
+            capability: Some(ProviderModelCapability {
+                task_families: vec![ModelTaskFamily::VideoGeneration],
+                input_modalities: vec![ModelModality::Text, ModelModality::Image],
+                output_modalities: vec![ModelModality::Video],
+                runtime_features: Vec::new(),
+                capabilities: ModelCapabilities::default(),
+            }),
+        }],
+        prompt_cache_mode: None,
+        created_at: now,
+        updated_at: now,
+    };
+    let key = ApiKeyEntry {
+        id: format!("{provider_id}-key"),
+        provider_id: provider_id.to_string(),
+        api_key_encrypted: ApiKeyProviderService::new().encrypt_api_key("test-key"),
+        alias: None,
+        enabled: true,
+        usage_count: 0,
+        error_count: 0,
+        last_used_at: None,
+        created_at: now,
+    };
+    let conn = lock_db(db).expect("lock product db");
+    ApiKeyProviderDao::insert_provider(&conn, &provider).expect("insert xAI video provider");
+    ApiKeyProviderDao::insert_api_key(&conn, &key).expect("insert xAI video provider api key");
 }
 
 async fn request(server: &AppServer, id: u64, method: &str, params: Value) -> Value {

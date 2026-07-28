@@ -111,10 +111,12 @@ fn resolve_cli_video_generation_runner_config() -> Result<VideoGenerationRunnerC
             None => "Lime 本地视频服务未配置 API Key".to_string(),
         })?;
 
-    Ok(VideoGenerationRunnerConfig {
-        endpoint: endpoint_override.unwrap_or_else(|| build_video_generation_endpoint(&host, port)),
+    Ok(VideoGenerationRunnerConfig::fal(
+        endpoint_override.unwrap_or_else(|| build_video_generation_endpoint(&host, port)),
         api_key,
-    })
+        "Authorization".to_string(),
+        Some("Bearer".to_string()),
+    ))
 }
 
 fn normalize_video_generation_service_host(host: &str) -> String {
@@ -262,10 +264,12 @@ mod tests {
                     json: true,
                 },
             },
-            VideoGenerationRunnerConfig {
-                endpoint: format!("http://{address}/v1/videos/generations"),
-                api_key: "test-key".to_string(),
-            },
+            VideoGenerationRunnerConfig::fal(
+                format!("http://{address}/v1/videos/generations"),
+                "test-key".to_string(),
+                "Authorization".to_string(),
+                Some("Bearer".to_string()),
+            ),
         )
         .expect("generate video task");
 

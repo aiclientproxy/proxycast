@@ -309,7 +309,7 @@ describe("threadTimelineView", () => {
     expect(items).toEqual([planItem]);
   });
 
-  it("应按结构化 runtime status 标记隐藏运行态摘要与上下文整理项", () => {
+  it("应隐藏诊断态摘要并保留上下文整理项", () => {
     const internalRuntimeSummary: AgentThreadItem = {
       id: "summary-runtime-status",
       thread_id: "thread-1",
@@ -358,7 +358,7 @@ describe("threadTimelineView", () => {
 
     expect(
       mergeThreadItems([internalRuntimeSummary, contextCompaction, toolItem]),
-    ).toEqual([toolItem]);
+    ).toEqual([contextCompaction, toolItem]);
   });
 
   it("不应再靠 turn_summary 文案内容猜测内部过程", () => {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AgentThreadItem } from "@/lib/api/agentProtocol";
-import { messageContentPartsFromAgentThreadItem } from "./agentThreadMessageContentParts";
+import {
+  imageGenerationContentPartFromThreadItem,
+  messageContentPartsFromAgentThreadItem,
+} from "./agentThreadMessageContentParts";
 
 type AgentMessageItem = Extract<AgentThreadItem, { type: "agent_message" }>;
 
@@ -150,5 +153,63 @@ describe("messageContentPartsFromAgentThreadItem", () => {
     );
 
     expect(parts).toEqual([]);
+  });
+});
+
+describe("imageGenerationContentPartFromThreadItem", () => {
+  const item = {
+    id: "image-generation-1",
+    thread_id: "thread-1",
+    turn_id: "turn-1",
+    type: "image_generation",
+    status: "completed",
+    generation_status: "completed",
+    sequence: 9,
+    revised_prompt: "a blue square",
+    result: "Zm9v",
+    saved_path: "/tmp/blue-square.png",
+    started_at: "2026-07-27T10:00:00.000Z",
+    updated_at: "2026-07-27T10:00:01.000Z",
+    completed_at: "2026-07-27T10:00:01.000Z",
+  } satisfies Extract<AgentThreadItem, { type: "image_generation" }>;
+
+  it("把 Codex hosted result 投影为可展示的 PNG media reference", () => {
+    expect(imageGenerationContentPartFromThreadItem(item)).toEqual({
+      type: "media_reference",
+      reference: {
+        kind: "image",
+        uri: "data:image/png;base64,Zm9v",
+        mimeType: "image/png",
+        title: "blue-square.png",
+        caption: "a blue square",
+        sourcePath: "/tmp/blue-square.png",
+      },
+      metadata: {
+        itemId: "image-generation-1",
+        threadItemId: "image-generation-1",
+        turnId: "turn-1",
+        sequence: 9,
+        contentPartIndex: 0,
+        source: "hosted_image_generation",
+        generationStatus: "completed",
+        mediaKind: "image",
+        mimeType: "image/png",
+        caption: "a blue square",
+        sourcePath: "/tmp/blue-square.png",
+      },
+    });
+  });
+
+  it.each([
+    ["in_progress item", { status: "in_progress", result: "" }],
+    [
+      "failed item",
+      { status: "failed", generation_status: "failed", result: "" },
+    ],
+    ["empty completed result", { result: "" }],
+  ])("%s 不生成破图", (_label, overrides) => {
+    expect(
+      imageGenerationContentPartFromThreadItem({ ...item, ...overrides }),
+    ).toBeNull();
   });
 });

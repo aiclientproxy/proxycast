@@ -54,6 +54,7 @@ pub(super) fn runtime_provider_config_from_credential(
         api_key,
         auth: RuntimeProviderAuth::ApiKey,
         base_url,
+        api_version: None,
         credential_uuid: credential.uuid.clone(),
         reasoning_effort: None,
         service_tier: None,

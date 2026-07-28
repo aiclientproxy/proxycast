@@ -9,6 +9,10 @@ pub enum ProtocolMappingError {
         protocol: ProtocolKind,
         part_type: &'static str,
     },
+    UnsupportedOption {
+        protocol: ProtocolKind,
+        option: &'static str,
+    },
     EmptyInput,
 }
 
@@ -22,9 +26,20 @@ impl fmt::Display for ProtocolMappingError {
                 f,
                 "input part `{part_type}` is not supported by protocol {protocol:?}"
             ),
+            Self::UnsupportedOption { protocol, option } => write!(
+                f,
+                "provider option `{option}` is not supported by protocol {protocol:?}"
+            ),
             Self::EmptyInput => f.write_str("canonical LLM request must contain input"),
         }
     }
+}
+
+pub(crate) fn unsupported_option(
+    protocol: ProtocolKind,
+    option: &'static str,
+) -> ProtocolMappingError {
+    ProtocolMappingError::UnsupportedOption { protocol, option }
 }
 
 impl std::error::Error for ProtocolMappingError {}

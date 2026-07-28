@@ -49,7 +49,7 @@ const VALID_PNG_DATA_URL: &str =
 async fn start_turn_projects_media_attachment_reference_into_context_telemetry() {
     let backend = start_media_context_turn(vec![AgentAttachment {
         kind: "image".to_string(),
-        uri: Some("sidecar://media/input-1.png".to_string()),
+        uri: Some("https://example.com/input.png".to_string()),
         metadata: Some(json!({
             "mediaType": "image/png",
             "title": "设计稿截图",
@@ -78,7 +78,7 @@ async fn start_turn_projects_media_attachment_reference_into_context_telemetry()
     assert_eq!(context["attachments"][0]["mimeType"], "image/png");
     assert_eq!(
         context["attachments"][0]["referenceUri"],
-        "sidecar://media/input-1.png"
+        "https://example.com/input.png"
     );
     assert_eq!(
         metadata[CONTEXT_PACKET_TELEMETRY_KEY]["packets"][0]["source"],
@@ -96,7 +96,7 @@ async fn start_turn_projects_media_attachment_reference_into_context_telemetry()
     assert_eq!(
         metadata[CONTEXT_PACKET_TELEMETRY_KEY]["packets"][0]["fragmentEnvelope"]
             ["sidecar_reference"]["uri"],
-        "sidecar://media/input-1.png"
+        "https://example.com/input.png"
     );
     assert!(
         metadata[CONTEXT_PACKET_TELEMETRY_KEY]["packets"][0]["fragmentEnvelope"]

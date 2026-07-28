@@ -330,10 +330,12 @@ async fn video_worker_uses_resolved_route_provider_and_model() {
     let result = execute_video_generation_task(
         temp_dir.path(),
         &created.task_id,
-        &VideoGenerationRunnerConfig {
-            endpoint: format!("http://{address}/v1/videos/generations"),
-            api_key: "test-key".to_string(),
-        },
+        &VideoGenerationRunnerConfig::fal(
+            format!("http://{address}/v1/videos/generations"),
+            "test-key".to_string(),
+            "Authorization".to_string(),
+            Some("Bearer".to_string()),
+        ),
     )
     .await
     .expect("execute video task");
@@ -522,10 +524,12 @@ async fn video_worker_fails_closed_on_capability_gap() {
     let result = lime_media_runtime::execute_video_generation_task_with_hook(
         temp_dir.path(),
         &created.task_id,
-        &VideoGenerationRunnerConfig {
-            endpoint: "http://127.0.0.1:1/v1/videos/generations".to_string(),
-            api_key: "test-key".to_string(),
-        },
+        &VideoGenerationRunnerConfig::fal(
+            "http://127.0.0.1:1/v1/videos/generations".to_string(),
+            "test-key".to_string(),
+            "Authorization".to_string(),
+            Some("Bearer".to_string()),
+        ),
         move |output| {
             updates_for_hook
                 .lock()
@@ -652,10 +656,12 @@ async fn video_worker_fails_closed_on_non_local_route_execution() {
     let result = execute_video_generation_task(
         temp_dir.path(),
         &created.task_id,
-        &VideoGenerationRunnerConfig {
-            endpoint: "http://127.0.0.1:1/v1/videos/generations".to_string(),
-            api_key: "test-key".to_string(),
-        },
+        &VideoGenerationRunnerConfig::fal(
+            "http://127.0.0.1:1/v1/videos/generations".to_string(),
+            "test-key".to_string(),
+            "Authorization".to_string(),
+            Some("Bearer".to_string()),
+        ),
     )
     .await
     .expect("execute video task");
@@ -739,10 +745,12 @@ async fn video_worker_fails_closed_on_unsupported_route_protocol() {
     let result = execute_video_generation_task(
         temp_dir.path(),
         &created.task_id,
-        &VideoGenerationRunnerConfig {
-            endpoint: "http://127.0.0.1:1/v1/videos/generations".to_string(),
-            api_key: "test-key".to_string(),
-        },
+        &VideoGenerationRunnerConfig::fal(
+            "http://127.0.0.1:1/v1/videos/generations".to_string(),
+            "test-key".to_string(),
+            "Authorization".to_string(),
+            Some("Bearer".to_string()),
+        ),
     )
     .await
     .expect("execute video task");

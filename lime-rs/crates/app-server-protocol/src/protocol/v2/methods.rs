@@ -34,7 +34,7 @@ pub const METHOD_THREAD_GOAL_GET: &str = "thread/goal/get";
 pub const METHOD_THREAD_GOAL_CLEAR: &str = "thread/goal/clear";
 pub const METHOD_ARTIFACT_WRITE: &str = "artifact/write";
 pub const METHOD_MODEL_LIST: &str = "model/list";
-pub const METHOD_MODEL_PROVIDER_CAPABILITIES_READ: &str = "modelProvider/capabilities/read";
+pub const METHOD_MODEL_LIST_UPDATED: &str = "model/list/updated";
 pub const METHOD_TURN_START: &str = "turn/start";
 pub const METHOD_TURN_STEER: &str = "turn/steer";
 pub const METHOD_TURN_INTERRUPT: &str = "turn/interrupt";
@@ -138,8 +138,6 @@ pub enum Method {
     ArtifactWrite,
     #[serde(rename = "model/list")]
     ModelList,
-    #[serde(rename = "modelProvider/capabilities/read")]
-    ModelProviderCapabilitiesRead,
     #[serde(rename = "turn/start")]
     TurnStart,
     #[serde(rename = "turn/steer")]
@@ -185,7 +183,6 @@ impl Method {
             Self::ThreadGoalClear => METHOD_THREAD_GOAL_CLEAR,
             Self::ArtifactWrite => METHOD_ARTIFACT_WRITE,
             Self::ModelList => METHOD_MODEL_LIST,
-            Self::ModelProviderCapabilitiesRead => METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
             Self::TurnStart => METHOD_TURN_START,
             Self::TurnSteer => METHOD_TURN_STEER,
             Self::TurnInterrupt => METHOD_TURN_INTERRUPT,
@@ -230,7 +227,6 @@ impl Method {
             METHOD_THREAD_GOAL_CLEAR => Some(Self::ThreadGoalClear),
             METHOD_ARTIFACT_WRITE => Some(Self::ArtifactWrite),
             METHOD_MODEL_LIST => Some(Self::ModelList),
-            METHOD_MODEL_PROVIDER_CAPABILITIES_READ => Some(Self::ModelProviderCapabilitiesRead),
             METHOD_TURN_START => Some(Self::TurnStart),
             METHOD_TURN_STEER => Some(Self::TurnSteer),
             METHOD_TURN_INTERRUPT => Some(Self::TurnInterrupt),
@@ -272,7 +268,6 @@ pub const METHODS: &[&str] = &[
     METHOD_THREAD_GOAL_CLEAR,
     METHOD_ARTIFACT_WRITE,
     METHOD_MODEL_LIST,
-    METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
     METHOD_TURN_START,
     METHOD_TURN_STEER,
     METHOD_TURN_INTERRUPT,
@@ -299,6 +294,7 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_REASONING_SUMMARY_PART_ADDED,
     METHOD_REASONING_TEXT_DELTA,
     METHOD_MODEL_REROUTED,
+    METHOD_MODEL_LIST_UPDATED,
     METHOD_MODEL_VERIFICATION,
     METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
     METHOD_THREAD_SETTINGS_UPDATED,

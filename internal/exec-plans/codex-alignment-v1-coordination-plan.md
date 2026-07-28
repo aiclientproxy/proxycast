@@ -1,6 +1,10 @@
 # Codex 对齐 v1 并行协调计划
 
-状态：执行中（2026-07-19）
+状态：快速骨架阶段完成（2026-07-28）
+
+完成口径：Codex Agent runtime 主链与 grok-build 多模型 / 多模态控制面骨架已完成；
+Fal/Bedrock adapter、真实云 Provider/地区/凭证矩阵，以及
+audio/video/file 的逐 Provider chat wire 属于后续细节，不计入本阶段完成度。
 
 本文件是并行执行的协调面，不定义新的 runtime owner。目标是让多个进程同时推进
 Codex v2 对齐时保持窄写集、可编译、可回滚和可验证。所有实现仍服从：
@@ -2576,17 +2580,554 @@ App Server 将 terminal provider metadata 投影为 Codex exact `ImageGeneration
 loose `result?: Value/status?: String` DTO、alias/第三方 hosted promotion、本地工具重复执行与 generic extension
 降级为 `dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。
 
-当前验证：model-provider hosted image `2/2`、Agent Runtime provider-executed history `2/2`、App Server image
-projection `6/6`、Renderer canonical item reader `22/22` 已通过；workspace rustfmt 已修正。协议 schema 已在独立
-临时目录生成并机械同步，generated TypeScript client 显示 required string `result/status` 与 optional
-`revisedPrompt/savedPath`。`npm run test:related` 因 Vite 将仓库 `electron/` 目录当文件读取而报 `EISDIR`，改用
-精确 Vitest 文件入口通过。收尾仍需重跑新增 Renderer 断言、`npm run test:contracts`、current runtime fixture、
-legacy governance、rustfmt check 与 diff check；live provider 不执行，不读取真实凭证。
+验证：model-provider image generation `5/5`、Agent Runtime provider-executed 定向 `2/2`、App Server image
+projection `6/6`、Renderer canonical item reader `23/23` 通过。`npm run test:rust:related -- <本刀 Rust 写集>`
+扩展到 19 个 current owner/反向依赖 crate，全部 lib 测试通过，其中 Agent Runtime `182/182`、App Server
+`1574/1574`、App Server protocol `86/86`、model-provider `214/214`、RuntimeCore `52/52`、tool-runtime
+`306/306`。协议 schema 在独立临时目录生成后机械同步；`npm run test:contracts` 通过（`817` schema
+definitions、`809` generated protocol types、`284` client checks，生成物零漂移）。
 
-进度口径：本切片实现骨架完成度为 `90%`，剩余是聚合门禁与真实 current fixture 证据。本刀不新增 Codex App
-Server method，method 产品范围仍为 `71 / 180 = 39.4%`；该百分比只衡量 exact method boundary，不能代表 hosted
-image 或多模型 transport 完成度。架构影响：重大，已更新 `architecture.md` 第 21 节；责任开发者确认：
-`root, 2026-07-27`。
+`npm run smoke:agent-runtime-current-fixture` 完整通过，覆盖真实 Electron、preload/IPC、App Server sidecar、
+history/terminal/read model 与 GUI current fixture，`liveProviderUsed=false`；它证明现有产品主链无回归，不冒充
+official hosted image 的 live provider 证据。`npm run governance:legacy-report` 通过（零引用候选 `0`、既有
+deprecated 分类漂移 `1`、边界违规 `0`），workspace rustfmt 与 `git diff --check` 通过。`npm run test:related`
+因 Vite 将仓库 `electron/` 目录当文件读取而报 `EISDIR`，精确 Vitest 文件入口已替代并通过。未读取真实凭证、
+未执行 live provider。
+
+进度口径：本次 request/reducer/lifecycle/history/protocol/read-model 骨架切片完成度为 `100%`。尚未计入本切片的
+产品细节是把 hosted `result` base64 真正渲染为聊天图片，以及 official OpenAI live request/stream 证据；两项
+保持后续工作，不能用 current fixture 替代。本刀不新增 Codex App Server method，method 产品范围仍为
+`71 / 180 = 39.4%`；该百分比只衡量 exact method boundary，不能代表 hosted image 或多模型 transport 完成度。
+架构影响：重大，已更新 `architecture.md` 第 21 节；责任开发者确认：`root, 2026-07-27`。
+
+### 2026-07-28 Hosted image Agent Chat 消费闭环
+
+目标与写集：完成上一节明确保留的用户可见消费链，把 App Server dedicated `image_generation` read-model item
+接入 Agent Chat 的实时流、历史恢复和图片展示。写集限定为 Renderer 既有 ThreadItem 内容投影、历史 hydrate、
+实时 content-part upsert、媒体引用展示、定向测试和本计划；不修改 provider request/reducer、App Server 协议、
+Electron command、多模型 catalog 或发布文件。
+
+完成结果与分类：`completed + generation_status=completed + 非空 result` 按 Codex exact 语义投影为
+`data:image/png;base64,<result>`，复用唯一 `media_reference` 内容类型，并透传 `revised_prompt` 与 `saved_path`。
+历史只有图片、没有 assistant final text 时仍生成 assistant 图片消息；实时 `item.completed` 原位 upsert，重复事件按
+`threadItemId` exactly once。`in_progress`、`failed` 与空 result 均不生成破图。hosted data URI 在聊天内直接渲染
+`img`，不把 base64 展开为可见文本或复制进调试属性；普通 sidecar/file media reference 继续使用原卡片与 Workbench
+预览。该 dedicated item -> existing content part -> existing renderer 链为 `current`；新建 hosted-image DTO/卡片体系、
+从 prompt/model/saved path 猜图、失败态占位图和刷新后才可见的历史-only 消费为 `dead / forbidden-to-restore`；
+无 `compat/deprecated`。
+
+验证：内容投影、历史恢复、实时同步与 StreamingRenderer 精确 Vitest `44/44` 通过；Renderer/Node TypeScript
+typecheck 通过；scoped Prettier 与 `git diff --check` 通过。`npm run test:related -- <本刀源码写集>` 复现既有 Vite
+`EISDIR: read .../electron` 基础设施错误，未出现断言失败，精确 Vitest 作为定向证据。完整
+`npm run smoke:agent-runtime-current-fixture` 退出 `0`，覆盖真实 Electron/preload/App Server、历史恢复、图片命令、
+media reference 与 Workbench，`liveProviderUsed=false`；`npm run verify:gui-smoke` 退出 `0`，完成 renderer/host/
+App Server sidecar 构建和真实 Electron shell smoke。未读取真实凭证、未执行 official OpenAI live provider，现有
+fixture 证据不冒充 hosted image live request/stream。
+
+进度口径：本次 hosted image 用户可见消费切片完成度为 `100%`；上一节剩余项现只保留 official OpenAI live
+request/stream 证据。本刀不新增 Codex App Server method，method 产品范围仍为 `71 / 180 = 39.4%`，不能把该
+method 百分比解释为本切片或多模型 transport 完成度。架构影响：非重大；复用既有 ThreadItem、`media_reference`
+与 StreamingRenderer owner，依赖方向和第 21 节架构图未变化。
+
+### 2026-07-28 Azure OpenAI Responses adapter
+
+目标与写集：参考 OpenCode Azure provider 的默认语义，在既有 `model-provider` 网络 owner 内实现 provider-aware
+Responses adapter：Azure route 默认进入 Responses，使用 resource base URL 下的 `/openai/v1/responses`、
+`api-key` header 和 `api-version=v1` query。写集限定为 RuntimeCore route protocol、Agent provider 配置、
+model-provider adapter/request capture、Services/App Server readiness/catalog 回归和本计划；不新增 provider
+crate、兼容 wrapper、Electron command 或 GUI surface，不修改 hosted image 写集与发布文件。
+
+退出条件：Azure provider identity 必须保留到网络边界，禁止退化为普通 OpenAI Bearer adapter；Responses
+request/history/tool/SSE 继续复用 current canonical lowering/reducer；hosted web/image capability 保持 fail closed；
+loopback request-capture 必须证明 exact path/query/header/body/terminal stream；configured provider readiness、
+direct route admission 与 connection test 改为正向。最低验证为 model-provider/Agent/RuntimeCore/Services/App Server
+定向测试、`npm run test:rust:related -- <写集>`、current runtime fixture、rustfmt 和 `git diff --check`。本切片
+已完成。
+
+完成结果与分类：Azure OpenAI Responses 为 `current`，provider identity 从 RuntimeCore resolved route 经 App Server
+与 Agent typed config 保留到 `model-provider`，最终使用 `/openai/v1/responses`、`api-key` 与 typed
+`api-version`；缺省版本和 system provider 存量均收敛到 `v1`。Responses lowering、function tool history、SSE
+reducer 与 health/circuit owner 继续复用 current algebra，health scope 增加 normalized API version。声明式
+`Provider.models[]` 可进入 catalog，自动 `/models` discovery 仍 fail closed。Azure Chat Completions、Bearer/NoAuth、
+deployment URL、WebSocket、hosted web/image capability 与 OpenAI server metadata trust 为
+`dead / forbidden-to-restore`；无 `compat/deprecated`。Vertex、Bedrock、Fal 的 unsupported 边界未放宽。
+
+验证：`model-provider --lib azure_` `5/5`、RuntimeCore `1/1`、Agent `1/1`、App Server `4/4`、Services
+`3/3` 通过；旧 unsupported provider 集合和 non-chat catalog 负向测试通过。跨 crate
+`cargo check --tests` 覆盖 `model-provider/lime-agent/runtime-core/lime-services/app-server/lime-server/lime-skills`
+并通过；模型能力推断精确 Vitest `17/17` 通过；`cargo fmt --check` 与 `git diff --check` 通过。完整
+`npm run smoke:agent-runtime-current-fixture` 通过，覆盖真实 Electron/preload/App Server current fixture，
+`liveProviderUsed=false`。`npm run test:related -- <模型能力文件>` 仍复现既有 Vite
+`EISDIR: read .../electron` 基础设施错误，已用精确 Vitest 替代定向证据。未读取真实 Azure 凭证、未执行 live
+provider，因此 fixture 不作为 Azure live 证据。
+
+进度口径：本 Azure Responses transport 切片完成度 `100%`；不代表 Vertex/Bedrock/Fal 或全部 Codex App Server
+method 已完成。架构影响：重大；扩展 current provider transport union、typed endpoint/auth 投影和 health scope，
+未改变 owner 方向。架构图/文字已同步 `internal/aiprompts/architecture.md`。责任开发者确认：root，2026-07-28。
+
+### 2026-07-28 Vertex Gemini adapter
+
+目标与写集：参考 OpenCode 的 Google Vertex project/location 与 Bearer 认证语义，在唯一 `model-provider` 网络
+owner 内实现 dedicated Vertex Gemini adapter。写集限定为 RuntimeCore route admission、Core runtime credential、
+Agent/App Server provider 投影、Services readiness/catalog/connection probe、model-provider endpoint/auth/request
+capture、架构与本计划；不修改 Renderer、Electron、版本、Forge、manifest、锁文件或发布脚本。
+
+退出条件：Vertex provider identity 必须保留为 `VertexGemini`，不得通过普通 Gemini API-key 或 Custom protocol
+放行；typed project/location 必须生成 regional/global Vertex project endpoint；Bearer header、Gemini canonical
+body、SSE terminal/usage 必须由 loopback request capture 证明；缺 context、NoAuth、带 path/query/fragment 的 origin
+必须发网前拒绝；configured readiness 和声明式 catalog 改为正向，Bedrock/Fal 继续 fail closed。自动 Vertex
+模型发现不在本切片范围，不能被声明模型替代或冒充。
+
+完成结果与分类：`RuntimeProviderProtocol::VertexGemini` 为 `current`，RuntimeCore、Agent、App Server、Services、
+Server 与 Skills 都委托同一 `CurrentProviderClient`；`RuntimeCredentialData::VertexKey` 承载 typed
+`project/location` 和已解析 endpoint。regional/global host、publisher path、Bearer auth、Gemini lowering/SSE reducer、
+health scope、configured readiness 与 declared model catalog 均已接通。普通 Gemini alias、`x-goog-api-key`、
+OpenAI-compatible body、NoAuth、WebSocket、缺 context 和 origin 自带 path/query/fragment 为
+`dead / forbidden-to-restore`；无 `compat/deprecated`。Bedrock/Fal 未放宽。
+
+验证：跨 `model-provider/runtime-core/lime-agent/lime-services/app-server/lime-server/lime-skills` 的
+`cargo check --tests` 通过；`vertex` 定向测试 `7/7` 通过，其中 model-provider request/endpoint/fail-closed `3/3`、
+RuntimeCore admission `1/1`、Services credential `1/1`、App Server readiness/catalog `2/2`。`npm run
+test:rust:related -- <Vertex 写集>` 以退出码 `0` 完成，覆盖 `20` 个 current crate 与反向依赖。`cargo fmt --check`、
+`git diff --check`、`npm run governance:legacy-report` 通过；治理结果为零引用候选 `0`、边界违规 `0`，唯一已有
+`deprecated` 分类漂移与本切片无关。
+
+current fixture 的前端终态、fixture guard、两个 Claw 首页 Gate B 与 Coding Workbench Gate B 已通过；图片命令
+Gate B 的单场景重跑也通过。聚合 `npm run smoke:agent-runtime-current-fixture` 两次未能完整退出：第一次在 Coding
+Workbench workspace navigation 停留首页，第二次在 hosted-image 的非关键 `modelProvider/list` 发生 `30s` IPC 超时。
+两个失败场景均按聚合器同参数单独重跑通过，故记录为共享 Electron/App Server fixture 的时序不稳定，而非 Vertex
+provider 回归；不得将单场景通过冒充完整聚合全绿。未读取真实凭证、未执行 live Vertex。
+
+进度口径：Vertex Gemini adapter 的实现及 provider/current-owner 验证完成度为 `100%`；本协调计划的完整 Gate B
+聚合证据仍待消除上述 fixture 时序不稳定后才能标记全绿。架构影响：重大，已更新 `architecture.md` 第 22 节；责任
+开发者确认：root，2026-07-28。
+
+### 2026-07-28 `model/list` 与 Multi-Agent 可执行模型单事实源
+
+目标与写集：修复 Codex `model/list` picker DTO、RuntimeCore catalog recovery 和 Multi-Agent `spawn_agent`
+模型说明之间的准入漂移。写集限定为 App Server model control owner、`spawn_agent` catalog projection、公共
+JSON-RPC 集成测试与本计划；不扩展 Codex `Model` wire，不修改 Renderer、Electron、provider transport、版本、
+manifest、锁文件或发布脚本。
+
+完成结果与分类：App Server 现在由唯一 `is_executable_chat_model` 谓词判定 capability provenance 与 task family。
+`canonical/provider_explicit` 且 task family 为空或包含 `chat/reasoning` 的模型才可进入执行控制面；
+`inferred_hint` 和 image/embedding 等非 chat 模型即使 picker 可见、或请求 `includeHidden=true`，也不会进入
+`model/list`。Codex `includeHidden` 语义继续只影响已具备执行资格模型的 picker visibility。RuntimeCore 自动恢复、
+Codex picker DTO 与当前 Provider 下的 `spawn_agent` model/reasoning/service-tier 说明复用同一能力准入，其中自动恢复
+和 spawn override 继续只消费 `visibility=list`。该统一谓词及三条消费者为 `current`；visibility-only 授权、
+Renderer 二次猜测 chat 能力、inferred/media 模型进入 chat picker 或 Multi-Agent override 为
+`dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。
+
+验证：App Server `model_list` 定向回归为单元 `5/5`、公共 JSON-RPC `2/2`，覆盖 exact Codex v2 shape、分页、
+hidden、provider readiness、inferred hint 与 image generation 排除；Multi-Agent catalog projection `1/1` 通过。
+`npm run test:rust:related -- <本刀 App Server 写集>` 运行 App Server 全量 lib `1581/1581` 通过；workspace rustfmt
+与 `git diff --check` 通过。`npm run test:contracts` 通过（`817` schema definitions、`809` generated protocol
+types、`284` client checks，生成物零漂移）；`npm run governance:legacy-report` 结果为零引用候选 `0`、既有
+deprecated 分类漂移 `1`、边界违规 `0`。本刀不改 GUI、Electron 或 bridge，故未重复运行 Gate A/B；Vertex 节记录的
+聚合 Electron fixture 时序不稳定仍是全计划 Gate B blocker，本结果不将定向 Rust/JSON-RPC 证据冒充 GUI 或 live
+provider 证据。
+
+进度口径：本次 control-plane admission 切片完成度为 `100%`；Codex method 产品范围未新增 method，仍为
+`71 / 180 = 39.4%`。后者只衡量 method boundary，不能代表本切片、多模型 transport 或全计划完成度。架构影响：
+非重大；未改变第 19/20/22 节既有 owner 与依赖方向，只消除了同一 catalog 的重复准入判断。下一刀回到 Grok
+control plane，审计 provider health/retry/circuit state 是否仍只有执行期内部状态、而没有 current App Server 可读
+状态；不得用静态 provider readiness 冒充运行时健康度。
+
+### 2026-07-28 静态 Provider capability 孤立命令删除
+
+目标与裁决：完成 Grok control-plane health/retry/circuit 审计后，确认
+`modelProvider/capabilities/read` 只读取全局默认 Provider，返回静态
+`namespaceTools/imageGeneration/webSearch`，既不绑定当前 Thread route，也不读取共享 circuit/runtime health，
+且 Renderer、Electron 与产品网关均无消费者。Codex 的同名方法成立于单一全局 `model_provider` 配置；Lime
+已经按 Thread 选择 provider/model，直接复制会把全局静态值冒充当前 route truth。因此该上游 identity 保留在
+method 产品范围矩阵，但从 `implemented` 改为 `product-scope-excluded`。
+
+完成结果与分类：已删除 v2 DTO/method/envelope/schema registry、App Server ingress/handler/RuntimeCore/
+LocalDataSource、Rust/TypeScript typed clients、公共 JSON-RPC 正向测试及 checked-in/generated protocol surface，
+生产源码与生成物零引用。真实 provider/model capability、configured readiness、provider lowering 与共享
+route health registry 继续为 `current`；`modelProvider/capabilities/read` 为
+`dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。治理 catalog 新增 Rust 与前端回流守卫，禁止
+恢复 method 字符串、DTO 或 helper。method 矩阵当前为
+`70 implemented / 109 planned / 35 product-scope-excluded`，产品范围完成度 `70 / 179 = 39.1%`。
+
+验证：Rust schema 与 TypeScript 生成物由唯一生成入口重建，为 `815` schema definitions、`807` generated
+protocol types；schema fixture `1/1`、`npm run test:contracts` 全绿（`284` client checks，生成物零漂移）。
+`npm run test:rust:related -- <本刀 Rust 写集>` 覆盖 `19` 个 current owner/反向依赖 crate 并全部通过，
+其中 App Server lib `1579/1579`。`npm run governance:legacy-report` 通过（零引用候选 `0`、既有 deprecated
+分类漂移 `1`、边界违规 `0`）；workspace rustfmt 与全树 `git diff --check` 通过。本刀是纯协议/App Server dead
+method 删除，未改 GUI、Electron 或 bridge，故未重复运行 Gate A/B；Vertex 节已有的聚合 Electron fixture 时序
+不稳定仍是全计划 Gate B blocker。
+
+下一刀：回到多模型主链 P0，优先收口 dedicated Gemini route admission 与旧负向断言，再补 Gemini request/
+stream/tool/usage request-capture；随后处理 runtime health 的 App Server 可读投影时，必须绑定 exact route scope，
+不得恢复本次删除的全局静态 capability 方法。
+
+### 2026-07-28 Exact-route provider health snapshot
+
+目标与写集：在既有 `model-provider -> AgentRuntimeState` current owner 内补全 Grok circuit control-plane 的
+只读事实，允许已解析 route 查询同一共享 breaker 的状态，而不把静态 readiness 或全局 provider metadata 冒充
+runtime health。写集限定为 health registry、Agent Runtime 委托、架构事实源与本计划；不新增 App Server JSON-RPC、
+Renderer 状态、compat 或 mock。
+
+完成结果与分类：`CurrentProviderHealthRegistry::snapshot_for(exact RuntimeProviderConfig)` 对未执行 route 返回
+unknown（`None`）且绝不创建 synthetic closed entry；已知 route 只返回脱敏 state、closed-window sample/failure count、
+half-open probe 状态和 open/half-open retry timing。breaker 打开后当前内部实现会丢弃统计窗口，因此 counts 明确为
+unknown，不伪造旧样本。`AgentRuntimeState::provider_health_snapshot` 仅委托其 clone 共享的同一 registry；session
+client、HTTP/WebSocket/fallback 均未被改为共享。snapshot、registry 与 Agent Runtime 委托为 `current`；全局
+provider health、静态 capability/readiness 代替 route health、unknown route 自动 closed 和无消费者 JSON-RPC
+method 为 `dead / forbidden-to-restore`；无 `compat/deprecated`。
+
+验证：model-provider health `18/18` 通过，覆盖 unknown/read-only、exact model 隔离、closed count、open/half-open
+state/retry、API version/credential scope 和敏感 endpoint/key 不泄漏；Agent provider-session `4/4` 通过，覆盖 clone
+共享 registry、session 切换仍保留原 route open 状态且不污染其他 model。`npm run test:rust:related -- <本刀写集>`
+扩展到 `13` 个 current owner/反向依赖 crate 并全部通过，其中 App Server `1579/1579`、model-provider
+`224/224`、agent-runtime `182/182`、tool-runtime `306/306`。workspace rustfmt、`git diff --check` 与
+`npm run governance:legacy-report` 通过（零引用候选 `0`、既有分类漂移 `1`、边界违规 `0`）。无
+GUI/bridge/protocol 改动，Gate A/B 与 contracts 不适用。
+
+进度口径：本 internal control-plane slice 的骨架与定向回归已完成；App Server/GUI 只有出现 exact Thread route
+消费者时才接入，并且必须传递解析后的 `RuntimeProviderConfig`，不能根据 provider name 猜 route。架构影响：非重大；
+未改变 owner 或主链方向，只补齐现有 registry 的可读事实。责任开发者确认：root，2026-07-28。
+
+### 2026-07-28 Exact credential reroute
+
+目标与写集：继续 Grok 多凭证控制面 P0，把原先只按 provider/model 排除整条 route 的粗粒度运行期失败处理，
+替换为 exact route 内的 credential-specific reroute。写集限定为 RuntimeCore exclusion、Services key selection、
+App Server route/credential 编排、Agent Runtime 失败安全判定、架构事实源和定向测试；不新增 App Server method、
+Renderer/GUI、Electron bridge、兼容 wrapper、版本、Forge、manifest、锁文件或发布脚本。
+
+完成结果与分类：`ModelRouteExclusion` 现在区分 route 与内部 credential scope，credential ref 不进入 payload 或
+Debug。RuntimeCore 只对 route scope 跳过 provider/model；credential scope 保持同一 candidate ready。App Server
+对未产生输出、未消费 pending input 的 401/403、quota、429、5xx/transport 只排除当前 repository credential，
+durable ref 命中失败 key 时从同一 provider key pool 选择下一把；direct request 不换 key。Services 的 exact
+provider selection 会过滤失败/不可解密 key，指定 provider 存在时禁止按 provider type 跨到其他 provider。
+key 池耗尽返回原 provider error，不转 backup model；已配置且非 keyless provider 没有 credential 时 fail closed，
+禁止降成 `NoAuth`。上述 RuntimeCore、Agent Runtime、Services 与 App Server owner 均为 `current`；整条 route
+排除 repository credential 失败、跨 provider/type 借 key、credential exhaustion 后 profile fallback 和隐式
+NoAuth 为 `dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。
+
+验证：RuntimeCore credential scope `1/1`、Agent Runtime credential-safe failure `1/1`、Services exact key
+selection/exhaustion `1/1`、App Server credential 定向 `14/14` 与真实 loopback 401/503 `3/3` 通过。loopback
+证明两把 key 使用同一 provider/model，事件 payload 不含 credential ref；单 key 耗尽保留 provider error且不请求
+backup model。`npm run test:rust:related -- <本刀写集>` 扩展到 `14` 个 current crate/反向依赖并全部通过，
+其中 App Server `1581/1581`、Agent Runtime `183/183`、tool-runtime `306/306`。workspace rustfmt 与全树
+`git diff --check` 通过；`npm run governance:legacy-report` 通过（零引用候选 `0`、既有 deprecated 分类漂移
+`1`、边界违规 `0`）。本刀未改公共协议、Bridge 或 GUI，故 contracts、Gate A/B 不适用。
+
+进度口径：本次 credential-specific reroute 骨架切片完成度为 `100%`；跨 Turn 的真实 `Retry-After`、quota reset
+与 credential cooldown 尚未实现，后续必须由 provider error metadata 驱动，禁止添加固定假 cooldown。架构影响：
+重大；更新第 8 节运行期重路由 scope 与 fail-closed 规则。责任开发者确认：root，2026-07-28。
+
+### 2026-07-28 Cross-Turn credential cooldown
+
+目标与写集：在 exact credential reroute 基础上补齐 Grok 多凭证控制面的跨 Turn 恢复窗口。参考 Codex 对
+`Retry-After` 秒值/HTTP-date 的解析，以及 Grok 把服务端 retry hint 保留为结构化 sampling error metadata 的做法，
+写集限定为 `model-provider` HTTP error metadata、`agent-runtime` error propagation、Services credential selector、
+App Server reroute 编排、架构事实源与定向测试。没有公共协议、Renderer、Electron、GUI 或 compat surface。
+
+完成结果与分类：`CurrentProviderError` 现在携带可选非零 `retry_after`，来源只允许真实 `Retry-After` 或 exhausted
+request/token quota reset header；request-layer 5xx sleep 继续按 Codex 上限裁剪，跨 Turn metadata 保留服务端完整
+窗口。Agent Runtime 原样贯穿该 duration；App Server 仅在未产生可见输出、未消费 pending input、非 direct request
+且已绑定 repository credential 的安全 reroute 上登记 cooldown。`ApiKeyProviderService` 使用进程内 deadline 跳过
+cooldown key，durable preferred ref 同样改选同 provider 下一把，过期自动清理；exact credential read 不改变语义。
+该 error/selector/reroute 链为 `current`。固定假 cooldown、把 credential ref/deadline/header 暴露到 payload/Debug/
+tracing/evidence、direct request 自动换 key、跨 provider 借 key为 `dead / forbidden-to-restore`；无
+`compat/deprecated`。
+
+验证：model-provider retry metadata parser `8/8`（含 request/token 同时耗尽时取较晚 reset）、Agent Runtime error
+contract `10/10`、Services cooldown selector `1/1`、App Server 真实两 Turn loopback `1/1` 通过。loopback 精确
+证明第一 Turn 收到 `429 + Retry-After` 后从失败 key 切换，第二 Turn 仍跳过该 key；没有 model route fallback。
+`npm run test:rust:related -- <本刀写集>` 以退出码 `0` 覆盖 13 个 current owner/反向依赖 crate，其中
+Agent Runtime `184/184`、App Server `1582/1582`、tool-runtime `306/306`。`cargo check` 覆盖
+model-provider/agent-runtime/lime-services/app-server/lime-server 通过；workspace rustfmt、`git diff --check` 与
+`npm run governance:legacy-report` 通过（零引用候选 `0`、既有 deprecated 分类漂移 `1`、边界违规 `0`）。crate
+manifest 只复用 workspace 现有 `chrono` 和锁文件已有 `httpdate`，Cargo.lock 已同步。本刀无公共命令/协议/GUI
+变化，contracts 与 Gate A/B 不适用。
+
+进度口径：跨 Turn credential cooldown 骨架完成度 `100%`；当前为进程内 control-plane health，不承诺跨 App
+重启持久化。下一刀回到 provider adapter 收口，优先修 Gemini dedicated admission 与旧负向断言，再补 Gemini
+request/stream/tool/usage capture。架构影响：重大；扩展第 8 节 provider error metadata 与 credential selector
+状态，未改变 current owner 或主链方向。责任开发者确认：root，2026-07-28。
+
+### 2026-07-28 Gemini dedicated adapter 收口复核
+
+目标与写集：按当前工作树复核普通 Gemini API Key 从 catalog/readiness、RuntimeCore admission、App Server route
+projection、Agent/Server/Skills credential mapping 到 `model-provider` request/SSE reducer 的完整 current 链，避免按
+旧审计结论重复实现。写集只新增 App Server dedicated protocol 投影守卫、Gemini/Vertex route health 隔离守卫，
+并清理正向 readiness 测试中的误导局部命名；不新增协议、兼容层、Renderer、Electron 或第二套 provider backend。
+
+完成结果与分类：Gemini 已由 `ProtocolKind::GeminiGenerateContent` 正向准入并投影到唯一
+`ModelProviderProtocol::GeminiGenerateContent`，configured provider 只在 enabled key 存在时 ready，声明模型进入
+current catalog。普通 Gemini 继续使用 `x-goog-api-key` 与 Google GenerateContent endpoint；Vertex 继续使用独立
+`VertexGemini` identity、typed project/location endpoint 与 Bearer token。exact route health key 的 protocol scope
+保证两者即使 provider/model/gateway origin 相同也不共享 breaker。上述 control-plane、wire adapter 与隔离守卫为
+`current`；Gemini/Vertex alias 互借 identity/auth/endpoint、OpenAI-compatible lowering、旧 unsupported 正向断言为
+`dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。
+
+专项验证：model-provider Gemini/Vertex request、endpoint、lowering、SSE、usage、tool、fail-closed `7/7`；RuntimeCore
+Gemini/Vertex admission `3/3`；Agent provider projection `10/10`；App Server dedicated projection、Gemini readiness
+各 `1/1`；Services Vertex credential projection `1/1`；Server Gemini credential mapper `1/1`；model-provider
+Gemini/Vertex health isolation `1/1`；Skills current provider crate test `1/1`。workspace rustfmt 与 `git diff --check`
+通过。`npm run test:rust:related -- <Gemini/Vertex 写集>` 以退出码 `0` 覆盖 13 个 current crate 与反向依赖，
+其中 Agent Runtime `184/184`、App Server `1583/1583`、tool-runtime `306/306`；
+`npm run governance:legacy-report` 结果为零引用候选 `0`、既有 deprecated 分类漂移 `1`、边界违规 `0`。
+本刀没有公共 protocol、GUI、Electron 或 bridge 改动，contracts 与 Gate A/B 不适用。
+
+进度口径：Gemini dedicated adapter 当前收口切片完成度为 `100%`；该百分比只描述本 adapter，不代表 Codex 全部
+method 或产品计划完成度。架构影响：非重大；复用第 16/22 节既有 owner 与依赖方向，只补充隔离守卫和事实证据。
+下一刀回到多模型 control plane 的 model switch/fallback policy 或尚未实现的 provider adapter，不再重复扩展 Gemini。
+责任开发者确认：root，2026-07-28。
+
+### 2026-07-28 Codex model switch provider-history 骨架
+
+目标与写集：继续多模型 control plane P0，复制 Codex
+`core/src/context/model_switch_instructions.rs` 的 `<model_switch>` developer-context 语义，并适配 Lime
+唯一的 RuntimeCore provider-history owner。写集限定为 App Server provider-history、ExecutionBackend 内部
+history contract、RuntimeBackend sampling 接线、对应定向测试、本计划与架构事实源；不新增 App Server
+method、协议字段、pending state、GUI 分支、provider adapter 或兼容层。
+
+完成结果与分类：provider history 从 `StoredSession.events` 选择最近一个已完成 Turn 的最后一条
+`routing.decision.made`，以其 selected provider/model 作为 previous truth；当前 route 只读取 Turn preflight
+后保存的 schema v2 `agentControlRoute.providerPreference/modelPreference`，RuntimeBackend sampling 则通过内部
+typed `ProviderTurnHistory` 对每次实际 route selection 重新比较。二者不同时，在历史末尾、当前 user input
+之前追加一次 Codex preamble 的 `<model_switch>` developer message；route 字段做 XML text escaping。
+首 Turn、相同 route、仅 effort/service tier 变化不注入；failed Turn 不成为 previous truth；切换 Turn 完成后
+下一 Turn 不重复注入；同一 Turn health-aware reroute 不复用初始 route marker，而按 fallback selection 生成或
+移除。该临时投影为 `current`；持久化 `pendingModelSwitch`、候选设置提前成为历史事实、
+provider-specific marker 与旧无切换边界行为为 `dead / replaced / forbidden-to-restore`；无
+`compat/deprecated`。
+
+专项验证：`cargo test --manifest-path lime-rs/Cargo.toml -p app-server provider_history --lib`
+通过 `24/24`，覆盖 durable cold-history 推导、marker 顺序、一次性注入、同 route、effort/tier 变化、失败
+Turn 隔离、首 Turn、XML escaping 与实际 reroute retarget；完整 App Server lib 回归通过 `1589/1589`；
+`npm run test:rust:related -- <model-switch 写集>` 识别 App Server 并以退出码 `0` 再次通过 `1589/1589`。
+App Server 包级 rustfmt check 与 scoped `git diff --check` 通过；`npm run governance:legacy-report` 为零引用
+候选 `0`、既有 deprecated 分类漂移 `1`、边界违规 `0`。本刀没有公共 protocol、GUI、Electron 或 bridge
+改动，contracts 与 Gate A/B 不适用。
+
+进度口径：model-switch provider-history 骨架实现完成度 `100%`；该百分比只描述本切片，不代表 Codex
+model-specific instructions catalog 或全部多模型计划完成。架构影响：非重大；复用既有 RuntimeCore
+provider-history、durable routing event 与 RuntimeBackend route attempt，不改变 owner 或依赖方向。责任开发者
+确认：root，2026-07-28。
+
+### 2026-07-28 `model/list` authoritative capability 投影
+
+目标与窄写集：继续 Grok 多模型 catalog/control-plane 主线，让公开 `model/list` 与 RuntimeCore route 直接复用同一
+typed capability snapshot。写集限定为 v2 `Model` DTO/schema/generated client、App Server catalog projection、
+Renderer registry projection、定向测试、架构事实源与本计划；不新增 provider network owner、Electron 后端、
+mock fallback 或 compat。
+
+完成结果与分类：Codex 的 `cursor/limit/includeHidden`、分页、picker、reasoning effort 与 input modality 字段保持
+不变；Lime `Model` 追加 `providerId`、`capabilitySnapshot`、`contextWindow` 与 `maxOutputTokens`。snapshot 从
+`EnhancedModelMetadata` 的 `canonical/provider_explicit/inferred_hint` provenance 和 capability 原样投影；目前
+public executable catalog 已在 RuntimeCore 排除 `inferred_hint`，故 Renderer 只接受权威 snapshot。`video/file`
+同时进入 Codex picker input modalities 与完整 snapshot；task family、input/output modality、runtime feature、
+tools/streaming/JSON/function calling/reasoning 和 limits 不再被前端重新推断。Renderer 校验 opaque route 解出的
+provider 必须等于 `providerId`，source 缺失或 provider 不一致直接失败。该 App Server catalog、typed client 与
+Renderer projection 为 `current`；`model/list` 内把 capability 固定标为 `inferred_hint`、从输入模态猜 vision/
+task family、固定 text output 或清空 limits 为 `dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。
+
+验证：协议 round-trip `1/1`、App Server catalog unit `6/6`、公开 JSON-RPC `model_list_jsonrpc` `2/2`、
+Renderer registry Vitest `16/16` 通过。schema fixture 与 TypeScript client 通过唯一生成入口重建（`815` schema
+definitions、`807` generated protocol types）；`npm run test:contracts` 通过（`284` client checks、生成物零漂移）。
+`npm run test:rust:related -- <本刀 Rust 写集>` 以退出码 `0` 覆盖 20 个 current owner/反向依赖 crate，其中
+App Server lib `1590/1590`、Agent Runtime `184/184`、tool-runtime `306/306`。`npm run governance:legacy-report`
+为零引用候选 `0`、既有 deprecated 分类漂移 `1`、边界违规 `0`。smart-related Vitest runner 在加载环境时触发既有
+`EISDIR .../electron`，同一配置下直接 `vitest run src/lib/api/modelRegistry.test.ts` 已通过；本刀未改 GUI layout、
+Electron/preload 或实时 provider，未把以上协议/JSON-RPC 证据冒充 Gate A/B。
+
+进度口径：本切片完成度 `100%`，证明模型选择、能力显示和 route admission 共享一份 catalog 事实；不代表所有
+provider adapter、runtime reroute 或 GUI Gate B 已完成。架构影响：重大；更新第 6.3 与第 19 节 public catalog
+boundary，owner 与依赖方向不变。责任开发者确认：root，2026-07-28。
+
+### 2026-07-28 多模型 / 多模态骨架最终收口
+
+目标与参考事实源：本轮按用户最终口径完成快速骨架收口。Agent loop、Thread/Turn/Item 与 provider history
+继续对齐 Codex；model catalog、thread model switch、provider readiness、credential cooldown 与 route-scoped
+circuit breaker 对照 `grok-build`；canonical media parts、Gemini/Vertex/Azure/Ollama wire lowering 对照 OpenCode。
+三者只提供语义参考，Lime current owner 仍是 App Server、RuntimeCore、`model-provider` 与 Renderer typed gateway。
+
+完成结果与分类：公开 `model/list` 已投影 authoritative typed capability snapshot；
+`thread/settings/update` 在持久化候选前执行 route/catalog/capability preflight，并在 Turn admission 时协调 durable
+thread settings；跨 provider/model 的下一次 sampling 追加一次 Codex `<model_switch>` developer context，实际 reroute
+按最终 route 重新计算。Gemini GenerateContent、Vertex Gemini、Azure Responses、Ollama Responses 为 dedicated
+`current` adapter，OpenAI/Anthropic 继续复用既有 current wire；provider route health 以 protocol/model/base URL/
+credential scope 隔离，credential cooldown 可跨 Turn 跳过失败 key。输入 image/audio/video/file capability 与输出
+media reference 进入同一 typed catalog；Agent 对话的 current 可执行输入按 `grok-build` sampling 主链限定为
+`text + image`，图片使用 canonical part、Thread/Turn/Item projection 和 GUI card/workbench preview。audio/video/file
+在 dedicated adapter 完成前只保留 typed capability 表达并 fail closed，不把 schema 骨架冒充 provider wire。
+Azure Chat、Gemini/Vertex alias 互借、前端 capability 猜测、独立 capability read method 与旧 Vec provider-history
+contract 为 `dead / deleted / forbidden-to-restore`；Fal/Bedrock chat adapter 尚未实现，继续在发网前 fail closed，
+不建 compat；无新增 `deprecated`。
+
+验证：ProviderTurnHistory 五个 App Server integration target 共 `8/8`；Services provider/admission `23/23`、
+RuntimeCore route `15/15`、App Server readiness `15/15`、model-provider current transport `123/123`；多模型/
+多模态 Renderer 定向测试 `77/77`；queued durable input 与 public `turn/steer` sidecar 回归分别 `1/1`，证明
+持久化 event/read model 不含 inline base64，resume 后 provider 仍获得可读 data URL。
+`npm run test:rust:related -- <本轮 provider/control-plane/multimodal 写集>` 以退出码 `0` 覆盖 current owner
+与反向依赖 crate，其中 App Server `1593/1593`、Agent Runtime `184/184`、model-provider `227/227`、
+tool-runtime `306/306`。TypeScript typecheck、workspace rustfmt、`git diff --check`、
+`npm run test:contracts`（807 generated types、284 client checks、modality/scripts/docs guards）与 production
+`cargo check -p app-server` 均通过且无 history dead-code warning。
+
+真实产品证据：`npm run smoke:agent-runtime-current-fixture` 通过真实 Electron Desktop Host、preload/IPC、
+`app_server_handle_json_lines`、App Server sidecar、read model 与 GUI；其中明确覆盖 model binding、图片命令、
+普通画图意图以及 `media item / imageView -> Agent Chat card -> Workbench preview`，`liveProviderUsed=false`。
+`multimodal-provider-capture-smoke` 另证明首轮和历史图片均到达 provider、durable/read-model/evidence 只保留
+canonical `sidecar://media/input-<sha256>.<ext>`，seed 为
+`.lime/qc/agent-runtime-multimodal-sidecar-v2/lime.db`。
+`npm run verify:gui-smoke` 另以独立 Electron smoke 退出码 `0` 通过。`npm run governance:legacy-report` 为零引用
+候选 `0`、边界违规 `0`，仅保留既有 deprecated 分类漂移 `1`。
+
+进度口径：用户要求的“先快速实现骨架”切片完成度 `100%`，可以结束本轮。该数字不表示 Fal/Bedrock 等
+未实现 adapter 已支持，也不表示每个真实云 provider、地区、凭证组合都完成 live 验证；这些属于后续细节扩展，
+也不表示 audio/video/file 已进入 Agent 对话 provider wire；这些能力必须继续在 current owner 内按 capability 和
+exact wire 逐个实现。架构影响：重大；第 6.3、8、16、19、22 节
+已经记录唯一 owner、grok-build/OpenCode 分工和 Gate B 边界。责任开发者确认：root，2026-07-28。
+
+### 2026-07-28 Grok 多模型骨架最终验证与媒体模型回归修复
+
+参考口径：多模型 catalog、默认选择、model switch、provider readiness、service tier、retry/circuit breaker 与
+多模态 sampling 行为以 `grok-build` 为主参考；Codex 继续负责 Agent runtime 与 Thread/Turn/Item 语义；OpenCode
+只用于补足具体 provider wire 和 canonical media lowering，不成为模型控制面事实源。
+
+完成结果与分类：`thread/settings/update` 已把 `serviceTier` 纳入原子 route preflight，并按 catalog 中的精确 tier
+ID fail closed；公开 `model/list` 在分页前为首个可见 executable model 标记唯一稳定 `isDefault`；Provider HTTP
+transport 尊重 Grok `x-should-retry: false`，该 header 会压制 5xx 重试并把最终错误标为不可重试。全包验证同时发现
+chat catalog reconciliation 会错误删除权威 image-only 模型，导致 public 图片命令在媒体专用 admission 前失败；
+当前 owner 已改为保留 catalog 中权威、可见的专用模型，普通 chat 与 media route 仍分别在各自 admission 边界校验。
+以上均为 `current`；把专用模型强制改选为 chat 模型、服务端明确禁止后仍重试、持久化未校验 tier 为
+`dead / replaced / forbidden-to-restore`；无 `compat/deprecated`。
+
+验证：`model-provider 229/229` 通过；首次 App Server 全包发现 `media_task_jsonrpc` 两条回归后没有掩盖失败，根因
+修复后该 public JSON-RPC target `6/6`、专用 model reconciliation 回归 `1/1` 通过。最终
+`npm run test:rust:related -- <本刀写集>` 以退出码 `0` 覆盖 13 个 current owner/反向依赖 crate，其中 App Server
+`1596/1596`、Agent Runtime `184/184`、model-provider `229/229`、tool-runtime `306/306`。`npm run test:contracts`、
+modality/scripts/docs guards、workspace rustfmt、`git diff --check` 与 `npm run governance:legacy-report` 通过；治理结果
+为零引用候选 `0`、边界违规 `0`，仅既有 deprecated 分类漂移 `1`。此前同一骨架变更集的真实 Electron Gate B、
+GUI smoke 与 multimodal provider capture 证据继续有效；本刀没有修改 Renderer/Electron 或 provider media lowering。
+
+完成口径：用户要求的快速多模型/多模态骨架为 `100%`，可以结束本轮；这不等于完整复制 Grok。该切片当时记录的
+catalog refresh、typed update notification、GUI cache 主动失效与 App Server default owner 已在下方最终收口切片完成；
+当前后续细节以最终收口清单为准。架构影响：非重大；修复既有 catalog 与 admission 职责边界，没有新增 owner、
+兼容层或生产 mock。责任开发者确认：root，2026-07-28。
+
+### 2026-07-28 App Server 默认模型与 canonical media 最终收口
+
+目标与参考边界：按用户最终确认把多模型 catalog/default/switch、provider readiness、service tier、retry/circuit
+breaker 和多模态 sampling 以 `/Users/coso/Documents/dev/rust/grok-build` 为主参考；Codex 继续负责 Agent runtime、
+Thread/Turn/Item、fork/history 和 GUI 护栏；OpenCode 只辅助 provider wire、canonical content 与媒体 lowering。
+
+完成结果与分类：App Server ready catalog 顺序现在同时驱动 `model/list.isDefault` 和缺省 `thread/start`，无显式
+provider/model 时由 RuntimeCore 选择首个 visible + authoritative + executable chat model，半截或空白显式 route
+fail closed，精确 route preflight 仍发生在 session/thread 持久化之前。Renderer Agent warmup 不再读取第二份
+`get_default_provider`，session gateway 允许缺省 route 直接交给 App Server；显式工作区选择继续原样传递。
+Provider credential create/enable/delete 会进入同一个 provider-scoped catalog refresh coordinator；成功提交 cache 后
+发布 typed `model/list/updated`，Renderer 失效缓存并强制重读 `model/list`，不轮询或本地推断 generation/default。
+`thread/settings/update` 在 model/collaboration model 变化且未显式给 tier 时，从目标 catalog 安装受支持的
+`default_service_tier`，目标无默认时清空旧 tier。公共 v2 chat `InputModality` 收窄为 `text | image`；
+audio/video/file 只保留在通用 provider capability taxonomy，未实现 dedicated chat ingress/sidecar/wire 前不能作为
+Agent chat 能力。上述均为 `current`。Renderer 本地默认 Provider 仲裁、跨模型残留旧 service tier、把通用媒体
+taxonomy 暴露成 chat input schema 为 `dead / deleted / forbidden-to-restore`；无新增 `compat/deprecated`。
+
+同一收口包含 canonical media 恢复：fork 会校验并复制 source session 的 image sidecar 到 target session，保持
+URI/digest/media type，创建或持久化失败会回滚 target sidecar；不恢复绝对路径，不持久化 inline base64。
+Renderer Message 图片不再把 `sidecar://` 直接交给 Chromium，而通过 `agentSession/media/read` 读取临时 data URL。
+这些路径为 `current`；直接浏览器 sidecar scheme、durable base64 与绝对路径恢复为 `dead / forbidden-to-restore`。
+
+验证：新增 service-tier 重建 lib 回归 `1/1`、公共 `model/list + thread/start` JSON-RPC `3/3`、Renderer session/default
+定向回归 `200/200`、`cargo check -p app-server --tests` 通过。fork JSON-RPC `1/1`、Message image attachments `2/2`、
+App Server 全包和 GUI smoke 已在同一变更集的前序阶段通过；最终静态收口再次通过 `npm run typecheck`、
+`npm run test:contracts`（`808` generated protocol types、`284` client checks，含 modality/scripts/Electron/docs guards）、
+`npm run governance:legacy-report`（零引用候选 `0`、既有 deprecated 分类漂移 `1`、边界违规 `0`）、workspace
+`cargo fmt --check` 与 `git diff --check`。最终当前树 `npm run verify:gui-smoke` 退出码 `0`，证据为
+`.lime/qc/project-gates/standalone-shell-01-20260728123252-79288/shell-01-electron-smoke/summary.json`。真实 Electron
+`inputbar-rich-restore` 修复后定向 Gate B 通过，实际命中
+`agentSession/media/read`，legacy command/mock fallback/console error/page error 均为 `0`，证据：
+`.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-inputbar-rich-restore-regression-summary.json`。
+修复前聚合 `npm run smoke:agent-runtime-current-fixture` 在该场景失败，修复后只重跑失败场景，尚未从头全量复跑；
+不得把定向通过描述为修复后聚合门禁全量通过。
+
+最终文档收口时再次复跑 catalog refresh 公共 JSON-RPC `2/2`、Renderer registry/cache Hook `18/18`、typed
+notification parser `7/7` 与完整 `npm run test:contracts`，均通过；协议仍为 `808` generated types、`284` client
+checks，生成物零漂移。
+
+文件规模退出条件：`runtime/thread_fork.rs` 当前 `1182` 行，下一次 fork/media 修改前先把 sidecar copy/rollback 拆到
+`runtime/thread_fork_media.rs`；model selection/default/reconciliation 已拆到
+`runtime/model_providers/selection.rs`。本轮 service tier 收尾又把目标模型默认值重建抽到
+`runtime/session_operations/model_defaults.rs`，`runtime/session_operations.rs` 已降到 `928` 行；下一次 settings patch、
+validation 或持久化行为修改前继续拆出 typed settings mutation owner，不再向主文件堆业务逻辑。
+
+完成口径：用户要求的快速多模型/多模态骨架切片为 `100%`，不是“完整复制 Grok/Codex/OpenCode”。真实云
+provider/地区/凭证矩阵、Fal/Bedrock adapter 及 audio/video/file 的逐 provider
+chat wire 属后续细节；在 exact ingress、durability、capability admission 和 lowering 全部完成前继续 fail closed。
+架构影响：重大；第 19/20 节已确认唯一 default owner 和 chat modality 边界。责任开发者确认：root，2026-07-28。
+
+### 2026-07-28 空响应重采样与 chat/media admission 终态修正
+
+目标与参考：Agent sampling loop 继续服从 Codex owner，并参考 `grok-build` 的 `AttemptOutcome::Empty`、
+`EmptyReason::{ReasoningOnly,NoVisibleContent}` 与 content-filter 终态分类；多模型 catalog/default/switch 和
+Text/Image chat 能力继续以 `grok-build` 为主参考。OpenCode 只用于 provider wire，不参与本刀控制面裁决。
+
+完成结果与分类：`agent-runtime::provider_turn` 对 reasoning-only、完全空 `stop` 和工具后的空 final 使用独立两次
+语义重采样预算；重采样不消耗 `max_turns`，复用同一 tool/hook snapshot，不把空尝试的 assistant reasoning 写回
+Provider transcript，并在下一次请求前检查 Provider token budget。`content_filter` 空终态合法结束，`length/error`
+空终态直接失败。上述为 `current`；reasoning-only 直接失败、工具后空终答成功和重采样占用工具回合为
+`dead / deleted / forbidden-to-restore`。
+
+模型选择统一使用 canonical `ModelTaskRequest + route_capability_gap` 验证 `chat + text input + text output + streaming`；
+`model/list.isDefault` 与缺省 `thread/start` 继续消费同一 ready catalog 顺序。图片生成等专用模型仍属于 media task
+catalog/admission，但不再作为 Agent chat Thread 的保留选择，也不能绕过 `thread/start` preflight。model-only 切换
+继续从目标模型重建或清空 `serviceTier`。这些路径为 `current`；专用媒体模型绕过 chat admission 为
+`dead / deleted / forbidden-to-restore`，无新增 `compat/deprecated`。
+
+结构收口：按上一节退出条件，将 selection/default/reconciliation 与 picker projection 拆到
+`runtime/model_providers/selection.rs`；`runtime/model_providers.rs` 从 `1273` 行降到 `429` 行，新 owner 为 `854` 行。
+`agent-runtime/src/provider_turn.rs` 当前 `1887` 行，下一次 sampling-attempt 行为修改前必须拆出独立 attempt owner；
+`provider_turn/tests.rs` 的大体量测试也应随 owner 拆分，不得继续堆入实现文件。
+
+验证：`agent-runtime --lib` `189/189`；App Server model selection `11/11`；最终 session operations 定向
+`16/16`，App Server related `1606/1606`。同一变更集的 App Server 全包、lime-agent、scheduler、server 分别通过
+`1604/1604`、`257/257`、`24/24`、`118/118`；`npm run test:contracts` 通过 `808` generated protocol types、
+`284` client checks 及 modality/scripts/docs guards。最终 `npm run governance:scripts` 通过；
+`npm run governance:legacy-report` 为零引用候选 `0`、既有 deprecated 分类漂移 `1`、边界违规 `0`；workspace
+rustfmt 与 `git diff --check` 通过。
+
+收尾只读复核发现并修复一个 P1：同模型的 `collaborationMode` 更新不再被误判成模型切换并覆盖用户已选
+`serviceTier`；只有最终 `(provider, model)` 真正变化时才从目标 catalog 重建或清空 tier。请求同时给出不一致的
+`model` 与 `collaborationMode.settings.model` 现在 fail closed，且拒绝后不持久化候选设置。新增回归覆盖同模型
+mode-only 保留 tier、collaboration 模型切换重建默认 tier 和冲突双模型字段；复核未发现其他 P0/P1、凭证泄漏或
+owner 越界。
+
+`npm run smoke:agent-runtime-current-fixture` 首轮通过 history/cache、stream terminal、Electron guards、Claw 首页、
+代码工作台、图片命令、停止后继续、审批、Plan、Skills、MCP 与 media reference 等场景，最后在 Content Factory
+预建 thread 处因未注册文本 fixture provider 被新的 production preflight 以 `provider_not_configured` 正确拒绝，
+因此该次聚合退出码为 `1`，不得记作全量通过。修复只扩充 test-only provider 准备步骤，没有放宽 production
+preflight；当前拆分后 sidecar 已定向复跑该失败场景并通过 Gate B，证据为
+`.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-content-factory-article-workspace-regression-summary.json`，
+其中 Electron/preload/IPC/App Server/read model identity 一致，legacy command 与 mock fallback 命中均为 `0`。
+受时间优先级约束未从聚合第一项再次全量复跑。架构影响：重大；更新架构第 6.3、19、20 节，责任开发者确认：
+root，2026-07-28。
+
+### 2026-07-28 xAI 视频 current 骨架收口
+
+目标与 owner：视频生成保持 dedicated media task，不进入 Agent chat picker。catalog/capability 与异步任务语义参考
+`grok-build`，具体 xAI wire/lowering 归 Lime `model-provider`；App Server 负责任务调度和 exact credential，
+`media-runtime` 只负责 durable progress/artifact，不再直接发 Provider HTTP。
+
+完成结果与分类：RuntimeCore 使用独立 `xai_video` 协议，只允许 Fal/xAI 视频 route；`model-provider` 实现 Fal
+同步 POST 与 xAI `POST /videos/generations -> request_id -> GET /videos/{id}`，覆盖
+done/failed/expired/timeout/cancelled，并严格使用 resolved auth header/prefix。任务持久化
+`provider_task.protocol/request_id/status`；App Server scheduler 只恢复 stale、已有 request id 的 xAI running task，
+恢复只 poll、不重复 POST。以上为 `current`；media-runtime 直发视频 HTTP、把 xAI 诊断标为 Fal、普通 OpenAI
+视频 fallback 为 `dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。
+
+验证：media-runtime route `9/9`；public App Server JSON-RPC xAI start/poll `1/1`、Fal 回归 `1/1`；此前同一
+变更集的 model-provider xAI lowering/URL/result `4/4`、media-runtime xAI start/poll/resume `2/2`、Fal worker
+`1/1`、App Server media worker `19/19` 均通过。最终 `npm run test:contracts` 通过 `808` generated protocol
+types、`284` client checks 及 modality/scripts/Electron release/docs guards；workspace rustfmt、`git diff --check`
+与 legacy governance 通过，治理摘要为零引用候选 `0`、边界违规 `0`、既有 deprecated 分类漂移 `1`。
+架构影响：重大；更新架构第 23 节与多模型执行计划，责任开发者确认：root，2026-07-28。
 
 ## 8. 完成定义
 

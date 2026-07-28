@@ -1,7 +1,6 @@
 use super::unavailable;
 use super::NoopAppDataSource;
 use super::RuntimeCoreError;
-use app_server_protocol::protocol::v2::ModelProviderCapabilitiesReadResponse;
 use app_server_protocol::*;
 use async_trait::async_trait;
 use lime_core::models::model_registry::EnhancedModelMetadata;
@@ -36,6 +35,13 @@ pub trait ModelProviderAppDataSource: Send + Sync {
         Ok(Vec::new())
     }
 
+    async fn has_model_provider_last_success(
+        &self,
+        _provider_id: &str,
+    ) -> Result<bool, RuntimeCoreError> {
+        Ok(false)
+    }
+
     async fn list_model_preferences(
         &self,
     ) -> Result<ModelPreferencesListResponse, RuntimeCoreError> {
@@ -55,12 +61,6 @@ pub trait ModelProviderAppDataSource: Send + Sync {
 
     async fn list_model_providers(&self) -> Result<ModelProviderListResponse, RuntimeCoreError> {
         Ok(ModelProviderListResponse::default())
-    }
-
-    async fn read_model_provider_capabilities(
-        &self,
-    ) -> Result<ModelProviderCapabilitiesReadResponse, RuntimeCoreError> {
-        Err(unavailable("modelProvider/capabilities/read"))
     }
 
     async fn list_model_provider_catalog(

@@ -233,12 +233,11 @@
     {
       "type": "imageGeneration",
       "codexFields": ["id", "status", "revisedPrompt", "result", "savedPath"],
-      "limeFields": ["id", "status", "result"],
+      "limeFields": ["id", "status", "revisedPrompt", "result", "savedPath"],
       "statusful": true,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
-      "shape": "gap",
-      "fieldNotes": ["Lime 缺少 revisedPrompt/savedPath，result 当前为 opaque Value"]
+      "shape": "aligned"
     },
     {
       "type": "enteredReviewMode",

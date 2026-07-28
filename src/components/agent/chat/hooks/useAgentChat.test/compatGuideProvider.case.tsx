@@ -4,7 +4,6 @@ import {
   createDeferred,
   flushEffects,
   getSubmittedTurnStart,
-  mockGetDefaultProvider,
   mockGetRuntimeProviderSelection,
   mockResolveClawWorkspaceProviderSelection,
   mockScheduleMinimumDelayIdleTask,
@@ -236,7 +235,6 @@ describe("useAgentChat 兼容接口 - guide / provider", () => {
     mockGetRuntimeProviderSelection.mockResolvedValue({
       provider_configured: false,
     });
-    mockGetDefaultProvider.mockResolvedValue(selectedProvider);
     mockResolveClawWorkspaceProviderSelection.mockResolvedValue({
       providerType: selectedProvider,
       model: selectedModel,
@@ -258,7 +256,7 @@ describe("useAgentChat 兼容接口 - guide / provider", () => {
 
       expect(mockGetRuntimeProviderSelection).toHaveBeenCalledTimes(1);
       expect(mockResolveClawWorkspaceProviderSelection).toHaveBeenCalledWith({
-        currentProviderType: selectedProvider,
+        currentProviderType: undefined,
         currentModel: selectedModel,
         theme: "general",
       });
@@ -301,7 +299,6 @@ describe("useAgentChat 兼容接口 - guide / provider", () => {
       await flushEffects();
       await flushEffects();
 
-      expect(mockGetDefaultProvider).not.toHaveBeenCalled();
       expect(mockResolveClawWorkspaceProviderSelection).toHaveBeenCalledWith({
         currentProviderType: "anthropic",
         currentModel: "glm-5.1",

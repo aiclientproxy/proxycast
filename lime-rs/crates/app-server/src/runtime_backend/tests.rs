@@ -136,11 +136,19 @@ fn runtime_reroute_policy_rejects_direct_hard_and_partial_failures() {
         Some(runtime_core::FailureClassification::Transport),
         true,
     );
-    let exclusion = runtime_route_exclusion(&selection, false, &transport)
-        .expect("retryable untouched profile route");
-    assert_eq!(exclusion.provider, "primary-provider");
-    assert_eq!(exclusion.model, "primary-model");
-    assert!(runtime_route_exclusion(&selection, true, &transport).is_none());
+    let route_exclusion = runtime_route_exclusion(&selection, false, None, &transport)
+        .expect("retryable keyless profile route");
+    assert_eq!(route_exclusion.provider, "primary-provider");
+    assert_eq!(route_exclusion.model, "primary-model");
+    assert!(route_exclusion.excludes_entire_route());
+
+    let credential_ref = "runtime-api-key-primary";
+    let credential_exclusion =
+        runtime_route_exclusion(&selection, false, Some(credential_ref), &transport)
+            .expect("retryable credential route");
+    assert_eq!(credential_exclusion.credential_ref(), Some(credential_ref));
+    assert!(!credential_exclusion.excludes_entire_route());
+    assert!(runtime_route_exclusion(&selection, true, Some(credential_ref), &transport).is_none());
 
     for error in [
         lime_agent::ReplyAttemptError::provider_failure(
@@ -161,15 +169,19 @@ fn runtime_reroute_policy_rejects_direct_hard_and_partial_failures() {
             Some(runtime_core::FailureClassification::Quota),
             false,
         ),
-        lime_agent::ReplyAttemptError::provider_failure(
-            "partial output failed",
-            true,
-            Some(runtime_core::FailureClassification::Transport),
-            true,
-        ),
     ] {
-        assert!(runtime_route_exclusion(&selection, false, &error).is_none());
+        let exclusion = runtime_route_exclusion(&selection, false, Some(credential_ref), &error)
+            .expect("credential-scoped provider rejection");
+        assert_eq!(exclusion.credential_ref(), Some(credential_ref));
     }
+
+    let partial = lime_agent::ReplyAttemptError::provider_failure(
+        "partial output failed",
+        true,
+        Some(runtime_core::FailureClassification::Transport),
+        true,
+    );
+    assert!(runtime_route_exclusion(&selection, false, Some(credential_ref), &partial).is_none());
 }
 
 pub(super) fn request_for_test(

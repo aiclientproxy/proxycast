@@ -1,4 +1,5 @@
 use super::*;
+use crate::runtime::model_providers::is_executable_chat_model;
 use app_server_protocol::RuntimeOptions;
 use lime_core::models::model_registry::{EnhancedModelMetadata, ModelVisibility};
 use std::collections::HashSet;
@@ -47,7 +48,9 @@ fn from_models(models: Vec<EnhancedModelMetadata>) -> SpawnAgentToolOptions {
     let mut seen = HashSet::new();
     let available_models = models
         .into_iter()
-        .filter(|model| model.visibility == ModelVisibility::List)
+        .filter(|model| {
+            model.visibility == ModelVisibility::List && is_executable_chat_model(model)
+        })
         .filter(|model| seen.insert(model.id.clone()))
         .map(|model| SpawnAgentModelOption {
             description: model
@@ -101,12 +104,12 @@ fn reasoning_efforts(model: &EnhancedModelMetadata) -> Vec<String> {
 mod tests {
     use super::*;
     use lime_core::models::model_registry::{
-        ModelCapabilities, ModelReasoningEffortOption, ModelReasoningEffortSupport,
-        ModelServiceTier,
+        ModelCapabilities, ModelCapabilityProvenance, ModelModality, ModelReasoningEffortOption,
+        ModelReasoningEffortSupport, ModelRuntimeFeature, ModelServiceTier, ModelTaskFamily,
     };
 
     #[test]
-    fn projects_only_picker_visible_models_with_typed_controls() {
+    fn projects_only_picker_visible_executable_chat_models_with_typed_controls() {
         let mut visible = EnhancedModelMetadata::new(
             "gpt-5.6-sol".to_string(),
             "GPT-5.6 Sol".to_string(),
@@ -116,6 +119,7 @@ mod tests {
         visible.description = Some("Frontier coding model".to_string());
         visible.capabilities = ModelCapabilities {
             reasoning: true,
+            streaming: true,
             reasoning_effort: Some(ModelReasoningEffortSupport {
                 supported: true,
                 levels: Vec::new(),
@@ -140,6 +144,11 @@ mod tests {
             }),
             ..ModelCapabilities::default()
         };
+        visible.capability_provenance = ModelCapabilityProvenance::ProviderExplicit;
+        visible.task_families = vec![ModelTaskFamily::Chat];
+        visible.input_modalities = vec![ModelModality::Text];
+        visible.output_modalities = vec![ModelModality::Text];
+        visible.runtime_features = vec![ModelRuntimeFeature::Streaming];
         visible.service_tiers = vec![ModelServiceTier {
             id: "priority".to_string(),
             name: "Priority".to_string(),
@@ -152,8 +161,29 @@ mod tests {
             "OpenAI".to_string(),
         );
         hidden.visibility = ModelVisibility::Hide;
+        hidden.capability_provenance = ModelCapabilityProvenance::ProviderExplicit;
+        hidden.task_families = vec![ModelTaskFamily::Chat];
+        hidden.input_modalities = vec![ModelModality::Text];
+        hidden.output_modalities = vec![ModelModality::Text];
+        hidden.runtime_features = vec![ModelRuntimeFeature::Streaming];
+        hidden.capabilities.streaming = true;
+        let mut inferred = EnhancedModelMetadata::new(
+            "inferred-model".to_string(),
+            "Inferred Model".to_string(),
+            "openai".to_string(),
+            "OpenAI".to_string(),
+        );
+        inferred.task_families = vec![ModelTaskFamily::Chat];
+        let mut image = EnhancedModelMetadata::new(
+            "image-model".to_string(),
+            "Image Model".to_string(),
+            "openai".to_string(),
+            "OpenAI".to_string(),
+        );
+        image.capability_provenance = ModelCapabilityProvenance::ProviderExplicit;
+        image.task_families = vec![ModelTaskFamily::ImageGeneration];
 
-        let options = from_models(vec![visible, hidden]);
+        let options = from_models(vec![visible, hidden, inferred, image]);
 
         assert_eq!(options.available_models.len(), 1);
         assert_eq!(options.available_models[0].model, "gpt-5.6-sol");

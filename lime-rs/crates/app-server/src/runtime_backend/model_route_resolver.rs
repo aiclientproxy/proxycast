@@ -36,6 +36,7 @@ impl ChatModelRouteResolution {
 pub(super) struct PreparedChatModelRoute {
     routing_resolution: RoutingResolution,
     provider_record: Option<ProviderWithKeys>,
+    excluded_credential_refs: Vec<String>,
 }
 
 impl PreparedChatModelRoute {
@@ -65,10 +66,22 @@ pub(super) fn prepare_chat_model_route(
     } else {
         api_key_provider_service.get_provider(db, &routing_resolution.selection.provider)?
     };
+    let excluded_credential_refs = excluded_routes
+        .iter()
+        .filter(|excluded| {
+            excluded.matches_route(
+                &routing_resolution.selection.provider,
+                &routing_resolution.selection.model,
+            )
+        })
+        .filter_map(ModelRouteExclusion::credential_ref)
+        .map(ToString::to_string)
+        .collect();
 
     Ok(PreparedChatModelRoute {
         routing_resolution,
         provider_record,
+        excluded_credential_refs,
     })
 }
 
@@ -81,7 +94,11 @@ pub(super) async fn assemble_chat_model_route(
     prepared: PreparedChatModelRoute,
     preferred_credential_ref: Option<&str>,
 ) -> Result<ChatModelRouteResolution, String> {
-    let routing_resolution = prepared.routing_resolution;
+    let PreparedChatModelRoute {
+        routing_resolution,
+        provider_record,
+        excluded_credential_refs,
+    } = prepared;
     let requested_route_selection = &routing_resolution.selection;
     let model_routing = &routing_resolution.routing;
     let provider_readiness = &routing_resolution.readiness;
@@ -90,9 +107,10 @@ pub(super) async fn assemble_chat_model_route(
             db,
             api_key_provider_service,
             &requested_route_selection.provider,
-            prepared.provider_record.as_ref(),
+            provider_record.as_ref(),
             direct_provider_config,
             preferred_credential_ref,
+            &excluded_credential_refs,
         )
         .await?
     } else {
@@ -121,7 +139,7 @@ pub(super) async fn assemble_chat_model_route(
         &model_task_request,
         requested_route_selection,
         &routing_payload,
-        prepared.provider_record.as_ref(),
+        provider_record.as_ref(),
         route_credential.credential_ref(),
         direct_provider_config,
     );
@@ -223,6 +241,7 @@ mod tests {
             model_name: "fixture-model".to_string(),
             api_key: Some("fixture-key".to_string()),
             base_url: Some("http://127.0.0.1:56599".to_string()),
+            api_version: None,
             credential_uuid: None,
             reasoning_effort: None,
             service_tier: None,
@@ -293,6 +312,7 @@ mod tests {
             model_name: "fixture-model".to_string(),
             api_key: Some("fixture-key".to_string()),
             base_url: Some("http://127.0.0.1:56599".to_string()),
+            api_version: None,
             credential_uuid: None,
             reasoning_effort: None,
             service_tier: None,
@@ -360,6 +380,7 @@ mod tests {
             model_name: "fixture-model".to_string(),
             api_key: Some("fixture-key".to_string()),
             base_url: Some("http://127.0.0.1:56599".to_string()),
+            api_version: None,
             credential_uuid: None,
             reasoning_effort: Some("ultra".to_string()),
             service_tier: None,
@@ -415,6 +436,7 @@ mod tests {
             model_name: "fixture-model".to_string(),
             api_key: Some("fixture-key".to_string()),
             base_url: Some("http://127.0.0.1:56599".to_string()),
+            api_version: None,
             credential_uuid: None,
             reasoning_effort: Some("medium".to_string()),
             service_tier: None,
@@ -1091,5 +1113,38 @@ mod tests {
                 .and_then(Value::as_str),
             Some("runtime_selection_only")
         );
+
+        let excluded = ModelRouteExclusion::for_credential(
+            &provider.id,
+            "scoped-route-model",
+            &ref_a,
+            runtime_core::FailureClassification::Authentication,
+        );
+        let rerouted = assemble_chat_model_route(
+            &db,
+            &service,
+            &request,
+            &requested_selection,
+            None,
+            prepare_chat_model_route(
+                &db,
+                &service,
+                &request,
+                &requested_selection,
+                None,
+                &[excluded],
+            )
+            .expect("prepare credential reroute"),
+            Some(&ref_a),
+        )
+        .await
+        .expect("assemble credential reroute");
+        assert_eq!(
+            rerouted.resolved_route.auth.credential_ref.as_deref(),
+            Some(ref_b.as_str())
+        );
+        let evidence = rerouted.decision_payload.to_string();
+        assert!(!evidence.contains(&ref_a));
+        assert!(!evidence.contains(&ref_b));
     }
 }

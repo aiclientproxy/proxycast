@@ -752,29 +752,24 @@ impl RuntimeCore {
             stored.session.clone()
         };
 
-        let reply_input = agent_runtime::reply_input::RuntimeReplyInput::try_from_user_parts(
-            input.clone(),
-            |media| {
-                super::input_media::resolve_runtime_input_media(
-                    media,
-                    self.sidecar_store.as_deref(),
-                    &session.session_id,
-                )
-            },
+        let prepared_input = super::input_media::prepare_runtime_input(
+            input,
+            self.sidecar_store.as_deref(),
+            &session.session_id,
         )
-        .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+        .map_err(RuntimeCoreError::Backend)?;
         let session_loop = self.session_loops.get_or_create(&session.session_id).await;
         let active_turn_id = session_loop
             .steer_for_turn_id_with_metadata(
                 Some(expected_turn_id),
-                vec![RuntimeSessionInput::User(reply_input)],
+                vec![RuntimeSessionInput::User(prepared_input.provider)],
                 client_user_message_id.clone(),
                 None,
             )
             .await
             .map_err(|error| steer_runtime_error(error, expected_turn_id))?;
 
-        let input_text = user_input_text(&input);
+        let input_text = user_input_text(&prepared_input.durable);
         let explicit_item_id = client_user_message_id
             .as_deref()
             .map(|client_id| format!("steer-{client_id}"))
@@ -784,7 +779,7 @@ impl RuntimeCore {
             "role": "user",
             "visibility": "user_visible",
             "source": "turn/steer",
-            "input": input,
+            "input": prepared_input.durable,
             "content": {
                 "kind": "inline_text",
                 "text": input_text,
@@ -919,6 +914,14 @@ impl RuntimeCore {
             self.ensure_capability_allowed_with_context(&capability_context, capability_id)?;
         }
 
+        let prepared_input = super::input_media::prepare_runtime_input(
+            params.input,
+            self.sidecar_store.as_deref(),
+            &params.session_id,
+        )
+        .map_err(RuntimeCoreError::Backend)?;
+        params.input = prepared_input.durable;
+
         let queued_turn = {
             let mut state = self
                 .state
@@ -1017,18 +1020,7 @@ impl RuntimeCore {
             });
         }
 
-        let mut provider_input =
-            agent_runtime::reply_input::RuntimeReplyInput::try_from_user_parts(
-                params.input.clone(),
-                |media| {
-                    super::input_media::resolve_runtime_input_media(
-                        media,
-                        self.sidecar_store.as_deref(),
-                        &params.session_id,
-                    )
-                },
-            )
-            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+        let mut provider_input = prepared_input.provider;
         provider_input.agent_only = input_kind.is_agent_only();
         let agent_only_input_event = input_kind
             .is_agent_only()
@@ -1081,7 +1073,7 @@ impl RuntimeCore {
                 .sessions
                 .get(&session.session_id)
                 .ok_or_else(|| RuntimeCoreError::SessionNotFound(session.session_id.clone()))?;
-            super::provider_history::provider_history_excluding_current_turn_input(
+            super::provider_history::provider_turn_history_excluding_current_turn_input(
                 stored,
                 self.sidecar_store.as_deref(),
                 &turn.turn_id,
@@ -1245,7 +1237,7 @@ impl RuntimeCore {
                 .sessions
                 .get(&session.session_id)
                 .ok_or_else(|| RuntimeCoreError::SessionNotFound(session.session_id.clone()))?;
-            super::provider_history::provider_history_excluding_current_turn_input(
+            super::provider_history::provider_turn_history_excluding_current_turn_input(
                 stored,
                 self.sidecar_store.as_deref(),
                 &turn.turn_id,
@@ -1602,7 +1594,7 @@ impl RuntimeCore {
     async fn execute_backend_request(
         &self,
         request: ExecutionRequest,
-        provider_history: Vec<CurrentProviderMessage>,
+        provider_history: super::provider_history::ProviderTurnHistory,
         pending_input: Option<RuntimeSessionInputHandle>,
         cancellation_token: Option<CancellationToken>,
         sink: &mut dyn RuntimeEventSink,
@@ -1688,17 +1680,12 @@ impl RuntimeCore {
             stored.session.clone()
         };
 
-        let input = agent_runtime::reply_input::RuntimeReplyInput::try_from_user_parts(
+        let prepared_input = super::input_media::prepare_runtime_input(
             params.input.clone(),
-            |media| {
-                super::input_media::resolve_runtime_input_media(
-                    media,
-                    self.sidecar_store.as_deref(),
-                    &params.session_id,
-                )
-            },
+            self.sidecar_store.as_deref(),
+            &params.session_id,
         )
-        .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+        .map_err(RuntimeCoreError::Backend)?;
         let (client_user_message_id, trace) = super::session_submission::metadata(
             params
                 .runtime_options
@@ -1712,7 +1699,7 @@ impl RuntimeCore {
         let active_turn_id = match session_loop
             .steer_for_turn_id_with_metadata(
                 requested_turn_id,
-                vec![RuntimeSessionInput::User(input)],
+                vec![RuntimeSessionInput::User(prepared_input.provider)],
                 client_user_message_id,
                 trace,
             )
@@ -1760,7 +1747,7 @@ impl RuntimeCore {
                     "role": "user",
                     "visibility": "user_visible",
                     "source": "session_steer",
-                    "input": params.input,
+                    "input": prepared_input.durable,
                     "content": {
                         "kind": "inline_text",
                         "text": user_input_text(&params.input),
@@ -1782,7 +1769,7 @@ impl RuntimeCore {
     async fn submit_backend_via_session_loop(
         &self,
         request: ExecutionRequest,
-        provider_history: Vec<CurrentProviderMessage>,
+        provider_history: super::provider_history::ProviderTurnHistory,
     ) -> Result<SubmittedRuntimeSessionTurn, RuntimeCoreError> {
         let session_id = request.session.session_id.clone();
         let turn_id = request.turn.turn_id.clone();
@@ -2005,7 +1992,7 @@ impl RuntimeCore {
     async fn execute_backend_via_session_loop(
         &self,
         request: ExecutionRequest,
-        provider_history: Vec<CurrentProviderMessage>,
+        provider_history: super::provider_history::ProviderTurnHistory,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
         let submission = self

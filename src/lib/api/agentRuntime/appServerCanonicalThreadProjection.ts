@@ -11,6 +11,7 @@ import type {
   AgentSessionDetail,
 } from "./sessionTypes";
 import { readCanonicalThreadItem } from "./appServerCanonicalItemReader";
+import { createConversationProjectionReducer } from "./conversationProjection";
 
 export interface CanonicalThreadListProjectionOptions {
   archived?: boolean;
@@ -259,7 +260,7 @@ function canonicalThreadItems(
     canonicalThreadTime(thread, "updatedAt") ??
     canonicalThreadTime(thread, "createdAt") ??
     Date.now();
-  const items: AgentThreadItem[] = [];
+  const reducer = createConversationProjectionReducer({ threadId });
   for (const turn of turns) {
     if (isQueuedTurn(turn)) {
       continue;
@@ -271,11 +272,27 @@ function canonicalThreadItems(
     if (!turnId) {
       return null;
     }
+    const turnProjection = canonicalTurnToRuntimeTurn(
+      turn,
+      threadId,
+      fallbackTimestampMs,
+    );
+    if (!turnProjection) {
+      return null;
+    }
+    reducer.dispatch({
+      type:
+        turnProjection.status === "running" ? "turn_started" : "turn_completed",
+      source: "read",
+      event_id: `thread-read:turn:${turnId}`,
+      turn: turnProjection,
+    });
     for (const item of turn.items) {
       if (!isRecord(item)) {
         return null;
       }
-      const sequence = readNumberField(item, "sequence") ?? items.length;
+      const sequence =
+        readNumberField(item, "sequence") ?? reducer.getProjection().items.length;
       const createdAtMs =
         canonicalThreadTime(item, "createdAt") ??
         canonicalThreadTime(turn, "startedAt") ??
@@ -297,10 +314,16 @@ function canonicalThreadItems(
       if (!projected) {
         return null;
       }
-      items.push(projected as unknown as AgentThreadItem);
+      const typedItem = projected as unknown as AgentThreadItem;
+      reducer.dispatch({
+        type: typedItem.status === "in_progress" ? "item_started" : "item_completed",
+        source: "read",
+        event_id: event.eventId,
+        item: typedItem,
+      });
     }
   }
-  return items;
+  return [...reducer.getProjection().items];
 }
 
 function isQueuedTurn(value: unknown): boolean {

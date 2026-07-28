@@ -1144,11 +1144,6 @@ declare module "./connection.js" {
     listModelProviders(
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ModelProviderListResponse>>;
-    readModelProviderCapabilities(
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.ModelProviderCapabilitiesReadResponse>
-    >;
     listModelProviderCatalog(
       options?: AppServerRequestOptions,
     ): Promise<

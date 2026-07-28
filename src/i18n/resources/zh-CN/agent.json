@@ -1627,6 +1627,7 @@
   "agentChat.threadTimeline.turnSummary.title.completed": "当前进展",
   "agentChat.threadTimeline.turnSummary.title.running": "处理中",
   "agentChat.threadTimeline.unsupportedItem.description": "这条运行记录暂未适配为对话卡片，已隐藏底层协议详情。",
+  "agentChat.threadTimeline.unsupportedItem.fields": "记录字段：{{fields}}",
   "agentChat.threadTimeline.unsupportedItem.title": "记录了 {{type}}",
   "agentChat.tokenUsage.inputOutput": "输入 {{input}} / 输出 {{output}}",
   "agentChat.tokenUsage.promptCache.read": "缓存 {{count}}",

@@ -1,7 +1,9 @@
 use super::request_context::RuntimeModelSelection;
 use lime_agent::SessionProviderConfig;
 use lime_core::database::DbConnection;
-use lime_core::models::model_registry::{EnhancedModelMetadata, ModelCapabilityProvenance};
+use lime_core::models::model_registry::{
+    EnhancedModelMetadata, ModelCapabilityProvenance, ModelModality,
+};
 use lime_core::models::RuntimeProviderCredential;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
 use lime_services::model_registry_service::{ModelRegistryService, ProviderModelCacheAccess};
@@ -31,18 +33,32 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
     route_credential: Option<&RuntimeProviderCredential>,
 ) -> Result<RuntimeModelRegistryMetadata, String> {
     if let Some(config) = direct_provider_config {
-        let model_capabilities = config.model_capabilities.as_ref().map(|value| {
+        let capability_snapshot = config.model_capabilities.as_ref().map(|value| {
             let snapshot = runtime_core::capability_snapshot_from_model_capabilities(value);
-            capability_payload(&snapshot, ModelCapabilityProvenance::ProviderExplicit)
+            snapshot
         });
+        let chat_wire_was_lowered = capability_snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot
+                .input_modalities
+                .iter()
+                .any(|modality| !matches!(modality.as_str(), "text" | "image"))
+        });
+        let model_capabilities = capability_snapshot.as_ref().map(|snapshot| {
+            capability_payload(snapshot, ModelCapabilityProvenance::ProviderExplicit)
+        });
+        let reason_code = if chat_wire_was_lowered {
+            "chat_wire_text_image_only"
+        } else {
+            "direct_provider_config_not_in_registry"
+        };
         return Ok(RuntimeModelRegistryMetadata {
             payload: json!({
                 "source": "direct_provider_config",
                 "sourceLabel": "direct_provider_config",
                 "source_label": "direct_provider_config",
                 "status": "runtime_selection_only",
-                "reasonCode": "direct_provider_config_not_in_registry",
-                "reason_code": "direct_provider_config_not_in_registry",
+                "reasonCode": reason_code,
+                "reason_code": reason_code,
                 "providerId": selection.provider,
                 "provider_id": selection.provider,
                 "requestedModelId": selection.model,
@@ -80,14 +96,24 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
         &selection.model,
         cache_access,
     )?;
-    let model = metadata
-        .model
+    let chat_wire_model = metadata.model.as_ref().map(chat_wire_model_metadata);
+    let chat_wire_was_lowered = metadata.model.as_ref().is_some_and(|model| {
+        chat_wire_model
+            .as_ref()
+            .is_some_and(|lowered| lowered.input_modalities != model.input_modalities)
+    });
+    let reason_code = if chat_wire_was_lowered {
+        "chat_wire_text_image_only"
+    } else {
+        metadata.reason_code
+    };
+    let model = chat_wire_model
         .as_ref()
         .map(serde_json::to_value)
         .transpose()
         .map_err(|error| format!("序列化模型注册 metadata 失败: {error}"))?;
-    let model_capabilities = metadata.model.as_ref().map(model_capability_payload);
-    let model_alias = metadata.model.as_ref().map(|model| {
+    let model_capabilities = chat_wire_model.as_ref().map(model_capability_payload);
+    let model_alias = chat_wire_model.as_ref().map(|model| {
         json!({
             "canonicalModelId": model.canonical_model_id,
             "canonical_model_id": model.canonical_model_id,
@@ -97,7 +123,7 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
             "alias_source": model.alias_source,
         })
     });
-    let reasoning = metadata.model.as_ref().map(|model| {
+    let reasoning = chat_wire_model.as_ref().map(|model| {
         json!({
             "supported": model.capabilities.reasoning,
             "reasoningEffort": model.capabilities.reasoning_effort,
@@ -111,8 +137,8 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
             "sourceLabel": metadata.source.as_str(),
             "source_label": metadata.source.as_str(),
             "status": if metadata.model.is_some() { "matched" } else { "missing" },
-            "reasonCode": metadata.reason_code,
-            "reason_code": metadata.reason_code,
+            "reasonCode": reason_code,
+            "reason_code": reason_code,
             "providerId": metadata.provider_id,
             "provider_id": metadata.provider_id,
             "requestedModelId": metadata.requested_model_id,
@@ -135,6 +161,14 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
     })
 }
 
+fn chat_wire_model_metadata(model: &EnhancedModelMetadata) -> EnhancedModelMetadata {
+    let mut model = model.clone();
+    model
+        .input_modalities
+        .retain(|modality| matches!(modality, ModelModality::Text | ModelModality::Image));
+    model
+}
+
 fn model_capability_payload(model: &EnhancedModelMetadata) -> Value {
     json!({
         "provenance": model.capability_provenance,
@@ -154,12 +188,17 @@ fn capability_payload(
     snapshot: &app_server_protocol::CapabilitySnapshot,
     provenance: ModelCapabilityProvenance,
 ) -> Value {
+    let input_modalities = snapshot
+        .input_modalities
+        .iter()
+        .filter(|modality| matches!(modality.as_str(), "text" | "image"))
+        .collect::<Vec<_>>();
     json!({
         "provenance": provenance,
         "capabilities": snapshot.capabilities,
         "taskFamilies": snapshot.task_families,
         "runtimeFeatures": snapshot.runtime_features,
-        "inputModalities": snapshot.input_modalities,
+        "inputModalities": input_modalities,
         "outputModalities": snapshot.output_modalities,
     })
 }
@@ -177,6 +216,31 @@ mod tests {
         let conn = Connection::open_in_memory().expect("open in-memory db");
         create_tables(&conn).expect("create schema");
         Arc::new(Mutex::new(conn))
+    }
+
+    #[test]
+    fn chat_route_metadata_keeps_only_executable_text_and_image_inputs() {
+        let mut model = EnhancedModelMetadata::new(
+            "model-a".to_string(),
+            "Model A".to_string(),
+            "provider-a".to_string(),
+            "Provider A".to_string(),
+        );
+        model.input_modalities = vec![
+            ModelModality::Text,
+            ModelModality::Image,
+            ModelModality::Audio,
+            ModelModality::Video,
+            ModelModality::File,
+        ];
+
+        let lowered = chat_wire_model_metadata(&model);
+
+        assert_eq!(
+            lowered.input_modalities,
+            vec![ModelModality::Text, ModelModality::Image]
+        );
+        assert_eq!(model.input_modalities.len(), 5);
     }
 
     #[tokio::test]
@@ -282,6 +346,7 @@ mod tests {
                 model_name: "fixture-model".to_string(),
                 api_key: Some("fixture-key".to_string()),
                 base_url: Some("http://127.0.0.1:56599".to_string()),
+                api_version: None,
                 credential_uuid: None,
                 reasoning_effort: None,
                 service_tier: None,
@@ -290,6 +355,8 @@ mod tests {
                 toolshim_model: None,
                 model_capabilities: Some(json!({
                     "taskFamilies": ["chat"],
+                    "inputModalities": ["text", "image", "audio"],
+                    "outputModalities": ["text"],
                     "runtimeFeatures": ["streaming"],
                     "capabilities": {
                         "streaming": true,
@@ -310,7 +377,7 @@ mod tests {
         );
         assert_eq!(
             metadata.payload()["reasonCode"].as_str(),
-            Some("direct_provider_config_not_in_registry")
+            Some("chat_wire_text_image_only")
         );
         assert_eq!(
             metadata
@@ -320,6 +387,12 @@ mod tests {
             Some("provider_explicit")
         );
         assert!(metadata.payload()["model"].is_null());
+        assert_eq!(
+            metadata
+                .payload()
+                .pointer("/modelCapabilities/inputModalities"),
+            Some(&json!(["text", "image"]))
+        );
         assert_eq!(
             metadata
                 .payload()

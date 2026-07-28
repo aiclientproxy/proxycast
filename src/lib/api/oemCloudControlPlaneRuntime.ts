@@ -124,6 +124,7 @@ export const MODEL_TASK_FAMILY_SET = new Set<ModelTaskFamily>([
   "vision_understanding",
   "image_generation",
   "image_edit",
+  "video_generation",
   "speech_to_text",
   "text_to_speech",
   "embedding",

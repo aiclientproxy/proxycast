@@ -7,15 +7,14 @@ use agent_protocol::{
 };
 use app_server::{
     run_json_lines, ActionRespondRequest, AppServer, CancelExecutionRequest, ExecutionBackend,
-    ExecutionRequest, ProjectionStore, RuntimeCore, RuntimeCoreError, RuntimeEvent,
-    RuntimeEventSink,
+    ExecutionRequest, ProjectionStore, ProviderTurnHistory, RuntimeCore, RuntimeCoreError,
+    RuntimeEvent, RuntimeEventSink,
 };
 use app_server_protocol::{
     METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ, METHOD_THREAD_START,
     METHOD_TURN_INTERRUPT, METHOD_TURN_START,
 };
 use async_trait::async_trait;
-use model_provider::current_client::CurrentProviderMessage;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, Lines};
@@ -51,7 +50,7 @@ impl ExecutionBackend for PendingApprovalBackend {
     async fn start_turn_with_provider_history_and_session_input(
         &self,
         request: ExecutionRequest,
-        _provider_history: Vec<CurrentProviderMessage>,
+        _provider_history: ProviderTurnHistory,
         pending_input: Option<agent_runtime::session_loop::RuntimeSessionInputHandle>,
         _cancellation_token: Option<tokio_util::sync::CancellationToken>,
         sink: &mut dyn RuntimeEventSink,

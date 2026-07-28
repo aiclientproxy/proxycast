@@ -10,6 +10,7 @@ mod common;
 mod fal_video_generation;
 mod openai_images;
 mod openai_responses_image_generation;
+mod xai_video_generation;
 
 pub use common::ProtocolMappingError;
 
@@ -45,6 +46,13 @@ pub fn build_fal_video_generation_body(
     request: &CanonicalRequest,
 ) -> Result<serde_json::Value, ProtocolMappingError> {
     fal_video_generation::body_for_model(model_id, request)
+}
+
+pub fn build_xai_video_generation_body(
+    model_id: &str,
+    request: &CanonicalRequest,
+) -> Result<serde_json::Value, ProtocolMappingError> {
+    xai_video_generation::body_for_model(model_id, request)
 }
 
 pub fn build_responses_image_generation_body(

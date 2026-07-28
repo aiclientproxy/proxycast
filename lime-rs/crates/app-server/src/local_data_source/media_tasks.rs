@@ -481,6 +481,7 @@ async fn assess_media_route(
         Some(&provider),
         None,
         None,
+        &[],
     )
     .await?;
     let requires_api_key = ModelRegistryService::requires_api_key_for_runtime(

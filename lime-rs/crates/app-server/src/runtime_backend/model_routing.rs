@@ -2,7 +2,7 @@ use super::model_registry_metadata::RuntimeModelRegistryMetadata;
 use super::request_context::RuntimeModelSelection;
 use crate::ExecutionRequest;
 use lime_agent::{supports_direct_route, supports_provider_type, SessionProviderConfig};
-use lime_core::database::dao::api_key_provider::ProviderWithKeys;
+use lime_core::database::dao::api_key_provider::{ApiProviderType, ProviderWithKeys};
 use lime_core::database::DbConnection;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
 use lime_services::model_registry_service::ModelRegistryService;
@@ -121,6 +121,22 @@ pub(crate) fn configured_provider_readiness(provider: &ProviderWithKeys) -> Prov
             total_key_count,
         );
     }
+    if provider.provider.provider_type == ApiProviderType::Vertexai {
+        for (field, value) in [
+            ("missing_project", provider.provider.project.as_deref()),
+            ("missing_location", provider.provider.location.as_deref()),
+        ] {
+            if !value.is_some_and(|value| !value.trim().is_empty()) {
+                return ProviderReadiness::provider_store_needs_setup(
+                    field,
+                    provider_type,
+                    Some(true),
+                    enabled_key_count,
+                    total_key_count,
+                );
+            }
+        }
+    }
     if enabled_key_count == 0 && provider_requires_enabled_api_key(provider) {
         return ProviderReadiness::provider_store_needs_setup(
             "missing_enabled_api_key",
@@ -151,7 +167,19 @@ fn direct_provider_readiness(config: &SessionProviderConfig) -> ProviderReadines
         .route_protocol
         .clone()
         .unwrap_or_else(|| runtime_core::protocol_from_provider_name(&config.provider_name));
-    if supports_direct_route(&config.provider_name, &protocol) {
+    let provider_name = config
+        .provider_name
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['-', ' '], "_");
+    let requires_api_key = matches!(provider_name.as_str(), "azure" | "azure_openai");
+    let has_api_key = config
+        .api_key
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty());
+    if requires_api_key && !has_api_key {
+        ProviderReadiness::direct_request_blocked("missing_enabled_api_key")
+    } else if supports_direct_route(&config.provider_name, &protocol) {
         ProviderReadiness::direct_request_ready()
     } else {
         ProviderReadiness::direct_request_blocked("unsupported_protocol")
@@ -382,7 +410,7 @@ mod tests {
     fn ready_routing_uses_configured_gemini_adapter() {
         let db = test_db();
         let service = ApiKeyProviderService::new();
-        let unsupported = service
+        let gemini = service
             .add_custom_provider(
                 &db,
                 "Gemini route".to_string(),
@@ -396,7 +424,7 @@ mod tests {
             )
             .expect("custom Gemini provider");
         service
-            .add_api_key(&db, &unsupported.id, "gemini-test", None, true)
+            .add_api_key(&db, &gemini.id, "gemini-test", None, true)
             .expect("Gemini API key");
         service
             .initialize_system_providers(&db)
@@ -411,7 +439,7 @@ mod tests {
                 "harness": {
                     "coding_model_slots": {
                         "coding": {
-                            "provider": unsupported.id,
+                            "provider": gemini.id,
                             "model": "gemini-2.5-pro"
                         },
                         "base": {
@@ -427,7 +455,7 @@ mod tests {
         let resolution = resolve_ready_routing(&db, &service, &request, &requested, None, &[])
             .expect("routing resolution");
 
-        assert_eq!(resolution.selection.provider, unsupported.id);
+        assert_eq!(resolution.selection.provider, gemini.id);
         assert_eq!(resolution.selection.model, "gemini-2.5-pro");
         assert_eq!(resolution.routing.service_model_slot, "coding");
         assert_eq!(resolution.attempted.len(), 1);
@@ -498,6 +526,7 @@ mod tests {
             model_name: "qwen3:14b".to_string(),
             api_key: None,
             base_url: Some("http://127.0.0.1:11434".to_string()),
+            api_version: None,
             credential_uuid: None,
             reasoning_effort: None,
             service_tier: None,
@@ -548,6 +577,7 @@ mod tests {
             model_name: "qwen3:14b".to_string(),
             api_key: None,
             base_url: Some("http://127.0.0.1:11434".to_string()),
+            api_version: None,
             credential_uuid: None,
             reasoning_effort: None,
             service_tier: None,
@@ -583,8 +613,6 @@ mod tests {
         let service = ApiKeyProviderService::new();
 
         for (provider_type, label) in [
-            (ApiProviderType::AzureOpenai, "Azure OpenAI"),
-            (ApiProviderType::Vertexai, "Vertex"),
             (ApiProviderType::AwsBedrock, "Bedrock"),
             (ApiProviderType::Fal, "Fal"),
         ] {
@@ -614,6 +642,130 @@ mod tests {
                 "provider_type={provider_type}"
             );
         }
+    }
+
+    #[test]
+    fn configured_vertex_provider_requires_context_key_and_current_adapter() {
+        let db = test_db();
+        let service = ApiKeyProviderService::new();
+        let provider = service
+            .add_custom_provider(
+                &db,
+                "Vertex Gemini route".to_string(),
+                ApiProviderType::Vertexai,
+                String::new(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create Vertex provider route");
+        let stored = service
+            .get_provider(&db, &provider.id)
+            .expect("read Vertex provider")
+            .expect("stored Vertex provider");
+        assert_eq!(
+            configured_provider_readiness(&stored).reason_code,
+            Some("missing_project")
+        );
+
+        service
+            .update_provider(
+                &db,
+                &provider.id,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some("project-alpha".to_string()),
+                Some("us-central1".to_string()),
+                None,
+                None,
+                None,
+            )
+            .expect("configure Vertex context");
+        let stored = service
+            .get_provider(&db, &provider.id)
+            .expect("read configured Vertex provider")
+            .expect("stored configured Vertex provider");
+        assert_eq!(
+            configured_provider_readiness(&stored).reason_code,
+            Some("missing_enabled_api_key")
+        );
+
+        service
+            .add_api_key(&db, &provider.id, "vertex-token", None, true)
+            .expect("add Vertex access token");
+        let stored = service
+            .get_provider(&db, &provider.id)
+            .expect("read ready Vertex provider")
+            .expect("stored ready Vertex provider");
+        assert!(configured_provider_readiness(&stored).ready);
+    }
+
+    #[test]
+    fn configured_azure_provider_requires_and_accepts_enabled_api_key() {
+        let db = test_db();
+        let service = ApiKeyProviderService::new();
+        let provider = service
+            .add_custom_provider(
+                &db,
+                "Azure Responses route".to_string(),
+                ApiProviderType::AzureOpenai,
+                "https://resource.openai.azure.com".to_string(),
+                Some("v1".to_string()),
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create Azure provider route");
+
+        let stored = service
+            .get_provider(&db, &provider.id)
+            .expect("read Azure provider")
+            .expect("stored Azure provider");
+        let readiness = configured_provider_readiness(&stored);
+        assert!(!readiness.ready);
+        assert_eq!(readiness.reason_code, Some("missing_enabled_api_key"));
+
+        service
+            .add_api_key(&db, &provider.id, "azure-test-key", None, true)
+            .expect("add Azure API key");
+        let stored = service
+            .get_provider(&db, &provider.id)
+            .expect("read ready Azure provider")
+            .expect("stored ready Azure provider");
+        let readiness = configured_provider_readiness(&stored);
+        assert!(readiness.ready);
+        assert_eq!(readiness.reason_code, None);
+    }
+
+    #[test]
+    fn direct_azure_route_without_api_key_is_missing_credential() {
+        let direct = SessionProviderConfig {
+            provider_name: "azure".to_string(),
+            provider_selector: Some("azure-openai".to_string()),
+            model_name: "gpt-5.4".to_string(),
+            api_key: None,
+            base_url: Some("https://resource.openai.azure.com".to_string()),
+            api_version: Some("v1".to_string()),
+            credential_uuid: None,
+            reasoning_effort: None,
+            service_tier: None,
+            route_protocol: Some(app_server_protocol::ProtocolKind::OpenaiResponses),
+            toolshim: false,
+            toolshim_model: None,
+            model_capabilities: None,
+            supports_websockets: false,
+        };
+
+        let readiness = direct_provider_readiness(&direct);
+        assert!(!readiness.ready);
+        assert_eq!(readiness.reason_code, Some("missing_enabled_api_key"));
     }
 
     #[test]

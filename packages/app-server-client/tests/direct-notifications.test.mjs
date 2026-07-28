@@ -7,6 +7,7 @@ import {
   isItemCompletedNotification,
   isItemStartedNotification,
   isMcpToolCallProgressNotification,
+  isModelListUpdatedNotification,
   isPlanDeltaNotification,
   isReasoningSummaryPartAddedNotification,
   isReasoningSummaryTextDeltaNotification,
@@ -16,6 +17,7 @@ import {
   isThreadSettingsUpdatedNotification,
   isTurnCompletedNotification,
   isTurnStartedNotification,
+  modelListUpdatedServerNotification,
   serverNotification,
 } from "../dist/index.js";
 
@@ -162,6 +164,42 @@ test("recognizes native v2 lifecycle and reasoning notifications", () => {
         },
       },
     }),
+    true,
+  );
+});
+
+test("recognizes typed model list update notifications", () => {
+  const providerUpdate = {
+    method: "model/list/updated",
+    params: { generation: 17, providerId: "openai" },
+  };
+  const globalUpdate = {
+    method: "model/list/updated",
+    params: { generation: 18, providerId: null },
+  };
+
+  assert.equal(isModelListUpdatedNotification(providerUpdate), true);
+  assert.deepEqual(
+    modelListUpdatedServerNotification(providerUpdate),
+    providerUpdate,
+  );
+  assert.equal(isModelListUpdatedNotification(globalUpdate), true);
+  assert.equal(isServerNotification(providerUpdate), false);
+});
+
+test("fails closed for malformed model list update notifications", () => {
+  const malformed = [
+    { method: "model/list/updated", params: {} },
+    { method: "model/list/updated", params: { generation: -1 } },
+    { method: "model/list/updated", params: { generation: 1.5 } },
+    {
+      method: "model/list/updated",
+      params: { generation: 19, providerId: 42 },
+    },
+  ];
+
+  assert.equal(
+    malformed.every((message) => !isModelListUpdatedNotification(message)),
     true,
   );
 });

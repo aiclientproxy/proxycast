@@ -397,6 +397,7 @@ describe("ElectronAppServerHost", () => {
           "item/started",
           "item/completed",
           "item/agentMessage/delta",
+          "model/list/updated",
           "thread/tokenUsage/updated",
         ]),
       },
@@ -731,6 +732,24 @@ describe("ElectronAppServerHost", () => {
       },
     });
     expect(fakeConnection.nextServerMessage).toHaveBeenCalled();
+  });
+
+  it("drainEvents 应透传 typed model/list/updated notification", async () => {
+    const { ElectronAppServerHost } = await import("./appServerHost");
+    const host = new ElectronAppServerHost();
+    enqueueFakeNotifications([
+      {
+        method: "model/list/updated",
+        params: { generation: 17, providerId: "openai" },
+      },
+    ]);
+
+    const drained = await host.drainEvents({ limit: 1 });
+
+    expect(decodeMessage(drained.lines[0] ?? "")).toEqual({
+      method: "model/list/updated",
+      params: { generation: 17, providerId: "openai" },
+    });
   });
 
   it("drainEvents 首条后只排空已缓冲消息，避免把流式首字扣到回合结束", async () => {

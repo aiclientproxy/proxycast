@@ -1627,6 +1627,7 @@
   "agentChat.threadTimeline.turnSummary.title.completed": "當前進展",
   "agentChat.threadTimeline.turnSummary.title.running": "處理中",
   "agentChat.threadTimeline.unsupportedItem.description": "這條執行記錄尚未適配為對話卡片，已隱藏底層協議詳情。",
+  "agentChat.threadTimeline.unsupportedItem.fields": "記錄欄位：{{fields}}",
   "agentChat.threadTimeline.unsupportedItem.title": "記錄了 {{type}}",
   "agentChat.tokenUsage.inputOutput": "輸入 {{input}} / 輸出 {{output}}",
   "agentChat.tokenUsage.promptCache.read": "快取 {{count}}",

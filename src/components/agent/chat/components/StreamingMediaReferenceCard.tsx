@@ -4,6 +4,10 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { MessageMediaReference } from "../types";
 
+function isInlineImageUri(uri: string): boolean {
+  return /^data:image\/[a-z0-9.+-]+;base64,/iu.test(uri.trim());
+}
+
 function normalizeKind(kind?: string | null): string {
   const normalized = kind?.trim().toLowerCase();
   if (!normalized) {
@@ -65,13 +69,73 @@ export function StreamingMediaReferenceCard({
     t("agentChat.streamingRenderer.mediaReference.title", {
       defaultValue: "Media reference",
     });
-  const kindFallback = t("agentChat.streamingRenderer.mediaReference.kind.file", {
-    defaultValue: "Media",
-  });
-  const kindLabel = t(`agentChat.streamingRenderer.mediaReference.kind.${kind}`, {
-    defaultValue: kindFallback,
-  });
+  const kindFallback = t(
+    "agentChat.streamingRenderer.mediaReference.kind.file",
+    {
+      defaultValue: "Media",
+    },
+  );
+  const kindLabel = t(
+    `agentChat.streamingRenderer.mediaReference.kind.${kind}`,
+    {
+      defaultValue: kindFallback,
+    },
+  );
   const byteSize = formatByteSize(reference.byteSize);
+  const inlineImageUri =
+    kind === "image" && isInlineImageUri(reference.uri)
+      ? reference.uri.trim()
+      : null;
+  if (inlineImageUri) {
+    const image = (
+      <img
+        src={inlineImageUri}
+        alt={title}
+        loading="lazy"
+        className="max-h-[512px] max-w-full rounded-lg border border-border object-contain"
+        data-testid="streaming-media-reference-image"
+      />
+    );
+    const content = (
+      <>
+        {image}
+        {reference.caption?.trim() ? (
+          <span className="text-xs text-muted-foreground">
+            {reference.caption.trim()}
+          </span>
+        ) : null}
+      </>
+    );
+
+    if (onOpen && reference.sourcePath?.trim()) {
+      return (
+        <button
+          type="button"
+          className="inline-flex max-w-full flex-col gap-1.5 text-left focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          data-testid="streaming-media-reference-card"
+          data-reference-uri-kind="inline-image"
+          aria-label={t("agentChat.streamingRenderer.mediaReference.open", {
+            title,
+            defaultValue: "Open media reference: {{title}}",
+          })}
+          onClick={() => onOpen(reference)}
+        >
+          {content}
+        </button>
+      );
+    }
+
+    return (
+      <span
+        className="inline-flex max-w-full flex-col gap-1.5"
+        data-testid="streaming-media-reference-card"
+        data-reference-uri-kind="inline-image"
+      >
+        {content}
+      </span>
+    );
+  }
+
   const className = cn(
     "max-w-[520px] rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-left text-sm shadow-sm",
     isStreaming && "border-sky-200 bg-sky-50/50",

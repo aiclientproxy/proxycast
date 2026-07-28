@@ -365,3 +365,35 @@ fn ready_routing_excludes_runtime_failed_route_and_records_reroute_evidence() {
         Some("provider_internal_failure")
     );
 }
+
+#[test]
+fn credential_failure_keeps_route_available_without_exposing_credential_ref() {
+    let requested = selection("primary-provider", "primary-model");
+    let credential_ref = "runtime-api-key-secret-key-id";
+    let excluded = ModelRouteExclusion::for_credential(
+        "primary-provider",
+        "primary-model",
+        credential_ref,
+        FailureClassification::Authentication,
+    );
+
+    assert!(excluded.matches_route("primary-provider", "primary-model"));
+    assert!(!excluded.excludes_entire_route());
+    assert_eq!(excluded.credential_ref(), Some(credential_ref));
+    assert!(!excluded.to_payload().to_string().contains(credential_ref));
+    assert!(!format!("{excluded:?}").contains(credential_ref));
+
+    let resolution =
+        resolve_ready_model_routing_with_exclusions(&[], &requested, &[excluded], |_| {
+            Ok(ProviderReadiness::provider_store_ready(
+                Some("openai".to_string()),
+                2,
+                2,
+            ))
+        })
+        .expect("same route remains ready through another credential");
+
+    assert_eq!(resolution.selection, requested);
+    assert_eq!(resolution.attempted.len(), 1);
+    assert!(resolution.attempted[0].runtime_failure.is_none());
+}

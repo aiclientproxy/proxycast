@@ -1,6 +1,7 @@
 use super::{
-    mark_stale_running_image_task_failed_for_retry, spawn_image_task_worker_for_existing_task,
-    ImageTaskWorkerContext,
+    mark_stale_running_image_task_failed_for_retry, should_execute_pending_video_task,
+    should_recover_stale_running_video_task, spawn_image_task_worker_for_existing_task,
+    spawn_video_task_worker_for_existing_task, MediaTaskWorkerContext,
 };
 use app_server_protocol::{
     MediaTaskArtifactListParams, MediaTaskArtifactLookupParams, MediaTaskArtifactResponse,
@@ -19,12 +20,12 @@ const IMAGE_TASK_WORKER_DEFAULT_SCAN_LIMIT_PER_WORKSPACE: usize = 8;
 pub(super) const IMAGE_TASK_WORKER_STALE_RUNNING_SECS: i64 = 10 * 60;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct ImageTaskWorkerSchedulerConfig {
+pub(crate) struct MediaTaskWorkerSchedulerConfig {
     pub(crate) scan_interval: StdDuration,
     pub(crate) per_workspace_limit: usize,
 }
 
-impl Default for ImageTaskWorkerSchedulerConfig {
+impl Default for MediaTaskWorkerSchedulerConfig {
     fn default() -> Self {
         Self {
             scan_interval: StdDuration::from_secs(IMAGE_TASK_WORKER_DEFAULT_SCAN_INTERVAL_SECS),
@@ -33,51 +34,51 @@ impl Default for ImageTaskWorkerSchedulerConfig {
     }
 }
 
-pub(crate) fn spawn_image_task_worker_scheduler(context: ImageTaskWorkerContext) -> JoinHandle<()> {
-    spawn_image_task_worker_scheduler_with_config(
+pub(crate) fn spawn_media_task_worker_scheduler(context: MediaTaskWorkerContext) -> JoinHandle<()> {
+    spawn_media_task_worker_scheduler_with_config(
         context,
-        ImageTaskWorkerSchedulerConfig::default(),
+        MediaTaskWorkerSchedulerConfig::default(),
     )
 }
 
-pub(crate) fn spawn_image_task_worker_scheduler_with_config(
-    context: ImageTaskWorkerContext,
-    config: ImageTaskWorkerSchedulerConfig,
+pub(crate) fn spawn_media_task_worker_scheduler_with_config(
+    context: MediaTaskWorkerContext,
+    config: MediaTaskWorkerSchedulerConfig,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        run_image_task_worker_scheduler(context, config).await;
+        run_media_task_worker_scheduler(context, config).await;
     })
 }
 
-async fn run_image_task_worker_scheduler(
-    context: ImageTaskWorkerContext,
-    config: ImageTaskWorkerSchedulerConfig,
+async fn run_media_task_worker_scheduler(
+    context: MediaTaskWorkerContext,
+    config: MediaTaskWorkerSchedulerConfig,
 ) {
     let mut interval = tokio::time::interval(config.scan_interval);
     interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
     loop {
         interval.tick().await;
-        match spawn_pending_image_task_workers_for_registered_workspaces(
+        match spawn_pending_media_task_workers_for_registered_workspaces(
             &context,
             config.per_workspace_limit,
         ) {
             Ok(handles) if !handles.is_empty() => {
                 tracing::info!(
                     spawned = handles.len(),
-                    "scheduled pending image task workers"
+                    "scheduled pending media task workers"
                 );
             }
             Ok(_) => {}
             Err(error) => {
-                tracing::warn!(error = %error, "failed to schedule pending image task workers");
+                tracing::warn!(error = %error, "failed to schedule pending media task workers");
             }
         }
     }
 }
 
-pub(super) fn spawn_pending_image_task_workers_for_registered_workspaces(
-    context: &ImageTaskWorkerContext,
+pub(super) fn spawn_pending_media_task_workers_for_registered_workspaces(
+    context: &MediaTaskWorkerContext,
     per_workspace_limit: usize,
 ) -> Result<Vec<JoinHandle<Result<MediaTaskOutput, String>>>, String> {
     let workspace_roots = list_registered_workspace_roots(context)?;
@@ -97,12 +98,26 @@ pub(super) fn spawn_pending_image_task_workers_for_registered_workspaces(
                 );
             }
         }
+        match spawn_pending_video_task_workers_for_workspace(
+            &workspace_root,
+            Some(per_workspace_limit),
+            context.clone(),
+        ) {
+            Ok(mut workspace_handles) => handles.append(&mut workspace_handles),
+            Err(error) => {
+                tracing::warn!(
+                    workspace_root = %workspace_root.display(),
+                    error = %error,
+                    "failed to scan video tasks for workspace"
+                );
+            }
+        }
     }
     Ok(handles)
 }
 
 fn list_registered_workspace_roots(
-    context: &ImageTaskWorkerContext,
+    context: &MediaTaskWorkerContext,
 ) -> Result<Vec<PathBuf>, String> {
     let conn = database::lock_db(&context.db)
         .map_err(|error| format!("读取 workspace 数据库失败: {error}"))?;
@@ -135,7 +150,7 @@ fn list_registered_workspace_roots(
 pub(crate) fn spawn_pending_image_task_workers_for_workspace(
     workspace_root: impl AsRef<Path>,
     limit: Option<usize>,
-    context: ImageTaskWorkerContext,
+    context: MediaTaskWorkerContext,
 ) -> Result<Vec<JoinHandle<Result<MediaTaskOutput, String>>>, String> {
     let workspace_root = workspace_root.as_ref();
     let tasks = list_image_tasks_for_workspace(workspace_root, limit)?;
@@ -171,6 +186,28 @@ pub(crate) fn spawn_pending_image_task_workers_for_workspace(
     Ok(handles)
 }
 
+pub(super) fn spawn_pending_video_task_workers_for_workspace(
+    workspace_root: impl AsRef<Path>,
+    limit: Option<usize>,
+    context: MediaTaskWorkerContext,
+) -> Result<Vec<JoinHandle<Result<MediaTaskOutput, String>>>, String> {
+    let workspace_root = workspace_root.as_ref();
+    let tasks = list_video_tasks_for_workspace(workspace_root, limit)?;
+    let mut handles = Vec::new();
+    for task in tasks {
+        if should_execute_pending_video_task(&task)
+            || should_recover_stale_running_video_task(&task, Utc::now())
+        {
+            if let Some(handle) =
+                spawn_video_task_worker_for_existing_task(workspace_root, &task, context.clone())
+            {
+                handles.push(handle);
+            }
+        }
+    }
+    Ok(handles)
+}
+
 pub(super) fn list_image_tasks_for_workspace(
     workspace_root: impl AsRef<Path>,
     limit: Option<usize>,
@@ -185,10 +222,24 @@ pub(super) fn list_image_tasks_for_workspace(
     Ok(listed.tasks)
 }
 
+pub(super) fn list_video_tasks_for_workspace(
+    workspace_root: impl AsRef<Path>,
+    limit: Option<usize>,
+) -> Result<Vec<MediaTaskArtifactResponse>, String> {
+    let workspace_root = workspace_root.as_ref();
+    let listed = crate::media_task::list_media_task_artifacts(MediaTaskArtifactListParams {
+        project_root_path: workspace_root.to_string_lossy().to_string(),
+        task_type: Some(MediaTaskType::VideoGenerate.as_str().to_string()),
+        limit,
+        ..MediaTaskArtifactListParams::default()
+    })?;
+    Ok(listed.tasks)
+}
+
 pub(crate) fn spawn_retryable_failed_image_task_worker(
     workspace_root: impl AsRef<Path>,
     task_ref: &str,
-    context: ImageTaskWorkerContext,
+    context: MediaTaskWorkerContext,
 ) -> Result<Option<JoinHandle<Result<MediaTaskOutput, String>>>, String> {
     let workspace_root = workspace_root.as_ref();
     let Some(retried) = retry_failed_image_task_for_worker(workspace_root, task_ref)? else {
@@ -204,7 +255,7 @@ pub(crate) fn spawn_retryable_failed_image_task_worker(
 pub(crate) fn spawn_stale_running_image_task_worker(
     workspace_root: impl AsRef<Path>,
     task_ref: &str,
-    context: ImageTaskWorkerContext,
+    context: MediaTaskWorkerContext,
 ) -> Result<Option<JoinHandle<Result<MediaTaskOutput, String>>>, String> {
     let workspace_root = workspace_root.as_ref();
     let Some(retried) = recover_stale_running_image_task_for_worker(workspace_root, task_ref)?
@@ -366,10 +417,10 @@ mod tests {
     use rusqlite::Connection;
     use std::sync::{Arc, Mutex};
 
-    fn test_context() -> ImageTaskWorkerContext {
+    fn test_context() -> MediaTaskWorkerContext {
         let conn = Connection::open_in_memory().expect("open in-memory db");
         create_tables(&conn).expect("create schema");
-        ImageTaskWorkerContext::new(Arc::new(Mutex::new(conn)))
+        MediaTaskWorkerContext::new(Arc::new(Mutex::new(conn)))
     }
 
     #[test]
@@ -465,7 +516,7 @@ mod tests {
         )
         .expect("create image task");
 
-        let handles = spawn_pending_image_task_workers_for_registered_workspaces(&context, 8)
+        let handles = spawn_pending_media_task_workers_for_registered_workspaces(&context, 8)
             .expect("scan registered workspaces");
 
         assert_eq!(handles.len(), 1);

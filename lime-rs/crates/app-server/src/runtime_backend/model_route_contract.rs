@@ -126,6 +126,7 @@ pub(super) fn provider_configuration_from_runtime(
         credential_ref: resolved_route.auth.credential_ref.clone(),
         direct_provider_config,
         auth: runtime_provider_auth(&resolved_route.auth.kind),
+        api_version: resolved_route.endpoint.api_version.clone(),
     }
 }
 
@@ -158,6 +159,7 @@ fn no_auth_direct_provider_config_from_route(
         model_name: selection.model.clone(),
         api_key: None,
         base_url: Some(base_url),
+        api_version: resolved_route.endpoint.api_version.clone(),
         credential_uuid: None,
         reasoning_effort: selection.reasoning_effort.clone(),
         service_tier: None,
@@ -187,6 +189,7 @@ fn model_provider_protocol_from_route_protocol(protocol: &ProtocolKind) -> Model
         }
         ProtocolKind::OpenaiChat => ModelProviderProtocol::ChatCompletions,
         ProtocolKind::GeminiGenerateContent => ModelProviderProtocol::GeminiGenerateContent,
+        ProtocolKind::VertexGemini => ModelProviderProtocol::GeminiGenerateContent,
         other => ModelProviderProtocol::Custom(route_protocol_name(other).to_string()),
     }
 }
@@ -199,6 +202,7 @@ fn route_protocol_name(protocol: &ProtocolKind) -> &'static str {
         ProtocolKind::AnthropicMessages => "anthropic_messages",
         ProtocolKind::GeminiGenerateContent => "gemini_generate_content",
         ProtocolKind::Fal => "fal",
+        ProtocolKind::XaiVideo => "xai_video",
         ProtocolKind::BedrockConverse => "bedrock_converse",
         ProtocolKind::VertexGemini => "vertex_gemini",
         ProtocolKind::CodexResponses => "codex_responses",
@@ -249,6 +253,7 @@ fn direct_route_config(config: &SessionProviderConfig) -> DirectRouteConfig<'_> 
             .as_deref()
             .is_some_and(|key| !key.trim().is_empty()),
         base_url: config.base_url.as_deref(),
+        api_version: config.api_version.as_deref(),
         credential_ref: config.credential_uuid.as_deref(),
         protocol: route_protocol_from_session_provider_config(config),
         toolshim: config.toolshim,
@@ -534,6 +539,14 @@ mod tests {
     }
 
     #[test]
+    fn model_route_protocol_projects_gemini_to_dedicated_adapter() {
+        assert_eq!(
+            model_provider_protocol_from_route_protocol(&ProtocolKind::GeminiGenerateContent),
+            ModelProviderProtocol::GeminiGenerateContent
+        );
+    }
+
+    #[test]
     fn provider_configuration_projects_no_auth_openai_route_to_direct_config() {
         let selection = RuntimeModelSelection {
             provider: "lime-hub".to_string(),
@@ -586,6 +599,7 @@ mod tests {
             model_name: "agnes-2.0-flash".to_string(),
             api_key: None,
             base_url: Some("https://llm.limeai.run/v1#lime_tenant_id=tenant-0001".to_string()),
+            api_version: None,
             credential_uuid: None,
             reasoning_effort: None,
             service_tier: None,
@@ -649,6 +663,49 @@ mod tests {
     }
 
     #[test]
+    fn provider_configuration_preserves_azure_responses_wire_metadata() {
+        let selection = RuntimeModelSelection {
+            provider: "azure-openai".to_string(),
+            model: "gpt-5.4".to_string(),
+            source: "runtime_options",
+            reasoning_effort: None,
+        };
+        let resolved_route = ResolvedModelRoute {
+            protocol: ProtocolKind::OpenaiResponses,
+            endpoint: app_server_protocol::EndpointInfo {
+                base_url: Some("https://resource.openai.azure.com".to_string()),
+                api_version: Some("2025-04-01-preview".to_string()),
+                ..Default::default()
+            },
+            auth: app_server_protocol::AuthMaterialRef {
+                kind: AuthKind::ApiKeyRef,
+                provider_id: Some("azure-openai".to_string()),
+                credential_ref: Some("runtime-api-key:azure-key".to_string()),
+                header_name: Some("api-key".to_string()),
+                header_prefix: None,
+            },
+            ..Default::default()
+        };
+
+        let configuration =
+            provider_configuration_from_runtime(&selection, &resolved_route, None, None);
+
+        assert_eq!(
+            configuration.route_protocol,
+            Some(ProtocolKind::OpenaiResponses)
+        );
+        assert_eq!(
+            configuration.api_version.as_deref(),
+            Some("2025-04-01-preview")
+        );
+        assert_eq!(configuration.auth, RuntimeProviderAuth::ApiKey);
+        assert_eq!(
+            configuration.credential_ref.as_deref(),
+            Some("runtime-api-key:azure-key")
+        );
+    }
+
+    #[test]
     fn provider_configuration_overwrites_stale_direct_reasoning_with_effective_selection() {
         let selection = RuntimeModelSelection {
             provider: "openai".to_string(),
@@ -662,6 +719,7 @@ mod tests {
             model_name: "gpt-codex".to_string(),
             api_key: Some("test-key".to_string()),
             base_url: Some("https://api.example.test/v1".to_string()),
+            api_version: None,
             credential_uuid: None,
             reasoning_effort: Some("high".to_string()),
             service_tier: None,

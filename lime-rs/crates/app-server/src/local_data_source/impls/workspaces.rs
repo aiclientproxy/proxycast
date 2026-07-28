@@ -93,7 +93,7 @@ fn trigger_image_task_recovery_for_workspace(
     if let Err(error) = crate::media_task_worker::spawn_pending_image_task_workers_for_workspace(
         root_path,
         Some(8),
-        crate::media_task_worker::ImageTaskWorkerContext::new(db.clone()),
+        crate::media_task_worker::MediaTaskWorkerContext::new(db.clone()),
     ) {
         tracing::warn!(
             workspace_root = %root_path,

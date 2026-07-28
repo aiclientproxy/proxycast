@@ -3,9 +3,13 @@ use super::support::{
     TestSessionDataSource,
 };
 use super::*;
-use app_server_protocol::protocol::v2::{ThreadCompactStartParams, ThreadCompactStartResponse};
+use agent_protocol::{CollaborationMode, CollaborationModeSettings, ModeKind};
+use app_server_protocol::protocol::v2::{
+    ThreadCompactStartParams, ThreadCompactStartResponse, ThreadSettingsUpdateParams,
+};
 use lime_core::models::model_registry::{
-    EnhancedModelMetadata, ModelCapabilityProvenance, ModelTaskFamily, ModelVisibility,
+    EnhancedModelMetadata, ModelCapabilityProvenance, ModelModality, ModelRuntimeFeature,
+    ModelServiceTier, ModelTaskFamily, ModelVisibility,
 };
 use serde_json::json;
 use serde_json::Value;
@@ -47,7 +51,7 @@ impl ExecutionBackend for LiveActionBackend {
     async fn start_turn_with_provider_history_and_session_input(
         &self,
         request: ExecutionRequest,
-        _provider_history: Vec<model_provider::current_client::CurrentProviderMessage>,
+        _provider_history: crate::runtime::provider_history::ProviderTurnHistory,
         pending_input: Option<agent_runtime::session_loop::RuntimeSessionInputHandle>,
         _cancellation_token: Option<tokio_util::sync::CancellationToken>,
         sink: &mut dyn RuntimeEventSink,
@@ -565,6 +569,155 @@ async fn catalog_refresh_preserves_current_selectable_model() {
 }
 
 #[tokio::test]
+async fn model_switch_rebuilds_the_target_models_default_service_tier() {
+    let mut priority_model = chat_model("provider-a", "priority-model");
+    priority_model.service_tiers = vec![ModelServiceTier {
+        id: "priority".to_string(),
+        name: "Priority".to_string(),
+        description: "Fast lane".to_string(),
+    }];
+    priority_model.default_service_tier = Some("priority".to_string());
+    let standard_model = chat_model("provider-a", "standard-model");
+    let (_temp, core) = model_selection_core(vec![model_catalog(
+        "provider-a",
+        vec![priority_model, standard_model],
+    )]);
+
+    let priority = core
+        .update_thread_settings(ThreadSettingsUpdateParams {
+            thread_id: "thread-model-refresh".to_string(),
+            model: Some("priority-model".to_string()),
+            ..ThreadSettingsUpdateParams::default()
+        })
+        .await
+        .expect("switch to target default tier");
+    assert_eq!(priority.service_tier.as_deref(), Some("priority"));
+
+    let standard = core
+        .update_thread_settings(ThreadSettingsUpdateParams {
+            thread_id: "thread-model-refresh".to_string(),
+            collaboration_mode: Some(CollaborationMode {
+                mode: ModeKind::Plan,
+                settings: CollaborationModeSettings {
+                    model: "standard-model".to_string(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                },
+            }),
+            ..ThreadSettingsUpdateParams::default()
+        })
+        .await
+        .expect("switch to model without a service tier");
+    assert_eq!(standard.service_tier, None);
+}
+
+#[tokio::test]
+async fn same_model_collaboration_mode_update_preserves_selected_service_tier() {
+    let mut model = chat_model("provider-a", "model-a");
+    model.service_tiers = vec![
+        ModelServiceTier {
+            id: "standard".to_string(),
+            name: "Standard".to_string(),
+            description: "Default lane".to_string(),
+        },
+        ModelServiceTier {
+            id: "priority".to_string(),
+            name: "Priority".to_string(),
+            description: "Fast lane".to_string(),
+        },
+    ];
+    model.default_service_tier = Some("standard".to_string());
+    let mut metadata = default_model_selection_metadata();
+    metadata["serviceTier"] = Value::String("priority".to_string());
+    let (_temp, core) = model_selection_core_with_metadata(
+        vec![model_catalog("provider-a", vec![model])],
+        metadata,
+    );
+
+    let changed = core
+        .update_thread_settings(ThreadSettingsUpdateParams {
+            thread_id: "thread-model-refresh".to_string(),
+            collaboration_mode: Some(CollaborationMode {
+                mode: ModeKind::Plan,
+                settings: CollaborationModeSettings {
+                    model: "model-a".to_string(),
+                    reasoning_effort: Some("high".to_string()),
+                    developer_instructions: Some("Plan before editing.".to_string()),
+                },
+            }),
+            ..ThreadSettingsUpdateParams::default()
+        })
+        .await
+        .expect("update collaboration mode without changing the model");
+
+    assert_eq!(changed.service_tier.as_deref(), Some("priority"));
+    assert_eq!(changed.collaboration_mode.mode, ModeKind::Plan);
+}
+
+#[tokio::test]
+async fn conflicting_model_and_collaboration_model_are_rejected() {
+    let (_temp, core) = model_selection_core(vec![model_catalog(
+        "provider-a",
+        vec![
+            chat_model("provider-a", "model-a"),
+            chat_model("provider-a", "model-b"),
+        ],
+    )]);
+
+    let error = core
+        .update_thread_settings(ThreadSettingsUpdateParams {
+            thread_id: "thread-model-refresh".to_string(),
+            model: Some("model-a".to_string()),
+            collaboration_mode: Some(CollaborationMode {
+                mode: ModeKind::Default,
+                settings: CollaborationModeSettings {
+                    model: "model-b".to_string(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                },
+            }),
+            ..ThreadSettingsUpdateParams::default()
+        })
+        .await
+        .expect_err("conflicting model fields must fail closed");
+
+    assert!(matches!(
+        error,
+        RuntimeCoreError::InvalidRequest(message)
+            if message.contains("model must match collaborationMode.settings.model")
+    ));
+    let (_, settings, _) = core
+        .loaded_thread_settings("thread-model-refresh")
+        .expect("read settings after rejected update")
+        .expect("persisted settings");
+    assert_eq!(settings.model, "model-a");
+}
+
+#[tokio::test]
+async fn catalog_refresh_replaces_specialized_media_model_with_executable_chat_model() {
+    let mut image = chat_model("provider-a", "model-a");
+    image.task_families = vec![ModelTaskFamily::ImageGeneration];
+    let chat = chat_model("provider-a", "model-b");
+    let (_temp, core) = model_selection_core(vec![model_catalog("provider-a", vec![image, chat])]);
+
+    let changed = core
+        .reconcile_thread_model_selection("thread-model-refresh")
+        .await
+        .expect("replace specialized media model");
+
+    assert_eq!(
+        changed.as_ref().map(|settings| settings.model.as_str()),
+        Some("model-b")
+    );
+    let (_, settings, _) = core
+        .loaded_thread_settings("thread-model-refresh")
+        .expect("read current settings")
+        .expect("persisted settings");
+    assert_eq!(settings.model_provider, "provider-a");
+    assert_eq!(settings.model, "model-b");
+}
+
+#[tokio::test]
 async fn catalog_refresh_reselects_same_provider_before_next_provider() {
     let mut hidden = chat_model("provider-a", "hidden-model");
     hidden.visibility = ModelVisibility::Hide;
@@ -830,6 +983,10 @@ fn chat_model(provider: &str, model: &str) -> EnhancedModelMetadata {
     );
     metadata.capability_provenance = ModelCapabilityProvenance::ProviderExplicit;
     metadata.task_families = vec![ModelTaskFamily::Chat];
+    metadata.input_modalities = vec![ModelModality::Text];
+    metadata.output_modalities = vec![ModelModality::Text];
+    metadata.runtime_features = vec![ModelRuntimeFeature::Streaming];
+    metadata.capabilities.streaming = true;
     metadata.capabilities.reasoning_effort = Some(
         lime_core::models::model_registry::ModelReasoningEffortSupport {
             supported: true,

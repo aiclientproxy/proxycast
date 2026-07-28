@@ -381,19 +381,42 @@ action-required/approval 与 ask-user 的 live continuation 归 `agent-runtime` 
 ```text
 provider config + configured-provider readiness + ModelRegistry metadata
   -> AppDataSource provider-scoped ProviderModelCatalog
-  -> RuntimeCore model/list Codex v2 projection + pagination
+  -> RuntimeCore model/list Codex v2 picker fields + authoritative catalog snapshot
   -> Renderer typed gateway / Electron recovery projection
 ```
 
 `ProviderModelCatalog` 是 App Server 内部 read projection，不是第二个 provider network owner；
 provider wire、capability 与执行 route 仍只归 `model-provider`。public `model/list` 必须保持 Codex
-v2 exact shape：`{ cursor?, limit?, includeHidden? } -> { data, nextCursor }`，不得扩展
-`providerId`、`tier` 或返回 provider 字段。多 provider identity 编入可逆 opaque `Model.id`：
-`route:<base64url(providerId)>.<base64url(stableModelId)>`；`Model.model` 只表示 provider wire
-model id。Renderer/Electron 只能通过 typed decoder 恢复 route，不能解析显示名或按 provider
-名称猜路由。默认目录只投影 picker-visible model；管理面显式 `includeHidden=true`。Spawn Agent
-模型选项消费内部 provider-scoped catalog，不得反向依赖 public DTO 或借 public 字段传递 provider
-identity。
+v2 的 request、分页和 picker 字段：`{ cursor?, limit?, includeHidden? } -> { data, nextCursor }`。Lime 的
+`Model` 在保留 Codex picker/reasoning/input-modality 字段外，追加 `providerId`、`capabilitySnapshot`、
+`contextWindow` 与 `maxOutputTokens`，使 GUI 与 RuntimeCore route 使用同一份 typed catalog fact。多 provider
+identity 同时编入可逆 opaque `Model.id`：`route:<base64url(providerId)>.<base64url(stableModelId)>`；
+`Model.model` 只表示 provider wire model id。Renderer 必须通过 typed decoder 恢复 route，并要求 decoded
+provider 与 `providerId` 完全一致；不一致或 capability source 缺失时 fail closed，不能解析显示名或按
+provider 名称猜路由。默认目录只投影 picker-visible executable model；管理面显式 `includeHidden=true`。Spawn
+Agent 模型选项消费内部 provider-scoped catalog，不得反向依赖 public DTO 或借展示字段推断 capability。
+
+跨 Turn 模型切换上下文继续由同一个 RuntimeCore provider-history owner 投影：
+
+```text
+latest completed Turn -> durable routing.decision.made -> previous provider/model
+current Turn -> preflighted agentControlRoute schema v2 -> initial route
+RuntimeBackend route attempt -> actual selected provider/model
+  -> compare previous truth with each actual route selection
+  -> append one Codex <model_switch> developer message at provider-history tail
+  -> current user input -> model-provider
+```
+
+previous truth 只认存在 `turn.completed` 的 Turn；failed/canceled route、候选设置和未完成 provider 尝试
+都不能提前消费切换提示。首 Turn、相同 provider/model、仅 reasoning effort 或 service tier 变化不注入。
+marker 只为当前 sampling 临时生成，不写新的 event、pending flag、Thread Item 或协议字段；冷恢复仍从
+durable routing event 推导，切换 Turn 完成后下一 Turn 自然不再生成。health-aware reroute 每次按实际
+selection 重新投影 marker，不能把初始 preflight route 冒充最终执行 route。Lime 当前没有 Codex 的
+model-specific base-instructions catalog，因此 marker 只复用 Codex preamble，携带 XML-escaped 的
+previous/current route，并要求继续遵循当前 system/developer instructions，不伪造模型专属指令。
+
+架构影响：非重大；只扩展既有 RuntimeCore provider-history 投影，不改变 owner、依赖方向或公开协议。
+架构图确认：上图复用现有 Turn admission/provider-history 主链。责任开发者确认：root，2026-07-28。
 
 canonical Tool display contract 是 `ThreadItemPayload::{Tool,McpToolCall,CollabAgentToolCall}` 加 `ToolOutput`；call identity、arguments、structured content、duration、truncation、output reference 与 error 必须是 typed 字段，不能藏在 metadata 或由 Renderer 解析文本。Approval Item 的 ordered `available_decisions` 与 resolution 使用 Codex 同义的 `Approved`、`ApprovedForSession`、`Denied`、`Abort`、`TimedOut`；pending 只由 Item status 表达，此时 `decision = null`。GUI 只允许显式 lower 为 `allow_once`、`allow_for_session`、`decline`、`cancel`，不得从 scope 反推丢失的 decision。`requestId` 是审批 identity，`actionId` 只能作为缺少 request identity 时的退场 fallback；ask-user 可以 terminal 且 `decision = null`，Turn 使用 `Resolved` 表达已回答。MCP server elicitation 始终是独立的瞬时 reverse request，不产生 Approval 或其他 Item。
 
@@ -407,10 +430,11 @@ typed runtime request
   -> RuntimeEvent
 ```
 
-`ProtocolKind` 不能把未实现的 Bedrock/Fal/Vertex/Azure 等协议伪装为
+`ProtocolKind` 不能把未实现的 Bedrock/Fal 等协议伪装为
 `Custom` 再走 Chat Completions。若 `model-provider` 没有完整 lowering/stream/retry
 实现，route resolver 必须返回 typed `UnsupportedProtocol`；协议声明、能力快照和真实
-网络实现必须一一对应。
+网络实现必须一一对应。Vertex Gemini 必须使用 dedicated `VertexGemini` runtime identity，不能通过普通
+Gemini API-key alias 或 `Custom("vertex_gemini")` 放行。
 
 Responses WebSocket 的 capability 由 `ProviderRuntimeSpec.supports_websockets` 或 direct runtime request 的显式字段进入 current config；`model-provider` 不按 provider 名称猜测支持。`AgentRuntimeState` 按 session identity 持有 provider client，route/config 不变时跨 Turn 复用，session close 时清理；不同 session 不共享 transport fallback。支持 WebSocket 的 Responses client 在同一连接上串行发送 `response.create`，禁止 multiplex，并让 SSE 与 WebSocket frame 复用同一个 Responses event reducer。Upgrade 426 或连接重试耗尽后，当前 session sticky 切到 HTTP SSE；WebSocket 在任何用户可见 event 前失败时可用完整 request 安全重放 HTTP，已经发出 text/tool event 后禁止重放，避免重复正文或工具副作用。流被取消或未完整消费时连接必须淘汰，不得把未读 frame 带入下一 Turn。
 
@@ -426,27 +450,35 @@ provider capability upper bound 必须委托同一 adapter availability，禁止
 白名单而产生 ready/capability 漂移。`namespace_tools`、hosted `image_generation` 与 hosted `web_search`
 只有在 canonical schema、request lowering、stream reducer 和 route gate 全部可执行后才能置为 true；普通
 function/client tool 支持不能代替这些 provider capability。
-Gemini GenerateContent 与 Ollama Responses 已是 current adapter。Ollama provider type/name 只解析为
+Gemini GenerateContent、Vertex Gemini、Azure OpenAI Responses 与 Ollama Responses 已是 current adapter。Azure 使用 resource
+root、`/openai`、`/openai/v1` 或完整 `/openai/v1/responses` endpoint，认证仅允许 `api-key`，typed
+`api-version` 缺省为 `v1`；deployment URL、Bearer/NoAuth、Chat Completions、WebSocket 与 hosted tools 均 fail closed。
+Vertex 从 provider store 的 typed `project/location` 生成
+`/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:streamGenerateContent?alt=sse`，
+认证只允许 `Authorization: Bearer <access-token>`；普通 Gemini 的 `x-goog-api-key`、缺失 project/location、
+带路径的自定义 origin、NoAuth 和 WebSocket 均在发网前拒绝。Vertex 与 Gemini 只共享 canonical
+lowering/SSE reducer，不共享 provider identity、endpoint 或 auth lowering。
+Ollama provider type/name 只解析为
 `OpenaiResponses`，使用 `NoAuth` 和 `/v1/responses`；`/api/tags` 只归模型发现，不参与 agent turn。独立
 `OllamaChat` protocol、NDJSON turn adapter 与 Chat Completions fallback 均为
-`dead / deleted / forbidden-to-restore`。Vertex、Bedrock、Fal 和 Azure OpenAI 在完整
-lowering/auth/query/stream adapter 落地前均返回 `unsupported_protocol`，不得进入 `model/list` selectable
-catalog、当前 provider capability read、profile fallback 或 connection/chat probe。Azure 不能因 body 近似
-OpenAI Chat 而放行：current transport 尚未消费其
-`api-key` header 与 `api-version`。Store 未命中的 provider 名称不得生成 builtin ready；唯一无 Store 旁路
+`dead / deleted / forbidden-to-restore`。Bedrock 和 Fal 在完整 lowering/auth/query/stream adapter 落地前
+均返回 `unsupported_protocol`，不得进入 `model/list` selectable catalog、当前 provider capability read、profile
+fallback 或 connection/chat probe。Store 未命中的 provider 名称不得生成 builtin ready；唯一无 Store 旁路
 是带完整 route/config/capability 的 explicit direct request。direct request 与当前 selection 绑定，只允许
 一次 admission，不复用同一 endpoint/credential 参与 profile fallback。
 
-`modelProvider/capabilities/read` 与 Codex 一致，每次读取最新产品配置中的当前 provider ID，并精确查询
-Store、readiness 与 capability snapshot。它不得汇总其他 ready provider、回退第一个可用 provider 或按
-显示名猜测；当前 provider 未配置、禁用、缺凭证或 adapter 未实现时返回全 false。具体 Turn 仍使用 resolved
-route/model capability 决定实际工具暴露，不能把该配置读结果当成跨 provider 能力上界。
+公开能力读取只有 `model/list.capabilitySnapshot`：它直接投影 ready provider-scoped executable catalog 的 typed
+snapshot，并保留 `providerId`、provenance、task family、modality、runtime feature 与 limits。具体 Turn 继续使用
+resolved route/model capability 决定实际工具暴露，不能把列表展示字段当成跨 provider 能力上界。Codex 的空参数
+`modelProvider/capabilities/read` 读取单一全局 Provider，与 Lime 的 Thread-bound route 不同且没有产品消费者，已从
+protocol、dispatcher、client、schema 和测试正向面物理删除；只允许出现在 excluded scope、历史 evidence 与 retired
+guard 中，禁止恢复为静态全局 capability owner。
 
 产品默认 provider 的配置事实源只有顶层 `Config.default_provider`；Electron AppConfig、App Server、
 `lime-config` observer 与 `lime-server` 必须读取同一字段。`RoutingConfig` 只承载 model aliases，旧
 `routing.default_provider` 已删除且 YAML 解析必须 fail closed，禁止恢复双读、优先级合并或迁移期 fallback。
 
-provider health 的共享粒度是 `provider/model/base-url/protocol/credential-scope`，由
+provider health 的共享粒度是 `provider/model/base-url/api-version/protocol/credential-scope`，由
 `model-provider::CurrentProviderHealthRegistry` 持有；同一 scope 的不同 session 复用同一 circuit
 breaker，但 HTTP client、WebSocket 与 HTTP fallback 仍保持 session-local。持久化凭证 scope 使用
 credential UUID；direct runtime key 只使用进程内 SHA-256 指纹，不保存原始 key；`NoAuth` 固定使用
@@ -457,26 +489,60 @@ breaker 的结构化 observer 必须在内部 mutex 释放后发出 `provider_he
 provider/model/protocol、credential kind、不可逆 route hash、state/reason、probe admission 与
 retry-after；禁止记录 base URL、credential UUID、API key 或请求内容。HalfOpen 已有 probe 时的拒绝只返回
 `50ms` 上限的短退避，不能再次宣告完整 open cooldown。
+运行期 control plane 只能通过 exact `RuntimeProviderConfig` 向该同一 registry 读取脱敏 snapshot；未知 route
+返回 unknown，且读取不得创建虚假的 `closed` breaker。snapshot 只包含 Closed/Open/HalfOpen、closed-window 的
+sample/failure count、probe-in-flight 与 retry-after；open/half-open 已丢弃 window 时计数必须明确为 unknown，
+不能由静态 provider readiness 或其他 route 推断。`AgentRuntimeState` 只委托这一个 registry；在没有当前
+Thread route 的 Renderer/Settings 消费者前，不新增孤立 App Server JSON-RPC method。
 HTTP/WebSocket transport 的真实重试在 sleep 前由同一 route observer 发出 `provider_retry` tracing，记录
 transport、reason、failed/next/max attempt、delay_ms、delay_source 与可选 HTTP status；仍复用相同的
 credential-safe route hash，不记录 endpoint、错误正文或凭证。当前请求策略保持 Codex 语义：只对 5xx 做
 request-layer retry，429/auth/content rejection 不被普通 transport retry 放大；没有实际重试就不发
 `provider_retry`。该 evidence 只服务 provider retry/health 诊断，不进入模型切换通知或配置 readiness。
+HTTP 与 Responses WebSocket upgrade 都必须消费服务端 `x-should-retry`；显式 `false` 覆盖状态码默认策略，立即
+停止当前请求的后续 attempt，并把最终 provider error 标记为不可重试。该类 server-directed rejection 不计入
+route circuit health failure，不能因连续 429/5xx 错误打开共享 breaker。
+
+Provider transport 正常结束但没有产生可见 text 或 tool call 时，由 `agent-runtime::provider_turn` 按
+`grok-build` 的 empty-response 语义执行有界重采样；这不是 HTTP retry，也不进入 `model-provider`。reasoning-only
+与完全空的 `stop` 共用独立的两次重采样预算，不消耗 `max_turns` 工具回合额度，并复用同一 sampling step 的
+tool/hook snapshot 与原始 Provider transcript；空尝试中的 reasoning/assistant 内容不得写回下一次请求。工具执行后的
+空 final 同样重采样，并保留已提交的 tool result。`content_filter` 空终态合法完成，`length` 与 `error` 空终态直接
+失败，Provider token budget 必须在开始下一次重采样前生效。reasoning-only 直接失败、工具后空终答成功以及让语义
+重采样消耗工具回合额度均为 `dead / forbidden-to-restore`。
 
 provider 运行期重路由仍沿唯一 current owner 链执行。`model-provider` 负责产生结构化失败分类与
 `retryable` 事实；`agent-runtime` 只传播单一 route 的执行失败、是否已经产生输出以及用量，不选择备用
-provider。只有尚未产生 text/reasoning/tool 输出、尚未消费 pending steer 且 provider 调用前未发出用户可见
-structured-input warning 的 `rate_limit`、`provider_internal` 或 `transport` 可重试失败，App Server 才把失败的
-provider/model 交给 RuntimeCore resolver 作为显式 exclusion，重新完成 candidate readiness、credential 与
-route resolution，并执行下一条 ready profile route。认证、权限、quota、请求错误、context overflow、
-content policy、unknown、非 retryable、已经产生输出、已经消费 pending input 或已经发出上述 warning 的失败
-必须原样终止；否则完整 route replay 会丢失 steer 或重复可见事件。explicit direct request 也必须原样终止，
-禁止借 profile fallback 偷换 endpoint 或 credential。RuntimeCore 负责
-candidate exclusion 和 routing attempts，App Server 负责有限重路由编排并复用
-`routing.fallback.applied` 输出 `runtime_provider_failure` evidence；不得新增平行 event、第二 resolver 或
-renderer fallback。evidence 只允许 provider/model、classification、retryable 与稳定 reason code，禁止写入
-endpoint、credential ref、API key 或 provider 错误正文。无备用 candidate 时保留最近一次真实 provider
-错误作为 Turn 失败原因。
+provider。尚未产生 text/reasoning/tool 输出、尚未消费 pending steer 且 provider 调用前未发出用户可见
+structured-input warning 时，App Server 按 resolved route 是否绑定 repository credential 分两种 scope：
+
+- 已绑定 credential 的 `authentication`、`permission`、`quota`、`rate_limit`、`provider_internal` 或
+  `transport` 失败只生成 credential-specific exclusion；认证、权限与 quota 即使不可重试，也可以尝试同一
+  provider/model key pool 的下一把 key，因为这不是重放同一 credential。RuntimeCore 不能因此排除整个
+  provider/model candidate；App Server 必须保持 exact provider/model/endpoint，过滤失败 credential ref，并在
+  durable ref 命中失败 key 时选择下一把。指定 provider 的 key 池不得按 provider type 跨到另一 provider。
+- 未绑定 repository credential 的 keyless route 只有 `rate_limit`、`provider_internal` 或 `transport` 的
+  retryable 失败可以生成整条 route exclusion，再由 RuntimeCore 选择下一条 ready profile route。
+
+请求错误、context overflow、content policy、unknown、已经产生输出、已经消费 pending input 或已经发出上述
+warning 的失败必须原样终止；explicit direct request 也必须原样终止，禁止借 profile fallback 偷换 endpoint 或
+credential。credential 池耗尽时必须保留最近一次真实 provider 错误，不得转到 backup model、跨 provider 捞 key
+或把需要凭证的 route 降成 `NoAuth`。RuntimeCore 负责 scope-aware exclusion 与 routing attempts，App Server 负责
+有限重路由编排；route fallback 继续复用 `routing.fallback.applied`，不得新增平行 event、第二 resolver 或
+renderer fallback。任何 evidence/debug 只允许 provider/model、classification、retryable、scope kind 与稳定
+reason code，禁止写入 endpoint、credential ref、API key 或 provider 错误正文。
+
+repository credential 的跨 Turn cooldown 只允许由真实 provider 恢复元数据驱动。`model-provider` 在非成功
+HTTP/WebSocket 响应上解析 `Retry-After` 秒值或 HTTP-date，以及 exhausted request/token quota 对应的
+`x-ratelimit-reset-*` / `anthropic-ratelimit-*-reset`；原始 header 不跨层，只把非零 `Duration` 随结构化
+provider error 交给 `agent-runtime` 和 App Server。App Server 仅在该失败已经满足 credential-specific reroute
+安全条件时登记 cooldown；`ApiKeyProviderService` 以内存 deadline 按内部 key ID 过滤后续 runtime selector，过期
+即清理。durable preferred ref 命中 cooldown 时也改选同一 provider 的下一把 key，但 exact credential read 仍是
+无副作用读取。explicit direct request、无 credential ref、零/过期/畸形 header、无恢复提示的普通
+401/403/transport/5xx 均不得产生固定假 cooldown。request 与 token quota 同时耗尽时必须取较晚 reset，避免在
+任一限制尚未恢复时过早复用 key。cooldown identity、deadline 和原始 header 不进入 route payload、Debug、
+tracing、历史或外部 evidence；内部 request-layer sleep 可按 Codex 上限裁剪，但跨 Turn deadline 必须保留服务端
+给出的完整恢复窗口。
 
 Responses 服务端事实只从 wire evidence 进入 canonical 主链。HTTP/WS handshake 只读取
 `openai-model` / `x-openai-model` header；stream event 只读取 `response.headers`（优先）或顶层
@@ -1133,9 +1199,13 @@ tool calls and truncated streams fail closed. Gemini `thoughtSignature` remains 
 assistant function call, copied through generic tool lifecycle metadata, stored on the canonical Thread item and restored
 when historical tool calls are lowered into a later provider request. It is not promoted to a product-level field.
 
-`GeminiGenerateContent` is `current`. Vertex Gemini, Azure OpenAI, Bedrock Converse and Fal chat remain unsupported and
-must not be admitted through aliases or custom protocol strings. Ollama Chat is deleted; Ollama now shares the current
-Responses algebra described below. No compatibility adapter or parallel provider backend exists.
+`GeminiGenerateContent`, Vertex Gemini and Azure OpenAI Responses are `current`. Azure keeps a dedicated provider identity
+through the shared Responses algebra so its `api-key` and typed `api-version` wire cannot degrade to OpenAI Bearer auth.
+Vertex keeps a dedicated runtime identity through the shared Gemini canonical algebra so its project endpoint and Bearer
+token cannot degrade to the Gemini API-key wire. Bedrock Converse and Fal chat remain unsupported and must not be admitted
+through aliases or custom protocol strings.
+Ollama Chat is deleted; Ollama now shares the current Responses algebra described below. No compatibility adapter or
+parallel provider backend exists.
 
 Architecture impact: major; this extends the current provider transport union and durable tool-history contract without
 changing owner direction. Architecture diagram updated: this section and the provider/runtime chain above. Responsible
@@ -1213,9 +1283,18 @@ provider name / model name / models[] entry without capability
 The only authoritative provenance values are `canonical` and `provider_explicit`. `inferred_hint` remains useful for
 catalog grouping and display, but RuntimeCore must reject it before provider execution even when the inferred object is
 non-empty. Direct runtime config is authoritative only when it carries an explicit capability snapshot. Renderer
-`model/list` projection preserves Codex picker, reasoning-effort and input-modality fields, marks the local projection as
-`inferred_hint`, and does not synthesize tools, streaming, JSON mode, function calling, runtime features, execution,
-context, tool-call, Responses, truncation or native-tool policy.
+`model/list` projection preserves Codex picker, reasoning-effort and input-modality fields while forwarding the selected
+catalog record's typed `providerId` and `capabilitySnapshot` unchanged. It also forwards known context/output limits. The
+Renderer reads capabilities, task families, input/output modalities and runtime features from that snapshot and must not
+synthesize tools, streaming, JSON mode, function calling, capability provenance or limits. `inferred_hint` is excluded
+from executable `model/list` rather than being relabeled locally. Executable chat entries are checked by the same canonical
+`ModelTaskRequest + route_capability_gap` contract used by Turn admission: they must explicitly advertise the `chat` task
+family, accept `text`, produce `text`, and support streaming. Reasoning and vision may be additional capabilities, but cannot
+replace the chat contract. Their current sampling input contract
+is narrowed to ordered `text | image` parts, matching grok-build; image/audio/video/file-only models remain outside the chat
+picker and are admitted only by their dedicated media owner. `CapabilitySnapshot.source` is the nested capability
+`provenance`, while the registry lookup source remains `modelRegistry.source`; `reasonCode` records matching or lowering
+reasons such as `chat_wire_text_image_only` and is never used as capability provenance.
 
 Provider configuration has one shape: `Provider.models[]` entries contain `id`, optional `displayName` and optional
 `capability`. Entries with capability become `provider_explicit`; entries without it remain `inferred_hint` and fail
@@ -1227,7 +1306,9 @@ capability fabrication are `dead / deleted / forbidden-to-restore`; no `compat/d
 
 Architecture impact: major; this changes the trust boundary between model discovery, App Server route metadata and
 RuntimeCore admission without adding a second catalog or execution owner. Architecture diagram updated: this section and
-the model-provider/runtime chain above. Responsible developer confirmation: root, 2026-07-27.
+the model-provider/runtime chain above. The public catalog projection was extended on 2026-07-28 to preserve the same
+authoritative snapshot through the Renderer boundary; it does not add a second owner. Responsible developer confirmation:
+root, 2026-07-28.
 
 ## 20. Model Catalog Refresh And Turn Selection Reconciliation
 
@@ -1236,6 +1317,17 @@ Catalog refresh and durable Thread selection use one admission path:
 ```text
 provider store mutation -> model_route_generation
   -> ready provider-scoped catalog
+provider credential create/enable/delete
+  -> foreground provider-scoped catalog refresh
+       | success: credential-scoped cache + provider last-success snapshot
+       | transient failure without last-success: one retry flight per provider
+           -> immediate background retry, then bounded 5s exponential backoff
+           -> at most 5 attempts, 60s delay cap
+  -> successful cache transaction advances model_route_generation
+  -> model/list/updated { generation, providerId }
+  -> Renderer cache invalidation + forced model/list read
+  -> App Server isDefault / ready catalog order is the only default-selection fact
+  -> pending route recovery for the committed generation
   -> RuntimeCore::start_turn_inner reconciliation
   -> visible + authoritative + chat-capable candidates
   -> current route preflight
@@ -1248,11 +1340,29 @@ provider store mutation -> model_route_generation
 
 Every production Turn entry, including public `turn/start`, synchronous RuntimeCore callers, queued resume, ThreadGoal
 continuation, workflow retry and mailbox TriggerTurn, reaches the same reconciliation boundary before provider execution.
+Public `thread/start` resolves an omitted provider/model pair to the first ready, visible, authoritative chat model in the
+same catalog order that produces `model/list.isDefault`, then performs the exact provider/model route preflight before
+creating the session or thread. Partial or blank explicit routes fail closed. An unready provider, unknown model or
+capability gap leaves no durable session/thread side effect. Switching provider/model without an explicit service tier
+installs the target catalog model's validated default tier, or clears the previous tier when the target has no default;
+model-only changes likewise clear an effort that the target model does not support. Renderer selection consumes only App
+Server `model/list` and its `isDefault` bit. The Agent warmup and session gateway do not read `get_default_provider`, require
+an explicit route, or arbitrate a local default; configured-provider reads remain diagnostics rather than a parallel
+selection owner. Public v2 chat `InputModality` is exactly `text | image`; audio/video/file remain general provider catalog
+taxonomy until a dedicated chat ingress, durable sidecar and exact wire lowering exist.
 The boundary reads the route generation before and after catalog construction and retries at most three times; continuous
 generation churn or the absence of an executable candidate fails closed. Candidate ordering preserves the current provider
 first and then catalog order. Hidden models, `inferred_hint` capability records and explicit non-chat task families cannot
 be selected. A catalog-present current selection is still checked by route preflight so stale credential, effort or service
 tier state cannot bypass normal admission.
+
+Credential mutation never creates a second catalog owner. The foreground refresh and every background retry pass through
+the same provider-scoped coordinator and `ModelProviderAppDataSource`; overlapping retry loops for one provider are
+suppressed. Background retry is scheduled only for `network`, `invalid_response`, or request-backed transient `other`
+failures when no provider-level last-success snapshot exists. Authentication, permission, not-found and configuration
+failures stop immediately. A successful retry commits the normal cache transaction, publishes typed `model/list/updated`
+and schedules pending route recovery; Renderer does not poll or infer generation. Existing last-success data remains the
+visible catalog during credential rotation failure and does not start a redundant retry loop.
 
 Typed direct provider config is outside catalog replacement. An explicit request with a direct API key/base URL is retained,
 and a durable AgentControl route records `routeSource=direct_provider_config`; neither is rewritten merely because the model
@@ -1264,12 +1374,19 @@ Foreground `turn/start` returns exactly one `thread/settings/updated` notificati
 performed by background/internal Turn entry publishes the same exact notification through a transient RuntimeEvent and the
 single v2 projector; it is not appended to EventLog and is not replayed by cold resume. The catalog, durable Thread settings,
 RuntimeCore route preflight and v2 notification remain `current`. Silent fallback, inferred capability authorization,
-catalog replacement of direct routes, stale route reuse and a second model-selection store are
+catalog replacement of direct routes, stale route reuse, preflight-after-persist and a second Renderer model-selection
+store are
 `dead / forbidden-to-restore`; no `compat/deprecated` path exists.
+
+Selection/default/reconciliation and public picker projection are owned by
+`runtime/model_providers/selection.rs`; Provider CRUD, catalog refresh coordination and retry permits remain in
+`runtime/model_providers.rs`. A dedicated media model can remain in the provider catalog for image/audio tasks, but it cannot
+be retained as an Agent chat Thread selection or bypass `thread/start` chat preflight. Mixing those two admission paths is
+`dead / forbidden-to-restore`.
 
 Architecture impact: major; this adds a generation-aware admission stage and a transient settings-notification branch while
 preserving the existing provider, session actor, Thread metadata and v2 projector owners. Architecture diagram updated: this
-section and the RuntimeCore Turn admission chain above. Responsible developer confirmation: root, 2026-07-27.
+section and the RuntimeCore Turn admission chain above. Responsible developer confirmation: root, 2026-07-28.
 
 ## 21. Official Responses Hosted Image Generation
 
@@ -1303,3 +1420,77 @@ media-task promotion, local re-execution and the previous loose `result?: Value/
 Architecture impact: major; this adds one provider-executed item variant while preserving `model-provider` as network
 owner, Agent Runtime as lifecycle/history owner, and App Server as Thread/Turn/Item projection owner. Architecture diagram
 updated: this section and the provider/runtime chain above. Responsible developer confirmation: root, 2026-07-27.
+
+## 22. Vertex Gemini Current Transport
+
+Vertex Gemini uses the existing provider store and model catalog control plane while keeping a dedicated wire identity:
+
+```text
+Provider(project, location, declared models) + enabled access token
+  -> RuntimeCore VertexGemini route admission
+  -> RuntimeCredentialData::VertexKey
+  -> regional/global Vertex project endpoint
+  -> model-provider Gemini canonical lowering
+  -> Authorization Bearer request
+  -> Gemini SSE reducer
+  -> Agent Runtime Thread/Turn/Item lifecycle
+```
+
+`model-provider` is the only endpoint owner. A regional location resolves to
+`https://{location}-aiplatform.googleapis.com`; `global` resolves to `https://aiplatform.googleapis.com`. The path is
+typed from project/location and always ends in `publishers/google/models/{model}:streamGenerateContent?alt=sse`.
+Provider-supplied origins may replace the host for controlled gateways and fixtures, but must be HTTP(S), have no path,
+query or fragment, and still receive the typed Vertex project path. The access-token string uses Bearer auth and never
+uses `x-goog-api-key`.
+
+Vertex request lowering, SSE reduction, tool history and usage semantics reuse the current Gemini canonical algebra.
+Provider identity, auth, endpoint construction, readiness and health scope remain distinct. The exact route health key
+includes protocol and credential scope, so a plain Gemini API-key route and a Vertex route never share circuit state even
+when provider, model and gateway origin are otherwise equal. Configured readiness requires enabled provider, non-empty
+project/location and an enabled credential; only declared authoritative models enter the selectable catalog. Automatic
+Vertex model discovery remains unsupported and cannot create route authority.
+
+Vertex Gemini is `current`. Plain Gemini aliasing, OpenAI-compatible lowering, API-key header auth, missing context,
+unresolved direct endpoints, WebSocket and hosted OpenAI capability promotion are
+`dead / forbidden-to-restore`; no `compat/deprecated` path exists. Bedrock and Fal chat remain fail closed; Fal video is
+admitted only by the dedicated media task chain below.
+
+Architecture impact: major; this extends the current provider transport union without changing owner direction.
+Architecture diagram updated: this section and the provider/runtime chain above. Responsible developer confirmation:
+root, 2026-07-28.
+
+## 23. Dedicated Video Media Task Execution Skeleton
+
+Video generation is a dedicated media task, not an Agent chat input or a chat picker model. Its model control and product
+semantics follow `grok-build`; provider body lowering remains in Lime's `model-provider` owner:
+
+```text
+provider model capability { taskFamilies: [video_generation], outputModalities: [video] }
+  -> RuntimeCore ModelTaskRequest + route_capability_gap
+  -> App Server ResolvedModelRoute + exact credentialRef/auth header/prefix
+  -> mediaTaskArtifact/video/create public JSON-RPC
+  -> App Server media video worker
+  -> model-provider protocol lowering + network execution
+       -> Fal synchronous POST
+       -> xAI POST /videos/generations -> durable request_id -> GET /videos/{id}
+  -> media-runtime durable provider progress + terminal task artifact
+  -> mediaTaskArtifact/get read model
+```
+
+`video_generation` must be provider-explicit or canonical and must produce `video`; model-name inference cannot authorize
+execution. A dedicated video model remains outside `model/list` because that method is the executable text chat picker.
+The worker accepts only `fal` or `xai_video`, resolves the exact durable credential reference, honors the route's header
+name and prefix, and records failed state when route or credential resolution is incomplete. Generic OpenAI video routes,
+hard-coded Bearer auth, an executable contract without binding, and creating an artifact without starting a worker are
+`dead / replaced / forbidden-to-restore`; no `compat/deprecated` path was added.
+
+This slice is intentionally a product skeleton, not full Grok video parity. Fal handles a synchronous provider result;
+xAI handles asynchronous start/poll and the `done/failed/expired/timeout/cancelled` terminal set. `media-runtime` persists
+`provider_task.protocol/request_id/status`, and the App Server scheduler resumes only stale running xAI tasks that already
+have a request id, so recovery polls without issuing a duplicate POST. `model-provider` is the only video HTTP and lowering
+owner; `media-runtime` owns task progress and artifacts only. Live provider validation, video GUI/history projection and
+audio workers remain `alignment-open` and must fail closed until implemented.
+
+Architecture impact: major; this adds the first executable video media task branch while preserving chat admission and
+Thread/Turn/Item ownership. Architecture diagram updated: this section and the media/provider chain above. Responsible
+developer confirmation: root, 2026-07-28.

@@ -1,9 +1,10 @@
 use super::health::{CircuitBreaker, TransportRetryEvent};
 use super::CurrentProviderError;
+use chrono::{DateTime, Utc};
 use rand::Rng;
 use reqwest::{header::HeaderMap, StatusCode};
 use std::error::Error;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // Matches the Codex provider default: four retries after the initial request.
 pub(super) const MAX_STREAM_REQUEST_ATTEMPTS: u8 = 5;
@@ -19,6 +20,14 @@ pub(super) struct RetryDelay {
 pub(super) fn should_retry_stream_request_status(status: StatusCode) -> bool {
     // Codex defaults to retry_5xx=true and retry_429=false at the request layer.
     status.is_server_error()
+}
+
+pub(super) fn server_disallows_retry(headers: &HeaderMap) -> bool {
+    headers
+        .get("x-should-retry")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .is_some_and(|value| value.eq_ignore_ascii_case("false"))
 }
 
 pub(super) fn retry_delay(headers: &HeaderMap, completed_attempts: u8) -> RetryDelay {
@@ -86,15 +95,118 @@ pub(super) fn error_chain(error: &(dyn Error + 'static)) -> String {
     messages.join(": ")
 }
 
+pub(super) fn provider_retry_after(headers: &HeaderMap) -> Option<Duration> {
+    let now = SystemTime::now();
+    retry_after_at(headers, now).or_else(|| quota_reset_after(headers, now))
+}
+
 fn retry_after(headers: &HeaderMap) -> Option<Duration> {
-    let seconds = headers
+    provider_retry_after(headers).map(|duration| duration.min(MAX_RETRY_AFTER))
+}
+
+fn retry_after_at(headers: &HeaderMap, now: SystemTime) -> Option<Duration> {
+    let value = headers
         .get(reqwest::header::RETRY_AFTER)?
         .to_str()
         .ok()?
-        .trim()
-        .parse::<u64>()
-        .ok()?;
-    (seconds > 0).then(|| Duration::from_secs(seconds).min(MAX_RETRY_AFTER))
+        .trim();
+    if let Ok(seconds) = value.parse::<u64>() {
+        return (seconds > 0).then(|| Duration::from_secs(seconds));
+    }
+    httpdate::parse_http_date(value)
+        .ok()?
+        .duration_since(now)
+        .ok()
+        .filter(|duration| !duration.is_zero())
+}
+
+fn quota_reset_after(headers: &HeaderMap, now: SystemTime) -> Option<Duration> {
+    const RESET_HEADERS: [(&str, Option<&str>); 5] = [
+        (
+            "x-ratelimit-reset-requests",
+            Some("x-ratelimit-remaining-requests"),
+        ),
+        (
+            "x-ratelimit-reset-tokens",
+            Some("x-ratelimit-remaining-tokens"),
+        ),
+        (
+            "anthropic-ratelimit-requests-reset",
+            Some("anthropic-ratelimit-requests-remaining"),
+        ),
+        (
+            "anthropic-ratelimit-tokens-reset",
+            Some("anthropic-ratelimit-tokens-remaining"),
+        ),
+        ("x-ratelimit-reset", None),
+    ];
+
+    RESET_HEADERS
+        .iter()
+        .filter(|(_, remaining_header)| {
+            remaining_header.is_none_or(|remaining_header| {
+                headers
+                    .get(remaining_header)
+                    .and_then(|value| value.to_str().ok())
+                    .is_none_or(|value| value.trim() == "0")
+            })
+        })
+        .filter_map(|(reset_header, _)| {
+            headers
+                .get(*reset_header)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| parse_reset_value(value.trim(), now))
+        })
+        .max()
+}
+
+fn parse_reset_value(value: &str, now: SystemTime) -> Option<Duration> {
+    if let Ok(timestamp) = DateTime::parse_from_rfc3339(value) {
+        return SystemTime::from(timestamp.with_timezone(&Utc))
+            .duration_since(now)
+            .ok()
+            .filter(|duration| !duration.is_zero());
+    }
+    if let Ok(raw) = value.parse::<u64>() {
+        let now_epoch = now.duration_since(UNIX_EPOCH).ok()?.as_secs();
+        return if raw > now_epoch / 2 {
+            raw.checked_sub(now_epoch)
+                .filter(|seconds| *seconds > 0)
+                .map(Duration::from_secs)
+        } else {
+            (raw > 0).then(|| Duration::from_secs(raw))
+        };
+    }
+    parse_compound_duration(value)
+}
+
+fn parse_compound_duration(value: &str) -> Option<Duration> {
+    let mut rest = value;
+    let mut seconds = 0.0_f64;
+    while !rest.is_empty() {
+        let number_len = rest
+            .find(|character: char| !character.is_ascii_digit() && character != '.')
+            .unwrap_or(rest.len());
+        if number_len == 0 || number_len == rest.len() {
+            return None;
+        }
+        let number = rest[..number_len].parse::<f64>().ok()?;
+        rest = &rest[number_len..];
+        let (multiplier, suffix_len) = if rest.starts_with("ms") {
+            (0.001, 2)
+        } else if rest.starts_with('s') {
+            (1.0, 1)
+        } else if rest.starts_with('m') {
+            (60.0, 1)
+        } else if rest.starts_with('h') {
+            (3600.0, 1)
+        } else {
+            return None;
+        };
+        seconds += number * multiplier;
+        rest = &rest[suffix_len..];
+    }
+    (seconds.is_finite() && seconds > 0.0).then(|| Duration::from_secs_f64(seconds))
 }
 
 fn exponential_backoff(completed_attempts: u8) -> Duration {
@@ -194,6 +306,16 @@ mod tests {
     }
 
     #[test]
+    fn explicit_server_retry_false_overrides_status_policy() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-should-retry", HeaderValue::from_static(" FALSE "));
+        assert!(server_disallows_retry(&headers));
+
+        headers.insert("x-should-retry", HeaderValue::from_static("true"));
+        assert!(!server_disallows_retry(&headers));
+    }
+
+    #[test]
     fn retry_after_overrides_and_is_capped() {
         let mut headers = HeaderMap::new();
         headers.insert(RETRY_AFTER, HeaderValue::from_static("2"));
@@ -207,6 +329,62 @@ mod tests {
 
         headers.insert(RETRY_AFTER, HeaderValue::from_static("120"));
         assert_eq!(retry_delay(&headers, 1).duration, MAX_RETRY_AFTER);
+    }
+
+    #[test]
+    fn provider_retry_after_preserves_server_window_and_http_date() {
+        let mut headers = HeaderMap::new();
+        headers.insert(RETRY_AFTER, HeaderValue::from_static("120"));
+        assert_eq!(
+            provider_retry_after(&headers),
+            Some(Duration::from_secs(120))
+        );
+
+        let now = SystemTime::now();
+        let retry_at = now + Duration::from_secs(90);
+        headers.insert(
+            RETRY_AFTER,
+            HeaderValue::from_str(&httpdate::fmt_http_date(retry_at)).expect("HTTP date"),
+        );
+        let parsed = retry_after_at(&headers, now).expect("HTTP-date retry window");
+        assert!((Duration::from_secs(89)..=Duration::from_secs(90)).contains(&parsed));
+    }
+
+    #[test]
+    fn provider_retry_after_consumes_exhausted_quota_reset() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-ratelimit-remaining-requests",
+            HeaderValue::from_static("0"),
+        );
+        headers.insert(
+            "x-ratelimit-reset-requests",
+            HeaderValue::from_static("1m250ms"),
+        );
+        assert_eq!(
+            provider_retry_after(&headers),
+            Some(Duration::from_millis(60_250))
+        );
+
+        headers.insert(
+            "x-ratelimit-remaining-tokens",
+            HeaderValue::from_static("0"),
+        );
+        headers.insert("x-ratelimit-reset-tokens", HeaderValue::from_static("2m"));
+        assert_eq!(
+            provider_retry_after(&headers),
+            Some(Duration::from_secs(120)),
+            "all exhausted dimensions must recover before the key is selected again"
+        );
+
+        headers.insert(
+            "x-ratelimit-remaining-requests",
+            HeaderValue::from_static("1"),
+        );
+        assert_eq!(
+            provider_retry_after(&headers),
+            Some(Duration::from_secs(120))
+        );
     }
 
     #[test]

@@ -685,9 +685,6 @@ impl RequestProcessor {
             METHOD_MODEL_PREFERENCES_LIST => self.handle_model_preferences_list_impl().boxed(),
             METHOD_MODEL_SYNC_STATE_READ => self.handle_model_sync_state_read_impl().boxed(),
             METHOD_MODEL_PROVIDER_LIST => self.handle_model_provider_list_impl().boxed(),
-            app_server_protocol::protocol::v2::METHOD_MODEL_PROVIDER_CAPABILITIES_READ => self
-                .handle_model_provider_capabilities_read_impl(params)
-                .boxed(),
             METHOD_MODEL_PROVIDER_CATALOG_LIST => {
                 self.handle_model_provider_catalog_list_impl().boxed()
             }

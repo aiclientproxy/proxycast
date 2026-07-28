@@ -708,7 +708,7 @@ async fn respond_action_tool_confirmation_resumes_pending_agent_tool_future() {
                 ExecutionBackend::start_turn_with_provider_history_and_session_input(
                     &*stream_backend,
                     request,
-                    Vec::new(),
+                    crate::runtime::provider_history::ProviderTurnHistory::default(),
                     Some(context.input_handle()),
                     Some(cancellation_token),
                     &mut sink,

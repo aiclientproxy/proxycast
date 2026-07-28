@@ -28,8 +28,8 @@ use lime_core::models::runtime_provider_model::{
 };
 use lime_core::provider_prompt_cache_support::is_known_automatic_anthropic_compatible_host;
 use model_provider::current_client::{
-    CanonicalLlmEvent, CurrentProviderClient, CurrentProviderContent, CurrentProviderMessage,
-    CurrentProviderRequest,
+    vertex_gemini_base_url, CanonicalLlmEvent, CurrentProviderClient, CurrentProviderContent,
+    CurrentProviderMessage, CurrentProviderRequest,
 };
 use model_provider::runtime_provider::{
     RuntimeProviderAuth, RuntimeProviderConfig, RuntimeProviderProtocol,
@@ -39,6 +39,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
+use std::time::{Duration, Instant};
 
 const SENSENOVA_OLD_OPENAI_COMPATIBLE_API_HOST: &str =
     "https://api.sensenova.cn/compatible-mode/v1";
@@ -80,6 +81,7 @@ mod tests {
     use rusqlite::Connection;
     use rusqlite::OptionalExtension;
     use std::sync::{Arc, Mutex};
+    use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     fn resolve_legacy_machine_id() -> String {
@@ -375,6 +377,35 @@ mod tests {
             persisted.provider.api_host,
             "https://proxy.example.com/sensenova"
         );
+    }
+
+    #[test]
+    fn test_initialize_system_providers_updates_azure_api_version() {
+        let db = init_test_database();
+        let service = ApiKeyProviderService::new();
+
+        service
+            .initialize_system_providers(&db)
+            .expect("初始化系统 Provider 失败");
+        {
+            let conn = db.lock().expect("获取数据库锁失败");
+            let mut provider = ApiKeyProviderDao::get_provider_by_id(&conn, "azure-openai")
+                .expect("读取 Azure Provider 失败")
+                .expect("Azure Provider 应存在");
+            provider.api_version = Some("2024-02-15-preview".to_string());
+            ApiKeyProviderDao::update_provider(&conn, &provider)
+                .expect("写入旧 Azure API version 失败");
+        }
+
+        service
+            .initialize_system_providers(&db)
+            .expect("重新初始化系统 Provider 失败");
+
+        let persisted = service
+            .get_provider(&db, "azure-openai")
+            .expect("读取 Azure Provider 失败")
+            .expect("Azure Provider 应存在");
+        assert_eq!(persisted.provider.api_version.as_deref(), Some("v1"));
     }
 
     #[test]
@@ -843,16 +874,146 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn runtime_selection_skips_excluded_keys_without_crossing_provider_boundary() {
+        let db = init_test_database();
+        let service = ApiKeyProviderService::new();
+        let provider = service
+            .add_custom_provider(
+                &db,
+                "Credential Reroute Provider".to_string(),
+                ApiProviderType::Openai,
+                "https://primary.example/v1".to_string(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create reroute provider");
+        let key_a = service
+            .add_api_key(&db, &provider.id, "sk-reroute-a", None, false)
+            .expect("add key A");
+        let key_b = service
+            .add_api_key(&db, &provider.id, "sk-reroute-b", None, false)
+            .expect("add key B");
+        let other_provider = service
+            .add_custom_provider(
+                &db,
+                "Other OpenAI Provider".to_string(),
+                ApiProviderType::Openai,
+                "https://other.example/v1".to_string(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create other provider");
+        let other_key = service
+            .add_api_key(&db, &other_provider.id, "sk-other", None, false)
+            .expect("add other provider key");
+
+        let ref_a = runtime_api_key_credential_uuid(&key_a.id);
+        let ref_b = runtime_api_key_credential_uuid(&key_b.id);
+        let first = service
+            .select_credential_for_provider_excluding(
+                &db,
+                &provider.id,
+                Some(&provider.id),
+                None,
+                &[],
+            )
+            .await
+            .expect("select first credential")
+            .expect("first credential");
+        let second = service
+            .select_credential_for_provider_excluding(
+                &db,
+                &provider.id,
+                Some(&provider.id),
+                None,
+                &[first.uuid.as_str()],
+            )
+            .await
+            .expect("select second credential")
+            .expect("second credential");
+
+        assert_ne!(first.uuid, second.uuid);
+        assert!([ref_a.as_str(), ref_b.as_str()].contains(&first.uuid.as_str()));
+        assert!([ref_a.as_str(), ref_b.as_str()].contains(&second.uuid.as_str()));
+
+        let exhausted = service
+            .select_credential_for_provider_excluding(
+                &db,
+                &provider.id,
+                Some(&provider.id),
+                None,
+                &[ref_a.as_str(), ref_b.as_str()],
+            )
+            .await
+            .expect("exhaust exact provider credentials");
+        assert!(exhausted.is_none());
+        assert_ne!(
+            runtime_api_key_credential_uuid(&other_key.id),
+            first.uuid,
+            "selection must stay inside the exact provider"
+        );
+    }
+
+    #[tokio::test]
+    async fn runtime_selection_skips_credential_until_server_cooldown_expires() {
+        let db = init_test_database();
+        let service = ApiKeyProviderService::new();
+        let provider = service
+            .add_custom_provider(
+                &db,
+                "Cooldown Provider".to_string(),
+                ApiProviderType::Openai,
+                "https://cooldown.example/v1".to_string(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create cooldown provider");
+        service
+            .add_api_key(&db, &provider.id, "sk-cooldown-a", None, false)
+            .expect("add cooldown key A");
+        service
+            .add_api_key(&db, &provider.id, "sk-cooldown-b", None, false)
+            .expect("add cooldown key B");
+        let first = service
+            .select_credential_for_provider(&db, &provider.id, Some(&provider.id), None)
+            .await
+            .expect("select first credential")
+            .expect("first credential");
+
+        service
+            .cooldown_runtime_credential(&first.uuid, Duration::from_secs(60))
+            .expect("record provider cooldown");
+        assert!(service
+            .runtime_credential_is_cooling(&first.uuid)
+            .expect("read provider cooldown"));
+
+        let second = service
+            .select_credential_for_provider(&db, &provider.id, Some(&provider.id), None)
+            .await
+            .expect("select credential outside cooldown")
+            .expect("second credential");
+        assert_ne!(first.uuid, second.uuid);
+        assert!(service
+            .select_runtime_credential_by_ref(&db, &provider.id, &first.uuid)
+            .expect("exact lookup remains a pure credential read")
+            .is_some());
+    }
+
+    #[tokio::test]
     async fn unsupported_provider_tests_fail_before_network() {
         let db = init_test_database();
         let service = ApiKeyProviderService::new();
 
-        for provider_type in [
-            ApiProviderType::AzureOpenai,
-            ApiProviderType::Vertexai,
-            ApiProviderType::AwsBedrock,
-            ApiProviderType::Fal,
-        ] {
+        for provider_type in [ApiProviderType::AwsBedrock, ApiProviderType::Fal] {
             let provider = service
                 .add_custom_provider(
                     &db,
@@ -940,6 +1101,103 @@ mod tests {
                 )
                 .expect("Ollama keyless provider test credential"),
             None
+        );
+    }
+
+    #[test]
+    fn azure_provider_tests_use_dedicated_responses_protocol_and_api_key() {
+        let db = init_test_database();
+        let service = ApiKeyProviderService::new();
+        let provider = service
+            .add_custom_provider(
+                &db,
+                "Azure Responses".to_string(),
+                ApiProviderType::AzureOpenai,
+                "https://resource.openai.azure.com".to_string(),
+                Some("v1".to_string()),
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create Azure provider");
+        service
+            .add_api_key(&db, &provider.id, "azure-test-key", None, true)
+            .expect("add Azure API key");
+
+        assert_eq!(
+            ApiKeyProviderService::current_provider_protocol(
+                ApiProviderType::AzureOpenai,
+                &provider.api_host,
+            )
+            .expect("Azure current protocol"),
+            model_provider::runtime_provider::RuntimeProviderProtocol::AzureResponses
+        );
+        assert_eq!(
+            service
+                .provider_test_api_key(
+                    &db,
+                    &provider.id,
+                    &provider.api_host,
+                    ApiProviderType::AzureOpenai,
+                )
+                .expect("Azure provider test credential")
+                .as_deref(),
+            Some("azure-test-key")
+        );
+    }
+
+    #[test]
+    fn vertex_provider_projects_context_into_dedicated_runtime_credential() {
+        let db = init_test_database();
+        let service = ApiKeyProviderService::new();
+        let provider = service
+            .add_custom_provider(
+                &db,
+                "Vertex Gemini".to_string(),
+                ApiProviderType::Vertexai,
+                String::new(),
+                None,
+                Some("project-alpha".to_string()),
+                Some("us-central1".to_string()),
+                None,
+                None,
+            )
+            .expect("create Vertex provider");
+        let key = service
+            .add_api_key(&db, &provider.id, "vertex-token", None, true)
+            .expect("add Vertex access token");
+
+        assert_eq!(
+            ApiKeyProviderService::current_provider_protocol(
+                ApiProviderType::Vertexai,
+                &provider.api_host,
+            )
+            .expect("Vertex current protocol"),
+            model_provider::runtime_provider::RuntimeProviderProtocol::VertexGemini
+        );
+        let credential = service
+            .select_runtime_credential_by_ref(
+                &db,
+                &provider.id,
+                &runtime_api_key_credential_uuid(&key.id),
+            )
+            .expect("select Vertex credential")
+            .expect("Vertex credential");
+        let RuntimeCredentialData::VertexKey {
+            base_url,
+            project,
+            location,
+            ..
+        } = credential.credential
+        else {
+            panic!("expected Vertex credential");
+        };
+        assert_eq!(project, "project-alpha");
+        assert_eq!(location, "us-central1");
+        assert_eq!(
+            base_url.as_deref(),
+            Some("https://us-central1-aiplatform.googleapis.com/v1/projects/project-alpha/locations/us-central1/publishers/google")
         );
     }
 
@@ -1344,6 +1602,8 @@ pub struct ApiKeyProviderService {
     encryption: EncryptionService,
     /// 轮询索引（按 provider_id 分组）
     round_robin_index: RwLock<HashMap<String, AtomicUsize>>,
+    /// 只记录上游明确给出的恢复窗口；credential identity 不进入日志或外部 evidence。
+    credential_cooldowns: RwLock<HashMap<String, Instant>>,
 }
 
 impl Default for ApiKeyProviderService {
@@ -1358,7 +1618,50 @@ impl ApiKeyProviderService {
         Self {
             encryption: EncryptionService::new(),
             round_robin_index: RwLock::new(HashMap::new()),
+            credential_cooldowns: RwLock::new(HashMap::new()),
         }
+    }
+
+    pub fn cooldown_runtime_credential(
+        &self,
+        credential_ref: &str,
+        retry_after: Duration,
+    ) -> Result<(), String> {
+        if retry_after.is_zero() {
+            return Ok(());
+        }
+        let Some(key_id) = runtime_api_key_id_from_credential_uuid(credential_ref.trim()) else {
+            return Ok(());
+        };
+        let Some(deadline) = Instant::now().checked_add(retry_after) else {
+            return Ok(());
+        };
+        let mut cooldowns = self
+            .credential_cooldowns
+            .write()
+            .map_err(|error| error.to_string())?;
+        cooldowns
+            .entry(key_id.to_string())
+            .and_modify(|current| *current = (*current).max(deadline))
+            .or_insert(deadline);
+        Ok(())
+    }
+
+    pub fn runtime_credential_is_cooling(&self, credential_ref: &str) -> Result<bool, String> {
+        let Some(key_id) = runtime_api_key_id_from_credential_uuid(credential_ref.trim()) else {
+            return Ok(false);
+        };
+        Ok(self.cooling_key_ids()?.contains(key_id))
+    }
+
+    fn cooling_key_ids(&self) -> Result<HashSet<String>, String> {
+        let now = Instant::now();
+        let mut cooldowns = self
+            .credential_cooldowns
+            .write()
+            .map_err(|error| error.to_string())?;
+        cooldowns.retain(|_, deadline| *deadline > now);
+        Ok(cooldowns.keys().cloned().collect())
     }
 
     fn normalize_custom_prompt_cache_mode(
@@ -1627,6 +1930,9 @@ impl ApiKeyProviderService {
                         test_model,
                         &prompt,
                         effective_provider_type,
+                        provider.api_version.as_deref(),
+                        provider.project.as_deref(),
+                        provider.location.as_deref(),
                     )
                     .await
                 }
@@ -1638,6 +1944,9 @@ impl ApiKeyProviderService {
                         test_model,
                         &prompt,
                         effective_provider_type,
+                        provider.api_version.as_deref(),
+                        provider.project.as_deref(),
+                        provider.location.as_deref(),
                     )
                     .await
                 }
@@ -1650,6 +1959,9 @@ impl ApiKeyProviderService {
                         &prompt,
                         provider.supports_automatic_prompt_cache(),
                         effective_provider_type,
+                        provider.api_version.as_deref(),
+                        provider.project.as_deref(),
+                        provider.location.as_deref(),
                     )
                     .await
                 }
@@ -1661,6 +1973,9 @@ impl ApiKeyProviderService {
                         test_model,
                         &prompt,
                         effective_provider_type,
+                        provider.api_version.as_deref(),
+                        provider.project.as_deref(),
+                        provider.location.as_deref(),
                     )
                     .await
                 }
@@ -1707,7 +2022,9 @@ impl ApiKeyProviderService {
     fn uses_openai_responses_protocol(provider_type: ApiProviderType) -> bool {
         matches!(
             provider_type,
-            ApiProviderType::OpenaiResponse | ApiProviderType::Ollama
+            ApiProviderType::OpenaiResponse
+                | ApiProviderType::AzureOpenai
+                | ApiProviderType::Ollama
         )
     }
 
@@ -1863,6 +2180,8 @@ impl ApiKeyProviderService {
             }
             ApiProviderType::Openai => Ok(RuntimeProviderProtocol::Responses),
             ApiProviderType::Gemini => Ok(RuntimeProviderProtocol::GeminiGenerateContent),
+            ApiProviderType::Vertexai => Ok(RuntimeProviderProtocol::VertexGemini),
+            ApiProviderType::AzureOpenai => Ok(RuntimeProviderProtocol::AzureResponses),
             ApiProviderType::Ollama => Ok(RuntimeProviderProtocol::Responses),
             unsupported => Err(format!(
                 "当前 model-provider 不支持 provider 协议: {unsupported}"
@@ -1877,6 +2196,9 @@ impl ApiKeyProviderService {
         model: &str,
         prompt: &str,
         provider_type: ApiProviderType,
+        api_version: Option<&str>,
+        project: Option<&str>,
+        location: Option<&str>,
     ) -> Result<(String, String), String> {
         let protocol = Self::current_provider_protocol(provider_type, api_host)?;
         let no_auth = api_key.is_none();
@@ -1892,6 +2214,8 @@ impl ApiKeyProviderService {
         let client = CurrentProviderClient::new(RuntimeProviderConfig {
             provider_name: match provider_type {
                 ApiProviderType::Ollama => "ollama",
+                ApiProviderType::AzureOpenai => "azure",
+                ApiProviderType::Vertexai => "gcpvertexai",
                 _ => match protocol {
                     RuntimeProviderProtocol::AnthropicMessages => "anthropic",
                     RuntimeProviderProtocol::GeminiGenerateContent => "google",
@@ -1907,7 +2231,13 @@ impl ApiKeyProviderService {
             } else {
                 RuntimeProviderAuth::ApiKey
             },
-            base_url: Some(api_host.to_string()),
+            base_url: Some(if provider_type == ApiProviderType::Vertexai {
+                vertex_gemini_base_url(Some(api_host), project, location)
+                    .map_err(|error| error.to_string())?
+            } else {
+                api_host.to_string()
+            }),
+            api_version: api_version.map(ToString::to_string),
             credential_uuid: if no_auth {
                 String::new()
             } else {
@@ -1954,9 +2284,21 @@ impl ApiKeyProviderService {
         model: &str,
         prompt: &str,
         provider_type: ApiProviderType,
+        api_version: Option<&str>,
+        project: Option<&str>,
+        location: Option<&str>,
     ) -> Result<(String, String), String> {
-        self.stream_current_provider(api_key, api_host, model, prompt, provider_type)
-            .await
+        self.stream_current_provider(
+            api_key,
+            api_host,
+            model,
+            prompt,
+            provider_type,
+            api_version,
+            project,
+            location,
+        )
+        .await
     }
 
     async fn test_anthropic_chat_once(
@@ -1967,9 +2309,21 @@ impl ApiKeyProviderService {
         prompt: &str,
         _enable_automatic_prompt_cache: bool,
         provider_type: ApiProviderType,
+        api_version: Option<&str>,
+        project: Option<&str>,
+        location: Option<&str>,
     ) -> Result<(String, String), String> {
-        self.stream_current_provider(api_key, api_host, model, prompt, provider_type)
-            .await
+        self.stream_current_provider(
+            api_key,
+            api_host,
+            model,
+            prompt,
+            provider_type,
+            api_version,
+            project,
+            location,
+        )
+        .await
     }
 
     async fn test_openai_responses_once(
@@ -1979,9 +2333,21 @@ impl ApiKeyProviderService {
         model: &str,
         prompt: &str,
         provider_type: ApiProviderType,
+        api_version: Option<&str>,
+        project: Option<&str>,
+        location: Option<&str>,
     ) -> Result<(String, String), String> {
-        self.stream_current_provider(api_key, api_host, model, prompt, provider_type)
-            .await
+        self.stream_current_provider(
+            api_key,
+            api_host,
+            model,
+            prompt,
+            provider_type,
+            api_version,
+            project,
+            location,
+        )
+        .await
     }
 
     /// 测试 Codex /responses 端点（用于不支持 messages 参数的上游）
@@ -1992,9 +2358,21 @@ impl ApiKeyProviderService {
         model: &str,
         prompt: &str,
         provider_type: ApiProviderType,
+        api_version: Option<&str>,
+        project: Option<&str>,
+        location: Option<&str>,
     ) -> Result<(String, String), String> {
-        self.stream_current_provider(api_key, api_host, model, prompt, provider_type)
-            .await
+        self.stream_current_provider(
+            api_key,
+            api_host,
+            model,
+            prompt,
+            provider_type,
+            api_version,
+            project,
+            location,
+        )
+        .await
     }
 
     // ==================== Provider 操作 ====================
@@ -2030,6 +2408,13 @@ impl ApiKeyProviderService {
                         && !default_provider.models.is_empty()
                     {
                         provider.models = default_provider.models;
+                        should_update = true;
+                    }
+                    if provider.is_system
+                        && provider.id == "azure-openai"
+                        && provider.api_version != default_provider.api_version
+                    {
+                        provider.api_version = default_provider.api_version;
                         should_update = true;
                     }
                     if should_update {
@@ -2847,6 +3232,24 @@ impl ApiKeyProviderService {
         provider_id_hint: Option<&str>,
         client_type: Option<&lime_core::models::client_type::ClientType>,
     ) -> Result<Option<RuntimeProviderCredential>, String> {
+        self.select_credential_for_provider_excluding(
+            db,
+            provider_type,
+            provider_id_hint,
+            client_type,
+            &[],
+        )
+        .await
+    }
+
+    pub async fn select_credential_for_provider_excluding(
+        &self,
+        db: &DbConnection,
+        provider_type: &str,
+        provider_id_hint: Option<&str>,
+        client_type: Option<&lime_core::models::client_type::ClientType>,
+        excluded_credential_refs: &[&str],
+    ) -> Result<Option<RuntimeProviderCredential>, String> {
         let mut runtime_provider_type = resolve_runtime_provider_type(provider_type);
         let mut resolved_provider_id_hint = provider_id_hint;
 
@@ -2887,11 +3290,12 @@ impl ApiKeyProviderService {
             }
         }
 
-        self.select_runtime_credential(
+        self.select_runtime_credential_excluding(
             db,
             runtime_provider_type.as_ref(),
             resolved_provider_id_hint,
             client_type,
+            excluded_credential_refs,
         )
         .await
     }
@@ -2921,6 +3325,32 @@ impl ApiKeyProviderService {
         provider_id_hint: Option<&str>,
         client_type: Option<&lime_core::models::client_type::ClientType>,
     ) -> Result<Option<RuntimeProviderCredential>, String> {
+        self.select_runtime_credential_excluding(
+            db,
+            runtime_provider_type,
+            provider_id_hint,
+            client_type,
+            &[],
+        )
+        .await
+    }
+
+    async fn select_runtime_credential_excluding(
+        &self,
+        db: &DbConnection,
+        runtime_provider_type: Option<&RuntimeProviderType>,
+        provider_id_hint: Option<&str>,
+        client_type: Option<&lime_core::models::client_type::ClientType>,
+        excluded_credential_refs: &[&str],
+    ) -> Result<Option<RuntimeProviderCredential>, String> {
+        let mut excluded_key_ids = excluded_credential_refs
+            .iter()
+            .filter_map(|credential_ref| {
+                runtime_api_key_id_from_credential_uuid(credential_ref.trim())
+            })
+            .map(ToString::to_string)
+            .collect::<HashSet<_>>();
+        excluded_key_ids.extend(self.cooling_key_ids()?);
         tracing::debug!(
             "[select_runtime_credential] 开始查找: runtime_provider_type={runtime_provider_type:?}, provider_id_hint={provider_id_hint:?}"
         );
@@ -2928,9 +3358,10 @@ impl ApiKeyProviderService {
         // 策略 1: 优先通过 provider_id 直接查找 (支持 deepseek, moonshot 等 60+ Provider)
         // 这些 Provider 在 API Key Provider 中有独立配置，应该优先使用
         if let Some(provider_id) = provider_id_hint {
+            let provider_is_configured = self.get_provider(db, provider_id)?.is_some();
             tracing::debug!("[select_runtime_credential] 尝试按 provider_id '{provider_id}' 查找");
             if let Some(cred) = self
-                .find_by_provider_id(db, provider_id, client_type)
+                .find_by_provider_id(db, provider_id, client_type, &excluded_key_ids)
                 .await?
             {
                 tracing::debug!(
@@ -2941,6 +3372,9 @@ impl ApiKeyProviderService {
                 return Ok(Some(cred));
             }
             tracing::debug!("[select_runtime_credential] provider_id '{provider_id}' 未找到凭证");
+            if provider_is_configured {
+                return Ok(None);
+            }
         }
 
         // 策略 2: 通过类型映射查找。
@@ -2955,7 +3389,9 @@ impl ApiKeyProviderService {
         tracing::debug!(
             "[select_runtime_credential] 尝试类型映射: {runtime_provider_type:?} -> {api_type:?}"
         );
-        if let Some(cred) = self.find_by_api_type(db, runtime_provider_type, &api_type)? {
+        if let Some(cred) =
+            self.find_by_api_type(db, runtime_provider_type, &api_type, &excluded_key_ids)?
+        {
             tracing::debug!(
                 "[select_runtime_credential] 通过类型映射找到凭证: {:?}",
                 cred.name
@@ -2975,6 +3411,7 @@ impl ApiKeyProviderService {
         db: &DbConnection,
         runtime_provider_type: &RuntimeProviderType,
         api_type: &ApiProviderType,
+        excluded_key_ids: &HashSet<String>,
     ) -> Result<Option<RuntimeProviderCredential>, String> {
         let conn = lime_core::database::lock_db(db)?;
 
@@ -2994,24 +3431,20 @@ impl ApiKeyProviderService {
         for provider in matching_providers {
             let keys = ApiKeyProviderDao::get_enabled_api_keys_by_provider(&conn, &provider.id)
                 .map_err(|e| e.to_string())?;
+            let keys = keys
+                .into_iter()
+                .filter(|key| !excluded_key_ids.contains(&key.id))
+                .collect::<Vec<_>>();
 
             if keys.is_empty() {
                 continue;
             }
 
-            // 轮询选择 API Key
-            let index = {
-                let mut indices = self.round_robin_index.write().map_err(|e| e.to_string())?;
-                indices
-                    .entry(provider.id.clone())
-                    .or_insert_with(|| AtomicUsize::new(0))
-                    .fetch_add(1, Ordering::SeqCst)
+            let Some((selected_key, api_key)) =
+                self.select_next_decryptable_api_key(&conn, &provider.id, &keys)?
+            else {
+                continue;
             };
-
-            let selected_key = &keys[index % keys.len()];
-
-            // 解密 API Key
-            let api_key = self.decrypt_api_key_entry_with_migration(&conn, selected_key)?;
 
             // 转换为 RuntimeProviderCredential
             let credential = self.convert_to_provider_credential(
@@ -3043,6 +3476,7 @@ impl ApiKeyProviderService {
         db: &DbConnection,
         provider_id: &str,
         client_type: Option<&lime_core::models::client_type::ClientType>,
+        excluded_key_ids: &HashSet<String>,
     ) -> Result<Option<RuntimeProviderCredential>, String> {
         // First, get all data we need while holding the lock
         let (provider, keys) = {
@@ -3073,6 +3507,10 @@ impl ApiKeyProviderService {
             // 获取启用的 API Key
             let keys = ApiKeyProviderDao::get_enabled_api_keys_by_provider(&conn, &provider.id)
                 .map_err(|e| e.to_string())?;
+            let keys = keys
+                .into_iter()
+                .filter(|key| !excluded_key_ids.contains(&key.id))
+                .collect::<Vec<_>>();
 
             if keys.is_empty() {
                 tracing::debug!(
@@ -3092,24 +3530,17 @@ impl ApiKeyProviderService {
 
         // 轮询选择 API Key，但需要检查客户端兼容性
         let mut selected_key = None;
-        let mut attempts = 0;
-        let max_attempts = keys.len();
-
-        while attempts < max_attempts {
-            let index = {
-                let mut indices = self.round_robin_index.write().map_err(|e| e.to_string())?;
-                indices
-                    .entry(provider.id.clone())
-                    .or_insert_with(|| AtomicUsize::new(0))
-                    .fetch_add(1, Ordering::SeqCst)
-            };
-
-            let candidate_key = &keys[index % keys.len()];
-
-            // 解密 API Key 进行测试
+        for index in self.next_round_robin_candidate_indices(&provider.id, keys.len())? {
+            let candidate_key = &keys[index];
             let api_key = {
                 let conn = lime_core::database::lock_db(db)?;
-                self.decrypt_api_key_entry_with_migration(&conn, candidate_key)?
+                match self.decrypt_api_key_entry_with_migration(&conn, candidate_key) {
+                    Ok(api_key) => api_key,
+                    Err(error) => {
+                        self.log_skipped_invalid_api_key(candidate_key, &error);
+                        continue;
+                    }
+                }
             };
             let effective_provider_type = provider.effective_provider_type();
 
@@ -3121,7 +3552,7 @@ impl ApiKeyProviderService {
                         client,
                         lime_core::models::client_type::ClientType::ClaudeCode
                     ) {
-                        selected_key = Some(candidate_key);
+                        selected_key = Some((candidate_key, api_key));
                         break;
                     }
 
@@ -3141,31 +3572,24 @@ impl ApiKeyProviderService {
                                 candidate_key.alias.as_deref().unwrap_or(&candidate_key.id),
                                 client
                             );
-                            attempts += 1;
                             continue;
                         }
                     }
                 }
             }
 
-            selected_key = Some(candidate_key);
+            selected_key = Some((candidate_key, api_key));
             break;
         }
 
-        let selected_key = match selected_key {
-            Some(key) => key,
+        let (selected_key, api_key) = match selected_key {
+            Some(selected) => selected,
             None => {
                 tracing::debug!(
-                    "[find_by_provider_id] provider '{provider_id}' 的所有 API Key 都不兼容当前客户端 ({client_type:?})"
+                    "[find_by_provider_id] provider '{provider_id}' 没有未排除且可用于当前客户端的 API Key ({client_type:?})"
                 );
                 return Ok(None);
             }
-        };
-
-        // 解密 API Key
-        let api_key = {
-            let conn = lime_core::database::lock_db(db)?;
-            self.decrypt_api_key_entry_with_migration(&conn, selected_key)?
         };
 
         // 根据 Provider 类型转换为对应的 RuntimeProviderCredential
@@ -3216,6 +3640,26 @@ impl ApiKeyProviderService {
                 };
                 (data, RuntimeProviderType::GeminiApiKey)
             }
+            ApiProviderType::Vertexai => {
+                let project =
+                    Self::required_vertex_provider_field(provider, "project", &provider.project)?;
+                let location =
+                    Self::required_vertex_provider_field(provider, "location", &provider.location)?;
+                let base_url = vertex_gemini_base_url(
+                    Some(&provider.api_host),
+                    Some(&project),
+                    Some(&location),
+                )
+                .map_err(|error| error.to_string())?;
+                let data = RuntimeCredentialData::VertexKey {
+                    api_key: api_key.to_string(),
+                    base_url: Some(base_url),
+                    project,
+                    location,
+                    model_aliases: std::collections::HashMap::new(),
+                };
+                (data, RuntimeProviderType::Vertex)
+            }
             _ => {
                 // 其他类型（OpenAI 兼容）使用 OpenAIKey
                 let data = RuntimeCredentialData::OpenAIKey {
@@ -3258,7 +3702,24 @@ impl ApiKeyProviderService {
             },
             ApiProviderType::Vertexai => RuntimeCredentialData::VertexKey {
                 api_key: api_key.to_string(),
-                base_url: Some(provider.api_host.clone()),
+                base_url: Some(
+                    vertex_gemini_base_url(
+                        Some(&provider.api_host),
+                        provider.project.as_deref(),
+                        provider.location.as_deref(),
+                    )
+                    .map_err(|error| error.to_string())?,
+                ),
+                project: Self::required_vertex_provider_field(
+                    provider,
+                    "project",
+                    &provider.project,
+                )?,
+                location: Self::required_vertex_provider_field(
+                    provider,
+                    "location",
+                    &provider.location,
+                )?,
                 model_aliases: std::collections::HashMap::new(),
             },
             // 其他类型（包括 Openai, OpenaiResponse 等）都用 OpenAI Key 格式
@@ -3277,6 +3738,19 @@ impl ApiKeyProviderService {
                 .effective_prompt_cache_mode()
                 .map(Self::to_credential_prompt_cache_mode),
         })
+    }
+
+    fn required_vertex_provider_field(
+        provider: &ApiKeyProvider,
+        field: &str,
+        value: &Option<String>,
+    ) -> Result<String, String> {
+        value
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+            .ok_or_else(|| format!("Vertex provider `{}` requires {field}", provider.id))
     }
 
     // ==================== 连接测试 ====================
@@ -3383,6 +3857,9 @@ impl ApiKeyProviderService {
                         &test_model,
                         "hi",
                         effective_provider_type,
+                        provider.api_version.as_deref(),
+                        provider.project.as_deref(),
+                        provider.location.as_deref(),
                     )
                     .await
                     .map(|_| vec![test_model])
@@ -3405,6 +3882,9 @@ impl ApiKeyProviderService {
                             &test_model,
                             "hi",
                             effective_provider_type,
+                            provider.api_version.as_deref(),
+                            provider.project.as_deref(),
+                            provider.location.as_deref(),
                         )
                         .await
                         .map(|_| vec![test_model])
@@ -3440,6 +3920,9 @@ impl ApiKeyProviderService {
                             &test_model,
                             "hi",
                             effective_provider_type,
+                            provider.api_version.as_deref(),
+                            provider.project.as_deref(),
+                            provider.location.as_deref(),
                         )
                         .await
                         .map(|_| vec![test_model]),
@@ -3482,6 +3965,9 @@ impl ApiKeyProviderService {
                 "claude-3-haiku-20240307",
                 "hi",
                 ApiProviderType::Anthropic,
+                None,
+                None,
+                None,
             )
             .await
         {
@@ -3503,7 +3989,16 @@ impl ApiKeyProviderService {
         provider_type: ApiProviderType,
     ) -> Result<Vec<String>, String> {
         match self
-            .stream_current_provider(api_key, api_host, model, "hi", provider_type)
+            .stream_current_provider(
+                api_key,
+                api_host,
+                model,
+                "hi",
+                provider_type,
+                None,
+                None,
+                None,
+            )
             .await
         {
             Ok(_) => Ok(vec![model.to_string()]),

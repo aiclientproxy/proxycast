@@ -22,6 +22,7 @@ pub struct DirectRouteConfig<'a> {
     pub provider_name: &'a str,
     pub api_key_present: bool,
     pub base_url: Option<&'a str>,
+    pub api_version: Option<&'a str>,
     pub credential_ref: Option<&'a str>,
     pub protocol: Option<ProtocolKind>,
     pub toolshim: bool,
@@ -234,6 +235,12 @@ fn resolve_protocol(
             .unwrap_or_else(|| protocol_from_provider_name(config.provider_name));
     }
 
+    if task_request.task_kind == ModelTaskKind::VideoGenerate
+        && is_xai_video_route(selection, provider)
+    {
+        return ProtocolKind::XaiVideo;
+    }
+
     if route_has_runtime_feature(capability_snapshot, "responses_api") {
         return ProtocolKind::OpenaiResponses;
     }
@@ -269,8 +276,10 @@ fn protocol_from_provider_type(provider_type: &str) -> ProtocolKind {
         Some("aws_bedrock") | Some("bedrock") => ProtocolKind::BedrockConverse,
         Some("ollama") => ProtocolKind::OpenaiResponses,
         Some("fal") => ProtocolKind::Fal,
-        Some("openai") | Some("azure_openai") | Some("newapi") | Some("new_api")
-        | Some("gateway") => ProtocolKind::OpenaiChat,
+        Some("azure") | Some("azure_openai") => ProtocolKind::OpenaiResponses,
+        Some("openai") | Some("newapi") | Some("new_api") | Some("gateway") => {
+            ProtocolKind::OpenaiChat
+        }
         _ => ProtocolKind::Unknown,
     }
 }
@@ -315,8 +324,10 @@ pub fn protocol_from_provider_name(provider: &str) -> ProtocolKind {
         Some("aws_bedrock") | Some("bedrock") => ProtocolKind::BedrockConverse,
         Some("ollama") => ProtocolKind::OpenaiResponses,
         Some("fal") => ProtocolKind::Fal,
-        Some("openai") | Some("azure_openai") | Some("newapi") | Some("new_api")
-        | Some("gateway") => ProtocolKind::OpenaiChat,
+        Some("azure") | Some("azure_openai") => ProtocolKind::OpenaiResponses,
+        Some("openai") | Some("newapi") | Some("new_api") | Some("gateway") => {
+            ProtocolKind::OpenaiChat
+        }
         _ => ProtocolKind::Unknown,
     }
 }
@@ -330,6 +341,24 @@ fn provider_name_is_fal(provider: &str) -> bool {
     normalized == "fal" || normalized.contains("fal.ai") || normalized.contains("fal-ai")
 }
 
+fn is_xai_video_route(
+    selection: &ModelRouteSelection<'_>,
+    provider: Option<&ModelRouteProvider<'_>>,
+) -> bool {
+    let provider_id = normalize_token(selection.provider_id);
+    let model_id = selection.model_id.trim().to_ascii_lowercase();
+    provider_id
+        .as_deref()
+        .is_some_and(|provider| matches!(provider, "xai" | "grok" | "grok_build"))
+        || model_id.starts_with("grok-imagine-video")
+        || provider
+            .and_then(|provider| provider.base_url)
+            .is_some_and(|base_url| {
+                let base_url = base_url.trim().to_ascii_lowercase();
+                base_url.contains("api.x.ai") || base_url.contains("grok.com")
+            })
+}
+
 fn endpoint_info(
     provider: Option<&ModelRouteProvider<'_>>,
     direct_config: Option<&DirectRouteConfig<'_>>,
@@ -338,7 +367,7 @@ fn endpoint_info(
         return EndpointInfo {
             kind: EndpointKind::DirectRequest,
             base_url: config.base_url.and_then(|value| non_empty(Some(value))),
-            api_version: None,
+            api_version: config.api_version.and_then(|value| non_empty(Some(value))),
             project: None,
             location: None,
             region: None,
@@ -390,6 +419,10 @@ fn auth_ref(
     direct_config: Option<&DirectRouteConfig<'_>>,
 ) -> AuthMaterialRef {
     if let Some(config) = direct_config {
+        let azure = matches!(
+            normalize_token(config.provider_name).as_deref(),
+            Some("azure") | Some("azure_openai")
+        );
         return AuthMaterialRef {
             kind: if config.api_key_present {
                 AuthKind::DirectApiKey
@@ -400,8 +433,8 @@ fn auth_ref(
             credential_ref: config
                 .credential_ref
                 .and_then(|value| non_empty(Some(value))),
-            header_name: Some("Authorization".to_string()),
-            header_prefix: Some("Bearer".to_string()),
+            header_name: Some(if azure { "api-key" } else { "Authorization" }.to_string()),
+            header_prefix: (!azure).then(|| "Bearer".to_string()),
         };
     }
 
@@ -452,7 +485,7 @@ fn capability_snapshot(routing_payload: &Value) -> CapabilitySnapshot {
         .or_else(|| registry.and_then(|value| value.get("model_capabilities")));
     let mut snapshot =
         capability_snapshot_from_model_capabilities(model_capabilities.unwrap_or(&Value::Null));
-    snapshot.source = registry.and_then(|value| string_field(value, &["source"]));
+    snapshot.source = model_capabilities.and_then(|value| string_field(value, &["provenance"]));
     snapshot.reason_code =
         registry.and_then(|value| string_field(value, &["reasonCode", "reason_code"]));
     snapshot
@@ -546,8 +579,12 @@ fn protocol_supported_for_task(task_kind: ModelTaskKind, protocol: &ProtocolKind
                 | ProtocolKind::OpenaiResponses
                 | ProtocolKind::AnthropicMessages
                 | ProtocolKind::GeminiGenerateContent
+                | ProtocolKind::VertexGemini
                 | ProtocolKind::CodexResponses
         ),
+        ModelTaskKind::VideoGenerate => {
+            matches!(protocol, ProtocolKind::Fal | ProtocolKind::XaiVideo)
+        }
         // Media tasks have dedicated lowerings and are validated by their own execution owner.
         _ => true,
     }
@@ -624,7 +661,7 @@ fn model_registry(routing_payload: &Value) -> Option<&Value> {
 
 fn framing_for_protocol(protocol: &ProtocolKind) -> FramingKind {
     match protocol {
-        ProtocolKind::Unknown => FramingKind::Json,
+        ProtocolKind::Fal | ProtocolKind::XaiVideo | ProtocolKind::Unknown => FramingKind::Json,
         _ => FramingKind::Sse,
     }
 }
@@ -693,6 +730,28 @@ mod tests {
         })
     }
 
+    fn video_task_request(provider_id: &str, model_id: &str) -> ModelTaskRequest {
+        build_model_task_request(ModelTaskRequestInput {
+            task_kind: ModelTaskKind::VideoGenerate,
+            source: ModelTaskSource::MediaTaskArtifact,
+            provider_id: Some(provider_id.to_string()),
+            model_id: Some(model_id.to_string()),
+            model_ref_source: ModelRefSource::Task,
+            modality_contract_key: Some("video_generation".to_string()),
+            routing_slot: Some("video_generation_model".to_string()),
+            task_families: vec!["video_generation".to_string()],
+            input_modalities: vec!["text".to_string()],
+            output_modalities: vec!["video".to_string()],
+            runtime_features: Vec::new(),
+            capabilities: vec!["video_generation".to_string()],
+            session_id: None,
+            thread_id: None,
+            turn_id: None,
+            content_id: None,
+            trace_id: None,
+        })
+    }
+
     #[test]
     fn direct_route_without_capability_snapshot_fails_closed() {
         let task_request = chat_task_request("fixture-openai", "fixture-model");
@@ -721,6 +780,7 @@ mod tests {
                 provider_name: "openai",
                 api_key_present: true,
                 base_url: Some("http://127.0.0.1:56599"),
+                api_version: None,
                 credential_ref: None,
                 protocol: Some(ProtocolKind::OpenaiChat),
                 toolshim: false,
@@ -735,6 +795,25 @@ mod tests {
             failure.capability_gap.as_deref(),
             Some("capability_snapshot:missing")
         );
+    }
+
+    #[test]
+    fn capability_snapshot_keeps_capability_provenance_separate_from_registry_source() {
+        let snapshot = capability_snapshot(&json!({
+            "modelRegistry": {
+                "source": "api",
+                "reasonCode": "matched_model",
+                "modelCapabilities": {
+                    "provenance": "provider_explicit",
+                    "taskFamilies": ["chat"],
+                    "inputModalities": ["text", "image"],
+                    "outputModalities": ["text"]
+                }
+            }
+        }));
+
+        assert_eq!(snapshot.source.as_deref(), Some("provider_explicit"));
+        assert_eq!(snapshot.reason_code.as_deref(), Some("matched_model"));
     }
 
     #[test]
@@ -863,6 +942,117 @@ mod tests {
         );
 
         assert_eq!(route.protocol, ProtocolKind::GeminiGenerateContent);
+        assert!(route.failure.is_none());
+    }
+
+    #[test]
+    fn vertex_gemini_is_admitted_with_typed_project_context() {
+        let task_request = chat_task_request("google-vertex", "gemini-2.5-flash");
+        let route = resolved_route_from_task(
+            &task_request,
+            ModelRouteSelection {
+                provider_id: "google-vertex",
+                model_id: "gemini-2.5-flash",
+                model_ref_source: ModelRefSource::RuntimeRequest,
+                reasoning_effort: None,
+            },
+            &json!({
+                "providerReadiness": { "ready": true, "status": "ready" },
+                "modelRegistry": {
+                    "source": "api",
+                    "status": "matched",
+                    "reasonCode": "matched_model",
+                    "modelCapabilities": {
+                        "provenance": "provider_explicit",
+                        "taskFamilies": ["chat"],
+                        "inputModalities": ["text"],
+                        "outputModalities": ["text"],
+                        "runtimeFeatures": ["streaming"],
+                        "capabilities": { "streaming": true }
+                    }
+                }
+            }),
+            Some(&ModelRouteProvider {
+                provider_id: "google-vertex",
+                provider_type: Cow::Borrowed("vertexai"),
+                base_url: None,
+                api_version: None,
+                project: Some("project-alpha"),
+                location: Some("us-central1"),
+                region: None,
+                credential_ref: Some("credential-vertex".to_string()),
+                auth_header: "Authorization",
+                auth_prefix: Some("Bearer"),
+                prompt_cache_mode: None,
+            }),
+            None,
+        );
+
+        assert_eq!(route.protocol, ProtocolKind::VertexGemini);
+        assert_eq!(route.endpoint.project.as_deref(), Some("project-alpha"));
+        assert_eq!(route.endpoint.location.as_deref(), Some("us-central1"));
+        assert_eq!(route.auth.header_name.as_deref(), Some("Authorization"));
+        assert_eq!(route.auth.header_prefix.as_deref(), Some("Bearer"));
+        assert!(route.failure.is_none());
+    }
+
+    #[test]
+    fn direct_azure_route_uses_responses_api_key_and_typed_api_version() {
+        let task_request = chat_task_request("azure", "gpt-5.4");
+        let route = resolved_route_from_task(
+            &task_request,
+            ModelRouteSelection {
+                provider_id: "azure",
+                model_id: "gpt-5.4",
+                model_ref_source: ModelRefSource::DirectProviderConfig,
+                reasoning_effort: None,
+            },
+            &json!({
+                "providerReadiness": {
+                    "ready": true,
+                    "status": "ready"
+                },
+                "modelRegistry": {
+                    "source": "direct_provider_config",
+                    "status": "matched",
+                    "reasonCode": "matched_direct_provider_config",
+                    "modelCapabilities": {
+                        "provenance": "provider_explicit",
+                        "taskFamilies": ["chat"],
+                        "inputModalities": ["text"],
+                        "outputModalities": ["text"],
+                        "runtimeFeatures": ["streaming"],
+                        "capabilities": {
+                            "streaming": true
+                        }
+                    }
+                }
+            }),
+            None,
+            Some(DirectRouteConfig {
+                provider_name: "azure",
+                api_key_present: true,
+                base_url: Some("https://resource.openai.azure.com"),
+                api_version: Some("2025-04-01-preview"),
+                credential_ref: Some("runtime-api-key:azure-key"),
+                protocol: None,
+                toolshim: false,
+                toolshim_model: None,
+            }),
+        );
+
+        assert_eq!(route.protocol, ProtocolKind::OpenaiResponses);
+        assert_eq!(
+            route.endpoint.base_url.as_deref(),
+            Some("https://resource.openai.azure.com")
+        );
+        assert_eq!(
+            route.endpoint.api_version.as_deref(),
+            Some("2025-04-01-preview")
+        );
+        assert_eq!(route.auth.kind, AuthKind::DirectApiKey);
+        assert_eq!(route.auth.header_name.as_deref(), Some("api-key"));
+        assert_eq!(route.auth.header_prefix, None);
         assert!(route.failure.is_none());
     }
 
@@ -1154,6 +1344,90 @@ mod tests {
 
         assert_eq!(route.protocol, ProtocolKind::OpenaiImages);
         assert!(route.failure.is_none());
+    }
+
+    #[test]
+    fn xai_video_task_uses_dedicated_json_protocol() {
+        let task_request = video_task_request("xai", "grok-imagine-video");
+        let provider = ModelRouteProvider {
+            provider_id: "xai",
+            provider_type: Cow::Borrowed("openai"),
+            base_url: Some("https://api.x.ai/v1"),
+            api_version: None,
+            project: None,
+            location: None,
+            region: None,
+            credential_ref: Some("runtime-api-key-xai".to_string()),
+            auth_header: "Authorization",
+            auth_prefix: Some("Bearer"),
+            prompt_cache_mode: None,
+        };
+        let route = resolved_route_from_task(
+            &task_request,
+            ModelRouteSelection {
+                provider_id: "xai",
+                model_id: "grok-imagine-video",
+                model_ref_source: ModelRefSource::Task,
+                reasoning_effort: None,
+            },
+            &json!({
+                "providerReadiness": { "ready": true, "status": "ready" },
+                "modelRegistry": {
+                    "source": "provider_declared_model",
+                    "status": "matched",
+                    "reasonCode": "matched_provider_models",
+                    "modelCapabilities": {
+                        "provenance": "provider_explicit",
+                        "taskFamilies": ["video_generation"],
+                        "inputModalities": ["text", "image"],
+                        "outputModalities": ["video"],
+                        "runtimeFeatures": ["responses_api"]
+                    }
+                }
+            }),
+            Some(&provider),
+            None,
+        );
+
+        assert_eq!(route.protocol, ProtocolKind::XaiVideo);
+        assert_eq!(route.framing, FramingKind::Json);
+        assert!(route.failure.is_none());
+    }
+
+    #[test]
+    fn generic_openai_video_route_fails_closed() {
+        let task_request = video_task_request("openai", "unimplemented-video-model");
+        let route = resolved_route_from_task(
+            &task_request,
+            ModelRouteSelection {
+                provider_id: "openai",
+                model_id: "unimplemented-video-model",
+                model_ref_source: ModelRefSource::Task,
+                reasoning_effort: None,
+            },
+            &json!({
+                "providerReadiness": { "ready": true, "status": "ready" },
+                "modelRegistry": {
+                    "source": "provider_declared_model",
+                    "status": "matched",
+                    "reasonCode": "matched_provider_models",
+                    "modelCapabilities": {
+                        "provenance": "provider_explicit",
+                        "taskFamilies": ["video_generation"],
+                        "inputModalities": ["text"],
+                        "outputModalities": ["video"]
+                    }
+                }
+            }),
+            None,
+            None,
+        );
+
+        assert_eq!(route.protocol, ProtocolKind::OpenaiChat);
+        let failure = route
+            .failure
+            .expect("generic OpenAI video must fail closed");
+        assert_eq!(failure.category, RouteFailureCategory::UnsupportedProtocol);
     }
 
     #[test]

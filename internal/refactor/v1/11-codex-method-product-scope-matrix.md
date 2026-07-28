@@ -19,9 +19,9 @@ legacy 同义命令冒充协议对齐。矩阵覆盖 `clientRequest`、`serverRe
 
 | 状态                     | 数量 | 裁决                                                                                                                                                                                                                                                           |
 | ------------------------ | ---: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `implemented`            |   71 | 连接握手、核心 Thread/Turn/Item、thread subscription/lifecycle/content search/raw item injection/background terminals/elicitation/Guardian continuation、typed approval/MCP server request 与 model control plane（含 `model/verification`、`model/rerouted`） |
+| `implemented`            |   70 | 连接握手、核心 Thread/Turn/Item、thread subscription/lifecycle/content search/raw item injection/background terminals/elicitation/Guardian continuation、typed approval/MCP server request 与 model control plane（含 `model/verification`、`model/rerouted`） |
 | `planned`                |  109 | process/fs、config、Hooks、Skills/Plugins/Apps、review 与 Windows sandbox                                                                                                                                                                                      |
-| `product-scope-excluded` |   34 | Codex account/commerce、attestation、remote control、test-only、internal raw response 和 deprecated surface                                                                                                                                                    |
+| `product-scope-excluded` |   35 | Codex account/commerce、attestation、remote control、test-only、internal raw response、deprecated surface，以及只表达单一全局 Provider 的 capability read                                                                                                      |
 | 合计                     |  214 | `130` client request、`11` server request、`72` server notification、`1` client notification                                                                                                                                                                   |
 
 `implemented` 只说明 method boundary 已存在并接入 current owner，不代表字段、恢复、GUI 或 Gate B 已全面 parity。
@@ -34,6 +34,7 @@ legacy 同义命令冒充协议对齐。矩阵覆盖 `clientRequest`、`serverRe
 3. `rawResponse/*` 绕过 canonical Thread/Turn/Item，保持 internal/excluded。
 4. `executionProcess/*`、`fileSystem/*`、旧 skill/plugin method 即使功能相似，也不能算 Codex method parity。
 5. Realtime、review、process、Windows sandbox 属于产品范围，当前标 `planned`，后续只能在既有 owner 补齐。
+6. `modelProvider/capabilities/read` 读取 Codex 单一全局 Provider；Lime 的 provider/model 选择绑定 Thread route。该空参数方法没有产品消费者，不能把静态全局值冒充当前 route truth，归入 excluded；能力继续由 executable model catalog、resolved route 与 provider lowering 承接。
 
 ## 守卫
 
@@ -58,8 +59,8 @@ fallback 继续只产生 `routing.fallback.applied`。下一刀处理 provider a
 Skills/Plugins/Apps watcher/readiness 与 Hook lifecycle。每完成一个
 method，必须同步 exact protocol、handler、typed client、fixture/evidence，再将其移入 `implemented`。
 Codex 已明确将 `thread/rollback` 标记为即将删除，Lime 不新增该公开方法。当前产品范围完成度为
-`71 / 180 = 39.4%`。分母较上一 revision 增加 `1`，来自 Codex HEAD 新增的
+`70 / 179 = 39.1%`。分母较上一 revision增加的 `1` 来自 Codex HEAD 新增的
 `externalAgentConfig/import/recordHistory`；该 P4 config-import method 已进入 `planned`，没有冒充 Lime
 现有配置导入能力或恢复 compat。Gemini GenerateContent transport 虽已完成 request/stream/tool/history
-闭环，但没有新增 exact Codex App Server method，因此不改变本矩阵计数；不得把 `39.4%` 解释成多模型或
+闭环，但没有新增 exact Codex App Server method，因此不改变本矩阵计数；不得把 `39.1%` 解释成多模型或
 整个 Codex 对齐工程的完成度。

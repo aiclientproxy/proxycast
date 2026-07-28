@@ -12,6 +12,8 @@ use serde_json::{Map, Value};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+mod model_defaults;
+
 #[derive(Clone)]
 enum SessionMetadataMutation {
     ThreadSettings(ThreadSettingsUpdateParams),
@@ -24,6 +26,49 @@ enum SessionMetadataMutationResult {
 }
 
 impl RuntimeCore {
+    pub(crate) async fn preflight_thread_start(
+        &self,
+        params: &app_server_protocol::AgentSessionStartParams,
+    ) -> Result<(), RuntimeCoreError> {
+        if !self.backend.requires_provider_selection() {
+            return Ok(());
+        }
+        let session_id = normalized_identity(
+            params.session_id.as_deref().unwrap_or_default(),
+            "thread/start sessionId",
+        )?;
+        let thread_id = normalized_identity(
+            params.thread_id.as_deref().unwrap_or_default(),
+            "thread/start threadId",
+        )?;
+        let metadata = params
+            .business_object_ref
+            .as_ref()
+            .and_then(|reference| reference.metadata.as_ref())
+            .and_then(Value::as_object)
+            .ok_or_else(|| {
+                RuntimeCoreError::InvalidRequest(
+                    "thread/start requires model route metadata".to_string(),
+                )
+            })?;
+        let settings =
+            thread_settings_from_metadata(metadata).map_err(RuntimeCoreError::InvalidRequest)?;
+        let now = super::timestamp();
+        let session = app_server_protocol::AgentSession {
+            session_id,
+            thread_id,
+            app_id: params.app_id.clone(),
+            workspace_id: params.workspace_id.clone(),
+            business_object_ref: params.business_object_ref.clone(),
+            status: app_server_protocol::AgentSessionStatus::Idle,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        self.backend
+            .preflight_thread_settings(&session, &settings)
+            .await
+    }
+
     pub(in crate::runtime) fn session_memory_enabled(&self, session_id: &str) -> bool {
         let state = self
             .state
@@ -45,9 +90,10 @@ impl RuntimeCore {
 
     pub async fn update_thread_settings(
         &self,
-        params: ThreadSettingsUpdateParams,
+        mut params: ThreadSettingsUpdateParams,
     ) -> Result<ThreadSettings, RuntimeCoreError> {
         validate_thread_settings(&params)?;
+        self.apply_target_model_defaults(&mut params).await?;
         let thread_id = params.thread_id.clone();
         let result = self
             .dispatch_session_metadata_mutation(
@@ -299,6 +345,7 @@ fn preview_thread_settings_mutation(
 fn thread_settings_require_route_preflight(params: &ThreadSettingsUpdateParams) -> bool {
     params.model.is_some()
         || params.model_provider.is_some()
+        || params.service_tier.is_some()
         || params.effort.is_some()
         || params.collaboration_mode.is_some()
 }
@@ -414,6 +461,16 @@ fn validate_thread_settings(params: &ThreadSettingsUpdateParams) -> Result<(), R
     }
     if let Some(mode) = params.collaboration_mode.as_ref() {
         normalized_value(&mode.settings.model, "collaborationMode.settings.model")?;
+        if params
+            .model
+            .as_ref()
+            .is_some_and(|model| model != &mode.settings.model)
+        {
+            return Err(RuntimeCoreError::InvalidRequest(
+                "thread/settings/update model must match collaborationMode.settings.model"
+                    .to_string(),
+            ));
+        }
         validate_optional_string(
             mode.settings.reasoning_effort.as_deref(),
             "collaborationMode.settings.reasoning_effort",
@@ -426,10 +483,29 @@ fn apply_thread_settings_patch(
     metadata: &mut Map<String, Value>,
     params: ThreadSettingsUpdateParams,
 ) -> Result<(), String> {
+    let current_model = metadata_string(metadata, &["modelName", "model"]);
+    let current_provider = metadata_string(
+        metadata,
+        &["providerSelector", "providerName", "modelProvider"],
+    );
+    let target_model = params
+        .collaboration_mode
+        .as_ref()
+        .map(|mode| mode.settings.model.as_str())
+        .or(params.model.as_deref())
+        .or(current_model.as_deref());
+    let target_provider = params
+        .model_provider
+        .as_deref()
+        .or(current_provider.as_deref());
+    let model_identity_changed =
+        target_model != current_model.as_deref() || target_provider != current_provider.as_deref();
     let model_update = params.model.clone();
-    let model_provider_update = params.model_provider.clone();
     let effort_update = params.effort.clone();
     let collaboration_model_update = params.collaboration_mode.is_some();
+    let reset_effort_for_model =
+        model_identity_changed && effort_update.is_none() && !collaboration_model_update;
+    let reset_service_tier_for_model = model_identity_changed && params.service_tier.is_none();
     insert_string(metadata, "workingDir", params.cwd);
     insert_value(metadata, "approvalPolicy", params.approval_policy);
     insert_value(metadata, "approvalsReviewer", params.approvals_reviewer);
@@ -442,7 +518,7 @@ fn apply_thread_settings_patch(
         );
         metadata.insert("providerName".to_string(), Value::String(model_provider));
     }
-    if model_update.is_some() || model_provider_update.is_some() || collaboration_model_update {
+    if model_identity_changed {
         metadata.remove("agentControlRoute");
     }
     if let Some(service_tier) = params.service_tier {
@@ -455,8 +531,15 @@ fn apply_thread_settings_patch(
                 metadata.remove("service_tier");
             }
         }
+    } else if reset_service_tier_for_model {
+        metadata.remove("serviceTier");
+        metadata.remove("service_tier");
     }
     insert_string(metadata, "reasoningEffort", params.effort);
+    if reset_effort_for_model {
+        metadata.remove("reasoningEffort");
+        metadata.remove("effort");
+    }
     insert_value(metadata, "reasoningSummary", params.summary);
     if let Some(mode) = params.collaboration_mode {
         metadata.insert(
@@ -489,7 +572,9 @@ fn apply_thread_settings_patch(
         if let Some(model) = model_update {
             mode.settings.model = model;
         }
-        if let Some(effort) = effort_update {
+        if reset_effort_for_model {
+            mode.settings.reasoning_effort = None;
+        } else if let Some(effort) = effort_update {
             mode.settings.reasoning_effort = Some(effort);
         }
         persist_collaboration_mode(metadata, mode)?;
@@ -666,7 +751,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejected_model_switch_does_not_persist_candidate_settings() {
+    async fn rejected_route_settings_do_not_persist_candidate_settings() {
         let temp = tempfile::TempDir::new().expect("thread settings temp dir");
         let store = Arc::new(
             crate::ProjectionStore::initialize(temp.path().join("projection.sqlite"))
@@ -693,6 +778,35 @@ mod tests {
             locale: None,
         })
         .expect("start settings preflight session");
+
+        let tier_error = core
+            .update_thread_settings(ThreadSettingsUpdateParams {
+                thread_id: "thread-settings-preflight".to_string(),
+                service_tier: Some(Some("unsupported-tier".to_string())),
+                ..ThreadSettingsUpdateParams::default()
+            })
+            .await
+            .expect_err("service tier update must be preflighted");
+        assert!(matches!(
+            tier_error,
+            RuntimeCoreError::RouteRejected {
+                reason_code,
+                ..
+            } if reason_code == "model_registry_metadata_missing"
+        ));
+        {
+            let state = core
+                .state
+                .lock()
+                .expect("runtime state after tier rejection");
+            let metadata = state.sessions["session-settings-preflight"]
+                .session
+                .business_object_ref
+                .as_ref()
+                .and_then(|reference| reference.metadata.as_ref())
+                .expect("persisted metadata after tier rejection");
+            assert!(metadata.get("serviceTier").is_none());
+        }
 
         let error = core
             .update_thread_settings(ThreadSettingsUpdateParams {
@@ -772,5 +886,43 @@ mod tests {
             mode.settings.developer_instructions.as_deref(),
             Some("Keep the existing plan instructions.")
         );
+    }
+
+    #[test]
+    fn model_only_update_clears_effort_owned_by_the_previous_model() {
+        let mut metadata = json!({
+            "modelName": "reasoning-model",
+            "providerSelector": "provider-a",
+            "reasoningEffort": "high",
+            "serviceTier": "priority",
+            "collaborationMode": {
+                "mode": "default",
+                "settings": {
+                    "model": "reasoning-model",
+                    "reasoning_effort": "high"
+                }
+            }
+        })
+        .as_object()
+        .expect("metadata object")
+        .clone();
+
+        apply_thread_settings_patch(
+            &mut metadata,
+            ThreadSettingsUpdateParams {
+                thread_id: "thread-1".to_string(),
+                model: Some("plain-model".to_string()),
+                model_provider: Some("provider-b".to_string()),
+                ..ThreadSettingsUpdateParams::default()
+            },
+        )
+        .expect("update metadata");
+
+        let settings = thread_settings_from_metadata(&metadata).expect("thread settings");
+        assert_eq!(settings.model, "plain-model");
+        assert_eq!(settings.model_provider, "provider-b");
+        assert_eq!(settings.effort, None);
+        assert_eq!(settings.service_tier, None);
+        assert_eq!(settings.collaboration_mode.settings.reasoning_effort, None);
     }
 }

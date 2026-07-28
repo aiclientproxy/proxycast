@@ -1,8 +1,63 @@
 {
   "$defs": {
+    "CapabilitySnapshot": {
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/ModelCapabilitiesInfo",
+          "default": {
+            "functionCalling": false,
+            "jsonMode": false,
+            "reasoning": false,
+            "streaming": false,
+            "tools": false,
+            "vision": false
+          }
+        },
+        "inputModalities": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "outputModalities": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reasonCode": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "runtimeFeatures": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "taskFamilies": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "InputModality": {
       "enum": [
-        "audio",
         "image",
         "text"
       ],
@@ -16,6 +71,113 @@
       },
       "required": [
         "message"
+      ],
+      "type": "object"
+    },
+    "ModelCapabilitiesInfo": {
+      "properties": {
+        "functionCalling": {
+          "type": "boolean"
+        },
+        "jsonMode": {
+          "type": "boolean"
+        },
+        "reasoning": {
+          "type": "boolean"
+        },
+        "reasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelReasoningEffortSupportInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "streaming": {
+          "type": "boolean"
+        },
+        "tools": {
+          "type": "boolean"
+        },
+        "vision": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "functionCalling",
+        "jsonMode",
+        "reasoning",
+        "streaming",
+        "tools",
+        "vision"
+      ],
+      "type": "object"
+    },
+    "ModelReasoningEffortOptionInfo": {
+      "properties": {
+        "default": {
+          "default": false,
+          "type": "boolean"
+        },
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ModelReasoningEffortSupportInfo": {
+      "properties": {
+        "default": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "levels": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "options": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ModelReasoningEffortOptionInfo"
+          },
+          "type": "array"
+        },
+        "source": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "supported": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "supported"
       ],
       "type": "object"
     },
@@ -101,6 +263,17 @@
         }
       ]
     },
+    "capabilitySnapshot": {
+      "$ref": "#/$defs/CapabilitySnapshot"
+    },
+    "contextWindow": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
     "defaultReasoningEffort": {
       "type": "string"
     },
@@ -131,7 +304,18 @@
     "isDefault": {
       "type": "boolean"
     },
+    "maxOutputTokens": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
     "model": {
+      "type": "string"
+    },
+    "providerId": {
       "type": "string"
     },
     "serviceTiers": {
@@ -168,6 +352,7 @@
   },
   "required": [
     "additionalSpeedTiers",
+    "capabilitySnapshot",
     "defaultReasoningEffort",
     "description",
     "displayName",
@@ -176,6 +361,7 @@
     "inputModalities",
     "isDefault",
     "model",
+    "providerId",
     "serviceTiers",
     "supportedReasoningEfforts",
     "supportsPersonality"
