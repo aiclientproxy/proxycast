@@ -1,6 +1,7 @@
 use super::{
-    SortDirection, Thread, ThreadHistoryMode, ThreadItem, ThreadListCwdFilter, ThreadSortKey,
-    ThreadSourceKind, ThreadStartSource, ThreadStatus, Turn, TurnEnvironmentParams, TurnItemsView,
+    DynamicToolSpec, SortDirection, Thread, ThreadHistoryMode, ThreadItem, ThreadListCwdFilter,
+    ThreadSortKey, ThreadSourceKind, ThreadStartSource, ThreadStatus, Turn, TurnEnvironmentParams,
+    TurnItemsView,
 };
 use agent_protocol::MultiAgentMode;
 use schemars::JsonSchema;
@@ -54,7 +55,7 @@ pub struct ThreadStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub environments: Option<Vec<TurnEnvironmentParams>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub dynamic_tools: Option<Vec<Value>>,
+    pub dynamic_tools: Option<Vec<DynamicToolSpec>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_capability_roots: Option<Vec<Value>>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

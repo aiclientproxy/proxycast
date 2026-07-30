@@ -5,6 +5,10 @@ mod agent_ui_sequence_verifier;
 mod approval_server_request;
 mod automation_execution;
 mod capability;
+mod current_time;
+#[cfg(test)]
+mod current_time_tests;
+mod dynamic_tool_server_request;
 mod execution_process;
 mod external_backend;
 mod file_checkpoint;
@@ -22,6 +26,7 @@ mod model_route_assembly;
 mod model_route_execution;
 mod model_task_contract;
 mod otel_trace;
+mod permission_server_request;
 mod plugin_packages;
 mod processor;
 mod project_shell;
@@ -124,6 +129,7 @@ pub use capability::CapabilityInventoryRecord;
 pub use capability::CapabilityInventorySource;
 pub use capability::CapabilityListContext;
 pub use capability::CapabilitySource;
+pub use current_time::CurrentTimeReadError;
 pub use external_backend::ExternalBackend;
 pub use external_backend::ExternalBackendConfig;
 pub use external_backend::DEFAULT_EXTERNAL_BACKEND_TIMEOUT_MS;
@@ -149,6 +155,7 @@ pub use runtime::BasicEvidenceExportProvider;
 pub use runtime::CancelExecutionRequest;
 pub use runtime::ConnectAppDataSource;
 pub use runtime::DiagnosticsAppDataSource;
+pub use runtime::DynamicToolRespondRequest;
 pub use runtime::EventLogRecord;
 pub use runtime::EventLogWriter;
 pub use runtime::EvidenceExportProvider;
@@ -179,6 +186,7 @@ pub use runtime::OutputSnapshotReadRequest;
 pub use runtime::OutputSnapshotRecord;
 pub use runtime::OutputSnapshotSaveRequest;
 pub use runtime::OutputSnapshotStore;
+pub use runtime::PermissionRespondRequest;
 pub use runtime::PluginDataSource;
 pub use runtime::ProjectionRepair;
 pub use runtime::ProjectionStore;
@@ -285,6 +293,7 @@ pub struct AppServer {
     transport_notification_opt_out: TransportNotificationOptOut,
     thread_unloading_delay: Duration,
     server_requests: server_request::ServerRequestRouter,
+    current_time_requests: current_time::CurrentTimeRequestRouter,
     mcp_elicitation_requests: mcp_elicitation::ElicitationRequestSource,
 }
 
@@ -314,6 +323,17 @@ impl AppServer {
         let transport_initialized = Arc::new(Mutex::new(HashSet::new()));
         let transport_notification_opt_out = Arc::new(Mutex::new(HashMap::new()));
         let server_requests = server_request::ServerRequestRouter::default();
+        let current_time_requests = current_time::CurrentTimeRequestRouter::new(
+            thread_states.clone(),
+            transport_writers.clone(),
+            transport_disconnects.clone(),
+            server_requests.clone(),
+        );
+        if let Err(error) =
+            runtime.set_current_time_gateway(Arc::new(current_time_requests.clone()))
+        {
+            tracing::warn!(%error, "runtime backend rejected current-time gateway injection");
+        }
         let interrupt_bridge = AppServerEventBridge {
             runtime_events: runtime.event_appender(),
             thread_states: thread_states.clone(),
@@ -358,6 +378,7 @@ impl AppServer {
             transport_notification_opt_out,
             thread_unloading_delay: DEFAULT_THREAD_UNLOADING_DELAY,
             server_requests,
+            current_time_requests,
             mcp_elicitation_requests: mcp_elicitation::ElicitationRequestSource::default(),
         }
     }
@@ -410,8 +431,12 @@ impl AppServer {
                     );
                     continue;
                 };
-                let approval_event = (event.event_type == "action.required").then(|| event.clone());
-                let (completion_tx, completion_rx) = if approval_event.is_some() {
+                let reverse_request_event = matches!(
+                    event.event_type.as_str(),
+                    "action.required" | "dynamic_tool.requested"
+                )
+                .then(|| event.clone());
+                let (completion_tx, completion_rx) = if reverse_request_event.is_some() {
                     let (sender, receiver) = oneshot::channel();
                     (Some(sender), Some(receiver))
                 } else {
@@ -430,20 +455,29 @@ impl AppServer {
                     tracing::error!(%error, "failed to enqueue background runtime event");
                     continue;
                 }
-                if let (Some(event), Some(completion_rx)) = (approval_event, completion_rx) {
+                if let (Some(event), Some(completion_rx)) = (reverse_request_event, completion_rx) {
                     match completion_rx.await {
                         Ok(Ok(_)) => {}
                         Ok(Err(error)) => {
-                            tracing::warn!(%error, "action.required projection failed");
+                            tracing::warn!(%error, "reverse-request projection failed");
                             continue;
                         }
                         Err(error) => {
-                            tracing::warn!(%error, "action.required projection did not complete");
+                            tracing::warn!(%error, "reverse-request projection did not complete");
                             continue;
                         }
                     }
                     let server = server.clone();
                     tokio::spawn(async move {
+                        if server
+                            .handle_dynamic_tool_server_request(event.clone())
+                            .await
+                        {
+                            return;
+                        }
+                        if server.handle_permission_server_request(event.clone()).await {
+                            return;
+                        }
                         server.handle_command_approval_request(event).await;
                     });
                 }
@@ -667,42 +701,6 @@ impl AppServer {
             JsonRpcMessage::Error(_response) => {
                 #[cfg(test)]
                 self.resolve_test_server_request_error(_response.id, _response.error);
-                Ok(Vec::new())
-            }
-        }
-    }
-
-    async fn handle_transport_message_streaming(
-        &self,
-        connection_id: ConnectionId,
-        message: JsonRpcMessage,
-        event_callback: &mut (dyn FnMut(JsonRpcMessage) + Send),
-    ) -> Result<Vec<JsonRpcMessage>, AppServerError> {
-        self.ensure_runtime_event_pump();
-        match message {
-            JsonRpcMessage::Request(request) => {
-                self.processor
-                    .handle_transport_request_streaming(connection_id, request, event_callback)
-                    .await
-            }
-            JsonRpcMessage::Notification(notification) => {
-                self.processor.handle_notification(notification);
-                Ok(Vec::new())
-            }
-            JsonRpcMessage::Response(response) => {
-                self.resolve_transport_server_request_response(
-                    connection_id,
-                    response.id,
-                    response.result,
-                );
-                Ok(Vec::new())
-            }
-            JsonRpcMessage::Error(response) => {
-                self.resolve_transport_server_request_error(
-                    connection_id,
-                    response.id,
-                    response.error,
-                );
                 Ok(Vec::new())
             }
         }
@@ -1643,26 +1641,6 @@ fn spawn_transport_request(
             }
             _ => None,
         };
-        if should_stream_transport_request(&message) {
-            let mut event_callback = |message: JsonRpcMessage| {
-                let _ = streamed_tx.send(Ok((connection_id, message)));
-            };
-            match server
-                .handle_transport_message_streaming(connection_id, message, &mut event_callback)
-                .await
-            {
-                Ok(messages) => {
-                    for message in messages {
-                        let _ = streamed_tx.send(Ok((connection_id, message)));
-                    }
-                }
-                Err(error) => {
-                    let _ = streamed_tx.send(Err(error));
-                }
-            }
-            return;
-        }
-
         match server
             .handle_transport_message(connection_id, message)
             .await
@@ -1958,20 +1936,6 @@ fn notification_is_opted_out(
         .expect("app-server transport notification opt-out mutex poisoned")
         .get(&connection_id)
         .is_some_and(|methods| methods.contains(&notification.method))
-}
-
-fn should_stream_transport_request(message: &JsonRpcMessage) -> bool {
-    matches!(
-        message,
-        JsonRpcMessage::Request(request)
-            if request.method == METHOD_MEDIA_READ
-                    && request
-                        .params
-                        .as_ref()
-                        .and_then(|params| params.get("stream"))
-                        .and_then(serde_json::Value::as_bool)
-                        .unwrap_or(false)
-    )
 }
 
 fn should_spawn_transport_request(message: &JsonRpcMessage) -> bool {
@@ -3292,20 +3256,6 @@ mod tests {
                 Some(json!({})),
             )),
         ));
-    }
-
-    #[test]
-    fn media_read_streaming_transport_requires_stream_flag() {
-        assert!(should_stream_transport_request(&JsonRpcMessage::Request(
-            JsonRpcRequest::new(
-                RequestId::Integer(1),
-                METHOD_MEDIA_READ,
-                Some(json!({ "stream": true })),
-            ),
-        )));
-        assert!(!should_stream_transport_request(&JsonRpcMessage::Request(
-            JsonRpcRequest::new(RequestId::Integer(2), METHOD_MEDIA_READ, Some(json!({})),),
-        )));
     }
 
     #[tokio::test]

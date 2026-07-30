@@ -258,30 +258,48 @@ fn canonical_mcp_output_is_size_bounded_and_redacts_sensitive_fields() {
 #[test]
 fn canonical_dynamic_tool_output_is_tagged_bounded_and_redacted() {
     let mut thread = canonical_thread(false);
-    thread.turns[0].items[0].kind = canonical::ItemKind::Tool;
+    thread.turns[0].items[0].kind = canonical::ItemKind::DynamicToolCall;
     thread.turns[0].items[0].status = canonical::ItemStatus::Completed;
-    thread.turns[0].items[0].payload = canonical::ThreadItemPayload::Tool {
+    thread.turns[0].items[0].payload = canonical::ThreadItemPayload::DynamicToolCall {
         call_id: "dynamic-safe".to_string(),
-        name: "lookup".to_string(),
-        arguments: Vec::new(),
-        output: Some(canonical::ToolOutput {
-            text: Some("x".repeat(MAX_DISPLAY_JSON_BYTES * 2)),
-            structured_content: Some(json!({
-                "password": "secret-value",
-                "safe": "visible"
-            })),
-            ..Default::default()
-        }),
+        namespace: Some("desktop".to_string()),
+        tool: "lookup".to_string(),
+        arguments: json!({"password": "argument-secret", "safe": "visible"}),
+        content_items: vec![
+            canonical::DynamicToolCallContentItem::InputText {
+                text: "x".repeat(MAX_DISPLAY_JSON_BYTES * 2),
+            },
+            canonical::DynamicToolCallContentItem::InputText {
+                text: json!({
+                    "password": "secret-value",
+                    "safe": "visible"
+                })
+                .to_string(),
+            },
+        ],
+        success: Some(true),
+        duration_ms: Some(11),
     };
 
     let projected = project_thread(thread).expect("project bounded dynamic output");
     let v2::ThreadItem::DynamicToolCall {
+        namespace,
+        tool,
+        arguments,
         content_items: Some(content_items),
+        success,
+        duration_ms,
         ..
     } = &projected.turns[0].items[0]
     else {
         panic!("dynamic tool item");
     };
+    assert_eq!(namespace.as_deref(), Some("desktop"));
+    assert_eq!(tool, "lookup");
+    assert_eq!(arguments["password"], "[redacted]");
+    assert_eq!(arguments["safe"], "visible");
+    assert_eq!(*success, Some(true));
+    assert_eq!(*duration_ms, Some(11));
     let wire = serde_json::to_value(content_items).expect("dynamic output wire");
     assert_eq!(wire[0]["type"], "inputText");
     assert!(wire[0]["text"].as_str().unwrap().len() <= MAX_DISPLAY_STRING_BYTES);

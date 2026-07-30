@@ -3,9 +3,8 @@
 use super::{RequestProcessor, RpcDispatch};
 #[cfg(test)]
 use crate::RuntimeCore;
-use app_server_protocol::{
-    ConfigWarningNotification, JsonRpcError, JsonRpcNotification, ServerNotification,
-};
+use app_server_protocol::protocol::v2::{ConfigWarningNotification, ServerNotification};
+use app_server_protocol::{JsonRpcError, JsonRpcNotification};
 use lime_core::config::{Config, ConfigManager};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -136,7 +135,7 @@ fn legacy_json_config_path(yaml_path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use app_server_protocol::METHOD_CONFIG_WARNING;
+    use app_server_protocol::protocol::v2::METHOD_CONFIG_WARNING;
     use serde_json::json;
 
     #[test]

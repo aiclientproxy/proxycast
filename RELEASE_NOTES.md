@@ -1,39 +1,39 @@
-## Lime v1.116.0
+## Lime v1.117.0
 
 ### 新功能
 
-- Agent 对话改为直接按 canonical Turn / Item 渲染，实时事件、冷启动读取和会话恢复共享同一 ConversationProjection；Hook、Sleep、Review、MCP 和动态工具状态可在统一时间线中呈现。
-- 新增统一 Pending Interaction 层，集中承接审批、用户补充输入、MCP elicitation 和动态工具交互，并在恢复后重建仍待处理的请求。
-- 媒体读取迁移到 Lime-owned v2 `media/read`，使用 canonical `threadId` 读取 bounded sidecar，并在图片可用、不可用和异常状态下提供稳定预览结果。
-- 官方 Agnes API Hub 现在可识别 `agnes-2.0-flash` 的 canonical 视觉、工具、流式与推理能力；非官方或非 HTTPS endpoint 不会获得同等能力授权。
+- 完成 `currentTime/read`、`item/permissions/requestApproval` 与 `item/tool/call` 三项 Host capability：系统时间读取、权限提升和桌面动态工具调用都经 Electron Host、App Server JSON-RPC 与 RuntimeCore 的同一条产品链闭环。
+- 动态工具调用升级为 canonical Thread Item，完整保留 namespace、tool、原始参数、有序文本/图片/音频输出、状态和耗时；恢复会话后仍能可靠呈现工具生命周期。
+- Multi-Agent 对话补齐六项 AgentControl 工具、typed wait state、子 Agent 活动投影和冷重启恢复；parent-owned 子线程现在明确禁止直接输入。
+- Lime Hub 可通过 bundled canonical registry 恢复已知模型的执行能力，并新增 Agnes 2.5 Flash/Pro canonical catalog；未知模型仍保持 fail-closed。
 
 ### 修复
 
-- 修复长会话恢复时重复合成消息、实时与历史内容漂移、推理/工具正文重复以及待处理交互丢失的问题。
-- 修复超长历史一次挂载全部 Item 和 assistant 长正文导致的打开卡顿；默认只渲染 bounded Turn window，旧记录和完整正文按需展开。
-- 修复 sidecar 媒体仍依赖 v0 session identity、读取失败被静默吞掉或异常 payload 进入预览的问题；协议漂移和未投影通知现在会产生可见诊断。
-- 修复多 Agent 工具结果只携带活动事件而缺少 typed 状态事实的问题，子 Agent 的完成、失败和等待状态可进入 canonical 投影。
+- 修复干净环境无法解析 `@limecloud/app-server-client/browser`、图片任务 fixture 使用错误 Chat 模型、模型列表 generation 基线漂移，以及非法模型参数返回错误 JSON-RPC code 的问题。
+- 修复模型选择器展示 RuntimeCore 无法执行的 inferred-only 模型、live provider metadata 被本地 hint 覆盖，以及 Windows Lime Hub 已保存模型无法进入首回合的问题。
+- 修复媒体预览依赖 transient chunk/completed 通知和 Renderer live-drain helper 的双轨行为；所有分段读取现在先校验 offset、length、digest 与大小再更新进度。
+- 修复初始会话和子 Agent 导航、canonical Item 读取、事件序列门控与待处理交互恢复中的边界问题。
 
 ### 优化与重构
 
-- 删除 canonical Item 到旧 Message 的二次合成、三个流式内容同步 hook、重复 approval/user-input API 和旧 MCP elicitation dialog owner，Renderer 只保留一条 current 投影链。
-- 将 assistant message phase、MCP tool result/error、动态工具多模态输出和 Agent control state 收紧为 typed protocol，并同步 Rust、JSON schema 与 TypeScript client。
-- 将历史窗口、长正文 preview、媒体异常态与 notification drift 设为 fail-visible 边界，不再通过通用 extension 或生产 mock fallback 猜测展示。
-- 模型目录 taxonomy 现在可从 canonical catalog 补齐 task family、modality 和 runtime feature，同时保持 endpoint provenance 的严格校验。
+- 将 `configWarning` 从 v0 DTO/schema 迁移到唯一的 typed v2 owner，Renderer 只投影解码后的全局告警，并提供五语言去重提示。
+- 删除 v0 配置告警、TextPosition/TextRange schema、媒体 transient notification 消费者、旧协议 facade 与重复预览同步模块，不保留生产兼容包装。
+- 收紧请求权限 profile、沙箱命令、动态工具路由、provider history 与 read model 的类型边界；保留名、schema 冲突、身份错配、重复或迟到响应全部 fail-closed。
+- Skill 安装目录改用后端权威 `localDirectoryPath`，Electron 对目录使用 `openPath`、对文件使用 `showItemInFolder`。
 
 ### 测试与质量
 
-- 扩展 direct TurnTimeline、历史 preview、恢复 replay、Pending Interaction、MCP elicitation、媒体异常态和协议漂移的前端与协议回归。
-- 新增长列表 Electron fixture、canonical thread seed/oracle、Agent runtime screenshot 与 tool execution current contract，覆盖真实 preload/IPC、App Server JSON-RPC、read model 和 GUI 状态。
-- 更新 Refactor v2 Item/Event projection inventory、render coverage fixture、legacy surface guard 和验证证据，守住单一 current owner 与零生产 mock fallback。
+- 新增 Host capability、动态工具、权限 profile、current time、AgentControl、parent-owned thread、配置告警 v2 与模型路由的 Rust、Electron、协议和 Renderer 回归。
+- 补充真实 Electron Gate B 证据，覆盖 preload/IPC、`app_server_handle_json_lines`、App Server、RuntimeCore、canonical read model、GUI 可见状态和冷重启 identity。
+- 加强 app-server-client browser 子路径、协议生成物、五语言资源、legacy surface 和 current bridge 的守卫。
 
 ### 文档
 
-- 更新 Renderer ConversationProjection、direct TurnTimeline、thread-scoped media read、异常态展示和长列表性能的架构事实源与 Refactor v2 执行记录。
-- 新增 LimeCore / AsterRouter / Codex App Server 的云端多模型平台目标架构，明确商业控制面、模型数据面和桌面 runtime 的唯一 owner。
+- 更新 Host capability、DynamicTool canonical payload、配置告警 v2、媒体 transient retirement 与 Lime Hub capability provenance 的架构事实源。
+- 更新 Refactor v2 V2-04/V2-05 进度、Gate B evidence、Windows runtime 模型路由计划和 Soul 输出面路线图。
 
 ### 其他
 
-- 将根应用、CLI npm 包、Rust workspace 与锁文件版本统一提升到 `1.116.0`。
+- 将根应用、CLI npm 包、Rust workspace 与锁文件版本统一提升到 `1.117.0`。
 
-**完整变更**: `v1.115.0` -> `v1.116.0`
+**完整变更**: `v1.116.0` -> `v1.117.0`

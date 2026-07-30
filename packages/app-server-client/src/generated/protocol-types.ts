@@ -65,6 +65,7 @@ export const METHOD_CONVERSATION_IMPORT_THREAD_COMMIT =
   "conversationImport/thread/commit";
 export const METHOD_CONVERSATION_IMPORT_THREAD_PREVIEW =
   "conversationImport/thread/preview";
+export const METHOD_CURRENT_TIME_READ = "currentTime/read";
 export const METHOD_DIAGNOSTICS_LOG_STORAGE_READ =
   "diagnostics/logStorage/read";
 export const METHOD_DIAGNOSTICS_SERVER_READ = "diagnostics/server/read";
@@ -135,6 +136,8 @@ export const METHOD_FILE_CHANGE_PATCH_UPDATED = "item/fileChange/patchUpdated";
 export const METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL =
   "item/fileChange/requestApproval";
 export const METHOD_MCP_TOOL_CALL_PROGRESS = "item/mcpToolCall/progress";
+export const METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL =
+  "item/permissions/requestApproval";
 export const METHOD_PLAN_DELTA = "item/plan/delta";
 export const METHOD_REASONING_SUMMARY_PART_ADDED =
   "item/reasoning/summaryPartAdded";
@@ -142,6 +145,7 @@ export const METHOD_REASONING_SUMMARY_TEXT_DELTA =
   "item/reasoning/summaryTextDelta";
 export const METHOD_REASONING_TEXT_DELTA = "item/reasoning/textDelta";
 export const METHOD_ITEM_STARTED = "item/started";
+export const METHOD_ITEM_TOOL_CALL = "item/tool/call";
 export const METHOD_ITEM_TOOL_REQUEST_USER_INPUT = "item/tool/requestUserInput";
 export const METHOD_KNOWLEDGE_CONTEXT_RESOLVE = "knowledgeContext/resolve";
 export const METHOD_KNOWLEDGE_CONTEXT_RUN_VALIDATE =
@@ -385,6 +389,7 @@ export const METHOD_VOICE_TRANSCRIPTION_POLISH_TEXT =
   "voiceTranscription/polishText";
 export const METHOD_VOICE_TRANSCRIPTION_TRANSCRIBE_AUDIO =
   "voiceTranscription/transcribeAudio";
+export const METHOD_WARNING = "warning";
 export const METHOD_WECHAT_CHANNEL_ACCOUNT_REMOVE =
   "wechatChannel/account/remove";
 export const METHOD_WECHAT_CHANNEL_ACCOUNT_LIST = "wechatChannel/accounts/list";
@@ -599,6 +604,10 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "conversationImport/thread/preview",
   },
   {
+    kind: "serverRequest",
+    method: "currentTime/read",
+  },
+  {
     kind: "request",
     method: "diagnostics/logStorage/read",
   },
@@ -803,6 +812,10 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "item/mcpToolCall/progress",
   },
   {
+    kind: "serverRequest",
+    method: "item/permissions/requestApproval",
+  },
+  {
     kind: "notification",
     method: "item/plan/delta",
   },
@@ -821,6 +834,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "notification",
     method: "item/started",
+  },
+  {
+    kind: "serverRequest",
+    method: "item/tool/call",
   },
   {
     kind: "serverRequest",
@@ -1667,6 +1684,10 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "voiceTranscription/transcribeAudio",
   },
   {
+    kind: "notification",
+    method: "warning",
+  },
+  {
     kind: "request",
     method: "wechatChannel/account/remove",
   },
@@ -1980,6 +2001,17 @@ export interface AdditionalContextEntry {
 }
 
 export type AdditionalContextKind = "application" | "untrusted";
+
+export interface AdditionalFileSystemPermissions {
+  entries?: FileSystemSandboxEntry[] | null;
+  globScanMaxDepth?: number | null;
+  read?: string[] | null;
+  write?: string[] | null;
+}
+
+export interface AdditionalNetworkPermissions {
+  enabled?: boolean | null;
+}
 
 export interface AgentAttachment {
   kind: string;
@@ -3755,7 +3787,6 @@ export interface AppServerMethodSpec {
 
 export type AppServerNotificationMethod =
   | "agentSession/event"
-  | "configWarning"
   | "initialized"
   | "workspaceRightSurface/pendingChanged";
 
@@ -4910,6 +4941,14 @@ export type ConversationImportThreadStatus =
   | "importing"
   | "not_imported";
 
+export interface CurrentTimeReadParams {
+  threadId: string;
+}
+
+export interface CurrentTimeReadResponse {
+  currentTimeAt: number;
+}
+
 export interface DiagnosticsCapabilityRoutingMetricsSnapshot {
   allCandidatesExcludedTotal: number;
   filterEvalTotal: number;
@@ -5055,7 +5094,40 @@ export type DynamicToolCallOutputContentItem =
       type: "inputAudio";
     };
 
+export interface DynamicToolCallParams {
+  arguments: unknown;
+  callId: string;
+  namespace?: null | string;
+  threadId: string;
+  tool: string;
+  turnId: string;
+}
+
+export interface DynamicToolCallResponse {
+  contentItems: DynamicToolCallOutputContentItem[];
+  success: boolean;
+}
+
 export type DynamicToolCallStatus = "completed" | "failed" | "inProgress";
+
+export interface DynamicToolFunctionSpec {
+  deferLoading?: boolean;
+  description: string;
+  inputSchema: unknown;
+  name: string;
+}
+
+export interface DynamicToolNamespaceSpec {
+  description: string;
+  name: string;
+  tools: DynamicToolNamespaceTool[];
+}
+
+export type DynamicToolNamespaceTool = DynamicToolFunctionSpec;
+
+export type DynamicToolSpec =
+  | DynamicToolFunctionSpec
+  | DynamicToolNamespaceSpec;
 
 export interface EndpointInfo {
   apiVersion?: null | string;
@@ -5221,6 +5293,8 @@ export interface FileChangeRequestApprovalResponse {
   decision: FileChangeApprovalDecision;
 }
 
+export type FileSystemAccessMode = "deny" | "read" | "write";
+
 export interface FileSystemCreateDirectoryParams {
   path: string;
 }
@@ -5270,6 +5344,20 @@ export interface FileSystemListDirectoryParams {
 
 export type FileSystemMutationResponse = Record<string, unknown>;
 
+export type FileSystemPath =
+  | {
+      path: string;
+      type: "path";
+    }
+  | {
+      pattern: string;
+      type: "glob_pattern";
+    }
+  | {
+      type: "special";
+      value: FileSystemSpecialPath;
+    };
+
 export interface FileSystemReadFilePreviewParams {
   maxSize?: number | null;
   path: string;
@@ -5279,6 +5367,34 @@ export interface FileSystemRenameFileParams {
   newPath: string;
   oldPath: string;
 }
+
+export interface FileSystemSandboxEntry {
+  access: FileSystemAccessMode;
+  path: FileSystemPath;
+}
+
+export type FileSystemSpecialPath =
+  | {
+      kind: "root";
+    }
+  | {
+      kind: "minimal";
+    }
+  | {
+      kind: "project_roots";
+      subpath?: null | string;
+    }
+  | {
+      kind: "tmpdir";
+    }
+  | {
+      kind: "slash_tmp";
+    }
+  | {
+      kind: "unknown";
+      path: string;
+      subpath?: null | string;
+    };
 
 export interface FileUpdateChange {
   diff: string;
@@ -5485,6 +5601,11 @@ export interface GitInfo {
   branch?: null | string;
   originUrl?: null | string;
   sha?: null | string;
+}
+
+export interface GrantedPermissionProfile {
+  fileSystem?: AdditionalFileSystemPermissions | null;
+  network?: AdditionalNetworkPermissions | null;
 }
 
 export interface HookPromptFragment {
@@ -5920,7 +6041,6 @@ export interface MediaReadParams {
   offset?: number | null;
   refId?: null | string;
   sidecarRef?: unknown;
-  stream?: boolean;
   threadId: string;
   uri?: null | string;
 }
@@ -6417,6 +6537,7 @@ export interface ModelInfo {
   autoCompactTokenLimit?: number | null;
   canonicalModelId?: null | string;
   capabilities?: ModelCapabilitiesInfo;
+  capabilityProvenance: string;
   contextWindow?: number | null;
   createdAt: number;
   defaultReasoningLevel?: null | string;
@@ -6801,6 +6922,25 @@ export type PatchChangeKind =
       move_path?: null | string;
       type: "update";
     };
+
+export type PermissionGrantScope = "session" | "turn";
+
+export interface PermissionsRequestApprovalParams {
+  cwd: string;
+  environmentId?: null | string;
+  itemId: string;
+  permissions: RequestPermissionProfile;
+  reason?: null | string;
+  startedAtMs: number;
+  threadId: string;
+  turnId: string;
+}
+
+export interface PermissionsRequestApprovalResponse {
+  permissions: GrantedPermissionProfile;
+  scope?: PermissionGrantScope;
+  strictAutoReview?: boolean | null;
+}
 
 export interface PlanDeltaNotification {
   delta: string;
@@ -7424,6 +7564,11 @@ export interface ReasoningTextDeltaNotification {
   turnId: string;
 }
 
+export interface RequestPermissionProfile {
+  fileSystem?: AdditionalFileSystemPermissions | null;
+  network?: AdditionalNetworkPermissions | null;
+}
+
 export interface ResolvedModelRoute {
   auth: AuthMaterialRef;
   capabilitySnapshot: CapabilitySnapshot;
@@ -7572,6 +7717,14 @@ export interface ServerInfo {
 
 export type ServerNotification =
   | {
+      method: "configWarning";
+      params: ConfigWarningNotification;
+    }
+  | {
+      method: "warning";
+      params: WarningNotification;
+    }
+  | {
       method: "thread/started";
       params: ThreadStartedNotification;
     }
@@ -7687,6 +7840,11 @@ export type ServerNotification =
 export type ServerRequest =
   | {
       id: number | string;
+      method: "currentTime/read";
+      params: CurrentTimeReadParams;
+    }
+  | {
+      id: number | string;
       method: "mcpServer/elicitation/request";
       params: McpServerElicitationRequestParams;
     }
@@ -7699,6 +7857,16 @@ export type ServerRequest =
       id: number | string;
       method: "item/fileChange/requestApproval";
       params: FileChangeRequestApprovalParams;
+    }
+  | {
+      id: number | string;
+      method: "item/permissions/requestApproval";
+      params: PermissionsRequestApprovalParams;
+    }
+  | {
+      id: number | string;
+      method: "item/tool/call";
+      params: DynamicToolCallParams;
     }
   | {
       id: number | string;
@@ -8751,7 +8919,7 @@ export interface ThreadStartParams {
   config?: null | Record<string, unknown>;
   cwd?: null | string;
   developerInstructions?: null | string;
-  dynamicTools?: unknown[] | null;
+  dynamicTools?: DynamicToolSpec[] | null;
   environments?: TurnEnvironmentParams[] | null;
   ephemeral?: boolean | null;
   experimentalRawEvents?: boolean;
@@ -9221,6 +9389,12 @@ export interface VoiceTranscriptionTranscribeAudioResponse {
   provider: VoiceAsrProviderType;
   sample_rate: number;
   text: string;
+}
+
+export interface WarningNotification {
+  code?: null | string;
+  message: string;
+  threadId?: null | string;
 }
 
 export interface WebSearchItem {

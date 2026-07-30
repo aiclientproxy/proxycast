@@ -46,7 +46,6 @@ const {
   AppServerRequestError,
   DEFAULT_STANDALONE_BACKEND_MODE,
   agentSessionEventNotification,
-  mediaReadEventNotification,
   createAgentRuntimeClient,
   decodeModelRouteSelector,
   getAppServerRequestSerializationScope,
@@ -75,6 +74,8 @@ const {
   METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT,
   METHOD_MEDIA_READ,
   METHOD_CANCEL_REQUEST,
+  METHOD_CONFIG_WARNING,
+  METHOD_WARNING,
   METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT,
   METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE,
   METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT,
@@ -2632,6 +2633,8 @@ test("exports app-server method catalog from checked-in Rust manifest", () => {
   assert.equal(isAppServerRequestMethod(METHOD_AGENT_SESSION_EVENT), false);
   assert.equal(isAppServerNotificationMethod(METHOD_INITIALIZED), true);
   assert.equal(isAppServerNotificationMethod(METHOD_AGENT_SESSION_EVENT), true);
+  assert.equal(isAppServerNotificationMethod(METHOD_CONFIG_WARNING), true);
+  assert.equal(isAppServerNotificationMethod(METHOD_WARNING), true);
   assert.equal(isAppServerNotificationMethod(METHOD_THREAD_START), false);
   assert.equal(
     isAppServerServerRequestMethod(METHOD_MCP_SERVER_ELICITATION_REQUEST),
@@ -3140,147 +3143,6 @@ test("connection detaches streaming request after first notification and drops i
   assert.equal(start.completed, false);
   assert.equal(start.notifications.length, 1);
   assert.equal(sent[0].method, METHOD_TURN_START);
-  assert.equal(sent[1].method, METHOD_THREAD_LIST);
-  assert.equal(list.id, 2);
-  assert.equal(list.result.sessions[0].sessionId, "sess_external");
-});
-
-test("connection can consume streamed media read chunk notifications", async () => {
-  const sent = [];
-  const inbound = [
-    {
-      method: METHOD_AGENT_SESSION_EVENT,
-      params: {
-        event: {
-          eventId: "evt-media-chunk",
-          sequence: 1,
-          sessionId: "sess_external",
-          threadId: "thread_external",
-          type: "media.read.chunk",
-          timestamp: "2026-06-04T00:00:00Z",
-          payload: {
-            streamId: "media-read:thread_external:0",
-            chunkIndex: 1,
-            done: false,
-            chunk: {
-              threadId: "thread_external",
-              uri: "sidecar://media/demo",
-              bytes: 4,
-              totalBytes: 4,
-              offset: 0,
-              length: 4,
-              contentRange: "bytes 0-3/4",
-              hasMore: false,
-              contentBase64: "iVBORw==",
-            },
-          },
-        },
-      },
-    },
-    {
-      method: METHOD_AGENT_SESSION_EVENT,
-      params: {
-        event: {
-          eventId: "evt-media-completed",
-          sequence: 2,
-          sessionId: "sess_external",
-          threadId: "thread_external",
-          type: "media.read.completed",
-          timestamp: "2026-06-04T00:00:01Z",
-          payload: {
-            streamId: "media-read:thread_external:0",
-            chunkCount: 1,
-            done: true,
-            media: {
-              threadId: "thread_external",
-              uri: "sidecar://media/demo",
-              bytes: 4,
-              totalBytes: 4,
-              offset: 0,
-              length: 4,
-              contentRange: "bytes 0-3/4",
-              hasMore: false,
-              sha256: "sha256:demo",
-            },
-          },
-        },
-      },
-    },
-    {
-      id: 1,
-      result: {
-        threadId: "thread_external",
-        uri: "sidecar://media/demo",
-        bytes: 4,
-        totalBytes: 4,
-        offset: 0,
-        length: 4,
-        contentRange: "bytes 0-3/4",
-        hasMore: false,
-        sha256: "sha256:demo",
-        contentBase64: "iVBORw==",
-      },
-    },
-    {
-      id: 2,
-      result: {
-        sessions: [
-          {
-            sessionId: "sess_external",
-            threadId: "thread_external",
-            appId: "content-studio",
-            status: "running",
-            createdAt: "2026-06-04T00:00:00Z",
-            updatedAt: "2026-06-04T00:00:01Z",
-          },
-        ],
-      },
-    },
-  ];
-  const connection = new AppServerConnection({
-    send(message) {
-      sent.push(message);
-    },
-    async nextMessage() {
-      const message = inbound.shift();
-      if (!message) {
-        throw new Error("empty transport");
-      }
-      return message;
-    },
-  });
-
-  const request = connection.client.readMedia({
-    threadId: "thread_external",
-    uri: "sidecar://media/demo",
-    stream: true,
-  });
-  const first = await connection.requestUntilFirstNotificationOrResponse(
-    request,
-    METHOD_MEDIA_READ,
-    { timeoutMs: 100 },
-  );
-  const mirroredChunk = await connection.nextNotification(100);
-  const completed = await connection.nextNotification(100);
-  const list = await connection.listSessions({}, { timeoutMs: 100 });
-
-  assert.equal(first.completed, false);
-  assert.equal(sent[0].method, METHOD_MEDIA_READ);
-  assert.equal(sent[0].params.stream, true);
-  assert.equal(
-    mediaReadEventNotification(first.notifications[0])?.params.event.payload
-      .chunk.contentBase64,
-    "iVBORw==",
-  );
-  assert.equal(
-    mediaReadEventNotification(mirroredChunk)?.params.event.payload.chunk
-      .contentBase64,
-    "iVBORw==",
-  );
-  assert.equal(
-    mediaReadEventNotification(completed)?.params.event.payload.media.sha256,
-    "sha256:demo",
-  );
   assert.equal(sent[1].method, METHOD_THREAD_LIST);
   assert.equal(list.id, 2);
   assert.equal(list.result.sessions[0].sessionId, "sess_external");
@@ -4732,15 +4594,8 @@ test("routes direct lifecycle notifications without wrapper projection", async (
       },
     },
   };
-  const routed = [];
   const lifecycleRouted = [];
   const router = new AppServerAgentEventRouter();
-  const unsubscribe = router.subscribe((agentEvent, source) => {
-    routed.push({
-      event: agentEvent,
-      method: source.method,
-    });
-  });
   const unsubscribeLifecycle = router.subscribeLifecycle(
     (lifecycleEvent, source) => {
       lifecycleRouted.push({
@@ -4756,7 +4611,6 @@ test("routes direct lifecycle notifications without wrapper projection", async (
     "msg_1",
   );
   assert.equal(await router.dispatch(notification), true);
-  unsubscribe();
   unsubscribeLifecycle();
   assert.equal(await router.dispatch(notification), true);
   assert.equal(
@@ -4766,7 +4620,6 @@ test("routes direct lifecycle notifications without wrapper projection", async (
     }),
     false,
   );
-  assert.deepEqual(routed, []);
   assert.deepEqual(lifecycleRouted, [
     {
       event: notification,
@@ -5824,6 +5677,14 @@ test("connects sidecar with initialize and initialized handshake", async () => {
                 }
               }
             }));
+            console.log(JSON.stringify({
+              method: 'configWarning',
+              params: {
+                summary: 'test initialize config warning',
+                path: '/tmp/lime/config.yaml',
+                details: 'invalid yaml'
+              }
+            }));
             return;
           }
           if (message.method === 'initialized') {
@@ -5863,6 +5724,15 @@ test("connects sidecar with initialize and initialized handshake", async () => {
         () => connected.sidecar.stderrLines.includes("initialized-received"),
         SIDECAR_TEST_TIMEOUT_MS,
       );
+      const initializeWarning = await connected.connection.nextNotification(
+        SIDECAR_TEST_TIMEOUT_MS,
+      );
+      assert.equal(initializeWarning.method, METHOD_CONFIG_WARNING);
+      assert.deepEqual(initializeWarning.params, {
+        summary: "test initialize config warning",
+        path: "/tmp/lime/config.yaml",
+        details: "invalid yaml",
+      });
 
       connected.sidecar.send(
         connected.client.startSession({

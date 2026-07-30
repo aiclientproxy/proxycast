@@ -72,7 +72,8 @@ describe("AgentChatWorkspace team runtime boundary", () => {
     );
     expect(navigationSource).not.toContain("childSubagentSessions");
     expect(navigationSource).not.toContain("isKnownSession");
-    expect(navigationSource).toContain("await switchTopic(sessionId)");
+    expect(navigationSource).toContain("await switchTopic(sessionId");
+    expect(navigationSource).toContain("allowDetachedSession: true");
 
     const productionSource = [
       workspaceSource,

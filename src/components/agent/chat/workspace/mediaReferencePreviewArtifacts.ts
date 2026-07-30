@@ -1,7 +1,6 @@
 import type {
   AppServerMediaReadParams,
   AppServerMediaReadResponse,
-  AppServerJsonRpcNotification,
 } from "@/lib/api/appServer";
 import { isAbsoluteLocalFilePath } from "@/lib/api/fileSystem";
 import { createPreviewArtifact } from "@/lib/artifact/previewArtifact";
@@ -15,24 +14,16 @@ import {
   type MediaReferencePreviewBudgetFacts,
   type MediaReferencePreviewPolicy,
 } from "./mediaReferencePreviewPolicy";
-import {
-  emitStreamingMediaReadProgress,
-  type MediaReferencePreviewProgress,
-} from "./mediaReferencePreviewStreamingProgress";
-
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
-export { emitStreamingMediaReadProgress };
-export type { MediaReferencePreviewProgress };
-
-type MediaReferencePreviewReadEnvelope = {
-  media: AppServerMediaReadResponse;
-  notifications?: readonly AppServerJsonRpcNotification[];
-};
-
-type MediaReferencePreviewReadResult =
-  | AppServerMediaReadResponse
-  | MediaReferencePreviewReadEnvelope;
+export interface MediaReferencePreviewProgress {
+  contentRange?: string;
+  hasMore: boolean;
+  loadedBytes: number;
+  mimeType?: string;
+  sha256?: string;
+  totalBytes: number;
+}
 
 type MediaReferencePreviewSource =
   | {
@@ -223,27 +214,6 @@ function formatMediaReadContentRange(totalBytes: number): string {
     return "bytes */0";
   }
   return `bytes 0-${totalBytes - 1}/${totalBytes}`;
-}
-
-function normalizeMediaPreviewReadResult(
-  result: MediaReferencePreviewReadResult,
-): {
-  media: AppServerMediaReadResponse;
-  notifications: readonly AppServerJsonRpcNotification[];
-} {
-  if (isMediaReferencePreviewReadEnvelope(result)) {
-    return {
-      media: result.media,
-      notifications: result.notifications ?? [],
-    };
-  }
-  return { media: result, notifications: [] };
-}
-
-function isMediaReferencePreviewReadEnvelope(
-  result: MediaReferencePreviewReadResult,
-): result is MediaReferencePreviewReadEnvelope {
-  return "media" in result;
 }
 
 function buildMediaReferenceFallbackMarkdown(params: {
@@ -575,7 +545,7 @@ export async function createMediaReferenceChunkedObjectUrlPreviewArtifact(params
   t: Translate;
   readMedia: (
     request: AppServerMediaReadParams,
-  ) => Promise<MediaReferencePreviewReadResult>;
+  ) => Promise<AppServerMediaReadResponse>;
   createObjectUrl?: (blob: Blob) => string;
   maxBytes?: number;
   chunkBytes?: number;
@@ -608,15 +578,7 @@ export async function createMediaReferenceChunkedObjectUrlPreviewArtifact(params
   if (!canContinue()) {
     return null;
   }
-  const firstResult = normalizeMediaPreviewReadResult(
-    await params.readMedia({ ...firstRequest, stream: true }),
-  );
-  let didEmitStreamingProgress = emitStreamingMediaReadProgress({
-    notifications: firstResult.notifications,
-    onProgress: params.onProgress,
-    threadId: firstRequest.threadId,
-  }).emitted;
-  const first = firstResult.media;
+  const first = await params.readMedia(firstRequest);
   if (!canContinue()) {
     return null;
   }
@@ -675,7 +637,7 @@ export async function createMediaReferenceChunkedObjectUrlPreviewArtifact(params
     if (expectedOffset > totalBytes) {
       return null;
     }
-    if (expectedOffset < totalBytes && !didEmitStreamingProgress) {
+    if (expectedOffset < totalBytes) {
       params.onProgress?.({
         contentRange: latest.contentRange,
         hasMore: latest.hasMore === true,
@@ -709,15 +671,7 @@ export async function createMediaReferenceChunkedObjectUrlPreviewArtifact(params
     if (!canContinue()) {
       return null;
     }
-    const latestResult = normalizeMediaPreviewReadResult(
-      await params.readMedia({ ...nextRequest, stream: true }),
-    );
-    didEmitStreamingProgress = emitStreamingMediaReadProgress({
-      notifications: latestResult.notifications,
-      onProgress: params.onProgress,
-      threadId: nextRequest.threadId,
-    }).emitted;
-    latest = latestResult.media;
+    latest = await params.readMedia(nextRequest);
     if (!canContinue()) {
       return null;
     }

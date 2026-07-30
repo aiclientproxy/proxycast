@@ -1,7 +1,11 @@
+import type { ModelCapabilityProvenance } from "@/lib/types/modelRegistry";
+
 export interface ProviderModelCompatibilityInput {
   providerType: string;
   configuredProviderType?: string | null;
   model: string;
+  capabilityProvenance?: ModelCapabilityProvenance;
+  enforceExecutableCapability?: boolean;
 }
 
 export interface ProviderModelCompatibilityResult {
@@ -11,7 +15,9 @@ export interface ProviderModelCompatibilityResult {
 }
 
 export interface ProviderModelCompatibilityIssue {
-  code: "local_cli_account_model_unsupported";
+  code:
+    | "local_cli_account_model_unsupported"
+    | "runtime_capability_not_authoritative";
   message: string;
   suggestedModel?: string;
 }
@@ -24,6 +30,8 @@ export function getProviderModelCompatibilityIssue({
   providerType,
   configuredProviderType,
   model,
+  capabilityProvenance,
+  enforceExecutableCapability = false,
 }: ProviderModelCompatibilityInput): ProviderModelCompatibilityIssue | null {
   const normalizedProviderType = normalize(providerType);
   const normalizedConfiguredType = normalize(configuredProviderType);
@@ -37,6 +45,17 @@ export function getProviderModelCompatibilityIssue({
       code: "local_cli_account_model_unsupported",
       message: "当前本地 CLI 登录态不支持该模型",
       suggestedModel: "gpt-5.2-codex",
+    };
+  }
+
+  if (
+    enforceExecutableCapability &&
+    capabilityProvenance !== "canonical" &&
+    capabilityProvenance !== "provider_explicit"
+  ) {
+    return {
+      code: "runtime_capability_not_authoritative",
+      message: "模型缺少可执行的权威能力声明",
     };
   }
 

@@ -588,7 +588,6 @@ fn is_agent_session_side_channel(event_type: &str) -> bool {
         || event_type.starts_with("provider.")
         || event_type.starts_with("image_task.")
         || event_type.starts_with("image_task_")
-        || event_type.starts_with("media.")
         || event_type.starts_with("runtime.")
 }
 
@@ -4687,7 +4686,6 @@ mod tests {
             "approval.required",
             "provider.first_event.received",
             "image_task.created",
-            "media.read.chunk",
             "runtime.status",
         ] {
             let notification = JsonRpcNotification::new(

@@ -35,6 +35,230 @@
       "title": "AdditionalContextKind",
       "type": "string"
     },
+    "AdditionalFileSystemPermissions": {
+      "$defs": {
+        "FileSystemAccessMode": {
+          "enum": [
+            "deny",
+            "read",
+            "write"
+          ],
+          "type": "string"
+        },
+        "FileSystemPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "path",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "glob_pattern",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "special",
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/FileSystemSpecialPath"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "FileSystemSandboxEntry": {
+          "properties": {
+            "access": {
+              "$ref": "#/$defs/FileSystemAccessMode"
+            },
+            "path": {
+              "$ref": "#/$defs/FileSystemPath"
+            }
+          },
+          "required": [
+            "access",
+            "path"
+          ],
+          "type": "object"
+        },
+        "FileSystemSpecialPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "root",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "minimal",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "project_roots",
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "tmpdir",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "slash_tmp",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "unknown",
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "path"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/FileSystemSandboxEntry"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "globScanMaxDepth": {
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "write": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "title": "AdditionalFileSystemPermissions",
+      "type": "object"
+    },
+    "AdditionalNetworkPermissions": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "title": "AdditionalNetworkPermissions",
+      "type": "object"
+    },
     "AgentAttachment": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -8530,7 +8754,6 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
         "agentSession/event",
-        "configWarning",
         "initialized",
         "workspaceRightSurface/pendingChanged"
       ],
@@ -11118,6 +11341,95 @@
           ],
           "type": "object"
         },
+        "DynamicToolFunctionSpec": {
+          "properties": {
+            "deferLoading": {
+              "type": "boolean"
+            },
+            "description": {
+              "type": "string"
+            },
+            "inputSchema": true,
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "description",
+            "inputSchema",
+            "name"
+          ],
+          "type": "object"
+        },
+        "DynamicToolNamespaceSpec": {
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "tools": {
+              "items": {
+                "$ref": "#/$defs/DynamicToolNamespaceTool"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "description",
+            "name",
+            "tools"
+          ],
+          "type": "object"
+        },
+        "DynamicToolNamespaceTool": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/DynamicToolFunctionSpec",
+              "properties": {
+                "type": {
+                  "const": "function",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "DynamicToolSpec": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/DynamicToolFunctionSpec",
+              "properties": {
+                "type": {
+                  "const": "function",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "$ref": "#/$defs/DynamicToolNamespaceSpec",
+              "properties": {
+                "type": {
+                  "const": "namespace",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "ImageDetail": {
           "enum": [
             "auto",
@@ -11160,10 +11472,6 @@
               ]
             },
             "sidecarRef": true,
-            "stream": {
-              "default": false,
-              "type": "boolean"
-            },
             "threadId": {
               "type": "string"
             },
@@ -12219,7 +12527,9 @@
               ]
             },
             "dynamicTools": {
-              "items": true,
+              "items": {
+                "$ref": "#/$defs/DynamicToolSpec"
+              },
               "type": [
                 "array",
                 "null"
@@ -13816,11 +14126,13 @@
         "TextPosition": {
           "properties": {
             "column": {
+              "description": "1-based column number (in Unicode scalar values).",
               "format": "uint",
               "minimum": 0,
               "type": "integer"
             },
             "line": {
+              "description": "1-based line number.",
               "format": "uint",
               "minimum": 0,
               "type": "integer"
@@ -13851,12 +14163,14 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "details": {
+          "description": "Optional extra guidance or error details.",
           "type": [
             "null",
             "string"
           ]
         },
         "path": {
+          "description": "Optional path to the config file that triggered the warning.",
           "type": [
             "null",
             "string"
@@ -13870,9 +14184,11 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Optional range for the error location inside the config file."
         },
         "summary": {
+          "description": "Concise summary of the warning.",
           "type": "string"
         }
       },
@@ -17870,6 +18186,34 @@
       "title": "ConversationImportThreadStatus",
       "type": "string"
     },
+    "CurrentTimeReadParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "title": "CurrentTimeReadParams",
+      "type": "object"
+    },
+    "CurrentTimeReadResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "currentTimeAt": {
+          "description": "Current time as whole Unix seconds.",
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "currentTimeAt"
+      ],
+      "title": "CurrentTimeReadResponse",
+      "type": "object"
+    },
     "DiagnosticsCapabilityRoutingMetricsSnapshot": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -19041,6 +19385,113 @@
       ],
       "title": "DynamicToolCallOutputContentItem"
     },
+    "DynamicToolCallParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "arguments": true,
+        "callId": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "arguments",
+        "callId",
+        "threadId",
+        "tool",
+        "turnId"
+      ],
+      "title": "DynamicToolCallParams",
+      "type": "object"
+    },
+    "DynamicToolCallResponse": {
+      "$defs": {
+        "DynamicToolCallOutputContentItem": {
+          "oneOf": [
+            {
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "text",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "contentItems": {
+          "items": {
+            "$ref": "#/$defs/DynamicToolCallOutputContentItem"
+          },
+          "type": "array"
+        },
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "contentItems",
+        "success"
+      ],
+      "title": "DynamicToolCallResponse",
+      "type": "object"
+    },
     "DynamicToolCallStatus": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
@@ -19050,6 +19501,225 @@
       ],
       "title": "DynamicToolCallStatus",
       "type": "string"
+    },
+    "DynamicToolFunctionSpec": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "deferLoading": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "inputSchema": true,
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "inputSchema",
+        "name"
+      ],
+      "title": "DynamicToolFunctionSpec",
+      "type": "object"
+    },
+    "DynamicToolNamespaceSpec": {
+      "$defs": {
+        "DynamicToolFunctionSpec": {
+          "properties": {
+            "deferLoading": {
+              "type": "boolean"
+            },
+            "description": {
+              "type": "string"
+            },
+            "inputSchema": true,
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "description",
+            "inputSchema",
+            "name"
+          ],
+          "type": "object"
+        },
+        "DynamicToolNamespaceTool": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/DynamicToolFunctionSpec",
+              "properties": {
+                "type": {
+                  "const": "function",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/DynamicToolNamespaceTool"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "description",
+        "name",
+        "tools"
+      ],
+      "title": "DynamicToolNamespaceSpec",
+      "type": "object"
+    },
+    "DynamicToolNamespaceTool": {
+      "$defs": {
+        "DynamicToolFunctionSpec": {
+          "properties": {
+            "deferLoading": {
+              "type": "boolean"
+            },
+            "description": {
+              "type": "string"
+            },
+            "inputSchema": true,
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "description",
+            "inputSchema",
+            "name"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DynamicToolFunctionSpec",
+          "properties": {
+            "type": {
+              "const": "function",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "DynamicToolNamespaceTool"
+    },
+    "DynamicToolSpec": {
+      "$defs": {
+        "DynamicToolFunctionSpec": {
+          "properties": {
+            "deferLoading": {
+              "type": "boolean"
+            },
+            "description": {
+              "type": "string"
+            },
+            "inputSchema": true,
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "description",
+            "inputSchema",
+            "name"
+          ],
+          "type": "object"
+        },
+        "DynamicToolNamespaceSpec": {
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "tools": {
+              "items": {
+                "$ref": "#/$defs/DynamicToolNamespaceTool"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "description",
+            "name",
+            "tools"
+          ],
+          "type": "object"
+        },
+        "DynamicToolNamespaceTool": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/DynamicToolFunctionSpec",
+              "properties": {
+                "type": {
+                  "const": "function",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DynamicToolFunctionSpec",
+          "properties": {
+            "type": {
+              "const": "function",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/DynamicToolNamespaceSpec",
+          "properties": {
+            "type": {
+              "const": "namespace",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "DynamicToolSpec"
     },
     "EndpointInfo": {
       "$defs": {
@@ -20424,6 +21094,16 @@
       "title": "FileChangeRequestApprovalResponse",
       "type": "object"
     },
+    "FileSystemAccessMode": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "deny",
+        "read",
+        "write"
+      ],
+      "title": "FileSystemAccessMode",
+      "type": "string"
+    },
     "FileSystemCreateDirectoryParams": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -20704,6 +21384,154 @@
       "title": "FileSystemMutationResponse",
       "type": "object"
     },
+    "FileSystemPath": {
+      "$defs": {
+        "FileSystemSpecialPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "root",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "minimal",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "project_roots",
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "tmpdir",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "slash_tmp",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "unknown",
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "path"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "const": "path",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "pattern": {
+              "type": "string"
+            },
+            "type": {
+              "const": "glob_pattern",
+              "type": "string"
+            }
+          },
+          "required": [
+            "pattern",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "special",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/FileSystemSpecialPath"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "FileSystemPath"
+    },
     "FileSystemReadFilePreviewParams": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -20741,6 +21569,271 @@
       ],
       "title": "FileSystemRenameFileParams",
       "type": "object"
+    },
+    "FileSystemSandboxEntry": {
+      "$defs": {
+        "FileSystemAccessMode": {
+          "enum": [
+            "deny",
+            "read",
+            "write"
+          ],
+          "type": "string"
+        },
+        "FileSystemPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "path",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "glob_pattern",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "special",
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/FileSystemSpecialPath"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "FileSystemSpecialPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "root",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "minimal",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "project_roots",
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "tmpdir",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "slash_tmp",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "unknown",
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "path"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "access": {
+          "$ref": "#/$defs/FileSystemAccessMode"
+        },
+        "path": {
+          "$ref": "#/$defs/FileSystemPath"
+        }
+      },
+      "required": [
+        "access",
+        "path"
+      ],
+      "title": "FileSystemSandboxEntry",
+      "type": "object"
+    },
+    "FileSystemSpecialPath": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "root",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "minimal",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "project_roots",
+              "type": "string"
+            },
+            "subpath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "tmpdir",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "slash_tmp",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "unknown",
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "subpath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "FileSystemSpecialPath"
     },
     "FileUpdateChange": {
       "$defs": {
@@ -22490,6 +23583,253 @@
         }
       },
       "title": "GitInfo",
+      "type": "object"
+    },
+    "GrantedPermissionProfile": {
+      "$defs": {
+        "AdditionalFileSystemPermissions": {
+          "properties": {
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/FileSystemSandboxEntry"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "globScanMaxDepth": {
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "read": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "write": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "AdditionalNetworkPermissions": {
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "FileSystemAccessMode": {
+          "enum": [
+            "deny",
+            "read",
+            "write"
+          ],
+          "type": "string"
+        },
+        "FileSystemPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "path",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "glob_pattern",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "special",
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/FileSystemSpecialPath"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "FileSystemSandboxEntry": {
+          "properties": {
+            "access": {
+              "$ref": "#/$defs/FileSystemAccessMode"
+            },
+            "path": {
+              "$ref": "#/$defs/FileSystemPath"
+            }
+          },
+          "required": [
+            "access",
+            "path"
+          ],
+          "type": "object"
+        },
+        "FileSystemSpecialPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "root",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "minimal",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "project_roots",
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "tmpdir",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "slash_tmp",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "unknown",
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "path"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "fileSystem": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdditionalFileSystemPermissions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "network": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdditionalNetworkPermissions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "title": "GrantedPermissionProfile",
       "type": "object"
     },
     "HookPromptFragment": {
@@ -27370,10 +28710,6 @@
           ]
         },
         "sidecarRef": true,
-        "stream": {
-          "default": false,
-          "type": "boolean"
-        },
         "threadId": {
           "type": "string"
         },
@@ -30618,6 +31954,9 @@
             "vision": false
           }
         },
+        "capabilityProvenance": {
+          "type": "string"
+        },
         "contextWindow": {
           "format": "int64",
           "type": [
@@ -30826,6 +32165,7 @@
         }
       },
       "required": [
+        "capabilityProvenance",
         "createdAt",
         "deploymentSource",
         "displayName",
@@ -31927,6 +33267,9 @@
                 "vision": false
               }
             },
+            "capabilityProvenance": {
+              "type": "string"
+            },
             "contextWindow": {
               "format": "int64",
               "type": [
@@ -32135,6 +33478,7 @@
             }
           },
           "required": [
+            "capabilityProvenance",
             "createdAt",
             "deploymentSource",
             "displayName",
@@ -34666,6 +36010,583 @@
         }
       ],
       "title": "PatchChangeKind"
+    },
+    "PermissionGrantScope": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "session",
+        "turn"
+      ],
+      "title": "PermissionGrantScope",
+      "type": "string"
+    },
+    "PermissionsRequestApprovalParams": {
+      "$defs": {
+        "AdditionalFileSystemPermissions": {
+          "properties": {
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/FileSystemSandboxEntry"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "globScanMaxDepth": {
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "read": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "write": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "AdditionalNetworkPermissions": {
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "FileSystemAccessMode": {
+          "enum": [
+            "deny",
+            "read",
+            "write"
+          ],
+          "type": "string"
+        },
+        "FileSystemPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "path",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "glob_pattern",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "special",
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/FileSystemSpecialPath"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "FileSystemSandboxEntry": {
+          "properties": {
+            "access": {
+              "$ref": "#/$defs/FileSystemAccessMode"
+            },
+            "path": {
+              "$ref": "#/$defs/FileSystemPath"
+            }
+          },
+          "required": [
+            "access",
+            "path"
+          ],
+          "type": "object"
+        },
+        "FileSystemSpecialPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "root",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "minimal",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "project_roots",
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "tmpdir",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "slash_tmp",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "unknown",
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "path"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "RequestPermissionProfile": {
+          "additionalProperties": false,
+          "properties": {
+            "fileSystem": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AdditionalFileSystemPermissions"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AdditionalNetworkPermissions"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "cwd": {
+          "type": "string"
+        },
+        "environmentId": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "permissions": {
+          "$ref": "#/$defs/RequestPermissionProfile"
+        },
+        "reason": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "startedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cwd",
+        "itemId",
+        "permissions",
+        "startedAtMs",
+        "threadId",
+        "turnId"
+      ],
+      "title": "PermissionsRequestApprovalParams",
+      "type": "object"
+    },
+    "PermissionsRequestApprovalResponse": {
+      "$defs": {
+        "AdditionalFileSystemPermissions": {
+          "properties": {
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/FileSystemSandboxEntry"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "globScanMaxDepth": {
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "read": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "write": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "AdditionalNetworkPermissions": {
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "FileSystemAccessMode": {
+          "enum": [
+            "deny",
+            "read",
+            "write"
+          ],
+          "type": "string"
+        },
+        "FileSystemPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "path",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "glob_pattern",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "special",
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/FileSystemSpecialPath"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "FileSystemSandboxEntry": {
+          "properties": {
+            "access": {
+              "$ref": "#/$defs/FileSystemAccessMode"
+            },
+            "path": {
+              "$ref": "#/$defs/FileSystemPath"
+            }
+          },
+          "required": [
+            "access",
+            "path"
+          ],
+          "type": "object"
+        },
+        "FileSystemSpecialPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "root",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "minimal",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "project_roots",
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "tmpdir",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "slash_tmp",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "unknown",
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "path"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "GrantedPermissionProfile": {
+          "properties": {
+            "fileSystem": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AdditionalFileSystemPermissions"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AdditionalNetworkPermissions"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "PermissionGrantScope": {
+          "enum": [
+            "session",
+            "turn"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "permissions": {
+          "$ref": "#/$defs/GrantedPermissionProfile"
+        },
+        "scope": {
+          "$ref": "#/$defs/PermissionGrantScope",
+          "default": "turn"
+        },
+        "strictAutoReview": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "permissions"
+      ],
+      "title": "PermissionsRequestApprovalResponse",
+      "type": "object"
     },
     "PlanDeltaNotification": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -39227,6 +41148,254 @@
       ],
       "title": "RequestId"
     },
+    "RequestPermissionProfile": {
+      "$defs": {
+        "AdditionalFileSystemPermissions": {
+          "properties": {
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/FileSystemSandboxEntry"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "globScanMaxDepth": {
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "read": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "write": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "AdditionalNetworkPermissions": {
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "FileSystemAccessMode": {
+          "enum": [
+            "deny",
+            "read",
+            "write"
+          ],
+          "type": "string"
+        },
+        "FileSystemPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "path",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "glob_pattern",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "special",
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/FileSystemSpecialPath"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "FileSystemSandboxEntry": {
+          "properties": {
+            "access": {
+              "$ref": "#/$defs/FileSystemAccessMode"
+            },
+            "path": {
+              "$ref": "#/$defs/FileSystemPath"
+            }
+          },
+          "required": [
+            "access",
+            "path"
+          ],
+          "type": "object"
+        },
+        "FileSystemSpecialPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "root",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "minimal",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "project_roots",
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "tmpdir",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "slash_tmp",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "unknown",
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "path"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "fileSystem": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdditionalFileSystemPermissions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "network": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdditionalNetworkPermissions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "title": "RequestPermissionProfile",
+      "type": "object"
+    },
     "ResolvedModelRoute": {
       "$defs": {
         "AuthKind": {
@@ -41313,6 +43482,43 @@
           ],
           "type": "string"
         },
+        "ConfigWarningNotification": {
+          "properties": {
+            "details": {
+              "description": "Optional extra guidance or error details.",
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "path": {
+              "description": "Optional path to the config file that triggered the warning.",
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "range": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TextRange"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional range for the error location inside the config file."
+            },
+            "summary": {
+              "description": "Concise summary of the warning.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "summary"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -42029,6 +44235,42 @@
           },
           "required": [
             "byteRange"
+          ],
+          "type": "object"
+        },
+        "TextPosition": {
+          "properties": {
+            "column": {
+              "description": "1-based column number (in Unicode scalar values).",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "line": {
+              "description": "1-based line number.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "column",
+            "line"
+          ],
+          "type": "object"
+        },
+        "TextRange": {
+          "properties": {
+            "end": {
+              "$ref": "#/$defs/TextPosition"
+            },
+            "start": {
+              "$ref": "#/$defs/TextPosition"
+            }
+          },
+          "required": [
+            "end",
+            "start"
           ],
           "type": "object"
         },
@@ -43392,6 +45634,33 @@
             }
           ]
         },
+        "WarningNotification": {
+          "description": "A user-visible runtime warning projected from the current event stream.",
+          "properties": {
+            "code": {
+              "description": "Lime-owned warning code used for localized presentation.",
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "message": {
+              "description": "Concise warning message for the user.",
+              "type": "string"
+            },
+            "threadId": {
+              "description": "Optional thread target when the warning applies to a specific thread.",
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "message"
+          ],
+          "type": "object"
+        },
         "WebSearchItem": {
           "properties": {
             "action": true,
@@ -43414,6 +45683,38 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "description": "Notifications emitted by the current v2 skeleton. Unknown methods fail\nclosed until their typed payloads are added to the v2 catalog.",
       "oneOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "configWarning",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ConfigWarningNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "warning",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WarningNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "method": {
@@ -43867,6 +46168,57 @@
     },
     "ServerRequest": {
       "$defs": {
+        "AdditionalFileSystemPermissions": {
+          "properties": {
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/FileSystemSandboxEntry"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "globScanMaxDepth": {
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "read": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "write": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "AdditionalNetworkPermissions": {
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
         "CommandExecutionApprovalDecision": {
           "enum": [
             "accept",
@@ -43933,6 +46285,48 @@
           ],
           "type": "object"
         },
+        "CurrentTimeReadParams": {
+          "properties": {
+            "threadId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "threadId"
+          ],
+          "type": "object"
+        },
+        "DynamicToolCallParams": {
+          "properties": {
+            "arguments": true,
+            "callId": {
+              "type": "string"
+            },
+            "namespace": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "tool": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "arguments",
+            "callId",
+            "threadId",
+            "tool",
+            "turnId"
+          ],
+          "type": "object"
+        },
         "FileChangeRequestApprovalParams": {
           "properties": {
             "grantRoot": {
@@ -43970,6 +46364,173 @@
             "turnId"
           ],
           "type": "object"
+        },
+        "FileSystemAccessMode": {
+          "enum": [
+            "deny",
+            "read",
+            "write"
+          ],
+          "type": "string"
+        },
+        "FileSystemPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "path",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "glob_pattern",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "special",
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/FileSystemSpecialPath"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "FileSystemSandboxEntry": {
+          "properties": {
+            "access": {
+              "$ref": "#/$defs/FileSystemAccessMode"
+            },
+            "path": {
+              "$ref": "#/$defs/FileSystemPath"
+            }
+          },
+          "required": [
+            "access",
+            "path"
+          ],
+          "type": "object"
+        },
+        "FileSystemSpecialPath": {
+          "oneOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "root",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "minimal",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "project_roots",
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "tmpdir",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "slash_tmp",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "unknown",
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "subpath": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "path"
+              ],
+              "type": "object"
+            }
+          ]
         },
         "McpServerElicitationRequestParams": {
           "oneOf": [
@@ -44022,6 +46583,51 @@
           ],
           "type": "object"
         },
+        "PermissionsRequestApprovalParams": {
+          "properties": {
+            "cwd": {
+              "type": "string"
+            },
+            "environmentId": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "itemId": {
+              "type": "string"
+            },
+            "permissions": {
+              "$ref": "#/$defs/RequestPermissionProfile"
+            },
+            "reason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "startedAtMs": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "cwd",
+            "itemId",
+            "permissions",
+            "startedAtMs",
+            "threadId",
+            "turnId"
+          ],
+          "type": "object"
+        },
         "RequestId": {
           "anyOf": [
             {
@@ -44032,6 +46638,32 @@
               "type": "string"
             }
           ]
+        },
+        "RequestPermissionProfile": {
+          "additionalProperties": false,
+          "properties": {
+            "fileSystem": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AdditionalFileSystemPermissions"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "network": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AdditionalNetworkPermissions"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "type": "object"
         },
         "ToolRequestUserInputOption": {
           "properties": {
@@ -44129,6 +46761,26 @@
               "$ref": "#/$defs/RequestId"
             },
             "method": {
+              "const": "currentTime/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CurrentTimeReadParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
               "const": "mcpServer/elicitation/request",
               "type": "string"
             },
@@ -44174,6 +46826,46 @@
             },
             "params": {
               "$ref": "#/$defs/FileChangeRequestApprovalParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "item/permissions/requestApproval",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PermissionsRequestApprovalParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "item/tool/call",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/DynamicToolCallParams"
             }
           },
           "required": [
@@ -46902,11 +49594,13 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "column": {
+          "description": "1-based column number (in Unicode scalar values).",
           "format": "uint",
           "minimum": 0,
           "type": "integer"
         },
         "line": {
+          "description": "1-based line number.",
           "format": "uint",
           "minimum": 0,
           "type": "integer"
@@ -46924,11 +49618,13 @@
         "TextPosition": {
           "properties": {
             "column": {
+              "description": "1-based column number (in Unicode scalar values).",
               "format": "uint",
               "minimum": 0,
               "type": "integer"
             },
             "line": {
+              "description": "1-based line number.",
               "format": "uint",
               "minimum": 0,
               "type": "integer"
@@ -65898,6 +68594,95 @@
     },
     "ThreadStartParams": {
       "$defs": {
+        "DynamicToolFunctionSpec": {
+          "properties": {
+            "deferLoading": {
+              "type": "boolean"
+            },
+            "description": {
+              "type": "string"
+            },
+            "inputSchema": true,
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "description",
+            "inputSchema",
+            "name"
+          ],
+          "type": "object"
+        },
+        "DynamicToolNamespaceSpec": {
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "tools": {
+              "items": {
+                "$ref": "#/$defs/DynamicToolNamespaceTool"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "description",
+            "name",
+            "tools"
+          ],
+          "type": "object"
+        },
+        "DynamicToolNamespaceTool": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/DynamicToolFunctionSpec",
+              "properties": {
+                "type": {
+                  "const": "function",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "DynamicToolSpec": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/DynamicToolFunctionSpec",
+              "properties": {
+                "type": {
+                  "const": "function",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "$ref": "#/$defs/DynamicToolNamespaceSpec",
+              "properties": {
+                "type": {
+                  "const": "namespace",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "MultiAgentMode": {
           "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
           "oneOf": [
@@ -65995,7 +68780,9 @@
           ]
         },
         "dynamicTools": {
-          "items": true,
+          "items": {
+            "$ref": "#/$defs/DynamicToolSpec"
+          },
           "type": [
             "array",
             "null"
@@ -82836,6 +85623,35 @@
       "title": "VoiceTranscriptionTranscribeAudioResponse",
       "type": "object"
     },
+    "WarningNotification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "A user-visible runtime warning projected from the current event stream.",
+      "properties": {
+        "code": {
+          "description": "Lime-owned warning code used for localized presentation.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "message": {
+          "description": "Concise warning message for the user.",
+          "type": "string"
+        },
+        "threadId": {
+          "description": "Optional thread target when the warning applies to a specific thread.",
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "title": "WarningNotification",
+      "type": "object"
+    },
     "WebSearchItem": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -84595,6 +87411,7 @@
               "thread/unarchived",
               "turn/completed",
               "turn/started",
+              "warning",
               "workspaceRightSurface/pendingChanged"
             ]
           },
@@ -84912,8 +87729,11 @@
         "serverRequests": {
           "items": {
             "enum": [
+              "currentTime/read",
               "item/commandExecution/requestApproval",
               "item/fileChange/requestApproval",
+              "item/permissions/requestApproval",
+              "item/tool/call",
               "item/tool/requestUserInput",
               "mcpServer/elicitation/request"
             ]

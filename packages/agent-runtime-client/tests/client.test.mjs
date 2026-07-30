@@ -263,9 +263,7 @@ test("malformed direct lifecycle notifications fail closed with explicit mapper 
 test("root client dispatches direct lifecycle and delta only to lifecycle listeners", async () => {
   const runtime = createRuntimeClient();
   const lifecycle = [];
-  const raw = [];
   runtime.subscribeLifecycleEvents((event) => lifecycle.push(event));
-  runtime.subscribeEvents((event) => raw.push(event));
 
   for (const notification of directToolLifecycle()) {
     assert.equal(await runtime.dispatchEvent(notification), true);
@@ -287,7 +285,6 @@ test("root client dispatches direct lifecycle and delta only to lifecycle listen
       "item/agentMessage/delta",
     ],
   );
-  assert.deepEqual(raw, []);
 });
 
 test("session gateway dispatches direct lifecycle and rejects wrapper lifecycle", async () => {
@@ -295,9 +292,7 @@ test("session gateway dispatches direct lifecycle and rejects wrapper lifecycle"
     createMinimalSessionGateway(),
   );
   const lifecycle = [];
-  const raw = [];
   runtime.subscribeLifecycleEvents((event) => lifecycle.push(event));
-  runtime.subscribeEvents((event) => raw.push(event));
 
   assert.equal(
     await runtime.dispatchEvent(turnNotification("inProgress")),
@@ -326,7 +321,6 @@ test("session gateway dispatches direct lifecycle and rejects wrapper lifecycle"
       "item/mcpToolCall/progress",
     ],
   );
-  assert.deepEqual(raw, []);
 });
 
 test("disabling sequence verification does not restore raw lifecycle", async () => {
@@ -345,35 +339,6 @@ test("disabling sequence verification does not restore raw lifecycle", async () 
     ),
     true,
   );
-});
-
-test("raw channel accepts only explicit media.read notifications", async () => {
-  for (const runtime of [
-    createRuntimeClient(),
-    createAgentRuntimeClientFromSessionGateway(createMinimalSessionGateway()),
-  ]) {
-    const received = [];
-    runtime.subscribeEvents((event) => received.push(event.type));
-
-    assert.equal(
-      await runtime.dispatchEvent(mediaReadChunkNotification()),
-      true,
-    );
-    assert.equal(
-      await runtime.dispatchEvent(mediaReadCompletedNotification()),
-      true,
-    );
-    assert.equal(
-      await runtime.dispatchEvent(rawNotification("snapshot.updated")),
-      false,
-    );
-    assert.equal(
-      await runtime.dispatchEvent(rawNotification("media.read.chunk")),
-      false,
-    );
-
-    assert.deepEqual(received, ["media.read.chunk", "media.read.completed"]);
-  }
 });
 
 test("nextEvent consumes direct notifications from gateway sources", async () => {
@@ -910,26 +875,4 @@ function rawNotification(type, overrides = {}) {
       },
     },
   };
-}
-
-function mediaReadChunkNotification() {
-  return rawNotification("media.read.chunk", {
-    payload: {
-      streamId: "media-stream-1",
-      chunkIndex: 0,
-      done: false,
-      chunk: { contentBase64: "aGVsbG8=" },
-    },
-  });
-}
-
-function mediaReadCompletedNotification() {
-  return rawNotification("media.read.completed", {
-    payload: {
-      streamId: "media-stream-1",
-      chunkCount: 1,
-      done: true,
-      media: { mimeType: "image/png" },
-    },
-  });
 }

@@ -261,6 +261,29 @@ export function useWorkspaceInitialSessionNavigation({
 
     if (
       !hasExplicitNavigationRequest &&
+      normalizedCurrentSessionId &&
+      normalizedCurrentSessionId !== normalizedInitialSessionId &&
+      appliedInitialSessionIdRef.current?.startsWith(
+        `${normalizedInitialSessionId}:`,
+      )
+    ) {
+      logAgentDebug(
+        "AgentChatPage",
+        "initialSessionNavigation.preserveCurrent",
+        {
+          currentSessionId: normalizedCurrentSessionId,
+          initialSessionId: normalizedInitialSessionId,
+        },
+        {
+          dedupeKey: `initialSessionNavigation.preserveCurrent:${normalizedInitialSessionId}:${normalizedCurrentSessionId}`,
+          throttleMs: 1000,
+        },
+      );
+      return;
+    }
+
+    if (
+      !hasExplicitNavigationRequest &&
       appliedInitialSessionIdRef.current === appliedNavigationKey
     ) {
       return;

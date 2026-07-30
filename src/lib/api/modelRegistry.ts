@@ -203,7 +203,10 @@ function toSnakeModelInfo(model: ModelInfo): EnhancedModelMetadata {
         model.capabilities?.reasoningEffort,
       ),
     },
-    capability_provenance: "provider_explicit",
+    capability_provenance: capabilityProvenanceFromSnapshot(
+      model.capabilityProvenance,
+      model.id,
+    ),
     execution_policy: buildModelExecutionPolicy(
       model as ModelExecutionPolicyInput,
     ),

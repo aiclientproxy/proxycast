@@ -368,6 +368,29 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                 duration_ms: duration_ms.map(saturating_i64),
             })
         }
+        canonical::ThreadItemPayload::DynamicToolCall {
+            namespace,
+            tool,
+            arguments,
+            content_items,
+            success,
+            duration_ms,
+            ..
+        } => Ok(v2::ThreadItem::DynamicToolCall {
+            id,
+            namespace,
+            tool,
+            arguments: bounded_safe_json(arguments).0,
+            status: project_dynamic_tool_status(status),
+            content_items: (!content_items.is_empty()).then(|| {
+                content_items
+                    .into_iter()
+                    .map(project_dynamic_tool_content_item)
+                    .collect()
+            }),
+            success: success.or_else(|| terminal_success(status)),
+            duration_ms: duration_ms.map(saturating_i64),
+        }),
         canonical::ThreadItemPayload::McpToolCall {
             server_name,
             tool_name,
@@ -967,6 +990,33 @@ fn output_content_items(
         });
     }
     (!items.is_empty()).then_some(items)
+}
+
+fn project_dynamic_tool_content_item(
+    item: canonical::DynamicToolCallContentItem,
+) -> v2::DynamicToolCallOutputContentItem {
+    match item {
+        canonical::DynamicToolCallContentItem::InputText { text } => {
+            v2::DynamicToolCallOutputContentItem::InputText {
+                text: bounded_dynamic_tool_text(&text),
+            }
+        }
+        canonical::DynamicToolCallContentItem::InputImage { image_url } => {
+            v2::DynamicToolCallOutputContentItem::InputImage { image_url }
+        }
+        canonical::DynamicToolCallContentItem::InputAudio { audio_url } => {
+            v2::DynamicToolCallOutputContentItem::InputAudio { audio_url }
+        }
+    }
+}
+
+fn bounded_dynamic_tool_text(text: &str) -> String {
+    let safe_text = serde_json::from_str::<Value>(text)
+        .ok()
+        .filter(|value| value.is_object() || value.is_array())
+        .map(|value| bounded_safe_json(value).0.to_string())
+        .unwrap_or_else(|| text.to_string());
+    bounded_safe_text(&safe_text, MAX_DISPLAY_STRING_BYTES).0
 }
 
 fn terminal_success(status: canonical::ItemStatus) -> Option<bool> {

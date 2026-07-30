@@ -1,6 +1,5 @@
 pub const METHOD_INITIALIZE: &str = "initialize";
 pub const METHOD_INITIALIZED: &str = "initialized";
-pub const METHOD_CONFIG_WARNING: &str = "configWarning";
 pub const METHOD_CAPABILITY_LIST: &str = "capability/list";
 pub const METHOD_ARTIFACT_READ: &str = "artifact/read";
 pub const METHOD_FILE_SYSTEM_LIST_DIRECTORY: &str = "fileSystem/listDirectory";

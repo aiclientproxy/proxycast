@@ -146,6 +146,32 @@ fn canonical_payload_to_agent_detail(
                 "tool_call"
             }
         }
+        ThreadItemPayload::DynamicToolCall {
+            call_id,
+            namespace,
+            tool,
+            arguments,
+            content_items,
+            success,
+            duration_ms,
+        } => {
+            detail.insert("call_id".to_string(), json!(call_id));
+            detail.insert("tool_name".to_string(), json!(tool));
+            detail.insert("arguments".to_string(), arguments.clone());
+            if let Some(namespace) = namespace {
+                detail.insert("namespace".to_string(), json!(namespace));
+            }
+            if !content_items.is_empty() {
+                detail.insert("content_items".to_string(), json!(content_items));
+            }
+            if let Some(success) = success {
+                detail.insert("success".to_string(), json!(success));
+            }
+            if let Some(duration_ms) = duration_ms {
+                detail.insert("duration_ms".to_string(), json!(duration_ms));
+            }
+            "tool_call"
+        }
         ThreadItemPayload::McpToolCall {
             call_id,
             server_name,

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "deferLoading": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "string"
+    },
+    "inputSchema": true,
+    "name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "description",
+    "inputSchema",
+    "name"
+  ],
+  "title": "DynamicToolFunctionSpec",
+  "type": "object"
+}

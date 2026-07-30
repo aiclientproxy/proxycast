@@ -1,4 +1,8 @@
 use crate::apply_patch::{apply_patch_tool_definition, runtime_apply_patch_executor_handle};
+use crate::current_time::{
+    current_time_tool_definition, runtime_current_time_executor_handle, CurrentTimeGateway,
+    CLOCK_CURRENT_TIME_TOOL_NAME,
+};
 use crate::image_task::{
     image_task_tool_definition, runtime_image_task_executor_handle, ImageTaskGateway,
 };
@@ -139,6 +143,14 @@ impl NativeDispatchBuilder {
             image_task_tool_definition(),
             runtime_image_task_executor_handle(gateway),
             &[],
+        )
+    }
+
+    pub fn with_current_time_gateway(self, gateway: Arc<dyn CurrentTimeGateway>) -> Self {
+        self.register(
+            current_time_tool_definition(),
+            runtime_current_time_executor_handle(gateway),
+            &[CLOCK_CURRENT_TIME_TOOL_NAME],
         )
     }
 

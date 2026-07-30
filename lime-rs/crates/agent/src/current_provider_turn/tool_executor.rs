@@ -7,7 +7,7 @@ use crate::agent_tools::execution::{
 };
 use crate::protocol::{AgentEvent, AgentToolProgressPayload};
 use crate::request_tool_policy::{is_same_tool, RequestToolPolicy};
-use crate::runtime_state::AgentRuntimeState;
+use crate::runtime_state::{AgentRuntimeState, EffectivePermissionGrant};
 use agent_protocol::action_required::{tool_confirmation_action, ActionRequiredProjection};
 use agent_protocol::ThreadId;
 use agent_runtime::action_required::ActionRequiredRequest;
@@ -32,6 +32,8 @@ use tool_runtime::tool_executor::{
 };
 
 const TOOL_CONFIRMATION_TIMEOUT: Duration = Duration::from_secs(300);
+const GRANTED_PERMISSIONS_METADATA_KEY: &str = "grantedPermissions";
+const STRICT_AUTO_REVIEW_METADATA_KEY: &str = "strictAutoReview";
 
 #[derive(Clone)]
 pub(super) struct CurrentTurnToolExecutor {
@@ -44,6 +46,7 @@ pub(super) struct CurrentTurnToolExecutor {
     pub(super) agent_control_gateway:
         Option<tool_runtime::agent_control::AgentControlGatewayHandle>,
     pub(super) pending_input: Option<RuntimeSessionInputHandle>,
+    pub(super) dynamic_tool_routes: mcp_step_snapshot::DynamicToolRoutes,
 }
 
 impl RuntimeToolExecutor for CurrentTurnToolExecutor {
@@ -69,6 +72,131 @@ impl RuntimeToolExecutor for CurrentTurnToolExecutor {
                     )),
                 )
                 .before_handler());
+            }
+
+            if tool_runtime::request_permissions::is_request_permissions_tool(request.tool_name) {
+                let args = tool_runtime::request_permissions::parse_request_permissions_args(
+                    request.params,
+                    request.context.working_directory(),
+                )
+                .map_err(|error| {
+                    RuntimeToolExecutionError::new(
+                        error,
+                        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+                            "request_permissions_invalid".to_string(),
+                        )),
+                    )
+                    .before_handler()
+                })?;
+                if args
+                    .environment_id
+                    .as_deref()
+                    .is_some_and(|environment_id| environment_id != "local")
+                {
+                    return Err(RuntimeToolExecutionError::new(
+                        "request_permissions references an unknown environment_id",
+                        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+                            "request_permissions_environment_unknown".to_string(),
+                        )),
+                    )
+                    .before_handler());
+                }
+                let (scope, request_call_id) = action_scope(request, &self.thread_id)
+                    .map_err(RuntimeToolExecutionError::before_handler)?;
+                let scope = scope.ok_or_else(|| {
+                    RuntimeToolExecutionError::new(
+                        "request_permissions requires canonical action scope",
+                        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+                            "request_permissions_scope_missing".to_string(),
+                        )),
+                    )
+                    .before_handler()
+                })?;
+                let session_id = scope.session_id.clone().ok_or_else(|| {
+                    RuntimeToolExecutionError::new(
+                        "request_permissions requires canonical session_id",
+                        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+                            "request_permissions_scope_missing".to_string(),
+                        )),
+                    )
+                    .before_handler()
+                })?;
+                let turn_id = scope.turn_id.clone().ok_or_else(|| {
+                    RuntimeToolExecutionError::new(
+                        "request_permissions requires canonical turn_id",
+                        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+                            "request_permissions_scope_missing".to_string(),
+                        )),
+                    )
+                    .before_handler()
+                })?;
+                let response_handle = self.pending_input.clone().ok_or_else(|| {
+                    RuntimeToolExecutionError::new(
+                        "request_permissions requires the active session response owner",
+                        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+                            "session_response_owner_missing".to_string(),
+                        )),
+                    )
+                    .before_handler()
+                })?;
+                let permission_request =
+                    agent_runtime::request_permissions::RequestPermissionsRequest::new(
+                        agent_runtime::request_permissions::RequestPermissionsIdentity::new(
+                            session_id.clone(),
+                            self.thread_id.as_str(),
+                            turn_id.clone(),
+                            request_call_id,
+                        ),
+                        args.environment_id,
+                        request.context.working_directory().to_string_lossy(),
+                        args.reason,
+                        args.permissions,
+                    );
+                let response = crate::request_permissions_bridge::request_permissions(
+                    self.state.action_required_state(),
+                    response_handle,
+                    permission_request,
+                    self.event_sender.clone(),
+                )
+                .await
+                .map_err(|error| {
+                    RuntimeToolExecutionError::new(
+                        error.to_string(),
+                        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+                            error.code().to_string(),
+                        )),
+                    )
+                })?;
+                self.state
+                    .record_permission_grant(&session_id, &turn_id, &response)
+                    .await;
+                let output = serde_json::to_string(&response).map_err(|error| {
+                    RuntimeToolExecutionError::new(
+                        format!("failed to serialize request_permissions response: {error}"),
+                        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+                            "request_permissions_response".to_string(),
+                        )),
+                    )
+                })?;
+                return Ok(RuntimeToolExecutionResult::new(
+                    true,
+                    output,
+                    None,
+                    HashMap::from([
+                        (
+                            "permission_scope".to_string(),
+                            serde_json::to_value(response.scope).unwrap_or(Value::Null),
+                        ),
+                        (
+                            "granted_permissions".to_string(),
+                            serde_json::to_value(response.permissions).unwrap_or(Value::Null),
+                        ),
+                        (
+                            "strict_auto_review".to_string(),
+                            Value::Bool(response.strict_auto_review.unwrap_or(false)),
+                        ),
+                    ]),
+                ));
             }
 
             if tool_runtime::request_user_input::request_user_input_canonical_tool_name(
@@ -117,6 +245,31 @@ impl RuntimeToolExecutor for CurrentTurnToolExecutor {
                     projection.metadata.into_iter().collect(),
                 ));
             }
+
+            if let Some(route) = self.dynamic_tool_routes.get(request.tool_name) {
+                return crate::current_provider_turn::dynamic_tool_bridge::call_dynamic_tool(
+                    request,
+                    &self.thread_id,
+                    route,
+                    self.pending_input.clone(),
+                    &self.event_sender,
+                )
+                .await;
+            }
+
+            let permission_grant = if let Some(identity) = request.context.tool_identity() {
+                self.state
+                    .effective_permission_grant(request.context.session_id(), identity.turn_id())
+                    .await
+            } else {
+                EffectivePermissionGrant::default()
+            };
+            let trusted_turn_context =
+                trusted_permission_turn_context(request.turn_context, &permission_grant);
+            let request = RuntimeToolExecutionRequest {
+                turn_context: trusted_turn_context.as_ref(),
+                ..request
+            };
 
             let decision = current_tool_execution_decision(request);
             match decision.kind {
@@ -202,6 +355,13 @@ impl RuntimeToolExecutor for CurrentTurnToolExecutor {
                         tool_call_id: identity.call_id().to_string(),
                         cancel_token: request.context.cancel_token().cloned(),
                         turn_context: request.turn_context,
+                        granted_permissions: if permission_grant.permissions.network.is_some()
+                            || permission_grant.permissions.file_system.is_some()
+                        {
+                            Some(permission_grant.permissions)
+                        } else {
+                            None
+                        },
                     },
                 )
                 .await;
@@ -281,6 +441,27 @@ impl RuntimeToolExecutor for CurrentTurnToolExecutor {
             await_mcp_call(&self.event_sender, &tool_id, &mcp_route, call).await
         })
     }
+}
+
+fn trusted_permission_turn_context(
+    source: Option<&tool_runtime::tool_executor::RuntimeToolTurnContext>,
+    grant: &EffectivePermissionGrant,
+) -> Option<tool_runtime::tool_executor::RuntimeToolTurnContext> {
+    let mut context = source.cloned();
+    if let Some(context) = context.as_mut() {
+        context.metadata.remove(GRANTED_PERMISSIONS_METADATA_KEY);
+        context.metadata.remove(STRICT_AUTO_REVIEW_METADATA_KEY);
+    }
+    if grant.strict_auto_review {
+        context
+            .get_or_insert_with(Default::default)
+            .metadata
+            .insert(
+                STRICT_AUTO_REVIEW_METADATA_KEY.to_string(),
+                Value::Bool(true),
+            );
+    }
+    context
 }
 
 fn mcp_tool_id(
@@ -400,7 +581,7 @@ fn current_tool_execution_decision(
         .turn_context
         .map(|context| serde_json::to_value(&context.metadata).unwrap_or(Value::Null));
     let persisted_policy = persisted_tool_execution_policy_from_metadata(request_metadata.as_ref());
-    decide_tool_execution(ToolExecutionDecisionInput {
+    let mut decision = decide_tool_execution(ToolExecutionDecisionInput {
         tool_name: request.tool_name,
         params: request.params,
         working_directory: request.context.working_directory(),
@@ -417,7 +598,24 @@ fn current_tool_execution_decision(
             persisted_policy: persisted_policy.as_ref(),
             request_metadata: request_metadata.as_ref(),
         },
-    })
+    });
+    let strict_auto_review = request
+        .turn_context
+        .and_then(|context| context.metadata.get(STRICT_AUTO_REVIEW_METADATA_KEY))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if strict_auto_review
+        && decision.kind == ToolExecutionDecisionKind::Allow
+        && tool_runtime::shell::is_shell_tool_name(request.tool_name)
+    {
+        decision.kind = ToolExecutionDecisionKind::RequiresApproval;
+        decision.reason_code = "strict_auto_review".to_string();
+        decision.reason = "permission grant requires review before shell execution".to_string();
+        decision
+            .metadata
+            .insert("strictAutoReview".to_string(), Value::Bool(true));
+    }
+    decision
 }
 
 async fn wait_for_tool_approval(
@@ -695,6 +893,7 @@ fn collect_text_fields(value: &Value, target: &mut Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use app_server_protocol::protocol::v2::GrantedPermissionProfile;
     use rmcp::model::{
         Content, NumberOrString, ProgressNotification, ProgressNotificationMethod,
         ProgressNotificationParam, ProgressToken,
@@ -756,6 +955,50 @@ mod tests {
         assert_eq!(
             projection.data["approvalScope"],
             projection.data["approval_scope"]
+        );
+    }
+
+    #[test]
+    fn permission_context_accepts_only_recorded_strict_review_state() {
+        let source = tool_runtime::tool_executor::RuntimeToolTurnContext {
+            metadata: HashMap::from([
+                (
+                    GRANTED_PERMISSIONS_METADATA_KEY.to_string(),
+                    serde_json::json!({ "network": { "enabled": true } }),
+                ),
+                (
+                    STRICT_AUTO_REVIEW_METADATA_KEY.to_string(),
+                    Value::Bool(true),
+                ),
+                ("safe".to_string(), Value::String("kept".to_string())),
+            ]),
+            ..Default::default()
+        };
+        let sanitized =
+            trusted_permission_turn_context(Some(&source), &EffectivePermissionGrant::default())
+                .expect("sanitized turn context");
+        assert!(!sanitized
+            .metadata
+            .contains_key(GRANTED_PERMISSIONS_METADATA_KEY));
+        assert!(!sanitized
+            .metadata
+            .contains_key(STRICT_AUTO_REVIEW_METADATA_KEY));
+        assert_eq!(
+            sanitized.metadata.get("safe"),
+            Some(&serde_json::json!("kept"))
+        );
+
+        let trusted = trusted_permission_turn_context(
+            Some(&source),
+            &EffectivePermissionGrant {
+                permissions: GrantedPermissionProfile::default(),
+                strict_auto_review: true,
+            },
+        )
+        .expect("trusted turn context");
+        assert_eq!(
+            trusted.metadata.get(STRICT_AUTO_REVIEW_METADATA_KEY),
+            Some(&Value::Bool(true))
         );
     }
 

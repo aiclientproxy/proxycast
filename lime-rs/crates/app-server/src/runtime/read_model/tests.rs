@@ -51,6 +51,99 @@ fn stored_running_session(started_at: &str, latest_event_at: &str) -> StoredSess
 }
 
 #[test]
+fn canonical_read_keeps_runtime_warning_message_and_localization_code() {
+    let mut stored = stored_running_session("2026-07-31T00:00:00Z", "2026-07-31T00:00:01Z");
+    stored.events.push(AgentEvent {
+        event_id: "event-read-model-warning".to_string(),
+        sequence: 2,
+        session_id: stored.session.session_id.clone(),
+        thread_id: Some(stored.session.thread_id.clone()),
+        turn_id: Some(stored.turns[0].turn_id.clone()),
+        event_type: "runtime.warning".to_string(),
+        timestamp: "2026-07-31T00:00:02Z".to_string(),
+        payload: json!({
+            "code": "skill_not_available",
+            "message": "技能不可用，已继续执行。"
+        }),
+    });
+
+    let detail = runtime_session_read_detail_with_item_source(
+        &stored,
+        ReadDetailOptions::default(),
+        &[],
+        Some(&[]),
+    );
+    let warning = detail["items"]
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["type"] == "warning"))
+        .expect("warning item");
+
+    assert_eq!(warning["thread_id"], stored.session.thread_id);
+    assert_eq!(warning["turn_id"], stored.turns[0].turn_id);
+    assert_eq!(warning["message"], "技能不可用，已继续执行。");
+    assert_eq!(warning["code"], "skill_not_available");
+    assert_eq!(detail["thread_read"]["thread_items"], detail["items"]);
+}
+
+#[test]
+fn canonical_read_rejects_malformed_runtime_warning_shapes_and_identity() {
+    let mut stored = stored_running_session("2026-07-31T00:00:00Z", "2026-07-31T00:00:01Z");
+    let session_id = stored.session.session_id.clone();
+    let thread_id = stored.session.thread_id.clone();
+    let turn_id = stored.turns[0].turn_id.clone();
+    let warning = |event_id: &str,
+                   thread_id: Option<String>,
+                   turn_id: Option<String>,
+                   payload: serde_json::Value| AgentEvent {
+        event_id: event_id.to_string(),
+        sequence: 2,
+        session_id: session_id.clone(),
+        thread_id,
+        turn_id,
+        event_type: "runtime.warning".to_string(),
+        timestamp: "2026-07-31T00:00:02Z".to_string(),
+        payload,
+    };
+    stored.events.extend([
+        warning(
+            "event-warning-alias-message",
+            Some(thread_id.clone()),
+            Some(turn_id.clone()),
+            json!({ "warning": "legacy alias must not recover" }),
+        ),
+        warning(
+            "event-warning-invalid-code",
+            Some(thread_id.clone()),
+            Some(turn_id.clone()),
+            json!({ "message": "invalid code", "code": 42 }),
+        ),
+        warning(
+            "event-warning-missing-thread",
+            None,
+            Some(turn_id.clone()),
+            json!({ "message": "missing thread identity" }),
+        ),
+        warning(
+            "event-warning-missing-turn",
+            Some(thread_id),
+            None,
+            json!({ "message": "missing turn identity" }),
+        ),
+    ]);
+
+    let detail = runtime_session_read_detail_with_item_source(
+        &stored,
+        ReadDetailOptions::default(),
+        &[],
+        Some(&[]),
+    );
+
+    assert!(detail["items"]
+        .as_array()
+        .is_some_and(|items| items.iter().all(|item| item["type"] != "warning")));
+}
+
+#[test]
 fn workflow_respond_action_requires_matching_canonical_pending_action() {
     let session_id = "sess_workflow_action_read".to_string();
     let thread_id = "thread_workflow_action_read".to_string();

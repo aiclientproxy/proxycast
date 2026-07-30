@@ -113,6 +113,53 @@ afterEach(async () => {
 });
 
 describe("ModelSelector", () => {
+  it("应暴露稳定的禁用触发器供工作区验证", () => {
+    const { container } = renderModelSelector({
+      compactTrigger: true,
+      disabled: true,
+    });
+
+    const trigger = container.querySelector(
+      '[data-testid="model-selector"]',
+    ) as HTMLButtonElement | null;
+    expect(trigger).toBeTruthy();
+    expect(trigger?.disabled).toBe(true);
+  });
+
+  it("Agnes 目录只应允许切换 RuntimeCore 可执行模型", () => {
+    const setModel = vi.fn();
+    mockUseProviderModels.mockReturnValue({
+      modelIds: ["agnes-2.0-flash", "agnes-2.5-flash", "agnes-video-v2.0"],
+      models: [
+        createModelMetadata("agnes-2.0-flash", {
+          capability_provenance: "canonical",
+        }),
+        createModelMetadata("agnes-2.5-flash", {
+          capability_provenance: "canonical",
+        }),
+        createModelMetadata("agnes-video-v2.0", {
+          capability_provenance: "inferred_hint",
+        }),
+      ],
+      loading: false,
+      error: null,
+    });
+
+    const { container } = renderModelSelector({
+      model: "agnes-2.0-flash",
+      setModel,
+    });
+
+    clickModelSelectorTrigger(container);
+
+    expect(getBodyText()).toContain("agnes-2.5-flash");
+    expect(getBodyText()).not.toContain("agnes-video-v2.0");
+
+    clickBodyButtonByText("agnes-2.5-flash");
+
+    expect(setModel).toHaveBeenCalledWith("agnes-2.5-flash");
+  });
+
   it("只有模型没有 provider 时不应展示成 Lime Hub 的已选模型", () => {
     const { container } = renderModelSelector({
       providerType: "",
@@ -248,8 +295,7 @@ describe("ModelSelector", () => {
     mockUseProviderModels.mockReturnValue({
       modelIds: ["gpt-5.2-codex", "gpt-5.1-codex-mini"],
       models: [
-        {
-          id: "gpt-5.2-codex",
+        createModelMetadata("gpt-5.2-codex", {
           capabilities: {
             vision: true,
             tools: true,
@@ -258,9 +304,8 @@ describe("ModelSelector", () => {
             function_calling: true,
             reasoning: true,
           },
-        },
-        {
-          id: "gpt-5.1-codex-mini",
+        }),
+        createModelMetadata("gpt-5.1-codex-mini", {
           capabilities: {
             vision: false,
             tools: true,
@@ -269,7 +314,7 @@ describe("ModelSelector", () => {
             function_calling: true,
             reasoning: false,
           },
-        },
+        }),
       ],
       loading: false,
       error: null,

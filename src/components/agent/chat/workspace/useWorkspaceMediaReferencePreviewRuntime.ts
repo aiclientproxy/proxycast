@@ -19,7 +19,6 @@ import {
   createMediaReferencePreviewArtifact,
   type MediaReferencePreviewProgress,
 } from "./mediaReferencePreviewArtifacts";
-import { subscribeMediaReferencePreviewReadProgress } from "./mediaReferencePreviewLiveDrain";
 import { createMediaReferencePagedPreviewArtifact } from "./mediaReferencePreviewPagination";
 
 export const WORKSPACE_MEDIA_REFERENCE_PREVIEW_RUNTIME_POLICY = {
@@ -228,26 +227,13 @@ export function useWorkspaceMediaReferencePreviewRuntime({
                 throw new Error("media preview request superseded");
               }
               client ??= createAppServerClient();
-              const unsubscribeProgress =
-                subscribeMediaReferencePreviewReadProgress({
-                  onProgress: updateProgressArtifact,
-                  readRequest: request,
-                  shouldContinue: () => isPreviewRequestCurrent(requestId),
-                });
-              try {
-                const response = await client.readMedia(request, {
-                  signal: abortController.signal,
-                });
-                if (!isPreviewRequestCurrent(requestId)) {
-                  throw new Error("media preview request superseded");
-                }
-                return {
-                  media: response.result,
-                  notifications: response.notifications,
-                };
-              } finally {
-                unsubscribeProgress();
+              const response = await client.readMedia(request, {
+                signal: abortController.signal,
+              });
+              if (!isPreviewRequestCurrent(requestId)) {
+                throw new Error("media preview request superseded");
               }
+              return response.result;
             },
           });
         if (!isPreviewRequestCurrent(requestId)) {

@@ -70,7 +70,9 @@ where
                 assistant_content.push(CurrentProviderContent::Reasoning(reasoning));
             }
         }
-        ThreadItemPayload::Tool { .. } | ThreadItemPayload::McpToolCall { .. } => {
+        ThreadItemPayload::Tool { .. }
+        | ThreadItemPayload::DynamicToolCall { .. }
+        | ThreadItemPayload::McpToolCall { .. } => {
             let call = tool_call_from_item(item).ok_or_else(|| {
                 format!(
                     "fork canonical tool item {} omitted a valid call",
@@ -112,13 +114,30 @@ pub(super) fn tool_call_from_event(event: &AgentEvent) -> Option<CurrentProvider
 }
 
 fn tool_call_from_item(item: &ThreadItem) -> Option<CurrentProviderToolCall> {
-    let (call_id, name, arguments) = match &item.payload {
+    let (call_id, name, arguments, raw_arguments) = match &item.payload {
         ThreadItemPayload::Tool {
             call_id,
             name,
             arguments,
             ..
-        } => (call_id.clone(), name.clone(), arguments.as_slice()),
+        } => {
+            let (arguments, raw_arguments) = canonical_tool_arguments(arguments);
+            (call_id.clone(), name.clone(), arguments, raw_arguments)
+        }
+        ThreadItemPayload::DynamicToolCall {
+            call_id,
+            namespace,
+            tool,
+            arguments,
+            ..
+        } => {
+            let name = namespace
+                .as_ref()
+                .map(|namespace| format!("{namespace}__{tool}"))
+                .unwrap_or_else(|| tool.clone());
+            let raw_arguments = serde_json::to_string(arguments).ok()?;
+            (call_id.clone(), name, arguments.clone(), raw_arguments)
+        }
         ThreadItemPayload::McpToolCall {
             call_id,
             server_name,
@@ -129,15 +148,16 @@ fn tool_call_from_item(item: &ThreadItem) -> Option<CurrentProviderToolCall> {
             let inner_name =
                 lime_mcp::naming::extract_runtime_inner_tool_name(server_name, tool_name)
                     .unwrap_or(tool_name);
+            let (arguments, raw_arguments) = canonical_tool_arguments(arguments);
             (
                 call_id.clone(),
                 lime_mcp::naming::build_runtime_tool_name(server_name, inner_name),
-                arguments.as_slice(),
+                arguments,
+                raw_arguments,
             )
         }
         _ => return None,
     };
-    let (arguments, raw_arguments) = canonical_tool_arguments(arguments);
     Some(CurrentProviderToolCall {
         id: call_id,
         name,
@@ -164,6 +184,41 @@ pub(super) fn tool_result_from_event(event: &AgentEvent) -> Option<CurrentProvid
 
 fn tool_result_from_item(item: &ThreadItem) -> Option<CurrentProviderToolResult> {
     let status = item.status;
+    if let ThreadItemPayload::DynamicToolCall {
+        call_id,
+        namespace,
+        tool,
+        content_items,
+        success,
+        ..
+    } = &item.payload
+    {
+        let name = namespace
+            .as_ref()
+            .map(|namespace| format!("{namespace}__{tool}"))
+            .unwrap_or_else(|| tool.clone());
+        let success = success.unwrap_or(status == ItemStatus::Completed);
+        let error = (!success).then(|| {
+            content_items
+                .iter()
+                .find_map(|item| match item {
+                    agent_protocol::DynamicToolCallContentItem::InputText { text }
+                        if !text.trim().is_empty() =>
+                    {
+                        Some(text.trim().to_string())
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| "dynamic tool call failed".to_string())
+        });
+        return Some(CurrentProviderToolResult {
+            call_id: call_id.clone(),
+            name,
+            success,
+            output: serde_json::to_string(content_items).ok()?,
+            error,
+        });
+    }
     let (call_id, name, output) = match &item.payload {
         ThreadItemPayload::Tool {
             call_id,
@@ -264,7 +319,10 @@ fn canonical_tool_argument_object(arguments: &[ToolArgument]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_protocol::{ItemId, ItemKind, SessionId, ThreadId, ToolArgument, ToolOutput, TurnId};
+    use agent_protocol::{
+        DynamicToolCallContentItem, ItemId, ItemKind, SessionId, ThreadId, ToolArgument,
+        ToolOutput, TurnId,
+    };
 
     fn mcp_item(tool_name: &str) -> ThreadItem {
         ThreadItem {
@@ -325,6 +383,72 @@ mod tests {
                 .get("google")
                 .and_then(|value| value.get("thoughtSignature")),
             Some(&serde_json::json!("sig"))
+        );
+    }
+
+    #[test]
+    fn dynamic_tool_item_restores_typed_call_and_ordered_result() {
+        let content_items = vec![
+            DynamicToolCallContentItem::InputText {
+                text: "Lime".to_string(),
+            },
+            DynamicToolCallContentItem::InputImage {
+                image_url: "data:image/png;base64,AA==".to_string(),
+            },
+            DynamicToolCallContentItem::InputAudio {
+                audio_url: "data:audio/wav;base64,AA==".to_string(),
+            },
+        ];
+        let item = ThreadItem {
+            session_id: SessionId::new("session-1"),
+            thread_id: ThreadId::new("thread-1"),
+            turn_id: TurnId::new("turn-1"),
+            item_id: ItemId::new("dynamic-item"),
+            sequence: 1,
+            ordinal: 1,
+            created_at_ms: 1,
+            updated_at_ms: 2,
+            completed_at_ms: Some(2),
+            kind: ItemKind::DynamicToolCall,
+            status: ItemStatus::Completed,
+            payload: ThreadItemPayload::DynamicToolCall {
+                call_id: "dynamic-call".to_string(),
+                namespace: Some("desktop".to_string()),
+                tool: "appInfo".to_string(),
+                arguments: serde_json::json!({
+                    "includeLocale": true,
+                    "options": {"platform": "darwin"}
+                }),
+                content_items: content_items.clone(),
+                success: Some(true),
+                duration_ms: Some(17),
+            },
+            metadata: Value::Null,
+        };
+
+        let call = tool_call_from_item(&item).expect("dynamic tool call");
+        let result = tool_result_from_item(&item).expect("dynamic tool result");
+        assert_eq!(call.id, "dynamic-call");
+        assert_eq!(call.name, "desktop__appInfo");
+        assert_eq!(
+            call.arguments,
+            serde_json::json!({
+                "includeLocale": true,
+                "options": {"platform": "darwin"}
+            })
+        );
+        assert_eq!(
+            serde_json::from_str::<Value>(&call.raw_arguments).expect("raw arguments"),
+            call.arguments
+        );
+        assert_eq!(result.call_id, "dynamic-call");
+        assert_eq!(result.name, "desktop__appInfo");
+        assert!(result.success);
+        assert_eq!(result.error, None);
+        assert_eq!(
+            serde_json::from_str::<Vec<DynamicToolCallContentItem>>(&result.output)
+                .expect("ordered dynamic result"),
+            content_items
         );
     }
 }

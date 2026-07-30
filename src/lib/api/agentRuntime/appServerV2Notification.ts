@@ -6,6 +6,7 @@ import { readCanonicalThreadItem } from "./appServerCanonicalItemReader";
 import { RENDER_PROJECTION_REFERENCE_REVISION } from "./conversationProjection";
 
 const DIRECT_V2_NOTIFICATION_METHODS = new Set([
+  "warning",
   "thread/started",
   "turn/started",
   "turn/completed",
@@ -64,6 +65,16 @@ export function readAppServerV2NotificationRoute(
   }
 
   switch (notification.method) {
+    case "warning": {
+      const threadId = readString(params, "threadId");
+      const message = readString(params, "message");
+      const code = readString(params, "code");
+      const validCode =
+        params.code === undefined || params.code === null || code !== undefined;
+      return threadId && message && validCode
+        ? { terminal: false, threadId }
+        : null;
+    }
     case "thread/started": {
       const thread = asRecord(params.thread);
       const threadId = readString(thread, "id");
@@ -185,6 +196,18 @@ export function projectAppServerV2NotificationPayload(
   };
 
   switch (notification.method) {
+    case "warning": {
+      const message = readString(params, "message");
+      const code = readString(params, "code");
+      return message
+        ? {
+            ...basePayload,
+            type: "warning",
+            message,
+            ...(code ? { code } : {}),
+          }
+        : null;
+    }
     case "thread/started":
       return {
         ...basePayload,

@@ -88,7 +88,11 @@ async fn turn_start_reselects_removed_model_before_admission() {
                 .expect("serialize empty provider catalog")],
         )
         .expect("remove current provider model");
-        assert_eq!(RouteStateDao::advance_generation(&conn).unwrap(), 1);
+        let previous_generation = RouteStateDao::read_generation(&conn).unwrap();
+        assert_eq!(
+            RouteStateDao::advance_generation(&conn).unwrap(),
+            previous_generation + 1
+        );
     }
 
     let lines = request_lines(

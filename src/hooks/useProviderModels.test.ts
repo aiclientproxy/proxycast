@@ -175,6 +175,42 @@ describe("loadProviderModels", () => {
     ]);
   });
 
+  it("实时目录应覆盖同 ID 的本地提示元数据", async () => {
+    mockFetchProviderModelsAuto.mockResolvedValueOnce({
+      models: [
+        {
+          ...createModelMetadata("agnes-2.5-flash"),
+          capability_provenance: "canonical",
+          canonical_model_id: "agnes/agnes-2.5-flash",
+        },
+      ],
+      source: "Api",
+      error: null,
+    });
+
+    const models = await loadProviderModels(
+      createProvider({
+        key: "custom-agnes",
+        providerId: "custom-agnes",
+        apiHost: "https://apihub.agnes-ai.com/v1",
+        models: ["agnes-2.5-flash"],
+      }),
+      {
+        liveFetchOnly: true,
+        hasApiKey: true,
+      },
+    );
+
+    expect(models).toHaveLength(1);
+    expect(models[0]).toEqual(
+      expect.objectContaining({
+        id: "agnes-2.5-flash",
+        capability_provenance: "canonical",
+        canonical_model_id: "agnes/agnes-2.5-flash",
+      }),
+    );
+  });
+
   it("实时目录读取失败且无本地兜底时，不应继续把旧模型当成最新模型展示", async () => {
     mockFetchProviderModelsAuto.mockResolvedValueOnce({
       models: [],

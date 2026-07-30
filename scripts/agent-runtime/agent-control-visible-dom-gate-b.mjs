@@ -17,13 +17,13 @@ export const AGENT_CONTROL_SUBAGENT_ACTIVITY_KINDS = [
 export const PARENT_OWNED_DIRECT_INPUT_ERROR =
   "direct app-server input is not allowed for parent-owned threads";
 
-const PARENT_OWNED_PLACEHOLDERS = new Set([
+export const PARENT_OWNED_PLACEHOLDERS = [
   "此子线程由父线程管理，无法直接输入",
   "此子執行緒由父執行緒管理，無法直接輸入",
   "This child thread is managed by its parent and cannot accept direct input",
   "この子スレッドは親スレッドによって管理されているため、直接入力できません",
   "이 하위 스레드는 상위 스레드에서 관리하므로 직접 입력할 수 없습니다",
-]);
+];
 
 const RETIRED_TEAM_TOOL_NAMES = new Set([
   "Agent",
@@ -231,15 +231,15 @@ export function buildAgentControlVisibleDomAssertions({ evidence, snapshot }) {
     visibleDomParentOwnedComposerDisabled:
       parentOwnedDom.textareaVisible === true &&
       parentOwnedDom.textareaDisabled === true &&
-      PARENT_OWNED_PLACEHOLDERS.has(parentOwnedDom.placeholder) &&
-      parentOwnedControls.sendDisabled === true &&
+      PARENT_OWNED_PLACEHOLDERS.includes(parentOwnedDom.placeholder) &&
+      parentOwnedControls.sendUnavailable === true &&
       parentOwnedControls.accessModeDisabled === true &&
       parentOwnedControls.modelSelectorCount > 0 &&
       parentOwnedControls.modelSelectorsDisabled === true &&
       parentOwnedControls.taskModeDisabled !== false,
     visibleDomParentOwnedUiAttemptDidNotStartTurn:
       parentOwnedChild.uiAttempt?.dispatchedEnter === true &&
-      parentOwnedChild.uiAttempt?.clickedDisabledSend === true &&
+      parentOwnedChild.uiAttempt?.sendUnavailable === true &&
       parentOwnedChild.uiAttempt?.turnStartCountBefore ===
         parentOwnedChild.uiAttempt?.turnStartCountAfter,
     visibleDomParentOwnedServerRejectsDirectTurn:

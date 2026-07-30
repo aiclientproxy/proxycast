@@ -11,6 +11,9 @@ use agent_runtime::provider_turn::{
     RuntimeToolStepSnapshotSourceHandle,
 };
 use agent_runtime::session_loop::RuntimeSessionInputHandle;
+use app_server_protocol::protocol::v2::{
+    DynamicToolFunctionSpec, DynamicToolNamespaceTool, DynamicToolSpec,
+};
 use rmcp::model::CallToolResult;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -26,6 +29,7 @@ use tool_runtime::turn_tool_surface::{
 };
 
 const MCP_TOOL_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(2);
+const DYNAMIC_TOOLS_METADATA_KEY: &str = "dynamicTools";
 
 #[derive(Clone, Default)]
 pub(super) struct DeferredToolSelections(Arc<Mutex<HashSet<String>>>);
@@ -34,6 +38,38 @@ pub(super) struct DeferredToolSelections(Arc<Mutex<HashSet<String>>>);
 pub(super) struct McpToolRoutes(
     Arc<RwLock<HashMap<String, tool_runtime::mcp_connection::McpStepRouteIdentity>>>,
 );
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct DynamicToolRoute {
+    pub(super) runtime_tool_name: String,
+    pub(super) namespace: Option<String>,
+    pub(super) tool: String,
+}
+
+#[derive(Clone, Default)]
+pub(super) struct DynamicToolRoutes(Arc<RwLock<HashMap<String, DynamicToolRoute>>>);
+
+impl DynamicToolRoutes {
+    fn replace(&self, routes: Vec<DynamicToolRoute>) {
+        *self.0.write().expect("dynamic tool routes lock poisoned") = routes
+            .into_iter()
+            .map(|route| (route.runtime_tool_name.clone(), route))
+            .collect();
+    }
+
+    pub(super) fn get(&self, runtime_tool_name: &str) -> Option<DynamicToolRoute> {
+        self.0
+            .read()
+            .expect("dynamic tool routes lock poisoned")
+            .get(runtime_tool_name)
+            .cloned()
+    }
+
+    #[cfg(test)]
+    pub(super) fn replace_for_test(&self, routes: impl IntoIterator<Item = DynamicToolRoute>) {
+        self.replace(routes.into_iter().collect());
+    }
+}
 
 impl McpToolRoutes {
     fn replace_from_snapshot(&self, snapshot: &tool_runtime::mcp_connection::McpStepSnapshot) {
@@ -112,6 +148,7 @@ pub(super) fn current_tool_step_snapshot_source(
     agent_control_gateway: Option<tool_runtime::agent_control::AgentControlGatewayHandle>,
     pending_input: Option<RuntimeSessionInputHandle>,
     mcp_tool_routes: McpToolRoutes,
+    dynamic_tool_routes: DynamicToolRoutes,
 ) -> RuntimeToolStepSnapshotSourceHandle {
     let deferred_tools = DeferredToolSelections::default();
     RuntimeToolStepSnapshotSourceHandle::new(Arc::new(CurrentTurnToolStepSnapshotSource {
@@ -125,6 +162,7 @@ pub(super) fn current_tool_step_snapshot_source(
         pending_input,
         deferred_tools,
         mcp_tool_routes,
+        dynamic_tool_routes,
     }))
 }
 
@@ -155,7 +193,7 @@ fn tool_definitions(
     turn_context: Option<&agent_protocol::turn_context::TurnContextOverride>,
     mcp_snapshot: &tool_runtime::mcp_connection::McpStepSnapshot,
     agent_control_gateway: Option<&tool_runtime::agent_control::AgentControlGatewayHandle>,
-) -> Vec<RuntimeToolDefinition> {
+) -> Result<(Vec<RuntimeToolDefinition>, Vec<DynamicToolRoute>), String> {
     let native_policy = native_tool_policy_from_turn_context(turn_context);
     let tool_surface_mode = turn_context
         .and_then(|context| runtime_turn_tool_surface_mode_from_metadata(&context.metadata));
@@ -169,12 +207,28 @@ fn tool_definitions(
     let native_dispatch = tool_runtime::native_dispatch::runtime_native_dispatch();
     let mut definitions = native_dispatch.definitions();
     definitions.extend(tool_runtime::unified_exec::unified_exec_tool_definitions());
+    definitions.push(tool_runtime::request_permissions::request_permissions_tool_definition());
     definitions.push(tool_runtime::request_user_input::request_user_input_tool_definition());
     if let Some(gateway) = agent_control_gateway {
         definitions.extend(gateway.tool_definitions());
     }
     definitions.extend(state.gateway_tools().definitions());
     definitions.extend(mcp_tool_definitions(mcp_snapshot));
+    let (dynamic_definitions, dynamic_routes) = dynamic_tool_definitions(turn_context)?;
+    let existing_names = definitions
+        .iter()
+        .map(|definition| definition.name.to_ascii_lowercase())
+        .collect::<HashSet<_>>();
+    if let Some(collision) = dynamic_definitions
+        .iter()
+        .find(|definition| existing_names.contains(&definition.name.to_ascii_lowercase()))
+    {
+        return Err(format!(
+            "dynamic tool '{}' collides with an existing runtime tool",
+            collision.name
+        ));
+    }
+    definitions.extend(dynamic_definitions);
     let canonical_name = |name: &str| {
         native_dispatch
             .canonical_name(name)
@@ -199,7 +253,95 @@ fn tool_definitions(
             )
     });
     definitions.sort_by(|left, right| left.name.cmp(&right.name));
-    definitions
+    Ok((definitions, dynamic_routes))
+}
+
+fn dynamic_tool_definitions(
+    turn_context: Option<&agent_protocol::turn_context::TurnContextOverride>,
+) -> Result<(Vec<RuntimeToolDefinition>, Vec<DynamicToolRoute>), String> {
+    let Some(specs) = turn_context
+        .and_then(|context| context.metadata.get("runtime_request"))
+        .and_then(|metadata| metadata.get(DYNAMIC_TOOLS_METADATA_KEY))
+    else {
+        return Ok((Vec::new(), Vec::new()));
+    };
+    let specs = serde_json::from_value::<Vec<DynamicToolSpec>>(specs.clone())
+        .map_err(|error| format!("invalid trusted dynamicTools metadata: {error}"))?;
+    let mut definitions = Vec::new();
+    let mut routes = Vec::new();
+    let mut names = HashSet::new();
+    for spec in specs {
+        match spec {
+            DynamicToolSpec::Function(tool) => {
+                push_dynamic_tool(None, tool, &mut names, &mut definitions, &mut routes)?;
+            }
+            DynamicToolSpec::Namespace(namespace) => {
+                let namespace_name = dynamic_tool_text(&namespace.name, "namespace name")?;
+                dynamic_tool_text(&namespace.description, "namespace description")?;
+                for tool in namespace.tools {
+                    match tool {
+                        DynamicToolNamespaceTool::Function(tool) => {
+                            push_dynamic_tool(
+                                Some(namespace_name.clone()),
+                                tool,
+                                &mut names,
+                                &mut definitions,
+                                &mut routes,
+                            )?;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok((definitions, routes))
+}
+
+fn push_dynamic_tool(
+    namespace: Option<String>,
+    tool: DynamicToolFunctionSpec,
+    names: &mut HashSet<String>,
+    definitions: &mut Vec<RuntimeToolDefinition>,
+    routes: &mut Vec<DynamicToolRoute>,
+) -> Result<(), String> {
+    let tool_name = dynamic_tool_text(&tool.name, "tool name")?;
+    let description = dynamic_tool_text(&tool.description, "tool description")?;
+    if tool.defer_loading {
+        return Err(
+            "dynamic tool deferLoading is not supported by the current runtime".to_string(),
+        );
+    }
+    if !tool.input_schema.is_object() {
+        return Err("dynamic tool inputSchema must be an object".to_string());
+    }
+    let runtime_tool_name = match namespace.as_deref() {
+        Some(namespace) => format!("{namespace}__{tool_name}"),
+        None => tool_name.clone(),
+    };
+    if !names.insert(runtime_tool_name.to_ascii_lowercase()) {
+        return Err(format!(
+            "dynamic tool runtime name '{runtime_tool_name}' is duplicated"
+        ));
+    }
+    definitions.push(RuntimeToolDefinition {
+        name: runtime_tool_name.clone(),
+        description,
+        input_schema: tool.input_schema,
+    });
+    routes.push(DynamicToolRoute {
+        runtime_tool_name,
+        namespace,
+        tool: tool_name,
+    });
+    Ok(())
+}
+
+fn dynamic_tool_text(value: &str, field: &str) -> Result<String, String> {
+    let value = value.trim();
+    if value.is_empty() || value.contains("__") {
+        return Err(format!("dynamic tool {field} is invalid"));
+    }
+    Ok(value.to_string())
 }
 
 fn mcp_tool_definitions(
@@ -232,6 +374,7 @@ struct CurrentTurnToolStepSnapshotSource {
     pending_input: Option<RuntimeSessionInputHandle>,
     deferred_tools: DeferredToolSelections,
     mcp_tool_routes: McpToolRoutes,
+    dynamic_tool_routes: DynamicToolRoutes,
 }
 
 impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
@@ -246,13 +389,14 @@ impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
             )
             .await;
             self.mcp_tool_routes.replace_from_snapshot(&mcp_snapshot);
-            let definitions = tool_definitions(
+            let (definitions, dynamic_routes) = tool_definitions(
                 &self.state,
                 &self.policy,
                 self.turn_context.as_ref(),
                 &mcp_snapshot,
                 self.agent_control_gateway.as_ref(),
-            );
+            )?;
+            self.dynamic_tool_routes.replace(dynamic_routes);
             let serial_mcp_tool_names = mcp_snapshot
                 .tools()
                 .iter()
@@ -280,6 +424,7 @@ impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
                 deferred_tools: self.deferred_tools.clone(),
                 agent_control_gateway: self.agent_control_gateway.clone(),
                 pending_input: self.pending_input.clone(),
+                dynamic_tool_routes: self.dynamic_tool_routes.clone(),
             }));
             Ok(RuntimeToolStepSnapshot::with_tool_metadata(
                 definitions,
@@ -326,11 +471,17 @@ mod tests {
         let policy = resolve_request_tool_policy_with_mode(None, Some(RequestToolPolicyMode::Auto));
         let snapshot =
             tool_runtime::mcp_connection::McpStepSnapshot::empty(RuntimeToolCaller::assistant());
-        let full = tool_definitions(&state, &policy, None, &snapshot, None);
+        let full = tool_definitions(&state, &policy, None, &snapshot, None)
+            .expect("full definitions")
+            .0;
         let compact_context = turn_context_with_tool_surface(TURN_TOOL_SURFACE_COMPACT_TOOLS);
-        let compact = tool_definitions(&state, &policy, Some(&compact_context), &snapshot, None);
+        let compact = tool_definitions(&state, &policy, Some(&compact_context), &snapshot, None)
+            .expect("compact definitions")
+            .0;
         let direct_context = turn_context_with_tool_surface(TURN_TOOL_SURFACE_DIRECT_ANSWER);
-        let direct = tool_definitions(&state, &policy, Some(&direct_context), &snapshot, None);
+        let direct = tool_definitions(&state, &policy, Some(&direct_context), &snapshot, None)
+            .expect("direct definitions")
+            .0;
 
         assert!(compact.len() < full.len());
         assert!(compact.iter().any(|tool| tool.name == "WebSearch"));
@@ -352,7 +503,9 @@ mod tests {
         let compact_context = turn_context_with_tool_surface(TURN_TOOL_SURFACE_COMPACT_TOOLS);
 
         let without_gateway =
-            tool_definitions(&state, &policy, Some(&compact_context), &snapshot, None);
+            tool_definitions(&state, &policy, Some(&compact_context), &snapshot, None)
+                .expect("definitions")
+                .0;
         assert!(!without_gateway
             .iter()
             .any(|tool| { tool_runtime::agent_control::is_agent_control_tool_name(&tool.name) }));
@@ -366,7 +519,9 @@ mod tests {
             Some(&compact_context),
             &snapshot,
             Some(&gateway),
-        );
+        )
+        .expect("definitions")
+        .0;
         assert!(!with_gateway
             .iter()
             .any(|tool| tool_runtime::agent_control::is_agent_control_tool_name(&tool.name)));
@@ -382,7 +537,9 @@ mod tests {
             Some(&explicitly_allowed_context),
             &snapshot,
             Some(&gateway),
-        );
+        )
+        .expect("definitions")
+        .0;
         let names = explicitly_allowed
             .iter()
             .filter(|tool| tool_runtime::agent_control::is_agent_control_tool_name(&tool.name))
@@ -390,7 +547,9 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(names, vec!["list_agents", "spawn_agent"]);
 
-        let full = tool_definitions(&state, &policy, None, &snapshot, Some(&gateway));
+        let full = tool_definitions(&state, &policy, None, &snapshot, Some(&gateway))
+            .expect("definitions")
+            .0;
         assert_eq!(
             full.iter()
                 .filter(|tool| tool_runtime::agent_control::is_agent_control_tool_name(&tool.name))
@@ -468,5 +627,62 @@ mod tests {
                 .and_then(|value| value.get("tool_surface_updated")),
             Some(&Value::Bool(false))
         );
+    }
+
+    #[test]
+    fn trusted_dynamic_tools_freeze_exact_namespace_route_and_reject_collisions() {
+        let state = AgentRuntimeState::new();
+        let policy = resolve_request_tool_policy_with_mode(None, Some(RequestToolPolicyMode::Auto));
+        let snapshot =
+            tool_runtime::mcp_connection::McpStepSnapshot::empty(RuntimeToolCaller::assistant());
+        let context = agent_protocol::turn_context::TurnContextOverride {
+            metadata: HashMap::from([(
+                "runtime_request".to_string(),
+                json!({
+                    "dynamicTools": [{
+                        "type": "namespace",
+                        "name": "desktop",
+                        "description": "Desktop host",
+                        "tools": [{
+                            "type": "function",
+                            "name": "appInfo",
+                            "description": "Read app information",
+                            "inputSchema": {"type": "object", "properties": {}}
+                        }]
+                    }]
+                }),
+            )]),
+            ..Default::default()
+        };
+        let (definitions, routes) =
+            tool_definitions(&state, &policy, Some(&context), &snapshot, None)
+                .expect("dynamic definitions");
+        assert!(definitions
+            .iter()
+            .any(|definition| definition.name == "desktop__appInfo"));
+        assert_eq!(
+            routes,
+            vec![DynamicToolRoute {
+                runtime_tool_name: "desktop__appInfo".to_string(),
+                namespace: Some("desktop".to_string()),
+                tool: "appInfo".to_string(),
+            }]
+        );
+
+        let collision = agent_protocol::turn_context::TurnContextOverride {
+            metadata: HashMap::from([(
+                "runtime_request".to_string(),
+                json!({
+                    "dynamicTools": [{
+                        "type": "function",
+                        "name": "exec_command",
+                        "description": "Collision",
+                        "inputSchema": {"type": "object"}
+                    }]
+                }),
+            )]),
+            ..Default::default()
+        };
+        assert!(tool_definitions(&state, &policy, Some(&collision), &snapshot, None).is_err());
     }
 }

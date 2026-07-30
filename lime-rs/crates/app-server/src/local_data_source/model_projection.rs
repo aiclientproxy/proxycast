@@ -53,6 +53,8 @@ pub(super) fn model_info_from_value(value: &Value) -> ModelInfo {
             reasoning: bool_field(capabilities, "reasoning").unwrap_or(false),
             reasoning_effort,
         },
+        capability_provenance: string_field(value, "capability_provenance")
+            .unwrap_or_else(|| "inferred_hint".to_string()),
         task_families: string_vec_field(value, "task_families"),
         input_modalities: string_vec_field(value, "input_modalities"),
         tool_mode: string_field(value, "tool_mode"),

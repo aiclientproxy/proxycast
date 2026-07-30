@@ -371,7 +371,10 @@ export function readCanonicalToolThreadItem(
     updated_at: event.timestamp,
     ...(isTerminalItemStatus(status) ? { completed_at: event.timestamp } : {}),
     type: "tool_call",
-    tool_name: toolName,
+    tool_name:
+      type === "collabAgentToolCall" && toolName === "wait"
+        ? "wait_agent"
+        : toolName,
     arguments: item.arguments,
     output,
     structured_content: readStructuredContent(item),

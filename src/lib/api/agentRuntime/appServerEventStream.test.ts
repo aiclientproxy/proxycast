@@ -38,6 +38,7 @@ describe("appServerEventStream", () => {
     "tool.result",
     "action.required",
     "action.resolved",
+    "runtime.warning",
   ])("拒绝 retired agentSession/event wrapper: %s", (type) => {
     expect(projectAppServerAgentEventPayload(rawNotification(type))).toBeNull();
   });
@@ -136,18 +137,4 @@ describe("appServerEventStream", () => {
       },
     });
   });
-
-  it.each(["media.read.chunk", "media.read.completed"])(
-    "保留 media read raw side-channel: %s",
-    (type) => {
-      expect(
-        projectAppServerAgentEventPayload(
-          rawNotification(type, { streamId: "media-stream-1" }),
-        ),
-      ).toMatchObject({
-        type: type.split(".").join("_"),
-        streamId: "media-stream-1",
-      });
-    },
-  );
 });

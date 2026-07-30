@@ -242,21 +242,6 @@ impl RequestProcessor {
             .await
     }
 
-    pub(crate) async fn handle_transport_request_streaming(
-        &self,
-        connection_id: ConnectionId,
-        request: JsonRpcRequest,
-        event_callback: &mut (dyn FnMut(JsonRpcMessage) + Send),
-    ) -> Result<Vec<JsonRpcMessage>, AppServerError> {
-        let request_id = request.id.clone();
-        self.handle_request_streaming_with_context(
-            request,
-            Some(ConnectionRequestId::new(connection_id, request_id)),
-            event_callback,
-        )
-        .await
-    }
-
     async fn handle_request_streaming_with_context(
         &self,
         request: JsonRpcRequest,

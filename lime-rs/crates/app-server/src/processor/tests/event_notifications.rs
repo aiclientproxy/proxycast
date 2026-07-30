@@ -51,6 +51,84 @@ fn event_notifications_jsonrpc_emits_direct_agent_message_delta() {
 }
 
 #[test]
+fn event_notifications_jsonrpc_emits_typed_warning_with_localization_code() {
+    let message = single_event_notification(AgentEvent {
+        event_id: "evt_warning".to_string(),
+        sequence: 2,
+        session_id: "sess_1".to_string(),
+        thread_id: Some("thread_1".to_string()),
+        turn_id: Some("turn_1".to_string()),
+        event_type: "runtime.warning".to_string(),
+        timestamp: "2026-07-05T00:00:00Z".to_string(),
+        payload: json!({
+            "code": "skill_not_available",
+            "message": "技能不可用，已继续执行。"
+        }),
+    })
+    .expect("notification");
+
+    let JsonRpcMessage::Notification(notification) = message else {
+        panic!("expected notification");
+    };
+    assert_eq!(notification.method, "warning");
+    assert_eq!(
+        notification.params.expect("params"),
+        json!({
+            "threadId": "thread_1",
+            "message": "技能不可用，已继续执行。",
+            "code": "skill_not_available"
+        })
+    );
+}
+
+#[test]
+fn malformed_runtime_warning_rejects_without_retired_side_channel() {
+    for payload in [
+        json!({}),
+        json!({ "message": "   " }),
+        json!({ "code": 42, "message": "warning" }),
+    ] {
+        let error = event_notifications_jsonrpc(AgentEvent {
+            event_id: "evt_warning_invalid".to_string(),
+            sequence: 3,
+            session_id: "sess_1".to_string(),
+            thread_id: Some("thread_1".to_string()),
+            turn_id: Some("turn_1".to_string()),
+            event_type: "runtime.warning".to_string(),
+            timestamp: "2026-07-05T00:00:00Z".to_string(),
+            payload,
+        })
+        .expect_err("malformed warning must reject");
+
+        assert_eq!(error.code, app_server_protocol::error_codes::RUNTIME_ERROR);
+        assert!(error.message.contains("runtime.warning"));
+    }
+}
+
+#[test]
+fn warning_alias_does_not_activate_typed_notification() {
+    let message = single_event_notification(AgentEvent {
+        event_id: "evt_warning_alias".to_string(),
+        sequence: 4,
+        session_id: "sess_1".to_string(),
+        thread_id: Some("thread_1".to_string()),
+        turn_id: Some("turn_1".to_string()),
+        event_type: "warning".to_string(),
+        timestamp: "2026-07-05T00:00:00Z".to_string(),
+        payload: json!({
+            "code": "skill_not_available",
+            "message": "技能不可用，已继续执行。"
+        }),
+    })
+    .expect("retired side channel");
+
+    let JsonRpcMessage::Notification(notification) = message else {
+        panic!("expected notification");
+    };
+    assert_eq!(notification.method, "agentSession/event");
+}
+
+#[test]
 fn event_notifications_jsonrpc_lowers_turn_failed_to_direct_completion() {
     let message = single_event_notification(AgentEvent {
         event_id: "evt_failed".to_string(),

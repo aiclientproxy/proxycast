@@ -17,7 +17,7 @@ Current scope:
 - supervise sidecar crash, startup failure, and restart with deterministic backoff;
 - route direct v2 Thread / Turn / Item lifecycle notifications into app-owned
   state, including `item/agentMessage/delta`;
-- keep `agentSession/event` only as the raw `media.read.*` side-channel;
+- reject raw `agentSession/event` as a runtime lifecycle transport;
 - use `AppServerConnection` for typed App Server request / response flows;
 - resolve or reject typed reverse `serverRequest` messages by their outer JSON-RPC
   request id; missing response wiring fails closed;
@@ -57,9 +57,6 @@ const eventRouter = new AppServerAgentEventRouter();
 eventRouter.subscribeLifecycle((notification) => {
   mainWindow.webContents.send("agent:lifecycle", notification);
 });
-eventRouter.subscribe((mediaEvent) => {
-  mainWindow.webContents.send("agent:media", mediaEvent);
-});
 
 void (async () => {
   while (!mainWindow.isDestroyed()) {
@@ -92,10 +89,6 @@ const runtime = createAgentRuntimeClient(connection, {
 runtime.subscribeLifecycleEvents((notification) => {
   mainWindow.webContents.send("agent:lifecycle", notification);
 });
-runtime.subscribeEvents((mediaEvent) => {
-  mainWindow.webContents.send("agent:media", mediaEvent);
-});
-
 await runtime.startTurn({
   threadId: session.result.thread.id,
   input: [{ type: "text", text: "整理资料并生成草稿" }],
@@ -116,8 +109,8 @@ await runtime.exportEvidence({
 `readThread` maps to `thread/read` and requires a hydrated `threadId`.
 Lifecycle delivery uses the direct v2 server notifications
 `thread/started`, `turn/started`, `turn/completed`, `item/started`,
-`item/completed`, and `item/agentMessage/delta`. The raw event subscription is
-reserved for `media.read.*`; it is not a second lifecycle protocol.
+`item/completed`, and `item/agentMessage/delta`. Media reads use typed
+`media/read` range responses and do not create a second raw event protocol.
 
 Typed reverse requests are answered through the same connection that received
 them. Use `respondServerRequest(requestId, result)` or

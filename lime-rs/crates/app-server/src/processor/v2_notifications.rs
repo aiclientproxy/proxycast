@@ -10,6 +10,7 @@ mod file_change;
 mod mcp;
 mod plan;
 mod thread_status;
+mod warning;
 
 enum EventProjection {
     Direct(Vec<JsonRpcNotification>),
@@ -136,6 +137,7 @@ impl V2NotificationProjector {
             "model.rerouted" => return self.project_model_rerouted(event),
             "model.verification" => return self.project_model_verification(event),
             "provider_safety_buffering" => self.project_model_safety_buffering(event),
+            "runtime.warning" => return warning::project(event),
             _ => return EventProjection::SideChannel,
         };
         match notification {

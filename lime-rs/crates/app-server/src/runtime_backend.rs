@@ -92,6 +92,8 @@ pub struct RuntimeBackend {
     api_key_provider_service: ApiKeyProviderService,
     db: Option<DbConnection>,
     app_data_source: Arc<RwLock<Option<Arc<dyn AppDataSource>>>>,
+    current_time_gateway:
+        Arc<RwLock<Option<Arc<dyn tool_runtime::current_time::CurrentTimeGateway>>>>,
     live_execution_process: Option<ExecutionProcessServer>,
 }
 
@@ -133,6 +135,7 @@ impl RuntimeBackend {
             api_key_provider_service: ApiKeyProviderService::new(),
             db,
             app_data_source: Arc::new(RwLock::new(None)),
+            current_time_gateway: Arc::new(RwLock::new(None)),
             live_execution_process,
         }
     }
@@ -153,6 +156,7 @@ impl RuntimeBackend {
         native_tools::register_current_native_tools_if_available(
             &self.agent_state,
             &self.app_data_source,
+            &self.current_time_gateway,
         )
         .await
     }

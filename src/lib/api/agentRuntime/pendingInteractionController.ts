@@ -1,6 +1,7 @@
 import {
   METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
   METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
+  METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
   METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
   METHOD_MCP_SERVER_ELICITATION_REQUEST,
   type CommandExecutionApprovalDecision,
@@ -10,6 +11,9 @@ import {
   type FileChangeRequestApprovalResponse,
   type McpServerElicitationRequestParams,
   type McpServerElicitationRequestResponse,
+  type PermissionsRequestApprovalParams,
+  type PermissionsRequestApprovalResponse,
+  type RequestPermissionProfile,
   type ToolRequestUserInputParams,
   type ToolRequestUserInputResponse,
 } from "@limecloud/app-server-client";
@@ -63,10 +67,21 @@ export interface PendingMcpElicitationInteraction extends PendingInteractionBase
   };
 }
 
+export interface PendingPermissionsApprovalInteraction extends PendingInteractionBase {
+  kind: "permissions_approval";
+  payload: {
+    cwd: string;
+    environmentId?: null | string;
+    permissions: RequestPermissionProfile;
+    reason?: null | string;
+  };
+}
+
 export type TypedPendingInteraction =
   | PendingApprovalInteraction
   | PendingUserInputInteraction
-  | PendingMcpElicitationInteraction;
+  | PendingMcpElicitationInteraction
+  | PendingPermissionsApprovalInteraction;
 
 export type PendingInteractionResponse =
   | {
@@ -91,6 +106,11 @@ export type PendingInteractionResponse =
       content: McpElicitationFormContent;
       interactionId: string;
       kind: "mcp_elicitation";
+    }
+  | {
+      decision: "decline" | "grant_session" | "grant_turn";
+      interactionId: string;
+      kind: "permissions_approval";
     };
 
 export type PendingInteractionResponseResult =
@@ -100,6 +120,7 @@ export type PendingInteractionResponseResult =
 type PendingWireResponse =
   | CommandExecutionRequestApprovalResponse
   | FileChangeRequestApprovalResponse
+  | PermissionsRequestApprovalResponse
   | ToolRequestUserInputResponse
   | McpServerElicitationRequestResponse;
 
@@ -112,7 +133,7 @@ interface PendingInteractionEntry {
 }
 
 /**
- * 四种 App Server reverse request 的唯一前端 pending owner。
+ * 五种 App Server reverse request 的唯一前端 pending owner。
  *
  * JSON-RPC action token 由 dispatcher 的请求闭包持有；公开 projection 只包含
  * 领域 identity，避免 Renderer UI 把 transport id 当成可持久化业务 id。
@@ -225,6 +246,19 @@ export class PendingInteractionController {
         this.#settle(response.interactionId, { action: response.action });
         return { accepted: true };
       }
+      case "permissions_approval": {
+        if (pending.projection.kind !== "permissions_approval") {
+          return { accepted: false };
+        }
+        this.#settle(
+          response.interactionId,
+          permissionResponseForDecision(
+            response.decision,
+            pending.projection.payload.permissions,
+          ),
+        );
+        return { accepted: true };
+      }
     }
   }
 
@@ -272,6 +306,18 @@ export class PendingInteractionController {
             { decision: "cancel" },
           );
         },
+      ),
+    );
+    this.#unregister.push(
+      this.#dispatcher.register<
+        PermissionsRequestApprovalParams,
+        PermissionsRequestApprovalResponse
+      >(METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL, (params, _request, signal) =>
+        this.#waitForResponse(
+          permissionsApprovalProjection(params),
+          signal,
+          declinedPermissionsResponse(),
+        ),
       ),
     );
     this.#unregister.push(
@@ -478,6 +524,32 @@ function userInputProjection(
   };
 }
 
+function permissionsApprovalProjection(
+  params: PermissionsRequestApprovalParams,
+): PendingPermissionsApprovalInteraction {
+  return {
+    id: semanticInteractionId(
+      "permissions_approval",
+      params.threadId,
+      params.turnId,
+      params.itemId,
+    ),
+    thread_id: params.threadId,
+    turn_id: params.turnId,
+    item_id: params.itemId,
+    kind: "permissions_approval",
+    status: "pending",
+    payload: {
+      cwd: params.cwd,
+      permissions: params.permissions,
+      ...(params.environmentId === undefined
+        ? {}
+        : { environmentId: params.environmentId }),
+      ...(params.reason === undefined ? {} : { reason: params.reason }),
+    },
+  };
+}
+
 function semanticInteractionId(
   kind: TypedPendingInteraction["kind"],
   ...parts: string[]
@@ -616,6 +688,25 @@ function toWireDecision(
     case "cancel":
       return "cancel";
   }
+}
+
+function permissionResponseForDecision(
+  decision: unknown,
+  permissions: RequestPermissionProfile,
+): PermissionsRequestApprovalResponse {
+  switch (decision) {
+    case "grant_turn":
+      return { permissions, scope: "turn" };
+    case "grant_session":
+      return { permissions, scope: "session" };
+    case "decline":
+    default:
+      return declinedPermissionsResponse();
+  }
+}
+
+function declinedPermissionsResponse(): PermissionsRequestApprovalResponse {
+  return { permissions: {}, scope: "turn" };
 }
 
 function responseFromUserData(

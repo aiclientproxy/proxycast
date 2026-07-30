@@ -68,6 +68,68 @@
     }
   },
   {
+    "id": "agnes/agnes-2.5-flash",
+    "name": "Agnes: Agnes 2.5 Flash",
+    "context_length": 524288,
+    "max_completion_tokens": 65536,
+    "task_families": [
+      "chat",
+      "reasoning",
+      "vision_understanding"
+    ],
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "runtime_features": [
+      "streaming",
+      "tool_calling",
+      "reasoning"
+    ],
+    "supports_tools": true,
+    "supports_reasoning": true,
+    "pricing": {
+      "prompt": 0.0,
+      "completion": 0.0,
+      "request": 0.0,
+      "image": 0.0
+    }
+  },
+  {
+    "id": "agnes/agnes-2.5-pro-alpha",
+    "name": "Agnes: Agnes 2.5 Pro Alpha",
+    "context_length": 1048576,
+    "max_completion_tokens": 65536,
+    "task_families": [
+      "chat",
+      "reasoning",
+      "vision_understanding"
+    ],
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "runtime_features": [
+      "streaming",
+      "tool_calling",
+      "reasoning"
+    ],
+    "supports_tools": true,
+    "supports_reasoning": true,
+    "pricing": {
+      "prompt": 0.0,
+      "completion": 0.0,
+      "request": 0.0,
+      "image": 0.0
+    }
+  },
+  {
     "id": "anthropic/claude-3-haiku",
     "name": "Anthropic: Claude 3 Haiku",
     "context_length": 200000,

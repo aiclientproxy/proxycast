@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   AppServerMediaReadParams,
   AppServerMediaReadResponse,
-  AppServerJsonRpcNotification,
 } from "@/lib/api/appServer";
 import {
   buildMediaReadParams,
@@ -11,7 +10,6 @@ import {
   createMediaReferenceObjectUrlPreviewArtifact,
   createMediaReferenceProgressPreviewArtifact,
   createMediaReferencePreviewArtifact,
-  emitStreamingMediaReadProgress,
 } from "./mediaReferencePreviewArtifacts";
 import { createMediaReferencePagedPreviewArtifact } from "./mediaReferencePreviewPagination";
 
@@ -71,83 +69,6 @@ function createMediaReadResponse(
       relativePath: "sessions/session-media/media/image-1.png",
     },
     ...overrides,
-  };
-}
-
-function createMediaReadChunkNotification(params: {
-  bytes: number;
-  chunkIndex: number;
-  contentBase64: string;
-  contentRange: string;
-  eventId?: string;
-  hasMore: boolean;
-  offset: number;
-  threadId?: string;
-  streamId?: string;
-  totalBytes: number;
-  uri?: string;
-}): AppServerJsonRpcNotification {
-  const threadId = params.threadId ?? "thread-media";
-  return {
-    method: "agentSession/event",
-    params: {
-      event: {
-        eventId: params.eventId ?? `evt-media-read-chunk-${params.chunkIndex}`,
-        sequence: params.chunkIndex,
-        threadId,
-        type: "media.read.chunk",
-        timestamp: "2026-07-07T00:00:00.000Z",
-        payload: {
-          streamId: params.streamId ?? "media-read-stream-1",
-          chunkIndex: params.chunkIndex,
-          done: false,
-          chunk: {
-            threadId,
-            uri: params.uri ?? "sidecar://media/image-1",
-            mimeType: "image/png",
-            bytes: params.bytes,
-            totalBytes: params.totalBytes,
-            offset: params.offset,
-            length: params.bytes,
-            contentRange: params.contentRange,
-            hasMore: params.hasMore,
-            contentBase64: params.contentBase64,
-          },
-        },
-      },
-    },
-  };
-}
-
-function createMediaReadCompletedNotification(): AppServerJsonRpcNotification {
-  return {
-    method: "agentSession/event",
-    params: {
-      event: {
-        eventId: "evt-media-read-completed",
-        sequence: 3,
-        threadId: "thread-media",
-        type: "media.read.completed",
-        timestamp: "2026-07-07T00:00:01.000Z",
-        payload: {
-          streamId: "media-read-stream-1",
-          chunkCount: 2,
-          done: true,
-          media: {
-            threadId: "thread-media",
-            uri: "sidecar://media/image-1",
-            mimeType: "image/png",
-            bytes: 8,
-            totalBytes: 8,
-            offset: 0,
-            length: 8,
-            contentRange: "bytes 0-7/8",
-            hasMore: false,
-            sha256: "sha256-image-1",
-          },
-        },
-      },
-    },
   };
 }
 
@@ -610,7 +531,6 @@ describe("createMediaReferencePreviewArtifact", () => {
         maxBytes: 4,
         offset: 0,
         length: 4,
-        stream: true,
       },
       {
         threadId: "thread-media",
@@ -619,7 +539,6 @@ describe("createMediaReferencePreviewArtifact", () => {
         maxBytes: 4,
         offset: 4,
         length: 4,
-        stream: true,
       },
     ]);
     expect(createObjectUrl).toHaveBeenCalledTimes(1);
@@ -649,215 +568,6 @@ describe("createMediaReferencePreviewArtifact", () => {
       contentKind: "image",
       renderMode: "media",
     });
-  });
-
-  it("stream=true media.read.chunk notification 应驱动 progress artifact", async () => {
-    const target = {
-      kind: "media_reference" as const,
-      index: 0,
-      reference: {
-        kind: "image",
-        uri: "sidecar://media/image-1",
-        mimeType: "image/png",
-        title: "image-1.png",
-        sidecarRef: {
-          ref: "sidecar://media/image-1",
-          kind: "media",
-          relativePath: "sessions/session-media/media/image-1.png",
-        },
-      },
-    };
-    const responses = [
-      {
-        media: createMediaReadResponse(),
-        notifications: [
-          createMediaReadChunkNotification({
-            bytes: 4,
-            chunkIndex: 1,
-            contentBase64: encodeBase64("ABCD"),
-            contentRange: "bytes 0-3/8",
-            hasMore: true,
-            offset: 0,
-            totalBytes: 8,
-          }),
-        ],
-      },
-      {
-        media: createMediaReadResponse({
-          bytes: 4,
-          offset: 4,
-          length: 4,
-          contentRange: "bytes 4-7/8",
-          hasMore: false,
-          contentBase64: encodeBase64("EFGH"),
-        }),
-        notifications: [
-          createMediaReadChunkNotification({
-            bytes: 4,
-            chunkIndex: 2,
-            contentBase64: encodeBase64("EFGH"),
-            contentRange: "bytes 4-7/8",
-            hasMore: false,
-            offset: 4,
-            totalBytes: 8,
-          }),
-          createMediaReadCompletedNotification(),
-        ],
-      },
-    ];
-    const readMedia = vi.fn(async () => {
-      const response = responses.shift();
-      if (!response) {
-        throw new Error("unexpected extra media read");
-      }
-      return response;
-    });
-    const onProgress = vi.fn();
-
-    const artifact = await createMediaReferenceChunkedObjectUrlPreviewArtifact({
-      message: {
-        id: "assistant-media-sidecar-stream",
-        role: "assistant",
-        content: "",
-        timestamp: new Date("2026-07-07T00:00:00.000Z"),
-      },
-      target,
-      threadId: "thread-media",
-      t,
-      readMedia,
-      createObjectUrl: vi.fn(() => "blob:streamed-media"),
-      onProgress,
-      chunkBytes: 4,
-      maxBytes: 16,
-    });
-
-    expect(readMedia).toHaveBeenCalledTimes(2);
-    expect(readMedia.mock.calls[0]?.[0]).toMatchObject({ stream: true });
-    expect(readMedia.mock.calls[1]?.[0]).toMatchObject({ stream: true });
-    expect(onProgress).toHaveBeenCalledTimes(1);
-    expect(onProgress).toHaveBeenCalledWith({
-      contentRange: "bytes 0-3/8",
-      hasMore: true,
-      loadedBytes: 4,
-      mimeType: "image/png",
-      sha256: undefined,
-      totalBytes: 8,
-    });
-    expect(artifact?.content).toBe("blob:streamed-media");
-  });
-
-  it("media.read.chunk progress 应按 threadId / streamId / uri / offset fail closed", () => {
-    const onProgress = vi.fn();
-    const seenEventIds = new Set<string>();
-
-    expect(
-      emitStreamingMediaReadProgress({
-        expectedOffset: 0,
-        expectedStreamId: "media-read-stream-expected",
-        expectedUri: "sidecar://media/image-1",
-        notifications: [
-          createMediaReadChunkNotification({
-            bytes: 4,
-            chunkIndex: 1,
-            contentBase64: encodeBase64("ABCD"),
-            contentRange: "bytes 0-3/8",
-            hasMore: true,
-            offset: 0,
-            streamId: "media-read-stream-other",
-            totalBytes: 8,
-          }),
-          createMediaReadChunkNotification({
-            bytes: 4,
-            chunkIndex: 2,
-            contentBase64: encodeBase64("ABCD"),
-            contentRange: "bytes 0-3/8",
-            hasMore: true,
-            offset: 0,
-            threadId: "session-other",
-            streamId: "media-read-stream-expected",
-            totalBytes: 8,
-          }),
-          createMediaReadChunkNotification({
-            bytes: 4,
-            chunkIndex: 3,
-            contentBase64: encodeBase64("ABCD"),
-            contentRange: "bytes 4-7/8",
-            hasMore: true,
-            offset: 4,
-            streamId: "media-read-stream-expected",
-            totalBytes: 8,
-          }),
-          createMediaReadChunkNotification({
-            bytes: 4,
-            chunkIndex: 4,
-            contentBase64: encodeBase64("ABCD"),
-            contentRange: "bytes 0-3/8",
-            hasMore: true,
-            offset: 0,
-            streamId: "media-read-stream-expected",
-            totalBytes: 8,
-            uri: "sidecar://media/image-other",
-          }),
-        ],
-        onProgress,
-        seenEventIds,
-        threadId: "thread-media",
-      }).emitted,
-    ).toBe(false);
-    expect(onProgress).not.toHaveBeenCalled();
-
-    const firstResult = emitStreamingMediaReadProgress({
-      expectedOffset: 0,
-      expectedUri: "sidecar://media/image-1",
-      notifications: [
-        createMediaReadChunkNotification({
-          bytes: 4,
-          chunkIndex: 5,
-          contentBase64: encodeBase64("ABCD"),
-          contentRange: "bytes 0-3/8",
-          eventId: "evt-media-live-1",
-          hasMore: true,
-          offset: 0,
-          streamId: "media-read-stream-bound",
-          totalBytes: 8,
-        }),
-      ],
-      onProgress,
-      seenEventIds,
-      threadId: "thread-media",
-    });
-
-    expect(firstResult).toEqual({
-      emitted: true,
-      streamId: "media-read-stream-bound",
-    });
-    expect(onProgress).toHaveBeenCalledTimes(1);
-
-    const duplicateResult = emitStreamingMediaReadProgress({
-      expectedStreamId: firstResult.streamId,
-      notifications: [
-        createMediaReadChunkNotification({
-          bytes: 4,
-          chunkIndex: 5,
-          contentBase64: encodeBase64("ABCD"),
-          contentRange: "bytes 0-3/8",
-          eventId: "evt-media-live-1",
-          hasMore: true,
-          offset: 0,
-          streamId: "media-read-stream-bound",
-          totalBytes: 8,
-        }),
-      ],
-      onProgress,
-      seenEventIds,
-      threadId: "thread-media",
-    });
-
-    expect(duplicateResult).toEqual({
-      emitted: false,
-      streamId: "media-read-stream-bound",
-    });
-    expect(onProgress).toHaveBeenCalledTimes(1);
   });
 
   it("range window 不连续时应放弃 chunked object URL 预览", async () => {

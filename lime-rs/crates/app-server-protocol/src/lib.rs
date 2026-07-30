@@ -20,10 +20,10 @@ pub use jsonrpc_lite::*;
 pub use protocol::app_server_method_catalog;
 pub use protocol::v0::*;
 pub use protocol::v2::{
-    InputModality, Model, ModelAvailabilityNux, ModelListParams, ModelListResponse,
-    ModelListUpdatedNotification, ModelServiceTier, ModelUpgradeInfo, ReasoningEffortOption,
-    METHOD_MODEL_LIST, METHOD_MODEL_LIST_UPDATED, METHOD_THREAD_COMPACT_START,
-    METHOD_THREAD_DECREMENT_ELICITATION, METHOD_THREAD_INCREMENT_ELICITATION,
-    METHOD_THREAD_LOADED_LIST, METHOD_THREAD_RESUME, METHOD_THREAD_SEARCH_OCCURRENCES,
-    V2_SCHEMA_TYPE_NAMES,
+    CurrentTimeReadParams, CurrentTimeReadResponse, InputModality, Model, ModelAvailabilityNux,
+    ModelListParams, ModelListResponse, ModelListUpdatedNotification, ModelServiceTier,
+    ModelUpgradeInfo, ReasoningEffortOption, METHOD_CURRENT_TIME_READ, METHOD_MODEL_LIST,
+    METHOD_MODEL_LIST_UPDATED, METHOD_THREAD_COMPACT_START, METHOD_THREAD_DECREMENT_ELICITATION,
+    METHOD_THREAD_INCREMENT_ELICITATION, METHOD_THREAD_LOADED_LIST, METHOD_THREAD_RESUME,
+    METHOD_THREAD_SEARCH_OCCURRENCES, V2_SCHEMA_TYPE_NAMES,
 };

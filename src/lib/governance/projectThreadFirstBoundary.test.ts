@@ -432,7 +432,8 @@ describe("Project / Thread-first boundary", () => {
     expect(navigationSource).toContain(
       "await readSessionId(normalizedTargetId)",
     );
-    expect(navigationSource).toContain("await switchTopic(sessionId)");
+    expect(navigationSource).toContain("await switchTopic(sessionId");
+    expect(navigationSource).toContain("allowDetachedSession: true");
     expect(navigationSource).not.toContain("isKnownSession");
     expect(threadItemProjectionSource).toContain(
       "buildAgentUiThreadItemEvent(sourceType, item, context)",

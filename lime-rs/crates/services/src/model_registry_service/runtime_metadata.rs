@@ -227,8 +227,8 @@ mod tests {
     };
     use lime_core::database::schema::create_tables;
     use lime_core::models::model_registry::{
-        ModelCapabilities, ModelReasoningEffortSource, ModelReasoningEffortSupport,
-        ModelRuntimeFeature, ModelTaskFamily,
+        ModelCapabilities, ModelCapabilityProvenance, ModelModality, ModelReasoningEffortSource,
+        ModelReasoningEffortSupport, ModelRuntimeFeature, ModelTaskFamily,
     };
     use lime_core::models::RuntimeProviderType;
     use rusqlite::Connection;
@@ -466,5 +466,44 @@ mod tests {
 
         assert_eq!(metadata.reason_code, "model_registry_metadata_missing");
         assert!(metadata.model.is_none());
+    }
+
+    #[test]
+    fn lime_hub_declared_canonical_model_keeps_executable_capability() {
+        let service = service();
+        let mut provider = provider(
+            "lime-hub",
+            "https://llm.limeai.run#lime_tenant_id=tenant-test",
+        );
+        provider.provider.models = vec![ProviderModelConfig::hint("gpt-5.2-pro")];
+
+        let metadata = service
+            .resolve_provider_model_metadata(
+                Some(&provider),
+                "lime-hub",
+                "gpt-5.2-pro",
+                ProviderModelCacheAccess::Unavailable,
+            )
+            .expect("lime-hub model metadata");
+
+        assert_eq!(
+            metadata.source,
+            ProviderModelRegistryMetadataSource::ProviderDeclaredModel
+        );
+        let model = metadata.model.expect("canonical model metadata");
+        assert_eq!(
+            model.capability_provenance,
+            ModelCapabilityProvenance::Canonical
+        );
+        assert_eq!(
+            model.canonical_model_id.as_deref(),
+            Some("openai/gpt-5.2-pro")
+        );
+        assert!(model.task_families.contains(&ModelTaskFamily::Chat));
+        assert!(model.input_modalities.contains(&ModelModality::Text));
+        assert!(model.output_modalities.contains(&ModelModality::Text));
+        assert!(model
+            .runtime_features
+            .contains(&ModelRuntimeFeature::Streaming));
     }
 }

@@ -10,6 +10,7 @@ use async_trait::async_trait;
 struct FixtureGateway {
     state: Arc<Mutex<HashMap<String, FixtureProcess>>>,
     starts: Arc<Mutex<Vec<ExecutionProcessStartParams>>>,
+    grants: Arc<Mutex<Vec<Option<app_server_protocol::protocol::v2::GrantedPermissionProfile>>>>,
 }
 
 #[derive(Clone)]
@@ -25,8 +26,10 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
         _thread_id: &str,
         _display_command: &str,
         params: ExecutionProcessStartParams,
+        granted_permissions: Option<app_server_protocol::protocol::v2::GrantedPermissionProfile>,
     ) -> Result<ExecutionProcessStartResponse, String> {
         self.starts.lock().unwrap().push(params.clone());
+        self.grants.lock().unwrap().push(granted_permissions);
         let command = params.command.last().cloned().unwrap_or_default();
         let running = command == "long-running";
         let initial = snapshot(&params, ExecutionProcessStatus::Running, None, "");
@@ -224,6 +227,7 @@ fn request<'a>(
         tool_call_id: call_id.to_string(),
         cancel_token: None,
         turn_context: None,
+        granted_permissions: None,
     }
 }
 
@@ -269,6 +273,33 @@ async fn exec_command_returns_terminal_output_for_short_process() {
         result.metadata.get("exec_command_call_id"),
         Some(&json!("call-short"))
     );
+}
+
+#[tokio::test]
+async fn exec_command_forwards_grants_outside_public_runtime_metadata() {
+    use app_server_protocol::protocol::v2::{
+        AdditionalNetworkPermissions, GrantedPermissionProfile,
+    };
+
+    let gateway = Arc::new(FixtureGateway::default());
+    let params = json!({ "cmd": "short", "login": false, "yield_time_ms": 250 });
+    let mut request = request(EXEC_COMMAND_TOOL_NAME, &params, "call-granted");
+    let granted = GrantedPermissionProfile {
+        network: Some(AdditionalNetworkPermissions {
+            enabled: Some(true),
+        }),
+        file_system: None,
+    };
+    request.granted_permissions = Some(granted.clone());
+
+    execute_runtime_unified_exec_tool(gateway.clone(), request)
+        .await
+        .expect("granted command result");
+
+    assert_eq!(gateway.grants.lock().unwrap().as_slice(), &[Some(granted)]);
+    let starts = gateway.starts.lock().unwrap();
+    assert_eq!(starts.len(), 1);
+    assert!(starts[0].runtime_metadata.is_none());
 }
 
 #[tokio::test]

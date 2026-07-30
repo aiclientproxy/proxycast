@@ -1,4 +1,4 @@
-use app_server_protocol::protocol::v2::ThreadBackgroundTerminal;
+use app_server_protocol::protocol::v2::{GrantedPermissionProfile, ThreadBackgroundTerminal};
 use app_server_protocol::{
     ExecutionProcessDrainOutputParams, ExecutionProcessDrainOutputResponse,
     ExecutionProcessEmptyResponse, ExecutionProcessIdParams, ExecutionProcessOutputDelta,
@@ -169,7 +169,7 @@ impl ExecutionProcessServer {
         &self,
         params: ExecutionProcessStartParams,
     ) -> Result<ExecutionProcessStartResponse, ExecutionProcessError> {
-        self.start_process_inner(None, params).await
+        self.start_process_inner(None, params, None).await
     }
 
     pub async fn start_thread_process(
@@ -184,14 +184,36 @@ impl ExecutionProcessServer {
                 "background terminal thread id must not be empty".to_string(),
             ));
         }
-        self.start_process_inner(Some((thread_id, display_command)), params)
+        self.start_process_inner(Some((thread_id, display_command)), params, None)
             .await
+    }
+
+    pub(crate) async fn start_thread_process_with_permissions(
+        &self,
+        thread_id: &str,
+        display_command: &str,
+        params: ExecutionProcessStartParams,
+        granted_permissions: Option<GrantedPermissionProfile>,
+    ) -> Result<ExecutionProcessStartResponse, ExecutionProcessError> {
+        let thread_id = thread_id.trim();
+        if thread_id.is_empty() {
+            return Err(ExecutionProcessError::Control(
+                "background terminal thread id must not be empty".to_string(),
+            ));
+        }
+        self.start_process_inner(
+            Some((thread_id, display_command)),
+            params,
+            granted_permissions,
+        )
+        .await
     }
 
     async fn start_process_inner(
         &self,
         thread_scope: Option<(&str, &str)>,
         params: ExecutionProcessStartParams,
+        granted_permissions: Option<GrantedPermissionProfile>,
     ) -> Result<ExecutionProcessStartResponse, ExecutionProcessError> {
         if params.command.is_empty() {
             return Err(ExecutionProcessError::EmptyCommand);
@@ -260,6 +282,7 @@ impl ExecutionProcessServer {
                 requested_policy: params.sandbox_policy.as_deref(),
                 command: params.command,
                 working_directory: &working_directory,
+                granted_permissions: granted_permissions.as_ref(),
             })
             .map_err(|error| ExecutionProcessError::Sandbox(error.to_string()))?
         } else {

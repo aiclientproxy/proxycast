@@ -101,7 +101,7 @@ impl AppServer {
         }
     }
 
-    async fn wait_server_request<P, R>(
+    pub(crate) async fn wait_server_request<P, R>(
         &self,
         method: &str,
         thread_id: &str,
@@ -229,7 +229,7 @@ impl AppServer {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum WaitServerRequestError {
+pub(crate) enum WaitServerRequestError {
     Transition,
     Failed(String),
 }

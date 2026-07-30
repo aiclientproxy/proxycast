@@ -165,6 +165,9 @@
         "vision": false
       }
     },
+    "capabilityProvenance": {
+      "type": "string"
+    },
     "contextWindow": {
       "format": "int64",
       "type": [
@@ -373,6 +376,7 @@
     }
   },
   "required": [
+    "capabilityProvenance",
     "createdAt",
     "deploymentSource",
     "displayName",

@@ -130,6 +130,17 @@ impl ExecutionBackend for RuntimeBackend {
         Ok(())
     }
 
+    fn set_current_time_gateway(
+        &self,
+        gateway: Arc<dyn tool_runtime::current_time::CurrentTimeGateway>,
+    ) -> Result<(), RuntimeCoreError> {
+        let mut guard = self.current_time_gateway.write().map_err(|_| {
+            RuntimeCoreError::Backend("current-time gateway lock poisoned".to_string())
+        })?;
+        *guard = Some(gateway);
+        Ok(())
+    }
+
     fn effective_turn_runtime_options(
         &self,
         request: &ExecutionRequest,
@@ -288,6 +299,28 @@ impl ExecutionBackend for RuntimeBackend {
                 sink.emit(action_response::action_canceled_event(&request))
             }
         }
+    }
+
+    async fn resolve_permission_action(
+        &self,
+        request: &crate::PermissionRespondRequest,
+    ) -> Result<(), RuntimeCoreError> {
+        let scope = lime_agent::AgentActionRequiredScope::from_parts(
+            Some(request.session_id.clone()),
+            Some(request.thread_id.clone()),
+            Some(request.turn_id.clone()),
+        )
+        .ok_or_else(|| RuntimeCoreError::ActionResponse {
+            code: "action_scope_missing".to_string(),
+            request_id: request.request_id.clone(),
+        })?;
+        self.agent_state
+            .resolve_permission_action(&request.session_id, &request.request_id, Some(scope))
+            .await
+            .map_err(|error| RuntimeCoreError::ActionResponse {
+                code: error.code().to_string(),
+                request_id: error.request_id().to_string(),
+            })
     }
 
     async fn read_tool_inventory(

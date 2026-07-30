@@ -119,6 +119,8 @@ pub struct Skill {
     pub name: String,
     pub description: String,
     pub directory: String,
+    #[serde(rename = "localDirectoryPath", skip_serializing_if = "Option::is_none")]
+    pub local_directory_path: Option<String>,
     #[serde(rename = "readmeUrl", skip_serializing_if = "Option::is_none")]
     pub readme_url: Option<String>,
     pub installed: bool,

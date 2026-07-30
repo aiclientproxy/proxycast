@@ -64,6 +64,7 @@ function createModelInfo(overrides: Record<string, unknown> = {}) {
       reasoning: false,
       reasoningEffort: null,
     },
+    capabilityProvenance: "provider_explicit",
     taskFamilies: ["chat"],
     inputModalities: ["text"],
     outputModalities: ["text"],
@@ -643,6 +644,12 @@ describe("modelRegistry API", () => {
         source: "Api",
         request_url: "https://api.openai.com/v1/models",
         from_cache: true,
+        models: [
+          expect.objectContaining({
+            id: "gpt-4.1",
+            capability_provenance: "provider_explicit",
+          }),
+        ],
       }),
     );
 
@@ -650,6 +657,32 @@ describe("modelRegistry API", () => {
       providerId: "openai",
     });
     expect(safeInvoke).not.toHaveBeenCalledWith("fetch_provider_models_auto");
+  });
+
+  it("Provider 实时目录应保留 inferred_hint 能力来源", async () => {
+    resolveAppServerRequest({
+      models: [
+        createModelInfo({
+          id: "unknown-model",
+          capabilityProvenance: "inferred_hint",
+        }),
+      ],
+      source: "Api",
+      error: null,
+      shouldPromptError: false,
+      fromCache: true,
+    });
+
+    await expect(fetchProviderModelsAuto("custom-provider")).resolves.toEqual(
+      expect.objectContaining({
+        models: [
+          expect.objectContaining({
+            id: "unknown-model",
+            capability_provenance: "inferred_hint",
+          }),
+        ],
+      }),
+    );
   });
 
   it("App Server 模型读链缺少必需 result 时不应回退 legacy", async () => {

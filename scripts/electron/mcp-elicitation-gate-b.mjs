@@ -42,6 +42,8 @@ const DEFAULTS = {
 const LOG_PREFIX = "[smoke:mcp-elicitation-gate-b]";
 const FINAL_TEXT = "MCP_ELICITATION_GATE_B_DONE";
 const TOOL_SUFFIX = "release_check";
+const DYNAMIC_TOOL_NAME = "desktop__appInfo";
+const DYNAMIC_TOOL_CALL_ID = "call-desktop-app-info";
 const NAVIGATION_RESTORE_STORAGE_KEY = "lime.appNavigation.restore.v1";
 const REQUIRED_METHODS = [
   "workspace/default/ensure",
@@ -456,13 +458,19 @@ async function startRuntimeTurn(
   });
   observedMethods.add(update.method);
   const gui = await openRuntimeThreadInGui(page, sessionId, options);
+  const dynamicLifecyclePromise = probeDynamicToolLifecycle(
+    page,
+    threadId,
+    options,
+    observedMethods,
+  );
   const turn = await appServerCallFromPage(page, "turn/start", {
     threadId,
     clientUserMessageId: `mcp-elicitation-${Date.now()}-${process.pid}`,
     input: [
       {
         type: "text",
-        text: "Run the release check through the available MCP tool.",
+        text: "Read the desktop app information, then run the release check through the available MCP tool.",
       },
     ],
     cwd: workspaceRoot,
@@ -478,7 +486,9 @@ async function startRuntimeTurn(
             source: "smoke:mcp-elicitation-gate-b",
             skip_mcp_prewarm: false,
           },
-          tool_scope: { allowed_tools: [expectedToolName] },
+          tool_scope: {
+            allowed_tools: [DYNAMIC_TOOL_NAME, expectedToolName],
+          },
         }),
       },
     },
@@ -486,7 +496,9 @@ async function startRuntimeTurn(
   observedMethods.add(turn.method);
   const turnId = String(turn.result?.turn?.id || "").trim();
   assert(turnId, "turn/start 未返回 canonical turn.id");
+  const dynamicLifecycle = await dynamicLifecyclePromise;
   return {
+    dynamicLifecycle,
     expectedToolName,
     gui,
     route,
@@ -543,6 +555,53 @@ function providerRequestSummary(requests) {
       .map((tool) => String(tool?.function?.name || tool?.name || "").trim())
       .filter(Boolean),
   }));
+}
+
+function dynamicToolItems(value, items = []) {
+  if (Array.isArray(value)) {
+    value.forEach((entry) => dynamicToolItems(entry, items));
+    return items;
+  }
+  if (!value || typeof value !== "object") return items;
+  if (
+    value.type === "dynamicToolCall" &&
+    value.namespace === "desktop" &&
+    value.tool === "appInfo"
+  ) {
+    items.push(value);
+  }
+  Object.values(value).forEach((entry) => dynamicToolItems(entry, items));
+  return items;
+}
+
+async function probeDynamicToolLifecycle(
+  page,
+  threadId,
+  options,
+  observedMethods,
+) {
+  const startedAt = Date.now();
+  const statuses = new Set();
+  const snapshots = [];
+  while (Date.now() - startedAt < Math.min(options.timeoutMs, 15_000)) {
+    const read = await appServerCallFromPage(page, "thread/read", {
+      threadId,
+      includeTurns: true,
+    });
+    observedMethods.add(read.method);
+    const items = dynamicToolItems(read.result);
+    for (const item of items) {
+      if (typeof item?.status === "string") statuses.add(item.status);
+    }
+    if (items.length > 0) {
+      snapshots.push(sanitizeJson(items));
+    }
+    if (statuses.has("inProgress") && statuses.has("completed")) {
+      return { statuses: Array.from(statuses), snapshots };
+    }
+    await sleep(10);
+  }
+  return { statuses: Array.from(statuses), snapshots };
 }
 
 function isExactEmptyObject(value) {
@@ -703,6 +762,10 @@ async function run() {
     rootDialogAbsent: false,
     mcpLedgerAccepted: false,
     providerFinalTextObserved: false,
+    dynamicToolProviderResultObserved: false,
+    dynamicToolCanonicalCompleted: false,
+    dynamicToolStartedObserved: false,
+    dynamicToolRequestHiddenFromRenderer: false,
     providerRequestCount: 0,
     consoleErrors: [],
     missingRequiredMethods: [...REQUIRED_METHODS],
@@ -720,6 +783,7 @@ async function run() {
   let fixture = null;
   let mcpFixture = null;
   let server = null;
+  let dynamicToolLifecycleTraceRaw = "";
 
   try {
     logStage("start-provider-fixture");
@@ -727,6 +791,12 @@ async function run() {
     const expectedToolName = toolName(serverName);
     fixture = await startOpenAiCompatibleFixtureServer({
       scriptedResponses: [
+        {
+          type: "tool_call",
+          id: DYNAMIC_TOOL_CALL_ID,
+          name: DYNAMIC_TOOL_NAME,
+          arguments: {},
+        },
         {
           type: "tool_call",
           id: "call-mcp-elicitation-release-check",
@@ -796,6 +866,7 @@ async function run() {
       workspaceRoot: workspace.rootPath,
     });
     raw.runtime = sanitizeJson(runtime);
+    raw.dynamicToolLifecycle = sanitizeJson(runtime.dynamicLifecycle);
 
     logStage("submit-renderer-form");
     const { form, rootDialogAbsent } = await waitForElicitationForm(
@@ -804,6 +875,13 @@ async function run() {
     );
     summary.rendererFormVisible = true;
     summary.rootDialogAbsent = rootDialogAbsent;
+    dynamicToolLifecycleTraceRaw =
+      (await page.evaluate(() =>
+        window.localStorage.getItem("lime_invoke_trace_buffer_v1"),
+      )) || "";
+    raw.dynamicToolLifecycleTrace = sanitizeJson(
+      parseInvokeTraceRaw(dynamicToolLifecycleTraceRaw),
+    );
     await page.screenshot({ path: screenshotPath, fullPage: true });
     summary.screenshot = screenshotPath;
     summary.formClosedAfterResolved = await submitElicitation(
@@ -839,6 +917,9 @@ async function run() {
     const providerRequests = providerRequestSummary(fixture.requests);
     raw.providerRequests = sanitizeJson(providerRequests);
     summary.providerRequestCount = providerRequests.length;
+    summary.dynamicToolProviderResultObserved = JSON.stringify(
+      fixture.requests.slice(1),
+    ).includes(DYNAMIC_TOOL_CALL_ID);
     summary.mcpLedgerAccepted = completion.ledger.some(
       (entry) =>
         entry?.action === "accept" && entry?.content?.confirmed === true,
@@ -847,6 +928,19 @@ async function run() {
       completion.read.result,
     ).includes(FINAL_TEXT);
     const traceRaw = completion.read.traceRaw;
+    const dynamicItems = dynamicToolItems(completion.read.result);
+    summary.dynamicToolCanonicalCompleted =
+      dynamicItems.length === 1 &&
+      dynamicItems[0]?.status === "completed" &&
+      dynamicItems[0]?.success === true;
+    const combinedTraceRaw = `${dynamicToolLifecycleTraceRaw}\n${traceRaw}`;
+    summary.dynamicToolStartedObserved =
+      runtime.dynamicLifecycle.statuses.includes("inProgress") &&
+      runtime.dynamicLifecycle.statuses.includes("completed");
+    summary.dynamicToolRequestHiddenFromRenderer = !combinedTraceRaw.includes(
+      '"method":"item/tool/call"',
+    );
+    raw.dynamicToolItems = sanitizeJson(dynamicItems);
     const evidence = electronEvidence(traceRaw, observedMethods);
     summary.appServerHandleJsonLinesSeen =
       evidence.appServerHandleJsonLinesSeen;
@@ -869,12 +963,32 @@ async function run() {
       `观察到 legacy MCP facade: ${summary.legacyMcpCommandsSeen.join(", ")}`,
     );
     assert(
+      providerRequests[0]?.toolNames?.includes(DYNAMIC_TOOL_NAME),
+      `首个 provider request 未携带 Electron dynamic tool: ${DYNAMIC_TOOL_NAME}`,
+    );
+    assert(
       providerRequests[0]?.toolNames?.includes(expectedToolName),
       `首个 provider request 未携带 scoped MCP tool: ${expectedToolName}`,
     );
     assert(
-      providerRequests.length >= 2,
-      "provider 未完成 tool result 后的第二次请求",
+      providerRequests.length >= 3,
+      "provider 未完成 dynamic tool 与 MCP tool result 后的后续请求",
+    );
+    assert(
+      summary.dynamicToolProviderResultObserved,
+      "dynamic tool response 未进入 provider 后续请求",
+    );
+    assert(
+      summary.dynamicToolCanonicalCompleted,
+      "thread/read 未观察到唯一 completed desktop/appInfo DynamicToolCall",
+    );
+    assert(
+      summary.dynamicToolStartedObserved,
+      "未观察到 desktop/appInfo DynamicToolCall inProgress 投影",
+    );
+    assert(
+      summary.dynamicToolRequestHiddenFromRenderer,
+      "item/tool/call reverse request 泄露到 Renderer",
     );
     assert(
       summary.rendererConfirmedSubmitted,

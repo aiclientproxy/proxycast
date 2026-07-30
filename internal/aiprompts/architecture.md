@@ -1346,7 +1346,15 @@ reasons such as `chat_wire_text_image_only` and is never used as capability prov
 Provider configuration has one shape: `Provider.models[]` entries contain `id`, optional `displayName` and optional
 `capability`. Entries with capability become `provider_explicit`; entries without it remain `inferred_hint` and fail
 closed. Protocol, endpoint and authentication can still be resolved for diagnostics, but an id-only entry cannot
-authorize a Turn. In particular, the Ollama Responses transport remains the single current wire owner while its
+authorize a Turn. The product-owned `lime-hub` gateway is the only additional hosting-provider identity allowed to map
+an id-only entry through the bundled canonical registry: admission becomes `canonical` only when the model resolves to an
+existing canonical record; unknown OEM model ids remain `inferred_hint` and fail closed. This restores persisted Windows
+Lime Hub selections without mutating user data or treating the gateway name itself as capability evidence.
+`modelProvider/fetchModels` carries backend capability provenance into the typed Renderer gateway; live API metadata
+wins over same-id local hints, and model selectors exclude `inferred_hint` entries instead of offering a route that
+RuntimeCore will reject. Bundled provider records may authorize documented upstream models such as Agnes 2.5, while
+unknown chat, image and video ids remain catalog-only hints. In particular,
+the Ollama Responses transport remains the single current wire owner while its
 discovered id-only model entries are not execution-ready until provider configuration supplies a typed capability
 snapshot. The deleted `custom_models/customModels` fields, name-based route authorization and Renderer false/default
 capability fabrication are `dead / deleted / forbidden-to-restore`; no `compat/deprecated` path exists.
@@ -1548,7 +1556,7 @@ Media references remain canonical Thread/Turn/Item data while the App Server own
 
 ```text
 canonical Media Item + host-safe sidecar URI
-  -> Renderer typed media/read { threadId, uri, offset, length, maxBytes, stream }
+  -> Renderer typed media/read { threadId, uri, offset, length, maxBytes }
   -> Electron preload/contextBridge -> app_server_handle_json_lines
   -> App Server v2 dispatcher -> thread-scoped SidecarStore reader
   -> bounded bytes + range/size/digest metadata
@@ -1572,11 +1580,122 @@ Rust or Renderer boundary. The controlled Electron Gate B additionally proves a 
 sidecar-unavailable metadata fallback through real preload/IPC/App Server JSON-RPC/read-model/GUI boundaries; it does not
 claim live-provider execution or every audio/platform failure mode.
 
-The former v0 `agentSession/media/read` method, `AgentSessionMediaRead*` types and matching client/build symbols are
-`dead / deleted / forbidden-to-restore`. `media.read.chunk` and `media.read.completed` remain `deprecated` transient event
-bypasses under V2-05 until their consumers move to the canonical projection; they are not a second media-read owner and
-this slice does not classify the broader notification surface as complete. No production `compat` path was added.
+The former v0 `agentSession/media/read` method, `AgentSessionMediaRead*` types, `MediaReadParams.stream`,
+`media.read.chunk`, `media.read.completed`, matching raw-event subscriptions and Renderer live-drain helpers are
+`dead / deleted / forbidden-to-restore`. Media progress is derived only after each bounded range response passes offset,
+length, digest and size validation. This closes only the media transient bypass; the broader V2-05 notification surface
+remains incomplete. No production `compat` path was added.
 
 Architecture impact: major; this replaces the GUI media read protocol and makes media failure rendering explicit while
 preserving App Server, SidecarStore and Thread/Turn/Item ownership. Architecture diagram updated: this section and the
-desktop/App Server projection chain above. Responsible developer confirmation: root, 2026-07-29.
+desktop/App Server projection chain above. Responsible developer confirmation: root, 2026-07-29. V2-05 media transient
+retirement confirmation: root, 2026-07-31.
+
+## 25. Host Capabilities And Product-Scope Reverse Requests
+
+The remaining V2-04 reverse requests are host-owned capabilities on the same canonical product chain:
+
+```text
+Electron Desktop Host
+  -> App Server JSON-RPC / server-request dispatcher
+  -> RuntimeCore session loop and exact response waiter
+  -> Thread/Turn/Item canonical lifecycle and DynamicToolCall projection
+  -> GUI PendingInteraction / typed timeline
+```
+
+`currentTime/read` is a read-only Electron host capability. The host is the only system-clock reader; App Server validates
+the canonical thread scope and deadline, and RuntimeCore resumes the exact waiter. The request does not create a Thread
+Item or expose a renderer clock API. Non-integer, out-of-range, duplicate, late, or mismatched responses fail closed.
+
+`item/permissions/requestApproval` is owned by `tool-runtime` (permission profile parsing), `agent-runtime` (typed action
+and waiter), App Server (JSON-RPC request/response validation), and the existing PendingInteractionController (GUI
+decision surface). Session, thread, turn, cwd, environment, profile subset and response identity are checked at every
+boundary. A grant is applied only after the exact pending request resolves; Renderer cannot synthesize a grant or bypass
+the runtime policy.
+
+`item/tool/call` is an Electron Desktop Host binding, not a renderer command. `thread/start` and `thread/resume` receive
+the host-owned `desktop.appInfo` namespace; after the canonical Thread identity is observed, the binding is frozen. The
+host accepts only the exact namespace/tool/schema/arguments/call identity and returns app name, version, locale and
+platform. It never accepts paths, shell commands, URLs, arbitrary IPC or handler parameters.
+
+DynamicTool definitions are trusted only from session metadata. Runtime snapshots flatten namespace routes (for example
+`desktop + appInfo -> desktop__appInfo`) and reject deferred loading, invalid schemas, reserved names and collisions with
+native/MCP/gateway tools. The executor registers the exact `DynamicTool` waiter before emitting
+`dynamic_tool.requested`. Canonical `ThreadItemPayload::DynamicToolCall` stores callId, namespace, tool, raw JSON
+arguments, ordered text/image/audio content, success and duration as typed fields. App Server projection, provider history,
+read model and GUI consume those fields directly; metadata is limited to non-contract enrichment.
+
+The three reverse requests, the host binding, the typed dynamic tool payload, and the permission/current-time waiters are
+`current`; no compatibility owner was added. V2-05 notification, transient bypass and broader recovery surfaces remain
+`deprecated / migration-open`. Legacy MCP Desktop commands, renderer-forged bindings, metadata core-field inference and
+production mock fallback are `dead / deleted / forbidden-to-restore`.
+
+Architecture impact: major; this closes the V2-04 host-capability boundary while preserving Electron as a thin Desktop
+Host, App Server as JSON-RPC/projection owner, RuntimeCore as session/turn owner, and Thread/Turn/Item as the durable
+fact source. Architecture diagram updated: this section and the reverse-request path above. Responsible developer
+confirmation: root, 2026-07-30.
+
+## 26. Config Warning V2 Notification Owner
+
+Local configuration warnings use the existing App Server product chain and a single typed v2 notification owner:
+
+```text
+initialize / turn/start
+  -> App Server config parser and RequestProcessor
+  -> v2 ConfigWarningNotification { summary, details, path?, range? }
+  -> app_server_handle_json_lines response notification batch
+  -> typed Renderer response projection
+  -> deduplicated five-locale global warning toast
+```
+
+`configWarning` keeps its existing wire method and producer timing. `details` is nullable; `path` and `range` are optional,
+and `TextPosition` uses the Codex 1-based line/column contract. The Renderer only projects a decoded notification and does
+not parse configuration files, invent warnings, or fall back to a mock backend. The notification is global UI state and
+does not create or mutate a Thread/Turn/Item.
+
+The v2 `config` module, v2 `ServerNotification`, central method catalog and v2 schema registry are the sole `current`
+typed owner. The former v0 constant, DTOs, notification variant, catalog entry, schema files and positive tests are
+`dead / deleted / forbidden-to-restore`; a v0 decoder regression test keeps that boundary fail closed. No `compat` owner
+was added.
+
+Architecture impact: major because the public notification/schema owner moved from v0 to v2, although the wire and
+runtime behavior did not change. The canonical product direction remains Electron Desktop Host -> App Server JSON-RPC ->
+RuntimeCore -> Thread/Turn/Item projection -> GUI. Architecture diagram updated: this section and the App Server protocol
+boundary above. Responsible developer confirmation: root, 2026-07-31.
+
+## 27. Runtime Warning V2 Notification And Recovery Owner
+
+Thread-scoped runtime warnings use one typed live path and one durable event fact source:
+
+```text
+AgentEvent::Warning { code?, message }
+  -> persisted runtime.warning with canonical thread identity
+  -> V2NotificationProjector
+  -> v2 warning { threadId, message, code? }
+  -> Renderer typed projection { type: "warning" }
+  -> existing localized deduplicated toast
+
+persisted runtime.warning
+  -> full canonical read / history-limit projection summary
+  -> derived historical warning item with message + code?
+  -> the same GUI warning presentation contract
+```
+
+The Codex base contract remains `threadId?: string | null` plus required `message`. Lime adds only optional `code`, omitted
+when absent, because the current structured-input producer already emits stable warning codes and the five-locale GUI must
+not expose a backend-language message in place of localized Skill/Mention warnings. `code` changes presentation only; it
+does not select providers, mutate runtime state, or create another warning owner. Malformed message/code and missing
+thread identity fail closed in the current Agent Chat path. The generic protocol can still decode a global
+`threadId: null` warning, but no global GUI delivery is claimed until a real global producer and GN owner exist.
+
+`runtime.warning` remains the sole durable fact. It is not forced into `ThreadItemPayload` and does not create an Item
+lifecycle. Full cold reads and limited projection-summary reads derive the warning beside canonical items from the same
+event log, preserving message, sequence and localization code without a second store. Live raw `agentSession/event`
+warning wrappers are `dead / forbidden-to-restore` and covered only by negative tests. `guardianWarning` stays `planned`
+because Lime has no Guardian review runtime producer; a schema-only or Renderer-fixture implementation would not make it
+current.
+
+Architecture impact: major because a live notification and recovery surface moved from the deprecated raw side channel
+to the v2 protocol/projector/Renderer boundary. The product direction remains Electron Desktop Host -> App Server
+JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI. Architecture diagram updated: this section and the App
+Server notification boundary above. Responsible developer confirmation: root, 2026-07-31.

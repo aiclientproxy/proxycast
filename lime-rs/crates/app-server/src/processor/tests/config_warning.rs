@@ -3,10 +3,12 @@
 use super::tests_support::initialize_processor;
 use crate::processor::config_warning::{ConfigWarningProvider, ConfigWarningScope};
 use crate::RuntimeCore;
+use app_server_protocol::protocol::v2::{
+    ConfigWarningNotification, ServerNotification, METHOD_CONFIG_WARNING,
+};
 use app_server_protocol::{
-    AgentSessionStartParams, ClientCapabilities, ClientInfo, ConfigWarningNotification,
-    InitializeParams, JsonRpcMessage, JsonRpcRequest, RequestId, ServerNotification,
-    METHOD_CONFIG_WARNING, METHOD_INITIALIZE, METHOD_TURN_START,
+    AgentSessionStartParams, ClientCapabilities, ClientInfo, InitializeParams, JsonRpcMessage,
+    JsonRpcRequest, RequestId, METHOD_INITIALIZE, METHOD_TURN_START,
 };
 use serde_json::json;
 use std::sync::Arc;

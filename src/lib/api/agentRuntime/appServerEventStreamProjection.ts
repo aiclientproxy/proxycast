@@ -20,8 +20,6 @@ const RAW_SIDE_CHANNEL_TYPES = new Set([
   "image_task.parameters.required",
   "image_task_parameters_required",
   "image_task.presentation.generated",
-  "media.read.chunk",
-  "media.read.completed",
   "runtime.status",
 ]);
 

@@ -35,9 +35,18 @@ export class FileShellHost {
     return openFilePreviewBrowserWindow(url, title);
   }
 
-  revealInFinder(args: HostArgs): Record<string, never> {
+  async revealInFinder(args: HostArgs): Promise<Record<string, never>> {
     const request = readRequest(args);
     const targetPath = readRequiredString(request, "path");
+
+    if (await isDirectory(targetPath)) {
+      const errorMessage = await shell.openPath(targetPath);
+      if (errorMessage) {
+        throw new Error(errorMessage);
+      }
+      return {};
+    }
+
     shell.showItemInFolder(targetPath);
     return {};
   }
@@ -258,6 +267,14 @@ function readElectronPath(name: ElectronKnownPathName): string | null {
     return next.trim() ? next : null;
   } catch {
     return null;
+  }
+}
+
+async function isDirectory(targetPath: string): Promise<boolean> {
+  try {
+    return (await stat(targetPath)).isDirectory();
+  } catch {
+    return false;
   }
 }
 

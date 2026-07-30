@@ -397,6 +397,15 @@ pub enum AgentEvent {
         scope: Option<AgentActionRequiredScope>,
     },
 
+    #[serde(rename = "dynamic_tool_call_requested")]
+    DynamicToolCallRequested {
+        call_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        namespace: Option<String>,
+        tool: String,
+        arguments: Value,
+    },
+
     #[serde(rename = "turn_context")]
     TurnContext {
         session_id: String,

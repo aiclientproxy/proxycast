@@ -70,9 +70,7 @@ function resolveProviderSelectionValue(provider: ConfiguredProvider): string {
 }
 
 function resolveInitialProviderModel(provider: ConfiguredProvider): string {
-  return (
-    provider.models?.find((modelId) => modelId.trim().length > 0) ?? ""
-  );
+  return provider.models?.find((modelId) => modelId.trim().length > 0) ?? "";
 }
 
 function resolveInitialProviderModelFromOptions(
@@ -390,17 +388,28 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const modelOptions = useMemo(
     () =>
-      visibleModels.map((item) => {
+      visibleModels.flatMap((item) => {
         const compatibilityIssue = getProviderModelCompatibilityIssue({
           providerType,
           configuredProviderType: selectedProvider?.type,
           model: item.id,
+          capabilityProvenance: item.capability_provenance,
+          enforceExecutableCapability: true,
         });
-        return {
-          id: item.id,
-          metadata: item,
-          compatibilityIssue,
-        };
+
+        if (
+          compatibilityIssue?.code === "runtime_capability_not_authoritative"
+        ) {
+          return [];
+        }
+
+        return [
+          {
+            id: item.id,
+            metadata: item,
+            compatibilityIssue,
+          },
+        ];
       }),
     [providerType, selectedProvider?.type, visibleModels],
   );
@@ -736,6 +745,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             <Button
               variant="outline"
               role="combobox"
+              data-testid="model-selector"
               aria-expanded={open}
               disabled={disabled}
               className={cn(
@@ -762,6 +772,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             <Button
               variant="outline"
               role="combobox"
+              data-testid="model-selector"
               aria-expanded={open}
               disabled={disabled}
               className={defaultTriggerClassName}

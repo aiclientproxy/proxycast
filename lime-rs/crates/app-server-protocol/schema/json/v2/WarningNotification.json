@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A user-visible runtime warning projected from the current event stream.",
+  "properties": {
+    "code": {
+      "description": "Lime-owned warning code used for localized presentation.",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "message": {
+      "description": "Concise warning message for the user.",
+      "type": "string"
+    },
+    "threadId": {
+      "description": "Optional thread target when the warning applies to a specific thread.",
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "message"
+  ],
+  "title": "WarningNotification",
+  "type": "object"
+}

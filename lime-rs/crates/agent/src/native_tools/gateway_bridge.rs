@@ -1,5 +1,6 @@
 use crate::native_tools::NativeRegistration;
 use std::sync::Arc;
+use tool_runtime::current_time::CurrentTimeGateway;
 use tool_runtime::gateway_dispatch_execution::RuntimeGatewayToolExecutionRegistration;
 use tool_runtime::image_task::ImageTaskGateway;
 use tool_runtime::mcp_resource::McpResourceGateway;
@@ -12,6 +13,16 @@ pub(crate) fn create_memory_tools(gateway: Arc<dyn MemoryStoreGateway>) -> Vec<N
     create_gateway_tools(
         NativeDispatch::builder()
             .with_memory_store_gateway(gateway)
+            .build(),
+    )
+}
+
+pub(crate) fn create_current_time_tools(
+    gateway: Arc<dyn CurrentTimeGateway>,
+) -> Vec<NativeRegistration> {
+    create_gateway_tools(
+        NativeDispatch::builder()
+            .with_current_time_gateway(gateway)
             .build(),
     )
 }

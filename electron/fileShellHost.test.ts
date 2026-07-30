@@ -93,12 +93,38 @@ afterEach(async () => {
 });
 
 describe("FileShellHost", () => {
-  it("revealInFinder 通过 Electron shell 定位本地路径", () => {
+  it("revealInFinder 通过 Electron shell 定位本地文件", async () => {
     const host = new FileShellHost();
 
-    expect(host.revealInFinder({ path: "/tmp/demo.txt" })).toEqual({});
+    await expect(
+      host.revealInFinder({ path: "/tmp/demo.txt" }),
+    ).resolves.toEqual({});
 
     expect(showItemInFolderMock).toHaveBeenCalledWith("/tmp/demo.txt");
+    expect(openPathMock).not.toHaveBeenCalled();
+  });
+
+  it("revealInFinder 应直接打开目录，避免 Windows 无法跳转安装目录", async () => {
+    openPathMock.mockResolvedValueOnce("");
+    const targetDirectory = await createTempUserDataDir();
+    const host = new FileShellHost();
+
+    await expect(
+      host.revealInFinder({ path: targetDirectory }),
+    ).resolves.toEqual({});
+
+    expect(openPathMock).toHaveBeenCalledWith(targetDirectory);
+    expect(showItemInFolderMock).not.toHaveBeenCalled();
+  });
+
+  it("revealInFinder 应暴露目录打开失败", async () => {
+    openPathMock.mockResolvedValueOnce("Unable to open directory");
+    const targetDirectory = await createTempUserDataDir();
+    const host = new FileShellHost();
+
+    await expect(
+      host.revealInFinder({ path: targetDirectory }),
+    ).rejects.toThrow("Unable to open directory");
   });
 
   it("openWithDefaultApp 通过 Electron shell 打开本地路径", async () => {

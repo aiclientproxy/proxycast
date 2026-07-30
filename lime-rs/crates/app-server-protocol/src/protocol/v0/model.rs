@@ -118,6 +118,7 @@ pub struct ModelInfo {
     pub tier: String,
     #[serde(default)]
     pub capabilities: ModelCapabilitiesInfo,
+    pub capability_provenance: String,
     #[serde(default)]
     pub task_families: Vec<String>,
     #[serde(default)]

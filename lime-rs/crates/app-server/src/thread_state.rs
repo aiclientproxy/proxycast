@@ -3,7 +3,7 @@ use app_server_protocol::{AgentEvent, JsonRpcMessage, JsonRpcNotification, Reque
 use app_server_transport::ConnectionId;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 use tokio_util::sync::CancellationToken;
 
 pub(crate) enum ThreadListenerCommand {
@@ -138,6 +138,7 @@ struct ThreadStateManagerInner {
 #[derive(Clone, Default)]
 pub(crate) struct ThreadStateManager {
     inner: Arc<Mutex<ThreadStateManagerInner>>,
+    subscriber_changed: Arc<Notify>,
 }
 
 impl ThreadStateManager {
@@ -205,6 +206,7 @@ impl ThreadStateManager {
             .checked_add(1)
             .expect("thread unload generation exhausted");
         entry.connection_ids.insert(connection_id);
+        self.subscriber_changed.notify_waiters();
         true
     }
 
@@ -271,6 +273,16 @@ impl ThreadStateManager {
             .get(thread_id)
             .map(|entry| entry.connection_ids.iter().copied().collect())
             .unwrap_or_default()
+    }
+
+    pub(crate) async fn wait_for_thread_subscriber(&self, thread_id: &ThreadId) {
+        loop {
+            let changed = self.subscriber_changed.notified();
+            if !self.subscribed_connection_ids(thread_id).await.is_empty() {
+                return;
+            }
+            changed.await;
+        }
     }
 
     pub(crate) async fn schedule_unload_if_idle(&self, thread_id: &ThreadId) -> Option<u64> {

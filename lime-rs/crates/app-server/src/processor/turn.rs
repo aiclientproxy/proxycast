@@ -34,8 +34,8 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: TurnStartParams = parse_params(params)?;
-        let session_id = self.resolve_loaded_v2_thread_session(&params.thread_id)?;
         self.ensure_direct_input_allowed(&params.thread_id).await?;
+        let session_id = self.resolve_loaded_v2_thread_session(&params.thread_id)?;
         let runtime_params = lower_turn_start_params(&params, session_id)?;
         let host = self.runtime_host_context();
         let mut notifications: Vec<JsonRpcNotification> = Vec::new();

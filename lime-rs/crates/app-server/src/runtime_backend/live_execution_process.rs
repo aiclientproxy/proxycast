@@ -1,8 +1,8 @@
 use crate::execution_process::ExecutionProcessServer;
 use app_server_protocol::{
-    ExecutionProcessDrainOutputParams, ExecutionProcessDrainOutputResponse,
-    ExecutionProcessEmptyResponse, ExecutionProcessIdParams, ExecutionProcessStartParams,
-    ExecutionProcessStartResponse, ExecutionProcessStatusResponse,
+    protocol::v2::GrantedPermissionProfile, ExecutionProcessDrainOutputParams,
+    ExecutionProcessDrainOutputResponse, ExecutionProcessEmptyResponse, ExecutionProcessIdParams,
+    ExecutionProcessStartParams, ExecutionProcessStartResponse, ExecutionProcessStatusResponse,
     ExecutionProcessWriteStdinParams,
 };
 use async_trait::async_trait;
@@ -15,10 +15,16 @@ impl RuntimeLiveExecutionGateway for ExecutionProcessServer {
         thread_id: &str,
         display_command: &str,
         params: ExecutionProcessStartParams,
+        granted_permissions: Option<GrantedPermissionProfile>,
     ) -> Result<ExecutionProcessStartResponse, String> {
-        self.start_thread_process(thread_id, display_command, params)
-            .await
-            .map_err(|error| error.to_string())
+        self.start_thread_process_with_permissions(
+            thread_id,
+            display_command,
+            params,
+            granted_permissions,
+        )
+        .await
+        .map_err(|error| error.to_string())
     }
 
     fn write_stdin(

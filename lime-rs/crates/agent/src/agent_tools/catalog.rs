@@ -31,6 +31,7 @@ pub const MEMORY_READ_TOOL_NAME: &str = "memory_read";
 pub const MEMORY_SEARCH_TOOL_NAME: &str = "memory_search";
 pub const MEMORY_ADD_NOTE_TOOL_NAME: &str = "memory_add_note";
 pub const SLEEP_TOOL_NAME: &str = "sleep";
+pub const CURRENT_TIME_TOOL_NAME: &str = "curr_time";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -253,6 +254,15 @@ static NATIVE_TOOL_CATALOG: &[ToolCatalogEntry] = &[
     },
     ToolCatalogEntry {
         name: SLEEP_TOOL_NAME,
+        profiles: CORE_PROFILES,
+        capabilities: PLAN_CAP,
+        lifecycle: ToolLifecycle::Current,
+        source: ToolSourceKind::LimeInjected,
+        permission_plane: ToolPermissionPlane::SessionAllowlist,
+        workspace_default_allow: true,
+    },
+    ToolCatalogEntry {
+        name: CURRENT_TIME_TOOL_NAME,
         profiles: CORE_PROFILES,
         capabilities: PLAN_CAP,
         lifecycle: ToolLifecycle::Current,
@@ -522,6 +532,7 @@ fn normalize_tool_catalog_alias(tool_name: &str) -> &str {
     match tool_catalog_reference_lookup_key(tool_name).as_str() {
         "requestuserinput" | "requestuserinputtool" => "request_user_input",
         "clocksleep" | "clock.sleep" | "sleep" => SLEEP_TOOL_NAME,
+        "clockcurrtime" | "clock.curr_time" | "currtime" | "curr_time" => CURRENT_TIME_TOOL_NAME,
         "filereadtool" | "readfiletool" | "readfile" | "developerread" | "mcpsystemreadfile" => {
             "Read"
         }

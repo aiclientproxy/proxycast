@@ -514,7 +514,7 @@ describe("readCanonicalThreadItem", () => {
     ).toMatchObject({
       id: "item-1",
       type: "tool_call",
-      tool_name: "wait",
+      tool_name: "wait_agent",
       status: "completed",
       success: true,
       metadata: {

@@ -12,6 +12,7 @@ pub mod reply_message;
 pub mod reply_request;
 pub mod reply_session;
 pub mod reply_stream;
+pub mod request_permissions;
 pub mod request_user_input;
 pub mod runtime_conversation;
 pub mod runtime_scope;

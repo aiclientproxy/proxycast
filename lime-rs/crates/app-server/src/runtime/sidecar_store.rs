@@ -51,15 +51,6 @@ pub struct SidecarReadBytesResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SidecarReadBytesChunk {
-    pub bytes: Vec<u8>,
-    pub total_bytes: u64,
-    pub offset: u64,
-    pub length: u64,
-    pub has_more: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SidecarStore {
     root: PathBuf,
 }
@@ -221,57 +212,6 @@ impl SidecarStore {
         .map(Some)
     }
 
-    pub(crate) fn stream_bytes_range_verified_with_cancel(
-        &self,
-        relative_path: &str,
-        expected_sha256: Option<&str>,
-        offset: u64,
-        length: u64,
-        max_bytes: u64,
-        is_canceled: &impl Fn() -> bool,
-        on_chunk: &mut impl FnMut(SidecarReadBytesChunk),
-    ) -> Result<Option<SidecarReadBytesResult>, String> {
-        fail_if_canceled(is_canceled)?;
-        let relative_path = normalize_sidecar_relative_path(relative_path)?;
-        let path = self
-            .root
-            .join(relative_path_to_platform_path(&relative_path));
-        if length == 0 {
-            return Err("sidecar range length must be positive".to_string());
-        }
-        if max_bytes == 0 {
-            return Err("sidecar range max bytes must be positive".to_string());
-        }
-        if length > max_bytes {
-            return Err(format!(
-                "sidecar range exceeds read window: {length} > {max_bytes} bytes"
-            ));
-        }
-        let total_bytes = match sidecar_file_len(&path)? {
-            Some(total_bytes) => total_bytes,
-            None => return Ok(None),
-        };
-        if offset > total_bytes {
-            return Err(format!(
-                "sidecar range offset exceeds file size {}: {} > {} bytes",
-                path.display(),
-                offset,
-                total_bytes
-            ));
-        }
-        let window_length = length.min(total_bytes.saturating_sub(offset));
-        let result = self.stream_bytes_window_verified_with_cancel(
-            &path,
-            expected_sha256,
-            offset,
-            window_length,
-            total_bytes,
-            is_canceled,
-            on_chunk,
-        )?;
-        Ok(Some(result))
-    }
-
     fn read_bytes_window_verified(
         &self,
         path: &Path,
@@ -319,80 +259,6 @@ impl SidecarStore {
             remaining -= read_len;
         }
         let sha256 = sha256_file_with_cancel(path, is_canceled)?;
-        if let Some(expected_sha256) = expected_sha256
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            if sha256 != expected_sha256 {
-                return Err(format!(
-                    "sidecar 文件校验失败 {}: expected {expected_sha256}, actual {sha256}",
-                    path.display()
-                ));
-            }
-        }
-        Ok(SidecarReadBytesResult {
-            bytes,
-            sha256,
-            total_bytes,
-            offset,
-            length,
-            has_more: offset.saturating_add(length) < total_bytes,
-        })
-    }
-
-    fn stream_bytes_window_verified_with_cancel(
-        &self,
-        path: &Path,
-        expected_sha256: Option<&str>,
-        offset: u64,
-        length: u64,
-        total_bytes: u64,
-        is_canceled: &impl Fn() -> bool,
-        on_chunk: &mut impl FnMut(SidecarReadBytesChunk),
-    ) -> Result<SidecarReadBytesResult, String> {
-        fail_if_canceled(is_canceled)?;
-        let window_end = offset.saturating_add(length);
-        let buffer_len = usize::try_from(length)
-            .map_err(|_| format!("sidecar range too large to allocate: {length} bytes"))?;
-        let mut bytes = Vec::with_capacity(buffer_len);
-        let mut file = fs::File::open(path)
-            .map_err(|error| format!("无法读取 sidecar 文件 {}: {error}", path.display()))?;
-        let mut hasher = Sha256::new();
-        let mut buffer = [0_u8; SIDECAR_READ_CHUNK_BYTES];
-        let mut position = 0_u64;
-        loop {
-            fail_if_canceled(is_canceled)?;
-            let read = file
-                .read(&mut buffer)
-                .map_err(|error| format!("无法读取 sidecar 文件 {}: {error}", path.display()))?;
-            if read == 0 {
-                break;
-            }
-            hasher.update(&buffer[..read]);
-            let chunk_start = position;
-            let chunk_end = position.saturating_add(read as u64);
-            if length > 0 && chunk_end > offset && chunk_start < window_end {
-                let overlap_start = offset.max(chunk_start);
-                let overlap_end = window_end.min(chunk_end);
-                let start = usize::try_from(overlap_start.saturating_sub(chunk_start))
-                    .map_err(|_| "sidecar chunk start overflow".to_string())?;
-                let end = usize::try_from(overlap_end.saturating_sub(chunk_start))
-                    .map_err(|_| "sidecar chunk end overflow".to_string())?;
-                let chunk_bytes = buffer[start..end].to_vec();
-                let chunk_length = chunk_bytes.len() as u64;
-                bytes.extend_from_slice(&chunk_bytes);
-                on_chunk(SidecarReadBytesChunk {
-                    bytes: chunk_bytes,
-                    total_bytes,
-                    offset: overlap_start,
-                    length: chunk_length,
-                    has_more: overlap_start.saturating_add(chunk_length) < total_bytes,
-                });
-            }
-            position = chunk_end;
-            fail_if_canceled(is_canceled)?;
-        }
-        let sha256 = format!("sha256:{}", hex_encode(hasher.finalize()));
         if let Some(expected_sha256) = expected_sha256
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -700,47 +566,6 @@ mod tests {
             .expect_err("canceled");
 
         assert_eq!(error, SIDECAR_READ_CANCELED);
-    }
-
-    #[test]
-    fn stream_bytes_range_verified_emits_chunks_and_keeps_full_digest() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let store = SidecarStore::new(temp.path()).expect("store");
-        let reference = store
-            .write_bytes(&SidecarBytesWriteRequest {
-                session_id: "sess-a".to_string(),
-                kind: "media".to_string(),
-                logical_id: "image-a".to_string(),
-                relative_path: "sessions/sess-a/media/image-a.bin".to_string(),
-                content: b"abcdef".to_vec(),
-            })
-            .expect("write");
-        let mut chunks = Vec::new();
-
-        let read = store
-            .stream_bytes_range_verified_with_cancel(
-                &reference.relative_path,
-                Some(&reference.sha256),
-                1,
-                4,
-                4,
-                &|| false,
-                &mut |chunk| chunks.push(chunk),
-            )
-            .expect("stream range")
-            .expect("available");
-
-        assert_eq!(read.bytes, b"bcde".to_vec());
-        assert_eq!(read.sha256, reference.sha256);
-        assert_eq!(read.total_bytes, 6);
-        assert_eq!(read.offset, 1);
-        assert_eq!(read.length, 4);
-        assert!(read.has_more);
-        assert_eq!(chunks.len(), 1);
-        assert_eq!(chunks[0].bytes, b"bcde".to_vec());
-        assert_eq!(chunks[0].offset, 1);
-        assert_eq!(chunks[0].length, 4);
-        assert!(chunks[0].has_more);
     }
 
     #[test]

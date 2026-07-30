@@ -12,6 +12,7 @@ import { resolveElectronAppServerRuntimeEnv } from "../lib/electron-app-server-a
 import { resolveDevAppServerBinary } from "../lib/electron-dev-sidecar.mjs";
 import {
   AGENT_CONTROL_FINAL_TEXT,
+  PARENT_OWNED_PLACEHOLDERS,
   AGENT_CONTROL_VISIBLE_DOM_GATE_B_BATCH_ID,
   buildAgentControlVisibleDomAssertions,
 } from "./agent-control-visible-dom-gate-b.mjs";
@@ -164,6 +165,12 @@ async function launchManagedElectron({
   page.setDefaultTimeout(timeoutMs);
   await page.setViewportSize({ width: 1440, height: 1000 });
   page.on("console", (message) => {
+    if (
+      message.text().includes("WorkspaceSubagentNavigation") ||
+      message.text().includes("useAgentSession.switchTopic")
+    ) {
+      console.log(`${LOG_PREFIX} renderer-debug=${message.text()}`);
+    }
     if (message.type() === "error") {
       const sourceUrl = String(message.location()?.url || "").trim();
       consoleErrors.push(
@@ -254,6 +261,7 @@ async function restoreAgentSessionRoute(page, sessionId, timeoutMs) {
     ({ errorKey, navigationKey, sessionId, traceKey }) => {
       localStorage.removeItem(errorKey);
       localStorage.removeItem(traceKey);
+      localStorage.setItem("lime:agent-debug", "1");
       sessionStorage.setItem(
         navigationKey,
         JSON.stringify({
@@ -509,7 +517,7 @@ async function collectParentOwnedChildGateB({
   await openSubagentActivityThread(page, childThreadId, timeoutMs);
   try {
     await page.waitForFunction(
-      (childSessionId) => {
+      ({ childSessionId, parentOwnedPlaceholders }) => {
         const textarea = Array.from(
           document.querySelectorAll('textarea[name="agent-chat-message"]'),
         ).find((node) => {
@@ -521,9 +529,18 @@ async function collectParentOwnedChildGateB({
             node.dataset.sessionId === childSessionId
           );
         });
-        return textarea instanceof HTMLTextAreaElement && textarea.disabled;
+        return (
+          textarea instanceof HTMLTextAreaElement &&
+          textarea.disabled &&
+          parentOwnedPlaceholders.includes(
+            textarea.getAttribute("placeholder") || "",
+          )
+        );
       },
-      canonicalThread.sessionId,
+      {
+        childSessionId: canonicalThread.sessionId,
+        parentOwnedPlaceholders: PARENT_OWNED_PLACEHOLDERS,
+      },
       { timeout: Math.min(timeoutMs, 30_000) },
     );
   } catch (error) {
@@ -536,7 +553,9 @@ async function collectParentOwnedChildGateB({
         disabled:
           node instanceof HTMLTextAreaElement ? node.disabled : undefined,
         sessionId:
-          node instanceof HTMLTextAreaElement ? node.dataset.sessionId : undefined,
+          node instanceof HTMLTextAreaElement
+            ? node.dataset.sessionId
+            : undefined,
         visible: node.getBoundingClientRect().height > 0,
       })),
       toasts: Array.from(document.querySelectorAll("[data-sonner-toast]")).map(
@@ -592,7 +611,11 @@ async function collectParentOwnedChildGateB({
         textareaDisabled: textarea.disabled,
         placeholder: textarea.getAttribute("placeholder") || "",
         controls: {
-          sendDisabled: send instanceof HTMLButtonElement && send.disabled,
+          sendButtonPresent: send instanceof HTMLButtonElement,
+          sendDisabled:
+            send instanceof HTMLButtonElement ? send.disabled : null,
+          sendUnavailable:
+            !(send instanceof HTMLButtonElement) || send.disabled,
           accessModeDisabled:
             accessMode instanceof HTMLSelectElement && accessMode.disabled,
           modelSelectorCount: modelSelectors.length,
@@ -641,7 +664,9 @@ async function collectParentOwnedChildGateB({
     }
     return {
       dispatchedEnter,
+      sendButtonPresent: send instanceof HTMLButtonElement,
       clickedDisabledSend: send instanceof HTMLButtonElement && send.disabled,
+      sendUnavailable: !(send instanceof HTMLButtonElement) || send.disabled,
     };
   });
   await page.evaluate(

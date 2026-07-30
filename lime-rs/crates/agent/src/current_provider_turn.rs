@@ -34,6 +34,7 @@ use tool_runtime::tool_lifecycle::{ToolLifecycleEmitter, ToolLifecycleEvent, Too
 
 #[cfg(test)]
 mod agent_control_tests;
+mod dynamic_tool_bridge;
 #[cfg(test)]
 mod input_tests;
 mod mcp_step_snapshot;
@@ -106,6 +107,7 @@ where
     let (host_event_sender, mut host_event_receiver) = mpsc::unbounded_channel();
     let (agent_event_sender, mut agent_event_receiver) = mpsc::unbounded_channel();
     let mcp_tool_routes = mcp_step_snapshot::McpToolRoutes::default();
+    let dynamic_tool_routes = mcp_step_snapshot::DynamicToolRoutes::default();
     let tool_step_snapshot_source = mcp_step_snapshot::current_tool_step_snapshot_source(
         state.clone(),
         policy.clone(),
@@ -116,12 +118,14 @@ where
         agent_control_gateway,
         pending_input.clone(),
         mcp_tool_routes.clone(),
+        dynamic_tool_routes.clone(),
     );
-    let lifecycle_emitter = Arc::new(CurrentTurnToolLifecycleEmitter::with_mcp_routes(
+    let lifecycle_emitter = Arc::new(CurrentTurnToolLifecycleEmitter::with_tool_routes(
         host_event_sender.clone(),
         session_id,
         thread_id,
         mcp_tool_routes,
+        dynamic_tool_routes,
     ));
 
     let turn_future = run_current_provider_turn(

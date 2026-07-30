@@ -68,6 +68,7 @@ internal/exec-plans/*
 !internal/exec-plans/tech-debt-tracker.md
 !internal/exec-plans/right-surface-implementation-progress.md
 !internal/exec-plans/agent-app-host-v3-implementation.md
+!internal/exec-plans/windows-runtime-model-route-repair-plan.md
 !internal/exec-plans/agent-app-uninstall-current-ui-progress.md
 !internal/exec-plans/writing-v2-workflow-completion-plan.md
 !internal/exec-plans/workflow-standardization-plan.md

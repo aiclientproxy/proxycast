@@ -101,23 +101,6 @@ describe("agent runtime event sequence gate", () => {
     });
   });
 
-  it.each(["media.read.chunk", "media.read.completed"])(
-    "放行 current media read side-channel: %s",
-    (type) => {
-      const notification = rawNotification(type, {
-        streamId: "media-stream-1",
-        done: type.endsWith("completed"),
-      });
-
-      expect(
-        projectAgentRuntimeSequenceGateNotifications(
-          "agent_stream_media_read",
-          notification,
-        ),
-      ).toEqual([notification]);
-    },
-  );
-
   it("接受 direct-v2 Thread/Turn/Item 完整序列", () => {
     const threadId = "thread-direct";
     const turnId = "turn-direct";

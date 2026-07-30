@@ -39,7 +39,7 @@ const LIME_TENANT_HEADER: &str = "X-Lime-Tenant-ID";
 const LIME_TENANT_PARAM: &str = "lime_tenant_id";
 const PROVIDER_MODELS_CACHE_KEY_PREFIX: &str = "provider_models_fetch_cache:";
 const PROVIDER_MODELS_CACHE_TTL_SECONDS: i64 = 10 * 24 * 60 * 60;
-const PROVIDER_MODELS_CACHE_TAXONOMY_VERSION: u32 = 2;
+const PROVIDER_MODELS_CACHE_TAXONOMY_VERSION: u32 = 3;
 const XIAOMI_MODEL_FETCH_HOST_KEYWORDS: &[&str] = &["xiaomimimo.com"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3858,7 +3858,7 @@ mod tests {
         infer_model_capabilities, infer_model_taxonomy, infer_runtime_features,
         infer_vision_capability, ModelFetchErrorKind, ModelFetchProtocol, ModelFetchSource,
         ModelRegistryService, ModelTaxonomyInput, LIME_TENANT_HEADER,
-        PROVIDER_MODELS_CACHE_TTL_SECONDS,
+        PROVIDER_MODELS_CACHE_TAXONOMY_VERSION, PROVIDER_MODELS_CACHE_TTL_SECONDS,
     };
     use lime_core::database::dao::api_key_provider::ApiProviderType;
     use lime_core::database::dao::route_state::RouteStateDao;
@@ -4062,34 +4062,40 @@ mod tests {
     #[test]
     fn test_official_agnes_endpoint_uses_canonical_model_capabilities() {
         let (service, _db) = setup_cache_service();
-        let response = ModelRegistryService::parse_openai_models_response(
-            r#"{"data":[{"id":"agnes-2.0-flash"}]}"#,
-        )
-        .expect("parse Agnes response");
-        let model = service.convert_api_model_for_endpoint(
-            response.into_iter().next().expect("Agnes model"),
-            "custom-provider",
-            "https://apihub.agnes-ai.com/v1",
-            0,
-        );
+        for (model_id, canonical_model_id) in [
+            ("agnes-2.0-flash", "agnes/agnes-2.0-flash"),
+            ("agnes-2.5-flash", "agnes/agnes-2.5-flash"),
+            ("agnes-2.5-pro-alpha", "agnes/agnes-2.5-pro-alpha"),
+        ] {
+            let response = ModelRegistryService::parse_openai_models_response(&format!(
+                r#"{{"data":[{{"id":"{model_id}"}}]}}"#
+            ))
+            .expect("parse Agnes response");
+            let model = service.convert_api_model_for_endpoint(
+                response.into_iter().next().expect("Agnes model"),
+                "custom-provider",
+                "https://apihub.agnes-ai.com/v1",
+                0,
+            );
 
-        assert_eq!(model.provider_id, "custom-provider");
-        assert_eq!(
-            model.canonical_model_id.as_deref(),
-            Some("agnes/agnes-2.0-flash")
-        );
-        assert_eq!(
-            model.capability_provenance,
-            ModelCapabilityProvenance::Canonical
-        );
-        assert!(model.capabilities.vision);
-        assert!(model.capabilities.tools);
-        assert!(model.capabilities.streaming);
-        assert!(model.capabilities.reasoning);
-        assert!(model.input_modalities.contains(&ModelModality::Image));
-        assert!(model
-            .runtime_features
-            .contains(&ModelRuntimeFeature::ToolCalling));
+            assert_eq!(model.provider_id, "custom-provider");
+            assert_eq!(
+                model.canonical_model_id.as_deref(),
+                Some(canonical_model_id)
+            );
+            assert_eq!(
+                model.capability_provenance,
+                ModelCapabilityProvenance::Canonical
+            );
+            assert!(model.capabilities.vision);
+            assert!(model.capabilities.tools);
+            assert!(model.capabilities.streaming);
+            assert!(model.capabilities.reasoning);
+            assert!(model.input_modalities.contains(&ModelModality::Image));
+            assert!(model
+                .runtime_features
+                .contains(&ModelRuntimeFeature::ToolCalling));
+        }
     }
 
     #[test]
@@ -4987,6 +4993,7 @@ mod tests {
             Some(ApiProviderType::Openai),
         );
         let legacy_payload = serde_json::json!({
+            "taxonomy_version": PROVIDER_MODELS_CACHE_TAXONOMY_VERSION - 1,
             "provider_id": provider_id,
             "api_host": api_host,
             "provider_type": "openai",

@@ -8,6 +8,10 @@ mod mcp_runtime_tests;
 use agent_runtime::action_required::{
     ActionRequiredError, ActionTerminalStatus, PendingActionDescriptor, PendingActionRestoreOutcome,
 };
+use app_server_protocol::protocol::v2::{
+    AdditionalFileSystemPermissions, GrantedPermissionProfile, PermissionGrantScope,
+    PermissionsRequestApprovalResponse,
+};
 use lime_core::database::DbConnection;
 use lime_mcp::{ElicitationRequestRouter, McpRuntimeServerSpec};
 pub(crate) use mcp_runtime::McpThreadRuntime;
@@ -34,6 +38,7 @@ pub struct AgentRuntimeState {
     mcp_runtimes: Arc<RwLock<HashMap<String, Arc<McpThreadRuntime>>>>,
     mcp_runtime_lifecycle: Arc<Mutex<()>>,
     action_required: Arc<agent_runtime::action_required::ActionRequiredState>,
+    permission_grants: Arc<RwLock<PermissionGrantState>>,
     live_execution_gateway:
         Arc<RwLock<Option<Arc<dyn crate::live_execution_process::LiveExecutionProcessGateway>>>>,
 }
@@ -51,6 +56,7 @@ impl Clone for AgentRuntimeState {
             mcp_runtimes: Arc::clone(&self.mcp_runtimes),
             mcp_runtime_lifecycle: Arc::clone(&self.mcp_runtime_lifecycle),
             action_required: Arc::clone(&self.action_required),
+            permission_grants: Arc::clone(&self.permission_grants),
             live_execution_gateway: Arc::clone(&self.live_execution_gateway),
         }
     }
@@ -77,6 +83,7 @@ impl AgentRuntimeState {
             action_required: Arc::new(
                 agent_runtime::action_required::ActionRequiredState::default(),
             ),
+            permission_grants: Arc::new(RwLock::new(PermissionGrantState::default())),
             live_execution_gateway: Arc::new(RwLock::new(None)),
         }
     }
@@ -125,6 +132,7 @@ impl AgentRuntimeState {
 
     pub async fn close_provider_session(&self, session_id: &str) {
         self.providers.write().await.remove(session_id);
+        self.clear_permission_grants(session_id).await;
     }
 
     pub(crate) fn gateway_tools(&self) -> &RuntimeGatewayToolExecutionRegistry {
@@ -225,6 +233,16 @@ impl AgentRuntimeState {
         gateway: Arc<dyn tool_runtime::memory_store::MemoryStoreGateway>,
     ) -> Result<(), String> {
         for registration in crate::native_tools::create_memory_tools(gateway) {
+            self.register_native_tool(registration).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn register_current_time_tools(
+        &self,
+        gateway: Arc<dyn tool_runtime::current_time::CurrentTimeGateway>,
+    ) -> Result<(), String> {
+        for registration in crate::native_tools::create_current_time_tools(gateway) {
             self.register_native_tool(registration).await?;
         }
         Ok(())
@@ -352,6 +370,66 @@ impl AgentRuntimeState {
             .await
     }
 
+    pub async fn resolve_permission_action(
+        &self,
+        session_id: &str,
+        request_id: &str,
+        action_scope: Option<AgentActionRequiredScope>,
+    ) -> Result<(), ActionRequiredError> {
+        let scope = require_action_scope(session_id, request_id, action_scope)?;
+        self.action_required
+            .resolve_action(request_id, Some(&scope))
+            .await
+    }
+
+    pub async fn record_permission_grant(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        response: &PermissionsRequestApprovalResponse,
+    ) {
+        if response.permissions.network.is_none() && response.permissions.file_system.is_none() {
+            return;
+        }
+        let mut grants = self.permission_grants.write().await;
+        let target = match response.scope {
+            PermissionGrantScope::Turn => grants
+                .turn
+                .entry((session_id.to_string(), turn_id.to_string()))
+                .or_default(),
+            PermissionGrantScope::Session => {
+                grants.session.entry(session_id.to_string()).or_default()
+            }
+        };
+        merge_granted_permissions(&mut target.permissions, &response.permissions);
+        target.strict_auto_review |= response.strict_auto_review.unwrap_or(false);
+    }
+
+    pub async fn effective_permission_grant(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> EffectivePermissionGrant {
+        let grants = self.permission_grants.read().await;
+        let mut effective = grants.session.get(session_id).cloned().unwrap_or_default();
+        if let Some(turn) = grants
+            .turn
+            .get(&(session_id.to_string(), turn_id.to_string()))
+        {
+            merge_granted_permissions(&mut effective.permissions, &turn.permissions);
+            effective.strict_auto_review |= turn.strict_auto_review;
+        }
+        effective
+    }
+
+    async fn clear_permission_grants(&self, session_id: &str) {
+        let mut grants = self.permission_grants.write().await;
+        grants.session.remove(session_id);
+        grants
+            .turn
+            .retain(|(candidate_session_id, _), _| candidate_session_id != session_id);
+    }
+
     pub async fn ensure_mcp_runtime(
         &self,
         session_id: String,
@@ -444,6 +522,69 @@ impl AgentRuntimeState {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EffectivePermissionGrant {
+    pub permissions: GrantedPermissionProfile,
+    pub strict_auto_review: bool,
+}
+
+#[derive(Default)]
+struct PermissionGrantState {
+    session: HashMap<String, EffectivePermissionGrant>,
+    turn: HashMap<(String, String), EffectivePermissionGrant>,
+}
+
+fn merge_granted_permissions(
+    target: &mut GrantedPermissionProfile,
+    incoming: &GrantedPermissionProfile,
+) {
+    if let Some(network) = incoming.network.as_ref() {
+        target.network = Some(network.clone());
+    }
+    if let Some(incoming_file_system) = incoming.file_system.as_ref() {
+        let target_file_system =
+            target
+                .file_system
+                .get_or_insert_with(|| AdditionalFileSystemPermissions {
+                    read: None,
+                    write: None,
+                    glob_scan_max_depth: None,
+                    entries: None,
+                });
+        merge_unique(
+            &mut target_file_system.read,
+            incoming_file_system.read.as_ref(),
+        );
+        merge_unique(
+            &mut target_file_system.write,
+            incoming_file_system.write.as_ref(),
+        );
+        merge_unique(
+            &mut target_file_system.entries,
+            incoming_file_system.entries.as_ref(),
+        );
+        target_file_system.glob_scan_max_depth = match (
+            target_file_system.glob_scan_max_depth,
+            incoming_file_system.glob_scan_max_depth,
+        ) {
+            (Some(current), Some(incoming)) => Some(current.max(incoming)),
+            (current, incoming) => current.or(incoming),
+        };
+    }
+}
+
+fn merge_unique<T: Clone + PartialEq>(target: &mut Option<Vec<T>>, incoming: Option<&Vec<T>>) {
+    let Some(incoming) = incoming else {
+        return;
+    };
+    let target = target.get_or_insert_with(Vec::new);
+    for value in incoming {
+        if !target.contains(value) {
+            target.push(value.clone());
+        }
+    }
+}
+
 fn require_action_scope(
     session_id: &str,
     request_id: &str,
@@ -461,6 +602,121 @@ fn require_action_scope(
         return Err(ActionRequiredError::ScopeMismatch(request_id.to_string()));
     }
     Ok(scope)
+}
+
+#[cfg(test)]
+mod permission_grant_tests {
+    use super::*;
+    use app_server_protocol::protocol::v2::AdditionalNetworkPermissions;
+
+    fn response(
+        scope: PermissionGrantScope,
+        permissions: GrantedPermissionProfile,
+        strict_auto_review: bool,
+    ) -> PermissionsRequestApprovalResponse {
+        PermissionsRequestApprovalResponse {
+            permissions,
+            scope,
+            strict_auto_review: strict_auto_review.then_some(true),
+        }
+    }
+
+    #[tokio::test]
+    async fn permission_grants_merge_by_scope_and_clear_with_session() {
+        let state = AgentRuntimeState::new();
+        state
+            .record_permission_grant(
+                "session-1",
+                "turn-1",
+                &response(
+                    PermissionGrantScope::Session,
+                    GrantedPermissionProfile {
+                        network: Some(AdditionalNetworkPermissions {
+                            enabled: Some(true),
+                        }),
+                        file_system: None,
+                    },
+                    false,
+                ),
+            )
+            .await;
+        state
+            .record_permission_grant(
+                "session-1",
+                "turn-1",
+                &response(
+                    PermissionGrantScope::Turn,
+                    GrantedPermissionProfile {
+                        network: None,
+                        file_system: Some(AdditionalFileSystemPermissions {
+                            read: None,
+                            write: Some(vec!["/tmp/output".to_string()]),
+                            glob_scan_max_depth: None,
+                            entries: None,
+                        }),
+                    },
+                    true,
+                ),
+            )
+            .await;
+
+        let originating_turn = state
+            .effective_permission_grant("session-1", "turn-1")
+            .await;
+        assert_eq!(
+            originating_turn
+                .permissions
+                .network
+                .and_then(|network| network.enabled),
+            Some(true)
+        );
+        assert_eq!(
+            originating_turn
+                .permissions
+                .file_system
+                .and_then(|file_system| file_system.write),
+            Some(vec!["/tmp/output".to_string()])
+        );
+        assert!(originating_turn.strict_auto_review);
+
+        let next_turn = state
+            .effective_permission_grant("session-1", "turn-2")
+            .await;
+        assert!(next_turn.permissions.network.is_some());
+        assert!(next_turn.permissions.file_system.is_none());
+        assert!(!next_turn.strict_auto_review);
+
+        state.close_provider_session("session-1").await;
+        assert_eq!(
+            state
+                .effective_permission_grant("session-1", "turn-1")
+                .await,
+            EffectivePermissionGrant::default()
+        );
+    }
+
+    #[tokio::test]
+    async fn empty_permission_response_cannot_enable_strict_auto_review() {
+        let state = AgentRuntimeState::new();
+        state
+            .record_permission_grant(
+                "session-1",
+                "turn-1",
+                &response(
+                    PermissionGrantScope::Turn,
+                    GrantedPermissionProfile::default(),
+                    true,
+                ),
+            )
+            .await;
+
+        assert_eq!(
+            state
+                .effective_permission_grant("session-1", "turn-1")
+                .await,
+            EffectivePermissionGrant::default()
+        );
+    }
 }
 
 #[cfg(test)]

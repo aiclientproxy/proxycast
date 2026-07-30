@@ -2501,6 +2501,89 @@ impl RuntimeCore {
         })
     }
 
+    pub async fn respond_permission(
+        &self,
+        request: PermissionRespondRequest,
+    ) -> Result<(), RuntimeCoreError> {
+        for (field, value) in [
+            ("session_id", request.session_id.as_str()),
+            ("thread_id", request.thread_id.as_str()),
+            ("turn_id", request.turn_id.as_str()),
+            ("request_id", request.request_id.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                return Err(RuntimeCoreError::Backend(format!(
+                    "permission response requires canonical {field}"
+                )));
+            }
+        }
+        let session = self
+            .session_loops
+            .get_existing(&request.session_id)
+            .await
+            .ok_or_else(|| RuntimeCoreError::SessionNotFound(request.session_id.clone()))?;
+        self.backend.resolve_permission_action(&request).await?;
+        let response = serde_json::to_value(&request.response)
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+        session
+            .respond_permission(Some(&request.turn_id), request.request_id, response)
+            .await
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))
+    }
+
+    pub async fn respond_dynamic_tool(
+        &self,
+        request: crate::DynamicToolRespondRequest,
+    ) -> Result<(), RuntimeCoreError> {
+        for (field, value) in [
+            ("session_id", request.session_id.as_str()),
+            ("thread_id", request.thread_id.as_str()),
+            ("turn_id", request.turn_id.as_str()),
+            ("call_id", request.call_id.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                return Err(RuntimeCoreError::Backend(format!(
+                    "dynamic tool response requires canonical {field}"
+                )));
+            }
+        }
+        {
+            let state = self
+                .state
+                .lock()
+                .expect("runtime core state mutex poisoned");
+            let stored = state
+                .sessions
+                .get(&request.session_id)
+                .ok_or_else(|| RuntimeCoreError::SessionNotFound(request.session_id.clone()))?;
+            if stored.session.thread_id != request.thread_id {
+                return Err(RuntimeCoreError::Backend(
+                    "dynamic tool response thread identity mismatch".to_string(),
+                ));
+            }
+            if !stored
+                .turns
+                .iter()
+                .any(|turn| turn.turn_id == request.turn_id)
+            {
+                return Err(RuntimeCoreError::Backend(
+                    "dynamic tool response turn identity mismatch".to_string(),
+                ));
+            }
+        }
+        let session = self
+            .session_loops
+            .get_existing(&request.session_id)
+            .await
+            .ok_or_else(|| RuntimeCoreError::SessionNotFound(request.session_id.clone()))?;
+        let response = serde_json::to_value(request.response)
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+        session
+            .respond_dynamic_tool(Some(&request.turn_id), request.call_id, response)
+            .await
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))
+    }
+
     async fn dispatch_live_action_response(
         &self,
         request: &ActionRespondRequest,

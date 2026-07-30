@@ -9,14 +9,19 @@ pub(super) fn runtime_warning_items_from_events(stored: &StoredSession) -> Vec<s
         .iter()
         .filter(|event| event.event_type == "runtime.warning")
         .filter_map(|event| {
+            let thread_id = event.thread_id.as_deref()?.trim();
+            if thread_id.is_empty() || thread_id != stored.session.thread_id {
+                return None;
+            }
+            let turn_id = event.turn_id.as_deref()?.trim();
+            if turn_id.is_empty() || !stored.turns.iter().any(|turn| turn.turn_id == turn_id) {
+                return None;
+            }
             let message = runtime_warning_message_from_event(event)?;
-            let turn_id = event
-                .turn_id
-                .clone()
-                .or_else(|| stored.turns.last().map(|turn| turn.turn_id.clone()))?;
-            Some(json!({
+            let code = runtime_warning_code_from_event(event)?;
+            let mut item = json!({
                 "id": format!("{}:warning:{}", turn_id, event.event_id),
-                "thread_id": event.thread_id.clone().unwrap_or_else(|| stored.session.thread_id.clone()),
+                "thread_id": thread_id,
                 "turn_id": turn_id,
                 "sequence": event.sequence,
                 "type": "warning",
@@ -25,7 +30,11 @@ pub(super) fn runtime_warning_items_from_events(stored: &StoredSession) -> Vec<s
                 "started_at": event.timestamp,
                 "completed_at": event.timestamp,
                 "updated_at": event.timestamp,
-            }))
+            });
+            if let Some(code) = code {
+                item["code"] = json!(code);
+            }
+            Some(item)
         })
         .collect()
 }
@@ -34,20 +43,27 @@ fn runtime_warning_message_from_event(event: &AgentEvent) -> Option<String> {
     if event.event_type != "runtime.warning" {
         return None;
     }
-    raw_string_field(
-        &event.payload,
-        &[
-            "message",
-            "warning",
-            "reason",
-            "detail",
-            "details",
-            "warning_message",
-            "warningMessage",
-        ],
-    )
-    .map(|message| message.trim().to_string())
-    .filter(|message| !message.is_empty())
+    event
+        .payload
+        .get("message")?
+        .as_str()
+        .map(str::trim)
+        .filter(|message| !message.is_empty())
+        .map(ToString::to_string)
+}
+
+fn runtime_warning_code_from_event(event: &AgentEvent) -> Option<Option<String>> {
+    if event.event_type != "runtime.warning" {
+        return None;
+    }
+    match event.payload.get("code") {
+        None | Some(serde_json::Value::Null) => Some(None),
+        Some(serde_json::Value::String(code)) => {
+            let code = code.trim();
+            Some((!code.is_empty()).then(|| code.to_string()))
+        }
+        Some(_) => None,
+    }
 }
 
 pub(super) fn runtime_error_items_from_events(stored: &StoredSession) -> Vec<serde_json::Value> {

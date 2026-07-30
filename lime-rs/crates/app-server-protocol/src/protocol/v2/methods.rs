@@ -66,10 +66,15 @@ pub const METHOD_THREAD_TOKEN_USAGE_UPDATED: &str = "thread/tokenUsage/updated";
 pub const METHOD_THREAD_GOAL_UPDATED: &str = "thread/goal/updated";
 pub const METHOD_THREAD_GOAL_CLEARED: &str = "thread/goal/cleared";
 pub const METHOD_SERVER_REQUEST_RESOLVED: &str = "serverRequest/resolved";
+pub const METHOD_CONFIG_WARNING: &str = "configWarning";
+pub const METHOD_WARNING: &str = "warning";
+pub const METHOD_CURRENT_TIME_READ: &str = "currentTime/read";
 pub const METHOD_MCP_SERVER_ELICITATION_REQUEST: &str = "mcpServer/elicitation/request";
 pub const METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL: &str =
     "item/commandExecution/requestApproval";
 pub const METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL: &str = "item/fileChange/requestApproval";
+pub const METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL: &str = "item/permissions/requestApproval";
+pub const METHOD_ITEM_TOOL_CALL: &str = "item/tool/call";
 pub const METHOD_ITEM_TOOL_REQUEST_USER_INPUT: &str = "item/tool/requestUserInput";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -280,6 +285,8 @@ pub const METHODS: &[&str] = &[
 ];
 
 pub const NOTIFICATION_METHODS: &[&str] = &[
+    METHOD_CONFIG_WARNING,
+    METHOD_WARNING,
     METHOD_THREAD_STARTED,
     METHOD_THREAD_ARCHIVED,
     METHOD_THREAD_DELETED,
@@ -311,8 +318,11 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
 ];
 
 pub const SERVER_REQUEST_METHODS: &[&str] = &[
+    METHOD_CURRENT_TIME_READ,
     METHOD_MCP_SERVER_ELICITATION_REQUEST,
     METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
     METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
+    METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
+    METHOD_ITEM_TOOL_CALL,
     METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
 ];

@@ -130,6 +130,7 @@ pub enum ItemKind {
     Plan,
     Reasoning,
     Tool,
+    DynamicToolCall,
     McpToolCall,
     CollabAgentToolCall,
     Approval,
@@ -163,6 +164,18 @@ pub struct ToolOutput {
     pub truncated: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_ref: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum DynamicToolCallContentItem {
+    InputText { text: String },
+    InputImage { image_url: String },
+    InputAudio { audio_url: String },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -328,6 +341,19 @@ pub enum ThreadItemPayload {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         output: Option<ToolOutput>,
     },
+    DynamicToolCall {
+        call_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        namespace: Option<String>,
+        tool: String,
+        arguments: Value,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        content_items: Vec<DynamicToolCallContentItem>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        success: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+    },
     McpToolCall {
         call_id: String,
         server_name: String,
@@ -423,6 +449,7 @@ impl ThreadItemPayload {
             Self::Plan { .. } => ItemKind::Plan,
             Self::Reasoning { .. } => ItemKind::Reasoning,
             Self::Tool { .. } => ItemKind::Tool,
+            Self::DynamicToolCall { .. } => ItemKind::DynamicToolCall,
             Self::McpToolCall { .. } => ItemKind::McpToolCall,
             Self::CollabAgentToolCall { .. } => ItemKind::CollabAgentToolCall,
             Self::Approval { .. } => ItemKind::Approval,
@@ -863,6 +890,50 @@ mod tests {
             output: None,
         };
         assert_eq!(payload.kind(), ItemKind::Tool);
+    }
+
+    #[test]
+    fn dynamic_tool_payload_round_trips_typed_ordered_content() {
+        let payload = ThreadItemPayload::DynamicToolCall {
+            call_id: "call-app-info".to_string(),
+            namespace: Some("desktop".to_string()),
+            tool: "appInfo".to_string(),
+            arguments: json!({"includeLocale": true}),
+            content_items: vec![
+                DynamicToolCallContentItem::InputText {
+                    text: "Lime".to_string(),
+                },
+                DynamicToolCallContentItem::InputImage {
+                    image_url: "data:image/png;base64,AA==".to_string(),
+                },
+                DynamicToolCallContentItem::InputAudio {
+                    audio_url: "data:audio/wav;base64,AA==".to_string(),
+                },
+            ],
+            success: Some(true),
+            duration_ms: Some(7),
+        };
+
+        assert_eq!(payload.kind(), ItemKind::DynamicToolCall);
+        let encoded = serde_json::to_value(&payload).expect("serialize dynamic tool payload");
+        assert_eq!(encoded["type"], "dynamicToolCall");
+        assert_eq!(encoded["namespace"], "desktop");
+        assert_eq!(encoded["tool"], "appInfo");
+        assert_eq!(encoded["arguments"], json!({"includeLocale": true}));
+        assert_eq!(encoded["content_items"][0]["type"], "inputText");
+        assert_eq!(
+            encoded["content_items"][1]["imageUrl"],
+            "data:image/png;base64,AA=="
+        );
+        assert_eq!(
+            encoded["content_items"][2]["audioUrl"],
+            "data:audio/wav;base64,AA=="
+        );
+        assert_eq!(
+            serde_json::from_value::<ThreadItemPayload>(encoded)
+                .expect("deserialize dynamic tool payload"),
+            payload
+        );
     }
 
     #[test]

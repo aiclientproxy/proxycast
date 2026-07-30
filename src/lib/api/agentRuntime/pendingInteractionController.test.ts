@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
   METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
+  METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
   METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
   METHOD_MCP_SERVER_ELICITATION_REQUEST,
   type CommandExecutionRequestApprovalParams,
   type McpServerElicitationRequestParams,
+  type PermissionsRequestApprovalParams,
   type ToolRequestUserInputParams,
 } from "@limecloud/app-server-client";
 import type { AppServerServerRequestHandler } from "../appServerServerRequest";
@@ -101,8 +103,43 @@ function mcpParams(): McpServerElicitationRequestParams {
   };
 }
 
+function permissionsParams(
+  itemId = "item-permissions-1",
+): PermissionsRequestApprovalParams {
+  return {
+    cwd: "/workspace/lime",
+    environmentId: "local-dev",
+    itemId,
+    permissions: {
+      network: { enabled: true },
+      fileSystem: {
+        read: ["/workspace/lime/config"],
+        write: ["/workspace/lime/generated"],
+        globScanMaxDepth: 2,
+        entries: [
+          {
+            access: "write",
+            path: {
+              type: "special",
+              value: { kind: "project_roots", subpath: "generated" },
+            },
+          },
+          {
+            access: "deny",
+            path: { type: "glob_pattern", pattern: "**/*.env" },
+          },
+        ],
+      },
+    },
+    reason: "生成构建产物并读取项目配置",
+    startedAtMs: 1,
+    threadId: "thread-1",
+    turnId: "turn-1",
+  };
+}
+
 describe("PendingInteractionController", () => {
-  it("只用一个 owner 注册四种 current server request", () => {
+  it("只用一个 owner 注册五种 current server request", () => {
     const harness = createHarness();
 
     expect(
@@ -110,6 +147,7 @@ describe("PendingInteractionController", () => {
     ).toEqual([
       METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
       METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
+      METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
       METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
       METHOD_MCP_SERVER_ELICITATION_REQUEST,
     ]);
@@ -190,6 +228,106 @@ describe("PendingInteractionController", () => {
       answers: { mode: { answers: ["确认"] } },
     });
     harness.detach();
+  });
+
+  it("permissions approval 投影完整 diff，并按 turn 原样授予请求画像", async () => {
+    const harness = createHarness();
+    const params = permissionsParams();
+    const response = harness.dispatch(
+      METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
+      params,
+      "electron-action:permissions-secret-token",
+    );
+    const [interaction] = harness.controller.getSnapshot();
+
+    expect(interaction).toMatchObject({
+      id: "permissions_approval:thread-1:turn-1:item-permissions-1",
+      thread_id: "thread-1",
+      turn_id: "turn-1",
+      item_id: "item-permissions-1",
+      kind: "permissions_approval",
+      status: "pending",
+      payload: {
+        cwd: "/workspace/lime",
+        environmentId: "local-dev",
+        permissions: params.permissions,
+        reason: "生成构建产物并读取项目配置",
+      },
+    });
+    expect(JSON.stringify(interaction)).not.toContain("electron-action:");
+
+    expect(
+      harness.controller.respond({
+        decision: "grant_turn",
+        interactionId: interaction.id,
+        kind: "permissions_approval",
+      }),
+    ).toEqual({ accepted: true });
+    await expect(response).resolves.toEqual({
+      permissions: params.permissions,
+      scope: "turn",
+    });
+    harness.detach();
+  });
+
+  it.each([
+    ["session grant", "grant_session", "session", true],
+    ["decline", "decline", "turn", false],
+    ["unsupported decision", "grant_forever", "turn", false],
+  ] as const)(
+    "permissions approval 的 %s 映射 fail closed",
+    async (_label, decision, scope, grantsRequestedPermissions) => {
+      const harness = createHarness();
+      const params = permissionsParams();
+      const response = harness.dispatch(
+        METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
+        params,
+        "electron-action:permissions-token",
+      );
+      const [interaction] = harness.controller.getSnapshot();
+
+      expect(
+        harness.controller.respond({
+          decision,
+          interactionId: interaction.id,
+          kind: "permissions_approval",
+        } as unknown as PendingInteractionResponse),
+      ).toEqual({ accepted: true });
+      await expect(response).resolves.toEqual({
+        permissions: grantsRequestedPermissions ? params.permissions : {},
+        scope,
+      });
+      harness.detach();
+    },
+  );
+
+  it("permissions approval 在 abort 与 detach 时都返回空权限画像", async () => {
+    const harness = createHarness();
+    const abort = new AbortController();
+    const abortedResponse = harness.dispatch(
+      METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
+      permissionsParams("item-permissions-abort"),
+      "electron-action:permissions-abort",
+      abort.signal,
+    );
+
+    abort.abort();
+    await expect(abortedResponse).resolves.toEqual({
+      permissions: {},
+      scope: "turn",
+    });
+
+    const detachedResponse = harness.dispatch(
+      METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
+      permissionsParams("item-permissions-detach"),
+      "electron-action:permissions-detach",
+    );
+    harness.detach();
+    await expect(detachedResponse).resolves.toEqual({
+      permissions: {},
+      scope: "turn",
+    });
+    expect(harness.controller.getSnapshot()).toEqual([]);
   });
 
   it("MCP 表单校验失败保持 pending，成功后 action token 只能消费一次", async () => {

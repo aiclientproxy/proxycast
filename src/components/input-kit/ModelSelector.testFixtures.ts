@@ -59,6 +59,7 @@ export function createModelMetadata(
       ...defaultCapabilities,
       ...capabilities,
     },
+    capability_provenance: "provider_explicit",
     pricing: null,
     limits: {
       context_length: null,
@@ -90,9 +91,7 @@ export function createTextOnlyModelMetadata(id: string) {
   });
 }
 
-export function renderModelSelector(
-  props: Partial<ModelSelectorProps> = {},
-) {
+export function renderModelSelector(props: Partial<ModelSelectorProps> = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);

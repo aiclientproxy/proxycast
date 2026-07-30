@@ -908,6 +908,7 @@ fn validate_agent_control_fork_items(turn: &agent_protocol::Turn) -> Result<(), 
             }
             ThreadItemPayload::Reasoning { .. }
             | ThreadItemPayload::Tool { .. }
+            | ThreadItemPayload::DynamicToolCall { .. }
             | ThreadItemPayload::McpToolCall { .. }
             | ThreadItemPayload::CollabAgentToolCall { .. }
             | ThreadItemPayload::Plan { .. }

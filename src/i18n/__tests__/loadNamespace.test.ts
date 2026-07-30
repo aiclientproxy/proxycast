@@ -371,6 +371,18 @@ describe("i18n namespace loader", () => {
       expect(resources[locale].common).toHaveProperty("common.cancel");
       expect(resources[locale].common).toHaveProperty("common.confirm");
       expect(resources[locale].common).toHaveProperty("common.app.loadingPage");
+      for (const key of [
+        "common.app.configWarning.title",
+        "common.app.configWarning.description",
+        "common.app.configWarning.descriptionWithPath",
+        "common.app.configWarning.descriptionWithDetails",
+        "common.app.configWarning.descriptionWithPathAndDetails",
+      ]) {
+        expect(
+          resources[locale].common,
+          `${locale}/common should include ${key}`,
+        ).toHaveProperty(key);
+      }
       expect(resources[locale].common).toHaveProperty(
         "common.splashScreen.slogan",
       );

@@ -1,8 +1,8 @@
 use super::super::*;
 use crate::protocol::app_server_method_catalog;
 use crate::protocol::v2::{
-    METHODS as V2_METHODS, METHOD_MCP_SERVER_ELICITATION_REQUEST, METHOD_THREAD_RESUME,
-    NOTIFICATION_METHODS as V2_NOTIFICATION_METHODS,
+    METHODS as V2_METHODS, METHOD_CONFIG_WARNING, METHOD_MCP_SERVER_ELICITATION_REQUEST,
+    METHOD_THREAD_RESUME, NOTIFICATION_METHODS as V2_NOTIFICATION_METHODS,
     SERVER_REQUEST_METHODS as V2_SERVER_REQUEST_METHODS,
 };
 
@@ -14,7 +14,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
         vec![
             METHOD_INITIALIZE,
             METHOD_INITIALIZED,
-            METHOD_CONFIG_WARNING,
             METHOD_CAPABILITY_LIST,
             METHOD_ARTIFACT_READ,
             METHOD_FILE_SYSTEM_LIST_DIRECTORY,
@@ -369,6 +368,26 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
         METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CHANGED
     ));
     assert!(!is_app_server_notification_method(METHOD_THREAD_START));
+}
+
+#[test]
+fn config_warning_is_not_owned_by_v0_notification_catalog() {
+    assert_eq!(
+        AppServerNotificationMethod::parse(METHOD_CONFIG_WARNING),
+        None
+    );
+    assert!(!APP_SERVER_METHODS
+        .iter()
+        .any(|spec| spec.method == METHOD_CONFIG_WARNING));
+
+    let raw = crate::JsonRpcNotification::new(
+        METHOD_CONFIG_WARNING,
+        Some(serde_json::json!({
+            "summary": "invalid configuration",
+            "details": null
+        })),
+    );
+    assert!(ServerNotification::try_from(raw).is_err());
 }
 
 #[test]

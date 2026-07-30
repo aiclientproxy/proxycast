@@ -1,23 +1,24 @@
 use super::{
     AgentMessageDeltaNotification, ArtifactWriteParams, ArtifactWriteResponse,
     CommandExecutionOutputDeltaNotification, CommandExecutionRequestApprovalParams,
+    ConfigWarningNotification, CurrentTimeReadParams, DynamicToolCallParams,
     FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, ItemCompletedNotification,
     ItemStartedNotification, McpServerElicitationRequestParams, McpToolCallProgressNotification,
     MediaReadParams, MediaReadResponse, Method, ModelListParams, ModelListUpdatedNotification,
     ModelReroutedNotification, ModelSafetyBufferingUpdatedNotification,
-    ModelVerificationNotification, PlanDeltaNotification, ReasoningSummaryPartAddedNotification,
-    ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification,
-    ServerRequestResolvedNotification, ThreadApproveGuardianDeniedActionParams,
-    ThreadApproveGuardianDeniedActionResponse, ThreadArchiveParams, ThreadArchiveResponse,
-    ThreadArchivedNotification, ThreadBackgroundTerminalsCleanParams,
-    ThreadBackgroundTerminalsCleanResponse, ThreadBackgroundTerminalsListParams,
-    ThreadBackgroundTerminalsListResponse, ThreadBackgroundTerminalsTerminateParams,
-    ThreadBackgroundTerminalsTerminateResponse, ThreadClosedNotification, ThreadCompactStartParams,
-    ThreadCompactStartResponse, ThreadDecrementElicitationParams,
-    ThreadDecrementElicitationResponse, ThreadDeleteParams, ThreadDeleteResponse,
-    ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse, ThreadGoalClearParams,
-    ThreadGoalClearResponse, ThreadGoalClearedNotification, ThreadGoalGetParams,
-    ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
+    ModelVerificationNotification, PermissionsRequestApprovalParams, PlanDeltaNotification,
+    ReasoningSummaryPartAddedNotification, ReasoningSummaryTextDeltaNotification,
+    ReasoningTextDeltaNotification, ServerRequestResolvedNotification,
+    ThreadApproveGuardianDeniedActionParams, ThreadApproveGuardianDeniedActionResponse,
+    ThreadArchiveParams, ThreadArchiveResponse, ThreadArchivedNotification,
+    ThreadBackgroundTerminalsCleanParams, ThreadBackgroundTerminalsCleanResponse,
+    ThreadBackgroundTerminalsListParams, ThreadBackgroundTerminalsListResponse,
+    ThreadBackgroundTerminalsTerminateParams, ThreadBackgroundTerminalsTerminateResponse,
+    ThreadClosedNotification, ThreadCompactStartParams, ThreadCompactStartResponse,
+    ThreadDecrementElicitationParams, ThreadDecrementElicitationResponse, ThreadDeleteParams,
+    ThreadDeleteResponse, ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse,
+    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalClearedNotification,
+    ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
     ThreadGoalUpdatedNotification, ThreadIncrementElicitationParams,
     ThreadIncrementElicitationResponse, ThreadInjectItemsParams, ThreadInjectItemsResponse,
     ThreadItemsListParams, ThreadItemsListResponse, ThreadListParams, ThreadListResponse,
@@ -34,15 +35,17 @@ use super::{
     ThreadUnsubscribeParams, ThreadUnsubscribeResponse, ToolRequestUserInputParams,
     TurnCompletedNotification, TurnInterruptParams, TurnInterruptResponse, TurnStartParams,
     TurnStartResponse, TurnStartedNotification, TurnSteerParams, TurnSteerResponse,
-    METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_FILE_CHANGE_PATCH_UPDATED,
+    WarningNotification, METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_CONFIG_WARNING,
+    METHOD_CURRENT_TIME_READ, METHOD_FILE_CHANGE_PATCH_UPDATED,
     METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL, METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
+    METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL, METHOD_ITEM_TOOL_CALL,
     METHOD_ITEM_TOOL_REQUEST_USER_INPUT, METHOD_MCP_SERVER_ELICITATION_REQUEST,
     METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_LIST_UPDATED, METHOD_MODEL_REROUTED,
     METHOD_MODEL_SAFETY_BUFFERING_UPDATED, METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA,
     METHOD_REASONING_SUMMARY_PART_ADDED, METHOD_REASONING_SUMMARY_TEXT_DELTA,
     METHOD_REASONING_TEXT_DELTA, METHOD_SERVER_REQUEST_RESOLVED, METHOD_THREAD_CLOSED,
     METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED,
-    METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED,
+    METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED, METHOD_WARNING,
 };
 use crate::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use schemars::JsonSchema;
@@ -472,6 +475,11 @@ impl ClientResponsePayload {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "method")]
 pub enum ServerRequest {
+    #[serde(rename = "currentTime/read")]
+    CurrentTimeRead {
+        id: RequestId,
+        params: CurrentTimeReadParams,
+    },
     #[serde(rename = "mcpServer/elicitation/request")]
     McpServerElicitationRequest {
         id: RequestId,
@@ -487,6 +495,16 @@ pub enum ServerRequest {
         id: RequestId,
         params: FileChangeRequestApprovalParams,
     },
+    #[serde(rename = "item/permissions/requestApproval")]
+    ItemPermissionsRequestApproval {
+        id: RequestId,
+        params: PermissionsRequestApprovalParams,
+    },
+    #[serde(rename = "item/tool/call")]
+    DynamicToolCall {
+        id: RequestId,
+        params: DynamicToolCallParams,
+    },
     #[serde(rename = "item/tool/requestUserInput")]
     ItemToolRequestUserInput {
         id: RequestId,
@@ -497,20 +515,25 @@ pub enum ServerRequest {
 impl ServerRequest {
     pub fn id(&self) -> &RequestId {
         match self {
-            Self::McpServerElicitationRequest { id, .. } => id,
+            Self::CurrentTimeRead { id, .. } | Self::McpServerElicitationRequest { id, .. } => id,
             Self::ItemCommandExecutionRequestApproval { id, .. } => id,
             Self::ItemFileChangeRequestApproval { id, .. } => id,
+            Self::ItemPermissionsRequestApproval { id, .. } => id,
+            Self::DynamicToolCall { id, .. } => id,
             Self::ItemToolRequestUserInput { id, .. } => id,
         }
     }
 
     pub fn method(&self) -> &'static str {
         match self {
+            Self::CurrentTimeRead { .. } => METHOD_CURRENT_TIME_READ,
             Self::McpServerElicitationRequest { .. } => METHOD_MCP_SERVER_ELICITATION_REQUEST,
             Self::ItemCommandExecutionRequestApproval { .. } => {
                 METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL
             }
             Self::ItemFileChangeRequestApproval { .. } => METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
+            Self::ItemPermissionsRequestApproval { .. } => METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
+            Self::DynamicToolCall { .. } => METHOD_ITEM_TOOL_CALL,
             Self::ItemToolRequestUserInput { .. } => METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
         }
     }
@@ -522,6 +545,12 @@ impl TryFrom<JsonRpcRequest> for ServerRequest {
     fn try_from(request: JsonRpcRequest) -> Result<Self, Self::Error> {
         let params = request.params.unwrap_or_else(|| serde_json::json!({}));
         match request.method.as_str() {
+            METHOD_CURRENT_TIME_READ => serde_json::from_value(params)
+                .map(|params| Self::CurrentTimeRead {
+                    id: request.id,
+                    params,
+                })
+                .map_err(|error| error.to_string()),
             METHOD_MCP_SERVER_ELICITATION_REQUEST => serde_json::from_value(params)
                 .map(|params| Self::McpServerElicitationRequest {
                     id: request.id,
@@ -540,6 +569,18 @@ impl TryFrom<JsonRpcRequest> for ServerRequest {
                     params,
                 })
                 .map_err(|error| error.to_string()),
+            METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL => serde_json::from_value(params)
+                .map(|params| Self::ItemPermissionsRequestApproval {
+                    id: request.id,
+                    params,
+                })
+                .map_err(|error| error.to_string()),
+            METHOD_ITEM_TOOL_CALL => serde_json::from_value(params)
+                .map(|params| Self::DynamicToolCall {
+                    id: request.id,
+                    params,
+                })
+                .map_err(|error| error.to_string()),
             METHOD_ITEM_TOOL_REQUEST_USER_INPUT => serde_json::from_value(params)
                 .map(|params| Self::ItemToolRequestUserInput {
                     id: request.id,
@@ -554,6 +595,11 @@ impl TryFrom<JsonRpcRequest> for ServerRequest {
 impl From<ServerRequest> for JsonRpcRequest {
     fn from(request: ServerRequest) -> Self {
         match request {
+            ServerRequest::CurrentTimeRead { id, params } => JsonRpcRequest::new(
+                id,
+                METHOD_CURRENT_TIME_READ,
+                Some(serde_json::to_value(params).expect("serialize v2 app-server request")),
+            ),
             ServerRequest::McpServerElicitationRequest { id, params } => JsonRpcRequest::new(
                 id,
                 METHOD_MCP_SERVER_ELICITATION_REQUEST,
@@ -571,6 +617,16 @@ impl From<ServerRequest> for JsonRpcRequest {
                 METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
                 Some(serde_json::to_value(params).expect("serialize v2 app-server request")),
             ),
+            ServerRequest::ItemPermissionsRequestApproval { id, params } => JsonRpcRequest::new(
+                id,
+                METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
+                Some(serde_json::to_value(params).expect("serialize v2 app-server request")),
+            ),
+            ServerRequest::DynamicToolCall { id, params } => JsonRpcRequest::new(
+                id,
+                METHOD_ITEM_TOOL_CALL,
+                Some(serde_json::to_value(params).expect("serialize v2 app-server request")),
+            ),
             ServerRequest::ItemToolRequestUserInput { id, params } => JsonRpcRequest::new(
                 id,
                 METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
@@ -585,6 +641,10 @@ impl From<ServerRequest> for JsonRpcRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "method", content = "params")]
 pub enum ServerNotification {
+    #[serde(rename = "configWarning")]
+    ConfigWarning(ConfigWarningNotification),
+    #[serde(rename = "warning")]
+    Warning(WarningNotification),
     #[serde(rename = "thread/started")]
     ThreadStarted(ThreadStartedNotification),
     #[serde(rename = "thread/archived")]
@@ -646,6 +706,8 @@ pub enum ServerNotification {
 impl ServerNotification {
     pub fn method(&self) -> &'static str {
         match self {
+            Self::ConfigWarning(_) => METHOD_CONFIG_WARNING,
+            Self::Warning(_) => METHOD_WARNING,
             Self::ThreadStarted(_) => "thread/started",
             Self::ThreadArchived(_) => "thread/archived",
             Self::ThreadDeleted(_) => "thread/deleted",
@@ -684,6 +746,12 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
     fn try_from(notification: JsonRpcNotification) -> Result<Self, Self::Error> {
         let params = notification.params.unwrap_or_else(|| serde_json::json!({}));
         match notification.method.as_str() {
+            METHOD_CONFIG_WARNING => serde_json::from_value(params)
+                .map(Self::ConfigWarning)
+                .map_err(|error| error.to_string()),
+            METHOD_WARNING => serde_json::from_value(params)
+                .map(Self::Warning)
+                .map_err(|error| error.to_string()),
             "thread/started" => serde_json::from_value(params)
                 .map(Self::ThreadStarted)
                 .map_err(|error| error.to_string()),
@@ -776,6 +844,10 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
 impl From<ServerNotification> for JsonRpcNotification {
     fn from(notification: ServerNotification) -> Self {
         match notification {
+            ServerNotification::ConfigWarning(params) => {
+                jsonrpc_notification(METHOD_CONFIG_WARNING, params)
+            }
+            ServerNotification::Warning(params) => jsonrpc_notification(METHOD_WARNING, params),
             ServerNotification::ThreadStarted(params) => {
                 jsonrpc_notification("thread/started", params)
             }

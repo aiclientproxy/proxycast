@@ -83,18 +83,18 @@
 
 ## 4. Model、安全、告警与搜索
 
-|   # | Method                           | 目标出口 | 当前裁决               | v2 投影                                           |
-| --: | -------------------------------- | -------- | ---------------------- | ------------------------------------------------- |
-|  52 | model/rerouted                   | TL/HS    | current                | from/to 与 allowlisted reason；不改变 route owner |
-|  53 | model/verification               | HS/DX    | current                | 脱敏验证结论                                      |
-|  54 | turn/moderationMetadata          | DX       | product-scope-excluded | 只驱动受审核 policy                               |
-|  55 | model/safetyBuffering/updated    | HS       | current                | 安全缓冲提示，不伪造模型选择                      |
-|  56 | warning                          | HS/GN    | planned                | thread-scoped warning 去重、可关闭                |
-|  57 | guardianWarning                  | HS/TL    | planned                | 高优先级安全 warning，不被普通 warning 吞掉       |
-|  58 | deprecationNotice                | GN       | product-scope-excluded | 开发/设置诊断，不污染对话流                       |
-|  59 | configWarning                    | GN       | planned                | 安全 path 摘要与设置入口                          |
-|  60 | fuzzyFileSearch/sessionUpdated   | PI       | planned                | Composer mention 搜索，丢弃陈旧 session           |
-|  61 | fuzzyFileSearch/sessionCompleted | PI       | planned                | 终结 loading、显示空/失败态                       |
+|   # | Method                           | 目标出口 | 当前裁决               | v2 投影                                                      |
+| --: | -------------------------------- | -------- | ---------------------- | ------------------------------------------------------------ |
+|  52 | model/rerouted                   | TL/HS    | current                | from/to 与 allowlisted reason；不改变 route owner            |
+|  53 | model/verification               | HS/DX    | current                | 脱敏验证结论                                                 |
+|  54 | turn/moderationMetadata          | DX       | product-scope-excluded | 只驱动受审核 policy                                          |
+|  55 | model/safetyBuffering/updated    | HS       | current                | 安全缓冲提示，不伪造模型选择                                 |
+|  56 | warning                          | HS/GN    | current                | typed threadId/message/code?；实时去重 toast 与冷读恢复      |
+|  57 | guardianWarning                  | HS/TL    | planned                | 高优先级安全 warning，不被普通 warning 吞掉                  |
+|  58 | deprecationNotice                | GN       | product-scope-excluded | 开发/设置诊断，不污染对话流                                  |
+|  59 | configWarning                    | GN       | current                | initialize/turn producer；typed path/range 经去重 toast 展示 |
+|  60 | fuzzyFileSearch/sessionUpdated   | PI       | planned                | Composer mention 搜索，丢弃陈旧 session                      |
+|  61 | fuzzyFileSearch/sessionCompleted | PI       | planned                | 终结 loading、显示空/失败态                                  |
 
 ## 5. Realtime、Windows 与登录
 
@@ -128,21 +128,21 @@ Codex 72 项是 runtime/rendering 上游基线，不是删除 Lime 产品扩展�
 
 raw JSON-RPC transport id/action token 只由 server-request dispatcher 的请求闭包持有。React projection 只接收 semantic interaction identity，不能持久化或显示 transport identity。
 
-|   # | Method                                | 当前裁决               | GUI/host 处理                                                                               |
-| --: | ------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------- |
-|   1 | item/commandExecution/requestApproval | current                | 命令审批，显示 command/actions/risk；映射 accept、session、policy、network、decline、cancel |
-|   2 | item/fileChange/requestApproval       | current                | Patch 审批，显示 Diff/reason/grantRoot                                                      |
-|   3 | item/tool/requestUserInput            | current                | 1-3 个问题、option、Other、secret、auto-resolution                                          |
-|   4 | mcpServer/elicitation/request         | current                | form、openai/form、url；结构化校验                                                          |
-|   5 | currentTime/read                      | planned                | host-only 当前时间能力；不进入时间线，不允许 Renderer 直接读取系统时钟                      |
-|   6 | item/permissions/requestApproval      | planned                | cwd、reason、environment、permission profile diff                                           |
-|   7 | item/tool/call                        | planned                | Electron 校验 binding 后路由 current ToolHost；Renderer 只观察 Item                         |
-|   8 | account/chatgptAuthTokens/refresh     | product-scope-excluded | credential broker host-only，绝不显示 token                                                 |
-|   9 | attestation/generate                  | product-scope-excluded | 平台能力 host-only，无伪造 fallback                                                         |
-|  10 | applyPatchApproval                    | deprecated             | legacy 与 v2 file approval 去重，同一动作只有一个 prompt                                    |
-|  11 | execCommandApproval                   | deprecated             | legacy 与 v2 command approval 去重，同一动作只有一个 prompt                                 |
+|   # | Method                                | 当前裁决               | GUI/host 处理                                                                                 |
+| --: | ------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------- |
+|   1 | item/commandExecution/requestApproval | current                | 命令审批，显示 command/actions/risk；映射 accept、session、policy、network、decline、cancel   |
+|   2 | item/fileChange/requestApproval       | current                | Patch 审批，显示 Diff/reason/grantRoot                                                        |
+|   3 | item/tool/requestUserInput            | current                | 1-3 个问题、option、Other、secret、auto-resolution                                            |
+|   4 | mcpServer/elicitation/request         | current                | form、openai/form、url；结构化校验                                                            |
+|   5 | currentTime/read                      | current                | Electron Host 独占系统时钟；thread-scoped reverse request 不进入时间线，Renderer 不直接读时钟 |
+|   6 | item/permissions/requestApproval      | current                | typed cwd/reason/environment/profile 经统一 PendingInteraction；exact waiter fail closed      |
+|   7 | item/tool/call                        | current                | Electron 校验 frozen binding 后执行 ToolHost；Renderer 只观察 typed DynamicToolCall Item      |
+|   8 | account/chatgptAuthTokens/refresh     | product-scope-excluded | credential broker host-only，绝不显示 token                                                   |
+|   9 | attestation/generate                  | product-scope-excluded | 平台能力 host-only，无伪造 fallback                                                           |
+|  10 | applyPatchApproval                    | deprecated             | legacy 与 v2 file approval 去重，同一动作只有一个 prompt                                      |
+|  11 | execCommandApproval                   | deprecated             | legacy 与 v2 command approval 去重，同一动作只有一个 prompt                                   |
 
-前四类 current request 已统一注册到一个 `PendingInteractionController`。command/file approval、requestUserInput 与 MCP elicitation 共享提交幂等、abort、Turn/thread 终结和 Composer 上方唯一交互表面；旧 server-request controller、独立 MCP Dialog/controller 和第二 pending store 已删除。其余 planned request 仍须先有真实 producer/host owner，不得复用这四类 handler 伪造支持。
+command/file approval、requestUserInput、MCP elicitation 与 permission approval 已统一注册到一个 `PendingInteractionController`，共享提交幂等、abort、Turn/thread 终结和 Composer 上方唯一交互表面。`currentTime/read` 与 `item/tool/call` 由 Electron Host 在 Renderer 之前处理；旧 server-request controller、独立 MCP Dialog/controller 和第二 pending store 已删除。product-scope-excluded request 不得复用这些 handler 伪造支持。
 
 ## 8. Pending Interaction 合同
 
@@ -151,8 +151,9 @@ raw JSON-RPC transport id/action token 只由 server-request dispatcher 的请�
       | FileApproval
       | UserInputRequest
       | McpElicitation
+      | PermissionApproval
 
-`PermissionApproval` 仍是 planned surface，只有 current producer 与 host policy owner 完成后才能加入上述生产 union。
+`PermissionApproval` 使用 typed cwd、reason、environment 与 permission profile diff；grant 只响应 App Server 当前 exact waiter，未知 decision、abort、detach 和越权 profile 均 fail closed。
 
 每个 projection 都包含 semantic interactionId、thread/turn/item anchor、createdAt、可选 expiresAt、pending/submitting/resolved/expired/disconnected 状态、本地化文案、结构化选项与 secret/network/filesystem/session 风险标签。
 

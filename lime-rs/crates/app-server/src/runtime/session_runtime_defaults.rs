@@ -4,6 +4,7 @@ use app_server_protocol::{AgentSession, RuntimeOptions, RuntimeRequest};
 use serde_json::{json, Map, Value};
 
 const IMPORTED_CONVERSATION_KIND: &str = "conversation.import";
+const DYNAMIC_TOOLS_METADATA_KEY: &str = "dynamicTools";
 
 impl RuntimeCore {
     pub(in crate::runtime) fn session_runtime_defaults(
@@ -173,6 +174,26 @@ fn merge_runtime_requests(
         (defaults, request) => return request.or(defaults),
     };
 
+    let default_dynamic_tools = defaults
+        .metadata
+        .as_ref()
+        .and_then(Value::as_object)
+        .and_then(|metadata| metadata.get(DYNAMIC_TOOLS_METADATA_KEY))
+        .cloned();
+    let mut metadata = merge_json_objects(defaults.metadata, request.metadata);
+    match (
+        metadata.as_mut().and_then(Value::as_object_mut),
+        default_dynamic_tools,
+    ) {
+        (Some(metadata), Some(dynamic_tools)) => {
+            metadata.insert(DYNAMIC_TOOLS_METADATA_KEY.to_string(), dynamic_tools);
+        }
+        (Some(metadata), None) => {
+            metadata.remove(DYNAMIC_TOOLS_METADATA_KEY);
+        }
+        _ => {}
+    }
+
     Some(RuntimeRequest {
         provider_config: request.provider_config.or(defaults.provider_config),
         provider_preference: request.provider_preference.or(defaults.provider_preference),
@@ -192,7 +213,7 @@ fn merge_runtime_requests(
         execution_strategy: request.execution_strategy.or(defaults.execution_strategy),
         auto_continue: request.auto_continue.or(defaults.auto_continue),
         system_prompt: request.system_prompt.or(defaults.system_prompt),
-        metadata: merge_json_objects(defaults.metadata, request.metadata),
+        metadata,
     })
 }
 
@@ -222,6 +243,7 @@ fn continuation_metadata(
 
 fn thread_settings_runtime_metadata(metadata: &Value) -> Value {
     compact_json(json!({
+        DYNAMIC_TOOLS_METADATA_KEY: metadata.get(DYNAMIC_TOOLS_METADATA_KEY).cloned(),
         "serviceTier": metadata.get("serviceTier").cloned(),
         "approvalsReviewer": metadata.get("approvalsReviewer").cloned(),
         "reasoningSummary": metadata
@@ -353,6 +375,67 @@ mod tests {
         assert_eq!(request.sandbox_policy.as_deref(), Some("workspace-write"));
         assert_eq!(request.workspace_id.as_deref(), Some("workspace-1"));
         assert!(request.metadata.is_none());
+    }
+
+    #[test]
+    fn session_dynamic_tools_are_sticky_and_turn_injection_is_removed() {
+        let defaults = default_runtime_options_for_session(&session(
+            "agent.thread",
+            json!({
+                "providerSelector": "openai",
+                "modelName": "gpt-5.4",
+                "dynamicTools": [{
+                    "type": "function",
+                    "name": "desktop_app_info",
+                    "description": "Read desktop app information",
+                    "inputSchema": {"type": "object", "properties": {}}
+                }]
+            }),
+        ))
+        .expect("valid metadata")
+        .expect("defaults");
+        let forged = RuntimeOptions {
+            runtime_request: Some(RuntimeRequest {
+                metadata: Some(json!({
+                    "dynamicTools": [{
+                        "type": "function",
+                        "name": "forged",
+                        "description": "Forged",
+                        "inputSchema": {"type": "object"}
+                    }],
+                    "callerValue": true
+                })),
+                ..RuntimeRequest::default()
+            }),
+            ..RuntimeOptions::default()
+        };
+
+        let merged = merge_with_request_options(defaults, Some(forged));
+        let metadata = merged
+            .runtime_request
+            .and_then(|request| request.metadata)
+            .expect("metadata");
+        assert_eq!(metadata["dynamicTools"][0]["name"], "desktop_app_info");
+        assert_eq!(metadata["callerValue"], true);
+
+        let defaults = default_runtime_options_for_session(&session(
+            "agent.thread",
+            json!({"providerSelector": "openai", "modelName": "gpt-5.4"}),
+        ))
+        .expect("valid metadata")
+        .expect("defaults");
+        let injected = RuntimeOptions {
+            runtime_request: Some(RuntimeRequest {
+                metadata: Some(json!({"dynamicTools": [{"type": "function"}]})),
+                ..RuntimeRequest::default()
+            }),
+            ..RuntimeOptions::default()
+        };
+        let metadata = merge_with_request_options(defaults, Some(injected))
+            .runtime_request
+            .and_then(|request| request.metadata)
+            .expect("request metadata remains present");
+        assert!(metadata.get(DYNAMIC_TOOLS_METADATA_KEY).is_none());
     }
 
     #[test]

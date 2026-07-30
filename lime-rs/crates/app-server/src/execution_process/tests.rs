@@ -219,7 +219,14 @@ async fn execution_process_server_enforces_seatbelt_workspace_boundaries() {
             approval_policy: Some("never".to_string()),
             sandbox_policy: Some("workspace-write".to_string()),
             runtime_metadata: Some(json!({
-                "workspaceSandbox": { "enabled": true, "strict": true }
+                "workspaceSandbox": { "enabled": true, "strict": true },
+                "metadata": {
+                    "grantedPermissions": {
+                        "fileSystem": {
+                            "write": [outside_path.to_string_lossy().to_string()]
+                        }
+                    }
+                }
             })),
             cwd: None,
             env: HashMap::from([(

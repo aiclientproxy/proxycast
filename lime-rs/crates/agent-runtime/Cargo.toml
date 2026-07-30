@@ -13,6 +13,7 @@ doctest = false
 [dependencies]
 agent-protocol.workspace = true
 anyhow.workspace = true
+app-server-protocol.workspace = true
 futures.workspace = true
 model-provider.workspace = true
 rusqlite.workspace = true

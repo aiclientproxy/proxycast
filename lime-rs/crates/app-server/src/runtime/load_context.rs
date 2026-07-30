@@ -121,8 +121,8 @@ impl RuntimeCore {
         };
         let workflow_audit_events =
             self.read_workflow_audit_events_for_session(&params.session_id)?;
-        let projection_usage_events = if events.is_empty() && params.history_limit.is_some() {
-            self.read_projection_usage_events_for_session(&params.session_id)?
+        let projection_support_events = if events.is_empty() && params.history_limit.is_some() {
+            self.read_projection_support_events_for_session(&params.session_id)?
         } else {
             Vec::new()
         };
@@ -132,7 +132,7 @@ impl RuntimeCore {
                 events,
                 params,
                 workflow_audit_events,
-                projection_usage_events,
+                projection_support_events,
                 projection_store,
             )
             .await?,
@@ -160,7 +160,7 @@ impl RuntimeCore {
             .map(|events| events.unwrap_or_default())
     }
 
-    fn read_projection_usage_events_for_session(
+    fn read_projection_support_events_for_session(
         &self,
         session_id: &str,
     ) -> Result<Vec<AgentEvent>, RuntimeCoreError> {
@@ -173,7 +173,10 @@ impl RuntimeCore {
                         records
                             .into_iter()
                             .map(|record| record.event)
-                            .filter(is_turn_completed_usage_event)
+                            .filter(|event| {
+                                is_turn_completed_usage_event(event)
+                                    || event.event_type == "runtime.warning"
+                            })
                             .collect::<Vec<_>>()
                     })
                     .map_err(RuntimeCoreError::Backend)
@@ -206,7 +209,7 @@ pub(in crate::runtime) async fn projection_load_context(
     events: Vec<AgentEvent>,
     params: &AgentSessionReadParams,
     workflow_audit_events: Vec<AgentEvent>,
-    projection_usage_events: Vec<AgentEvent>,
+    projection_support_events: Vec<AgentEvent>,
     projection_store: &super::ProjectionStore,
 ) -> Result<SessionLoadContext, RuntimeCoreError> {
     let stored = StoredSession {
@@ -226,7 +229,9 @@ pub(in crate::runtime) async fn projection_load_context(
             .collect(),
     };
     let mut detail = if stored.events.is_empty() && params.history_limit.is_some() {
-        let mut usage_events = projection_usage_events;
+        let (mut usage_events, warning_events): (Vec<_>, Vec<_>) = projection_support_events
+            .into_iter()
+            .partition(is_turn_completed_usage_event);
         usage_events.extend(
             workflow_audit_events
                 .iter()
@@ -238,6 +243,7 @@ pub(in crate::runtime) async fn projection_load_context(
             &projection,
             params,
             &usage_events,
+            &warning_events,
             projection_store,
         )
         .await?
@@ -282,6 +288,7 @@ async fn projection_summary_detail(
     projection: &ProjectionReadSession,
     params: &AgentSessionReadParams,
     usage_events: &[AgentEvent],
+    warning_events: &[AgentEvent],
     projection_store: &super::ProjectionStore,
 ) -> Result<serde_json::Value, RuntimeCoreError> {
     let messages = projection.messages.clone();
@@ -290,11 +297,15 @@ async fn projection_summary_detail(
         .as_ref()
         .and_then(|detail| detail.get("thread_read"))
         .and_then(Value::as_object);
-    let items = Value::Array(
-        read_model::canonical_items_from_thread_store(projection_store, stored)
-            .await
-            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?,
-    );
+    let canonical_items = read_model::canonical_items_from_thread_store(projection_store, stored)
+        .await
+        .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+    let mut warning_stored = stored.clone();
+    warning_stored.events = warning_events.to_vec();
+    let items = Value::Array(read_model::merge_runtime_warning_items(
+        &warning_stored,
+        canonical_items,
+    ));
     let thread_items = items.clone();
     let artifacts = process_detail_array(process_detail.as_ref(), "artifacts");
     let outputs = process_detail_array(process_detail.as_ref(), "outputs");

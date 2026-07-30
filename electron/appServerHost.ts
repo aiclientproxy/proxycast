@@ -37,6 +37,8 @@ import { resolveCurrentDesktopStorageRoots } from "./appDataPaths";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { tryHandleCurrentTimeRead } from "./appServerCurrentTimeHost";
+import { AppServerDynamicToolHost } from "./appServerDynamicToolHost";
 
 const DEFAULT_APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
 const APP_SERVER_BACKEND_TIMEOUT_GRACE_MS = 30_000;
@@ -102,6 +104,7 @@ export class ElectronAppServerHost {
   #serverRequestRawIdsByToken = new Map<string, RequestId>();
   #serverRequestTokensByRawId = new Map<string, string>();
   #stopping = false;
+  #dynamicToolHost = new AppServerDynamicToolHost();
 
   async warmup(): Promise<InitializeResponse> {
     const connected = await this.#connect();
@@ -110,7 +113,9 @@ export class ElectronAppServerHost {
 
   async request<T>(method: string, params: unknown = {}): Promise<T> {
     const connected = await this.#connect();
-    const request = connected.client.request(method, params ?? {});
+    const request = this.#dynamicToolHost.prepareClientRequest(
+      connected.client.request(method, params ?? {}),
+    );
     const response = await this.#requestAppServer<T>(
       connected,
       request,
@@ -119,6 +124,7 @@ export class ElectronAppServerHost {
         timeoutMs: resolveAppServerRequestTimeoutMs(method),
       },
     );
+    this.#dynamicToolHost.observeClientResult(method, response.result);
     return response.result;
   }
 
@@ -147,7 +153,9 @@ export class ElectronAppServerHost {
         continue;
       }
       if (isJsonRpcRequestLike(message)) {
-        const proxiedMessage = this.#proxyRequestMessage(message);
+        const preparedMessage =
+          this.#dynamicToolHost.prepareClientRequest(message);
+        const proxiedMessage = this.#proxyRequestMessage(preparedMessage);
         const timeoutMs = resolveAppServerRequestTimeoutMs(
           proxiedMessage.message.method,
           request.timeoutMs,
@@ -163,6 +171,10 @@ export class ElectronAppServerHost {
                 proxiedMessage.message.method,
                 { timeoutMs },
               ),
+          );
+          this.#dynamicToolHost.observeClientResult(
+            proxiedMessage.message.method,
+            result.result,
           );
           responses.push(
             ...result.messages.map((response) =>
@@ -204,18 +216,24 @@ export class ElectronAppServerHost {
     );
     const drained: JsonRpcMessage[] = [];
 
-    for (let index = 0; index < limit; index += 1) {
+    while (drained.length < limit) {
+      let message: JsonRpcMessage;
       try {
-        drained.push(
-          await connected.connection.nextServerMessage(
-            index === 0
-              ? APP_SERVER_DRAIN_FIRST_MESSAGE_WAIT_MS
-              : APP_SERVER_DRAIN_BUFFERED_MESSAGE_WAIT_MS,
-          ),
+        message = await connected.connection.nextServerMessage(
+          drained.length === 0
+            ? APP_SERVER_DRAIN_FIRST_MESSAGE_WAIT_MS
+            : APP_SERVER_DRAIN_BUFFERED_MESSAGE_WAIT_MS,
         );
       } catch {
         break;
       }
+      if (tryHandleCurrentTimeRead(connected.connection, message)) {
+        continue;
+      }
+      if (this.#dynamicToolHost.tryHandle(connected.connection, message)) {
+        continue;
+      }
+      drained.push(message);
     }
 
     const rendererMessages = drained.map((message) =>
@@ -244,6 +262,7 @@ export class ElectronAppServerHost {
     this.#consumedServerRequestTokens.clear();
     this.#serverRequestRawIdsByToken.clear();
     this.#serverRequestTokensByRawId.clear();
+    this.#dynamicToolHost.reset();
   }
 
   #projectServerMessageForRenderer(message: JsonRpcMessage): JsonRpcMessage {
@@ -284,7 +303,9 @@ export class ElectronAppServerHost {
       return message;
     }
     if (this.#consumedServerRequestTokens.has(message.id)) {
-      throw new Error("App Server server-request action token was already used");
+      throw new Error(
+        "App Server server-request action token was already used",
+      );
     }
     const rawId = this.#serverRequestRawIdsByToken.get(message.id);
     if (rawId === undefined) {

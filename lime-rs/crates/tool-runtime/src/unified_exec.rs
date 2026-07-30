@@ -46,6 +46,7 @@ pub struct RuntimeUnifiedExecToolRequest<'a> {
     pub tool_call_id: String,
     pub cancel_token: Option<CancellationToken>,
     pub turn_context: Option<&'a RuntimeToolTurnContext>,
+    pub granted_permissions: Option<app_server_protocol::protocol::v2::GrantedPermissionProfile>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -298,6 +299,7 @@ async fn execute_command(
                 cwd: None,
                 env: request.environment,
             },
+            request.granted_permissions,
         )
         .await;
     if let Err(error) = start_result {

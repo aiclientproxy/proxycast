@@ -125,6 +125,9 @@ function processNotification(
 ): GateResult {
   const directRoute = readAppServerV2NotificationRoute(notification);
   if (directRoute) {
+    if (notification.method === "warning") {
+      return { kind: "accepted", notifications: [notification] };
+    }
     if (isDirectStreamingNotification(notification.method)) {
       const guard = DIRECT_ITEM_STREAM_GUARDS.get(notification.method);
       if (guard) {
@@ -305,9 +308,7 @@ function isCurrentNonThreadSideChannelEvent(eventType: string): boolean {
     eventType === "image_task.presentation.generated" ||
     eventType === "image_task.created" ||
     eventType === "image_task.parameters.required" ||
-    eventType === "image_task_parameters_required" ||
-    eventType === "media.read.chunk" ||
-    eventType === "media.read.completed"
+    eventType === "image_task_parameters_required"
   );
 }
 

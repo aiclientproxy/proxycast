@@ -183,6 +183,10 @@
       "method": "conversationImport/thread/preview"
     },
     {
+      "kind": "serverRequest",
+      "method": "currentTime/read"
+    },
+    {
       "kind": "request",
       "method": "diagnostics/logStorage/read"
     },
@@ -387,6 +391,10 @@
       "method": "item/mcpToolCall/progress"
     },
     {
+      "kind": "serverRequest",
+      "method": "item/permissions/requestApproval"
+    },
+    {
       "kind": "notification",
       "method": "item/plan/delta"
     },
@@ -405,6 +413,10 @@
     {
       "kind": "notification",
       "method": "item/started"
+    },
+    {
+      "kind": "serverRequest",
+      "method": "item/tool/call"
     },
     {
       "kind": "serverRequest",
@@ -1251,6 +1263,10 @@
       "method": "voiceTranscription/transcribeAudio"
     },
     {
+      "kind": "notification",
+      "method": "warning"
+    },
+    {
       "kind": "request",
       "method": "wechatChannel/account/remove"
     },
@@ -1665,7 +1681,6 @@
       "ClientCapabilities",
       "ClientInfo",
       "ClientNotification",
-      "ConfigWarningNotification",
       "ConnectCallbackSendParams",
       "ConnectCallbackSendResponse",
       "ConnectCallbackStatus",
@@ -2077,8 +2092,6 @@
       "SupportBundleExportParams",
       "SupportBundleExportResponse",
       "SupportBundleTraceExportSelection",
-      "TextPosition",
-      "TextRange",
       "TransportKind",
       "UsageStatsDailyTrendsListResponse",
       "UsageStatsDailyUsage",
@@ -2168,6 +2181,8 @@
     "v2": [
       "AdditionalContextEntry",
       "AdditionalContextKind",
+      "AdditionalFileSystemPermissions",
+      "AdditionalNetworkPermissions",
       "AgentMessageDeltaNotification",
       "ArtifactSnapshot",
       "ArtifactWriteParams",
@@ -2186,14 +2201,28 @@
       "CommandExecutionRequestApprovalResponse",
       "CommandExecutionSource",
       "CommandExecutionStatus",
+      "ConfigWarningNotification",
+      "CurrentTimeReadParams",
+      "CurrentTimeReadResponse",
       "DynamicToolCallOutputContentItem",
+      "DynamicToolCallParams",
+      "DynamicToolCallResponse",
       "DynamicToolCallStatus",
+      "DynamicToolFunctionSpec",
+      "DynamicToolNamespaceSpec",
+      "DynamicToolNamespaceTool",
+      "DynamicToolSpec",
       "FileChangeApprovalDecision",
       "FileChangePatchUpdatedNotification",
       "FileChangeRequestApprovalParams",
       "FileChangeRequestApprovalResponse",
+      "FileSystemAccessMode",
+      "FileSystemPath",
+      "FileSystemSandboxEntry",
+      "FileSystemSpecialPath",
       "FileUpdateChange",
       "GitInfo",
+      "GrantedPermissionProfile",
       "HookPromptFragment",
       "ImageGenerationItem",
       "InitializeCapabilities",
@@ -2227,17 +2256,23 @@
       "ModelVerificationNotification",
       "PatchApplyStatus",
       "PatchChangeKind",
+      "PermissionGrantScope",
+      "PermissionsRequestApprovalParams",
+      "PermissionsRequestApprovalResponse",
       "PlanDeltaNotification",
       "ReasoningEffortOption",
       "ReasoningSummaryPartAddedNotification",
       "ReasoningSummaryTextDeltaNotification",
       "ReasoningTextDeltaNotification",
+      "RequestPermissionProfile",
       "ServerNotification",
       "ServerRequest",
       "ServerRequestResolvedNotification",
       "SleepItem",
       "SortDirection",
       "SubAgentActivityKind",
+      "TextPosition",
+      "TextRange",
       "Thread",
       "ThreadActiveFlag",
       "ThreadApproveGuardianDeniedActionParams",
@@ -2352,6 +2387,7 @@
       "TurnSteerResponse",
       "TurnsPage",
       "UserInput",
+      "WarningNotification",
       "WebSearchItem"
     ]
   }

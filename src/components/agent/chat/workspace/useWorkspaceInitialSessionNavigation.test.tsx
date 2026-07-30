@@ -473,6 +473,32 @@ describe("useWorkspaceInitialSessionNavigation", () => {
     expect(switchTopic).not.toHaveBeenCalled();
   });
 
+  it("已水合 initialSessionId 后切入 detached session 不应被旧目标抢回", async () => {
+    const switchTopic = vi.fn(async () => undefined);
+    const mounted = renderHook({
+      initialSessionId: "session-parent",
+      currentSessionId: "session-parent",
+      shouldHydrateMatchedInitialSession: true,
+      switchTopic,
+    });
+
+    await flushEffects();
+    expect(switchTopic).toHaveBeenCalledWith("session-parent", {
+      forceRefresh: true,
+    });
+
+    switchTopic.mockClear();
+    mounted.rerender({
+      initialSessionId: "session-parent",
+      currentSessionId: "session-child",
+      shouldHydrateMatchedInitialSession: false,
+      switchTopic,
+    });
+    await flushEffects();
+
+    expect(switchTopic).not.toHaveBeenCalled();
+  });
+
   it("短时间内重复挂载相同初始会话时应去重", async () => {
     const switchTopic = vi.fn(async () => undefined);
 

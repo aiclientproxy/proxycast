@@ -32,10 +32,6 @@
       ]
     },
     "sidecarRef": true,
-    "stream": {
-      "default": false,
-      "type": "boolean"
-    },
     "threadId": {
       "type": "string"
     },

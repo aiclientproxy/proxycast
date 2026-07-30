@@ -36,6 +36,7 @@ describe("openWorkspaceSubagentTarget", () => {
     );
     expect(switchTopic).toHaveBeenCalledWith("agent-child", {
       allowDetachedSession: true,
+      forceRefresh: true,
     });
   });
 
@@ -58,6 +59,7 @@ describe("openWorkspaceSubagentTarget", () => {
     );
     expect(switchTopic).toHaveBeenCalledWith("agent-resolved", {
       allowDetachedSession: true,
+      forceRefresh: true,
     });
   });
 
@@ -80,6 +82,7 @@ describe("openWorkspaceSubagentTarget", () => {
     );
     expect(switchTopic).toHaveBeenCalledWith("agent-child", {
       allowDetachedSession: true,
+      forceRefresh: true,
     });
   });
 

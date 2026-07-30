@@ -1,10 +1,6 @@
 import {
-  agentSessionEventNotification,
-  mediaReadEventNotification,
-  type AgentEvent,
   type AgentSessionActionRespondParams,
   type AgentSessionActionRespondResponse,
-  type AgentSessionEventNotification,
   type ThreadReadParams,
   type ThreadReadResponse,
   type ThreadMemoryModeSetParams,
@@ -33,13 +29,6 @@ import {
   type AppServerRequestResult,
 } from "./connection.js";
 
-export type AgentEventListener = (
-  event: AgentEvent,
-  notification: AgentSessionEventNotification,
-) => void | Promise<void>;
-
-export type AgentRuntimeEventListener = AgentEventListener;
-
 export type AgentRuntimeLifecycleNotification = Extract<
   ServerNotification,
   {
@@ -61,9 +50,7 @@ export type AgentRuntimeLifecycleNotification = Extract<
   }
 >;
 
-export type AgentRuntimeNotification =
-  | AgentRuntimeLifecycleNotification
-  | AgentSessionEventNotification;
+export type AgentRuntimeNotification = AgentRuntimeLifecycleNotification;
 
 export type AgentRuntimeLifecycleEventListener = (
   event: AgentRuntimeLifecycleNotification,
@@ -119,9 +106,6 @@ export interface AgentRuntimeClient {
     params: EvidenceExportParams,
     options?: AppServerRequestOptions,
   ): Promise<AppServerRequestResult<EvidenceExportResponse>>;
-  subscribeEvents(
-    listener: AgentRuntimeEventListener,
-  ): AgentRuntimeClientSubscription;
   subscribeLifecycleEvents(
     listener: AgentRuntimeLifecycleEventListener,
   ): AgentRuntimeClientSubscription;
@@ -130,15 +114,7 @@ export interface AgentRuntimeClient {
 }
 
 export class AppServerAgentEventRouter {
-  #listeners = new Set<AgentEventListener>();
   #lifecycleListeners = new Set<AgentRuntimeLifecycleEventListener>();
-
-  subscribe(listener: AgentEventListener): () => void {
-    this.#listeners.add(listener);
-    return () => {
-      this.#listeners.delete(listener);
-    };
-  }
 
   subscribeLifecycle(listener: AgentRuntimeLifecycleEventListener): () => void {
     this.#lifecycleListeners.add(listener);
@@ -155,14 +131,7 @@ export class AppServerAgentEventRouter {
       }
       return true;
     }
-    const notification = agentSessionEventNotification(message);
-    if (!notification || !mediaReadEventNotification(notification)) {
-      return false;
-    }
-    for (const listener of this.#listeners) {
-      await listener(notification.params.event, notification);
-    }
-    return true;
+    return false;
   }
 }
 
@@ -278,13 +247,6 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
     );
   }
 
-  subscribeEvents(
-    listener: AgentRuntimeEventListener,
-  ): AgentRuntimeClientSubscription {
-    const unsubscribe = this.eventRouter.subscribe(listener);
-    return { unsubscribe };
-  }
-
   subscribeLifecycleEvents(
     listener: AgentRuntimeLifecycleEventListener,
   ): AgentRuntimeClientSubscription {
@@ -303,11 +265,6 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
       if (lifecycle) {
         await this.dispatchEvent(lifecycle);
         return lifecycle;
-      }
-      const agentNotification = agentSessionEventNotification(notification);
-      if (agentNotification && mediaReadEventNotification(agentNotification)) {
-        await this.dispatchEvent(agentNotification);
-        return agentNotification;
       }
     }
   }

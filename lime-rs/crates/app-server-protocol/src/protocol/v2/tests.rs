@@ -85,6 +85,61 @@ fn thread_start_uses_v2_camel_case_fields() {
 }
 
 #[test]
+fn thread_start_dynamic_tools_use_typed_function_and_namespace_shapes() {
+    let params: ThreadStartParams = serde_json::from_value(json!({
+        "dynamicTools": [
+            {
+                "type": "function",
+                "name": "lookup",
+                "description": "Lookup a record",
+                "inputSchema": {"type": "object"}
+            },
+            {
+                "type": "namespace",
+                "name": "docs",
+                "description": "Documentation tools",
+                "tools": [{
+                    "type": "function",
+                    "name": "search",
+                    "description": "Search documentation",
+                    "inputSchema": {
+                        "type": "object",
+                        "required": ["query"],
+                        "properties": {"query": {"type": "string"}}
+                    },
+                    "deferLoading": true
+                }]
+            }
+        ]
+    }))
+    .expect("typed dynamic tools");
+
+    let tools = params.dynamic_tools.expect("dynamic tools");
+    assert!(matches!(tools[0], DynamicToolSpec::Function(_)));
+    let DynamicToolSpec::Namespace(namespace) = &tools[1] else {
+        panic!("second dynamic tool must be a namespace");
+    };
+    assert_eq!(namespace.name, "docs");
+    let DynamicToolNamespaceTool::Function(function) = &namespace.tools[0];
+    assert_eq!(function.name, "search");
+    assert!(function.defer_loading);
+}
+
+#[test]
+fn thread_start_dynamic_tools_reject_untyped_values() {
+    let error = serde_json::from_value::<ThreadStartParams>(json!({
+        "dynamicTools": [{
+            "name": "lookup",
+            "description": "Lookup a record",
+            "inputSchema": {"type": "object"}
+        }]
+    }))
+    .expect_err("dynamic tool type tag is required");
+
+    assert!(error.to_string().contains("type"));
+}
+
+#[test]
 fn thread_elicitation_requests_round_trip_exact_codex_shape() {
     let thread_id = "019f9b19-17a2-78b2-84d7-ce881fcf0617";
     let requests = [
@@ -248,8 +303,7 @@ fn media_read_round_trips_thread_scoped_shape() {
             "uri": "sidecar://media/image_1",
             "maxBytes": 1024,
             "offset": 0,
-            "length": 512,
-            "stream": true
+            "length": 512
         }
     });
     let request: ClientRequest =
@@ -395,6 +449,105 @@ fn model_list_updated_notification_round_trips_typed_generation() {
         notification
     );
     assert!(NOTIFICATION_METHODS.contains(&METHOD_MODEL_LIST_UPDATED));
+}
+
+#[test]
+fn config_warning_notification_round_trips_codex_shape() {
+    let expected = json!({
+        "method": "configWarning",
+        "params": {
+            "summary": "Invalid configuration; using defaults.",
+            "details": "failed to parse config.toml",
+            "path": "/tmp/config.toml",
+            "range": {
+                "start": { "line": 2, "column": 5 },
+                "end": { "line": 2, "column": 12 }
+            }
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode config warning notification");
+    assert_eq!(notification.method(), METHOD_CONFIG_WARNING);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_CONFIG_WARNING);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC config warning notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode config warning notification"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_CONFIG_WARNING));
+
+    assert_eq!(
+        serde_json::to_value(ConfigWarningNotification {
+            summary: "Using defaults.".to_string(),
+            details: None,
+            path: None,
+            range: None,
+        })
+        .expect("encode nullable config warning details"),
+        json!({
+            "summary": "Using defaults.",
+            "details": null
+        })
+    );
+}
+
+#[test]
+fn warning_notification_round_trips_thread_scoped_lime_shape() {
+    let expected = json!({
+        "method": "warning",
+        "params": {
+            "threadId": "thread-1",
+            "message": "技能不可用，已继续执行。",
+            "code": "skill_not_available"
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode warning notification");
+    assert_eq!(notification.method(), METHOD_WARNING);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_WARNING);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC warning notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode warning notification"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_WARNING));
+
+    assert_eq!(
+        serde_json::to_value(WarningNotification {
+            thread_id: None,
+            message: "全局提醒".to_string(),
+            code: None,
+        })
+        .expect("encode global warning notification"),
+        json!({
+            "threadId": null,
+            "message": "全局提醒"
+        })
+    );
+    assert!(serde_json::from_value::<ServerNotification>(json!({
+        "method": "warning",
+        "params": { "threadId": "thread-1" }
+    }))
+    .is_err());
+    assert!(serde_json::from_value::<ServerNotification>(json!({
+        "method": "warning",
+        "params": {
+            "threadId": "thread-1",
+            "message": "warning",
+            "code": 42
+        }
+    }))
+    .is_err());
 }
 
 #[test]
@@ -1328,9 +1481,12 @@ fn v2_method_registry_round_trips_wire_names() {
     assert_eq!(
         SERVER_REQUEST_METHODS,
         &[
+            METHOD_CURRENT_TIME_READ,
             METHOD_MCP_SERVER_ELICITATION_REQUEST,
             METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
             METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
+            METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
+            METHOD_ITEM_TOOL_CALL,
             METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
         ]
     );
@@ -1450,6 +1606,159 @@ fn typed_v2_request_and_standard_response_round_trip() {
 
 #[test]
 fn typed_v2_server_envelopes_fail_closed_for_unknown_methods() {
+    let current_time_value = json!({
+        "id": "current-time-1",
+        "method": "currentTime/read",
+        "params": { "threadId": "thread_1" }
+    });
+    let current_time: ServerRequest =
+        serde_json::from_value(current_time_value.clone()).expect("decode current-time request");
+    assert_eq!(current_time.method(), METHOD_CURRENT_TIME_READ);
+    let current_time_jsonrpc: crate::JsonRpcRequest = current_time.clone().into();
+    assert_eq!(
+        ServerRequest::try_from(current_time_jsonrpc)
+            .expect("decode JSON-RPC current-time request"),
+        current_time
+    );
+    assert_eq!(
+        serde_json::to_value(current_time).expect("encode current-time request"),
+        current_time_value
+    );
+    assert_eq!(
+        serde_json::to_value(CurrentTimeReadResponse {
+            current_time_at: 1_783_860_000,
+        })
+        .expect("encode current-time response"),
+        json!({ "currentTimeAt": 1_783_860_000_i64 })
+    );
+
+    let permissions_value = json!({
+        "id": "permissions-1",
+        "method": "item/permissions/requestApproval",
+        "params": {
+            "threadId": "thread-1",
+            "turnId": "turn-1",
+            "itemId": "item-1",
+            "environmentId": "environment-1",
+            "startedAtMs": 1_783_860_000_123_i64,
+            "cwd": "/tmp/workspace",
+            "reason": "Allow generated files",
+            "permissions": {
+                "network": { "enabled": true },
+                "fileSystem": {
+                    "read": null,
+                    "write": null,
+                    "globScanMaxDepth": 2,
+                    "entries": [
+                        {
+                            "path": {
+                                "type": "special",
+                                "value": { "kind": "project_roots", "subpath": null }
+                            },
+                            "access": "write"
+                        },
+                        {
+                            "path": { "type": "glob_pattern", "pattern": "**/*.env" },
+                            "access": "deny"
+                        }
+                    ]
+                }
+            }
+        }
+    });
+    let permissions: ServerRequest =
+        serde_json::from_value(permissions_value.clone()).expect("decode permissions request");
+    assert_eq!(
+        permissions.method(),
+        METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL
+    );
+    let permissions_jsonrpc: crate::JsonRpcRequest = permissions.clone().into();
+    assert_eq!(
+        ServerRequest::try_from(permissions_jsonrpc).expect("decode JSON-RPC permissions request"),
+        permissions
+    );
+    assert_eq!(
+        serde_json::to_value(permissions).expect("encode permissions request"),
+        permissions_value
+    );
+
+    let default_response: PermissionsRequestApprovalResponse = serde_json::from_value(json!({
+        "permissions": {}
+    }))
+    .expect("decode default permission response");
+    assert_eq!(default_response.scope, PermissionGrantScope::Turn);
+    assert_eq!(default_response.strict_auto_review, None);
+    assert_eq!(
+        serde_json::to_value(PermissionsRequestApprovalResponse {
+            permissions: GrantedPermissionProfile::default(),
+            scope: PermissionGrantScope::Session,
+            strict_auto_review: Some(true),
+        })
+        .expect("encode permission response"),
+        json!({
+            "permissions": {},
+            "scope": "session",
+            "strictAutoReview": true
+        })
+    );
+    assert!(serde_json::from_value::<RequestPermissionProfile>(json!({
+        "network": null,
+        "fileSystem": null,
+        "macos": {}
+    }))
+    .is_err());
+
+    let dynamic_tool_call_value = json!({
+        "id": "dynamic-tool-call-1",
+        "method": "item/tool/call",
+        "params": {
+            "threadId": "thread-1",
+            "turnId": "turn-1",
+            "callId": "call-1",
+            "namespace": "workspace",
+            "tool": "render",
+            "arguments": { "format": "png" }
+        }
+    });
+    let dynamic_tool_call: ServerRequest = serde_json::from_value(dynamic_tool_call_value.clone())
+        .expect("decode dynamic tool call request");
+    assert_eq!(dynamic_tool_call.method(), METHOD_ITEM_TOOL_CALL);
+    let dynamic_tool_call_jsonrpc: crate::JsonRpcRequest = dynamic_tool_call.clone().into();
+    assert_eq!(
+        ServerRequest::try_from(dynamic_tool_call_jsonrpc)
+            .expect("decode JSON-RPC dynamic tool call request"),
+        dynamic_tool_call
+    );
+    assert_eq!(
+        serde_json::to_value(dynamic_tool_call).expect("encode dynamic tool call request"),
+        dynamic_tool_call_value
+    );
+    assert_eq!(
+        serde_json::to_value(DynamicToolCallResponse {
+            content_items: vec![
+                DynamicToolCallOutputContentItem::InputText {
+                    text: "done".to_string(),
+                },
+                DynamicToolCallOutputContentItem::InputImage {
+                    image_url: "data:image/png;base64,AA==".to_string(),
+                },
+                DynamicToolCallOutputContentItem::InputAudio {
+                    audio_url: "data:audio/wav;base64,AA==".to_string(),
+                },
+            ],
+            success: true,
+        })
+        .expect("encode dynamic tool call response"),
+        json!({
+            "contentItems": [
+                { "type": "inputText", "text": "done" },
+                { "type": "inputImage", "imageUrl": "data:image/png;base64,AA==" },
+                { "type": "inputAudio", "audioUrl": "data:audio/wav;base64,AA==" }
+            ],
+            "success": true
+        })
+    );
+
     let request_value = json!({
         "id": 7,
         "method": "mcpServer/elicitation/request",
@@ -1808,6 +2117,8 @@ fn typed_v2_envelope_schema_names_are_stable() {
     assert_eq!(
         methods,
         [
+            "configWarning",
+            "warning",
             "thread/started",
             "thread/archived",
             "thread/deleted",

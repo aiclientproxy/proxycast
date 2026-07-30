@@ -1,0 +1,63 @@
+{
+  "$defs": {
+    "DynamicToolFunctionSpec": {
+      "properties": {
+        "deferLoading": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "inputSchema": true,
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "inputSchema",
+        "name"
+      ],
+      "type": "object"
+    },
+    "DynamicToolNamespaceTool": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DynamicToolFunctionSpec",
+          "properties": {
+            "type": {
+              "const": "function",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "description": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/DynamicToolNamespaceTool"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "description",
+    "name",
+    "tools"
+  ],
+  "title": "DynamicToolNamespaceSpec",
+  "type": "object"
+}

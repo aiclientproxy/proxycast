@@ -273,13 +273,13 @@ pub use message_content::{MessageContentPart, MessageContentReference};
 pub use response_item::ResponseItem;
 pub use thread::{
     ApprovalAction, ApprovalDecision, ApprovalScope, CollabAgentOperation, CollabAgentState,
-    CollabAgentStatus, FileChange, FileChangeKind, FileChangeStatus, ItemKind, ItemStatus,
-    PageCursor, PlanStep, PlanStepStatus, SortDirection, SubAgentActivityKind, Thread,
-    ThreadActiveFlag, ThreadHistoryChange, ThreadHistoryChangeSet, ThreadItem, ThreadItemPayload,
-    ThreadItemsListParams, ThreadItemsListResponse, ThreadListParams, ThreadListResponse,
-    ThreadStatus, ThreadTurnsListParams, ThreadTurnsListResponse, ThreadTurnsView, ToolArgument,
-    ToolOutput, Turn, TurnAdmissionState, TurnApprovalState, TurnError, TurnItemsView,
-    TurnQueueState, TurnStatus,
+    CollabAgentStatus, DynamicToolCallContentItem, FileChange, FileChangeKind, FileChangeStatus,
+    ItemKind, ItemStatus, PageCursor, PlanStep, PlanStepStatus, SortDirection,
+    SubAgentActivityKind, Thread, ThreadActiveFlag, ThreadHistoryChange, ThreadHistoryChangeSet,
+    ThreadItem, ThreadItemPayload, ThreadItemsListParams, ThreadItemsListResponse,
+    ThreadListParams, ThreadListResponse, ThreadStatus, ThreadTurnsListParams,
+    ThreadTurnsListResponse, ThreadTurnsView, ToolArgument, ToolOutput, Turn, TurnAdmissionState,
+    TurnApprovalState, TurnError, TurnItemsView, TurnQueueState, TurnStatus,
 };
 
 #[cfg(test)]

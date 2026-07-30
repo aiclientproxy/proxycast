@@ -1884,6 +1884,120 @@ Gate B：controlled Electron fixture 从 canonical SQLite seed 恢复 240 Turn /
 OPEN_REF：下一刀进入 V2-04 剩余 product-scope reverse request / multi-agent 场景，再按 EVENT-PROJECTIONS 推进 V2-05 notification、host capability 与 recovery。V2 总体完成度保守估算约 82%。
 ```
 
+### 9.67 V2-04 Multi-Agent AgentControl Gate B closure
+
+```text
+状态：completed（2026-07-30）；只关闭 V2-04 Multi-Agent 子切片，V2-04 与 v2 总体仍为 in-progress，不是 release-ready。
+
+主目标：用真实 Electron Gate B 关闭六工具 AgentControl 的可见 DOM、parent-owned child 输入政策与 cold restart identity 退出条件；不恢复旧 Team 工具、raw output 推断、第二 roster/pending owner或生产 mock fallback。
+
+本轮窄写集：App Server turn direct-input policy 与 public JSON-RPC 回归；canonical Item reader 的 wait_agent 投影；ModelSelector 稳定 test id；AgentControl managed smoke、Gate B assertions 与脚本回归；internal/refactor/v2、本执行计划和 evidence。共享工作树其他 Rust/Renderer 热区不做无关重写。
+
+实现事实：spawn_agent、list_agents、send_message、followup_task、interrupt_agent、wait_agent 在 provider request、runtime inventory、canonical read model 与 GUI 使用同一 identity；六个 DOM Tool row 各出现一次且 completed。wait 不再投影为 subagent_activity(kind=wait)，Started/Interacted/Interrupted 只来自 canonical SubAgent Item。parent-owned child 只读 canonical Thread canAcceptDirectInput=false，Composer、发送、access mode、model selector 与 task mode全部禁用，五语言 placeholder 有稳定回归；UI 尝试不发起 turn/start，App Server public JSON-RPC 仍以 -32600 拒绝直接输入。
+
+Gate B：.lime/qc/agent-runtime-tool-execution-smoke.json 为 status=pass，39/39 assertions 全真且 failedAssertions=[]。Electron PID 40827 -> 42257，旧进程树 remainingPids=[]；六个 Tool Item、四个 SubAgent activity、child Thread 与 wait_agent state 跨冷重启稳定。parent-owned child 与重启前后截图均落在 .lime/qc；invoke/console error 为 0。localhost provider fixture 只证明真实 Electron/preload/IPC/app_server_handle_json_lines/App Server/runtime/read model/GUI，不证明 live Provider。
+
+验证：focused Vitest 3 files / 88 tests 与 AgentControl Gate assertions 13/13 通过；Rust App Server 1623 个单测及相关 integration targets 通过；npm run build、npm run test:contracts、npm run governance:legacy-report、npm run smoke:agent-control-cold-restart-gate-b、npm run smoke:agent-runtime-current-fixture、npm run verify:gui-smoke 通过。最新 shell Gate B-F 证据为 .lime/qc/project-gates/standalone-shell-01-20260730095250-16113/shell-01-electron-smoke/summary.json。npm run test:related 因 runner 把 electron/ 目录误当文件而报 EISDIR，随后以精确 Vitest 文件模式完成覆盖，不把 runner 错误记为通过。
+
+架构确认：本切片没有改变 public owner 或依赖方向，只落实既有 Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item -> GUI 边界，因此不构成新的重大架构变更；architecture.md 无需改写。
+
+治理分类：六工具 AgentControl、typed wait states、canonical SubAgent activity、parent-owned policy、cold-restart identity 与真实 Electron GUI 为 current；无 compat；currentTime/read、item/permissions/requestApproval、item/tool/call 为 deprecated / producer-and-Gate-B-pending；裸旧 Team 工具、raw output 推断与生产 mock fallback 为 dead/deleted/forbidden-to-restore。
+
+OPEN_REF：V2-04 只剩上述三项 product-scope reverse request 的真实 producer、PendingInteraction 与 Gate B；随后按 EVENT-PROJECTIONS 推进 V2-05 notification、host capability 与 recovery。总体完成度保守估算约 84%。
+```
+
+### 9.68 V2-04 Host Capabilities 与 Product-Scope Reverse Request closure
+
+```text
+状态：completed（2026-07-30）；V2-04 完成，v2 总体仍为 in-progress，不是 release-ready。
+
+主目标：关闭 currentTime/read、item/permissions/requestApproval、item/tool/call 三项 product-scope reverse request，统一 Host/RuntimeCore/Thread-Item/GUI owner；不新增第二 pending store、第二 runtime、Renderer 执行路径或生产 mock fallback。
+
+本轮窄写集：Electron current-time 与 dynamic-tool Host、App Server reverse-request dispatcher、agent-runtime permission waiter、tool-runtime capability owner、agent-protocol typed DynamicToolCall payload、provider history/read-model/projection、V2-04 文档与 Gate B evidence。保留工作树中其他 agent 的 dirty changes，不覆盖无关热区。
+
+实现事实：Electron Host 独占系统时钟；permission profile 由 tool-runtime 解析、agent-runtime 注册 exact waiter、App Server 校验 server request、PendingInteractionController 承接 GUI grant；`desktop.appInfo` binding 在 thread/start/resume 后冻结，`item/tool/call` 校验 thread/namespace/tool/schema/arguments/call identity。DynamicTool route 只从可信 session metadata 建立，deferLoading、保留名、schema 非 object 和 native/MCP/gateway collision 均 fail closed。
+
+canonical：新增 `ThreadItemPayload::DynamicToolCall` 与 `DynamicToolCallContentItem`，显式保存 namespace、tool、原始 JSON arguments、有序 text/image/audio content、success、duration。started/completed 使用同一 item identity；provider history、read model、App Server projection 直接读取 typed payload，不从 metadata 推断核心 contract。
+
+Gate B：真实 Electron fixture 命中 preload/IPC、`app_server_handle_json_lines`、App Server JSON-RPC、RuntimeCore、read model 与 GUI；dynamic tool provider result、canonical started/completed 与 Renderer-hidden request 全部成立，provider request count=3，console/missing/legacy MCP 为 0。证据：`.lime/qc/gui-evidence/mcp-elicitation-gate-b/v2-04-host-capabilities-final-summary.json`、同目录 raw/png。该 Gate B 专门覆盖 DynamicTool；currentTime/permission 由 Electron 39 tests 与 Rust waiter/profile tests 覆盖，未把它们误写为独立真实 Gate B。
+
+验证：`cargo check --manifest-path lime-rs/Cargo.toml -p agent-protocol -p lime-agent -p app-server`、typed DynamicTool 1+3+5、permission 3+1+2+1、current time 5+2、`npm run typecheck:electron`、Electron Vitest 3 files/39 tests、`npm run test:contracts`、`npm run verify:gui-smoke` 均通过。收尾复核追加：全量 Vitest 以 `npm test -- --resume` 完成 112/112 批；`npm run test:rust:changed` 因 `Cargo.lock` 改动自动扩大为 workspace `cargo test --lib --workspace` 并通过；`npm run smoke:agent-runtime-current-fixture` 通过受控真实 Electron 闭环。为保留已完成的 Vitest 批次，未从头直接执行 `npm run verify:local`；其非 Vitest 子项 `verify:app-version`、i18n check/unused/scan、lint、typecheck 均已通过。`npm run test:contracts` 同时覆盖 protocol type drift、286 app-server-client checks、command/harness/modality/scripts/docs/release guards；`git diff --check` 通过。
+
+架构确认：本轮改变了 canonical Item contract 和 Host reverse-request boundary，已同步 `internal/aiprompts/architecture.md` 第 25 节；产品链仍为 Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item -> GUI。责任开发者确认：root，2026-07-30。
+
+治理分类：三项 reverse request、Electron Host binding、typed DynamicToolCall、permission/current-time waiter 为 current；无 compat；V2-05 notification/transient bypass、broader host capability 与 recovery 继续 deprecated/迁出中；旧 MCP Desktop command、Renderer 伪造 binding、metadata 核心字段推断、生产 mock fallback 为 dead/deleted/forbidden-to-restore。
+
+OPEN_REF：进入 V2-05 notification、host capability 与 recovery；V2-04 owner 冻结。v2 总体完成度保守估算约 88%。
+```
+
+### 9.69 V2-05 media transient notification retirement
+
+```text
+状态：completed（2026-07-31）；media/read transient notification bypass 已迁出，只完成 V2-05 的这一切片，不代表 V2-05 或 v2 总体完成。
+
+主目标：保留 current `media/read` bounded range response、分页预览与 `$/cancelRequest`，物理删除 `stream` 参数、`media.read.chunk` / `media.read.completed` raw `agentSession/event`、客户端专用 raw subscription 和 Renderer live-drain 旁路。GUI 进度只由每个已校验 range response 累计，不再从第二通知通道镜像同一数据。
+
+窄写集：app-server-protocol v2 media schema/generated client；App Server media processor/reader/SidecarStore/transport cancellation；app-server-client 与 agent-runtime-client 的 media raw-event facade；Workspace media preview range projection及其 focused tests；对应 contract/governance/docs/evidence。避让 V2-04 reverse request、provider/model、Multi-Agent 与其他 V2-05 planned notification 热区。
+
+实现与裁决：`MediaReadParams.stream`、`media.read.chunk`、`media.read.completed`、App Server streaming producer/transport branch、SidecarStore callback sibling、app-server-client 与 agent-runtime-client raw-event subscription、Renderer response notification envelope、streaming progress parser 和 live-drain helper均已物理删除。`media/read` 保留唯一 bounded range response、thread scope、digest/max-bytes 校验和 `$/cancelRequest`；GUI 只在每段 response 校验通过后累计 progress，并继续维护 object URL、预算、迟到请求与 metadata fallback。
+
+验证：Rust media reader 6/6、public media task JSON-RPC 8/8、request cancel 5/5、protocol v2 48/48；Workspace media preview 28/28；app-server-client 94/94、agent-runtime-client 22/22；`npm run test:contracts` 287 checks 及 command/harness/modality/scripts/docs/release guards通过；`npm run governance:legacy-report` 为零引用候选 0、分类漂移 0、边界违规 0；`cargo fmt --check` 与 `git diff --check` 通过。`npm run smoke:agent-runtime-current-fixture` 完整通过并包含真实 Electron media item/imageView -> card/Workbench source preview，`liveProviderUsed=false`；`npm run verify:gui-smoke` 通过，证据为 `.lime/qc/project-gates/standalone-shell-01-20260730165204-31622/shell-01-electron-smoke/summary.json`。
+
+架构确认：本切片删除第二 transient notification 通道，收敛 public media read boundary，已同步 `internal/aiprompts/architecture.md` 第 24 节；主链仍为 Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI。责任开发者确认：root，2026-07-31。
+
+治理分类：bounded `media/read`、SidecarStore verified range reader、typed client、response-driven progress 与 fail-visible Renderer 为 current；无 compat；V2-05 其他 planned notification、host capability 与 recovery 仍为 deprecated/迁出中；media transient notification、raw subscription、response envelope、streaming parser/live drain 和 streaming transport branch 为 dead/deleted/forbidden-to-restore。
+
+OPEN_REF：下一刀回到 `EVENT-PROJECTIONS.md` 中尚未裁决的 planned notification/host capability/recovery，保持 media read owner 冻结。v2 总体完成度保守估算约 89%，仍非 release-ready。
+```
+
+### 9.70 V2-05 configWarning current audit 与 guard closure
+
+```text
+状态：completed（2026-07-31）；只关闭 configWarning 的协议 owner、Renderer 消费与回流守卫，不代表 V2-05 或 v2 总体完成。
+
+主目标：确认 configWarning 只由 app-server-protocol v2 与 App Server producer 继续演进，checked-in schema/generated client、Electron Host、Renderer typed gateway、五语言 toast 和文档裁决一致；不恢复 v0 DTO，不新增第二 warning channel 或设置页伪入口。
+
+窄写集：app-server-client handshake/catalog tests、Electron App Server Host buffered notification test、i18n 五语言 key regression、app-server-client contract guard 与本执行计划。协议 owner、schema/generated、Renderer production 实现和 EVENT-PROJECTIONS 已由当前工作树同步，本切片只做审计与稳定回归，不重写无关脏热区。
+
+实现事实：Rust initialize dispatch 保持 response 在前、configWarning notification 在后；stdio sidecar handshake 只消费 initialize response，后续 notification 留在同一 transport queue，Electron warmup 后由 drainEvents 投递 Renderer。turn/start warning 继续随 request response path 返回。Renderer 统一由 readAppServerConfigWarnings -> publishAppServerConfigWarnings -> AppServerConfigWarningToastBridge 消费，在 App 根挂载后按 summary/path/details/range 去重，并展示本地化 warning toast。
+
+协议事实：ConfigWarningNotification、TextPosition 与 TextRange 已从 v0 owner 删除并进入 v2；schema fixture tree 与临时权威生成结果完全一致，manifest、METHOD_CONFIG_WARNING、ServerNotification union 与 generated TypeScript 无漂移。APP_SERVER_METHODS 将 configWarning 明确分类为 notification，client test 与跨层 source guard 均锁住该裁决。
+
+验证：app-server-protocol schema fixture 1/1；App Server config_warning Rust tests 6/6；`npm run test:rust:related -- <configWarning paths...>` 自动扩展到 20 个反向依赖 crate 并全部通过；app-server-client 8 files / 94 tests；Electron Host、i18n、Renderer response/publisher/toast 5 files / 44 tests；`npm run test:contracts` 通过并包含 288 app-server-client checks；`npm run smoke:agent-runtime-current-fixture` 完整通过且 `liveProviderUsed=false`；`npm run verify:gui-smoke` 通过，证据为 `.lime/qc/project-gates/standalone-shell-01-20260730172753-14419/shell-01-electron-smoke/summary.json`；`git diff --check` 通过。证据等级为 Rust owner unit/related integration、真实 stdio sidecar process integration、Electron Host unit、Renderer component/locale regression、current Agent fixture 与通用真实 Electron smoke；本切片没有伪称专用 configWarning Electron Gate B。
+
+架构确认：本切片把 public notification/schema owner 从 v0 迁到 v2，属于重大协议 owner 变更；已同步 `internal/aiprompts/architecture.md` 第 26 节。wire 与 runtime 行为保持不变，产品方向仍为 Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI。责任开发者确认：root，2026-07-31。
+
+治理分类：v2 ConfigWarningNotification、App Server initialize/turn producer、generated catalog、Electron drain 与 Renderer toast 为 current；无 compat；EVENT-PROJECTIONS 中其余 planned warning/guardian/realtime/windows/recovery surface 继续开放；v0 ConfigWarningNotification/TextPosition/TextRange 为 dead/deleted/forbidden-to-restore。
+
+OPEN_REF：继续按 EVENT-PROJECTIONS 推进其余 planned notification、Windows/realtime host capability 与 recovery，并补风险匹配的真实 Gate B。v2 总体完成度保守估算约 90%，仍非 release-ready。
+```
+
+### 9.71 V2-05 thread-scoped warning typed notification 与 recovery closure
+
+```text
+状态：completed（2026-07-31）；只关闭普通 warning 的 typed live/recovery 垂直切片，V2-05 与 v2 总体仍为 in-progress，不是 release-ready。
+
+主目标：把 current AgentEvent::Warning 从 durable runtime.warning 投影为 v2 warning，并让同一 durable event 在 full canonical cold read 与 history-limit projection summary 中恢复；Renderer 只消费 typed warning，不恢复 raw agentSession/event wrapper、第二 persistence 或 canonical ThreadItem 变体。
+
+窄写集：app-server-protocol v2 warning/method/envelope/schema/generated client；App Server V2NotificationProjector、read model 与 limited-history support event；Renderer v2 route/sequence gate/raw-wrapper guard；warning 五语言 presentation 的现有 owner；architecture、internal/refactor/v2 与本执行计划。v2_notifications.rs 超过 1000 行，本轮只加路由，业务 projector 落在独立 warning.rs；未改写其他 notification 热区。
+
+实现事实：Codex 基础 contract 保持 threadId?: string|null 与必填 message；Lime 只增加可选 code，用于 skill_not_available、skill_load_failed、mention_not_available 的五语言展示，缺失时按 message 展示。current Agent Chat producer、live projector 与 Renderer 要求非空 thread identity；通用协议仍可解码 threadId:null，但不宣称全局 GUI owner。历史恢复只接受精确 message/code shape，并要求 event thread/turn identity 与当前 stored session/turn 匹配；畸形字段、旧 alias、缺失或错配 identity 均 fail closed。
+
+恢复事实：runtime.warning 是唯一 durable fact，不伪装成 ThreadItemPayload。full cold read 与 history-limit projection summary 从同一事件派生 warning read item，保留 event id/sequence/thread/turn/message/code，再按既有 read-detail 顺序与 canonical items 合并；没有新增 compat、第二 store 或 production mock fallback。
+
+验证：protocol v2 50/50、schema fixture 1/1、App Server warning 12/12、projection-summary recovery 1/1、Renderer 3 files / 61 tests、generated TypeScript drift check 通过。npm run test:contracts 通过，含 839 schema definitions、831 generated types、0 generation failure、289 app-server-client checks 及 command/harness/modality/scripts/release/docs guards。Rust related 覆盖 19 个 scoped packages、18 个 lib 目标，共 3597 项（3593 passed、4 个既有环境/live 测试 ignored、0 failed）。
+
+产品证据：npm run smoke:agent-runtime-current-fixture 完整通过且 liveProviderUsed=false；它证明 current Agent/Electron fixture 主链无回归，但没有普通 warning 专项 DOM 断言，因此不冒充 warning 专项 Gate B。通用 npm run verify:gui-smoke 通过 21/21 assertions，证据为 .lime/qc/project-gates/standalone-shell-01-20260730191439-55464/shell-01-electron-smoke/summary.json；该 Gate B-F 证明 Electron/preload/IPC/app_server_handle_json_lines/App Server/GUI shell 与零 mock fallback，不宣称实际命中 warning method。
+
+治理与格式：cargo fmt --manifest-path lime-rs/Cargo.toml --all --check、定向 Prettier、git diff --check 与 npm run governance:legacy-report 通过；治理扫描为零引用候选 0、分类漂移 0、边界违规 0。
+
+架构确认：本切片把普通 warning 的 live notification 与 durable recovery 统一到 v2 protocol/projector/Renderer 边界，已同步 internal/aiprompts/architecture.md 第 27 节。唯一产品链仍为 Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI。责任开发者确认：root，2026-07-31。
+
+治理分类：v2 warning protocol/projector、thread-scoped Renderer toast、full/limited durable recovery 为 current；无 compat；raw runtime.warning agentSession/event wrapper 为 dead/forbidden-to-restore；guardianWarning 因没有真实 Guardian runtime producer 保持 planned。
+
+OPEN_REF：下一刀审计 skills/changed 的真实 Skill catalog producer、GUI refresh consumer 与 recovery 语义；只有形成 typed producer -> GUI refresh -> 风险匹配 Gate B 的垂直链才转 current。v2 总体完成度保守估算约 91%，仍非 release-ready。
+```
+
 ## 10. 完成定义
 
 v2 实施不能因为“几个进程都有改动”而标记完成。每个 slice 必须同时具备：

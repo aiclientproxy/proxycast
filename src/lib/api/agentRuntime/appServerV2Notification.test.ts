@@ -181,6 +181,33 @@ describe("App Server v2 direct notifications", () => {
     });
   });
 
+  it("projects typed warning and preserves the localization code", () => {
+    const notification = directNotification("warning", {
+      code: "skill_not_available",
+      message: "技能不可用，已继续执行。",
+      threadId,
+    });
+
+    expect(readAppServerV2NotificationRoute(notification)).toEqual({
+      terminal: false,
+      threadId,
+    });
+    expect(projectAppServerV2NotificationPayload(notification)).toMatchObject({
+      code: "skill_not_available",
+      message: "技能不可用，已继续执行。",
+      protocol_method: "warning",
+      session_id: threadId,
+      thread_id: threadId,
+      type: "warning",
+    });
+    expect(
+      projectAgentRuntimeSequenceGateNotifications(
+        "agent_stream_direct_v2_warning",
+        notification,
+      ),
+    ).toEqual([notification]);
+  });
+
   it("unknown Item 只投影脱敏字段名，不保留原始字段值", () => {
     const secretValue = "secret-value-must-not-leak";
     const projected = projectAppServerV2NotificationPayload(
@@ -638,6 +665,8 @@ describe("App Server v2 direct notifications", () => {
       "item/mcpToolCall/progress",
       { itemId: "item_mcp-call-1", message: "   ", threadId, turnId },
     ],
+    ["warning", { message: "   ", threadId }],
+    ["warning", { code: 42, message: "warning", threadId }],
   ])("fails closed for malformed %s", (method, params) => {
     const notification = directNotification(method, params);
 

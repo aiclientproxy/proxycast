@@ -1,15 +1,11 @@
 import {
-  agentSessionEventNotification,
-  mediaReadEventNotification,
   serverNotification,
   AgentRuntimeClient,
   AgentRuntimeClientSubscription,
-  AgentRuntimeEventListener,
   AgentRuntimeLifecycleEventListener,
   AgentRuntimeNotification,
   AgentSessionActionRespondParams,
   AgentSessionActionRespondResponse,
-  AgentSessionEventNotification,
   ThreadReadParams,
   ThreadReadResponse,
   ThreadMemoryModeSetParams,
@@ -170,9 +166,6 @@ export function createAgentRuntimeClientFromSessionGateway(
         params,
         options,
       ),
-    subscribeEvents(listener) {
-      return eventRouter.subscribe(listener);
-    },
     subscribeLifecycleEvents(listener) {
       return eventRouter.subscribeLifecycle(listener);
     },
@@ -270,7 +263,6 @@ async function nextDrainedAgentRuntimeEvent(
 }
 
 class AgentRuntimeGatewayEventRouter {
-  readonly #listeners = new Set<AgentRuntimeEventListener>();
   readonly #lifecycleListeners = new Set<AgentRuntimeLifecycleEventListener>();
   readonly #eventPipeline: AgentRuntimeEventPipeline;
   readonly #pendingNextEvents: AgentRuntimeNotification[] = [];
@@ -282,17 +274,6 @@ class AgentRuntimeGatewayEventRouter {
       adapters: options.adapters,
       middlewares: options.middlewares,
     });
-  }
-
-  subscribe(
-    listener: AgentRuntimeEventListener,
-  ): AgentRuntimeClientSubscription {
-    this.#listeners.add(listener);
-    return {
-      unsubscribe: () => {
-        this.#listeners.delete(listener);
-      },
-    };
   }
 
   subscribeLifecycle(
@@ -311,18 +292,7 @@ class AgentRuntimeGatewayEventRouter {
   ): Promise<AgentRuntimeGatewayDispatchResult> {
     const lifecycle = serverNotification(message);
     if (!lifecycle) {
-      const notification = agentSessionEventNotification(message);
-      if (!notification || !mediaReadEventNotification(notification)) {
-        return { accepted: false, reason: "dropped" };
-      }
-      for (const listener of this.#listeners) {
-        await listener(notification.params.event, notification);
-      }
-      return {
-        accepted: true,
-        notification,
-        notifications: [notification],
-      };
+      return { accepted: false, reason: "dropped" };
     }
     const pipelineResult = await this.#eventPipeline.process(lifecycle);
     if (!pipelineResult.accepted) {
@@ -351,10 +321,4 @@ class AgentRuntimeGatewayEventRouter {
   }
 }
 
-type AgentRuntimeGatewayDispatchResult =
-  | AgentRuntimeEventPipelineResult
-  | {
-      accepted: true;
-      notification: AgentSessionEventNotification;
-      notifications: AgentSessionEventNotification[];
-    };
+type AgentRuntimeGatewayDispatchResult = AgentRuntimeEventPipelineResult;

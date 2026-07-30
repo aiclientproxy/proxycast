@@ -85,9 +85,15 @@ function mergeConfiguredAndFetchedModels(
     registryModels,
     selectedProvider.models ?? [],
   );
+  const fetchedModelsById = new Map(
+    fetchedModels.map((model) => [model.id.trim().toLowerCase(), model]),
+  );
+  const configuredWithLiveMetadata = configuredModels.map(
+    (model) => fetchedModelsById.get(model.id.trim().toLowerCase()) ?? model,
+  );
   const seenModelIds = new Set<string>();
 
-  return [...configuredModels, ...fetchedModels].filter((model) => {
+  return [...configuredWithLiveMetadata, ...fetchedModels].filter((model) => {
     const normalizedModelId = model.id.trim().toLowerCase();
     if (!normalizedModelId || seenModelIds.has(normalizedModelId)) {
       return false;
@@ -100,9 +106,7 @@ function mergeConfiguredAndFetchedModels(
 function hasDeclaredProviderModels(
   selectedProvider: ConfiguredProvider | undefined | null,
 ): boolean {
-  return Boolean(
-    selectedProvider?.models?.some((modelId) => modelId.trim()),
-  );
+  return Boolean(selectedProvider?.models?.some((modelId) => modelId.trim()));
 }
 
 function blocksProviderModelLoad(
@@ -174,8 +178,7 @@ export async function loadProviderModels(
   const canUseApiModelFetch = canFetchProviderModelsFromApi(selectedProvider, {
     hasApiKey: options.hasApiKey,
   });
-  const useLiveFetchTruthOnly =
-    options.liveFetchOnly && canUseApiModelFetch;
+  const useLiveFetchTruthOnly = options.liveFetchOnly && canUseApiModelFetch;
 
   const localResult = buildProviderModelsFromRegistry(
     selectedProvider,
@@ -304,8 +307,8 @@ export function useProviderModels(
   );
   const useLiveFetchTruthOnly = Boolean(
     liveFetchOnly &&
-      autoFetchCapability?.supported &&
-      (!autoFetchCapability.requiresApiKey || hasApiKey !== false),
+    autoFetchCapability?.supported &&
+    (!autoFetchCapability.requiresApiKey || hasApiKey !== false),
   );
   // 当本地没有模型时，从 API 获取
   useEffect(() => {

@@ -1390,6 +1390,7 @@ async fn read_session_current_projection_summary_preserves_process_items() {
             event_type: "runtime.warning".to_string(),
             timestamp: timestamp(),
             payload: json!({
+                "code": "skill_not_available",
                 "message": "模型路由发生降级，但任务继续。"
             }),
         },
@@ -1532,6 +1533,11 @@ async fn read_session_current_projection_summary_preserves_process_items() {
             && item["status"].as_str() == Some("completed")
             && item["response"].is_null()
             && item["prompt"].as_str() == Some("是否继续对齐 Codex？")
+    }));
+    assert!(items.iter().any(|item| {
+        item["type"].as_str() == Some("warning")
+            && item["message"].as_str() == Some("模型路由发生降级，但任务继续。")
+            && item["code"].as_str() == Some("skill_not_available")
     }));
     assert_eq!(detail["thread_read"]["thread_items"], detail["items"]);
     assert_eq!(

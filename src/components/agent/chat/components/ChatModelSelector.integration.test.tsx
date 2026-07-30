@@ -191,6 +191,7 @@ function createModel(id: string, providerId: string) {
       function_calling: true,
       reasoning: false,
     },
+    capability_provenance: "provider_explicit",
     pricing: null,
     limits: {
       context_length: null,

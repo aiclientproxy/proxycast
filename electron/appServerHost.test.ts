@@ -133,6 +133,8 @@ const {
     transport: {
       send: vi.fn(),
     },
+    respondServerRequest: vi.fn(),
+    rejectServerRequest: vi.fn(),
     nextNotification: vi.fn(async () => {
       const notification = mirroredNotifications.shift();
       if (!notification) {
@@ -230,6 +232,8 @@ const {
       turnStartRequestMode = "resolve";
       fakeConnection.request.mockClear();
       fakeConnection.transport.send.mockClear();
+      fakeConnection.respondServerRequest.mockClear();
+      fakeConnection.rejectServerRequest.mockClear();
       fakeConnection.nextNotification.mockClear();
       fakeConnection.nextServerMessage.mockClear();
     },
@@ -261,6 +265,8 @@ vi.mock("./electronRuntime", () => ({
     getAppPath: () => process.cwd(),
     getPath: (name: string) =>
       name === "userData" ? "/tmp/lime-electron-user-data" : "/tmp/lime",
+    getLocale: () => "en-US",
+    getName: () => "Lime",
     getVersion: () => "0.0.0-test",
     isPackaged: false,
   },
@@ -734,6 +740,43 @@ describe("ElectronAppServerHost", () => {
     expect(fakeConnection.nextServerMessage).toHaveBeenCalled();
   });
 
+  it("warmup 后应保留 initialize 阶段已缓冲的 configWarning", async () => {
+    const { ElectronAppServerHost } = await import("./appServerHost");
+    const host = new ElectronAppServerHost();
+    enqueueFakeNotifications([
+      {
+        method: "configWarning",
+        params: {
+          summary: "test initialize config warning",
+          path: "/tmp/lime/config.yaml",
+          details: "invalid yaml",
+        },
+      },
+    ]);
+
+    await host.warmup();
+    const initialized = await host.handleJsonLines({
+      lines: [encodeMessage({ id: 7, method: "initialize", params: {} })],
+    });
+    const drained = await host.drainEvents({ limit: 1 });
+
+    expect(decodeMessage(initialized.lines[0] ?? "")).toMatchObject({
+      id: 7,
+      result: {
+        serverInfo: { name: "app-server" },
+      },
+    });
+    expect(decodeMessage(drained.lines[0] ?? "")).toEqual({
+      method: "configWarning",
+      params: {
+        summary: "test initialize config warning",
+        path: "/tmp/lime/config.yaml",
+        details: "invalid yaml",
+      },
+    });
+    expect(fakeConnection.request).not.toHaveBeenCalled();
+  });
+
   it("drainEvents 应透传 typed model/list/updated notification", async () => {
     const { ElectronAppServerHost } = await import("./appServerHost");
     const host = new ElectronAppServerHost();
@@ -772,8 +815,8 @@ describe("ElectronAppServerHost", () => {
 
     expect(drained.lines).toHaveLength(2);
     expect(
-      fakeConnection.nextServerMessage.mock.calls.map(([timeoutMs]) =>
-        timeoutMs,
+      fakeConnection.nextServerMessage.mock.calls.map(
+        ([timeoutMs]) => timeoutMs,
       ),
     ).toEqual([25, 0, 0]);
   });
@@ -831,9 +874,54 @@ describe("ElectronAppServerHost", () => {
 
     await expect(
       host.handleJsonLines({
-        lines: [encodeMessage({ id: actionToken, result: { action: "cancel" } })],
+        lines: [
+          encodeMessage({ id: actionToken, result: { action: "cancel" } }),
+        ],
       }),
     ).rejects.toThrow("action token was already used");
+  });
+
+  it("drainEvents 应在 Electron host 回答 currentTime/read 且不投递 Renderer", async () => {
+    const { ElectronAppServerHost } = await import("./appServerHost");
+    const host = new ElectronAppServerHost();
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_783_860_000_987);
+    enqueueFakeNotifications([
+      {
+        id: "app-server-clock:7",
+        method: "currentTime/read",
+        params: { threadId: "thread-clock" },
+      },
+      {
+        id: "app-server-request:8",
+        method: "mcpServer/elicitation/request",
+        params: {
+          threadId: "thread-clock",
+          turnId: "turn-clock",
+          serverName: "form-server",
+          mode: "form",
+          message: "Choose a value",
+          requestedSchema: { type: "object", properties: {} },
+        },
+      },
+    ]);
+
+    try {
+      const drained = await host.drainEvents({ limit: 1 });
+      const rendererMessage = decodeMessage(drained.lines[0] ?? "");
+
+      expect(fakeConnection.respondServerRequest).toHaveBeenCalledTimes(1);
+      expect(fakeConnection.respondServerRequest).toHaveBeenCalledWith(
+        "app-server-clock:7",
+        { currentTimeAt: 1_783_860_000 },
+      );
+      expect(rendererMessage).toMatchObject({
+        id: expect.stringMatching(/^electron-action:[0-9a-f-]+$/u),
+        method: "mcpServer/elicitation/request",
+      });
+      expect(drained.lines.join("\n")).not.toContain("currentTime/read");
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("drainEvents includeRecent 应允许第二观察者读取最近已消费 notification", async () => {

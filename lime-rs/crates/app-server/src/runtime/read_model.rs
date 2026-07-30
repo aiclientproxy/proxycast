@@ -48,6 +48,17 @@ use thread_store::{ListItemsParams, PageRequest, ThreadStore, ThreadStoreResult}
 pub(super) use canonical_items::canonical_item_to_agent_detail;
 pub(super) use messages::runtime_session_messages;
 
+pub(super) fn merge_runtime_warning_items(
+    stored: &StoredSession,
+    mut items: Vec<serde_json::Value>,
+) -> Vec<serde_json::Value> {
+    // Warning notifications are durable runtime events, not canonical ThreadItem
+    // variants. Re-derive them beside canonical items for every cold-read path.
+    items.extend(runtime_warning_items_from_events(stored));
+    sort_read_detail_items(&mut items);
+    items
+}
+
 pub(super) struct PendingAction {
     pub(super) action_type: AgentSessionActionType,
     pub(super) scope: Option<AgentSessionActionScope>,
@@ -140,7 +151,7 @@ fn runtime_session_read_detail_with_item_source(
             sort_read_detail_items(&mut items);
             items
         },
-        |items| items.to_vec(),
+        |items| merge_runtime_warning_items(stored, items.to_vec()),
     );
     if canonical_items.is_some() {
         apply_canonical_item_views(&mut thread_read, &items);

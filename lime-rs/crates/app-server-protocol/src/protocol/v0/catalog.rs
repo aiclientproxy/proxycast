@@ -1179,8 +1179,6 @@ impl AppServerRequestMethod {
 pub enum AppServerNotificationMethod {
     #[serde(rename = "initialized")]
     Initialized,
-    #[serde(rename = "configWarning")]
-    ConfigWarning,
     #[serde(rename = "workspaceRightSurface/pendingChanged")]
     WorkspaceRightSurfacePendingChanged,
     #[serde(rename = "agentSession/event")]
@@ -1191,7 +1189,6 @@ impl AppServerNotificationMethod {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Initialized => METHOD_INITIALIZED,
-            Self::ConfigWarning => METHOD_CONFIG_WARNING,
             Self::WorkspaceRightSurfacePendingChanged => {
                 METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CHANGED
             }
@@ -1202,7 +1199,6 @@ impl AppServerNotificationMethod {
     pub fn parse(method: &str) -> Option<Self> {
         match method {
             METHOD_INITIALIZED => Some(Self::Initialized),
-            METHOD_CONFIG_WARNING => Some(Self::ConfigWarning),
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CHANGED => {
                 Some(Self::WorkspaceRightSurfacePendingChanged)
             }
@@ -1219,10 +1215,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_INITIALIZED,
-        kind: AppServerMethodKind::Notification,
-    },
-    AppServerMethodSpec {
-        method: METHOD_CONFIG_WARNING,
         kind: AppServerMethodKind::Notification,
     },
     AppServerMethodSpec {
@@ -2650,27 +2642,5 @@ mod tests {
             decoded,
             ServerNotification::AgentSessionEvent(AgentSessionEventParams { event })
         );
-    }
-
-    #[test]
-    fn notification_round_trips_config_warning_payload() {
-        let notification = ServerNotification::ConfigWarning(ConfigWarningNotification {
-            summary: "Invalid configuration; using defaults.".to_string(),
-            details: Some("failed to parse config.toml".to_string()),
-            path: Some("/tmp/config.toml".to_string()),
-            range: Some(TextRange {
-                start: TextPosition { line: 2, column: 5 },
-                end: TextPosition {
-                    line: 2,
-                    column: 12,
-                },
-            }),
-        });
-
-        let raw: crate::JsonRpcNotification = notification.clone().into();
-        assert_eq!(raw.method, METHOD_CONFIG_WARNING);
-        let decoded = ServerNotification::try_from(raw).expect("decode");
-
-        assert_eq!(decoded, notification);
     }
 }

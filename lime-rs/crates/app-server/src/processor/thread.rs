@@ -7,17 +7,18 @@ use super::{
     RpcDispatch,
 };
 use app_server_protocol::protocol::v2::{
-    ServerNotification, SortDirection, Thread, ThreadArchiveParams, ThreadArchiveResponse,
-    ThreadArchivedNotification, ThreadCompactStartParams, ThreadDecrementElicitationParams,
-    ThreadDecrementElicitationResponse, ThreadDeleteParams, ThreadDeleteResponse,
-    ThreadDeletedNotification, ThreadHistoryMode, ThreadIncrementElicitationParams,
-    ThreadIncrementElicitationResponse, ThreadItem, ThreadItemsListParams, ThreadListParams,
-    ThreadLoadedListParams, ThreadMetadataUpdateParams, ThreadMetadataUpdateResponse,
-    ThreadNameUpdatedNotification, ThreadReadParams, ThreadResumeParams, ThreadResumeResponse,
-    ThreadSearchOccurrencesParams, ThreadSearchParams, ThreadSetNameParams, ThreadStartParams,
-    ThreadStartResponse, ThreadStatus, ThreadTurnsListParams, ThreadUnarchiveParams,
-    ThreadUnarchiveResponse, ThreadUnarchivedNotification, ThreadUnsubscribeParams,
-    ThreadUnsubscribeResponse, ThreadUnsubscribeStatus, Turn, TurnItemsView, TurnStatus, TurnsPage,
+    DynamicToolNamespaceTool, DynamicToolSpec, ServerNotification, SortDirection, Thread,
+    ThreadArchiveParams, ThreadArchiveResponse, ThreadArchivedNotification,
+    ThreadCompactStartParams, ThreadDecrementElicitationParams, ThreadDecrementElicitationResponse,
+    ThreadDeleteParams, ThreadDeleteResponse, ThreadDeletedNotification, ThreadHistoryMode,
+    ThreadIncrementElicitationParams, ThreadIncrementElicitationResponse, ThreadItem,
+    ThreadItemsListParams, ThreadListParams, ThreadLoadedListParams, ThreadMetadataUpdateParams,
+    ThreadMetadataUpdateResponse, ThreadNameUpdatedNotification, ThreadReadParams,
+    ThreadResumeParams, ThreadResumeResponse, ThreadSearchOccurrencesParams, ThreadSearchParams,
+    ThreadSetNameParams, ThreadStartParams, ThreadStartResponse, ThreadStatus,
+    ThreadTurnsListParams, ThreadUnarchiveParams, ThreadUnarchiveResponse,
+    ThreadUnarchivedNotification, ThreadUnsubscribeParams, ThreadUnsubscribeResponse,
+    ThreadUnsubscribeStatus, Turn, TurnItemsView, TurnStatus, TurnsPage,
 };
 use app_server_protocol::{
     error_codes, AgentSessionStartParams, BusinessObjectRef, JsonRpcError, JsonRpcNotification,
@@ -29,6 +30,7 @@ use projection::{
     project_thread_turns_list_response,
 };
 use serde_json::json;
+use std::collections::HashSet;
 use uuid::Uuid;
 
 pub(super) enum ProjectedEvent {
@@ -289,6 +291,7 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: ThreadStartParams = parse_params(params)?;
+        validate_dynamic_tools(params.dynamic_tools.as_deref())?;
         let selection = self
             .runtime
             .resolve_thread_start_model_selection(
@@ -297,7 +300,10 @@ impl RequestProcessor {
                 params.service_tier.clone(),
             )
             .await
-            .map_err(to_jsonrpc_error)?;
+            .map_err(|error| match error {
+                crate::RuntimeCoreError::InvalidRequest(message) => invalid_params(message),
+                other => to_jsonrpc_error(other),
+            })?;
         let model = selection.model;
         let model_provider = selection.model_provider;
         let service_tier = selection.service_tier;
@@ -632,6 +638,87 @@ fn normalize_thread_resume_snapshot(thread: &mut Thread, active_turn_id: Option<
     normalize_resume_turns(&mut thread.turns, active_turn_id);
 }
 
+fn validate_dynamic_tools(tools: Option<&[DynamicToolSpec]>) -> Result<(), JsonRpcError> {
+    let Some(tools) = tools else {
+        return Ok(());
+    };
+    let mut names = HashSet::new();
+    for spec in tools {
+        match spec {
+            DynamicToolSpec::Function(tool) => {
+                validate_dynamic_tool_function(None, tool, &mut names)?;
+            }
+            DynamicToolSpec::Namespace(namespace) => {
+                let namespace_name = required_dynamic_tool_text(&namespace.name, "namespace name")?;
+                required_dynamic_tool_text(&namespace.description, "namespace description")?;
+                if namespace.tools.is_empty() {
+                    return Err(invalid_params(format!(
+                        "dynamic tool namespace '{namespace_name}' must contain at least one tool"
+                    )));
+                }
+                for tool in &namespace.tools {
+                    match tool {
+                        DynamicToolNamespaceTool::Function(tool) => {
+                            validate_dynamic_tool_function(Some(namespace_name), tool, &mut names)?;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_dynamic_tool_function(
+    namespace: Option<&str>,
+    tool: &app_server_protocol::protocol::v2::DynamicToolFunctionSpec,
+    names: &mut HashSet<String>,
+) -> Result<(), JsonRpcError> {
+    let tool_name = required_dynamic_tool_text(&tool.name, "tool name")?;
+    required_dynamic_tool_text(&tool.description, "tool description")?;
+    if tool.defer_loading {
+        return Err(invalid_params(format!(
+            "dynamic tool '{}' uses unsupported deferLoading",
+            dynamic_runtime_tool_name(namespace, tool_name)
+        )));
+    }
+    if !tool.input_schema.is_object() {
+        return Err(invalid_params(format!(
+            "dynamic tool '{}' inputSchema must be an object",
+            dynamic_runtime_tool_name(namespace, tool_name)
+        )));
+    }
+    let runtime_name = dynamic_runtime_tool_name(namespace, tool_name);
+    if !names.insert(runtime_name.to_ascii_lowercase()) {
+        return Err(invalid_params(format!(
+            "dynamic tool runtime name '{runtime_name}' is duplicated"
+        )));
+    }
+    Ok(())
+}
+
+fn required_dynamic_tool_text<'a>(value: &'a str, field: &str) -> Result<&'a str, JsonRpcError> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(invalid_params(format!(
+            "dynamic tool {field} must not be empty"
+        )));
+    }
+    if value.contains("__") {
+        return Err(invalid_params(format!(
+            "dynamic tool {field} must not contain the reserved '__' separator"
+        )));
+    }
+    Ok(value)
+}
+
+fn dynamic_runtime_tool_name(namespace: Option<&str>, tool: &str) -> String {
+    match namespace {
+        Some(namespace) => format!("{namespace}__{tool}"),
+        None => tool.to_string(),
+    }
+}
+
 fn normalize_resume_turns(turns: &mut [Turn], active_turn_id: Option<&str>) {
     for turn in turns {
         if active_turn_id == Some(turn.id.as_str()) {
@@ -748,6 +835,10 @@ fn required_metadata_string(
 
 fn invalid_request(message: impl Into<String>) -> JsonRpcError {
     JsonRpcError::new(error_codes::INVALID_REQUEST, message)
+}
+
+fn invalid_params(message: impl Into<String>) -> JsonRpcError {
+    JsonRpcError::new(error_codes::INVALID_PARAMS, message)
 }
 
 fn metadata_optional_string(metadata: &serde_json::Value, key: &str) -> Option<String> {
@@ -874,5 +965,39 @@ mod tests {
         assert_eq!(idle_snapshot.status, Some(ThreadStatus::Idle));
         assert_eq!(idle_snapshot.turns[0].status, TurnStatus::Interrupted);
         assert_eq!(error_snapshot.status, Some(ThreadStatus::SystemError));
+    }
+
+    #[test]
+    fn dynamic_tools_reject_deferred_and_flattened_name_collisions() {
+        let deferred = vec![DynamicToolSpec::Function(
+            app_server_protocol::protocol::v2::DynamicToolFunctionSpec {
+                name: "later".to_string(),
+                description: "Load later".to_string(),
+                input_schema: serde_json::json!({"type": "object"}),
+                defer_loading: true,
+            },
+        )];
+        assert_eq!(
+            validate_dynamic_tools(Some(&deferred))
+                .expect_err("deferred tools are unsupported")
+                .code,
+            error_codes::INVALID_PARAMS
+        );
+
+        let duplicate = vec![
+            DynamicToolSpec::Function(app_server_protocol::protocol::v2::DynamicToolFunctionSpec {
+                name: "desktop__appInfo".to_string(),
+                description: "Invalid flattened name".to_string(),
+                input_schema: serde_json::json!({"type": "object"}),
+                defer_loading: false,
+            }),
+            DynamicToolSpec::Function(app_server_protocol::protocol::v2::DynamicToolFunctionSpec {
+                name: "Desktop__AppInfo".to_string(),
+                description: "Invalid flattened name".to_string(),
+                input_schema: serde_json::json!({"type": "object"}),
+                defer_loading: false,
+            }),
+        ];
+        assert!(validate_dynamic_tools(Some(&duplicate)).is_err());
     }
 }

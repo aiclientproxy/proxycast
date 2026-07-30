@@ -116,6 +116,32 @@ async fn parent_owned_thread_projects_policy_and_rejects_direct_turn_input() {
         );
         assert!(response.get("result").is_none());
     }
+
+    let restarted_runtime =
+        RuntimeCore::with_backend(Arc::new(MockBackend)).with_projection_store(Arc::clone(&store));
+    let restarted_server = AppServer::with_runtime(restarted_runtime);
+    initialize_server(&restarted_server).await;
+    let restarted_response = request_raw(
+        &restarted_server,
+        12,
+        METHOD_TURN_START,
+        json!({
+            "threadId": child_thread_id,
+            "input": [{"type": "text", "text": "reject after cold restart"}]
+        }),
+    )
+    .await;
+    assert_eq!(
+        restarted_response.pointer("/error/code"),
+        Some(&json!(error_codes::INVALID_REQUEST))
+    );
+    assert_eq!(
+        restarted_response.pointer("/error/message"),
+        Some(&json!(
+            "direct app-server input is not allowed for parent-owned threads"
+        ))
+    );
+    assert!(restarted_response.get("result").is_none());
 }
 
 async fn start_thread(server: &AppServer, id: u64) -> String {

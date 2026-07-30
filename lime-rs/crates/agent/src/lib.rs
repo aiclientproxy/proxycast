@@ -31,6 +31,7 @@ pub mod protocol_projection;
 mod provider_configuration;
 pub mod provider_continuation_state;
 pub mod provider_runtime_governor;
+mod request_permissions_bridge;
 mod request_tool_policy;
 mod request_user_input_bridge;
 pub mod runtime_projection_snapshot;

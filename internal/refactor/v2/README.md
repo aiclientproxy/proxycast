@@ -1,8 +1,8 @@
 # Codex 渲染对齐重构 v2
 
-状态：implementation in progress（V2-02 / V2-04 收尾，V2-05 planned surface 待实现）
+状态：implementation in progress（V2-00 至 V2-04 已关闭，V2-05 分切片推进）
 
-日期：2026-07-29
+日期：2026-07-31
 
 ## 1. 目标
 
@@ -51,19 +51,19 @@ v2 把 Lime 的对话界面重构为 Codex App Server v2 的完整语义投影�
 
 ## 3. 当前事实与差距
 
-2026-07-29 的 current 代码已经让 18 类 Rust ThreadItem 通过 typed canonical reader 进入 direct TurnTimeline，但专项 Gate B 与 V2-05 高级通知仍未完整：
+2026-07-31 的 current 代码已经让 canonical ThreadItem 通过 typed reader 进入 direct TurnTimeline，并关闭 V2-00 至 V2-04；V2-05 的高级通知与全面恢复仍未完整：
 
-| 层              | 当前事实                                                                                                        | v2 缺口                                                                                 |
-| --------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Rust Item 协议  | app-server-protocol v2 有 18 个顶层变体；MCP result/error 与 DynamicTool `inputAudio` 为 typed current contract | UserMessage audio/localAudio 不在 Lime 产品协议范围；部分 host/media 异常态 Gate B 待补 |
-| v2 notification | 72 项 coverage、pinned schema/hash/method drift gate 与 unknown notification recorder 已落地                    | 大量 planned notification 尚无完整 producer、GUI outlet 与 Gate B                       |
-| reverse request | MCP elicitation、命令审批、文件审批、用户输入 4 类 typed request 共用唯一 pending owner                         | currentTime、permission、dynamic tool dispatch 仍须按产品范围补真实 owner               |
-| canonical lower | 18 类上游 type 均投影为 typed Item；unknown camelCase type 进入 `unknown_item`，畸形/旧 shape fail closed       | 不再允许 extension 或 raw JSON fallback；专项 malformed/Gate B 仍需扩圈                 |
-| 时间线          | MessageList 直接消费 canonical Turn render projection；User/Agent/Media/Process 保持 sequence                   | 长列表性能和完整 Electron 场景矩阵仍待验证                                              |
-| 恢复            | live、cold read 与 production `thread/resume` 使用同一 reducer；resume 后 live 继续复用该实例                   | restart/disconnect 的完整 V2-05 产品矩阵仍待补                                          |
-| 交互            | 四类 pending request 使用单一 PendingInteractionController 和 Composer 上方唯一交互层                           | planned permission/tool-call request 尚未进入 current union                             |
+| 层              | 当前事实                                                                                                                                                              | v2 缺口                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Rust Item 协议  | Codex 顶层 Item 与 Lime-owned DynamicTool 均进入 typed current contract；MCP result/error 与 `inputAudio` 保持结构化                                                  | UserMessage audio/localAudio 不在 Lime 产品协议范围；其余 planned Item 不得由 metadata 推断 |
+| v2 notification | 72 项 coverage、pinned schema/hash/method drift gate、unknown recorder，以及 typed `configWarning` / thread-scoped `warning` producer、GUI 与 warning recovery 已落地 | 其余 planned notification 尚无完整 producer、GUI outlet 与 Gate B                           |
+| reverse request | command/file/userInput/MCP/permission 共用唯一 pending owner；currentTime 与 dynamic tool 由 Electron Host 处理                                                       | product-scope-excluded request 保持 fail closed，不新增 Renderer 或 compat handler          |
+| canonical lower | 18 类上游 type 均投影为 typed Item；unknown camelCase type 进入 `unknown_item`，畸形/旧 shape fail closed                                                             | 不再允许 extension 或 raw JSON fallback；专项 malformed/Gate B 仍需扩圈                     |
+| 时间线          | MessageList 直接消费 canonical Turn render projection；长列表窗口化和真实 Electron 性能证据已关闭                                                                     | V2-05 新 notification 仍须逐项证明不会破坏 sequence 与终态                                  |
+| 恢复            | live、cold read 与 production `thread/resume` 使用同一 reducer；resume 后 live 继续复用该实例                                                                         | restart/disconnect 的完整 V2-05 产品矩阵仍待补                                              |
+| 交互            | 五类可见 pending request 使用单一 PendingInteractionController；host-only request 不进入 React pending state                                                          | 后续 planned request 必须先有真实 producer/host owner                                       |
 
-因此，v2 的第一原则是把当前 AgentThreadItem 的二次 lower 从主渲染通路移出。迁移期间只有旧 Message/read 渲染链可把它作为只读兼容输入；canonical ThreadItem state 仍是 current live/read 状态，不得把二次 lower 继续增长为第二套 Item 模型。
+canonical Item -> Message 二次合成、通用 extension fallback 与第二 pending store 已从生产主链删除。canonical ThreadItem state 是 live/read/resume 的唯一事实源；后续 V2-05 切片不得恢复第二套 Item 模型或生产 mock fallback。
 
 ### 3.1 当前 Renderer 主链
 

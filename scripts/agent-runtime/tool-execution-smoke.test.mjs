@@ -567,7 +567,9 @@ describe("agent runtime tool execution smoke guard", () => {
           textareaDisabled: true,
           placeholder: "此子线程由父线程管理，无法直接输入",
           controls: {
+            sendButtonPresent: true,
             sendDisabled: true,
+            sendUnavailable: true,
             accessModeDisabled: true,
             modelSelectorCount: 1,
             modelSelectorsDisabled: true,
@@ -576,7 +578,9 @@ describe("agent runtime tool execution smoke guard", () => {
         },
         uiAttempt: {
           dispatchedEnter: true,
+          sendButtonPresent: true,
           clickedDisabledSend: true,
+          sendUnavailable: true,
           turnStartCountBefore: 0,
           turnStartCountAfter: 0,
         },
@@ -669,6 +673,35 @@ describe("agent runtime tool execution smoke guard", () => {
     });
     expect(
       directInputLeaked.visibleDomParentOwnedUiAttemptDidNotStartTurn,
+    ).toBe(false);
+
+    const enabledSubmitControl = buildAgentControlVisibleDomAssertions({
+      evidence,
+      snapshot: {
+        ...snapshot,
+        parentOwnedChild: {
+          ...snapshot.parentOwnedChild,
+          dom: {
+            ...snapshot.parentOwnedChild.dom,
+            controls: {
+              ...snapshot.parentOwnedChild.dom.controls,
+              sendDisabled: false,
+              sendUnavailable: false,
+            },
+          },
+          uiAttempt: {
+            ...snapshot.parentOwnedChild.uiAttempt,
+            clickedDisabledSend: false,
+            sendUnavailable: false,
+          },
+        },
+      },
+    });
+    expect(enabledSubmitControl.visibleDomParentOwnedComposerDisabled).toBe(
+      false,
+    );
+    expect(
+      enabledSubmitControl.visibleDomParentOwnedUiAttemptDidNotStartTurn,
     ).toBe(false);
 
     const serverAccepted = buildAgentControlVisibleDomAssertions({

@@ -1406,7 +1406,7 @@ impl SkillService {
             .parent()
             .ok_or_else(|| anyhow!("Failed to resolve skill directory"))?;
         let inspection = Self::inspect_skill_dir(skill_dir)?;
-        Ok(self.build_skill_from_inspection(
+        let mut skill = self.build_skill_from_inspection(
             inspection,
             key,
             directory,
@@ -1417,7 +1417,9 @@ impl SkillService {
             repo_owner,
             repo_name,
             repo_branch,
-        ))
+        );
+        skill.local_directory_path = Some(skill_dir.to_string_lossy().into_owned());
+        Ok(skill)
     }
 
     fn build_skill_from_remote_archive_entry(
@@ -1476,6 +1478,7 @@ impl SkillService {
                 .and_then(|manifest| manifest.metadata.description.clone())
                 .unwrap_or_default(),
             directory,
+            local_directory_path: None,
             readme_url,
             installed,
             source_kind,
@@ -1812,6 +1815,10 @@ metadata:
         let skill = all_skills.get("local:shared-skill").unwrap();
         assert_eq!(skill.name, "Project Skill");
         assert_eq!(skill.catalog_source, SkillCatalogSource::Project);
+        assert_eq!(
+            skill.local_directory_path.as_deref(),
+            Some(project_skill_dir.to_string_lossy().as_ref())
+        );
     }
 
     #[test]

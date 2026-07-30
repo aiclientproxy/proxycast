@@ -167,7 +167,8 @@ pub use backend::UnavailableBackend;
 pub use error::RuntimeCoreError;
 pub use event_log::EventLogRecord;
 pub use event_log::EventLogWriter;
-pub use event_sink::RuntimeEventSink;
+use event_sink::RuntimeEventCallback;
+pub use event_sink::{RuntimeEvent, RuntimeEventHub, RuntimeEventSink};
 pub use evidence_provider::BasicEvidenceExportProvider;
 pub use evidence_provider::NoopEvidenceExportProvider;
 pub use execution_request::ExecutionRequest;
@@ -246,55 +247,6 @@ impl From<Option<ClientInfo>> for RuntimeHostContext {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct RuntimeEvent {
-    pub event_type: String,
-    pub payload: serde_json::Value,
-}
-
-/// Owned runtime event channel used by App Server's background projection pump.
-///
-/// RuntimeCore owns persistence; App Server owns transport projection. Keeping the
-/// receiver behind the hub lets a turn task publish after the request future has
-/// returned without capturing a borrowed request callback.
-#[derive(Clone)]
-pub struct RuntimeEventHub {
-    sender: mpsc::UnboundedSender<AgentEvent>,
-    receiver: Arc<Mutex<Option<mpsc::UnboundedReceiver<AgentEvent>>>>,
-}
-
-impl RuntimeEventHub {
-    pub fn new() -> Self {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        Self {
-            sender,
-            receiver: Arc::new(Mutex::new(Some(receiver))),
-        }
-    }
-
-    pub(crate) fn take_receiver(&self) -> Option<mpsc::UnboundedReceiver<AgentEvent>> {
-        self.receiver
-            .lock()
-            .expect("runtime event hub mutex poisoned")
-            .take()
-    }
-
-    pub(crate) fn publish(&self, event: AgentEvent) {
-        let _ = self.sender.send(event);
-    }
-}
-
-impl RuntimeEvent {
-    pub fn new(event_type: impl Into<String>, payload: serde_json::Value) -> Self {
-        Self {
-            event_type: event_type.into(),
-            payload,
-        }
-    }
-}
-
-type RuntimeEventCallback<'a> = dyn FnMut(AgentEvent) -> Result<(), RuntimeCoreError> + Send + 'a;
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct ArtifactContentRequest {
     pub session: AgentSession,
     pub artifact: ArtifactSummary,
@@ -353,6 +305,24 @@ pub struct ActionRespondRequest {
     pub pending_action_descriptor: Option<agent_runtime::action_required::PendingActionDescriptor>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PermissionRespondRequest {
+    pub session_id: String,
+    pub thread_id: String,
+    pub turn_id: String,
+    pub request_id: String,
+    pub response: app_server_protocol::protocol::v2::PermissionsRequestApprovalResponse,
+}
+
+#[derive(Debug, Clone)]
+pub struct DynamicToolRespondRequest {
+    pub session_id: String,
+    pub thread_id: String,
+    pub turn_id: String,
+    pub call_id: String,
+    pub response: app_server_protocol::protocol::v2::DynamicToolCallResponse,
+}
+
 impl ActionRespondRequest {
     pub fn runtime_metadata(&self) -> Option<&serde_json::Value> {
         self.metadata.as_ref()
@@ -380,6 +350,13 @@ pub trait ExecutionBackend: Send + Sync {
     fn set_app_data_source(
         &self,
         _app_data_source: Arc<dyn AppDataSource>,
+    ) -> Result<(), RuntimeCoreError> {
+        Ok(())
+    }
+
+    fn set_current_time_gateway(
+        &self,
+        _gateway: Arc<dyn tool_runtime::current_time::CurrentTimeGateway>,
     ) -> Result<(), RuntimeCoreError> {
         Ok(())
     }
@@ -463,6 +440,15 @@ pub trait ExecutionBackend: Send + Sync {
         request: ActionRespondRequest,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError>;
+
+    async fn resolve_permission_action(
+        &self,
+        _request: &PermissionRespondRequest,
+    ) -> Result<(), RuntimeCoreError> {
+        Err(RuntimeCoreError::Backend(
+            "runtime backend does not support permission responses".to_string(),
+        ))
+    }
 
     async fn read_tool_inventory(
         &self,
@@ -648,6 +634,13 @@ impl RuntimeCore {
         }
         self.app_data_source = app_data_source;
         self
+    }
+
+    pub(crate) fn set_current_time_gateway(
+        &self,
+        gateway: Arc<dyn tool_runtime::current_time::CurrentTimeGateway>,
+    ) -> Result<(), RuntimeCoreError> {
+        self.backend.set_current_time_gateway(gateway)
     }
 
     pub fn with_output_snapshot_store(

@@ -66,13 +66,16 @@ describe("MCP elicitation Gate B guard", () => {
     expect(content).toContain("summary.capabilityMissingCount === 0");
   });
 
-  it("requires the Composer form, exact MCP accept ledger, and second provider response", () => {
+  it("requires dynamic-tool and MCP results before the final provider response", () => {
     const content = readGateB();
 
     expect(content).toContain('input[type="checkbox"]');
     expect(content).toContain("confirmed=true");
     expect(content).toContain("MCP_ELICITATION_GATE_B_DONE");
-    expect(content).toContain("providerRequests.length >= 2");
+    expect(content).toContain("providerRequests.length >= 3");
+    expect(content).toContain("dynamicToolProviderResultObserved");
+    expect(content).toContain("dynamicToolCanonicalCompleted");
+    expect(content).toContain("dynamicToolRequestHiddenFromRenderer");
     expect(content).toContain('entry?.action === "accept"');
     expect(content).toContain("content?.confirmed === true");
     expect(content).toContain('data-testid="pending-interaction-layer"');

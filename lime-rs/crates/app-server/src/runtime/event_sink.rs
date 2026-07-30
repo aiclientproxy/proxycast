@@ -1,5 +1,57 @@
-use super::{RuntimeCoreError, RuntimeEvent};
+use super::RuntimeCoreError;
 use app_server_protocol::AgentEvent;
+use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuntimeEvent {
+    pub event_type: String,
+    pub payload: serde_json::Value,
+}
+
+impl RuntimeEvent {
+    pub fn new(event_type: impl Into<String>, payload: serde_json::Value) -> Self {
+        Self {
+            event_type: event_type.into(),
+            payload,
+        }
+    }
+}
+
+/// Owned runtime event channel used by App Server's background projection pump.
+///
+/// RuntimeCore owns persistence; App Server owns transport projection. Keeping the
+/// receiver behind the hub lets a turn task publish after the request future has
+/// returned without capturing a borrowed request callback.
+#[derive(Clone)]
+pub struct RuntimeEventHub {
+    sender: mpsc::UnboundedSender<AgentEvent>,
+    receiver: Arc<Mutex<Option<mpsc::UnboundedReceiver<AgentEvent>>>>,
+}
+
+impl RuntimeEventHub {
+    pub fn new() -> Self {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        Self {
+            sender,
+            receiver: Arc::new(Mutex::new(Some(receiver))),
+        }
+    }
+
+    pub(crate) fn take_receiver(&self) -> Option<mpsc::UnboundedReceiver<AgentEvent>> {
+        self.receiver
+            .lock()
+            .expect("runtime event hub mutex poisoned")
+            .take()
+    }
+
+    pub(crate) fn publish(&self, event: AgentEvent) {
+        let _ = self.sender.send(event);
+    }
+}
+
+pub(super) type RuntimeEventCallback<'a> =
+    dyn FnMut(AgentEvent) -> Result<(), RuntimeCoreError> + Send + 'a;
 
 pub trait RuntimeEventSink: Send {
     fn emit(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError>;

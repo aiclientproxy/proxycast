@@ -9,7 +9,6 @@ import {
   METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CHANGED,
 } from "./generated/protocol-types.js";
 import type {
-  MediaReadResponse as GeneratedMediaReadResponse,
   ConversationImportJobPhase as GeneratedConversationImportJobPhase,
   ConversationImportJobStatus as GeneratedConversationImportJobStatus,
   ConversationImportSourceClient as GeneratedConversationImportSourceClient,
@@ -2705,38 +2704,6 @@ export type AgentSessionEventNotification = JsonRpcNotification & {
   params: AgentSessionEventParams;
 };
 
-export const MEDIA_READ_CHUNK_EVENT_TYPE = "media.read.chunk";
-export const MEDIA_READ_COMPLETED_EVENT_TYPE = "media.read.completed";
-
-export type MediaReadChunk = Omit<GeneratedMediaReadResponse, "sha256"> & {
-  sha256?: string | null;
-};
-
-export type MediaReadChunkEventPayload = {
-  streamId: string;
-  chunkIndex: number;
-  done: false;
-  chunk: MediaReadChunk;
-};
-
-export type MediaReadCompletedEventPayload = {
-  streamId: string;
-  chunkCount: number;
-  done: true;
-  media: Omit<GeneratedMediaReadResponse, "contentBase64">;
-};
-
-export type MediaReadEventNotification = AgentSessionEventNotification & {
-  params: AgentSessionEventParams & {
-    event: AgentEvent & {
-      type:
-        | typeof MEDIA_READ_CHUNK_EVENT_TYPE
-        | typeof MEDIA_READ_COMPLETED_EVENT_TYPE;
-      payload: MediaReadChunkEventPayload | MediaReadCompletedEventPayload;
-    };
-  };
-};
-
 export type WorkspaceRightSurfacePendingChangedParams =
   GeneratedWorkspaceRightSurfacePendingChangedParams;
 
@@ -3178,48 +3145,8 @@ function isAgentSessionRawSideChannelType(type: string): boolean {
     type.startsWith("provider.") ||
     type.startsWith("image_task.") ||
     type.startsWith("image_task_") ||
-    type.startsWith("media.") ||
     type.startsWith("runtime.")
   );
-}
-
-export function mediaReadEventNotification(
-  message: JsonRpcMessage,
-): MediaReadEventNotification | undefined {
-  const notification = agentSessionEventNotification(message);
-  if (!notification) {
-    return undefined;
-  }
-  const eventType = notification.params.event.type;
-  if (
-    eventType !== MEDIA_READ_CHUNK_EVENT_TYPE &&
-    eventType !== MEDIA_READ_COMPLETED_EVENT_TYPE
-  ) {
-    return undefined;
-  }
-  const payload = notification.params.event.payload as
-    | Partial<MediaReadChunkEventPayload>
-    | Partial<MediaReadCompletedEventPayload>
-    | undefined;
-  if (!payload || typeof payload.streamId !== "string") {
-    return undefined;
-  }
-  if (
-    eventType === MEDIA_READ_CHUNK_EVENT_TYPE &&
-    payload.done === false &&
-    typeof (payload as Partial<MediaReadChunkEventPayload>).chunk === "object"
-  ) {
-    return notification as MediaReadEventNotification;
-  }
-  if (
-    eventType === MEDIA_READ_COMPLETED_EVENT_TYPE &&
-    payload.done === true &&
-    typeof (payload as Partial<MediaReadCompletedEventPayload>).media ===
-      "object"
-  ) {
-    return notification as MediaReadEventNotification;
-  }
-  return undefined;
 }
 
 export function isWorkspaceRightSurfacePendingChangedNotification(

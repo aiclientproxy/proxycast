@@ -121,8 +121,8 @@ const runtime = createAgentRuntimeClient(connected.connection, {
   request: { timeoutMs: 120_000 },
 });
 
-runtime.subscribeEvents((event) => {
-  mainWindow.webContents.send("agent:event", event);
+runtime.subscribeLifecycleEvents((event) => {
+  mainWindow.webContents.send("agent:lifecycle", event);
 });
 
 void (async () => {

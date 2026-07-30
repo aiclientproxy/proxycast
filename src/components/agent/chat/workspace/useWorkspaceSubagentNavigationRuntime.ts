@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { readThreadSessionId } from "@/lib/api/agentRuntime/threadClient";
+import { logAgentDebug } from "@/lib/agentDebug";
 import type { CanonicalChildThreadSummary } from "../projection/canonicalChildThreadSummary";
 
 interface UseWorkspaceSubagentNavigationRuntimeParams {
@@ -9,7 +10,7 @@ interface UseWorkspaceSubagentNavigationRuntimeParams {
   deferSessionRecentMetadataSyncForNavigation: (sessionId: string) => void;
   switchTopic: (
     sessionId: string,
-    options?: { allowDetachedSession?: boolean },
+    options?: { allowDetachedSession?: boolean; forceRefresh?: boolean },
   ) => Promise<unknown> | void;
 }
 
@@ -29,13 +30,29 @@ export async function openWorkspaceSubagentTarget({
   if (!normalizedTargetId) {
     return;
   }
+  logAgentDebug("WorkspaceSubagentNavigation", "start", {
+    canonicalChildCount: canonicalChildren.length,
+    targetId: normalizedTargetId,
+  });
   const canonicalSessionId = canonicalChildren
     .find((child) => child.threadId.trim() === normalizedTargetId)
     ?.sessionId?.trim();
   const sessionId =
     canonicalSessionId || (await readSessionId(normalizedTargetId));
+  logAgentDebug("WorkspaceSubagentNavigation", "resolved", {
+    sessionId,
+    targetId: normalizedTargetId,
+  });
   deferSessionRecentMetadataSyncForNavigation(sessionId);
-  await switchTopic(sessionId, { allowDetachedSession: true });
+  const result = await switchTopic(sessionId, {
+    allowDetachedSession: true,
+    forceRefresh: true,
+  });
+  logAgentDebug("WorkspaceSubagentNavigation", "completed", {
+    result: typeof result === "string" ? result : null,
+    sessionId,
+    targetId: normalizedTargetId,
+  });
 }
 
 export function useWorkspaceSubagentNavigationRuntime({

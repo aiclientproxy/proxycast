@@ -54,6 +54,31 @@ describe("resolveProviderModelCompatibility", () => {
     });
   });
 
+  it("模型选择器应拒绝缺少权威能力来源的实时目录项", () => {
+    expect(
+      getProviderModelCompatibilityIssue({
+        providerType: "custom-agnes",
+        configuredProviderType: "openai",
+        model: "agnes-video-v2.0",
+        capabilityProvenance: "inferred_hint",
+        enforceExecutableCapability: true,
+      }),
+    ).toEqual({
+      code: "runtime_capability_not_authoritative",
+      message: "模型缺少可执行的权威能力声明",
+    });
+
+    expect(
+      getProviderModelCompatibilityIssue({
+        providerType: "custom-agnes",
+        configuredProviderType: "openai",
+        model: "agnes-2.5-flash",
+        capabilityProvenance: "canonical",
+        enforceExecutableCapability: true,
+      }),
+    ).toBeNull();
+  });
+
   it("应过滤不兼容模型并保留兼容模型", () => {
     const result = filterProviderModelsByCompatibility(
       {

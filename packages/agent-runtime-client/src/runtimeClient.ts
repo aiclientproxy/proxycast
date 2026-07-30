@@ -3,7 +3,6 @@ import {
   type AgentRuntimeClient,
   type AgentRuntimeClientOptions as BaseAgentRuntimeClientOptions,
   type AgentRuntimeClientSubscription,
-  type AgentRuntimeEventListener,
   type AgentRuntimeLifecycleEventListener,
   type AgentRuntimeLifecycleNotification,
   type AgentRuntimeNotification,
@@ -33,8 +32,6 @@ import {
   type RequestId,
   type StructuredOutputContract,
   serverNotification,
-  agentSessionEventNotification,
-  mediaReadEventNotification,
 } from "@limecloud/app-server-client";
 
 export type { StructuredOutputContract };
@@ -59,7 +56,6 @@ export interface AgentRuntimeClientOptions extends BaseAgentRuntimeClientOptions
 export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
   readonly connection: AppServerConnection;
   readonly #base: BaseAppServerAgentRuntimeClient;
-  readonly #listeners = new Set<AgentRuntimeEventListener>();
   readonly #lifecycleListeners = new Set<AgentRuntimeLifecycleEventListener>();
   readonly #eventPipeline: AgentRuntimeEventPipeline;
   readonly #pendingNextEvents: AgentRuntimeNotification[] = [];
@@ -151,17 +147,6 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
     return await this.#base.exportEvidence(params, options);
   }
 
-  subscribeEvents(
-    listener: AgentRuntimeEventListener,
-  ): AgentRuntimeClientSubscription {
-    this.#listeners.add(listener);
-    return {
-      unsubscribe: () => {
-        this.#listeners.delete(listener);
-      },
-    };
-  }
-
   subscribeLifecycleEvents(
     listener: AgentRuntimeLifecycleEventListener,
   ): AgentRuntimeClientSubscription {
@@ -179,14 +164,7 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
       const result = await this.#dispatchLifecycle(lifecycle);
       return result.accepted;
     }
-    const notification = agentSessionEventNotification(message);
-    if (!notification || !mediaReadEventNotification(notification)) {
-      return false;
-    }
-    for (const listener of this.#listeners) {
-      await listener(notification.params.event, notification);
-    }
-    return true;
+    return false;
   }
 
   async #dispatchLifecycle(
@@ -226,17 +204,6 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
           throw this.#eventPipeline.sequenceViolationError();
         }
       }
-      const agentNotification = agentSessionEventNotification(notification);
-      if (
-        !agentNotification ||
-        !mediaReadEventNotification(agentNotification)
-      ) {
-        continue;
-      }
-      for (const listener of this.#listeners) {
-        await listener(agentNotification.params.event, agentNotification);
-      }
-      return agentNotification;
     }
   }
 }

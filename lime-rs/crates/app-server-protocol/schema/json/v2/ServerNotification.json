@@ -266,6 +266,43 @@
       ],
       "type": "string"
     },
+    "ConfigWarningNotification": {
+      "properties": {
+        "details": {
+          "description": "Optional extra guidance or error details.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "path": {
+          "description": "Optional path to the config file that triggered the warning.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional range for the error location inside the config file."
+        },
+        "summary": {
+          "description": "Concise summary of the warning.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary"
+      ],
+      "type": "object"
+    },
     "DynamicToolCallOutputContentItem": {
       "oneOf": [
         {
@@ -982,6 +1019,42 @@
       },
       "required": [
         "byteRange"
+      ],
+      "type": "object"
+    },
+    "TextPosition": {
+      "properties": {
+        "column": {
+          "description": "1-based column number (in Unicode scalar values).",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "description": "1-based line number.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "column",
+        "line"
+      ],
+      "type": "object"
+    },
+    "TextRange": {
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/TextPosition"
+        },
+        "start": {
+          "$ref": "#/$defs/TextPosition"
+        }
+      },
+      "required": [
+        "end",
+        "start"
       ],
       "type": "object"
     },
@@ -2345,6 +2418,33 @@
         }
       ]
     },
+    "WarningNotification": {
+      "description": "A user-visible runtime warning projected from the current event stream.",
+      "properties": {
+        "code": {
+          "description": "Lime-owned warning code used for localized presentation.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "message": {
+          "description": "Concise warning message for the user.",
+          "type": "string"
+        },
+        "threadId": {
+          "description": "Optional thread target when the warning applies to a specific thread.",
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    },
     "WebSearchItem": {
       "properties": {
         "action": true,
@@ -2367,6 +2467,38 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Notifications emitted by the current v2 skeleton. Unknown methods fail\nclosed until their typed payloads are added to the v2 catalog.",
   "oneOf": [
+    {
+      "properties": {
+        "method": {
+          "const": "configWarning",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ConfigWarningNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "warning",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/WarningNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
     {
       "properties": {
         "method": {

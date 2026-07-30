@@ -133,7 +133,10 @@ fn swap_claude_word_order(model: &str) -> Option<String> {
 }
 
 fn is_hosting_provider(provider: &str) -> bool {
-    matches!(provider, "databricks" | "openrouter" | "azure" | "bedrock")
+    matches!(
+        provider,
+        "databricks" | "openrouter" | "azure" | "bedrock" | "lime-hub"
+    )
 }
 
 /// Infer the real provider from model name patterns
@@ -316,11 +319,30 @@ mod tests {
             map_to_canonical_model("agnes", "agnes-2.0-flash", r),
             Some("agnes/agnes-2.0-flash".to_string())
         );
+        assert_eq!(
+            map_to_canonical_model("agnes", "agnes-2.5-flash", r),
+            Some("agnes/agnes-2.5-flash".to_string())
+        );
+        assert_eq!(
+            map_to_canonical_model("agnes", "agnes-2.5-pro-alpha", r),
+            Some("agnes/agnes-2.5-pro-alpha".to_string())
+        );
+        assert_eq!(map_to_canonical_model("agnes", "agnes-video-v2.0", r), None);
 
         // === OpenRouter (already canonical format) ===
         assert_eq!(
             map_to_canonical_model("openrouter", "anthropic/claude-3.5-sonnet", r),
             Some("anthropic/claude-3.5-sonnet".to_string())
+        );
+
+        // === Product-owned hosting gateway ===
+        assert_eq!(
+            map_to_canonical_model("lime-hub", "gpt-5.2-pro", r),
+            Some("openai/gpt-5.2-pro".to_string())
+        );
+        assert_eq!(
+            map_to_canonical_model("lime-hub", "private-model-without-catalog-entry", r),
+            None
         );
 
         // === Anthropic Claude - basic ===

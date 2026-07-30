@@ -1,7 +1,7 @@
 use app_server_protocol::{
-    ExecutionProcessDrainOutputParams, ExecutionProcessDrainOutputResponse,
-    ExecutionProcessEmptyResponse, ExecutionProcessIdParams, ExecutionProcessStartParams,
-    ExecutionProcessStartResponse, ExecutionProcessStatusResponse,
+    protocol::v2::GrantedPermissionProfile, ExecutionProcessDrainOutputParams,
+    ExecutionProcessDrainOutputResponse, ExecutionProcessEmptyResponse, ExecutionProcessIdParams,
+    ExecutionProcessStartParams, ExecutionProcessStartResponse, ExecutionProcessStatusResponse,
     ExecutionProcessWriteStdinParams,
 };
 use async_trait::async_trait;
@@ -14,6 +14,7 @@ pub trait RuntimeLiveExecutionGateway: Send + Sync {
         thread_id: &str,
         display_command: &str,
         params: ExecutionProcessStartParams,
+        granted_permissions: Option<GrantedPermissionProfile>,
     ) -> Result<ExecutionProcessStartResponse, String>;
 
     fn write_stdin(

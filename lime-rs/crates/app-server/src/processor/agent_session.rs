@@ -1,9 +1,6 @@
 //! agent_session domain handlers for the App Server processor.
 
-use super::{
-    dispatch_result, parse_params, project_event_notifications_jsonrpc, to_jsonrpc_error,
-    v2_notifications::V2NotificationProjector, RequestProcessor, RpcDispatch,
-};
+use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, RpcDispatch};
 use app_server_protocol::protocol::v2::MediaReadParams;
 use app_server_protocol::{
     AgentSessionFileCheckpointDiffParams, AgentSessionFileCheckpointGetParams,
@@ -16,43 +13,14 @@ impl RequestProcessor {
         &self,
         request_id: &RequestId,
         params: Option<serde_json::Value>,
-        event_callback: Option<&mut (dyn FnMut(JsonRpcMessage) + Send)>,
+        _event_callback: Option<&mut (dyn FnMut(JsonRpcMessage) + Send)>,
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: MediaReadParams = parse_params(params)?;
-        let response = if params.stream {
-            if let Some(event_callback) = event_callback {
-                let mut event_projector = V2NotificationProjector::default();
-                let mut runtime_event_callback = |event| {
-                    let messages = project_event_notifications_jsonrpc(&mut event_projector, event)
-                        .map_err(|error| {
-                            crate::RuntimeCoreError::Backend(format!(
-                                "failed to serialize media read streaming event: {}",
-                                error.message
-                            ))
-                        })?;
-                    for message in messages {
-                        event_callback(message);
-                    }
-                    Ok(())
-                };
-                self.runtime
-                    .read_media_streaming_with_cancel(
-                        params,
-                        || self.is_request_canceled(request_id),
-                        &mut runtime_event_callback,
-                    )
-                    .map_err(to_jsonrpc_error)?
-            } else {
-                self.runtime
-                    .read_media_with_cancel(params, || self.is_request_canceled(request_id))
-                    .map_err(to_jsonrpc_error)?
-            }
-        } else {
-            self.runtime
-                .read_media_with_cancel(params, || self.is_request_canceled(request_id))
-                .map_err(to_jsonrpc_error)?
-        };
+        let response = self
+            .runtime
+            .read_media_with_cancel(params, || self.is_request_canceled(request_id))
+            .map_err(to_jsonrpc_error)?;
         dispatch_result(response)
     }
 

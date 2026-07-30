@@ -7,32 +7,6 @@ use super::{
     AgentSessionEventParams, AppServerNotificationMethod, WorkspaceRightSurfacePendingChangedParams,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TextPosition {
-    pub line: usize,
-    pub column: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TextRange {
-    pub start: TextPosition,
-    pub end: TextPosition,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ConfigWarningNotification {
-    pub summary: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub details: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub range: Option<TextRange>,
-}
-
 macro_rules! app_server_server_notification_definitions {
     ($($variant:ident => $wire:literal ($payload:ty)),* $(,)?) => {
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -91,7 +65,6 @@ macro_rules! app_server_server_notification_definitions {
 }
 
 app_server_server_notification_definitions! {
-    ConfigWarning => "configWarning" (ConfigWarningNotification),
     AgentSessionEvent => "agentSession/event" (AgentSessionEventParams),
     WorkspaceRightSurfacePendingChanged => "workspaceRightSurface/pendingChanged" (
         WorkspaceRightSurfacePendingChangedParams

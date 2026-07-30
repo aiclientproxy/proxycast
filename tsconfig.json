@@ -29,6 +29,9 @@
       "@limecloud/app-server-client": [
         "./packages/app-server-client/src/index.ts"
       ],
+      "@limecloud/app-server-client/browser": [
+        "./packages/app-server-client/src/browser.ts"
+      ],
       "@limecloud/agent-runtime-ui": [
         "./packages/agent-runtime-ui/src/index.ts"
       ],

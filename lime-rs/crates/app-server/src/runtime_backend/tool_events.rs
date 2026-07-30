@@ -92,6 +92,7 @@ pub(super) fn runtime_event_type_from_raw(raw_type: &str) -> &'static str {
         "artifact_snapshot" => "artifact.snapshot",
         "action_required" => "action.required",
         "action_resolved" => "action.resolved",
+        "dynamic_tool_call_requested" => "dynamic_tool.requested",
         "turn_context" => "turn.context",
         "model_change" => "model.changed",
         "server_model" => "model.server_reported",

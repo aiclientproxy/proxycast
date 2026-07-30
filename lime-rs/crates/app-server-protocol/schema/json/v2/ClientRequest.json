@@ -148,6 +148,95 @@
       ],
       "type": "object"
     },
+    "DynamicToolFunctionSpec": {
+      "properties": {
+        "deferLoading": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "inputSchema": true,
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "inputSchema",
+        "name"
+      ],
+      "type": "object"
+    },
+    "DynamicToolNamespaceSpec": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/DynamicToolNamespaceTool"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "description",
+        "name",
+        "tools"
+      ],
+      "type": "object"
+    },
+    "DynamicToolNamespaceTool": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DynamicToolFunctionSpec",
+          "properties": {
+            "type": {
+              "const": "function",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DynamicToolSpec": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DynamicToolFunctionSpec",
+          "properties": {
+            "type": {
+              "const": "function",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/DynamicToolNamespaceSpec",
+          "properties": {
+            "type": {
+              "const": "namespace",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "ImageDetail": {
       "enum": [
         "auto",
@@ -190,10 +279,6 @@
           ]
         },
         "sidecarRef": true,
-        "stream": {
-          "default": false,
-          "type": "boolean"
-        },
         "threadId": {
           "type": "string"
         },
@@ -1249,7 +1334,9 @@
           ]
         },
         "dynamicTools": {
-          "items": true,
+          "items": {
+            "$ref": "#/$defs/DynamicToolSpec"
+          },
           "type": [
             "array",
             "null"

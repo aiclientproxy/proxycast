@@ -468,7 +468,7 @@ impl ServerRequestRouter {
     }
 
     #[cfg(test)]
-    fn pending_count(&self) -> usize {
+    pub(crate) fn pending_count(&self) -> usize {
         self.inner
             .pending
             .lock()
