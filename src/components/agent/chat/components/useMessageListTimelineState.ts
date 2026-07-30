@@ -6,16 +6,15 @@ import { buildInputbarRuntimeStatusLineModel } from "../utils/inputbarRuntimeSta
 import {
   filterConversationThreadItemsForRenderedTurns,
   resolveConversationRenderedTurnIdSet,
-  resolveConversationRenderedTurns,
 } from "../projection/threadTimelineWindowProjection";
 import {
   buildCurrentTurnTimelineProjection,
-  buildDeferredTimelineByMessageIdProjection,
   buildMessageGroupsProjection,
   buildMessageRenderGroupsProjection,
   buildTimelineByMessageIdProjection,
   resolveLastAssistantMessage,
 } from "../projection/messageTimelineRenderProjection";
+import { buildTurnTimelineRenderProjection } from "../projection/turnTimelineRenderProjection";
 import type {
   ActionRequired,
   AgentThreadItem,
@@ -40,10 +39,7 @@ interface UseMessageListTimelineStateOptions {
   isRestoredHistoryWindow: boolean;
   isSending: boolean;
   pendingActions: readonly ActionRequired[];
-  persistedHiddenHistoryCount: number;
-  progressiveInitialRenderCount: number;
-  renderedAssistantMessageCount: number;
-  renderedMessageCount: number;
+  hasPersistedOlderHistory: boolean;
   renderedMessages: Message[];
   submittedActionsInFlight: readonly ActionRequired[];
   threadItems: readonly AgentThreadItem[];
@@ -60,35 +56,15 @@ export function useMessageListTimelineState({
   isRestoredHistoryWindow,
   isSending,
   pendingActions,
-  persistedHiddenHistoryCount,
-  progressiveInitialRenderCount,
-  renderedAssistantMessageCount,
-  renderedMessageCount,
+  hasPersistedOlderHistory,
   renderedMessages,
   submittedActionsInFlight,
   threadItems,
   threadRead,
   turns,
 }: UseMessageListTimelineStateOptions) {
-  const renderedTurns = useMemo(() => {
-    return resolveConversationRenderedTurns({
-      turns,
-      currentTurnId,
-      hiddenHistoryCount,
-      isRestoredHistoryWindow,
-      renderedAssistantMessageCount,
-      renderedMessageCount,
-      progressiveInitialRenderCount,
-    });
-  }, [
-    currentTurnId,
-    hiddenHistoryCount,
-    isRestoredHistoryWindow,
-    progressiveInitialRenderCount,
-    renderedAssistantMessageCount,
-    renderedMessageCount,
-    turns,
-  ]);
+  // Turn 窗口由 useMessageListRenderWindow 选择；这里仅补充已选 entry 的展示投影。
+  const renderedTurns = useMemo(() => [...turns], [turns]);
   const renderedTurnIdSet = useMemo(() => {
     return resolveConversationRenderedTurnIdSet({
       renderedTurns,
@@ -121,7 +97,7 @@ export function useMessageListTimelineState({
   const hasHistoricalWindow =
     isRestoredHistoryWindow ||
     hiddenHistoryCount > 0 ||
-    persistedHiddenHistoryCount > 0;
+    hasPersistedOlderHistory;
   const shouldProtectHistoricalWindowDuringSending =
     isSending &&
     hasHistoricalWindow &&
@@ -141,7 +117,7 @@ export function useMessageListTimelineState({
     !focusedTimelineItemId &&
     (shouldDeferHistoricalTimeline ||
       hiddenHistoryCount > 0 ||
-      persistedHiddenHistoryCount > 0);
+      hasPersistedOlderHistory);
   const [isHistoricalTimelineReady, setIsHistoricalTimelineReady] = useState(
     () => !shouldDeferHistoricalTimeline,
   );
@@ -180,10 +156,8 @@ export function useMessageListTimelineState({
     !activeCurrentTurnId &&
     pendingActions.length === 0 &&
     (threadRead?.pending_requests?.length ?? 0) === 0;
-  const shouldDeferThreadItemsScan =
-    !activeCurrentTurnId &&
-    shouldDeferHistoricalTimeline &&
-    !isHistoricalTimelineReady;
+  // 首帧必须确定 canonical Item owner，历史细节延迟期间不能退回 Message 窗口。
+  const shouldDeferThreadItemsScan = false;
   const renderedThreadItemsMeasurement = useMemo(
     () =>
       measureMessageListComputation(() =>
@@ -199,25 +173,14 @@ export function useMessageListTimelineState({
   const timelineByMessageIdMeasurement = useMemo(
     () =>
       measureMessageListComputation(() =>
-        shouldDeferThreadItemsScan
-          ? buildDeferredTimelineByMessageIdProjection({
-              renderedMessages,
-              renderedTurns,
-            })
-          : buildTimelineByMessageIdProjection({
-              canBuildHistoricalTimeline,
-              renderedMessages,
-              renderedTurns,
-              renderedThreadItems,
-            }),
+        buildTimelineByMessageIdProjection({
+          canBuildHistoricalTimeline: true,
+          renderedMessages,
+          renderedTurns,
+          renderedThreadItems,
+        }),
       ),
-    [
-      canBuildHistoricalTimeline,
-      renderedMessages,
-      renderedThreadItems,
-      renderedTurns,
-      shouldDeferThreadItemsScan,
-    ],
+    [renderedMessages, renderedThreadItems, renderedTurns],
   );
   const timelineByMessageId = timelineByMessageIdMeasurement.value;
   const lastAssistantMessage = useMemo(
@@ -319,6 +282,19 @@ export function useMessageListTimelineState({
     ],
   );
   const renderGroups = renderGroupsMeasurement.value;
+  const renderEntriesMeasurement = useMemo(
+    () =>
+      measureMessageListComputation(() =>
+        buildTurnTimelineRenderProjection({
+          messageGroups: renderGroups,
+          renderedTurns,
+          renderedThreadItems,
+          currentTurnId,
+        }),
+      ),
+    [currentTurnId, renderGroups, renderedThreadItems, renderedTurns],
+  );
+  const renderEntries = renderEntriesMeasurement.value;
 
   return {
     activeConversationRuntimeStatusLine,
@@ -333,6 +309,8 @@ export function useMessageListTimelineState({
     renderedThreadItems,
     renderedThreadItemsMeasurement,
     renderedTurns,
+    renderEntries,
+    renderEntriesMeasurement,
     renderGroups,
     renderGroupsMeasurement,
     shouldDeferHistoricalTimeline,

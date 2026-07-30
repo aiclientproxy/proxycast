@@ -557,6 +557,12 @@ fn append_runtime_events_to_stored_session(
                 event.event_id.as_str(),
                 sidecar_store,
             )?;
+            output_media::persist_local_image_output_payload(
+                event.event_type.as_str(),
+                &mut event.payload,
+                session_id,
+                sidecar_store,
+            )?;
         }
         attach_session_projection_metadata(&mut event, stored);
         attach_goal_accounting_mode(&mut event, stored);

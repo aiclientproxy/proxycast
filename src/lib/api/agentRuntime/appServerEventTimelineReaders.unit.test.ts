@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AppServerAgentEvent } from "@/lib/api/appServer";
-import { readPatchItemFromPayload } from "./appServerEventTimelineReaders";
+import {
+  readCanonicalAgentThreadTurn,
+  readPatchItemFromPayload,
+} from "./appServerEventTimelineReaders";
 
 const event: AppServerAgentEvent = {
   eventId: "event-patch",
@@ -53,6 +56,26 @@ describe("readPatchItemFromPayload", () => {
           diff: "-source\n+destination",
         },
       ],
+    });
+  });
+});
+
+describe("readCanonicalAgentThreadTurn", () => {
+  it("保留 canonical interrupted 状态而不是降为 canceled", () => {
+    expect(
+      readCanonicalAgentThreadTurn(
+        {
+          id: "turn-1",
+          status: "interrupted",
+          startedAt: "2026-07-21T00:00:00.000Z",
+          completedAt: "2026-07-21T00:00:01.000Z",
+        },
+        event,
+        "completed",
+      ),
+    ).toMatchObject({
+      id: "turn-1",
+      status: "interrupted",
     });
   });
 });

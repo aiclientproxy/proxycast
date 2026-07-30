@@ -144,12 +144,21 @@ export async function waitForGuiChatCompleted(
               '[data-message-role="assistant"]',
             ),
           );
+          const lastAssistantMessageId =
+            group?.getAttribute("data-last-assistant-message-id") || "";
           const assistantScope =
-            assistantBubbles[assistantBubbles.length - 1] ?? group;
+            assistantBubbles.find(
+              (bubble) =>
+                bubble.getAttribute("data-message-id") ===
+                lastAssistantMessageId,
+            ) ?? assistantBubbles[assistantBubbles.length - 1] ?? group;
           const assistantScopeText = assistantScope?.innerText || groupText;
+          const assistantTurnText = assistantBubbles
+            .map((bubble) => bubble.innerText || "")
+            .join("\n");
           const hasRequiredAssistantVisibleTexts =
             requiredAssistantVisibleTexts.every((requiredText) =>
-              assistantScopeText.includes(requiredText),
+              groupText.includes(requiredText),
             );
 
           return {
@@ -157,6 +166,7 @@ export async function waitForGuiChatCompleted(
             groupText,
             assistantScope,
             assistantScopeText,
+            assistantTurnText,
             hasExpectedAssistantContent:
               requiredAssistantVisibleTexts.length > 0
                 ? assistantScopeText.includes(summaryText) &&
@@ -179,6 +189,7 @@ export async function waitForGuiChatCompleted(
         const scopedText = scopedSnapshot.groupText;
         const assistantScope = scopedSnapshot.assistantScope;
         const assistantScopeText = scopedSnapshot.assistantScopeText;
+        const assistantTurnText = scopedSnapshot.assistantTurnText;
         const textarea = document.querySelector(
           'textarea[name="agent-chat-message"]',
         );
@@ -318,7 +329,7 @@ export async function waitForGuiChatCompleted(
           requiredVisibleTextHits: requiredAssistantVisibleTexts.map(
             (requiredText) => ({
               text: requiredText,
-              occurrences: assistantScopeText.split(requiredText).length - 1,
+              occurrences: scopedText.split(requiredText).length - 1,
             }),
           ),
           summaryOccurrences: text.split(summaryText).length - 1,
@@ -330,7 +341,7 @@ export async function waitForGuiChatCompleted(
           disallowedVisibleTextHits: disallowedVisibleTexts.map(
             (guardText) => ({
               text: guardText,
-              occurrences: assistantScopeText.split(guardText).length - 1,
+              occurrences: assistantTurnText.split(guardText).length - 1,
             }),
           ),
           scopedSummaryOccurrences: scopedText.split(summaryText).length - 1,
@@ -342,7 +353,7 @@ export async function waitForGuiChatCompleted(
           })),
           assistantScopeDedupeGuardHits: dedupeGuardTexts.map((guardText) => ({
             text: guardText,
-            occurrences: assistantScopeText.split(guardText).length - 1,
+            occurrences: assistantTurnText.split(guardText).length - 1,
           })),
           completionScope: {
             foundTurnGroup: Boolean(scopedTurnGroup),

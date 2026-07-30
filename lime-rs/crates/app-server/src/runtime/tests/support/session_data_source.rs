@@ -13,6 +13,8 @@ pub(in crate::runtime::tests) struct TestSessionDataSource {
     media_task_artifacts: Mutex<Vec<MediaTaskArtifactResponse>>,
     media_task_list_requests: Mutex<Vec<MediaTaskArtifactListParams>>,
     model_catalogs: Vec<ProviderModelCatalog>,
+    model_fetch_response: Mutex<Option<Result<ModelProviderFetchModelsResponse, String>>>,
+    model_fetch_requests: Mutex<Vec<ModelProviderFetchModelsParams>>,
 }
 
 impl TestSessionDataSource {
@@ -29,6 +31,8 @@ impl TestSessionDataSource {
             media_task_artifacts: Mutex::new(Vec::new()),
             media_task_list_requests: Mutex::new(Vec::new()),
             model_catalogs: Vec::new(),
+            model_fetch_response: Mutex::new(None),
+            model_fetch_requests: Mutex::new(Vec::new()),
         }
     }
 
@@ -90,6 +94,26 @@ impl TestSessionDataSource {
             model_catalogs,
             ..self
         }
+    }
+
+    pub(in crate::runtime::tests) fn with_model_fetch_response(
+        self,
+        response: Result<ModelProviderFetchModelsResponse, String>,
+    ) -> Self {
+        *self
+            .model_fetch_response
+            .lock()
+            .expect("test model fetch response mutex poisoned") = Some(response);
+        self
+    }
+
+    pub(in crate::runtime::tests) fn model_fetch_requests(
+        &self,
+    ) -> Vec<ModelProviderFetchModelsParams> {
+        self.model_fetch_requests
+            .lock()
+            .expect("test model fetch requests mutex poisoned")
+            .clone()
     }
 
     pub(in crate::runtime::tests) fn knowledge_compile_requests(
@@ -305,6 +329,23 @@ impl ModelProviderAppDataSource for TestSessionDataSource {
         _query: ModelCatalogQuery,
     ) -> Result<Vec<ProviderModelCatalog>, RuntimeCoreError> {
         Ok(self.model_catalogs.clone())
+    }
+
+    async fn fetch_model_provider_models(
+        &self,
+        params: ModelProviderFetchModelsParams,
+    ) -> Result<ModelProviderFetchModelsResponse, RuntimeCoreError> {
+        self.model_fetch_requests
+            .lock()
+            .expect("test model fetch requests mutex poisoned")
+            .push(params);
+        self.model_fetch_response
+            .lock()
+            .expect("test model fetch response mutex poisoned")
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| Err("model fetch response not configured".to_string()))
+            .map_err(RuntimeCoreError::Backend)
     }
 }
 impl ConnectAppDataSource for TestSessionDataSource {}

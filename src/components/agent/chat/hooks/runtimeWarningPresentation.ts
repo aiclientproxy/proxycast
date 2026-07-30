@@ -8,6 +8,10 @@ export const ARTIFACT_DOCUMENT_PERSIST_FAILED_WARNING_CODE =
 export const SKILL_NOT_AVAILABLE_WARNING_CODE = "skill_not_available";
 export const SKILL_LOAD_FAILED_WARNING_CODE = "skill_load_failed";
 export const MENTION_NOT_AVAILABLE_WARNING_CODE = "mention_not_available";
+const UNKNOWN_APP_SERVER_NOTIFICATION_PREFIX =
+  "unknown_app_server_notification:";
+const UNPROJECTED_APP_SERVER_NOTIFICATION_PREFIX =
+  "unprojected_app_server_notification:";
 
 export type RuntimeWarningToastLevel = "info" | "warning" | "error";
 
@@ -26,6 +30,28 @@ export function resolveRuntimeWarningToastPresentation(params: {
     typeof params.message === "string" && params.message.trim()
       ? params.message.trim()
       : "收到运行提醒";
+
+  if (code.startsWith(UNKNOWN_APP_SERVER_NOTIFICATION_PREFIX)) {
+    return {
+      level: "warning",
+      message: resolveRequiredAgentChatCopy("runtimeWarning.unknownNotification", {
+        method: code.slice(UNKNOWN_APP_SERVER_NOTIFICATION_PREFIX.length),
+      }),
+      shouldToast: true,
+    };
+  }
+  if (code.startsWith(UNPROJECTED_APP_SERVER_NOTIFICATION_PREFIX)) {
+    return {
+      level: "warning",
+      message: resolveRequiredAgentChatCopy(
+        "runtimeWarning.unprojectedNotification",
+        {
+          method: code.slice(UNPROJECTED_APP_SERVER_NOTIFICATION_PREFIX.length),
+        },
+      ),
+      shouldToast: true,
+    };
+  }
 
   switch (code) {
     case ARTIFACT_DOCUMENT_REPAIRED_WARNING_CODE:

@@ -19,6 +19,12 @@ import {
   buildAppServerRequestResponse,
   findPendingAppServerRequest,
 } from "../lib/agent-runtime-smoke-core.mjs";
+import {
+  buildToolExecutionProviderUpdateParams,
+  buildToolExecutionThreadStartParams,
+  buildToolExecutionTurnStartParams,
+  normalizeToolExecutionThreadReadResponse,
+} from "./tool-execution-current-contract.mjs";
 
 function readDeferredGateBSources() {
   return [
@@ -43,6 +49,152 @@ function readAgentControlGateBSources() {
 }
 
 describe("agent runtime tool execution smoke guard", () => {
+  it("provisions an executable fixture route before canonical V2 thread/start", () => {
+    const provider = {
+      modelPreference: "lime-fixture-chat",
+      providerPreference: "fixture-provider-id",
+      providerConfig: {
+        modelCapabilities: {
+          capabilities: { tools: true, streaming: true },
+          taskFamilies: ["chat"],
+          inputModalities: ["text"],
+          outputModalities: ["text"],
+          runtimeFeatures: ["streaming", "tool_calling"],
+        },
+      },
+    };
+
+    expect(
+      buildToolExecutionProviderUpdateParams("fixture-provider-id", provider),
+    ).toMatchObject({
+      providerId: "fixture-provider-id",
+      enabled: true,
+      models: [
+        {
+          id: "lime-fixture-chat",
+          capability: provider.providerConfig.modelCapabilities,
+        },
+      ],
+    });
+    const start = buildToolExecutionThreadStartParams({
+      provider,
+      title: "Fixture Thread",
+      workspaceRoot: "/tmp/lime-fixture",
+    });
+    expect(start).toMatchObject({
+      cwd: "/tmp/lime-fixture",
+      model: "lime-fixture-chat",
+      modelProvider: "fixture-provider-id",
+      runtimeWorkspaceRoots: ["/tmp/lime-fixture"],
+      serviceName: "Fixture Thread",
+      threadSource: "appServer",
+    });
+    expect(start).not.toHaveProperty("businessObjectRef");
+    expect(start).not.toHaveProperty("workspaceId");
+  });
+
+  it("uses only canonical V2 turn/start fields and the returned read projection", () => {
+    const start = buildToolExecutionTurnStartParams({
+      clientUserMessageId: "client-turn-1",
+      message: "run fixture",
+      metadata: { tool_scope: { allowed_tools: ["Read"] } },
+      model: "lime-fixture-chat",
+      threadId: "thread-1",
+      workspaceRoot: "/tmp/lime-fixture",
+    });
+    expect(start).toMatchObject({
+      threadId: "thread-1",
+      clientUserMessageId: "client-turn-1",
+      input: [{ type: "text", text: "run fixture" }],
+      model: "lime-fixture-chat",
+      approvalPolicy: "never",
+      sandboxPolicy: "danger-full-access",
+    });
+    expect(JSON.parse(start.additionalContext.metadata.value)).toEqual({
+      tool_scope: { allowed_tools: ["Read"] },
+    });
+    expect(start).not.toHaveProperty("runtimeOptions");
+    expect(start).not.toHaveProperty("sessionId");
+
+    const normalized = normalizeToolExecutionThreadReadResponse({
+      thread: {
+        id: "thread-1",
+        sessionId: "session-1",
+        status: { type: "idle" },
+        turns: [
+          {
+            id: "turn-1",
+            status: "completed",
+            items: [
+              {
+                type: "dynamicToolCall",
+                id: "call-1",
+                tool: "Read",
+                status: "completed",
+                success: true,
+                contentItems: [{ type: "inputText", text: "ok" }],
+              },
+              {
+                type: "collabAgentToolCall",
+                id: "call-2",
+                tool: "wait",
+                status: "completed",
+                agentsStates: {
+                  "thread-child": {
+                    status: "interrupted",
+                    message: "interrupted by parent",
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(normalized).toMatchObject({
+      thread_id: "thread-1",
+      session_id: "session-1",
+      status: "idle",
+      diagnostics: { latestTurnStatus: "completed" },
+      thread_items: [
+        {
+          type: "tool_call",
+          call_id: "call-1",
+          tool_name: "Read",
+          status: "completed",
+          success: true,
+        },
+        {
+          type: "tool_call",
+          call_id: "call-2",
+          tool_name: "wait_agent",
+          status: "completed",
+          success: true,
+          output: "",
+          agent_states: [
+            {
+              thread_id: "thread-child",
+              status: "interrupted",
+              message: "interrupted by parent",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("keeps provider provisioning ahead of thread/start in the runtime smoke", () => {
+    const content = fs.readFileSync(
+      "scripts/agent-runtime/tool-execution-smoke.mjs",
+      "utf8",
+    );
+    expect(content.indexOf("stage=provider-provision")).toBeLessThan(
+      content.indexOf("stage=session"),
+    );
+    expect(content).not.toContain("createAgentSessionCurrent");
+    expect(content).not.toContain("updateAgentThreadSettingsCurrent");
+  });
+
   it("通过 typed server request outer response 处理 pending approval", () => {
     const request = findPendingAppServerRequest(
       [
@@ -133,6 +285,10 @@ describe("agent runtime tool execution smoke guard", () => {
     expect(content).toContain("usesAppServerToolInventoryCurrent: true");
     expect(content).not.toContain("usesCompatToolInventoryCommand");
     expect(content).not.toContain("collabOperationToToolName");
+    expect(content).toContain("AGENT_CONTROL_WAIT_TIMEOUT_MS = 10_000");
+    expect(content).toContain("waitAgent?.agentStates?.some");
+    expect(content).not.toContain("toolOutputText.includes('\"timed_out\"')");
+    expect(content).not.toContain("timeout_ms: 0");
     expect(content).not.toContain(
       'item?.type === "subagent_activity" ? item?.status_label',
     );
@@ -341,6 +497,16 @@ describe("agent runtime tool execution smoke guard", () => {
           tool,
           status: "completed",
           success: true,
+          agentStates:
+            tool === "wait_agent"
+              ? [
+                  {
+                    thread_id: "thread-child",
+                    status: "interrupted",
+                    message: null,
+                  },
+                ]
+              : [],
         })),
       },
     };
@@ -379,6 +545,13 @@ describe("agent runtime tool execution smoke guard", () => {
           visible: true,
         }),
       ),
+      waitAgentStates: [
+        {
+          thread_id: "thread-child",
+          status: "interrupted",
+          message: null,
+        },
+      ],
       parentOwnedChild: {
         childThreadId: "thread-child",
         canonicalThread: {
@@ -454,6 +627,17 @@ describe("agent runtime tool execution smoke guard", () => {
     });
     expect(hotReloadOnly.visibleDomRestoredAfterColdRestart).toBe(false);
 
+    const missingRestoredWaitState = buildAgentControlVisibleDomAssertions({
+      evidence,
+      snapshot: {
+        ...snapshot,
+        waitAgentStates: [],
+      },
+    });
+    expect(
+      missingRestoredWaitState.visibleDomWaitAgentStatesStableAcrossRestart,
+    ).toBe(false);
+
     const missingIdentity = buildAgentControlVisibleDomAssertions({
       evidence,
       snapshot: {
@@ -483,9 +667,9 @@ describe("agent runtime tool execution smoke guard", () => {
         },
       },
     });
-    expect(directInputLeaked.visibleDomParentOwnedUiAttemptDidNotStartTurn).toBe(
-      false,
-    );
+    expect(
+      directInputLeaked.visibleDomParentOwnedUiAttemptDidNotStartTurn,
+    ).toBe(false);
 
     const serverAccepted = buildAgentControlVisibleDomAssertions({
       evidence,

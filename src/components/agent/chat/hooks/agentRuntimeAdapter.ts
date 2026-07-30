@@ -18,10 +18,11 @@ import {
   createAgentRuntimeClient,
   type AgentRuntimeClient,
 } from "@/lib/api/agentRuntime/clientFactory";
-import type {
-  AgentRuntimeCreateSessionOptions,
-  AgentRuntimeGetSessionOptions,
-  AgentRuntimeReplayedActionRequiredView,
+import {
+  AGENT_RUNTIME_DEFAULT_HISTORY_LIMIT,
+  type AgentRuntimeCreateSessionOptions,
+  type AgentRuntimeGetSessionOptions,
+  type AgentRuntimeReplayedActionRequiredView,
 } from "@/lib/api/agentRuntime/requestTypes";
 import type {
   AgentRuntimeListSessionsOptions,
@@ -29,6 +30,8 @@ import type {
   AgentSessionInfo,
   RuntimeProviderSelection,
 } from "@/lib/api/agentRuntime/sessionTypes";
+import type { ConversationProjectionReducer } from "@/lib/api/agentRuntime/conversationProjection";
+import { createThreadResumeConversationProjection } from "@/lib/api/agentRuntime/conversationProjection/replay";
 import type { AgentAccessMode } from "./agentChatStorage";
 import type { ActionRequiredScope, ApprovalDecision } from "../types";
 import {
@@ -113,7 +116,10 @@ export interface AgentRuntimeAdapter {
     turnId?: string,
     eventName?: string,
   ): Promise<boolean>;
-  resumeThread(threadId: string): Promise<boolean>;
+  resumeThread(
+    threadId: string,
+    consumeReplay?: (reducer: ConversationProjectionReducer) => void,
+  ): Promise<boolean>;
   runUserShellCommand(
     threadId: string,
     command: string,
@@ -157,9 +163,9 @@ function buildGetSessionRequestKey(
 ): string {
   return JSON.stringify({
     sessionId,
-    historyBeforeMessageId: options?.historyBeforeMessageId ?? null,
-    historyLimit: options?.historyLimit ?? null,
-    historyOffset: options?.historyOffset ?? null,
+    historyItemCursor: options?.historyItemCursor ?? null,
+    historyLimit: options?.historyLimit ?? AGENT_RUNTIME_DEFAULT_HISTORY_LIMIT,
+    historyTurnCursor: options?.historyTurnCursor ?? null,
     resumeSessionStartHooks: options?.resumeSessionStartHooks === true,
   });
 }
@@ -169,15 +175,85 @@ export function createAgentRuntimeAdapter({
   listenRuntimeEvent = listenAgentRuntimeEvent,
 }: AgentRuntimeAdapterDeps = {}): AgentRuntimeAdapter {
   const getSessionInFlight = new Map<string, Promise<AgentSessionDetail>>();
+  const sessionThreadIds = new Map<string, string>();
+
+  function rememberSessionThreadId(
+    requestedSessionId: string,
+    detail: AgentSessionDetail,
+  ): string | null {
+    const threadId =
+      detail.thread_id?.trim() || detail.thread_read?.thread_id?.trim();
+    const normalizedSessionId = requestedSessionId.trim();
+    const detailSessionId = detail.id?.trim();
+    if (
+      normalizedSessionId &&
+      normalizedSessionId !== detailSessionId &&
+      normalizedSessionId !== threadId
+    ) {
+      throw new Error("canonical session detail identity mismatch");
+    }
+    if (!threadId) {
+      return null;
+    }
+    if (normalizedSessionId) {
+      sessionThreadIds.set(normalizedSessionId, threadId);
+    }
+    if (detail.id?.trim()) {
+      sessionThreadIds.set(detail.id.trim(), threadId);
+    }
+    return threadId;
+  }
+
+  function getSessionDetail(
+    sessionId: string,
+    options?: AgentRuntimeGetSessionOptions,
+  ): Promise<AgentSessionDetail> {
+    const key = buildGetSessionRequestKey(sessionId, options);
+    const existing = getSessionInFlight.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const request = client
+      .getAgentRuntimeSession(sessionId, options)
+      .then((detail) => {
+        rememberSessionThreadId(sessionId, detail);
+        return detail;
+      })
+      .finally(() => {
+        if (getSessionInFlight.get(key) === request) {
+          getSessionInFlight.delete(key);
+        }
+      });
+    getSessionInFlight.set(key, request);
+    return request;
+  }
 
   async function resolveSessionThreadId(sessionId: string): Promise<string> {
     const normalizedSessionId = sessionId.trim();
     if (!normalizedSessionId) {
       throw new Error("sessionId is required to resolve canonical thread");
     }
-    const detail = await client.getAgentRuntimeSession(normalizedSessionId);
-    const threadId =
-      detail.thread_id?.trim() || detail.thread_read?.thread_id?.trim();
+    const cachedThreadId = sessionThreadIds.get(normalizedSessionId);
+    if (cachedThreadId) {
+      return cachedThreadId;
+    }
+
+    const pendingDefaultDetail = getSessionInFlight.get(
+      buildGetSessionRequestKey(normalizedSessionId),
+    );
+    if (pendingDefaultDetail) {
+      const pendingThreadId = rememberSessionThreadId(
+        normalizedSessionId,
+        await pendingDefaultDetail,
+      );
+      if (pendingThreadId) {
+        return pendingThreadId;
+      }
+    }
+
+    const detail = await getSessionDetail(normalizedSessionId);
+    const threadId = rememberSessionThreadId(normalizedSessionId, detail);
     if (!threadId) {
       throw new Error("canonical session detail did not include a thread_id");
     }
@@ -233,30 +309,10 @@ export function createAgentRuntimeAdapter({
       return client.listAgentRuntimeSessions(options);
     },
     async getSession(sessionId, options) {
-      const key = buildGetSessionRequestKey(sessionId, options);
-      const existing = getSessionInFlight.get(key);
-      if (existing) {
-        return existing;
-      }
-
-      const request = client
-        .getAgentRuntimeSession(sessionId, options)
-        .finally(() => {
-          if (getSessionInFlight.get(key) === request) {
-            getSessionInFlight.delete(key);
-          }
-        });
-      getSessionInFlight.set(key, request);
-      return request;
+      return getSessionDetail(sessionId, options);
     },
     async getSessionReadModel(sessionId) {
-      const detail = await client.getAgentRuntimeSession(sessionId);
-      const threadId = detail.thread_id?.trim();
-      if (!threadId) {
-        throw new Error(
-          "canonical session detail did not include a thread_id for thread/read",
-        );
-      }
+      const threadId = await resolveSessionThreadId(sessionId);
       return client.getAgentRuntimeThreadRead(threadId);
     },
     async getThreadTurnControl(threadId) {
@@ -368,12 +424,20 @@ export function createAgentRuntimeAdapter({
         ...(eventName ? { event_name: eventName } : {}),
       });
     },
-    async resumeThread(threadId) {
+    async resumeThread(threadId, consumeReplay) {
       const normalizedThreadId = threadId.trim();
       const response = await client.resumeThread({
         threadId: normalizedThreadId,
       });
-      return response.result.thread.id === normalizedThreadId;
+      if (response.result.thread.id !== normalizedThreadId) {
+        return false;
+      }
+      const replay = createThreadResumeConversationProjection(response.result);
+      if (!replay) {
+        return false;
+      }
+      consumeReplay?.(replay);
+      return true;
     },
     async runUserShellCommand(threadId, command, eventName) {
       await client.runUserShellCommand({ threadId, command }, eventName);

@@ -4,6 +4,66 @@ use schemars::schema_for;
 use serde_json::json;
 
 #[test]
+fn v2_display_items_match_codex_tagged_nullable_wire() {
+    let command = json!({
+        "type": "commandExecution",
+        "id": "command-1",
+        "command": "cargo test",
+        "cwd": "/workspace",
+        "source": "agent",
+        "status": "completed",
+        "commandActions": [],
+        "exitCode": 0,
+        "durationMs": 12
+    });
+    let decoded: ThreadItem = serde_json::from_value(command.clone()).expect("command item");
+    assert_eq!(
+        serde_json::to_value(decoded).expect("command wire"),
+        command
+    );
+
+    let mcp = json!({
+        "type": "mcpToolCall",
+        "id": "mcp-1",
+        "server": "docs",
+        "tool": "search",
+        "status": "completed",
+        "arguments": {"query": "ThreadItem"},
+        "result": {
+            "content": [{"type": "text", "text": "found"}],
+            "structuredContent": null,
+            "_meta": null
+        },
+        "error": null,
+        "durationMs": 12
+    });
+    let decoded: ThreadItem = serde_json::from_value(mcp.clone()).expect("MCP item");
+    assert_eq!(serde_json::to_value(decoded).expect("MCP wire"), mcp);
+
+    for content_item in [
+        json!({"type": "inputText", "text": "ok"}),
+        json!({"type": "inputImage", "imageUrl": "https://example.test/a.png"}),
+        json!({"type": "inputAudio", "audioUrl": "https://example.test/a.wav"}),
+    ] {
+        let decoded: DynamicToolCallOutputContentItem =
+            serde_json::from_value(content_item.clone()).expect("dynamic content item");
+        assert_eq!(serde_json::to_value(decoded).unwrap(), content_item);
+    }
+}
+
+#[test]
+fn v2_agent_message_phase_uses_the_canonical_enum_owner() {
+    let item = json!({
+        "type": "agentMessage",
+        "id": "message-1",
+        "text": "done",
+        "phase": "final_answer"
+    });
+    let decoded: ThreadItem = serde_json::from_value(item.clone()).expect("agent message");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), item);
+}
+
+#[test]
 fn thread_start_uses_v2_camel_case_fields() {
     let params = ThreadStartParams {
         model: Some("gpt-5.4".to_string()),
@@ -176,6 +236,32 @@ fn artifact_write_round_trips_typed_snapshot_shape() {
         Some(Method::ArtifactWrite)
     );
     assert!(METHODS.contains(&METHOD_ARTIFACT_WRITE));
+}
+
+#[test]
+fn media_read_round_trips_thread_scoped_shape() {
+    let expected = json!({
+        "id": 5,
+        "method": "media/read",
+        "params": {
+            "threadId": "thread_1",
+            "uri": "sidecar://media/image_1",
+            "maxBytes": 1024,
+            "offset": 0,
+            "length": 512,
+            "stream": true
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode media/read request");
+
+    assert_eq!(request.method(), Method::MediaRead);
+    assert_eq!(
+        serde_json::to_value(request).expect("encode media/read request"),
+        expected
+    );
+    assert_eq!(Method::parse(METHOD_MEDIA_READ), Some(Method::MediaRead));
+    assert!(METHODS.contains(&METHOD_MEDIA_READ));
 }
 
 #[test]

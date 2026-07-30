@@ -1,3 +1,4 @@
+import { act } from "react";
 import { describe, expect, it } from "vitest";
 import {
   findStreamingRendererCallByContent,
@@ -567,7 +568,7 @@ describe("MessageList reasoning flow", () => {
     );
   });
 
-  it("WebTools 已由内联 contentParts 持有时完成态应折叠为单一过程摘要", () => {
+  it("runtimeTurnId 接管后 WebTools 应由 canonical 消息与过程段直接渲染", () => {
     const now = new Date("2026-06-24T10:00:00.000Z");
     const messages: Message[] = [
       {
@@ -731,26 +732,34 @@ describe("MessageList reasoning flow", () => {
 
     expect(
       container.querySelector(
-        '[data-testid="message-list-historical-timeline-preview:leading"]',
+        '[data-testid="conversation-turn-timeline"][data-runtime-turn-id="turn-web-tools-inline-owner"]',
       ),
     ).not.toBeNull();
-    expect(mockAgentThreadTimeline).not.toHaveBeenCalled();
-    expect(mockStreamingRenderer).toHaveBeenCalledWith(
+    const preview = container.querySelector<HTMLButtonElement>(
+      '[data-testid="message-list-historical-timeline-preview:leading"]',
+    );
+    expect(preview).not.toBeNull();
+    act(() => preview?.click());
+    expect(mockAgentThreadTimeline).toHaveBeenCalledWith(
       expect.objectContaining({
-        thinkingContent: undefined,
-        contentParts: expect.arrayContaining([
-          expect.objectContaining({ type: "text" }),
+        items: expect.arrayContaining([
+          expect.objectContaining({ id: "web-search-web-tools-inline-owner" }),
+          expect.objectContaining({ id: "reasoning-web-tools-inline-owner" }),
+          expect.objectContaining({ id: "web-fetch-web-tools-inline-owner" }),
         ]),
       }),
     );
-    const webToolsRendererCall = findStreamingRendererCallByContent(
-      "timeline final should not render separately\n\n最终整理完成。",
-    );
     expect(
-      webToolsRendererCall?.contentParts?.some(
-        (part) => part.type === "tool_use" || part.type === "thinking",
+      findStreamingRendererCallByContent(
+        "timeline commentary should not render separately",
       ),
-    ).toBe(false);
+    ).toEqual(expect.objectContaining({ suppressProcessFlow: true }));
+    expect(
+      findStreamingRendererCallByContent(
+        "timeline final should not render separately",
+      ),
+    ).toEqual(expect.objectContaining({ suppressProcessFlow: true }));
+    expect(container.textContent).not.toContain("最终整理完成。");
   });
 
   it("恢复历史对话时有内联过程的已完成助手消息不应退化成纯最终正文", () => {

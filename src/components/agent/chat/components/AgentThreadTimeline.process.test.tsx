@@ -421,6 +421,34 @@ describe("AgentThreadTimeline", () => {
     expect(container.textContent).toContain("确认文章标题");
     expect(container.textContent).not.toContain("已中断");
   });
+  it("分段渲染关闭内联状态时不应重复显示待处理提示", () => {
+    const container = renderTimeline(
+      [
+        {
+          ...createBaseItem("action-without-inline-status", 1),
+          type: "tool_call",
+          tool_name: "write_file",
+          arguments: { path: "publish.md" },
+        },
+      ],
+      {
+        turn: { status: "aborted" },
+        actionRequests: [
+          {
+            requestId: "req-without-inline-status",
+            actionType: "ask_user",
+            status: "pending",
+            prompt: "请先确认文章标题。",
+          },
+        ],
+        showInlineStatusHint: false,
+      },
+    );
+
+    expect(
+      container.querySelector('[data-testid="agent-thread-inline-status"]'),
+    ).toBeNull();
+  });
   it("运行时权限确认等待不应渲染为失败或暴露内部字段", () => {
     const internalError =
       "运行时权限声明需要真实确认，当前 turn 已在模型执行前等待用户确认：confirmationStatus=not_requested，askProfileKeys=web_search, write_artifacts。已创建真实权限确认请求；请确认后重试或恢复本轮执行。";

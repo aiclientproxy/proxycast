@@ -39,7 +39,7 @@ const LIME_TENANT_HEADER: &str = "X-Lime-Tenant-ID";
 const LIME_TENANT_PARAM: &str = "lime_tenant_id";
 const PROVIDER_MODELS_CACHE_KEY_PREFIX: &str = "provider_models_fetch_cache:";
 const PROVIDER_MODELS_CACHE_TTL_SECONDS: i64 = 10 * 24 * 60 * 60;
-const PROVIDER_MODELS_CACHE_TAXONOMY_VERSION: u32 = 1;
+const PROVIDER_MODELS_CACHE_TAXONOMY_VERSION: u32 = 2;
 const XIAOMI_MODEL_FETCH_HOST_KEYWORDS: &[&str] = &["xiaomimimo.com"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1441,6 +1441,16 @@ struct ModelTaxonomyInput<'a> {
 }
 
 fn infer_model_taxonomy(input: ModelTaxonomyInput<'_>) -> InferredModelTaxonomy {
+    let canonical_task_families = input
+        .canonical_model
+        .map(|model| {
+            model
+                .task_families
+                .iter()
+                .filter_map(|family| parse_task_family(family))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     let canonical_input_modalities = input
         .canonical_model
         .map(|model| parse_modalities(&model.input_modalities))
@@ -1449,6 +1459,21 @@ fn infer_model_taxonomy(input: ModelTaxonomyInput<'_>) -> InferredModelTaxonomy 
         .canonical_model
         .map(|model| parse_modalities(&model.output_modalities))
         .unwrap_or_default();
+    let canonical_runtime_features = input
+        .canonical_model
+        .map(|model| {
+            model
+                .runtime_features
+                .iter()
+                .filter_map(|feature| parse_runtime_feature(feature))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let task_family_seed = if input.explicit_task_families.is_empty() {
+        canonical_task_families.as_slice()
+    } else {
+        input.explicit_task_families
+    };
     let input_seed = if input.explicit_input_modalities.is_empty() {
         canonical_input_modalities.as_slice()
     } else {
@@ -1465,7 +1490,7 @@ fn infer_model_taxonomy(input: ModelTaxonomyInput<'_>) -> InferredModelTaxonomy 
         input.family,
         input.description,
         input.capabilities,
-        input.explicit_task_families,
+        task_family_seed,
         input_seed,
         output_seed,
         input.provider_model_id,
@@ -1489,11 +1514,16 @@ fn infer_model_taxonomy(input: ModelTaxonomyInput<'_>) -> InferredModelTaxonomy 
             input.capabilities,
         )
     };
+    let runtime_feature_seed = if input.explicit_runtime_features.is_empty() {
+        canonical_runtime_features.as_slice()
+    } else {
+        input.explicit_runtime_features
+    };
     let runtime_features = infer_runtime_features(
         input.provider_id,
         input.capabilities,
         &task_families,
-        input.explicit_runtime_features,
+        runtime_feature_seed,
     );
     let deployment_source = infer_deployment_source(
         input.provider_id,
@@ -2387,7 +2417,7 @@ impl ModelRegistryService {
                 let now = chrono::Utc::now().timestamp();
                 let models: Vec<EnhancedModelMetadata> = api_models
                     .into_iter()
-                    .map(|m| self.convert_api_model(m, provider_id, now))
+                    .map(|m| self.convert_api_model_for_endpoint(m, provider_id, api_host, now))
                     .collect();
 
                 if let Err(error) = self.save_provider_models_cache_scoped(
@@ -2552,6 +2582,16 @@ impl ModelRegistryService {
         reqwest::Url::parse(trimmed)
             .or_else(|_| reqwest::Url::parse(&format!("https://{trimmed}")))
             .ok()
+    }
+
+    fn canonical_provider_id_for_api_host(api_host: &str) -> Option<&'static str> {
+        let url = Self::parse_api_host_url(api_host)?;
+        let is_official_agnes = url.scheme() == "https"
+            && url
+                .host_str()
+                .is_some_and(|host| host.eq_ignore_ascii_case("apihub.agnes-ai.com"))
+            && url.port_or_known_default() == Some(443);
+        is_official_agnes.then_some("agnes")
     }
 
     fn api_host_without_query_fragment(api_host: &str) -> String {
@@ -3259,6 +3299,33 @@ impl ModelRegistryService {
         provider_id: &str,
         now: i64,
     ) -> EnhancedModelMetadata {
+        self.convert_api_model_with_canonical_provider(model, provider_id, provider_id, now)
+    }
+
+    fn convert_api_model_for_endpoint(
+        &self,
+        model: ApiModelResponse,
+        provider_id: &str,
+        api_host: &str,
+        now: i64,
+    ) -> EnhancedModelMetadata {
+        let canonical_provider_id =
+            Self::canonical_provider_id_for_api_host(api_host).unwrap_or(provider_id);
+        self.convert_api_model_with_canonical_provider(
+            model,
+            provider_id,
+            canonical_provider_id,
+            now,
+        )
+    }
+
+    fn convert_api_model_with_canonical_provider(
+        &self,
+        model: ApiModelResponse,
+        provider_id: &str,
+        canonical_provider_id: &str,
+        now: i64,
+    ) -> EnhancedModelMetadata {
         let display_name = model.display_name.clone().unwrap_or_else(|| {
             model
                 .id
@@ -3267,7 +3334,7 @@ impl ModelRegistryService {
                 .unwrap_or(&model.id)
                 .to_string()
         });
-        let canonical_model = maybe_get_canonical_model(provider_id, &model.id);
+        let canonical_model = maybe_get_canonical_model(canonical_provider_id, &model.id);
         let capability_provenance = if canonical_model.is_some() {
             ModelCapabilityProvenance::Canonical
         } else if api_model_has_explicit_capability_snapshot(&model) {
@@ -3990,6 +4057,68 @@ mod tests {
         assert!(!source.contains(&looks_like_marker));
         assert!(!source.contains(&bounded_token_marker));
         assert!(!source.contains(&keywords_marker));
+    }
+
+    #[test]
+    fn test_official_agnes_endpoint_uses_canonical_model_capabilities() {
+        let (service, _db) = setup_cache_service();
+        let response = ModelRegistryService::parse_openai_models_response(
+            r#"{"data":[{"id":"agnes-2.0-flash"}]}"#,
+        )
+        .expect("parse Agnes response");
+        let model = service.convert_api_model_for_endpoint(
+            response.into_iter().next().expect("Agnes model"),
+            "custom-provider",
+            "https://apihub.agnes-ai.com/v1",
+            0,
+        );
+
+        assert_eq!(model.provider_id, "custom-provider");
+        assert_eq!(
+            model.canonical_model_id.as_deref(),
+            Some("agnes/agnes-2.0-flash")
+        );
+        assert_eq!(
+            model.capability_provenance,
+            ModelCapabilityProvenance::Canonical
+        );
+        assert!(model.capabilities.vision);
+        assert!(model.capabilities.tools);
+        assert!(model.capabilities.streaming);
+        assert!(model.capabilities.reasoning);
+        assert!(model.input_modalities.contains(&ModelModality::Image));
+        assert!(model
+            .runtime_features
+            .contains(&ModelRuntimeFeature::ToolCalling));
+    }
+
+    #[test]
+    fn test_non_official_agnes_endpoint_does_not_gain_canonical_capabilities() {
+        let (service, _db) = setup_cache_service();
+        for api_host in [
+            "http://apihub.agnes-ai.com/v1",
+            "https://apihub.agnes-ai.com:8443/v1",
+            "https://apihub.agnes-ai.com.evil.test/v1",
+            "https://gateway.example.com/v1",
+        ] {
+            let response = ModelRegistryService::parse_openai_models_response(
+                r#"{"data":[{"id":"agnes-2.0-flash"}]}"#,
+            )
+            .expect("parse Agnes-shaped response");
+            let model = service.convert_api_model_for_endpoint(
+                response.into_iter().next().expect("Agnes-shaped model"),
+                "custom-provider",
+                api_host,
+                0,
+            );
+
+            assert_eq!(
+                model.capability_provenance,
+                ModelCapabilityProvenance::InferredHint,
+                "{api_host} must not authorize canonical Agnes capabilities"
+            );
+            assert!(model.canonical_model_id.is_none());
+        }
     }
 
     #[test]

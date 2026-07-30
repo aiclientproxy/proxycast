@@ -8,6 +8,10 @@ function isInlineImageUri(uri: string): boolean {
   return /^data:image\/[a-z0-9.+-]+;base64,/iu.test(uri.trim());
 }
 
+function isInternalMediaReferenceUri(uri: string): boolean {
+  return uri.trim().toLowerCase().startsWith("sidecar://");
+}
+
 function normalizeKind(kind?: string | null): string {
   const normalized = kind?.trim().toLowerCase();
   if (!normalized) {
@@ -86,6 +90,9 @@ export function StreamingMediaReferenceCard({
     kind === "image" && isInlineImageUri(reference.uri)
       ? reference.uri.trim()
       : null;
+  const displayUri = isInternalMediaReferenceUri(reference.uri)
+    ? null
+    : reference.uri.trim();
   if (inlineImageUri) {
     const image = (
       <img
@@ -137,8 +144,8 @@ export function StreamingMediaReferenceCard({
   }
 
   const className = cn(
-    "max-w-[520px] rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-left text-sm shadow-sm",
-    isStreaming && "border-sky-200 bg-sky-50/50",
+    "max-w-[520px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm shadow-sm",
+    isStreaming && "border-sky-200 bg-sky-50",
     onOpen &&
       "cursor-pointer transition hover:border-sky-300 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-300",
   );
@@ -154,9 +161,11 @@ export function StreamingMediaReferenceCard({
           {reference.mimeType ? <span>{reference.mimeType}</span> : null}
           {byteSize ? <span>{byteSize}</span> : null}
         </div>
-        <div className="mt-1 truncate font-mono text-xs text-slate-500">
-          {reference.uri}
-        </div>
+        {displayUri ? (
+          <div className="mt-1 truncate font-mono text-xs text-slate-500">
+            {displayUri}
+          </div>
+        ) : null}
       </div>
     </div>
   );

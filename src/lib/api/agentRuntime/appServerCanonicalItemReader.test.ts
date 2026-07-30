@@ -127,11 +127,11 @@ describe("readCanonicalThreadItem", () => {
             type: "image",
             mime_type: "image/webp",
             data: "",
-            uri: "/tmp/local.webp",
-            source_path: "/tmp/local.webp",
+            display_name: "local.webp",
+            unavailable_reason: "host_reference_required",
             detail: "auto",
           },
-          { type: "skill", name: "review", path: "/skills/review" },
+          { type: "skill", name: "review", path: "review" },
           { type: "mention", name: "README", path: "README.md" },
         ],
         client_id: "client-1",
@@ -143,12 +143,12 @@ describe("readCanonicalThreadItem", () => {
       {
         type: "agentMessage",
         text: "answer",
-        phase: "final",
+        phase: "final_answer",
       },
       {
         type: "agent_message",
         text: "answer",
-        phase: "final",
+        phase: "final_answer",
         status: "in_progress",
       },
     ],
@@ -179,6 +179,8 @@ describe("readCanonicalThreadItem", () => {
         command: "npm test",
         cwd: "/repo",
         status: "completed",
+        pluginId: "plugin-docs",
+        scriptPath: "scripts/test.mjs",
         processId: "process-1",
         source: "agent",
         commandActions: [{ type: "read", path: "package.json" }],
@@ -189,7 +191,9 @@ describe("readCanonicalThreadItem", () => {
       {
         type: "command_execution",
         command: "npm test",
-        cwd: "/repo",
+        cwd: "repo",
+        plugin_id: "plugin-docs",
+        script_path: "scripts/test.mjs",
         process_id: "process-1",
         source: "agent",
         command_actions: [{ type: "read", path: "package.json" }],
@@ -236,8 +240,66 @@ describe("readCanonicalThreadItem", () => {
       { type: "imageView", path: "/tmp/result.png" },
       {
         type: "media",
-        uri: "/tmp/result.png",
+        uri: "",
         mime_type: "image/png",
+        preview: "result.png",
+        status: "in_progress",
+      },
+    ],
+    [
+      "imageView sidecar",
+      {
+        type: "imageView",
+        path: "sidecar://media/output-deadbeef/fixture%20result.png",
+      },
+      {
+        type: "media",
+        uri: "sidecar://media/output-deadbeef/fixture%20result.png",
+        mime_type: "image/png",
+        preview: "fixture result.png",
+        status: "in_progress",
+      },
+    ],
+    [
+      "hookPrompt",
+      {
+        type: "hookPrompt",
+        fragments: [
+          { hookRunId: "hook-run-1", text: "Run the focused checks." },
+          { hookRunId: "hook-run-2", text: "Then summarize." },
+        ],
+      },
+      {
+        type: "hook_prompt",
+        fragments: [
+          { hook_run_id: "hook-run-1", text: "Run the focused checks." },
+          { hook_run_id: "hook-run-2", text: "Then summarize." },
+        ],
+        status: "in_progress",
+      },
+    ],
+    [
+      "sleep",
+      { type: "sleep", durationMs: 1250 },
+      { type: "sleep", duration_ms: 1250, status: "in_progress" },
+    ],
+    [
+      "enteredReviewMode",
+      { type: "enteredReviewMode", review: "Review the current changes." },
+      {
+        type: "review_boundary",
+        boundary: "entered",
+        review: "Review the current changes.",
+        status: "in_progress",
+      },
+    ],
+    [
+      "exitedReviewMode",
+      { type: "exitedReviewMode", review: "No blocking findings." },
+      {
+        type: "review_boundary",
+        boundary: "exited",
+        review: "No blocking findings.",
         status: "in_progress",
       },
     ],
@@ -267,6 +329,27 @@ describe("readCanonicalThreadItem", () => {
       expect(projected).not.toHaveProperty("metadata");
     },
   );
+
+  it.each([
+    { type: "audio", url: "https://example.test/input.wav" },
+    { type: "localAudio", path: "/tmp/local.wav" },
+  ])("rejects unsupported UserInput audio shape %#", (content) => {
+    expect(
+      readCanonicalThreadItem(
+        item({ type: "userMessage", content: [content] }),
+        event,
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    { type: "hookPrompt", fragments: [{ hookRunId: "", text: "x" }] },
+    { type: "sleep", durationMs: -1 },
+    { type: "sleep", durationMs: 1.5 },
+    { type: "enteredReviewMode" },
+  ])("rejects malformed typed canonical item %#", (value) => {
+    expect(readCanonicalThreadItem(item(value), event)).toBeNull();
+  });
 
   it("keeps raw-only reasoning protocol data out of the default display text", () => {
     expect(
@@ -324,7 +407,10 @@ describe("readCanonicalThreadItem", () => {
   );
 
   it("projects a canonical v2 dynamic tool call with stable UI identity", () => {
-    const contentItems = [{ type: "inputText", text: "score:9" }];
+    const contentItems = [
+      { type: "inputText", text: "score:9" },
+      { type: "inputAudio", audioUrl: "https://example.test/score.wav" },
+    ];
     const projected = readCanonicalThreadItem(
       item({
         type: "dynamicToolCall",
@@ -534,6 +620,46 @@ describe("readCanonicalThreadItem", () => {
     expect(projected).not.toHaveProperty("ordinal");
     expect(projected).not.toHaveProperty("metadata");
     expect(projected).not.toHaveProperty("completed_at");
+  });
+
+  it("preserves declined command and patch outcomes without lowering them to failed", () => {
+    const completedEvent = {
+      ...event,
+      type: "item.completed",
+    } as const;
+
+    expect(
+      readCanonicalThreadItem(
+        item({
+          type: "commandExecution",
+          command: "npm test",
+          cwd: "/repo",
+          status: "declined",
+        }),
+        completedEvent,
+      ),
+    ).toMatchObject({
+      type: "command_execution",
+      status: "completed",
+      command_status: "declined",
+      completed_at: event.timestamp,
+    });
+    expect(
+      readCanonicalThreadItem(
+        item({
+          type: "fileChange",
+          changes: [{ path: "src/app.ts" }],
+          status: "declined",
+        }),
+        completedEvent,
+      ),
+    ).toMatchObject({
+      type: "patch",
+      status: "completed",
+      file_status: "declined",
+      success: false,
+      completed_at: event.timestamp,
+    });
   });
 
   it("derives terminal lifecycle from the raw event envelope", () => {

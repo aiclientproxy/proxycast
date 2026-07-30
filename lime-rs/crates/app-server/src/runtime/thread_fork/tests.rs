@@ -42,6 +42,7 @@ fn fork_rejects_canonical_history_that_cannot_be_lowered_without_loss() {
                     text: Some("spawned".to_string()),
                     ..ToolOutput::default()
                 }),
+                agent_states: Default::default(),
             }),
             "collab tool arguments",
         ),

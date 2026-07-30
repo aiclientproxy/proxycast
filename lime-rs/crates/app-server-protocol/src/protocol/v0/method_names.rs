@@ -279,7 +279,6 @@ pub const METHOD_CONVERSATION_IMPORT_SOURCE_SCAN: &str = "conversationImport/sou
 pub const METHOD_CONVERSATION_IMPORT_THREAD_PREVIEW: &str = "conversationImport/thread/preview";
 pub const METHOD_CONVERSATION_IMPORT_THREAD_COMMIT: &str = "conversationImport/thread/commit";
 pub const METHOD_CONVERSATION_IMPORT_JOB_READ: &str = "conversationImport/job/read";
-pub const METHOD_AGENT_SESSION_MEDIA_READ: &str = "agentSession/media/read";
 pub const METHOD_AGENT_SESSION_ACTION_RESPOND: &str = "agentSession/action/respond";
 pub const METHOD_AGENT_SESSION_EVENT: &str = "agentSession/event";
 pub const METHOD_WORKFLOW_READ: &str = "workflow/read";

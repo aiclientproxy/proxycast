@@ -1206,10 +1206,10 @@ impl RuntimeCore {
             // The provider-backed backend drains QueueOnly at the first post-step mailbox
             // boundary through the session loader. Non-provider backends do not expose that
             // boundary, so their durable mailbox must be materialized before execution.
-            self.deliver_pending_agent_trigger_mailbox_for_turn(&session, &turn, &params.input)
+            self.deliver_pending_agent_trigger_mailbox_for_turn(&session, &turn)
                 .await
         } else {
-            self.deliver_pending_agent_mailbox_for_turn(&session, &turn, &params.input)
+            self.deliver_pending_agent_mailbox_for_turn(&session, &turn)
                 .await
         } {
             Ok(delivery) => delivery,
@@ -1782,7 +1782,7 @@ impl RuntimeCore {
         let mailbox_loader_runtime = runtime.clone();
         let mailbox_loader_session = request.session.clone();
         let mailbox_loader_turn = request.turn.clone();
-        let mailbox_loader_input = {
+        {
             let state = self
                 .state
                 .lock()
@@ -1796,19 +1796,18 @@ impl RuntimeCore {
                     RuntimeCoreError::Backend(
                         "runtime session submission requires durable turn input".to_string(),
                     )
-                })?
-        };
+                })?;
+        }
         let mailbox_loader_events = event_sender.clone();
         let mailbox_loader =
             move || -> BoxFuture<'static, Result<Vec<RuntimeSessionInput>, String>> {
                 let runtime = mailbox_loader_runtime.clone();
                 let session = mailbox_loader_session.clone();
                 let turn = mailbox_loader_turn.clone();
-                let current_input = mailbox_loader_input.clone();
                 let event_sender = mailbox_loader_events.clone();
                 Box::pin(async move {
                     let delivery = runtime
-                        .deliver_pending_agent_mailbox_for_turn(&session, &turn, &current_input)
+                        .deliver_pending_agent_mailbox_for_turn(&session, &turn)
                         .await
                         .map_err(|error| error.to_string())?;
                     for event in delivery.events.iter().cloned() {

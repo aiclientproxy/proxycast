@@ -59,6 +59,18 @@ function subagentActivityIdentity(rows) {
     );
 }
 
+function agentStateIdentity(states) {
+  return states
+    .map((state) => [
+      String(state?.thread_id || state?.threadId || ""),
+      String(state?.status || ""),
+      state?.message ?? null,
+    ])
+    .sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    );
+}
+
 function sameIdentity(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -75,6 +87,12 @@ export function buildAgentControlVisibleDomAssertions({ evidence, snapshot }) {
       .map((entry) => String(entry?.tool || "").trim())
       .filter(Boolean),
   );
+  const expectedWaitAgentStates = matrix.find(
+    (entry) => entry?.tool === "wait_agent",
+  )?.agentStates;
+  const restoredWaitAgentStates = Array.isArray(snapshot?.waitAgentStates)
+    ? snapshot.waitAgentStates
+    : [];
   const typedToolRows = Array.isArray(snapshot?.typedToolRows)
     ? snapshot.typedToolRows
     : [];
@@ -167,6 +185,14 @@ export function buildAgentControlVisibleDomAssertions({ evidence, snapshot }) {
       preRestartChildThreadIds.size === 1 &&
       restoredChildThreadIds.size === 1 &&
       [...preRestartChildThreadIds][0] === [...restoredChildThreadIds][0],
+    visibleDomWaitAgentStatesStableAcrossRestart:
+      Array.isArray(expectedWaitAgentStates) &&
+      expectedWaitAgentStates.length > 0 &&
+      restoredWaitAgentStates.length > 0 &&
+      sameIdentity(
+        agentStateIdentity(expectedWaitAgentStates),
+        agentStateIdentity(restoredWaitAgentStates),
+      ),
     visibleDomAllAgentControlToolsCompletedInReadModel:
       AGENT_CONTROL_TOOL_NAMES.every((toolName) =>
         completedRuntimeTools.has(toolName),

@@ -260,8 +260,8 @@ impl RequestProcessor {
             app_server_protocol::protocol::v2::METHOD_THREAD_GOAL_CLEAR => {
                 self.handle_thread_goal_clear(params).boxed()
             }
-            METHOD_AGENT_SESSION_MEDIA_READ => self
-                .handle_session_media_read_impl(&id, params, event_callback)
+            app_server_protocol::protocol::v2::METHOD_MEDIA_READ => self
+                .handle_media_read_v2_impl(&id, params, event_callback)
                 .boxed(),
             METHOD_WORKFLOW_READ => self.handle_workflow_read_impl(params).boxed(),
             METHOD_WORKFLOW_CANCEL => self.handle_workflow_cancel_impl(params).boxed(),

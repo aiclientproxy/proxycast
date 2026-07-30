@@ -56,6 +56,10 @@ export interface ConversationProjectionDiagnostic {
   thread_id?: string;
   turn_id?: string;
   item_id?: string;
+  protocol_revision?: string;
+  protocol_method?: string;
+  upstream_type?: string;
+  field_names?: readonly string[];
 }
 
 export type ItemProjectionDelta =
@@ -80,6 +84,8 @@ export type ItemProjectionDelta =
 interface ProjectionEventBase {
   source: ConversationProjectionSource;
   event_id?: string;
+  protocol_revision?: string;
+  protocol_method?: string;
 }
 
 export type ConversationProjectionEvent =
@@ -123,11 +129,11 @@ export interface ConversationProjectionState {
   turn_order: readonly string[];
   items: Readonly<Record<string, AgentThreadItem>>;
   item_order_by_turn: Readonly<Record<string, readonly string[]>>;
-  pending_interactions: Readonly<
-    Record<string, PendingInteractionProjection>
-  >;
+  pending_interactions: Readonly<Record<string, PendingInteractionProjection>>;
   notices: readonly NoticeProjection[];
-  orphan_deltas: Readonly<Record<string, readonly ConversationProjectionEvent[]>>;
+  orphan_deltas: Readonly<
+    Record<string, readonly ConversationProjectionEvent[]>
+  >;
   diagnostics: readonly ConversationProjectionDiagnostic[];
   applied_event_ids: Readonly<Record<string, true>>;
 }

@@ -122,7 +122,7 @@ describe("agentChatHistory timeline fallback", () => {
     });
   });
 
-  it("历史 timeline agent_message 只有 content 字段时仍应恢复最终正文", () => {
+  it("历史 timeline agent_message 只有 content 字段时仍应仅恢复最终正文", () => {
     const detail: AgentSessionDetail = {
       id: "session-timeline-content-final",
       created_at: 1,
@@ -198,21 +198,12 @@ describe("agentChatHistory timeline fallback", () => {
       role: "assistant",
       content:
         "这个 README 主要说明 Agent Workspace 的目标、阶段和当前交付边界。",
-      toolCalls: [
-        {
-          id: "item-read-file-content-final",
-          name: "Read",
-          status: "completed",
-        },
-      ],
     });
-    expect(messages[1]?.contentParts?.map((part) => part.type)).toEqual([
-      "tool_use",
-      "text",
-    ]);
+    expect(messages[1]?.toolCalls).toBeUndefined();
+    expect(messages[1]?.contentParts?.map((part) => part.type)).toEqual(["text"]);
   });
 
-  it("历史 timeline 应把 canonical imageView media item 恢复为引用", () => {
+  it("历史 timeline 的 canonical media item 不应二次合成为 Message 引用", () => {
     const detail: AgentSessionDetail = {
       id: "session-timeline-media-final",
       created_at: 1,
@@ -283,29 +274,11 @@ describe("agentChatHistory timeline fallback", () => {
       content: "图片已生成",
     });
     expect(messages[1]?.contentParts).toEqual([
-      expect.objectContaining({
-        type: "text",
-        text: "图片已生成",
-      }),
-      expect.objectContaining({
-        type: "media_reference",
-        reference: expect.objectContaining({
-          title: "image-1.png",
-          uri: "/tmp/lime-media/image-1.png",
-          mimeType: "image/png",
-          sourcePath: "/tmp/lime-media/image-1.png",
-        }),
-        metadata: expect.objectContaining({
-          source: "agent_media_reference",
-          threadItemId: "item-image-view",
-          referenceUri: "/tmp/lime-media/image-1.png",
-          mimeType: "image/png",
-        }),
-      }),
+      expect.objectContaining({ type: "text", text: "图片已生成" }),
     ]);
   });
 
-  it("历史 plan item 应恢复为 proposed_plan 且 update_plan tool_call 不应恢复为消息工具卡", () => {
+  it("历史 plan item 与 update_plan tool_call 均不应二次合成为 Message", () => {
     const detail: AgentSessionDetail = {
       id: "session-update-plan-history",
       created_at: 1,
@@ -398,14 +371,6 @@ describe("agentChatHistory timeline fallback", () => {
 
     expect(assistantMessage?.toolCalls).toBeUndefined();
     expect(assistantMessage?.contentParts).toEqual([
-      {
-        type: "text",
-        text:
-          "<proposed_plan>\n" +
-          "- [x] 整理计划\n" +
-          "- [ ] 执行修改\n" +
-          "</proposed_plan>",
-      },
       {
         type: "text",
         text: "计划已更新。",
@@ -808,23 +773,6 @@ describe("agentChatHistory timeline fallback", () => {
     expect(messages[1]).toMatchObject({
       role: "assistant",
       content: "## 今日国际新闻简报\n\n- 第一条要闻。",
-      contentParts: [
-        {
-          type: "text",
-          text: "我会先检索多组来源并交叉核对。",
-          metadata: {
-            source: "agent_thread_item",
-            threadItemId: "assistant-commentary",
-            turnId: "turn-commentary-final",
-            sequence: 2,
-            phase: "commentary",
-          },
-        },
-        {
-          type: "text",
-          text: "## 今日国际新闻简报\n\n- 第一条要闻。",
-        },
-      ],
     });
     expect(messages[1]?.content).not.toContain("我会先检索");
     expect(
@@ -832,7 +780,7 @@ describe("agentChatHistory timeline fallback", () => {
         ?.filter((part) => part.type === "text")
         .map((part) => part.text)
         .join("\n"),
-    ).toContain("我会先检索");
+    ).not.toContain("我会先检索");
     expect(
       messages[1]?.contentParts
         ?.filter((part) => part.type === "thinking")
@@ -841,7 +789,7 @@ describe("agentChatHistory timeline fallback", () => {
     ).not.toContain("我会先检索");
   });
 
-  it("历史恢复应保留旧无 phase 过程文本并把最后一条 agent_message 作为最终正文", () => {
+  it("历史恢复应忽略旧无 phase 过程 Item 并只保留最后一条 agent_message 正文", () => {
     const detail: AgentSessionDetail = {
       id: "session-legacy-unphased-final",
       created_at: 1,
@@ -955,29 +903,16 @@ describe("agentChatHistory timeline fallback", () => {
     });
     expect(messages[1]?.content).not.toContain("我会先做");
     expect(messages[1]?.content).not.toContain("噪声较多");
-    expect(messages[1]?.contentParts?.map((part) => part.type)).toEqual([
-      "text",
-      "tool_use",
-      "text",
-      "tool_use",
-      "text",
-    ]);
+    expect(messages[1]?.contentParts?.map((part) => part.type)).toEqual(["text"]);
     expect(
       messages[1]?.contentParts
         ?.filter((part) => part.type === "text")
         .map((part) => part.text),
-    ).toEqual([
-      "我会先做几组中英文检索，覆盖多个新闻源。",
-      "搜索结果里噪声较多，我再打开几个页面交叉核对。",
-      "## 今日国际新闻简报\n\n- 重点一：附来源。",
-    ]);
-    expect(messages[1]?.toolCalls?.map((tool) => tool.status)).toEqual([
-      "completed",
-      "failed",
-    ]);
+    ).toEqual(["## 今日国际新闻简报\n\n- 重点一：附来源。"]);
+    expect(messages[1]?.toolCalls).toBeUndefined();
   });
 
-  it("后端 detail.messages 有正文时仍应从 timeline 恢复 Skill、思考与用户输入", () => {
+  it("后端 detail.messages 有正文时只从 timeline 恢复 canonical 用户与最终正文", () => {
     const detail: AgentSessionDetail = {
       id: "session-skill-timeline-process",
       created_at: 1,
@@ -1102,27 +1037,14 @@ describe("agentChatHistory timeline fallback", () => {
     expect(messages[1]).toMatchObject({
       role: "assistant",
       content: "该跟踪ID无上下文，无法判断具体含义。",
-      inlineProcessRetention: "skill",
-      thinkingContent: "先确认 Skill 指令，再基于可见上下文回答。",
     });
-    expect(messages[1]?.contentParts?.map((part) => part.type)).toEqual([
-      "tool_use",
-      "thinking",
-      "text",
-    ]);
-    expect(messages[1]?.toolCalls?.[0]).toMatchObject({
-      name: "Skill",
-      status: "completed",
-      result: expect.objectContaining({
-        output: "已从 SKILL.md 读取并执行 Skill：analysis",
-        metadata: expect.objectContaining({
-          skill_markdown_content: expect.stringContaining("Analysis Skill"),
-        }),
-      }),
-    });
+    expect(messages[1]?.inlineProcessRetention).toBeUndefined();
+    expect(messages[1]?.thinkingContent).toBeUndefined();
+    expect(messages[1]?.toolCalls).toBeUndefined();
+    expect(messages[1]?.contentParts?.map((part) => part.type)).toEqual(["text"]);
   });
 
-  it("后端 detail.messages 和 timeline 消息都为空时应从真实 turn 恢复用户请求", () => {
+  it("只有 turn 与 error Item 时不应回退合成用户 Message", () => {
     const detail: AgentSessionDetail = {
       id: "session-turn-only",
       created_at: 1,
@@ -1171,14 +1093,6 @@ describe("agentChatHistory timeline fallback", () => {
 
     const messages = hydrateSessionDetailMessages(detail, "session-turn-only");
 
-    expect(messages).toHaveLength(1);
-    expect(messages[0]).toMatchObject({
-      id: "session-turn-only-turn-turn-search-prompt",
-      role: "user",
-      content: "@搜索 OpenAI 最新模型公告，给我 3 条要点，并附来源。",
-    });
-    expect(messages[0]?.content).not.toContain("confirmationStatus");
-    expect(messages[0]?.content).not.toContain("askProfileKeys");
-    expect(messages[0]?.content).not.toContain("辅助标题生成");
+    expect(messages).toEqual([]);
   });
 });

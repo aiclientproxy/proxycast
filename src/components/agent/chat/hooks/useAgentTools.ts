@@ -37,8 +37,11 @@ import {
   findActionRequestSourceMessageId,
 } from "../utils/currentTurnActionRequests";
 import type { AgentSessionDetailRefreshRequest } from "./agentSessionRefresh";
-import { getDefaultAgentApprovalServerRequestController } from "@/lib/api/agentApprovalServerRequest";
-import { getDefaultAgentUserInputServerRequestController } from "@/lib/api/agentUserInputServerRequest";
+import {
+  actionFromPendingInteraction,
+  findPendingActionInteraction,
+} from "@/lib/api/agentRuntime/pendingInteractionController";
+import { usePendingInteractions } from "./usePendingInteractions";
 
 interface UseAgentToolsOptions {
   runtime: AgentRuntimeAdapter;
@@ -111,10 +114,10 @@ export function useAgentTools(options: UseAgentToolsOptions) {
   const [submittedActionsInFlight, setSubmittedActionsInFlight] = useState<
     ActionRequired[]
   >([]);
-  const approvalServerRequestController =
-    getDefaultAgentApprovalServerRequestController();
-  const userInputServerRequestController =
-    getDefaultAgentUserInputServerRequestController();
+  const {
+    interactions: pendingInteractions,
+    respond: respondPendingInteraction,
+  } = usePendingInteractions();
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const projectedServerRequestIdsRef = useRef<Set<string>>(new Set());
@@ -124,13 +127,10 @@ export function useAgentTools(options: UseAgentToolsOptions) {
   >(new Map());
 
   useEffect(() => {
-    const detach = approvalServerRequestController.attach();
-    const detachUserInput = userInputServerRequestController.attach();
     const syncServerRequests = () => {
-      const latestActions = [
-        ...approvalServerRequestController.getSnapshot(),
-        ...userInputServerRequestController.getSnapshot(),
-      ];
+      const latestActions = pendingInteractions
+        .map(actionFromPendingInteraction)
+        .filter((action): action is ActionRequired => Boolean(action));
       const latestRequestIds = new Set(
         latestActions.map((action) => action.requestId),
       );
@@ -168,22 +168,8 @@ export function useAgentTools(options: UseAgentToolsOptions) {
       }
       projectedServerRequestIdsRef.current = latestRequestIds;
     };
-    const unsubscribe =
-      approvalServerRequestController.subscribe(syncServerRequests);
-    const unsubscribeUserInput =
-      userInputServerRequestController.subscribe(syncServerRequests);
     syncServerRequests();
-    return () => {
-      unsubscribe();
-      unsubscribeUserInput();
-      detach();
-      detachUserInput();
-    };
-  }, [
-    approvalServerRequestController,
-    setMessages,
-    userInputServerRequestController,
-  ]);
+  }, [pendingInteractions, setMessages]);
 
   const refreshActionResponseSession = useCallback(
     async (targetSessionId: string) => {
@@ -256,12 +242,21 @@ export function useAgentTools(options: UseAgentToolsOptions) {
 
           submittedUserData = userData;
 
-          const handledByServerRequest =
-            actionType === "ask_user" &&
-            userInputServerRequestController.respond({
-              ...response,
+          const userInputInteraction = findPendingActionInteraction(
+            pendingInteractions,
+            actionType,
+            effectiveRequestId,
+          );
+          const handledByServerRequest = Boolean(
+            userInputInteraction &&
+            respondPendingInteraction({
+              confirmed: response.confirmed !== false,
+              interactionId: userInputInteraction.id,
+              kind: "request_user_input",
+              response: response.response,
               userData,
-            });
+            }).accepted,
+          );
           if (actionType === "ask_user" && !handledByServerRequest) {
             throw new Error("用户输入请求已失效，请等待当前 typed request");
           }
@@ -365,9 +360,19 @@ export function useAgentTools(options: UseAgentToolsOptions) {
               submittedUserData,
             }),
           );
-          const handledByServerRequest =
-            actionType === "tool_confirmation" &&
-            approvalServerRequestController.respond(response);
+          const approvalInteraction = findPendingActionInteraction(
+            pendingInteractions,
+            actionType,
+            effectiveRequestId,
+          );
+          const handledByServerRequest = Boolean(
+            approvalInteraction &&
+            respondPendingInteraction({
+              interactionId: approvalInteraction.id,
+              kind: "approval",
+              response,
+            }).accepted,
+          );
           if (!handledByServerRequest) {
             throw new Error("审批请求已失效，请等待当前 typed request");
           }
@@ -424,8 +429,8 @@ export function useAgentTools(options: UseAgentToolsOptions) {
       sessionIdRef,
       setMessages,
       setThreadItems,
-      approvalServerRequestController,
-      userInputServerRequestController,
+      pendingInteractions,
+      respondPendingInteraction,
     ],
   );
 

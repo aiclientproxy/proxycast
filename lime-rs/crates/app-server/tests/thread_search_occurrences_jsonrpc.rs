@@ -298,7 +298,7 @@ fn agent_item(thread: &Thread, item_id: &str, ordinal: u64, text: &str, phase: &
         ordinal,
         ThreadItemPayload::AgentMessage {
             text: text.to_string(),
-            phase: Some(phase.to_string()),
+            phase: agent_protocol::response_item::MessagePhase::from_wire(phase),
             content_parts: Vec::new(),
         },
     )

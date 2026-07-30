@@ -6,12 +6,20 @@ import { changeLimeLocale } from "@/i18n/createI18n";
 import { useWorkspaceInputbarSceneRuntime } from "./useWorkspaceInputbarSceneRuntime";
 
 const mockInputbarRender = vi.hoisted(() => vi.fn());
+const mockPendingInteractionRuntime = vi.hoisted(() => ({
+  interactions: [] as unknown[],
+  respond: vi.fn(() => ({ accepted: true })),
+}));
 
 vi.mock("../components/Inputbar", () => ({
   Inputbar: (props: { overlayAccessory?: React.ReactNode }) => {
     mockInputbarRender(props);
     return <div data-testid="inputbar-mock">{props.overlayAccessory}</div>;
   },
+}));
+
+vi.mock("../hooks/usePendingInteractions", () => ({
+  usePendingInteractions: () => mockPendingInteractionRuntime,
 }));
 
 vi.mock("./WorkspaceHarnessDialogs", () => ({
@@ -273,6 +281,7 @@ beforeEach(async () => {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
     }
   ).IS_REACT_ACT_ENVIRONMENT = true;
+  mockPendingInteractionRuntime.interactions = [];
   await changeLimeLocale("zh-CN");
 });
 
@@ -291,6 +300,43 @@ afterEach(() => {
 });
 
 describe("useWorkspaceInputbarSceneRuntime", () => {
+  it("typed MCP interaction 应位于 Composer 上方且不替换 Inputbar", () => {
+    mockPendingInteractionRuntime.interactions = [
+      {
+        id: "mcp_elicitation:thread-1:turn-1:1",
+        thread_id: "thread-1",
+        turn_id: "turn-1",
+        kind: "mcp_elicitation",
+        status: "pending",
+        payload: {
+          message: "请确认发布参数",
+          requestedSchema: {
+            type: "object",
+            properties: { confirmed: { type: "boolean" } },
+          },
+          serverName: "release-tools",
+        },
+      },
+    ];
+    const container = renderHookNode(
+      createDefaultProps({ threadId: "thread-1" }),
+    );
+
+    const layer = container.querySelector(
+      '[data-testid="pending-interaction-layer"]',
+    );
+    const inputbar = container.querySelector('[data-testid="inputbar-mock"]');
+    expect(layer).not.toBeNull();
+    expect(inputbar).not.toBeNull();
+    expect(
+      Boolean(layer && inputbar && layer.compareDocumentPosition(inputbar) & 4),
+    ).toBe(true);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="inputbar-approval-replacement"]'),
+    ).toBeNull();
+  });
+
   it("Inputbar 发送应绑定当前会话，避免落到旧 active session", async () => {
     const handleSend = vi.fn().mockResolvedValue(true);
     renderHookNode(

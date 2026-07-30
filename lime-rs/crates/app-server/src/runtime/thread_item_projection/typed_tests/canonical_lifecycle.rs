@@ -1,5 +1,9 @@
 use super::*;
-use agent_protocol::MessageContentPart;
+use agent_protocol::{
+    CollabAgentOperation, CollabAgentState, CollabAgentStatus, MessageContentPart, SessionId,
+    ThreadId, ThreadItem, TurnId,
+};
+use std::collections::HashMap;
 
 #[test]
 fn canonical_nested_item_uses_outer_event_identity_time_and_lifecycle_status() {
@@ -138,6 +142,73 @@ fn canonical_nested_tool_output_and_metadata_are_preserved_across_lifecycle() {
 }
 
 #[test]
+fn canonical_wait_agent_states_survive_materialization_and_lifecycle_merge() {
+    let mut started = ThreadItem::new(
+        SessionId::new("nested-session"),
+        ThreadId::new("nested-thread"),
+        TurnId::new("nested-turn"),
+        7,
+        7,
+        ThreadItemPayload::CollabAgentToolCall {
+            call_id: "wait-call".to_string(),
+            operation: CollabAgentOperation::Wait,
+            target_thread_id: None,
+            message: None,
+            output: None,
+            agent_states: HashMap::new(),
+        },
+    );
+    started.status = ItemStatus::InProgress;
+    let mut completed = started.clone();
+    completed.sequence = 8;
+    completed.status = ItemStatus::Completed;
+    completed.completed_at_ms = Some(8);
+    let ThreadItemPayload::CollabAgentToolCall { agent_states, .. } = &mut completed.payload else {
+        panic!("wait payload");
+    };
+    agent_states.insert(
+        ThreadId::new("child-thread"),
+        CollabAgentState {
+            status: CollabAgentStatus::Completed,
+            message: None,
+        },
+    );
+
+    let changes = materialize_events(
+        &[
+            event(
+                "wait-started",
+                1,
+                "item.started",
+                "outer-turn",
+                json!({"item": started}),
+            ),
+            event(
+                "wait-completed",
+                2,
+                "item.completed",
+                "outer-turn",
+                json!({"item": completed}),
+            ),
+        ],
+        "session-1",
+        "thread-1",
+    )
+    .expect("materialize canonical wait lifecycle");
+
+    assert_eq!(changes.changed_items.len(), 1);
+    let ThreadItemPayload::CollabAgentToolCall { agent_states, .. } =
+        &changes.changed_items[0].payload
+    else {
+        panic!("materialized wait payload");
+    };
+    assert_eq!(
+        agent_states[&ThreadId::new("child-thread")].status,
+        CollabAgentStatus::Completed
+    );
+}
+
+#[test]
 fn current_codex_import_uses_lime_event_log_ordinal() {
     let changes = materialize_events(
         &[event(
@@ -247,7 +318,10 @@ fn canonical_agent_message_merges_typed_content_parts_across_lifecycle() {
         panic!("canonical agent message payload");
     };
     assert_eq!(text, "result");
-    assert_eq!(phase.as_deref(), Some("final_answer"));
+    assert_eq!(
+        phase,
+        &Some(agent_protocol::response_item::MessagePhase::FinalAnswer)
+    );
     assert_eq!(content_parts.len(), 2);
     assert!(matches!(
         &content_parts[0],

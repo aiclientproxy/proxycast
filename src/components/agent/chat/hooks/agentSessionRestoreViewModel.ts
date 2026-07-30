@@ -6,8 +6,12 @@ import type { AgentSessionCachedSnapshot } from "./agentSessionScopedStorage";
 import type { Topic } from "./agentChatShared";
 
 export interface AgentSessionRestoreHistoryWindow {
-  loadedMessages: number;
-  totalMessages: number;
+  loadedEntries: number;
+  loadedTurns: number;
+  loadedItems: number;
+  hasMore: boolean;
+  itemCursor: string | null;
+  turnCursor: string | null;
   isLoadingFull: boolean;
   error: string | null;
 }
@@ -91,25 +95,10 @@ export function buildAgentSessionRestoreViewModel(
   const currentTurnId = shouldUseCachedSnapshot
     ? cachedSnapshot?.currentTurnId || null
     : scopedCurrentTurnId || cachedSnapshot?.currentTurnId || null;
-  const cachedTotalMessages =
-    cachedSnapshot?.cacheMetadata?.messagesCount ??
-    cachedSnapshot?.messages.length ??
-    0;
-  const historyWindow =
-    shouldUseCachedSnapshot &&
-    (cachedSnapshot?.cacheMetadata?.historyTruncated === true ||
-      cachedTotalMessages > messages.length)
-      ? {
-          loadedMessages: messages.length,
-          totalMessages: Math.max(cachedTotalMessages, messages.length),
-          isLoadingFull: false,
-          error: null,
-        }
-      : null;
 
   return {
     currentTurnId,
-    historyWindow,
+    historyWindow: null,
     messages,
     sessionId: scopedSessionCandidate,
     threadItems,
@@ -117,30 +106,15 @@ export function buildAgentSessionRestoreViewModel(
   };
 }
 
-export function buildCachedTopicSnapshotViewModel({
-  cachedSnapshot,
-  selectedTopic,
-  topicId,
-}: CachedTopicSnapshotViewModelInput): CachedTopicSnapshotViewModel {
+export function buildCachedTopicSnapshotViewModel(
+  input: CachedTopicSnapshotViewModelInput,
+): CachedTopicSnapshotViewModel {
+  const { cachedSnapshot, topicId } = input;
   const metadata = cachedSnapshot.cacheMetadata;
-  const totalMessages =
-    metadata?.messagesCount ??
-    selectedTopic?.messagesCount ??
-    cachedSnapshot.messages.length;
-  const historyWindow =
-    metadata?.historyTruncated === true ||
-    totalMessages > cachedSnapshot.messages.length
-      ? {
-          loadedMessages: cachedSnapshot.messages.length,
-          totalMessages: Math.max(totalMessages, cachedSnapshot.messages.length),
-          isLoadingFull: false,
-          error: null,
-        }
-      : null;
 
   return {
     currentTurnId: cachedSnapshot.currentTurnId,
-    historyWindow,
+    historyWindow: null,
     metricContext: {
       cacheFreshness: metadata?.freshness ?? null,
       cacheStorageKind: metadata?.storageKind ?? null,

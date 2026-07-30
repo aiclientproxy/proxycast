@@ -6,6 +6,7 @@ import {
 import {
   MEDIA_REFERENCE_MIME_TYPE,
   MEDIA_REFERENCE_PROMPT,
+  MEDIA_REFERENCE_SAFE_URI_PREFIX,
   MEDIA_REFERENCE_SUMMARY_TEXT,
   MEDIA_REFERENCE_TITLE,
   MEDIA_REFERENCE_URI,
@@ -217,6 +218,24 @@ export function buildMediaReferenceScenarioAssertions({
       summary.guiMediaReferenceSnapshot?.bodyTextIncludesInlinePayload ===
         false &&
       summary.readModelMediaReferenceCompleted?.noInlinePayload === true,
+    guiMediaReferenceUsesSafeSidecarHandle:
+      summary.guiMediaReferenceSnapshot?.referenceUriUsesSafeSidecar === true &&
+      summary.guiMediaReferenceSnapshot?.referenceUri?.startsWith(
+        MEDIA_REFERENCE_SAFE_URI_PREFIX,
+      ) === true &&
+      summary.guiMediaReferenceSnapshot?.cardTextIncludesSafeHandle === false &&
+      summary.readModelMediaReferenceCompleted?.usesSafeSidecarHandle === true,
+    guiMediaReferenceSourcePathNotExposed:
+      summary.guiMediaReferenceSnapshot?.bodyTextIncludesSourcePath === false &&
+      summary.guiMediaReferenceSnapshot?.cardReferenceIncludesSourcePath ===
+        false &&
+      summary.readModelMediaReferenceCompleted?.sourcePathNotExposed === true &&
+      summary.guiMediaReferencePreview?.preview?.bodyTextIncludesSourcePath ===
+        false &&
+      summary.guiMediaReferencePreview?.preview
+        ?.cardReferenceIncludesSourcePath === false &&
+      summary.guiMediaReferencePreview?.preview
+        ?.previewImageIncludesSourcePath === false,
     guiMediaReferencePreviewOpened:
       summary.guiMediaReferencePreview?.click?.clicked === true &&
       summary.guiMediaReferencePreview?.preview?.workbenchPreviewVisible ===
@@ -225,6 +244,30 @@ export function buildMediaReferenceScenarioAssertions({
       summary.guiMediaReferencePreview?.preview
         ?.previewTextIncludesSidecarSource === false &&
       summary.guiMediaReferencePreview?.preview
+        ?.bodyTextIncludesInlinePayload === false,
+    appServerMediaReadV2Succeeded:
+      summary.mediaReadV2Success?.threadId === summary.threadId &&
+      summary.mediaReadV2Success?.contentBase64Present === true &&
+      summary.mediaReadV2Success?.mimeType === MEDIA_REFERENCE_MIME_TYPE &&
+      summary.mediaReadV2Success?.bytes > 0 &&
+      summary.mediaReadV2Success?.sidecarRef?.relativePath?.length > 0,
+    appServerMediaReadThreadScoped:
+      summary.mediaReadV2Trace?.requestCount >= 2 &&
+      summary.mediaReadV2Trace?.allUseExpectedThread === true &&
+      summary.mediaReadV2Trace?.noLegacySessionIdentity === true,
+    guiMediaReferenceUnavailableFallbackVisible:
+      summary.mediaReadUnavailableMutation?.originalBytes > 0 &&
+      summary.mediaReadUnavailableMutation?.unavailableBytes === 0 &&
+      summary.guiMediaReferenceUnavailableFallback?.click?.clicked === true &&
+      summary.guiMediaReferenceUnavailableFallback?.preview
+        ?.workbenchPreviewVisible === true &&
+      summary.guiMediaReferenceUnavailableFallback?.preview
+        ?.markdownPreviewVisible === true &&
+      summary.guiMediaReferenceUnavailableFallback?.preview
+        ?.previewImageVisible === false &&
+      summary.guiMediaReferenceUnavailableFallback?.preview
+        ?.previewTextIncludesReference === true &&
+      summary.guiMediaReferenceUnavailableFallback?.preview
         ?.bodyTextIncludesInlinePayload === false,
     readModelMediaReferenceCompleted:
       summary.readModelMediaReferenceCompleted?.includesPrompt === true &&

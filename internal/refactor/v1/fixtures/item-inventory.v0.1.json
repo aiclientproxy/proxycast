@@ -3,8 +3,10 @@
   "kind": "codex-v2-thread-item-inventory",
   "upstream": {
     "repository": "/Users/coso/Documents/dev/rust/codex",
-    "revision": "9fc715c0861c956c894a91890b78dc05b304ba29",
-    "source": "codex-rs/app-server-protocol/src/protocol/v2/item.rs"
+    "revision": "4c43465133428898aa84f0bfc02c306ed65fb66a",
+    "source": "codex-rs/app-server-protocol/src/protocol/v2/item.rs",
+    "schemaSource": "codex-rs/app-server-protocol/schema/json/codex_app_server_protocol.v2.schemas.json",
+    "schemaSha256": "380e97f5778c40c7fead146c6af5da97e478164b194c0ce1b15edac80d8c8527"
   },
   "lime": {
     "source": "lime-rs/crates/app-server-protocol/src/protocol/v2/item.rs",
@@ -95,6 +97,8 @@
       "type": "commandExecution",
       "codexFields": [
         "id",
+        "pluginId",
+        "scriptPath",
         "command",
         "cwd",
         "processId",
@@ -124,7 +128,7 @@
       ],
       "limeStreamMethods": ["item/commandExecution/outputDelta"],
       "shape": "gap",
-      "fieldNotes": ["cwd 当前 Lime wire 类型为 string，Codex 使用路径 URI 类型", "terminalInteraction 尚无 Runtime source event，保持 gap；outputDelta 已接入并复用 canonical itemId"]
+      "fieldNotes": ["Lime 尚未承接 Codex pluginId/scriptPath 的 host-safe display reference", "cwd 当前 Lime wire 类型为 string，Codex 使用路径 URI 类型", "terminalInteraction 尚无 Runtime source event，保持 gap；outputDelta 已接入并复用 canonical itemId"]
     },
     {
       "type": "fileChange",

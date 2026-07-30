@@ -323,7 +323,7 @@ describe("StreamingRenderer", () => {
       "sidecar://media/image-1",
     );
     expect(container.textContent).toContain("结果图");
-    expect(container.textContent).toContain("sidecar://media/image-1");
+    expect(container.textContent).not.toContain("sidecar://media/image-1");
     expect(container.textContent).toContain("图片已生成。");
     expect(container.textContent).not.toContain("data:image");
 

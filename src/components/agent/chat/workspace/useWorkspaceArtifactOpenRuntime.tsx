@@ -90,7 +90,7 @@ export interface UseWorkspaceArtifactOpenRuntimeParams {
   projectRootPath?: string | null;
   readSessionFile: (fileName: string) => Promise<string | null>;
   sessionFiles: SessionFile[];
-  sessionId?: string | null;
+  threadId?: string | null;
   setArtifactViewMode: ApplyArtifactViewMode;
   setCanvasState: Dispatch<SetStateAction<CanvasStateUnion | null>>;
   setCanvasWorkbenchLayoutMode: Dispatch<
@@ -137,7 +137,7 @@ export function useWorkspaceArtifactOpenRuntime({
   projectRootPath,
   readSessionFile,
   sessionFiles,
-  sessionId,
+  threadId,
   setArtifactViewMode,
   setCanvasState,
   setCanvasWorkbenchLayoutMode,
@@ -453,7 +453,7 @@ export function useWorkspaceArtifactOpenRuntime({
       artifacts,
       handleWorkspaceArtifactClick,
       requestCanvasWorkbenchPreviewOpen,
-      sessionId,
+      threadId,
       setCanvasWorkbenchLayoutMode,
       setLayoutMode,
       t,

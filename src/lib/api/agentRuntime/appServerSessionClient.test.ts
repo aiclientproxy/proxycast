@@ -203,6 +203,91 @@ describe("appServerSessionClient", () => {
     });
   });
 
+  it("list 后首次 get 仍应通过 thread/read 刷新 canonical 产品投影", async () => {
+    const appServerClient = appServerClientMock();
+    const articleWorkspace = {
+      schemaVersion: "article-workspace.v1",
+      objects: [
+        {
+          ref: {
+            appId: "content-factory-app",
+            kind: "articleDraft",
+            id: "article-1",
+            sessionId: "session-navigation",
+          },
+        },
+      ],
+    };
+    vi.mocked(appServerClient.request)
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            canonicalThread({
+              id: "thread-navigation",
+              sessionId: "session-navigation",
+              historyMode: "legacy",
+              turns: [],
+            }),
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      );
+    vi.mocked(appServerClient.readThread).mockResolvedValueOnce(
+      rpcResult({
+        thread: canonicalThread({
+          id: "thread-navigation",
+          sessionId: "session-navigation",
+          historyMode: "legacy",
+          metadata: { articleWorkspace },
+          turns: [],
+        }),
+      }),
+    );
+    const client = createAppServerSessionClient({ appServerClient });
+
+    await expect(client.listAgentRuntimeSessions()).resolves.toHaveLength(1);
+    await expect(
+      client.getAgentRuntimeSession("session-navigation"),
+    ).resolves.toMatchObject({
+      id: "session-navigation",
+      thread_id: "thread-navigation",
+      messages: [],
+      thread_read: {
+        articleWorkspace,
+      },
+    });
+    expect(appServerClient.readThread).toHaveBeenCalledTimes(1);
+    expect(appServerClient.readThread).toHaveBeenCalledWith({
+      threadId: "thread-navigation",
+      includeTurns: false,
+    });
+    expect(appServerClient.request).toHaveBeenCalledTimes(3);
+    expect(appServerClient.request).toHaveBeenNthCalledWith(
+      2,
+      "thread/items/list",
+      {
+        threadId: "thread-navigation",
+        limit: 40,
+        sortDirection: "desc",
+      },
+    );
+  });
+
   it("list 收到非 canonical envelope 时应 fail closed", async () => {
     const appServerClient = appServerClientMock();
     vi.mocked(appServerClient.request).mockResolvedValueOnce(
@@ -265,12 +350,10 @@ describe("appServerSessionClient", () => {
     ).resolves.toMatchObject({
       id: "session-codex",
       thread_id: "thread-codex",
-      messages: [
-        { role: "user", content: [{ type: "text", text: "继续整理" }] },
-        {
-          role: "assistant",
-          content: [{ type: "text", text: "已完成整理。" }],
-        },
+      messages: [],
+      items: [
+        { type: "user_message", content: "继续整理" },
+        { type: "agent_message", text: "已完成整理。" },
       ],
       turns: [{ id: "turn-completed", status: "completed" }],
     });
@@ -281,7 +364,7 @@ describe("appServerSessionClient", () => {
     });
   });
 
-  it("get 对 paginated Thread 应读取完整 turns 页面并保持 thread/turn/item identity", async () => {
+  it("get 对 paginated Thread 应通过 current 分页保持 thread/turn/item identity", async () => {
     const appServerClient = appServerClientMock();
     vi.mocked(appServerClient.readThread).mockResolvedValueOnce(
       rpcResult({
@@ -299,45 +382,11 @@ describe("appServerSessionClient", () => {
         rpcResult({
           data: [
             {
-              id: "turn-page-1",
-              status: "completed",
-              startedAt: 1780704000,
-              completedAt: 1780704001,
-              items: [
-                { id: "item-summary-1", type: "userMessage", content: [] },
-              ],
-            },
-          ],
-          nextCursor: "cursor-page-2",
-          backwardsCursor: null,
-        }),
-      )
-      .mockResolvedValueOnce(
-        rpcResult({
-          data: [
-            {
-              id: "turn-page-2",
-              status: "completed",
-              startedAt: 1780704002,
-              completedAt: 1780704003,
-              items: [
-                { id: "item-summary-2", type: "agentMessage", text: "第二页" },
-              ],
-            },
-          ],
-          nextCursor: null,
-          backwardsCursor: "cursor-page-1",
-        }),
-      )
-      .mockResolvedValueOnce(
-        rpcResult({
-          data: [
-            {
-              turnId: "turn-page-1",
+              turnId: "turn-page-2",
               item: {
-                id: "item-page-1",
-                type: "userMessage",
-                content: [{ type: "text", text: "第一页" }],
+                id: "item-page-2",
+                type: "agentMessage",
+                text: "第二页",
               },
             },
           ],
@@ -349,16 +398,42 @@ describe("appServerSessionClient", () => {
         rpcResult({
           data: [
             {
-              turnId: "turn-page-2",
-              item: {
-                id: "item-page-2",
-                type: "agentMessage",
-                text: "第二页",
-              },
+              id: "turn-page-2",
+              status: "completed",
+              startedAt: 1780704002,
+              completedAt: 1780704003,
             },
           ],
           nextCursor: null,
-          backwardsCursor: "cursor-items-page-1",
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              id: "turn-page-2",
+              status: "completed",
+              startedAt: 1780704002,
+              completedAt: 1780704003,
+            },
+          ],
+          nextCursor: "cursor-page-2",
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              id: "turn-page-1",
+              status: "completed",
+              startedAt: 1780704000,
+              completedAt: 1780704001,
+            },
+          ],
+          nextCursor: null,
+          backwardsCursor: "cursor-page-1",
         }),
       );
     const client = createAppServerSessionClient({ appServerClient });
@@ -369,25 +444,27 @@ describe("appServerSessionClient", () => {
       id: "session-paginated",
       thread_id: "thread-paginated",
       turns: [
-        { id: "turn-page-1", thread_id: "thread-paginated" },
         { id: "turn-page-2", thread_id: "thread-paginated" },
       ],
       items: [
-        {
-          id: "item-page-1",
-          thread_id: "thread-paginated",
-          turn_id: "turn-page-1",
-        },
         {
           id: "item-page-2",
           thread_id: "thread-paginated",
           turn_id: "turn-page-2",
         },
       ],
-      messages: [
-        { id: "item-page-1", role: "user" },
-        { id: "item-page-2", role: "assistant" },
-      ],
+      messages: [],
+      messages_count: 1,
+      history_limit: 40,
+      history_cursor: {
+        item_cursor: "cursor-items-page-2",
+        turn_cursor: null,
+        loaded_entry_count: 2,
+        loaded_turn_count: 1,
+        loaded_item_count: 1,
+        has_more: true,
+      },
+      history_truncated: true,
     });
     expect(appServerClient.readThread).toHaveBeenCalledTimes(1);
     expect(appServerClient.readThread).toHaveBeenCalledWith({
@@ -396,12 +473,11 @@ describe("appServerSessionClient", () => {
     });
     expect(appServerClient.request).toHaveBeenNthCalledWith(
       1,
-      "thread/turns/list",
+      "thread/items/list",
       {
         threadId: "thread-paginated",
-        limit: 100,
-        sortDirection: "asc",
-        itemsView: "summary",
+        limit: 40,
+        sortDirection: "desc",
       },
     );
     expect(appServerClient.request).toHaveBeenNthCalledWith(
@@ -409,84 +485,514 @@ describe("appServerSessionClient", () => {
       "thread/turns/list",
       {
         threadId: "thread-paginated",
-        cursor: "cursor-page-2",
-        limit: 100,
-        sortDirection: "asc",
+        limit: 40,
+        sortDirection: "desc",
         itemsView: "summary",
       },
     );
-    expect(appServerClient.request).toHaveBeenNthCalledWith(
-      3,
-      "thread/items/list",
-      {
-        threadId: "thread-paginated",
-        limit: 100,
-        sortDirection: "asc",
-      },
-    );
-    expect(appServerClient.request).toHaveBeenNthCalledWith(
-      4,
-      "thread/items/list",
-      {
-        threadId: "thread-paginated",
-        cursor: "cursor-items-page-2",
-        limit: 100,
-        sortDirection: "asc",
-      },
-    );
+    expect(appServerClient.request).toHaveBeenCalledTimes(2);
   });
 
-  it("get 对 legacy Thread 空 turns 应回读 includeTurns=true", async () => {
+  it("get 应把 opaque Item cursor 原样传给 current owner", async () => {
     const appServerClient = appServerClientMock();
-    vi.mocked(appServerClient.readThread)
+    vi.mocked(appServerClient.readThread).mockResolvedValueOnce(
+      rpcResult({
+        thread: canonicalThread({
+          id: "thread-paginated-cursor",
+          sessionId: "session-paginated-cursor",
+          historyMode: "paginated",
+          turns: [
+            {
+              id: "turn-partial",
+              status: "completed",
+              startedAt: 1780704000,
+              items: [
+                {
+                  id: "999",
+                  type: "agentMessage",
+                  text: "partial embedded item must not become history truth",
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+    vi.mocked(appServerClient.request)
       .mockResolvedValueOnce(
         rpcResult({
-          thread: canonicalThread({
-            id: "thread-legacy-history",
-            sessionId: "session-legacy-history",
-            historyMode: "legacy",
-            turns: [],
-          }),
+          data: [
+            {
+              turnId: "turn-cursor",
+              item: {
+                id: "message-latest-uuid",
+                type: "agentMessage",
+                text: "最新",
+              },
+            },
+            {
+              turnId: "turn-cursor",
+              item: {
+                id: "message-cursor-uuid",
+                type: "userMessage",
+                content: [{ type: "text", text: "游标消息" }],
+              },
+            },
+            {
+              turnId: "turn-cursor",
+              item: {
+                id: "message-older-uuid",
+                type: "agentMessage",
+                text: "更早一页",
+              },
+            },
+            {
+              turnId: "turn-cursor",
+              item: {
+                id: "message-earliest-uuid",
+                type: "userMessage",
+                content: [{ type: "text", text: "最早" }],
+              },
+            },
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
         }),
       )
       .mockResolvedValueOnce(
         rpcResult({
-          thread: canonicalThread({
-            id: "thread-legacy-history",
-            sessionId: "session-legacy-history",
-            historyMode: "legacy",
-            turns: [
-              {
-                id: "turn-legacy-history",
-                status: "completed",
-                startedAt: 1780704000,
-                items: [
-                  {
-                    id: "item-legacy-history",
-                    type: "userMessage",
-                    content: [{ type: "text", text: "历史回读" }],
-                  },
-                ],
-              },
-            ],
-          }),
+          data: [
+            {
+              id: "turn-cursor",
+              status: "completed",
+              startedAt: 1780704000,
+              completedAt: 1780704001,
+            },
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
         }),
       );
     const client = createAppServerSessionClient({ appServerClient });
 
     await expect(
-      client.getAgentRuntimeSession("session-legacy-history"),
+      client.getAgentRuntimeSession("session-paginated-cursor", {
+        historyItemCursor: "message-cursor-uuid",
+        historyLimit: 1,
+      }),
     ).resolves.toMatchObject({
-      thread_id: "thread-legacy-history",
-      messages: [
-        { role: "user", content: [{ type: "text", text: "历史回读" }] },
+      messages: [],
+      items: [
+        { id: "message-earliest-uuid", type: "user_message" },
+        { id: "message-older-uuid", type: "agent_message" },
+        { id: "message-cursor-uuid", type: "user_message" },
+        { id: "message-latest-uuid", type: "agent_message" },
       ],
+      messages_count: 4,
+      history_limit: 1,
+      history_cursor: {
+        item_cursor: null,
+        turn_cursor: null,
+        loaded_entry_count: 5,
+        loaded_turn_count: 1,
+        loaded_item_count: 4,
+        has_more: false,
+      },
+      history_truncated: false,
     });
-    expect(appServerClient.readThread).toHaveBeenNthCalledWith(2, {
-      threadId: "session-legacy-history",
-      includeTurns: true,
+    expect(appServerClient.request).toHaveBeenNthCalledWith(
+      1,
+      "thread/items/list",
+      {
+        threadId: "thread-paginated-cursor",
+        cursor: "message-cursor-uuid",
+        limit: 1,
+        sortDirection: "desc",
+      },
+    );
+    expect(appServerClient.request).toHaveBeenNthCalledWith(
+      2,
+      "thread/turns/list",
+      {
+        threadId: "thread-paginated-cursor",
+        limit: 1,
+        sortDirection: "desc",
+        itemsView: "summary",
+      },
+    );
+  });
+
+  it("get 应允许一个 owner 到 EOF 后只继续另一个 opaque cursor", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.readThread).mockResolvedValueOnce(
+      rpcResult({
+        thread: canonicalThread({
+          id: "thread-turn-cursor",
+          sessionId: "session-turn-cursor",
+          historyMode: "paginated",
+          turns: [],
+        }),
+      }),
+    );
+    vi.mocked(appServerClient.request).mockResolvedValueOnce(
+      rpcResult({
+        data: [
+          {
+            id: "turn-failed-page-2",
+            status: "failed",
+            startedAt: 1780704000,
+            completedAt: 1780704001,
+            error: { message: "failed before creating an item" },
+          },
+        ],
+        nextCursor: null,
+        backwardsCursor: null,
+      }),
+    );
+    const client = createAppServerSessionClient({ appServerClient });
+
+    await expect(
+      client.getAgentRuntimeSession("session-turn-cursor", {
+        historyItemCursor: null,
+        historyLimit: 40,
+        historyTurnCursor: " opaque-turn-page-2 ",
+      }),
+    ).resolves.toMatchObject({
+      turns: [
+        {
+          id: "turn-failed-page-2",
+          status: "failed",
+          error_message: "failed before creating an item",
+        },
+      ],
+      items: [],
+      history_cursor: {
+        item_cursor: null,
+        turn_cursor: null,
+        loaded_entry_count: 1,
+        loaded_turn_count: 1,
+        loaded_item_count: 0,
+        has_more: false,
+      },
+    });
+    expect(appServerClient.request).toHaveBeenCalledTimes(1);
+    expect(appServerClient.request).toHaveBeenCalledWith("thread/turns/list", {
+      threadId: "thread-turn-cursor",
+      cursor: " opaque-turn-page-2 ",
+      limit: 40,
+      sortDirection: "desc",
+      itemsView: "summary",
+    });
+  });
+
+  it("get 应保留无 Item 的 failed Turn", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.readThread).mockResolvedValueOnce(
+      rpcResult({
+        thread: canonicalThread({
+          id: "thread-failed",
+          sessionId: "session-failed",
+          turns: [
+            {
+              id: "turn-failed",
+              status: "failed",
+              startedAt: 1780704000,
+              completedAt: 1780704001,
+              error: { message: "provider failed" },
+              items: [],
+            },
+          ],
+        }),
+      }),
+    );
+    const client = createAppServerSessionClient({ appServerClient });
+
+    await expect(
+      client.getAgentRuntimeSession("session-failed"),
+    ).resolves.toMatchObject({
+      id: "session-failed",
+      messages: [],
+      turns: [
+        {
+          id: "turn-failed",
+          status: "failed",
+          error_message: "provider failed",
+        },
+      ],
+      items: [],
     });
     expect(appServerClient.request).not.toHaveBeenCalled();
+  });
+
+  it("get 应返回 Turn owner cursor 而不是扫描后续页", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.readThread).mockResolvedValueOnce(
+      rpcResult({
+        thread: canonicalThread({
+          id: "thread-failed-page-2",
+          sessionId: "session-failed-page-2",
+          historyMode: "paginated",
+          turns: [],
+        }),
+      }),
+    );
+    vi.mocked(appServerClient.request)
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              turnId: "turn-selected-page-1",
+              item: {
+                id: "message-selected-page-1",
+                type: "agentMessage",
+                text: "最新回复",
+              },
+            },
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              id: "turn-selected-page-1",
+              status: "completed",
+              startedAt: 1780704002,
+              completedAt: 1780704003,
+            },
+          ],
+          nextCursor: "turn-page-2",
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              id: "turn-failed-page-2",
+              status: "failed",
+              startedAt: 1780704000,
+              completedAt: 1780704001,
+              error: { message: "failed before creating an item" },
+            },
+          ],
+          nextCursor: null,
+          backwardsCursor: "turn-page-1",
+        }),
+      );
+    const client = createAppServerSessionClient({ appServerClient });
+
+    await expect(
+      client.getAgentRuntimeSession("session-failed-page-2"),
+    ).resolves.toMatchObject({
+      turns: [
+        { id: "turn-selected-page-1", status: "completed" },
+      ],
+      items: [{ id: "message-selected-page-1" }],
+      history_cursor: {
+        item_cursor: null,
+        turn_cursor: "turn-page-2",
+        has_more: true,
+      },
+    });
+    expect(appServerClient.request).toHaveBeenCalledTimes(2);
+  });
+
+  it("get 对空 embedded Thread 应走 current Turn/Item owner page", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.readThread).mockResolvedValueOnce(
+      rpcResult({
+        thread: canonicalThread({
+          id: "thread-legacy-history",
+          sessionId: "session-legacy-history",
+          historyMode: "legacy",
+          turns: [],
+        }),
+      }),
+    );
+    vi.mocked(appServerClient.request)
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              turnId: "turn-legacy-history",
+              item: {
+                id: "item-agent-latest",
+                type: "agentMessage",
+                text: "最新回复",
+              },
+            },
+            {
+              turnId: "turn-legacy-history",
+              item: {
+                id: "item-user-older",
+                type: "userMessage",
+                content: [{ type: "text", text: "历史回读" }],
+              },
+            },
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              id: "turn-legacy-history",
+              status: "completed",
+              startedAt: 1780704000,
+              completedAt: 1780704001,
+            },
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      );
+    const client = createAppServerSessionClient({ appServerClient });
+
+    await expect(
+      client.getAgentRuntimeSession("session-legacy-history", {
+        historyLimit: 1,
+      }),
+    ).resolves.toMatchObject({
+      thread_id: "thread-legacy-history",
+      messages: [],
+      items: [
+        {
+          id: "item-user-older",
+          type: "user_message",
+        },
+        {
+          id: "item-agent-latest",
+          type: "agent_message",
+        },
+      ],
+      messages_count: 2,
+      history_limit: 1,
+      history_cursor: {
+        item_cursor: null,
+        turn_cursor: null,
+        loaded_entry_count: 3,
+        loaded_turn_count: 1,
+        loaded_item_count: 2,
+        has_more: false,
+      },
+      history_truncated: false,
+    });
+    expect(appServerClient.readThread).toHaveBeenCalledTimes(1);
+    expect(appServerClient.readThread).toHaveBeenCalledWith({
+      threadId: "session-legacy-history",
+      includeTurns: false,
+    });
+    expect(appServerClient.request).toHaveBeenNthCalledWith(
+      1,
+      "thread/items/list",
+      {
+        threadId: "thread-legacy-history",
+        limit: 1,
+        sortDirection: "desc",
+      },
+    );
+    expect(appServerClient.request).toHaveBeenNthCalledWith(
+      2,
+      "thread/turns/list",
+      {
+        threadId: "thread-legacy-history",
+        limit: 1,
+        sortDirection: "desc",
+        itemsView: "summary",
+      },
+    );
+  });
+
+  it("get 达到历史消息窗口后不应继续扫描剩余 Item 页面", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.readThread).mockResolvedValueOnce(
+      rpcResult({
+        thread: canonicalThread({
+          id: "thread-bounded-history",
+          sessionId: "session-bounded-history",
+          historyMode: "legacy",
+          turns: [],
+        }),
+      }),
+    );
+    vi.mocked(appServerClient.request)
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              turnId: "turn-bounded-history",
+              item: {
+                id: "item-agent-latest",
+                type: "agentMessage",
+                text: "最新回复",
+              },
+            },
+          ],
+          nextCursor: "cursor-with-more-items",
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              id: "turn-bounded-history",
+              status: "completed",
+              startedAt: 1780704000,
+              completedAt: 1780704001,
+            },
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      );
+    const client = createAppServerSessionClient({ appServerClient });
+
+    const detail = await client.getAgentRuntimeSession(
+      "session-bounded-history",
+      { historyLimit: 1 },
+    );
+
+    expect(detail).toMatchObject({
+      messages: [],
+      items: [{ id: "item-agent-latest", type: "agent_message" }],
+      history_limit: 1,
+      history_cursor: {
+        item_cursor: "cursor-with-more-items",
+        turn_cursor: null,
+        loaded_entry_count: 2,
+        loaded_turn_count: 1,
+        loaded_item_count: 1,
+        has_more: true,
+      },
+      history_truncated: true,
+    });
+    expect(detail.messages_count).toBe(1);
+    expect(appServerClient.request).toHaveBeenCalledTimes(2);
+    expect(appServerClient.request).toHaveBeenNthCalledWith(
+      1,
+      "thread/items/list",
+      {
+        threadId: "thread-bounded-history",
+        limit: 1,
+        sortDirection: "desc",
+      },
+    );
+    expect(appServerClient.request).toHaveBeenNthCalledWith(
+      2,
+      "thread/turns/list",
+      {
+        threadId: "thread-bounded-history",
+        limit: 1,
+        sortDirection: "desc",
+        itemsView: "summary",
+      },
+    );
   });
 
   it("get 遇到旧 session envelope 时应显式拒绝，不恢复兼容解析", async () => {
@@ -499,6 +1005,25 @@ describe("appServerSessionClient", () => {
     await expect(
       client.getAgentRuntimeSession("session-legacy"),
     ).rejects.toThrow("thread/read did not return canonical session detail");
+  });
+
+  it("get 应拒绝不属于请求 session/thread 的 canonical Thread", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.readThread).mockResolvedValueOnce(
+      rpcResult({
+        thread: canonicalThread({
+          id: "thread-other",
+          sessionId: "session-other",
+          turns: [],
+        }),
+      }),
+    );
+    const client = createAppServerSessionClient({ appServerClient });
+
+    await expect(
+      client.getAgentRuntimeSession("session-requested"),
+    ).rejects.toThrow("thread/read canonical identity mismatch");
+    expect(appServerClient.request).not.toHaveBeenCalled();
   });
 
   it("get 缺少 sessionId 时应 fail closed", async () => {

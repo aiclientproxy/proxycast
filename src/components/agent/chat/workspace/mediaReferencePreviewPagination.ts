@@ -1,11 +1,11 @@
 import type {
-  AppServerAgentSessionMediaReadParams,
-  AppServerAgentSessionMediaReadResponse,
+  AppServerMediaReadParams,
+  AppServerMediaReadResponse,
 } from "@/lib/api/appServer";
 import type { Artifact } from "@/lib/artifact/types";
 import type { Message, MessagePreviewTarget } from "../types";
 import {
-  buildAgentSessionMediaReadParams,
+  buildMediaReadParams,
   createMediaReferencePreviewArtifact,
 } from "./mediaReferencePreviewArtifacts";
 import {
@@ -43,7 +43,7 @@ function mediaPageIndex(offset: number, pageBytes: number): number {
 
 function createMediaReferencePageWindowPreviewArtifact(params: {
   maxBytes: number;
-  media: AppServerAgentSessionMediaReadResponse;
+  media: AppServerMediaReadResponse;
   message: Message;
   pageBytes: number;
   target: Extract<MessagePreviewTarget, { kind: "media_reference" }>;
@@ -53,9 +53,7 @@ function createMediaReferencePageWindowPreviewArtifact(params: {
   const pageLength = params.media.length ?? params.media.bytes;
   const loadedBytes = pageOffset + params.media.bytes;
   const previousOffset =
-    pageOffset > 0
-      ? Math.max(0, pageOffset - params.pageBytes)
-      : undefined;
+    pageOffset > 0 ? Math.max(0, pageOffset - params.pageBytes) : undefined;
   return createMediaReferencePreviewArtifact({
     fallbackStatus: "unavailable",
     message: params.message,
@@ -89,13 +87,13 @@ function createMediaReferencePageWindowPreviewArtifact(params: {
 export async function createMediaReferencePagedPreviewArtifact(params: {
   message: Message;
   target: Extract<MessagePreviewTarget, { kind: "media_reference" }>;
-  sessionId?: string | null;
+  threadId?: string | null;
   t: Translate;
   offset: number;
   length?: number;
   readMedia: (
-    request: AppServerAgentSessionMediaReadParams,
-  ) => Promise<AppServerAgentSessionMediaReadResponse>;
+    request: AppServerMediaReadParams,
+  ) => Promise<AppServerMediaReadResponse>;
   maxBytes?: number;
   pageBytes?: number;
   shouldContinue?: () => boolean;
@@ -113,8 +111,8 @@ export async function createMediaReferencePagedPreviewArtifact(params: {
   }
 
   const pageBytes = Math.min(requestedPageBytes, maxBytes);
-  const request = buildAgentSessionMediaReadParams({
-    sessionId: params.sessionId,
+  const request = buildMediaReadParams({
+    threadId: params.threadId,
     target: params.target,
     maxBytes: pageBytes,
     offset,

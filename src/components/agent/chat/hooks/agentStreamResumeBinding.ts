@@ -24,6 +24,7 @@ import {
   upsertThreadItemState,
   upsertThreadTurnState,
 } from "./agentThreadState";
+import { reconcileAgentStreamProjectionItems } from "./agentStreamConversationProjection";
 
 type MessageParts = NonNullable<Message["contentParts"]>;
 
@@ -643,7 +644,30 @@ export async function bindRecoveredAgentStreamThread(
 
   listenerMapRef.current.set(target.eventName, unlisten);
   void runtime
-    .resumeThread(target.threadId)
+    .resumeThread(target.threadId, (reducer) => {
+      requestState.conversationProjectionOwner = {
+        reducer,
+        nextEventOrdinal: 1,
+      };
+      const projection = reducer.getProjection();
+      if (projection.items.length > 0) {
+        setThreadItems((current) =>
+          reconcileAgentStreamProjectionItems({
+            current,
+            pendingItemKey,
+            projected: projection.items,
+          }),
+        );
+      }
+      if (projection.turns.length > 0) {
+        setThreadTurns((current) =>
+          projection.turns.reduce(
+            (turns, turn) => upsertThreadTurnState(turns, turn),
+            current,
+          ),
+        );
+      }
+    })
     .catch((error) => {
       console.error("[AgentChat] 恢复运行中会话执行失败:", error);
     })

@@ -1,12 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  getDefaultAgentApprovalServerRequestController,
-  resetDefaultAgentApprovalServerRequestControllerForTests,
-} from "../agentApprovalServerRequest";
-import {
-  getDefaultAgentUserInputServerRequestController,
-  resetDefaultAgentUserInputServerRequestControllerForTests,
-} from "../agentUserInputServerRequest";
+  getDefaultPendingInteractionController,
+  resetDefaultPendingInteractionControllerForTests,
+} from "./pendingInteractionController";
 import {
   findPendingTypedAction,
   findPendingTypedServerRequestAction,
@@ -16,8 +12,7 @@ import {
 
 describe("typed server-request replay", () => {
   beforeEach(() => {
-    resetDefaultAgentApprovalServerRequestControllerForTests();
-    resetDefaultAgentUserInputServerRequestControllerForTests();
+    resetDefaultPendingInteractionControllerForTests();
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -52,25 +47,32 @@ describe("typed server-request replay", () => {
     expect(
       findPendingTypedServerRequestAction("session-1", "request-1"),
     ).toBeNull();
-    expect(
-      getDefaultAgentApprovalServerRequestController().getSnapshot(),
-    ).toEqual([]);
-    expect(
-      getDefaultAgentUserInputServerRequestController().getSnapshot(),
-    ).toEqual([]);
+    expect(getDefaultPendingInteractionController().getSnapshot()).toEqual([]);
   });
 
   it("同作用域 AskUser typed pending 应由 controller settle", () => {
-    const controller = getDefaultAgentUserInputServerRequestController();
+    const controller = getDefaultPendingInteractionController();
     vi.spyOn(controller, "getSnapshot").mockReturnValue([
       {
-        requestId: "item-ask-1",
-        actionType: "ask_user",
-        scope: { threadId: "thread-1", turnId: "turn-1" },
+        id: "request_user_input:thread-1:turn-1:item-ask-1",
+        thread_id: "thread-1",
+        turn_id: "turn-1",
+        item_id: "item-ask-1",
+        kind: "request_user_input",
         status: "pending",
+        payload: {
+          request: {
+            requestId: "item-ask-1",
+            actionType: "ask_user",
+            scope: { threadId: "thread-1", turnId: "turn-1" },
+            status: "pending",
+          },
+        },
       },
     ]);
-    const respond = vi.spyOn(controller, "respond").mockReturnValue(true);
+    const respond = vi
+      .spyOn(controller, "respond")
+      .mockReturnValue({ accepted: true });
 
     expect(
       respondPendingTypedServerRequest({
@@ -83,23 +85,31 @@ describe("typed server-request replay", () => {
       }),
     ).toBe(true);
     expect(respond).toHaveBeenCalledWith({
-      requestId: "item-ask-1",
-      actionType: "ask_user",
       confirmed: true,
-      decision: undefined,
+      interactionId: "request_user_input:thread-1:turn-1:item-ask-1",
+      kind: "request_user_input",
       response: undefined,
       userData: { mode: "auto" },
     });
   });
 
   it("typed pending scope 不匹配时 fail closed", () => {
-    const controller = getDefaultAgentApprovalServerRequestController();
+    const controller = getDefaultPendingInteractionController();
     vi.spyOn(controller, "getSnapshot").mockReturnValue([
       {
-        requestId: "approval-1",
-        actionType: "tool_confirmation",
-        scope: { threadId: "thread-1", turnId: "turn-1" },
+        id: "approval:thread-1:turn-1:approval-1",
+        thread_id: "thread-1",
+        turn_id: "turn-1",
+        kind: "approval",
         status: "pending",
+        payload: {
+          request: {
+            requestId: "approval-1",
+            actionType: "tool_confirmation",
+            scope: { threadId: "thread-1", turnId: "turn-1" },
+            status: "pending",
+          },
+        },
       },
     ]);
     const respond = vi.spyOn(controller, "respond");

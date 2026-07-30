@@ -15,6 +15,14 @@ import {
   seedThreadReadPageIsomorphicCanonicalThread,
 } from "./lib/session-history-thread-read-isomorphic-fixture.mjs";
 import {
+  THREAD_READ_LONG_LIST,
+  seedThreadReadLongListCanonicalThread,
+} from "./lib/session-history-long-list-fixture.mjs";
+import {
+  assertThreadReadLongListDomOracle,
+  runThreadReadLongListDomOracle,
+} from "./lib/session-history-long-list-oracle.mjs";
+import {
   assertThreadReadPageIsomorphicDomOracle,
   assertThreadReadPageIsomorphicReadModel,
   runThreadReadPageIsomorphicDomOracle,
@@ -52,6 +60,7 @@ const CURRENT_METHODS = [
   "thread/read",
   "thread/list",
   "thread/turns/list",
+  "thread/items/list",
   "thread/resume",
 ];
 const FORBIDDEN_METHODS = [
@@ -403,14 +412,14 @@ async function closeElectronFixture(handle) {
   }
 }
 
-async function startCanonicalHistoryThread(page, cwd) {
+async function startCanonicalHistoryThread(page, cwd, options = {}) {
   return await page.evaluate(
-    async ({ command, cwd, title }) => {
+    async ({ command, cwd, requestId, title }) => {
       const invoke = window.electronAPI?.invoke;
       if (typeof invoke !== "function") {
         throw new Error("Electron preload invoke bridge is unavailable");
       }
-      const id = "thread-read-isomorphic-setup";
+      const id = requestId;
       const params = {
         model: "fixture-model",
         modelProvider: "fixture-provider",
@@ -459,7 +468,8 @@ async function startCanonicalHistoryThread(page, cwd) {
     {
       command: APP_SERVER_HANDLE_JSON_LINES_COMMAND,
       cwd,
-      title: THREAD_READ_PAGE_ISOMORPHIC.title,
+      requestId: options.requestId || "thread-read-isomorphic-setup",
+      title: options.title || THREAD_READ_PAGE_ISOMORPHIC.title,
     },
   );
 }
@@ -483,6 +493,10 @@ async function run() {
     options.evidenceDir,
     `${options.prefix}-failure.png`,
   );
+  const longListScreenshotPath = path.join(
+    options.evidenceDir,
+    `${options.prefix}-long-list.png`,
+  );
   const runtimeEnv = createTempRuntimeEnv();
   const appServerBinary = resolveDevAppServerBinary({
     env: runtimeEnv.env,
@@ -497,6 +511,7 @@ async function run() {
     checkedAt: new Date().toISOString(),
     appUrl: options.appUrl || null,
     backendMode: "unavailable",
+    proofLevel: "Gate B controlled fixture",
     currentMethods: CURRENT_METHODS,
     forbiddenMethods: FORBIDDEN_METHODS,
     electronPreloadBridge: false,
@@ -507,9 +522,12 @@ async function run() {
     restoredRolloutPaths: null,
     threadReadPageIsomorphicSeed: null,
     threadReadPageIsomorphicSummary: null,
+    threadReadLongListSeed: null,
+    threadReadLongListSummary: null,
     consoleErrors: [],
     pageErrors: [],
     screenshot: null,
+    longListScreenshot: null,
     rawEvidence: rawEvidencePath,
     summary: summaryPath,
     tempRoot: options.keepTemp ? runtimeEnv.tempRoot : null,
@@ -639,6 +657,50 @@ async function run() {
       dom: assertThreadReadPageIsomorphicDomOracle(threadDomResult),
     });
     await handle.page.screenshot({ path: screenshotPath, fullPage: true });
+
+    logStage("start-thread-read-long-list");
+    const longListSetup = await startCanonicalHistoryThread(
+      handle.page,
+      runtimeEnv.persistedWorkspaceRoot,
+      {
+        requestId: "thread-read-long-list-setup",
+        title: THREAD_READ_LONG_LIST.title,
+      },
+    );
+    rawEvidence.threadReadLongListSetup = sanitizeJson(longListSetup);
+
+    logStage("seed-thread-read-long-list");
+    const longListSeed = seedThreadReadLongListCanonicalThread({
+      runtimeEnv,
+      runSqlite,
+      sqlLiteral,
+      thread: longListSetup?.result?.thread,
+    });
+    summary.threadReadLongListSeed = sanitizeJson({
+      sessionId: longListSeed.sessionId,
+      threadId: longListSeed.threadId,
+      turnCount: longListSeed.turnCount,
+      itemCount: longListSeed.itemCount,
+    });
+
+    logStage("run-electron-thread-read-long-list");
+    await handle.page.reload({ waitUntil: "domcontentloaded" });
+    await waitForRendererReady(handle.page, options);
+    await clearInvokeBuffers(handle.page);
+    await setSidebarWorkspace(handle.page, THREAD_READ_LONG_LIST.workspaceId);
+    await handle.page.evaluate(() => window.__LIME_AGENTUI_PERF__?.clear?.());
+    const longListDomResult = await runThreadReadLongListDomOracle(
+      handle.page,
+      options,
+    );
+    rawEvidence.threadReadLongListDom = sanitizeJson(longListDomResult);
+    summary.threadReadLongListSummary = sanitizeJson(
+      assertThreadReadLongListDomOracle(longListDomResult),
+    );
+    await handle.page.screenshot({
+      path: longListScreenshotPath,
+      fullPage: false,
+    });
     await closeElectronFixture(handle);
     handle = null;
 
@@ -653,6 +715,7 @@ async function run() {
     summary.consoleErrors = consoleErrors;
     summary.pageErrors = pageErrors;
     summary.screenshot = screenshotPath;
+    summary.longListScreenshot = longListScreenshotPath;
     summary.ok = true;
     summary.completedAt = new Date().toISOString();
     writeJsonFile(rawEvidencePath, rawEvidence);

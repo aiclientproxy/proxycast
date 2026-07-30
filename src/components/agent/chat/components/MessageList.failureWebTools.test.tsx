@@ -275,7 +275,7 @@ describe("MessageList failure and web tools", () => {
     expect(container.textContent).not.toContain("execution backend error");
   });
 
-  it("完成态 App Server reasoning 与 WebSearch/WebFetch 应折叠为过程摘要", () => {
+  it("完成态 App Server reasoning 与 WebSearch/WebFetch 应进入 canonical 过程段", () => {
     const turnId = "turn-web-tools-reasoning";
     const messages: Message[] = [
       {
@@ -383,12 +383,18 @@ describe("MessageList failure and web tools", () => {
       | StreamingRendererCallProps
       | undefined;
 
-    expect(call?.contentParts).toEqual([
+    expect(call).toEqual(
       expect.objectContaining({
-        type: "text",
-        text: "网页搜索渲染结论：最终正文继续输出。",
+        content: "网页搜索渲染结论：最终正文继续输出。",
+        contentParts: undefined,
+        suppressProcessFlow: true,
       }),
-    ]);
+    );
+    expect(
+      container.querySelector(
+        '[data-testid="conversation-turn-timeline"][data-runtime-turn-id="turn-web-tools-reasoning"]',
+      ),
+    ).not.toBeNull();
     expect(
       container.querySelector(
         '[data-testid="message-list-historical-timeline-preview:leading"]',

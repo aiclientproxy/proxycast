@@ -580,8 +580,6 @@ pub enum AppServerRequestMethod {
     ConversationImportThreadCommit,
     #[serde(rename = "conversationImport/job/read")]
     ConversationImportJobRead,
-    #[serde(rename = "agentSession/media/read")]
-    AgentSessionMediaRead,
     #[serde(rename = "agentSession/action/respond")]
     AgentSessionActionRespond,
     #[serde(rename = "workflow/read")]
@@ -868,7 +866,6 @@ impl AppServerRequestMethod {
             Self::ConversationImportThreadPreview => METHOD_CONVERSATION_IMPORT_THREAD_PREVIEW,
             Self::ConversationImportThreadCommit => METHOD_CONVERSATION_IMPORT_THREAD_COMMIT,
             Self::ConversationImportJobRead => METHOD_CONVERSATION_IMPORT_JOB_READ,
-            Self::AgentSessionMediaRead => METHOD_AGENT_SESSION_MEDIA_READ,
             Self::AgentSessionActionRespond => METHOD_AGENT_SESSION_ACTION_RESPOND,
             Self::WorkflowRead => METHOD_WORKFLOW_READ,
             Self::WorkflowCancel => METHOD_WORKFLOW_CANCEL,
@@ -1168,7 +1165,6 @@ impl AppServerRequestMethod {
             }
             METHOD_CONVERSATION_IMPORT_THREAD_COMMIT => Some(Self::ConversationImportThreadCommit),
             METHOD_CONVERSATION_IMPORT_JOB_READ => Some(Self::ConversationImportJobRead),
-            METHOD_AGENT_SESSION_MEDIA_READ => Some(Self::AgentSessionMediaRead),
             METHOD_AGENT_SESSION_ACTION_RESPOND => Some(Self::AgentSessionActionRespond),
             METHOD_WORKFLOW_READ => Some(Self::WorkflowRead),
             METHOD_WORKFLOW_CANCEL => Some(Self::WorkflowCancel),
@@ -2271,10 +2267,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_CONVERSATION_IMPORT_JOB_READ,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AGENT_SESSION_MEDIA_READ,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {

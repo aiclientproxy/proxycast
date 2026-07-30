@@ -157,6 +157,58 @@
       ],
       "type": "string"
     },
+    "MediaReadParams": {
+      "properties": {
+        "length": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "maxBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "refId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sidecarRef": true,
+        "stream": {
+          "default": false,
+          "type": "boolean"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "uri": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
     "ModeKind": {
       "description": "Initial collaboration mode for a turn or session.",
       "enum": [
@@ -2331,6 +2383,26 @@
         },
         "params": {
           "$ref": "#/$defs/ArtifactWriteParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "media/read",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/MediaReadParams"
         }
       },
       "required": [

@@ -4,9 +4,13 @@ use agent_protocol as canonical;
 use app_server_protocol::protocol::v2;
 use app_server_protocol::{error_codes, AgentEvent, JsonRpcError};
 use serde_json::Value;
-use std::collections::HashMap;
 
 use super::ProjectedEvent;
+use safe_display::{
+    bounded_safe_json, bounded_safe_text, MAX_DISPLAY_JSON_BYTES, MAX_DISPLAY_STRING_BYTES,
+};
+
+mod safe_display;
 
 pub(super) fn lower_thread_read_params(
     params: &v2::ThreadReadParams,
@@ -353,8 +357,11 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                 id,
                 namespace: None,
                 tool: name,
-                arguments: serde_json::to_value(arguments)
-                    .map_err(|error| projection_error(format!("tool arguments: {error}")))?,
+                arguments: bounded_safe_json(
+                    serde_json::to_value(arguments)
+                        .map_err(|error| projection_error(format!("tool arguments: {error}")))?,
+                )
+                .0,
                 status: project_dynamic_tool_status(status),
                 content_items: output_content_items(output.as_ref()),
                 success,
@@ -368,18 +375,27 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             output,
             ..
         } => {
-            let result = output.as_ref().map(project_mcp_tool_result);
             let error = output
                 .as_ref()
                 .and_then(|value| value.error.clone())
-                .map(|message| serde_json::json!({ "message": message }));
+                .map(|message| v2::McpToolCallError {
+                    message: bounded_safe_text(&message, MAX_DISPLAY_STRING_BYTES).0,
+                });
+            let result = output
+                .as_ref()
+                .filter(|value| value.error.is_none())
+                .map(project_mcp_tool_result)
+                .map(Box::new);
             Ok(v2::ThreadItem::McpToolCall {
                 id,
                 server: server_name,
                 tool: tool_name,
                 status: project_mcp_status(status),
-                arguments: serde_json::to_value(arguments)
-                    .map_err(|error| projection_error(format!("MCP arguments: {error}")))?,
+                arguments: bounded_safe_json(
+                    serde_json::to_value(arguments)
+                        .map_err(|error| projection_error(format!("MCP arguments: {error}")))?,
+                )
+                .0,
                 app_context: None,
                 mcp_app_resource_uri: None,
                 plugin_id: None,
@@ -395,6 +411,7 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             operation,
             target_thread_id,
             message,
+            agent_states,
             ..
         } => Ok(v2::ThreadItem::CollabAgentToolCall {
             id,
@@ -410,7 +427,15 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                 &metadata,
                 &["reasoningEffort", "reasoning_effort"],
             ),
-            agents_states: HashMap::new(),
+            agents_states: agent_states
+                .into_iter()
+                .map(|(thread_id, state)| {
+                    (
+                        thread_id.as_str().to_string(),
+                        project_collab_agent_state(state),
+                    )
+                })
+                .collect(),
         }),
         canonical::ThreadItemPayload::Approval { .. } => Err(projection_error(format!(
             "canonical approval item {id} has no v2 ThreadItem representation"
@@ -428,7 +453,8 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             source: project_command_source(&metadata),
             status: project_command_status(status),
             command_actions: Vec::new(),
-            aggregated_output: output,
+            aggregated_output: output
+                .map(|value| bounded_safe_text(&value, MAX_DISPLAY_JSON_BYTES).0),
             exit_code,
             duration_ms: metadata_u64(&metadata, &["durationMs", "duration_ms"])
                 .map(saturating_i64),
@@ -793,29 +819,56 @@ fn project_mcp_status(status: canonical::ItemStatus) -> v2::McpToolCallStatus {
     }
 }
 
-fn project_mcp_tool_result(output: &canonical::ToolOutput) -> Value {
+fn project_mcp_tool_result(output: &canonical::ToolOutput) -> v2::McpToolCallResult {
+    let mut truncated = output.truncated;
     let content = output
         .text
         .as_ref()
         .filter(|text| !text.is_empty())
-        .map(|text| vec![serde_json::json!({ "type": "text", "text": text })])
+        .map(|text| {
+            let (text, text_truncated) = bounded_safe_text(text, MAX_DISPLAY_STRING_BYTES);
+            truncated |= text_truncated;
+            vec![serde_json::json!({ "type": "text", "text": text })]
+        })
         .unwrap_or_default();
-    let mut result = serde_json::Map::from_iter([("content".to_string(), Value::Array(content))]);
-    if let Some(structured_content) = &output.structured_content {
-        result.insert("structuredContent".to_string(), structured_content.clone());
-    }
+    let structured_content = output.structured_content.clone().map(|value| {
+        let (value, value_truncated) = bounded_safe_json(value);
+        truncated |= value_truncated;
+        value
+    });
 
     let mut metadata = serde_json::Map::new();
-    if output.truncated {
+    if truncated {
         metadata.insert("truncated".to_string(), Value::Bool(true));
     }
-    if let Some(output_ref) = &output.output_ref {
-        metadata.insert("outputRef".to_string(), Value::String(output_ref.clone()));
+    if output.output_ref.is_some() {
+        // The opaque sidecar id is not an action capability. Renderer receives
+        // only availability until Desktop Host provides a semantic resolver.
+        metadata.insert("outputAvailable".to_string(), Value::Bool(true));
     }
-    if !metadata.is_empty() {
-        result.insert("_meta".to_string(), Value::Object(metadata));
+
+    let mut result = v2::McpToolCallResult {
+        content,
+        structured_content,
+        meta: (!metadata.is_empty()).then_some(Value::Object(metadata)),
+    };
+    if serde_json::to_vec(&result)
+        .map(|bytes| bytes.len() > MAX_DISPLAY_JSON_BYTES)
+        .unwrap_or(true)
+    {
+        result = v2::McpToolCallResult {
+            content: vec![serde_json::json!({
+                "type": "text",
+                "text": "[tool output exceeded display limit]"
+            })],
+            structured_content: None,
+            meta: Some(serde_json::json!({
+                "truncated": true,
+                "outputAvailable": output.output_ref.is_some()
+            })),
+        };
     }
-    Value::Object(result)
+    result
 }
 
 fn project_collab_status(status: canonical::ItemStatus) -> v2::CollabAgentToolCallStatus {
@@ -827,6 +880,23 @@ fn project_collab_status(status: canonical::ItemStatus) -> v2::CollabAgentToolCa
         canonical::ItemStatus::Failed
         | canonical::ItemStatus::Interrupted
         | canonical::ItemStatus::Cancelled => v2::CollabAgentToolCallStatus::Failed,
+    }
+}
+
+fn project_collab_agent_state(state: canonical::CollabAgentState) -> v2::CollabAgentState {
+    v2::CollabAgentState {
+        status: match state.status {
+            canonical::CollabAgentStatus::PendingInit => v2::CollabAgentStatus::PendingInit,
+            canonical::CollabAgentStatus::Running => v2::CollabAgentStatus::Running,
+            canonical::CollabAgentStatus::Interrupted => v2::CollabAgentStatus::Interrupted,
+            canonical::CollabAgentStatus::Completed => v2::CollabAgentStatus::Completed,
+            canonical::CollabAgentStatus::Errored => v2::CollabAgentStatus::Errored,
+            canonical::CollabAgentStatus::Shutdown => v2::CollabAgentStatus::Shutdown,
+            canonical::CollabAgentStatus::NotFound => v2::CollabAgentStatus::NotFound,
+        },
+        message: state
+            .message
+            .map(|message| bounded_safe_text(&message, MAX_DISPLAY_STRING_BYTES).0),
     }
 }
 
@@ -878,16 +948,22 @@ fn output_content_items(
     let output = output?;
     let mut items = Vec::new();
     if let Some(text) = output.text.as_ref().filter(|value| !value.is_empty()) {
-        items.push(v2::DynamicToolCallOutputContentItem::InputText { text: text.clone() });
+        items.push(v2::DynamicToolCallOutputContentItem::InputText {
+            text: bounded_safe_text(text, MAX_DISPLAY_STRING_BYTES).0,
+        });
     }
     if let Some(value) = &output.structured_content {
         items.push(v2::DynamicToolCallOutputContentItem::InputText {
-            text: value.to_string(),
+            text: bounded_safe_text(
+                &bounded_safe_json(value.clone()).0.to_string(),
+                MAX_DISPLAY_STRING_BYTES,
+            )
+            .0,
         });
     }
     if let Some(error) = output.error.as_ref().filter(|value| !value.is_empty()) {
         items.push(v2::DynamicToolCallOutputContentItem::InputText {
-            text: error.clone(),
+            text: bounded_safe_text(error, MAX_DISPLAY_STRING_BYTES).0,
         });
     }
     (!items.is_empty()).then_some(items)

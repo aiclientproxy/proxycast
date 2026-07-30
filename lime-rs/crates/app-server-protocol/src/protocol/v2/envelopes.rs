@@ -3,20 +3,21 @@ use super::{
     CommandExecutionOutputDeltaNotification, CommandExecutionRequestApprovalParams,
     FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, ItemCompletedNotification,
     ItemStartedNotification, McpServerElicitationRequestParams, McpToolCallProgressNotification,
-    Method, ModelListParams, ModelListUpdatedNotification, ModelReroutedNotification,
-    ModelSafetyBufferingUpdatedNotification, ModelVerificationNotification, PlanDeltaNotification,
-    ReasoningSummaryPartAddedNotification, ReasoningSummaryTextDeltaNotification,
-    ReasoningTextDeltaNotification, ServerRequestResolvedNotification,
-    ThreadApproveGuardianDeniedActionParams, ThreadApproveGuardianDeniedActionResponse,
-    ThreadArchiveParams, ThreadArchiveResponse, ThreadArchivedNotification,
-    ThreadBackgroundTerminalsCleanParams, ThreadBackgroundTerminalsCleanResponse,
-    ThreadBackgroundTerminalsListParams, ThreadBackgroundTerminalsListResponse,
-    ThreadBackgroundTerminalsTerminateParams, ThreadBackgroundTerminalsTerminateResponse,
-    ThreadClosedNotification, ThreadCompactStartParams, ThreadCompactStartResponse,
-    ThreadDecrementElicitationParams, ThreadDecrementElicitationResponse, ThreadDeleteParams,
-    ThreadDeleteResponse, ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse,
-    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalClearedNotification,
-    ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
+    MediaReadParams, MediaReadResponse, Method, ModelListParams, ModelListUpdatedNotification,
+    ModelReroutedNotification, ModelSafetyBufferingUpdatedNotification,
+    ModelVerificationNotification, PlanDeltaNotification, ReasoningSummaryPartAddedNotification,
+    ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification,
+    ServerRequestResolvedNotification, ThreadApproveGuardianDeniedActionParams,
+    ThreadApproveGuardianDeniedActionResponse, ThreadArchiveParams, ThreadArchiveResponse,
+    ThreadArchivedNotification, ThreadBackgroundTerminalsCleanParams,
+    ThreadBackgroundTerminalsCleanResponse, ThreadBackgroundTerminalsListParams,
+    ThreadBackgroundTerminalsListResponse, ThreadBackgroundTerminalsTerminateParams,
+    ThreadBackgroundTerminalsTerminateResponse, ThreadClosedNotification, ThreadCompactStartParams,
+    ThreadCompactStartResponse, ThreadDecrementElicitationParams,
+    ThreadDecrementElicitationResponse, ThreadDeleteParams, ThreadDeleteResponse,
+    ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse, ThreadGoalClearParams,
+    ThreadGoalClearResponse, ThreadGoalClearedNotification, ThreadGoalGetParams,
+    ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
     ThreadGoalUpdatedNotification, ThreadIncrementElicitationParams,
     ThreadIncrementElicitationResponse, ThreadInjectItemsParams, ThreadInjectItemsResponse,
     ThreadItemsListParams, ThreadItemsListResponse, ThreadListParams, ThreadListResponse,
@@ -216,6 +217,11 @@ pub enum ClientRequest {
         id: RequestId,
         params: ArtifactWriteParams,
     },
+    #[serde(rename = "media/read")]
+    MediaRead {
+        id: RequestId,
+        params: MediaReadParams,
+    },
     #[serde(rename = "model/list")]
     ModelList {
         id: RequestId,
@@ -272,6 +278,7 @@ impl ClientRequest {
             | Self::ThreadGoalGet { id, .. }
             | Self::ThreadGoalClear { id, .. }
             | Self::ArtifactWrite { id, .. }
+            | Self::MediaRead { id, .. }
             | Self::ModelList { id, .. }
             | Self::TurnStart { id, .. }
             | Self::TurnSteer { id, .. }
@@ -316,6 +323,7 @@ impl ClientRequest {
             Self::ThreadGoalGet { .. } => Method::ThreadGoalGet,
             Self::ThreadGoalClear { .. } => Method::ThreadGoalClear,
             Self::ArtifactWrite { .. } => Method::ArtifactWrite,
+            Self::MediaRead { .. } => Method::MediaRead,
             Self::ModelList { .. } => Method::ModelList,
             Self::TurnStart { .. } => Method::TurnStart,
             Self::TurnSteer { .. } => Method::TurnSteer,
@@ -368,6 +376,7 @@ pub enum ClientResponsePayload {
     ThreadGoalGet(ThreadGoalGetResponse),
     ThreadGoalClear(ThreadGoalClearResponse),
     ArtifactWrite(ArtifactWriteResponse),
+    MediaRead(MediaReadResponse),
     TurnStart(TurnStartResponse),
     TurnSteer(TurnSteerResponse),
     TurnInterrupt(TurnInterruptResponse),
@@ -409,6 +418,7 @@ impl ClientResponsePayload {
             Self::ThreadGoalGet(_) => Method::ThreadGoalGet,
             Self::ThreadGoalClear(_) => Method::ThreadGoalClear,
             Self::ArtifactWrite(_) => Method::ArtifactWrite,
+            Self::MediaRead(_) => Method::MediaRead,
             Self::TurnStart(_) => Method::TurnStart,
             Self::TurnSteer(_) => Method::TurnSteer,
             Self::TurnInterrupt(_) => Method::TurnInterrupt,
@@ -448,6 +458,7 @@ impl ClientResponsePayload {
             Self::ThreadGoalGet(response) => serde_json::to_value(response)?,
             Self::ThreadGoalClear(response) => serde_json::to_value(response)?,
             Self::ArtifactWrite(response) => serde_json::to_value(response)?,
+            Self::MediaRead(response) => serde_json::to_value(response)?,
             Self::TurnStart(response) => serde_json::to_value(response)?,
             Self::TurnSteer(response) => serde_json::to_value(response)?,
             Self::TurnInterrupt(response) => serde_json::to_value(response)?,

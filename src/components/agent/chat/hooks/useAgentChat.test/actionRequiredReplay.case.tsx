@@ -15,7 +15,7 @@ describe("useAgentChat action_required 渲染链路 - reply / replay", () => {
   it("replayPendingAction 应调用 replay request 命令并恢复 pendingActions", async () => {
     const workspaceId = "ws-replay-action-required";
     seedSession(workspaceId, "session-replay-action-required");
-    const respond = mockTypedActionResponseHandled("ask_user");
+    const respond = mockTypedActionResponseHandled("ask_user", "req-replay-1");
     const harness = mountHook(workspaceId);
     const stream = captureTurnStream();
 

@@ -1,6 +1,6 @@
 # Lime 第二轮重构 v2
 
-> status: active research baseline
+> status: historical research baseline
 > owner: runtime-architecture
 > last_verified: 2026-07-18
 > codex_commit: `2e4f55608b4ad26d9c48ea45a6fcd20bfd5e9fe8`
@@ -43,27 +43,28 @@ React GUI
 
 ## 文档索引
 
-| 文档                                                                | 作用                                               |
-| ------------------------------------------------------------------- | -------------------------------------------------- |
-| [00-decisions/record.md](./00-decisions/record.md)                  | v2 裁决、非目标和清理原则                          |
-| [01-current-facts/snapshot.md](./01-current-facts/snapshot.md)      | 代码和上游仓库的可复核快照                         |
-| [02-codex/current-map.md](./02-codex/current-map.md)                | Codex current 模块、可复制实现和拒绝项             |
-| [03-opencode/module-map.md](./03-opencode/module-map.md)            | OpenCode package owner、依赖方向和允许参照边界     |
-| [04-target/architecture.md](./04-target/architecture.md)            | Lime GUI 目标架构和数据流                          |
-| [05-boundaries/ownership.md](./05-boundaries/ownership.md)          | crate/package/host 的唯一 owner 与禁依赖           |
-| [06-protocol/contracts.md](./06-protocol/contracts.md)              | method、scope、schema、notification 和 client 契约 |
-| [07-runtime/lifecycle.md](./07-runtime/lifecycle.md)                | Thread/Turn/Item、队列、工具、取消、恢复状态机     |
-| [08-projection/read-model.md](./08-projection/read-model.md)        | materialization、read model、GUI projection 和分页 |
-| [09-provider/capability.md](./09-provider/capability.md)            | provider/model/capability/content/lowering 设计    |
-| [10-tool-context/policy.md](./10-tool-context/policy.md)            | 工具、审批、sandbox、context、skills、multi-agent  |
-| [11-gui/electron-gates.md](./11-gui/electron-gates.md)              | GUI 分层、桌面适配和 Gate A/B                      |
-| [12-plan/slices.md](./12-plan/slices.md)                            | 可执行重构切片、删除清单和退出条件                 |
-| [多进程实施计划](../../../exec-plans/refactor-v2-implementation.md) | slice 认领、原子锁、写集隔离、交接和冲突处理       |
-| [13-evidence/verification.md](./13-evidence/verification.md)        | 验证矩阵、证据格式和完成定义                       |
-| [14-upstream/ledger.md](./14-upstream/ledger.md)                    | Codex/OpenCode 版本账本和 allowlist 规则           |
-| [15-cleanup/inventory.md](./15-cleanup/inventory.md)                | v1 残留和 Lime 旧路径的清理盘点                    |
-| [16-v1-crosswalk.md](./16-v1-crosswalk.md)                          | v1 丰富文档到 v2 current owner 的逐文件迁移对照    |
-| [99-archive/policy.md](./99-archive/policy.md)                      | 历史文档归档和断链防护                             |
+| 文档                                                                    | 作用                                                                |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [00-decisions/record.md](./00-decisions/record.md)                      | v2 裁决、非目标和清理原则                                           |
+| [01-current-facts/snapshot.md](./01-current-facts/snapshot.md)          | 代码和上游仓库的可复核快照                                          |
+| [02-codex/current-map.md](./02-codex/current-map.md)                    | Codex current 模块、可复制实现和拒绝项                              |
+| [03-opencode/module-map.md](./03-opencode/module-map.md)                | OpenCode package owner、依赖方向和允许参照边界                      |
+| [04-target/architecture.md](./04-target/architecture.md)                | Lime GUI 目标架构和数据流                                           |
+| [05-boundaries/ownership.md](./05-boundaries/ownership.md)              | crate/package/host 的唯一 owner 与禁依赖                            |
+| [06-protocol/contracts.md](./06-protocol/contracts.md)                  | method、scope、schema、notification 和 client 契约                  |
+| [07-runtime/lifecycle.md](./07-runtime/lifecycle.md)                    | Thread/Turn/Item、队列、工具、取消、恢复状态机                      |
+| [08-projection/read-model.md](./08-projection/read-model.md)            | materialization、read model、GUI projection 和分页                  |
+| [09-provider/capability.md](./09-provider/capability.md)                | provider/model/capability/content/lowering 设计                     |
+| [10-tool-context/policy.md](./10-tool-context/policy.md)                | 工具、审批、sandbox、context、skills、multi-agent                   |
+| [11-gui/electron-gates.md](./11-gui/electron-gates.md)                  | GUI 分层、桌面适配和 Gate A/B                                       |
+| [12-plan/slices.md](./12-plan/slices.md)                                | 可执行重构切片、删除清单和退出条件                                  |
+| [历史多进程实施计划](../../../exec-plans/refactor-v2-implementation.md) | 已完成旧广义切片的协调与 evidence，不再定义当前渲染 owner           |
+| [当前渲染对齐计划](../../../refactor/v2/IMPLEMENTATION-PLAN.md)         | ConversationProjection、ItemRenderer 与 V2-00 至 V2-05 当前执行状态 |
+| [13-evidence/verification.md](./13-evidence/verification.md)            | 验证矩阵、证据格式和完成定义                                        |
+| [14-upstream/ledger.md](./14-upstream/ledger.md)                        | Codex/OpenCode 版本账本和 allowlist 规则                            |
+| [15-cleanup/inventory.md](./15-cleanup/inventory.md)                    | v1 残留和 Lime 旧路径的清理盘点                                     |
+| [16-v1-crosswalk.md](./16-v1-crosswalk.md)                              | v1 丰富文档到 v2 current owner 的逐文件迁移对照                     |
+| [99-archive/policy.md](./99-archive/policy.md)                          | 历史文档归档和断链防护                                              |
 
 ## v2 完成定义
 
@@ -75,6 +76,6 @@ React GUI
 4. 有 protocol/schema、行为单测、runtime fixture 和 GUI Gate A/B 中与风险匹配的证据。
 5. 正常、失败、中断、排队、过期事件、恢复和分页路径均有可验证退出条件。
 
-## 当前下一刀
+## 历史收尾位置
 
-S5ag 的 Workspace owner 拆分已完成：`Entry -> Setup -> Command -> Scene` 均已落到独立 current owner，主 runtime 仅保留无条件组合。下一步是 fresh current-tree 验证、架构确认和 `verify:local` 基线 blocker 的独立治理；不得恢复旧 runtime、compat wrapper 或生产 mock fallback。
+S5ag 的 Workspace owner 拆分已完成：`Entry -> Setup -> Command -> Scene` 均已落到独立 current owner，主 runtime 仅保留无条件组合。该研究树和旧多进程计划只保留为 dated evidence；当前下一刀由 `internal/refactor/v2/IMPLEMENTATION-PLAN.md` 定义，不得用旧 `agentSession/*` owner、compat wrapper 或生产 mock fallback 覆盖 current 计划。

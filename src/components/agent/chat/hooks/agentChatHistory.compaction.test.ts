@@ -5,22 +5,23 @@ import type { AgentSessionDetail } from "@/lib/api/agentRuntime/sessionTypes";
 import { hydrateSessionDetailMessages } from "./agentChatHistory";
 
 describe("agentChatHistory compaction and previews", () => {
-  it("分页历史消息应使用历史窗口绝对位置生成稳定 ID", () => {
+  it("imported Message 应保留来源 ID，不依赖 canonical history count", () => {
     const detail: AgentSessionDetail = {
       id: "session-page",
       created_at: 1,
       updated_at: 2,
       messages_count: 100,
       history_limit: 2,
-      history_offset: 40,
       history_truncated: true,
       messages: [
         {
+          id: "imported-user-1",
           role: "user",
           timestamp: 1710000000,
           content: [{ type: "text", text: "更早问题" }],
         },
         {
+          id: "imported-assistant-1",
           role: "assistant",
           timestamp: 1710000005,
           content: [{ type: "text", text: "更早回答" }],
@@ -31,32 +32,36 @@ describe("agentChatHistory compaction and previews", () => {
     const messages = hydrateSessionDetailMessages(detail, "session-page");
 
     expect(messages.map((message) => message.id)).toEqual([
-      "session-page-58",
-      "session-page-59",
+      "imported-user-1",
+      "imported-assistant-1",
     ]);
   });
 
-  it("Cursor 分页历史消息应优先使用游标起始位置生成稳定 ID", () => {
+  it("canonical cursor 不应参与 imported Message ID 合成", () => {
     const detail: AgentSessionDetail = {
       id: "session-cursor-page",
       created_at: 1,
       updated_at: 2,
       messages_count: 100,
       history_limit: 2,
-      history_offset: 40,
       history_cursor: {
-        oldest_message_id: 21,
-        start_index: 20,
-        loaded_count: 2,
+        item_cursor: "opaque-item-page-2",
+        turn_cursor: null,
+        loaded_entry_count: 2,
+        loaded_turn_count: 0,
+        loaded_item_count: 2,
+        has_more: true,
       },
       history_truncated: true,
       messages: [
         {
+          id: "imported-cursor-user",
           role: "user",
           timestamp: 1710000000,
           content: [{ type: "text", text: "Cursor 更早问题" }],
         },
         {
+          id: "imported-cursor-assistant",
           role: "assistant",
           timestamp: 1710000005,
           content: [{ type: "text", text: "Cursor 更早回答" }],
@@ -70,8 +75,8 @@ describe("agentChatHistory compaction and previews", () => {
     );
 
     expect(messages.map((message) => message.id)).toEqual([
-      "session-cursor-page-20",
-      "session-cursor-page-21",
+      "imported-cursor-user",
+      "imported-cursor-assistant",
     ]);
   });
 
@@ -357,7 +362,7 @@ describe("agentChatHistory compaction and previews", () => {
     });
   });
 
-  it("thread item 图片任务草稿应从同 turn read model 恢复 token usage", () => {
+  it("process-only thread item 不应为 token usage 合成 Message", () => {
     const detail: AgentSessionDetail = {
       id: "session-thread-item-image-usage",
       created_at: 1,
@@ -393,12 +398,7 @@ describe("agentChatHistory compaction and previews", () => {
       "session-thread-item-image-usage",
     );
 
-    expect(messages[0]?.usage).toEqual({
-      input_tokens: 31000,
-      output_tokens: 119,
-      cached_input_tokens: undefined,
-      cache_creation_input_tokens: undefined,
-    });
+    expect(messages).toEqual([]);
   });
 
   it("合并相邻 assistant 历史消息时也应保留最后一条 usage", () => {

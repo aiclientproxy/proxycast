@@ -5,7 +5,8 @@ use super::session_media_refs::{
 use super::sidecar_store::{SidecarReadBytesChunk, SidecarReadBytesResult};
 use super::timestamp;
 use super::{RuntimeCore, RuntimeCoreError};
-use app_server_protocol::{AgentEvent, AgentSessionMediaReadParams, AgentSessionMediaReadResponse};
+use app_server_protocol::protocol::v2::{MediaReadParams, MediaReadResponse};
+use app_server_protocol::AgentEvent;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde_json::{json, Value};
 
@@ -15,19 +16,19 @@ const MEDIA_READ_CHUNK_EVENT_TYPE: &str = "media.read.chunk";
 const MEDIA_READ_COMPLETED_EVENT_TYPE: &str = "media.read.completed";
 
 impl RuntimeCore {
-    pub fn read_agent_session_media(
+    pub fn read_media(
         &self,
-        params: AgentSessionMediaReadParams,
-    ) -> Result<AgentSessionMediaReadResponse, RuntimeCoreError> {
-        self.read_agent_session_media_with_cancel(params, || false)
+        params: MediaReadParams,
+    ) -> Result<MediaReadResponse, RuntimeCoreError> {
+        self.read_media_with_cancel(params, || false)
     }
 
-    pub(crate) fn read_agent_session_media_with_cancel(
+    pub(crate) fn read_media_with_cancel(
         &self,
-        params: AgentSessionMediaReadParams,
+        params: MediaReadParams,
         is_canceled: impl Fn() -> bool,
-    ) -> Result<AgentSessionMediaReadResponse, RuntimeCoreError> {
-        let resolved = self.resolve_agent_session_media_request(&params)?;
+    ) -> Result<MediaReadResponse, RuntimeCoreError> {
+        let resolved = self.resolve_media_read_request(&params)?;
         fail_if_canceled(&is_canceled)?;
         let content = resolved
             .sidecar_store
@@ -56,27 +57,24 @@ impl RuntimeCore {
         ))
     }
 
-    pub(crate) fn read_agent_session_media_streaming_with_cancel(
+    pub(crate) fn read_media_streaming_with_cancel(
         &self,
-        params: AgentSessionMediaReadParams,
+        params: MediaReadParams,
         is_canceled: impl Fn() -> bool,
         on_event: &mut impl FnMut(AgentEvent) -> Result<(), RuntimeCoreError>,
-    ) -> Result<AgentSessionMediaReadResponse, RuntimeCoreError> {
+    ) -> Result<MediaReadResponse, RuntimeCoreError> {
         if !params.stream {
-            return self.read_agent_session_media_with_cancel(params, is_canceled);
+            return self.read_media_with_cancel(params, is_canceled);
         }
-        let resolved = self.resolve_agent_session_media_request(&params)?;
+        let resolved = self.resolve_media_read_request(&params)?;
         fail_if_canceled(&is_canceled)?;
-        let stream_id = media_read_stream_id(&resolved.params.session_id, resolved.offset);
+        let stream_id = media_read_stream_id(&resolved.params.thread_id, resolved.offset);
         let mut chunk_index = 0_u64;
         let mut on_chunk = |chunk: SidecarReadBytesChunk| {
             chunk_index += 1;
             let event = media_read_chunk_event(&resolved, &stream_id, chunk_index, &chunk);
             if let Err(error) = on_event(event) {
-                tracing::warn!(
-                    "failed to send agentSession/media/read streaming chunk: {}",
-                    error
-                );
+                tracing::warn!("failed to send media/read streaming chunk: {}", error);
             }
         };
         let content = resolved
@@ -114,25 +112,26 @@ impl RuntimeCore {
         Ok(response)
     }
 
-    fn resolve_agent_session_media_request(
+    fn resolve_media_read_request(
         &self,
-        params: &AgentSessionMediaReadParams,
+        params: &MediaReadParams,
     ) -> Result<ResolvedMediaRead, RuntimeCoreError> {
         let requested = RequestedMediaSidecar::from_params(params)?;
         let sidecar_store = self.sidecar_store.as_ref().ok_or_else(|| {
             RuntimeCoreError::Backend(
-                "agentSession/media/read requires an initialized sidecar store".to_string(),
+                "media/read requires an initialized sidecar store".to_string(),
             )
         })?;
-        let (known_ref, thread_id, base_sequence) = {
+        let (known_ref, session_id, base_sequence) = {
             let state = self
                 .state
                 .lock()
                 .expect("runtime core state mutex poisoned");
             let stored = state
                 .sessions
-                .get(&params.session_id)
-                .ok_or_else(|| RuntimeCoreError::SessionNotFound(params.session_id.clone()))?;
+                .values()
+                .find(|stored| stored.session.thread_id == params.thread_id)
+                .ok_or_else(|| RuntimeCoreError::SessionNotFound(params.thread_id.clone()))?;
             let known_ref = known_media_sidecar_refs(stored)
                 .into_iter()
                 .find(|candidate| candidate.matches(&requested))
@@ -143,12 +142,12 @@ impl RuntimeCore {
                 })?;
             (
                 known_ref,
-                stored.session.thread_id.clone(),
+                stored.session.session_id.clone(),
                 stored.events.len() as u64,
             )
         };
         let relative_path = session_scoped_media_relative_path(
-            params.session_id.as_str(),
+            session_id.as_str(),
             known_ref.relative_path.as_str(),
         )?;
         let max_bytes = params
@@ -166,7 +165,7 @@ impl RuntimeCore {
             max_bytes,
             offset,
             length,
-            thread_id,
+            session_id,
             base_sequence,
         })
     }
@@ -187,13 +186,13 @@ fn validate_known_media_size(
 }
 
 fn media_read_response(
-    params: &AgentSessionMediaReadParams,
+    params: &MediaReadParams,
     requested: &RequestedMediaSidecar,
     known_ref: &KnownMediaSidecarRef,
     content: &SidecarReadBytesResult,
-) -> AgentSessionMediaReadResponse {
-    AgentSessionMediaReadResponse {
-        session_id: params.session_id.clone(),
+) -> MediaReadResponse {
+    MediaReadResponse {
+        thread_id: params.thread_id.clone(),
         uri: known_ref.display_uri(requested),
         mime_type: known_ref.mime_type.clone(),
         bytes: content.bytes.len() as u64,
@@ -233,7 +232,7 @@ fn media_read_chunk_event(
             "chunkIndex": chunk_index,
             "done": false,
             "chunk": {
-                "sessionId": resolved.params.session_id.clone(),
+                "threadId": resolved.params.thread_id.clone(),
                 "uri": resolved.known_ref.display_uri(&resolved.requested),
                 "mimeType": resolved.known_ref.mime_type.clone(),
                 "bytes": chunk.bytes.len() as u64,
@@ -253,7 +252,7 @@ fn media_read_completed_event(
     resolved: &ResolvedMediaRead,
     stream_id: &str,
     chunk_count: u64,
-    response: &AgentSessionMediaReadResponse,
+    response: &MediaReadResponse,
 ) -> AgentEvent {
     media_read_event(
         resolved,
@@ -265,7 +264,7 @@ fn media_read_completed_event(
             "chunkCount": chunk_count,
             "done": true,
             "media": {
-                "sessionId": response.session_id.clone(),
+                "threadId": response.thread_id.clone(),
                 "uri": response.uri.clone(),
                 "mimeType": response.mime_type.clone(),
                 "bytes": response.bytes,
@@ -295,8 +294,8 @@ fn media_read_event(
             sequence_offset
         ),
         sequence: resolved.base_sequence.saturating_add(sequence_offset),
-        session_id: resolved.params.session_id.clone(),
-        thread_id: Some(resolved.thread_id.clone()),
+        session_id: resolved.session_id.clone(),
+        thread_id: Some(resolved.params.thread_id.clone()),
         turn_id: None,
         event_type: event_type.to_string(),
         timestamp: timestamp(),
@@ -319,7 +318,7 @@ fn safe_event_id_component(value: &str) -> String {
 
 #[derive(Debug, Clone)]
 struct ResolvedMediaRead {
-    params: AgentSessionMediaReadParams,
+    params: MediaReadParams,
     requested: RequestedMediaSidecar,
     known_ref: KnownMediaSidecarRef,
     sidecar_store: std::sync::Arc<super::sidecar_store::SidecarStore>,
@@ -327,7 +326,7 @@ struct ResolvedMediaRead {
     max_bytes: u64,
     offset: u64,
     length: u64,
-    thread_id: String,
+    session_id: String,
     base_sequence: u64,
 }
 
@@ -469,8 +468,8 @@ mod tests {
         let (core, _temp, ref_id) = prepared_core_with_media_ref(None);
 
         let response = core
-            .read_agent_session_media(AgentSessionMediaReadParams {
-                session_id: "sess-media-read".to_string(),
+            .read_media(MediaReadParams {
+                thread_id: "thread-media-read".to_string(),
                 uri: Some(ref_id.clone()),
                 ref_id: None,
                 sidecar_ref: None,
@@ -481,7 +480,7 @@ mod tests {
             })
             .expect("read media");
 
-        assert_eq!(response.session_id, "sess-media-read");
+        assert_eq!(response.thread_id, "thread-media-read");
         assert_eq!(response.uri, ref_id);
         assert_eq!(response.mime_type.as_deref(), Some("image/png"));
         assert_eq!(response.bytes, 4);
@@ -500,8 +499,8 @@ mod tests {
         let (core, _temp, ref_id) = prepared_core_with_media_ref(None);
 
         let response = core
-            .read_agent_session_media(AgentSessionMediaReadParams {
-                session_id: "sess-media-read".to_string(),
+            .read_media(MediaReadParams {
+                thread_id: "thread-media-read".to_string(),
                 uri: Some(ref_id.clone()),
                 ref_id: None,
                 sidecar_ref: None,
@@ -512,7 +511,7 @@ mod tests {
             })
             .expect("read media range");
 
-        assert_eq!(response.session_id, "sess-media-read");
+        assert_eq!(response.thread_id, "thread-media-read");
         assert_eq!(response.uri, ref_id);
         assert_eq!(response.bytes, 2);
         assert_eq!(response.total_bytes, 4);
@@ -530,9 +529,9 @@ mod tests {
         let mut events = Vec::new();
 
         let response = core
-            .read_agent_session_media_streaming_with_cancel(
-                AgentSessionMediaReadParams {
-                    session_id: "sess-media-read".to_string(),
+            .read_media_streaming_with_cancel(
+                MediaReadParams {
+                    thread_id: "thread-media-read".to_string(),
                     uri: Some(ref_id.clone()),
                     ref_id: None,
                     sidecar_ref: None,
@@ -570,8 +569,8 @@ mod tests {
             prepared_core_with_artifact_sidecar("image", "image/png", vec![0x89, b'P', b'N', b'G']);
 
         let response = core
-            .read_agent_session_media(AgentSessionMediaReadParams {
-                session_id: "sess-artifact-media-read".to_string(),
+            .read_media(MediaReadParams {
+                thread_id: "thread-artifact-media-read".to_string(),
                 uri: Some("artifact://message/image-1".to_string()),
                 ref_id: None,
                 sidecar_ref: None,
@@ -582,7 +581,7 @@ mod tests {
             })
             .expect("read media artifact");
 
-        assert_eq!(response.session_id, "sess-artifact-media-read");
+        assert_eq!(response.thread_id, "thread-artifact-media-read");
         assert_eq!(response.mime_type.as_deref(), Some("image/png"));
         assert_eq!(response.bytes, 4);
         assert_eq!(response.content_base64, "iVBORw==");
@@ -605,8 +604,8 @@ mod tests {
         );
 
         let error = core
-            .read_agent_session_media(AgentSessionMediaReadParams {
-                session_id: "sess-artifact-media-read".to_string(),
+            .read_media(MediaReadParams {
+                thread_id: "thread-artifact-media-read".to_string(),
                 uri: Some("artifact://message/image-1".to_string()),
                 ref_id: None,
                 sidecar_ref: None,
@@ -625,8 +624,8 @@ mod tests {
         let (core, _temp, _ref_id) = prepared_core_with_media_ref(None);
 
         let error = core
-            .read_agent_session_media(AgentSessionMediaReadParams {
-                session_id: "sess-media-read".to_string(),
+            .read_media(MediaReadParams {
+                thread_id: "thread-media-read".to_string(),
                 uri: Some("sidecar://media/missing".to_string()),
                 ref_id: None,
                 sidecar_ref: None,
@@ -657,8 +656,8 @@ mod tests {
             .to_string();
 
         let error = core
-            .read_agent_session_media(AgentSessionMediaReadParams {
-                session_id: "sess-media-read".to_string(),
+            .read_media(MediaReadParams {
+                thread_id: "thread-media-read".to_string(),
                 uri: Some(ref_id),
                 ref_id: None,
                 sidecar_ref: None,

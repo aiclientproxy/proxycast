@@ -8,7 +8,6 @@
     "agentSession/fileCheckpoint/list",
     "agentSession/fileCheckpoint/restore",
     "agentSession/handoffBundle/export",
-    "agentSession/media/read",
     "agentSession/replayCase/export",
     "agentSession/reviewDecision/save",
     "agentSession/reviewDecisionTemplate/export",

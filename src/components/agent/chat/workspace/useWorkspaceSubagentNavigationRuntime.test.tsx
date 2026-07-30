@@ -34,7 +34,9 @@ describe("openWorkspaceSubagentTarget", () => {
     expect(deferSessionRecentMetadataSyncForNavigation).toHaveBeenCalledWith(
       "agent-child",
     );
-    expect(switchTopic).toHaveBeenCalledWith("agent-child");
+    expect(switchTopic).toHaveBeenCalledWith("agent-child", {
+      allowDetachedSession: true,
+    });
   });
 
   it("canonical child 缺少 sessionId 时应读取 Thread 映射", async () => {
@@ -54,7 +56,9 @@ describe("openWorkspaceSubagentTarget", () => {
     expect(deferSessionRecentMetadataSyncForNavigation).toHaveBeenCalledWith(
       "agent-resolved",
     );
-    expect(switchTopic).toHaveBeenCalledWith("agent-resolved");
+    expect(switchTopic).toHaveBeenCalledWith("agent-resolved", {
+      allowDetachedSession: true,
+    });
   });
 
   it("未知 canonical ThreadId 应读取真实 sessionId 后导航", async () => {
@@ -74,7 +78,9 @@ describe("openWorkspaceSubagentTarget", () => {
     expect(deferSessionRecentMetadataSyncForNavigation).toHaveBeenCalledWith(
       "agent-child",
     );
-    expect(switchTopic).toHaveBeenCalledWith("agent-child");
+    expect(switchTopic).toHaveBeenCalledWith("agent-child", {
+      allowDetachedSession: true,
+    });
   });
 
   it("Thread 身份解析失败时不得切换 session", async () => {

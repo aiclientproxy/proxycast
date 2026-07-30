@@ -1,49 +1,175 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { scheduleMinimumDelayIdleTask } from "@/lib/utils/scheduleMinimumDelayIdleTask";
 import {
-  buildConversationMessageRenderWindowProjection,
-  filterVisibleConversationMessages,
-  resolveConversationMessageRenderWindowSettings,
-  resolveInitialConversationRenderedMessageCount,
-  shouldUseConversationProgressiveRender,
-} from "../projection/messageRenderWindowProjection";
-import type { Message } from "../types";
+  buildCurrentTurnTimelineProjection,
+  buildMessageGroupsProjection,
+  buildMessageRenderGroupsProjection,
+  buildTimelineByMessageIdProjection,
+  resolveLastAssistantMessage,
+} from "../projection/messageTimelineRenderProjection";
+import {
+  buildTurnTimelineRenderProjection,
+  type TurnTimelineRenderEntry,
+} from "../projection/turnTimelineRenderProjection";
+import { filterVisibleConversationMessages } from "../projection/messageRenderWindowProjection";
+import type { AgentThreadItem, AgentThreadTurn, Message } from "../types";
 import { MESSAGE_LIST_RENDER_WINDOW_SETTINGS } from "./messageListConstants";
 
+interface SessionHistoryWindow {
+  hasMore?: boolean;
+}
+
 interface UseMessageListRenderWindowOptions {
+  currentTurnId: string | null;
   isSending: boolean;
   isRestoringSession: boolean;
   isUserScrolling: boolean;
   messages: Message[];
-  sessionHistoryWindow: {
-    loadedMessages: number;
-    totalMessages: number;
-    isLoadingFull: boolean;
-    error?: string | null;
-  } | null;
+  sessionHistoryWindow: SessionHistoryWindow | null;
+  threadItems: readonly AgentThreadItem[];
+  turns: readonly AgentThreadTurn[];
+}
+
+interface RenderEntryWindowSnapshot {
+  firstId: string | null;
+  lastId: string | null;
+  length: number;
+}
+
+function hasPersistedOlderHistory(
+  historyWindow: SessionHistoryWindow | null,
+): boolean {
+  return Boolean(historyWindow && historyWindow.hasMore !== false);
+}
+
+function buildOwnershipRenderEntries(params: {
+  currentTurnId: string | null;
+  messages: Message[];
+  threadItems: readonly AgentThreadItem[];
+  turns: readonly AgentThreadTurn[];
+}): TurnTimelineRenderEntry[] {
+  const messageGroups = buildMessageGroupsProjection(params.messages);
+  const timelineByMessageId = buildTimelineByMessageIdProjection({
+    canBuildHistoricalTimeline: true,
+    renderedMessages: params.messages,
+    renderedTurns: [...params.turns],
+    renderedThreadItems: [...params.threadItems],
+  });
+  const lastAssistantMessageId =
+    resolveLastAssistantMessage(params.messages)?.id ?? null;
+  const activeCurrentTurn =
+    params.turns.find((turn) => turn.id === params.currentTurnId) ?? null;
+  const currentTurnTimeline = buildCurrentTurnTimelineProjection({
+    activeCurrentTurnId: params.currentTurnId,
+    activeCurrentTurn,
+    lastAssistantMessageId,
+    timelineByMessageId,
+    renderedThreadItems: [...params.threadItems],
+    renderedMessages: params.messages,
+  });
+  const ownershipGroups = buildMessageRenderGroupsProjection({
+    messageGroups,
+    timelineByMessageId,
+    currentTurnTimeline,
+    lastAssistantMessageId,
+  });
+
+  return buildTurnTimelineRenderProjection({
+    messageGroups: ownershipGroups,
+    renderedTurns: params.turns,
+    renderedThreadItems: params.threadItems,
+    currentTurnId: params.currentTurnId,
+  });
+}
+
+function collectRenderedEntryOwnership(
+  entries: readonly TurnTimelineRenderEntry[],
+): { messageIds: Set<string>; turnIds: Set<string> } {
+  const messageIds = new Set<string>();
+  const turnIds = new Set<string>();
+
+  for (const entry of entries) {
+    if (entry.kind === "canonical_turn") {
+      turnIds.add(entry.turn.id);
+      for (const segment of entry.segments) {
+        if (segment.kind !== "message") continue;
+        messageIds.add(segment.item.id);
+        if (segment.item.type === "user_message" && segment.item.client_id) {
+          messageIds.add(segment.item.client_id);
+        }
+      }
+      continue;
+    }
+
+    const timelineTurnId = entry.group.timeline?.turn.id.trim();
+    if (timelineTurnId) turnIds.add(timelineTurnId);
+    for (const message of entry.group.messages) {
+      messageIds.add(message.id);
+      const turnId = message.runtimeTurnId?.trim();
+      if (turnId) turnIds.add(turnId);
+    }
+  }
+
+  return { messageIds, turnIds };
+}
+
+function selectRenderedEntries(params: {
+  entries: readonly TurnTimelineRenderEntry[];
+  renderedEntryCount: number;
+  pinnedEntryId: string | null;
+}): TurnTimelineRenderEntry[] {
+  if (params.renderedEntryCount >= params.entries.length) {
+    return [...params.entries];
+  }
+
+  const tail = params.entries.slice(-params.renderedEntryCount);
+  if (
+    !params.pinnedEntryId ||
+    tail.some((entry) => entry.id === params.pinnedEntryId)
+  ) {
+    return tail;
+  }
+
+  const pinnedEntry = params.entries.find(
+    (entry) => entry.id === params.pinnedEntryId,
+  );
+  if (!pinnedEntry) return tail;
+
+  const selectedIds = new Set([
+    pinnedEntry.id,
+    ...tail.map((entry) => entry.id),
+  ]);
+  return params.entries.filter((entry) => selectedIds.has(entry.id));
 }
 
 export function useMessageListRenderWindow({
+  currentTurnId,
   isSending,
   isRestoringSession,
   isUserScrolling,
   messages,
   sessionHistoryWindow,
+  threadItems,
+  turns,
 }: UseMessageListRenderWindowOptions) {
   const visibleMessages = useMemo(
     () => filterVisibleConversationMessages(messages),
     [messages],
   );
-  const visibleMessageFirstId = visibleMessages[0]?.id ?? null;
-  const visibleMessageLastId =
-    visibleMessages[visibleMessages.length - 1]?.id ?? null;
-  const persistedHiddenHistoryCount =
-    sessionHistoryWindow &&
-    sessionHistoryWindow.totalMessages > sessionHistoryWindow.loadedMessages
-      ? sessionHistoryWindow.totalMessages - sessionHistoryWindow.loadedMessages
-      : 0;
-  const isRestoredHistoryWindow =
-    isRestoringSession || persistedHiddenHistoryCount > 0;
+  const visibleEntries = useMemo(
+    () =>
+      buildOwnershipRenderEntries({
+        currentTurnId,
+        messages: visibleMessages,
+        threadItems,
+        turns,
+      }),
+    [currentTurnId, threadItems, turns, visibleMessages],
+  );
+  const visibleEntryFirstId = visibleEntries[0]?.id ?? null;
+  const visibleEntryLastId = visibleEntries.at(-1)?.id ?? null;
+  const hasPersistedHistory = hasPersistedOlderHistory(sessionHistoryWindow);
+  const isRestoredHistoryWindow = isRestoringSession || hasPersistedHistory;
   const [restoredPromptCacheNoticeReady, setRestoredPromptCacheNoticeReady] =
     useState(() => !isRestoredHistoryWindow);
 
@@ -63,104 +189,99 @@ export function useMessageListRenderWindow({
         idleTimeoutMs: 3_000,
       },
     );
-  }, [isRestoredHistoryWindow, visibleMessageFirstId, visibleMessageLastId]);
+  }, [isRestoredHistoryWindow, visibleEntryFirstId, visibleEntryLastId]);
 
-  const messageRenderWindowSettings =
-    resolveConversationMessageRenderWindowSettings(
-      MESSAGE_LIST_RENDER_WINDOW_SETTINGS,
-      isRestoredHistoryWindow,
-    );
-  const progressiveInitialRenderCount =
-    messageRenderWindowSettings.initialRenderCount;
-  const progressiveRenderBatchSize =
-    messageRenderWindowSettings.renderBatchSize;
-  const progressiveRenderMinimumDelayMs =
-    messageRenderWindowSettings.minimumDelayMs;
-  const shouldUseProgressiveRender = shouldUseConversationProgressiveRender({
-    isSending,
-    isRestoredHistoryWindow,
-    visibleMessageCount: visibleMessages.length,
-    settings: messageRenderWindowSettings,
-  });
-  const visibleMessageWindowRef = useRef<{
-    firstId: string | null;
-    lastId: string | null;
-    length: number;
-  } | null>(null);
-  const [renderedMessageCount, setRenderedMessageCount] = useState(() =>
-    resolveInitialConversationRenderedMessageCount({
-      isSending,
-      isRestoredHistoryWindow,
-      visibleMessageCount: visibleMessages.length,
-      settings: messageRenderWindowSettings,
-    }),
+  const renderWindowSettings = isRestoredHistoryWindow
+    ? MESSAGE_LIST_RENDER_WINDOW_SETTINGS.restored
+    : MESSAGE_LIST_RENDER_WINDOW_SETTINGS.regular;
+  const progressiveInitialRenderCount = renderWindowSettings.initialRenderCount;
+  const progressiveRenderBatchSize = renderWindowSettings.renderBatchSize;
+  const progressiveRenderMinimumDelayMs = renderWindowSettings.minimumDelayMs;
+  const shouldUseProgressiveRender =
+    (!isSending || isRestoredHistoryWindow) &&
+    visibleEntries.length > progressiveInitialRenderCount;
+  const visibleEntryWindowRef = useRef<RenderEntryWindowSnapshot | null>(null);
+  const [renderedEntryCount, setRenderedEntryCount] = useState(() =>
+    shouldUseProgressiveRender
+      ? Math.min(visibleEntries.length, progressiveInitialRenderCount)
+      : visibleEntries.length,
   );
 
   useEffect(() => {
-    const previousWindow = visibleMessageWindowRef.current;
-    visibleMessageWindowRef.current = {
-      firstId: visibleMessageFirstId,
-      lastId: visibleMessageLastId,
-      length: visibleMessages.length,
+    const previousWindow = visibleEntryWindowRef.current;
+    visibleEntryWindowRef.current = {
+      firstId: visibleEntryFirstId,
+      lastId: visibleEntryLastId,
+      length: visibleEntries.length,
     };
 
     if (!shouldUseProgressiveRender) {
-      setRenderedMessageCount(visibleMessages.length);
+      setRenderedEntryCount(visibleEntries.length);
       return;
     }
 
     const isAppendOnlyUpdate =
       previousWindow !== null &&
-      previousWindow.firstId === visibleMessageFirstId &&
-      previousWindow.length <= visibleMessages.length &&
-      previousWindow.lastId !== visibleMessageLastId;
+      previousWindow.firstId === visibleEntryFirstId &&
+      previousWindow.length <= visibleEntries.length &&
+      previousWindow.lastId !== visibleEntryLastId;
 
     if (!isAppendOnlyUpdate) {
-      setRenderedMessageCount(
-        Math.min(visibleMessages.length, progressiveInitialRenderCount),
+      setRenderedEntryCount(
+        Math.min(visibleEntries.length, progressiveInitialRenderCount),
       );
       return;
     }
 
-    const appendedCount = visibleMessages.length - previousWindow.length;
-    if (appendedCount <= 0) {
-      return;
-    }
+    const appendedCount = visibleEntries.length - previousWindow.length;
+    if (appendedCount <= 0) return;
 
-    setRenderedMessageCount((current) =>
+    setRenderedEntryCount((current) =>
       Math.min(
-        visibleMessages.length,
+        visibleEntries.length,
         Math.max(current + appendedCount, progressiveInitialRenderCount),
       ),
     );
   }, [
     progressiveInitialRenderCount,
     shouldUseProgressiveRender,
-    visibleMessageFirstId,
-    visibleMessageLastId,
-    visibleMessages.length,
+    visibleEntries.length,
+    visibleEntryFirstId,
+    visibleEntryLastId,
   ]);
 
-  const messageRenderWindow = useMemo(
+  const normalizedRenderedEntryCount = shouldUseProgressiveRender
+    ? Math.min(visibleEntries.length, Math.max(0, renderedEntryCount))
+    : visibleEntries.length;
+  const pinnedEntryId = useMemo(() => {
+    if (!currentTurnId) return null;
+    return (
+      visibleEntries.find((entry) => {
+        if (entry.kind === "canonical_turn") {
+          return entry.turn.id === currentTurnId;
+        }
+        if (entry.group.timeline?.turn.id === currentTurnId) return true;
+        return entry.group.messages.some(
+          (message) => message.runtimeTurnId?.trim() === currentTurnId,
+        );
+      })?.id ?? null
+    );
+  }, [currentTurnId, visibleEntries]);
+  const renderedEntries = useMemo(
     () =>
-      buildConversationMessageRenderWindowProjection({
-        visibleMessages,
-        renderedMessageCount,
-        isSending,
-        isRestoredHistoryWindow,
-        settings: messageRenderWindowSettings,
+      selectRenderedEntries({
+        entries: visibleEntries,
+        renderedEntryCount: normalizedRenderedEntryCount,
+        pinnedEntryId,
       }),
-    [
-      isRestoredHistoryWindow,
-      isSending,
-      messageRenderWindowSettings,
-      renderedMessageCount,
-      visibleMessages,
-    ],
+    [normalizedRenderedEntryCount, pinnedEntryId, visibleEntries],
   );
-  const hiddenHistoryCount = messageRenderWindow.hiddenHistoryCount;
+  const hiddenHistoryCount = Math.max(
+    0,
+    visibleEntries.length - renderedEntries.length,
+  );
   const shouldAutoHydrateHiddenHistory =
-    messageRenderWindow.shouldAutoHydrateHiddenHistory;
+    shouldUseProgressiveRender && !isRestoredHistoryWindow;
 
   useEffect(() => {
     if (
@@ -173,11 +294,8 @@ export function useMessageListRenderWindow({
 
     return scheduleMinimumDelayIdleTask(
       () => {
-        setRenderedMessageCount((current) =>
-          Math.min(
-            visibleMessages.length,
-            current + progressiveRenderBatchSize,
-          ),
+        setRenderedEntryCount((current) =>
+          Math.min(visibleEntries.length, current + progressiveRenderBatchSize),
         );
       },
       {
@@ -191,32 +309,46 @@ export function useMessageListRenderWindow({
     progressiveRenderBatchSize,
     progressiveRenderMinimumDelayMs,
     shouldAutoHydrateHiddenHistory,
-    visibleMessages.length,
+    visibleEntries.length,
   ]);
 
-  const renderedMessages = messageRenderWindow.renderedMessages;
-  const renderedAssistantMessageCount = useMemo(
+  const renderedOwnership = useMemo(
+    () => collectRenderedEntryOwnership(renderedEntries),
+    [renderedEntries],
+  );
+  const renderedMessages = useMemo(
     () =>
-      renderedMessages.reduce(
-        (count, message) => count + (message.role === "assistant" ? 1 : 0),
-        0,
-      ),
-    [renderedMessages],
+      visibleMessages.filter((message) => {
+        if (renderedOwnership.messageIds.has(message.id)) return true;
+        const turnId = message.runtimeTurnId?.trim();
+        return Boolean(turnId && renderedOwnership.turnIds.has(turnId));
+      }),
+    [renderedOwnership, visibleMessages],
+  );
+  const renderedTurns = useMemo(
+    () => turns.filter((turn) => renderedOwnership.turnIds.has(turn.id)),
+    [renderedOwnership, turns],
+  );
+  const renderedThreadItems = useMemo(
+    () =>
+      threadItems.filter((item) => renderedOwnership.turnIds.has(item.turn_id)),
+    [renderedOwnership, threadItems],
   );
   const handleExpandAllHistory = useCallback(() => {
-    setRenderedMessageCount(visibleMessages.length);
-  }, [visibleMessages.length]);
+    setRenderedEntryCount(visibleEntries.length);
+  }, [visibleEntries.length]);
 
   return {
     handleExpandAllHistory,
+    hasPersistedOlderHistory: hasPersistedHistory,
     hiddenHistoryCount,
     isRestoredHistoryWindow,
-    persistedHiddenHistoryCount,
-    progressiveInitialRenderCount,
-    renderedAssistantMessageCount,
-    renderedMessageCount,
+    renderedEntryCount: renderedEntries.length,
     renderedMessages,
+    renderedThreadItems,
+    renderedTurns,
     restoredPromptCacheNoticeReady,
+    visibleEntries,
     visibleMessages,
   };
 }

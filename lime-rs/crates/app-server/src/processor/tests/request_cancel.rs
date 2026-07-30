@@ -4,13 +4,13 @@ use crate::runtime::sidecar_store::{SidecarBytesWriteRequest, SidecarStore};
 use crate::RuntimeCore;
 use crate::RuntimeEvent;
 use app_server_protocol::error_codes;
+use app_server_protocol::protocol::v2::METHOD_MEDIA_READ;
 use app_server_protocol::AgentSessionStartParams;
 use app_server_protocol::JsonRpcMessage;
 use app_server_protocol::JsonRpcNotification;
 use app_server_protocol::JsonRpcRequest;
 use app_server_protocol::RequestId;
 use app_server_protocol::METHOD_AGENT_SESSION_EVENT;
-use app_server_protocol::METHOD_AGENT_SESSION_MEDIA_READ;
 use app_server_protocol::METHOD_CANCEL_REQUEST;
 use app_server_protocol::METHOD_THREAD_LIST;
 use app_server_protocol::METHOD_THREAD_RESUME;
@@ -149,9 +149,9 @@ async fn media_read_streaming_request_emits_chunk_notifications() {
         .handle_request_streaming(
             JsonRpcRequest::new(
                 RequestId::Integer(10),
-                METHOD_AGENT_SESSION_MEDIA_READ,
+                METHOD_MEDIA_READ,
                 Some(json!({
-                    "sessionId": "sess-media-stream",
+                    "threadId": "thread-media-stream",
                     "uri": sidecar_ref.ref_id,
                     "maxBytes": 1024,
                     "length": 4,
@@ -247,9 +247,9 @@ async fn cancel_request_notification_cancels_media_read_before_sidecar_io() {
     let messages = processor
         .handle_request(JsonRpcRequest::new(
             RequestId::Integer(9),
-            METHOD_AGENT_SESSION_MEDIA_READ,
+            METHOD_MEDIA_READ,
             Some(json!({
-                "sessionId": "sess-media-cancel",
+                "threadId": "thread-media-cancel",
                 "uri": sidecar_ref.ref_id,
                 "maxBytes": 1024
             })),

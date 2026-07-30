@@ -1,12 +1,14 @@
 # Refactor v2 多进程实施计划
 
-> status: skeleton-and-post-gate-closeout / refinement-backlog-active / not-archive-ready
+> status: historical evidence / superseded for current rendering work
 > owner: refactor-v2-coordinator
 > coordination: required
 > started: 2026-07-12
 > execution: post-skeleton-refinement
 > source plan: `internal/research/refactor/v2/12-plan/slices.md`
 > architecture: `internal/research/refactor/v2/04-target/architecture.md`
+
+> 2026-07-29 current rendering correction：本计划记录旧广义 Refactor v2 多进程切片与 dated evidence，不再定义 ConversationProjection、ItemRenderer 或 `agentSession/*` 的 current owner。当前渲染实施顺序、写集和退出条件以 `internal/refactor/v2/IMPLEMENTATION-PLAN.md` 为准；与 `internal/aiprompts/architecture.md` 冲突的旧 owner 声明只作历史证据。
 
 > 2026-07-22 current correction：v0 `ManagedObjective`、`agentSession/objective/*`、旧
 > Objective client/DTO/GUI/Automation projection 与 `managed_objectives` storage 已
@@ -1782,6 +1784,104 @@ reader cleanup：turn_input_events、provider_history、read_model/messages、se
 验证：上述 Rust 文件 scoped rustfmt --check、cargo fmt --all -- --check、git diff --check 和 typed/flat 静态边界扫描通过；最终工作树 governance legacy report 通过，零引用候选、分类漂移和边界违规均未报告。mention_selection 独立 target 冷编译约 20 分钟、默认 target 再编译约 8 分钟后仍未完成 app-server test binary，均已停止避免与共享编译争抢资源，因此本轮不把 Cargo 定向测试标为通过。
 分类：validated Mention selection、typed mailbox/import producer与 typed reader 为 current；旧 app/plugin 原始 Mention provider lowering、五个 flat AgentInput object reader fallback为 dead/deleted/forbidden-to-restore；v0 AgentSession adapter与 Rust client 错误 start_turn API为 deprecated/delete-pending；未新增 compat。
 OPEN_REF：下一刀批量迁 61 个 test-only AgentSessionTurnStartParams 调用，删除 turn_start.rs adapter、legacy_user_input 和 turn_execution 泛型 Into；随后协调 protocol owner删除 v0 AgentSessionTurnStartParams/AgentInput 类型、schema roots与无消费者 app-server-client start_turn API。AgentAttachment继续保留给 ConversationImport media owner。完成后再集中补 App Server 定向 Cargo、contracts、agent current fixture与 GUI Gate B。
+```
+
+### 9.63 Renderer canonical timeline / replay / pending 收口
+
+```text
+主目标：把 V2 Renderer 的 live、cold read、production resume、Turn render 与 reverse request 收敛到唯一 owner，删除 canonical Item -> Message、通用 extension 和重复 pending store；不把 V2-05 planned notification 提前标记完成。
+
+架构影响：重大。Renderer Item 状态继续由 request-scoped ConversationProjection 持有；thread/read/items/turns 与 thread/resume 都经 canonical reader 进入同一 reducer，resume reducer 安装到 active stream state 后由后续 live notification 复用。MessageList 只从该状态纯派生 canonical Turn render entries；pending reverse request 只由 PendingInteractionController 承接。Electron 仍只做 Desktop Host，App Server/RuntimeCore/ThreadStore owner 与 model-provider/tool-runtime 边界不变。
+
+本轮写集：src/lib/api/agentRuntime/conversationProjection/replay*、pendingInteractionController*、canonical Item reader/protocol DTO；agentRuntimeAdapter、agentStreamResumeBinding；chat projection/turnTimelineRenderProjection*、ConversationTurnTimeline、MessageList/PendingInteractionLayer/MCP form/timeline renderer；五语言 agent 文案；internal/refactor/v2、architecture 与本执行计划。共享工作树其余 V1/Rust 热区不由本切片改写。
+
+direct timeline：canonical UserMessage、AgentMessage、Media 与连续 Process segment 按 Item sequence 进入 ConversationTurnTimeline。未被 canonical Item 覆盖的 optimistic/imported/local product surface 只保留 residual Message，不建立第二 store。canonicalItemsToMessages、tool/agent/reasoning Message content-part 合成与 canonical compatibility branch 已删除，禁止恢复。
+
+replay：thread/resume response 经 readCanonicalThreadDetail 创建 ConversationProjection reducer；adapter 校验 canonical thread identity，resume binding 把 reducer 安装到当前 request state，随后 live event 继续复用同一实例。live/cold/replay 的 Item identity、顺序和 terminal 等价由同一 reducer 回归证明。
+
+pending：command approval、file approval、requestUserInput、MCP elicitation 四类 reverse request 只注册到 PendingInteractionController。transport id/action token 留在 dispatcher closure，React 只持 semantic interaction identity；唯一可操作表面位于 Composer 上方。turn/completed、thread/closed、abort/detach 统一终结 pending，重复提交 fail closed。旧两个 server-request controller、MCP 根部 Dialog/controller 与独立 pending store 已删除。
+
+typed Item：HookPrompt、Sleep、entered/exited Review 分别使用 hook_prompt、sleep、review_boundary DTO 和低干扰 renderer；Hook runtime identity 不泄露到 DOM。MCP result/error 与 DynamicTool inputAudio 继续走真实 typed protocol。UserMessage audio/localAudio 因 Lime Rust UserInput/AgentInput 无产品 owner，删除前端 reader/type/正向断言并补 malformed fail-closed 测试；两类音频边界不得混写。
+
+drift：V2-00 pinned upstream schema/hash/method gate 已实际读取指定 Codex revision 并校验 SHA/字段/method inventory。unknown Item 与 unknown/known-unprojected notification recorder 已接线；recorder 只是诊断 owner，不等于 V2-05 planned notification 已实现。
+
+架构确认：architecture.md 7.1.1 已更新 live/read/resume reducer、direct TurnTimeline 与 PendingInteraction 数据流。责任人 root 于 2026-07-29 确认：无第二 timeline/pending store、无生产 mock fallback、无 compat wrapper、无 raw request id Renderer owner；重大架构变更确认完成，PR body 仍需在真实提交时复述。
+
+定向验证：canonical reader + timeline 2 files / 57 tests；production replay 4 files / 45 tests，stream projection/runtime handler 扩圈 2 files / 63 tests；pending interaction 7 files / 227 tests，controller 修复后 5/5；typecheck、目标 ESLint 与 git diff --check 在各 owner 交接时通过。
+
+分类：ConversationProjection live/read/resume、direct TurnTimeline、PendingInteractionController、typed Hook/Sleep/Review、typed MCP/DynamicTool 为 current；无 compat；fileChange outputDelta、thread/compacted 与未迁完的旧 notification 裁决为 deprecated/迁出中；canonical Item -> Message 合成、通用 extension fallback、UserMessage 音频半实现、重复 pending owner 为 dead/deleted/forbidden-to-restore。
+
+OPEN_REF：先完成 Renderer 重建后的 contracts、current runtime fixture、session-history Electron fixture、MCP elicitation Gate B、GUI smoke、fresh verify:local 与 test:resume。V2-05 仍有大量 planned notification/host capability/recovery 场景，必须逐项从真实 producer 到 Gate B 实现；不能用 drift warning、fixture 或 current 四类 pending handler冒充完成。按六阶段退出条件保守估算总体 68%，不得标记整体完成或 release-ready。
+```
+
+### 9.64 Renderer integration gate closure
+
+```text
+主目标：关闭 9.63 留下的 Renderer 整合门禁，把 session detail、direct Item timeline、production replay 与 MCP elicitation 的真实跨层证据写回唯一事实源；不把门禁通过扩张为 V2-05 planned surface 已完成。
+
+写集：session history/MCP Gate B fixture 与守卫、canonical session/detail 与 AgentMessage phase 回归、legacy catalog；internal/refactor/v2/IMPLEMENTATION-PLAN.md 与本执行计划。共享工作树其余 Rust/Renderer 热区保持既有 owner，不做无关重写。
+
+session detail：详情读取必须先发 `thread/read {threadId, includeTurns:false}`；`thread/list` 只作为摘要与列表事实，不得提供详情替代。响应直接消费 canonical `items`，兼容字段固定为 `messages: []`，禁止恢复 Item -> Message 合成。AgentMessage terminal phase 统一为 `final_answer`，旧 `final` 只允许历史 evidence 或负向守卫。
+
+session history Gate B：真实 Electron preload 启动 App Server，archive/unarchive 后从 canonical storage 读回；`thread/read`、`thread/turns/list`、`thread/items/list` 与 `thread/resume` 使用相同 thread/turn/item identity。三组 Turn、九个 Item 在 GUI 保序，图片附件保持唯一，console/page errors 为空。证据：`.lime/qc/gui-evidence/agent-session-history-electron-fixture/agent-session-history-electron-fixture-summary.json`。
+
+MCP elicitation Gate B：真实 Electron preload 与 `app_server_handle_json_lines` 命中，runtime initialize 宣告 elicitation capability；Renderer 表单可见、提交后 resolved 关闭，MCP ledger 接受选择，provider 继续完成最终文本。legacy MCP command 命中为零，console errors 为空。证据：`.lime/qc/gui-evidence/mcp-elicitation-gate-b/mcp-elicitation-gate-b-summary.json`，`ok=true`、`proofLevel=Gate B`。
+
+守卫：MCP/session-history source guard 改为格式无关正则，避免 Prettier 展开数组后误报，10/10 通过。legacy catalog 将 `rust-app-paths-root-fetch-duplication` 收口为 `dead/maxCount=0`；集中 output media sidecar writer 更新显式 owner allowlist。canonical direct Item、`messages: []`、`final_answer` 与 exact `thread/read` 请求均有稳定回归。
+
+验证：`npm run test:contracts`、`npm run smoke:mcp-elicitation-gate-b`、`npm run verify:gui-smoke` 通过；`npm run test:resume` 112/112 批通过；fresh `npm run verify:local` 通过 i18n、lint、typecheck、112/112 Vitest、Rust changed-scope、Electron renderer/host build 与真实 GUI smoke；legacySurfaceCatalog 223/223 通过；governance legacy report 为零引用候选 0、分类漂移 0、边界违规 0；`npm run governance:scripts` 与 `git diff --check` 通过。
+
+分类：canonical session detail、direct Item timeline、production replay、PendingInteraction MCP elicitation 与真实 Electron/App Server 证据为 current；无 compat；fileChange outputDelta、thread/compacted、未迁完旧 notification 与未完成 producer/Gate B 的 product-scope reverse request 为 deprecated/迁出中；Item -> Message 合成、旧 `phase:"final"`、重复 pending/dialog owner、旧 MCP Desktop commands、app_paths 重复 root 获取样板为 dead/deleted/forbidden-to-restore。
+
+当时 OPEN_REF（后续由 9.65 关闭）：整合门禁关闭后，下一刀是 V2-02 图片/音频异常态 fail-visible Gate B；V2-03 长列表性能证据、V2-04 剩余 product-scope reverse request / multi-agent 场景，以及 V2-05 planned notification、host capability 与 recovery 仍继续开放。drift recorder 只诊断 unknown/known-unprojected notification，不得据此标记 planned surface 完成。当时按六阶段退出条件保守估算总体 74%，不表示整体完成或 release-ready。
+```
+
+### 9.65 Media read v2 cutover and abnormal-state Gate B
+
+```text
+状态：completed（2026-07-29）。
+
+主目标：关闭 V2-02 媒体异常态主链 blocker，把唯一 GUI sidecar 读取从 v0 `agentSession/media/read` 直接迁到 Lime-owned v2 `media/read`，请求/响应只使用 canonical `threadId`；复用既有 bounded SidecarStore reader，不新增 compat、第二 reader 或生产 mock fallback。
+
+本轮窄写集：app-server-protocol v2 media method/envelope/schema 与 v0 删除；App Server media reader/dispatcher/cancel tests；packages/app-server-client 与 Renderer typed gateway；media reference preview owner/tests；session-history Electron fixture/oracle/guard；legacy catalog、architecture、internal/refactor/v2 与本执行计划。共享工作树其它 provider、turn/item、MCP、pending 与 V2-05 notification 热区不做无关改写。
+
+边界裁决：`media/read` 是 Codex 未提供同名 method 的 Lime-owned host-safe sidecar extension，owner 仍是 App Server read model + SidecarStore。`media.read.chunk` / `media.read.completed` 现有 transient event 旁路本轮只做字段同步，继续列为 deprecated/V2-05 迁出项；不能以本切片冒充 notification 全面收口。
+
+退出条件：旧 method/type/client symbol 物理删除并有回流守卫；Rust producer、schema、generated client、Renderer request 使用同一 `threadId`/range/size/digest 语义；真实 Electron fixture 命中 preload、`app_server_handle_json_lines`、`media/read` 和用户可见媒体 fallback，console/page error 为空；定向 Rust/TS、contracts、GUI smoke、治理扫描与 diff check 通过。
+
+完成事实：v0 `agentSession/media/read`、`AgentSessionMediaRead*`、`agent_session_media_read`、`readSessionMedia` 与 `buildAgentSessionMediaReadParams` 已从生产面物理删除；schema、generated/package client、App Server dispatcher/reader 与 Renderer gateway 统一使用 `threadId`。负向 contract guard 是这些旧符号唯一允许保留的位置。
+
+失败语义：SidecarStore 继续在 App Server 内执行 Thread scope、range、max-bytes 与 digest 校验；读取缺失或权限拒绝时 Renderer 保留脱敏 metadata fallback，不展示底层路径或错误。图片、音频、视频在浏览器解码失败后切到共享 `unsupported` 兜底面，不再留下空白媒体元素。object URL 保持替换、卸载和预算淘汰释放。
+
+Gate B：controlled Electron fixture 经真实 Electron preload/contextBridge、`electron-ipc`、`app_server_handle_json_lines`、App Server JSON-RPC、read model 与 GUI 读取 471-byte PNG；两次 `media/read` 请求均只含预期 `threadId`、无 `sessionId`。sidecar 置空后，同一媒体入口展示 Markdown metadata fallback。legacy command hit、mock fallback、console error、page error 均为 0；截图和 summary/ledger 位于同一 run 目录。证据：`.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-media-read-v2-gate-b-summary.json` 与 `.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-media-read-v2-gate-b-chat.png`。
+
+证据边界：真实 Gate B 证明图片成功读取和 sidecar 不可用 fallback；权限拒绝、图片/音频格式解码失败、过大结果、range 与 digest 异常由 Rust/TS 定向回归覆盖。它不证明 live Provider，也不冒充所有音频、视频或平台异常都已取得真实 Electron 证据。
+
+验证：`npm run smoke:agent-runtime-current-fixture` 通过；fresh `npm run verify:local` 通过 i18n、lint、typecheck、112/112 Vitest、`test:contracts`、Rust changed-scope、Electron renderer/host build 与真实 GUI smoke；最终版异常态定向回归 2 files / 29 tests passed，定向 ESLint 与 `npm run typecheck` 通过；`npm run governance:legacy-report` 为零引用候选 0、分类漂移 0、边界违规 0；`npm run governance:scripts` 与最终 `git diff --check` 通过。
+
+治理分类：`media/read`、Thread-scoped SidecarStore reader、typed client 与 fail-visible Renderer 为 current；无 compat；`media.read.chunk` / `media.read.completed` 为 deprecated/V2-05 transient bypass；v0 method/type/client symbols 为 dead/deleted/forbidden-to-restore。
+```
+
+### 9.66 V2-03 bounded TurnTimeline and long-list Gate B closure
+
+```text
+状态：completed（2026-07-29）；v2 总体仍为 in-progress，不是 release-ready。
+
+主目标：关闭 V2-03 长列表性能退出条件。canonical 历史继续由 bounded Turn window 直接渲染，不恢复 Item -> Message 合成；已完成的历史 assistant 长正文复用唯一 preview owner，显式展开前不挂载全文。
+
+本轮窄写集：ConversationTurnTimeline、MessageList history chrome 与 direct timeline 回归；session-history Electron fixture 的 240 Turn / 720 Item canonical SQLite seed、DOM/performance oracle 与证据；architecture、internal/refactor/v2 与本执行计划。共享工作树中的 provider、protocol、pending interaction、multi-agent 和 V2-05 notification 热区不做无关改写。
+
+实现事实：恢复窗口中的 canonical assistant 纯文本超过 900 字先进入 compact preview，超过 24,000 字使用 2,000 字 long preview；streaming、A2UI 和含非文本 part 的 Item 不折叠，用户可显式展开全文。history chrome 暴露稳定 evidence attributes，便于 fixture 读取 hidden/rendered/restored 状态。首帧继续由现有 Turn render window 限定，没有新增第二 store、compat wrapper 或生产 mock fallback。
+
+Gate B：controlled Electron fixture 从 canonical SQLite seed 恢复 240 Turn / 720 Item。首帧 DOM 只挂载 10 个 canonical Turn，最终扫描 30 个 Item，residual Message 为 0；长正文 preview 可见而 tail marker 未进入 DOM。首次 MessageList paint 37ms、稳定 paint 200ms，long task 0，console/page error 0。历史数据读取命中 current `thread/read`、`thread/items/list`、`thread/turns/list`，未命中旧 AgentSession 历史方法。证据为 `.lime/qc/gui-evidence/agent-session-history-electron-fixture/agent-session-history-electron-fixture-summary.json` 与 `.lime/qc/gui-evidence/agent-session-history-electron-fixture/agent-session-history-electron-fixture-long-list.png`。
+
+证据边界：这是 `APP_SERVER_BACKEND_MODE=unavailable` 下的受控 Gate B，证明真实 Electron、preload/IPC、`app_server_handle_json_lines`、App Server JSON-RPC、canonical read model 与 GUI；不调用 live Provider，也不代表真实用户历史数据或 macOS 之外平台的普遍性能。
+
+验证：direct timeline 与历史预览扩圈 5 files / 61 tests passed；定向 ESLint、`npm run typecheck`、`npm run test:contracts`、`npm run governance:scripts`、`git diff --check` 通过；`npm run smoke:agent-session-history-electron-fixture` 通过；`npm run smoke:agent-runtime-current-fixture` 完整通过且 `liveProviderUsed=false`；独立 `npm run verify:gui-smoke` 通过，证据为 `.lime/qc/project-gates/standalone-shell-01-20260729161109-71996/shell-01-electron-smoke/summary.json`；最终 fresh `npm run verify:local` 通过 i18n、lint、typecheck、112/112 Vitest、contracts、scripts/docs governance、Rust changed-scope 与第二次真实 Electron GUI smoke，后者证据为 `.lime/qc/project-gates/standalone-shell-01-20260729163104-57139/shell-01-electron-smoke/summary.json`；最终 `npm run governance:legacy-report` 为零引用候选 0、分类漂移 0、边界违规 0，`npm run test:contracts` 与 `git diff --check` 再次通过。
+
+治理分类：direct canonical TurnTimeline、bounded restored Turn window、canonical long-message preview 与 Electron long-list fixture 为 current；无 compat；V2-05 planned notification/transient bypass 继续为 deprecated/迁出中；canonical Item -> Message 合成、首帧无界历史挂载和 canonical 长正文绕过 preview 为 dead/deleted/forbidden-to-restore。
+
+OPEN_REF：下一刀进入 V2-04 剩余 product-scope reverse request / multi-agent 场景，再按 EVENT-PROJECTIONS 推进 V2-05 notification、host capability 与 recovery。V2 总体完成度保守估算约 82%。
 ```
 
 ## 10. 完成定义

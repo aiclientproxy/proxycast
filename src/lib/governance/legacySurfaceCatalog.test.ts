@@ -118,6 +118,10 @@ describe("legacySurfaceCatalog", () => {
       "agent-chat-generic-artifact-frame-shell-surface": [
         "src/components/agent/chat/components/ArtifactFrame.tsx",
       ],
+      "agent-chat-item-message-tool-synthesis-surface": [
+        "src/components/agent/chat/hooks/agentStreamToolItemMessageSync.ts",
+        "src/components/agent/chat/hooks/agentStreamToolItemMessageSync.unit.test.ts",
+      ],
     } as const;
 
     for (const [id, targets] of Object.entries(expectedTargetsById)) {
@@ -4121,6 +4125,7 @@ describe("legacySurfaceCatalog", () => {
       "lime-rs/crates/app-server/src/runtime/context_packet.rs",
       "lime-rs/crates/app-server/src/runtime/evidence_provider.rs",
       "lime-rs/crates/app-server/src/runtime/file_checkpoint_projection.rs",
+      "lime-rs/crates/app-server/src/runtime/output_media.rs",
       "lime-rs/crates/app-server/src/runtime/output_refs.rs",
       "lime-rs/crates/app-server/src/runtime/output_refs/tests.rs",
       "lime-rs/crates/app-server/src/runtime/plugin_worker_runtime/tests.rs",

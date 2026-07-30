@@ -211,7 +211,7 @@ fn completed_turn_with_messages(messages: &[(&str, Option<&str>)]) -> Turn {
                 status: ItemStatus::Completed,
                 payload: ThreadItemPayload::AgentMessage {
                     text: (*text).to_string(),
-                    phase: phase.map(str::to_string),
+                    phase: phase.and_then(agent_protocol::response_item::MessagePhase::from_wire),
                     content_parts: Vec::new(),
                 },
                 metadata: json!({}),

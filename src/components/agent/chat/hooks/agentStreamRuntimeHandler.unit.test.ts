@@ -5,6 +5,10 @@ import {
   type AgentEvent,
   type AgentThreadItem,
 } from "@/lib/api/agentProtocol";
+import {
+  MAX_PROJECTION_OUTPUT_BYTES,
+  PROJECTION_OUTPUT_TRUNCATION_MARKER,
+} from "@/lib/api/agentRuntime/conversationProjection";
 import type { Message } from "../types";
 import {
   clearAgentUiProjectionEvents,
@@ -2219,7 +2223,7 @@ describe("agentStreamRuntimeHandler", () => {
     ]);
   });
 
-  it("item_completed 应把已有 legacy 工具卡同步为完成态", () => {
+  it("item_completed 只更新 canonical ThreadItem，不再改写 legacy Message 工具卡", () => {
     let messages: Message[] = [
       {
         id: "assistant-1",
@@ -2269,6 +2273,8 @@ describe("agentStreamRuntimeHandler", () => {
     handleTurnStreamEvent({
       data: {
         type: "item_completed",
+        protocol_method: "item/completed",
+        protocol_revision: "fixture-revision",
         item: {
           id: "tool-search-1",
           thread_id: "session-1",
@@ -2335,23 +2341,183 @@ describe("agentStreamRuntimeHandler", () => {
     });
     expect(messages[0]?.toolCalls?.[0]).toMatchObject({
       id: "tool-search-1",
-      status: "completed",
-      result: {
-        success: true,
-        output: "权威评测摘要",
-      },
+      status: "running",
     });
+    expect(messages[0]?.toolCalls?.[0]?.result).toBeUndefined();
     expect(messages[0]?.contentParts?.[0]).toMatchObject({
       type: "tool_use",
       toolCall: {
         id: "tool-search-1",
-        status: "completed",
-        result: {
-          success: true,
-          output: "权威评测摘要",
-        },
+        status: "running",
       },
     });
+  });
+
+  it("direct command output 只由 ConversationProjection 写回并保持有界 canonical 类型", () => {
+    let messages: Message[] = [
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: "",
+        timestamp: new Date("2026-07-29T01:00:00.000Z"),
+        runtimeTurnId: "turn-1",
+      },
+    ];
+    let threadItems: AgentThreadItem[] = [];
+    const requestState = {
+      accumulatedContent: "",
+      currentTurnId: "turn-1",
+      requestLogId: null,
+      requestStartedAt: 0,
+      requestFinished: false,
+    };
+    const setMessages = vi.fn(
+      (value: Message[] | ((prev: Message[]) => Message[])) => {
+        messages = typeof value === "function" ? value(messages) : value;
+      },
+    );
+    const setThreadItems = vi.fn(
+      (
+        value:
+          | AgentThreadItem[]
+          | ((prev: AgentThreadItem[]) => AgentThreadItem[]),
+      ) => {
+        threadItems = typeof value === "function" ? value(threadItems) : value;
+      },
+    );
+    const dispatch = (data: AgentEvent) =>
+      handleTurnStreamEvent({
+        data,
+        requestState,
+        callbacks: {
+          activateStream: () => {},
+          isStreamActivated: () => true,
+          clearOptimisticItem: () => {},
+          clearOptimisticTurn: () => {},
+          disposeListener: () => {},
+          clearActiveStreamIfMatch: () => true,
+          appendThinkingToParts: (
+            parts: NonNullable<Message["contentParts"]>,
+          ) => parts,
+        },
+        eventName: "agent-runtime-direct-command-projection-test",
+        pendingTurnKey: "pending-turn",
+        pendingItemKey: "pending-item",
+        assistantMsgId: "assistant-1",
+        activeSessionId: "session-1",
+        resolvedWorkspaceId: "workspace-1",
+        effectiveExecutionStrategy: "react",
+        content: "",
+        runtime: {} as never,
+        warnedKeysRef: { current: new Set<string>() },
+        actionLoggedKeys: new Set<string>(),
+        toolLogIdByToolId: new Map<string, string>(),
+        toolStartedAtByToolId: new Map<string, number>(),
+        toolNameByToolId: new Map<string, string>(),
+        setMessages: setMessages as never,
+        setPendingActions: vi.fn() as never,
+        getThreadItems: () => threadItems,
+        setThreadItems: setThreadItems as never,
+        setThreadTurns: vi.fn() as never,
+        setCurrentTurnId: vi.fn() as never,
+        setExecutionRuntime: vi.fn() as never,
+        setIsSending: vi.fn() as never,
+      });
+
+    dispatch({
+      type: "tool_output_delta",
+      thread_id: "thread-1",
+      turn_id: "turn-1",
+      tool_id: "command-1",
+      source_item_id: "command-1",
+      protocol_method: "item/commandExecution/outputDelta",
+      protocol_revision: "fixture-revision",
+      delta: "buffered-before-start\n",
+    } as AgentEvent);
+
+    expect(threadItems).toEqual([]);
+    expect(messages[0]?.toolCalls).toBeUndefined();
+    expect(messages[0]?.contentParts).toBeUndefined();
+
+    const commandItem: AgentThreadItem = {
+      id: "command-1",
+      thread_id: "thread-1",
+      turn_id: "turn-1",
+      sequence: 3,
+      status: "in_progress",
+      started_at: "2026-07-29T01:00:00.000Z",
+      updated_at: "2026-07-29T01:00:00.000Z",
+      type: "command_execution",
+      command: "generate-output",
+      cwd: "/workspace",
+    };
+    dispatch({
+      type: "item_started",
+      protocol_method: "item/started",
+      protocol_revision: "fixture-revision",
+      item: commandItem,
+    } as AgentEvent);
+
+    expect(threadItems).toHaveLength(1);
+    expect(threadItems[0]).toMatchObject({
+      id: "command-1",
+      type: "command_execution",
+      aggregated_output: "buffered-before-start\n",
+    });
+
+    const oversizedDelta = `discarded-head-${"d".repeat(
+      MAX_PROJECTION_OUTPUT_BYTES + 128,
+    )}-kept-tail`;
+    dispatch({
+      type: "tool_output_delta",
+      thread_id: "thread-1",
+      turn_id: "turn-1",
+      tool_id: "command-1",
+      source_item_id: "command-1",
+      protocol_method: "item/commandExecution/outputDelta",
+      protocol_revision: "fixture-revision",
+      delta: oversizedDelta,
+    } as AgentEvent);
+
+    expect(threadItems).toHaveLength(1);
+    const streamedCommand = threadItems[0];
+    expect(streamedCommand?.type).toBe("command_execution");
+    if (streamedCommand?.type !== "command_execution") {
+      throw new Error("expected command_execution after direct output delta");
+    }
+    expect(
+      new TextEncoder().encode(streamedCommand.aggregated_output).byteLength,
+    ).toBe(MAX_PROJECTION_OUTPUT_BYTES);
+    expect(streamedCommand.aggregated_output).toContain(
+      PROJECTION_OUTPUT_TRUNCATION_MARKER,
+    );
+    expect(streamedCommand.aggregated_output).toMatch(/-kept-tail$/u);
+    expect(messages[0]?.toolCalls).toBeUndefined();
+    expect(messages[0]?.contentParts).toBeUndefined();
+
+    dispatch({
+      type: "item_completed",
+      protocol_method: "item/completed",
+      protocol_revision: "fixture-revision",
+      item: {
+        ...commandItem,
+        status: "completed",
+        completed_at: "2026-07-29T01:00:01.000Z",
+        updated_at: "2026-07-29T01:00:01.000Z",
+        aggregated_output: "authoritative completed snapshot\n",
+      },
+    } as AgentEvent);
+
+    expect(threadItems).toEqual([
+      expect.objectContaining({
+        id: "command-1",
+        type: "command_execution",
+        status: "completed",
+        aggregated_output: "authoritative completed snapshot\n",
+      }),
+    ]);
+    expect(messages[0]?.toolCalls).toBeUndefined();
+    expect(messages[0]?.contentParts).toBeUndefined();
   });
 
   it("收到 turn_completed 时应把 usage 写回 assistant 消息", () => {
@@ -2889,7 +3055,7 @@ describe("agentStreamRuntimeHandler", () => {
     expect(mockToast.error).toHaveBeenCalledWith("模型未输出最终答复，请重试");
   });
 
-  it("commentary 阶段 text_delta 应进入 agent_message timeline，不应追加到正文 overlay", () => {
+  it("commentary text_delta 只进入 agent_message timeline，不再写回 Message", () => {
     let messages: Message[] = [
       {
         id: "assistant-commentary",
@@ -2972,19 +3138,7 @@ describe("agentStreamRuntimeHandler", () => {
     expect(requestState.accumulatedContent).toBe("");
     expect(messages[0]?.content).toBe("");
     expect(getAgentStreamTextOverlay("assistant-commentary")).toBeNull();
-    expect(messages[0]?.contentParts).toEqual([
-      {
-        type: "text",
-        text: "我会先搜索公开资料。",
-        metadata: {
-          source: "agent_text_delta",
-          itemId: "item-commentary-1",
-          phase: "commentary",
-          sequence: 1,
-          turnId: "turn-commentary",
-        },
-      },
-    ]);
+    expect(messages[0]?.contentParts).toEqual([]);
     expect(threadItems).toEqual([
       expect.objectContaining({
         id: "item-commentary-1",
@@ -2996,7 +3150,7 @@ describe("agentStreamRuntimeHandler", () => {
     ]);
   });
 
-  it("commentary delta 早于 assistant message 挂载时应在后续过程事件重放进 contentParts", () => {
+  it("commentary delta 早于 Message 挂载时也不应重放进 contentParts", () => {
     let messages: Message[] = [];
     let threadItems: AgentThreadItem[] = [];
     const requestState = {
@@ -3094,20 +3248,17 @@ describe("agentStreamRuntimeHandler", () => {
     });
 
     expect(messages[0]?.contentParts?.map((part) => part.type)).toEqual([
-      "text",
       "tool_use",
     ]);
-    expect(messages[0]?.contentParts?.[0]).toMatchObject({
-      type: "text",
-      text: "我先联网核实目标页面来源。",
-      metadata: {
-        source: "agent_text_delta",
-        itemId: "item-commentary-race",
-        phase: "commentary",
-        sequence: 1,
-        turnId: "turn-commentary-race",
-      },
-    });
+    expect(threadItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "item-commentary-race",
+          type: "agent_message",
+          text: "我先联网核实目标页面来源。\n",
+        }),
+      ]),
+    );
   });
 
   it("工具过程后有 assistant 正文时应由结构化顺序正常完成", () => {
@@ -4997,7 +5148,7 @@ describe("agentStreamRuntimeHandler", () => {
     expect(messages[0]?.imageWorkbenchPreview?.taskId).toBe("draft-image-1");
   });
 
-  it("图片生成非 final text_delta 应直接采用后端模型文案", () => {
+  it("图片生成非 final text_delta 应保留在 canonical AgentMessage", () => {
     let messages: Message[] = [
       {
         id: "assistant-image-structured",
@@ -5085,21 +5236,14 @@ describe("agentStreamRuntimeHandler", () => {
       setIsSending: vi.fn() as never,
     });
 
-    const partText = messages[0]?.contentParts?.find(
-      (
-        part,
-      ): part is Extract<
-        NonNullable<Message["contentParts"]>[number],
-        { type: "text" }
-      > => part.type === "text",
-    )?.text;
-    expect(partText).toContain("好啊，先来Generate深圳夏day午后的城市照片");
-    expect(partText).toContain("真实摄影Style");
+    expect(messages[0]?.content).toBe("");
+    expect(messages[0]?.contentParts).toEqual([]);
     const firstThreadItem = threadItems[0];
     expect(firstThreadItem?.type).toBe("agent_message");
-    expect(
-      firstThreadItem?.type === "agent_message" ? firstThreadItem.text : "",
-    ).toBe(partText);
+    const itemText =
+      firstThreadItem?.type === "agent_message" ? firstThreadItem.text : "";
+    expect(itemText).toContain("好啊，先来Generate深圳夏day午后的城市照片");
+    expect(itemText).toContain("真实摄影Style");
   });
 
   it("text_delta_batch 应先写入 overlay，并在 turn_completed 时一次性 reconcile 回消息", () => {
@@ -5302,6 +5446,8 @@ describe("agentStreamRuntimeHandler", () => {
     handleTurnStreamEvent({
       data: {
         type: "item_updated",
+        protocol_method: "item/started",
+        protocol_revision: "fixture-revision",
         item: {
           id: "reasoning-1",
           thread_id: "session-1",
@@ -5450,6 +5596,8 @@ describe("agentStreamRuntimeHandler", () => {
       ...baseOptions,
       data: {
         type: "item_updated",
+        protocol_method: "item/started",
+        protocol_revision: "fixture-revision",
         item: {
           id: "reasoning-actual-1",
           thread_id: "session-1",

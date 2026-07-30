@@ -13,6 +13,7 @@ import {
   readStringArray,
 } from "./appServerEventPayloadUtils";
 import { projectAppServerV2NotificationPayload } from "./appServerV2Notification";
+import { projectAppServerNotificationDriftPayload } from "./appServerNotificationDrift";
 
 const RAW_SIDE_CHANNEL_TYPES = new Set([
   "image_task.created",
@@ -27,10 +28,15 @@ const RAW_SIDE_CHANNEL_TYPES = new Set([
 export function projectAppServerAgentEventPayload(
   notification: AppServerJsonRpcNotification,
 ): Record<string, unknown> | null {
-  return (
-    projectAppServerV2NotificationPayload(notification) ??
-    projectRawSideChannel(notification)
-  );
+  const direct = projectAppServerV2NotificationPayload(notification);
+  if (direct) {
+    return direct;
+  }
+  const sideChannel = projectRawSideChannel(notification);
+  if (sideChannel || notification.method === APP_SERVER_METHOD_AGENT_SESSION_EVENT) {
+    return sideChannel;
+  }
+  return projectAppServerNotificationDriftPayload(notification);
 }
 
 function projectRawSideChannel(

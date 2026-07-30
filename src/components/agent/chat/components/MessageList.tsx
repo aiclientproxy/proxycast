@@ -9,6 +9,7 @@ import {
 import type { AgentStreamTextOverlaySnapshot } from "../hooks/agentStreamTextOverlayStore";
 import type { Message } from "../types";
 import { MessageListItem } from "./MessageListItem";
+import { ConversationTurnTimeline } from "./ConversationTurnTimeline";
 import type {
   MessageListProps,
   MessageListRenderGroup,
@@ -90,11 +91,14 @@ const MessageListInner: React.FC<MessageListProps> = ({
   ] = useState<Set<string>>(() => new Set());
   const scrollController = useMessageListScrollController();
   const renderWindow = useMessageListRenderWindow({
+    currentTurnId,
     isSending,
     isRestoringSession,
     isUserScrolling: scrollController.isUserScrolling,
     messages,
     sessionHistoryWindow,
+    threadItems,
+    turns,
   });
   const timelineState = useMessageListTimelineState({
     activePendingA2UISource,
@@ -102,18 +106,15 @@ const MessageListInner: React.FC<MessageListProps> = ({
     currentTurnId,
     focusedTimelineItemId,
     hiddenHistoryCount: renderWindow.hiddenHistoryCount,
+    hasPersistedOlderHistory: renderWindow.hasPersistedOlderHistory,
     isRestoredHistoryWindow: renderWindow.isRestoredHistoryWindow,
     isSending,
     pendingActions,
-    persistedHiddenHistoryCount: renderWindow.persistedHiddenHistoryCount,
-    progressiveInitialRenderCount: renderWindow.progressiveInitialRenderCount,
-    renderedAssistantMessageCount: renderWindow.renderedAssistantMessageCount,
-    renderedMessageCount: renderWindow.renderedMessageCount,
     renderedMessages: renderWindow.renderedMessages,
     submittedActionsInFlight,
-    threadItems,
+    threadItems: renderWindow.renderedThreadItems,
     threadRead,
-    turns,
+    turns: renderWindow.renderedTurns,
   });
   const historicalHydration = useMessageListHistoricalHydration({
     activeCurrentTurnId: timelineState.activeCurrentTurnId,
@@ -132,8 +133,14 @@ const MessageListInner: React.FC<MessageListProps> = ({
   useMessageListAutoScroll({
     isRestoringSession,
     isSending,
-    renderedMessageCount:
-      renderWindow.renderedMessages.length + (trailingContent ? 1 : 0),
+    renderedMessageCount: timelineState.renderEntries.reduce(
+      (count, entry) =>
+        count +
+        (entry.kind === "canonical_turn"
+          ? entry.segments.length
+          : entry.group.messages.length),
+      trailingContent ? 1 : 0,
+    ),
     scrollRef: scrollController.scrollRef,
     shouldAutoScroll: scrollController.shouldAutoScroll,
   });
@@ -157,7 +164,7 @@ const MessageListInner: React.FC<MessageListProps> = ({
     isRestoringSession,
     messageGroupsMeasurement: timelineState.messageGroupsMeasurement,
     messagesCount: messages.length,
-    persistedHiddenHistoryCount: renderWindow.persistedHiddenHistoryCount,
+    persistedHiddenHistoryCount: Number(renderWindow.hasPersistedOlderHistory),
     renderedMessages: renderWindow.renderedMessages,
     renderedThreadItemsCount: timelineState.renderedThreadItems.length,
     renderedThreadItemsMeasurement:
@@ -360,16 +367,10 @@ const MessageListInner: React.FC<MessageListProps> = ({
               {leadingContent}
             </div>
           ) : null}
-          {renderWindow.persistedHiddenHistoryCount > 0 ? (
+          {renderWindow.hasPersistedOlderHistory ? (
             <PersistedHistoryWindow
-              loadedMessages={
-                sessionHistoryWindow?.loadedMessages ??
-                renderWindow.renderedMessages.length
-              }
-              totalMessages={
-                sessionHistoryWindow?.totalMessages ??
-                renderWindow.renderedMessages.length
-              }
+              loadedEntries={renderWindow.visibleEntries.length}
+              hasMore
               isLoadingFull={sessionHistoryWindow?.isLoadingFull === true}
               error={sessionHistoryWindow?.error}
               onLoadFullHistory={onLoadFullHistory}
@@ -379,18 +380,87 @@ const MessageListInner: React.FC<MessageListProps> = ({
             <HistoryWindow
               hiddenHistoryCount={renderWindow.hiddenHistoryCount}
               isRestoredHistoryWindow={renderWindow.isRestoredHistoryWindow}
-              renderedMessagesCount={renderWindow.renderedMessages.length}
+              renderedEntriesCount={renderWindow.renderedEntryCount}
               onExpandAllHistory={renderWindow.handleExpandAllHistory}
             />
           ) : null}
-          {timelineState.messageGroups.length === 0 &&
+          {timelineState.renderEntries.length === 0 &&
             (isRestoringSession ? (
               <RestoringSessionEmptyState />
             ) : isTaskCenterEmptyState ? (
               <TaskCenterEmptyState />
             ) : null)}
 
-          {timelineState.renderGroups.map((group, groupIndex) => {
+          {timelineState.renderEntries.map((entry, groupIndex) => {
+            if (entry.kind === "canonical_turn") {
+              const lastAssistantItemId = entry.segments
+                .filter(
+                  (segment) =>
+                    segment.kind === "message" &&
+                    segment.item.type === "agent_message",
+                )
+                .at(-1)?.id;
+              return (
+                <MessageTurnGroup
+                  key={entry.id}
+                  $deferOffscreenWork={
+                    groupIndex < timelineState.renderEntries.length - 2 &&
+                    entry.turn.status !== "running"
+                  }
+                  data-testid="message-turn-group"
+                  data-render-entry-kind="canonical_turn"
+                  data-group-index={groupIndex + 1}
+                  data-runtime-turn-id={entry.turn.id}
+                  data-runtime-turn-status={entry.turn.status}
+                  data-last-assistant-message-id={lastAssistantItemId || ""}
+                  data-timeline-message-id={lastAssistantItemId || ""}
+                  data-render-priority={
+                    groupIndex < timelineState.renderEntries.length - 2
+                      ? "offscreen-deferred"
+                      : "tail"
+                  }
+                  className="py-2"
+                >
+                  <ConversationTurnTimeline
+                    entry={entry}
+                    sessionId={sessionId}
+                    threadRead={threadRead}
+                    pendingActions={pendingActions}
+                    submittedActionsInFlight={submittedActionsInFlight}
+                    assistantLabel={assistantLabel}
+                    copiedId={copiedId}
+                    compactLeadingSpacing={compactLeadingSpacing}
+                    isSending={isSending}
+                    renderA2UIInline={renderA2UIInline}
+                    a2uiFormDataMap={a2uiFormDataMap}
+                    collapseCodeBlocks={collapseCodeBlocks}
+                    shouldCollapseCodeBlock={shouldCollapseCodeBlock}
+                    focusedTimelineItemId={focusedTimelineItemId}
+                    timelineFocusRequestKey={timelineFocusRequestKey}
+                    shouldDeferHistoricalTimelineDetails={
+                      timelineState.shouldDeferHistoricalTimelineDetails
+                    }
+                    handleCopy={handleCopy}
+                    onA2UISubmit={onA2UISubmit}
+                    onA2UIFormChange={onA2UIFormChange}
+                    onWriteFile={onWriteFile}
+                    onFileClick={onFileClick}
+                    onOpenArtifactFromTimeline={onOpenArtifactFromTimeline}
+                    onOpenUrlPreview={onOpenUrlPreview}
+                    onOpenSavedSiteContent={onOpenSavedSiteContent}
+                    onOpenMessagePreview={onOpenMessagePreview}
+                    onOpenSubagentSession={onOpenSubagentSession}
+                    onPermissionResponse={onPermissionResponse}
+                    onQuoteMessage={onQuoteMessage}
+                    onSaveMessageAsSkill={onSaveMessageAsSkill}
+                    onSaveMessageAsKnowledge={onSaveMessageAsKnowledge}
+                    onCodeBlockClick={onCodeBlockClick}
+                  />
+                </MessageTurnGroup>
+              );
+            }
+
+            const group = entry.group;
             const groupRuntimeTurnId =
               group.timeline?.turn?.id ||
               group.messages.find((message) => message.runtimeTurnId)
@@ -404,19 +474,20 @@ const MessageListInner: React.FC<MessageListProps> = ({
               "";
             return (
               <MessageTurnGroup
-                key={group.id}
+                key={entry.id}
                 $deferOffscreenWork={
-                  groupIndex < timelineState.renderGroups.length - 2 &&
+                  groupIndex < timelineState.renderEntries.length - 2 &&
                   groupRuntimeTurnStatus !== "running"
                 }
                 data-testid="message-turn-group"
+                data-render-entry-kind="message_group"
                 data-group-index={groupIndex + 1}
                 data-runtime-turn-id={groupRuntimeTurnId}
                 data-runtime-turn-status={groupRuntimeTurnStatus}
                 data-last-assistant-message-id={group.lastAssistantId || ""}
                 data-timeline-message-id={group.timelineMessageId || ""}
                 data-render-priority={
-                  groupIndex < timelineState.renderGroups.length - 2
+                  groupIndex < timelineState.renderEntries.length - 2
                     ? "offscreen-deferred"
                     : "tail"
                 }

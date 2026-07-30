@@ -560,6 +560,62 @@ describe("ArtifactRenderer 空内容态", () => {
     ).toBeNull();
   });
 
+  it.each([
+    {
+      contentKind: "image",
+      filename: "broken-image.bin",
+      mimeType: "image/x-unsupported",
+      testId: "preview-artifact-image",
+    },
+    {
+      contentKind: "audio",
+      filename: "broken-audio.bin",
+      mimeType: "audio/x-unsupported",
+      testId: "preview-artifact-audio",
+    },
+  ])(
+    "$contentKind preview 解码失败时应切到可见的 unsupported 兜底面",
+    ({ contentKind, filename, mimeType, testId }) => {
+      const container = renderArtifact(
+        createArtifact({
+          type: "document",
+          title: filename,
+          content: "blob:unsupported-media",
+          status: "complete",
+          meta: {
+            previewArtifact: true,
+            isSourceBacked: true,
+            contentKind,
+            renderMode: "media",
+            previewUrl: "blob:unsupported-media",
+            filePath: `workspace/${filename}`,
+            filename,
+            mimeType,
+          },
+        }),
+      );
+
+      const media = container.querySelector(`[data-testid="${testId}"]`);
+      expect(media).not.toBeNull();
+
+      act(() => {
+        media?.dispatchEvent(new Event("error"));
+      });
+
+      const fallback = container.querySelector(
+        '[data-testid="preview-artifact-fallback-surface"]',
+      );
+      expect(fallback).not.toBeNull();
+      expect(fallback?.getAttribute("data-preview-render-mode")).toBe(
+        "unsupported",
+      );
+      expect(container.textContent).toContain("暂不支持内嵌预览");
+      expect(container.textContent).toContain(filename);
+      expect(container.textContent).toContain(`类型：${mimeType}`);
+      expect(container.querySelector(`[data-testid="${testId}"]`)).toBeNull();
+    },
+  );
+
   it("system_open preview artifact 应渲染统一兜底面而不是空内容文档", () => {
     const container = renderArtifact(
       createArtifact({

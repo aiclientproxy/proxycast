@@ -1,6 +1,6 @@
 import {
   agentSessionEventNotification,
-  agentSessionMediaReadEventNotification,
+  mediaReadEventNotification,
   type AgentEvent,
   type AgentSessionActionRespondParams,
   type AgentSessionActionRespondResponse,
@@ -156,10 +156,7 @@ export class AppServerAgentEventRouter {
       return true;
     }
     const notification = agentSessionEventNotification(message);
-    if (
-      !notification ||
-      !agentSessionMediaReadEventNotification(notification)
-    ) {
+    if (!notification || !mediaReadEventNotification(notification)) {
       return false;
     }
     for (const listener of this.#listeners) {
@@ -308,10 +305,7 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
         return lifecycle;
       }
       const agentNotification = agentSessionEventNotification(notification);
-      if (
-        agentNotification &&
-        agentSessionMediaReadEventNotification(agentNotification)
-      ) {
+      if (agentNotification && mediaReadEventNotification(agentNotification)) {
         await this.dispatchEvent(agentNotification);
         return agentNotification;
       }

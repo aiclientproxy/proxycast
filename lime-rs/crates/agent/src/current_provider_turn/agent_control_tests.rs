@@ -30,6 +30,7 @@ fn terminal_event(tool_name: &str, activity: SubAgentProjectionActivity) -> Tool
                 activity,
                 detail: Some("/root/research".to_string()),
             }],
+            agent_control_state_facts: Vec::new(),
         }),
     }
 }

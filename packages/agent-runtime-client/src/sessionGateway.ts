@@ -1,6 +1,6 @@
 import {
   agentSessionEventNotification,
-  agentSessionMediaReadEventNotification,
+  mediaReadEventNotification,
   serverNotification,
   AgentRuntimeClient,
   AgentRuntimeClientSubscription,
@@ -312,10 +312,7 @@ class AgentRuntimeGatewayEventRouter {
     const lifecycle = serverNotification(message);
     if (!lifecycle) {
       const notification = agentSessionEventNotification(message);
-      if (
-        !notification ||
-        !agentSessionMediaReadEventNotification(notification)
-      ) {
+      if (!notification || !mediaReadEventNotification(notification)) {
         return { accepted: false, reason: "dropped" };
       }
       for (const listener of this.#listeners) {

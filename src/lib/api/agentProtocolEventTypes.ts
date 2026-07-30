@@ -529,6 +529,8 @@ export interface AgentEventError {
 
 export interface AgentEventEnvelope {
   event_id?: string;
+  protocol_method?: string;
+  protocol_revision?: string;
   renderer_event_received_at?: number;
   request_id?: string;
   run_id?: string;

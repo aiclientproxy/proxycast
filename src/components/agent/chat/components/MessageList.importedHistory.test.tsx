@@ -273,8 +273,12 @@ describe("MessageList imported history", () => {
 
     expect(historyWindow).not.toBeNull();
     expect(container.textContent).toContain("To open the chat faster");
+    expect(container.textContent).toContain(
+      "latest 36 conversation entries are shown first",
+    );
+    expect(container.textContent).toContain("9 earlier entries");
     expect(container.textContent).toContain("消息 90");
-    expect(container.textContent).not.toContain("消息 1");
+    expect(container.textContent).not.toContain("消息 1Saturday");
     expect(expandButton).not.toBeNull();
 
     act(() => {
@@ -284,7 +288,7 @@ describe("MessageList imported history", () => {
     expect(
       container.querySelector('[data-testid="message-list-history-window"]'),
     ).toBeNull();
-    expect(container.textContent).toContain("消息 1");
+    expect(container.textContent).toContain("消息 1Saturday");
   });
 
   it("user peer 包络正文应直接渲染为专门协作卡片", () => {
@@ -515,7 +519,7 @@ describe("MessageList imported history", () => {
         metrics: expect.objectContaining({
           hiddenHistoryCount: expect.any(Number),
           messagesCount: 32,
-          persistedHiddenHistoryCount: 128,
+          persistedHiddenHistoryCount: 1,
           renderedMessagesCount: expect.any(Number),
         }),
       }),

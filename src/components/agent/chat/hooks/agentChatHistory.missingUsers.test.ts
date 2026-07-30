@@ -134,11 +134,13 @@ describe("agentChatHistory missing user recovery", () => {
       updated_at: 2,
       messages_count: 1,
       history_limit: 80,
-      history_offset: 0,
       history_cursor: {
-        oldest_message_id: null,
-        start_index: 0,
-        loaded_count: 1,
+        item_cursor: null,
+        turn_cursor: null,
+        loaded_entry_count: 1,
+        loaded_turn_count: 0,
+        loaded_item_count: 1,
+        has_more: false,
       },
       history_truncated: false,
       messages: [
@@ -322,7 +324,7 @@ describe("agentChatHistory missing user recovery", () => {
     expect(messages[1]?.content).toContain("三国主要人物的群像海报");
   });
 
-  it("current read model 图片工具历史恢复时应补回前置寒暄", () => {
+  it("current read model 图片工具历史只保留 canonical 用户锚点", () => {
     const detail: AgentSessionDetail = {
       id: "session-image-thread-item-intro",
       thread_id: "thread-image-thread-item-intro",
@@ -387,19 +389,7 @@ describe("agentChatHistory missing user recovery", () => {
       "session-image-thread-item-intro",
     );
 
-    expect(messages.map((message) => message.role)).toEqual([
-      "user",
-      "assistant",
-    ]);
-    expect(messages[1]).toMatchObject({
-      role: "assistant",
-      imageWorkbenchPreview: {
-        taskId: "task-image-thread-item-intro",
-        prompt: "画一张广州夏天的图",
-        status: "complete",
-      },
-    });
-    expect(messages[1]?.content).toContain("广州夏天");
+    expect(messages.map((message) => message.role)).toEqual(["user"]);
   });
 
   it("后端连续两轮只有助手图片轨迹时应按 turn 顺序补回各自用户指令", () => {
@@ -604,7 +594,7 @@ describe("agentChatHistory missing user recovery", () => {
     );
   });
 
-  it("已完成旧会话压缩水合时应保留工具过程并让最终正文接在工具之后", () => {
+  it("已完成旧会话压缩水合时只保留最终正文 Message", () => {
     const detail: AgentSessionDetail = {
       id: "session-compact-history",
       created_at: 1,
@@ -690,16 +680,10 @@ describe("agentChatHistory missing user recovery", () => {
     expect(messages[1]).toMatchObject({
       role: "assistant",
       content: "最终回复正文",
-      thinkingContent: "大量思考过程",
     });
-    expect(messages[1]?.toolCalls?.[0]).toMatchObject({
-      id: "item-compact-history",
-      name: "Bash",
-      status: "completed",
-    });
+    expect(messages[1]?.thinkingContent).toBeUndefined();
+    expect(messages[1]?.toolCalls).toBeUndefined();
     expect(messages[1]?.contentParts?.map((part) => part.type)).toEqual([
-      "thinking",
-      "tool_use",
       "text",
     ]);
     expect(messages[1]?.contentParts?.at(-1)).toEqual({

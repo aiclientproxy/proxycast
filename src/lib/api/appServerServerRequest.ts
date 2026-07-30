@@ -36,6 +36,18 @@ type ResolvedServerRequestNotification = {
   threadId: string;
 };
 
+type InFlightServerRequest = {
+  controller: AbortController;
+  threadId: string | null;
+  turnId: string | null;
+};
+
+type TerminalServerRequestScope = {
+  method: "thread/closed" | "turn/completed";
+  threadId: string;
+  turnId: string | null;
+};
+
 export const APP_SERVER_SERVER_REQUEST_LIFECYCLE_TRACE_KEY =
   "lime:debug:app-server-server-request-lifecycle:v1";
 const APP_SERVER_SERVER_REQUEST_LIFECYCLE_TRACE_LIMIT = 100;
@@ -43,7 +55,7 @@ const APP_SERVER_SERVER_REQUEST_LIFECYCLE_TRACE_LIMIT = 100;
 export class AppServerServerRequestDispatcher {
   readonly #eventBus: Pick<AppServerEventBus, "subscribe">;
   readonly #handlers = new Map<string, RegisteredServerRequestHandler>();
-  readonly #inFlightRequests = new Map<string, AbortController>();
+  readonly #inFlightRequests = new Map<string, InFlightServerRequest>();
   readonly #resolvedRequestKeys = new Set<string>();
   readonly #settledRequestKeys = new Set<string>();
   readonly #responder: ServerRequestResponder;
@@ -91,12 +103,17 @@ export class AppServerServerRequestDispatcher {
     ) {
       return false;
     }
+    const identity = serverRequestIdentity(request);
     const controller = new AbortController();
     const connectionGeneration = this.#connectionGeneration;
-    this.#inFlightRequests.set(requestKey, controller);
+    this.#inFlightRequests.set(requestKey, {
+      controller,
+      threadId: identity.threadId,
+      turnId: identity.turnId,
+    });
     appendServerRequestLifecycleTrace({
       kind: "request",
-      ...serverRequestIdentity(request),
+      ...identity,
     });
     try {
       const handler = this.#handlers.get(request.method);
@@ -149,8 +166,8 @@ export class AppServerServerRequestDispatcher {
 
   reset(): void {
     this.#connectionGeneration += 1;
-    for (const controller of this.#inFlightRequests.values()) {
-      controller.abort();
+    for (const request of this.#inFlightRequests.values()) {
+      request.controller.abort();
     }
     this.#handlers.clear();
     this.#inFlightRequests.clear();
@@ -170,6 +187,10 @@ export class AppServerServerRequestDispatcher {
           const resolved = readResolvedNotification(notification);
           if (resolved) {
             this.#resolve(resolved);
+          }
+          const terminal = readTerminalServerRequestScope(notification);
+          if (terminal) {
+            this.#terminateScope(terminal);
           }
           recordRuntimeTerminalNotification(notification);
         }
@@ -207,7 +228,19 @@ export class AppServerServerRequestDispatcher {
       threadId: resolved.threadId,
     });
     this.#settledRequestKeys.add(requestKey);
-    this.#inFlightRequests.get(requestKey)?.abort();
+    this.#inFlightRequests.get(requestKey)?.controller.abort();
+  }
+
+  #terminateScope(scope: TerminalServerRequestScope): void {
+    for (const request of this.#inFlightRequests.values()) {
+      if (request.threadId !== scope.threadId) {
+        continue;
+      }
+      if (scope.turnId && request.turnId !== scope.turnId) {
+        continue;
+      }
+      request.controller.abort();
+    }
   }
 }
 
@@ -245,7 +278,8 @@ function recordRuntimeTerminalNotification(notification: {
 }): void {
   if (
     notification.method !== "item/completed" &&
-    notification.method !== "turn/completed"
+    notification.method !== "turn/completed" &&
+    notification.method !== "thread/closed"
   ) {
     return;
   }
@@ -261,6 +295,35 @@ function recordRuntimeTerminalNotification(notification: {
     threadId: readString(params.threadId),
     turnId: readString(params.turnId),
   });
+}
+
+function readTerminalServerRequestScope(notification: {
+  method: string;
+  params?: unknown;
+}): TerminalServerRequestScope | null {
+  if (
+    notification.method !== "turn/completed" &&
+    notification.method !== "thread/closed"
+  ) {
+    return null;
+  }
+  const params =
+    notification.params &&
+    typeof notification.params === "object" &&
+    !Array.isArray(notification.params)
+      ? (notification.params as Record<string, unknown>)
+      : null;
+  const threadId = params ? readString(params.threadId) : null;
+  if (!threadId) {
+    return null;
+  }
+  if (notification.method === "thread/closed") {
+    return { method: "thread/closed", threadId, turnId: null };
+  }
+  const turnId = readString(params?.turnId);
+  return turnId
+    ? { method: "turn/completed", threadId, turnId }
+    : null;
 }
 
 function appendServerRequestLifecycleTrace(

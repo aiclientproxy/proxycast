@@ -1,6 +1,6 @@
 import type {
-  AppServerAgentSessionMediaReadParams,
-  AppServerAgentSessionMediaReadResponse,
+  AppServerMediaReadParams,
+  AppServerMediaReadResponse,
   AppServerJsonRpcNotification,
 } from "@/lib/api/appServer";
 import { isAbsoluteLocalFilePath } from "@/lib/api/fileSystem";
@@ -26,12 +26,12 @@ export { emitStreamingMediaReadProgress };
 export type { MediaReferencePreviewProgress };
 
 type MediaReferencePreviewReadEnvelope = {
-  media: AppServerAgentSessionMediaReadResponse;
+  media: AppServerMediaReadResponse;
   notifications?: readonly AppServerJsonRpcNotification[];
 };
 
 type MediaReferencePreviewReadResult =
-  | AppServerAgentSessionMediaReadResponse
+  | AppServerMediaReadResponse
   | MediaReferencePreviewReadEnvelope;
 
 type MediaReferencePreviewSource =
@@ -143,7 +143,7 @@ function resolveMediaReferenceReadOwner(
     MessagePreviewTarget,
     { kind: "media_reference" }
   >["reference"],
-): Pick<AppServerAgentSessionMediaReadParams, "refId" | "sidecarRef" | "uri"> {
+): Pick<AppServerMediaReadParams, "refId" | "sidecarRef" | "uri"> {
   const sidecarRef = reference.sidecarRef;
   const refId = reference.refId?.trim();
   const uriCandidates = [reference.sourceUri, reference.uri];
@@ -155,15 +155,15 @@ function resolveMediaReferenceReadOwner(
   };
 }
 
-export function buildAgentSessionMediaReadParams(params: {
-  sessionId?: string | null;
+export function buildMediaReadParams(params: {
+  threadId?: string | null;
   target: Extract<MessagePreviewTarget, { kind: "media_reference" }>;
   maxBytes?: number;
   offset?: number;
   length?: number;
-}): AppServerAgentSessionMediaReadParams | null {
-  const sessionId = params.sessionId?.trim();
-  if (!sessionId) {
+}): AppServerMediaReadParams | null {
+  const threadId = params.threadId?.trim();
+  if (!threadId) {
     return null;
   }
 
@@ -184,8 +184,8 @@ export function buildAgentSessionMediaReadParams(params: {
     return null;
   }
 
-  const request: AppServerAgentSessionMediaReadParams = {
-    sessionId,
+  const request: AppServerMediaReadParams = {
+    threadId,
     maxBytes: params.maxBytes ?? MEDIA_REFERENCE_PREVIEW_MAX_BYTES,
     offset: params.offset ?? 0,
     length:
@@ -196,7 +196,7 @@ export function buildAgentSessionMediaReadParams(params: {
 }
 
 function isCompleteMediaReadResponse(
-  media: AppServerAgentSessionMediaReadResponse,
+  media: AppServerMediaReadResponse,
 ): boolean {
   const offset = media.offset ?? 0;
   const totalBytes = media.totalBytes ?? media.bytes;
@@ -228,7 +228,7 @@ function formatMediaReadContentRange(totalBytes: number): string {
 function normalizeMediaPreviewReadResult(
   result: MediaReferencePreviewReadResult,
 ): {
-  media: AppServerAgentSessionMediaReadResponse;
+  media: AppServerMediaReadResponse;
   notifications: readonly AppServerJsonRpcNotification[];
 } {
   if (isMediaReferencePreviewReadEnvelope(result)) {
@@ -256,8 +256,13 @@ function buildMediaReferenceFallbackMarkdown(params: {
   >["reference"];
   t: Translate;
 }): string {
-  const { fallbackStatus = "unavailable", progress, reference, t, title } =
-    params;
+  const {
+    fallbackStatus = "unavailable",
+    progress,
+    reference,
+    t,
+    title,
+  } = params;
   const lines = [
     `# ${title}`,
     "",
@@ -381,8 +386,7 @@ export function createMediaReferencePreviewArtifact(params: {
           ...params.previewBudget,
           loadedBytes:
             params.previewBudget?.loadedBytes ?? progress?.loadedBytes,
-          totalBytes:
-            params.previewBudget?.totalBytes ?? progress?.totalBytes,
+          totalBytes: params.previewBudget?.totalBytes ?? progress?.totalBytes,
         },
       }),
       openedFrom: "message-media-reference",
@@ -431,7 +435,7 @@ export function createMediaReferenceProgressPreviewArtifact(params: {
 export function createMediaReferenceBinaryPreviewArtifact(params: {
   message: Message;
   target: Extract<MessagePreviewTarget, { kind: "media_reference" }>;
-  media: AppServerAgentSessionMediaReadResponse;
+  media: AppServerMediaReadResponse;
   t: Translate;
   previewUrl?: string;
   previewSource?: "sidecar_read" | "sidecar_object_url";
@@ -507,7 +511,7 @@ export function createMediaReferenceBinaryPreviewArtifact(params: {
 function createMediaReferenceBudgetExceededPreviewArtifact(params: {
   chunkBytes: number;
   maxBytes: number;
-  media: AppServerAgentSessionMediaReadResponse;
+  media: AppServerMediaReadResponse;
   message: Message;
   target: Extract<MessagePreviewTarget, { kind: "media_reference" }>;
   t: Translate;
@@ -540,7 +544,7 @@ function createMediaReferenceBudgetExceededPreviewArtifact(params: {
 export function createMediaReferenceObjectUrlPreviewArtifact(params: {
   message: Message;
   target: Extract<MessagePreviewTarget, { kind: "media_reference" }>;
-  media: AppServerAgentSessionMediaReadResponse;
+  media: AppServerMediaReadResponse;
   t: Translate;
   createObjectUrl?: (blob: Blob) => string;
 }): Artifact | null {
@@ -567,10 +571,10 @@ export function createMediaReferenceObjectUrlPreviewArtifact(params: {
 export async function createMediaReferenceChunkedObjectUrlPreviewArtifact(params: {
   message: Message;
   target: Extract<MessagePreviewTarget, { kind: "media_reference" }>;
-  sessionId?: string | null;
+  threadId?: string | null;
   t: Translate;
   readMedia: (
-    request: AppServerAgentSessionMediaReadParams,
+    request: AppServerMediaReadParams,
   ) => Promise<MediaReferencePreviewReadResult>;
   createObjectUrl?: (blob: Blob) => string;
   maxBytes?: number;
@@ -590,8 +594,8 @@ export async function createMediaReferenceChunkedObjectUrlPreviewArtifact(params
   }
 
   const chunkBytes = Math.min(requestedChunkBytes, maxBytes);
-  const firstRequest = buildAgentSessionMediaReadParams({
-    sessionId: params.sessionId,
+  const firstRequest = buildMediaReadParams({
+    threadId: params.threadId,
     target: params.target,
     maxBytes: chunkBytes,
     offset: 0,
@@ -610,7 +614,7 @@ export async function createMediaReferenceChunkedObjectUrlPreviewArtifact(params
   let didEmitStreamingProgress = emitStreamingMediaReadProgress({
     notifications: firstResult.notifications,
     onProgress: params.onProgress,
-    sessionId: firstRequest.sessionId,
+    threadId: firstRequest.threadId,
   }).emitted;
   const first = firstResult.media;
   if (!canContinue()) {
@@ -692,8 +696,8 @@ export async function createMediaReferenceChunkedObjectUrlPreviewArtifact(params
     }
 
     const nextLength = Math.min(chunkBytes, totalBytes - expectedOffset);
-    const nextRequest = buildAgentSessionMediaReadParams({
-      sessionId: params.sessionId,
+    const nextRequest = buildMediaReadParams({
+      threadId: params.threadId,
       target: params.target,
       maxBytes: chunkBytes,
       offset: expectedOffset,
@@ -711,7 +715,7 @@ export async function createMediaReferenceChunkedObjectUrlPreviewArtifact(params
     didEmitStreamingProgress = emitStreamingMediaReadProgress({
       notifications: latestResult.notifications,
       onProgress: params.onProgress,
-      sessionId: nextRequest.sessionId,
+      threadId: nextRequest.threadId,
     }).emitted;
     latest = latestResult.media;
     if (!canContinue()) {

@@ -1,9 +1,10 @@
 use super::*;
 use agent_protocol::{
-    AgentInput, ImageDetail, ItemKind, ItemStatus, MessageContentPart, MessageContentReference,
-    ThreadItemPayload, TurnAdmissionState, TurnApprovalState, TurnItemsView, TurnQueueState,
-    TurnStatus,
+    AgentInput, CollabAgentOperation, CollabAgentState, CollabAgentStatus, ImageDetail, ItemKind,
+    ItemStatus, MessageContentPart, MessageContentReference, ThreadItemPayload, TurnAdmissionState,
+    TurnApprovalState, TurnItemsView, TurnQueueState, TurnStatus,
 };
+use std::collections::HashMap;
 
 fn item(sequence: u64, ordinal: u64, id: &str, text: &str) -> ThreadItem {
     ThreadItem {
@@ -144,6 +145,61 @@ fn item_updates_replace_nested_turn_projection_without_duplicates() {
         ThreadItemPayload::AgentMessage { text, .. } if text == "firstsecond"
     ));
     assert_eq!(builder.snapshot().turns[0].items, nested.to_vec());
+}
+
+#[test]
+fn collab_wait_completion_preserves_typed_agent_states_in_history() {
+    let mut builder = ThreadHistoryBuilder::new();
+    builder
+        .append_turns_at(1, vec![turn("turn-1", TurnStatus::InProgress)])
+        .expect("turn append");
+    let mut started = ThreadItem::new(
+        SessionId::new("session-1"),
+        ThreadId::new("thread-1"),
+        TurnId::new("turn-1"),
+        2,
+        1,
+        ThreadItemPayload::CollabAgentToolCall {
+            call_id: "wait-call".to_string(),
+            operation: CollabAgentOperation::Wait,
+            target_thread_id: None,
+            message: None,
+            output: None,
+            agent_states: HashMap::new(),
+        },
+    );
+    started.status = ItemStatus::InProgress;
+    builder
+        .append_items_at(2, vec![started.clone()])
+        .expect("wait start");
+
+    let mut completed = started;
+    completed.sequence = 3;
+    completed.status = ItemStatus::Completed;
+    completed.completed_at_ms = Some(3);
+    let ThreadItemPayload::CollabAgentToolCall { agent_states, .. } = &mut completed.payload else {
+        panic!("collab wait payload");
+    };
+    agent_states.insert(
+        ThreadId::new("thread-child"),
+        CollabAgentState {
+            status: CollabAgentStatus::Completed,
+            message: None,
+        },
+    );
+    builder
+        .append_items_at(3, vec![completed])
+        .expect("wait completion");
+
+    let ThreadItemPayload::CollabAgentToolCall { agent_states, .. } =
+        &builder.turns()[0].items[0].payload
+    else {
+        panic!("merged collab wait payload");
+    };
+    assert_eq!(
+        agent_states[&ThreadId::new("thread-child")].status,
+        CollabAgentStatus::Completed
+    );
 }
 
 #[test]

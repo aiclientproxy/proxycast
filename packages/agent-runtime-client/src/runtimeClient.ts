@@ -34,7 +34,7 @@ import {
   type StructuredOutputContract,
   serverNotification,
   agentSessionEventNotification,
-  agentSessionMediaReadEventNotification,
+  mediaReadEventNotification,
 } from "@limecloud/app-server-client";
 
 export type { StructuredOutputContract };
@@ -180,10 +180,7 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
       return result.accepted;
     }
     const notification = agentSessionEventNotification(message);
-    if (
-      !notification ||
-      !agentSessionMediaReadEventNotification(notification)
-    ) {
+    if (!notification || !mediaReadEventNotification(notification)) {
       return false;
     }
     for (const listener of this.#listeners) {
@@ -232,7 +229,7 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
       const agentNotification = agentSessionEventNotification(notification);
       if (
         !agentNotification ||
-        !agentSessionMediaReadEventNotification(agentNotification)
+        !mediaReadEventNotification(agentNotification)
       ) {
         continue;
       }

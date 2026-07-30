@@ -209,8 +209,9 @@ describe("claw chat Gate B contract evidence", () => {
     expect(buildGateBContractAssertions(evidence)).toMatchObject({
       runIdPresent: false,
       electronIpcAppServerBridgeUsed: false,
-      evidenceArtifactsShareRunDirectory: false,
       screenshotCaptured: false,
+      evidenceArtifactsComplete: false,
+      evidenceArtifactsShareRunDirectory: true,
       noLegacyCommandHits: false,
       noMockFallbackHits: false,
       noPageErrors: false,

@@ -221,7 +221,10 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
   it("收到带 scope 的 action_required 后应保留作用域，并在提交时透传 action_scope", async () => {
     const workspaceId = "ws-action-required-scope";
     seedSession(workspaceId, "session-action-required-scope");
-    const respond = mockTypedActionResponseHandled("ask_user");
+    const respond = mockTypedActionResponseHandled(
+      "ask_user",
+      "req-ar-scope-1",
+    );
     const harness = mountHook(workspaceId);
     const stream = captureTurnStream();
 
@@ -278,10 +281,9 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
         .find((msg) => msg.role === "assistant");
 
       expect(respond).toHaveBeenCalledWith({
-        requestId: "req-ar-scope-1",
-        actionType: "ask_user",
         confirmed: true,
-        decision: undefined,
+        interactionId: "request_user_input:test:req-ar-scope-1",
+        kind: "request_user_input",
         response: '{"answer":"自动执行"}',
         userData: { answer: "自动执行" },
       });
@@ -308,7 +310,10 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
       providerType: "openai",
       model: "gpt-5.4-mini",
     });
-    const respond = mockTypedActionResponseHandled("tool_confirmation");
+    const respond = mockTypedActionResponseHandled(
+      "tool_confirmation",
+      "req-tool-confirm-scope-1",
+    );
     const harness = mountHook(workspaceId);
     const stream = captureTurnStream();
 
@@ -360,10 +365,14 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
       });
 
       expect(respond).toHaveBeenCalledWith({
-        requestId: "req-tool-confirm-scope-1",
-        confirmed: true,
-        actionType: "tool_confirmation",
-        response: "允许",
+        interactionId: "approval:test:req-tool-confirm-scope-1",
+        kind: "approval",
+        response: {
+          requestId: "req-tool-confirm-scope-1",
+          confirmed: true,
+          actionType: "tool_confirmation",
+          response: "允许",
+        },
       });
       expect(mockRespondAgentRuntimeAction).not.toHaveBeenCalled();
       expect(sourceEventName).toMatch(/^agent_stream_/);
@@ -741,7 +750,10 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
   it("ask_user 提交后应保留只读回显，避免面板消失", async () => {
     const workspaceId = "ws-ask-submit-keep";
     seedSession(workspaceId, "session-ask-submit-keep");
-    const respond = mockTypedActionResponseHandled("ask_user");
+    const respond = mockTypedActionResponseHandled(
+      "ask_user",
+      "req-ask-submit-1",
+    );
     const harness = mountHook(workspaceId);
     const stream = captureTurnStream();
 
@@ -778,10 +790,9 @@ describe("useAgentChat action_required 渲染链路 - ask / elicitation", () => 
         .find((msg) => msg.role === "assistant");
 
       expect(respond).toHaveBeenCalledWith({
-        requestId: "req-ask-submit-1",
-        actionType: "ask_user",
         confirmed: true,
-        decision: undefined,
+        interactionId: "request_user_input:test:req-ask-submit-1",
+        kind: "request_user_input",
         response: '{"answer":"自动执行（Auto）"}',
         userData: { answer: "自动执行（Auto）" },
       });

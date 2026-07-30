@@ -1148,5 +1148,7 @@
   "agentChat.toolCall.actionOverride.getLog.running": "ログ取得中",
   "agentChat.runtimeWarning.skillNotAvailable": "選択した Skill は現在利用できません。",
   "agentChat.runtimeWarning.skillLoadFailed": "選択した Skill を読み込めませんでした。",
-  "agentChat.runtimeWarning.mentionNotAvailable": "選択した Mention を解決できませんでした。"
+  "agentChat.runtimeWarning.mentionNotAvailable": "選択した Mention を解決できませんでした。",
+  "agentChat.runtimeWarning.unknownNotification": "このバージョンでは実行通知 {{method}} を認識できません。プロトコル診断を記録しました。",
+  "agentChat.runtimeWarning.unprojectedNotification": "実行通知 {{method}} は現在の画面にまだ接続されていません。プロトコル診断を記録しました。"
 }

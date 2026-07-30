@@ -1438,7 +1438,7 @@ describe("agentStreamTurnEventBinding", () => {
     expect(disposeListener).toHaveBeenCalledTimes(1);
   });
 
-  it("App Server WebSearch/WebFetch 中间 reasoning 应进入现有 GUI stream listener", async () => {
+  it("App Server WebSearch/WebFetch 过程应由 threadItems 承接且 Message 只保留最终正文", async () => {
     vi.useFakeTimers();
 
     let messages: Message[] = [
@@ -1757,31 +1757,15 @@ describe("agentStreamTurnEventBinding", () => {
 
     expect(messages[0]?.isThinking).toBe(false);
     expect(messages[0]?.content).toContain("网页搜索渲染结论");
-    expect(messages[0]?.contentParts?.map((part) => part.type)).toEqual([
-      "text",
-      "tool_use",
-      "tool_use",
-      "thinking",
-      "text",
+    expect(
+      messages[0]?.contentParts?.some((part) => part.type === "tool_use"),
+    ).toBe(false);
+    expect(messages[0]?.contentParts).toEqual([
+      {
+        type: "text",
+        text: "网页搜索渲染结论：搜索来源已展开，读取页面已归入同一过程，最终正文继续输出。",
+      },
     ]);
-    expect(messages[0]?.contentParts?.[0]).toMatchObject({
-      type: "text",
-      text: "我先联网核实目标页面来源。",
-      metadata: {
-        source: "agent_text_delta",
-        itemId: "agent-message-commentary-turn-app-server-web-tools",
-        turnId: "turn-app-server-web-tools",
-      },
-    });
-    expect(messages[0]?.contentParts?.[3]).toMatchObject({
-      type: "thinking",
-      text: "搜索结果还需要继续筛掉广告软文，我先读取有效来源。",
-      metadata: {
-        source: "thread_item_reasoning",
-        threadItemId: "reasoning-web-tools",
-        turnId: "turn-app-server-web-tools",
-      },
-    });
     expect(threadItems.map((item) => item.type)).toEqual([
       "agent_message",
       "tool_call",
@@ -1789,6 +1773,12 @@ describe("agentStreamTurnEventBinding", () => {
       "tool_call",
       "agent_message",
     ]);
+    expect(threadItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "tool-web-search", type: "tool_call" }),
+        expect.objectContaining({ id: "tool-web-fetch", type: "tool_call" }),
+      ]),
+    );
     expect(threadItems.at(-1)).toMatchObject({
       id: "agent-message-final-turn-app-server-web-tools",
       phase: "final_answer",

@@ -20,7 +20,20 @@ function appServerClientMock(): AppServerSessionReadClient {
               id: "turn-1",
               status: "inProgress",
               startedAt: Date.parse("2026-06-06T00:00:01.000Z") / 1000,
-              items: [],
+              items: [
+                {
+                  id: "file-change-1",
+                  type: "fileChange",
+                  status: "completed",
+                  changes: [
+                    {
+                      path: "src/App.tsx",
+                      kind: { type: "update" },
+                      diff: "+export const ready = true;",
+                    },
+                  ],
+                },
+              ],
             },
           ],
         },
@@ -54,6 +67,13 @@ describe("appServerReadModelClient", () => {
       ],
     });
     expect(readModel.active_turn_id).toBe("turn-1");
+    expect(readModel.thread_items).toEqual([
+      expect.objectContaining({
+        id: "file-change-1",
+        type: "patch",
+        paths: ["src/App.tsx"],
+      }),
+    ]);
 
     expect(appServerClient.readThread).toHaveBeenLastCalledWith({
       threadId: "session-1",

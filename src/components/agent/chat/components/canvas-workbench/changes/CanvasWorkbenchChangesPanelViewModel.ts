@@ -130,10 +130,10 @@ export function findChangeItemForSelection(
 function hasChangeItemReviewEvidence(item: CanvasWorkbenchChangeItem): boolean {
   return Boolean(
     item.preview?.trim() ||
-      item.diffLines?.length ||
-      item.currentContent != null ||
-      item.previousContent != null ||
-      item.checkpointPath?.trim(),
+    item.diffLines?.length ||
+    item.currentContent != null ||
+    item.previousContent != null ||
+    item.checkpointPath?.trim(),
   );
 }
 
@@ -143,8 +143,7 @@ function findLatestRuntimeChangeItemWithEvidence(
   const itemsByLatest = [...items].reverse();
   return (
     itemsByLatest.find(
-      (item) =>
-        item.source === "runtime" && hasChangeItemReviewEvidence(item),
+      (item) => item.source === "runtime" && hasChangeItemReviewEvidence(item),
     ) || itemsByLatest.find((item) => item.source === "runtime")
   );
 }
@@ -750,9 +749,8 @@ export function buildCanvasWorkbenchChangeFileTree(
     .forEach((item) => {
       const segments = splitChangeItemPath(item.path);
       const fileName =
-        segments.length > 0
-          ? segments[segments.length - 1]
-          : resolveChangeItemDisplayName(item);
+        resolveChangeItemDisplayName(item) ||
+        (segments.length > 0 ? segments[segments.length - 1] : item.path);
       let currentChildren = roots;
       let currentPath = "";
 

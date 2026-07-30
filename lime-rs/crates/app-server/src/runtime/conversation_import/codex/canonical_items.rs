@@ -477,6 +477,7 @@ fn canonical_tool_payload(
                 .map(ThreadId::new),
                 message: argument_string(raw_arguments, &["message", "prompt"]),
                 output,
+                agent_states: Default::default(),
             },
         );
     }

@@ -529,9 +529,12 @@ export interface AgentRuntimeThreadLimeCorePolicyEvaluation {
 }
 
 export interface AgentSessionHistoryCursor {
-  oldest_message_id?: number | null;
-  start_index?: number | null;
-  loaded_count?: number | null;
+  item_cursor?: string | null;
+  turn_cursor?: string | null;
+  loaded_entry_count?: number | null;
+  loaded_turn_count?: number | null;
+  loaded_item_count?: number | null;
+  has_more?: boolean | null;
 }
 
 /**
@@ -548,9 +551,8 @@ export interface AgentSessionDetail {
   working_dir?: string;
   execution_strategy?: AgentExecutionStrategy;
   execution_runtime?: AgentSessionExecutionRuntime | null;
-  messages_count?: number;
+  messages_count?: number | null;
   history_limit?: number | null;
-  history_offset?: number | null;
   history_cursor?: AgentSessionHistoryCursor | null;
   history_truncated?: boolean;
   messages: AgentMessage[];

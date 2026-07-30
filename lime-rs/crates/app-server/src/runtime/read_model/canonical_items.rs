@@ -168,6 +168,7 @@ fn canonical_payload_to_agent_detail(
             target_thread_id,
             message,
             output,
+            ..
         } => {
             detail.insert("call_id".to_string(), json!(call_id));
             if let Some(output) = output {

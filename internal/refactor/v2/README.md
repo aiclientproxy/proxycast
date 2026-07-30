@@ -1,8 +1,8 @@
 # Codex 渲染对齐重构 v2
 
-状态：proposed / implementation-ready
+状态：implementation in progress（V2-02 / V2-04 收尾，V2-05 planned surface 待实现）
 
-日期：2026-07-28
+日期：2026-07-29
 
 ## 1. 目标
 
@@ -51,20 +51,48 @@ v2 把 Lime 的对话界面重构为 Codex App Server v2 的完整语义投影�
 
 ## 3. 当前事实与差距
 
-2026-07-28 的当前代码已经有 18 类 Rust ThreadItem 骨架，但 Renderer 还不是完整 Item Scene：
+2026-07-29 的 current 代码已经让 18 类 Rust ThreadItem 通过 typed canonical reader 进入 direct TurnTimeline，但专项 Gate B 与 V2-05 高级通知仍未完整：
 
-| 层              | 当前事实                                                                                                 | v2 缺口                                                                                                    |
-| --------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Rust Item 协议  | lime-rs/crates/app-server-protocol/src/protocol/v2/item.rs 有 18 个顶层变体和 8 类流式增量               | 部分字段仍是 String 或 opaque Value；DynamicToolCall 缺音频；没有 renderer 专用安全 display shape          |
-| v2 notification | ServerNotification 当前有 28 个 typed method                                                             | Codex 72 项覆盖表尚未逐项作产品裁决、typed contract 和 UI 出口                                             |
-| reverse request | 当前只有 MCP elicitation、命令审批、文件审批、用户输入 4 类 typed request                                | currentTime、permission、dynamic tool dispatch 和 legacy 去重路径尚未完成产品裁决/接线                     |
-| 前端直连路由    | appServerV2Notification.ts 只直接接 14 个 notification                                                   | 非直连 method 缺统一 coverage map，无法保证未知协议 fail visible                                           |
-| canonical lower | appServerCanonicalItemReader.ts 可 lower 18 类上游 type；合法未知 camelCase type 已投影为 `unknown_item` | 多个类型被压成 extension 或 tool_call；declined 仍被伪装为 failed；ConversationProjection/reducer 尚未统一 |
-| 时间线          | 现有 history hydration 会把 item 合并为 Message 与 tool content part                                     | Message -> Tool -> Message 的原始交错顺序不能稳定保留                                                      |
-| 可见性          | ContextCompaction 已保留并复用现有低干扰信息行 renderer                                                  | live/cold/replay 共享 reducer 与专门 Gate B 证据尚未完成                                                   |
-| 交互            | 既有 DecisionPanel 和 MCP form 可处理部分 pending action                                                 | pending interaction 没有统一的 item anchor、terminal/断线对账与跨 Thread 队列合同                          |
+| 层              | 当前事实                                                                                                        | v2 缺口                                                                                 |
+| --------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Rust Item 协议  | app-server-protocol v2 有 18 个顶层变体；MCP result/error 与 DynamicTool `inputAudio` 为 typed current contract | UserMessage audio/localAudio 不在 Lime 产品协议范围；部分 host/media 异常态 Gate B 待补 |
+| v2 notification | 72 项 coverage、pinned schema/hash/method drift gate 与 unknown notification recorder 已落地                    | 大量 planned notification 尚无完整 producer、GUI outlet 与 Gate B                       |
+| reverse request | MCP elicitation、命令审批、文件审批、用户输入 4 类 typed request 共用唯一 pending owner                         | currentTime、permission、dynamic tool dispatch 仍须按产品范围补真实 owner               |
+| canonical lower | 18 类上游 type 均投影为 typed Item；unknown camelCase type 进入 `unknown_item`，畸形/旧 shape fail closed       | 不再允许 extension 或 raw JSON fallback；专项 malformed/Gate B 仍需扩圈                 |
+| 时间线          | MessageList 直接消费 canonical Turn render projection；User/Agent/Media/Process 保持 sequence                   | 长列表性能和完整 Electron 场景矩阵仍待验证                                              |
+| 恢复            | live、cold read 与 production `thread/resume` 使用同一 reducer；resume 后 live 继续复用该实例                   | restart/disconnect 的完整 V2-05 产品矩阵仍待补                                          |
+| 交互            | 四类 pending request 使用单一 PendingInteractionController 和 Composer 上方唯一交互层                           | planned permission/tool-call request 尚未进入 current union                             |
 
-因此，v2 的第一原则是把当前 AgentThreadItem 的二次 lower 从主渲染通路移出。它可在迁移期间作为只读兼容输入，但不能继续增长为第二套 Item 模型。
+因此，v2 的第一原则是把当前 AgentThreadItem 的二次 lower 从主渲染通路移出。迁移期间只有旧 Message/read 渲染链可把它作为只读兼容输入；canonical ThreadItem state 仍是 current live/read 状态，不得把二次 lower 继续增长为第二套 Item 模型。
+
+### 3.1 当前 Renderer 主链
+
+```text
+direct v2 notification
+  -> current notification router
+  -> request-scoped ConversationProjection reducer
+  -> canonical AgentThreadItem state
+  -> existing timeline renderer
+
+thread/read + thread/items/list + thread/turns/list
+  -> canonical item reader
+  -> the same ConversationProjection reducer
+  -> canonical AgentThreadItem state
+
+thread/resume
+  -> canonical item reader
+  -> install the same ConversationProjection reducer into active stream state
+  -> subsequent live notifications reuse the same reducer
+
+canonical Thread/Turn/Item state
+  -> pure turnTimelineRenderProjection
+  -> direct User / Agent / Media / Process segments
+  -> MessageList
+```
+
+direct notification 没有上游 event id 时，live owner 只在 sequence gate/router 之后分配 request 内到达序号；不得用内容 hash 合并合法重复 chunk，也不得把该序号宣称为跨重连 replay identity。CommandExecution、Tool、WebSearch 和 Patch 的可见输出在 projection 边界限制为 256 KiB 并保留尾部。unknown Item diagnostic 只记录 revision、method、type、identity 与脱敏字段名。
+
+canonical Item -> Message 的 tool/agent/reasoning 合成入口、`canonicalItemsToMessages` 与旧 MessageList canonical compatibility branch 已物理删除，属于 `dead / deleted / forbidden-to-restore`。未被 canonical Item 覆盖的 optimistic/imported/local product surface 仍以 residual Message 显示，但它只是 direct projection 的纯派生补充，不是第二个 Item store。
 
 ## 4. 目标架构
 
@@ -72,7 +100,7 @@ v2 把 Lime 的对话界面重构为 Codex App Server v2 的完整语义投影�
       -> App Server JSON-RPC v2
       -> typed Renderer gateway
       -> ConversationProjection reducer
-      -> TurnTimeline / PendingInteractionStore / NoticeStore
+      -> TurnTimeline / PendingInteractionController / NoticeStore
       -> ItemRenderer(type) + Turn panels + Composer interaction layer
 
 读路径与直播路径必须共享同一 reducer：

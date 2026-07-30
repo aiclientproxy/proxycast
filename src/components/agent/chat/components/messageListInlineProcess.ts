@@ -71,6 +71,9 @@ export function hasTimelineProcessItems(items?: AgentThreadItem[]): boolean {
         item.type === "command_execution" ||
         item.type === "patch" ||
         item.type === "web_search" ||
+        item.type === "hook_prompt" ||
+        item.type === "sleep" ||
+        item.type === "review_boundary" ||
         item.type === "approval_request" ||
         item.type === "request_user_input" ||
         item.type === "context_compaction",

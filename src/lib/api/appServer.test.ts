@@ -3,7 +3,7 @@ import { safeInvoke } from "@/lib/dev-bridge";
 import {
   APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
   APP_SERVER_METHOD_AGENT_SESSION_EVENT,
-  APP_SERVER_METHOD_AGENT_SESSION_MEDIA_READ,
+  APP_SERVER_METHOD_MEDIA_READ,
   APP_SERVER_METHOD_CANCEL_REQUEST,
   APP_SERVER_METHOD_THREAD_RESUME,
   APP_SERVER_METHOD_TURN_INTERRUPT,
@@ -752,13 +752,13 @@ describe("App Server API", () => {
     });
   });
 
-  it("readAgentSessionMedia 应通过 App Server JSON-RPC 读取已知 sidecar media", async () => {
+  it("readMedia 应通过 App Server JSON-RPC 读取已知 sidecar media", async () => {
     vi.mocked(safeInvoke).mockResolvedValueOnce({
       lines: [
         line({
           id: 6,
           result: {
-            sessionId: "session-media",
+            threadId: "thread-media",
             uri: "sidecar://media/demo",
             mimeType: "image/png",
             bytes: 4,
@@ -780,8 +780,8 @@ describe("App Server API", () => {
     });
 
     const client = new AppServerClient({ initialRequestId: 6 });
-    const result = await client.readAgentSessionMedia({
-      sessionId: "session-media",
+    const result = await client.readMedia({
+      threadId: "thread-media",
       uri: "sidecar://media/demo",
       maxBytes: 1024,
     });
@@ -801,9 +801,9 @@ describe("App Server API", () => {
           lines: [
             line({
               id: 6,
-              method: APP_SERVER_METHOD_AGENT_SESSION_MEDIA_READ,
+              method: APP_SERVER_METHOD_MEDIA_READ,
               params: {
-                sessionId: "session-media",
+                threadId: "thread-media",
                 uri: "sidecar://media/demo",
                 maxBytes: 1024,
               },
@@ -814,7 +814,7 @@ describe("App Server API", () => {
     );
   });
 
-  it("readAgentSessionMedia abort 后应拒绝并忽略迟到 bridge 结果", async () => {
+  it("readMedia abort 后应拒绝并忽略迟到 bridge 结果", async () => {
     let resolveSafeInvoke!: (value: unknown) => void;
     const pendingSafeInvoke = new Promise((resolve) => {
       resolveSafeInvoke = resolve;
@@ -825,9 +825,9 @@ describe("App Server API", () => {
     const abortController = new AbortController();
 
     const client = new AppServerClient({ initialRequestId: 6 });
-    const result = client.readAgentSessionMedia(
+    const result = client.readMedia(
       {
-        sessionId: "session-media",
+        threadId: "thread-media",
         uri: "sidecar://media/demo",
         maxBytes: 1024,
       },
@@ -838,7 +838,7 @@ describe("App Server API", () => {
 
     await expect(result).rejects.toMatchObject({
       name: "AppServerRequestAbortedError",
-      method: APP_SERVER_METHOD_AGENT_SESSION_MEDIA_READ,
+      method: APP_SERVER_METHOD_MEDIA_READ,
       requestId: 6,
       reason: "preview superseded",
     });
@@ -848,9 +848,9 @@ describe("App Server API", () => {
         lines: [
           line({
             id: 6,
-            method: APP_SERVER_METHOD_AGENT_SESSION_MEDIA_READ,
+            method: APP_SERVER_METHOD_MEDIA_READ,
             params: {
-              sessionId: "session-media",
+              threadId: "thread-media",
               uri: "sidecar://media/demo",
               maxBytes: 1024,
             },

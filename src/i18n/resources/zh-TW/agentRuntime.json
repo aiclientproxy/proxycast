@@ -1148,5 +1148,7 @@
   "agentChat.toolCall.actionOverride.getLog.running": "取得日誌中",
   "agentChat.runtimeWarning.skillNotAvailable": "所選 Skill 目前無法使用。",
   "agentChat.runtimeWarning.skillLoadFailed": "所選 Skill 載入失敗。",
-  "agentChat.runtimeWarning.mentionNotAvailable": "目前無法解析所選 Mention。"
+  "agentChat.runtimeWarning.mentionNotAvailable": "目前無法解析所選 Mention。",
+  "agentChat.runtimeWarning.unknownNotification": "收到目前版本無法識別的執行通知：{{method}}。已記錄協定診斷。",
+  "agentChat.runtimeWarning.unprojectedNotification": "收到尚未接入目前介面的執行通知：{{method}}。已記錄協定診斷。"
 }

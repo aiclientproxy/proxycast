@@ -1,8 +1,6 @@
 import type { AgentRuntimeFileCheckpointThreadSummary } from "@/lib/api/agentRuntime/sessionTypes";
 import type { CodingWorkbenchView } from "@limecloud/agent-runtime-projection";
-import type {
-  CanvasWorkbenchHeaderView,
-} from "../components/CanvasWorkbenchLayout";
+import type { CanvasWorkbenchHeaderView } from "../components/CanvasWorkbenchLayout";
 import type {
   CanvasWorkbenchChangeItem,
   CanvasWorkbenchChangeView,
@@ -85,7 +83,8 @@ export function buildWorkspaceHeaderView({
         key: "workspace-root",
         label: "工作区",
         value: workspaceRootLabel,
-        detail: projectRootPath?.trim() || "绑定工作区后，这里会展示真实文件树。",
+        detail:
+          projectRootPath?.trim() || "绑定工作区后，这里会展示真实文件树。",
         tone: hasProjectRootPath ? "accent" : "default",
       },
       {
@@ -130,19 +129,25 @@ export function buildCanvasWorkbenchChangeViewFromCodingProjection({
   fileCheckpointSummary?: AgentRuntimeFileCheckpointThreadSummary | null;
   onOpenFile?: (path: string) => void | Promise<void>;
 }): CanvasWorkbenchChangeView | null {
-  const items = codingView.changes.map((change): CanvasWorkbenchChangeItem => ({
-    id: change.id,
-    path: change.path,
-    displayName: extractFileNameFromPath(change.path),
-    source: "runtime",
-    status: statusForCanvasChange(change.status),
-    changeKind: change.changeKind,
-    preview: change.preview,
-    currentContent: change.preview ?? null,
-    previousContent: null,
-    checkpointPath: change.checkpointRef || null,
-    checkpointLabel: change.checkpointRef ? "snapshot" : null,
-  }));
+  const items = codingView.changes.map(
+    (change): CanvasWorkbenchChangeItem => ({
+      id: change.id,
+      path: change.path,
+      displayName: change.destinationPath
+        ? `${extractFileNameFromPath(change.path)} -> ${extractFileNameFromPath(
+            change.destinationPath,
+          )}`
+        : extractFileNameFromPath(change.path),
+      source: "runtime",
+      status: statusForCanvasChange(change.status),
+      changeKind: change.changeKind,
+      preview: change.preview,
+      currentContent: change.preview ?? null,
+      previousContent: null,
+      checkpointPath: change.checkpointRef || null,
+      checkpointLabel: change.checkpointRef ? "snapshot" : null,
+    }),
+  );
   if (items.length === 0 && !(fileCheckpointSummary?.count ?? 0)) {
     return null;
   }

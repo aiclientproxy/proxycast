@@ -18,6 +18,7 @@ const SAFE_UNKNOWN_FIELD_NAME_RE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
 const SENSITIVE_UNKNOWN_FIELD_NAME_RE =
   /(authorization|cookie|credential|password|secret|token|api[_-]?key)/iu;
 const UNKNOWN_ITEM_FIELD_NAME_LIMIT = 12;
+const MAX_DISPLAY_JSON_BYTES = 256 * 1024;
 const INTERNAL_THREAD_ITEM_TYPES = new Set([
   "agent_message",
   "approval_request",
@@ -106,8 +107,8 @@ export function readCanonicalThreadItem(
         ...base,
         type: "agent_message",
         text,
-        phase: readString(item, "phase"),
-        memoryCitation: item.memoryCitation,
+        phase: readMessagePhase(item.phase),
+        memoryCitation: readMemoryCitation(item.memoryCitation),
       };
     }
     case "plan": {
@@ -140,6 +141,7 @@ export function readCanonicalThreadItem(
     case "commandExecution": {
       const command = readString(item, "command");
       const cwd = readString(item, "cwd");
+      const commandStatus = readString(item, "status");
       if (command === undefined || cwd === undefined) {
         return null;
       }
@@ -147,12 +149,13 @@ export function readCanonicalThreadItem(
         ...base,
         type: "command_execution",
         command,
-        cwd,
+        cwd: safeDisplayPath(cwd),
+        plugin_id: readString(item, "pluginId"),
+        script_path: readString(item, "scriptPath"),
+        command_status: commandStatus,
         process_id: readString(item, "processId"),
         source: readString(item, "source"),
-        command_actions: Array.isArray(item.commandActions)
-          ? item.commandActions
-          : [],
+        command_actions: readCommandActions(item.commandActions),
         aggregated_output: readString(item, "aggregatedOutput"),
         exit_code: readFiniteNumber(item, "exitCode"),
         duration_ms: readFiniteNumber(item, "durationMs"),
@@ -160,7 +163,7 @@ export function readCanonicalThreadItem(
       };
     }
     case "fileChange": {
-      const changes = Array.isArray(item.changes) ? item.changes : [];
+      const changes = readFileChanges(item.changes);
       const fileStatus = readString(item, "status");
       const paths = changes.flatMap((change) => {
         const record = normalizeRecord(change);
@@ -174,7 +177,7 @@ export function readCanonicalThreadItem(
         changes,
         file_status: fileStatus,
         paths,
-        success: status === "completed",
+        success: fileStatus === "completed",
       };
     }
     case "mcpToolCall":
@@ -196,12 +199,14 @@ export function readCanonicalThreadItem(
         stage: isTerminalItemStatus(status) ? "completed" : "started",
       };
     case "imageView": {
-      const uri = readString(item, "path") ?? "";
+      const source = readString(item, "path") ?? "";
+      const uri = isSafeMediaReference(source) ? source : "";
       return {
         ...base,
         type: "media",
         uri,
-        mime_type: imageMimeType(uri),
+        mime_type: imageMimeType(source),
+        preview: safeMediaDisplayName(source),
       };
     }
     case "webSearch":
@@ -221,16 +226,41 @@ export function readCanonicalThreadItem(
         saved_path: readString(item, "savedPath"),
       };
     }
-    case "hookPrompt":
-    case "sleep":
-    case "enteredReviewMode":
-    case "exitedReviewMode":
+    case "hookPrompt": {
+      const fragments = readHookPromptFragments(item.fragments);
+      if (!fragments) {
+        return null;
+      }
       return {
         ...base,
-        type: "extension",
-        name: type,
-        data: item,
+        type: "hook_prompt",
+        fragments,
       };
+    }
+    case "sleep": {
+      const durationMs = readOptionalNonNegativeInteger(item.durationMs);
+      if (durationMs === null) {
+        return null;
+      }
+      return {
+        ...base,
+        type: "sleep",
+        ...(durationMs === undefined ? {} : { duration_ms: durationMs }),
+      };
+    }
+    case "enteredReviewMode":
+    case "exitedReviewMode": {
+      const review = readString(item, "review");
+      if (review === undefined) {
+        return null;
+      }
+      return {
+        ...base,
+        type: "review_boundary",
+        boundary: type === "enteredReviewMode" ? "entered" : "exited",
+        review,
+      };
+    }
     default:
       return CANONICAL_ITEM_TYPE_RE.test(type) &&
         !INTERNAL_THREAD_ITEM_TYPES.has(type)
@@ -254,6 +284,36 @@ function readUnknownItemFieldNames(item: Record<string, unknown>): string[] {
         : "[redacted]",
     );
   return [...new Set(names)].sort().slice(0, UNKNOWN_ITEM_FIELD_NAME_LIMIT);
+}
+
+function readHookPromptFragments(
+  value: unknown,
+): Array<{ hook_run_id: string; text: string }> | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const fragments = [];
+  for (const entry of value) {
+    const record = normalizeRecord(entry);
+    const hookRunId = readString(record ?? {}, "hookRunId");
+    const text = readString(record ?? {}, "text");
+    if (!record || !hookRunId || text === undefined) {
+      return null;
+    }
+    fragments.push({ hook_run_id: hookRunId, text });
+  }
+  return fragments;
+}
+
+function readOptionalNonNegativeInteger(
+  value: unknown,
+): number | undefined | null {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null;
 }
 
 function canonicalPlanMetadata(
@@ -351,7 +411,9 @@ function readCanonicalToolMetadata(
     if (
       item.result !== undefined &&
       item.result !== null &&
-      (!result || !Array.isArray(result.content))
+      (!result ||
+        !Array.isArray(result.content) ||
+        !isBoundedDisplayJson(result))
     ) {
       return null;
     }
@@ -370,10 +432,11 @@ function readCanonicalToolMetadata(
     if (!Object.prototype.hasOwnProperty.call(item, "arguments")) {
       return null;
     }
+    const contentItems = readDynamicToolContentItems(item.contentItems);
     if (
       item.contentItems !== undefined &&
       item.contentItems !== null &&
-      !Array.isArray(item.contentItems)
+      !contentItems
     ) {
       return null;
     }
@@ -381,9 +444,7 @@ function readCanonicalToolMetadata(
       callId: id,
       canonical_type: type,
       namespace: readString(item, "namespace"),
-      content_items: Array.isArray(item.contentItems)
-        ? item.contentItems
-        : undefined,
+      content_items: contentItems,
     });
   }
 
@@ -476,7 +537,7 @@ function normalizeItemStatus(
     case "inProgress":
       return "in_progress";
     case "declined":
-      return allowDeclined ? "failed" : null;
+      return allowDeclined ? "completed" : null;
     default:
       return null;
   }
@@ -533,7 +594,7 @@ function readUserMessageContent(
         if (!url || detail === null) {
           return null;
         }
-        parts.push(imageContentReference(url, undefined, detail));
+        parts.push(imageContentReference(url, detail));
         break;
       }
       case "localImage": {
@@ -542,7 +603,14 @@ function readUserMessageContent(
         if (!path || detail === null) {
           return null;
         }
-        parts.push(imageContentReference(path, path, detail));
+        parts.push({
+          type: "image",
+          mime_type: imageMimeType(path),
+          data: "",
+          display_name: safeDisplayPath(path),
+          unavailable_reason: "host_reference_required",
+          ...(detail ? { detail } : {}),
+        });
         break;
       }
       case "skill":
@@ -553,7 +621,11 @@ function readUserMessageContent(
         if ((type !== "skill" && type !== "mention") || !name || !path) {
           return null;
         }
-        parts.push({ type, name, path });
+        parts.push({
+          type,
+          name,
+          path: type === "skill" ? safeDisplayPath(path) : path,
+        });
         break;
       }
       default:
@@ -565,7 +637,6 @@ function readUserMessageContent(
 
 function imageContentReference(
   uri: string,
-  sourcePath?: string,
   detail?: AgentMessageContentImage["detail"],
 ): AgentMessageContentImage {
   const dataUrl = /^data:(image\/[\w.+-]+);base64,([\s\S]*)$/iu.exec(uri);
@@ -584,9 +655,6 @@ function imageContentReference(
     uri,
     ...(detail ? { detail } : {}),
   };
-  if (sourcePath) {
-    content.source_path = sourcePath;
-  }
   return content;
 }
 
@@ -661,6 +729,158 @@ function readTextElements(
     });
   }
   return elements;
+}
+
+function readMessagePhase(
+  value: unknown,
+): "commentary" | "final_answer" | undefined {
+  return value === "commentary" || value === "final_answer" ? value : undefined;
+}
+
+function readMemoryCitation(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  const citation = readOptionalRecord(value);
+  if (!citation || !Array.isArray(citation.entries)) {
+    return undefined;
+  }
+  const entries = citation.entries.flatMap((entry) => {
+    const record = normalizeRecord(entry);
+    const path = readString(record ?? {}, "path");
+    if (!record || !path) {
+      return [];
+    }
+    return [{ ...record, path: safeDisplayPath(path) }];
+  });
+  return {
+    ...citation,
+    entries,
+  };
+}
+
+function readCommandActions(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((entry) => {
+    const record = normalizeRecord(entry);
+    const type = readString(record ?? {}, "type");
+    if (!record || !type) {
+      return [];
+    }
+    return [
+      omitUndefined({
+        type,
+        command: readString(record, "command"),
+        name: readString(record, "name"),
+        query: readString(record, "query"),
+        path: readString(record, "path")
+          ? safeDisplayPath(readString(record, "path") as string)
+          : undefined,
+      }),
+    ];
+  });
+}
+
+function readFileChanges(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((entry) => {
+    const record = normalizeRecord(entry);
+    const path = readString(record ?? {}, "path");
+    const diff = readString(record ?? {}, "diff");
+    const kind = readOptionalRecord(record?.kind);
+    const kindType = readString(kind ?? {}, "type");
+    if (!record || !path || diff === undefined || !kind || !kindType) {
+      return [];
+    }
+    return [
+      {
+        path: safeDisplayPath(path),
+        kind: omitUndefined({
+          type: kindType,
+          move_path: readString(kind, "move_path")
+            ? safeDisplayPath(readString(kind, "move_path") as string)
+            : undefined,
+        }),
+        diff,
+      },
+    ];
+  });
+}
+
+function readDynamicToolContentItems(
+  value: unknown,
+): Record<string, unknown>[] | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || !isBoundedDisplayJson(value)) {
+    return undefined;
+  }
+  const output: Record<string, unknown>[] = [];
+  for (const entry of value) {
+    const record = normalizeRecord(entry);
+    const type = readString(record ?? {}, "type");
+    if (!record || !type) {
+      return undefined;
+    }
+    if (type === "inputText") {
+      const text = readString(record, "text");
+      if (text === undefined) return undefined;
+      output.push({ type, text });
+      continue;
+    }
+    if (type === "inputImage" || type === "inputAudio") {
+      const field = type === "inputImage" ? "imageUrl" : "audioUrl";
+      const uri = readString(record, field);
+      if (!uri) return undefined;
+      output.push({ type, [field]: uri });
+      continue;
+    }
+    return undefined;
+  }
+  return output;
+}
+
+function isBoundedDisplayJson(value: unknown): boolean {
+  try {
+    return (
+      new TextEncoder().encode(JSON.stringify(value)).length <=
+      MAX_DISPLAY_JSON_BYTES
+    );
+  } catch {
+    return false;
+  }
+}
+
+function safeDisplayPath(value: string): string {
+  const normalized = value.trim().replace(/\\/gu, "/");
+  const parts = normalized.split("/").filter((part) => part && part !== ".");
+  const isAbsolute =
+    normalized.startsWith("/") ||
+    normalized.startsWith("~/") ||
+    /^[A-Za-z]:\//u.test(normalized) ||
+    parts.includes("..");
+  return isAbsolute ? (parts.at(-1) ?? "[local path]") : normalized;
+}
+
+function isSafeMediaReference(value: string): boolean {
+  return /^(?:sidecar|https?):\/\//iu.test(value.trim());
+}
+
+function safeMediaDisplayName(value: string): string {
+  const withoutQuery = value.trim().split(/[?#]/u, 1)[0] ?? value.trim();
+  const encodedName = withoutQuery.split(/[\\/]/u).at(-1)?.trim();
+  if (!encodedName) {
+    return safeDisplayPath(value);
+  }
+  try {
+    return decodeURIComponent(encodedName);
+  } catch {
+    return encodedName;
+  }
 }
 
 function readToolOutput(item: Record<string, unknown>): string | undefined {

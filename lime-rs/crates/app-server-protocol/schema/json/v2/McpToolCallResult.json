@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "_meta": true,
+    "content": {
+      "items": true,
+      "type": "array"
+    },
+    "structuredContent": true
+  },
+  "required": [
+    "_meta",
+    "content",
+    "structuredContent"
+  ],
+  "title": "McpToolCallResult",
+  "type": "object"
+}

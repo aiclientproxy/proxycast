@@ -1321,14 +1321,15 @@ describe("claw chat current Electron fixture smoke guard", () => {
     );
   });
 
-  it("keeps pending approval as a single inputbar row without tool argument details", () => {
+  it("keeps pending approval above an enabled composer without tool argument details", () => {
     const content = readSmokeScript();
 
     expect(content).toContain('[data-testid="inputbar-approval-prompt"]');
     expect(content).toContain('[data-testid="inputbar-approval-summary"]');
     expect(content).toContain('approvalPrompt?.querySelector("details")');
     expect(content).toContain('approvalPrompt?.querySelector("pre")');
-    expect(content).toContain("snapshot.textareaVisible === false");
+    expect(content).toContain("snapshot.textareaVisible === true");
+    expect(content).toContain("snapshot.textareaDisabled === false");
     expect(content).toContain("snapshot.singleLine === true");
     expect(content).toContain(
       "approvalRequestResumePendingGui?.hasToolName === false",
@@ -1718,7 +1719,8 @@ describe("claw chat current Electron fixture smoke guard", () => {
           hasSection: true,
           hasApprovalContent: true,
           hasPrompt: true,
-          textareaVisible: false,
+          textareaVisible: true,
+          textareaDisabled: false,
           singleLine: true,
         },
         approvalRequestDecisionPendingReadModel: {
@@ -2555,11 +2557,26 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain("runMediaReferenceScenario");
     expect(content).toContain("summarizeGuiMediaReferenceSnapshot");
     expect(content).toContain("openGuiMediaReferencePreview");
+    expect(content).toContain("openGuiMediaReferenceUnavailableFallback");
     expect(content).toContain("waitForSessionReadMediaReferenceCompleted");
     expect(content).toContain("mediaReferencePromptReachedBackend");
     expect(content).toContain("guiMediaReferenceCardVisible");
     expect(content).toContain("guiMediaReferenceDoesNotExposeInlinePayload");
+    expect(content).toContain("guiMediaReferenceUsesSafeSidecarHandle");
+    expect(content).toContain("guiMediaReferenceSourcePathNotExposed");
+    expect(content).toContain("MEDIA_REFERENCE_SAFE_URI_PREFIX");
+    expect(content).toContain("cardTextIncludesSafeHandle");
+    expect(content).toContain("sourcePathNotExposed");
     expect(content).toContain("guiMediaReferencePreviewOpened");
+    expect(content).toContain("appServerMediaReadV2Succeeded");
+    expect(content).toContain("appServerMediaReadThreadScoped");
+    expect(content).toContain("guiMediaReferenceUnavailableFallbackVisible");
+    expect(content).toContain('APP_SERVER_METHOD_MEDIA_READ = "media/read"');
+    expect(content).toContain("mediaReadV2Success");
+    expect(content).toContain("mediaReadV2Trace");
+    expect(content).toContain("noLegacySessionIdentity");
+    expect(content).toContain("makeMediaSidecarUnavailable");
+    expect(content).toContain("markdownPreviewVisible");
     expect(content).toContain("readModelMediaReferenceObserved");
     expect(content).toContain("imageViewPaths");
     expect(content).toContain("hasSourceOwner");
@@ -2586,7 +2603,9 @@ describe("claw chat current Electron fixture smoke guard", () => {
   });
 
   it("summarizes current imageView media and v2 turn status", () => {
-    const referencePath = "/tmp/fixture-media-reference.png";
+    const sourcePath = "/tmp/fixture-media-reference.png";
+    const referenceUri =
+      "sidecar://media/output-deadbeef/fixture-media-reference.png";
     expect(
       summarizeReadModelMediaReference(
         {
@@ -2594,12 +2613,13 @@ describe("claw chat current Electron fixture smoke guard", () => {
             turns: [
               {
                 status: "completed",
-                items: [{ type: "imageView", path: referencePath }],
+                items: [{ type: "imageView", path: referenceUri }],
               },
             ],
           },
         },
-        referencePath,
+        referenceUri,
+        sourcePath,
       ),
     ).toMatchObject({
       latestTurnStatus: "completed",
@@ -2607,6 +2627,8 @@ describe("claw chat current Electron fixture smoke guard", () => {
       matchingImageViewCount: 1,
       hasMediaReference: true,
       hasSourceOwner: true,
+      usesSafeSidecarHandle: true,
+      sourcePathNotExposed: true,
       contentPartsKeyObserved: false,
       noInlinePayload: true,
     });

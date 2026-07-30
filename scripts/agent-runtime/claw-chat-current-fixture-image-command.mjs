@@ -800,7 +800,18 @@ export async function waitForGuiImageCommandTerminal(
         const completionSelector = `[data-testid="image-workbench-completion-caption-${taskId}"]`;
         const mediaSelector = `[data-testid="image-workbench-message-preview-single-media-${taskId}"], [data-testid="image-workbench-message-preview-grid-${taskId}"]`;
         const cards = Array.from(document.querySelectorAll(cardSelector));
-        const introNodes = Array.from(document.querySelectorAll(introSelector));
+        const legacyIntroNodes = Array.from(
+          document.querySelectorAll(introSelector),
+        );
+        const canonicalIntroNodes = Array.from(
+          document.querySelectorAll(
+            '[data-message-role="assistant"][data-thread-item-id]',
+          ),
+        ).filter((node) =>
+          (node.textContent || "").includes(presentationIntro),
+        );
+        const introNodes =
+          legacyIntroNodes.length > 0 ? legacyIntroNodes : canonicalIntroNodes;
         const completionNodes = Array.from(
           document.querySelectorAll(completionSelector),
         );
@@ -909,6 +920,12 @@ export async function waitForGuiImageCommandTerminal(
           hasPresentationIntro: text.includes(presentationIntro),
           hasPresentationIntroInAssistantText:
             introText.includes(presentationIntro),
+          presentationIntroSource:
+            legacyIntroNodes.length > 0
+              ? "message_shell"
+              : canonicalIntroNodes.length > 0
+                ? "canonical_item"
+                : null,
           hasToolStripLabel: toolLabels.some((label) =>
             toolbarText.includes(label),
           ),

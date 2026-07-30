@@ -383,6 +383,7 @@ fn merge_payload(
                 target_thread_id: previous_target,
                 message: previous_message,
                 output: previous_output,
+                agent_states: mut previous_states,
             },
             ThreadItemPayload::CollabAgentToolCall {
                 call_id,
@@ -390,18 +391,27 @@ fn merge_payload(
                 target_thread_id,
                 message,
                 output,
+                agent_states,
             },
-        ) => ThreadItemPayload::CollabAgentToolCall {
-            call_id: prefer_string(previous_call_id, call_id, ""),
-            operation: if target_thread_id.is_none() && message.is_none() && output.is_none() {
-                previous_operation
-            } else {
-                operation
-            },
-            target_thread_id: target_thread_id.or(previous_target),
-            message: message.or(previous_message),
-            output: merge_tool_output(previous_output, output),
-        },
+        ) => {
+            previous_states.extend(agent_states);
+            ThreadItemPayload::CollabAgentToolCall {
+                call_id: prefer_string(previous_call_id, call_id, ""),
+                operation: if target_thread_id.is_none()
+                    && message.is_none()
+                    && output.is_none()
+                    && previous_states.is_empty()
+                {
+                    previous_operation
+                } else {
+                    operation
+                },
+                target_thread_id: target_thread_id.or(previous_target),
+                message: message.or(previous_message),
+                output: merge_tool_output(previous_output, output),
+                agent_states: previous_states,
+            }
+        }
         (
             ThreadItemPayload::Approval {
                 request_id: previous_request_id,

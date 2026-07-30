@@ -612,7 +612,8 @@ async fn spawn_forks_all_last_n_or_no_parent_turns_into_canonical_history() {
             matches!(
                 &item.payload,
                 ThreadItemPayload::AgentMessage { phase, .. }
-                    if phase.as_deref() == Some("final_answer")
+                    if phase
+                        == &Some(agent_protocol::response_item::MessagePhase::FinalAnswer)
             )
         }));
         assert!(assistant_items

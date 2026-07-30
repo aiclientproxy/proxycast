@@ -16,7 +16,6 @@ export {
   resolveHistoryToolName,
   shouldCompactCompletedSessionHistory,
 } from "./agentChatHistoryNormalize";
-export { mergeThreadItemReasoningIntoMessages } from "./agentChatHistoryReasoning";
 export { mergeAdjacentAssistantMessages } from "./agentChatHistoryAdjacentMerge";
 export { mergeHydratedMessagesWithLocalState } from "./agentChatHistoryLocalMerge";
 export { dedupeAdjacentHistoryMessages } from "./agentChatHistorySignatures";

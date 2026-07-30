@@ -706,7 +706,7 @@ function normalizeAgentThreadTurnStatus(
     case "inProgress":
       return "running";
     case "interrupted":
-      return "canceled";
+      return "interrupted";
     default:
       return status ?? fallbackStatus;
   }

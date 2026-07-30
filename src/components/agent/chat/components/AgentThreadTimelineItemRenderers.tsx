@@ -4,11 +4,14 @@ import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
   Bot,
+  ClipboardCheck,
   Clock3,
   ListChecks,
   Loader2,
+  MessageSquareText,
   ShieldAlert,
   Sparkles,
+  Timer,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +93,43 @@ function SurfaceCard({
           </div>
           <div className="ml-0 mt-1.5">{children}</div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function CanonicalActivityRow({
+  icon: Icon,
+  title,
+  detail,
+  timestamp,
+  testId,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  detail?: string;
+  timestamp?: string | null;
+  testId: string;
+}) {
+  return (
+    <div className="flex items-start gap-2.5 py-1.5" data-testid={testId}>
+      <div className="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400">
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="text-xs leading-5 text-slate-500">{title}</span>
+          {timestamp ? (
+            <span className="text-xs leading-5 text-slate-400">
+              {timestamp}
+            </span>
+          ) : null}
+        </div>
+        {detail ? (
+          <div className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">
+            {detail}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -419,6 +459,54 @@ function renderGroupItemDetails(
         onOpenSavedSiteContent={onOpenSavedSiteContent}
         grouped={options?.groupedToolCall}
         groupMarker={options?.groupMarker}
+      />
+    );
+  }
+
+  if (item.type === "hook_prompt") {
+    const detail = item.fragments
+      .map((fragment) => fragment.text.trim())
+      .filter(Boolean)
+      .join("\n");
+    return (
+      <CanonicalActivityRow
+        icon={MessageSquareText}
+        title={t("agentChat.threadTimeline.hookPrompt.title")}
+        detail={detail}
+        timestamp={timestamp}
+        testId="timeline-hook-prompt"
+      />
+    );
+  }
+
+  if (item.type === "sleep") {
+    const detail =
+      item.duration_ms === undefined
+        ? t("agentChat.threadTimeline.sleep.detail.unspecified")
+        : t("agentChat.threadTimeline.sleep.detail.duration", {
+            duration: item.duration_ms.toLocaleString(),
+          });
+    return (
+      <CanonicalActivityRow
+        icon={Timer}
+        title={t("agentChat.threadTimeline.sleep.title")}
+        detail={detail}
+        timestamp={timestamp}
+        testId="timeline-sleep"
+      />
+    );
+  }
+
+  if (item.type === "review_boundary") {
+    return (
+      <CanonicalActivityRow
+        icon={ClipboardCheck}
+        title={t(
+          `agentChat.threadTimeline.reviewBoundary.${item.boundary}.title`,
+        )}
+        detail={item.review.trim() || undefined}
+        timestamp={timestamp}
+        testId="timeline-review-boundary"
       />
     );
   }

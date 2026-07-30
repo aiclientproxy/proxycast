@@ -232,6 +232,7 @@ internal/oem/
 internal/tech/
 !internal/tech/
 internal/tech/*
+!internal/tech/model-platform-architecture.md
 !internal/tech/plugin/
 !internal/tech/plugin/*.md
 !internal/tech/harness/

@@ -55,6 +55,7 @@ fn targeted_lifecycle_event(
             sidecar_reference: None,
             metadata: HashMap::new(),
             agent_control_projection_facts: facts,
+            agent_control_state_facts: Vec::new(),
         }),
     }
 }
@@ -95,6 +96,15 @@ fn canonical_wait_agent_projects_one_collab_lifecycle_item() {
                 sidecar_reference: None,
                 metadata: HashMap::new(),
                 agent_control_projection_facts: Vec::new(),
+                agent_control_state_facts: vec![
+                    tool_runtime::agent_control::AgentStateProjectionFact {
+                        target_thread_id: ThreadId::new("thread-child"),
+                        state: agent_protocol::CollabAgentState {
+                            status: agent_protocol::CollabAgentStatus::Completed,
+                            message: None,
+                        },
+                    },
+                ],
             }),
         ),
         lifecycle_context(2),
@@ -111,6 +121,7 @@ fn canonical_wait_agent_projects_one_collab_lifecycle_item() {
         target_thread_id,
         message,
         output,
+        agent_states,
         ..
     } = completed.payload
     else {
@@ -119,6 +130,10 @@ fn canonical_wait_agent_projects_one_collab_lifecycle_item() {
     assert_eq!(operation, CollabAgentOperation::Wait);
     assert!(target_thread_id.is_none());
     assert!(message.is_none());
+    assert_eq!(
+        agent_states[&ThreadId::new("thread-child")].status,
+        agent_protocol::CollabAgentStatus::Completed
+    );
     let output = output.expect("wait terminal output");
     assert_eq!(output.text.as_deref(), Some("Wait completed."));
     assert_eq!(

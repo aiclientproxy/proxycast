@@ -11,6 +11,10 @@ import { publishProcessedAgentRuntimeEvent } from "../agentRuntimeEvents";
 import { projectAgentRuntimeSequenceGateNotifications } from "./eventSequenceGate";
 import { projectAppServerAgentEventPayload } from "./appServerEventStreamProjection";
 import { readAppServerAgentEvent } from "./appServerEventPayloadUtils";
+import {
+  readAppServerNotificationDriftRoute,
+  recordAppServerNotificationDrift,
+} from "./appServerNotificationDrift";
 import { readAppServerV2NotificationRoute } from "./appServerV2Notification";
 
 export const APP_SERVER_EVENT_DRAIN_LIMIT = 50;
@@ -156,6 +160,7 @@ export class AppServerAgentSessionEventDrainRouter {
   ): void {
     const routable = readRoutableNotification(notification);
     if (!routable) {
+      recordAppServerNotificationDrift(notification);
       if (fallbackEventName) {
         publishAppServerAgentSessionNotifications(fallbackEventName, [
           notification,
@@ -396,11 +401,19 @@ function readRoutableNotification(
   }
 
   const direct = readAppServerV2NotificationRoute(notification);
-  return direct
+  if (direct) {
+    return {
+      sessionId: direct.threadId,
+      terminal: direct.terminal,
+      turnId: direct.turnId,
+    };
+  }
+  const drift = readAppServerNotificationDriftRoute(notification);
+  return drift
     ? {
-        sessionId: direct.threadId,
-        terminal: direct.terminal,
-        turnId: direct.turnId,
+        sessionId: drift.threadId,
+        terminal: false,
+        turnId: drift.turnId,
       }
     : null;
 }

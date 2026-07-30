@@ -3,142 +3,188 @@ import {
   buildSessionHistoryPageRequestPlan,
   buildSessionHistoryPageResultPlan,
   normalizeNonNegativeInteger,
-  normalizePositiveInteger,
-  resolveDetailHistoryLoadedMessages,
+  normalizeOpaqueCursor,
   resolveSessionHistoryWindowFromDetail,
 } from "./sessionHistoryPaginationController";
 
-function messages(count: number) {
-  return Array.from({ length: count }, (_, index) => ({ id: `m-${index}` }));
-}
-
 describe("sessionHistoryPaginationController", () => {
-  it("应归一化整数边界", () => {
-    expect(normalizePositiveInteger(1.8)).toBe(1);
-    expect(normalizePositiveInteger(0)).toBeNull();
-    expect(normalizeNonNegativeInteger(0)).toBe(0);
+  it("应保持 opaque cursor 原值并归一化计数边界", () => {
+    expect(normalizeOpaqueCursor(" cursor with spaces ")).toBe(
+      " cursor with spaces ",
+    );
+    expect(normalizeOpaqueCursor("")).toBeNull();
+    expect(normalizeNonNegativeInteger(1.8)).toBe(1);
     expect(normalizeNonNegativeInteger(-1)).toBeNull();
   });
 
-  it("应从 detail cursor / limit offset 推导已加载消息数", () => {
-    expect(
-      resolveDetailHistoryLoadedMessages({
-        messages: messages(40),
-        messages_count: 320,
-        history_cursor: { start_index: 280 },
-      }),
-    ).toBe(40);
-
-    expect(
-      resolveDetailHistoryLoadedMessages({
-        messages: messages(50),
-        messages_count: 320,
-        history_limit: 50,
-        history_offset: 40,
-      }),
-    ).toBe(90);
-  });
-
-  it("未截断或已全量加载时不应保留 history window", () => {
+  it("应只根据 Item/Turn cursor 构造 history window", () => {
     expect(
       resolveSessionHistoryWindowFromDetail({
-        messages: messages(40),
-        history_truncated: false,
+        items: [{ id: "item-1" }, { id: "item-2" }],
+        turns: [{ id: "turn-1" }],
+        history_cursor: {
+          item_cursor: "opaque-item-page-2",
+          turn_cursor: null,
+          loaded_entry_count: 3,
+          loaded_turn_count: 1,
+          loaded_item_count: 2,
+          has_more: true,
+        },
       }),
-    ).toBeNull();
+    ).toEqual({
+      loadedEntries: 3,
+      loadedTurns: 1,
+      loadedItems: 2,
+      hasMore: true,
+      itemCursor: "opaque-item-page-2",
+      turnCursor: null,
+      isLoadingFull: false,
+      error: null,
+    });
+  });
 
+  it("两个 owner 都到 EOF 时不应保留 history window", () => {
     expect(
       resolveSessionHistoryWindowFromDetail({
-        messages: messages(40),
-        messages_count: 40,
-        history_truncated: true,
+        items: [{ id: "item-1" }],
+        turns: [{ id: "turn-1" }],
+        history_cursor: {
+          item_cursor: null,
+          turn_cursor: null,
+          loaded_entry_count: 2,
+          loaded_turn_count: 1,
+          loaded_item_count: 1,
+          has_more: true,
+        },
       }),
     ).toBeNull();
   });
 
-  it("应构造首个完整历史分页请求计划", () => {
+  it("应使用两个 owner cursor 构造下一页请求", () => {
+    const currentHistoryWindow = {
+      loadedEntries: 60,
+      loadedTurns: 20,
+      loadedItems: 40,
+      hasMore: true,
+      itemCursor: "opaque-item-page-2",
+      turnCursor: null,
+      isLoadingFull: false,
+      error: "old",
+    };
+
     expect(
       buildSessionHistoryPageRequestPlan({
-        currentHistoryWindow: {
-          loadedMessages: 40,
-          totalMessages: 320,
-          historyBeforeMessageId: 281,
-          historyStartIndex: 280,
-          isLoadingFull: false,
-          error: "old",
-        },
-        currentMessagesCount: 40,
+        currentHistoryWindow,
         pageSize: 50,
       }),
     ).toEqual({
-      historyBeforeMessageId: 281,
-      loadedMessagesCount: 40,
+      itemCursor: "opaque-item-page-2",
+      turnCursor: null,
       loadingWindow: {
-        loadedMessages: 40,
-        totalMessages: 320,
-        historyBeforeMessageId: 281,
-        historyStartIndex: 280,
+        ...currentHistoryWindow,
         isLoadingFull: true,
         error: null,
       },
       nextHistoryLimit: 50,
-      nextHistoryOffset: 40,
       requestOptions: {
+        historyItemCursor: "opaque-item-page-2",
+        historyTurnCursor: null,
         historyLimit: 50,
-        historyOffset: 40,
-        historyBeforeMessageId: 281,
       },
-      totalMessagesCount: 320,
     });
   });
 
-  it("已在加载时不应重复构造分页请求", () => {
+  it("加载中或没有可继续的 owner cursor 时不应重复请求", () => {
     expect(
       buildSessionHistoryPageRequestPlan({
         currentHistoryWindow: {
-          loadedMessages: 40,
-          totalMessages: 320,
+          loadedEntries: 60,
+          loadedTurns: 20,
+          loadedItems: 40,
+          hasMore: true,
+          itemCursor: "opaque-item-page-2",
+          turnCursor: null,
           isLoadingFull: true,
           error: null,
         },
-        currentMessagesCount: 40,
+        pageSize: 50,
+      }),
+    ).toBeNull();
+    expect(
+      buildSessionHistoryPageRequestPlan({
+        currentHistoryWindow: {
+          loadedEntries: 60,
+          loadedTurns: 20,
+          loadedItems: 40,
+          hasMore: true,
+          itemCursor: null,
+          turnCursor: null,
+          isLoadingFull: false,
+          error: null,
+        },
         pageSize: 50,
       }),
     ).toBeNull();
   });
 
-  it("应根据分页 detail 构造下一轮 history window", () => {
+  it("应累计 Turn/Item entry count 并仅按下一 cursor 决定 hasMore", () => {
+    const currentHistoryWindow = {
+      loadedEntries: 60,
+      loadedTurns: 20,
+      loadedItems: 40,
+      hasMore: true,
+      itemCursor: "opaque-item-page-2",
+      turnCursor: "opaque-turn-page-2",
+      isLoadingFull: true,
+      error: null,
+    };
+
     expect(
       buildSessionHistoryPageResultPlan({
+        currentHistoryWindow,
         detail: {
-          messages: messages(50),
-          messages_count: 320,
-          history_limit: 50,
-          history_offset: 40,
           history_cursor: {
-            oldest_message_id: 231,
-            start_index: 230,
+            item_cursor: "opaque-item-page-3",
+            turn_cursor: null,
+            loaded_entry_count: 75,
+            loaded_turn_count: 25,
+            loaded_item_count: 50,
+            has_more: true,
           },
         },
-        historyBeforeMessageId: 281,
-        nextHistoryLimit: 50,
-        nextHistoryOffset: 40,
-        totalMessagesCount: 320,
       }),
-    ).toMatchObject({
-      detailLoadedMessages: 90,
-      nextHistoryBeforeMessageId: 231,
-      nextHistoryStartIndex: 230,
-      nextLoadedMessages: 90,
-      resolvedTotalMessages: 320,
+    ).toEqual({
+      detailLoadedEntries: 75,
+      detailLoadedTurns: 25,
+      detailLoadedItems: 50,
+      nextLoadedEntries: 135,
+      nextLoadedTurns: 45,
+      nextLoadedItems: 90,
       nextHistoryWindow: {
-        loadedMessages: 90,
-        totalMessages: 320,
-        historyBeforeMessageId: 231,
-        historyStartIndex: 230,
+        loadedEntries: 135,
+        loadedTurns: 45,
+        loadedItems: 90,
+        hasMore: true,
+        itemCursor: "opaque-item-page-3",
+        turnCursor: null,
         isLoadingFull: false,
         error: null,
       },
     });
+
+    expect(
+      buildSessionHistoryPageResultPlan({
+        currentHistoryWindow,
+        detail: {
+          items: [{ id: "item-3" }],
+          turns: [{ id: "turn-3" }],
+          history_cursor: {
+            item_cursor: null,
+            turn_cursor: null,
+            has_more: false,
+          },
+        },
+      }).nextHistoryWindow,
+    ).toBeNull();
   });
 });

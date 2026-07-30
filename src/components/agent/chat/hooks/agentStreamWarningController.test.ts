@@ -96,6 +96,35 @@ describe("agentStreamWarningController", () => {
     }
   });
 
+  it("协议 notification drift 应使用本地化文案并保留 method", () => {
+    const previousLocale = document.documentElement.lang;
+    document.documentElement.lang = "en-US";
+    try {
+      expect(
+        buildAgentStreamWarningPlan({
+          activeSessionId: "session-a",
+          alreadyWarned: false,
+          code: "unknown_app_server_notification:future/itemChanged",
+          message: "future/itemChanged",
+        }).toast?.message,
+      ).toBe(
+        "This version does not recognize the runtime notification future/itemChanged. A protocol diagnostic was recorded.",
+      );
+      expect(
+        buildAgentStreamWarningPlan({
+          activeSessionId: "session-a",
+          alreadyWarned: false,
+          code: "unprojected_app_server_notification:hook/started",
+          message: "hook/started",
+        }).toast?.message,
+      ).toBe(
+        "The runtime notification hook/started is not connected to the current interface yet. A protocol diagnostic was recorded.",
+      );
+    } finally {
+      document.documentElement.lang = previousLocale;
+    }
+  });
+
   it("应从 warning plan 构造 toast action", () => {
     expect(
       buildAgentStreamWarningToastAction({

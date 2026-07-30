@@ -31,13 +31,13 @@
         "string"
       ]
     },
-    "sessionId": {
-      "type": "string"
-    },
     "sidecarRef": true,
     "stream": {
       "default": false,
       "type": "boolean"
+    },
+    "threadId": {
+      "type": "string"
     },
     "uri": {
       "type": [
@@ -47,8 +47,8 @@
     }
   },
   "required": [
-    "sessionId"
+    "threadId"
   ],
-  "title": "AgentSessionMediaReadParams",
+  "title": "MediaReadParams",
   "type": "object"
 }

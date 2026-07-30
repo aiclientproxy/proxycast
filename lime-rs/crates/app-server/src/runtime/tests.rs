@@ -46,5 +46,6 @@ mod session_shell;
 mod sessions;
 mod support;
 mod thread_delete;
+mod thread_start_preflight;
 mod trace_store;
 mod turn_lifecycle;

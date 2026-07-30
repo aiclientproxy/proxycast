@@ -183,42 +183,50 @@
     "DynamicToolCallOutputContentItem": {
       "oneOf": [
         {
-          "additionalProperties": false,
           "properties": {
-            "inputText": {
-              "properties": {
-                "text": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "text"
-              ],
-              "type": "object"
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "const": "inputText",
+              "type": "string"
             }
           },
           "required": [
-            "inputText"
+            "text",
+            "type"
           ],
           "type": "object"
         },
         {
-          "additionalProperties": false,
           "properties": {
-            "inputImage": {
-              "properties": {
-                "image_url": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "image_url"
-              ],
-              "type": "object"
+            "imageUrl": {
+              "type": "string"
+            },
+            "type": {
+              "const": "inputImage",
+              "type": "string"
             }
           },
           "required": [
-            "inputImage"
+            "imageUrl",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "audioUrl": {
+              "type": "string"
+            },
+            "type": {
+              "const": "inputAudio",
+              "type": "string"
+            }
+          },
+          "required": [
+            "audioUrl",
+            "type"
           ],
           "type": "object"
         }
@@ -425,6 +433,13 @@
         "path"
       ],
       "type": "object"
+    },
+    "MessagePhase": {
+      "enum": [
+        "commentary",
+        "final_answer"
+      ],
+      "type": "string"
     },
     "MultiAgentMode": {
       "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
@@ -774,9 +789,13 @@
               ]
             },
             "phase": {
-              "type": [
-                "null",
-                "string"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MessagePhase"
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "text": {
@@ -956,7 +975,20 @@
                 "null"
               ]
             },
-            "error": true,
+            "error": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "message"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "id": {
               "type": "string"
             },
@@ -972,7 +1004,25 @@
                 "string"
               ]
             },
-            "result": true,
+            "result": {
+              "properties": {
+                "_meta": true,
+                "content": {
+                  "items": true,
+                  "type": "array"
+                },
+                "structuredContent": true
+              },
+              "required": [
+                "_meta",
+                "content",
+                "structuredContent"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "server": {
               "type": "string"
             },
@@ -989,7 +1039,9 @@
           },
           "required": [
             "arguments",
+            "error",
             "id",
+            "result",
             "server",
             "status",
             "tool",

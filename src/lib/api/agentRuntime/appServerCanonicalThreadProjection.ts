@@ -1,7 +1,6 @@
 import type { AppServerAgentSessionOverview } from "./appServerSessionClient";
 import type { AppServerAgentEvent } from "../appServer";
 import type {
-  AgentMessage,
   AgentThreadItem,
   AgentThreadTurn,
   AgentThreadTurnStatus,
@@ -11,7 +10,10 @@ import type {
   AgentSessionDetail,
 } from "./sessionTypes";
 import { readCanonicalThreadItem } from "./appServerCanonicalItemReader";
-import { createConversationProjectionReducer } from "./conversationProjection";
+import {
+  createConversationProjectionReducer,
+  RENDER_PROJECTION_REFERENCE_REVISION,
+} from "./conversationProjection";
 
 export interface CanonicalThreadListProjectionOptions {
   archived?: boolean;
@@ -187,7 +189,6 @@ export function readCanonicalThreadDetail(
   if (!items) {
     return null;
   }
-  const messages = canonicalItemsToMessages(items);
   const threadStatus = canonicalThreadStatus(thread.status);
   if (!threadStatus) {
     return null;
@@ -220,7 +221,7 @@ export function readCanonicalThreadDetail(
       metadataString(metadata, "executionStrategy", "execution_strategy"),
     ),
     messages_count: canonicalThreadMessageCount(rawTurns, metadata),
-    messages,
+    messages: [],
     turns,
     items,
     thread_read: {
@@ -285,24 +286,21 @@ function canonicalThreadItems(
         turnProjection.status === "running" ? "turn_started" : "turn_completed",
       source: "read",
       event_id: `thread-read:turn:${turnId}`,
+      protocol_method: "thread/read",
+      protocol_revision: RENDER_PROJECTION_REFERENCE_REVISION,
       turn: turnProjection,
     });
-    for (const item of turn.items) {
+    for (const [itemIndex, item] of turn.items.entries()) {
       if (!isRecord(item)) {
         return null;
       }
-      const sequence =
-        readNumberField(item, "sequence") ?? reducer.getProjection().items.length;
       const createdAtMs =
         canonicalThreadTime(item, "createdAt") ??
         canonicalThreadTime(turn, "startedAt") ??
         fallbackTimestampMs;
-      if (sequence === undefined) {
-        continue;
-      }
       const event: AppServerAgentEvent = {
         eventId: `thread-read:${canonicalItemId(item)}`,
-        sequence,
+        sequence: itemIndex,
         sessionId,
         threadId,
         turnId,
@@ -319,6 +317,8 @@ function canonicalThreadItems(
         type: typedItem.status === "in_progress" ? "item_started" : "item_completed",
         source: "read",
         event_id: event.eventId,
+        protocol_method: "thread/read",
+        protocol_revision: RENDER_PROJECTION_REFERENCE_REVISION,
         item: typedItem,
       });
     }
@@ -366,31 +366,6 @@ function canonicalTurnPromptText(value: Record<string, unknown>): string {
     readOptionalStringField(value, "message") ||
     ""
   );
-}
-
-function canonicalItemsToMessages(items: AgentThreadItem[]): AgentMessage[] {
-  return items.flatMap((item) => {
-    if (item.type !== "user_message" && item.type !== "agent_message") {
-      return [];
-    }
-    const text = item.type === "user_message" ? item.content : item.text;
-    const contentParts =
-      item.type === "user_message" && Array.isArray(item.content_parts)
-        ? item.content_parts
-        : undefined;
-    const timestampMs = Date.parse(item.started_at);
-    return [
-      {
-        id: item.id,
-        role: item.type === "user_message" ? "user" : "assistant",
-        content: contentParts?.length ? contentParts : [{ type: "text", text }],
-        timestamp: Number.isFinite(timestampMs)
-          ? Math.trunc(timestampMs / 1_000)
-          : Math.trunc(Date.now() / 1_000),
-        runtimeTurnId: item.turn_id,
-      },
-    ];
-  });
 }
 
 function canonicalTurnToRuntimeTurn(

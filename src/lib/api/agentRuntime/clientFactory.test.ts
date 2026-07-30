@@ -118,6 +118,16 @@ function appServerClientMock(): AgentRuntimeAppServerClient {
       notifications: [],
     }),
     request: vi.fn().mockImplementation((method: string) => {
+      if (method === "thread/items/list" || method === "thread/turns/list") {
+        return Promise.resolve({
+          id: 1,
+          result: { data: [] },
+          response: { id: 1, result: {} },
+          messages: [],
+          notifications: [],
+        });
+      }
+
       if (method === "workspaceSkillBindings/list") {
         return Promise.resolve({
           id: 1,
@@ -677,7 +687,7 @@ describe("agentRuntime clientFactory", () => {
       limit: 100,
     });
     expect(appServerClient.readThread).toHaveBeenCalledWith({
-      threadId: "session-1",
+      threadId: "thread-1",
       includeTurns: false,
     });
     expect(appServerClient.archiveThread).toHaveBeenCalledWith({

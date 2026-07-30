@@ -10,7 +10,7 @@ const MESSAGE_IMAGE_PREVIEW_MAX_BYTES = 32 * 1024 * 1024;
 
 interface MessageImageAttachmentsProps {
   images: Message["images"];
-  sessionId?: string | null;
+  threadId?: string | null;
   onOpenImage?: (
     image: NonNullable<Message["images"]>[number],
     index: number,
@@ -59,32 +59,32 @@ function MessageImageAttachment({
   image,
   index,
   onOpenImage,
-  sessionId,
+  threadId,
 }: {
   image: NonNullable<Message["images"]>[number];
   index: number;
-  sessionId?: string | null;
+  threadId?: string | null;
   onOpenImage?: MessageImageAttachmentsProps["onOpenImage"];
 }) {
   const { t } = useTranslation("agent");
   const directSrc = resolveMessageImageSrc(image);
   const sidecarUri = resolveMessageImageSidecarUri(image);
-  const normalizedSessionId = sessionId?.trim() || "";
+  const normalizedThreadId = threadId?.trim() || "";
   const [sidecarSrc, setSidecarSrc] = React.useState("");
   const [loadFailed, setLoadFailed] = React.useState(false);
 
   React.useEffect(() => {
     setSidecarSrc("");
     setLoadFailed(false);
-    if (directSrc || !sidecarUri || !normalizedSessionId) {
+    if (directSrc || !sidecarUri || !normalizedThreadId) {
       return;
     }
 
     const abortController = new AbortController();
     void createAppServerClient()
-      .readAgentSessionMedia(
+      .readMedia(
         {
-          sessionId: normalizedSessionId,
+          threadId: normalizedThreadId,
           uri: sidecarUri,
           maxBytes: MESSAGE_IMAGE_PREVIEW_MAX_BYTES,
           length: MESSAGE_IMAGE_PREVIEW_MAX_BYTES,
@@ -115,11 +115,11 @@ function MessageImageAttachment({
       });
 
     return () => abortController.abort();
-  }, [directSrc, image.mediaType, normalizedSessionId, sidecarUri]);
+  }, [directSrc, image.mediaType, normalizedThreadId, sidecarUri]);
 
   const src = directSrc || sidecarSrc;
   const isUnavailable =
-    loadFailed || (!src && (!sidecarUri || !normalizedSessionId));
+    loadFailed || (!src && (!sidecarUri || !normalizedThreadId));
   const imageNode =
     isUnavailable || !src ? (
       <ImageUnavailablePlaceholder
@@ -156,7 +156,7 @@ function MessageImageAttachment({
 export function MessageImageAttachments({
   images,
   onOpenImage,
-  sessionId,
+  threadId,
 }: MessageImageAttachmentsProps) {
   if (!images?.length) {
     return null;
@@ -171,7 +171,7 @@ export function MessageImageAttachments({
             image={img}
             index={index}
             onOpenImage={onOpenImage}
-            sessionId={sessionId}
+            threadId={threadId}
           />
         );
       })}

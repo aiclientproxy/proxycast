@@ -16,6 +16,8 @@ import type {
   PendingInteractionProjection,
   TurnProjection,
 } from "./contracts";
+import { buildUnknownItemProtocolDriftDiagnostic } from "./protocolDrift";
+import { mergeProjectionOutput, sanitizeProjectionItem } from "./sanitizer";
 
 const ITEM_KEY_SEPARATOR = "\u001f";
 const MAX_ORPHAN_DELTAS = 32;
@@ -48,10 +50,14 @@ export function createInitialConversationProjectionState(
   };
 }
 
-export function createConversationProjectionReducer(options: {
-  threadId?: string | null;
-} = {}): ConversationProjectionReducer {
-  let state = createInitialConversationProjectionState(options.threadId ?? null);
+export function createConversationProjectionReducer(
+  options: {
+    threadId?: string | null;
+  } = {},
+): ConversationProjectionReducer {
+  let state = createInitialConversationProjectionState(
+    options.threadId ?? null,
+  );
   return {
     dispatch(event) {
       state = reduceConversationProjection(state, event);
@@ -60,7 +66,9 @@ export function createConversationProjectionReducer(options: {
     getState: () => state,
     getProjection: () => selectConversationProjection(state),
     reset() {
-      state = createInitialConversationProjectionState(options.threadId ?? null);
+      state = createInitialConversationProjectionState(
+        options.threadId ?? null,
+      );
       return state;
     },
   };
@@ -147,10 +155,25 @@ function applyItemSnapshot(
     { type: "item_started" | "item_updated" | "item_completed" }
   >,
 ): ConversationProjectionState {
-  const item = event.item;
-  const key = conversationItemKey(item.thread_id, item.turn_id, item.id);
+  const snapshot = sanitizeProjectionItem(event.item);
+  const key = conversationItemKey(
+    snapshot.thread_id,
+    snapshot.turn_id,
+    snapshot.id,
+  );
   const existing = state.items[key];
-  if (event.type === "item_started" && existing && isTerminal(existing.status)) {
+  const item = existing
+    ? {
+        ...snapshot,
+        sequence: existing.sequence,
+        started_at: existing.started_at,
+      }
+    : snapshot;
+  if (
+    event.type === "item_started" &&
+    existing &&
+    isTerminal(existing.status)
+  ) {
     return addDiagnostic(state, {
       code: "item_started_after_terminal",
       source: event.source,
@@ -167,9 +190,9 @@ function applyItemSnapshot(
   if (!itemOrder.includes(key)) {
     itemOrder.push(key);
   }
-  itemOrder.sort((left, right) => compareItems(next.items[left], next.items[right]));
-
   const items = { ...next.items, [key]: item };
+  itemOrder.sort((left, right) => compareItems(items[left], items[right]));
+
   let diagnostics = next.diagnostics;
   if (event.type === "item_updated" && !existing) {
     diagnostics = appendDiagnostic(diagnostics, {
@@ -181,6 +204,28 @@ function applyItemSnapshot(
       item_id: item.id,
       message: `Accepted item/update as the first snapshot for ${item.id}.`,
     });
+  }
+  if (
+    item.type === "unknown_item" &&
+    !diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === "protocol_drift" &&
+        diagnostic.thread_id === item.thread_id &&
+        diagnostic.turn_id === item.turn_id &&
+        diagnostic.item_id === item.id &&
+        diagnostic.upstream_type === item.upstream_type,
+    )
+  ) {
+    diagnostics = appendDiagnostic(
+      diagnostics,
+      buildUnknownItemProtocolDriftDiagnostic({
+        eventId: event.event_id,
+        item,
+        method: event.protocol_method,
+        protocolRevision: event.protocol_revision,
+        source: event.source,
+      }),
+    );
   }
 
   const orphanDeltas = next.orphan_deltas[key] ?? [];
@@ -227,13 +272,16 @@ function applyItemSnapshot(
           [item.turn_id]: {
             ...updatedTurn,
             item_ids: itemOrder.map((entry) =>
-              entry === key ? item.id : next.items[entry]?.id ?? entry,
+              entry === key ? item.id : (items[entry]?.id ?? entry),
             ),
           },
         }
       : next.turns,
     items,
-    item_order_by_turn: { ...next.item_order_by_turn, [item.turn_id]: itemOrder },
+    item_order_by_turn: {
+      ...next.item_order_by_turn,
+      [item.turn_id]: itemOrder,
+    },
     orphan_deltas: nextOrphans,
     diagnostics,
   };
@@ -243,7 +291,11 @@ function applyItemDeltaEvent(
   state: ConversationProjectionState,
   event: Extract<ConversationProjectionEvent, { type: "item_delta" }>,
 ): ConversationProjectionState {
-  const key = conversationItemKey(event.thread_id, event.turn_id, event.item_id);
+  const key = conversationItemKey(
+    event.thread_id,
+    event.turn_id,
+    event.item_id,
+  );
   const item = state.items[key];
   if (!item) {
     const orphanDeltas = [...(state.orphan_deltas[key] ?? []), event].slice(
@@ -302,7 +354,10 @@ function applyItemDelta(
   switch (delta.kind) {
     case "text":
       if (item.type !== "agent_message" && item.type !== "plan") {
-        return { item, unsupported: `Text delta is not supported for ${item.type}.` };
+        return {
+          item,
+          unsupported: `Text delta is not supported for ${item.type}.`,
+        };
       }
       return {
         item: {
@@ -315,16 +370,28 @@ function applyItemDelta(
         },
       } as { item: AgentThreadItem };
     case "output":
+      if (item.type === "command_execution") {
+        return {
+          item: {
+            ...item,
+            aggregated_output: mergeProjectionOutput(
+              item.aggregated_output,
+              delta.value,
+              delta.mode,
+            ),
+          },
+        };
+      }
       if (item.type !== "tool_call" && item.type !== "web_search") {
-        return { item, unsupported: `Output delta is not supported for ${item.type}.` };
+        return {
+          item,
+          unsupported: `Output delta is not supported for ${item.type}.`,
+        };
       }
       return {
         item: {
           ...item,
-          output:
-            delta.mode === "replace"
-              ? delta.value
-              : `${item.output ?? ""}${delta.value}`,
+          output: mergeProjectionOutput(item.output, delta.value, delta.mode),
         },
       } as { item: AgentThreadItem };
     case "aggregated_output":
@@ -337,25 +404,39 @@ function applyItemDelta(
       return {
         item: {
           ...item,
-          aggregated_output:
-            delta.mode === "replace"
-              ? delta.value
-              : `${item.aggregated_output ?? ""}${delta.value}`,
+          aggregated_output: mergeProjectionOutput(
+            item.aggregated_output,
+            delta.value,
+            delta.mode,
+          ),
         },
       };
     case "reasoning_summary":
       if (item.type !== "reasoning") {
-        return { item, unsupported: `Reasoning summary delta is not supported for ${item.type}.` };
+        return {
+          item,
+          unsupported: `Reasoning summary delta is not supported for ${item.type}.`,
+        };
       }
-      return { item: replaceReasoningPart(item, "summary", delta.index, delta.value) };
+      return {
+        item: replaceReasoningPart(item, "summary", delta.index, delta.value),
+      };
     case "reasoning_content":
       if (item.type !== "reasoning") {
-        return { item, unsupported: `Reasoning content delta is not supported for ${item.type}.` };
+        return {
+          item,
+          unsupported: `Reasoning content delta is not supported for ${item.type}.`,
+        };
       }
-      return { item: replaceReasoningPart(item, "content", delta.index, delta.value) };
+      return {
+        item: replaceReasoningPart(item, "content", delta.index, delta.value),
+      };
     case "patch":
       if (item.type !== "patch") {
-        return { item, unsupported: `Patch delta is not supported for ${item.type}.` };
+        return {
+          item,
+          unsupported: `Patch delta is not supported for ${item.type}.`,
+        };
       }
       return {
         item: {
@@ -366,7 +447,10 @@ function applyItemDelta(
       };
     case "tool_progress":
       if (item.type !== "tool_call") {
-        return { item, unsupported: `Tool progress is not supported for ${item.type}.` };
+        return {
+          item,
+          unsupported: `Tool progress is not supported for ${item.type}.`,
+        };
       }
       return {
         item: {
@@ -375,7 +459,9 @@ function applyItemDelta(
             ...(isRecord(item.metadata) ? item.metadata : {}),
             progress: {
               ...(delta.message ? { message: delta.message } : {}),
-              ...(delta.progress !== undefined ? { progress: delta.progress } : {}),
+              ...(delta.progress !== undefined
+                ? { progress: delta.progress }
+                : {}),
               ...(delta.total !== undefined ? { total: delta.total } : {}),
               ...(delta.metadata ?? {}),
             },
@@ -458,7 +544,10 @@ function ensureTurnForItem(
 
 function resolvePendingInteraction(
   state: ConversationProjectionState,
-  event: Extract<ConversationProjectionEvent, { type: "server_request_resolved" }>,
+  event: Extract<
+    ConversationProjectionEvent,
+    { type: "server_request_resolved" }
+  >,
 ): ConversationProjectionState {
   const existing = state.pending_interactions[event.interaction_id];
   if (!existing) {
@@ -494,7 +583,10 @@ function addDiagnostic(
   state: ConversationProjectionState,
   diagnostic: ConversationProjectionDiagnostic,
 ): ConversationProjectionState {
-  return { ...state, diagnostics: appendDiagnostic(state.diagnostics, diagnostic) };
+  return {
+    ...state,
+    diagnostics: appendDiagnostic(state.diagnostics, diagnostic),
+  };
 }
 
 function appendDiagnostic(
@@ -504,7 +596,9 @@ function appendDiagnostic(
   return [...diagnostics, diagnostic].slice(-MAX_DIAGNOSTICS);
 }
 
-function eventThreadIdOf(event: ConversationProjectionEvent): string | undefined {
+function eventThreadIdOf(
+  event: ConversationProjectionEvent,
+): string | undefined {
   switch (event.type) {
     case "turn_started":
     case "turn_completed":
@@ -521,7 +615,9 @@ function eventThreadIdOf(event: ConversationProjectionEvent): string | undefined
   }
 }
 
-function statusFromTurn(status: AgentThreadTurnStatus): ConversationProjectionStatus {
+function statusFromTurn(
+  status: AgentThreadTurnStatus,
+): ConversationProjectionStatus {
   switch (status) {
     case "running":
       return "running";

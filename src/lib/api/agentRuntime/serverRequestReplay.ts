@@ -1,6 +1,9 @@
 import type { ActionRequired, ConfirmResponse } from "../agentActionTypes";
-import { getDefaultAgentApprovalServerRequestController } from "../agentApprovalServerRequest";
-import { getDefaultAgentUserInputServerRequestController } from "../agentUserInputServerRequest";
+import {
+  actionFromPendingInteraction,
+  findPendingActionInteraction,
+  getDefaultPendingInteractionController,
+} from "./pendingInteractionController";
 import type {
   AgentRuntimeRespondActionRequest,
   AgentRuntimeReplayedActionRequiredView,
@@ -10,10 +13,10 @@ export function findPendingTypedServerRequestAction(
   sessionId: string,
   requestId: string,
 ): ActionRequired | null {
-  const pendingActions = [
-    ...getDefaultAgentApprovalServerRequestController().getSnapshot(),
-    ...getDefaultAgentUserInputServerRequestController().getSnapshot(),
-  ];
+  const pendingActions = getDefaultPendingInteractionController()
+    .getSnapshot()
+    .map(actionFromPendingInteraction)
+    .filter((action): action is ActionRequired => Boolean(action));
   return findPendingTypedAction(pendingActions, sessionId, requestId);
 }
 
@@ -44,16 +47,29 @@ export function respondPendingTypedServerRequest(
     response: request.response,
     userData: request.user_data,
   };
-  switch (request.action_type) {
-    case "tool_confirmation":
-      return getDefaultAgentApprovalServerRequestController().respond(response);
-    case "ask_user":
-      return getDefaultAgentUserInputServerRequestController().respond(
-        response,
-      );
-    case "elicitation":
-      return false;
+  const controller = getDefaultPendingInteractionController();
+  const interaction = findPendingActionInteraction(
+    controller.getSnapshot(),
+    request.action_type,
+    request.request_id,
+  );
+  if (!interaction) {
+    return false;
   }
+  if (interaction.kind === "approval") {
+    return controller.respond({
+      interactionId: interaction.id,
+      kind: "approval",
+      response,
+    }).accepted;
+  }
+  return controller.respond({
+    confirmed: response.confirmed !== false,
+    interactionId: interaction.id,
+    kind: "request_user_input",
+    response: response.response,
+    userData: response.userData,
+  }).accepted;
 }
 
 export function findPendingTypedAction(

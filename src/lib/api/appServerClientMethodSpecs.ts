@@ -228,8 +228,8 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
-    name: "readAgentSessionMedia",
-    method: constants.APP_SERVER_METHOD_AGENT_SESSION_MEDIA_READ,
+    name: "readMedia",
+    method: constants.APP_SERVER_METHOD_MEDIA_READ,
     params: "required",
   },
   {

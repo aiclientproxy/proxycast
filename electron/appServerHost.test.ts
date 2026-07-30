@@ -778,7 +778,7 @@ describe("ElectronAppServerHost", () => {
     ).toEqual([25, 0, 0]);
   });
 
-  it("drainEvents 应上行 server request 并透传 renderer exact-id response", async () => {
+  it("drainEvents 应隐藏 raw server request id 并只接受一次 action token", async () => {
     const { ElectronAppServerHost } = await import("./appServerHost");
     const host = new ElectronAppServerHost();
     enqueueFakeNotifications([
@@ -801,15 +801,18 @@ describe("ElectronAppServerHost", () => {
     ]);
 
     const drained = await host.drainEvents({ limit: 1 });
-    expect(decodeMessage(drained.lines[0] ?? "")).toMatchObject({
-      id: "app-server-request:7",
+    const projectedRequest = decodeMessage(drained.lines[0] ?? "");
+    expect(projectedRequest).toMatchObject({
+      id: expect.stringMatching(/^electron-action:[0-9a-f-]+$/u),
       method: "mcpServer/elicitation/request",
     });
+    const actionToken = (projectedRequest as JsonRpcRequest).id;
+    expect(actionToken).not.toBe("app-server-request:7");
 
     await host.handleJsonLines({
       lines: [
         encodeMessage({
-          id: "app-server-request:7",
+          id: actionToken,
           result: {
             action: "accept",
             content: { confirmed: true },
@@ -825,6 +828,12 @@ describe("ElectronAppServerHost", () => {
         content: { confirmed: true },
       },
     });
+
+    await expect(
+      host.handleJsonLines({
+        lines: [encodeMessage({ id: actionToken, result: { action: "cancel" } })],
+      }),
+    ).rejects.toThrow("action token was already used");
   });
 
   it("drainEvents includeRecent 应允许第二观察者读取最近已消费 notification", async () => {

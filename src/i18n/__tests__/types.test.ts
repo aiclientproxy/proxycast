@@ -206,10 +206,14 @@ function assertI18nKeyTypes() {
   i18n.t("agentChat.decisionPanel.permission.resultLabel", { ns: "agent" });
   i18n.t("agentChat.decisionPanel.permission.result.allowed", { ns: "agent" });
   i18n.t("agentChat.decisionPanel.permission.result.denied", { ns: "agent" });
-  i18n.t("agentChat.messageList.history.windowSummaryRestored", {
+  i18n.t("agentChat.messageList.history.windowEntrySummaryRestored", {
     ns: "agent",
     loaded: "40",
     hidden: "30",
+  });
+  i18n.t("agentChat.messageList.history.persistedEntrySummary", {
+    ns: "agent",
+    loaded: "40",
   });
   i18n.t("agentChat.messageList.taskCenterEmpty.title", { ns: "agent" });
   i18n.t("agentChat.serviceSkills.badge.recent", { ns: "agent" });

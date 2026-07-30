@@ -31,7 +31,7 @@ type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 export interface UseWorkspaceMediaReferencePreviewRuntimeParams {
   artifacts: Artifact[];
-  sessionId?: string | null;
+  threadId?: string | null;
   t: Translate;
   setLayoutMode: Dispatch<SetStateAction<LayoutMode>>;
   setCanvasWorkbenchLayoutMode: Dispatch<
@@ -73,7 +73,7 @@ export function useWorkspaceMediaReferencePreviewRuntime({
   artifacts,
   handleWorkspaceArtifactClick,
   requestCanvasWorkbenchPreviewOpen,
-  sessionId,
+  threadId,
   setCanvasWorkbenchLayoutMode,
   setLayoutMode,
   t,
@@ -216,7 +216,7 @@ export function useWorkspaceMediaReferencePreviewRuntime({
         let client: ReturnType<typeof createAppServerClient> | null = null;
         const mediaArtifact =
           await createMediaReferenceChunkedObjectUrlPreviewArtifact({
-            sessionId,
+            threadId,
             target,
             message,
             t,
@@ -235,7 +235,7 @@ export function useWorkspaceMediaReferencePreviewRuntime({
                   shouldContinue: () => isPreviewRequestCurrent(requestId),
                 });
               try {
-                const response = await client.readAgentSessionMedia(request, {
+                const response = await client.readMedia(request, {
                   signal: abortController.signal,
                 });
                 if (!isPreviewRequestCurrent(requestId)) {
@@ -276,7 +276,7 @@ export function useWorkspaceMediaReferencePreviewRuntime({
           "AgentChatWorkspace",
           "media_reference_sidecar_read_failed",
           {
-            sessionId,
+            threadId,
             uri: target.reference.uri,
             error,
           },
@@ -299,7 +299,7 @@ export function useWorkspaceMediaReferencePreviewRuntime({
       openPreviewArtifact,
       registerMediaPreviewObjectUrl,
       revokeMediaPreviewObjectUrl,
-      sessionId,
+      threadId,
       t,
     ],
   );
@@ -319,7 +319,7 @@ export function useWorkspaceMediaReferencePreviewRuntime({
       try {
         let client: ReturnType<typeof createAppServerClient> | null = null;
         const pageArtifact = await createMediaReferencePagedPreviewArtifact({
-          sessionId,
+          threadId,
           target,
           message,
           t,
@@ -331,7 +331,7 @@ export function useWorkspaceMediaReferencePreviewRuntime({
               throw new Error("media preview request superseded");
             }
             client ??= createAppServerClient();
-            const response = await client.readAgentSessionMedia(request, {
+            const response = await client.readMedia(request, {
               signal: abortController.signal,
             });
             if (!isPreviewRequestCurrent(requestId)) {
@@ -355,7 +355,7 @@ export function useWorkspaceMediaReferencePreviewRuntime({
           "media_reference_sidecar_page_read_failed",
           {
             offset: page.offset,
-            sessionId,
+            threadId,
             uri: target.reference.uri,
             error,
           },
@@ -374,7 +374,7 @@ export function useWorkspaceMediaReferencePreviewRuntime({
       beginPreviewRequest,
       isPreviewRequestCurrent,
       openPreviewArtifact,
-      sessionId,
+      threadId,
       t,
     ],
   );

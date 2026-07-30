@@ -14,6 +14,7 @@ import type { AgentUiPerformanceTraceMetadata } from "./agentStreamPerformanceMe
 import type { AgentStreamReasoningTimelineState } from "./agentStreamReasoningTimeline";
 import type { TextSegmentFinalEligibility } from "./agentStreamTextDeltaLifecycle";
 import type { SoulInteractionCopy } from "@/lib/soul/interactionCopy";
+import type { AgentStreamConversationProjectionOwner } from "./agentStreamConversationProjection";
 
 export type MessageParts = NonNullable<Message["contentParts"]>;
 
@@ -31,6 +32,7 @@ export interface PendingImageTaskPresentation {
 }
 
 export interface StreamRequestState extends AgentStreamReasoningTimelineState {
+  conversationProjectionOwner?: AgentStreamConversationProjectionOwner;
   accumulatedContent: string;
   hasMeaningfulCompletionSignal?: boolean;
   hasFinalAnswerRequiredProcessBoundary?: boolean;
@@ -69,7 +71,6 @@ export interface StreamRequestState extends AgentStreamReasoningTimelineState {
   streamedReasoningSequence?: number | null;
   streamedReasoningSegmentCounter?: number;
   streamedAgentMessageTextByItemId?: Map<string, string>;
-  streamedAgentMessageItemsByItemId?: Map<string, AgentThreadItem>;
   activeTextSegmentItemId?: string | null;
   activeTextSegmentPhase?: string | null;
   activeTextSegmentSequence?: number | null;

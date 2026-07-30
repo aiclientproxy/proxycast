@@ -14,7 +14,10 @@ describe("useAgentChat.confirmAction", () => {
   it("tool_confirmation 应调用统一 runtime action 响应", async () => {
     const workspaceId = "ws-tool";
     seedSession(workspaceId, "session-tool");
-    const respond = mockTypedActionResponseHandled("tool_confirmation");
+    const respond = mockTypedActionResponseHandled(
+      "tool_confirmation",
+      "req-tool-1",
+    );
     const harness = mountHook(workspaceId);
 
     try {
@@ -29,10 +32,14 @@ describe("useAgentChat.confirmAction", () => {
       });
 
       expect(respond).toHaveBeenCalledWith({
-        requestId: "req-tool-1",
-        actionType: "tool_confirmation",
-        confirmed: true,
-        response: "允许",
+        interactionId: "approval:test:req-tool-1",
+        kind: "approval",
+        response: {
+          requestId: "req-tool-1",
+          actionType: "tool_confirmation",
+          confirmed: true,
+          response: "允许",
+        },
       });
       expect(mockRespondAgentRuntimeAction).not.toHaveBeenCalled();
     } finally {
@@ -75,7 +82,10 @@ describe("useAgentChat.confirmAction", () => {
   it("ask_user 应解析 response JSON 后提交", async () => {
     const workspaceId = "ws-ask-user";
     seedSession(workspaceId, "session-ask-user");
-    const respond = mockTypedActionResponseHandled("ask_user");
+    const respond = mockTypedActionResponseHandled(
+      "ask_user",
+      "req-ask-user-1",
+    );
     const harness = mountHook(workspaceId);
 
     try {
@@ -90,10 +100,9 @@ describe("useAgentChat.confirmAction", () => {
       });
 
       expect(respond).toHaveBeenCalledWith({
-        requestId: "req-ask-user-1",
-        actionType: "ask_user",
         confirmed: true,
-        decision: undefined,
+        interactionId: "request_user_input:test:req-ask-user-1",
+        kind: "request_user_input",
         response: '{"answer":"选项A"}',
         userData: { answer: "选项A" },
       });
@@ -107,7 +116,10 @@ describe("useAgentChat.confirmAction", () => {
   it("confirmAction 成功后应刷新当前会话详情以同步 terminal approval item", async () => {
     const workspaceId = "ws-action-detail-refresh";
     seedSession(workspaceId, "session-action-detail-refresh");
-    const respond = mockTypedActionResponseHandled("tool_confirmation");
+    const respond = mockTypedActionResponseHandled(
+      "tool_confirmation",
+      "req-action-detail-refresh-1",
+    );
     const harness = mountHook(workspaceId);
 
     try {
@@ -199,7 +211,10 @@ describe("useAgentChat.confirmAction", () => {
     const workspaceId = "ws-ask-user-submitting";
     seedSession(workspaceId, "session-ask-user-submitting");
     let resolveRefresh: (() => void) | null = null;
-    const respond = mockTypedActionResponseHandled("ask_user");
+    const respond = mockTypedActionResponseHandled(
+      "ask_user",
+      "req-ask-user-submitting-1",
+    );
     mockGetAgentRuntimeSession.mockImplementation(
       () =>
         new Promise((resolve) => {

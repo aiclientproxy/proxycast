@@ -1,9 +1,5 @@
 import { act } from "react";
-import {
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   flushEffects,
   mockGetAgentRuntimeSession,
@@ -213,23 +209,11 @@ describe("useAgentChat 偏好持久化 - history normalization", () => {
 
       const value = harness.getValue();
       expect(value.sessionId).toBe(sessionId);
-      expect(value.messages).toHaveLength(2);
+      expect(value.messages).toHaveLength(1);
       expect(value.messages[0]).toMatchObject({
         role: "user",
         content: "先给我一个修复计划，不要直接改代码",
       });
-      const assistantMessage = value.messages[1];
-      expect(assistantMessage).toMatchObject({
-        role: "assistant",
-      });
-      const assistantText = assistantMessage?.contentParts
-        ?.filter((part) => part.type === "text")
-        .map((part) => part.text)
-        .join("\n");
-      expect(assistantText).toContain("<proposed_plan>");
-      expect(assistantText).toContain("确认计划模式请求进入 App Server");
-      expect(assistantText).toContain("输出 proposed_plan");
-      expect(assistantText).toContain("验证右侧计划轨显示");
       expect(value.threadItems.map((item) => item.id)).toEqual([
         "item-user-plan-1",
         "item-plan-1",
@@ -244,6 +228,7 @@ describe("useAgentChat 偏好持久化 - history normalization", () => {
     const topicId = "topic-full-history";
     const now = Math.floor(Date.now() / 1000);
     const recentMessages = Array.from({ length: 40 }, (_, index) => ({
+      id: `recent-${index}`,
       role: (index % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
       timestamp: now - (40 - index),
       content: [
@@ -254,6 +239,7 @@ describe("useAgentChat 偏好持久化 - history normalization", () => {
       ],
     }));
     const olderPageMessages = Array.from({ length: 50 }, (_, index) => ({
+      id: `older-${index}`,
       role: (index % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
       timestamp: now - (90 - index),
       content: [
@@ -268,13 +254,15 @@ describe("useAgentChat 偏好持久化 - history normalization", () => {
         id: topicId,
         created_at: now,
         updated_at: now,
-        messages_count: 320,
+        messages_count: 1,
         history_limit: 40,
-        history_offset: 0,
         history_cursor: {
-          oldest_message_id: 281,
-          start_index: 280,
-          loaded_count: 40,
+          item_cursor: "opaque-item-page-2",
+          turn_cursor: null,
+          loaded_entry_count: 40,
+          loaded_turn_count: 0,
+          loaded_item_count: 40,
+          has_more: true,
         },
         history_truncated: true,
         execution_strategy: "react",
@@ -284,20 +272,17 @@ describe("useAgentChat 偏好持久化 - history normalization", () => {
       })
       .mockResolvedValueOnce({
         id: topicId,
-        thread_id: topicId,
-        messages: [],
-      })
-      .mockResolvedValueOnce({
-        id: topicId,
         created_at: now,
         updated_at: now,
-        messages_count: 320,
+        messages_count: 1,
         history_limit: 50,
-        history_offset: 40,
         history_cursor: {
-          oldest_message_id: 231,
-          start_index: 230,
-          loaded_count: 50,
+          item_cursor: "opaque-item-page-3",
+          turn_cursor: null,
+          loaded_entry_count: 50,
+          loaded_turn_count: 0,
+          loaded_item_count: 50,
+          has_more: true,
         },
         history_truncated: true,
         execution_strategy: "react",
@@ -316,10 +301,11 @@ describe("useAgentChat 偏好持久化 - history normalization", () => {
       await flushEffects();
 
       expect(harness.getValue().sessionHistoryWindow).toMatchObject({
-        loadedMessages: 40,
-        totalMessages: 320,
-        historyBeforeMessageId: 281,
-        historyStartIndex: 280,
+        loadedEntries: 40,
+        loadedItems: 40,
+        loadedTurns: 0,
+        itemCursor: "opaque-item-page-2",
+        turnCursor: null,
         isLoadingFull: false,
       });
 
@@ -332,18 +318,19 @@ describe("useAgentChat 偏好持久化 - history normalization", () => {
         topicId,
         expect.objectContaining({
           historyLimit: 50,
-          historyOffset: 40,
-          historyBeforeMessageId: 281,
+          historyItemCursor: "opaque-item-page-2",
+          historyTurnCursor: null,
         }),
       );
       expect(harness.getValue().messages).toHaveLength(90);
       expect(harness.getValue().messages[0]?.content).toBe("更早的问题");
       expect(harness.getValue().messages.at(-1)?.content).toBe("最近一条回复");
       expect(harness.getValue().sessionHistoryWindow).toMatchObject({
-        loadedMessages: 90,
-        totalMessages: 320,
-        historyBeforeMessageId: 231,
-        historyStartIndex: 230,
+        loadedEntries: 90,
+        loadedItems: 90,
+        loadedTurns: 0,
+        itemCursor: "opaque-item-page-3",
+        turnCursor: null,
         isLoadingFull: false,
       });
     } finally {

@@ -76,6 +76,36 @@ describe("timeline item converters", () => {
     expect(toolCall?.result?.output).not.toContain("Output:");
   });
 
+  it("CommandExecution declined 应保持终态但不伪装成执行失败", () => {
+    const item: AgentThreadItem = {
+      id: "command-declined",
+      thread_id: "thread-1",
+      turn_id: "turn-1",
+      sequence: 4,
+      type: "command_execution",
+      status: "completed",
+      command_status: "declined",
+      command: "npm test",
+      cwd: "/workspace/lime",
+      started_at: "2026-06-21T13:10:00.000Z",
+      completed_at: "2026-06-21T13:10:01.000Z",
+      updated_at: "2026-06-21T13:10:01.000Z",
+    };
+
+    expect(toToolCallState(item)).toMatchObject({
+      status: "completed",
+      result: {
+        success: false,
+        metadata: {
+          command_status: "declined",
+        },
+      },
+      metadata: {
+        command_status: "declined",
+      },
+    });
+  });
+
   it("approval_request 应保留 thread/turn scope 供恢复时匹配 owner", () => {
     const item: AgentThreadItem = {
       id: "approval-exec",

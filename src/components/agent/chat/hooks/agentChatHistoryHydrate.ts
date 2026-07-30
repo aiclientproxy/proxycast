@@ -58,7 +58,10 @@ import {
   collectDetailThreadItems,
   hydrateSessionDetailMessagesFromThreadItems,
 } from "./agentChatHistoryThreadItems";
-import { hydrateSessionDetailMessagesFromTurns } from "./agentChatHistoryTimelineBasics";
+import {
+  hydrateSessionDetailMessagesFromTurns,
+  isAuxiliaryHistoryTurn,
+} from "./agentChatHistoryTimelineBasics";
 import {
   mergeMissingUserMessagesFromTimeline,
   shouldMergeTimelineProcessMessages,
@@ -79,30 +82,6 @@ export const hydrateSessionDetailMessages = (
   const compactCompletedHistory =
     options.compactCompletedHistory === true &&
     shouldCompactCompletedSessionHistory(detail);
-  const historyOffset =
-    typeof detail.history_offset === "number" &&
-    Number.isFinite(detail.history_offset) &&
-    detail.history_offset >= 0
-      ? Math.trunc(detail.history_offset)
-      : 0;
-  const cursorStartIndex =
-    typeof detail.history_cursor?.start_index === "number" &&
-    Number.isFinite(detail.history_cursor.start_index) &&
-    detail.history_cursor.start_index >= 0
-      ? Math.trunc(detail.history_cursor.start_index)
-      : null;
-  const messagesCount =
-    typeof detail.messages_count === "number" &&
-    Number.isFinite(detail.messages_count) &&
-    detail.messages_count >= 0
-      ? Math.trunc(detail.messages_count)
-      : null;
-  const historyAbsoluteStartIndex =
-    cursorStartIndex !== null
-      ? cursorStartIndex
-      : messagesCount === null
-        ? 0
-        : Math.max(0, messagesCount - historyOffset - detail.messages.length);
 
   const loadedMessages: Message[] = detail.messages
     .filter(
@@ -406,7 +385,7 @@ export const hydrateSessionDetailMessages = (
         return [];
       }
       const hydratedMessage: Message = {
-        id: `${topicId}-${historyAbsoluteStartIndex + index}`,
+        id: readHistoryString(msg.id) || `${topicId}-${index}`,
         role: normalizedRole,
         content,
         images: images.length > 0 ? images : undefined,
@@ -436,7 +415,22 @@ export const hydrateSessionDetailMessages = (
     options.includeTimelineFallback === false
       ? []
       : hydrateSessionDetailMessagesFromThreadItems(detail, topicId);
-  const hasCanonicalConversationItems = collectDetailThreadItems(detail).some(
+  const detailThreadItems = collectDetailThreadItems(detail);
+  const auxiliaryTurnIds = new Set(
+    (detail.turns || [])
+      .filter((turn) => isAuxiliaryHistoryTurn(turn))
+      .map((turn) => turn.id),
+  );
+  const hasCanonicalRenderableItems = detailThreadItems.some(
+    (item) => !auxiliaryTurnIds.has(item.turn_id),
+  );
+  const hasCanonicalProcessItems = detailThreadItems.some(
+    (item) =>
+      !auxiliaryTurnIds.has(item.turn_id) &&
+      item.type !== "user_message" &&
+      item.type !== "agent_message",
+  );
+  const hasCanonicalConversationItems = detailThreadItems.some(
     (item) => item.type === "user_message" || item.type === "agent_message",
   );
   const artifactTimelineMessages =
@@ -458,7 +452,8 @@ export const hydrateSessionDetailMessages = (
     detail,
     topicId,
   );
-  const threadReadToolCallMessages = hasThreadItemProcessMessages
+  const threadReadToolCallMessages =
+    hasThreadItemProcessMessages || hasCanonicalProcessItems
     ? []
     : hydrateSessionDetailMessagesFromThreadReadToolCalls(detail, topicId);
   const readModelProcessMessages = [
@@ -546,6 +541,10 @@ export const hydrateSessionDetailMessages = (
             )
           : timelineMessages,
       );
+    }
+
+    if (hasCanonicalRenderableItems) {
+      return [];
     }
 
     return projectConversationMessagesByRuntimeTurn(

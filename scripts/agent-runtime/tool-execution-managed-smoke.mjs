@@ -31,6 +31,7 @@ import {
   waitForProcessIdsExit,
 } from "./tool-execution-soak-evidence.mjs";
 import { runManagedColdRestarts } from "./tool-execution-managed-restart.mjs";
+import { normalizeToolExecutionThreadReadResponse } from "./tool-execution-current-contract.mjs";
 import {
   cleanupToolExecutionTempRoot,
   createToolExecutionTempRuntimeEnv,
@@ -311,7 +312,6 @@ async function expandHistoricalToolRows(page, timeoutMs) {
       },
       { timeout: Math.min(timeoutMs, 30_000) },
     );
-    if ((await materializedTimelines.count()) > previousTimelineCount) break;
   }
 
   const closedProcessSelector =
@@ -460,10 +460,16 @@ async function openSubagentActivityThread(page, childThreadId, timeoutMs) {
     if ((await row.getAttribute("data-subagent-thread-id")) !== childThreadId) {
       continue;
     }
-    const button = row.locator("button").first();
+    const button = row.locator("button").last();
     if ((await button.count()) === 0) {
       continue;
     }
+    console.log(
+      `${LOG_PREFIX} open-subagent-button=${JSON.stringify({
+        text: (await button.textContent())?.trim() || "",
+        threadId: childThreadId,
+      })}`,
+    );
     await button.click({ timeout: timeoutMs });
     return;
   }
@@ -501,76 +507,110 @@ async function collectParentOwnedChildGateB({
   }
   const canonicalThread = readReply.result.thread;
   await openSubagentActivityThread(page, childThreadId, timeoutMs);
-  await page.waitForFunction(
-    (childSessionId) => {
+  try {
+    await page.waitForFunction(
+      (childSessionId) => {
+        const textarea = Array.from(
+          document.querySelectorAll('textarea[name="agent-chat-message"]'),
+        ).find((node) => {
+          const rect = node.getBoundingClientRect();
+          return (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            node instanceof HTMLTextAreaElement &&
+            node.dataset.sessionId === childSessionId
+          );
+        });
+        return textarea instanceof HTMLTextAreaElement && textarea.disabled;
+      },
+      canonicalThread.sessionId,
+      { timeout: Math.min(timeoutMs, 30_000) },
+    );
+  } catch (error) {
+    const diagnostics = await readInvokeDiagnostics(page);
+    const navigationState = await page.evaluate(() => ({
+      bodyText: (document.body.textContent || "").trim().slice(-1_000),
+      textareas: Array.from(
+        document.querySelectorAll('textarea[name="agent-chat-message"]'),
+      ).map((node) => ({
+        disabled:
+          node instanceof HTMLTextAreaElement ? node.disabled : undefined,
+        sessionId:
+          node instanceof HTMLTextAreaElement ? node.dataset.sessionId : undefined,
+        visible: node.getBoundingClientRect().height > 0,
+      })),
+      toasts: Array.from(document.querySelectorAll("[data-sonner-toast]")).map(
+        (node) => (node.textContent || "").trim().slice(0, 300),
+      ),
+    }));
+    throw new Error(
+      `parent-owned child GUI navigation failed: canonical=${JSON.stringify({
+        canAcceptDirectInput: canonicalThread.canAcceptDirectInput ?? null,
+        parentThreadId: canonicalThread.parentThreadId ?? null,
+        sessionId: canonicalThread.sessionId ?? null,
+        threadId: canonicalThread.id ?? null,
+      })} dom=${JSON.stringify(navigationState)} calls=${JSON.stringify(
+        diagnostics.appServerCalls.slice(-12),
+      )}; ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  const dom = await page.evaluate(
+    ({ childSessionId, childThreadId }) => {
+      const visible = (node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
       const textarea = Array.from(
         document.querySelectorAll('textarea[name="agent-chat-message"]'),
-      ).find((node) => {
-        const rect = node.getBoundingClientRect();
-        return (
-          rect.width > 0 &&
-          rect.height > 0 &&
+      ).find(
+        (node) =>
           node instanceof HTMLTextAreaElement &&
-          node.dataset.sessionId === childSessionId
-        );
-      });
-      return textarea instanceof HTMLTextAreaElement && textarea.disabled;
+          node.dataset.sessionId === childSessionId &&
+          visible(node),
+      );
+      if (!(textarea instanceof HTMLTextAreaElement)) {
+        throw new Error("parent-owned child textarea missing");
+      }
+      const core = textarea.closest('[data-testid="inputbar-core-container"]');
+      const send = core?.querySelector('[data-testid="send-btn"]');
+      const accessMode = Array.from(
+        document.querySelectorAll(
+          '[data-testid="inputbar-access-mode-select"]',
+        ),
+      ).find(visible);
+      const modelSelectors = Array.from(
+        document.querySelectorAll('[data-testid="model-selector"]'),
+      ).filter(visible);
+      const taskModes = Array.from(
+        document.querySelectorAll('[data-testid="inputbar-task-mode-status"]'),
+      ).filter(visible);
+      return {
+        activeSessionId: textarea.dataset.sessionId || null,
+        childThreadId,
+        textareaVisible: textarea.getBoundingClientRect().height > 0,
+        textareaDisabled: textarea.disabled,
+        placeholder: textarea.getAttribute("placeholder") || "",
+        controls: {
+          sendDisabled: send instanceof HTMLButtonElement && send.disabled,
+          accessModeDisabled:
+            accessMode instanceof HTMLSelectElement && accessMode.disabled,
+          modelSelectorCount: modelSelectors.length,
+          modelSelectorsDisabled:
+            modelSelectors.length > 0 &&
+            modelSelectors.every(
+              (node) => node instanceof HTMLButtonElement && node.disabled,
+            ),
+          taskModeDisabled:
+            taskModes.length === 0 ||
+            taskModes.every(
+              (node) => node instanceof HTMLButtonElement && node.disabled,
+            ),
+        },
+      };
     },
-    canonicalThread.sessionId,
-    { timeout: timeoutMs },
+    { childSessionId: canonicalThread.sessionId, childThreadId },
   );
-
-  const dom = await page.evaluate(({ childSessionId, childThreadId }) => {
-    const visible = (node) => {
-      const rect = node.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    };
-    const textarea = Array.from(
-      document.querySelectorAll('textarea[name="agent-chat-message"]'),
-    ).find(
-      (node) =>
-        node instanceof HTMLTextAreaElement &&
-        node.dataset.sessionId === childSessionId &&
-        visible(node),
-    );
-    if (!(textarea instanceof HTMLTextAreaElement)) {
-      throw new Error("parent-owned child textarea missing");
-    }
-    const core = textarea.closest('[data-testid="inputbar-core-container"]');
-    const send = core?.querySelector('[data-testid="send-btn"]');
-    const accessMode = Array.from(
-      document.querySelectorAll('[data-testid="inputbar-access-mode-select"]'),
-    ).find(visible);
-    const modelSelectors = Array.from(
-      document.querySelectorAll('[data-testid="model-selector"]'),
-    ).filter(visible);
-    const taskModes = Array.from(
-      document.querySelectorAll('[data-testid="inputbar-task-mode-status"]'),
-    ).filter(visible);
-    return {
-      activeSessionId: textarea.dataset.sessionId || null,
-      childThreadId,
-      textareaVisible: textarea.getBoundingClientRect().height > 0,
-      textareaDisabled: textarea.disabled,
-      placeholder: textarea.getAttribute("placeholder") || "",
-      controls: {
-        sendDisabled: send instanceof HTMLButtonElement && send.disabled,
-        accessModeDisabled:
-          accessMode instanceof HTMLSelectElement && accessMode.disabled,
-        modelSelectorCount: modelSelectors.length,
-        modelSelectorsDisabled:
-          modelSelectors.length > 0 &&
-          modelSelectors.every(
-            (node) => node instanceof HTMLButtonElement && node.disabled,
-          ),
-        taskModeDisabled:
-          taskModes.length === 0 ||
-          taskModes.every(
-            (node) => node instanceof HTMLButtonElement && node.disabled,
-          ),
-      },
-    };
-  }, { childSessionId: canonicalThread.sessionId, childThreadId });
 
   const diagnosticsBeforeAttempt = await readInvokeDiagnostics(page);
   const turnStartCountBefore = turnStartCountForThread(
@@ -733,6 +773,25 @@ async function collectAgentControlVisibleDomGateB({
     timeoutMs,
   });
   const { subagentActivityRows, typedToolRows } = domState;
+  const threadId = String(evidence?.runtime?.threadId || "").trim();
+  if (!threadId) {
+    throw new Error("AgentControl evidence 缺少 threadId");
+  }
+  const parentReadReply = await invokeAppServerJsonRpcRaw(page, "thread/read", {
+    threadId,
+    includeTurns: true,
+  });
+  if (parentReadReply?.error || !parentReadReply?.result?.thread) {
+    throw new Error(
+      `冷重启后读取 parent canonical Thread 失败: ${JSON.stringify(parentReadReply?.error ?? null)}`,
+    );
+  }
+  const restoredParent = normalizeToolExecutionThreadReadResponse(
+    parentReadReply.result,
+  );
+  const waitAgentStates =
+    restoredParent.thread_items.find((item) => item?.tool_name === "wait_agent")
+      ?.agent_states ?? [];
   console.log(`${LOG_PREFIX} typed-tool-rows=${JSON.stringify(typedToolRows)}`);
   console.log(
     `${LOG_PREFIX} subagent-activity-rows=${JSON.stringify(subagentActivityRows)}`,
@@ -755,7 +814,7 @@ async function collectAgentControlVisibleDomGateB({
   const snapshot = {
     proofLevel: "Gate B",
     claimBoundary:
-      "real Electron host/preload/App Server/runtime/read-model to six AgentControl Tool rows and canonical SubAgent activity DOM; localhost provider fixture, not live-provider proof",
+      "real Electron host/preload/App Server/runtime/read-model to six AgentControl Tool rows, canonical wait_agent states, and SubAgent activity DOM; localhost provider fixture, not live-provider proof",
     url: page.url(),
     electron: rendererSnapshot.electron === true,
     hasInvokeBridge: rendererSnapshot.hasInvokeBridge === true,
@@ -766,6 +825,7 @@ async function collectAgentControlVisibleDomGateB({
     activeSessionId: domState.activeSessionId,
     typedToolRows,
     subagentActivityRows,
+    waitAgentStates,
     parentOwnedChild,
     finalAssistantTextVisible: domState.finalAssistantTextVisible,
     appServerCalls: diagnostics.appServerCalls,

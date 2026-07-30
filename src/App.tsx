@@ -15,7 +15,6 @@ import { withI18nPatch } from "./i18n/withI18nPatch";
 import { AppPageContent } from "./components/AppPageContent";
 import type { AgentBackgroundSessionRuntimeSnapshot } from "./components/agent/chat";
 import { AppServerConfigWarningToastBridge } from "./components/AppServerConfigWarningToastBridge";
-import { McpServerElicitationDialog } from "./components/agent/chat/components/McpServerElicitationDialog";
 import { SplashScreen } from "./components/SplashScreen";
 import { AppSidebar } from "./components/AppSidebar";
 import { startupTracker } from "./lib/diagnostics/startupPerformance";
@@ -74,7 +73,6 @@ import {
   type PluginLaunchTargetStorage,
 } from "./features/plugin/ui/pluginLaunchTargetPersistence";
 import type { AgentPageParams } from "./types/page";
-import { McpServerElicitationController } from "./lib/api/mcpServerElicitation";
 
 const AppContainer = styled.div`
   display: flex;
@@ -184,9 +182,6 @@ function AppContent() {
   const nativeStartupScreenAvailable = hasNativeStartupScreen();
   const reserveMacWindowControls = shouldReserveMacWindowControls();
   const [showSplash, setShowSplash] = useState(!nativeStartupScreenAvailable);
-  const [mcpServerElicitationController] = useState(
-    () => new McpServerElicitationController(),
-  );
   const {
     currentPage,
     pageParams,
@@ -221,10 +216,6 @@ function AppContent() {
   } | null>(null);
 
   useSkillCatalogBootstrap();
-  useEffect(
-    () => mcpServerElicitationController.attach(),
-    [mcpServerElicitationController],
-  );
   useServiceSkillCatalogBootstrap();
   useSiteAdapterCatalogBootstrap();
   useOemLimeHubProviderSync();
@@ -635,9 +626,6 @@ function AppContent() {
 
         <ComponentDebugOverlay />
         <AppServerConfigWarningToastBridge />
-        <McpServerElicitationDialog
-          controller={mcpServerElicitationController}
-        />
       </AppContainer>
     </ComponentDebugProvider>
   );

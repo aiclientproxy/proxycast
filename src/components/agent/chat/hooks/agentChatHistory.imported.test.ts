@@ -5,7 +5,7 @@ import type { AgentSessionDetail } from "@/lib/api/agentRuntime/sessionTypes";
 import { hydrateSessionDetailMessages } from "./agentChatHistory";
 
 describe("agentChatHistory imported Codex timeline", () => {
-  it("timeline 已有工具过程时不应再注入 thread_read.tool_calls 兼容摘要", () => {
+  it("timeline 已有 canonical 工具过程时 Message 不应再注入工具摘要", () => {
     const detail: AgentSessionDetail = {
       id: "session-timeline-tool-read-summary",
       thread_id: "thread-timeline-tool-read-summary",
@@ -103,18 +103,11 @@ describe("agentChatHistory imported Codex timeline", () => {
 
     expect(messages).toHaveLength(2);
     expect(assistant?.runtimeTurnId).toBe("turn-current");
-    expect(toolParts).toHaveLength(1);
-    expect(assistant?.toolCalls).toHaveLength(1);
-    expect(assistant?.toolCalls?.[0]).toMatchObject({
-      id: "tool-current-search",
-      name: "search_query",
-      result: {
-        output: "timeline search result",
-      },
-    });
+    expect(toolParts).toHaveLength(0);
+    expect(assistant?.toolCalls).toBeUndefined();
   });
 
-  it("本地历史导入的 reasoning 不应被 thread_read 工具摘要覆盖", () => {
+  it("本地历史导入的 canonical reasoning/tool 不应写回 Message", () => {
     const detail: AgentSessionDetail = {
       id: "session-codex-import-thread-read",
       thread_id: "thread-codex-import-thread-read",
@@ -227,22 +220,8 @@ describe("agentChatHistory imported Codex timeline", () => {
 
     expect(messages).toHaveLength(2);
     expect(messages[1]?.contentParts?.map((part) => part.type)).toEqual([
-      "thinking",
-      "tool_use",
       "text",
     ]);
-    expect(messages[1]?.contentParts?.[0]).toEqual({
-      type: "thinking",
-      text: "I need to inspect the test failure first.",
-      metadata: {
-        imported: true,
-        sequence: 1,
-        source: "thread_item_reasoning",
-        source_client: "codex",
-        threadItemId: "reasoning-codex",
-        turnId: "turn-codex",
-      },
-    });
   });
 
   it("本地历史导入会话不应把旧失败 turn 冒充为当前处理失败", () => {
@@ -412,11 +391,13 @@ describe("agentChatHistory imported Codex timeline", () => {
       updated_at: 2,
       messages_count: 2,
       history_limit: 40,
-      history_offset: 0,
       history_cursor: {
-        oldest_message_id: null,
-        start_index: 0,
-        loaded_count: 2,
+        item_cursor: null,
+        turn_cursor: null,
+        loaded_entry_count: 2,
+        loaded_turn_count: 0,
+        loaded_item_count: 2,
+        has_more: false,
       },
       history_truncated: false,
       messages: [

@@ -193,7 +193,10 @@ pub(in crate::runtime) fn terminal_result_payload(
                 .rev()
                 .find_map(|item| match &item.payload {
                     ThreadItemPayload::AgentMessage { text, phase, .. }
-                        if phase.as_deref() == Some("final_answer") =>
+                        if matches!(
+                            phase,
+                            Some(agent_protocol::response_item::MessagePhase::FinalAnswer)
+                        ) =>
                     {
                         Some(text.clone())
                     }

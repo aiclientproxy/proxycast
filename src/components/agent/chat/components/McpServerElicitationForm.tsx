@@ -1,22 +1,13 @@
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, CircleHelp, Loader2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   type McpElicitationFormContent,
   type McpElicitationFormIssue,
   type McpElicitationFormValue,
-  type McpServerElicitationController,
   type PendingMcpServerElicitation,
 } from "@/lib/api/mcpServerElicitation";
 
@@ -38,32 +29,24 @@ interface McpField {
 
 type SubmissionAction = "accept" | "cancel" | "decline";
 
-export function McpServerElicitationDialog({
-  controller,
-}: {
-  controller: McpServerElicitationController;
-}) {
-  const pending = useSyncExternalStore(
-    controller.subscribe,
-    controller.getSnapshot,
-    controller.getSnapshot,
-  );
-  const request = pending[0];
+export type McpServerElicitationFormSubmission =
+  | { action: "accept"; content: McpElicitationFormContent }
+  | { action: "cancel" | "decline" };
 
-  return request ? (
-    <McpServerElicitationForm
-      key={request.key}
-      controller={controller}
-      request={request}
-    />
-  ) : null;
-}
+export type McpServerElicitationFormSubmissionResult =
+  | { accepted: true }
+  | { accepted: false; issues?: McpElicitationFormIssue[] };
 
-function McpServerElicitationForm({
-  controller,
+/** MCP server form surface; placement and request lifecycle belong to PendingInteractionLayer. */
+export function McpServerElicitationForm({
+  onSubmit,
   request,
 }: {
-  controller: McpServerElicitationController;
+  onSubmit: (
+    submission: McpServerElicitationFormSubmission,
+  ) =>
+    | McpServerElicitationFormSubmissionResult
+    | Promise<McpServerElicitationFormSubmissionResult>;
   request: PendingMcpServerElicitation;
 }) {
   const { t } = useTranslation("agent");
@@ -85,17 +68,17 @@ function McpServerElicitationForm({
   const [issues, setIssues] = useState<McpElicitationFormIssue[]>([]);
   const [submitting, setSubmitting] = useState<SubmissionAction | null>(null);
 
-  const settle = (action: SubmissionAction) => {
+  const settle = async (action: SubmissionAction) => {
     if (submitting) {
       return;
     }
     setSubmitting(action);
     if (action === "decline") {
-      controller.decline(request.key);
+      await onSubmit({ action: "decline" });
       return;
     }
     if (action === "cancel") {
-      controller.cancel(request.key);
+      await onSubmit({ action: "cancel" });
       return;
     }
     const { content, localIssues } = buildTypedContent(fields, values);
@@ -104,123 +87,125 @@ function McpServerElicitationForm({
       setSubmitting(null);
       return;
     }
-    const validationIssues = controller.accept(request.key, content);
-    if (validationIssues.length > 0) {
-      setIssues(validationIssues);
+    const result = await onSubmit({ action: "accept", content });
+    if (!result.accepted && result.issues?.length) {
+      setIssues(result.issues);
       setSubmitting(null);
     }
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && settle("cancel")}>
-      <DialogContent className="border-border p-0" maxWidth="max-w-xl">
-        <DialogHeader className="border-b border-border px-5 py-4 pr-12">
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <CircleHelp className="h-5 w-5 text-emerald-600" />
-            {t("agentChat.mcpElicitation.title")}
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            {t("agentChat.mcpElicitation.server", {
-              server: request.params.serverName,
-            })}
-          </DialogDescription>
-        </DialogHeader>
+    <section
+      className="w-full overflow-hidden rounded-md border border-border bg-background"
+      data-testid="mcp-server-elicitation-form"
+      data-interaction-id={request.key}
+    >
+      <header className="space-y-1 border-b border-border px-5 py-4">
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          <CircleHelp className="h-5 w-5 text-emerald-600" />
+          {t("agentChat.mcpElicitation.title")}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {t("agentChat.mcpElicitation.server", {
+            server: request.params.serverName,
+          })}
+        </p>
+      </header>
 
-        <div className="min-h-0 space-y-5 overflow-y-auto px-5 py-4">
-          <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
-            {request.params.message}
-          </p>
+      <div className="min-h-0 space-y-5 overflow-y-auto px-5 py-4">
+        <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
+          {request.params.message}
+        </p>
 
-          <div className="space-y-4">
-            {fields.map((field) => {
-              const fieldIssues = issues.filter(
-                (issue) => issue.field === field.key,
-              );
-              const inputId = `mcp-elicitation-${request.key}-${field.key}`;
-              return (
-                <div className="space-y-1.5" key={field.key}>
-                  <label
-                    className="block text-sm font-medium text-foreground"
-                    htmlFor={inputId}
-                  >
-                    {field.title}
-                    {field.required ? (
-                      <span className="ml-1 text-red-600" aria-hidden="true">
-                        *
-                      </span>
-                    ) : null}
-                  </label>
-                  {field.description ? (
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      {field.description}
-                    </p>
+        <div className="space-y-4">
+          {fields.map((field) => {
+            const fieldIssues = issues.filter(
+              (issue) => issue.field === field.key,
+            );
+            const inputId = `mcp-elicitation-${request.key}-${field.key}`;
+            return (
+              <div className="space-y-1.5" key={field.key}>
+                <label
+                  className="block text-sm font-medium text-foreground"
+                  htmlFor={inputId}
+                >
+                  {field.title}
+                  {field.required ? (
+                    <span className="ml-1 text-red-600" aria-hidden="true">
+                      *
+                    </span>
                   ) : null}
-                  <McpFieldInput
-                    disabled={submitting !== null}
-                    field={field}
-                    id={inputId}
-                    value={values[field.key]}
-                    onChange={(value) => {
-                      setValues((current) => ({
-                        ...current,
-                        [field.key]: value,
-                      }));
-                      setIssues((current) =>
-                        current.filter((issue) => issue.field !== field.key),
-                      );
-                    }}
-                  />
-                  {fieldIssues.map((issue) => (
-                    <p
-                      className="text-xs text-red-600"
-                      data-testid={`mcp-elicitation-error-${field.key}`}
-                      key={`${issue.code}:${issue.field}`}
-                    >
-                      {t(`agentChat.mcpElicitation.validation.${issue.code}`)}
-                    </p>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
+                </label>
+                {field.description ? (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {field.description}
+                  </p>
+                ) : null}
+                <McpFieldInput
+                  disabled={submitting !== null}
+                  field={field}
+                  id={inputId}
+                  value={values[field.key]}
+                  onChange={(value) => {
+                    setValues((current) => ({
+                      ...current,
+                      [field.key]: value,
+                    }));
+                    setIssues((current) =>
+                      current.filter((issue) => issue.field !== field.key),
+                    );
+                  }}
+                />
+                {fieldIssues.map((issue) => (
+                  <p
+                    className="text-xs text-red-600"
+                    data-testid={`mcp-elicitation-error-${field.key}`}
+                    key={`${issue.code}:${issue.field}`}
+                  >
+                    {t(`agentChat.mcpElicitation.validation.${issue.code}`)}
+                  </p>
+                ))}
+              </div>
+            );
+          })}
         </div>
+      </div>
 
-        <DialogFooter className="gap-2 border-t border-border px-5 py-4 sm:space-x-0">
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={submitting !== null}
-            onClick={() => settle("cancel")}
-          >
-            <X className="mr-2 h-4 w-4" />
-            {t("agentChat.mcpElicitation.action.cancel")}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={submitting !== null}
-            onClick={() => settle("decline")}
-          >
-            {submitting === "decline" ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
-            {t("agentChat.mcpElicitation.action.decline")}
-          </Button>
-          <Button
-            type="button"
-            disabled={submitting !== null}
-            onClick={() => settle("accept")}
-          >
-            {submitting === "accept" ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Check className="mr-2 h-4 w-4" />
-            )}
-            {t("agentChat.mcpElicitation.action.accept")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <footer className="flex flex-wrap justify-end gap-2 border-t border-border px-5 py-4">
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={submitting !== null}
+          onClick={() => settle("cancel")}
+        >
+          <X className="mr-2 h-4 w-4" />
+          {t("agentChat.mcpElicitation.action.cancel")}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={submitting !== null}
+          onClick={() => settle("decline")}
+        >
+          {submitting === "decline" ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : null}
+          {t("agentChat.mcpElicitation.action.decline")}
+        </Button>
+        <Button
+          type="button"
+          disabled={submitting !== null}
+          onClick={() => settle("accept")}
+        >
+          {submitting === "accept" ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Check className="mr-2 h-4 w-4" />
+          )}
+          {t("agentChat.mcpElicitation.action.accept")}
+        </Button>
+      </footer>
+    </section>
   );
 }
 

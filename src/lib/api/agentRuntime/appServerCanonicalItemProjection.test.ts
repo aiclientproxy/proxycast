@@ -63,7 +63,7 @@ function directAgentMessageCompletedNotification() {
         id: "message-turn-stream-repair",
         type: "agentMessage",
         text: COMPLETED_MESSAGE_TEXT,
-        phase: "final",
+        phase: "final_answer",
       },
     },
   } satisfies AppServerJsonRpcNotification;
@@ -101,7 +101,7 @@ describe("direct v2 App Server Item projection", () => {
         status: "completed",
         type: "agent_message",
         text: COMPLETED_MESSAGE_TEXT,
-        phase: "final",
+        phase: "final_answer",
       },
     });
   });

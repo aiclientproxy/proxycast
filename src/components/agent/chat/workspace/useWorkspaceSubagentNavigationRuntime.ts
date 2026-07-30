@@ -7,7 +7,10 @@ import type { CanonicalChildThreadSummary } from "../projection/canonicalChildTh
 interface UseWorkspaceSubagentNavigationRuntimeParams {
   canonicalChildren: CanonicalChildThreadSummary[];
   deferSessionRecentMetadataSyncForNavigation: (sessionId: string) => void;
-  switchTopic: (sessionId: string) => Promise<unknown> | void;
+  switchTopic: (
+    sessionId: string,
+    options?: { allowDetachedSession?: boolean },
+  ) => Promise<unknown> | void;
 }
 
 interface OpenWorkspaceSubagentTargetParams extends UseWorkspaceSubagentNavigationRuntimeParams {
@@ -32,7 +35,7 @@ export async function openWorkspaceSubagentTarget({
   const sessionId =
     canonicalSessionId || (await readSessionId(normalizedTargetId));
   deferSessionRecentMetadataSyncForNavigation(sessionId);
-  await switchTopic(sessionId);
+  await switchTopic(sessionId, { allowDetachedSession: true });
 }
 
 export function useWorkspaceSubagentNavigationRuntime({

@@ -730,6 +730,97 @@ async fn queue_only_stays_pending_until_a_real_turn_without_starting_one() {
 }
 
 #[tokio::test]
+async fn queue_only_delivery_during_active_turn_does_not_reappend_turn_input() {
+    let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
+    let release = Arc::new(tokio::sync::Semaphore::new(0));
+    let backend = Arc::new(BlockingBackend {
+        started: started_tx,
+        release: Arc::clone(&release),
+    });
+    let (_temp, core, store) = setup_with_backend(backend);
+    core.start_turn_admitted(
+        AgentSessionTurnStartParams {
+            session_id: "child-session".to_string(),
+            turn_id: Some("active-queue-only-turn".to_string()),
+            input: AgentInput {
+                text: "continue parent work".to_string(),
+                attachments: Vec::new(),
+            },
+            runtime_options: None,
+            queue_if_busy: false,
+            skip_pre_submit_resume: false,
+        },
+        RuntimeHostContext::default(),
+    )
+    .await
+    .expect("admit active turn");
+    assert_eq!(
+        started_rx.recv().await.as_deref(),
+        Some("active-queue-only-turn")
+    );
+    assert_eq!(
+        core.events_for_session("child-session")
+            .expect("admission events")
+            .iter()
+            .filter(|event| {
+                event.turn_id.as_deref() == Some("active-queue-only-turn")
+                    && event.event_type == "message.created"
+                    && event.payload["role"] == "user"
+            })
+            .count(),
+        1,
+        "scenario=active-queue-only-delivery admission must persist the parent input first"
+    );
+
+    append(&store, result("active-child-result"));
+    let (session, turns) = core.session_snapshot("child-session").expect("session");
+    let turn = turns
+        .into_iter()
+        .find(|turn| turn.turn_id == "active-queue-only-turn")
+        .expect("active turn");
+    core.deliver_pending_agent_mailbox_for_turn(&session, &turn)
+        .await
+        .expect("deliver queue-only result during active turn");
+
+    let events = core.events_for_session("child-session").expect("events");
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| {
+                event.turn_id.as_deref() == Some("active-queue-only-turn")
+                    && event.event_type == "message.created"
+                    && event.payload["role"] == "user"
+                    && event.payload.get("mailbox").is_none()
+            })
+            .count(),
+        1,
+        "scenario=active-queue-only-delivery parent turn input must be canonicalized once"
+    );
+    assert!(pending(&store).await.is_empty());
+    assert!(has_item(&store, "active-child-result").await);
+
+    release.add_permits(1);
+    tokio::time::timeout(std::time::Duration::from_secs(1), async {
+        loop {
+            if core
+                .events_for_session("child-session")
+                .expect("terminal events")
+                .iter()
+                .any(|event| {
+                    event.turn_id.as_deref() == Some("active-queue-only-turn")
+                        && event.event_type == "turn.completed"
+                })
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("active turn completion");
+}
+
+#[tokio::test]
 async fn multiple_results_complete_distinct_canonical_items_before_ack() {
     let (_temp, core, store, _backend) = setup();
     append(&store, result("result-1"));
@@ -881,13 +972,9 @@ async fn in_progress_result_is_completed_before_retry_ack() {
             ["child-thread"],
         )
         .expect("repair canonical sequence");
-    core.deliver_pending_agent_mailbox_for_turn(
-        &session,
-        &turn,
-        &[agent_protocol::AgentInput::text("continue")],
-    )
-    .await
-    .expect("retry result delivery");
+    core.deliver_pending_agent_mailbox_for_turn(&session, &turn)
+        .await
+        .expect("retry result delivery");
 
     assert!(pending(&store).await.is_empty());
     assert_eq!(
@@ -946,11 +1033,7 @@ async fn existing_canonical_item_is_acknowledged_without_a_duplicate_visible_ite
     .expect("persist mailbox item before simulated crash");
 
     let retry = core
-        .deliver_pending_agent_mailbox_for_turn(
-            &session,
-            &turn,
-            &[agent_protocol::AgentInput::text(message.content.clone())],
-        )
+        .deliver_pending_agent_mailbox_for_turn(&session, &turn)
         .await
         .expect("retry delivery");
     assert!(retry.events.is_empty());

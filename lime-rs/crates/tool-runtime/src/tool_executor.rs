@@ -317,6 +317,7 @@ pub struct RuntimeToolExecutionResult {
     pub sidecar_reference: Option<ToolOutputReference>,
     pub metadata: HashMap<String, Value>,
     pub agent_control_projection_facts: Vec<crate::agent_control::SubAgentProjectionFact>,
+    pub agent_control_state_facts: Vec<crate::agent_control::AgentStateProjectionFact>,
 }
 
 impl RuntimeToolExecutionResult {
@@ -335,6 +336,7 @@ impl RuntimeToolExecutionResult {
             sidecar_reference: None,
             metadata,
             agent_control_projection_facts: Vec::new(),
+            agent_control_state_facts: Vec::new(),
         }
     }
 
@@ -358,6 +360,14 @@ impl RuntimeToolExecutionResult {
         facts: Vec<crate::agent_control::SubAgentProjectionFact>,
     ) -> Self {
         self.agent_control_projection_facts = facts;
+        self
+    }
+
+    pub fn with_agent_control_state_facts(
+        mut self,
+        facts: Vec<crate::agent_control::AgentStateProjectionFact>,
+    ) -> Self {
+        self.agent_control_state_facts = facts;
         self
     }
 }

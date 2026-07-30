@@ -1,42 +1,39 @@
-## Lime v1.115.0
+## Lime v1.116.0
 
 ### 新功能
 
-- 新增 Vertex Gemini current transport，按 project/location 构建专用 endpoint，使用 Bearer access token，并复用 Gemini canonical lowering、SSE 与工具历史语义。
-- 新增 Azure OpenAI Responses current route，支持资源根地址、typed `api-version` 和 `api-key` 认证，同时对不受支持的 Chat Completions、WebSocket 与 hosted tools fail closed。
-- 打通 Fal 与 xAI 视频生成的公开媒体任务链；xAI request id、轮询状态和终态会持久化，App Server 重启后可继续轮询而不会重复创建任务。
-- 新增 `model/list/updated` typed 通知，Provider、凭证或目录变化后，已挂载的前端模型视图会自动失效并刷新。
-- Hosted Image Generation 结果和会话 sidecar 图片现在可在 Agent 时间线中直接预览，并为不可用媒体提供稳定占位状态。
+- Agent 对话改为直接按 canonical Turn / Item 渲染，实时事件、冷启动读取和会话恢复共享同一 ConversationProjection；Hook、Sleep、Review、MCP 和动态工具状态可在统一时间线中呈现。
+- 新增统一 Pending Interaction 层，集中承接审批、用户补充输入、MCP elicitation 和动态工具交互，并在恢复后重建仍待处理的请求。
+- 媒体读取迁移到 Lime-owned v2 `media/read`，使用 canonical `threadId` 读取 bounded sidecar，并在图片可用、不可用和异常状态下提供稳定预览结果。
+- 官方 Agnes API Hub 现在可识别 `agnes-2.0-flash` 的 canonical 视觉、工具、流式与推理能力；非官方或非 HTTPS endpoint 不会获得同等能力授权。
 
 ### 修复
 
-- 修复模型切换时旧 reasoning effort、service tier 或 collaboration model 残留的问题；Thread 设置会先通过最新目录 preflight，再原子持久化。
-- 修复 Provider 正常结束但只返回 reasoning 或空内容时过早结束的问题，新增独立、有限的空响应重采样预算，并保留工具快照与 Provider token budget 约束。
-- 修复 HTTP/WebSocket 忽略服务端 `x-should-retry`、`Retry-After` 与 quota reset 提示的问题，避免不可重试请求被放大。
-- 修复不同 credential、protocol、endpoint 或 API version 共享 circuit health 的问题，并提供不泄漏凭证和 endpoint 的 exact-route 健康快照。
-- 修复模型目录刷新后专用媒体模型继续作为 Agent chat 选择、以及无能力 provenance 的模型获得执行权限的问题。
+- 修复长会话恢复时重复合成消息、实时与历史内容漂移、推理/工具正文重复以及待处理交互丢失的问题。
+- 修复超长历史一次挂载全部 Item 和 assistant 长正文导致的打开卡顿；默认只渲染 bounded Turn window，旧记录和完整正文按需展开。
+- 修复 sidecar 媒体仍依赖 v0 session identity、读取失败被静默吞掉或异常 payload 进入预览的问题；协议漂移和未投影通知现在会产生可见诊断。
+- 修复多 Agent 工具结果只携带活动事件而缺少 typed 状态事实的问题，子 Agent 的完成、失败和等待状态可进入 canonical 投影。
 
 ### 优化与重构
 
-- 将 `model/list.capabilitySnapshot` 设为公开能力读取的唯一事实源，删除无产品消费者的全局 `modelProvider/capabilities/read` 协议、schema、client 与测试正向面。
-- 将视频 lowering、网络执行和 Provider 状态统一收敛到 `model-provider`，媒体 runtime 只负责进度与 durable artifact，App Server 只负责 route、凭证和 worker 编排。
-- 将 Provider 目录选择、默认值与刷新协调拆分到单一 owner，并统一 foreground、background、queued、retry 与 mailbox 的模型设置投影。
-- 收敛 Agent 图片、流式媒体引用和 canonical Item 内容投影，减少历史恢复与实时渲染之间的重复转换。
+- 删除 canonical Item 到旧 Message 的二次合成、三个流式内容同步 hook、重复 approval/user-input API 和旧 MCP elicitation dialog owner，Renderer 只保留一条 current 投影链。
+- 将 assistant message phase、MCP tool result/error、动态工具多模态输出和 Agent control state 收紧为 typed protocol，并同步 Rust、JSON schema 与 TypeScript client。
+- 将历史窗口、长正文 preview、媒体异常态与 notification drift 设为 fail-visible 边界，不再通过通用 extension 或生产 mock fallback 猜测展示。
+- 模型目录 taxonomy 现在可从 canonical catalog 补齐 task family、modality 和 runtime feature，同时保持 endpoint provenance 的严格校验。
 
 ### 测试与质量
 
-- 补充 Azure Responses、Vertex Gemini、xAI/Fal 视频、Provider health/retry、credential reroute、空响应重采样和模型目录刷新 Rust 回归。
-- 新增公开 JSON-RPC 视频任务与模型目录更新覆盖，同步 App Server JSON schema、TypeScript generated protocol types 和 Electron 直连通知测试。
-- 扩展 Agent 图片附件、Hosted Image、流式媒体引用、模型注册表自动刷新及五语言不可用状态的前端回归。
-- 新增 Codex Item/Event 渲染覆盖清单与治理守卫，为后续 ConversationProjection 单一读模型迁移建立可验证基线。
+- 扩展 direct TurnTimeline、历史 preview、恢复 replay、Pending Interaction、MCP elicitation、媒体异常态和协议漂移的前端与协议回归。
+- 新增长列表 Electron fixture、canonical thread seed/oracle、Agent runtime screenshot 与 tool execution current contract，覆盖真实 preload/IPC、App Server JSON-RPC、read model 和 GUI 状态。
+- 更新 Refactor v2 Item/Event projection inventory、render coverage fixture、legacy surface guard 和验证证据，守住单一 current owner 与零生产 mock fallback。
 
 ### 文档
 
-- 更新模型 catalog/admission、Provider health/retry、Vertex Gemini、视频媒体任务与 Agent empty-response 的 current 架构事实源。
-- 新增 Codex 渲染对齐 v2 的 Item/Event 投影矩阵、实施计划和完成定义，明确不改变多模型、多模态 current owner。
+- 更新 Renderer ConversationProjection、direct TurnTimeline、thread-scoped media read、异常态展示和长列表性能的架构事实源与 Refactor v2 执行记录。
+- 新增 LimeCore / AsterRouter / Codex App Server 的云端多模型平台目标架构，明确商业控制面、模型数据面和桌面 runtime 的唯一 owner。
 
 ### 其他
 
-- 将根应用、CLI npm 包、Rust workspace 与锁文件版本统一提升到 `1.115.0`。
+- 将根应用、CLI npm 包、Rust workspace 与锁文件版本统一提升到 `1.116.0`。
 
-**完整变更**: `v1.114.0` -> `v1.115.0`
+**完整变更**: `v1.115.0` -> `v1.116.0`

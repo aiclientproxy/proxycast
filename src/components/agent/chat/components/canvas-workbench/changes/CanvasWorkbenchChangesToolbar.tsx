@@ -321,7 +321,9 @@ export function CanvasWorkbenchChangesToolbar({
         {showFilesToggle ? (
           <button
             type="button"
+            data-testid="canvas-workbench-changes-files-toggle"
             aria-label={filesPanelToggleLabel}
+            aria-expanded={filesPanelOpen}
             title={filesPanelToggleLabel}
             disabled={!onToggleFilesPanel}
             onClick={onToggleFilesPanel}

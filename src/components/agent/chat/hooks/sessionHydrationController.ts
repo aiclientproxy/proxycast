@@ -1,4 +1,6 @@
-export const SESSION_DETAIL_HISTORY_LIMIT = 40;
+import { AGENT_RUNTIME_DEFAULT_HISTORY_LIMIT } from "@/lib/api/agentRuntime/requestTypes";
+
+export const SESSION_DETAIL_HISTORY_LIMIT = AGENT_RUNTIME_DEFAULT_HISTORY_LIMIT;
 
 export interface SessionDetailHydrationOptions {
   historyLimit: number;

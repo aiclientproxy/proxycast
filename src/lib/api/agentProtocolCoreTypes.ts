@@ -72,6 +72,8 @@ export interface AgentMessageContentImage {
   data: string;
   uri?: string;
   source_path?: string;
+  display_name?: string;
+  unavailable_reason?: "host_reference_required";
   detail?: "auto" | "low" | "high" | "original";
 }
 
@@ -173,6 +175,7 @@ export interface AgentThreadUserMessageItem extends AgentThreadItemBase {
   type: "user_message";
   content: string;
   content_parts?: AgentMessageContent[];
+  client_id?: string;
 }
 
 export interface AgentThreadContentReference {
@@ -202,7 +205,7 @@ export interface AgentThreadAgentMessageItem extends AgentThreadItemBase {
   type: "agent_message";
   text: string;
   contentParts?: AgentThreadMessageContentPart[];
-  phase?: string;
+  phase?: "commentary" | "final_answer";
 }
 
 export interface AgentThreadPlanItem extends AgentThreadItemBase {
@@ -229,10 +232,19 @@ export interface AgentThreadToolCallItem extends AgentThreadItemBase {
   metadata?: unknown;
 }
 
+export type AgentThreadCommandExecutionStatus =
+  | "inProgress"
+  | "completed"
+  | "declined"
+  | "failed";
+
 export interface AgentThreadCommandExecutionItem extends AgentThreadItemBase {
   type: "command_execution";
   command: string;
   cwd: string;
+  plugin_id?: string;
+  script_path?: string;
+  command_status?: AgentThreadCommandExecutionStatus;
   source?: string;
   process_id?: string;
   duration_ms?: number;
@@ -347,10 +359,25 @@ export interface AgentThreadImageGenerationItem extends AgentThreadItemBase {
   saved_path?: string;
 }
 
-export interface AgentThreadExtensionItem extends AgentThreadItemBase {
-  type: "extension";
-  name: string;
-  data: Record<string, unknown>;
+export interface AgentThreadHookPromptFragment {
+  hook_run_id: string;
+  text: string;
+}
+
+export interface AgentThreadHookPromptItem extends AgentThreadItemBase {
+  type: "hook_prompt";
+  fragments: AgentThreadHookPromptFragment[];
+}
+
+export interface AgentThreadSleepItem extends AgentThreadItemBase {
+  type: "sleep";
+  duration_ms?: number;
+}
+
+export interface AgentThreadReviewBoundaryItem extends AgentThreadItemBase {
+  type: "review_boundary";
+  boundary: "entered" | "exited";
+  review: string;
 }
 
 export interface AgentThreadSubagentActivityItem extends AgentThreadItemBase {
@@ -423,7 +450,9 @@ export type AgentThreadItem =
   | AgentThreadFileArtifactItem
   | AgentThreadMediaItem
   | AgentThreadImageGenerationItem
-  | AgentThreadExtensionItem
+  | AgentThreadHookPromptItem
+  | AgentThreadSleepItem
+  | AgentThreadReviewBoundaryItem
   | AgentThreadSubagentActivityItem
   | AgentThreadExpertProfileSwitchItem
   | AgentThreadWarningItem

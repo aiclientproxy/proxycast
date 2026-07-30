@@ -3,6 +3,7 @@ import {
   lazy,
   useCallback,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -220,6 +221,11 @@ interface DeveloperSettingsProps {
   embedded?: boolean;
 }
 
+type DeveloperMessage = {
+  type: "success" | "error";
+  text: string;
+};
+
 export function DeveloperSettings({
   embedded = false,
 }: DeveloperSettingsProps = {}) {
@@ -228,11 +234,37 @@ export function DeveloperSettings({
   const [appConfig, setAppConfig] = useState<Config | null>(null);
   const [diagnosticBusy, setDiagnosticBusy] = useState(false);
   const [workspaceHarnessSaving, setWorkspaceHarnessSaving] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
+  const [message, setMessage] = useState<DeveloperMessage | null>(null);
   const [showClipboardGuide, setShowClipboardGuide] = useState(false);
+  const messageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearMessage = useCallback(() => {
+    if (messageTimerRef.current !== null) {
+      clearTimeout(messageTimerRef.current);
+      messageTimerRef.current = null;
+    }
+    setMessage(null);
+  }, []);
+
+  const showTransientMessage = useCallback((nextMessage: DeveloperMessage) => {
+    if (messageTimerRef.current !== null) {
+      clearTimeout(messageTimerRef.current);
+    }
+    setMessage(nextMessage);
+    messageTimerRef.current = setTimeout(() => {
+      setMessage(null);
+      messageTimerRef.current = null;
+    }, 2500);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (messageTimerRef.current !== null) {
+        clearTimeout(messageTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const loadAppConfig = useCallback(async () => {
     try {
@@ -293,16 +325,15 @@ export function DeveloperSettings({
 
   const handleCopyDiagnostic = useCallback(async () => {
     setDiagnosticBusy(true);
-    setMessage(null);
+    clearMessage();
     setShowClipboardGuide(false);
     try {
       const payload = await buildDiagnosticPayload();
       await copyCrashDiagnosticToClipboard(payload);
-      setMessage({
+      showTransientMessage({
         type: "success",
         text: t("settings.developer.message.diagnosticCopied"),
       });
-      setTimeout(() => setMessage(null), 2500);
     } catch (error) {
       console.error("复制诊断信息失败:", error);
       const isPermissionDenied = isClipboardPermissionDeniedError(error);
@@ -317,20 +348,19 @@ export function DeveloperSettings({
     } finally {
       setDiagnosticBusy(false);
     }
-  }, [buildDiagnosticPayload, t]);
+  }, [buildDiagnosticPayload, clearMessage, showTransientMessage, t]);
 
   const handleCopyDiagnosticJson = useCallback(async () => {
     setDiagnosticBusy(true);
-    setMessage(null);
+    clearMessage();
     setShowClipboardGuide(false);
     try {
       const payload = await buildDiagnosticPayload();
       await copyCrashDiagnosticJsonToClipboard(payload);
-      setMessage({
+      showTransientMessage({
         type: "success",
         text: t("settings.developer.message.diagnosticJsonCopied"),
       });
-      setTimeout(() => setMessage(null), 2500);
     } catch (error) {
       console.error("复制纯 JSON 失败:", error);
       const isPermissionDenied = isClipboardPermissionDeniedError(error);
@@ -345,11 +375,11 @@ export function DeveloperSettings({
     } finally {
       setDiagnosticBusy(false);
     }
-  }, [buildDiagnosticPayload, t]);
+  }, [buildDiagnosticPayload, clearMessage, showTransientMessage, t]);
 
   const handleExportDiagnostic = useCallback(async () => {
     setDiagnosticBusy(true);
-    setMessage(null);
+    clearMessage();
     setShowClipboardGuide(false);
     try {
       const payload = await buildDiagnosticPayload();
@@ -361,14 +391,13 @@ export function DeveloperSettings({
       } catch {
         // 导出已经成功，打开目录失败不覆盖导出反馈。
       }
-      setMessage({
+      showTransientMessage({
         type: "success",
         text: t("settings.developer.message.diagnosticExported", {
           fileName: result.fileName,
           location: result.locationHint,
         }),
       });
-      setTimeout(() => setMessage(null), 2500);
     } catch (error) {
       console.error("导出诊断信息失败:", error);
       setMessage({
@@ -381,11 +410,11 @@ export function DeveloperSettings({
     } finally {
       setDiagnosticBusy(false);
     }
-  }, [buildDiagnosticPayload, t]);
+  }, [buildDiagnosticPayload, clearMessage, showTransientMessage, t]);
 
   const handleOpenDownloadDirectory = useCallback(async () => {
     setDiagnosticBusy(true);
-    setMessage(null);
+    clearMessage();
     try {
       await openCrashDiagnosticDownloadDirectory();
     } catch (error) {
@@ -400,7 +429,7 @@ export function DeveloperSettings({
     } finally {
       setDiagnosticBusy(false);
     }
-  }, [t]);
+  }, [clearMessage, t]);
 
   const handleClearDiagnosticHistory = useCallback(async () => {
     const confirmed =
@@ -411,15 +440,14 @@ export function DeveloperSettings({
     }
 
     setDiagnosticBusy(true);
-    setMessage(null);
+    clearMessage();
     setShowClipboardGuide(false);
     try {
       await clearCrashDiagnosticHistory();
-      setMessage({
+      showTransientMessage({
         type: "success",
         text: t("settings.developer.message.diagnosticHistoryCleared"),
       });
-      setTimeout(() => setMessage(null), 2500);
     } catch (error) {
       console.error("清空旧诊断信息失败:", error);
       setMessage({
@@ -432,12 +460,12 @@ export function DeveloperSettings({
     } finally {
       setDiagnosticBusy(false);
     }
-  }, [t]);
+  }, [clearMessage, showTransientMessage, t]);
 
   const handleWorkspaceHarnessEnabledChange = useCallback(
     async (nextEnabled: boolean) => {
       setWorkspaceHarnessSaving(true);
-      setMessage(null);
+      clearMessage();
       try {
         const latestConfig = appConfig ?? (await getConfig());
         const nextConfig: Config = {
@@ -449,13 +477,12 @@ export function DeveloperSettings({
         };
         await saveConfig(nextConfig);
         setAppConfig(nextConfig);
-        setMessage({
+        showTransientMessage({
           type: "success",
           text: nextEnabled
             ? t("settings.developer.message.workspaceHarnessEnabled")
             : t("settings.developer.message.workspaceHarnessDisabled"),
         });
-        setTimeout(() => setMessage(null), 2500);
       } catch (error) {
         console.error("保存处理工作台开关失败:", error);
         setMessage({
@@ -469,7 +496,7 @@ export function DeveloperSettings({
         setWorkspaceHarnessSaving(false);
       }
     },
-    [appConfig, t],
+    [appConfig, clearMessage, showTransientMessage, t],
   );
 
   const workspaceHarnessEnabled = isWorkspaceHarnessEnabled(appConfig);
@@ -566,10 +593,7 @@ export function DeveloperSettings({
               <ClawTraceSettingsPanel
                 appConfig={appConfig}
                 onConfigSaved={setAppConfig}
-                onMessage={(nextMessage) => {
-                  setMessage(nextMessage);
-                  setTimeout(() => setMessage(null), 2500);
-                }}
+                onMessage={showTransientMessage}
               />
               <CompactSwitchRow
                 title={t("settings.developer.debugSwitch.component.title")}

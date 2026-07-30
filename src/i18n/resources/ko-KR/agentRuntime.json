@@ -1148,5 +1148,7 @@
   "agentChat.toolCall.actionOverride.getLog.running": "로그 가져오는 중",
   "agentChat.runtimeWarning.skillNotAvailable": "선택한 Skill을 현재 사용할 수 없습니다.",
   "agentChat.runtimeWarning.skillLoadFailed": "선택한 Skill을 불러오지 못했습니다.",
-  "agentChat.runtimeWarning.mentionNotAvailable": "선택한 Mention을 확인할 수 없습니다."
+  "agentChat.runtimeWarning.mentionNotAvailable": "선택한 Mention을 확인할 수 없습니다.",
+  "agentChat.runtimeWarning.unknownNotification": "현재 버전에서 실행 알림 {{method}}을(를) 인식할 수 없습니다. 프로토콜 진단을 기록했습니다.",
+  "agentChat.runtimeWarning.unprojectedNotification": "실행 알림 {{method}}은(는) 현재 화면에 아직 연결되지 않았습니다. 프로토콜 진단을 기록했습니다."
 }

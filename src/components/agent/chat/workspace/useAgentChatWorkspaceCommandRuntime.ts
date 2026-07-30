@@ -360,6 +360,7 @@ export function useAgentChatWorkspaceCommandRuntime({
         saveSessionFile,
         sessionFiles,
         sessionId,
+        threadId: threadRead?.thread_id ?? null,
         setArtifactViewMode: applyAutoArtifactViewMode,
         setCanvasState,
         setCanvasWorkbenchLayoutMode,

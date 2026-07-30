@@ -2,42 +2,50 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "oneOf": [
     {
-      "additionalProperties": false,
       "properties": {
-        "inputText": {
-          "properties": {
-            "text": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "text"
-          ],
-          "type": "object"
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "inputText",
+          "type": "string"
         }
       },
       "required": [
-        "inputText"
+        "text",
+        "type"
       ],
       "type": "object"
     },
     {
-      "additionalProperties": false,
       "properties": {
-        "inputImage": {
-          "properties": {
-            "image_url": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "image_url"
-          ],
-          "type": "object"
+        "imageUrl": {
+          "type": "string"
+        },
+        "type": {
+          "const": "inputImage",
+          "type": "string"
         }
       },
       "required": [
-        "inputImage"
+        "imageUrl",
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "audioUrl": {
+          "type": "string"
+        },
+        "type": {
+          "const": "inputAudio",
+          "type": "string"
+        }
+      },
+      "required": [
+        "audioUrl",
+        "type"
       ],
       "type": "object"
     }

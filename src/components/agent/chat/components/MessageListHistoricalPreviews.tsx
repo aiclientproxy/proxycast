@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AgentThreadItem } from "../types";
 import type { ConfirmResponse, SiteSavedContentTarget } from "../types";
@@ -99,6 +100,7 @@ export const HistoricalTimelinePreview: React.FC<{
     description?: string | null;
   }) => void;
   sourceMessageId?: string;
+  onExpand?: () => void;
 }> = ({
   items,
   placement,
@@ -112,6 +114,7 @@ export const HistoricalTimelinePreview: React.FC<{
   onPermissionResponse,
   onSaveFileArtifactAsKnowledge,
   sourceMessageId,
+  onExpand,
 }) => {
   const { t } = useTranslation("agent");
   const summary = useMemo(
@@ -178,16 +181,34 @@ export const HistoricalTimelinePreview: React.FC<{
     (item): item is Extract<AgentThreadItem, { type: "file_artifact" }> =>
       item.type === "file_artifact",
   );
+  const summaryRow = (
+    <>
+      <span className="font-medium">{title}</span>
+      <span className="sr-only">{metaText}</span>
+      {onExpand ? <ChevronDown className="ml-auto h-4 w-4" /> : null}
+    </>
+  );
 
   return (
     <div className="space-y-1.5">
-      <div
-        data-testid={`message-list-historical-timeline-preview:${placement}`}
-        className="flex w-full items-center gap-1.5 border-b border-slate-200 py-2 text-left text-sm text-slate-500"
-      >
-        <span className="font-medium">{title}</span>
-        <span className="sr-only">{metaText}</span>
-      </div>
+      {onExpand ? (
+        <button
+          type="button"
+          data-testid={`message-list-historical-timeline-preview:${placement}`}
+          className="flex w-full items-center gap-1.5 border-b border-slate-200 py-2 text-left text-sm text-slate-500 transition-colors hover:text-slate-700"
+          aria-label={`${title}. ${metaText}`}
+          onClick={onExpand}
+        >
+          {summaryRow}
+        </button>
+      ) : (
+        <div
+          data-testid={`message-list-historical-timeline-preview:${placement}`}
+          className="flex w-full items-center gap-1.5 border-b border-slate-200 py-2 text-left text-sm text-slate-500"
+        >
+          {summaryRow}
+        </div>
+      )}
       {fileArtifacts.length > 0 ? (
         <div data-testid="historical-file-artifact-group" className="space-y-1">
           {fileArtifacts.map((item) => (

@@ -826,7 +826,11 @@ fn selected_agent_control_fork_history(
                             text,
                             phase,
                             content_parts,
-                        } if phase.as_deref() == Some("final_answer") => {
+                        } if matches!(
+                            phase,
+                            Some(agent_protocol::response_item::MessagePhase::FinalAnswer)
+                        ) =>
+                        {
                             Some(ForkedAgentControlMessage {
                                 source_thread_id: turn.thread_id.as_str().to_string(),
                                 source_turn_id: turn.turn_id.as_str().to_string(),
@@ -916,7 +920,11 @@ fn validate_agent_control_fork_items(turn: &agent_protocol::Turn) -> Result<(), 
                 phase,
                 content_parts,
                 ..
-            } if phase.as_deref() == Some("final_answer") => {
+            } if matches!(
+                phase,
+                Some(agent_protocol::response_item::MessagePhase::FinalAnswer)
+            ) =>
+            {
                 if item.status != ItemStatus::Completed
                     || content_parts.iter().any(|part| {
                         matches!(part, agent_protocol::MessageContentPart::Media { .. })

@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
+use super::{McpToolCallError, McpToolCallResult};
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     tag = "type",
@@ -24,7 +26,7 @@ pub enum ThreadItem {
         id: String,
         text: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        phase: Option<String>,
+        phase: Option<agent_protocol::response_item::MessagePhase>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         memory_citation: Option<MemoryCitation>,
     },
@@ -74,10 +76,10 @@ pub enum ThreadItem {
         mcp_app_resource_uri: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         plugin_id: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        result: Option<Value>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        error: Option<Value>,
+        #[schemars(required, extend("type" = ["object", "null"]))]
+        result: Option<Box<McpToolCallResult>>,
+        #[schemars(required, extend("type" = ["object", "null"]))]
+        error: Option<McpToolCallError>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         duration_ms: Option<i64>,
     },
@@ -268,10 +270,15 @@ pub enum DynamicToolCallStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum DynamicToolCallOutputContentItem {
     InputText { text: String },
     InputImage { image_url: String },
+    InputAudio { audio_url: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

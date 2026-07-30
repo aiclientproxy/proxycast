@@ -22,13 +22,8 @@ import {
   type AgentStreamTerminalCompletionPlan,
   type AgentStreamMissingFinalReplyPlan,
 } from "./agentStreamCompletionController";
-import {
-  isPersistedReasoningContentPart,
-  syncAssistantReasoningContentPartFromThreadItem,
-} from "./agentStreamReasoningContentSync";
-import { syncAssistantAgentMessageContentPartFromThreadItem } from "./agentStreamAgentMessageContentSync";
-import { syncMessageToolCallFromThreadItem } from "./agentStreamToolItemMessageSync";
 import { buildAgentStreamTurnStartedPendingItemUpdate } from "./agentStreamThreadItemController";
+import { reconcileAgentStreamProjectionItems } from "./agentStreamConversationProjection";
 import {
   bindSubmissionMessagesToRuntimeTurn,
   extractVisibleTextFromAgentMessage,
@@ -164,9 +159,7 @@ export function handleAgentStreamMessageSnapshotEvent(params: {
               params.surfaceThinkingDeltas
                 ? msg.contentParts || []
                 : (msg.contentParts || []).filter(
-                    (part) =>
-                      part.type !== "thinking" ||
-                      isPersistedReasoningContentPart(part),
+                    (part) => part.type !== "thinking",
                   ),
               snapshotText,
             ),
@@ -223,6 +216,7 @@ export function handleAgentStreamThreadItemLifecycleEvent(params: {
   >;
   pendingItemKey: string;
   pendingTurnKey: string;
+  projectedItems?: readonly AgentThreadItem[];
   requestState: StreamRequestState;
   shouldPreserveAssistantContent?: boolean;
   setters: RuntimeHandlerStateSetters;
@@ -258,37 +252,22 @@ export function handleAgentStreamThreadItemLifecycleEvent(params: {
       updated_at: params.event.item.updated_at || pendingTurn.updated_at,
     });
   });
-  let nextThreadItemsForSync: readonly AgentThreadItem[] =
-    params.setters.getThreadItems?.() ?? [];
   params.setters.setThreadItems((prev) => {
-    const nextItems = upsertThreadItemState(
+    const currentItems =
       params.event.item.type === "reasoning"
         ? removeStreamedReasoningTimelineItems(
             removeThreadItemState(prev, params.pendingItemKey),
             params.event.item.turn_id,
           )
-        : removeThreadItemState(prev, params.pendingItemKey),
-      params.event.item,
-    );
-    nextThreadItemsForSync = nextItems;
+        : removeThreadItemState(prev, params.pendingItemKey);
+    const nextItems = params.projectedItems
+      ? reconcileAgentStreamProjectionItems({
+          current: currentItems,
+          pendingItemKey: params.pendingItemKey,
+          projected: params.projectedItems,
+        })
+      : upsertThreadItemState(currentItems, params.event.item);
     return nextItems;
-  });
-  syncMessageToolCallFromThreadItem({
-    assistantMsgId: params.assistantMsgId,
-    item: params.event.item,
-    setMessages: params.setters.setMessages,
-  });
-  syncAssistantReasoningContentPartFromThreadItem({
-    assistantMsgId: params.assistantMsgId,
-    item: params.event.item,
-    threadItems: nextThreadItemsForSync,
-    setMessages: params.setters.setMessages,
-  });
-  syncAssistantAgentMessageContentPartFromThreadItem({
-    assistantMsgId: params.assistantMsgId,
-    item: params.event.item,
-    threadItems: nextThreadItemsForSync,
-    setMessages: params.setters.setMessages,
   });
   syncFinalAgentMessageSnapshotToRequestState(params);
   if (

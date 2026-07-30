@@ -162,7 +162,7 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
     }
   });
 
-  it("切换到 stale 快照话题时应先回放缓存，并立即后台刷新", async () => {
+  it("切换到 stale 快照话题时应先回放缓存，不伪造 history cursor，并立即后台刷新", async () => {
     const workspaceId = "ws-topic-history-stale-refresh";
     const nowMs = Date.now();
     const deferredTopicDetail = createDeferred<{
@@ -250,12 +250,7 @@ describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
       expect(harness.getValue().messages[0]?.content).toBe(
         "这是 stale 快照里的最近结果。",
       );
-      expect(harness.getValue().sessionHistoryWindow).toEqual({
-        loadedMessages: 1,
-        totalMessages: 2,
-        isLoadingFull: false,
-        error: null,
-      });
+      expect(harness.getValue().sessionHistoryWindow).toBeNull();
       expect(mockScheduleMinimumDelayIdleTask).not.toHaveBeenCalled();
       expect(mockGetAgentRuntimeSession).toHaveBeenCalledWith(
         "topic-stale",

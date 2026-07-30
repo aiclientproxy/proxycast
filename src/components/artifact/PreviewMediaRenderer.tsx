@@ -1,8 +1,9 @@
 import { FileAudio, FileVideo, Image as ImageIcon } from "lucide-react";
-import { memo } from "react";
+import { memo, useState } from "react";
 import { resolveLocalFilePreviewUrl } from "@/lib/api/fileSystem";
 import { cn } from "@/lib/utils";
 import type { Artifact } from "@/lib/artifact/types";
+import { PreviewArtifactFallbackSurface } from "./PreviewArtifactFallbackSurface";
 
 export type PreviewMediaContentKind = "image" | "audio" | "video";
 
@@ -47,6 +48,12 @@ export const PreviewMediaRenderer = memo(function PreviewMediaRenderer({
   tone = "dark",
 }: PreviewMediaRendererProps) {
   const mediaUrl = resolvePreviewArtifactFileUrl(artifact);
+  const loadIdentity = `${contentKind}:${mediaUrl ?? ""}`;
+  const [failedLoadIdentity, setFailedLoadIdentity] = useState<string | null>(
+    null,
+  );
+  const hasLoadError =
+    Boolean(mediaUrl) && failedLoadIdentity === loadIdentity;
   const filename =
     readStringMeta(artifact.meta, "filename") || artifact.title || "preview";
   const isLight = tone === "light";
@@ -58,6 +65,16 @@ export const PreviewMediaRenderer = memo(function PreviewMediaRenderer({
     "m-6 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-2xl border",
     isLight ? "border-border bg-muted/30" : "border-white/10 bg-black/20",
   );
+
+  if (hasLoadError) {
+    return (
+      <PreviewArtifactFallbackSurface
+        artifact={artifact}
+        mode="unsupported"
+        tone={tone}
+      />
+    );
+  }
 
   if (!mediaUrl) {
     const Icon =
@@ -92,6 +109,7 @@ export const PreviewMediaRenderer = memo(function PreviewMediaRenderer({
             alt={filename}
             className="max-h-full max-w-full object-contain"
             data-testid="preview-artifact-image"
+            onError={() => setFailedLoadIdentity(loadIdentity)}
           />
         ) : contentKind === "audio" ? (
           <audio
@@ -99,6 +117,7 @@ export const PreviewMediaRenderer = memo(function PreviewMediaRenderer({
             controls
             className="w-full max-w-xl"
             data-testid="preview-artifact-audio"
+            onError={() => setFailedLoadIdentity(loadIdentity)}
           />
         ) : (
           <video
@@ -106,6 +125,7 @@ export const PreviewMediaRenderer = memo(function PreviewMediaRenderer({
             controls
             className="max-h-full max-w-full"
             data-testid="preview-artifact-video"
+            onError={() => setFailedLoadIdentity(loadIdentity)}
           />
         )}
       </div>

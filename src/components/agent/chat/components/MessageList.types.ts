@@ -36,8 +36,12 @@ export interface MessageListProps {
   submittedActionsInFlight?: readonly ActionRequired[];
   canonicalChildren?: CanonicalChildThreadSummary[];
   sessionHistoryWindow?: {
-    loadedMessages: number;
-    totalMessages: number;
+    loadedEntries?: number;
+    loadedTurns?: number;
+    loadedItems?: number;
+    loadedMessages?: number;
+    totalMessages?: number | null;
+    hasMore?: boolean;
     isLoadingFull: boolean;
     error?: string | null;
   } | null;

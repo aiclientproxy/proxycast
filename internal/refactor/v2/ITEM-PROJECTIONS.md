@@ -1,10 +1,12 @@
 # Codex ThreadItem 全量渲染合同
 
-状态：proposed / exhaustive
+状态：implementation in progress / exhaustive baseline
 
 上游集合：Codex 4c43465133428898aa84f0bfc02c306ed65fb66a，18 类顶层 ThreadItem
 
 Lime 协议基线：lime-rs/crates/app-server-protocol/src/protocol/v2/item.rs
+
+实施快照：18 类 coverage baseline 与 pinned upstream drift gate 已固化；live、thread/read 和 production `thread/resume` replay 复用同一 ConversationProjection reducer。direct TurnTimeline 已接管 MessageList，typed Item renderer 覆盖 18 类 Item；CommandExecution 输出有 256 KiB 上限，unknown Item/notification 有脱敏 drift diagnostic。下表的 `current / gate-pending` 表示 typed producer/reader/renderer 已存在，但不代表该类型已经取得专项 Electron Gate B。
 
 ## 1. 通用合同
 
@@ -21,34 +23,34 @@ Lime 协议基线：lime-rs/crates/app-server-protocol/src/protocol/v2/item.rs
 | interrupted    | Turn 中断，保留部分输出并停止 spinner                            |
 | awaiting input | 有待办交互，在 Item 附近锚定且在 Composer 上方提供唯一可操作表面 |
 
-当前 AgentThreadItemStatus 只有 in_progress、completed、failed；v2 必须把 declined/interrupted 作为显示终态保留，不能在 canonical lower 中改写成 failed。
+当前投影保留 interrupted Turn 终态；CommandExecution/FileChange 的 declined 使用 completed lifecycle 加 typed 业务状态表达，显示层不得把拒绝伪装成系统失败或成功。
 
 连续活动可进入 ActivityCluster，但这只影响视觉。每个 item.id 仍有独立更新键、状态、输出和可访问名称；展开后必须恢复原 sequence。
 
 ## 2. 全量矩阵
 
-|   # | 上游 type           | 目标主投影              | 当前裁决                                        | v2 renderer             |
-| --: | ------------------- | ----------------------- | ----------------------------------------------- | ----------------------- |
-|   1 | userMessage         | 用户消息与附件          | partial                                         | UserMessageItem         |
-|   2 | hookPrompt          | Hook 注入上下文         | gap                                             | HookPromptItem          |
-|   3 | agentMessage        | Assistant Markdown 正文 | partial                                         | AgentMessageItem        |
-|   4 | plan                | 建议方案                | partial                                         | ProposedPlanItem        |
-|   5 | reasoning           | 推理摘要与受控原始内容  | partial                                         | ReasoningItem           |
-|   6 | commandExecution    | Shell / 文件探索活动    | partial                                         | CommandExecutionItem    |
-|   7 | fileChange          | 文件变更与 Diff         | partial                                         | FileChangeItem          |
-|   8 | mcpToolCall         | MCP 调用                | partial                                         | McpToolCallItem         |
-|   9 | dynamicToolCall     | 业务工具调用            | partial                                         | DynamicToolCallItem     |
-|  10 | collabAgentToolCall | 多 Agent 调度           | gap                                             | CollabAgentToolCallItem |
-|  11 | subAgentActivity    | 子 Agent 生命周期       | partial                                         | SubAgentActivityItem    |
-|  12 | webSearch           | 搜索活动与结果          | partial                                         | WebSearchItem           |
-|  13 | imageView           | 图片查看                | partial                                         | ImageViewItem           |
-|  14 | sleep               | 等待                    | gap                                             | SleepItem               |
-|  15 | imageGeneration     | 图片生成                | partial                                         | ImageGenerationItem     |
-|  16 | enteredReviewMode   | Review 进入边界         | gap                                             | ReviewBoundaryItem      |
-|  17 | exitedReviewMode    | Review 退出边界         | gap                                             | ReviewBoundaryItem      |
-|  18 | contextCompaction   | 上下文压缩信息行        | first slice visible; lifecycle/recovery pending | ContextCompactionItem   |
+|   # | 上游 type           | 目标主投影              | 当前裁决               | v2 renderer             |
+| --: | ------------------- | ----------------------- | ---------------------- | ----------------------- |
+|   1 | userMessage         | 用户消息与附件          | current / gate-pending | UserMessageItem         |
+|   2 | hookPrompt          | Hook 注入上下文         | current / gate-pending | HookPromptItem          |
+|   3 | agentMessage        | Assistant Markdown 正文 | current / gate-pending | AgentMessageItem        |
+|   4 | plan                | 建议方案                | current / gate-pending | ProposedPlanItem        |
+|   5 | reasoning           | 推理摘要与受控原始内容  | current / gate-pending | ReasoningItem           |
+|   6 | commandExecution    | Shell / 文件探索活动    | current / gate-pending | CommandExecutionItem    |
+|   7 | fileChange          | 文件变更与 Diff         | current / gate-pending | FileChangeItem          |
+|   8 | mcpToolCall         | MCP 调用                | current / gate-pending | McpToolCallItem         |
+|   9 | dynamicToolCall     | 业务工具调用            | current / gate-pending | DynamicToolCallItem     |
+|  10 | collabAgentToolCall | 多 Agent 调度           | current / gate-pending | CollabAgentToolCallItem |
+|  11 | subAgentActivity    | 子 Agent 生命周期       | current / gate-pending | SubAgentActivityItem    |
+|  12 | webSearch           | 搜索活动与结果          | current / gate-pending | WebSearchItem           |
+|  13 | imageView           | 图片查看                | current / gate-pending | ImageViewItem           |
+|  14 | sleep               | 等待                    | current / gate-pending | SleepItem               |
+|  15 | imageGeneration     | 图片生成                | current / gate-pending | ImageGenerationItem     |
+|  16 | enteredReviewMode   | Review 进入边界         | current / gate-pending | ReviewBoundaryItem      |
+|  17 | exitedReviewMode    | Review 退出边界         | current / gate-pending | ReviewBoundaryItem      |
+|  18 | contextCompaction   | 上下文压缩信息行        | current / gate-pending | ContextCompactionItem   |
 
-partial 代表已有字段或旧 Message 内容部件可显示，不代表 lifecycle、恢复、结构化字段和 Gate B 已对齐。gap 代表禁止在 Renderer 从文本猜测，必须先补 current protocol/read-model/host capability。
+所有类型都通过 typed canonical reader 进入 direct timeline；专项 Gate B 未覆盖的类型仍不得扩大为产品完整性结论。未知或畸形 shape 禁止降级到 extension/raw JSON，必须 fail visible 或 fail closed。
 
 ## 3. UserMessage
 
@@ -59,8 +61,8 @@ partial 代表已有字段或旧 Message 内容部件可显示，不代表 lifec
 | text           | 文本与 text elements | 当前 parser 对非法 UTF-8 byte range fail closed；v2 改为跳过该 range 并保留文本 |
 | image          | 远端图片缩略图       | 需要受控 URL、lazy load、失败态和 lightbox                                      |
 | localImage     | host 介导本地图片    | 当前会携带 source path；v2 改为受控 media handle                                |
-| audio          | 远端音频播放器       | 当前缺失                                                                        |
-| localAudio     | host 介导音频播放器  | 当前缺失                                                                        |
+| audio          | 不在当前产品协议范围 | Lime Rust UserInput/AgentInput 无此 variant；reader fail closed                 |
+| localAudio     | 不在当前产品协议范围 | Lime Rust UserInput/AgentInput 无此 variant；reader fail closed                 |
 | skill          | 只读 Skill token     | 当前有基础字段，需 semantic open action                                         |
 | mention        | 文件/资源 mention    | 当前有基础字段，需 host allowlist action                                        |
 
@@ -103,12 +105,12 @@ changes[] 以完整快照显示新增、修改、删除和重命名摘要，文�
 
 标题是 server / tool；可读 appContext 名称优先，技术 identity 为次级详情。arguments 使用 JSON tree 并遮蔽 token、password、authorization 等敏感键。progress 是有界列表，主行只显示最新一条。
 
-结果必须区分 content、structuredContent、error 和 \_meta：
+结果已使用 typed shape 区分 content、structuredContent、error 和 \_meta：
 
 - content 按 text、image、audio、embedded resource、resource link、unknown JSON 顺序渲染；
 - structuredContent 进入 schema-aware viewer，不与正文重复；
 - \_meta 默认不显示，只读取 allowlisted UI metadata；
-- result/error 目前是 opaque Value，必须在 current protocol owner 形成 typed、脱敏 display shape 后进入 renderer；
+- result/error 只按 typed、脱敏 display shape 进入 renderer；畸形 required field fail closed；
 - 媒体和资源只能经 host capability 读取。
 
 MCP elicitation 不是 MCP result。它是独立 pending interaction；若有 thread/turn/item 关联，只在 Item 旁提供 anchor，表单仍在 Composer 上方完成。
@@ -117,7 +119,7 @@ MCP elicitation 不是 MCP result。它是独立 pending interaction；若有 th
 
 标题显示业务可读名称和 namespace/tool，详情可查看 stable technical identity。arguments 按工具 schema 显示，禁止任意 HTML。Item 本身仅观察状态；实际 item/tool/call 由 Electron main 校验 binding 后路由 current ToolHost。
 
-contentItems 必须按原序渲染 text、image、audio。Lime 当前只定义 InputText 和 InputImage；InputAudio 是协议与多模态 gap，必须在 model-provider canonical content、app-server-protocol、typed client、host media resolver 和 renderer 同批补齐。completed 加 success=false 表示业务失败，不能因为 Item lifecycle completed 而显示成功。
+contentItems 必须按原序渲染 text、image、audio。DynamicTool 的真实协议、schema、generated client 与 reader 已保留 `inputAudio`；这与不支持 UserMessage audio/localAudio 是两个不同边界。completed 加 success=false 表示业务失败，不能因为 Item lifecycle completed 而显示成功。
 
 ## 7. Multi-Agent、搜索与媒体
 
@@ -139,13 +141,13 @@ action 可能为 search、openPage、findInPage 或 other。显示 query、URL h
 
 ## 8. Hook、Sleep、Review 与 Compaction
 
-HookPrompt 是持久化上下文事实，不是用户消息。它默认归入相邻 Hook 活动的注入上下文，展开显示 fragment 与 hookRunId；replay 不触发 Hook。
+HookPrompt 是持久化上下文事实，不是用户消息。它以 typed fragments 显示为低干扰信息行；`hookRunId` 不进入可见 DOM，replay 只显示历史事实而不触发 Hook。
 
 Sleep 显示可访问的等待状态和 reduced-motion 静态进度，但只能由 Item/Turn lifecycle 结束；用户只能 interrupt Turn。replay 只显示历史记录。
 
 enteredReviewMode 和 exitedReviewMode 是顺序边界，不是 Assistant final answer。它们更新 Composer mode UI；缺少对应进入/退出事件时仍 fail visible。
 
-ContextCompaction 必须显示低干扰信息行。`threadTimelineView.ts` 的静默过滤分支已删除，并复用现有 `ContextCompactionCard`。历史所有权仍归 Codex/App Server，Renderer 不保存或重建压缩前完整 history；live/cold/replay 的统一 reducer 与恢复证据仍待补齐。
+ContextCompaction 显示低干扰信息行。`threadTimelineView.ts` 的静默过滤分支已删除，并复用现有 `ContextCompactionCard`。历史所有权仍归 Codex/App Server，Renderer 不保存或重建压缩前完整 history；live、cold read 与 production resume replay 已复用同一 reducer。
 
 ## 9. Unknown Item
 

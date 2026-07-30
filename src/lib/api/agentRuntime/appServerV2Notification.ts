@@ -3,6 +3,7 @@ import type {
   AppServerJsonRpcNotification,
 } from "@/lib/api/appServer";
 import { readCanonicalThreadItem } from "./appServerCanonicalItemReader";
+import { RENDER_PROJECTION_REFERENCE_REVISION } from "./conversationProjection";
 
 const DIRECT_V2_NOTIFICATION_METHODS = new Set([
   "thread/started",
@@ -20,6 +21,22 @@ const DIRECT_V2_NOTIFICATION_METHODS = new Set([
   "item/reasoning/textDelta",
   "thread/tokenUsage/updated",
 ]);
+const MAX_DIRECT_ITEM_SEQUENCE_TURNS = 512;
+
+type DirectItemSequenceState = {
+  itemSequences: Map<string, number>;
+  nextSequence: number;
+};
+
+const directItemSequenceByTurn = new Map<string, DirectItemSequenceState>();
+
+export function isAppServerV2NotificationMethod(method: string): boolean {
+  return DIRECT_V2_NOTIFICATION_METHODS.has(method);
+}
+
+export function resetAppServerV2NotificationProjectionState(): void {
+  directItemSequenceByTurn.clear();
+}
 
 export type AppServerV2NotificationRoute = {
   itemId?: string;
@@ -157,6 +174,8 @@ export function projectAppServerV2NotificationPayload(
   const emittedAtMs = notificationTimestampMs(notification.method, params);
   const timestamp = timestampFromMs(emittedAtMs ?? receivedAtMs);
   const basePayload = {
+    protocol_method: notification.method,
+    protocol_revision: RENDER_PROJECTION_REFERENCE_REVISION,
     renderer_event_received_at: receivedAtMs,
     server_event_emitted_at: emittedAtMs ?? null,
     session_id: route.threadId,
@@ -182,12 +201,18 @@ export function projectAppServerV2NotificationPayload(
         notification.method === "turn/completed"
           ? completedTurnFinalAnswerText(sourceTurn)
           : undefined;
-      return {
+      const payload = {
         ...basePayload,
         type: turnEventType(turn.status),
         turn,
         ...(text ? { text } : {}),
       };
+      if (notification.method === "turn/completed" && route.turnId) {
+        directItemSequenceByTurn.delete(
+          directItemSequenceTurnKey(route.threadId, route.turnId),
+        );
+      }
+      return payload;
     }
     case "item/started":
     case "item/completed": {
@@ -195,7 +220,7 @@ export function projectAppServerV2NotificationPayload(
       if (!itemRecord || !route.turnId) {
         return null;
       }
-      const sequence = Math.max(0, Math.trunc(emittedAtMs ?? receivedAtMs));
+      const sequence = directItemSequence(route, route.itemId);
       const event: AppServerAgentEvent = {
         eventId: "direct-v2",
         payload: params,
@@ -216,6 +241,7 @@ export function projectAppServerV2NotificationPayload(
       return {
         ...basePayload,
         sequence,
+        sequence_provenance: "notification_order",
         type:
           notification.method === "item/started"
             ? "item_started"
@@ -251,7 +277,7 @@ export function projectAppServerV2NotificationPayload(
       if (!changes || !route.itemId || !route.turnId) {
         return null;
       }
-      const sequence = Math.max(0, Math.trunc(receivedAtMs));
+      const sequence = directItemSequence(route, route.itemId);
       const event: AppServerAgentEvent = {
         eventId: "direct-v2",
         payload: params,
@@ -275,6 +301,7 @@ export function projectAppServerV2NotificationPayload(
         ? {
             ...basePayload,
             sequence,
+            sequence_provenance: "notification_order",
             type: "item_updated",
             item,
           }
@@ -382,6 +409,39 @@ export function projectAppServerV2NotificationPayload(
     default:
       return null;
   }
+}
+
+function directItemSequence(
+  route: AppServerV2NotificationRoute,
+  itemId: string | undefined,
+): number {
+  if (!route.turnId || !itemId) {
+    return 0;
+  }
+  const turnKey = directItemSequenceTurnKey(route.threadId, route.turnId);
+  let state = directItemSequenceByTurn.get(turnKey);
+  if (!state) {
+    if (directItemSequenceByTurn.size >= MAX_DIRECT_ITEM_SEQUENCE_TURNS) {
+      const oldestTurnKey = directItemSequenceByTurn.keys().next().value;
+      if (oldestTurnKey !== undefined) {
+        directItemSequenceByTurn.delete(oldestTurnKey);
+      }
+    }
+    state = { itemSequences: new Map(), nextSequence: 0 };
+    directItemSequenceByTurn.set(turnKey, state);
+  }
+  const existing = state.itemSequences.get(itemId);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const sequence = state.nextSequence;
+  state.nextSequence += 1;
+  state.itemSequences.set(itemId, sequence);
+  return sequence;
+}
+
+function directItemSequenceTurnKey(threadId: string, turnId: string): string {
+  return `${threadId}\u001f${turnId}`;
 }
 
 function readReasoningNotificationRoute(
@@ -520,7 +580,7 @@ function turnStatus(status: string): string | undefined {
     case "failed":
       return "failed";
     case "interrupted":
-      return "canceled";
+      return "interrupted";
     default:
       return undefined;
   }
@@ -533,6 +593,7 @@ function turnEventType(status: unknown): string {
     case "failed":
       return "turn_failed";
     case "canceled":
+    case "interrupted":
       return "turn_canceled";
     default:
       return "turn_started";

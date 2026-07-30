@@ -4,13 +4,7 @@ import {
   type AppServerThreadListResponse,
   type AppServerThreadReadParams,
 } from "@/lib/api/appServer";
-import {
-  METHOD_THREAD_LIST,
-  METHOD_THREAD_ITEMS_LIST,
-  METHOD_THREAD_TURNS_LIST,
-  type ThreadItemsListResponse,
-  type ThreadTurnsListResponse,
-} from "../../../../packages/app-server-client/src/protocol";
+import { METHOD_THREAD_LIST } from "../../../../packages/app-server-client/src/protocol";
 import type {
   AgentExecutionStrategy,
   AgentSessionExecutionRuntimePreferences,
@@ -19,6 +13,7 @@ import {
   readCanonicalThreadDetail,
   readCanonicalThreadListResponse,
 } from "./appServerCanonicalThreadProjection";
+import { readCanonicalThreadHistoryWindow } from "./canonicalThreadHistoryWindow";
 import type {
   AgentRuntimeCreateSessionOptions,
   AgentRuntimeGetSessionOptions,
@@ -70,6 +65,19 @@ export interface AppServerSessionClientDeps {
 export function createAppServerSessionClient({
   appServerClient = new AppServerClient(),
 }: AppServerSessionClientDeps = {}) {
+  const sessionThreadIds = new Map<string, string>();
+
+  function rememberSessionThreadId(
+    sessionId: string,
+    threadId: string | undefined,
+  ): void {
+    const normalizedSessionId = sessionId.trim();
+    const normalizedThreadId = threadId?.trim();
+    if (normalizedSessionId && normalizedThreadId) {
+      sessionThreadIds.set(normalizedSessionId, normalizedThreadId);
+    }
+  }
+
   async function createAgentRuntimeSession(
     workspaceId?: string,
     name?: string,
@@ -113,19 +121,23 @@ export function createAppServerSessionClient({
     if (!sessions) {
       throw new Error("thread/list did not return session list");
     }
+    for (const session of sessions) {
+      rememberSessionThreadId(session.sessionId, session.threadId);
+    }
     return sessions.map(appServerSessionOverviewToRuntimeInfo);
   }
 
   async function getAgentRuntimeSession(
     sessionId: string,
-    _options?: AgentRuntimeGetSessionOptions,
+    options?: AgentRuntimeGetSessionOptions,
   ): Promise<AgentSessionDetail> {
     const normalizedSessionId = sessionId.trim();
     if (!normalizedSessionId) {
       throw new Error("sessionId is required to read App Server session");
     }
 
-    let threadId = normalizedSessionId;
+    let threadId =
+      sessionThreadIds.get(normalizedSessionId) ?? normalizedSessionId;
     let readResult: unknown;
     try {
       readResult = (
@@ -151,28 +163,37 @@ export function createAppServerSessionClient({
 
     const canonicalThread = readCanonicalThreadFromResult(readResult);
     if (canonicalThread) {
-      if (readStringField(canonicalThread, "historyMode") === "paginated") {
-        readResult = await readPaginatedCanonicalThread(
+      assertCanonicalThreadIdentity(normalizedSessionId, canonicalThread);
+      rememberSessionThreadId(
+        readStringField(canonicalThread, "sessionId") || normalizedSessionId,
+        readStringField(canonicalThread, "id") || threadId,
+      );
+    }
+    const historyWindow = canonicalThread
+      ? await readCanonicalThreadHistoryWindow(
           appServerClient,
           canonicalThread,
-        );
-      } else if (
-        !Array.isArray(canonicalThread.turns) ||
-        canonicalThread.turns.length === 0
-      ) {
-        readResult = (
-          await appServerClient.readThread(
-            appServerThreadReadParams(threadId, true),
-          )
-        ).result;
-      }
+          options,
+        )
+      : null;
+    if (historyWindow) {
+      readResult = { thread: historyWindow.thread };
     }
 
     const canonicalDetail = readCanonicalThreadDetail(readResult);
     if (!canonicalDetail) {
       throw new Error("thread/read did not return canonical session detail");
     }
-    return canonicalDetail;
+    if (!historyWindow) {
+      return canonicalDetail;
+    }
+    const detailWithHistory: AgentSessionDetail = {
+      ...canonicalDetail,
+      history_limit: historyWindow.historyLimit,
+      history_cursor: historyWindow.historyCursor,
+      history_truncated: historyWindow.historyTruncated,
+    };
+    return detailWithHistory;
   }
 
   async function updateAgentRuntimeThreadToolPreferences(
@@ -259,6 +280,17 @@ function readStringField(
 ): string {
   const value = readField(record, camelKey, snakeKey);
   return typeof value === "string" ? value : "";
+}
+
+function assertCanonicalThreadIdentity(
+  requestedId: string,
+  thread: Record<string, unknown>,
+): void {
+  const threadId = readStringField(thread, "id").trim();
+  const sessionId = readStringField(thread, "sessionId").trim();
+  if (requestedId !== threadId && requestedId !== sessionId) {
+    throw new Error("thread/read canonical identity mismatch");
+  }
 }
 
 function readOptionalStringField(
@@ -551,105 +583,6 @@ function readCanonicalThreadFromResult(
   value: unknown,
 ): Record<string, unknown> | null {
   return isRecord(value) && isRecord(value.thread) ? value.thread : null;
-}
-
-async function readPaginatedCanonicalThread(
-  client: AppServerSessionRpcClient,
-  thread: Record<string, unknown>,
-): Promise<{ thread: Record<string, unknown> }> {
-  const threadId =
-    readStringField(thread, "threadId") || readStringField(thread, "id");
-  if (!threadId) {
-    throw new Error("thread/read returned an empty canonical thread id");
-  }
-
-  const turns: Record<string, unknown>[] = [];
-  const turnCursors = new Set<string>();
-  let turnCursor: string | undefined;
-  do {
-    const response = await client.request<ThreadTurnsListResponse>(
-      METHOD_THREAD_TURNS_LIST,
-      omitUndefined({
-        threadId,
-        cursor: turnCursor,
-        limit: THREAD_LIST_PAGE_LIMIT,
-        sortDirection: "asc",
-        itemsView: "summary",
-      }),
-    );
-    if (!isRecord(response.result) || !Array.isArray(response.result.data)) {
-      throw new Error("thread/turns/list did not return turn page");
-    }
-    for (const turn of response.result.data) {
-      if (isRecord(turn)) {
-        turns.push(turn);
-      }
-    }
-    const nextCursor = readNextCursor(response.result);
-    if (!nextCursor || turnCursors.has(nextCursor)) {
-      break;
-    }
-    turnCursors.add(nextCursor);
-    turnCursor = nextCursor;
-  } while (turnCursor);
-
-  const itemsByTurnId = new Map<string, unknown[]>();
-  const itemCursors = new Set<string>();
-  let itemCursor: string | undefined;
-  do {
-    const response = await client.request<ThreadItemsListResponse>(
-      METHOD_THREAD_ITEMS_LIST,
-      omitUndefined({
-        threadId,
-        cursor: itemCursor,
-        limit: THREAD_LIST_PAGE_LIMIT,
-        sortDirection: "asc",
-      }),
-    );
-    if (!isRecord(response.result) || !Array.isArray(response.result.data)) {
-      throw new Error("thread/items/list did not return item page");
-    }
-    for (const entry of response.result.data) {
-      if (!isRecord(entry)) {
-        continue;
-      }
-      const turnId = readStringField(entry, "turnId");
-      const item = entry.item;
-      if (!turnId || !isRecord(item)) {
-        continue;
-      }
-      const items = itemsByTurnId.get(turnId) ?? [];
-      items.push(item);
-      itemsByTurnId.set(turnId, items);
-    }
-    const nextCursor = readNextCursor(response.result);
-    if (!nextCursor || itemCursors.has(nextCursor)) {
-      break;
-    }
-    itemCursors.add(nextCursor);
-    itemCursor = nextCursor;
-  } while (itemCursor);
-
-  return {
-    thread: {
-      ...thread,
-      turns: turns.map((turn) => ({
-        ...turn,
-        items: itemsByTurnId.get(canonicalTurnId(turn)) ?? [],
-      })),
-    },
-  };
-}
-
-function readNextCursor(value: Record<string, unknown>): string | undefined {
-  const cursor = value.nextCursor;
-  return typeof cursor === "string" && cursor.trim()
-    ? cursor.trim()
-    : undefined;
-}
-
-function canonicalTurnId(value: Record<string, unknown>): string {
-  return readStringField(value, "turnId") || readStringField(value, "id");
 }
 
 function appServerSessionOverviewToRuntimeInfo(

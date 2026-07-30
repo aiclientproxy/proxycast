@@ -97,6 +97,16 @@ const rendererQueuedTurnWriteSurfaceForbiddenSnippets = [
   "normalizeQueuedTurnSnapshots",
   "queued_turns",
 ];
+const retiredAgentStreamToolMessageSynthesisFiles = [
+  "src/components/agent/chat/hooks/agentStreamToolItemMessageSync.ts",
+  "src/components/agent/chat/hooks/agentStreamToolItemMessageSync.unit.test.ts",
+];
+const retiredAgentStreamToolMessageSynthesisSnippets = [
+  "syncMessageToolCallFromThreadItem",
+  "toolCallStateFromThreadItem",
+  "mergeToolCallStateFromItem",
+  "agentStreamToolItemMessageSync",
+];
 const retiredPublicQueuedTurnSurfaceSpecs = [
   {
     file: "lime-rs/crates/app-server-protocol/src/protocol/v0/agent_session.rs",
@@ -4055,7 +4065,7 @@ const checks = [
       '"turn.failed"',
       "mpsc::unbounded_channel::<StreamedTransportMessage>()",
       "should_stream_transport_request",
-      "METHOD_AGENT_SESSION_MEDIA_READ",
+      "METHOD_MEDIA_READ",
       'params.get("stream")',
       "media_read_streaming_transport_requires_stream_flag",
       "METHOD_EVIDENCE_EXPORT",
@@ -4341,12 +4351,20 @@ const checks = [
       "export interface McpServerElicitationRequestResponse",
       "export interface FileChangeRequestApprovalResponse",
       "export interface ToolRequestUserInputResponse",
+      "export interface McpToolCallResult",
+      "export interface McpToolCallError",
+      'type: "inputAudio";',
+      "error: null | {",
+      "result: null | {",
+      'export type MessagePhase = "commentary" | "final_answer";',
     ],
     absentSnippets: [
       "export interface AppServerClientRequest",
       "method: AppServerRequestMethod;",
       "export type AppServerNotification =",
       "export interface McpServerElicitationResponse",
+      'type: "audio";',
+      'type: "localAudio";',
     ],
   },
   {
@@ -4700,6 +4718,68 @@ const checks = [
       "AgentSessionDeleteParams",
       "AgentSessionDeleteResponse",
       '"agentSession/delete"',
+    ],
+  },
+  {
+    name: "media/read is the only production media sidecar read contract",
+    files: [
+      ...rustProtocolFiles,
+      "lime-rs/crates/app-server/src/lib.rs",
+      "lime-rs/crates/app-server/src/processor/agent_session.rs",
+      "lime-rs/crates/app-server/src/processor/dispatch.rs",
+      "lime-rs/crates/app-server/src/processor/dispatch/v2_ingress.rs",
+      "lime-rs/crates/app-server/src/runtime/session_media_reader.rs",
+      "lime-rs/crates/app-server/src/runtime/session_media_refs.rs",
+      "lime-rs/crates/app-server-protocol/schema/json/v0/AgentSessionMediaReadParams.json",
+      "lime-rs/crates/app-server-protocol/schema/json/v0/AgentSessionMediaReadResponse.json",
+      "packages/app-server-client/src/generated/protocol-types.ts",
+      "packages/app-server-client/src/protocol.ts",
+      "packages/app-server-client/src/request-client.ts",
+      "packages/app-server-client/src/request-client-methods.ts",
+      "packages/app-server-client/src/connection-methods.ts",
+      "src/lib/api/appServerConstants.ts",
+      "src/lib/api/appServerTypes.ts",
+      "src/lib/api/appServerClientMethods.ts",
+      "src/lib/api/appServerClientMethodSpecs.ts",
+      "src/components/agent/chat/components/MessageImageAttachments.tsx",
+      "src/components/agent/chat/workspace/mediaReferencePreviewArtifacts.ts",
+      "src/components/agent/chat/workspace/mediaReferencePreviewPagination.ts",
+      "src/components/agent/chat/workspace/useWorkspaceMediaReferencePreviewRuntime.ts",
+    ],
+    allowMissingFiles: true,
+    snippets: [],
+    absentSnippets: [
+      '"agentSession/media/read"',
+      "METHOD_AGENT_SESSION_MEDIA_READ",
+      "AgentSessionMediaReadParams",
+      "AgentSessionMediaReadResponse",
+      "readAgentSessionMedia",
+      "buildAgentSessionMediaReadParams",
+      "APP_SERVER_METHOD_AGENT_SESSION_MEDIA_READ",
+    ],
+  },
+  {
+    name: "TypeScript protocol and clients expose typed media/read contract",
+    files: [
+      "packages/app-server-client/src/generated/protocol-types.ts",
+      "packages/app-server-client/src/request-client.ts",
+      "packages/app-server-client/src/request-client-methods.ts",
+      "packages/app-server-client/src/connection-methods.ts",
+      "src/lib/api/appServerConstants.ts",
+      "src/lib/api/appServerTypes.ts",
+      "src/lib/api/appServerClientMethods.ts",
+      "src/lib/api/appServerClientMethodSpecs.ts",
+    ],
+    snippets: [
+      'export const METHOD_MEDIA_READ = "media/read"',
+      "export interface MediaReadParams",
+      "threadId: string",
+      "export interface MediaReadResponse",
+      "readMedia(",
+      "METHOD_MEDIA_READ",
+      "APP_SERVER_METHOD_MEDIA_READ",
+      "AppServerMediaReadParams",
+      "AppServerMediaReadResponse",
     ],
   },
   {
@@ -5423,7 +5503,9 @@ const checks = [
       "createAppServerSessionClient",
       "type AppServerSessionClient",
       "type AppServerSessionRpcClient",
-      "appServerSessionClient = createAppServerSessionClient({ appServerClient })",
+      "const defaultAppServerSessionClient = createAppServerSessionClient()",
+      "deps.appServerSessionClient ??",
+      "createAppServerSessionClient({ appServerClient: deps.appServerClient })",
       "appServerSessionClient.createAgentRuntimeSession(",
       "appServerSessionClient.listAgentRuntimeSessions({",
       "appServerSessionClient.getAgentRuntimeSession(",
@@ -5452,10 +5534,14 @@ const checks = [
     ],
   },
   {
-    name: "Renderer App Server session facade uses protocol method constants",
-    file: "src/lib/api/agentRuntime/appServerSessionClient.ts",
+    name: "Renderer App Server session facade and history window use protocol method constants",
+    files: [
+      "src/lib/api/agentRuntime/appServerSessionClient.ts",
+      "src/lib/api/agentRuntime/canonicalThreadHistoryWindow.ts",
+    ],
     snippets: [
       "METHOD_THREAD_LIST,",
+      "METHOD_THREAD_ITEMS_LIST,",
       "METHOD_THREAD_TURNS_LIST,",
       "export type AppServerSessionRpcClient = Pick<",
       '| "startSession"',
@@ -5467,7 +5553,7 @@ const checks = [
       '| "request"',
       "client.request<AppServerThreadListResponse>",
       "METHOD_THREAD_LIST",
-      "listCanonicalSessionOverviews(appServerClient, options)",
+      "listCanonicalSessionOverviews(",
       "appServerThreadReadParams(threadId, false)",
       "appServerClient.readThread(",
       "appServerClient.updateThreadSettings(",
@@ -7697,28 +7783,25 @@ const checks = [
     ],
   },
   {
-    name: "Renderer Agent stream handler treats TurnItem lifecycle as tool card source",
+    name: "Renderer Agent stream handler projects canonical Item lifecycle through ConversationProjection",
     files: [
       "src/components/agent/chat/hooks/agentStreamRuntimeHandler.ts",
-      "src/components/agent/chat/hooks/agentStreamRuntimeHandlerActions.ts",
+      "src/components/agent/chat/hooks/agentStreamRuntimeHandlerTypes.ts",
       "src/components/agent/chat/hooks/agentStreamRuntimeLifecycleEvents.ts",
-      "src/components/agent/chat/hooks/agentStreamLegacyToolEventGate.ts",
-      "src/components/agent/chat/hooks/agentStreamToolItemMessageSync.ts",
+      "src/components/agent/chat/hooks/agentStreamConversationProjection.ts",
     ],
     snippets: [
-      "function shouldLetLegacyToolEventUpdateMessageLayer(",
-      "function syncMessageToolCallFromThreadItem(",
-      "function isItemLifecycleToolItem(",
-      'metadata?.source !== "legacy_tool_event"',
-      "return !isItemLifecycleToolItem(item);",
-      "return false;",
+      "applyAgentStreamConversationProjection",
+      "conversationProjectionOwner",
+      "reconcileAgentStreamProjectionItems",
       "getThreadItems?: () => readonly AgentThreadItem[]",
-      "getThreadItems?.() as",
       'case "item_completed":',
-      "syncMessageToolCallFromThreadItem({",
-      "shouldUpdateLegacyToolMessageLayer(data)",
-      "if (!shouldUpdateMessageLayer) {",
-      "handleToolEndEvent({",
+      "projectedItems:",
+    ],
+    absentSnippets: [
+      "syncMessageToolCallFromThreadItem",
+      "agentStreamToolItemMessageSync",
+      "toolCallStateFromThreadItem",
     ],
   },
   {
@@ -7744,10 +7827,10 @@ const checks = [
     ],
   },
   {
-    name: "Renderer Agent stream handler tests item terminal sync over legacy tool cards",
+    name: "Renderer Agent stream handler tests canonical Item terminal ownership",
     file: "src/components/agent/chat/hooks/agentStreamRuntimeHandler.unit.test.ts",
     snippets: [
-      "item_completed 应把已有 legacy 工具卡同步为完成态",
+      "item_completed 只更新 canonical ThreadItem，不再改写 legacy Message 工具卡",
       'type: "item_completed"',
       'type: "tool_call"',
       'source: "item_lifecycle"',
@@ -8676,6 +8759,7 @@ checkRetiredAgentRuntimeCommandManifestFiles();
 checkRetiredAgentRuntimeAdapterFiles();
 checkRetiredAgentSessionUpdateSurface();
 checkRetiredRendererProjectionFiles();
+checkRetiredAgentStreamToolMessageSynthesisSurface();
 checkRetiredRendererQueuedTurnProjectionSurface();
 checkRetiredRendererQueuedTurnSecondaryProjectionSurface();
 checkRetiredAgentUiResumeContractFiles();
@@ -9560,6 +9644,36 @@ function checkRetiredRendererProjectionFiles() {
   for (const file of retiredRendererProjectionFiles) {
     if (fs.existsSync(path.join(repoRoot, file))) {
       failures.push(`retired Renderer projection must stay deleted: ${file}`);
+    }
+  }
+}
+
+function checkRetiredAgentStreamToolMessageSynthesisSurface() {
+  for (const file of retiredAgentStreamToolMessageSynthesisFiles) {
+    if (fs.existsSync(path.join(repoRoot, file))) {
+      failures.push(
+        `retired Item-to-Message tool synthesis must stay deleted: ${file}`,
+      );
+    }
+  }
+
+  const agentChatRoot = path.join(repoRoot, "src/components/agent/chat");
+  for (const relativePath of walkSourceFiles(agentChatRoot)) {
+    if (
+      !/\.[cm]?[jt]sx?$/u.test(relativePath) ||
+      /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(relativePath)
+    ) {
+      continue;
+    }
+    const content = fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+    for (const snippet of retiredAgentStreamToolMessageSynthesisSnippets) {
+      if (content.includes(snippet)) {
+        failures.push(
+          `retired Item-to-Message tool synthesis: ${relativePath} must not contain ${JSON.stringify(
+            snippet,
+          )}`,
+        );
+      }
     }
   }
 }

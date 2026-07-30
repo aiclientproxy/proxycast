@@ -1,6 +1,6 @@
 import {
   subscribeAppServerNotifications,
-  type AppServerAgentSessionMediaReadParams,
+  type AppServerMediaReadParams,
   type AppServerEventBusSubscription,
 } from "@/lib/api/appServer";
 import {
@@ -18,12 +18,12 @@ type SubscribeNotifications = (
 
 export function subscribeMediaReferencePreviewReadProgress(params: {
   onProgress?: (progress: MediaReferencePreviewProgress) => void;
-  readRequest: AppServerAgentSessionMediaReadParams;
+  readRequest: AppServerMediaReadParams;
   shouldContinue?: () => boolean;
   subscribeNotifications?: SubscribeNotifications;
 }): () => void {
-  const sessionId = params.readRequest.sessionId.trim();
-  if (!sessionId || !params.onProgress) {
+  const threadId = params.readRequest.threadId.trim();
+  if (!threadId || !params.onProgress) {
     return () => undefined;
   }
 
@@ -53,7 +53,7 @@ export function subscribeMediaReferencePreviewReadProgress(params: {
           streamId = nextStreamId;
         },
         seenEventIds,
-        sessionId,
+        threadId,
       });
       streamId = result.streamId ?? streamId;
     },

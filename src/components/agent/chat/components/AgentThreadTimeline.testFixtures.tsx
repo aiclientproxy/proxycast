@@ -265,6 +265,7 @@ export function renderTimeline(
     deferCompletedSingleDetails?: boolean;
     collapseInactiveDetails?: boolean;
     showOperationalDetails?: boolean;
+    showInlineStatusHint?: boolean;
   },
 ): HTMLDivElement {
   const container = document.createElement("div");
@@ -289,6 +290,7 @@ export function renderTimeline(
         deferCompletedSingleDetails={props?.deferCompletedSingleDetails}
         collapseInactiveDetails={props?.collapseInactiveDetails}
         showOperationalDetails={props?.showOperationalDetails}
+        showInlineStatusHint={props?.showInlineStatusHint}
       />,
     );
   });

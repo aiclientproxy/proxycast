@@ -1592,8 +1592,8 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "optional-empty",
     },
     {
-      name: "readAgentSessionMedia",
-      method: protocol.METHOD_AGENT_SESSION_MEDIA_READ,
+      name: "readMedia",
+      method: protocol.METHOD_MEDIA_READ,
       kind: "request",
       params: "required",
     },

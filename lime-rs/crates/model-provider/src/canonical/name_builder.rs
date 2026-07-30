@@ -312,6 +312,10 @@ mod tests {
             map_to_canonical_model("openai", "gpt-4-turbo-2024-04-09", r),
             Some("openai/gpt-4-turbo".to_string())
         );
+        assert_eq!(
+            map_to_canonical_model("agnes", "agnes-2.0-flash", r),
+            Some("agnes/agnes-2.0-flash".to_string())
+        );
 
         // === OpenRouter (already canonical format) ===
         assert_eq!(

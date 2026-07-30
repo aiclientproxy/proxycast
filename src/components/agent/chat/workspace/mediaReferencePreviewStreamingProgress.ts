@@ -18,7 +18,7 @@ export function emitStreamingMediaReadProgress(params: {
   onProgress?: (progress: MediaReferencePreviewProgress) => void;
   onStreamId?: (streamId: string) => void;
   seenEventIds?: Set<string>;
-  sessionId: string;
+  threadId: string;
 }): { emitted: boolean; streamId?: string } {
   if (!params.onProgress || params.notifications.length === 0) {
     return { emitted: false };
@@ -39,7 +39,7 @@ export function emitStreamingMediaReadProgress(params: {
     const event = normalizeRecord(normalizeRecord(notification.params)?.event);
     if (
       readString(event, "type") !== "media.read.chunk" ||
-      readString(event, "sessionId") !== params.sessionId
+      readString(event, "threadId") !== params.threadId
     ) {
       continue;
     }
@@ -52,8 +52,8 @@ export function emitStreamingMediaReadProgress(params: {
       continue;
     }
     const chunk = normalizeRecord(payload?.chunk);
-    const chunkSessionId = readString(chunk, "sessionId");
-    if (chunkSessionId && chunkSessionId !== params.sessionId) {
+    const chunkThreadId = readString(chunk, "threadId");
+    if (chunkThreadId && chunkThreadId !== params.threadId) {
       continue;
     }
     if (expectedUri && readString(chunk, "uri") !== expectedUri) {

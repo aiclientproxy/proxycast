@@ -22,6 +22,8 @@ pub struct NormalizedToolOutput {
     pub metadata: HashMap<String, Value>,
     #[serde(skip, default)]
     pub agent_control_projection_facts: Vec<crate::agent_control::SubAgentProjectionFact>,
+    #[serde(skip, default)]
+    pub agent_control_state_facts: Vec<crate::agent_control::AgentStateProjectionFact>,
 }
 
 impl NormalizedToolOutput {
@@ -52,6 +54,7 @@ impl NormalizedToolOutput {
                     sidecar_reference: result.sidecar_reference,
                     metadata,
                     agent_control_projection_facts: result.agent_control_projection_facts,
+                    agent_control_state_facts: result.agent_control_state_facts,
                 }
             }
             RuntimeToolExecutionOutcome::Error(error) => {
@@ -76,6 +79,7 @@ impl NormalizedToolOutput {
                     sidecar_reference: None,
                     metadata,
                     agent_control_projection_facts: Vec::new(),
+                    agent_control_state_facts: Vec::new(),
                 }
             }
             RuntimeToolExecutionOutcome::Aborted => Self {
@@ -91,6 +95,7 @@ impl NormalizedToolOutput {
                     Value::String(TOOL_OUTCOME_ABORTED.to_string()),
                 )]),
                 agent_control_projection_facts: Vec::new(),
+                agent_control_state_facts: Vec::new(),
             },
         }
     }

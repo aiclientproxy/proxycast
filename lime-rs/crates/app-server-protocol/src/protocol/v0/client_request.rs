@@ -339,7 +339,6 @@ app_server_client_request_definitions! {
     ConversationImportThreadPreview => "conversationImport/thread/preview",
     ConversationImportThreadCommit => "conversationImport/thread/commit",
     ConversationImportJobRead => "conversationImport/job/read",
-    AgentSessionMediaRead => "agentSession/media/read",
     AgentSessionActionRespond => "agentSession/action/respond",
     WorkflowRead => "workflow/read",
     WorkflowCancel => "workflow/cancel",

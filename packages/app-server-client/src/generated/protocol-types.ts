@@ -17,7 +17,6 @@ export const METHOD_AGENT_SESSION_FILE_CHECKPOINT_RESTORE =
   "agentSession/fileCheckpoint/restore";
 export const METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT =
   "agentSession/handoffBundle/export";
-export const METHOD_AGENT_SESSION_MEDIA_READ = "agentSession/media/read";
 export const METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT =
   "agentSession/replayCase/export";
 export const METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE =
@@ -183,6 +182,7 @@ export const METHOD_MCP_TOOL_CALL_WITH_CALLER = "mcpTool/callWithCaller";
 export const METHOD_MCP_TOOL_LIST = "mcpTool/list";
 export const METHOD_MCP_TOOL_LIST_FOR_CONTEXT = "mcpTool/listForContext";
 export const METHOD_MCP_TOOL_SEARCH = "mcpTool/search";
+export const METHOD_MEDIA_READ = "media/read";
 export const METHOD_MEDIA_TASK_ARTIFACT_AUDIO_COMPLETE =
   "mediaTaskArtifact/audio/complete";
 export const METHOD_MEDIA_TASK_ARTIFACT_AUDIO_CREATE =
@@ -457,10 +457,6 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "agentSession/handoffBundle/export",
-  },
-  {
-    kind: "request",
-    method: "agentSession/media/read",
   },
   {
     kind: "request",
@@ -969,6 +965,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "mcpTool/search",
+  },
+  {
+    kind: "request",
+    method: "media/read",
   },
   {
     kind: "request",
@@ -2203,32 +2203,6 @@ export interface AgentSessionListParams {
 
 export interface AgentSessionListResponse {
   sessions?: AgentSessionOverview[];
-}
-
-export interface AgentSessionMediaReadParams {
-  length?: number | null;
-  maxBytes?: number | null;
-  offset?: number | null;
-  refId?: null | string;
-  sessionId: string;
-  sidecarRef?: unknown;
-  stream?: boolean;
-  uri?: null | string;
-}
-
-export interface AgentSessionMediaReadResponse {
-  bytes: number;
-  contentBase64: string;
-  contentRange: string;
-  hasMore: boolean;
-  length: number;
-  mimeType?: null | string;
-  offset: number;
-  sessionId: string;
-  sha256: string;
-  sidecarRef?: unknown;
-  totalBytes: number;
-  uri: string;
 }
 
 export interface AgentSessionOverview {
@@ -3748,11 +3722,6 @@ export type AppServerClientRequest =
     }
   | {
       id: number | string;
-      method: "agentSession/media/read";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
       method: "agentSession/action/respond";
       params?: unknown;
     }
@@ -3805,7 +3774,6 @@ export type AppServerRequestMethod =
   | "agentSession/fileCheckpoint/list"
   | "agentSession/fileCheckpoint/restore"
   | "agentSession/handoffBundle/export"
-  | "agentSession/media/read"
   | "agentSession/replayCase/export"
   | "agentSession/reviewDecision/save"
   | "agentSession/reviewDecisionTemplate/export"
@@ -4576,6 +4544,11 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "media/read";
+      params: MediaReadParams;
+    }
+  | {
+      id: number | string;
       method: "model/list";
       params: ModelListParams;
     }
@@ -5070,14 +5043,16 @@ export interface DiagnosticsTraceSummary {
 
 export type DynamicToolCallOutputContentItem =
   | {
-      inputText: {
-        text: string;
-      };
+      text: string;
+      type: "inputText";
     }
   | {
-      inputImage: {
-        image_url: string;
-      };
+      imageUrl: string;
+      type: "inputImage";
+    }
+  | {
+      audioUrl: string;
+      type: "inputAudio";
     };
 
 export type DynamicToolCallStatus = "completed" | "failed" | "inProgress";
@@ -5888,6 +5863,10 @@ export interface McpToolCallAppContext {
   templateId?: null | string;
 }
 
+export interface McpToolCallError {
+  message: string;
+}
+
 export interface McpToolCallParams {
   arguments: unknown;
   toolName: string;
@@ -5904,6 +5883,12 @@ export interface McpToolCallResponse {
   content?: McpContent[];
   is_error: boolean;
   structuredContent?: unknown;
+}
+
+export interface McpToolCallResult {
+  _meta: unknown;
+  content: unknown[];
+  structuredContent: unknown;
 }
 
 export type McpToolCallStatus = "completed" | "failed" | "inProgress";
@@ -5927,6 +5912,32 @@ export interface McpToolSearchParams {
   caller?: null | string;
   limit?: number;
   query: string;
+}
+
+export interface MediaReadParams {
+  length?: number | null;
+  maxBytes?: number | null;
+  offset?: number | null;
+  refId?: null | string;
+  sidecarRef?: unknown;
+  stream?: boolean;
+  threadId: string;
+  uri?: null | string;
+}
+
+export interface MediaReadResponse {
+  bytes: number;
+  contentBase64: string;
+  contentRange: string;
+  hasMore: boolean;
+  length: number;
+  mimeType?: null | string;
+  offset: number;
+  sha256: string;
+  sidecarRef?: unknown;
+  threadId: string;
+  totalBytes: number;
+  uri: string;
 }
 
 export interface MediaTaskArtifactAudioCompleteParams {
@@ -6327,6 +6338,7 @@ export interface MemoryStoreSearchResponse {
 
 export type Method =
   | "artifact/write"
+  | "media/read"
   | "model/list"
   | "thread/approveGuardianDeniedAction"
   | "thread/archive"
@@ -8372,7 +8384,7 @@ export type ThreadItem =
   | {
       id: string;
       memoryCitation?: MemoryCitation | null;
-      phase?: null | string;
+      phase?: MessagePhase | null;
       text: string;
       type: "agentMessage";
     }
@@ -8410,11 +8422,17 @@ export type ThreadItem =
       appContext?: McpToolCallAppContext | null;
       arguments: unknown;
       durationMs?: number | null;
-      error?: unknown;
+      error: null | {
+        message: string;
+      };
       id: string;
       mcpAppResourceUri?: null | string;
       pluginId?: null | string;
-      result?: unknown;
+      result: null | {
+        _meta: unknown;
+        content: unknown[];
+        structuredContent: unknown;
+      };
       server: string;
       status: McpToolCallStatus;
       tool: string;
@@ -9600,6 +9618,8 @@ export interface TextElement {
   byteRange: ByteRange;
   placeholder?: null | string;
 }
+
+export type MessagePhase = "commentary" | "final_answer";
 
 export interface ProviderModelCapability {
   capabilities?: ModelCapabilitiesInfo;

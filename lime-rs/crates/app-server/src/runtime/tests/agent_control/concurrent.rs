@@ -318,6 +318,14 @@ async fn concurrent_children_keep_mailbox_routes_and_terminal_state_isolated() {
                 && entry["result_status"] == "completed"
         }));
     }
+    assert!(wait.projection_facts.is_empty());
+    assert_eq!(wait.state_facts.len(), 2);
+    for thread_id in [&alpha_identity.thread_id, &beta_identity.thread_id] {
+        assert!(wait.state_facts.iter().any(|fact| {
+            &fact.target_thread_id == thread_id
+                && fact.state.status == agent_protocol::CollabAgentStatus::Completed
+        }));
+    }
     let second_wait = gateway
         .gateway()
         .execute(AgentControlGatewayRequest {
@@ -333,6 +341,7 @@ async fn concurrent_children_keep_mailbox_routes_and_terminal_state_isolated() {
         .await
         .expect("second wait");
     assert_eq!(second_wait.output["timed_out"], true);
+    assert!(second_wait.state_facts.is_empty());
 
     let listed = gateway
         .gateway()
@@ -571,6 +580,16 @@ async fn one_failed_child_does_not_pollute_a_completed_sibling() {
     }));
     assert!(activity.iter().any(|entry| {
         entry["sender"] == "/root/will_complete" && entry["result_status"] == "completed"
+    }));
+    assert!(wait.projection_facts.is_empty());
+    assert_eq!(wait.state_facts.len(), 2);
+    assert!(wait.state_facts.iter().any(|fact| {
+        fact.target_thread_id == failed_identity.thread_id
+            && fact.state.status == agent_protocol::CollabAgentStatus::Errored
+    }));
+    assert!(wait.state_facts.iter().any(|fact| {
+        fact.target_thread_id == completed_identity.thread_id
+            && fact.state.status == agent_protocol::CollabAgentStatus::Completed
     }));
 
     let listed = gateway

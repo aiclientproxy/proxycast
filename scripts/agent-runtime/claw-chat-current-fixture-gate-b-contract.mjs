@@ -48,6 +48,7 @@ export function buildGateBContractEvidence({
   const artifactEntries = Object.entries(artifacts ?? {}).filter(
     ([, value]) => typeof value === "string" && value.trim().length > 0,
   );
+  const artifactNames = new Set(artifactEntries.map(([name]) => name));
   const artifactDirectories = new Set(
     artifactEntries.map(([, value]) => path.dirname(path.resolve(value))),
   );
@@ -66,8 +67,13 @@ export function buildGateBContractEvidence({
         name,
         file: path.basename(value),
       })),
+      requiredArtifactsPresent: [
+        "summary",
+        "backendLedger",
+        "screenshot",
+      ].every((name) => artifactNames.has(name)),
       artifactsShareDirectory:
-        artifactEntries.length >= 3 && artifactDirectories.size === 1,
+        artifactEntries.length > 0 && artifactDirectories.size === 1,
       screenshotCaptured: artifactEntries.some(
         ([name, value]) => name === "screenshot" && fs.existsSync(value),
       ),
@@ -99,9 +105,10 @@ export function buildGateBContractAssertions(evidence) {
   return {
     runIdPresent:
       typeof evidence.run.id === "string" && evidence.run.id.trim().length > 0,
+    screenshotCaptured: evidence.run.screenshotCaptured === true,
+    evidenceArtifactsComplete: evidence.run.requiredArtifactsPresent === true,
     evidenceArtifactsShareRunDirectory:
       evidence.run.artifactsShareDirectory === true,
-    screenshotCaptured: evidence.run.screenshotCaptured === true,
     electronRenderer: evidence.renderer.electron === true,
     electronPreloadInvokeAvailable: evidence.renderer.preloadInvoke === true,
     appServerCommandSupported:

@@ -51,6 +51,7 @@ fn canonical_tool_payload(
                 target_thread_id: Some(ThreadId::new("thread-child")),
                 message: Some("continue".to_string()),
                 output,
+                agent_states: Default::default(),
             },
             "call-collab-large",
         ),

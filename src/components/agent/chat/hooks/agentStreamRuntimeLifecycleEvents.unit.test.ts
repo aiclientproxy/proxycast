@@ -69,6 +69,7 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
       event: { type: "item_started", item },
       pendingItemKey: `pending-item:${pendingTurnKey}`,
       pendingTurnKey,
+      projectedItems: [item],
       requestState,
       setters: {
         getThreadItems: () => [],
@@ -105,7 +106,7 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
     ]);
   });
 
-  it("运行中的 canonical AgentMessage snapshot 应立即同步到同一 commentary part", () => {
+  it("运行中的 canonical AgentMessage snapshot 只更新 Item，不再写回 Message part", () => {
     let messages: Message[] = [
       {
         id: "assistant-1",
@@ -149,6 +150,7 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
       event: { type: "item_updated", item },
       pendingItemKey: "pending-item",
       pendingTurnKey: "pending-turn",
+      projectedItems: [item],
       requestState: {
         accumulatedContent: "",
         requestLogId: null,
@@ -168,17 +170,7 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
     expect(threadItems).toEqual([expect.objectContaining(item)]);
     expect(messages[0]).toMatchObject({
       runtimeTurnId: "turn-1",
-      contentParts: [
-        {
-          type: "text",
-          text: "先核对仓库状态。",
-          metadata: expect.objectContaining({
-            itemId: "agent-message-commentary",
-            phase: "commentary",
-            sequence: 103,
-          }),
-        },
-      ],
+      contentParts: [],
     });
   });
 
@@ -229,6 +221,7 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
       event: { type: "item_updated", item: snapshot("最终", 50) },
       pendingItemKey: "pending-item",
       pendingTurnKey: "pending-turn",
+      projectedItems: [snapshot("最终", 50)],
       requestState,
       setters,
     });
@@ -237,6 +230,7 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
       event: { type: "item_updated", item: snapshot("最终答复", 51) },
       pendingItemKey: "pending-item",
       pendingTurnKey: "pending-turn",
+      projectedItems: [snapshot("最终答复", 51)],
       requestState,
       setters,
     });
@@ -284,6 +278,7 @@ describe("agentStreamRuntimeLifecycleEvents", () => {
       },
       pendingItemKey: "pending-item",
       pendingTurnKey: "pending-turn",
+      projectedItems: [],
       requestState,
       setters: {
         getThreadItems: () => [],

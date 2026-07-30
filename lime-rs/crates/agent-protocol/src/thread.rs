@@ -4,6 +4,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+
+use crate::response_item::MessagePhase;
 
 use crate::{AgentInput, ItemId, MessageContentPart, SessionId, ThreadId, TurnId};
 
@@ -291,7 +294,7 @@ pub enum ThreadItemPayload {
     AgentMessage {
         text: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        phase: Option<String>,
+        phase: Option<MessagePhase>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         content_parts: Vec<MessageContentPart>,
     },
@@ -343,6 +346,8 @@ pub enum ThreadItemPayload {
         message: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         output: Option<ToolOutput>,
+        #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+        agent_states: HashMap<ThreadId, CollabAgentState>,
     },
     Approval {
         request_id: String,

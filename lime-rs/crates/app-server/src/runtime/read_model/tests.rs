@@ -268,6 +268,7 @@ fn canonical_wait_collab_tool_projects_as_completed_tool_call() {
             target_thread_id: None,
             message: None,
             output: None,
+            agent_states: Default::default(),
         },
         metadata: json!({}),
     };

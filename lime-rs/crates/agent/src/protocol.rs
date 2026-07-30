@@ -627,6 +627,7 @@ pub(crate) fn canonical_tool_item_event(
         ),
     );
 
+    let mut agent_states = HashMap::new();
     let (mut status, output) = match output {
         Some(output) => {
             let NormalizedToolOutput {
@@ -639,7 +640,13 @@ pub(crate) fn canonical_tool_item_event(
                 sidecar_reference,
                 metadata: output_metadata,
                 agent_control_projection_facts: _,
+                agent_control_state_facts,
             } = output;
+            agent_states.extend(
+                agent_control_state_facts
+                    .into_iter()
+                    .map(|fact| (fact.target_thread_id, fact.state)),
+            );
             let aborted = output_metadata
                 .get(tool_runtime::tool_result_projection::TOOL_OUTCOME_METADATA_KEY)
                 .and_then(Value::as_str)
@@ -694,6 +701,17 @@ pub(crate) fn canonical_tool_item_event(
     if command_running {
         status = ItemStatus::InProgress;
     }
+    if tool_name == tool_runtime::agent_control::WAIT_AGENT_TOOL_NAME
+        && agent_states.values().any(|state| {
+            matches!(
+                state.status,
+                agent_protocol::CollabAgentStatus::Errored
+                    | agent_protocol::CollabAgentStatus::NotFound
+            )
+        })
+    {
+        status = ItemStatus::Failed;
+    }
     let payload = if command_tool {
         let command = metadata
             .get("command")
@@ -734,6 +752,7 @@ pub(crate) fn canonical_tool_item_event(
             target_thread_id: None,
             message: None,
             output,
+            agent_states,
         }
     } else {
         ThreadItemPayload::Tool {
@@ -931,6 +950,7 @@ mod tests {
             sidecar_reference: None,
             metadata,
             agent_control_projection_facts: Vec::new(),
+            agent_control_state_facts: Vec::new(),
         }
     }
 
@@ -960,6 +980,7 @@ mod tests {
                         ),
                     )]),
                     agent_control_projection_facts: Vec::new(),
+                    agent_control_state_facts: Vec::new(),
                 }),
             },
             tool_item_context(),

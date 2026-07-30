@@ -42,8 +42,13 @@ const DEFAULTS = {
 const LOG_PREFIX = "[smoke:mcp-elicitation-gate-b]";
 const FINAL_TEXT = "MCP_ELICITATION_GATE_B_DONE";
 const TOOL_SUFFIX = "release_check";
+const NAVIGATION_RESTORE_STORAGE_KEY = "lime.appNavigation.restore.v1";
 const REQUIRED_METHODS = [
   "workspace/default/ensure",
+  "modelProvider/create",
+  "modelProvider/update",
+  "modelProviderKey/create",
+  "model/list",
   "mcpServer/create",
   "mcpServer/start",
   "mcpTool/list",
@@ -324,92 +329,209 @@ async function ensureWorkspace(page, observedMethods) {
   );
   observedMethods.add(response.method);
   const workspaceId = String(response.result?.workspace?.id || "").trim();
-  assert(workspaceId, "workspace/default/ensure 未返回 workspace.id");
-  return { response, workspaceId };
+  const rootPath = String(
+    response.result?.workspace?.root_path ||
+      response.result?.workspace?.rootPath ||
+      "",
+  ).trim();
+  assert(
+    workspaceId && rootPath,
+    "workspace/default/ensure 未返回 workspace identity",
+  );
+  return { response, rootPath, workspaceId };
+}
+
+async function createRepositoryProvider(page, fixture, observedMethods) {
+  const created = await appServerCallFromPage(page, "modelProvider/create", {
+    name: `MCP elicitation Gate B ${Date.now()}`,
+    providerType: fixture.provider.providerName,
+    apiHost: fixture.provider.providerConfig.baseUrl,
+  });
+  observedMethods.add(created.method);
+  const providerId = String(created.result?.provider?.id || "").trim();
+  assert(providerId, "modelProvider/create 未返回 provider.id");
+
+  const updated = await appServerCallFromPage(page, "modelProvider/update", {
+    providerId,
+    enabled: true,
+    sortOrder: 1,
+    models: [
+      {
+        id: fixture.provider.modelPreference,
+        capability: fixture.provider.providerConfig.modelCapabilities,
+      },
+    ],
+  });
+  observedMethods.add(updated.method);
+
+  const key = await appServerCallFromPage(page, "modelProviderKey/create", {
+    providerId,
+    apiKey: fixture.provider.providerConfig.apiKey,
+    alias: "mcp-elicitation-gate-b",
+    replaceExisting: true,
+  });
+  observedMethods.add(key.method);
+  assert(key.result?.key?.id, "modelProviderKey/create 未返回 key.id");
+
+  const catalog = await appServerCallFromPage(page, "model/list", {
+    includeHidden: true,
+    limit: 500,
+  });
+  observedMethods.add(catalog.method);
+  const model = Array.isArray(catalog.result?.data)
+    ? catalog.result.data.find(
+        (candidate) =>
+          candidate?.providerId === providerId &&
+          candidate?.model === fixture.provider.modelPreference,
+      )
+    : null;
+  assert(model, "model/list 未返回可执行 fixture route");
+  const capability = model.capabilitySnapshot;
+  assert(
+    capability?.taskFamilies?.includes("chat") &&
+      capability?.outputModalities?.includes("text") &&
+      capability?.runtimeFeatures?.includes("tool_calling"),
+    "fixture route 缺少 chat/text/tool_calling capability",
+  );
+
+  return {
+    catalogModel: model,
+    model: fixture.provider.modelPreference,
+    providerId,
+  };
+}
+
+async function openRuntimeThreadInGui(page, sessionId, options) {
+  await page.evaluate(
+    ({ navigationKey, sessionId: activeSessionId }) => {
+      sessionStorage.setItem(
+        navigationKey,
+        JSON.stringify({
+          page: "agent",
+          params: { initialSessionId: activeSessionId },
+        }),
+      );
+    },
+    { navigationKey: NAVIGATION_RESTORE_STORAGE_KEY, sessionId },
+  );
+  await page.reload({
+    waitUntil: "domcontentloaded",
+    timeout: options.timeoutMs,
+  });
+  const input = page.locator(
+    `textarea[name="agent-chat-message"][data-session-id="${sessionId}"]`,
+  );
+  await input.waitFor({ state: "visible", timeout: options.timeoutMs });
+  assert(
+    (await input.getAttribute("data-session-id")) === sessionId,
+    "Renderer 未恢复 MCP Gate B canonical session",
+  );
+  return { activeSessionId: sessionId };
 }
 
 async function startRuntimeTurn(
   page,
-  { fixture, observedMethods, serverName, workspaceId },
+  { fixture, observedMethods, options, serverName, workspaceRoot },
 ) {
-  const sessionId = `mcp-elicitation-${Date.now()}-${process.pid}`;
-  const threadId = `${sessionId}-thread`;
-  const turnId = `${sessionId}-turn`;
   const expectedToolName = toolName(serverName);
+  const route = await createRepositoryProvider(page, fixture, observedMethods);
   const start = await appServerCallFromPage(page, "thread/start", {
-    sessionId,
-    threadId,
-    appId: "desktop",
-    workspaceId,
-    businessObjectRef: {
-      kind: "agent.session",
-      id: `agent-session:${workspaceId}:${sessionId}`,
-      title: "MCP elicitation Gate B",
-      metadata: {
-        title: "MCP elicitation Gate B",
-        executionStrategy: "react",
-        runStartHooks: false,
-        harness: { source: "smoke:mcp-elicitation-gate-b" },
-      },
-    },
+    cwd: workspaceRoot,
+    historyMode: "paginated",
+    model: route.model,
+    modelProvider: route.providerId,
+    runtimeWorkspaceRoots: [workspaceRoot],
+    serviceName: "MCP elicitation Gate B",
+    threadSource: "appServer",
   });
   observedMethods.add(start.method);
+  const sessionId = String(start.result?.thread?.sessionId || "").trim();
+  const threadId = String(start.result?.thread?.id || "").trim();
+  assert(sessionId && threadId, "thread/start 未返回 canonical identity");
+
   const update = await appServerCallFromPage(page, "thread/settings/update", {
     threadId,
-    modelProvider: fixture.provider.providerPreference,
-    model: fixture.provider.modelPreference,
+    modelProvider: route.providerId,
+    model: route.model,
   });
   observedMethods.add(update.method);
+  const gui = await openRuntimeThreadInGui(page, sessionId, options);
   const turn = await appServerCallFromPage(page, "turn/start", {
-    sessionId,
-    turnId,
-    input: { text: "Run the release check through the available MCP tool." },
-    runtimeOptions: {
-      stream: true,
-      eventName: `mcp_elicitation_${turnId}`,
-      runtimeRequest: {
-        providerPreference: fixture.provider.providerPreference,
-        modelPreference: fixture.provider.modelPreference,
-        providerConfig: fixture.provider.providerConfig,
-        approvalPolicy: "never",
-        sandboxPolicy: "danger-full-access",
-        executionStrategy: "react",
-        metadata: {
+    threadId,
+    clientUserMessageId: `mcp-elicitation-${Date.now()}-${process.pid}`,
+    input: [
+      {
+        type: "text",
+        text: "Run the release check through the available MCP tool.",
+      },
+    ],
+    cwd: workspaceRoot,
+    runtimeWorkspaceRoots: [workspaceRoot],
+    model: route.model,
+    approvalPolicy: "never",
+    sandboxPolicy: "danger-full-access",
+    additionalContext: {
+      metadata: {
+        kind: "application",
+        value: JSON.stringify({
           harness: {
             source: "smoke:mcp-elicitation-gate-b",
             skip_mcp_prewarm: false,
           },
           tool_scope: { allowed_tools: [expectedToolName] },
-        },
+        }),
       },
     },
-    queueIfBusy: false,
-    skipPreSubmitResume: true,
   });
   observedMethods.add(turn.method);
-  return { expectedToolName, sessionId, start, threadId, turn, turnId, update };
+  const turnId = String(turn.result?.turn?.id || "").trim();
+  assert(turnId, "turn/start 未返回 canonical turn.id");
+  return {
+    expectedToolName,
+    gui,
+    route,
+    sessionId,
+    start,
+    threadId,
+    turn,
+    turnId,
+    update,
+  };
 }
 
-async function waitForElicitationDialog(page, options) {
-  const dialog = page.getByRole("dialog");
-  await dialog.waitFor({
+async function waitForElicitationForm(page, options) {
+  const layer = page.locator(
+    '[data-testid="pending-interaction-layer"][data-interaction-kind="mcp_elicitation"]',
+  );
+  await layer.waitFor({
     state: "visible",
     timeout: Math.min(options.timeoutMs, 90_000),
   });
-  await dialog.locator('input[type="checkbox"]').check();
-  const checked = await dialog.locator('input[type="checkbox"]').isChecked();
+  const form = layer.locator('[data-testid="mcp-server-elicitation-form"]');
+  await form.waitFor({
+    state: "visible",
+    timeout: Math.min(options.timeoutMs, 30_000),
+  });
+  await form.locator('input[type="checkbox"]').check();
+  const checked = await form.locator('input[type="checkbox"]').isChecked();
   assert(checked, "Renderer MCP 表单未提交 confirmed=true");
-  return dialog;
+  const rootDialogAbsent = (await page.getByRole("dialog").count()) === 0;
+  assert(rootDialogAbsent, "MCP elicitation 不得恢复根部 Dialog");
+  return { form, rootDialogAbsent };
 }
 
-async function submitElicitation(page, dialog, options) {
-  const submit = dialog.getByRole("button", { name: /提交|Submit/ });
+async function submitElicitation(page, form, options) {
+  const submit = form.getByRole("button", { name: /提交|Submit/ });
   await submit.click({ timeout: Math.min(options.timeoutMs, 30_000) });
-  await dialog.waitFor({
+  await form.waitFor({
     state: "hidden",
     timeout: Math.min(options.timeoutMs, 60_000),
   });
-  return (await page.getByRole("dialog").count()) === 0;
+  return (
+    (await page
+      .locator('[data-testid="mcp-server-elicitation-form"]')
+      .count()) === 0
+  );
 }
 
 function providerRequestSummary(requests) {
@@ -487,8 +609,8 @@ async function waitForCompletion(
   let latestRead = null;
   while (Date.now() - startedAt < options.timeoutMs) {
     latestRead = await appServerCallFromPage(page, "thread/read", {
-      sessionId: runtime.sessionId,
-      historyLimit: 80,
+      threadId: runtime.threadId,
+      includeTurns: true,
     });
     observedMethods.add(latestRead.method);
     const ledger = readJsonLines(ledgerPath);
@@ -577,7 +699,8 @@ async function run() {
     appServerHandleJsonLinesSeen: false,
     rendererFormVisible: false,
     rendererConfirmedSubmitted: false,
-    dialogClosedAfterResolved: false,
+    formClosedAfterResolved: false,
+    rootDialogAbsent: false,
     mcpLedgerAccepted: false,
     providerFinalTextObserved: false,
     providerRequestCount: 0,
@@ -668,19 +791,24 @@ async function run() {
     const runtime = await startRuntimeTurn(page, {
       fixture,
       observedMethods,
+      options,
       serverName,
-      workspaceId: workspace.workspaceId,
+      workspaceRoot: workspace.rootPath,
     });
     raw.runtime = sanitizeJson(runtime);
 
     logStage("submit-renderer-form");
-    const dialog = await waitForElicitationDialog(page, options);
+    const { form, rootDialogAbsent } = await waitForElicitationForm(
+      page,
+      options,
+    );
     summary.rendererFormVisible = true;
+    summary.rootDialogAbsent = rootDialogAbsent;
     await page.screenshot({ path: screenshotPath, fullPage: true });
     summary.screenshot = screenshotPath;
-    summary.dialogClosedAfterResolved = await submitElicitation(
+    summary.formClosedAfterResolved = await submitElicitation(
       page,
-      dialog,
+      form,
       options,
     );
     summary.rendererConfirmedSubmitted = true;
@@ -761,9 +889,10 @@ async function run() {
       "provider final text 未进入 current read model",
     );
     assert(
-      summary.dialogClosedAfterResolved,
-      "serverRequest/resolved 后表单未关闭",
+      summary.formClosedAfterResolved,
+      "serverRequest/resolved 后 Composer 表单未关闭",
     );
+    assert(summary.rootDialogAbsent, "MCP elicitation 出现重复根部 Dialog");
     assert(
       completion.capabilityEvidence.runtimeProtocolCurrent &&
         completion.capabilityEvidence.runtimeCapabilityExact,

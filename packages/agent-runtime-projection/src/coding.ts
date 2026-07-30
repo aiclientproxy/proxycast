@@ -128,6 +128,8 @@ export interface CodingReadModelFacts {
   change_summary?: CodingReadModelChangeSummaryFact | null;
   changeSummary?: CodingReadModelChangeSummaryFact | null;
   artifacts?: unknown[];
+  thread_items?: readonly unknown[];
+  threadItems?: readonly unknown[];
 }
 
 export interface CodingWorkbenchProjectionInput<
@@ -170,6 +172,7 @@ export interface CodingFileView {
 export interface FileChangeView {
   id: string;
   path: string;
+  destinationPath?: string;
   status: string;
   changeKind?: string;
   artifactRefs: string[];
@@ -455,34 +458,59 @@ function executionEventsFromThreadItems(
   threadItems: readonly unknown[] | undefined,
 ): AgentRuntimeExecutionEvent[] {
   if (!threadItems?.length) return [];
-  const latestFileItems = new Map<string, Record<string, unknown>>();
+  const latestFileItems = new Map<
+    string,
+    {
+      item: Record<string, unknown>;
+      change?: Record<string, unknown>;
+      path: string;
+    }
+  >();
   const commandItems: Record<string, unknown>[] = [];
 
   threadItems.forEach((value) => {
     const item = threadItemRecord(value);
     if (!item) return;
     const type = valueString(item.type);
-    if (type === "command_execution") {
+    if (type === "command_execution" || type === "commandExecution") {
       commandItems.push(item);
       return;
     }
-    if (type !== "patch") return;
-    const paths = valueStringArray(item.paths, item.path);
-    paths.forEach((path) => {
-      const previous = latestFileItems.get(path);
+    const changes =
+      (type === "fileChange" || type === "patch") && Array.isArray(item.changes)
+        ? item.changes.filter(isRecord)
+        : [];
+    const fileEntries =
+      changes.length > 0
+        ? changes.flatMap((change) => {
+            const path = valueString(change.path);
+            return path ? [{ item, change, path }] : [];
+          })
+        : type === "patch"
+          ? valueStringArray(item.paths, item.path).map((path) => ({
+              item,
+              path,
+            }))
+          : [];
+    fileEntries.forEach((entry) => {
+      const previous = latestFileItems.get(entry.path);
       const sequence = valueNumber(item.sequence) ?? 0;
-      if (!previous || sequence >= (valueNumber(previous.sequence) ?? 0)) {
-        latestFileItems.set(path, item);
+      if (!previous || sequence >= (valueNumber(previous.item.sequence) ?? 0)) {
+        latestFileItems.set(entry.path, entry);
       }
     });
   });
 
   const events: AgentRuntimeExecutionEvent[] = [];
-  latestFileItems.forEach((item, path) => {
+  latestFileItems.forEach(({ item, change, path }) => {
     const id = valueString(item.id) ?? `thread-item:file:${path}`;
     const createdAt = threadItemTimestamp(item);
+    const kind = valueRecord(change?.kind);
+    const destinationPath = safeRelativePath(
+      valueString(kind?.move_path, kind?.movePath),
+    );
     events.push({
-      id: `thread-item:${id}:file`,
+      id: `thread-item:${id}:file:${path}`,
       kind: "source",
       status: threadItemStatus(item),
       eventClass: "file.changed",
@@ -495,8 +523,11 @@ function executionEventsFromThreadItems(
       completedAt: valueString(item.completed_at, item.completedAt),
       payload: {
         path,
-        changeKind: "modified",
-        preview: valueString(item.text, item.summary),
+        destinationPath,
+        changeKind: destinationPath
+          ? "renamed"
+          : (valueString(kind?.type) ?? "modified"),
+        preview: valueString(change?.diff, item.text, item.summary),
       },
     });
   });
@@ -525,7 +556,11 @@ function executionEventsFromThreadItems(
         commandId: id,
         command,
         cwd: valueString(item.cwd),
-        preview: valueString(item.aggregated_output, item.output),
+        preview: valueString(
+          item.aggregated_output,
+          item.aggregatedOutput,
+          item.output,
+        ),
         exitCode,
       },
     });
@@ -554,6 +589,26 @@ function executionEventsFromThreadItems(
   return events.sort(
     (left, right) => eventSequence(left) - eventSequence(right),
   );
+}
+
+function projectionThreadItems(
+  input?: CodingWorkbenchProjectionInput,
+): readonly unknown[] {
+  const itemsById = new Map<string, unknown>();
+  const anonymousItems: unknown[] = [];
+  const readModelItems =
+    input?.codingReadModel?.thread_items ??
+    input?.codingReadModel?.threadItems ??
+    [];
+  [...readModelItems, ...(input?.threadItems ?? [])].forEach((item) => {
+    const id = isRecord(item) ? valueString(item.id) : undefined;
+    if (id) {
+      itemsById.set(id, item);
+    } else {
+      anonymousItems.push(item);
+    }
+  });
+  return [...itemsById.values(), ...anonymousItems];
 }
 
 function isTurnLifecycleEvent(event: AgentRuntimeExecutionEvent): boolean {
@@ -691,6 +746,9 @@ function collectChanges(
       {
         id: event.id,
         path,
+        destinationPath: safeRelativePath(
+          payloadString(event, "destinationPath", "movePath"),
+        ),
         status: event.status,
         changeKind: payloadString(event, "changeKind", "operation"),
         artifactRefs: event.artifactRefs ?? [],
@@ -1389,9 +1447,12 @@ export function projectCodingWorkbenchView<
 export function projectCodingWorkbenchViewFromEvents<
   TEvent extends AgentRuntimeExecutionEvent,
 >(input?: CodingWorkbenchProjectionInput<TEvent>): CodingWorkbenchView<TEvent> {
+  const threadItemEvents = executionEventsFromThreadItems(
+    projectionThreadItems(input),
+  ) as TEvent[];
   const executionEvents = input?.executionEvents?.length
-    ? input.executionEvents
-    : (executionEventsFromThreadItems(input?.threadItems) as TEvent[]);
+    ? [...input.executionEvents, ...threadItemEvents]
+    : threadItemEvents;
   return projectCodingWorkbenchView(
     projectAgentUiState({
       ...input,

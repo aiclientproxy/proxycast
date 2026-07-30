@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
   METHOD_MCP_SERVER_ELICITATION_REQUEST,
   METHOD_SERVER_REQUEST_RESOLVED,
   type JsonRpcRequest,
@@ -9,7 +10,6 @@ import {
   AppServerServerRequestDispatcher,
 } from "./appServerServerRequest";
 import { AppServerEventBus } from "./appServerEventBus";
-import { METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL } from "./agentApprovalServerRequest";
 import { CLAW_TRACE_DEBUG_OVERRIDE_KEY } from "../developerFeatures";
 
 function createHarness() {
@@ -410,6 +410,72 @@ describe("AppServerServerRequestDispatcher", () => {
       request.id,
       { action: "decline" },
     );
+  });
+
+  it("turn/completed 只中止同 Thread/Turn 的 pending handler", async () => {
+    const harness = createHarness();
+    const signals = new Map<string, AbortSignal>();
+    const releases = new Map<string, () => void>();
+    harness.dispatcher.register(
+      METHOD_MCP_SERVER_ELICITATION_REQUEST,
+      (params, _request, signal) =>
+        new Promise((resolve) => {
+          const turnId = (params as { turnId: string }).turnId;
+          signals.set(turnId, signal);
+          releases.set(turnId, () => resolve({ action: "decline" }));
+        }),
+    );
+    const first = elicitationRequest("app-server-request:terminal-first");
+    const second = {
+      ...elicitationRequest("app-server-request:terminal-second"),
+      params: {
+        ...elicitationRequest().params,
+        turnId: "turn-2",
+      },
+    };
+    const firstDispatch = harness.dispatcher.dispatch(first);
+    const secondDispatch = harness.dispatcher.dispatch(second);
+    await vi.waitFor(() => expect(signals.size).toBe(2));
+
+    harness.notify({
+      method: "turn/completed",
+      params: { threadId: "thread-1", turnId: "turn-1" },
+    });
+
+    expect(signals.get("turn-1")?.aborted).toBe(true);
+    expect(signals.get("turn-2")?.aborted).toBe(false);
+    releases.get("turn-1")?.();
+    releases.get("turn-2")?.();
+    await expect(firstDispatch).resolves.toBe(false);
+    await expect(secondDispatch).resolves.toBe(true);
+  });
+
+  it("thread/closed 中止该 Thread 的全部 pending handler", async () => {
+    const harness = createHarness();
+    let handlerSignal: AbortSignal | undefined;
+    let release: (() => void) | undefined;
+    harness.dispatcher.register(
+      METHOD_MCP_SERVER_ELICITATION_REQUEST,
+      (_params, _request, signal) =>
+        new Promise((resolve) => {
+          handlerSignal = signal;
+          release = () => resolve({ action: "decline" });
+        }),
+    );
+    const dispatched = harness.dispatcher.dispatch(
+      elicitationRequest("app-server-request:thread-closed"),
+    );
+    await vi.waitFor(() => expect(handlerSignal).toBeDefined());
+
+    harness.notify({
+      method: "thread/closed",
+      params: { threadId: "thread-1" },
+    });
+
+    expect(handlerSignal?.aborted).toBe(true);
+    release?.();
+    await expect(dispatched).resolves.toBe(false);
+    expect(harness.responder.respondServerRequest).not.toHaveBeenCalled();
   });
 
   it("缺少 threadId 的 resolved fail closed 且不中止 handler", async () => {

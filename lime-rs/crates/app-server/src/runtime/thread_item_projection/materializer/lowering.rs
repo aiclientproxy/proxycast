@@ -193,7 +193,9 @@ pub(super) fn typed_payload(
         },
         ItemFamily::AgentMessage => ThreadItemPayload::AgentMessage {
             text: message_text(payload),
-            phase: map_string(payload, &["phase", "messagePhase", "message_phase"]),
+            phase: map_string(payload, &["phase", "messagePhase", "message_phase"])
+                .as_deref()
+                .and_then(agent_protocol::response_item::MessagePhase::from_wire),
             content_parts: message_content_parts(payload)?,
         },
         ItemFamily::Plan => ThreadItemPayload::Plan {
@@ -244,6 +246,7 @@ pub(super) fn typed_payload(
             .map(ThreadId::new),
             message: map_string(payload, &["message", "prompt", "detail"]),
             output: tool_output(payload),
+            agent_states: Default::default(),
         },
         ItemFamily::Approval => {
             let decision = approval_decision(event_type, payload);

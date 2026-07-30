@@ -40,7 +40,6 @@ import {
 } from "./agentStreamRuntimeMetricsController";
 import type { AgentStreamRequestLogFinishPayload } from "./agentStreamRequestLogController";
 import { buildAgentStreamProcessBoundaryTextCommitPatch } from "./agentStreamProcessBoundaryCommit";
-import { isPersistedReasoningContentPart } from "./agentStreamReasoningContentSync";
 import { resetStreamedReasoningSegment } from "./agentStreamReasoningTimeline";
 import {
   clearActiveTextSegmentState,
@@ -60,7 +59,6 @@ import {
   buildAgentStreamTimerClearPlan,
 } from "./agentStreamTimerController";
 import { projectAgentStreamTimelineItem } from "./agentStreamTimelineItemProjector";
-import { mergeAssistantAgentMessageContentPartsFromThreadItems } from "./agentStreamAgentMessageContentSync";
 import { saveAgentSessionCachedMessagesSnapshot } from "./agentSessionScopedStorage";
 import { shouldLetLegacyToolEventUpdateMessageLayer } from "./agentStreamLegacyToolEventGate";
 import {
@@ -354,7 +352,7 @@ export function createAgentStreamRuntimeHandlerActions({
           accumulatedContent: requestState.accumulatedContent,
           parts: msg.contentParts,
           renderedContent: requestState.renderedContent,
-          shouldRetainThinkingPart: isPersistedReasoningContentPart,
+          shouldRetainThinkingPart: () => false,
           surfaceThinkingDeltas: shouldPreserveVisibleProcessForMessage(msg),
           textPartMetadata: buildAgentTextDeltaContentPartMetadata({
             itemId: requestState.activeTextSegmentItemId,
@@ -620,17 +618,7 @@ export function createAgentStreamRuntimeHandlerActions({
         return {
           ...updateMessageArtifactsStatus(msg, "complete"),
           ...buildAgentStreamCompletedAssistantMessagePatch({
-            parts: mergeAssistantAgentMessageContentPartsFromThreadItems({
-              parts: msg.contentParts,
-              turnId: msg.runtimeTurnId ?? requestState.currentTurnId,
-              items: [
-                ...Array.from(
-                  requestState.streamedAgentMessageItemsByItemId?.values() ??
-                    [],
-                ),
-                ...(getThreadItems?.() ?? []),
-              ],
-            }),
+            parts: msg.contentParts,
             finalContent: resolvedFinalContent,
             finalTextPartMetadata: buildAgentTextDeltaContentPartMetadata({
               itemId: requestState.activeTextSegmentItemId,

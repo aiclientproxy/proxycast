@@ -973,10 +973,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     }
 
     const activeTopic = topics.find((topic) => topic.id === resolvedSessionId);
-    const totalMessages =
-      sessionHistoryWindow?.totalMessages ??
-      activeTopic?.messagesCount ??
-      messages.length;
+    const topicMessagesCount = activeTopic?.messagesCount ?? messages.length;
     const transientMessages = selectActiveSessionTransientMessages(messages);
     const transientThreadTurns = selectActiveSessionTransientTurns(threadTurns);
     const transientTurnIds = new Set(
@@ -1004,10 +1001,8 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         },
         {
           sessionUpdatedAt: activeTopic?.updatedAt ?? Date.now(),
-          messagesCount: totalMessages,
-          historyTruncated:
-            (sessionHistoryWindow?.totalMessages ?? totalMessages) >
-            (sessionHistoryWindow?.loadedMessages ?? messages.length),
+          messagesCount: topicMessagesCount,
+          historyTruncated: sessionHistoryWindow?.hasMore === true,
         },
       );
     });
@@ -2520,7 +2515,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     const currentHistoryWindow = sessionHistoryWindowRef.current;
     const requestPlan = buildSessionHistoryPageRequestPlan({
       currentHistoryWindow,
-      currentMessagesCount: messagesRef.current.length,
       pageSize: SESSION_HISTORY_LOAD_PAGE_SIZE,
     });
     if (!requestPlan) {
@@ -2531,12 +2525,13 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     const startedAt = Date.now();
     setSessionHistoryWindow(requestPlan.loadingWindow);
     logAgentDebug("useAgentSession", "loadFullHistory.start", {
-      historyBeforeMessageId: requestPlan.historyBeforeMessageId,
-      loadedMessagesCount: requestPlan.loadedMessagesCount,
+      historyItemCursor: requestPlan.itemCursor,
+      historyTurnCursor: requestPlan.turnCursor,
+      loadedEntriesCount: currentHistoryWindow?.loadedEntries ?? 0,
+      loadedItemsCount: currentHistoryWindow?.loadedItems ?? 0,
+      loadedTurnsCount: currentHistoryWindow?.loadedTurns ?? 0,
       nextHistoryLimit: requestPlan.nextHistoryLimit,
-      nextHistoryOffset: requestPlan.nextHistoryOffset,
       sessionId: targetSessionId,
-      totalMessagesCount: requestPlan.totalMessagesCount,
       workspaceId,
     });
 
@@ -2565,11 +2560,8 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         sessionId: targetSessionId,
       });
       const resultPlan = buildSessionHistoryPageResultPlan({
+        currentHistoryWindow: requestPlan.loadingWindow,
         detail,
-        historyBeforeMessageId: requestPlan.historyBeforeMessageId,
-        nextHistoryLimit: requestPlan.nextHistoryLimit,
-        nextHistoryOffset: requestPlan.nextHistoryOffset,
-        totalMessagesCount: requestPlan.totalMessagesCount,
       });
 
       startTransition(() => {
@@ -2600,16 +2592,16 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       );
       logAgentDebug("useAgentSession", "loadFullHistory.success", {
         durationMs: Date.now() - startedAt,
-        historyBeforeMessageId: requestPlan.historyBeforeMessageId,
+        historyItemCursor: requestPlan.itemCursor,
+        historyTurnCursor: requestPlan.turnCursor,
         historyTruncated: detail.history_truncated === true,
-        historyOffset: detail.history_offset ?? requestPlan.nextHistoryOffset,
         incomingMessagesCount: mergePlan.incomingMessages.length,
-        loadedMessagesCount: resultPlan.nextLoadedMessages,
+        loadedEntriesCount: resultPlan.nextLoadedEntries,
+        loadedItemsCount: resultPlan.nextLoadedItems,
+        loadedTurnsCount: resultPlan.nextLoadedTurns,
         messagesCount: mergePlan.mergedMessages.length,
         nextHistoryLimit: requestPlan.nextHistoryLimit,
-        nextHistoryOffset: requestPlan.nextHistoryOffset,
         sessionId: targetSessionId,
-        totalMessagesCount: resultPlan.resolvedTotalMessages,
         workspaceId,
       });
       return true;
@@ -2633,9 +2625,9 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         {
           durationMs: Date.now() - startedAt,
           error,
-          historyBeforeMessageId: requestPlan.historyBeforeMessageId,
+          historyItemCursor: requestPlan.itemCursor,
+          historyTurnCursor: requestPlan.turnCursor,
           nextHistoryLimit: requestPlan.nextHistoryLimit,
-          nextHistoryOffset: requestPlan.nextHistoryOffset,
           sessionId: targetSessionId,
           workspaceId,
         },

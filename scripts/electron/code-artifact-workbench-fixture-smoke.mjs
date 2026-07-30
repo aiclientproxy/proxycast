@@ -2538,10 +2538,12 @@ async function collectCodingWorkbenchGuiEvidence(
       key: "changes",
       panelTestId: "canvas-workbench-panel-changes",
       expectedTexts: [
-        CODING_FILE_DISPLAY_PATH,
-        "src/added.ts",
-        "src/deleted.ts",
-        "src/source.ts -> src/destination.ts",
+        path.basename(CODING_FILE_PATH),
+        path.basename(CODING_ADDED_FILE_PATH),
+        path.basename(CODING_DELETED_FILE_PATH),
+        `${path.basename(CODING_MOVE_SOURCE_PATH)} -> ${path.basename(
+          CODING_MOVE_DESTINATION_PATH,
+        )}`,
       ],
     },
     {
@@ -2607,20 +2609,6 @@ async function collectCodingWorkbenchGuiEvidence(
         ).find(isVisible);
         if (tabButton instanceof HTMLElement) {
           tabButton.click();
-          if (key === "changes") {
-            const expandButton = Array.from(
-              document.querySelectorAll(
-                '[data-testid="file-changes-summary-toggle"]',
-              ),
-            ).find(
-              (candidate) =>
-                isVisible(candidate) &&
-                candidate.getAttribute("aria-expanded") !== "true",
-            );
-            if (expandButton instanceof HTMLElement) {
-              expandButton.click();
-            }
-          }
           return true;
         }
         return false;
@@ -2639,10 +2627,11 @@ async function collectCodingWorkbenchGuiEvidence(
 
     const startedAt = Date.now();
     let lastSnapshot = null;
+    let filesPanelToggleClicked = false;
     while (Date.now() - startedAt < tabEvidenceTimeoutMs) {
       const snapshot = await evaluatePageSnapshot(
         page,
-        ({ panelTestId, expectedTexts }) => {
+        ({ key, panelTestId, expectedTexts }) => {
           const isVisible = (element) => {
             if (!(element instanceof HTMLElement)) {
               return false;
@@ -2688,32 +2677,56 @@ async function collectCodingWorkbenchGuiEvidence(
                 present: false,
               })),
               expectedTextsPresent: false,
+              panelText: "",
               bodyText: document.body?.innerText || "",
             };
           }
           const panel = Array.from(
             root.querySelectorAll(`[data-testid="${panelTestId}"]`),
           ).find(isVisible);
-          const panelText = panel?.textContent || "";
+          const filesPanel = root.querySelector(
+            '[data-testid="canvas-workbench-changes-file-list"]',
+          );
+          const filesPanelToggle = root.querySelector(
+            '[data-testid="canvas-workbench-changes-files-toggle"]',
+          );
+          const filesPanelVisible = isVisible(filesPanel);
+          const filesPanelToggleVisible = isVisible(filesPanelToggle);
+          const filesPanelToggleExpanded =
+            filesPanelToggle?.getAttribute("aria-expanded") === "true";
+          let filesPanelToggleClicked = false;
+          if (
+            key === "changes" &&
+            !filesPanelVisible &&
+            filesPanelToggleVisible &&
+            !filesPanelToggleExpanded &&
+            filesPanelToggle instanceof HTMLElement
+          ) {
+            filesPanelToggle.click();
+            filesPanelToggleClicked = true;
+          }
+          const panelText = panel?.innerText || "";
           const bodyText = document.body?.innerText || "";
-          const evidenceText =
-            panelTestId === "canvas-workbench-panel-changes"
-              ? bodyText
-              : panelText;
           return {
             clicked: true,
             panelVisible: Boolean(panel),
+            filesPanelVisible,
+            filesPanelToggleVisible,
+            filesPanelToggleExpanded,
+            filesPanelToggleClicked,
             expectedTexts: expectedTexts.map((text) => ({
               text,
-              present: evidenceText.includes(text),
+              present: panelText.includes(text),
             })),
             expectedTextsPresent: expectedTexts.every((text) =>
-              evidenceText.includes(text),
+              panelText.includes(text),
             ),
+            panelText,
             bodyText,
           };
         },
         {
+          key: tab.key,
           panelTestId: tab.panelTestId,
           expectedTexts: tab.expectedTexts,
         },
@@ -2723,10 +2736,18 @@ async function collectCodingWorkbenchGuiEvidence(
         continue;
       }
       lastSnapshot = snapshot;
-      if (snapshot.panelVisible && snapshot.expectedTextsPresent) {
+      filesPanelToggleClicked ||= snapshot.filesPanelToggleClicked === true;
+      if (
+        snapshot.panelVisible &&
+        snapshot.expectedTextsPresent &&
+        (tab.key !== "changes" || snapshot.filesPanelVisible)
+      ) {
         break;
       }
       await sleep(options.intervalMs);
+    }
+    if (lastSnapshot && tab.key === "changes") {
+      lastSnapshot.filesPanelToggleClicked = filesPanelToggleClicked;
     }
     evidence[tab.key] = sanitizeJson(lastSnapshot);
   }
@@ -3269,6 +3290,15 @@ async function run() {
         requests: sessionCreation.requests,
         timeoutMs: options.timeoutMs,
       });
+      logStage("wait-gui-coding-turn-terminal");
+      sessionCreation.read = await waitForCodeArtifactTurnTerminal(
+        page,
+        options,
+        {
+          requests: sessionCreation.requests,
+          timeoutMs: options.timeoutMs,
+        },
+      );
       logStage("open-session-after-gui-coding-input");
       summary.guiSessionOpenAfterInputClick = sanitizeJson(
         await openFixtureSessionFromSidebar(page, options),

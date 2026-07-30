@@ -1,3 +1,4 @@
+import { act } from "react";
 import { describe, expect, it } from "vitest";
 import {
   mockAgentThreadTimeline,
@@ -11,7 +12,7 @@ import type {
 } from "./MessageList.testHarness";
 
 describe("MessageList imported history codex import", () => {
-  it("续聊后的本地历史导入过程应默认折叠，展开后保留完整 canonical 记录", () => {
+  it("续聊后的本地历史导入过程应由 runtimeTurnId 直接接入 canonical 记录", () => {
     const importedMetadata = {
       imported: true,
       imported_synthetic: true,
@@ -238,9 +239,13 @@ describe("MessageList imported history codex import", () => {
 
     expect(
       container.querySelector(
-        '[data-testid="message-list-historical-timeline-preview:leading"]',
+        '[data-testid="conversation-turn-timeline"][data-runtime-turn-id="turn-imported-history"]',
       ),
     ).not.toBeNull();
+    const preview = container.querySelector<HTMLButtonElement>(
+      '[data-testid="message-list-historical-timeline-preview:leading"]',
+    );
+    expect(preview).not.toBeNull();
     const importedAssistantRendererCall = mockStreamingRenderer.mock.calls.find(
       ([props]) => {
         const rendererProps = props as {
@@ -253,48 +258,16 @@ describe("MessageList imported history codex import", () => {
       | { content?: string; contentParts?: Array<Record<string, unknown>> }
       | undefined;
 
-    const importedContentParts =
-      importedAssistantRendererCall?.contentParts || [];
     expect(importedAssistantRendererCall?.content).toContain("已完成修复。");
     expect(importedAssistantRendererCall?.content).not.toContain(
       "我会先运行测试并检查失败。",
     );
-    expect(
-      importedContentParts
-        .filter((part) => part.type === "text")
-        .map((part) => part.text),
-    ).toEqual(["已完成修复。"]);
-    expect(importedContentParts.map((part) => part.type)).toEqual(
-      expect.arrayContaining(["file_changes_batch", "text"]),
-    );
-    expect(
-      importedContentParts.some(
-        (part) => part.type === "thinking" || part.type === "tool_use",
-      ),
-    ).toBe(false);
-    expect(
-      importedContentParts.find((part) => part.type === "file_changes_batch"),
-    ).toMatchObject({
-      type: "file_changes_batch",
-      aggregate: {
-        fileCount: 1,
-        files: [
-          expect.objectContaining({
-            path: "/workspace/imported-codex/src/lib.rs",
-          }),
-        ],
-      },
-    });
+    expect(importedAssistantRendererCall?.contentParts).toBeUndefined();
+    act(() => preview?.click());
     expect(
       mockAgentThreadTimeline.mock.calls.some(([props]) =>
         props.items?.some((item) => item.id === "imported-file-artifact"),
       ),
-    ).toBe(false);
-
-    const preview = container.querySelector<HTMLElement>(
-      '[data-testid="message-list-historical-timeline-preview:leading"]',
-    );
-    expect(preview?.tagName).toBe("DIV");
-    expect(mockAgentThreadTimeline).not.toHaveBeenCalled();
+    ).toBe(true);
   });
 });

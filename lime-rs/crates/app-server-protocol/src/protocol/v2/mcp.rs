@@ -1,5 +1,23 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct McpToolCallResult {
+    pub content: Vec<Value>,
+    #[schemars(required)]
+    pub structured_content: Option<Value>,
+    #[serde(rename = "_meta")]
+    #[schemars(required)]
+    pub meta: Option<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct McpToolCallError {
+    pub message: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

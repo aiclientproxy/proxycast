@@ -148,6 +148,12 @@ export function toToolCallState(item: AgentThreadItem): ToolCallState | null {
     }
     case "command_execution": {
       const commandOutput = stripCommandOutputWrapper(item.aggregated_output);
+      const metadata = {
+        ...itemMetadataRecord(item),
+        ...(item.command_status
+          ? { command_status: item.command_status }
+          : {}),
+      };
       return {
         id: item.id,
         name: "exec_command",
@@ -161,16 +167,22 @@ export function toToolCallState(item: AgentThreadItem): ToolCallState | null {
           item.aggregated_output !== undefined ||
           item.error !== undefined ||
           item.exit_code !== undefined ||
+          item.command_status !== undefined ||
           item.metadata !== undefined
             ? {
                 success:
                   item.status === "completed" &&
+                  item.command_status !== "declined" &&
+                  item.command_status !== "failed" &&
                   item.error === undefined &&
                   (item.exit_code === undefined || item.exit_code === 0),
                 output: commandOutput || "",
                 error: item.error,
                 metadata: mergeResultMetadata(metadataRecord(item.metadata), {
                   sequence: item.sequence,
+                  ...(item.command_status
+                    ? { command_status: item.command_status }
+                    : {}),
                   ...(item.exit_code !== undefined
                     ? { exit_code: item.exit_code }
                     : {}),
@@ -178,7 +190,7 @@ export function toToolCallState(item: AgentThreadItem): ToolCallState | null {
                 }),
               }
             : undefined,
-        metadata: itemMetadataRecord(item),
+        metadata,
         startTime: new Date(item.started_at),
         endTime: item.completed_at ? new Date(item.completed_at) : undefined,
       };

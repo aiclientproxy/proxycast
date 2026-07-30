@@ -144,7 +144,7 @@ describe("agentStreamRuntimeHandler storage", () => {
     });
   });
 
-  it("Codex reasoning v2 应分段显示 summary 并由 completed snapshot 单次接管", () => {
+  it("Codex reasoning v2 completed snapshot 只接管 canonical Item", () => {
     let messages: Message[] = [
       {
         id: "assistant-reasoning-v2",
@@ -346,8 +346,18 @@ describe("agentStreamRuntimeHandler storage", () => {
     ).toEqual([
       expect.objectContaining({
         type: "thinking",
-        text: "haha\n\n第二段，继续",
+        text: "haha",
         metadata: expect.objectContaining({
+          source: "streamed_reasoning_summary",
+          threadItemId: "reasoning-v2",
+          summaryIndex: 0,
+        }),
+      }),
+      expect.objectContaining({
+        type: "thinking",
+        text: "第二段，继续",
+        metadata: expect.objectContaining({
+          source: "streamed_reasoning_summary",
           threadItemId: "reasoning-v2",
           summaryIndex: 1,
         }),
@@ -378,10 +388,20 @@ describe("agentStreamRuntimeHandler storage", () => {
     expect(messages[0]?.contentParts).toEqual([
       expect.objectContaining({
         type: "thinking",
-        text: "haha\n\n第二段，继续",
+        text: "haha",
         metadata: expect.objectContaining({
-          source: "thread_item_reasoning",
+          source: "streamed_reasoning_summary",
           threadItemId: "reasoning-v2",
+          summaryIndex: 0,
+        }),
+      }),
+      expect.objectContaining({
+        type: "thinking",
+        text: "第二段，继续",
+        metadata: expect.objectContaining({
+          source: "streamed_reasoning_summary",
+          threadItemId: "reasoning-v2",
+          summaryIndex: 1,
         }),
       }),
     ]);
@@ -395,7 +415,7 @@ describe("agentStreamRuntimeHandler storage", () => {
     ]);
   });
 
-  it("普通会话 item reasoning 应在 text_delta 和 turn_completed 后继续保留到消息过程", () => {
+  it("普通会话 canonical reasoning 不应写回 Message 过程", () => {
     let messages: Message[] = [
       {
         id: "assistant-web-tools",
@@ -528,16 +548,6 @@ describe("agentStreamRuntimeHandler storage", () => {
         }),
       }),
       expect.objectContaining({
-        type: "thinking",
-        text: "搜索结果还需要继续筛掉广告软文，我先读取有效来源。",
-        metadata: expect.objectContaining({
-          source: "thread_item_reasoning",
-          threadItemId: "reasoning-web-tools",
-          sequence: 2,
-          turnId: "turn-web-tools",
-        }),
-      }),
-      expect.objectContaining({
         type: "text",
         text: "网页搜索渲染结论：最终正文继续输出。",
         metadata: expect.objectContaining({
@@ -550,7 +560,7 @@ describe("agentStreamRuntimeHandler storage", () => {
     ]);
   });
 
-  it("WebSearch 与 WebFetch 之间的 reasoning 在 canonical Tool Item 完成后应保留顺序", () => {
+  it("WebSearch 与 WebFetch 之间的 reasoning 只保留在 canonical Items", () => {
     let messages: Message[] = [
       {
         id: "assistant-web-tools-full-chain",
@@ -754,20 +764,31 @@ describe("agentStreamRuntimeHandler storage", () => {
     expect(messages[0]?.isThinking).toBe(false);
     expect(messages[0]?.runtimeTurnId).toBe("turn-web-tools-full-chain");
     expect(messages[0]?.contentParts?.map((part) => part.type)).toEqual([
-      "tool_use",
-      "thinking",
-      "tool_use",
       "text",
     ]);
-    expect(messages[0]?.contentParts?.[1]).toMatchObject({
-      type: "thinking",
-      text: "搜索结果还需要继续筛掉广告软文，我先读取有效来源。",
-      metadata: {
-        source: "thread_item_reasoning",
-        threadItemId: "reasoning-web-tools-full-chain",
-        turnId: "turn-web-tools-full-chain",
+    expect(
+      threadItems.map((item) => ({
+        id: item.id,
+        sequence: item.sequence,
+        type: item.type,
+      })),
+    ).toEqual([
+      {
+        id: "tool-web-search-full-chain",
+        sequence: 2,
+        type: "tool_call",
       },
-    });
+      {
+        id: "reasoning-web-tools-full-chain",
+        sequence: 3,
+        type: "reasoning",
+      },
+      {
+        id: "tool-web-fetch-full-chain",
+        sequence: 4,
+        type: "tool_call",
+      },
+    ]);
   });
 
   it("工具完成事件不应覆盖开始序号，避免 WebSearch 中间 reasoning 被挤出过程组", () => {
@@ -991,7 +1012,6 @@ describe("agentStreamRuntimeHandler storage", () => {
     expect(messages[0]?.contentParts?.map((part) => part.type)).toEqual([
       "text",
       "tool_use",
-      "thinking",
       "tool_use",
       "text",
     ]);
@@ -1000,10 +1020,6 @@ describe("agentStreamRuntimeHandler storage", () => {
       metadata: { sequence: 2 },
     });
     expect(messages[0]?.contentParts?.[2]).toMatchObject({
-      type: "thinking",
-      text: "搜索结果还需要继续筛掉广告软文，我先读取有效来源。",
-    });
-    expect(messages[0]?.contentParts?.[3]).toMatchObject({
       type: "tool_use",
       metadata: { sequence: 5 },
     });
@@ -1206,7 +1222,6 @@ describe("agentStreamRuntimeHandler storage", () => {
     expect(messages[0]?.runtimeTurnId).toBe("turn-web-tools-no-turn-start");
     expect(messages[0]?.contentParts?.map((part) => part.type)).toEqual([
       "tool_use",
-      "thinking",
       "tool_use",
       "text",
     ]);
@@ -1460,28 +1475,20 @@ describe("agentStreamRuntimeHandler storage", () => {
 
     expect(messages[0]?.contentParts?.map((part) => part.type)).toEqual([
       "tool_use",
-      "thinking",
       "tool_use",
       "text",
     ]);
-    expect(messages[0]?.contentParts?.[0]).toMatchObject({
-      type: "tool_use",
-      metadata: { sequence: 2 },
-    });
-    expect(messages[0]?.contentParts?.[1]).toMatchObject({
-      type: "thinking",
-      metadata: {
-        sequence: 3,
-        threadItemId: "reasoning-web-tools-item-sequence",
-      },
-    });
-    expect(messages[0]?.contentParts?.[2]).toMatchObject({
-      type: "tool_use",
-      metadata: { sequence: 4 },
-    });
+    expect(
+      messages[0]?.contentParts
+        ?.filter((part) => part.type === "tool_use")
+        .map((part) => part.toolCall.id),
+    ).toEqual([
+      "tool-web-search-item-sequence",
+      "tool-web-fetch-item-sequence",
+    ]);
   });
 
-  it("item_completed 的 canonical imageView media item 应同步到当前 assistant 消息", () => {
+  it("item_completed 的 canonical media 只更新 threadItems", () => {
     let messages: Message[] = [
       {
         id: "assistant-media-reference",
@@ -1573,24 +1580,13 @@ describe("agentStreamRuntimeHandler storage", () => {
     });
 
     expect(messages[0]?.runtimeTurnId).toBe("turn-media-reference");
-    expect(messages[0]?.contentParts?.map((part) => part.type)).toEqual([
-      "media_reference",
-    ]);
-    expect(messages[0]?.contentParts?.[0]).toMatchObject({
-      type: "media_reference",
-      reference: {
+    expect(messages[0]?.contentParts).toEqual([]);
+    expect(threadItems).toEqual([
+      expect.objectContaining({
+        id: "agent-media-reference-1",
+        type: "media",
         uri: "/tmp/lime-media/fixture-image-1.png",
-        mimeType: "image/png",
-        title: "fixture-image-1.png",
-        sourcePath: "/tmp/lime-media/fixture-image-1.png",
-      },
-      metadata: {
-        source: "agent_media_reference",
-        threadItemId: "agent-media-reference-1",
-        turnId: "turn-media-reference",
-        sequence: 5,
-        sourcePath: "/tmp/lime-media/fixture-image-1.png",
-      },
-    });
+      }),
+    ]);
   });
 });

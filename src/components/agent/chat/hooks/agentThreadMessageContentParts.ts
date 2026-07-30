@@ -65,7 +65,15 @@ function mediaKindFromMimeType(mimeType: string | null): string {
 function mediaTitleFromUri(uri: string): string {
   const withoutQuery = uri.split(/[?#]/u, 1)[0] ?? uri;
   const segments = withoutQuery.split(/[\\/]/u);
-  return segments.at(-1)?.trim() || uri;
+  const encodedTitle = segments.at(-1)?.trim();
+  if (!encodedTitle) {
+    return uri;
+  }
+  try {
+    return decodeURIComponent(encodedTitle);
+  } catch {
+    return encodedTitle;
+  }
 }
 
 function isAbsoluteLocalPath(uri: string): boolean {

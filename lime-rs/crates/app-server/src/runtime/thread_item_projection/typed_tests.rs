@@ -236,7 +236,7 @@ fn user_and_agent_messages_have_explicit_terminal_item_lifecycle() {
         agent.payload,
         ThreadItemPayload::AgentMessage {
             text: "answer".to_string(),
-            phase: Some("final_answer".to_string()),
+            phase: Some(agent_protocol::response_item::MessagePhase::FinalAnswer),
             content_parts: Vec::new(),
         }
     );
@@ -452,7 +452,7 @@ fn coalesces_message_delta_batch_into_the_same_typed_item() {
         changes.changed_items[0].payload,
         ThreadItemPayload::AgentMessage {
             text: "hello world!".to_string(),
-            phase: Some("commentary".to_string()),
+            phase: Some(agent_protocol::response_item::MessagePhase::Commentary),
             content_parts: Vec::new(),
         }
     );

@@ -699,8 +699,6 @@ pub(super) fn v0_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<AgentSessionStartResponse>("AgentSessionStartResponse"),
         typed_schema::<AgentSessionReadParams>("AgentSessionReadParams"),
         typed_schema::<AgentSessionReadResponse>("AgentSessionReadResponse"),
-        typed_schema::<AgentSessionMediaReadParams>("AgentSessionMediaReadParams"),
-        typed_schema::<AgentSessionMediaReadResponse>("AgentSessionMediaReadResponse"),
         typed_schema::<AgentSessionToolInventoryReadParams>("AgentSessionToolInventoryReadParams"),
         typed_schema::<AgentSessionToolInventoryReadResponse>(
             "AgentSessionToolInventoryReadResponse",
@@ -754,6 +752,8 @@ pub(super) fn v2_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<v2::McpServerElicitationRequestResponse>(
             "McpServerElicitationRequestResponse",
         ),
+        typed_schema::<v2::McpToolCallResult>("McpToolCallResult"),
+        typed_schema::<v2::McpToolCallError>("McpToolCallError"),
         typed_schema::<v2::CommandExecutionApprovalDecision>("CommandExecutionApprovalDecision"),
         typed_schema::<v2::CommandExecutionRequestApprovalParams>(
             "CommandExecutionRequestApprovalParams",
@@ -826,6 +826,8 @@ pub(super) fn v2_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<v2::WebSearchItem>("WebSearchItem"),
         typed_schema::<v2::SleepItem>("SleepItem"),
         typed_schema::<v2::ImageGenerationItem>("ImageGenerationItem"),
+        typed_schema::<v2::MediaReadParams>("MediaReadParams"),
+        typed_schema::<v2::MediaReadResponse>("MediaReadResponse"),
         typed_schema::<v2::ArtifactWriteParams>("ArtifactWriteParams"),
         typed_schema::<v2::ArtifactSnapshot>("ArtifactSnapshot"),
         typed_schema::<v2::ArtifactWriteResponse>("ArtifactWriteResponse"),

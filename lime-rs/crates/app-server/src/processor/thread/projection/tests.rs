@@ -1,5 +1,6 @@
 use super::*;
 use serde_json::json;
+use std::collections::HashMap;
 
 #[test]
 fn v2_read_params_choose_exact_turn_loading_mode() {
@@ -190,20 +191,164 @@ fn canonical_mcp_output_projects_codex_result_shape_when_only_truncation_remains
         panic!("MCP item");
     };
     assert_eq!(*status, v2::McpToolCallStatus::Failed);
-    assert_eq!(
-        result,
-        &Some(json!({
-            "content": [],
-            "_meta": {
-                "truncated": true,
-                "outputRef": "output-1"
-            }
-        }))
-    );
+    assert_eq!(result, &None);
     assert_eq!(
         error,
-        &Some(json!({ "message": "tool output unavailable" }))
+        &Some(v2::McpToolCallError {
+            message: "tool output unavailable".to_string()
+        })
     );
+}
+
+#[test]
+fn canonical_mcp_output_is_size_bounded_and_redacts_sensitive_fields() {
+    let mut thread = canonical_thread(false);
+    thread.turns[0].items[0] = canonical::ThreadItem {
+        session_id: canonical::SessionId::new("session-1"),
+        thread_id: canonical::ThreadId::new("thread-1"),
+        turn_id: canonical::TurnId::new("turn-1"),
+        item_id: canonical::ItemId::new("mcp-safe"),
+        sequence: 1,
+        ordinal: 1,
+        created_at_ms: 1_700_000_000_500,
+        updated_at_ms: 1_700_000_001_000,
+        completed_at_ms: Some(1_700_000_001_000),
+        kind: canonical::ItemKind::McpToolCall,
+        status: canonical::ItemStatus::Completed,
+        payload: canonical::ThreadItemPayload::McpToolCall {
+            call_id: "mcp-safe".to_string(),
+            server_name: "docs".to_string(),
+            tool_name: "search".to_string(),
+            arguments: vec![canonical::ToolArgument {
+                name: "token".to_string(),
+                value: "secret-value".to_string(),
+            }],
+            output: Some(canonical::ToolOutput {
+                text: Some("x".repeat(MAX_DISPLAY_JSON_BYTES * 2)),
+                structured_content: Some(json!({
+                    "password": "secret-value",
+                    "safe": "visible"
+                })),
+                output_ref: Some("sidecar://private-output-id".to_string()),
+                ..Default::default()
+            }),
+        },
+        metadata: json!({}),
+    };
+
+    let projected = project_thread(thread).expect("project bounded MCP result");
+    let v2::ThreadItem::McpToolCall {
+        arguments, result, ..
+    } = &projected.turns[0].items[0]
+    else {
+        panic!("MCP item");
+    };
+    let result = result.as_deref().expect("successful MCP result");
+    let wire = serde_json::to_value(result).expect("MCP result wire");
+    assert!(serde_json::to_vec(result).unwrap().len() <= MAX_DISPLAY_JSON_BYTES);
+    assert_eq!(arguments[0]["value"], "[redacted]");
+    assert_eq!(wire["structuredContent"]["password"], "[redacted]");
+    assert_eq!(wire["structuredContent"]["safe"], "visible");
+    assert_eq!(wire["_meta"]["truncated"], true);
+    assert_eq!(wire["_meta"]["outputAvailable"], true);
+    assert!(!wire.to_string().contains("private-output-id"));
+    assert!(!wire.to_string().contains("secret-value"));
+}
+
+#[test]
+fn canonical_dynamic_tool_output_is_tagged_bounded_and_redacted() {
+    let mut thread = canonical_thread(false);
+    thread.turns[0].items[0].kind = canonical::ItemKind::Tool;
+    thread.turns[0].items[0].status = canonical::ItemStatus::Completed;
+    thread.turns[0].items[0].payload = canonical::ThreadItemPayload::Tool {
+        call_id: "dynamic-safe".to_string(),
+        name: "lookup".to_string(),
+        arguments: Vec::new(),
+        output: Some(canonical::ToolOutput {
+            text: Some("x".repeat(MAX_DISPLAY_JSON_BYTES * 2)),
+            structured_content: Some(json!({
+                "password": "secret-value",
+                "safe": "visible"
+            })),
+            ..Default::default()
+        }),
+    };
+
+    let projected = project_thread(thread).expect("project bounded dynamic output");
+    let v2::ThreadItem::DynamicToolCall {
+        content_items: Some(content_items),
+        ..
+    } = &projected.turns[0].items[0]
+    else {
+        panic!("dynamic tool item");
+    };
+    let wire = serde_json::to_value(content_items).expect("dynamic output wire");
+    assert_eq!(wire[0]["type"], "inputText");
+    assert!(wire[0]["text"].as_str().unwrap().len() <= MAX_DISPLAY_STRING_BYTES);
+    assert!(wire[0]["text"]
+        .as_str()
+        .unwrap()
+        .ends_with("... [truncated]"));
+    assert_eq!(wire[1]["type"], "inputText");
+    assert_eq!(
+        serde_json::from_str::<Value>(wire[1]["text"].as_str().unwrap()).unwrap(),
+        json!({"password": "[redacted]", "safe": "visible"})
+    );
+    assert!(!wire.to_string().contains("secret-value"));
+}
+
+#[test]
+fn canonical_wait_projects_typed_agent_states_without_raw_output() {
+    let mut thread = canonical_thread(false);
+    thread.turns[0].items[0].kind = canonical::ItemKind::CollabAgentToolCall;
+    thread.turns[0].items[0].status = canonical::ItemStatus::Completed;
+    thread.turns[0].items[0].payload = canonical::ThreadItemPayload::CollabAgentToolCall {
+        call_id: "wait-typed-states".to_string(),
+        operation: canonical::CollabAgentOperation::Wait,
+        target_thread_id: None,
+        message: None,
+        output: Some(canonical::ToolOutput {
+            text: Some("model-visible wait output".to_string()),
+            ..Default::default()
+        }),
+        agent_states: HashMap::from([
+            (
+                canonical::ThreadId::new("child-completed"),
+                canonical::CollabAgentState {
+                    status: canonical::CollabAgentStatus::Completed,
+                    message: None,
+                },
+            ),
+            (
+                canonical::ThreadId::new("child-failed"),
+                canonical::CollabAgentState {
+                    status: canonical::CollabAgentStatus::Errored,
+                    message: Some("child failed".to_string()),
+                },
+            ),
+        ]),
+    };
+
+    let projected = project_thread(thread).expect("project typed wait states");
+    let v2::ThreadItem::CollabAgentToolCall { agents_states, .. } = &projected.turns[0].items[0]
+    else {
+        panic!("collab wait item");
+    };
+    assert_eq!(agents_states.len(), 2);
+    assert_eq!(
+        agents_states["child-completed"].status,
+        v2::CollabAgentStatus::Completed
+    );
+    assert_eq!(
+        agents_states["child-failed"],
+        v2::CollabAgentState {
+            status: v2::CollabAgentStatus::Errored,
+            message: Some("child failed".to_string()),
+        }
+    );
+    assert!(!serde_json::to_string(&projected)
+        .expect("serialize projected thread")
+        .contains("model-visible wait output"));
 }
 
 #[test]

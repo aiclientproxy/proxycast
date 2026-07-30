@@ -101,11 +101,26 @@ describe("code artifact workbench Electron fixture smoke guard", () => {
     expect(content).toContain('[data-testid="tool-call-row"]');
     expect(content).toContain("collectCodingWorkbenchGuiEvidence");
     expect(content).toContain("codingWorkbenchGuiEvidence");
+    expect(content).toContain("canvas-workbench-changes-files-toggle");
+    expect(content).toContain("filesPanelToggleClicked");
+    expect(content).not.toContain("file-changes-summary-toggle");
+    expect(content).toContain("path.basename(CODING_FILE_PATH)");
+    expect(content).toContain("present: panelText.includes(text)");
+    expect(content).toContain("panelText,");
+    expect(content).not.toMatch(
+      /panelTestId === ["']canvas-workbench-panel-changes["'][\s\S]*?\? bodyText[\s\S]*?: panelText/,
+    );
     expect(content).toContain("gui-coding-input");
     expect(content).toContain("GUI_CODING_PROMPT");
     expect(content).toContain("sendPromptFromGui");
     expect(content).toContain("guiPromptSubmitted");
     expect(content).toContain("guiSessionOpenAfterInputClick");
+    expect(content).toContain('logStage("wait-gui-coding-turn-terminal")');
+    const guiCodingTerminalFlow = content.slice(
+      content.indexOf('logStage("wait-gui-coding-read-model")'),
+      content.indexOf('logStage("open-session-after-gui-coding-input")'),
+    );
+    expect(guiCodingTerminalFlow).toContain("waitForCodeArtifactTurnTerminal");
     expect(content).toContain("clickCodingWorkbenchRecovery");
     expect(content).toContain("codingRecoveryEvidence");
     expect(content).toContain("waitForCodingRecoveryGuiTerminal");

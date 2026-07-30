@@ -45,6 +45,7 @@ import {
 import { buildFixtureAssertionReport } from "./claw-chat-current-fixture-assertions.mjs";
 import { resolveGateBExpectedIdentity } from "./claw-chat-current-fixture-assertion-context.mjs";
 import { collectGateBGuiEvidence } from "./claw-chat-current-fixture-gate-b-execution-evidence.mjs";
+import { captureEvidenceScreenshot } from "./claw-chat-current-fixture-screenshot.mjs";
 import {
   collectAppServerTraceEvidence,
   collectAgentUiPerformanceTraceEvidence,
@@ -568,6 +569,8 @@ async function run() {
     backendLedgerPath: options.keepTemp ? runtimeEnv.backendLedgerPath : null,
     backendLedger: backendLedgerEvidencePath,
     screenshot: null,
+    screenshotCapture: null,
+    failureScreenshotCapture: null,
     consoleErrors: [],
     pageErrors: [],
     rendererSnapshot: null,
@@ -654,6 +657,10 @@ async function run() {
     guiMediaReferenceCompleted: null,
     guiMediaReferenceSnapshot: null,
     guiMediaReferencePreview: null,
+    mediaReadV2Success: null,
+    mediaReadV2Trace: null,
+    mediaReadUnavailableMutation: null,
+    guiMediaReferenceUnavailableFallback: null,
     readModelMediaReferenceCompleted: null,
     readModelSkillsRuntimeCompleted: null,
     readModelExplicitSkillsRuntimeCompleted: null,
@@ -1143,12 +1150,12 @@ async function run() {
       })),
     );
     try {
-      await page.screenshot({
+      const screenshotCapture = await captureEvidenceScreenshot({
+        page,
         path: screenshotPath,
-        fullPage: true,
-        timeout: 15_000,
       });
-      summary.screenshot = screenshotPath;
+      summary.screenshot = screenshotCapture.path;
+      summary.screenshotCapture = sanitizeJson(screenshotCapture);
     } catch (screenshotError) {
       summary.screenshotError = sanitizeText(screenshotError);
     }
@@ -1261,12 +1268,12 @@ async function run() {
     summary.pageLifecycleEvents = pageLifecycleEvents;
     try {
       if (page) {
-        await page.screenshot({
+        const screenshotCapture = await captureEvidenceScreenshot({
+          page,
           path: failureScreenshotPath,
-          fullPage: true,
-          timeout: 15_000,
         });
-        summary.screenshot = failureScreenshotPath;
+        summary.screenshot = screenshotCapture.path;
+        summary.failureScreenshotCapture = sanitizeJson(screenshotCapture);
       }
     } catch (screenshotError) {
       summary.screenshotError = sanitizeText(screenshotError);

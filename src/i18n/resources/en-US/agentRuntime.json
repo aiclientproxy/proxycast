@@ -1148,5 +1148,7 @@
   "agentChat.toolCall.actionOverride.getLog.running": "Fetching logs",
   "agentChat.runtimeWarning.skillNotAvailable": "The selected Skill is not available.",
   "agentChat.runtimeWarning.skillLoadFailed": "The selected Skill could not be loaded.",
-  "agentChat.runtimeWarning.mentionNotAvailable": "The selected Mention could not be resolved."
+  "agentChat.runtimeWarning.mentionNotAvailable": "The selected Mention could not be resolved.",
+  "agentChat.runtimeWarning.unknownNotification": "This version does not recognize the runtime notification {{method}}. A protocol diagnostic was recorded.",
+  "agentChat.runtimeWarning.unprojectedNotification": "The runtime notification {{method}} is not connected to the current interface yet. A protocol diagnostic was recorded."
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentThreadItem } from "@/lib/api/agentProtocol";
 import {
   imageGenerationContentPartFromThreadItem,
+  mediaReferenceContentPartFromThreadItem,
   messageContentPartsFromAgentThreadItem,
 } from "./agentThreadMessageContentParts";
 
@@ -211,5 +212,36 @@ describe("imageGenerationContentPartFromThreadItem", () => {
     expect(
       imageGenerationContentPartFromThreadItem({ ...item, ...overrides }),
     ).toBeNull();
+  });
+});
+
+describe("mediaReferenceContentPartFromThreadItem", () => {
+  it("解码 sidecar URI 的可见文件名并保留安全 handle", () => {
+    const item = {
+      id: "media-1",
+      thread_id: "thread-1",
+      turn_id: "turn-1",
+      type: "media",
+      status: "completed",
+      sequence: 10,
+      uri: "sidecar://media/output-deadbeef/fixture%20result.png",
+      mime_type: "image/png",
+      started_at: "2026-07-27T10:00:00.000Z",
+      updated_at: "2026-07-27T10:00:01.000Z",
+      completed_at: "2026-07-27T10:00:01.000Z",
+    } satisfies Extract<AgentThreadItem, { type: "media" }>;
+
+    expect(mediaReferenceContentPartFromThreadItem(item)).toMatchObject({
+      type: "media_reference",
+      reference: {
+        uri: item.uri,
+        title: "fixture result.png",
+        mimeType: "image/png",
+      },
+      metadata: {
+        referenceUri: item.uri,
+        mimeType: "image/png",
+      },
+    });
   });
 });

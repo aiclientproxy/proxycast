@@ -37,6 +37,9 @@ mod thread_state;
 mod trace_context;
 
 pub use app_server_protocol::error_codes;
+pub use app_server_protocol::protocol::v2::{
+    MediaReadParams, MediaReadResponse, METHOD_MEDIA_READ,
+};
 use app_server_protocol::AgentEvent;
 pub use app_server_protocol::AgentInput;
 pub use app_server_protocol::AgentSession;
@@ -50,8 +53,6 @@ pub use app_server_protocol::AgentSessionApprovalDecision;
 pub use app_server_protocol::AgentSessionHandoffArtifact;
 pub use app_server_protocol::AgentSessionHandoffBundleExportParams;
 pub use app_server_protocol::AgentSessionHandoffBundleExportResponse;
-pub use app_server_protocol::AgentSessionMediaReadParams;
-pub use app_server_protocol::AgentSessionMediaReadResponse;
 pub use app_server_protocol::AgentSessionReplayCaseExportParams;
 pub use app_server_protocol::AgentSessionReplayCaseExportResponse;
 pub use app_server_protocol::AgentSessionReviewDecision;
@@ -87,7 +88,6 @@ pub use app_server_protocol::METHOD_AGENT_SESSION_ACTION_RESPOND;
 pub use app_server_protocol::METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT;
 pub use app_server_protocol::METHOD_AGENT_SESSION_EVENT;
 pub use app_server_protocol::METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT;
-pub use app_server_protocol::METHOD_AGENT_SESSION_MEDIA_READ;
 pub use app_server_protocol::METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT;
 pub use app_server_protocol::METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE;
 pub use app_server_protocol::METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT;
@@ -1964,7 +1964,7 @@ fn should_stream_transport_request(message: &JsonRpcMessage) -> bool {
     matches!(
         message,
         JsonRpcMessage::Request(request)
-            if request.method == METHOD_AGENT_SESSION_MEDIA_READ
+            if request.method == METHOD_MEDIA_READ
                     && request
                         .params
                         .as_ref()
@@ -3275,11 +3275,7 @@ mod tests {
     #[test]
     fn initialized_requests_spawn_transport_tasks_without_racing_initialize() {
         assert!(should_spawn_transport_request(&JsonRpcMessage::Request(
-            JsonRpcRequest::new(
-                RequestId::Integer(1),
-                METHOD_AGENT_SESSION_MEDIA_READ,
-                Some(json!({})),
-            ),
+            JsonRpcRequest::new(RequestId::Integer(1), METHOD_MEDIA_READ, Some(json!({})),),
         )));
         assert!(should_spawn_transport_request(&JsonRpcMessage::Request(
             JsonRpcRequest::new(RequestId::Integer(2), METHOD_TURN_START, Some(json!({})),),
@@ -3303,16 +3299,12 @@ mod tests {
         assert!(should_stream_transport_request(&JsonRpcMessage::Request(
             JsonRpcRequest::new(
                 RequestId::Integer(1),
-                METHOD_AGENT_SESSION_MEDIA_READ,
+                METHOD_MEDIA_READ,
                 Some(json!({ "stream": true })),
             ),
         )));
         assert!(!should_stream_transport_request(&JsonRpcMessage::Request(
-            JsonRpcRequest::new(
-                RequestId::Integer(2),
-                METHOD_AGENT_SESSION_MEDIA_READ,
-                Some(json!({})),
-            ),
+            JsonRpcRequest::new(RequestId::Integer(2), METHOD_MEDIA_READ, Some(json!({})),),
         )));
     }
 

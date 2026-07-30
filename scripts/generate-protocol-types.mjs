@@ -117,6 +117,12 @@ function schemaToTs(schema, indent = 0) {
     return Array.from(new Set(variants)).join(" | ");
   }
 
+  // A nullable object preserves properties on the object branch. Check null
+  // before the object shortcut so `type: ["object", "null"]` stays nullable.
+  if (schema.type === "null") {
+    return "null";
+  }
+
   // 对象类型
   if (schema.type === "object" || schema.properties) {
     return objectTypeToTs(schema, indent);

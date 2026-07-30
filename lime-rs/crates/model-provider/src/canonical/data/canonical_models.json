@@ -38,6 +38,36 @@
     }
   },
   {
+    "id": "agnes/agnes-2.0-flash",
+    "name": "Agnes: Agnes 2.0 Flash",
+    "context_length": 524288,
+    "task_families": [
+      "chat",
+      "reasoning",
+      "vision_understanding"
+    ],
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "runtime_features": [
+      "streaming",
+      "tool_calling",
+      "reasoning"
+    ],
+    "supports_tools": true,
+    "supports_reasoning": true,
+    "pricing": {
+      "prompt": 0.0,
+      "completion": 0.0,
+      "request": 0.0,
+      "image": 0.0
+    }
+  },
+  {
     "id": "anthropic/claude-3-haiku",
     "name": "Anthropic: Claude 3 Haiku",
     "context_length": 200000,

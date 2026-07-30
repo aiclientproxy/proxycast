@@ -74,8 +74,11 @@ export interface AgentMessageContentImage {
   data: string;
   uri?: string;
   source_path?: string;
+  display_name?: string;
+  unavailable_reason?: "host_reference_required";
   detail?: "auto" | "low" | "high" | "original";
 }
+
 export interface AgentMessageContentSkill {
   type: "skill";
   name: string;
@@ -162,6 +165,7 @@ export interface AgentThreadUserMessageItem extends AgentThreadItemBase {
   type: "user_message";
   content: string;
   content_parts?: AgentMessageContent[];
+  client_id?: string;
 }
 export interface AgentThreadContentReference {
   uri: string;
@@ -188,7 +192,7 @@ export interface AgentThreadAgentMessageItem extends AgentThreadItemBase {
   type: "agent_message";
   text: string;
   contentParts?: AgentThreadMessageContentPart[];
-  phase?: string;
+  phase?: "commentary" | "final_answer";
 }
 export interface AgentThreadPlanItem extends AgentThreadItemBase {
   type: "plan";
@@ -209,10 +213,18 @@ export interface AgentThreadToolCallItem extends AgentThreadItemBase {
   error?: string;
   metadata?: unknown;
 }
+export type AgentThreadCommandExecutionStatus =
+  | "inProgress"
+  | "completed"
+  | "declined"
+  | "failed";
 export interface AgentThreadCommandExecutionItem extends AgentThreadItemBase {
   type: "command_execution";
   command: string;
   cwd: string;
+  plugin_id?: string;
+  script_path?: string;
+  command_status?: AgentThreadCommandExecutionStatus;
   aggregated_output?: string;
   exit_code?: number;
   error?: string;
@@ -321,10 +333,22 @@ export interface AgentThreadImageGenerationItem extends AgentThreadItemBase {
   saved_path?: string;
 }
 
-export interface AgentThreadExtensionItem extends AgentThreadItemBase {
-  type: "extension";
-  name: string;
-  data: Record<string, unknown>;
+export interface AgentThreadHookPromptFragment {
+  hook_run_id: string;
+  text: string;
+}
+export interface AgentThreadHookPromptItem extends AgentThreadItemBase {
+  type: "hook_prompt";
+  fragments: AgentThreadHookPromptFragment[];
+}
+export interface AgentThreadSleepItem extends AgentThreadItemBase {
+  type: "sleep";
+  duration_ms?: number;
+}
+export interface AgentThreadReviewBoundaryItem extends AgentThreadItemBase {
+  type: "review_boundary";
+  boundary: "entered" | "exited";
+  review: string;
 }
 export interface AgentThreadSubagentActivityItem extends AgentThreadItemBase {
   type: "subagent_activity";
@@ -389,7 +413,9 @@ export type AgentThreadItem =
   | AgentThreadFileArtifactItem
   | AgentThreadMediaItem
   | AgentThreadImageGenerationItem
-  | AgentThreadExtensionItem
+  | AgentThreadHookPromptItem
+  | AgentThreadSleepItem
+  | AgentThreadReviewBoundaryItem
   | AgentThreadSubagentActivityItem
   | AgentThreadExpertProfileSwitchItem
   | AgentThreadWarningItem
@@ -840,7 +866,22 @@ export interface AgentEventError {
   type: "error";
   message: string;
 }
-export type AgentEvent =
+export interface AgentEventEnvelope {
+  event_id?: string;
+  protocol_method?: string;
+  protocol_revision?: string;
+  renderer_event_received_at?: number;
+  request_id?: string;
+  run_id?: string;
+  sequence?: number;
+  session_id?: string;
+  server_event_emitted_at?: number;
+  thread_id?: string;
+  trace_id?: string;
+  turn_id?: string;
+  timestamp?: string;
+}
+export type AgentEvent = (
   | AgentEventThreadStarted
   | AgentEventTurnStarted
   | AgentEventItemStarted
@@ -891,7 +932,9 @@ export type AgentEvent =
   | AgentEventQuotaBlocked
   | AgentEventMessage
   | AgentEventWarning
-  | AgentEventError;
+  | AgentEventError
+) &
+  AgentEventEnvelope;
 export interface AgentUserInputOp {
   type: "user_input";
   eventName: string;

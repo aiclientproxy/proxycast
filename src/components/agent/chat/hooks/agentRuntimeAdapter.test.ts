@@ -172,8 +172,32 @@ describe("defaultAgentRuntimeAdapter", () => {
     await expect(adapter.getSessionReadModel("session-9")).resolves.toEqual({
       thread_id: "thread-9",
     });
-    expect(client.getAgentRuntimeSession).toHaveBeenCalledWith("session-9");
+    expect(client.getAgentRuntimeSession).toHaveBeenCalledWith(
+      "session-9",
+      undefined,
+    );
     expect(client.getAgentRuntimeThreadRead).toHaveBeenCalledWith("thread-9");
+  });
+
+  it("getSessionReadModel 应拒绝错配 session/thread identity 且不得读取其他 Thread", async () => {
+    const client = {
+      ...mockRuntimeClient,
+      getAgentRuntimeSession: vi.fn().mockResolvedValue({
+        id: "session-other",
+        thread_id: "thread-other",
+        created_at: 1,
+        updated_at: 2,
+        messages: [],
+        thread_read: null,
+      }),
+      getAgentRuntimeThreadRead: vi.fn(),
+    };
+    const adapter = createAgentRuntimeAdapter({ client });
+
+    await expect(
+      adapter.getSessionReadModel("session-requested"),
+    ).rejects.toThrow("canonical session detail identity mismatch");
+    expect(client.getAgentRuntimeThreadRead).not.toHaveBeenCalled();
   });
 
   it("getThreadTurnControl 应透传 canonical threadId 并返回窄投影", async () => {
@@ -309,6 +333,86 @@ describe("defaultAgentRuntimeAdapter", () => {
     expect(client.submitAgentRuntimeTurn).not.toHaveBeenCalled();
   });
 
+  it("resumeThread 应把真实 response snapshot 投影后交给 stream consumer", async () => {
+    const client = {
+      ...mockRuntimeClient,
+      resumeThread: vi.fn().mockResolvedValue({
+        result: {
+          approvalPolicy: null,
+          approvalsReviewer: null,
+          cwd: "/workspace",
+          model: "gpt-5.4",
+          modelProvider: "openai",
+          sandbox: null,
+          thread: {
+            cliVersion: "0.0.0",
+            createdAt: 1_753_132_800,
+            cwd: "/workspace",
+            ephemeral: false,
+            id: "thread-resume",
+            modelProvider: "openai",
+            preview: "Resume",
+            sessionId: "session-resume",
+            source: "appServer",
+            status: { type: "idle" },
+            turns: [
+              {
+                id: "turn-resume",
+                status: "completed",
+                startedAt: 1_753_132_800,
+                completedAt: 1_753_132_801,
+                items: [
+                  {
+                    id: "item-resume",
+                    type: "agentMessage",
+                    text: "已恢复",
+                  },
+                ],
+              },
+            ],
+            updatedAt: 1_753_132_801,
+          },
+        },
+        notifications: [],
+      }),
+    };
+    const adapter = createAgentRuntimeAdapter({ client });
+    const consumeReplay = vi.fn();
+
+    await expect(
+      adapter.resumeThread("thread-resume", consumeReplay),
+    ).resolves.toBe(true);
+
+    expect(client.resumeThread).toHaveBeenCalledWith({
+      threadId: "thread-resume",
+    });
+    expect(consumeReplay).toHaveBeenCalledTimes(1);
+    expect(consumeReplay.mock.calls[0]?.[0].getProjection()).toMatchObject({
+      thread_id: "thread-resume",
+      items: [expect.objectContaining({ id: "item-resume" })],
+      turns: [
+        expect.objectContaining({ id: "turn-resume", status: "completed" }),
+      ],
+    });
+  });
+
+  it("resumeThread identity 错配时应 fail closed 且不发布 replay", async () => {
+    const client = {
+      ...mockRuntimeClient,
+      resumeThread: vi.fn().mockResolvedValue({
+        result: { thread: { id: "thread-other" } },
+        notifications: [],
+      }),
+    };
+    const adapter = createAgentRuntimeAdapter({ client });
+    const consumeReplay = vi.fn();
+
+    await expect(
+      adapter.resumeThread("thread-requested", consumeReplay),
+    ).resolves.toBe(false);
+    expect(consumeReplay).not.toHaveBeenCalled();
+  });
+
   it("getSession 应合并同一会话同一请求形状的并发读取", async () => {
     let resolveSession!: (value: { id: string; messages: unknown[] }) => void;
     const sessionPromise = new Promise<{ id: string; messages: unknown[] }>(
@@ -341,6 +445,45 @@ describe("defaultAgentRuntimeAdapter", () => {
     await expect(second).resolves.toMatchObject({ id: "session-9" });
   });
 
+  it("详情与 read model 应共享默认 40 条历史窗口读取", async () => {
+    let resolveSession!: (value: {
+      id: string;
+      messages: unknown[];
+      thread_id?: string;
+    }) => void;
+    const sessionPromise = new Promise<{
+      id: string;
+      messages: unknown[];
+      thread_id?: string;
+    }>((resolve) => {
+      resolveSession = resolve;
+    });
+    const client = {
+      ...mockRuntimeClient,
+      getAgentRuntimeSession: vi.fn().mockReturnValue(sessionPromise),
+    };
+    const adapter = createAgentRuntimeAdapter({ client });
+
+    const detail = adapter.getSession("session-9", { historyLimit: 40 });
+    vi.mocked(client.getAgentRuntimeThreadRead).mockResolvedValue({
+      thread_id: "thread-9",
+    });
+    const readModel = adapter.getSessionReadModel("session-9");
+
+    expect(client.getAgentRuntimeSession).toHaveBeenCalledTimes(1);
+
+    resolveSession({
+      id: "session-9",
+      thread_id: "thread-9",
+      messages: [],
+    });
+    await expect(detail).resolves.toMatchObject({ id: "session-9" });
+    await expect(readModel).resolves.toMatchObject({
+      thread_id: "thread-9",
+    });
+    expect(client.getAgentRuntimeThreadRead).toHaveBeenCalledWith("thread-9");
+  });
+
   it("getSession 不应合并不同历史窗口请求，完成后下一次应重新读取", async () => {
     const client = {
       ...mockRuntimeClient,
@@ -358,7 +501,8 @@ describe("defaultAgentRuntimeAdapter", () => {
       adapter.getSession("session-9", { historyLimit: 40 }),
       adapter.getSession("session-9", {
         historyLimit: 50,
-        historyBeforeMessageId: 123,
+        historyItemCursor: "item-page-2",
+        historyTurnCursor: "turn-page-2",
       }),
     ]);
     await adapter.getSession("session-9", { historyLimit: 40 });
@@ -372,13 +516,41 @@ describe("defaultAgentRuntimeAdapter", () => {
     expect(client.getAgentRuntimeSession).toHaveBeenNthCalledWith(
       2,
       "session-9",
-      { historyLimit: 50, historyBeforeMessageId: 123 },
+      {
+        historyLimit: 50,
+        historyItemCursor: "item-page-2",
+        historyTurnCursor: "turn-page-2",
+      },
     );
     expect(client.getAgentRuntimeSession).toHaveBeenNthCalledWith(
       3,
       "session-9",
       { historyLimit: 40 },
     );
+  });
+
+  it("getSession 不应合并不同 opaque Item/Turn cursor 请求", async () => {
+    const client = {
+      ...mockRuntimeClient,
+      getAgentRuntimeSession: vi
+        .fn()
+        .mockResolvedValueOnce({ id: "session-9", messages: ["page-a"] })
+        .mockResolvedValueOnce({ id: "session-9", messages: ["page-b"] }),
+    };
+    const adapter = createAgentRuntimeAdapter({ client });
+
+    await adapter.getSession("session-9", {
+      historyLimit: 50,
+      historyItemCursor: "item-a",
+      historyTurnCursor: "turn-a",
+    });
+    await adapter.getSession("session-9", {
+      historyLimit: 50,
+      historyItemCursor: "item-b",
+      historyTurnCursor: "turn-b",
+    });
+
+    expect(client.getAgentRuntimeSession).toHaveBeenCalledTimes(2);
   });
 
   it("generateSessionTitle 应透传标题预览文本", async () => {

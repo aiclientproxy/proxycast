@@ -134,6 +134,9 @@ export function isTimelineProcessItem(item: AgentThreadItem): boolean {
     item.type === "patch" ||
     item.type === "web_search" ||
     item.type === "hook" ||
+    item.type === "hook_prompt" ||
+    item.type === "sleep" ||
+    item.type === "review_boundary" ||
     item.type === "subagent_activity" ||
     item.type === "context_compaction" ||
     item.type === "approval_request" ||

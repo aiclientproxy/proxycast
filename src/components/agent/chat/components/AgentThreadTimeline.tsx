@@ -1,9 +1,4 @@
-import React, {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 
@@ -76,6 +71,7 @@ interface AgentThreadTimelineProps {
   collapseInactiveDetails?: boolean;
   expandCompletedProcessDetails?: boolean;
   showOperationalDetails?: boolean;
+  showInlineStatusHint?: boolean;
 }
 
 const INITIAL_DETAIL_ITEM_COUNT = 24;
@@ -515,6 +511,7 @@ export const AgentThreadTimeline: React.FC<AgentThreadTimelineProps> = ({
   collapseInactiveDetails = false,
   expandCompletedProcessDetails = false,
   showOperationalDetails = true,
+  showInlineStatusHint = true,
 }) => {
   const pendingRuntimeConfirmationPrompt = useMemo(
     () => resolvePendingRuntimeConfirmationPrompt({ items, actionRequests }),
@@ -565,7 +562,7 @@ export const AgentThreadTimeline: React.FC<AgentThreadTimelineProps> = ({
       data-testid="agent-thread-flow"
       data-placement={placement}
     >
-      {inlineStatusHint ? (
+      {showInlineStatusHint && inlineStatusHint ? (
         <ThreadInlineStatusHint hint={inlineStatusHint} />
       ) : null}
       {displayModel.orderedBlocks.map((block, index) => {

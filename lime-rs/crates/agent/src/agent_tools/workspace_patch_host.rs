@@ -1087,6 +1087,7 @@ mod tests {
                 sidecar_reference: None,
                 metadata: HashMap::from([("source".to_string(), json!("fixed_web_search"))]),
                 agent_control_projection_facts: Vec::new(),
+                agent_control_state_facts: Vec::new(),
             },
         }
     }

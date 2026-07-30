@@ -8,7 +8,12 @@ import {
   type AppServerJsonRpcNotification,
 } from "@/lib/api/appServer";
 import { providerTraceStageFromEventType } from "./appServerEventPayloadUtils";
-import { readAppServerV2NotificationRoute } from "./appServerV2Notification";
+import {
+  isAppServerV2NotificationMethod,
+  readAppServerV2NotificationRoute,
+  resetAppServerV2NotificationProjectionState,
+} from "./appServerV2Notification";
+import { readAppServerNotificationDriftRoute } from "./appServerNotificationDrift";
 
 type GateResult =
   | { kind: "accepted"; notifications: AppServerJsonRpcNotification[] }
@@ -51,6 +56,7 @@ type SequenceGateNotification = Parameters<
 export function resetAgentRuntimeEventSequenceGatesForTests(): void {
   gates.clear();
   directItemStates.clear();
+  resetAppServerV2NotificationProjectionState();
 }
 
 export function agentRuntimeSequenceGateAllowsNotification(
@@ -144,6 +150,12 @@ function processNotification(
   }
   const event = readAppServerAgentEvent(notification.params);
   if (!event) {
+    if (
+      !isAppServerV2NotificationMethod(notification.method) &&
+      readAppServerNotificationDriftRoute(notification)
+    ) {
+      return { kind: "accepted", notifications: [notification] };
+    }
     return { kind: "ignored" };
   }
   if (isCurrentNonThreadSideChannelEvent(event.type)) {

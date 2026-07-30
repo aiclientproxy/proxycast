@@ -5,7 +5,14 @@
     "repository": "/Users/coso/Documents/dev/rust/codex",
     "revision": "4c43465133428898aa84f0bfc02c306ed65fb66a",
     "itemSource": "codex-rs/app-server-protocol/src/protocol/v2/item.rs",
-    "methodSource": "codex-rs/app-server-protocol/src/protocol/common.rs"
+    "itemSchemaSource": "codex-rs/app-server-protocol/schema/json/codex_app_server_protocol.v2.schemas.json",
+    "itemSchemaSha256": "380e97f5778c40c7fead146c6af5da97e478164b194c0ce1b15edac80d8c8527",
+    "methodSource": "codex-rs/app-server-protocol/src/protocol/common.rs",
+    "notificationSchemaSource": "codex-rs/app-server-protocol/schema/json/ServerNotification.json",
+    "notificationSchemaSha256": "61341f7cc0730e6b0c4f59be97d18acec190fa87aa7551ae03d1abfef0536311",
+    "requestSchemaSource": "codex-rs/app-server-protocol/schema/json/ServerRequest.json",
+    "requestSchemaSha256": "27ce8a1fc4b9326911f7c42379ff9fa661eee70060a7a2af942813247625d887",
+    "schemaSnapshotSha256": "70f1fc9b1e6fdf0e9e7dc2791cc5e019145384f71974119002b1a35a3c0f52ad"
   },
   "factSources": {
     "itemInventory": "internal/refactor/v1/fixtures/item-inventory.v0.1.json",
@@ -74,8 +81,16 @@
       "outlets": ["pendingInteraction", "timeline"]
     },
     { "method": "item/completed", "outlets": ["timeline"] },
-    { "method": "rawResponseItem/completed", "outlets": ["diagnostics"] },
-    { "method": "rawResponse/completed", "outlets": ["diagnostics"] },
+    {
+      "method": "rawResponseItem/completed",
+      "outlets": ["diagnostics"],
+      "schemaExcluded": true
+    },
+    {
+      "method": "rawResponse/completed",
+      "outlets": ["diagnostics"],
+      "schemaExcluded": true
+    },
     { "method": "item/agentMessage/delta", "outlets": ["timeline"] },
     { "method": "item/plan/delta", "outlets": ["timeline"] },
     {
@@ -190,7 +205,11 @@
       "method": "mcpServer/elicitation/request",
       "owner": "pendingInteraction"
     },
-    { "method": "currentTime/read", "owner": "hostCapability" },
+    {
+      "method": "currentTime/read",
+      "owner": "hostCapability",
+      "schemaExcluded": true
+    },
     {
       "method": "item/permissions/requestApproval",
       "owner": "pendingInteraction"

@@ -596,10 +596,10 @@ fn is_final_agent_message(item: &ThreadItem) -> bool {
     let ThreadItemPayload::AgentMessage { phase, .. } = &item.payload else {
         return false;
     };
-    phase.as_deref().is_some_and(|phase| {
-        let normalized = phase.trim().to_ascii_lowercase().replace('-', "_");
-        matches!(normalized.as_str(), "final" | "final_answer")
-    })
+    matches!(
+        phase,
+        Some(agent_protocol::response_item::MessagePhase::FinalAnswer)
+    )
 }
 
 fn strip_user_message_prefix(text: &str) -> &str {

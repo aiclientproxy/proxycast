@@ -33,6 +33,7 @@ pub const METHOD_THREAD_GOAL_SET: &str = "thread/goal/set";
 pub const METHOD_THREAD_GOAL_GET: &str = "thread/goal/get";
 pub const METHOD_THREAD_GOAL_CLEAR: &str = "thread/goal/clear";
 pub const METHOD_ARTIFACT_WRITE: &str = "artifact/write";
+pub const METHOD_MEDIA_READ: &str = "media/read";
 pub const METHOD_MODEL_LIST: &str = "model/list";
 pub const METHOD_MODEL_LIST_UPDATED: &str = "model/list/updated";
 pub const METHOD_TURN_START: &str = "turn/start";
@@ -136,6 +137,8 @@ pub enum Method {
     ThreadGoalClear,
     #[serde(rename = "artifact/write")]
     ArtifactWrite,
+    #[serde(rename = "media/read")]
+    MediaRead,
     #[serde(rename = "model/list")]
     ModelList,
     #[serde(rename = "turn/start")]
@@ -182,6 +185,7 @@ impl Method {
             Self::ThreadGoalGet => METHOD_THREAD_GOAL_GET,
             Self::ThreadGoalClear => METHOD_THREAD_GOAL_CLEAR,
             Self::ArtifactWrite => METHOD_ARTIFACT_WRITE,
+            Self::MediaRead => METHOD_MEDIA_READ,
             Self::ModelList => METHOD_MODEL_LIST,
             Self::TurnStart => METHOD_TURN_START,
             Self::TurnSteer => METHOD_TURN_STEER,
@@ -226,6 +230,7 @@ impl Method {
             METHOD_THREAD_GOAL_GET => Some(Self::ThreadGoalGet),
             METHOD_THREAD_GOAL_CLEAR => Some(Self::ThreadGoalClear),
             METHOD_ARTIFACT_WRITE => Some(Self::ArtifactWrite),
+            METHOD_MEDIA_READ => Some(Self::MediaRead),
             METHOD_MODEL_LIST => Some(Self::ModelList),
             METHOD_TURN_START => Some(Self::TurnStart),
             METHOD_TURN_STEER => Some(Self::TurnSteer),
@@ -267,6 +272,7 @@ pub const METHODS: &[&str] = &[
     METHOD_THREAD_GOAL_GET,
     METHOD_THREAD_GOAL_CLEAR,
     METHOD_ARTIFACT_WRITE,
+    METHOD_MEDIA_READ,
     METHOD_MODEL_LIST,
     METHOD_TURN_START,
     METHOD_TURN_STEER,

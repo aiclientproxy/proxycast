@@ -9,8 +9,11 @@ const paths = {
   smoke: "scripts/electron/session-history-fixture-smoke.mjs",
   threadFixture:
     "scripts/electron/lib/session-history-thread-read-isomorphic-fixture.mjs",
+  seedHelper: "scripts/electron/lib/session-history-canonical-thread-seed.mjs",
   threadOracle:
     "scripts/electron/lib/session-history-thread-read-isomorphic-oracle.mjs",
+  longListFixture: "scripts/electron/lib/session-history-long-list-fixture.mjs",
+  longListOracle: "scripts/electron/lib/session-history-long-list-oracle.mjs",
   archiveOracle:
     "scripts/electron/lib/session-history-thread-archive-oracle.mjs",
 };
@@ -87,7 +90,9 @@ describe("agent session history Electron fixture smoke guard", () => {
   });
 
   it("keeps thread read/list/turns/resume on the v2 Thread/Turn/Item contract", () => {
-    const fixture = read(paths.threadFixture);
+    const fixture = [read(paths.threadFixture), read(paths.seedHelper)].join(
+      "\n",
+    );
     const oracle = read(paths.threadOracle);
 
     expect(fixture).toContain("THREAD_READ_PAGE_ISOMORPHIC");
@@ -105,6 +110,8 @@ describe("agent session history Electron fixture smoke guard", () => {
     expect(fixture).toContain('uri: "data:image/png;');
     expect(fixture).toContain('type: "reasoning"');
     expect(fixture).toContain('type: "agentMessage"');
+    expect(fixture).toContain('phase: "final_answer"');
+    expect(fixture).not.toContain('phase: "final"');
     expect(fixture).not.toContain("content: turn.userText");
     expect(fixture).not.toContain("projected_turns");
     expect(fixture).not.toContain("projected_items");
@@ -129,6 +136,33 @@ describe("agent session history Electron fixture smoke guard", () => {
     expect(oracle).not.toContain("historyLimit:");
     expect(oracle).not.toContain("historyOffset:");
     expect(oracle).not.toContain("result?.resume?.resumed");
+  });
+
+  it("proves bounded direct Turn rendering for a deterministic long history", () => {
+    const smoke = read(paths.smoke);
+    const fixture = read(paths.longListFixture);
+    const oracle = read(paths.longListOracle);
+
+    expect(smoke).toContain("seedThreadReadLongListCanonicalThread");
+    expect(smoke).toContain("runThreadReadLongListDomOracle");
+    expect(smoke).toContain("assertThreadReadLongListDomOracle");
+    expect(smoke).toContain("threadReadLongListSummary");
+    expect(smoke).toContain("longListScreenshot");
+    expect(fixture).toContain("THREAD_READ_LONG_LIST_TURN_COUNT = 240");
+    expect(fixture).toContain("THREAD_READ_LONG_LIST_ITEM_COUNT");
+    expect(fixture).toContain("LONG_HISTORY_TERMINAL_MARKER");
+    expect(fixture).toContain("seedCanonicalHistoryThread");
+    expect(oracle).toContain("MAX_INITIAL_DOM_TURN_GROUPS");
+    expect(oracle).toContain("MAX_INITIAL_DOM_TEXT_LENGTH");
+    expect(oracle).toContain("window.__LIME_AGENTUI_PERF__?.summary");
+    expect(oracle).toContain("clickToFirstMessageListPaintMs");
+    expect(oracle).toContain("messageListComputeMaxMs");
+    expect(oracle).toContain('"thread/read"');
+    expect(oracle).toContain('"thread/turns/list"');
+    expect(oracle).toContain('"thread/items/list"');
+    expect(oracle).toContain('"canonical_turn"');
+    expect(oracle).toContain('"message_group"');
+    expect(oracle).not.toContain("agent_runtime_");
   });
 
   it("does not use legacy runtime or production mock fallback", () => {

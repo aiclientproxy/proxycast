@@ -1,25 +1,25 @@
 # 验证与证据矩阵
 
-> status: current verification contract
+> status: historical verification matrix
 > owner: quality-workflow
 > last_verified: 2026-07-15
 >
-> 当前 v2 代码切片以 `internal/exec-plans/refactor-v2-implementation.md` 为执行事实源；本矩阵只约束验证等级，不再把已完成切片描述为“仅文档”。
+> 本矩阵记录旧广义 Refactor v2 切片的验证等级和 dated evidence；当前渲染对齐执行事实以 `internal/refactor/v2/IMPLEMENTATION-PLAN.md`、`internal/aiprompts/quality-workflow.md` 与当前代码为准。
 
 ## 风险到门禁
 
-| 变更 | 最小验证 | 产品证据 |
-| --- | --- | --- |
-| protocol/method/schema/scope | `npm run test:contracts` + Rust protocol tests | schema fixture diff、typed client round trip |
-| agent-runtime queue/turn/tool | Rust related + `npm run smoke:agent-runtime-current-fixture` | accepted/queued/completed/failed/interrupted/resume |
-| Item/materialization/read model | projection unit + thread-store tests | create/update/remove/rollback/stale/pagination/repair |
-| provider/capability/lowering | provider tests + contract tests | each protocol request/event/media/usage/error |
-| MCP/skills/multi-agent | domain tests + current smoke | snapshot/approval/edge/mailbox/recovery |
-| Renderer projection | Vitest + ESLint/typecheck | Gate A screenshot/state assertions |
-| Electron/Workspace/bridge | `npm run verify:gui-smoke` | Gate B real Electron/preload/IPC/App Server/read model/UI |
-| i18n | `npm run i18n:check:json` | five locale keys and visible states |
-| legacy deletion | `npm run governance:legacy-report` | zero production references + negative guard |
-| script/package boundary | `npm run governance:scripts` | no unregistered root script/package |
+| 变更                            | 最小验证                                                     | 产品证据                                                  |
+| ------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------- |
+| protocol/method/schema/scope    | `npm run test:contracts` + Rust protocol tests               | schema fixture diff、typed client round trip              |
+| agent-runtime queue/turn/tool   | Rust related + `npm run smoke:agent-runtime-current-fixture` | accepted/queued/completed/failed/interrupted/resume       |
+| Item/materialization/read model | projection unit + thread-store tests                         | create/update/remove/rollback/stale/pagination/repair     |
+| provider/capability/lowering    | provider tests + contract tests                              | each protocol request/event/media/usage/error             |
+| MCP/skills/multi-agent          | domain tests + current smoke                                 | snapshot/approval/edge/mailbox/recovery                   |
+| Renderer projection             | Vitest + ESLint/typecheck                                    | Gate A screenshot/state assertions                        |
+| Electron/Workspace/bridge       | `npm run verify:gui-smoke`                                   | Gate B real Electron/preload/IPC/App Server/read model/UI |
+| i18n                            | `npm run i18n:check:json`                                    | five locale keys and visible states                       |
+| legacy deletion                 | `npm run governance:legacy-report`                           | zero production references + negative guard               |
+| script/package boundary         | `npm run governance:scripts`                                 | no unregistered root script/package                       |
 
 ## Evidence record format
 

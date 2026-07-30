@@ -1699,124 +1699,6 @@
       "title": "AgentSessionListResponse",
       "type": "object"
     },
-    "AgentSessionMediaReadParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "length": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "maxBytes": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "offset": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "refId": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "sessionId": {
-          "type": "string"
-        },
-        "sidecarRef": true,
-        "stream": {
-          "default": false,
-          "type": "boolean"
-        },
-        "uri": {
-          "type": [
-            "null",
-            "string"
-          ]
-        }
-      },
-      "required": [
-        "sessionId"
-      ],
-      "title": "AgentSessionMediaReadParams",
-      "type": "object"
-    },
-    "AgentSessionMediaReadResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "bytes": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "contentBase64": {
-          "type": "string"
-        },
-        "contentRange": {
-          "type": "string"
-        },
-        "hasMore": {
-          "type": "boolean"
-        },
-        "length": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "mimeType": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "offset": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sessionId": {
-          "type": "string"
-        },
-        "sha256": {
-          "type": "string"
-        },
-        "sidecarRef": true,
-        "totalBytes": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "uri": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "bytes",
-        "contentBase64",
-        "contentRange",
-        "hasMore",
-        "length",
-        "offset",
-        "sessionId",
-        "sha256",
-        "totalBytes",
-        "uri"
-      ],
-      "title": "AgentSessionMediaReadResponse",
-      "type": "object"
-    },
     "AgentSessionOverview": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -8515,25 +8397,6 @@
               "$ref": "#/$defs/RequestId"
             },
             "method": {
-              "const": "agentSession/media/read",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
               "const": "agentSession/action/respond",
               "type": "string"
             },
@@ -8719,7 +8582,6 @@
         "agentSession/fileCheckpoint/list",
         "agentSession/fileCheckpoint/restore",
         "agentSession/handoffBundle/export",
-        "agentSession/media/read",
         "agentSession/replayCase/export",
         "agentSession/reviewDecision/save",
         "agentSession/reviewDecisionTemplate/export",
@@ -11265,6 +11127,58 @@
           ],
           "type": "string"
         },
+        "MediaReadParams": {
+          "properties": {
+            "length": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "maxBytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "offset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "refId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "sidecarRef": true,
+            "stream": {
+              "default": false,
+              "type": "boolean"
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "uri": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "threadId"
+          ],
+          "type": "object"
+        },
         "ModeKind": {
           "description": "Initial collaboration mode for a turn or session.",
           "enum": [
@@ -13439,6 +13353,26 @@
             },
             "params": {
               "$ref": "#/$defs/ArtifactWriteParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "media/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/MediaReadParams"
             }
           },
           "required": [
@@ -19057,42 +18991,50 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
         {
-          "additionalProperties": false,
           "properties": {
-            "inputText": {
-              "properties": {
-                "text": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "text"
-              ],
-              "type": "object"
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "const": "inputText",
+              "type": "string"
             }
           },
           "required": [
-            "inputText"
+            "text",
+            "type"
           ],
           "type": "object"
         },
         {
-          "additionalProperties": false,
           "properties": {
-            "inputImage": {
-              "properties": {
-                "image_url": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "image_url"
-              ],
-              "type": "object"
+            "imageUrl": {
+              "type": "string"
+            },
+            "type": {
+              "const": "inputImage",
+              "type": "string"
             }
           },
           "required": [
-            "inputImage"
+            "imageUrl",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "audioUrl": {
+              "type": "string"
+            },
+            "type": {
+              "const": "inputAudio",
+              "type": "string"
+            }
+          },
+          "required": [
+            "audioUrl",
+            "type"
           ],
           "type": "object"
         }
@@ -23099,42 +23041,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -23319,6 +23269,13 @@
           ],
           "type": "object"
         },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -23488,9 +23445,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -23670,7 +23631,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -23686,7 +23660,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -23703,7 +23695,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -24318,42 +24312,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -24538,6 +24540,13 @@
           ],
           "type": "object"
         },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -24707,9 +24716,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -24889,7 +24902,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -24905,7 +24931,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -24922,7 +24966,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -27043,6 +27089,19 @@
       "title": "McpToolCallAppContext",
       "type": "object"
     },
+    "McpToolCallError": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "title": "McpToolCallError",
+      "type": "object"
+    },
     "McpToolCallParams": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -27174,6 +27233,24 @@
       "title": "McpToolCallResponse",
       "type": "object"
     },
+    "McpToolCallResult": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "_meta": true,
+        "content": {
+          "items": true,
+          "type": "array"
+        },
+        "structuredContent": true
+      },
+      "required": [
+        "_meta",
+        "content",
+        "structuredContent"
+      ],
+      "title": "McpToolCallResult",
+      "type": "object"
+    },
     "McpToolCallStatus": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
@@ -27257,6 +27334,124 @@
         "query"
       ],
       "title": "McpToolSearchParams",
+      "type": "object"
+    },
+    "MediaReadParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "length": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "maxBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "refId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sidecarRef": true,
+        "stream": {
+          "default": false,
+          "type": "boolean"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "uri": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "title": "MediaReadParams",
+      "type": "object"
+    },
+    "MediaReadResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contentBase64": {
+          "type": "string"
+        },
+        "contentRange": {
+          "type": "string"
+        },
+        "hasMore": {
+          "type": "boolean"
+        },
+        "length": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mimeType": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "sidecarRef": true,
+        "threadId": {
+          "type": "string"
+        },
+        "totalBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "bytes",
+        "contentBase64",
+        "contentRange",
+        "hasMore",
+        "length",
+        "offset",
+        "sha256",
+        "threadId",
+        "totalBytes",
+        "uri"
+      ],
+      "title": "MediaReadResponse",
       "type": "object"
     },
     "MediaTaskArtifactAudioCompleteParams": {
@@ -29722,6 +29917,7 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
         "artifact/write",
+        "media/read",
         "model/list",
         "thread/approveGuardianDeniedAction",
         "thread/archive",
@@ -41120,42 +41316,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -41459,6 +41663,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "ModeKind": {
           "description": "Initial collaboration mode for a turn or session.",
@@ -42168,9 +42379,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -42350,7 +42565,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -42366,7 +42594,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -42383,7 +42629,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -46894,42 +47142,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -47137,6 +47393,13 @@
           ],
           "type": "object"
         },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -47320,9 +47583,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -47502,7 +47769,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -47518,7 +47798,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -47535,7 +47833,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -48874,42 +49174,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -49116,6 +49424,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "MultiAgentMode": {
           "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
@@ -49465,9 +49780,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -49647,7 +49966,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -49663,7 +49995,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -49680,7 +50030,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -50954,42 +51306,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -51173,6 +51533,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "PatchApplyStatus": {
           "enum": [
@@ -51481,9 +51848,13 @@
               ]
             },
             "phase": {
-              "type": [
-                "null",
-                "string"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MessagePhase"
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "text": {
@@ -51663,7 +52034,20 @@
                 "null"
               ]
             },
-            "error": true,
+            "error": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "message"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "id": {
               "type": "string"
             },
@@ -51679,7 +52063,25 @@
                 "string"
               ]
             },
-            "result": true,
+            "result": {
+              "properties": {
+                "_meta": true,
+                "content": {
+                  "items": true,
+                  "type": "array"
+                },
+                "structuredContent": true
+              },
+              "required": [
+                "_meta",
+                "content",
+                "structuredContent"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
             "server": {
               "type": "string"
             },
@@ -51696,7 +52098,9 @@
           },
           "required": [
             "arguments",
+            "error",
             "id",
+            "result",
             "server",
             "status",
             "tool",
@@ -52149,42 +52553,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -52369,6 +52781,13 @@
           ],
           "type": "object"
         },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -52538,9 +52957,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -52720,7 +53143,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -52736,7 +53172,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -52753,7 +53207,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -53411,42 +53867,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -53631,6 +54095,13 @@
           ],
           "type": "object"
         },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -53800,9 +54271,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -53982,7 +54457,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -53998,7 +54486,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -54015,7 +54521,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -54809,42 +55317,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -55051,6 +55567,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "PatchApplyStatus": {
           "enum": [
@@ -55376,9 +55899,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -55558,7 +56085,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -55574,7 +56114,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -55591,7 +56149,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -56522,42 +57082,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -56764,6 +57332,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "PatchApplyStatus": {
           "enum": [
@@ -57089,9 +57664,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -57271,7 +57850,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -57287,7 +57879,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -57304,7 +57914,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -58093,42 +58705,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -58335,6 +58955,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "PatchApplyStatus": {
           "enum": [
@@ -58660,9 +59287,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -58842,7 +59473,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -58858,7 +59502,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -58875,7 +59537,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -59832,42 +60496,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -60074,6 +60746,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "MultiAgentMode": {
           "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
@@ -60423,9 +61102,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -60605,7 +61288,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -60621,7 +61317,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -60638,7 +61352,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -61734,42 +62450,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -61976,6 +62700,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "PatchApplyStatus": {
           "enum": [
@@ -62301,9 +63032,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -62483,7 +63218,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -62499,7 +63247,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -62516,7 +63282,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -63300,42 +64068,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -63542,6 +64318,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "PatchApplyStatus": {
           "enum": [
@@ -63867,9 +64650,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -64049,7 +64836,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -64065,7 +64865,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -64082,7 +64900,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -65472,42 +66292,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -65714,6 +66542,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "MultiAgentMode": {
           "description": "Effective multi-agent delegation policy copied from the Codex protocol shape.",
@@ -66063,9 +66898,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -66245,7 +67084,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -66261,7 +67113,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -66278,7 +67148,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -67090,42 +67962,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -67332,6 +68212,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "PatchApplyStatus": {
           "enum": [
@@ -67657,9 +68544,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -67839,7 +68730,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -67855,7 +68759,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -67872,7 +68794,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -68992,42 +69916,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -69212,6 +70144,13 @@
           ],
           "type": "object"
         },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -69381,9 +70320,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -69563,7 +70506,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -69579,7 +70535,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -69596,7 +70570,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -70318,42 +71294,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -70560,6 +71544,13 @@
             "path"
           ],
           "type": "object"
+        },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
         },
         "PatchApplyStatus": {
           "enum": [
@@ -70885,9 +71876,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -71067,7 +72062,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -71083,7 +72091,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -71100,7 +72126,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -72172,42 +73200,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -72392,6 +73428,13 @@
           ],
           "type": "object"
         },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -72561,9 +73604,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -72743,7 +73790,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -72759,7 +73819,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -72776,7 +73854,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -73459,42 +74539,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -73679,6 +74767,13 @@
           ],
           "type": "object"
         },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -73848,9 +74943,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -74030,7 +75129,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -74046,7 +75158,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -74063,7 +75193,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -75250,42 +76382,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -75470,6 +76610,13 @@
           ],
           "type": "object"
         },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -75639,9 +76786,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -75821,7 +76972,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -75837,7 +77001,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -75854,7 +77036,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -76548,42 +77732,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -76768,6 +77960,13 @@
           ],
           "type": "object"
         },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -76937,9 +78136,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -77119,7 +78322,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -77135,7 +78351,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -77152,7 +78386,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -78113,42 +79349,50 @@
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
-              "additionalProperties": false,
               "properties": {
-                "inputText": {
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ],
-                  "type": "object"
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputText",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputText"
+                "text",
+                "type"
               ],
               "type": "object"
             },
             {
-              "additionalProperties": false,
               "properties": {
-                "inputImage": {
-                  "properties": {
-                    "image_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "image_url"
-                  ],
-                  "type": "object"
+                "imageUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputImage",
+                  "type": "string"
                 }
               },
               "required": [
-                "inputImage"
+                "imageUrl",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "audioUrl": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "inputAudio",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "audioUrl",
+                "type"
               ],
               "type": "object"
             }
@@ -78333,6 +79577,13 @@
           ],
           "type": "object"
         },
+        "MessagePhase": {
+          "enum": [
+            "commentary",
+            "final_answer"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -78502,9 +79753,13 @@
                   ]
                 },
                 "phase": {
-                  "type": [
-                    "null",
-                    "string"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/MessagePhase"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "text": {
@@ -78684,7 +79939,20 @@
                     "null"
                   ]
                 },
-                "error": true,
+                "error": {
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "id": {
                   "type": "string"
                 },
@@ -78700,7 +79968,25 @@
                     "string"
                   ]
                 },
-                "result": true,
+                "result": {
+                  "properties": {
+                    "_meta": true,
+                    "content": {
+                      "items": true,
+                      "type": "array"
+                    },
+                    "structuredContent": true
+                  },
+                  "required": [
+                    "_meta",
+                    "content",
+                    "structuredContent"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
                 "server": {
                   "type": "string"
                 },
@@ -78717,7 +80003,9 @@
               },
               "required": [
                 "arguments",
+                "error",
                 "id",
+                "result",
                 "server",
                 "status",
                 "tool",
@@ -83322,7 +84610,6 @@
               "agentSession/fileCheckpoint/list",
               "agentSession/fileCheckpoint/restore",
               "agentSession/handoffBundle/export",
-              "agentSession/media/read",
               "agentSession/replayCase/export",
               "agentSession/reviewDecision/save",
               "agentSession/reviewDecisionTemplate/export",
@@ -83434,6 +84721,7 @@
               "mcpTool/list",
               "mcpTool/listForContext",
               "mcpTool/search",
+              "media/read",
               "mediaTaskArtifact/audio/complete",
               "mediaTaskArtifact/audio/create",
               "mediaTaskArtifact/cancel",

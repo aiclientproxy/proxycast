@@ -31,7 +31,10 @@ describe("MessageList history window", () => {
         '[data-testid="message-list-persisted-history-window"]',
       ),
     ).not.toBeNull();
-    expect(container.textContent).toContain("latest 2 / 320 messages");
+    expect(container.textContent).toContain(
+      "latest 1 conversation entries are shown first",
+    );
+    expect(container.textContent).not.toContain("/ 320");
 
     const button = container.querySelector(
       '[data-testid="message-list-load-full-history"]',
@@ -44,6 +47,109 @@ describe("MessageList history window", () => {
     });
 
     expect(onLoadFullHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("历史总数未知时不应展示猜测总数", () => {
+    const container = render(createConversationMessages(2), {
+      sessionHistoryWindow: {
+        loadedMessages: 2,
+        totalMessages: null,
+        hasMore: true,
+        isLoadingFull: false,
+        error: null,
+      },
+      onLoadFullHistory: vi.fn(),
+    });
+
+    expect(container.textContent).toContain(
+      "latest 1 conversation entries are shown first; earlier history is still available",
+    );
+    expect(container.textContent).not.toContain("latest 1 /");
+    expect(
+      container.querySelector('[data-testid="message-list-load-full-history"]'),
+    ).not.toBeNull();
+  });
+
+  it("canonical cursor 已到 EOF 时不应按旧 Message 总数显示加载入口", () => {
+    const container = render(createConversationMessages(2), {
+      sessionHistoryWindow: {
+        loadedMessages: 2,
+        totalMessages: 320,
+        hasMore: false,
+        isLoadingFull: false,
+        error: null,
+      },
+      onLoadFullHistory: vi.fn(),
+    });
+
+    expect(
+      container.querySelector(
+        '[data-testid="message-list-persisted-history-window"]',
+      ),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-testid="message-list-load-full-history"]'),
+    ).toBeNull();
+  });
+
+  it("canonical Turn 与 residual Message 数量不同时应由 render entry 负责加载计数", () => {
+    const timestamp = "2026-04-25T10:00:00.000Z";
+    const turns: AgentThreadTurn[] = Array.from({ length: 3 }, (_, index) => ({
+      id: `turn-entry-owner-${index + 1}`,
+      thread_id: "thread-entry-owner",
+      prompt_text: `canonical ${index + 1}`,
+      status: "completed",
+      started_at: timestamp,
+      completed_at: timestamp,
+      created_at: timestamp,
+      updated_at: timestamp,
+    }));
+    const threadItems: AgentThreadItem[] = turns.map((turn, index) => ({
+      id: `item-entry-owner-${index + 1}`,
+      thread_id: turn.thread_id,
+      turn_id: turn.id,
+      sequence: 1,
+      status: "completed",
+      started_at: timestamp,
+      completed_at: timestamp,
+      updated_at: timestamp,
+      type: "tool_call",
+      tool_name: "Read",
+      arguments: { file_path: `/repo/entry-${index + 1}.ts` },
+    }));
+    const container = render(
+      [
+        {
+          id: "residual-local-message",
+          role: "assistant",
+          content: "本地残留消息",
+          timestamp: new Date(timestamp),
+        } as Message,
+      ],
+      {
+        currentTurnId: null,
+        turns,
+        threadItems,
+        sessionHistoryWindow: {
+          loadedMessages: 1,
+          totalMessages: null,
+          hasMore: true,
+          isLoadingFull: false,
+          error: null,
+        },
+        onLoadFullHistory: vi.fn(),
+      },
+    );
+
+    expect(container.textContent).toContain(
+      "latest 3 conversation entries are shown first",
+    );
+    expect(
+      container.querySelectorAll('[data-render-entry-kind="canonical_turn"]'),
+    ).toHaveLength(2);
+    expect(
+      container.querySelectorAll('[data-render-entry-kind="message_group"]'),
+    ).toHaveLength(1);
   });
 
   it("旧会话首帧应先渲染消息文本并延后历史 timeline", async () => {
@@ -111,19 +217,24 @@ describe("MessageList history window", () => {
       },
     });
 
-    expect(container.textContent).toContain("latest 40 / 188 messages");
-    expect(container.textContent).toContain("消息 40");
-    expect(container.textContent).toContain("消息 31");
-    expect(container.textContent).not.toContain("消息 30");
     expect(container.textContent).toContain(
-      "30 earlier messages can be expanded",
+      "latest 20 conversation entries are shown first",
+    );
+    expect(container.textContent).toContain("消息 40");
+    expect(container.textContent).toContain("消息 21");
+    expect(container.textContent).not.toContain("消息 20Saturday");
+    expect(
+      container.querySelectorAll('[data-testid="message-turn-group"]'),
+    ).toHaveLength(10);
+    expect(container.textContent).toContain(
+      "10 earlier entries can be expanded",
     );
 
     act(() => {
       vi.advanceTimersByTime(2_000);
     });
 
-    expect(container.textContent).not.toContain("消息 30");
+    expect(container.textContent).not.toContain("消息 20Saturday");
 
     const expandButton = container.querySelector(
       '[data-testid="message-list-expand-history"]',
@@ -133,7 +244,9 @@ describe("MessageList history window", () => {
       expandButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(container.textContent).toContain("消息 30");
+    expect(
+      container.querySelectorAll('[data-testid="message-turn-group"]'),
+    ).toHaveLength(20);
   });
 
   it("旧会话消息较少但执行过程很多时也应延后构建 timeline", async () => {
@@ -246,7 +359,7 @@ describe("MessageList history window", () => {
     expect(mockAgentThreadTimeline).not.toHaveBeenCalled();
   });
 
-  it("已分页旧会话应延后扫描 threadItems，idle 后只生成尾部历史摘要", () => {
+  it("已分页旧会话首帧应建立 canonical ownership 并延后历史细节", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const turns: AgentThreadTurn[] = Array.from({ length: 8 }, (_, index) => {
       const minute = String(index + 1).padStart(2, "0");
@@ -315,10 +428,10 @@ describe("MessageList history window", () => {
 
     expect(commit?.metrics).toEqual(
       expect.objectContaining({
-        renderedTurnsCount: 2,
+        renderedTurnsCount: 8,
         shouldDeferHistoricalTimeline: true,
-        threadItemsCount: 0,
-        threadItemsScanDeferred: true,
+        threadItemsCount: 40,
+        threadItemsScanDeferred: false,
         turnsCount: 8,
       }),
     );
@@ -336,8 +449,8 @@ describe("MessageList history window", () => {
       );
     expect(idleCommit?.metrics).toEqual(
       expect.objectContaining({
-        renderedTurnsCount: 2,
-        threadItemsCount: 10,
+        renderedTurnsCount: 8,
+        threadItemsCount: 40,
         turnsCount: 8,
       }),
     );
@@ -345,7 +458,7 @@ describe("MessageList history window", () => {
     expect(container.textContent).not.toContain("/repo/file-");
   });
 
-  it("旧历史窗口发送中但 active turn 尚未出现时不应扫描旧 threadItems", () => {
+  it("旧历史窗口发送中但 active turn 尚未出现时仍应保持 canonical ownership", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const turns: AgentThreadTurn[] = Array.from({ length: 8 }, (_, index) => {
       const minute = String(index + 1).padStart(2, "0");
@@ -423,10 +536,10 @@ describe("MessageList history window", () => {
 
     expect(commit?.metrics).toEqual(
       expect.objectContaining({
-        renderedTurnsCount: 2,
+        renderedTurnsCount: 8,
         shouldDeferHistoricalTimeline: true,
-        threadItemsCount: 0,
-        threadItemsScanDeferred: true,
+        threadItemsCount: 40,
+        threadItemsScanDeferred: false,
         turnsCount: 8,
       }),
     );
@@ -445,8 +558,8 @@ describe("MessageList history window", () => {
 
     expect(idleCommit?.metrics).toEqual(
       expect.objectContaining({
-        renderedTurnsCount: 2,
-        threadItemsCount: 10,
+        renderedTurnsCount: 8,
+        threadItemsCount: 40,
         turnsCount: 8,
       }),
     );
@@ -472,12 +585,14 @@ describe("MessageList history window", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("latest 40 / 188 messages");
-    expect(container.textContent).toContain("消息 40");
-    expect(container.textContent).toContain("消息 31");
-    expect(container.textContent).not.toContain("消息 30");
     expect(container.textContent).toContain(
-      "30 earlier messages can be expanded",
+      "latest 20 conversation entries are shown first",
+    );
+    expect(container.textContent).toContain("消息 40");
+    expect(container.textContent).toContain("消息 21");
+    expect(container.textContent).not.toContain("消息 20Saturday");
+    expect(container.textContent).toContain(
+      "10 earlier entries can be expanded",
     );
 
     const commit = getAgentUiPerformanceMetrics().find(
@@ -486,8 +601,8 @@ describe("MessageList history window", () => {
 
     expect(commit?.metrics).toEqual(
       expect.objectContaining({
-        hiddenHistoryCount: 30,
-        renderedMessagesCount: 10,
+        hiddenHistoryCount: 10,
+        renderedMessagesCount: 20,
         visibleMessagesCount: 40,
       }),
     );
@@ -600,7 +715,7 @@ describe("MessageList history window", () => {
         messageListComputeMs: expect.any(Number),
         messageListThreadItemsScanMs: expect.any(Number),
         messageListTimelineBuildMs: expect.any(Number),
-        threadItemsScanDeferred: true,
+        threadItemsScanDeferred: false,
       }),
     );
 

@@ -53,7 +53,7 @@ function createItem(overrides: Partial<AgentThreadItem> = {}): AgentThreadItem {
 }
 
 describe("agentSessionState WebTools hydrate", () => {
-  it("hydrate App Server WebSearch/WebFetch detail.items 时应保留中间 reasoning 顺序", () => {
+  it("hydrate App Server WebSearch/WebFetch 时由 threadItems 保留中间 reasoning 顺序", () => {
     const turnId = "turn-web-tools-hydrate";
     const detail = {
       id: "topic-web-tools-hydrate",
@@ -159,16 +159,14 @@ describe("agentSessionState WebTools hydrate", () => {
     ]);
     expect(
       result.snapshot.messages[1]?.contentParts?.map((part) => part.type),
-    ).toEqual(["tool_use", "thinking", "tool_use", "text"]);
-    expect(result.snapshot.messages[1]?.contentParts?.[0]).toMatchObject({
-      type: "tool_use",
-      metadata: { sequence: 2 },
-      toolCall: { name: "WebSearch" },
-    });
-    expect(result.snapshot.messages[1]?.contentParts?.[1]).toMatchObject({
-      type: "thinking",
-      text: "搜索结果还需要继续筛掉广告软文，我先读取有效来源。",
-    });
+    ).toEqual(["text"]);
+    expect(result.snapshot.threadItems.map((item) => item.id)).toEqual([
+      "user-web-tools-hydrate",
+      "tool-search-hydrate",
+      "reasoning-web-tools-hydrate",
+      "tool-fetch-hydrate",
+      "assistant-web-tools-final",
+    ]);
   });
 
   it("同会话 hydrate 应保留 canonical WebTools 顺序，但历史 GUI 只投影 final", () => {
@@ -362,7 +360,7 @@ describe("agentSessionState WebTools hydrate", () => {
     expect(result.snapshot.messages[1]?.content).toContain("网页搜索渲染结论");
     expect(
       result.snapshot.messages[1]?.contentParts?.map((part) => part.type),
-    ).toEqual(["text", "tool_use", "thinking", "tool_use", "text"]);
+    ).toEqual(["text", "tool_use", "tool_use", "text"]);
     const messageGroups = buildMessageGroupsProjection(
       result.snapshot.messages,
     );

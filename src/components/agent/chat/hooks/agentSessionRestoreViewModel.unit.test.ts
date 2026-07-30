@@ -7,7 +7,10 @@ import {
 } from "./agentSessionRestoreViewModel";
 import type { Topic } from "./agentChatShared";
 
-function createMessage(index: number, overrides: Partial<Message> = {}): Message {
+function createMessage(
+  index: number,
+  overrides: Partial<Message> = {},
+): Message {
   return {
     id: overrides.id ?? `message-${index}`,
     role: overrides.role ?? (index % 2 === 0 ? "assistant" : "user"),
@@ -88,7 +91,7 @@ function createTopic(overrides: Partial<Topic> = {}): Topic {
 }
 
 describe("agentSessionRestoreViewModel", () => {
-  it("无 transient messages 时应直接使用 cached snapshot 并恢复历史窗口", () => {
+  it("无 transient messages 时应使用 cached snapshot 但不伪造 history cursor", () => {
     const viewModel = buildAgentSessionRestoreViewModel({
       cachedSnapshot: createCachedSnapshot({
         cacheMetadata: {
@@ -113,12 +116,7 @@ describe("agentSessionRestoreViewModel", () => {
     expect(viewModel).toMatchObject({
       sessionId: "session-1",
       currentTurnId: "cached-turn",
-      historyWindow: {
-        loadedMessages: 1,
-        totalMessages: 10,
-        isLoadingFull: false,
-        error: null,
-      },
+      historyWindow: null,
     });
     expect(viewModel.messages.map((message) => message.id)).toEqual([
       "cached-message",
@@ -129,6 +127,31 @@ describe("agentSessionRestoreViewModel", () => {
     expect(viewModel.threadItems.map((item) => item.id)).toEqual([
       "cached-item",
     ]);
+  });
+
+  it("缓存仅有 Message count 时不应恢复 canonical history window", () => {
+    const viewModel = buildAgentSessionRestoreViewModel({
+      cachedSnapshot: createCachedSnapshot({
+        cacheMetadata: {
+          storageKind: "transient",
+          freshness: "fresh",
+          updatedAt: 1,
+          lastAccessedAt: 1,
+          expiresAt: 2,
+          staleUntil: 3,
+          sessionUpdatedAt: 4,
+          messagesCount: null,
+          historyTruncated: true,
+        },
+      }),
+      scopedCurrentTurnId: null,
+      scopedItems: [],
+      scopedMessages: [],
+      scopedSessionCandidate: "session-unknown-total",
+      scopedTurns: [],
+    });
+
+    expect(viewModel.historyWindow).toBeNull();
   });
 
   it("有 transient messages 时应合并 cached messages 并优先保留 transient turns/items/currentTurn", () => {
@@ -252,12 +275,7 @@ describe("agentSessionRestoreViewModel", () => {
     expect(viewModel).toMatchObject({
       sessionId: "topic-1",
       currentTurnId: "cached-turn",
-      historyWindow: {
-        loadedMessages: 1,
-        totalMessages: 5,
-        isLoadingFull: false,
-        error: null,
-      },
+      historyWindow: null,
       metricContext: {
         cacheFreshness: "stale",
         cacheStorageKind: "persisted",

@@ -38,6 +38,17 @@ function isTransientSessionReadError(error: unknown): boolean {
   );
 }
 
+function normalizeOpaqueHistoryCursor(
+  options: AgentRuntimeGetSessionOptions | undefined,
+  key: "historyItemCursor" | "historyTurnCursor",
+): string | null | undefined {
+  if (!options || !(key in options)) {
+    return undefined;
+  }
+  const value = options[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 function omitUndefinedSessionOptionalFields(
   detail: AgentSessionDetail,
 ): AgentSessionDetail {
@@ -51,6 +62,8 @@ export interface AgentRuntimeSessionClientDeps {
   appServerClient?: AppServerSessionRpcClient;
   appServerSessionClient?: AppServerSessionClient;
 }
+
+const defaultAppServerSessionClient = createAppServerSessionClient();
 
 export const AGENT_RUNTIME_SESSIONS_CHANGED_EVENT =
   "lime:agent-runtime-sessions-changed";
@@ -79,10 +92,12 @@ export function notifyAgentRuntimeSessionsChanged(
   );
 }
 
-export function createSessionClient({
-  appServerClient,
-  appServerSessionClient = createAppServerSessionClient({ appServerClient }),
-}: AgentRuntimeSessionClientDeps = {}) {
+export function createSessionClient(deps: AgentRuntimeSessionClientDeps = {}) {
+  const appServerSessionClient =
+    deps.appServerSessionClient ??
+    (deps.appServerClient
+      ? createAppServerSessionClient({ appServerClient: deps.appServerClient })
+      : defaultAppServerSessionClient);
   async function createAgentRuntimeSession(
     workspaceId?: string,
     name?: string,
@@ -219,18 +234,14 @@ export function createSessionClient({
       options.historyLimit >= 0
         ? Math.trunc(options.historyLimit)
         : undefined;
-    const historyOffset =
-      typeof options?.historyOffset === "number" &&
-      Number.isFinite(options.historyOffset) &&
-      options.historyOffset >= 0
-        ? Math.trunc(options.historyOffset)
-        : undefined;
-    const historyBeforeMessageId =
-      typeof options?.historyBeforeMessageId === "number" &&
-      Number.isFinite(options.historyBeforeMessageId) &&
-      options.historyBeforeMessageId > 0
-        ? Math.trunc(options.historyBeforeMessageId)
-        : undefined;
+    const historyItemCursor = normalizeOpaqueHistoryCursor(
+      options,
+      "historyItemCursor",
+    );
+    const historyTurnCursor = normalizeOpaqueHistoryCursor(
+      options,
+      "historyTurnCursor",
+    );
     const slowTimer: number | null =
       typeof window !== "undefined"
         ? window.setTimeout(() => {
@@ -243,9 +254,9 @@ export function createSessionClient({
               "runtimeGetSession.slow",
               {
                 elapsedMs: Date.now() - startedAt,
+                historyItemCursor: historyItemCursor ?? null,
                 historyLimit: historyLimit ?? null,
-                historyOffset: historyOffset ?? null,
-                historyBeforeMessageId: historyBeforeMessageId ?? null,
+                historyTurnCursor: historyTurnCursor ?? null,
                 resumeSessionStartHooks,
                 sessionId,
                 source,
@@ -260,9 +271,9 @@ export function createSessionClient({
         : null;
 
     const getSessionMetricContext = {
+      historyItemCursor: historyItemCursor ?? null,
       historyLimit: historyLimit ?? null,
-      historyOffset: historyOffset ?? null,
-      historyBeforeMessageId: historyBeforeMessageId ?? null,
+      historyTurnCursor: historyTurnCursor ?? null,
       resumeSessionStartHooks,
       sessionId,
       source,
@@ -283,10 +294,8 @@ export function createSessionClient({
         {
           ...(resumeSessionStartHooks ? { resumeSessionStartHooks: true } : {}),
           ...(typeof historyLimit === "number" ? { historyLimit } : {}),
-          ...(typeof historyOffset === "number" ? { historyOffset } : {}),
-          ...(typeof historyBeforeMessageId === "number"
-            ? { historyBeforeMessageId }
-            : {}),
+          ...(historyItemCursor !== undefined ? { historyItemCursor } : {}),
+          ...(historyTurnCursor !== undefined ? { historyTurnCursor } : {}),
         },
       );
       const normalizedDetail = detail as AgentSessionDetail | null | undefined;
@@ -319,9 +328,9 @@ export function createSessionClient({
       });
       logAgentDebug("AgentApi", "runtimeGetSession.success", {
         durationMs: Date.now() - startedAt,
+        historyItemCursor: historyItemCursor ?? null,
         historyLimit: historyLimit ?? null,
-        historyOffset: historyOffset ?? null,
-        historyBeforeMessageId: historyBeforeMessageId ?? null,
+        historyTurnCursor: historyTurnCursor ?? null,
         itemsCount: normalizedSessionDetail.items?.length ?? 0,
         messagesCount: normalizedSessionDetail.messages?.length ?? 0,
         resumeSessionStartHooks,
@@ -342,9 +351,9 @@ export function createSessionClient({
         {
           durationMs: Date.now() - startedAt,
           error,
+          historyItemCursor: historyItemCursor ?? null,
           historyLimit: historyLimit ?? null,
-          historyOffset: historyOffset ?? null,
-          historyBeforeMessageId: historyBeforeMessageId ?? null,
+          historyTurnCursor: historyTurnCursor ?? null,
           resumeSessionStartHooks,
           sessionId,
           source,

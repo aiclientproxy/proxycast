@@ -8,7 +8,7 @@ use crate::tool_executor::{
     RuntimeToolExecutionError, RuntimeToolExecutionRequest, RuntimeToolExecutionResult,
     RuntimeToolPolicyErrorKind,
 };
-use agent_protocol::ThreadId;
+use agent_protocol::{CollabAgentState, ThreadId};
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -266,6 +266,7 @@ pub struct AgentControlGatewayRequest {
 pub struct AgentControlGatewayResult {
     pub output: Value,
     pub projection_facts: Vec<SubAgentProjectionFact>,
+    pub state_facts: Vec<AgentStateProjectionFact>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -280,6 +281,12 @@ pub struct SubAgentProjectionFact {
     pub target_thread_id: ThreadId,
     pub activity: SubAgentProjectionActivity,
     pub detail: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentStateProjectionFact {
+    pub target_thread_id: ThreadId,
+    pub state: CollabAgentState,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -401,12 +408,14 @@ fn runtime_execution_result(
     let AgentControlGatewayResult {
         output,
         projection_facts,
+        state_facts,
     } = result;
     let output =
         serde_json::to_string(&output).map_err(agent_control_result_serialization_error)?;
     Ok(
         RuntimeToolExecutionResult::new(true, output, None, Default::default())
-            .with_agent_control_projection_facts(projection_facts),
+            .with_agent_control_projection_facts(projection_facts)
+            .with_agent_control_state_facts(state_facts),
     )
 }
 
@@ -653,6 +662,7 @@ mod tests {
             Ok(AgentControlGatewayResult {
                 output: json!({ "accepted": true }),
                 projection_facts: Vec::new(),
+                state_facts: Vec::new(),
             })
         }
     }
@@ -941,7 +951,7 @@ mod tests {
 
     #[test]
     fn transports_typed_projection_facts_outside_model_visible_output() {
-        let expected = vec![
+        let expected_activity = vec![
             SubAgentProjectionFact {
                 target_thread_id: ThreadId::new("thread-child"),
                 activity: SubAgentProjectionActivity::Started,
@@ -958,14 +968,23 @@ mod tests {
                 detail: None,
             },
         ];
+        let expected_states = vec![AgentStateProjectionFact {
+            target_thread_id: ThreadId::new("thread-child"),
+            state: CollabAgentState {
+                status: agent_protocol::CollabAgentStatus::Completed,
+                message: None,
+            },
+        }];
         let result = runtime_execution_result(AgentControlGatewayResult {
             output: json!({ "accepted": true }),
-            projection_facts: expected.clone(),
+            projection_facts: expected_activity.clone(),
+            state_facts: expected_states.clone(),
         })
         .expect("runtime projection");
 
         assert_eq!(result.output, "{\"accepted\":true}");
-        assert_eq!(result.agent_control_projection_facts, expected);
+        assert_eq!(result.agent_control_projection_facts, expected_activity);
+        assert_eq!(result.agent_control_state_facts, expected_states);
         assert!(result.metadata.is_empty());
 
         let normalized =
@@ -973,9 +992,11 @@ mod tests {
                 crate::tool_executor::RuntimeToolExecutionOutcome::Result(result),
                 1,
             );
-        assert_eq!(normalized.agent_control_projection_facts, expected);
+        assert_eq!(normalized.agent_control_projection_facts, expected_activity);
+        assert_eq!(normalized.agent_control_state_facts, expected_states);
         let serialized = serde_json::to_value(normalized).expect("serialize normalized output");
         assert!(serialized.get("agent_control_projection_facts").is_none());
+        assert!(serialized.get("agent_control_state_facts").is_none());
     }
 
     #[test]
@@ -983,6 +1004,7 @@ mod tests {
         let result = runtime_execution_result(AgentControlGatewayResult {
             output: json!({ "agents": [] }),
             projection_facts: Vec::new(),
+            state_facts: Vec::new(),
         })
         .expect("runtime projection");
 

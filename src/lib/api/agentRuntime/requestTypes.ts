@@ -4,6 +4,8 @@ export interface AgentRuntimeCreateSessionOptions {
   metadata?: Record<string, unknown>;
 }
 
+export const AGENT_RUNTIME_DEFAULT_HISTORY_LIMIT = 40;
+
 export interface AgentRuntimeInterruptTurnRequest {
   session_id: string;
   turn_id?: string;
@@ -30,17 +32,17 @@ export interface AgentRuntimeGetSessionOptions {
    */
   source?: string;
   /**
-   * 限制返回的历史窗口数量；传 0 表示请求完整历史。
+   * 限制每个 canonical Turn/Item owner 返回的 entry 数量；传 0 表示读到 EOF。
    */
   historyLimit?: number;
   /**
-   * 从最新历史向前跳过的消息数量，用于加载更早历史分页。
+   * `thread/items/list` 返回的 opaque next cursor。`null` 表示 Item 已到 EOF。
    */
-  historyOffset?: number;
+  historyItemCursor?: string | null;
   /**
-   * 稳定游标：读取指定后端消息 ID 之前的更早历史，优先于 offset。
+   * `thread/turns/list` 返回的 opaque next cursor。`null` 表示 Turn 已到 EOF。
    */
-  historyBeforeMessageId?: number;
+  historyTurnCursor?: string | null;
 }
 
 export interface AgentRuntimeReplayRequestRequest {

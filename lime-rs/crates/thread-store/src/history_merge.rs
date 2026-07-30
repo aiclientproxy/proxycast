@@ -163,6 +163,7 @@ fn merge_payload(previous: ThreadItemPayload, next: ThreadItemPayload) -> Thread
                 target_thread_id: old_target,
                 message: old_message,
                 output: old_output,
+                agent_states: mut old_states,
             },
             CollabAgentToolCall {
                 call_id,
@@ -170,18 +171,27 @@ fn merge_payload(previous: ThreadItemPayload, next: ThreadItemPayload) -> Thread
                 target_thread_id,
                 message,
                 output,
+                agent_states,
             },
-        ) => CollabAgentToolCall {
-            call_id: prefer_string(old_call, call_id, ""),
-            operation: if target_thread_id.is_none() && message.is_none() && output.is_none() {
-                old_operation
-            } else {
-                operation
-            },
-            target_thread_id: target_thread_id.or(old_target),
-            message: message.or(old_message),
-            output: merge_tool_output(old_output, output),
-        },
+        ) => {
+            old_states.extend(agent_states);
+            CollabAgentToolCall {
+                call_id: prefer_string(old_call, call_id, ""),
+                operation: if target_thread_id.is_none()
+                    && message.is_none()
+                    && output.is_none()
+                    && old_states.is_empty()
+                {
+                    old_operation
+                } else {
+                    operation
+                },
+                target_thread_id: target_thread_id.or(old_target),
+                message: message.or(old_message),
+                output: merge_tool_output(old_output, output),
+                agent_states: old_states,
+            }
+        }
         (
             Approval {
                 request_id: old_request,

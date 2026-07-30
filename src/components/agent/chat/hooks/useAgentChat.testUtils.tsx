@@ -2,8 +2,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, vi } from "vitest";
 import type { TurnStartParams } from "@limecloud/app-server-client";
-import { getDefaultAgentApprovalServerRequestController } from "@/lib/api/agentApprovalServerRequest";
-import { getDefaultAgentUserInputServerRequestController } from "@/lib/api/agentUserInputServerRequest";
+import { getDefaultPendingInteractionController } from "@/lib/api/agentRuntime/pendingInteractionController";
 import type { WriteArtifactContext } from "../types";
 import type { ChatToolPreferences } from "../utils/chatToolPreferences";
 
@@ -237,12 +236,31 @@ export function getSubmittedTurnMetadata(
 
 export function mockTypedActionResponseHandled(
   actionType: "ask_user" | "tool_confirmation",
+  requestId: string,
 ) {
-  const controller =
-    actionType === "ask_user"
-      ? getDefaultAgentUserInputServerRequestController()
-      : getDefaultAgentApprovalServerRequestController();
-  return vi.spyOn(controller, "respond").mockReturnValue(true);
+  const controller = getDefaultPendingInteractionController();
+  const kind = actionType === "ask_user" ? "request_user_input" : "approval";
+  const interactionId = `${kind}:test:${encodeURIComponent(requestId)}`;
+  const getSnapshot = vi.spyOn(controller, "getSnapshot").mockReturnValue([
+    {
+      id: interactionId,
+      thread_id: "test-thread",
+      kind,
+      status: "pending",
+      payload: {
+        request: { requestId, actionType, status: "pending" },
+      },
+    },
+  ]);
+  const respond = vi
+    .spyOn(controller, "respond")
+    .mockReturnValue({ accepted: true });
+  const restoreRespond = respond.mockRestore.bind(respond);
+  respond.mockRestore = () => {
+    restoreRespond();
+    getSnapshot.mockRestore();
+  };
+  return respond;
 }
 
 export function mountHook(

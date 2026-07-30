@@ -284,6 +284,66 @@ describe("workspaceConversationSceneViewModel", () => {
     expect(changeView?.onOpenFile).toBe(onOpenFile);
   });
 
+  it("应直接投影 canonical fileChange，并保留 move 目标路径", () => {
+    const codingView = projectCodingWorkbenchViewFromEvents({
+      executionEvents: [],
+      codingReadModel: {
+        thread_id: "thread-1",
+        thread_items: [
+          {
+            id: "file-change-1",
+            type: "fileChange",
+            status: "completed",
+            changes: [
+              {
+                path: "src/added.ts",
+                kind: { type: "add" },
+                diff: "+export const added = true;",
+              },
+              {
+                path: "src/deleted.ts",
+                kind: { type: "delete" },
+                diff: "-export const deleted = true;",
+              },
+              {
+                path: "src/coding-target.ts",
+                kind: { type: "update" },
+                diff: "+export const codingWorkbenchSmoke = true;",
+              },
+              {
+                path: "src/source.ts",
+                kind: { type: "update", move_path: "src/destination.ts" },
+                diff: "+export const destination = true;",
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const changeView = buildCanvasWorkbenchChangeViewFromCodingProjection({
+      codingView,
+    });
+
+    expect(codingView.changes).toMatchObject([
+      { path: "src/added.ts", changeKind: "add" },
+      { path: "src/deleted.ts", changeKind: "delete" },
+      { path: "src/coding-target.ts", changeKind: "update" },
+      {
+        path: "src/source.ts",
+        destinationPath: "src/destination.ts",
+        changeKind: "renamed",
+      },
+    ]);
+    expect(changeView?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "src/source.ts",
+          displayName: "source.ts -> destination.ts",
+        }),
+      ]),
+    );
+  });
+
   it("应从 current thread read model 合并 coding command/test/action 状态", () => {
     const codingView = projectCodingWorkbenchViewFromEvents({
       executionEvents: [],

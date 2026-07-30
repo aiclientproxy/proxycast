@@ -64,6 +64,39 @@ impl RuntimeCore {
             created_at: now.clone(),
             updated_at: now,
         };
+        let first_error = match self
+            .backend
+            .preflight_thread_settings(&session, &settings)
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(error) => error,
+        };
+        let Some(provider_id) = missing_model_catalog_provider(&first_error) else {
+            return Err(first_error);
+        };
+
+        let refresh = self.refresh_model_provider_catalog(&provider_id).await;
+        match refresh {
+            Ok(response) if response.source == "Api" => {}
+            Ok(response) => {
+                tracing::warn!(
+                    provider_id,
+                    source = response.source,
+                    error_kind = response.error_kind.as_deref().unwrap_or("unknown"),
+                    "thread start model catalog refresh did not produce API metadata"
+                );
+                return Err(first_error);
+            }
+            Err(_) => {
+                tracing::warn!(
+                    provider_id,
+                    "thread start model catalog refresh failed; preserving pending route"
+                );
+                return Err(first_error);
+            }
+        }
+
         self.backend
             .preflight_thread_settings(&session, &settings)
             .await
@@ -644,6 +677,20 @@ fn persist_collaboration_mode(
 
 fn normalized_identity(value: &str, field: &str) -> Result<String, RuntimeCoreError> {
     normalized_value(value, field).map(str::to_string)
+}
+
+fn missing_model_catalog_provider(error: &RuntimeCoreError) -> Option<String> {
+    match error {
+        RuntimeCoreError::PendingRoute {
+            provider: Some(provider),
+            reason_code,
+            ..
+        } if reason_code == "model_registry_metadata_missing" => {
+            let provider = provider.trim();
+            (!provider.is_empty()).then(|| provider.to_string())
+        }
+        _ => None,
+    }
 }
 
 fn normalized_value<'a>(value: &'a str, field: &str) -> Result<&'a str, RuntimeCoreError> {

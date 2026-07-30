@@ -1,51 +1,51 @@
 export interface SessionHistoryWindowState {
-  loadedMessages: number;
-  totalMessages: number;
-  historyBeforeMessageId?: number | null;
-  historyStartIndex?: number | null;
+  loadedEntries: number;
+  loadedTurns: number;
+  loadedItems: number;
+  hasMore: boolean;
+  itemCursor: string | null;
+  turnCursor: string | null;
   isLoadingFull: boolean;
   error: string | null;
 }
 
 export interface SessionHistoryDetailLike {
   history_cursor?: {
-    oldest_message_id?: number | null;
-    start_index?: number | null;
+    item_cursor?: string | null;
+    turn_cursor?: string | null;
+    loaded_entry_count?: number | null;
+    loaded_turn_count?: number | null;
+    loaded_item_count?: number | null;
+    has_more?: boolean | null;
   } | null;
-  history_limit?: number | null;
-  history_offset?: number | null;
-  history_truncated?: boolean | null;
-  messages: readonly unknown[];
-  messages_count?: number | null;
+  items?: readonly unknown[];
+  turns?: readonly unknown[];
 }
 
 export interface SessionHistoryPageRequestPlan {
-  historyBeforeMessageId: number | null;
-  loadedMessagesCount: number;
+  itemCursor: string | null;
+  turnCursor: string | null;
   loadingWindow: SessionHistoryWindowState;
   nextHistoryLimit: number;
-  nextHistoryOffset: number;
   requestOptions: {
-    historyBeforeMessageId?: number;
+    historyItemCursor: string | null;
+    historyTurnCursor: string | null;
     historyLimit: number;
-    historyOffset: number;
   };
-  totalMessagesCount: number;
 }
 
 export interface SessionHistoryPageResultPlan {
-  detailLoadedMessages: number;
-  nextHistoryBeforeMessageId: number | null;
-  nextHistoryStartIndex: number | null;
+  detailLoadedEntries: number;
+  detailLoadedTurns: number;
+  detailLoadedItems: number;
   nextHistoryWindow: SessionHistoryWindowState | null;
-  nextLoadedMessages: number;
-  resolvedTotalMessages: number;
+  nextLoadedEntries: number;
+  nextLoadedTurns: number;
+  nextLoadedItems: number;
 }
 
-export function normalizePositiveInteger(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value > 0
-    ? Math.trunc(value)
-    : null;
+export function normalizeOpaqueCursor(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 export function normalizeNonNegativeInteger(value: unknown): number | null {
@@ -54,58 +54,43 @@ export function normalizeNonNegativeInteger(value: unknown): number | null {
     : null;
 }
 
-export function resolveDetailHistoryLoadedMessages(
-  detail: SessionHistoryDetailLike,
-): number {
-  const totalMessages =
-    normalizeNonNegativeInteger(detail.messages_count) ??
-    detail.messages.length;
-  const cursorStartIndex = normalizeNonNegativeInteger(
-    detail.history_cursor?.start_index,
-  );
-  if (cursorStartIndex !== null) {
-    return Math.min(
-      totalMessages,
-      Math.max(detail.messages.length, totalMessages - cursorStartIndex),
-    );
-  }
-  const historyLimit =
-    normalizeNonNegativeInteger(detail.history_limit) ?? null;
-  const historyOffset = normalizeNonNegativeInteger(detail.history_offset) ?? 0;
-
-  if (historyLimit === null) {
-    return detail.messages.length;
-  }
-
-  return Math.min(totalMessages, historyOffset + historyLimit);
+function resolveDetailLoadedCounts(detail: SessionHistoryDetailLike): {
+  entries: number;
+  turns: number;
+  items: number;
+} {
+  const turns =
+    normalizeNonNegativeInteger(detail.history_cursor?.loaded_turn_count) ??
+    detail.turns?.length ??
+    0;
+  const items =
+    normalizeNonNegativeInteger(detail.history_cursor?.loaded_item_count) ??
+    detail.items?.length ??
+    0;
+  const entries =
+    normalizeNonNegativeInteger(detail.history_cursor?.loaded_entry_count) ??
+    turns + items;
+  return { entries, turns, items };
 }
 
 export function resolveSessionHistoryWindowFromDetail(
   detail: SessionHistoryDetailLike,
 ): SessionHistoryWindowState | null {
-  if (detail.history_truncated !== true) {
+  const itemCursor = normalizeOpaqueCursor(detail.history_cursor?.item_cursor);
+  const turnCursor = normalizeOpaqueCursor(detail.history_cursor?.turn_cursor);
+  const hasMore = itemCursor !== null || turnCursor !== null;
+  if (!hasMore) {
     return null;
   }
 
-  const loadedMessages = resolveDetailHistoryLoadedMessages(detail);
-  const totalMessages = Math.max(
-    loadedMessages,
-    normalizeNonNegativeInteger(detail.messages_count) ?? loadedMessages,
-  );
-
-  if (totalMessages <= loadedMessages) {
-    return null;
-  }
-
+  const loaded = resolveDetailLoadedCounts(detail);
   return {
-    loadedMessages,
-    totalMessages,
-    historyBeforeMessageId: normalizePositiveInteger(
-      detail.history_cursor?.oldest_message_id,
-    ),
-    historyStartIndex: normalizeNonNegativeInteger(
-      detail.history_cursor?.start_index,
-    ),
+    loadedEntries: loaded.entries,
+    loadedTurns: loaded.turns,
+    loadedItems: loaded.items,
+    hasMore: true,
+    itemCursor,
+    turnCursor,
     isLoadingFull: false,
     error: null,
   };
@@ -113,103 +98,73 @@ export function resolveSessionHistoryWindowFromDetail(
 
 export function buildSessionHistoryPageRequestPlan(params: {
   currentHistoryWindow?: SessionHistoryWindowState | null;
-  currentMessagesCount: number;
   pageSize: number;
 }): SessionHistoryPageRequestPlan | null {
-  const currentHistoryWindow = params.currentHistoryWindow;
-  if (currentHistoryWindow?.isLoadingFull) {
+  const current = params.currentHistoryWindow;
+  if (!current || current.isLoadingFull || !current.hasMore) {
     return null;
   }
 
-  const loadedMessagesCount =
-    currentHistoryWindow?.loadedMessages ?? params.currentMessagesCount;
-  const totalMessagesCount =
-    currentHistoryWindow?.totalMessages ?? loadedMessagesCount;
-  const nextHistoryOffset = loadedMessagesCount;
-  const historyBeforeMessageId =
-    normalizePositiveInteger(currentHistoryWindow?.historyBeforeMessageId) ??
-    null;
-  const nextHistoryLimit =
-    totalMessagesCount > loadedMessagesCount
-      ? Math.min(params.pageSize, totalMessagesCount - loadedMessagesCount)
-      : params.pageSize;
-
+  const itemCursor = normalizeOpaqueCursor(current.itemCursor);
+  const turnCursor = normalizeOpaqueCursor(current.turnCursor);
+  if (itemCursor === null && turnCursor === null) {
+    return null;
+  }
+  const nextHistoryLimit = normalizeNonNegativeInteger(params.pageSize) ?? 0;
   if (nextHistoryLimit <= 0) {
     return null;
   }
 
   return {
-    historyBeforeMessageId,
-    loadedMessagesCount,
-    loadingWindow: currentHistoryWindow
-      ? { ...currentHistoryWindow, isLoadingFull: true, error: null }
-      : {
-          loadedMessages: loadedMessagesCount,
-          totalMessages: totalMessagesCount,
-          historyBeforeMessageId,
-          historyStartIndex: null,
-          isLoadingFull: true,
-          error: null,
-        },
+    itemCursor,
+    turnCursor,
+    loadingWindow: { ...current, isLoadingFull: true, error: null },
     nextHistoryLimit,
-    nextHistoryOffset,
     requestOptions: {
+      historyItemCursor: itemCursor,
+      historyTurnCursor: turnCursor,
       historyLimit: nextHistoryLimit,
-      historyOffset: nextHistoryOffset,
-      ...(historyBeforeMessageId !== null ? { historyBeforeMessageId } : {}),
     },
-    totalMessagesCount,
   };
 }
 
 export function buildSessionHistoryPageResultPlan(params: {
+  currentHistoryWindow: SessionHistoryWindowState;
   detail: SessionHistoryDetailLike;
-  historyBeforeMessageId: number | null;
-  nextHistoryLimit: number;
-  nextHistoryOffset: number;
-  totalMessagesCount: number;
 }): SessionHistoryPageResultPlan {
-  const detailLoadedMessages = resolveDetailHistoryLoadedMessages(
-    params.detail,
+  const detailLoaded = resolveDetailLoadedCounts(params.detail);
+  const itemCursor = normalizeOpaqueCursor(
+    params.detail.history_cursor?.item_cursor,
   );
-  const detailTotalMessages =
-    normalizeNonNegativeInteger(params.detail.messages_count) ??
-    params.totalMessagesCount;
-  const nextLoadedMessages = Math.min(
-    detailTotalMessages,
-    Math.max(
-      detailLoadedMessages,
-      params.nextHistoryOffset + params.nextHistoryLimit,
-    ),
+  const turnCursor = normalizeOpaqueCursor(
+    params.detail.history_cursor?.turn_cursor,
   );
-  const resolvedTotalMessages = Math.max(
-    nextLoadedMessages,
-    detailTotalMessages,
-  );
-  const nextHistoryBeforeMessageId = normalizePositiveInteger(
-    params.detail.history_cursor?.oldest_message_id,
-  );
-  const nextHistoryStartIndex = normalizeNonNegativeInteger(
-    params.detail.history_cursor?.start_index,
-  );
+  const hasMore = itemCursor !== null || turnCursor !== null;
+  const nextLoadedEntries =
+    params.currentHistoryWindow.loadedEntries + detailLoaded.entries;
+  const nextLoadedTurns =
+    params.currentHistoryWindow.loadedTurns + detailLoaded.turns;
+  const nextLoadedItems =
+    params.currentHistoryWindow.loadedItems + detailLoaded.items;
 
   return {
-    detailLoadedMessages,
-    nextHistoryBeforeMessageId,
-    nextHistoryStartIndex,
-    nextLoadedMessages,
-    resolvedTotalMessages,
-    nextHistoryWindow:
-      resolvedTotalMessages > nextLoadedMessages
-        ? {
-            loadedMessages: nextLoadedMessages,
-            totalMessages: resolvedTotalMessages,
-            historyBeforeMessageId:
-              nextHistoryBeforeMessageId ?? params.historyBeforeMessageId,
-            historyStartIndex: nextHistoryStartIndex,
-            isLoadingFull: false,
-            error: null,
-          }
-        : null,
+    detailLoadedEntries: detailLoaded.entries,
+    detailLoadedTurns: detailLoaded.turns,
+    detailLoadedItems: detailLoaded.items,
+    nextLoadedEntries,
+    nextLoadedTurns,
+    nextLoadedItems,
+    nextHistoryWindow: hasMore
+      ? {
+          loadedEntries: nextLoadedEntries,
+          loadedTurns: nextLoadedTurns,
+          loadedItems: nextLoadedItems,
+          hasMore: true,
+          itemCursor,
+          turnCursor,
+          isLoadingFull: false,
+          error: null,
+        }
+      : null,
   };
 }

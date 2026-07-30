@@ -1,44 +1,41 @@
-## Lime v1.115.0
+## Lime v1.116.0
 
 <sub>The Simplified Chinese release notes are the primary version. This English page is a companion for international readers.</sub>
 
 ### New Features
 
-- Added the current Vertex Gemini transport with project/location endpoint construction, Bearer access-token authentication, and shared Gemini canonical lowering, SSE, and tool-history semantics.
-- Added the current Azure OpenAI Responses route with resource-root URLs, typed `api-version`, and `api-key` authentication while unsupported Chat Completions, WebSocket, and hosted tools fail closed.
-- Completed public Fal and xAI video-generation media tasks; xAI request IDs, polling state, and terminal state are durable so App Server restarts resume polling without creating a duplicate task.
-- Added the typed `model/list/updated` notification so mounted model views invalidate and refresh after provider, credential, or catalog mutations.
-- Added direct Agent timeline previews for Hosted Image Generation results and session sidecar images, with a stable unavailable-media state.
+- Agent conversations now render canonical Turns and Items directly, with one ConversationProjection shared by live events, cold reads, and production resume; Hook, Sleep, Review, MCP, and dynamic-tool states appear in the unified timeline.
+- Added one Pending Interaction layer for approvals, additional user input, MCP elicitation, and dynamic-tool interaction, including restoration of requests that are still pending after resume.
+- Migrated media reads to the Lime-owned v2 `media/read` method with canonical `threadId`, bounded sidecar access, and stable available, unavailable, and abnormal preview states.
+- Added canonical capability recognition for `agnes-2.0-flash` on the official Agnes API Hub, including vision, tools, streaming, and reasoning; non-official or non-HTTPS endpoints do not receive this authorization.
 
 ### Fixes
 
-- Fixed stale reasoning effort, service tier, or collaboration model surviving model switches; Thread settings now preflight against the latest catalog before atomic persistence.
-- Fixed provider turns ending too early after reasoning-only or empty successful responses by adding a separate bounded resampling budget that preserves tool snapshots and provider token-budget enforcement.
-- Fixed HTTP and WebSocket transports ignoring server `x-should-retry`, `Retry-After`, and quota-reset guidance, preventing explicitly non-retryable requests from being amplified.
-- Fixed circuit health being shared across different credentials, protocols, endpoints, or API versions, and added exact-route health snapshots that do not expose credentials or endpoints.
-- Fixed dedicated media models surviving as Agent chat selections after catalog refresh and capability records without trusted provenance gaining execution authority.
+- Fixed duplicate synthesized messages, drift between live and historical content, repeated reasoning/tool text, and lost pending interactions during long-session restoration.
+- Fixed slow conversation opening caused by mounting every historical Item and full assistant body; the GUI now renders a bounded Turn window and expands earlier entries or full text on demand.
+- Fixed sidecar media reads depending on v0 session identity, silently swallowed read failures, and abnormal payloads entering previews; protocol drift and unprojected notifications now produce visible diagnostics.
+- Fixed multi-agent tool results carrying activity events without typed state facts, allowing completed, failed, and waiting child-agent states to reach the canonical projection.
 
 ### Improvements and Refactors
 
-- Made `model/list.capabilitySnapshot` the only public capability source and removed the unconsumed global `modelProvider/capabilities/read` protocol, schema, client, and positive tests.
-- Converged video lowering, network execution, and provider status in `model-provider`; media runtime now owns progress and durable artifacts while App Server owns route, credential, and worker orchestration.
-- Split provider catalog selection, defaults, and refresh coordination into one owner and unified model-setting projection across foreground, background, queued, retry, and mailbox paths.
-- Consolidated Agent image, streaming media-reference, and canonical Item content projections to reduce duplicate conversion between history recovery and live rendering.
+- Removed the second canonical Item-to-Message synthesis path, three streaming content-sync hooks, duplicate approval/user-input APIs, and the old MCP elicitation dialog owner, leaving one current Renderer projection chain.
+- Tightened assistant message phases, MCP tool results/errors, dynamic-tool multimodal output, and agent-control state into typed protocols synchronized across Rust, JSON Schema, and the TypeScript client.
+- Made history windows, long-text previews, media abnormal states, and notification drift fail-visible boundaries instead of relying on generic extensions or production mock fallback.
+- Model taxonomy can now inherit task families, modalities, and runtime features from the canonical catalog while retaining strict endpoint provenance checks.
 
 ### Tests and Quality
 
-- Added Rust regressions for Azure Responses, Vertex Gemini, xAI/Fal video, provider health/retry, credential reroute, empty-response resampling, and model catalog refresh.
-- Added public JSON-RPC coverage for video tasks and model catalog updates, and synchronized App Server JSON schemas, generated TypeScript protocol types, and Electron direct-notification tests.
-- Expanded frontend coverage for Agent image attachments, Hosted Image, streaming media references, model-registry auto-refresh, and the unavailable state in all five locales.
-- Added Codex Item/Event rendering coverage inventories and governance guards as a verifiable baseline for the future single ConversationProjection read model.
+- Expanded frontend and protocol regressions for direct TurnTimeline rendering, history previews, resume replay, Pending Interaction, MCP elicitation, media abnormal states, and protocol drift.
+- Added long-list Electron fixtures, canonical thread seeds/oracles, Agent runtime screenshots, and a current tool-execution contract covering real preload/IPC, App Server JSON-RPC, read models, and GUI state.
+- Updated Refactor v2 Item/Event projection inventories, render-coverage fixtures, legacy-surface guards, and verification evidence to protect the single current owner and zero production mock fallback.
 
 ### Documentation
 
-- Updated current architecture facts for model catalog/admission, provider health/retry, Vertex Gemini, video media tasks, and Agent empty-response handling.
-- Added the Codex rendering alignment v2 Item/Event projection matrices, implementation plan, and completion definition while preserving current multi-model and multimodal owners.
+- Updated the architecture sources and Refactor v2 execution record for Renderer ConversationProjection, direct TurnTimeline, thread-scoped media reads, abnormal-state presentation, and long-list performance.
+- Added the target cloud multi-model platform architecture for LimeCore, AsterRouter, and Codex App Server, defining the unique owners for the commercial control plane, model data plane, and desktop runtime.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and lockfile versions to `1.115.0`.
+- Bumped the root app, CLI npm package, Rust workspace, and lockfile versions to `1.116.0`.
 
-**Full changes**: `v1.114.0` -> `v1.115.0`
+**Full changes**: `v1.115.0` -> `v1.116.0`

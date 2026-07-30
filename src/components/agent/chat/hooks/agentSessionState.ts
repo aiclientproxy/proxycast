@@ -13,7 +13,6 @@ import type { AgentSessionCachedSnapshot } from "./agentSessionScopedStorage";
 import { normalizeLegacyThreadItems } from "@/lib/api/agentTextNormalization";
 import {
   hydrateSessionDetailMessages,
-  mergeThreadItemReasoningIntoMessages,
   mergeHydratedMessagesWithLocalState,
   normalizeHistoricalTopicSnapshotMessages,
   shouldCompactCompletedSessionHistory,
@@ -883,12 +882,8 @@ export function buildHydratedAgentSessionSnapshot(
     nextThreadItems,
     interruptedTurnIds,
   );
-  const nextMessagesWithThreadReasoning = mergeThreadItemReasoningIntoMessages(
-    nextMessages,
-    nextThreadItemsWithTerminalMarkers,
-  );
   const nextMessagesWithTerminalMarkers = markInterruptedAssistantMessages(
-    nextMessagesWithThreadReasoning,
+    nextMessages,
     interruptedTurnIds,
     { fallbackTurnId: nextCurrentTurnId },
   );

@@ -1,6 +1,6 @@
 use super::sidecar_store::{normalize_sidecar_relative_path, session_scoped_relative_path};
 use super::{RuntimeCoreError, StoredSession};
-use app_server_protocol::AgentSessionMediaReadParams;
+use app_server_protocol::protocol::v2::MediaReadParams;
 use serde_json::Value;
 use std::collections::HashSet;
 
@@ -11,9 +11,7 @@ pub(super) struct RequestedMediaSidecar {
 }
 
 impl RequestedMediaSidecar {
-    pub(super) fn from_params(
-        params: &AgentSessionMediaReadParams,
-    ) -> Result<Self, RuntimeCoreError> {
+    pub(super) fn from_params(params: &MediaReadParams) -> Result<Self, RuntimeCoreError> {
         let mut keys = HashSet::new();
         push_key(&mut keys, params.uri.as_deref());
         push_key(&mut keys, params.ref_id.as_deref());
@@ -29,7 +27,7 @@ impl RequestedMediaSidecar {
 
         if keys.is_empty() && relative_path.is_none() {
             return Err(RuntimeCoreError::Backend(
-                "agentSession/media/read requires uri, ref, or sidecarRef".to_string(),
+                "media/read requires uri, ref, or sidecarRef".to_string(),
             ));
         }
         Ok(Self {

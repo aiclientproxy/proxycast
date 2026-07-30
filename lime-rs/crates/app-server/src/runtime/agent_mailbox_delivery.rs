@@ -284,9 +284,8 @@ impl RuntimeCore {
         &self,
         session: &AgentSession,
         turn: &AgentTurn,
-        current_input: &[UserInput],
     ) -> Result<MailboxTurnDelivery, RuntimeCoreError> {
-        self.deliver_pending_agent_mailbox_for_turn_with_mode(session, turn, current_input, true)
+        self.deliver_pending_agent_mailbox_for_turn_with_mode(session, turn, true)
             .await
     }
 
@@ -294,9 +293,8 @@ impl RuntimeCore {
         &self,
         session: &AgentSession,
         turn: &AgentTurn,
-        current_input: &[UserInput],
     ) -> Result<MailboxTurnDelivery, RuntimeCoreError> {
-        self.deliver_pending_agent_mailbox_for_turn_with_mode(session, turn, current_input, false)
+        self.deliver_pending_agent_mailbox_for_turn_with_mode(session, turn, false)
             .await
     }
 
@@ -304,7 +302,6 @@ impl RuntimeCore {
         &self,
         session: &AgentSession,
         turn: &AgentTurn,
-        current_input: &[UserInput],
         include_queue_only: bool,
     ) -> Result<MailboxTurnDelivery, RuntimeCoreError> {
         self.recover_direct_child_terminal_activity(session).await?;
@@ -325,7 +322,7 @@ impl RuntimeCore {
                     || mailbox_turn_id(&message.message_id) == turn.turn_id
             })
             .collect::<Vec<_>>();
-        self.append_mailbox_items_before_ack(session, turn, Some(current_input), &store, messages)
+        self.append_mailbox_items_before_ack(session, turn, &store, messages)
             .await
     }
 
@@ -356,7 +353,7 @@ impl RuntimeCore {
             return Ok(messages);
         }
         Ok(self
-            .append_mailbox_items_before_ack(&session, &turn, None, &store, messages)
+            .append_mailbox_items_before_ack(&session, &turn, &store, messages)
             .await?
             .consumed_messages)
     }
@@ -497,7 +494,6 @@ impl RuntimeCore {
         &self,
         session: &AgentSession,
         turn: &AgentTurn,
-        current_input: Option<&[UserInput]>,
         store: &ProjectionStore,
         messages: Vec<AgentMailboxMessage>,
     ) -> Result<MailboxTurnDelivery, RuntimeCoreError> {
@@ -505,7 +501,6 @@ impl RuntimeCore {
         let mut consumed_messages = Vec::new();
         let mut pending = Vec::new();
         let mut runtime_events = Vec::new();
-        let mut contains_turn_input = false;
 
         for message in messages {
             let item_id = mailbox_item_id(&message.message_id);
@@ -518,7 +513,6 @@ impl RuntimeCore {
                 continue;
             }
             let is_turn_input = message.delivery_mode == AgentMailboxDeliveryMode::TriggerTurn;
-            contains_turn_input |= is_turn_input;
             runtime_events.extend(mailbox_message_runtime_events(
                 &message,
                 &item_id,
@@ -527,13 +521,6 @@ impl RuntimeCore {
             pending.push(message);
         }
 
-        if !runtime_events.is_empty() && !contains_turn_input {
-            if let Some(input_event) =
-                current_input.and_then(super::turn_input_events::runtime_event_for_turn_input)
-            {
-                runtime_events.push(input_event);
-            }
-        }
         let events = if runtime_events.is_empty() {
             Vec::new()
         } else {

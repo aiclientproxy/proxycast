@@ -76,6 +76,7 @@ pub(super) fn into_parts(
         ClientRequest::ThreadGoalGet { id, params } => parts(id, Method::ThreadGoalGet, params),
         ClientRequest::ThreadGoalClear { id, params } => parts(id, Method::ThreadGoalClear, params),
         ClientRequest::ArtifactWrite { id, params } => parts(id, Method::ArtifactWrite, params),
+        ClientRequest::MediaRead { id, params } => parts(id, Method::MediaRead, params),
         ClientRequest::ModelList { id, params } => parts(id, Method::ModelList, params),
         ClientRequest::ThreadSettingsUpdate { id, params } => {
             parts(id, Method::ThreadSettingsUpdate, params)
@@ -122,7 +123,7 @@ fn parts(
 mod tests {
     use super::*;
     use app_server_protocol::protocol::v2::{
-        METHOD_THREAD_READ, METHOD_THREAD_RESUME, METHOD_TURN_INTERRUPT,
+        METHOD_MEDIA_READ, METHOD_THREAD_READ, METHOD_THREAD_RESUME, METHOD_TURN_INTERRUPT,
     };
     use app_server_protocol::RequestId;
     use serde_json::json;
@@ -163,6 +164,20 @@ mod tests {
 
         let (_, method, _) = into_parts(request).expect("lower request");
         assert_eq!(method, METHOD_THREAD_RESUME);
+    }
+
+    #[test]
+    fn media_read_rejects_legacy_session_identity() {
+        let request = request(
+            METHOD_MEDIA_READ,
+            json!({
+                "sessionId": "session-1",
+                "uri": "sidecar://media/image-1"
+            }),
+        );
+
+        let error = decode(&request).expect_err("legacy media identity must fail closed");
+        assert_eq!(error.code, error_codes::INVALID_PARAMS);
     }
 
     #[test]

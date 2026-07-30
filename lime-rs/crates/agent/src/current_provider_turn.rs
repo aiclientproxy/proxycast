@@ -633,6 +633,7 @@ mod tests {
                     )),
                     metadata: HashMap::from([("source".to_string(), serde_json::json!("mcp"))]),
                     agent_control_projection_facts: Vec::new(),
+                    agent_control_state_facts: Vec::new(),
                 }),
             })
             .expect("completed lifecycle projection");
@@ -722,6 +723,7 @@ mod tests {
                     sidecar_reference: None,
                     metadata: output_metadata,
                     agent_control_projection_facts: Vec::new(),
+                    agent_control_state_facts: Vec::new(),
                 }),
             })
             .expect("failed lifecycle projection");
@@ -790,6 +792,7 @@ mod tests {
                     sidecar_reference: None,
                     metadata: HashMap::new(),
                     agent_control_projection_facts: Vec::new(),
+                    agent_control_state_facts: Vec::new(),
                 }),
             })
             .await;

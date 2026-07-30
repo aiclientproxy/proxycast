@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { AgentSessionExecutionRuntime } from "@/lib/api/agentExecutionRuntime";
 import type { AgentThreadItem, AgentThreadTurn } from "@/lib/api/agentProtocol";
 import type { AgentRuntimeThreadReadModel } from "@/lib/api/agentRuntime/sessionTypes";
+import { createConversationProjectionReducer } from "@/lib/api/agentRuntime/conversationProjection";
 import type { ActionRequired, Message } from "../types";
 import type { ActiveStreamState } from "./agentStreamSubmissionLifecycle";
 import {
@@ -409,12 +410,50 @@ describe("agentStreamResumeBinding", () => {
   it("恢复绑定默认只显示 reasoning summary，并在终态事件后清理 active stream", async () => {
     const unlisten = vi.fn();
     let eventHandler: ((event: { payload: unknown }) => void) | null = null;
+    const replayReducer = createConversationProjectionReducer({
+      threadId: "thread-1",
+    });
+    replayReducer.dispatch({
+      type: "turn_started",
+      source: "replay",
+      event_id: "thread-resume:turn:thread-1:turn-1",
+      protocol_method: "thread/resume",
+      turn: {
+        id: "turn-1",
+        thread_id: "thread-1",
+        prompt_text: "继续",
+        status: "running",
+        started_at: "2026-07-06T00:00:00.000Z",
+        created_at: "2026-07-06T00:00:00.000Z",
+        updated_at: "2026-07-06T00:00:00.000Z",
+      },
+    });
+    replayReducer.dispatch({
+      type: "item_started",
+      source: "replay",
+      event_id: "thread-resume:item:thread-1:turn-1:message-1",
+      protocol_method: "thread/resume",
+      item: {
+        id: "message-1",
+        thread_id: "thread-1",
+        turn_id: "turn-1",
+        sequence: 2,
+        status: "in_progress",
+        started_at: "2026-07-06T00:00:00.000Z",
+        updated_at: "2026-07-06T00:00:00.000Z",
+        type: "agent_message",
+        text: "恢复中的输出",
+      },
+    });
     const runtime = {
       listenToTurnEvents: vi.fn(async (_eventName, handler) => {
         eventHandler = handler;
         return unlisten;
       }),
-      resumeThread: vi.fn(async () => true),
+      resumeThread: vi.fn(async (_threadId, consumeReplay) => {
+        consumeReplay?.(replayReducer);
+        return true;
+      }),
     };
     const activeStreamState: { current: ActiveStreamState | null } = {
       current: null,
@@ -488,7 +527,17 @@ describe("agentStreamResumeBinding", () => {
       "agentSession/event/session-1",
       expect.any(Function),
     );
-    expect(runtime.resumeThread).toHaveBeenCalledWith("thread-1");
+    expect(runtime.resumeThread).toHaveBeenCalledWith(
+      "thread-1",
+      expect.any(Function),
+    );
+    expect(threadItems.current).toEqual([
+      expect.objectContaining({
+        id: "message-1",
+        status: "in_progress",
+        text: "恢复中的输出",
+      }),
+    ]);
 
     eventHandler?.({
       payload: {
@@ -524,7 +573,26 @@ describe("agentStreamResumeBinding", () => {
     });
     eventHandler?.({
       payload: {
+        type: "item_completed",
+        protocol_method: "item/completed",
+        item: {
+          id: "message-1",
+          thread_id: "thread-1",
+          turn_id: "turn-1",
+          sequence: 99,
+          status: "completed",
+          started_at: "2026-07-06T00:00:09.000Z",
+          completed_at: "2026-07-06T00:00:01.000Z",
+          updated_at: "2026-07-06T00:00:01.000Z",
+          type: "agent_message",
+          text: "live 权威快照",
+        },
+      },
+    });
+    eventHandler?.({
+      payload: {
         type: "turn_completed",
+        protocol_method: "turn/completed",
         session_id: "session-1",
         turn_id: "turn-1",
         turn: {
@@ -555,6 +623,15 @@ describe("agentStreamResumeBinding", () => {
         }),
       ]),
     );
+    expect(
+      threadItems.current.find((item) => item.id === "message-1"),
+    ).toMatchObject({
+      id: "message-1",
+      sequence: 2,
+      started_at: "2026-07-06T00:00:00.000Z",
+      status: "completed",
+      text: "live 权威快照",
+    });
     expect(activeStreamState.current).toBeNull();
     expect(isSending).toBe(false);
     expect(unlisten).toHaveBeenCalledTimes(1);

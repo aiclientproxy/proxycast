@@ -7,7 +7,7 @@ import type { MessageImage } from "../types";
 import { MessageImageAttachments } from "./MessageImageAttachments";
 
 const appServerMocks = vi.hoisted(() => ({
-  readAgentSessionMedia: vi.fn(),
+  readMedia: vi.fn(),
 }));
 
 vi.mock("@/lib/api/appServer", () => ({
@@ -26,7 +26,7 @@ beforeEach(async () => {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
     }
   ).IS_REACT_ACT_ENVIRONMENT = true;
-  appServerMocks.readAgentSessionMedia.mockReset();
+  appServerMocks.readMedia.mockReset();
   await changeLimeLocale("zh-CN");
 });
 
@@ -43,14 +43,14 @@ afterEach(() => {
   }
 });
 
-function renderAttachments(images: MessageImage[], sessionId?: string) {
+function renderAttachments(images: MessageImage[], threadId?: string) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
 
   act(() => {
     root.render(
-      <MessageImageAttachments images={images} sessionId={sessionId} />,
+      <MessageImageAttachments images={images} threadId={threadId} />,
     );
   });
 
@@ -87,9 +87,9 @@ describe("MessageImageAttachments", () => {
   });
 
   it("sidecar 图片应通过 App Server 读取后再交给浏览器", async () => {
-    appServerMocks.readAgentSessionMedia.mockResolvedValueOnce({
+    appServerMocks.readMedia.mockResolvedValueOnce({
       result: {
-        sessionId: "session-1",
+        threadId: "thread-1",
         uri: "sidecar://media/input-demo.png",
         mimeType: "image/png",
         bytes: 4,
@@ -112,13 +112,13 @@ describe("MessageImageAttachments", () => {
           previewUrl: "sidecar://media/input-demo.png",
         },
       ],
-      "session-1",
+      "thread-1",
     );
 
     expect(container.querySelector("img")).toBeNull();
-    expect(appServerMocks.readAgentSessionMedia).toHaveBeenCalledWith(
+    expect(appServerMocks.readMedia).toHaveBeenCalledWith(
       expect.objectContaining({
-        sessionId: "session-1",
+        threadId: "thread-1",
         uri: "sidecar://media/input-demo.png",
       }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),

@@ -693,4 +693,64 @@ describe("AgentThreadTimeline", () => {
       container.querySelector('[data-testid="decision-panel"]'),
     ).toBeNull();
   });
+
+  it("typed Hook、Sleep 与复核边界应渲染为低干扰运行记录", () => {
+    const hook = renderTimeline([
+      {
+        ...createBaseItem("hook-prompt-1", 1),
+        type: "hook_prompt",
+        fragments: [
+          { hook_run_id: "hook-run-1", text: "先运行受影响测试。" },
+          { hook_run_id: "hook-run-2", text: "再整理验证结论。" },
+        ],
+      },
+    ]);
+    expect(
+      hook.querySelector('[data-testid="timeline-hook-prompt"]'),
+    ).not.toBeNull();
+    expect(hook.textContent).toContain("已应用自动补充说明");
+    expect(hook.textContent).toContain("先运行受影响测试");
+    expect(hook.textContent).not.toContain("hook-run-1");
+
+    const sleep = renderTimeline([
+      {
+        ...createBaseItem("sleep-1", 1),
+        type: "sleep",
+        duration_ms: 1250,
+      },
+    ]);
+    expect(
+      sleep.querySelector('[data-testid="timeline-sleep"]'),
+    ).not.toBeNull();
+    expect(sleep.textContent).toContain("短暂停顿");
+    expect(sleep.textContent).toContain("1,250");
+
+    const enteredReview = renderTimeline([
+      {
+        ...createBaseItem("review-entered-1", 1),
+        type: "review_boundary",
+        boundary: "entered",
+        review: "复核当前变更与测试证据。",
+      },
+    ]);
+    expect(
+      enteredReview.querySelector('[data-testid="timeline-review-boundary"]'),
+    ).not.toBeNull();
+    expect(enteredReview.textContent).toContain("开始复核");
+    expect(enteredReview.textContent).toContain("复核当前变更与测试证据");
+
+    const exitedReview = renderTimeline([
+      {
+        ...createBaseItem("review-exited-1", 1),
+        type: "review_boundary",
+        boundary: "exited",
+        review: "没有阻塞项。",
+      },
+    ]);
+    expect(exitedReview.textContent).toContain("复核已结束");
+    expect(exitedReview.textContent).toContain("没有阻塞项");
+    expect(
+      exitedReview.querySelector('[data-testid="timeline-unsupported-item"]'),
+    ).toBeNull();
+  });
 });

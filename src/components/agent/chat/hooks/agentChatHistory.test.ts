@@ -187,11 +187,13 @@ describe("agentChatHistory core hydrate", () => {
       updated_at: 2,
       messages_count: 2,
       history_limit: 2,
-      history_offset: 0,
       history_cursor: {
-        oldest_message_id: null,
-        start_index: 0,
-        loaded_count: 2,
+        item_cursor: null,
+        turn_cursor: null,
+        loaded_entry_count: 2,
+        loaded_turn_count: 0,
+        loaded_item_count: 2,
+        has_more: false,
       },
       history_truncated: false,
       messages: [
@@ -225,6 +227,8 @@ describe("agentChatHistory core hydrate", () => {
       "session-app-server-messages",
     );
 
+    // Contract guard: the retired `loaded_count: 2` fixture must not return.
+    expect(detail.history_cursor).not.toHaveProperty("loaded_count");
     expect(messages).toHaveLength(2);
     expect(messages.map((message) => message.id)).toEqual([
       "session-app-server-messages-0",
@@ -261,11 +265,13 @@ describe("agentChatHistory core hydrate", () => {
       updated_at: 2,
       messages_count: 4,
       history_limit: 4,
-      history_offset: 0,
       history_cursor: {
-        oldest_message_id: null,
-        start_index: 0,
-        loaded_count: 4,
+        item_cursor: null,
+        turn_cursor: null,
+        loaded_entry_count: 4,
+        loaded_turn_count: 0,
+        loaded_item_count: 4,
+        has_more: false,
       },
       history_truncated: false,
       messages: [
@@ -408,7 +414,7 @@ describe("agentChatHistory core hydrate", () => {
     }
   });
 
-  it("App Server read detail.thread_read.thread_items 应恢复 revisioned proposed_plan 历史", () => {
+  it("revisioned proposed_plan 只由 canonical Item 恢复", () => {
     const detail: AgentSessionDetail = {
       id: "session-thread-read-plan-items",
       thread_id: "thread-read-plan-items",
@@ -472,18 +478,8 @@ describe("agentChatHistory core hydrate", () => {
       "session-thread-read-plan-items",
     );
 
-    expect(messages.map((message) => message.role)).toEqual([
-      "user",
-      "assistant",
-    ]);
+    expect(messages.map((message) => message.role)).toEqual(["user"]);
     expect(messages[0]?.content).toBe("先给我一个修复计划，不要直接改代码");
-    const planTextPart = messages[1]?.contentParts?.find(
-      (part) => part.type === "text" && part.text.includes("<proposed_plan>"),
-    );
-    expect(planTextPart).toMatchObject({
-      type: "text",
-      text: expect.stringContaining("输出 proposed_plan"),
-    });
   });
 
   it("App Server thread_read.tool_calls 应合入已恢复助手消息", () => {
@@ -494,11 +490,13 @@ describe("agentChatHistory core hydrate", () => {
       updated_at: 2,
       messages_count: 2,
       history_limit: 2,
-      history_offset: 0,
       history_cursor: {
-        oldest_message_id: null,
-        start_index: 0,
-        loaded_count: 2,
+        item_cursor: null,
+        turn_cursor: null,
+        loaded_entry_count: 2,
+        loaded_turn_count: 0,
+        loaded_item_count: 2,
+        has_more: false,
       },
       history_truncated: false,
       messages: [
@@ -699,11 +697,13 @@ describe("agentChatHistory core hydrate", () => {
       updated_at: 2,
       messages_count: 2,
       history_limit: 2,
-      history_offset: 0,
       history_cursor: {
-        oldest_message_id: null,
-        start_index: 0,
-        loaded_count: 2,
+        item_cursor: null,
+        turn_cursor: null,
+        loaded_entry_count: 2,
+        loaded_turn_count: 0,
+        loaded_item_count: 2,
+        has_more: false,
       },
       history_truncated: false,
       messages: [
@@ -815,7 +815,7 @@ describe("agentChatHistory core hydrate", () => {
     ]);
   });
 
-  it("App Server 图片工具历史应优先用完整 output 恢复图片轻卡", () => {
+  it("App Server canonical 图片工具不应合成 Message 轻卡", () => {
     const fullOutput = JSON.stringify({
       success: true,
       task_id: "task-history-image-1",
@@ -892,20 +892,11 @@ describe("agentChatHistory core hydrate", () => {
       "session-history-image-tool",
     );
 
-    expect(messages[1]).toMatchObject({
-      role: "assistant",
-      imageWorkbenchPreview: {
-        taskId: "task-history-image-1",
-        prompt: "深圳夏天午后的城市照片",
-        status: "running",
-        taskFilePath:
-          "/Users/coso/Library/Application Support/lime/projects/demo/.lime/tasks/image_generate/task-history-image-1.json",
-        artifactPath: ".lime/tasks/image_generate/task-history-image-1.json",
-      },
-    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({ role: "user" });
   });
 
-  it("本地历史导入的 detail.items 应按 turn 合入已恢复助手消息", () => {
+  it("本地历史导入的 canonical process Items 不应合入 Message", () => {
     const detail: AgentSessionDetail = {
       id: "session-codex-import-timeline",
       thread_id: "thread-codex-import-timeline",
@@ -1041,67 +1032,11 @@ describe("agentChatHistory core hydrate", () => {
       role: "assistant",
       content: "done",
       runtimeTurnId: "turn-codex",
-      toolCalls: [
-        {
-          id: "command-codex",
-          name: "exec_command",
-          status: "completed",
-          result: {
-            success: true,
-            output: "ok",
-            metadata: {
-              imported: true,
-              source_client: "codex",
-              exit_code: 0,
-              cwd: "/workspace/app",
-            },
-          },
-        },
-        {
-          id: "patch-codex",
-          name: "apply_patch",
-          status: "completed",
-        },
-        {
-          id: "search-codex",
-          name: "web_search",
-          status: "completed",
-        },
-      ],
-      actionRequests: [
-        {
-          requestId: "approval-codex",
-          status: "submitted",
-        },
-      ],
     });
+    expect(messages[1]?.toolCalls).toBeUndefined();
+    expect(messages[1]?.actionRequests).toBeUndefined();
     expect(messages[1]?.contentParts?.map((part) => part.type)).toEqual([
-      "thinking",
-      "tool_use",
-      "tool_use",
-      "tool_use",
-      "action_required",
       "text",
     ]);
-    expect(messages[1]?.contentParts?.[1]).toMatchObject({
-      type: "tool_use",
-      toolCall: {
-        id: "command-codex",
-        result: {
-          metadata: {
-            imported: true,
-            source_client: "codex",
-            exit_code: 0,
-            cwd: "/workspace/app",
-          },
-        },
-      },
-    });
-    expect(messages[1]?.toolCalls?.[0]?.result?.output).not.toContain(
-      "Exit code:",
-    );
-    expect(messages[1]?.toolCalls?.[0]?.result?.output).not.toContain(
-      "Output:",
-    );
   });
 });

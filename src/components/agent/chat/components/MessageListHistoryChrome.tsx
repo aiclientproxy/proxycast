@@ -9,16 +9,16 @@ function formatContentLength(value: number): string {
 }
 
 interface PersistedHistoryWindowProps {
-  loadedMessages: number;
-  totalMessages: number;
+  loadedEntries: number;
+  hasMore: boolean;
   isLoadingFull?: boolean;
   error?: string | null;
   onLoadFullHistory?: () => void | Promise<void>;
 }
 
 export function PersistedHistoryWindow({
-  loadedMessages,
-  totalMessages,
+  loadedEntries,
+  hasMore,
   isLoadingFull = false,
   error = null,
   onLoadFullHistory,
@@ -31,9 +31,8 @@ export function PersistedHistoryWindow({
       className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm text-slate-600"
     >
       <div className="min-w-0 flex-1">
-        {t("agentChat.messageList.history.persistedSummary", {
-          loaded: formatContentLength(loadedMessages),
-          total: formatContentLength(totalMessages),
+        {t("agentChat.messageList.history.persistedEntrySummary", {
+          loaded: formatContentLength(loadedEntries),
         })}
         {error ? <span className="ml-2 text-red-600">{error}</span> : null}
       </div>
@@ -41,7 +40,7 @@ export function PersistedHistoryWindow({
         type="button"
         data-testid="message-list-load-full-history"
         className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={isLoadingFull || !onLoadFullHistory}
+        disabled={!hasMore || isLoadingFull || !onLoadFullHistory}
         onClick={() => {
           void onLoadFullHistory?.();
         }}
@@ -57,14 +56,14 @@ export function PersistedHistoryWindow({
 interface HistoryWindowProps {
   hiddenHistoryCount: number;
   isRestoredHistoryWindow: boolean;
-  renderedMessagesCount: number;
+  renderedEntriesCount: number;
   onExpandAllHistory: () => void;
 }
 
 export function HistoryWindow({
   hiddenHistoryCount,
   isRestoredHistoryWindow,
-  renderedMessagesCount,
+  renderedEntriesCount,
   onExpandAllHistory,
 }: HistoryWindowProps) {
   const { t } = useTranslation("agent");
@@ -72,15 +71,18 @@ export function HistoryWindow({
   return (
     <div
       data-testid="message-list-history-window"
+      data-hidden-history-count={hiddenHistoryCount}
+      data-rendered-entries-count={renderedEntriesCount}
+      data-restored-history-window={isRestoredHistoryWindow ? "true" : "false"}
       className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm text-slate-600"
     >
       <div className="min-w-0 flex-1">
         {t(
           isRestoredHistoryWindow
-            ? "agentChat.messageList.history.windowSummaryRestored"
-            : "agentChat.messageList.history.windowSummaryDeferred",
+            ? "agentChat.messageList.history.windowEntrySummaryRestored"
+            : "agentChat.messageList.history.windowEntrySummaryDeferred",
           {
-            loaded: formatContentLength(renderedMessagesCount),
+            loaded: formatContentLength(renderedEntriesCount),
             hidden: formatContentLength(hiddenHistoryCount),
           },
         )}
@@ -91,7 +93,7 @@ export function HistoryWindow({
         className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
         onClick={onExpandAllHistory}
       >
-        {t("agentChat.messageList.history.expandEarlier")}
+        {t("agentChat.messageList.history.expandEarlierEntries")}
       </button>
     </div>
   );

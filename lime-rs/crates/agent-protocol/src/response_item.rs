@@ -5,14 +5,25 @@
 //! for provider lowering, so unknown provider fields are not rewritten on write.
 
 use crate::ImageDetail;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MessagePhase {
     Commentary,
     FinalAnswer,
+}
+
+impl MessagePhase {
+    pub fn from_wire(value: &str) -> Option<Self> {
+        match value.trim() {
+            "commentary" => Some(Self::Commentary),
+            "final" | "finalAnswer" | "final_answer" => Some(Self::FinalAnswer),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

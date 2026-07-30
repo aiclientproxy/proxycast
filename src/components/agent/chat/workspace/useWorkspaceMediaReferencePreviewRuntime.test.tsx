@@ -7,7 +7,7 @@ import {
   subscribeAppServerNotifications,
 } from "@/lib/api/appServer";
 import type {
-  AppServerAgentSessionMediaReadResponse,
+  AppServerMediaReadResponse,
   AppServerEventBusSubscription,
   AppServerJsonRpcNotification,
 } from "@/lib/api/appServer";
@@ -118,10 +118,10 @@ function createSidecarMediaTarget(
 }
 
 function createMediaReadResponse(
-  overrides: Partial<AppServerAgentSessionMediaReadResponse> = {},
-): AppServerAgentSessionMediaReadResponse {
+  overrides: Partial<AppServerMediaReadResponse> = {},
+): AppServerMediaReadResponse {
   return {
-    sessionId: "session-media",
+    threadId: "thread-media",
     uri: "sidecar://media/image-1",
     mimeType: "image/png",
     bytes: 3,
@@ -144,12 +144,12 @@ function createMediaReadChunkNotification(params: {
   eventId?: string;
   hasMore: boolean;
   offset: number;
-  sessionId?: string;
+  threadId?: string;
   streamId?: string;
   totalBytes: number;
   uri?: string;
 }): AppServerJsonRpcNotification {
-  const sessionId = params.sessionId ?? "session-media";
+  const threadId = params.threadId ?? "thread-media";
   const uri = params.uri ?? "sidecar://media/image-1";
   return {
     method: "agentSession/event",
@@ -157,8 +157,7 @@ function createMediaReadChunkNotification(params: {
       event: {
         eventId: params.eventId ?? "evt-media-live-chunk-1",
         sequence: 1,
-        sessionId,
-        threadId: "thread-media",
+        threadId,
         type: "media.read.chunk",
         timestamp: "2026-07-07T00:00:00.000Z",
         payload: {
@@ -166,7 +165,7 @@ function createMediaReadChunkNotification(params: {
           chunkIndex: 1,
           done: false,
           chunk: {
-            sessionId,
+            threadId,
             uri,
             mimeType: "image/png",
             bytes: params.bytes,
@@ -203,7 +202,7 @@ function renderHook(props?: Partial<HookProps>) {
     artifacts: [],
     handleWorkspaceArtifactClick: vi.fn(),
     requestCanvasWorkbenchPreviewOpen: vi.fn(),
-    sessionId: "session-media",
+    threadId: "thread-media",
     setCanvasWorkbenchLayoutMode: vi.fn(),
     setLayoutMode: vi.fn(),
     t,
@@ -354,12 +353,12 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
 
   it("sidecar 媒体预览应创建 object URL，并在替换和卸载时释放", async () => {
     const upsertGeneralArtifact = vi.fn();
-    const readAgentSessionMedia = vi
+    const readMedia = vi
       .fn()
       .mockResolvedValueOnce({ result: createMediaReadResponse() })
       .mockResolvedValueOnce({ result: createMediaReadResponse() });
     vi.mocked(createAppServerClient).mockReturnValue({
-      readAgentSessionMedia,
+      readMedia,
     } as ReturnType<typeof createAppServerClient>);
     const { createObjectUrl, revokeObjectUrl } = installObjectUrlMocks();
     const { render, getValue } = renderHook({
@@ -384,7 +383,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
     });
 
     expect(createAppServerClient).toHaveBeenCalledTimes(2);
-    expect(readAgentSessionMedia).toHaveBeenCalledTimes(2);
+    expect(readMedia).toHaveBeenCalledTimes(2);
     expect(createObjectUrl).toHaveBeenCalledTimes(2);
     const secondArtifact = upsertGeneralArtifact.mock.calls[1]?.[0] as Artifact;
     expect(firstArtifact.id).toBe(secondArtifact.id);
@@ -413,11 +412,54 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
     expect(revokeObjectUrl).toHaveBeenCalledWith("blob:media-2");
   });
 
+  it("sidecar 读取被权限拒绝时应保留可见 metadata fallback", async () => {
+    const upsertGeneralArtifact = vi.fn();
+    const handleWorkspaceArtifactClick = vi.fn();
+    const requestCanvasWorkbenchPreviewOpen = vi.fn();
+    const readMedia = vi
+      .fn()
+      .mockRejectedValue(new Error("permission denied: private sidecar path"));
+    vi.mocked(createAppServerClient).mockReturnValue({
+      readMedia,
+    } as ReturnType<typeof createAppServerClient>);
+    const { createObjectUrl } = installObjectUrlMocks();
+    const { render, getValue } = renderHook({
+      handleWorkspaceArtifactClick,
+      requestCanvasWorkbenchPreviewOpen,
+      upsertGeneralArtifact,
+    });
+
+    await render();
+    await act(async () => {
+      await getValue().openMediaReferencePreview(
+        createSidecarMediaTarget(),
+        createMessage("assistant-sidecar-media-permission-denied"),
+      );
+    });
+
+    expect(readMedia).toHaveBeenCalledOnce();
+    expect(createObjectUrl).not.toHaveBeenCalled();
+    expect(upsertGeneralArtifact).toHaveBeenCalledOnce();
+    const artifact = upsertGeneralArtifact.mock.calls[0]?.[0] as Artifact;
+    expect(artifact.content).toContain("media sidecar source");
+    expect(artifact.content).not.toContain("permission denied");
+    expect(artifact.meta).toMatchObject({
+      mediaPreviewPolicy: "sidecar_metadata_fallback",
+      contentKind: "markdown",
+      renderMode: "canvas",
+    });
+    expect(handleWorkspaceArtifactClick).toHaveBeenCalledWith(artifact);
+    expect(requestCanvasWorkbenchPreviewOpen).toHaveBeenCalledWith({
+      filePath: artifact.meta.filePath,
+      selectionKey: `artifact:${artifact.id}`,
+    });
+  });
+
   it("chunked sidecar 媒体预览应先写入 progress artifact，再替换为 object URL", async () => {
     const upsertGeneralArtifact = vi.fn();
     const handleWorkspaceArtifactClick = vi.fn();
     const requestCanvasWorkbenchPreviewOpen = vi.fn();
-    const readAgentSessionMedia = vi
+    const readMedia = vi
       .fn()
       .mockResolvedValueOnce({
         result: createMediaReadResponse({
@@ -442,7 +484,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
         }),
       });
     vi.mocked(createAppServerClient).mockReturnValue({
-      readAgentSessionMedia,
+      readMedia,
     } as ReturnType<typeof createAppServerClient>);
     const { createObjectUrl } = installObjectUrlMocks();
     const { render, getValue } = renderHook({
@@ -459,7 +501,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       );
     });
 
-    expect(readAgentSessionMedia).toHaveBeenCalledTimes(2);
+    expect(readMedia).toHaveBeenCalledTimes(2);
     expect(upsertGeneralArtifact).toHaveBeenCalledTimes(2);
     const progressArtifact = upsertGeneralArtifact.mock
       .calls[0]?.[0] as Artifact;
@@ -507,11 +549,11 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       },
     );
     const pendingRead = createDeferred<{
-      result: AppServerAgentSessionMediaReadResponse;
+      result: AppServerMediaReadResponse;
     }>();
-    const readAgentSessionMedia = vi.fn().mockReturnValue(pendingRead.promise);
+    const readMedia = vi.fn().mockReturnValue(pendingRead.promise);
     vi.mocked(createAppServerClient).mockReturnValue({
-      readAgentSessionMedia,
+      readMedia,
     } as ReturnType<typeof createAppServerClient>);
     const { createObjectUrl } = installObjectUrlMocks();
     const { render, getValue } = renderHook({
@@ -592,7 +634,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
     const upsertGeneralArtifact = vi.fn();
     const handleWorkspaceArtifactClick = vi.fn();
     const requestCanvasWorkbenchPreviewOpen = vi.fn();
-    const readAgentSessionMedia = vi.fn().mockResolvedValue({
+    const readMedia = vi.fn().mockResolvedValue({
       result: createMediaReadResponse({
         bytes: 3,
         totalBytes:
@@ -605,7 +647,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       }),
     });
     vi.mocked(createAppServerClient).mockReturnValue({
-      readAgentSessionMedia,
+      readMedia,
     } as ReturnType<typeof createAppServerClient>);
     const { createObjectUrl } = installObjectUrlMocks();
     const { render, getValue } = renderHook({
@@ -626,7 +668,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       );
     });
 
-    expect(readAgentSessionMedia).toHaveBeenCalledTimes(1);
+    expect(readMedia).toHaveBeenCalledTimes(1);
     expect(createObjectUrl).not.toHaveBeenCalled();
     expect(upsertGeneralArtifact).toHaveBeenCalledTimes(1);
     const artifact = upsertGeneralArtifact.mock.calls[0]?.[0] as Artifact;
@@ -654,7 +696,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
     const upsertGeneralArtifact = vi.fn();
     const handleWorkspaceArtifactClick = vi.fn();
     const requestCanvasWorkbenchPreviewOpen = vi.fn();
-    const readAgentSessionMedia = vi.fn().mockResolvedValue({
+    const readMedia = vi.fn().mockResolvedValue({
       result: createMediaReadResponse({
         bytes: 3,
         offset: 3,
@@ -665,7 +707,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       }),
     });
     vi.mocked(createAppServerClient).mockReturnValue({
-      readAgentSessionMedia,
+      readMedia,
     } as ReturnType<typeof createAppServerClient>);
     const { createObjectUrl } = installObjectUrlMocks();
     const { render, getValue } = renderHook({
@@ -683,13 +725,13 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       );
     });
 
-    expect(readAgentSessionMedia).toHaveBeenCalledTimes(1);
-    expect(readAgentSessionMedia).toHaveBeenCalledWith(
+    expect(readMedia).toHaveBeenCalledTimes(1);
+    expect(readMedia).toHaveBeenCalledWith(
       expect.objectContaining({
         length: 3,
         maxBytes: 3,
         offset: 3,
-        sessionId: "session-media",
+        threadId: "thread-media",
         uri: "sidecar://media/image-1",
       }),
       expect.objectContaining({
@@ -735,9 +777,9 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       },
     );
     const firstRead = createDeferred<{
-      result: AppServerAgentSessionMediaReadResponse;
+      result: AppServerMediaReadResponse;
     }>();
-    const readAgentSessionMedia = vi
+    const readMedia = vi
       .fn()
       .mockReturnValueOnce(firstRead.promise)
       .mockResolvedValueOnce({
@@ -751,7 +793,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
         }),
       });
     vi.mocked(createAppServerClient).mockReturnValue({
-      readAgentSessionMedia,
+      readMedia,
     } as ReturnType<typeof createAppServerClient>);
     const { createObjectUrl } = installObjectUrlMocks();
     const { render, getValue } = renderHook({
@@ -781,10 +823,10 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       );
     });
 
-    const firstReadOptions = readAgentSessionMedia.mock.calls[0]?.[1] as
+    const firstReadOptions = readMedia.mock.calls[0]?.[1] as
       | { signal?: AbortSignal }
       | undefined;
-    const secondReadOptions = readAgentSessionMedia.mock.calls[1]?.[1] as
+    const secondReadOptions = readMedia.mock.calls[1]?.[1] as
       | { signal?: AbortSignal }
       | undefined;
     expect(firstReadOptions?.signal).toBeInstanceOf(AbortSignal);
@@ -820,7 +862,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       await firstPreview;
     });
 
-    expect(readAgentSessionMedia).toHaveBeenCalledTimes(2);
+    expect(readMedia).toHaveBeenCalledTimes(2);
     expect(createObjectUrl).toHaveBeenCalledTimes(1);
     expect(upsertGeneralArtifact).toHaveBeenCalledTimes(1);
     expect(handleWorkspaceArtifactClick).toHaveBeenCalledTimes(1);
@@ -833,11 +875,11 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
     const handleWorkspaceArtifactClick = vi.fn();
     const requestCanvasWorkbenchPreviewOpen = vi.fn();
     const pendingRead = createDeferred<{
-      result: AppServerAgentSessionMediaReadResponse;
+      result: AppServerMediaReadResponse;
     }>();
-    const readAgentSessionMedia = vi.fn().mockReturnValue(pendingRead.promise);
+    const readMedia = vi.fn().mockReturnValue(pendingRead.promise);
     vi.mocked(createAppServerClient).mockReturnValue({
-      readAgentSessionMedia,
+      readMedia,
     } as ReturnType<typeof createAppServerClient>);
     const { createObjectUrl, revokeObjectUrl } = installObjectUrlMocks();
     const { render, getValue } = renderHook({
@@ -862,7 +904,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       mounted.container.remove();
     });
 
-    const readOptions = readAgentSessionMedia.mock.calls[0]?.[1] as
+    const readOptions = readMedia.mock.calls[0]?.[1] as
       | { signal?: AbortSignal }
       | undefined;
     expect(readOptions?.signal).toBeInstanceOf(AbortSignal);
@@ -874,7 +916,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       await preview;
     });
 
-    expect(readAgentSessionMedia).toHaveBeenCalledTimes(1);
+    expect(readMedia).toHaveBeenCalledTimes(1);
     expect(createObjectUrl).not.toHaveBeenCalled();
     expect(revokeObjectUrl).not.toHaveBeenCalled();
     expect(upsertGeneralArtifact).not.toHaveBeenCalled();
@@ -884,11 +926,11 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
   });
 
   it("object URL 数量超过 runtime 预算时应释放最旧 preview URL", async () => {
-    const readAgentSessionMedia = vi.fn(async () => ({
+    const readMedia = vi.fn(async () => ({
       result: createMediaReadResponse(),
     }));
     vi.mocked(createAppServerClient).mockReturnValue({
-      readAgentSessionMedia,
+      readMedia,
     } as ReturnType<typeof createAppServerClient>);
     const { revokeObjectUrl } = installObjectUrlMocks();
     const { render, getValue } = renderHook();
@@ -911,7 +953,7 @@ describe("useWorkspaceMediaReferencePreviewRuntime", () => {
       });
     }
 
-    expect(readAgentSessionMedia).toHaveBeenCalledTimes(
+    expect(readMedia).toHaveBeenCalledTimes(
       WORKSPACE_MEDIA_REFERENCE_PREVIEW_RUNTIME_POLICY.objectUrlMaxCount + 1,
     );
     expect(revokeObjectUrl).toHaveBeenCalledTimes(1);

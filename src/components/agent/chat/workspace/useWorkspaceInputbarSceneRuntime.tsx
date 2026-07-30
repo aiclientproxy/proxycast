@@ -10,6 +10,11 @@ import type {
   AgentInitialKnowledgePackSelectionParams,
 } from "@/types/page";
 import { InputbarApprovalPrompt } from "../components/Inputbar/components/InputbarApprovalPrompt";
+import {
+  PendingInteractionLayer,
+  selectActivePendingInteraction,
+} from "../components/PendingInteractionLayer";
+import { usePendingInteractions } from "../hooks/usePendingInteractions";
 import { useWorkspaceNavigationActions } from "./useWorkspaceNavigationActions";
 import type { ConfirmResponse } from "../types";
 import {
@@ -207,6 +212,19 @@ export function useWorkspaceInputbarSceneRuntime({
   inputCompletionEnabled = true,
 }: UseWorkspaceInputbarSceneRuntimeParams) {
   const { t } = useTranslation("agent");
+  const {
+    interactions: pendingInteractions,
+    respond: respondPendingInteraction,
+  } = usePendingInteractions();
+  const pendingInteractionThreadId = threadId?.trim() || sessionId?.trim();
+  const activePendingInteraction = useMemo(
+    () =>
+      selectActivePendingInteraction(
+        pendingInteractions,
+        pendingInteractionThreadId,
+      ),
+    [pendingInteractionThreadId, pendingInteractions],
+  );
   const directInputBlocked = canAcceptDirectInput === false;
   const knowledgeRuntime = useWorkspaceKnowledgeRuntime({
     projectRootPath,
@@ -303,16 +321,17 @@ export function useWorkspaceInputbarSceneRuntime({
       ?.prompt_text?.trim() ||
     resolvedTurns[resolvedTurns.length - 1]?.prompt_text?.trim() ||
     "";
-  const approvalAccessory = inputbarApprovalAction ? (
-    <InputbarApprovalPrompt
-      request={inputbarApprovalAction}
-      onSubmit={
-        generalWorkbenchHarnessPanelBaseProps.onRespondToAction as
-          | ((response: ConfirmResponse) => void | Promise<void>)
-          | undefined
-      }
-    />
-  ) : null;
+  const approvalAccessory =
+    inputbarApprovalAction && !activePendingInteraction ? (
+      <InputbarApprovalPrompt
+        request={inputbarApprovalAction}
+        onSubmit={
+          generalWorkbenchHarnessPanelBaseProps.onRespondToAction as
+            | ((response: ConfirmResponse) => void | Promise<void>)
+            | undefined
+        }
+      />
+    ) : null;
 
   const presentationRuntime = useWorkspaceInputbarScenePresentationRuntime({
     setMentionedCharacters,
@@ -443,9 +462,24 @@ export function useWorkspaceInputbarSceneRuntime({
       },
     },
   });
+  const pendingInteractionLayer = activePendingInteraction ? (
+    <PendingInteractionLayer
+      interactions={pendingInteractions}
+      threadId={pendingInteractionThreadId}
+      onRespond={respondPendingInteraction}
+    />
+  ) : null;
 
   return {
     ...presentationRuntime,
+    inputbarNode: pendingInteractionLayer ? (
+      <div className="w-full min-w-0 space-y-2">
+        {pendingInteractionLayer}
+        {presentationRuntime.inputbarNode}
+      </div>
+    ) : (
+      presentationRuntime.inputbarNode
+    ),
     knowledgePackSelection: knowledgeRuntime.knowledgePackSelection,
     knowledgePackOptions: knowledgeRuntime.knowledgePackOptions,
     onToggleKnowledgePack: knowledgeRuntime.onToggleKnowledgePack,

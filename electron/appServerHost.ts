@@ -35,6 +35,7 @@ import {
 import { app, session } from "./electronRuntime";
 import { resolveCurrentDesktopStorageRoots } from "./appDataPaths";
 import { readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 const DEFAULT_APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
@@ -59,6 +60,8 @@ const APP_SERVER_PROXY_REQUEST_ID_PREFIX = "electron-host";
 const APP_SERVER_CANCEL_REQUEST_METHOD = "$/cancelRequest";
 const APP_SERVER_CONFIG_FILE_NAME = "config.yaml";
 const APP_SERVER_RECENT_NOTIFICATION_LIMIT = 500;
+const APP_SERVER_SERVER_REQUEST_TOKEN_LIMIT = 500;
+const APP_SERVER_SERVER_REQUEST_TOKEN_PREFIX = "electron-action:";
 const APP_SERVER_DRAIN_FIRST_MESSAGE_WAIT_MS = 25;
 const APP_SERVER_DRAIN_BUFFERED_MESSAGE_WAIT_MS = 0;
 const APP_SERVER_PROXY_PROBE_URL = "https://llm.limeai.run/v1/models";
@@ -94,7 +97,10 @@ export class ElectronAppServerHost {
   #connectPromise: Promise<ConnectedAppServerSidecar> | null = null;
   #nextProxyRequestId = 1;
   #activeProxyRequestIds = new Map<RequestId, RequestId>();
+  #consumedServerRequestTokens = new Set<string>();
   #recentNotifications: JsonRpcMessage[] = [];
+  #serverRequestRawIdsByToken = new Map<string, RequestId>();
+  #serverRequestTokensByRawId = new Map<string, string>();
   #stopping = false;
 
   async warmup(): Promise<InitializeResponse> {
@@ -175,7 +181,9 @@ export class ElectronAppServerHost {
         }
         continue;
       }
-      (await this.#connect()).connection.transport.send(message);
+      (await this.#connect()).connection.transport.send(
+        this.#restoreServerRequestResponseId(message),
+      );
     }
 
     this.#rememberRecentNotifications(responses);
@@ -210,14 +218,17 @@ export class ElectronAppServerHost {
       }
     }
 
-    this.#rememberRecentNotifications(drained);
+    const rendererMessages = drained.map((message) =>
+      this.#projectServerMessageForRenderer(message),
+    );
+    this.#rememberRecentNotifications(rendererMessages);
     const messages =
       request.includeRecent === true
         ? uniqueJsonRpcMessages([
             ...this.#recentNotifications,
-            ...drained,
+            ...rendererMessages,
           ]).slice(-limit)
-        : drained;
+        : rendererMessages;
 
     return {
       lines: messages.map(encodeMessage),
@@ -230,6 +241,86 @@ export class ElectronAppServerHost {
     this.#lifecycle = null;
     this.#connected = null;
     this.#connectPromise = null;
+    this.#consumedServerRequestTokens.clear();
+    this.#serverRequestRawIdsByToken.clear();
+    this.#serverRequestTokensByRawId.clear();
+  }
+
+  #projectServerMessageForRenderer(message: JsonRpcMessage): JsonRpcMessage {
+    if (isJsonRpcRequestLike(message)) {
+      const token = this.#serverRequestToken(message.id);
+      return { ...message, id: token };
+    }
+    if (!isJsonRpcNotification(message)) {
+      return message;
+    }
+    if (message.method !== "serverRequest/resolved") {
+      return message;
+    }
+    const params = asRecord(message.params);
+    const rawRequestId = params?.requestId;
+    if (typeof rawRequestId !== "string" && typeof rawRequestId !== "number") {
+      return message;
+    }
+    const token = this.#serverRequestTokensByRawId.get(
+      stableRequestIdKey(rawRequestId),
+    );
+    return token
+      ? {
+          ...message,
+          params: { ...params, requestId: token },
+        }
+      : message;
+  }
+
+  #restoreServerRequestResponseId(message: JsonRpcMessage): JsonRpcMessage {
+    if (!isJsonRpcResponse(message) && !isJsonRpcErrorResponse(message)) {
+      return message;
+    }
+    if (
+      typeof message.id !== "string" ||
+      !message.id.startsWith(APP_SERVER_SERVER_REQUEST_TOKEN_PREFIX)
+    ) {
+      return message;
+    }
+    if (this.#consumedServerRequestTokens.has(message.id)) {
+      throw new Error("App Server server-request action token was already used");
+    }
+    const rawId = this.#serverRequestRawIdsByToken.get(message.id);
+    if (rawId === undefined) {
+      throw new Error("Unknown App Server server-request action token");
+    }
+    this.#consumedServerRequestTokens.add(message.id);
+    return { ...message, id: rawId };
+  }
+
+  #serverRequestToken(rawId: RequestId): string {
+    const rawKey = stableRequestIdKey(rawId);
+    const existing = this.#serverRequestTokensByRawId.get(rawKey);
+    if (existing) {
+      return existing;
+    }
+    const token = `${APP_SERVER_SERVER_REQUEST_TOKEN_PREFIX}${randomUUID()}`;
+    this.#serverRequestTokensByRawId.set(rawKey, token);
+    this.#serverRequestRawIdsByToken.set(token, rawId);
+    while (
+      this.#serverRequestRawIdsByToken.size >
+      APP_SERVER_SERVER_REQUEST_TOKEN_LIMIT
+    ) {
+      const oldestToken = this.#serverRequestRawIdsByToken.keys().next().value;
+      if (typeof oldestToken !== "string") {
+        break;
+      }
+      const oldestRawId = this.#serverRequestRawIdsByToken.get(oldestToken);
+      this.#serverRequestRawIdsByToken.delete(oldestToken);
+      this.#consumedServerRequestTokens.delete(oldestToken);
+      if (oldestRawId !== undefined) {
+        this.#serverRequestTokensByRawId.delete(
+          stableRequestIdKey(oldestRawId),
+        );
+      }
+    }
+    return token;
   }
 
   async #connect(): Promise<ConnectedAppServerSidecar> {
@@ -434,6 +525,16 @@ function isStaleSidecarConnectionError(error: unknown): boolean {
       error.message.includes("app-server sidecar is closed") ||
       error.message.includes("app-server exited before next message"))
   );
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function stableRequestIdKey(id: RequestId): string {
+  return JSON.stringify([typeof id, String(id)]);
 }
 
 function appServerHostStoppingError(): Error {

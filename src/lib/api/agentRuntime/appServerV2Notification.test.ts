@@ -18,6 +18,10 @@ import {
   projectAppServerV2NotificationPayload,
   readAppServerV2NotificationRoute,
 } from "./appServerV2Notification";
+import {
+  conversationProjectionEventFromPayload,
+  createConversationProjectionReducer,
+} from "./conversationProjection";
 
 const threadId = "thread-v2";
 const turnId = "turn-v2";
@@ -122,9 +126,11 @@ describe("App Server v2 direct notifications", () => {
       },
     });
     expect(projected[2]).toMatchObject({
+      sequence: 0,
+      sequence_provenance: "notification_order",
       item: {
         id: "item-v2",
-        sequence: 1_783_814_400_100,
+        sequence: 0,
         status: "in_progress",
         text: "",
         type: "agent_message",
@@ -138,10 +144,79 @@ describe("App Server v2 direct notifications", () => {
     });
   });
 
+  it("uses first-seen notification order instead of timestamps for live Item sequence", () => {
+    const firstStarted = projectAppServerV2NotificationPayload(
+      directNotification("item/started", {
+        item: { id: "item-first", text: "first", type: "agentMessage" },
+        startedAtMs: 1_783_814_400_900,
+        threadId,
+        turnId,
+      }),
+    );
+    const secondStarted = projectAppServerV2NotificationPayload(
+      directNotification("item/started", {
+        item: { id: "item-second", text: "second", type: "agentMessage" },
+        startedAtMs: 1_783_814_400_100,
+        threadId,
+        turnId,
+      }),
+    );
+    const firstCompleted = projectAppServerV2NotificationPayload(
+      directNotification("item/completed", {
+        completedAtMs: 1_783_814_401_500,
+        item: { id: "item-first", text: "first done", type: "agentMessage" },
+        threadId,
+        turnId,
+      }),
+    );
+
+    expect([
+      (firstStarted?.item as { sequence?: number } | undefined)?.sequence,
+      (secondStarted?.item as { sequence?: number } | undefined)?.sequence,
+      (firstCompleted?.item as { sequence?: number } | undefined)?.sequence,
+    ]).toEqual([0, 1, 0]);
+    expect(firstStarted).toMatchObject({
+      sequence: 0,
+      sequence_provenance: "notification_order",
+    });
+  });
+
+  it("unknown Item 只投影脱敏字段名，不保留原始字段值", () => {
+    const secretValue = "secret-value-must-not-leak";
+    const projected = projectAppServerV2NotificationPayload(
+      directNotification("item/started", {
+        item: {
+          id: "future-item-v2",
+          type: "futureWidget",
+          displayName: "safe display value",
+          authorization: secretValue,
+          apiKey: secretValue,
+          "invalid field": secretValue,
+        },
+        startedAtMs: 1_783_814_400_100,
+        threadId,
+        turnId,
+      }),
+    );
+
+    expect(projected).toMatchObject({
+      type: "item_started",
+      item: {
+        id: "future-item-v2",
+        type: "unknown_item",
+        upstream_type: "futureWidget",
+        field_names: ["[redacted]", "displayName"],
+      },
+    });
+    expect(JSON.stringify(projected)).not.toContain(secretValue);
+    expect(JSON.stringify(projected)).not.toContain("authorization");
+    expect(JSON.stringify(projected)).not.toContain("apiKey");
+  });
+
   it.each([
     ["completed", "turn_completed", "completed"],
     ["failed", "turn_failed", "failed"],
-    ["interrupted", "turn_canceled", "canceled"],
+    ["interrupted", "turn_canceled", "interrupted"],
   ])("maps terminal turn status %s", (status, type, projectedStatus) => {
     expect(
       projectAppServerV2NotificationPayload(
@@ -379,6 +454,84 @@ describe("App Server v2 direct notifications", () => {
     });
   });
 
+  it("feeds direct command notifications through the projection reducer and lets completed snapshot win", () => {
+    const reducer = createConversationProjectionReducer({ threadId });
+    const dispatch = (
+      eventId: string,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      const payload = projectAppServerV2NotificationPayload(
+        directNotification(method, params),
+      );
+      expect(payload).not.toBeNull();
+      const event = conversationProjectionEventFromPayload(
+        payload ?? {},
+        "live",
+        eventId,
+      );
+      expect(event).not.toBeNull();
+      if (event) {
+        reducer.dispatch(event);
+      }
+    };
+
+    dispatch("command-start", "item/started", {
+      item: {
+        id: "command-v2",
+        type: "commandExecution",
+        status: "inProgress",
+        command: "printf first && printf second",
+        cwd: "/workspace",
+      },
+      startedAtMs: 1_783_814_400_100,
+      threadId,
+      turnId,
+    });
+    dispatch("command-output-1", "item/commandExecution/outputDelta", {
+      delta: "first\n",
+      itemId: "command-v2",
+      threadId,
+      turnId,
+    });
+    dispatch("command-output-2", "item/commandExecution/outputDelta", {
+      delta: "second\n",
+      itemId: "command-v2",
+      threadId,
+      turnId,
+    });
+
+    expect(reducer.getProjection().items[0]).toMatchObject({
+      id: "command-v2",
+      type: "command_execution",
+      status: "in_progress",
+      aggregated_output: "first\nsecond\n",
+    });
+
+    dispatch("command-complete", "item/completed", {
+      completedAtMs: 1_783_814_400_900,
+      item: {
+        id: "command-v2",
+        type: "commandExecution",
+        status: "completed",
+        command: "printf first && printf second",
+        cwd: "/workspace",
+        aggregatedOutput: "authoritative snapshot\n",
+        exitCode: 0,
+      },
+      threadId,
+      turnId,
+    });
+
+    expect(reducer.getProjection().items[0]).toMatchObject({
+      id: "command-v2",
+      type: "command_execution",
+      status: "completed",
+      aggregated_output: "authoritative snapshot\n",
+      exit_code: 0,
+    });
+  });
+
   it("projects file change patch updates into the existing patch item", () => {
     const changes = [
       {
@@ -400,7 +553,8 @@ describe("App Server v2 direct notifications", () => {
       threadId,
       turnId,
     });
-    expect(projectAppServerV2NotificationPayload(notification)).toMatchObject({
+    const projected = projectAppServerV2NotificationPayload(notification);
+    expect(projected).toMatchObject({
       type: "item_updated",
       item: {
         changes,
@@ -409,12 +563,16 @@ describe("App Server v2 direct notifications", () => {
         paths: ["src/index.ts"],
         status: "in_progress",
         success: false,
-        text: JSON.stringify(changes),
         type: "patch",
       },
       thread_id: threadId,
       turn_id: turnId,
     });
+    const projectedItem = projected?.item as
+      | { text?: string }
+      | null
+      | undefined;
+    expect(JSON.parse(projectedItem?.text ?? "null")).toEqual(changes);
   });
 
   it("projects MCP progress onto the canonical MCP tool item identity", () => {

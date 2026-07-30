@@ -31,13 +31,13 @@
       "minimum": 0,
       "type": "integer"
     },
-    "sessionId": {
-      "type": "string"
-    },
     "sha256": {
       "type": "string"
     },
     "sidecarRef": true,
+    "threadId": {
+      "type": "string"
+    },
     "totalBytes": {
       "format": "uint64",
       "minimum": 0,
@@ -54,11 +54,11 @@
     "hasMore",
     "length",
     "offset",
-    "sessionId",
     "sha256",
+    "threadId",
     "totalBytes",
     "uri"
   ],
-  "title": "AgentSessionMediaReadResponse",
+  "title": "MediaReadResponse",
   "type": "object"
 }

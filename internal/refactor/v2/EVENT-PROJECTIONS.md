@@ -1,6 +1,6 @@
 # Codex Event 与 Reverse Request 全量投影表
 
-状态：proposed / coverage baseline
+状态：implementation in progress / coverage baseline
 
 上游事实源是 Codex 4c43465133428898aa84f0bfc02c306ed65fb66a。表中的 72 个 notification 和 11 个 reverse request 是审计全集，不代表 Lime 会无条件复制所有 Codex 产品功能。xuanlan 原稿记录的 10 类 request 未包含当前 revision 的 currentTime/read，本文件以 Codex/v1 机器清单为准。
 
@@ -12,6 +12,8 @@
 - deprecated：上游已退役，仅防重复或安全诊断，不新增用户功能。
 
 出口代码：TL 时间线，TP Turn 面板，PI pending interaction，HS Header/状态区，GN 应用通知，DX 仅开发诊断。
+
+实施快照：direct `item/started -> item/commandExecution/outputDelta* -> item/completed` 通过 typed adapter 和共享 reducer；production `thread/resume` 安装同一 replay reducer，后续 live notification 继续复用。completed snapshot 权威覆盖 delta 草稿，输出限制为 256 KiB。unknown Item 与 unknown/known-unprojected notification drift recorder 已接线，但 recorder 只提供 fail-visible 诊断，不能把 72 notification 中的 planned surface 标记完成。
 
 ## 1. Thread、Turn 与 Hook
 
@@ -124,7 +126,7 @@ Codex 72 项是 runtime/rendering 上游基线，不是删除 Lime 产品扩展�
 
 ## 7. Reverse Request
 
-raw JSON-RPC request id 只由 Electron main 的 pending map 保存。Renderer 只接收 semantic PendingInteractionProjection 与一次性 action token。
+raw JSON-RPC transport id/action token 只由 server-request dispatcher 的请求闭包持有。React projection 只接收 semantic interaction identity，不能持久化或显示 transport identity。
 
 |   # | Method                                | 当前裁决               | GUI/host 处理                                                                               |
 | --: | ------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------- |
@@ -140,14 +142,17 @@ raw JSON-RPC request id 只由 Electron main 的 pending map 保存。Renderer �
 |  10 | applyPatchApproval                    | deprecated             | legacy 与 v2 file approval 去重，同一动作只有一个 prompt                                    |
 |  11 | execCommandApproval                   | deprecated             | legacy 与 v2 command approval 去重，同一动作只有一个 prompt                                 |
 
+前四类 current request 已统一注册到一个 `PendingInteractionController`。command/file approval、requestUserInput 与 MCP elicitation 共享提交幂等、abort、Turn/thread 终结和 Composer 上方唯一交互表面；旧 server-request controller、独立 MCP Dialog/controller 和第二 pending store 已删除。其余 planned request 仍须先有真实 producer/host owner，不得复用这四类 handler 伪造支持。
+
 ## 8. Pending Interaction 合同
 
     PendingInteractionProjection
       = CommandApproval
       | FileApproval
-      | PermissionApproval
       | UserInputRequest
       | McpElicitation
+
+`PermissionApproval` 仍是 planned surface，只有 current producer 与 host policy owner 完成后才能加入上述生产 union。
 
 每个 projection 都包含 semantic interactionId、thread/turn/item anchor、createdAt、可选 expiresAt、pending/submitting/resolved/expired/disconnected 状态、本地化文案、结构化选项与 secret/network/filesystem/session 风险标签。
 

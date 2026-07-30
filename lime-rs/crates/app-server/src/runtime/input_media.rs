@@ -1,3 +1,4 @@
+use super::image_media::{extension_for_media_type, validate_image_bytes, MAX_IMAGE_MEDIA_BYTES};
 use super::sidecar_store::{
     session_scoped_relative_path, SidecarBytesWriteRequest, SidecarRef, SidecarStore,
 };
@@ -10,7 +11,6 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 
-const MAX_INPUT_MEDIA_BYTES: usize = 32 * 1024 * 1024;
 const INPUT_MEDIA_URI_PREFIX: &str = "sidecar://media/input-";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,10 +103,10 @@ pub(super) fn resolve_runtime_input_media(
             if !metadata.is_file() {
                 return Err("local image path must reference a regular file".to_string());
             }
-            if metadata.len() > MAX_INPUT_MEDIA_BYTES as u64 {
+            if metadata.len() > MAX_IMAGE_MEDIA_BYTES as u64 {
                 return Err(format!(
                     "provider image input exceeds {} bytes",
-                    MAX_INPUT_MEDIA_BYTES
+                    MAX_IMAGE_MEDIA_BYTES
                 ));
             }
             let bytes =
@@ -155,10 +155,10 @@ fn decode_image_data_url(source: &str) -> Result<(Vec<u8>, String), String> {
     if bytes.is_empty() {
         return Err("provider image input is empty".to_string());
     }
-    if bytes.len() > MAX_INPUT_MEDIA_BYTES {
+    if bytes.len() > MAX_IMAGE_MEDIA_BYTES {
         return Err(format!(
             "provider image input exceeds {} bytes",
-            MAX_INPUT_MEDIA_BYTES
+            MAX_IMAGE_MEDIA_BYTES
         ));
     }
     Ok((bytes, media_type))
@@ -208,7 +208,7 @@ fn hydrate_persisted_image(
         .read_bytes_verified(
             &relative_path,
             Some(&expected_sha256),
-            MAX_INPUT_MEDIA_BYTES as u64,
+            MAX_IMAGE_MEDIA_BYTES as u64,
         )?
         .ok_or_else(|| format!("canonical provider image sidecar is missing: {uri}"))?;
     let detected = validate_image_bytes(&read.bytes, Some(locator.media_type))?;
@@ -258,7 +258,7 @@ fn copy_canonical_input_media(
         .read_bytes_verified(
             &source_relative_path,
             Some(&expected_sha256),
-            MAX_INPUT_MEDIA_BYTES as u64,
+            MAX_IMAGE_MEDIA_BYTES as u64,
         )?
         .ok_or_else(|| format!("canonical provider image sidecar is missing: {uri}"))?;
     validate_image_bytes(&read.bytes, Some(locator.media_type))?;
@@ -323,7 +323,7 @@ fn input_media_output_ref(
         .read_bytes_verified(
             &relative_path,
             Some(&expected_sha256),
-            MAX_INPUT_MEDIA_BYTES as u64,
+            MAX_IMAGE_MEDIA_BYTES as u64,
         )?
         .ok_or_else(|| format!("canonical provider image sidecar is missing: {uri}"))?;
     validate_image_bytes(&read.bytes, Some(locator.media_type))?;
@@ -385,39 +385,6 @@ fn media_type_for_extension(extension: &str) -> Option<&'static str> {
     }
 }
 
-fn validate_image_bytes<'a>(
-    bytes: &[u8],
-    declared_media_type: Option<&'a str>,
-) -> Result<&'a str, String> {
-    let detected = detected_image_media_type(bytes)
-        .ok_or_else(|| "provider image input is not a supported image".to_string())?;
-    if let Some(declared) = declared_media_type {
-        if declared != detected {
-            return Err(format!(
-                "provider image media type mismatch: declared {declared}, detected {detected}"
-            ));
-        }
-        return Ok(declared);
-    }
-    Ok(detected)
-}
-
-fn detected_image_media_type(bytes: &[u8]) -> Option<&'static str> {
-    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        return Some("image/png");
-    }
-    if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
-        return Some("image/jpeg");
-    }
-    if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
-        return Some("image/gif");
-    }
-    if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
-        return Some("image/webp");
-    }
-    None
-}
-
 fn remote_image_media_type(url: &url::Url) -> &'static str {
     let path = url.path().to_ascii_lowercase();
     if path.ends_with(".png") {
@@ -430,15 +397,6 @@ fn remote_image_media_type(url: &url::Url) -> &'static str {
         "image/webp"
     } else {
         "image/*"
-    }
-}
-
-fn extension_for_media_type(media_type: &str) -> &'static str {
-    match media_type {
-        "image/jpeg" => "jpg",
-        "image/gif" => "gif",
-        "image/webp" => "webp",
-        _ => "png",
     }
 }
 

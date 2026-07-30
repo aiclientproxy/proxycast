@@ -4,22 +4,22 @@ use super::{
     dispatch_result, parse_params, project_event_notifications_jsonrpc, to_jsonrpc_error,
     v2_notifications::V2NotificationProjector, RequestProcessor, RpcDispatch,
 };
+use app_server_protocol::protocol::v2::MediaReadParams;
 use app_server_protocol::{
     AgentSessionFileCheckpointDiffParams, AgentSessionFileCheckpointGetParams,
     AgentSessionFileCheckpointListParams, AgentSessionFileCheckpointRestoreParams,
-    AgentSessionMediaReadParams, AgentSessionToolInventoryReadParams, JsonRpcError, JsonRpcMessage,
-    RequestId,
+    AgentSessionToolInventoryReadParams, JsonRpcError, JsonRpcMessage, RequestId,
 };
 
 impl RequestProcessor {
-    pub(super) async fn handle_session_media_read_impl(
+    pub(super) async fn handle_media_read_v2_impl(
         &self,
         request_id: &RequestId,
         params: Option<serde_json::Value>,
         event_callback: Option<&mut (dyn FnMut(JsonRpcMessage) + Send)>,
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
-        let params: AgentSessionMediaReadParams = parse_params(params)?;
+        let params: MediaReadParams = parse_params(params)?;
         let response = if params.stream {
             if let Some(event_callback) = event_callback {
                 let mut event_projector = V2NotificationProjector::default();
@@ -37,7 +37,7 @@ impl RequestProcessor {
                     Ok(())
                 };
                 self.runtime
-                    .read_agent_session_media_streaming_with_cancel(
+                    .read_media_streaming_with_cancel(
                         params,
                         || self.is_request_canceled(request_id),
                         &mut runtime_event_callback,
@@ -45,16 +45,12 @@ impl RequestProcessor {
                     .map_err(to_jsonrpc_error)?
             } else {
                 self.runtime
-                    .read_agent_session_media_with_cancel(params, || {
-                        self.is_request_canceled(request_id)
-                    })
+                    .read_media_with_cancel(params, || self.is_request_canceled(request_id))
                     .map_err(to_jsonrpc_error)?
             }
         } else {
             self.runtime
-                .read_agent_session_media_with_cancel(params, || {
-                    self.is_request_canceled(request_id)
-                })
+                .read_media_with_cancel(params, || self.is_request_canceled(request_id))
                 .map_err(to_jsonrpc_error)?
         };
         dispatch_result(response)

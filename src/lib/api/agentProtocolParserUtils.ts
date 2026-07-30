@@ -203,6 +203,18 @@ export function withAgentEventEnvelope<TEvent extends AgentEvent>(
         : typeof source.eventId === "string"
           ? source.eventId
           : event.event_id,
+    protocol_method:
+      typeof source.protocol_method === "string"
+        ? source.protocol_method
+        : typeof source.protocolMethod === "string"
+          ? source.protocolMethod
+          : event.protocol_method,
+    protocol_revision:
+      typeof source.protocol_revision === "string"
+        ? source.protocol_revision
+        : typeof source.protocolRevision === "string"
+          ? source.protocolRevision
+          : event.protocol_revision,
     renderer_event_received_at:
       typeof source.renderer_event_received_at === "number" &&
       Number.isFinite(source.renderer_event_received_at)

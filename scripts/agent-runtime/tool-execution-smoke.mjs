@@ -7,19 +7,14 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
   assertSmoke,
-  createAgentSessionCurrent,
   exportAgentSessionEvidencePackCurrent,
   invokeDevBridge,
   invokeAppServerMethod,
-  readAgentRuntimeThreadCurrent,
-  readAgentSessionDetailCurrent,
   respondAgentServerRequestCurrent,
   sleep,
-  startAgentSessionTurnCurrent,
   summarizeEvidencePack,
   summarizeThreadRead,
   threadSettled,
-  updateAgentThreadSettingsCurrent,
   waitForHealth,
 } from "../lib/agent-runtime-smoke-core.mjs";
 import {
@@ -32,6 +27,12 @@ import {
   liveProviderSmokeAllowed,
 } from "../lib/live-provider-smoke-gate.mjs";
 import { startOpenAiCompatibleFixtureServer } from "../lib/openai-compatible-fixture-server.mjs";
+import {
+  createToolExecutionThreadCurrent,
+  provisionToolExecutionFixtureProvider,
+  readToolExecutionThreadCurrent,
+  startToolExecutionTurnCurrent,
+} from "./tool-execution-current-contract.mjs";
 import {
   buildDeferredMcpToolSearchAssertions,
   buildDeferredMcpToolSearchFixtureResponses,
@@ -84,6 +85,7 @@ const AGENT_CONTROL_TOOLS = [
   "interrupt_agent",
   "list_agents",
 ];
+const AGENT_CONTROL_WAIT_TIMEOUT_MS = 10_000;
 const PLAN_WORKTREE_TOOLS = [
   "EnterPlanMode",
   "ExitPlanMode",
@@ -638,7 +640,7 @@ function buildAgentControlFixtureResponse(context) {
   }
   if (!calledTools.has("wait_agent")) {
     return toolCall("wait_agent", "call-tool-exec-wait-agent", {
-      timeout_ms: 0,
+      timeout_ms: AGENT_CONTROL_WAIT_TIMEOUT_MS,
     });
   }
   return {
@@ -1236,6 +1238,14 @@ function buildBatchScenario(batchId, fixtureFiles) {
       requiresTargetToolsInInitialInventory: false,
       buildAssertions({ evidencePackText, toolOutputText, matrix }) {
         const waitAgent = matrix.find((entry) => entry.tool === "wait_agent");
+        const waitAgentHasTerminalState = waitAgent?.agentStates?.some(
+          (state) =>
+            ["completed", "interrupted", "errored", "shutdown"].includes(
+              String(state?.status || "")
+                .trim()
+                .toLowerCase(),
+            ),
+        );
         return {
           spawnAgentCreatedDurableChild:
             toolOutputText.includes("spawn_agent:") &&
@@ -1255,8 +1265,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
           waitAgentReturnedTerminalResult:
             waitAgent?.status === "completed" &&
             waitAgent.success !== false &&
-            toolOutputText.includes("wait_agent:") &&
-            toolOutputText.includes('"timed_out"'),
+            waitAgentHasTerminalState === true,
           evidencePackMentionsCurrentAgentControl:
             evidencePackText.includes("spawn_agent") &&
             evidencePackText.includes("list_agents") &&
@@ -1496,6 +1505,8 @@ function requestUserMessagesText(body) {
 function providerRequestSummaries(fixtureRequests) {
   return fixtureRequests.map((request, index) => {
     const toolNames = requestToolNames(request?.body);
+    const allMessagesText = requestMessagesText(request?.body);
+    const userMessagesText = requestUserMessagesText(request?.body);
     return {
       index,
       path: request?.path || null,
@@ -1506,6 +1517,12 @@ function providerRequestSummaries(fixtureRequests) {
       responseKind: request?.responseKind || null,
       responseToolName: request?.responseToolName || null,
       responseError: request?.responseError || null,
+      childMarkerInAllMessages:
+        allMessagesText.includes("AGENT_RUNTIME_AGENT_CHILD_READY") ||
+        allMessagesText.includes("AGENT_RUNTIME_AGENT_CHILD_FOLLOWUP"),
+      childMarkerInUserMessages:
+        userMessagesText.includes("AGENT_RUNTIME_AGENT_CHILD_READY") ||
+        userMessagesText.includes("AGENT_RUNTIME_AGENT_CHILD_FOLLOWUP"),
     };
   });
 }
@@ -1541,8 +1558,11 @@ function getToolCalls(threadRead) {
         tool_name: canonicalToolName,
         call_id: callId,
         status: item?.status,
-        success: item?.metadata?.success ?? null,
+        success: item?.success ?? item?.metadata?.success ?? null,
         output: item?.output,
+        agent_states: Array.isArray(item?.agent_states)
+          ? item.agent_states
+          : [],
       },
     ];
   });
@@ -1580,6 +1600,11 @@ function buildToolExecutionMatrix(threadRead, targetTools) {
       status: matching ? toolStatus(matching) : "missing",
       success: matching?.success ?? null,
       outputPreview: matching ? toolOutput(matching).slice(0, 500) : "",
+      agentStates: Array.isArray(matching?.agent_states)
+        ? matching.agent_states
+        : Array.isArray(matching?.agentStates)
+          ? matching.agentStates
+          : [],
     };
   });
 }
@@ -1977,10 +2002,13 @@ async function waitForRuntimeCompletion(
   const seenRequestIds = new Set();
 
   while (Date.now() - startedAt < options.timeoutMs) {
-    const [threadRead, sessionDetail] = await Promise.all([
-      readAgentRuntimeThreadCurrent(options, sessionId, { historyLimit: 80 }),
-      readAgentSessionDetailCurrent(options, sessionId, { historyLimit: 80 }),
-    ]);
+    const threadRead = await readToolExecutionThreadCurrent(
+      options,
+      sessionId,
+      { historyLimit: 80 },
+      invokeAppServerMethod,
+    );
+    const sessionDetail = threadRead.session_detail;
     const matrix = buildToolExecutionMatrix(threadRead, targetTools);
     const turnObserved = runtimeTurnObserved(threadRead, fixture);
     const pendingRequests = pendingRequestsFromThreadRead(threadRead).filter(
@@ -1989,6 +2017,7 @@ async function waitForRuntimeCompletion(
     );
     lastSnapshot = {
       threadRead: summarizeThreadRead(threadRead),
+      latestTurnError: threadRead?.diagnostics?.latestTurnError ?? null,
       session: {
         id: sessionDetail?.id || null,
         executionStrategy:
@@ -2107,50 +2136,55 @@ async function runSmoke(options) {
   );
 
   try {
-    console.log(`${LOG_PREFIX} stage=session`);
-    const sessionId = await createAgentSessionCurrent(options, {
-      workspaceId,
-      title: `Tool execution fixture ${scenario.id} ${new Date().toISOString()}`,
-      executionStrategy: "react",
-      metadata: {
-        harness: {
-          hiddenFromUserRecents: true,
-          source: "smoke:agent-runtime-tool-execution",
-          scenarioId: scenario.id,
-        },
-      },
+    console.log(`${LOG_PREFIX} stage=provider-provision`);
+    const repositoryProvider = await provisionToolExecutionFixtureProvider({
+      fixture,
+      invoke: invokeAppServerMethod,
+      options,
     });
-    assertSmoke(sessionId, "thread/start 未返回 sessionId");
 
-    await updateAgentThreadSettingsCurrent(options, {
-      threadId: sessionId,
-      provider: fixture.provider,
+    console.log(`${LOG_PREFIX} stage=session`);
+    const identity = await createToolExecutionThreadCurrent({
+      invoke: invokeAppServerMethod,
+      options,
+      provider: repositoryProvider,
+      title: `Tool execution fixture ${scenario.id} ${new Date().toISOString()}`,
+      workspaceRoot,
     });
+    const { sessionId, threadId } = identity;
+    assertSmoke(
+      sessionId && threadId,
+      "thread/start 未返回 canonical identity",
+    );
 
     console.log(`${LOG_PREFIX} stage=submit-turn session=${sessionId}`);
-    const turnId = `tool-execution-${Date.now()}-${process.pid}`;
-    const eventName = `app_server_tool_execution_${turnId}`;
-    await startAgentSessionTurnCurrent(options, {
-      sessionId,
-      workspaceId,
-      message: scenario.prompt,
-      eventName,
-      turnId,
-      runtimeRequest: {
-        providerPreference: fixture.provider.providerPreference,
-        modelPreference: fixture.provider.modelPreference,
-        providerConfig: fixture.provider.providerConfig,
-        approvalPolicy: "never",
-        sandboxPolicy: "danger-full-access",
-        metadata: turnMetadata,
+    const requestedTurnId = `tool-execution-${Date.now()}-${process.pid}`;
+    const eventName = `app_server_tool_execution_${requestedTurnId}`;
+    const turnResponse = await startToolExecutionTurnCurrent(
+      options,
+      {
+        sessionId: threadId,
+        workspaceRoot,
+        message: scenario.prompt,
+        eventName,
+        turnId: requestedTurnId,
+        runtimeRequest: {
+          providerPreference: repositoryProvider.providerPreference,
+          modelPreference: repositoryProvider.modelPreference,
+          approvalPolicy: "never",
+          sandboxPolicy: "danger-full-access",
+          metadata: turnMetadata,
+        },
+        skipPreSubmitResume: true,
       },
-      skipPreSubmitResume: true,
-    });
+      invokeAppServerMethod,
+    );
+    const turnId = turnResponse.canonicalTurnId;
 
     console.log(`${LOG_PREFIX} stage=wait-runtime`);
     const finalState = await waitForRuntimeCompletion(
       options,
-      sessionId,
+      threadId,
       fixture,
       scenario.expectedFixtureRequestCount || scriptedResponses.length,
       targetTools,
@@ -2169,13 +2203,28 @@ async function runSmoke(options) {
       scenario.id === MCP_DEFERRED_TOOLSEARCH_GATE_B_BATCH_ID
         ? await runDeferredMcpNewTurnIsolation({
             options,
-            sessionId,
+            sessionId: threadId,
             workspaceId,
             fixtureRequests: providerFixtureRequests,
-            provider: fixture.provider,
+            provider: repositoryProvider,
             turnMetadata,
-            startAgentSessionTurnCurrent,
-            readAgentRuntimeThreadCurrent,
+            startAgentSessionTurnCurrent: (nextOptions, nextRequest) =>
+              startToolExecutionTurnCurrent(
+                nextOptions,
+                { ...nextRequest, workspaceRoot },
+                invokeAppServerMethod,
+              ),
+            readAgentRuntimeThreadCurrent: (
+              nextOptions,
+              nextThreadId,
+              readOptions,
+            ) =>
+              readToolExecutionThreadCurrent(
+                nextOptions,
+                nextThreadId,
+                readOptions,
+                invokeAppServerMethod,
+              ),
             summarizeThreadRead,
             threadSettled,
             fixtureChatRequestCount,
@@ -2251,12 +2300,12 @@ async function runSmoke(options) {
         scenario.requiresTargetToolsInInitialInventory === false ||
         inventoryCoverage.missingTargetToolsInInventory.length === 0,
       allTargetToolsCompleted: Object.values(completedTools).every(Boolean),
-      sessionDefaultedToReact:
-        finalState.sessionDetail?.execution_strategy === "react" ||
-        finalState.sessionDetail?.executionStrategy === "react",
-      currentAgentRuntimeObserved:
-        detailText.includes('"execution_strategy":"react"') ||
-        detailText.includes('"executionStrategy":"react"'),
+      canonicalThreadIdentityObserved:
+        finalState.sessionDetail?.id === sessionId &&
+        finalState.sessionDetail?.thread_id === threadId,
+      currentThreadProjectionObserved:
+        detailText.includes('"canonicalThread"') &&
+        Array.isArray(finalState.sessionDetail?.turns),
       evidencePackExported: Boolean(evidencePack),
       ...scenarioAssertions,
     };
@@ -2307,10 +2356,10 @@ async function runSmoke(options) {
         fixtureRoot: FIXTURE_ROOT,
       },
       provider: {
-        providerPreference: fixture.provider.providerPreference,
-        providerName: fixture.provider.providerName,
-        modelPreference: fixture.provider.modelPreference,
-        source: fixture.provider.source,
+        providerPreference: repositoryProvider.providerPreference,
+        providerName: repositoryProvider.providerName,
+        modelPreference: repositoryProvider.modelPreference,
+        source: repositoryProvider.source,
         requests: providerRequests,
         newTurnIsolationRequests: newTurnProviderRequests,
         targetToolPresence: providerToolPresence,
@@ -2322,6 +2371,7 @@ async function runSmoke(options) {
       scenarioRuntimeContext: runtimeContext,
       runtime: {
         sessionId,
+        threadId,
         turnId,
         eventName,
         finalSnapshot: finalState.snapshot,

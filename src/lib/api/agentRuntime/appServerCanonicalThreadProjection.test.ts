@@ -306,17 +306,18 @@ describe("appServerCanonicalThreadProjection", () => {
       metadata: expect.objectContaining({ server: "files" }),
     });
     expect(patch).toMatchObject({
-      status: "failed",
+      status: "completed",
       file_status: "declined",
       success: false,
     });
     expect(failedMessage).toMatchObject({ status: "completed" });
     expect(completedMessage).toMatchObject({ status: "completed" });
 
-    expect(detail?.messages[0]).toMatchObject({
-      role: "user",
-      timestamp: CREATED_AT_SECONDS + 1,
-      content: [
+    expect(detail?.messages).toEqual([]);
+    expect(detail?.items?.find((item) => item.id === "item-user")).toMatchObject({
+      type: "user_message",
+      content: "分析",
+      content_parts: [
         { type: "text", text: "分析" },
         {
           type: "image",
@@ -326,11 +327,70 @@ describe("appServerCanonicalThreadProjection", () => {
         {
           type: "image",
           data: "",
-          uri: "/tmp/a.png",
-          source_path: "/tmp/a.png",
+          display_name: "a.png",
+          unavailable_reason: "host_reference_required",
         },
       ],
     });
+  });
+
+  it("按每个 Turn 的 items 原序生成 0-based sequence，并忽略上游 legacy sequence", () => {
+    const detail = readCanonicalThreadDetail({
+      thread: {
+        id: "thread-item-sequence",
+        sessionId: "session-item-sequence",
+        status: { type: "idle" },
+        createdAt: CREATED_AT_SECONDS,
+        updatedAt: CREATED_AT_SECONDS + 2,
+        turns: [
+          {
+            id: "turn-item-sequence-first",
+            status: "completed",
+            startedAt: CREATED_AT_SECONDS,
+            items: [
+              {
+                id: "item-sequence-first-user",
+                type: "userMessage",
+                content: [{ type: "text", text: "第一轮" }],
+                sequence: 1_753_132_800_000,
+              },
+              {
+                id: "item-sequence-first-agent",
+                type: "agentMessage",
+                text: "第一轮完成",
+                sequence: 99,
+              },
+            ],
+          },
+          {
+            id: "turn-item-sequence-second",
+            status: "completed",
+            startedAt: CREATED_AT_SECONDS + 1,
+            items: [
+              {
+                id: "item-sequence-second-user",
+                type: "userMessage",
+                content: [{ type: "text", text: "第二轮" }],
+                sequence: 1_753_132_900_000,
+              },
+              {
+                id: "item-sequence-second-agent",
+                type: "agentMessage",
+                text: "第二轮完成",
+                sequence: 100,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(detail?.items?.map((item) => [item.id, item.sequence])).toEqual([
+      ["item-sequence-first-user", 0],
+      ["item-sequence-first-agent", 1],
+      ["item-sequence-second-user", 0],
+      ["item-sequence-second-agent", 1],
+    ]);
   });
 
   it("遇到未知 Codex ThreadItem 时保留 thread/read 并投影安全诊断", () => {

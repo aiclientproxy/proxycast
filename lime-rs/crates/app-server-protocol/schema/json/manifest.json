@@ -44,10 +44,6 @@
     },
     {
       "kind": "request",
-      "method": "agentSession/media/read"
-    },
-    {
-      "kind": "request",
       "method": "agentSession/replayCase/export"
     },
     {
@@ -553,6 +549,10 @@
     {
       "kind": "request",
       "method": "mcpTool/search"
+    },
+    {
+      "kind": "request",
+      "method": "media/read"
     },
     {
       "kind": "request",
@@ -1583,8 +1583,6 @@
       "AgentSessionHandoffBundleExportResponse",
       "AgentSessionListParams",
       "AgentSessionListResponse",
-      "AgentSessionMediaReadParams",
-      "AgentSessionMediaReadResponse",
       "AgentSessionOverview",
       "AgentSessionReadParams",
       "AgentSessionReadResponse",
@@ -2206,8 +2204,12 @@
       "McpServerElicitationRequestParams",
       "McpServerElicitationRequestResponse",
       "McpToolCallAppContext",
+      "McpToolCallError",
       "McpToolCallProgressNotification",
+      "McpToolCallResult",
       "McpToolCallStatus",
+      "MediaReadParams",
+      "MediaReadResponse",
       "MemoryCitation",
       "MemoryCitationEntry",
       "Method",

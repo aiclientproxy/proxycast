@@ -675,14 +675,17 @@ describe("Agent API 治理护栏", () => {
         status: "running",
         profile_status: "running",
       },
-      messages: [
+      messages: [],
+      items: [
         {
-          role: "user",
-          content: [{ type: "text", text: "hello" }],
+          id: "item-user-2",
+          type: "user_message",
+          content: "hello",
         },
         {
-          role: "assistant",
-          content: [{ type: "text", text: "world" }],
+          id: "item-agent-2",
+          type: "agent_message",
+          text: "world",
         },
       ],
       turns: [

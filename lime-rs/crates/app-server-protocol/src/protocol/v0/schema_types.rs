@@ -571,8 +571,6 @@ pub const V0_SCHEMA_TYPE_NAMES: &[&str] = &[
     "AgentSessionStartResponse",
     "AgentSessionReadParams",
     "AgentSessionReadResponse",
-    "AgentSessionMediaReadParams",
-    "AgentSessionMediaReadResponse",
     "AgentSessionToolInventoryReadParams",
     "AgentSessionToolInventoryReadResponse",
     "AgentSessionTurnStartParams",

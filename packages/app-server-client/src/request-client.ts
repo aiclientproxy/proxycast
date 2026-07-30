@@ -685,9 +685,7 @@ export interface AppServerClient {
   startSession(params: protocol.ThreadStartParams): protocol.JsonRpcRequest;
   forkThread(params: protocol.ThreadForkParams): protocol.JsonRpcRequest;
   readSession(params: protocol.AgentSessionReadParams): protocol.JsonRpcRequest;
-  readAgentSessionMedia(
-    params: protocol.AgentSessionMediaReadParams,
-  ): protocol.JsonRpcRequest;
+  readMedia(params: protocol.MediaReadParams): protocol.JsonRpcRequest;
   readWorkflow(params: protocol.WorkflowReadParams): protocol.JsonRpcRequest;
   cancelWorkflow(
     params: protocol.WorkflowCancelParams,

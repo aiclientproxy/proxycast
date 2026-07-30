@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
-  AppServerAgentSessionMediaReadParams,
-  AppServerAgentSessionMediaReadResponse,
+  AppServerMediaReadParams,
+  AppServerMediaReadResponse,
   AppServerJsonRpcNotification,
 } from "@/lib/api/appServer";
 import {
-  buildAgentSessionMediaReadParams,
+  buildMediaReadParams,
   createMediaReferenceBinaryPreviewArtifact,
   createMediaReferenceChunkedObjectUrlPreviewArtifact,
   createMediaReferenceObjectUrlPreviewArtifact,
@@ -51,10 +51,10 @@ function encodeBase64(value: string): string {
 }
 
 function createMediaReadResponse(
-  overrides: Partial<AppServerAgentSessionMediaReadResponse> = {},
-): AppServerAgentSessionMediaReadResponse {
+  overrides: Partial<AppServerMediaReadResponse> = {},
+): AppServerMediaReadResponse {
   return {
-    sessionId: "session-media",
+    threadId: "thread-media",
     uri: "sidecar://media/image-1",
     mimeType: "image/png",
     bytes: 4,
@@ -82,20 +82,19 @@ function createMediaReadChunkNotification(params: {
   eventId?: string;
   hasMore: boolean;
   offset: number;
-  sessionId?: string;
+  threadId?: string;
   streamId?: string;
   totalBytes: number;
   uri?: string;
 }): AppServerJsonRpcNotification {
-  const sessionId = params.sessionId ?? "session-media";
+  const threadId = params.threadId ?? "thread-media";
   return {
     method: "agentSession/event",
     params: {
       event: {
         eventId: params.eventId ?? `evt-media-read-chunk-${params.chunkIndex}`,
         sequence: params.chunkIndex,
-        sessionId,
-        threadId: "thread-media",
+        threadId,
         type: "media.read.chunk",
         timestamp: "2026-07-07T00:00:00.000Z",
         payload: {
@@ -103,7 +102,7 @@ function createMediaReadChunkNotification(params: {
           chunkIndex: params.chunkIndex,
           done: false,
           chunk: {
-            sessionId,
+            threadId,
             uri: params.uri ?? "sidecar://media/image-1",
             mimeType: "image/png",
             bytes: params.bytes,
@@ -127,7 +126,6 @@ function createMediaReadCompletedNotification(): AppServerJsonRpcNotification {
       event: {
         eventId: "evt-media-read-completed",
         sequence: 3,
-        sessionId: "session-media",
         threadId: "thread-media",
         type: "media.read.completed",
         timestamp: "2026-07-07T00:00:01.000Z",
@@ -136,7 +134,7 @@ function createMediaReadCompletedNotification(): AppServerJsonRpcNotification {
           chunkCount: 2,
           done: true,
           media: {
-            sessionId: "session-media",
+            threadId: "thread-media",
             uri: "sidecar://media/image-1",
             mimeType: "image/png",
             bytes: 8,
@@ -202,8 +200,8 @@ describe("createMediaReferencePreviewArtifact", () => {
   });
 
   it("sidecar media reference 可构造 App Server media read params", () => {
-    const params = buildAgentSessionMediaReadParams({
-      sessionId: " session-media ",
+    const params = buildMediaReadParams({
+      threadId: " thread-media ",
       target: {
         kind: "media_reference",
         index: 0,
@@ -221,7 +219,7 @@ describe("createMediaReferencePreviewArtifact", () => {
     });
 
     expect(params).toEqual({
-      sessionId: "session-media",
+      threadId: "thread-media",
       uri: "sidecar://media/image-1",
       sidecarRef: {
         ref: "sidecar://media/image-1",
@@ -235,8 +233,8 @@ describe("createMediaReferencePreviewArtifact", () => {
   });
 
   it("已有 source owner 的 media reference 不应重复读取 sidecar bytes", () => {
-    const params = buildAgentSessionMediaReadParams({
-      sessionId: "session-media",
+    const params = buildMediaReadParams({
+      threadId: "thread-media",
       target: {
         kind: "media_reference",
         index: 0,
@@ -253,8 +251,8 @@ describe("createMediaReferencePreviewArtifact", () => {
   });
 
   it("非 sidecar 展示 URI 可通过 refId 进入 App Server media read", () => {
-    const params = buildAgentSessionMediaReadParams({
-      sessionId: "session-media",
+    const params = buildMediaReadParams({
+      threadId: "thread-media",
       target: {
         kind: "media_reference",
         index: 0,
@@ -271,7 +269,7 @@ describe("createMediaReferencePreviewArtifact", () => {
     });
 
     expect(params).toEqual({
-      sessionId: "session-media",
+      threadId: "thread-media",
       refId: "sidecar://media/image-1",
       maxBytes: 1024,
       offset: 128,
@@ -280,8 +278,8 @@ describe("createMediaReferencePreviewArtifact", () => {
   });
 
   it("非 sidecar 展示 URI 可通过 sidecar sourceUri 进入 App Server media read", () => {
-    const params = buildAgentSessionMediaReadParams({
-      sessionId: "session-media",
+    const params = buildMediaReadParams({
+      threadId: "thread-media",
       target: {
         kind: "media_reference",
         index: 0,
@@ -295,7 +293,7 @@ describe("createMediaReferencePreviewArtifact", () => {
     });
 
     expect(params).toEqual({
-      sessionId: "session-media",
+      threadId: "thread-media",
       uri: "sidecar://media/image-1",
       maxBytes: 25 * 1024 * 1024,
       offset: 0,
@@ -311,8 +309,8 @@ describe("createMediaReferencePreviewArtifact", () => {
       bytes: 8,
       mimeType: "image/png",
     };
-    const params = buildAgentSessionMediaReadParams({
-      sessionId: "session-media",
+    const params = buildMediaReadParams({
+      threadId: "thread-media",
       target: {
         kind: "media_reference",
         index: 0,
@@ -326,7 +324,7 @@ describe("createMediaReferencePreviewArtifact", () => {
     });
 
     expect(params).toEqual({
-      sessionId: "session-media",
+      threadId: "thread-media",
       sidecarRef,
       maxBytes: 25 * 1024 * 1024,
       offset: 0,
@@ -355,7 +353,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         },
       },
       media: {
-        sessionId: "session-media",
+        threadId: "thread-media",
         uri: "sidecar://media/image-1",
         mimeType: "image/png",
         bytes: 8,
@@ -467,7 +465,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         },
       },
       media: {
-        sessionId: "session-media",
+        threadId: "thread-media",
         uri: "sidecar://media/image-1",
         mimeType: "image/png",
         bytes: 8,
@@ -516,7 +514,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         },
       },
       media: {
-        sessionId: "session-media",
+        threadId: "thread-media",
         uri: "sidecar://media/image-1",
         mimeType: "image/png",
         bytes: 4,
@@ -571,11 +569,11 @@ describe("createMediaReferencePreviewArtifact", () => {
         contentBase64: encodeBase64("EFGH"),
       }),
     ];
-    const requests: AppServerAgentSessionMediaReadParams[] = [];
+    const requests: AppServerMediaReadParams[] = [];
     const readMedia = vi.fn(
       async (
-        request: AppServerAgentSessionMediaReadParams,
-      ): Promise<AppServerAgentSessionMediaReadResponse> => {
+        request: AppServerMediaReadParams,
+      ): Promise<AppServerMediaReadResponse> => {
         requests.push(request);
         const response = responses[requests.length - 1];
         if (!response) {
@@ -594,7 +592,7 @@ describe("createMediaReferencePreviewArtifact", () => {
     const artifact = await createMediaReferenceChunkedObjectUrlPreviewArtifact({
       message,
       target,
-      sessionId: " session-media ",
+      threadId: " thread-media ",
       t,
       readMedia,
       createObjectUrl,
@@ -606,7 +604,7 @@ describe("createMediaReferencePreviewArtifact", () => {
     expect(readMedia).toHaveBeenCalledTimes(2);
     expect(requests).toEqual([
       {
-        sessionId: "session-media",
+        threadId: "thread-media",
         uri: "sidecar://media/image-1",
         sidecarRef: target.reference.sidecarRef,
         maxBytes: 4,
@@ -615,7 +613,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         stream: true,
       },
       {
-        sessionId: "session-media",
+        threadId: "thread-media",
         uri: "sidecar://media/image-1",
         sidecarRef: target.reference.sidecarRef,
         maxBytes: 4,
@@ -724,7 +722,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         timestamp: new Date("2026-07-07T00:00:00.000Z"),
       },
       target,
-      sessionId: "session-media",
+      threadId: "thread-media",
       t,
       readMedia,
       createObjectUrl: vi.fn(() => "blob:streamed-media"),
@@ -748,7 +746,7 @@ describe("createMediaReferencePreviewArtifact", () => {
     expect(artifact?.content).toBe("blob:streamed-media");
   });
 
-  it("media.read.chunk progress 应按 sessionId / streamId / uri / offset fail closed", () => {
+  it("media.read.chunk progress 应按 threadId / streamId / uri / offset fail closed", () => {
     const onProgress = vi.fn();
     const seenEventIds = new Set<string>();
 
@@ -775,7 +773,7 @@ describe("createMediaReferencePreviewArtifact", () => {
             contentRange: "bytes 0-3/8",
             hasMore: true,
             offset: 0,
-            sessionId: "session-other",
+            threadId: "session-other",
             streamId: "media-read-stream-expected",
             totalBytes: 8,
           }),
@@ -803,7 +801,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         ],
         onProgress,
         seenEventIds,
-        sessionId: "session-media",
+        threadId: "thread-media",
       }).emitted,
     ).toBe(false);
     expect(onProgress).not.toHaveBeenCalled();
@@ -826,7 +824,7 @@ describe("createMediaReferencePreviewArtifact", () => {
       ],
       onProgress,
       seenEventIds,
-      sessionId: "session-media",
+      threadId: "thread-media",
     });
 
     expect(firstResult).toEqual({
@@ -852,7 +850,7 @@ describe("createMediaReferencePreviewArtifact", () => {
       ],
       onProgress,
       seenEventIds,
-      sessionId: "session-media",
+      threadId: "thread-media",
     });
 
     expect(duplicateResult).toEqual({
@@ -889,7 +887,7 @@ describe("createMediaReferencePreviewArtifact", () => {
       }),
     ];
     const readMedia = vi.fn(
-      async (): Promise<AppServerAgentSessionMediaReadResponse> =>
+      async (): Promise<AppServerMediaReadResponse> =>
         responses.shift() ?? createMediaReadResponse(),
     );
     const createObjectUrl = vi.fn(() => "blob:invalid-gap");
@@ -902,7 +900,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         timestamp: new Date("2026-07-07T00:00:00.000Z"),
       },
       target,
-      sessionId: "session-media",
+      threadId: "thread-media",
       t,
       readMedia,
       createObjectUrl,
@@ -945,7 +943,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         timestamp: new Date("2026-07-07T00:00:00.000Z"),
       },
       target,
-      sessionId: "session-media",
+      threadId: "thread-media",
       t,
       readMedia,
       createObjectUrl,
@@ -987,7 +985,7 @@ describe("createMediaReferencePreviewArtifact", () => {
       }),
     ];
     const readMedia = vi.fn(
-      async (): Promise<AppServerAgentSessionMediaReadResponse> =>
+      async (): Promise<AppServerMediaReadResponse> =>
         responses.shift() ?? createMediaReadResponse(),
     );
     const createObjectUrl = vi.fn(() => "blob:invalid-sha");
@@ -1000,7 +998,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         timestamp: new Date("2026-07-07T00:00:00.000Z"),
       },
       target,
-      sessionId: "session-media",
+      threadId: "thread-media",
       t,
       readMedia,
       createObjectUrl,
@@ -1044,7 +1042,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         timestamp: new Date("2026-07-07T00:00:00.000Z"),
       },
       target,
-      sessionId: "session-media",
+      threadId: "thread-media",
       t,
       readMedia,
       createObjectUrl,
@@ -1087,7 +1085,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         },
       },
     };
-    const requests: AppServerAgentSessionMediaReadParams[] = [];
+    const requests: AppServerMediaReadParams[] = [];
     const readMedia = vi.fn(async (request) => {
       requests.push(request);
       return createMediaReadResponse({
@@ -1109,7 +1107,7 @@ describe("createMediaReferencePreviewArtifact", () => {
         timestamp: new Date("2026-07-07T00:00:00.000Z"),
       },
       target,
-      sessionId: "session-media",
+      threadId: "thread-media",
       t,
       readMedia,
       offset: 4,
@@ -1120,7 +1118,7 @@ describe("createMediaReferencePreviewArtifact", () => {
     expect(readMedia).toHaveBeenCalledTimes(1);
     expect(requests).toEqual([
       {
-        sessionId: "session-media",
+        threadId: "thread-media",
         uri: "sidecar://media/image-1",
         sidecarRef: target.reference.sidecarRef,
         maxBytes: 4,

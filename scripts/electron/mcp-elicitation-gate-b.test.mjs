@@ -19,6 +19,34 @@ describe("MCP elicitation Gate B guard", () => {
     expect(content).toContain('method: "elicitation/create"');
     expect(content).toContain('type: "initialize"');
     expect(content).toContain("startOpenAiCompatibleFixtureServer");
+    expect(content).toContain('"modelProvider/create"');
+    expect(content).toContain('"modelProvider/update"');
+    expect(content).toContain('"modelProviderKey/create"');
+    expect(content).toContain('"model/list"');
+    expect(content).toContain(
+      "capability: fixture.provider.providerConfig.modelCapabilities",
+    );
+    expect(content).toContain("const capability = model.capabilitySnapshot");
+    expect(content).toContain("NAVIGATION_RESTORE_STORAGE_KEY");
+    expect(content).toContain("initialSessionId: activeSessionId");
+  });
+
+  it("uses only current v2 Thread/Turn request shapes", () => {
+    const content = readGateB();
+
+    expect(content).toContain(
+      'const threadId = String(start.result?.thread?.id || "").trim()',
+    );
+    expect(content).toMatch(/input:\s*\[\s*\{\s*type:\s*"text",\s*text:/u);
+    expect(content).toContain('kind: "application"');
+    expect(content).toContain("threadId: runtime.threadId");
+    expect(content).toContain("includeTurns: true");
+    expect(content).toContain("workspaceRoot: workspace.rootPath");
+    expect(content).not.toContain("runtimeEnv.workspaceRoot");
+    expect(content).not.toContain("businessObjectRef:");
+    expect(content).not.toContain("runtimeOptions:");
+    expect(content).not.toContain("queueIfBusy:");
+    expect(content).not.toContain("historyLimit:");
   });
 
   it("requires exact runtime capability advertisement and management capability absence", () => {
@@ -38,7 +66,7 @@ describe("MCP elicitation Gate B guard", () => {
     expect(content).toContain("summary.capabilityMissingCount === 0");
   });
 
-  it("requires the renderer boolean form, exact MCP accept ledger, and second provider response", () => {
+  it("requires the Composer form, exact MCP accept ledger, and second provider response", () => {
     const content = readGateB();
 
     expect(content).toContain('input[type="checkbox"]');
@@ -47,7 +75,11 @@ describe("MCP elicitation Gate B guard", () => {
     expect(content).toContain("providerRequests.length >= 2");
     expect(content).toContain('entry?.action === "accept"');
     expect(content).toContain("content?.confirmed === true");
-    expect(content).toContain("dialogClosedAfterResolved");
+    expect(content).toContain('data-testid="pending-interaction-layer"');
+    expect(content).toContain('data-testid="mcp-server-elicitation-form"');
+    expect(content).toContain("formClosedAfterResolved");
+    expect(content).toContain("rootDialogAbsent");
+    expect(content).not.toContain("dialogClosedAfterResolved");
   });
 
   it("does not use generic action response, explicit management call proof, or mock fallback", () => {

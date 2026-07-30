@@ -117,6 +117,16 @@
       "allowedPaths": []
     },
     {
+      "id": "agent-chat-item-message-tool-synthesis-surface",
+      "classification": "dead",
+      "description": "已删除的 canonical Item 到 Message toolCalls/contentParts 二次合成模块与专属测试；live 工具生命周期只允许进入 ConversationProjection canonical ThreadItem owner",
+      "targets": [
+        "src/components/agent/chat/hooks/agentStreamToolItemMessageSync.ts",
+        "src/components/agent/chat/hooks/agentStreamToolItemMessageSync.unit.test.ts"
+      ],
+      "allowedPaths": []
+    },
+    {
       "id": "artifact-fenced-response-parser-surface",
       "classification": "dead",
       "description": "已删除的前端 artifact/code fence response parser 与自身测试；结构化 artifact 只允许由 App Server item/artifact payload、artifact-document 与 renderer registry 承接",
@@ -5760,6 +5770,7 @@
         "lime-rs/crates/app-server/src/runtime/context_packet.rs",
         "lime-rs/crates/app-server/src/runtime/evidence_provider.rs",
         "lime-rs/crates/app-server/src/runtime/file_checkpoint_projection.rs",
+        "lime-rs/crates/app-server/src/runtime/output_media.rs",
         "lime-rs/crates/app-server/src/runtime/output_refs.rs",
         "lime-rs/crates/app-server/src/runtime/output_refs/tests.rs",
         "lime-rs/crates/app-server/src/runtime/plugin_worker_runtime/tests.rs",
@@ -6652,17 +6663,17 @@
   "rustTextCounts": [
     {
       "id": "rust-app-paths-root-fetch-duplication",
-      "classification": "deprecated",
-      "description": "app_paths 重复获取 preferred/legacy root 样板回流",
+      "classification": "dead",
+      "description": "已删除的 app_paths 重复获取 preferred/legacy root 样板不得回流",
       "includePathPrefixes": ["lime-rs/crates/core/src/app_paths.rs"],
       "occurrences": [
         {
           "pattern": "let preferred_root = preferred_data_dir()?;",
-          "maxCount": 1
+          "maxCount": 0
         },
         {
           "pattern": "let legacy_root = legacy_home_dir()?;",
-          "maxCount": 1
+          "maxCount": 0
         }
       ]
     }

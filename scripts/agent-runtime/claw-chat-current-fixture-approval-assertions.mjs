@@ -214,7 +214,8 @@ export function buildApprovalRequestResumeScenarioAssertions({
       summary.approvalRequestResumePendingGui?.hasDetails === false &&
       summary.approvalRequestResumePendingGui?.hasPreformattedArguments ===
         false &&
-      summary.approvalRequestResumePendingGui?.textareaVisible === false &&
+      summary.approvalRequestResumePendingGui?.textareaVisible === true &&
+      summary.approvalRequestResumePendingGui?.textareaDisabled === false &&
       summary.approvalRequestResumePendingGui?.singleLine === true &&
       summary.approvalRequestResumePendingGui?.approveButtonVisible === true &&
       summary.approvalRequestResumePendingGui?.approveButtonDisabled === false,
@@ -430,7 +431,8 @@ export function buildApprovalRequestDecisionScenarioAssertions({
       summary.approvalRequestDecisionPendingGui?.hasDetails === false &&
       summary.approvalRequestDecisionPendingGui?.hasPreformattedArguments ===
         false &&
-      summary.approvalRequestDecisionPendingGui?.textareaVisible === false &&
+      summary.approvalRequestDecisionPendingGui?.textareaVisible === true &&
+      summary.approvalRequestDecisionPendingGui?.textareaDisabled === false &&
       summary.approvalRequestDecisionPendingGui?.singleLine === true &&
       (expectedDecision === "cancel"
         ? summary.approvalRequestDecisionPendingGui?.cancelButtonVisible ===
@@ -588,7 +590,8 @@ export function buildApprovalRequestHostInterruptScenarioAssertions({
       pendingGui?.hasSection === true &&
       pendingGui?.hasApprovalContent === true &&
       pendingGui?.hasPrompt === true &&
-      pendingGui?.textareaVisible === false &&
+      pendingGui?.textareaVisible === true &&
+      pendingGui?.textareaDisabled === false &&
       pendingGui?.singleLine === true,
     readModelApprovalRequestHostInterruptPending:
       pendingReadModel?.hasPendingRequest === true &&

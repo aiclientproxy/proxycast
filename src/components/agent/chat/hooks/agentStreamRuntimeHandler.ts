@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import type {
   AgentEventImageTaskCreated,
-  AgentThreadItem,
+  AgentThreadAgentMessageItem,
 } from "@/lib/api/agentProtocol";
 import { logAgentDebug } from "@/lib/agentDebug";
 import { updateMessageArtifactsStatus } from "../utils/messageArtifacts";
@@ -70,8 +70,6 @@ import {
   buildAgentStreamThinkingDeltaPreApplyPlan,
 } from "./agentStreamThinkingDeltaController";
 import { shouldSurfaceReasoningEventAsVisibleProcess } from "./agentStreamVisibleReasoningPolicy";
-import { syncAssistantAgentMessageContentPartFromThreadItem } from "./agentStreamAgentMessageContentSync";
-import { isPersistedReasoningContentPart } from "./agentStreamReasoningContentSync";
 import { isRuntimePermissionConfirmationWaitMessage } from "../utils/runtimeActionConfirmation";
 import { buildAgentUiProjectionEvents } from "../projection/agentUiEventProjection";
 import { enqueueAgentUiProjectionEvents } from "../projection/conversationProjectionStore";
@@ -113,6 +111,10 @@ import {
   type TextDeltaAgentEvent,
 } from "./agentStreamTextDeltaLifecycle";
 import { shouldApplyAgentStreamTerminalEvent } from "./agentStreamTerminalTurnGuard";
+import {
+  applyAgentStreamConversationProjection,
+  reconcileAgentStreamProjectionItems,
+} from "./agentStreamConversationProjection";
 
 function normalizeOptionalText(value?: string | null): string | null {
   const normalized = value?.trim();
@@ -210,6 +212,35 @@ export function handleTurnStreamEvent({
     requestState.preservedAssistantContentInitialized = true;
   }
 
+  const conversationProjectionUpdate = applyAgentStreamConversationProjection({
+    event: data,
+    existingItems: getThreadItems?.() ?? [],
+    host: requestState,
+    threadId: activeSessionId,
+  });
+  let conversationProjectionOwnsItemUpdate = false;
+  if (conversationProjectionUpdate?.event.type === "item_delta") {
+    const projectionEvent = conversationProjectionUpdate.event;
+    const projectedItem = conversationProjectionUpdate.projection.items.find(
+      (item) =>
+        item.thread_id === projectionEvent.thread_id &&
+        item.turn_id === projectionEvent.turn_id &&
+        item.id === projectionEvent.item_id,
+    );
+    conversationProjectionOwnsItemUpdate =
+      Boolean(projectedItem) ||
+      projectionEvent.protocol_method === "item/commandExecution/outputDelta";
+    if (projectedItem) {
+      setThreadItems((prev) =>
+        reconcileAgentStreamProjectionItems({
+          current: prev,
+          pendingItemKey,
+          projected: conversationProjectionUpdate.projection.items,
+        }),
+      );
+    }
+  }
+
   const projectionEvents = buildAgentUiProjectionEvents(
     data,
     {
@@ -275,21 +306,6 @@ export function handleTurnStreamEvent({
     setThreadItems,
     setThreadTurns,
   };
-  const syncStreamedAgentMessageContentParts = () => {
-    const items = requestState.streamedAgentMessageItemsByItemId;
-    if (!items || items.size === 0) {
-      return;
-    }
-    const threadItems = getThreadItems?.() ?? [];
-    for (const item of items.values()) {
-      syncAssistantAgentMessageContentPartFromThreadItem({
-        assistantMsgId,
-        item,
-        threadItems,
-        setMessages,
-      });
-    }
-  };
   const noteProcessEventSequence = (sequence: number | null | undefined) => {
     if (typeof sequence !== "number" || !Number.isFinite(sequence)) {
       return;
@@ -298,7 +314,6 @@ export function handleTurnStreamEvent({
       requestState.maxProcessEventSequence ?? Number.NEGATIVE_INFINITY,
       sequence,
     );
-    syncStreamedAgentMessageContentParts();
   };
   const noteFinalAnswerRequiredProcessBoundary = (
     sequence: number | null | undefined,
@@ -403,7 +418,6 @@ export function handleTurnStreamEvent({
   const upsertStructuredAgentMessageDeltaItem = (
     event: TextDeltaAgentEvent,
     options: {
-      shouldSyncMessageContentPart?: boolean;
       shouldSyncThreadItem?: boolean;
       textDelta?: string;
     } = {},
@@ -434,7 +448,13 @@ export function handleTurnStreamEvent({
 
     const now = event.timestamp || new Date().toISOString();
     const sequence = sequenceFromAgentEvent(event) ?? Number.MAX_SAFE_INTEGER;
-    const item = {
+    const phase: AgentThreadAgentMessageItem["phase"] =
+      event.phase === "commentary"
+        ? "commentary"
+        : event.phase === "final_answer"
+          ? "final_answer"
+          : undefined;
+    const item: AgentThreadAgentMessageItem = {
       id: itemId,
       thread_id:
         normalizeOptionalText(event.thread_id) ||
@@ -447,7 +467,7 @@ export function handleTurnStreamEvent({
       updated_at: now,
       type: "agent_message" as const,
       text: nextText,
-      ...(event.phase ? { phase: event.phase } : {}),
+      ...(phase ? { phase } : {}),
       metadata: {
         source: "agent_text_delta",
         ...(event.itemId ? { itemId: event.itemId } : {}),
@@ -455,11 +475,6 @@ export function handleTurnStreamEvent({
       },
     };
 
-    const itemsByItemId =
-      requestState.streamedAgentMessageItemsByItemId ??
-      new Map<string, AgentThreadItem>();
-    requestState.streamedAgentMessageItemsByItemId = itemsByItemId;
-    itemsByItemId.set(itemId, item);
     logAgentDebug(
       "AgentStream",
       "nonFinalTextDelta",
@@ -490,17 +505,6 @@ export function handleTurnStreamEvent({
           item,
         ),
       );
-    }
-    if (
-      options.shouldSyncMessageContentPart !== false &&
-      normalizeOptionalText(event.itemId)
-    ) {
-      syncAssistantAgentMessageContentPartFromThreadItem({
-        assistantMsgId,
-        item,
-        threadItems: getThreadItems?.(),
-        setMessages,
-      });
     }
     return true;
   };
@@ -642,6 +646,7 @@ export function handleTurnStreamEvent({
         pendingItemKey,
         pendingTurnKey,
         requestState,
+        projectedItems: conversationProjectionUpdate?.projection.items,
         shouldPreserveAssistantContent,
         setters: runtimeStateSetters,
       });
@@ -662,6 +667,7 @@ export function handleTurnStreamEvent({
         pendingItemKey,
         pendingTurnKey,
         requestState,
+        projectedItems: conversationProjectionUpdate?.projection.items,
         shouldPreserveAssistantContent,
         setters: runtimeStateSetters,
       });
@@ -1166,7 +1172,6 @@ export function handleTurnStreamEvent({
         Boolean(normalizeOptionalText(data.itemId));
       if (visibleTextDelta && isStructuredFinalDelta) {
         upsertStructuredAgentMessageDeltaItem(data, {
-          shouldSyncMessageContentPart: false,
           shouldSyncThreadItem: false,
           textDelta: visibleTextDelta,
         });
@@ -1190,9 +1195,7 @@ export function handleTurnStreamEvent({
                     contentParts: isRetainedSkillProcessMessage(msg)
                       ? msg.contentParts
                       : (msg.contentParts || []).filter(
-                          (part) =>
-                            part.type !== "thinking" ||
-                            isPersistedReasoningContentPart(part),
+                          (part) => part.type !== "thinking",
                         ),
                   }
                 : msg,
@@ -1216,8 +1219,11 @@ export function handleTurnStreamEvent({
       upsertFallbackTextOverlayIfSilent("tool_start_fallback");
       {
         const shouldUpdateMessageLayer =
+          !conversationProjectionOwnsItemUpdate &&
           shouldUpdateLegacyToolMessageLayer(data);
-        upsertProjectedTimelineItem(data);
+        if (!conversationProjectionOwnsItemUpdate) {
+          upsertProjectedTimelineItem(data);
+        }
         if (!shouldUpdateMessageLayer) {
           break;
         }
@@ -1243,8 +1249,11 @@ export function handleTurnStreamEvent({
       noteFinalAnswerRequiredProcessBoundary(sequenceFromAgentEvent(data));
       {
         const shouldUpdateMessageLayer =
+          !conversationProjectionOwnsItemUpdate &&
           shouldUpdateLegacyToolMessageLayer(data);
-        upsertProjectedTimelineItem(data);
+        if (!conversationProjectionOwnsItemUpdate) {
+          upsertProjectedTimelineItem(data);
+        }
         if (!shouldUpdateMessageLayer) {
           break;
         }
@@ -1264,8 +1273,11 @@ export function handleTurnStreamEvent({
       noteFinalAnswerRequiredProcessBoundary(sequenceFromAgentEvent(data));
       {
         const shouldUpdateMessageLayer =
+          !conversationProjectionOwnsItemUpdate &&
           shouldUpdateLegacyToolMessageLayer(data);
-        upsertProjectedTimelineItem(data);
+        if (!conversationProjectionOwnsItemUpdate) {
+          upsertProjectedTimelineItem(data);
+        }
         if (!shouldUpdateMessageLayer) {
           break;
         }
@@ -1289,8 +1301,11 @@ export function handleTurnStreamEvent({
       noteFinalAnswerRequiredProcessBoundary(sequenceFromAgentEvent(data));
       {
         const shouldUpdateMessageLayer =
+          !conversationProjectionOwnsItemUpdate &&
           shouldUpdateLegacyToolMessageLayer(data);
-        upsertProjectedTimelineItem(data);
+        if (!conversationProjectionOwnsItemUpdate) {
+          upsertProjectedTimelineItem(data);
+        }
         if (!shouldUpdateMessageLayer) {
           break;
         }

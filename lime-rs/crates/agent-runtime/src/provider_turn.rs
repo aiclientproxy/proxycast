@@ -1669,6 +1669,7 @@ fn provider_executed_tool_output(result: ToolResultValue) -> NormalizedToolOutpu
             serde_json::Value::Bool(true),
         )]),
         agent_control_projection_facts: Vec::new(),
+        agent_control_state_facts: Vec::new(),
     }
 }
 

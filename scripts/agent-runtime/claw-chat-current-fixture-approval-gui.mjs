@@ -130,6 +130,7 @@ export async function waitForGuiApprovalPending(page, options) {
             approvalPrompt?.querySelector("pre"),
           ),
           textareaVisible,
+          textareaDisabled: textarea?.disabled ?? null,
           promptHeight: promptRect?.height ?? null,
           singleLine:
             Boolean(promptRect) &&
@@ -192,7 +193,8 @@ export async function waitForGuiApprovalPending(page, options) {
       snapshot.hasCommand === false &&
       snapshot.hasDetails === false &&
       snapshot.hasPreformattedArguments === false &&
-      snapshot.textareaVisible === false &&
+      snapshot.textareaVisible === true &&
+      snapshot.textareaDisabled === false &&
       snapshot.singleLine === true &&
       snapshot.approveButtonVisible &&
       snapshot.approveButtonDisabled === false

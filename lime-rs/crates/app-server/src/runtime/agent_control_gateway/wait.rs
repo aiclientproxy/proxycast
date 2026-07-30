@@ -2,13 +2,50 @@
 
 use super::*;
 
+pub(super) struct AgentControlWaitResult {
+    pub(super) output: serde_json::Value,
+    pub(super) state_facts: Vec<AgentStateProjectionFact>,
+}
+
+#[derive(Default)]
+struct AgentControlWaitActivity {
+    output: Vec<serde_json::Value>,
+    state_facts: Vec<AgentStateProjectionFact>,
+}
+
+impl AgentControlWaitResult {
+    fn without_states(output: serde_json::Value) -> Self {
+        Self {
+            output,
+            state_facts: Vec::new(),
+        }
+    }
+}
+
+impl AgentControlWaitActivity {
+    fn is_empty(&self) -> bool {
+        self.output.is_empty()
+    }
+
+    fn into_result(self) -> AgentControlWaitResult {
+        AgentControlWaitResult {
+            output: json!({
+                "message": "Wait completed.",
+                "timed_out": false,
+                "activity": self.output,
+            }),
+            state_facts: self.state_facts,
+        }
+    }
+}
+
 impl RuntimeCore {
     pub(super) async fn execute_agent_control_wait(
         &self,
         caller: &ResolvedAgentControlCaller,
         timeout_ms: u64,
         cancel_token: Option<tokio_util::sync::CancellationToken>,
-    ) -> Result<serde_json::Value, RuntimeCoreError> {
+    ) -> Result<AgentControlWaitResult, RuntimeCoreError> {
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
         let activity = self
             .session_loops
@@ -22,27 +59,23 @@ impl RuntimeCore {
         let mut recovery_interval = std::time::Duration::from_millis(250);
         loop {
             if self.has_queued_agent_control_steer(&caller.session.session_id, &caller.turn_id)? {
-                return Ok(json!({
+                return Ok(AgentControlWaitResult::without_states(json!({
                     "message": "Wait interrupted by new input.",
                     "timed_out": false,
-                }));
+                })));
             }
             if let Some(activity) = pending_activity.take() {
                 match activity {
                     agent_runtime::session_loop::RuntimeSessionInputActivity::Steer => {
-                        return Ok(json!({
+                        return Ok(AgentControlWaitResult::without_states(json!({
                             "message": "Wait interrupted by new input.",
                             "timed_out": false,
-                        }));
+                        })));
                     }
                     agent_runtime::session_loop::RuntimeSessionInputActivity::Mailbox => {
                         let activity = self.consume_agent_control_wait_activity(caller).await?;
                         if !activity.is_empty() {
-                            return Ok(json!({
-                                "message": "Wait completed.",
-                                "timed_out": false,
-                                "activity": activity,
-                            }));
+                            return Ok(activity.into_result());
                         }
                     }
                 }
@@ -57,10 +90,10 @@ impl RuntimeCore {
                     .min(std::time::Duration::from_secs(2));
             }
             if self.has_queued_agent_control_steer(&caller.session.session_id, &caller.turn_id)? {
-                return Ok(json!({
+                return Ok(AgentControlWaitResult::without_states(json!({
                     "message": "Wait interrupted by new input.",
                     "timed_out": false,
-                }));
+                })));
             }
             if self
                 .has_pending_agent_mailbox_activity(&caller.session.session_id)
@@ -68,11 +101,7 @@ impl RuntimeCore {
             {
                 let activity = self.consume_agent_control_wait_activity(caller).await?;
                 if !activity.is_empty() {
-                    return Ok(json!({
-                        "message": "Wait completed.",
-                        "timed_out": false,
-                        "activity": activity,
-                    }));
+                    return Ok(activity.into_result());
                 }
             }
             if tokio::time::Instant::now() >= deadline {
@@ -81,10 +110,10 @@ impl RuntimeCore {
                 if self
                     .has_queued_agent_control_steer(&caller.session.session_id, &caller.turn_id)?
                 {
-                    return Ok(json!({
+                    return Ok(AgentControlWaitResult::without_states(json!({
                         "message": "Wait interrupted by new input.",
                         "timed_out": false,
-                    }));
+                    })));
                 }
                 if self
                     .has_pending_agent_mailbox_activity(&caller.session.session_id)
@@ -92,14 +121,13 @@ impl RuntimeCore {
                 {
                     let activity = self.consume_agent_control_wait_activity(caller).await?;
                     if !activity.is_empty() {
-                        return Ok(json!({
-                            "message": "Wait completed.",
-                            "timed_out": false,
-                            "activity": activity,
-                        }));
+                        return Ok(activity.into_result());
                     }
                 }
-                return Ok(json!({ "message": "Wait timed out.", "timed_out": true }));
+                return Ok(AgentControlWaitResult::without_states(json!({
+                    "message": "Wait timed out.",
+                    "timed_out": true
+                })));
             }
             let recovery_sleep = tokio::time::sleep_until(next_recovery);
             tokio::pin!(recovery_sleep);
@@ -121,19 +149,15 @@ impl RuntimeCore {
                         .map(|receiver| *receiver.borrow_and_update());
                     match activity {
                         Some(agent_runtime::session_loop::RuntimeSessionInputActivity::Steer) => {
-                            return Ok(json!({
+                            return Ok(AgentControlWaitResult::without_states(json!({
                                 "message": "Wait interrupted by new input.",
                                 "timed_out": false,
-                            }));
+                            })));
                         }
                         Some(agent_runtime::session_loop::RuntimeSessionInputActivity::Mailbox) => {
                             let activity = self.consume_agent_control_wait_activity(caller).await?;
                             if !activity.is_empty() {
-                                return Ok(json!({
-                                    "message": "Wait completed.",
-                                    "timed_out": false,
-                                    "activity": activity,
-                                }));
+                                return Ok(activity.into_result());
                             }
                         }
                         None => {}
@@ -149,22 +173,21 @@ impl RuntimeCore {
                 _ = &mut deadline_sleep => {
                     self.recover_direct_child_terminal_activity(&caller.session).await?;
                     if self.has_queued_agent_control_steer(&caller.session.session_id, &caller.turn_id)? {
-                        return Ok(json!({
+                        return Ok(AgentControlWaitResult::without_states(json!({
                             "message": "Wait interrupted by new input.",
                             "timed_out": false,
-                        }));
+                        })));
                     }
                     if self.has_pending_agent_mailbox_activity(&caller.session.session_id).await? {
                         let activity = self.consume_agent_control_wait_activity(caller).await?;
                         if !activity.is_empty() {
-                            return Ok(json!({
-                                "message": "Wait completed.",
-                                "timed_out": false,
-                                "activity": activity,
-                            }));
+                            return Ok(activity.into_result());
                         }
                     }
-                    return Ok(json!({ "message": "Wait timed out.", "timed_out": true }));
+                    return Ok(AgentControlWaitResult::without_states(json!({
+                        "message": "Wait timed out.",
+                        "timed_out": true
+                    })));
                 }
                 _ = async {
                     match cancel_token.as_ref() {
@@ -172,7 +195,10 @@ impl RuntimeCore {
                         None => std::future::pending::<()>().await,
                     }
                 } => {
-                    return Ok(json!({ "message": "Wait interrupted.", "timed_out": false }));
+                    return Ok(AgentControlWaitResult::without_states(json!({
+                        "message": "Wait interrupted.",
+                        "timed_out": false
+                    })));
                 }
             }
         }
@@ -181,19 +207,53 @@ impl RuntimeCore {
     async fn consume_agent_control_wait_activity(
         &self,
         caller: &ResolvedAgentControlCaller,
-    ) -> Result<Vec<serde_json::Value>, RuntimeCoreError> {
+    ) -> Result<AgentControlWaitActivity, RuntimeCoreError> {
         let messages = self
             .consume_pending_agent_mailbox_for_wait(&caller.session.session_id, &caller.turn_id)
             .await?;
         if messages.is_empty() {
-            return Ok(Vec::new());
+            return Ok(AgentControlWaitActivity::default());
         }
-        let identities = self
-            .agent_control_store()?
+        let store = self.agent_control_store()?;
+        let identities = store
             .list_agent_identities(caller.identity.root_thread_id.clone())
             .await
             .map_err(agent_control_store_error)?;
-        Ok(messages
+        let mut seen_senders = HashSet::new();
+        let mut state_facts = Vec::new();
+        for message in &messages {
+            if !seen_senders.insert(message.sender_thread_id.clone()) {
+                continue;
+            }
+            let fallback = mailbox_agent_state(message);
+            let state = match store
+                .read_thread(ReadThreadParams {
+                    thread_id: message.sender_thread_id.clone(),
+                    include_archived: true,
+                    turns_view: agent_protocol::ThreadTurnsView::Full,
+                })
+                .await
+            {
+                Ok(Some(thread)) => thread.agent_state.unwrap_or(fallback),
+                Ok(None) => agent_protocol::CollabAgentState {
+                    status: agent_protocol::CollabAgentStatus::NotFound,
+                    message: None,
+                },
+                Err(error) => {
+                    tracing::warn!(
+                        thread_id = %message.sender_thread_id,
+                        error = %error,
+                        "failed to read canonical agent state for wait projection"
+                    );
+                    fallback
+                }
+            };
+            state_facts.push(AgentStateProjectionFact {
+                target_thread_id: message.sender_thread_id.clone(),
+                state,
+            });
+        }
+        let output = messages
             .into_iter()
             .map(|message| {
                 let sender = identities
@@ -218,7 +278,11 @@ impl RuntimeCore {
                     "result_status": result_status,
                 })
             })
-            .collect())
+            .collect();
+        Ok(AgentControlWaitActivity {
+            output,
+            state_facts,
+        })
     }
 
     fn has_queued_agent_control_steer(
@@ -238,5 +302,21 @@ impl RuntimeCore {
             .turns
             .iter()
             .any(|turn| turn.turn_id != current_turn_id && turn.status == AgentTurnStatus::Queued))
+    }
+}
+
+fn mailbox_agent_state(message: &AgentMailboxMessage) -> agent_protocol::CollabAgentState {
+    let status = match message.result_status {
+        Some(thread_store::AgentMailboxResultStatus::Completed) => {
+            agent_protocol::CollabAgentStatus::Completed
+        }
+        Some(thread_store::AgentMailboxResultStatus::Failed) => {
+            agent_protocol::CollabAgentStatus::Errored
+        }
+        None => agent_protocol::CollabAgentStatus::Running,
+    };
+    agent_protocol::CollabAgentState {
+        status,
+        message: None,
     }
 }

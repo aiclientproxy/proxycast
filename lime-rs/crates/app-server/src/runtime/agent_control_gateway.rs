@@ -13,12 +13,12 @@ use std::sync::Arc;
 use thread_store::{
     AgentGraphStore, AgentIdentity, AgentIdentityStore, AgentMailboxDeliveryMode,
     AgentMailboxDeliveryStatus, AgentMailboxMessage, AgentMailboxMessageKind, AgentMailboxStore,
-    AppendAgentMailboxMessageParams, ThreadSpawnEdgeStatus, ThreadStore,
+    AppendAgentMailboxMessageParams, ReadThreadParams, ThreadSpawnEdgeStatus, ThreadStore,
 };
 use tool_runtime::agent_control::{
     AgentControlGateway, AgentControlGatewayError, AgentControlGatewayHandle,
-    AgentControlGatewayRequest, AgentControlGatewayResult, SubAgentProjectionActivity,
-    SubAgentProjectionFact,
+    AgentControlGatewayRequest, AgentControlGatewayResult, AgentStateProjectionFact,
+    SubAgentProjectionActivity, SubAgentProjectionFact,
 };
 
 use super::agent_control_gateway_support::{
@@ -96,7 +96,7 @@ impl RuntimeCore {
         child_runtime_options: Option<RuntimeOptions>,
     ) -> Result<AgentControlGatewayResult, RuntimeCoreError> {
         let caller = self.resolve_agent_control_caller(&request.caller).await?;
-        let (output, projection_facts) = match request.command {
+        let (output, projection_facts, state_facts) = match request.command {
             tool_runtime::agent_control::AgentControlCommand::SpawnAgent {
                 task_name,
                 message,
@@ -121,6 +121,7 @@ impl RuntimeCore {
                         activity: SubAgentProjectionActivity::Started,
                         detail: Some(agent_path),
                     }],
+                    Vec::new(),
                 )
             }
             tool_runtime::agent_control::AgentControlCommand::SendMessage { target, message } => {
@@ -141,6 +142,7 @@ impl RuntimeCore {
                         activity: SubAgentProjectionActivity::Interacted,
                         detail: Some(agent_path),
                     }],
+                    Vec::new(),
                 )
             }
             tool_runtime::agent_control::AgentControlCommand::FollowupTask { target, message } => {
@@ -161,13 +163,15 @@ impl RuntimeCore {
                         activity: SubAgentProjectionActivity::Interacted,
                         detail: Some(agent_path),
                     }],
+                    Vec::new(),
                 )
             }
-            tool_runtime::agent_control::AgentControlCommand::WaitAgent { timeout_ms } => (
-                self.execute_agent_control_wait(&caller, timeout_ms, request.cancel_token)
-                    .await?,
-                Vec::new(),
-            ),
+            tool_runtime::agent_control::AgentControlCommand::WaitAgent { timeout_ms } => {
+                let result = self
+                    .execute_agent_control_wait(&caller, timeout_ms, request.cancel_token)
+                    .await?;
+                (result.output, Vec::new(), result.state_facts)
+            }
             tool_runtime::agent_control::AgentControlCommand::InterruptAgent { target } => {
                 let (output, target_thread_id, agent_path) = self
                     .execute_agent_control_interrupt(&caller, target, host.clone())
@@ -179,17 +183,20 @@ impl RuntimeCore {
                         activity: SubAgentProjectionActivity::Interrupted,
                         detail: Some(agent_path),
                     }],
+                    Vec::new(),
                 )
             }
             tool_runtime::agent_control::AgentControlCommand::ListAgents { path_prefix } => (
                 self.execute_agent_control_list(&caller, path_prefix)
                     .await?,
                 Vec::new(),
+                Vec::new(),
             ),
         };
         Ok(AgentControlGatewayResult {
             output,
             projection_facts,
+            state_facts,
         })
     }
 

@@ -226,11 +226,11 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerThreadUnarchiveResponse>
     >;
-    readAgentSessionMedia(
-      params: appServer.AppServerAgentSessionMediaReadParams,
+    readMedia(
+      params: appServer.AppServerMediaReadParams,
       options?: appServer.AppServerRequestOptions,
     ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerAgentSessionMediaReadResponse>
+      appServer.AppServerRequestResult<appServer.AppServerMediaReadResponse>
     >;
     readAgentSessionToolInventory(
       params?: appServer.AppServerAgentSessionToolInventoryReadParams,

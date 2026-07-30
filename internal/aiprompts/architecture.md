@@ -840,6 +840,53 @@ direct notification 主链已把 Codex v2 lifecycle 与流式 Item method 纳入
 - canonical Item append 必须遵循 raw rollout append + metadata patch contract；ThreadStore apply 失败时 notification/mailbox ack 不得发生，restart/repair 从连续有效 durable tail 和 raw rollout 重建。
 - Evidence、replay、analysis、review 与 GUI 从 App Server `evidence/export`、v2 read model 和 notification 消费同一事实源。
 
+#### 7.1.1 Renderer ConversationProjection 与 direct TurnTimeline
+
+Renderer 的 current Item 状态 owner 已收敛到同一个 typed `ConversationProjection` reducer：
+
+```text
+direct App Server v2 notification
+  -> direct notification router / sequence gate
+  -> typed AgentEvent payload
+  -> request-scoped ConversationProjection reducer
+  -> canonical AgentThreadItem state
+  -> pure canonical Turn render projection
+  -> direct User / Agent / Media / Process segments
+  -> MessageList
+
+thread/read + thread/items/list + thread/turns/list
+  -> bounded canonical history window
+  -> canonical Item reader
+  -> the same ConversationProjection reducer
+  -> canonical AgentThreadItem state
+
+thread/resume
+  -> canonical Item reader
+  -> install the same ConversationProjection reducer into active stream state
+  -> subsequent live notifications reuse the same reducer
+
+App Server reverse requests
+  -> one PendingInteractionController
+  -> semantic interaction identity only
+  -> one actionable layer above Composer
+```
+
+direct notification 没有上游 event id 时，stream owner 只能在 router 去重之后分配 request 内单调到达序号；不能用内容 hash 去重，因为相同 chunk 可以合法重复，也不能把该序号当作跨重连 replay identity。Item identity 仍是 `thread_id + turn_id + item.id`，首次 canonical sequence 决定顺序，completed snapshot 权威覆盖 delta 草稿，terminal 后 late delta 只记录诊断。
+
+Renderer session id 不得预绑定为 canonical thread id。live reducer 只能从 existing canonical Item 或首个带明确 direct-v2 protocol method 的事件建立 thread owner；无 protocol method 的 compat 事件继续委托 legacy lifecycle，不能抢占 current owner。session detail/read model 只接受 requested id 等于 canonical `sessionId` 或 `threadId` 的响应，其他 identity 必须在 App Server client 与 Renderer adapter 两层 fail closed，且不得写入 identity cache。
+
+cold read 对 `historyMode=paginated` 的 `thread/read` embedded turns 一律视为 partial view，使用 store-owned `thread/items/list` cursor 选取 message window，再扫描 `thread/turns/list` 到 EOF，恢复选中 Item 所属 Turn 以及所有 active/failed/interrupted 等无 Item Turn。Renderer 分页以 opaque canonical Item ID `oldest_item_id` 为稳定锚点；旧数字 `oldest_message_id` 仅作迁出兼容并让位于 Item ID。`has_more` 是继续分页的事实，未到 Item EOF 时 `messages_count` 未知且不生成 `start_index`；只有 EOF 后才暴露精确总数和绝对索引，GUI 不得把观察下界显示为总数。
+
+历史列表的首帧 DOM 必须继续受 Turn render window 约束，不能因为 canonical Item 已恢复就一次挂载全部历史。已完成的历史 assistant 纯文本复用唯一 `HistoricalAssistantMessagePreview`：正文超过 900 字先显示 compact preview，超过 24,000 字使用 2,000 字 long preview，用户显式展开后才挂载全文；streaming、A2UI 和含非文本 part 的 canonical Item 不得被错误折叠。受控 Electron Gate B 以 240 Turn / 720 Item SQLite fixture 证明首帧只挂载 10 个 canonical Turn、扫描 30 个 Item、residual Message 为 0、长正文尾部 marker 不进入 DOM；首次 MessageList paint 为 37ms、稳定 paint 为 200ms，long task、console error 与 page error 均为 0。该证据只证明受控历史恢复与 Renderer/Electron/App Server/read-model 链路，不代表 live Provider、真实用户历史或所有平台性能。
+
+CommandExecution、Tool、WebSearch 与 Patch stdout/stderr 在 projection 边界限制为 256 KiB，超限保留尾部并带显式截断标记。unknown Item/notification 只向受控 diagnostics 记录 protocol revision、method、upstream type、Item identity 与脱敏字段名；raw 值、credential、metadata 和 provider payload 不进入 diagnostic。known-unprojected/unknown notification recorder 只提供 fail-visible 诊断，不能替代 V2-05 planned notification 的 producer、typed protocol、projection 或 Gate B。
+
+canonical Item -> Message 的 tool/agent/reasoning `toolCalls/contentParts` 合成、`canonicalItemsToMessages` 与 MessageList canonical compatibility branch 已物理删除并有回流守卫，属于 `dead / deleted / forbidden-to-restore`。未被 canonical Item 覆盖的 optimistic/imported/local product surface 只作为 direct render projection 的 residual Message，不得成为第二个 Item store。HookPrompt、Sleep、Review boundary 使用 typed Item DTO；Hook 的 runtime identity 不进入可见 DOM。UserMessage audio/localAudio 不在 Lime 当前产品协议范围，reader fail closed；DynamicTool `inputAudio` 继续由真实 v2 schema/typed client/renderer 链承接。
+
+command approval、file approval、requestUserInput 与 MCP elicitation 只由 `PendingInteractionController` 注册和终结。JSON-RPC transport id/action token 只能留在 dispatcher 请求闭包；React state 只持有 semantic interaction identity。旧 server-request controller、独立 MCP Dialog/controller 与第二 pending store 均为 `dead / deleted / forbidden-to-restore`。
+
+Architecture impact: major; this changes the Renderer live/read/resume Item state owner, canonical Turn rendering and pending-interaction owner while preserving Electron as transport host, App Server/ThreadStore as canonical owner, and model-provider/tool-runtime boundaries. Architecture diagram updated: this section and the Renderer data-flow chain above. Responsible developer confirmation: root, 2026-07-29.
+
 ### 7.2 Plugin、Skills 与 MCP
 
 Plugin UI/worker 只通过 typed client 和 App Server method 进入 runtime；不得复制 turn start、cancel、tool dispatch 或 evidence 链。Skill 是产品与领域工作流单元，MCP 是标准化 tool/resource/prompt 接入；二者均由 App Server 和各自 runtime owner 注入当前 turn，而不是由 Renderer 直接执行。
@@ -1494,3 +1541,42 @@ audio workers remain `alignment-open` and must fail closed until implemented.
 Architecture impact: major; this adds the first executable video media task branch while preserving chat admission and
 Thread/Turn/Item ownership. Architecture diagram updated: this section and the media/provider chain above. Responsible
 developer confirmation: root, 2026-07-28.
+
+## 24. Thread-Scoped Media Read And Fail-Visible Preview
+
+Media references remain canonical Thread/Turn/Item data while the App Server owns bounded sidecar reads:
+
+```text
+canonical Media Item + host-safe sidecar URI
+  -> Renderer typed media/read { threadId, uri, offset, length, maxBytes, stream }
+  -> Electron preload/contextBridge -> app_server_handle_json_lines
+  -> App Server v2 dispatcher -> thread-scoped SidecarStore reader
+  -> bounded bytes + range/size/digest metadata
+       | available and browser-decodable: bounded object URL -> image/audio/video preview
+       | unavailable/denied/invalid/too large: metadata fallback surface
+       | browser decode failure: unsupported fallback surface
+```
+
+`media/read` is the single `current` read method for GUI media sidecars. It is a Lime-owned host-safe extension because
+Codex has no equivalent public method; its owner is the App Server read model plus SidecarStore, not Electron or the
+Renderer. Requests and responses use canonical `threadId`; the Renderer cannot send `sessionId`, absolute source paths,
+credentials or inline unbounded payloads. The reader enforces Thread scope, range and maximum-size constraints, validates
+the sidecar digest, and returns only bounded base64 content. The Renderer owns the resulting object URL lifecycle and
+releases replaced, unmounted and over-budget URLs.
+
+A read failure never restores filesystem access or a production mock fallback. Missing or unreadable sidecars preserve a
+visible metadata artifact without exposing the underlying error or absolute path. Browser image, audio or video decode
+failure switches the existing preview to the shared `unsupported` surface instead of leaving an empty media element.
+Permission denial, unsupported format, oversized results, invalid ranges and digest mismatch are covered at the nearest
+Rust or Renderer boundary. The controlled Electron Gate B additionally proves a 471-byte PNG success path and the
+sidecar-unavailable metadata fallback through real preload/IPC/App Server JSON-RPC/read-model/GUI boundaries; it does not
+claim live-provider execution or every audio/platform failure mode.
+
+The former v0 `agentSession/media/read` method, `AgentSessionMediaRead*` types and matching client/build symbols are
+`dead / deleted / forbidden-to-restore`. `media.read.chunk` and `media.read.completed` remain `deprecated` transient event
+bypasses under V2-05 until their consumers move to the canonical projection; they are not a second media-read owner and
+this slice does not classify the broader notification surface as complete. No production `compat` path was added.
+
+Architecture impact: major; this replaces the GUI media read protocol and makes media failure rendering explicit while
+preserving App Server, SidecarStore and Thread/Turn/Item ownership. Architecture diagram updated: this section and the
+desktop/App Server projection chain above. Responsible developer confirmation: root, 2026-07-29.

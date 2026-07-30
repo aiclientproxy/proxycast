@@ -140,8 +140,18 @@ describe("CanvasWorkbenchLayout", () => {
         '[data-testid="canvas-workbench-changes-file-list"]',
       ),
     ).toBeNull();
+    expect(
+      container
+        .querySelector('[data-testid="canvas-workbench-changes-files-toggle"]')
+        ?.getAttribute("aria-expanded"),
+    ).toBe("false");
     clickByAriaLabel(container, "显示文件");
     await flushEffects();
+    expect(
+      container
+        .querySelector('[data-testid="canvas-workbench-changes-files-toggle"]')
+        ?.getAttribute("aria-expanded"),
+    ).toBe("true");
     expect(
       container.querySelector(
         '[data-testid="canvas-workbench-changes-file-list"]',
@@ -154,6 +164,11 @@ describe("CanvasWorkbenchLayout", () => {
     ).not.toBeNull();
     clickByAriaLabel(container, "隐藏文件");
     await flushEffects();
+    expect(
+      container
+        .querySelector('[data-testid="canvas-workbench-changes-files-toggle"]')
+        ?.getAttribute("aria-expanded"),
+    ).toBe("false");
     expect(
       container.querySelector(
         '[data-testid="canvas-workbench-changes-file-list"]',
