@@ -17,6 +17,7 @@ import {
   TERMINAL_CANCELED_AFTER_ANSWER_ASSERTION_KEYS,
   TERMINAL_FAILED_AFTER_ANSWER_ASSERTION_KEYS,
   TERMINAL_STALE_GUARD_ASSERTION_KEYS,
+  TYPED_ERROR_RETRY_ASSERTION_KEYS,
   WEB_TOOLS_RENDERING_ASSERTION_KEYS,
 } from "./claw-chat-current-fixture-constants.mjs";
 import { MEDIA_REFERENCE_ASSERTION_KEYS } from "./claw-chat-current-fixture-media-reference.mjs";
@@ -49,6 +50,7 @@ export function buildNotApplicableAssertions(context) {
     isTerminalCanceledAfterAnswerScenario,
     isTerminalFailedAfterAnswerScenario,
     isTerminalStaleGuardScenario,
+    isTypedErrorRetryScenario,
     isWebToolsRenderingScenario,
   } = context;
   if (
@@ -622,5 +624,6 @@ export function buildNotApplicableAssertions(context) {
     ...(isTerminalStaleGuardScenario
       ? []
       : TERMINAL_STALE_GUARD_ASSERTION_KEYS),
+    ...(isTypedErrorRetryScenario ? [] : TYPED_ERROR_RETRY_ASSERTION_KEYS),
   ];
 }

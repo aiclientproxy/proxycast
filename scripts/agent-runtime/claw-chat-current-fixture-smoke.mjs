@@ -41,6 +41,12 @@ import {
   TERMINAL_CANCELED_AFTER_ANSWER_SCENARIO,
   TERMINAL_FAILED_AFTER_ANSWER_SCENARIO,
   TERMINAL_STALE_GUARD_SCENARIO,
+  TYPED_ERROR_RETRY_FAILURE_PROMPT,
+  TYPED_ERROR_RETRY_FAILURE_SCENARIO,
+  TYPED_ERROR_RETRY_SUCCESS_PROMPT,
+  TYPED_ERROR_RETRY_SUCCESS_SCENARIO,
+  TURN_PLAN_UPDATE_PROMPT,
+  TURN_PLAN_UPDATE_SCENARIO,
 } from "./claw-chat-current-fixture-constants.mjs";
 import { buildFixtureAssertionReport } from "./claw-chat-current-fixture-assertions.mjs";
 import { resolveGateBExpectedIdentity } from "./claw-chat-current-fixture-assertion-context.mjs";
@@ -120,8 +126,8 @@ Claw Chat Current Electron Fixture Smoke
   的主链可以完成用户消息、assistant 输出和 read model 收尾。
 
 边界:
-  普通聊天场景使用一次性本地 external backend fixture；图片命令场景使用
-  APP_SERVER_BACKEND_MODE=runtime 以验证 App Server ImageCommandWorkflow。
+  普通聊天场景使用一次性本地 external backend fixture；图片命令、Soul、
+  active steer 与 turn-plan-update 场景使用 APP_SERVER_BACKEND_MODE=runtime。
   全部场景均不调用正式模型后端，不使用 APP_SERVER_BACKEND_MODE=mock，
   不走 Tauri / legacy runtime command / renderer mock fallback 作为成功证据。
 
@@ -133,7 +139,7 @@ Claw Chat Current Electron Fixture Smoke
   --evidence-dir <path>  证据目录
   --prefix <name>        证据文件前缀
   --run-id <id>          Gate 项目 run-id；也可通过 LIME_GATE_RUN_ID 注入
-  --scenario <name>      complete | home-hotpath | home-hotpath-greeting | cancel | cancel-then-continue | inputbar-rich-restore | inputbar-active-steer | plan | goal | soul-style | image-command | plain-image-intent | media-reference | reasoning-first-visible | live-tail-commit | electron-resize-reflow | approval-request-resume | approval-request-decline | approval-request-cancel | approval-request-host-interrupt | approval-request-full-access | terminal-failed-after-answer | terminal-canceled-after-answer | terminal-stale-guard | web-tools-rendering | mcp-structured-content | skills-runtime | expert-plaza-skills-runtime | expert-panel-skills-runtime | right-surface-visual-matrix | content-factory-article-workspace | content-factory-inline-image-article-workspace，默认 complete
+  --scenario <name>      complete | home-hotpath | home-hotpath-greeting | cancel | cancel-then-continue | inputbar-rich-restore | inputbar-active-steer | plan | turn-plan-update | goal | soul-style | image-command | plain-image-intent | media-reference | reasoning-first-visible | live-tail-commit | electron-resize-reflow | approval-request-resume | approval-request-decline | approval-request-cancel | approval-request-host-interrupt | approval-request-full-access | terminal-failed-after-answer | terminal-canceled-after-answer | terminal-stale-guard | typed-error-retry-success | typed-error-retry-failure | web-tools-rendering | mcp-structured-content | skills-runtime | expert-plaza-skills-runtime | expert-panel-skills-runtime | right-surface-visual-matrix | content-factory-article-workspace | content-factory-inline-image-article-workspace，默认 complete
   --prompt <text>        仅 home-hotpath 场景可用，覆盖默认新闻输入
   --soul-style-profile <id>   soul-style 场景使用的 profile，默认 ${DEFAULT_SOUL_STYLE_FIXTURE_PROFILE_ID}
   --cdp-port <port>      可选 Electron remote debugging port；传入后通过 CDP renderer 执行 GUI 动作
@@ -252,6 +258,7 @@ function parseArgs(argv) {
     INPUTBAR_RICH_RESTORE_SCENARIO,
     ACTIVE_STEER_SCENARIO,
     "plan",
+    TURN_PLAN_UPDATE_SCENARIO,
     "goal",
     SOUL_STYLE_SCENARIO,
     IMAGE_COMMAND_SCENARIO,
@@ -268,6 +275,8 @@ function parseArgs(argv) {
     TERMINAL_CANCELED_AFTER_ANSWER_SCENARIO,
     TERMINAL_FAILED_AFTER_ANSWER_SCENARIO,
     TERMINAL_STALE_GUARD_SCENARIO,
+    TYPED_ERROR_RETRY_SUCCESS_SCENARIO,
+    TYPED_ERROR_RETRY_FAILURE_SCENARIO,
     "web-tools-rendering",
     "mcp-structured-content",
     "skills-runtime",
@@ -318,6 +327,7 @@ function shouldUseTextProviderFixture(scenario) {
     scenario === SOUL_STYLE_SCENARIO ||
     scenario === INPUTBAR_RICH_RESTORE_SCENARIO ||
     scenario === ACTIVE_STEER_SCENARIO ||
+    scenario === TURN_PLAN_UPDATE_SCENARIO ||
     scenario === CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO ||
     scenario === CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO
   );
@@ -329,7 +339,9 @@ function scenarioWaitsForExternalBackendCancel(scenario) {
     scenario === "cancel-then-continue" ||
     scenario === INPUTBAR_RICH_RESTORE_SCENARIO ||
     scenario === TERMINAL_CANCELED_AFTER_ANSWER_SCENARIO ||
-    scenario === APPROVAL_REQUEST_HOST_INTERRUPT_SCENARIO
+    scenario === APPROVAL_REQUEST_HOST_INTERRUPT_SCENARIO ||
+    scenario === TYPED_ERROR_RETRY_SUCCESS_SCENARIO ||
+    scenario === TYPED_ERROR_RETRY_FAILURE_SCENARIO
   );
 }
 
@@ -345,6 +357,7 @@ function resolveScenarioBackendEnv(options, runtimeEnv) {
   if (
     options.scenario === SOUL_STYLE_SCENARIO ||
     options.scenario === ACTIVE_STEER_SCENARIO ||
+    options.scenario === TURN_PLAN_UPDATE_SCENARIO ||
     options.scenario === CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO ||
     options.scenario === CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO
   ) {
@@ -369,6 +382,7 @@ function resolveScenarioBackendEnv(options, runtimeEnv) {
       runtimeEnv.backendPath,
       runtimeEnv.backendLedgerPath,
       runtimeEnv.cancelSignalPath,
+      runtimeEnv.typedErrorSignalPath,
     ]),
     APP_SERVER_BACKEND_TIMEOUT_MS: backendTimeoutMs,
   };
@@ -543,9 +557,17 @@ async function run() {
                     ? APPROVAL_REQUEST_RESUME_PROMPT
                     : options.scenario === APPROVAL_REQUEST_FULL_ACCESS_SCENARIO
                       ? APPROVAL_REQUEST_FULL_ACCESS_PROMPT
-                      : options.scenario === HOME_HOTPATH_GREETING_SCENARIO
-                        ? GREETING_PROMPT
-                        : NEWS_PROMPT),
+                      : options.scenario === TYPED_ERROR_RETRY_SUCCESS_SCENARIO
+                        ? TYPED_ERROR_RETRY_SUCCESS_PROMPT
+                        : options.scenario ===
+                            TYPED_ERROR_RETRY_FAILURE_SCENARIO
+                          ? TYPED_ERROR_RETRY_FAILURE_PROMPT
+                          : options.scenario === TURN_PLAN_UPDATE_SCENARIO
+                            ? TURN_PLAN_UPDATE_PROMPT
+                            : options.scenario ===
+                                HOME_HOTPATH_GREETING_SCENARIO
+                              ? GREETING_PROMPT
+                              : NEWS_PROMPT),
     sessionId: null,
     threadId: null,
     workspaceId: null,
@@ -629,6 +651,7 @@ async function run() {
     guiWebToolsRenderingCompleted: null,
     skillsRuntimeInputSend: null,
     guiSkillsRuntimeCompleted: null,
+    skillsChangedCatalogRefresh: null,
     explicitSkillsRuntimeInputSend: null,
     guiExplicitSkillsRuntimeCompleted: null,
     manualEnableSkillsRuntimeTurnStart: null,
@@ -640,6 +663,16 @@ async function run() {
     readModelPlanCompleted: null,
     readModelGoalCompleted: null,
     readModelReasoningFirstVisibleCompleted: null,
+    typedErrorTurnStart: null,
+    typedErrorRetryInputSend: null,
+    typedErrorRetryingBackend: null,
+    typedErrorRetryingGui: null,
+    typedErrorAwaitingTerminalBackend: null,
+    typedErrorAwaitingTerminalGui: null,
+    readModelTypedErrorPending: null,
+    guiTypedErrorTerminal: null,
+    readModelTypedErrorTerminal: null,
+    typedErrorTerminalBackend: null,
     readModelWebToolsRenderingCompleted: null,
     imageCommandInputSend: null,
     imageCommandBackendTurnStart: null,
@@ -754,6 +787,7 @@ async function run() {
         soulStyleExpectation: soulStyleSelection,
         activeSteerDelayMs:
           options.scenario === ACTIVE_STEER_SCENARIO ? 30_000 : 0,
+        turnPlanUpdate: options.scenario === TURN_PLAN_UPDATE_SCENARIO,
       });
       summary.textProviderFixtureServer = sanitizeJson({
         baseUrl: textProviderFixtureServer.baseUrl,

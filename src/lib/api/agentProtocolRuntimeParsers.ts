@@ -371,6 +371,14 @@ export function parseAgentRuntimeEvent(
       return {
         type: "error",
         message: (event.message as string) || "Unknown error",
+        will_retry:
+          typeof event.will_retry === "boolean" ? event.will_retry : undefined,
+        codex_error_info: event.codex_error_info,
+        additional_details:
+          typeof event.additional_details === "string" ||
+          event.additional_details === null
+            ? event.additional_details
+            : undefined,
       };
     case "warning":
       return {

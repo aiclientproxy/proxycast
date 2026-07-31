@@ -20,7 +20,7 @@ src/lib/api/
 
 src/hooks/
 ├── useMcp.ts              # MCP runtime 状态与事件刷新
-└── useMcpEvents.ts        # Desktop Host MCP event bridge
+└── useMcpEvents.ts        # MCP Desktop events 与 App Server typed notification bridge
 
 src/components/mcp/
 ├── McpPage.tsx            # 设置页入口
@@ -54,6 +54,7 @@ Current MCP method 固定为：
 - `mcpServer/importFromApp`
 - `mcpServer/syncAllToLive`
 - `mcpServer/oauth/login`
+- `mcpServer/oauthLogin/completed`
 - `mcpServer/start`
 - `mcpServer/stop`
 - `mcpTool/list`
@@ -80,7 +81,7 @@ Current MCP method 固定为：
 
 - `stdio` 与 `streamable_http` 都由 `lime-rs/crates/mcp` 管理。
 - HTTP header 只允许来自配置中的安全字段或环境变量引用；inline secret、非法 header、缺失 env var 必须 fail closed。
-- OAuth 登录走 `mcpServer/oauth/login`，使用系统浏览器 current 网关打开授权 URL，callback 完成后通过 `mcp:oauth_completed` 刷新前端。
+- OAuth 登录走 `mcpServer/oauth/login`，使用系统浏览器 current 网关打开授权 URL；callback 成功或失败后由 App Server 发布 `mcpServer/oauthLogin/completed` typed notification，Renderer 经 typed event bus 刷新 server/tool 状态。旧 `mcp:oauth_completed` Desktop event 为 `dead / deleted / forbidden-to-restore`。
 - OAuth token store 使用 app data runtime 下的 versioned credential envelope，按 server name + URL 隔离。
 - 显式 `oauth.client_id` / `oauth_resource` 目前仍按 unsupported fail-closed，不能伪装成可用。
 
@@ -119,6 +120,7 @@ MCP smoke：
 npm run smoke:mcp-current
 npm run smoke:mcp-current -- --allow-write-fixture
 npm run smoke:mcp-current -- --allow-oauth-fixture
+npm run smoke:mcp-oauth-notification-electron-fixture
 npm run smoke:mcp-current -- --allow-live-provider
 ```
 

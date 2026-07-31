@@ -1699,3 +1699,39 @@ Architecture impact: major because a live notification and recovery surface move
 to the v2 protocol/projector/Renderer boundary. The product direction remains Electron Desktop Host -> App Server
 JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI. Architecture diagram updated: this section and the App
 Server notification boundary above. Responsible developer confirmation: root, 2026-07-31.
+
+## 28. Skills Changed Catalog Invalidation Owner
+
+Skill catalog invalidation uses one current catalog owner and one typed transient notification path:
+
+```text
+default Skill roots create / modify / remove
+  or successful Lime Skill catalog mutation
+  -> invalidate lime-skills executable snapshot cache
+  -> App Server v2 skills/changed {}
+  -> app_server_handle_json_lines notification drain
+  -> Renderer typed notification bus
+  -> current skill/list
+  -> Composer Skill catalog projection and GUI refresh
+```
+
+The App Server watches only default Skill roots. Existing roots are recursive watches; roots created after startup are
+reconciled and watched. Filesystem create, modify and remove events invalidate the executable snapshot and broadcast at
+most once per ten-second throttle window. Successful Lime catalog mutations invalidate the same cache and attach the
+same typed notification at the processor boundary; failed mutations and mutations for other apps do not notify.
+
+`skill/list` is the sole executable catalog read for Composer. The Renderer API reuses the existing typed executable
+Skill decoder and applies a pure GUI projection. `skillManagement/list` retains its management-center semantics and does
+not become a second Composer catalog owner. Reconnect or remount performs a fresh list independently of notification
+delivery. `skills/changed` carries the strict empty object only and is a process-level transient invalidation; it does not
+create a Thread/Turn/Item, durable event, persistence record or replay requirement.
+
+The v2 protocol/schema/generated client, App Server watcher and successful mutation producer, `lime-skills` cache
+invalidation, Renderer typed event bus and current `skill/list` refresh are `current`. No `compat` path exists.
+`skills/extraRoots/set`, a second catalog/read model, durable notification replay and production mock fallback were not
+added and are `dead / forbidden-to-restore` as alternate implementations.
+
+Architecture impact: major because this adds a public notification producer and GUI invalidation boundary while keeping
+the product direction unchanged: Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore/domain owner -> GUI.
+Architecture diagram updated: this section and the Skill catalog path above. Responsible developer confirmation: root,
+2026-07-31.

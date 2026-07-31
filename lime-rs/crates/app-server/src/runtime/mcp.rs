@@ -72,7 +72,7 @@ impl RuntimeCore {
     pub async fn login_mcp_server_oauth(
         &self,
         params: McpServerOauthLoginParams,
-    ) -> Result<McpServerOauthLoginResponse, RuntimeCoreError> {
+    ) -> Result<lime_mcp::McpOAuthLoginHandle, RuntimeCoreError> {
         self.app_data_source.login_mcp_server_oauth(params).await
     }
 

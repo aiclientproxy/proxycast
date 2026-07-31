@@ -138,6 +138,7 @@ describe("AssistantFirstTokenRuntimeStatus", () => {
     );
 
     expect(indicator).not.toBeNull();
+    expect(indicator?.getAttribute("data-status")).toBe("context");
     expect(indicator?.textContent).toContain("正在准备回复");
     expect(indicator?.textContent).not.toContain(
       "正在整理会话信息和可用资料。",

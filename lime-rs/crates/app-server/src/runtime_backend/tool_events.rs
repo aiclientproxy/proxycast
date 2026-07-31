@@ -174,19 +174,13 @@ fn update_plan_event_from_completed_tool(event: &RuntimeAgentEvent) -> Option<Ru
     };
     let tool = canonical_tool_item(event)?;
     let output = tool.output?;
-    if !tool.item.status.is_terminal() || output.error.is_some() {
+    if tool.name != tool_runtime::update_plan::UPDATE_PLAN_NAME
+        || !tool.item.status.is_terminal()
+        || output.error.is_some()
+    {
         return None;
     }
-    let metadata = tool
-        .item
-        .metadata
-        .as_object()
-        .map(|metadata| metadata.clone().into_iter().collect());
-    plan_events::plan_final_event_from_update_plan_result(
-        tool.call_id,
-        output.text.as_deref().unwrap_or_default(),
-        metadata.as_ref(),
-    )
+    plan_events::turn_plan_updated_event_from_update_plan_result(tool.call_id, output)
 }
 
 fn runtime_event_type_for_agent_event(event: &RuntimeAgentEvent, raw_type: &str) -> &'static str {
@@ -208,6 +202,7 @@ fn provider_stream_runtime_event_type(runtime_event_kind: &str) -> &'static str 
 struct CanonicalToolItem<'a> {
     item: &'a ThreadItem,
     call_id: &'a str,
+    name: &'a str,
     output: Option<&'a ToolOutput>,
 }
 
@@ -219,7 +214,10 @@ fn canonical_tool_item(event: &RuntimeAgentEvent) -> Option<CanonicalToolItem<'_
         _ => return None,
     };
     let ThreadItemPayload::Tool {
-        call_id, output, ..
+        call_id,
+        name,
+        output,
+        ..
     } = &item.payload
     else {
         return None;
@@ -227,6 +225,7 @@ fn canonical_tool_item(event: &RuntimeAgentEvent) -> Option<CanonicalToolItem<'_
     Some(CanonicalToolItem {
         item,
         call_id,
+        name,
         output: output.as_ref(),
     })
 }
@@ -717,7 +716,7 @@ mod tests {
     }
 
     #[test]
-    fn canonical_update_plan_completion_emits_plan_final_fact() {
+    fn canonical_update_plan_completion_emits_turn_plan_updated_fact() {
         let events = runtime_events_from_agent_event(&canonical_tool_event(
             "tool-plan",
             "update_plan",
@@ -726,18 +725,16 @@ mod tests {
                 success: true,
                 output: "Plan updated".to_string(),
                 error: None,
-                structured_content: None,
+                structured_content: Some(json!({
+                    "tool_family": "update_plan",
+                    "explanation": "开始实现",
+                    "plan": [
+                        { "step": "读现状", "status": "completed" },
+                        { "step": "打通主链", "status": "in_progress" }
+                    ]
+                })),
                 images: None,
-                metadata: Some(HashMap::from([
-                    (
-                        "plan".to_string(),
-                        json!([
-                            { "step": "读现状", "status": "completed" },
-                            { "step": "打通主链", "status": "in_progress" }
-                        ]),
-                    ),
-                    ("explanation".to_string(), json!("开始实现")),
-                ])),
+                metadata: None,
             }),
         ))
         .expect("update_plan item completion should emit");
@@ -747,9 +744,34 @@ mod tests {
                 .iter()
                 .map(|event| event.event_type.as_str())
                 .collect::<Vec<_>>(),
-            vec!["item.completed", "plan.final"]
+            vec!["item.completed", "turn.plan.updated"]
         );
-        assert_eq!(events[1].payload["revisionId"], "update_plan:tool-plan");
+        assert_eq!(events[1].payload["toolCallId"], "tool-plan");
+        assert_eq!(events[1].payload["explanation"], "开始实现");
+        assert_eq!(events[1].payload["plan"][1]["status"], "in_progress");
+    }
+
+    #[test]
+    fn non_update_plan_completion_does_not_emit_turn_plan_updated_fact() {
+        let events = runtime_events_from_agent_event(&canonical_tool_event(
+            "tool-other",
+            "other_tool",
+            Some(json!({})),
+            Some(AgentToolResult {
+                success: true,
+                output: "Plan updated".to_string(),
+                error: None,
+                structured_content: Some(json!({
+                    "plan": [{ "step": "不应投影", "status": "completed" }]
+                })),
+                images: None,
+                metadata: None,
+            }),
+        ))
+        .expect("other tool item completion should emit");
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, "item.completed");
     }
 
     #[test]

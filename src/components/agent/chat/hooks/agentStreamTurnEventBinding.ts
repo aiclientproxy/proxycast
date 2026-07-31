@@ -9,7 +9,10 @@ import type {
   AgentExecutionStrategy,
   AgentSessionExecutionRuntime,
 } from "@/lib/api/agentExecutionRuntime";
-import type { AutoContinueRequestPayload } from "@/lib/api/agentRuntime/sessionTypes";
+import type {
+  AgentTodoItem,
+  AutoContinueRequestPayload,
+} from "@/lib/api/agentRuntime/sessionTypes";
 import { logAgentDebug } from "@/lib/agentDebug";
 import type { ActionRequired, Message } from "../types";
 import { handleTurnStreamEvent } from "./agentStreamRuntimeHandler";
@@ -113,31 +116,6 @@ function buildAgentEventPerformanceTrace(params: {
   };
 }
 
-function readRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function readRuntimeErrorMessage(payload: unknown): string {
-  const root = readRecord(payload);
-  const params = readRecord(root?.params);
-  const event = readRecord(params?.event);
-  const eventPayload = readRecord(event?.payload);
-  const directPayload = readRecord(root?.payload);
-  const source = eventPayload ?? directPayload ?? params ?? root;
-  const message =
-    source?.message ??
-    source?.errorMessage ??
-    source?.error_message ??
-    source?.error ??
-    event?.event_type ??
-    root?.type;
-  return typeof message === "string" && message.trim()
-    ? message.trim()
-    : "Runtime error";
-}
-
 function isFinalAgentMessageSnapshotEvent(event: AgentEvent): boolean {
   return (
     (event.type === "item_started" ||
@@ -211,6 +189,7 @@ interface RegisterAgentStreamTurnEventBindingOptions {
   setPendingActions: Dispatch<SetStateAction<ActionRequired[]>>;
   getThreadItems?: () => readonly AgentThreadItem[];
   setThreadItems: Dispatch<SetStateAction<AgentThreadItem[]>>;
+  setTodoItems?: Dispatch<SetStateAction<AgentTodoItem[]>>;
   setThreadTurns: Dispatch<SetStateAction<AgentThreadTurn[]>>;
   setCurrentTurnId: Dispatch<SetStateAction<string | null>>;
   setExecutionRuntime: Dispatch<
@@ -257,6 +236,7 @@ export async function registerAgentStreamTurnEventBinding(
     setPendingActions,
     getThreadItems,
     setThreadItems,
+    setTodoItems,
     setThreadTurns,
     setCurrentTurnId,
     setExecutionRuntime,
@@ -543,6 +523,7 @@ export async function registerAgentStreamTurnEventBinding(
       setPendingActions,
       getThreadItems,
       setThreadItems,
+      setTodoItems,
       setThreadTurns,
       setCurrentTurnId,
       setExecutionRuntime,
@@ -683,10 +664,6 @@ export async function registerAgentStreamTurnEventBinding(
         );
       }
       if (!data) {
-        if (eventType === "runtime_error" || eventType === "runtime.error") {
-          dispatchSyntheticError(readRuntimeErrorMessage(event.payload));
-          return;
-        }
         if (!terminalRecoveryPollStarted) {
           clearDeferredRecoveryPoll();
         }
@@ -821,6 +798,7 @@ export async function registerAgentStreamTurnEventBinding(
         setPendingActions,
         getThreadItems,
         setThreadItems,
+        setTodoItems,
         setThreadTurns,
         setCurrentTurnId,
         setExecutionRuntime,

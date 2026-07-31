@@ -41,9 +41,3 @@ pub struct McpResourceUpdatedPayload {
     pub server_name: String,
     pub uri: String,
 }
-
-/// OAuth 授权完成事件
-#[derive(Debug, Clone, Serialize)]
-pub struct McpOAuthCompletedPayload {
-    pub server_name: String,
-}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "error": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "threadId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "name",
+    "success",
+    "threadId"
+  ],
+  "title": "McpServerOauthLoginCompletedNotification",
+  "type": "object"
+}

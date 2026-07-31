@@ -111,6 +111,7 @@ import {
   type TextDeltaAgentEvent,
 } from "./agentStreamTextDeltaLifecycle";
 import { shouldApplyAgentStreamTerminalEvent } from "./agentStreamTerminalTurnGuard";
+import { buildAgentStreamTypedErrorPlan } from "./agentStreamTypedErrorController";
 import {
   applyAgentStreamConversationProjection,
   reconcileAgentStreamProjectionItems,
@@ -189,6 +190,7 @@ export function handleTurnStreamEvent({
   setPendingActions,
   getThreadItems,
   setThreadItems,
+  setTodoItems,
   setThreadTurns,
   setCurrentTurnId,
   setExecutionRuntime,
@@ -1057,6 +1059,16 @@ export function handleTurnStreamEvent({
       activateStream();
       break;
 
+    case "turn_plan_updated":
+      activateStream();
+      setTodoItems?.(
+        data.plan.map((item) => ({
+          content: item.step,
+          status: item.status,
+        })),
+      );
+      break;
+
     case "plan_delta":
     case "plan_final": {
       activateStream();
@@ -1534,6 +1546,35 @@ export function handleTurnStreamEvent({
 
     case "error": {
       flushPendingTextRender();
+      const typedErrorPlan = buildAgentStreamTypedErrorPlan({
+        event: data,
+        executionStrategy: effectiveExecutionStrategy,
+        soulCopy,
+      });
+      if (typedErrorPlan) {
+        activateStream();
+        const runtimeStatusPlan = buildAgentStreamRuntimeStatusApplyPlan({
+          status: typedErrorPlan.status,
+          updatedAt: new Date().toISOString(),
+        });
+        setThreadItems((prev) => {
+          const nextItems = applyAgentStreamRuntimeStatusToThreadItems({
+            activeSessionId,
+            items: prev,
+            pendingItemKey,
+            plan: runtimeStatusPlan,
+          });
+          return nextItems ?? prev;
+        });
+        setMessages((prev) =>
+          applyAgentStreamRuntimeStatusToMessages({
+            assistantMsgId,
+            messages: prev,
+            plan: runtimeStatusPlan,
+          }),
+        );
+        break;
+      }
       if (isRuntimePermissionConfirmationWaitMessage(data.message)) {
         clearOptimisticItem();
         finishRequestLog(requestState, {

@@ -3,7 +3,7 @@ use super::NoopAppDataSource;
 use super::RuntimeCoreError;
 use app_server_protocol::*;
 use async_trait::async_trait;
-use lime_mcp::McpRuntimeServerSpec;
+use lime_mcp::{McpOAuthLoginHandle, McpRuntimeServerSpec};
 
 #[async_trait]
 pub trait McpAppDataSource: Send + Sync {
@@ -79,7 +79,7 @@ pub trait McpAppDataSource: Send + Sync {
     async fn login_mcp_server_oauth(
         &self,
         _params: McpServerOauthLoginParams,
-    ) -> Result<McpServerOauthLoginResponse, RuntimeCoreError> {
+    ) -> Result<McpOAuthLoginHandle, RuntimeCoreError> {
         Err(requires_current("mcpServer/oauth/login"))
     }
 

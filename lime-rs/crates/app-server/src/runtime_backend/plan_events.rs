@@ -1,8 +1,6 @@
 use crate::RuntimeEvent;
+use agent_protocol::ToolOutput;
 use serde_json::{json, Value};
-use std::collections::HashMap;
-
-const UPDATE_PLAN_ACK: &str = "Plan updated";
 
 pub fn plan_delta_event(text: impl Into<String>, revision_id: impl Into<String>) -> RuntimeEvent {
     let text = text.into();
@@ -68,52 +66,31 @@ pub fn proposed_plan_final_event(
     event
 }
 
-pub fn plan_final_event_from_update_plan_result(
+pub fn turn_plan_updated_event_from_update_plan_result(
     tool_id: &str,
-    output: &str,
-    metadata: Option<&HashMap<String, Value>>,
+    output: &ToolOutput,
 ) -> Option<RuntimeEvent> {
-    if output.trim() != UPDATE_PLAN_ACK {
+    if output.text.as_deref()?.trim() != tool_runtime::update_plan::PLAN_UPDATED_MESSAGE {
         return None;
     }
-    let metadata = metadata?;
-    let plan = metadata.get("plan")?.clone();
-    let text = plan_text_from_plan_value(&plan)?;
-    let revision_id = format!("update_plan:{tool_id}");
-    let mut event = plan_final_event(text, revision_id, Some(plan));
-    if let Some(payload_object) = event.payload.as_object_mut() {
-        payload_object.insert("toolCallId".to_string(), Value::String(tool_id.to_string()));
-        payload_object.insert(
-            "source".to_string(),
-            Value::String("update_plan".to_string()),
-        );
-        if let Some(explanation) = metadata.get("explanation") {
-            if !explanation.is_null() {
-                payload_object.insert("explanation".to_string(), explanation.clone());
-            }
-        }
-    }
-    Some(event)
-}
-
-fn plan_text_from_plan_value(plan: &Value) -> Option<String> {
-    let lines = plan
-        .as_array()?
-        .iter()
-        .filter_map(|item| {
-            let step = item.get("step")?.as_str()?.trim();
-            if step.is_empty() {
-                return None;
-            }
-            let status = item
-                .get("status")
-                .and_then(Value::as_str)
-                .unwrap_or("pending");
-            let marker = if status == "completed" { "[x]" } else { "[ ]" };
-            Some(format!("- {marker} {step}"))
-        })
-        .collect::<Vec<_>>();
-    (!lines.is_empty()).then(|| lines.join("\n"))
+    let structured_content = output.structured_content.as_ref()?.as_object()?;
+    let plan = serde_json::from_value::<Vec<tool_runtime::update_plan::PlanStep>>(
+        structured_content.get("plan")?.clone(),
+    )
+    .ok()?;
+    let explanation = match structured_content.get("explanation") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(explanation)) => Some(explanation.clone()),
+        Some(_) => return None,
+    };
+    Some(RuntimeEvent::new(
+        "turn.plan.updated",
+        json!({
+            "toolCallId": tool_id,
+            "explanation": explanation,
+            "plan": plan,
+        }),
+    ))
 }
 
 fn plan_value_from_markdown_text(text: &str) -> Option<Value> {
@@ -190,29 +167,41 @@ mod tests {
     }
 
     #[test]
-    fn builds_update_plan_final_event_from_tool_metadata() {
-        let event = plan_final_event_from_update_plan_result(
+    fn builds_turn_plan_updated_event_from_canonical_tool_output() {
+        let event = turn_plan_updated_event_from_update_plan_result(
             "tool-plan-1",
-            "Plan updated",
-            Some(&HashMap::from([
-                (
-                    "plan".to_string(),
-                    json!([
+            &ToolOutput {
+                text: Some("Plan updated".to_string()),
+                structured_content: Some(json!({
+                    "tool_family": "update_plan",
+                    "explanation": "继续实现",
+                    "plan": [
                         { "step": "读现状", "status": "completed" },
                         { "step": "补主链", "status": "in_progress" }
-                    ]),
-                ),
-                ("explanation".to_string(), json!("继续实现")),
-            ])),
+                    ]
+                })),
+                ..ToolOutput::default()
+            },
         )
-        .expect("update_plan result should become plan.final");
+        .expect("update_plan result should become turn.plan.updated");
 
-        assert_eq!(event.event_type, "plan.final");
-        assert_eq!(event.payload["revisionId"], "update_plan:tool-plan-1");
+        assert_eq!(event.event_type, "turn.plan.updated");
         assert_eq!(event.payload["toolCallId"], "tool-plan-1");
-        assert_eq!(event.payload["source"], "update_plan");
         assert_eq!(event.payload["explanation"], "继续实现");
-        assert_eq!(event.payload["text"], "- [x] 读现状\n- [ ] 补主链");
         assert_eq!(event.payload["plan"][1]["status"], "in_progress");
+    }
+
+    #[test]
+    fn ignores_update_plan_ack_without_canonical_structured_output() {
+        let event = turn_plan_updated_event_from_update_plan_result(
+            "tool-plan-1",
+            &ToolOutput {
+                text: Some("Plan updated".to_string()),
+                structured_content: None,
+                ..ToolOutput::default()
+            },
+        );
+
+        assert!(event.is_none());
     }
 }

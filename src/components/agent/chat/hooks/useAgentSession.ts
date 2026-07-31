@@ -2643,6 +2643,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     sessionIdRef,
     threadRead,
     todoItems,
+    setTodoItems,
     workspaceId,
   ]);
 
@@ -3467,6 +3468,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     currentTurnId,
     setCurrentTurnId,
     todoItems,
+    setTodoItems,
     queuedTurnCount,
     threadRead,
     getThreadIdForSubmit,

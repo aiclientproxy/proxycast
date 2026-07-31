@@ -6,10 +6,12 @@ use serde_json::Value;
 use std::collections::HashSet;
 
 mod command;
+pub(crate) mod error;
 mod file_change;
 mod mcp;
 mod plan;
 mod thread_status;
+mod turn_plan;
 mod warning;
 
 enum EventProjection {
@@ -31,6 +33,7 @@ pub(crate) struct V2NotificationProjector {
     completed_file_change_item_ids: HashSet<String>,
     started_mcp_item_ids: HashSet<String>,
     completed_mcp_item_ids: HashSet<String>,
+    terminal_error_turn_ids: HashSet<String>,
     thread_status: thread_status::ThreadStatusProjector,
 }
 
@@ -54,12 +57,12 @@ impl V2NotificationProjector {
             "turn.completed" => {
                 return self.project_turn_completed_with_usage(event, v2::TurnStatus::Completed)
             }
-            "turn.failed" => {
-                return self.project_turn_completed_with_usage(event, v2::TurnStatus::Failed)
-            }
+            "turn.failed" => return self.project_turn_failed(event),
             "turn.canceled" => {
                 return self.project_turn_completed_with_usage(event, v2::TurnStatus::Interrupted)
             }
+            "plugin_worker.retry" => return self.project_error(event, Some(true)),
+            "runtime.error" => return self.project_error(event, None),
             "action.required" => {
                 return EventProjection::Direct(
                     self.thread_status
@@ -120,6 +123,7 @@ impl V2NotificationProjector {
                     event,
                 )
             }
+            "turn.plan.updated" => return turn_plan::project(event),
             "tool.progress" => {
                 return mcp::project_progress(
                     &self.started_mcp_item_ids,
@@ -230,6 +234,42 @@ impl V2NotificationProjector {
             notifications.push(usage_notification.into());
         }
         notifications.push(turn_notification.into());
+        EventProjection::Direct(notifications)
+    }
+
+    fn project_error(
+        &mut self,
+        event: &AgentEvent,
+        forced_will_retry: Option<bool>,
+    ) -> EventProjection {
+        let Some(projected) = error::project(event, forced_will_retry) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        if !projected.will_retry
+            && !self
+                .terminal_error_turn_ids
+                .insert(projected.turn_id.clone())
+        {
+            return EventProjection::Direct(Vec::new());
+        }
+        EventProjection::Direct(vec![projected.notification.into()])
+    }
+
+    fn project_turn_failed(&mut self, event: &AgentEvent) -> EventProjection {
+        let Some(turn_id) = required_event_id(event.turn_id.as_deref()) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let completion = self.project_turn_completed_with_usage(event, v2::TurnStatus::Failed);
+        let EventProjection::Direct(mut notifications) = completion else {
+            return completion;
+        };
+        if self.terminal_error_turn_ids.remove(&turn_id) {
+            return EventProjection::Direct(notifications);
+        }
+        let Some(projected) = error::project(event, Some(false)) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        notifications.insert(0, projected.notification.into());
         EventProjection::Direct(notifications)
     }
 
@@ -880,35 +920,44 @@ mod tests {
             (
                 "turn.completed",
                 json!({"turn": canonical_turn("completed")}),
-                "turn/completed",
+                vec!["turn/completed"],
             ),
             (
                 "turn.failed",
-                json!({"turn": canonical_turn("failed")}),
-                "turn/completed",
+                json!({
+                    "message": "provider failed",
+                    "turn": canonical_turn("failed")
+                }),
+                vec!["error", "turn/completed"],
             ),
             (
                 "turn.canceled",
                 json!({"turn": canonical_turn("interrupted")}),
-                "turn/completed",
+                vec!["turn/completed"],
             ),
             (
                 "item.started",
                 json!({"item": canonical_item("inProgress")}),
-                "item/started",
+                vec!["item/started"],
             ),
             (
                 "item.completed",
                 json!({"item": canonical_item("completed")}),
-                "item/completed",
+                vec!["item/completed"],
             ),
         ];
-        for (event_type, payload, method) in cases {
+        for (event_type, payload, methods) in cases {
             let mut projector = V2NotificationProjector::default();
             let notifications = projector
                 .project(event(event_type, payload))
                 .expect("direct lifecycle");
-            assert_eq!(notifications[0].method, method);
+            assert_eq!(
+                notifications
+                    .iter()
+                    .map(|notification| notification.method.as_str())
+                    .collect::<Vec<_>>(),
+                methods
+            );
         }
     }
 

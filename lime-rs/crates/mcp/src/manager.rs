@@ -38,7 +38,7 @@ use tracing::{debug, info, warn};
 use crate::client::McpClientWrapper;
 use crate::environment::McpEnvironmentRegistry;
 use crate::events::*;
-use crate::oauth::{McpOAuthLoginResponse, McpOAuthRegistry};
+use crate::oauth::{McpOAuthLoginHandle, McpOAuthRegistry};
 use crate::types::*;
 
 mod lifecycle;
@@ -373,9 +373,9 @@ impl McpClientManager {
         config: &McpServerConfig,
         scopes: Option<Vec<String>>,
         timeout_secs: Option<u64>,
-    ) -> Result<McpOAuthLoginResponse, McpError> {
+    ) -> Result<McpOAuthLoginHandle, McpError> {
         self.oauth_registry
-            .start_login(name, config, scopes, timeout_secs, self.emitter.clone())
+            .start_login(name, config, scopes, timeout_secs)
             .await
     }
 

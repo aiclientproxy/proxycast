@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { skillsChangedServerNotification } from "@limecloud/app-server-client";
 import { logAgentDebug } from "@/lib/agentDebug";
+import { subscribeAppServerNotifications } from "@/lib/api/appServerEventBus";
 import { skillsApi, type Skill } from "@/lib/api/skills";
 import { scheduleMinimumDelayIdleTask } from "@/lib/utils/scheduleMinimumDelayIdleTask";
 
@@ -47,7 +49,7 @@ export function useLimeSkills(options: UseLimeSkillsOptions = {}) {
       try {
         const loadedSkills = includeRemote
           ? await skillsApi.getAll("lime")
-          : await skillsApi.getLocal("lime");
+          : await skillsApi.getRuntimeCatalog();
 
         if (latestRequestIdRef.current !== requestId) {
           return loadedSkills;
@@ -107,6 +109,34 @@ export function useLimeSkills(options: UseLimeSkillsOptions = {}) {
     void refreshSkills(false);
     return;
   }, [autoLoad, deferredDelayMs, refreshSkills]);
+
+  useEffect(() => {
+    return subscribeAppServerNotifications({
+      onNotifications: (notifications) => {
+        const changedCount = notifications.filter(
+          (notification) =>
+            skillsChangedServerNotification(notification) !== undefined,
+        ).length;
+        if (changedCount > 0) {
+          logAgentDebug(
+            logScopeRef.current,
+            "skillsChanged.received",
+            { method: "skills/changed", count: changedCount },
+            { consoleOnly: true },
+          );
+          void refreshSkills(false);
+        }
+      },
+      onError: (error) => {
+        logAgentDebug(
+          logScopeRef.current,
+          "skillsChanged.subscription.error",
+          { error },
+          { level: "warn" },
+        );
+      },
+    });
+  }, [refreshSkills]);
 
   useEffect(() => {
     return () => {

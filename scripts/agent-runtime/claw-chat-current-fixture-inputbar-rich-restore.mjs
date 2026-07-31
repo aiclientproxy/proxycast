@@ -69,7 +69,12 @@ function recordRichRestoreStep(summary, stage, value) {
   );
 }
 
-export async function waitForRichRestoreSnapshot(page, options, predicate, label) {
+export async function waitForRichRestoreSnapshot(
+  page,
+  options,
+  predicate,
+  label,
+) {
   const startedAt = Date.now();
   let lastSnapshot = null;
   while (Date.now() - startedAt < options.timeoutMs) {
@@ -84,9 +89,7 @@ export async function waitForRichRestoreSnapshot(page, options, predicate, label
     }
     await sleep(options.intervalMs);
   }
-  throw new Error(
-    `${label}: ${JSON.stringify(sanitizeJson(lastSnapshot))}`,
-  );
+  throw new Error(`${label}: ${JSON.stringify(sanitizeJson(lastSnapshot))}`);
 }
 
 async function evaluateRichRestoreSnapshot(page) {
@@ -100,11 +103,19 @@ async function evaluateRichRestoreSnapshot(page) {
       sessionId,
       skillName,
     }) => {
+      const normalizeMentionText = (value) =>
+        String(value || "")
+          .trim()
+          .toLocaleLowerCase()
+          .replace(/[\s_-]+/g, "");
+      const expectedSkillName = normalizeMentionText(skillName);
       const textareaCandidates = Array.from(
         document.querySelectorAll('textarea[name="agent-chat-message"]'),
       ).filter((node) => node instanceof HTMLTextAreaElement);
       const textarea =
-        textareaCandidates.find((node) => node.dataset.sessionId === sessionId) ??
+        textareaCandidates.find(
+          (node) => node.dataset.sessionId === sessionId,
+        ) ??
         textareaCandidates[0] ??
         null;
       const container = textarea?.closest(
@@ -114,11 +125,11 @@ async function evaluateRichRestoreSnapshot(page) {
       const style = textarea ? window.getComputedStyle(textarea) : null;
       const textareaVisible = Boolean(
         textarea &&
-          rect &&
-          rect.width > 16 &&
-          rect.height > 16 &&
-          style?.visibility !== "hidden" &&
-          style?.display !== "none",
+        rect &&
+        rect.width > 16 &&
+        rect.height > 16 &&
+        style?.visibility !== "hidden" &&
+        style?.display !== "none",
       );
       const buttons = Array.from(document.querySelectorAll("button")).map(
         (button) => ({
@@ -221,7 +232,9 @@ async function evaluateRichRestoreSnapshot(page) {
         imageRestored: imagePreviewCount > 0,
         skillBadgeCount: skillBadges.length,
         skillBadgeTexts: skillBadges,
-        skillRestored: skillBadges.some((text) => text.includes(skillName)),
+        skillRestored: skillBadges.some((text) =>
+          normalizeMentionText(text).includes(expectedSkillName),
+        ),
         stopButtonVisible,
         sendButtonExists: Boolean(sendButton),
         sendButtonDisabled:
@@ -317,8 +330,7 @@ async function dropPathReference(page, options) {
           (node) =>
             node instanceof HTMLTextAreaElement &&
             node.dataset.sessionId === sessionId,
-        ) ??
-        document.querySelector('textarea[name="agent-chat-message"]');
+        ) ?? document.querySelector('textarea[name="agent-chat-message"]');
       const target =
         textarea?.closest('[data-testid="inputbar-core-container"]') ??
         textarea;
@@ -418,23 +430,46 @@ async function selectCapabilityReportSkill(page, options) {
     `textarea[name="agent-chat-message"][data-session-id="${richRestoreSessionId}"]`,
   );
   await textarea.fill("/capability-report");
+  let lastSelectionResult = null;
   const selected = await waitForRichRestoreSnapshot(
     page,
     { ...options, timeoutMs: Math.min(options.timeoutMs, 30_000) },
     async () => {
       const result = await page.evaluate((skillName) => {
+        const normalizeMentionText = (value) =>
+          String(value || "")
+            .trim()
+            .toLocaleLowerCase()
+            .replace(/[\s_-]+/g, "");
+        const expectedSkillName = normalizeMentionText(skillName);
         const popover = document.querySelector(
           '[data-testid="mention-popover-content"]',
         );
-        if (!popover || !popover.textContent?.includes(skillName)) {
-          return { clicked: false, reason: "skill-not-visible" };
+        if (
+          !popover ||
+          !normalizeMentionText(popover.textContent).includes(expectedSkillName)
+        ) {
+          return {
+            clicked: false,
+            reason: "skill-not-visible",
+            candidates: popover
+              ? Array.from(
+                  popover.querySelectorAll('[cmdk-item], [role="option"]'),
+                )
+                  .map((node) => String(node.textContent || "").trim())
+                  .filter(Boolean)
+                  .slice(0, 8)
+              : [],
+          };
         }
         const items = Array.from(
           popover.querySelectorAll('[cmdk-item], [role="option"]'),
         ).filter(
           (node) =>
             node instanceof HTMLElement &&
-            (node.textContent || "").includes(skillName) &&
+            normalizeMentionText(node.textContent).includes(
+              expectedSkillName,
+            ) &&
             node.getAttribute("aria-disabled") !== "true" &&
             !(node instanceof HTMLButtonElement && node.disabled),
         );
@@ -474,15 +509,16 @@ async function selectCapabilityReportSkill(page, options) {
           candidateCount: items.length,
         };
       }, INPUTBAR_RICH_RESTORE_SKILL_NAME);
+      lastSelectionResult = sanitizeJson(result);
       return result?.clicked === true;
     },
     "Inputbar mention 面板未选中 Capability Report 技能",
   ).catch(async (error) => {
     const debug = await evaluateRichRestoreSnapshot(page);
     throw new Error(
-      `${error instanceof Error ? error.message : String(error)}; snapshot=${JSON.stringify(
-        sanitizeJson(debug),
-      )}`,
+      `${error instanceof Error ? error.message : String(error)}; selection=${JSON.stringify(
+        lastSelectionResult,
+      )}; snapshot=${JSON.stringify(sanitizeJson(debug))}`,
     );
   });
   void selected;
@@ -682,14 +718,12 @@ export async function runInputbarRichRestoreScenario({
 
   return sanitizeJson({
     inputbarRichRestoreSkill: summary.inputbarRichRestoreSkill,
-    inputbarRichRestoreDraftPrepared:
-      summary.inputbarRichRestoreDraftPrepared,
+    inputbarRichRestoreDraftPrepared: summary.inputbarRichRestoreDraftPrepared,
     inputbarRichRestoreInputSend: summary.inputbarRichRestoreInputSend,
     inputbarRichRestoreBackendTurnStart:
       summary.inputbarRichRestoreBackendTurnStart,
     inputbarRichRestoreStopClick: summary.inputbarRichRestoreStopClick,
-    inputbarRichRestoreBackendCancel:
-      summary.inputbarRichRestoreBackendCancel,
+    inputbarRichRestoreBackendCancel: summary.inputbarRichRestoreBackendCancel,
     inputbarRichRestoreGuiCanceled: summary.inputbarRichRestoreGuiCanceled,
     inputbarRichRestoreReadModelCanceled:
       summary.inputbarRichRestoreReadModelCanceled,

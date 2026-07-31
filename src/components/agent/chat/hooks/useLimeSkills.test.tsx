@@ -6,12 +6,19 @@ import { useLimeSkills } from "./useLimeSkills";
 
 const mockGetLocal = vi.hoisted(() => vi.fn());
 const mockGetAll = vi.hoisted(() => vi.fn());
+const mockGetRuntimeCatalog = vi.hoisted(() => vi.fn());
 const mockLogAgentDebug = vi.hoisted(() => vi.fn());
+const mockSubscribeAppServerNotifications = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/api/appServerEventBus", () => ({
+  subscribeAppServerNotifications: mockSubscribeAppServerNotifications,
+}));
 
 vi.mock("@/lib/api/skills", () => ({
   skillsApi: {
     getLocal: mockGetLocal,
     getAll: mockGetAll,
+    getRuntimeCatalog: mockGetRuntimeCatalog,
   },
 }));
 
@@ -130,7 +137,8 @@ describe("useLimeSkills", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     vi.clearAllMocks();
     vi.useFakeTimers();
-    mockGetLocal.mockResolvedValue([
+    mockSubscribeAppServerNotifications.mockReturnValue(vi.fn());
+    mockGetRuntimeCatalog.mockResolvedValue([
       {
         key: "local-skill",
         name: "本地技能",
@@ -166,14 +174,14 @@ describe("useLimeSkills", () => {
       });
       await flushEffects();
 
-      expect(mockGetLocal).not.toHaveBeenCalled();
+      expect(mockGetRuntimeCatalog).not.toHaveBeenCalled();
 
       act(() => {
         vi.advanceTimersByTime(1);
       });
       await flushEffects();
 
-      expect(mockGetLocal).toHaveBeenCalledWith("lime");
+      expect(mockGetRuntimeCatalog).toHaveBeenCalledOnce();
       expect(harness.getValue().skills[0]?.key).toBe("local-skill");
       expect(mockLogAgentDebug).toHaveBeenCalledWith(
         "TestScope",
@@ -191,7 +199,7 @@ describe("useLimeSkills", () => {
     try {
       await flushEffects();
 
-      expect(mockGetLocal).toHaveBeenCalledWith("lime");
+      expect(mockGetRuntimeCatalog).toHaveBeenCalledOnce();
 
       await act(async () => {
         await harness.getValue().refreshSkills(true);
@@ -209,15 +217,57 @@ describe("useLimeSkills", () => {
 
     try {
       await flushEffects();
-      expect(mockGetLocal).toHaveBeenCalledTimes(1);
+      expect(mockGetRuntimeCatalog).toHaveBeenCalledTimes(1);
 
       harness.rerender();
       await flushEffects();
 
-      expect(mockGetLocal).toHaveBeenCalledTimes(1);
+      expect(mockGetRuntimeCatalog).toHaveBeenCalledTimes(1);
       expect(harness.getValue().skills[0]?.key).toBe("local-skill");
     } finally {
       harness.unmount();
     }
+  });
+
+  it("typed skills/changed 应重新读取本地 catalog，畸形 payload 不触发", async () => {
+    let onNotifications:
+      | ((notifications: Array<{ method: string; params: unknown }>) => void)
+      | undefined;
+    const unsubscribe = vi.fn();
+    mockSubscribeAppServerNotifications.mockImplementationOnce(
+      (subscription) => {
+        onNotifications = subscription.onNotifications;
+        return unsubscribe;
+      },
+    );
+    const harness = mountHook({ autoLoad: false });
+
+    try {
+      expect(mockGetRuntimeCatalog).not.toHaveBeenCalled();
+      act(() => {
+        onNotifications?.([
+          { method: "skills/changed", params: { path: "/private/skill" } },
+        ]);
+      });
+      await flushEffects();
+      expect(mockGetRuntimeCatalog).not.toHaveBeenCalled();
+
+      act(() => {
+        onNotifications?.([{ method: "skills/changed", params: {} }]);
+      });
+      await flushEffects();
+      expect(mockGetRuntimeCatalog).toHaveBeenCalledOnce();
+      expect(mockGetLocal).not.toHaveBeenCalled();
+      expect(mockGetAll).not.toHaveBeenCalled();
+      expect(mockLogAgentDebug).toHaveBeenCalledWith(
+        "useLimeSkills",
+        "skillsChanged.received",
+        { method: "skills/changed", count: 1 },
+        { consoleOnly: true },
+      );
+    } finally {
+      harness.unmount();
+    }
+    expect(unsubscribe).toHaveBeenCalledOnce();
   });
 });

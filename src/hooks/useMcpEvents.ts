@@ -1,4 +1,6 @@
+import { mcpServerOauthLoginCompletedServerNotification } from "@limecloud/app-server-client";
 import { safeListen } from "@/lib/api/bridgeEvents";
+import { subscribeAppServerNotifications } from "@/lib/api/appServerEventBus";
 import type { UnlistenFn } from "@/lib/desktop-host/event";
 import type { McpServerCapabilities, McpToolDefinition } from "@/lib/api/mcp";
 
@@ -29,10 +31,6 @@ interface McpResourceUpdatedPayload {
   uri: string;
 }
 
-interface McpOAuthCompletedPayload {
-  server_name: string;
-}
-
 export interface McpServerConnectionState {
   phase: "idle" | "starting" | "stopping" | "reconnecting";
   error: string | null;
@@ -52,9 +50,9 @@ export interface SetupMcpEventListenersOptions {
       phase: McpServerConnectionState["phase"];
     },
   ) => void;
-  refreshServers: () => void;
-  refreshTools: () => void;
-  refreshResources: () => void;
+  refreshServers: () => void | Promise<void>;
+  refreshTools: () => void | Promise<void>;
+  refreshResources: () => void | Promise<void>;
   setError: (error: string) => void;
   setTools: (tools: McpToolDefinition[]) => void;
   setOAuthCompletion: (completion: McpOAuthCompletionState) => void;
@@ -73,6 +71,50 @@ export async function setupMcpEventListeners({
   const unlisteners: UnlistenFn[] = [];
 
   try {
+    // 必须先同步订阅；否则快速 OAuth 回调可能在 Desktop listener 就绪前被排空。
+    const unlistenOAuthCompleted = subscribeAppServerNotifications({
+      onNotifications: (notifications) => {
+        for (const message of notifications) {
+          const notification =
+            mcpServerOauthLoginCompletedServerNotification(message);
+          if (!notification) {
+            continue;
+          }
+          const { error, name, success } = notification.params;
+          if (success) {
+            console.log("[useMcp] OAuth 授权已完成:", name);
+            updateServerConnectionState(name, {
+              phase: "idle",
+            });
+            if (isMounted()) {
+              setOAuthCompletion({
+                serverName: name,
+                completedAt: Date.now(),
+              });
+            }
+          } else {
+            console.error("[useMcp] OAuth 授权失败:", name, error);
+            updateServerConnectionState(name, {
+              phase: "idle",
+              error: error ?? null,
+            });
+          }
+          const refresh = Promise.all([
+            Promise.resolve(refreshServers()),
+            Promise.resolve(refreshTools()),
+          ]);
+          if (!success && error) {
+            void refresh.then(() => {
+              if (isMounted()) {
+                setError(`${name}: ${error}`);
+              }
+            });
+          }
+        }
+      },
+    });
+    unlisteners.push(unlistenOAuthCompleted);
+
     const unlistenStarted = await safeListen<McpServerStartedPayload>(
       "mcp:server_started",
       (event) => {
@@ -150,25 +192,6 @@ export async function setupMcpEventListeners({
       },
     );
     unlisteners.push(unlistenResource);
-
-    const unlistenOAuthCompleted = await safeListen<McpOAuthCompletedPayload>(
-      "mcp:oauth_completed",
-      (event) => {
-        console.log("[useMcp] OAuth 授权已完成:", event.payload.server_name);
-        updateServerConnectionState(event.payload.server_name, {
-          phase: "idle",
-        });
-        if (isMounted()) {
-          setOAuthCompletion({
-            serverName: event.payload.server_name,
-            completedAt: Date.now(),
-          });
-        }
-        refreshServers();
-        refreshTools();
-      },
-    );
-    unlisteners.push(unlistenOAuthCompleted);
 
     return unlisteners;
   } catch (error) {

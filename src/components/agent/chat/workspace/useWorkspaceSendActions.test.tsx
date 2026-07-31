@@ -1,6 +1,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import contentFactoryFixture from "@/features/plugin/testing/fixtures/content-factory-app.json";
 import { buildPackageIdentity } from "@/features/plugin/install/packageIdentity";
 import { normalizeManifest } from "@/features/plugin/manifest/normalizeManifest";
@@ -5607,6 +5608,9 @@ Extract it into the Agent Skills directory.`,
 
   it("@搜索 发送失败时不应误记最近使用", async () => {
     mockSendMessage.mockRejectedValueOnce(new Error("network down"));
+    const toastErrorSpy = vi
+      .spyOn(toast, "error")
+      .mockImplementation(() => "test-toast");
     const harness = mountHook({
       input:
         "@搜索 关键词:AI Agent 融资 站点:36Kr 时间:近30天 深度:深度 重点:融资额与产品发布 输出:要点",
@@ -5624,10 +5628,12 @@ Extract it into the Agent Skills directory.`,
         expect(started).toBe(false);
       });
 
+      expect(toastErrorSpy).toHaveBeenCalledWith("发送失败: network down");
       expect(listServiceSkillUsage()).toEqual([]);
       expect(listMentionEntryUsage()).toEqual([]);
     } finally {
       harness.unmount();
+      toastErrorSpy.mockRestore();
     }
   });
 

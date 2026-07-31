@@ -21,6 +21,139 @@
       ],
       "type": "object"
     },
+    "CodexErrorInfo": {
+      "description": "Codex-compatible error classification exposed on the v2 wire.",
+      "oneOf": [
+        {
+          "enum": [
+            "badRequest",
+            "contextWindowExceeded",
+            "cyberPolicy",
+            "internalServerError",
+            "other",
+            "sandboxError",
+            "serverOverloaded",
+            "sessionBudgetExceeded",
+            "threadRollbackFailed",
+            "unauthorized",
+            "usageLimitExceeded"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "httpConnectionFailed": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "httpConnectionFailed"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseStreamConnectionFailed": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseStreamConnectionFailed"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseStreamDisconnected": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseStreamDisconnected"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseTooManyFailedAttempts": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseTooManyFailedAttempts"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "activeTurnNotSteerable": {
+              "properties": {
+                "turnKind": {
+                  "$ref": "#/$defs/NonSteerableTurnKind"
+                }
+              },
+              "required": [
+                "turnKind"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "activeTurnNotSteerable"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "CollabAgentState": {
       "properties": {
         "message": {
@@ -438,6 +571,13 @@
       "enum": [
         "commentary",
         "final_answer"
+      ],
+      "type": "string"
+    },
+    "NonSteerableTurnKind": {
+      "enum": [
+        "compact",
+        "review"
       ],
       "type": "string"
     },
@@ -1402,6 +1542,7 @@
       "type": "object"
     },
     "TurnError": {
+      "additionalProperties": false,
       "properties": {
         "additionalDetails": {
           "type": [
@@ -1409,7 +1550,16 @@
             "string"
           ]
         },
-        "errorInfo": true,
+        "codexErrorInfo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CodexErrorInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "message": {
           "type": "string"
         }

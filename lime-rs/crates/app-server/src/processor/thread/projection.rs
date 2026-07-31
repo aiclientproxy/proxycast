@@ -296,7 +296,9 @@ fn project_turn(turn: canonical::Turn) -> Result<v2::Turn, JsonRpcError> {
         status: project_turn_status(turn.status),
         error: turn.error.map(|error| v2::TurnError {
             message: error.message,
-            error_info: error.code.map(Value::String),
+            codex_error_info: crate::processor::v2_notifications::error::codex_error_info_from_code(
+                error.code.as_deref(),
+            ),
             additional_details: error.details,
         }),
         started_at: turn.started_at_ms.map(millis_to_seconds),

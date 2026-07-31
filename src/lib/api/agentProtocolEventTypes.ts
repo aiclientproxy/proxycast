@@ -208,6 +208,15 @@ export interface AgentEventPlanFinal {
   source?: string;
 }
 
+export interface AgentEventTurnPlanUpdated {
+  type: "turn_plan_updated";
+  explanation?: string;
+  plan: Array<{
+    step: string;
+    status: "pending" | "in_progress" | "completed";
+  }>;
+}
+
 export interface AgentEventToolStart {
   type: "tool_start";
   tool_name: string;
@@ -525,6 +534,9 @@ export interface AgentEventWarning {
 export interface AgentEventError {
   type: "error";
   message: string;
+  will_retry?: boolean;
+  codex_error_info?: unknown;
+  additional_details?: string | null;
 }
 
 export interface AgentEventEnvelope {
@@ -566,6 +578,7 @@ export type AgentEvent = (
   | AgentEventReasoningEnded
   | AgentEventPlanDelta
   | AgentEventPlanFinal
+  | AgentEventTurnPlanUpdated
   | AgentEventToolStart
   | AgentEventToolEnd
   | AgentEventImageTaskCreated

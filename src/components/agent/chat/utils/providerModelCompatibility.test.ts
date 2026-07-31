@@ -79,6 +79,19 @@ describe("resolveProviderModelCompatibility", () => {
     ).toBeNull();
   });
 
+  it("Provider 显式声明的模型应保留可执行路由，不依赖能力猜测授权", () => {
+    expect(
+      getProviderModelCompatibilityIssue({
+        providerType: "deepseek",
+        configuredProviderType: "openai",
+        model: "deepseek-v4-pro",
+        capabilityProvenance: "inferred_hint",
+        providerDeclaredModel: true,
+        enforceExecutableCapability: true,
+      }),
+    ).toBeNull();
+  });
+
   it("应过滤不兼容模型并保留兼容模型", () => {
     const result = filterProviderModelsByCompatibility(
       {

@@ -5,6 +5,7 @@ export interface ProviderModelCompatibilityInput {
   configuredProviderType?: string | null;
   model: string;
   capabilityProvenance?: ModelCapabilityProvenance;
+  providerDeclaredModel?: boolean;
   enforceExecutableCapability?: boolean;
 }
 
@@ -31,6 +32,7 @@ export function getProviderModelCompatibilityIssue({
   configuredProviderType,
   model,
   capabilityProvenance,
+  providerDeclaredModel = false,
   enforceExecutableCapability = false,
 }: ProviderModelCompatibilityInput): ProviderModelCompatibilityIssue | null {
   const normalizedProviderType = normalize(providerType);
@@ -50,6 +52,7 @@ export function getProviderModelCompatibilityIssue({
 
   if (
     enforceExecutableCapability &&
+    !providerDeclaredModel &&
     capabilityProvenance !== "canonical" &&
     capabilityProvenance !== "provider_explicit"
   ) {

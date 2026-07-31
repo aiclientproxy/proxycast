@@ -118,6 +118,7 @@ export async function waitForSessionReadCompleted(
     lastRead = read.result;
     const serialized = JSON.stringify(read.result || {});
     if (
+      readModelLatestTurnStatus(read.result) === "completed" &&
       serialized.includes(prompt) &&
       (serialized.includes(doneText) || serialized.includes(summaryText))
     ) {

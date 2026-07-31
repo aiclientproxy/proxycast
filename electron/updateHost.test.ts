@@ -74,6 +74,17 @@ vi.mock("./electronRuntime", () => ({
 
 import { ElectronUpdateHost } from "./updateHost";
 
+function emitDownloadedUpdate(releaseName: string | undefined): void {
+  autoUpdaterEmit(
+    "update-downloaded",
+    {},
+    "release notes",
+    releaseName,
+    new Date("2026-07-17T00:00:00.000Z"),
+    "https://updates.limecloud.com/Lime-update.zip",
+  );
+}
+
 describe("ElectronUpdateHost", () => {
   beforeEach(() => {
     appState.isPackaged = false;
@@ -196,22 +207,18 @@ describe("ElectronUpdateHost", () => {
       });
       const host = new ElectronUpdateHost(vi.fn());
 
-      await expect(host.invoke("check_for_updates")).resolves.toEqual(
-        expect.objectContaining({ hasUpdate: true }),
-      );
+      const checkSession = host.invoke("check_for_updates");
+      await Promise.resolve();
       expect(checkForUpdatesMock).toHaveBeenCalledTimes(1);
       await expect(host.invoke("get_update_install_session")).resolves.toEqual(
         expect.objectContaining({ stage: "downloading" }),
       );
 
       const installSession = host.invoke("start_update_install_session");
-      autoUpdaterEmit(
-        "update-downloaded",
-        {},
-        "release notes",
-        "1.61.0",
-        new Date("2026-07-17T00:00:00.000Z"),
-        "https://updates.limecloud.com/Lime-1.61.0.zip",
+      emitDownloadedUpdate("1.61.0");
+
+      await expect(checkSession).resolves.toEqual(
+        expect.objectContaining({ hasUpdate: true, latest: "1.61.0" }),
       );
 
       await expect(installSession).resolves.toEqual(
@@ -236,12 +243,14 @@ describe("ElectronUpdateHost", () => {
     });
     const host = new ElectronUpdateHost(vi.fn());
 
-    await expect(
-      host.invoke("check_for_updates", { automatic: true }),
-    ).resolves.toEqual(expect.objectContaining({ hasUpdate: true }));
-    await expect(
-      host.invoke("check_for_updates", { automatic: true }),
-    ).resolves.toEqual(expect.objectContaining({ hasUpdate: true }));
+    const firstCheck = host.invoke("check_for_updates", { automatic: true });
+    const secondCheck = host.invoke("check_for_updates", { automatic: true });
+    emitDownloadedUpdate("1.61.0");
+
+    await expect(Promise.all([firstCheck, secondCheck])).resolves.toEqual([
+      expect.objectContaining({ hasUpdate: true }),
+      expect.objectContaining({ hasUpdate: true }),
+    ]);
 
     expect(checkForUpdatesMock).toHaveBeenCalledTimes(1);
   });
@@ -255,28 +264,89 @@ describe("ElectronUpdateHost", () => {
       });
       const host = new ElectronUpdateHost(vi.fn());
 
-      await host.invoke("check_for_updates");
+      const checkSession = host.invoke("check_for_updates");
       const firstInstall = host.invoke("start_update_install_session");
       const secondInstall = host.invoke("start_update_install_session");
-      autoUpdaterEmit(
-        "update-downloaded",
-        {},
-        "release notes",
-        "1.61.0",
-        new Date("2026-07-17T00:00:00.000Z"),
-        "https://updates.limecloud.com/Lime-1.61.0.zip",
-      );
+      emitDownloadedUpdate("1.61.0");
 
-      await expect(Promise.all([firstInstall, secondInstall])).resolves.toEqual(
-        [
-          expect.objectContaining({ stage: "restarting" }),
-          expect.objectContaining({ stage: "restarting" }),
-        ],
-      );
+      await expect(
+        Promise.all([checkSession, firstInstall, secondInstall]),
+      ).resolves.toEqual([
+        expect.objectContaining({ hasUpdate: true }),
+        expect.objectContaining({ stage: "restarting" }),
+        expect.objectContaining({ stage: "restarting" }),
+      ]);
       await vi.advanceTimersByTimeAsync(250);
       expect(quitAndInstallMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
   });
+
+  it.each(["1.60.0", "v1.60.0", "1.59.0"])(
+    "候选版本 %s 不高于当前版本时不得进入安装",
+    async (candidateVersion) => {
+      vi.useFakeTimers();
+      try {
+        appState.isPackaged = true;
+        checkForUpdatesMock.mockImplementation(() => {
+          autoUpdaterEmit("update-available");
+        });
+        const host = new ElectronUpdateHost(vi.fn());
+
+        const checkSession = host.invoke("check_for_updates");
+        const installSession = host.invoke("start_update_install_session");
+        emitDownloadedUpdate(candidateVersion);
+
+        await expect(checkSession).resolves.toEqual(
+          expect.objectContaining({
+            hasUpdate: false,
+            latest: candidateVersion.replace(/^v/i, ""),
+          }),
+        );
+        await expect(installSession).resolves.toEqual(
+          expect.objectContaining({ stage: "up_to_date" }),
+        );
+        await vi.advanceTimersByTimeAsync(250);
+        expect(quitAndInstallMock).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it.each([undefined, "latest"])(
+    "候选版本 %s 无效时应终止更新且不得安装",
+    async (candidateVersion) => {
+      vi.useFakeTimers();
+      try {
+        appState.isPackaged = true;
+        checkForUpdatesMock.mockImplementation(() => {
+          autoUpdaterEmit("update-available");
+        });
+        const host = new ElectronUpdateHost(vi.fn());
+
+        const checkSession = host.invoke("check_for_updates");
+        const installSession = host.invoke("start_update_install_session");
+        emitDownloadedUpdate(candidateVersion);
+
+        await expect(checkSession).resolves.toEqual(
+          expect.objectContaining({
+            hasUpdate: false,
+            error: "更新清单未提供有效的候选版本",
+          }),
+        );
+        await expect(installSession).resolves.toEqual(
+          expect.objectContaining({
+            stage: "failed",
+            latestVersion: null,
+          }),
+        );
+        await vi.advanceTimersByTimeAsync(250);
+        expect(quitAndInstallMock).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 });

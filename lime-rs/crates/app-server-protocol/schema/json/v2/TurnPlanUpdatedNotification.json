@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "TurnPlanStep": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/TurnPlanStepStatus"
+        },
+        "step": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "step"
+      ],
+      "type": "object"
+    },
+    "TurnPlanStepStatus": {
+      "enum": [
+        "completed",
+        "inProgress",
+        "pending"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Reports the latest turn-scoped execution checklist.",
+  "properties": {
+    "explanation": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "plan": {
+      "items": {
+        "$ref": "#/$defs/TurnPlanStep"
+      },
+      "type": "array"
+    },
+    "threadId": {
+      "type": "string"
+    },
+    "turnId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "plan",
+    "threadId",
+    "turnId"
+  ],
+  "title": "TurnPlanUpdatedNotification",
+  "type": "object"
+}

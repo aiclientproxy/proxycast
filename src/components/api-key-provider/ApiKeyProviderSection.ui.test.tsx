@@ -235,6 +235,21 @@ async function submitCustomProviderDraft({
   apiKey?: string;
   model: string;
 }) {
+  await fillCustomProviderDraft({ name, apiHost, apiKey, model });
+  await clickByTestId("model-activate-button", 3);
+}
+
+async function fillCustomProviderDraft({
+  name,
+  apiHost,
+  apiKey = "sk-test",
+  model,
+}: {
+  name: string;
+  apiHost: string;
+  apiKey?: string;
+  model: string;
+}) {
   await act(async () => {
     setInputValue(
       findByTestId<HTMLInputElement>("model-provider-name-input"),
@@ -251,7 +266,6 @@ async function submitCustomProviderDraft({
     setInputValue(findByTestId<HTMLInputElement>("model-draft-input"), model);
   });
   await clickByTestId("model-draft-add-button");
-  await clickByTestId("model-activate-button", 3);
 }
 
 function collectReadableText(node: Node): string {
@@ -928,6 +942,38 @@ describe("ApiKeyProviderSection 模型管理布局", () => {
       "配置已保存，但连接测试未通过：模型无权限",
     );
     expect(maybeByTestId(container, "model-add-configure")).not.toBeNull();
+    expect(
+      findByTestId<HTMLButtonElement>("model-add-cancel-button").textContent,
+    ).toContain("完成添加");
+
+    await clickByTestId("model-add-cancel-button");
+
+    expect(hookState.selectProvider).toHaveBeenCalledWith("custom-1");
+    expect(maybeByTestId(container, "model-add-configure")).toBeNull();
+  });
+
+  it("未保存的自定义供应商退出动作应明确显示取消且不伪装成完成", async () => {
+    const hookState = createHookState();
+    const container = renderSection();
+
+    await openCustomProviderForm();
+    await fillCustomProviderDraft({
+      name: "Unsaved API",
+      apiHost: "https://api.example.com/v1",
+      model: "unsaved-model",
+    });
+
+    const cancelButton = findByTestId<HTMLButtonElement>(
+      "model-add-cancel-button",
+    );
+    expect(cancelButton.textContent).toContain("取消");
+    expect(cancelButton.textContent).not.toContain("完成添加");
+
+    await clickByTestId("model-add-cancel-button");
+
+    expect(maybeByTestId(container, "model-add-configure")).toBeNull();
+    expect(hookState.addCustomProvider).not.toHaveBeenCalled();
+    expect(hookState.updateProvider).not.toHaveBeenCalled();
   });
 
   it("添加流程连接超时时不应向用户暴露 Desktop Host 内部命令", async () => {

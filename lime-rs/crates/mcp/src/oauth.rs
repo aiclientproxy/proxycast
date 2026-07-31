@@ -1,4 +1,3 @@
-use crate::events::{McpOAuthCompletedPayload, McpServerErrorPayload};
 use crate::oauth_store::PersistentCredentialStore;
 use crate::streamable_http::build_default_headers;
 use crate::types::{McpError, McpServerConfig, McpServerTransport};
@@ -7,11 +6,12 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::Router;
-use lime_core::DynEmitter;
 use rmcp::transport::auth::{AuthorizationManager, CredentialStore, OAuthState, StoredCredentials};
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{oneshot, Mutex};
@@ -28,11 +28,38 @@ pub struct McpOAuthLoginParams {
     pub timeout_secs: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub struct McpOAuthLoginResponse {
+pub struct McpOAuthLoginHandle {
     pub authorization_url: String,
     pub state: String,
+    completion: Pin<Box<dyn Future<Output = Result<(), McpError>> + Send + 'static>>,
+}
+
+impl std::fmt::Debug for McpOAuthLoginHandle {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("McpOAuthLoginHandle")
+            .field("authorization_url", &self.authorization_url)
+            .field("state", &self.state)
+            .finish_non_exhaustive()
+    }
+}
+
+impl McpOAuthLoginHandle {
+    pub fn new(
+        authorization_url: impl Into<String>,
+        state: impl Into<String>,
+        completion: impl Future<Output = Result<(), McpError>> + Send + 'static,
+    ) -> Self {
+        Self {
+            authorization_url: authorization_url.into(),
+            state: state.into(),
+            completion: Box::pin(completion),
+        }
+    }
+
+    pub async fn wait(self) -> Result<(), McpError> {
+        self.completion.await
+    }
 }
 
 /// OAuth 凭据根只能由组合根注入。未注入时所有凭据操作 fail closed，
@@ -59,8 +86,7 @@ impl McpOAuthRegistry {
         config: &McpServerConfig,
         scopes: Option<Vec<String>>,
         timeout_secs: Option<u64>,
-        emitter: Option<DynEmitter>,
-    ) -> Result<McpOAuthLoginResponse, McpError> {
+    ) -> Result<McpOAuthLoginHandle, McpError> {
         let (url, bearer_token_env_var, http_headers, env_http_headers) = match &config.transport {
             McpServerTransport::StreamableHttp {
                 url,
@@ -133,36 +159,30 @@ impl McpOAuthRegistry {
         let wait_secs = timeout_secs
             .unwrap_or(DEFAULT_OAUTH_TIMEOUT_SECS)
             .clamp(30, 900);
-        let server_name_for_error = server_name.clone();
-        let emitter_for_error = emitter.clone();
-        tokio::spawn(async move {
-            if let Err(error) = complete_oauth_login(
+        let completion = async move {
+            let result = complete_oauth_login(
                 auth_state,
                 store,
                 callback_rx,
                 wait_secs,
                 server_name.clone(),
-                emitter,
             )
-            .await
-            {
+            .await;
+            if let Err(error) = &result {
                 tracing::warn!(
                     server_name = %server_name,
                     error = %error,
                     "MCP OAuth login did not complete"
                 );
-                emit_oauth_error(
-                    emitter_for_error,
-                    &server_name_for_error,
-                    &error.to_string(),
-                );
             }
-        });
+            result
+        };
 
-        Ok(McpOAuthLoginResponse {
+        Ok(McpOAuthLoginHandle::new(
             authorization_url,
-            state: "pending".to_string(),
-        })
+            "pending",
+            completion,
+        ))
     }
 
     pub async fn authorized_manager_for(
@@ -360,7 +380,6 @@ async fn complete_oauth_login(
     callback_rx: oneshot::Receiver<OAuthCallbackResult>,
     timeout_secs: u64,
     server_name: String,
-    emitter: Option<DynEmitter>,
 ) -> Result<(), McpError> {
     let login_timeout = Duration::from_secs(timeout_secs);
     let started_at = Instant::now();
@@ -410,47 +429,7 @@ async fn complete_oauth_login(
     })
     .await
     .map_err(|_| McpError::Timeout)??;
-    emit_oauth_completed(emitter, &server_name);
     Ok(())
-}
-
-fn emit_oauth_completed(emitter: Option<DynEmitter>, server_name: &str) {
-    let Some(emitter) = emitter else {
-        return;
-    };
-    let payload = McpOAuthCompletedPayload {
-        server_name: server_name.to_string(),
-    };
-    let Ok(value) = serde_json::to_value(&payload) else {
-        return;
-    };
-    if let Err(error) = emitter.emit_event("mcp:oauth_completed", &value) {
-        tracing::warn!(
-            server_name = %server_name,
-            error = %error,
-            "MCP OAuth completion event failed"
-        );
-    }
-}
-
-fn emit_oauth_error(emitter: Option<DynEmitter>, server_name: &str, error: &str) {
-    let Some(emitter) = emitter else {
-        return;
-    };
-    let payload = McpServerErrorPayload {
-        server_name: server_name.to_string(),
-        error: error.to_string(),
-    };
-    let Ok(value) = serde_json::to_value(&payload) else {
-        return;
-    };
-    if let Err(error) = emitter.emit_event("mcp:server_error", &value) {
-        tracing::warn!(
-            server_name = %server_name,
-            error = %error,
-            "MCP OAuth error event failed"
-        );
-    }
 }
 
 async fn discover_supported_scopes(

@@ -263,13 +263,20 @@ test("malformed direct lifecycle notifications fail closed with explicit mapper 
 test("root client dispatches direct lifecycle and delta only to lifecycle listeners", async () => {
   const runtime = createRuntimeClient();
   const lifecycle = [];
+  const signals = [];
   runtime.subscribeLifecycleEvents((event) => lifecycle.push(event));
+  runtime.subscribeSignalEvents((event) => signals.push(event));
 
   for (const notification of directToolLifecycle()) {
     assert.equal(await runtime.dispatchEvent(notification), true);
   }
   const delta = agentMessageDeltaNotification();
   assert.equal(await runtime.dispatchEvent(delta), true);
+  assert.equal(await runtime.dispatchEvent(errorNotification(true)), true);
+  assert.equal(
+    await runtime.dispatchEvent(turnPlanUpdatedNotification()),
+    true,
+  );
   assert.equal(
     await runtime.dispatchEvent(rawNotification("turn.completed")),
     false,
@@ -285,6 +292,10 @@ test("root client dispatches direct lifecycle and delta only to lifecycle listen
       "item/agentMessage/delta",
     ],
   );
+  assert.deepEqual(signals, [
+    errorNotification(true),
+    turnPlanUpdatedNotification(),
+  ]);
 });
 
 test("session gateway dispatches direct lifecycle and rejects wrapper lifecycle", async () => {
@@ -292,7 +303,9 @@ test("session gateway dispatches direct lifecycle and rejects wrapper lifecycle"
     createMinimalSessionGateway(),
   );
   const lifecycle = [];
+  const signals = [];
   runtime.subscribeLifecycleEvents((event) => lifecycle.push(event));
+  runtime.subscribeSignalEvents((event) => signals.push(event));
 
   assert.equal(
     await runtime.dispatchEvent(turnNotification("inProgress")),
@@ -305,6 +318,11 @@ test("session gateway dispatches direct lifecycle and rejects wrapper lifecycle"
   assert.equal(await runtime.dispatchEvent(planDeltaNotification()), true);
   assert.equal(
     await runtime.dispatchEvent(mcpToolCallProgressNotification()),
+    true,
+  );
+  assert.equal(await runtime.dispatchEvent(errorNotification(false)), true);
+  assert.equal(
+    await runtime.dispatchEvent(turnPlanUpdatedNotification()),
     true,
   );
   assert.equal(
@@ -321,6 +339,10 @@ test("session gateway dispatches direct lifecycle and rejects wrapper lifecycle"
       "item/mcpToolCall/progress",
     ],
   );
+  assert.deepEqual(signals, [
+    errorNotification(false),
+    turnPlanUpdatedNotification(),
+  ]);
 });
 
 test("disabling sequence verification does not restore raw lifecycle", async () => {
@@ -369,6 +391,28 @@ test("nextEvent consumes direct notifications from gateway sources", async () =>
 
   const drainedEvent = await drainedRuntime.nextEvent();
   assert.equal(drainedEvent.method, "turn/started");
+
+  const directSignal = errorNotification(true);
+  const signalRuntime = createAgentRuntimeClientFromSessionGateway({
+    ...createMinimalSessionGateway(),
+    async nextEvent() {
+      return directSignal;
+    },
+  });
+  const signals = [];
+  signalRuntime.subscribeSignalEvents((event) => signals.push(event));
+
+  const signalEvent = await signalRuntime.nextEvent();
+  assert.equal(signalEvent.method, "error");
+  assert.deepEqual(signals, [directSignal]);
+
+  const drainedSignalRuntime = createAgentRuntimeClientFromSessionGateway({
+    ...createMinimalSessionGateway(),
+    async drainEvents() {
+      return [{ method: "log/list", params: {} }, errorNotification(false)];
+    },
+  });
+  assert.equal((await drainedSignalRuntime.nextEvent()).method, "error");
 });
 
 test("sequence verifier fails closed for orphan direct tool completion", async () => {
@@ -781,6 +825,35 @@ function agentMessageDeltaNotification(overrides = {}) {
     params: {
       delta: "hello",
       itemId: "msg_1",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      ...overrides,
+    },
+  };
+}
+
+function errorNotification(willRetry, overrides = {}) {
+  return {
+    method: "error",
+    params: {
+      error: { message: "provider stream reconnecting" },
+      threadId: "thread-1",
+      turnId: "turn-1",
+      willRetry,
+      ...overrides,
+    },
+  };
+}
+
+function turnPlanUpdatedNotification(overrides = {}) {
+  return {
+    method: "turn/plan/updated",
+    params: {
+      explanation: "继续执行",
+      plan: [
+        { step: "读现状", status: "completed" },
+        { step: "补主链", status: "inProgress" },
+      ],
       threadId: "thread-1",
       turnId: "turn-1",
       ...overrides,

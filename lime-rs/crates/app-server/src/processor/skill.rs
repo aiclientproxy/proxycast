@@ -1,6 +1,9 @@
 //! skill domain handlers for the App Server processor.
 
 use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, RpcDispatch};
+use app_server_protocol::protocol::v2::{
+    ServerNotification as V2ServerNotification, SkillsChangedNotification,
+};
 use app_server_protocol::{
     JsonRpcError, SkillDownloadInstallParams, SkillLocalDetailInspectParams,
     SkillLocalImportParams, SkillLocalInspectParams, SkillLocalRenameParams,
@@ -10,6 +13,7 @@ use app_server_protocol::{
     SkillRemoteInspectParams, SkillRepositoryDeleteParams, SkillRepositorySaveParams,
     SkillScaffoldCreateParams,
 };
+use serde::Serialize;
 
 impl RequestProcessor {
     pub(super) async fn handle_skill_list_impl(&self) -> Result<RpcDispatch, JsonRpcError> {
@@ -52,12 +56,13 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: SkillManagementInstallParams = parse_params(params)?;
+        let changes_lime_catalog = is_lime_app(&params.app);
         let response = self
             .runtime
             .install_management_skill(params)
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, changes_lime_catalog)
     }
 
     pub(super) async fn handle_skill_management_uninstall_impl(
@@ -66,12 +71,13 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: SkillManagementUninstallParams = parse_params(params)?;
+        let changes_lime_catalog = is_lime_app(&params.app);
         let response = self
             .runtime
             .uninstall_management_skill(params)
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, changes_lime_catalog)
     }
 
     pub(super) async fn handle_skill_repository_list_impl(
@@ -97,7 +103,7 @@ impl RequestProcessor {
             .save_skill_repository(params)
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, true)
     }
 
     pub(super) async fn handle_skill_repository_delete_impl(
@@ -111,7 +117,7 @@ impl RequestProcessor {
             .delete_skill_repository(params)
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, true)
     }
 
     pub(super) async fn handle_skill_cache_refresh_impl(
@@ -123,7 +129,7 @@ impl RequestProcessor {
             .refresh_skill_cache()
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, true)
     }
 
     pub(super) async fn handle_skill_installed_directories_list_impl(
@@ -186,12 +192,13 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: SkillScaffoldCreateParams = parse_params(params)?;
+        let changes_lime_catalog = is_lime_app(&params.app);
         let response = self
             .runtime
             .create_skill_scaffold(params)
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, changes_lime_catalog)
     }
 
     pub(super) async fn handle_skill_local_import_impl(
@@ -200,12 +207,13 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: SkillLocalImportParams = parse_params(params)?;
+        let changes_lime_catalog = is_lime_app(&params.app);
         let response = self
             .runtime
             .import_local_skill(params)
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, changes_lime_catalog)
     }
 
     pub(super) async fn handle_skill_local_rename_impl(
@@ -214,12 +222,13 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: SkillLocalRenameParams = parse_params(params)?;
+        let changes_lime_catalog = is_lime_app(&params.app);
         let response = self
             .runtime
             .rename_local_skill(params)
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, changes_lime_catalog)
     }
 
     pub(super) async fn handle_skill_remote_inspect_impl(
@@ -242,12 +251,13 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: SkillPackageLocalInstallParams = parse_params(params)?;
+        let changes_lime_catalog = is_lime_app(&params.app);
         let response = self
             .runtime
             .install_local_skill_package(params)
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, changes_lime_catalog)
     }
 
     pub(super) async fn handle_skill_package_local_replace_impl(
@@ -256,12 +266,13 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: SkillPackageLocalReplaceParams = parse_params(params)?;
+        let changes_lime_catalog = is_lime_app(&params.app);
         let response = self
             .runtime
             .replace_local_skill_package(params)
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, changes_lime_catalog)
     }
 
     pub(super) async fn handle_skill_package_export_impl(
@@ -284,12 +295,13 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: SkillMarketplaceInstallParams = parse_params(params)?;
+        let changes_lime_catalog = is_lime_app(&params.app);
         let response = self
             .runtime
             .install_marketplace_skill(params)
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, changes_lime_catalog)
     }
 
     pub(super) async fn handle_skill_download_install_impl(
@@ -298,11 +310,30 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: SkillDownloadInstallParams = parse_params(params)?;
+        let changes_lime_catalog = is_lime_app(&params.app);
         let response = self
             .runtime
             .install_skill_from_download_url(params)
             .await
             .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        dispatch_skill_catalog_mutation(response, changes_lime_catalog)
     }
+}
+
+fn dispatch_skill_catalog_mutation(
+    response: impl Serialize,
+    changes_lime_catalog: bool,
+) -> Result<RpcDispatch, JsonRpcError> {
+    let dispatch = dispatch_result(response)?;
+    if !changes_lime_catalog {
+        return Ok(dispatch);
+    }
+    lime_skills::invalidate_agent_skill_snapshot_cache();
+    Ok(dispatch.with_notification(
+        V2ServerNotification::SkillsChanged(SkillsChangedNotification {}).into(),
+    ))
+}
+
+fn is_lime_app(app: &str) -> bool {
+    app.trim().eq_ignore_ascii_case("lime")
 }

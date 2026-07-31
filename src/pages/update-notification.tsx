@@ -77,6 +77,8 @@ export function UpdateNotificationPage() {
   const downloadUrl = installSession?.downloadUrl || params.downloadUrl || "";
   const closeLabel = t("common.updateNotification.action.close");
   const hideLabel = t("common.updateNotification.action.hide");
+  const failed = installSession?.stage === "failed";
+  const upToDate = installSession?.stage === "up_to_date";
   const sessionProgressLabel = (() => {
     if (!installSession) {
       return "";
@@ -122,10 +124,22 @@ export function UpdateNotificationPage() {
         return t("common.updateNotification.action.restarting");
       case "failed":
         return t("common.updateNotification.action.retry");
+      case "completed":
+        return t("common.updateNotification.action.restartToUpdate");
       default:
         return t("common.updateNotification.action.updateNow");
     }
   })();
+  const notificationTitle = failed
+    ? t("common.updateNotification.progress.failed")
+    : upToDate
+      ? t("common.updateNotification.progress.upToDate")
+      : latestVersion
+        ? t("common.updateNotification.version.new", {
+            version: latestVersion,
+          })
+        : sessionProgressLabel ||
+          t("common.updateNotification.progress.checking");
 
   useLayoutEffect(() => {
     const previousWindow = document.documentElement.dataset.limeWindow;
@@ -275,10 +289,8 @@ export function UpdateNotificationPage() {
         <div className="update-toast-main">
           <div className="update-toast-top">
             <div className="update-toast-message">
-              {t("common.updateNotification.version.new", {
-                version: latestVersion,
-              })}
-              {currentVersion ? (
+              {notificationTitle}
+              {currentVersion && !failed && !upToDate && latestVersion ? (
                 <span className="update-toast-sub">
                   {t("common.updateNotification.version.current", {
                     version: currentVersion,
@@ -310,12 +322,14 @@ export function UpdateNotificationPage() {
                 </>
               ) : (
                 <>
-                  <button
-                    onClick={() => handleLater(24)}
-                    className="update-btn update-btn-ghost"
-                  >
-                    {t("common.updateNotification.action.laterOneDay")}
-                  </button>
+                  {!failed && !upToDate ? (
+                    <button
+                      onClick={() => handleLater(24)}
+                      className="update-btn update-btn-ghost"
+                    >
+                      {t("common.updateNotification.action.laterOneDay")}
+                    </button>
+                  ) : null}
                   <button
                     onClick={handleDismiss}
                     className="update-btn update-btn-icon"
@@ -324,13 +338,19 @@ export function UpdateNotificationPage() {
                   >
                     <X size={13} />
                   </button>
-                  <button
-                    onClick={handleDownload}
-                    className="update-btn update-btn-primary"
-                  >
-                    <Download size={14} />
-                    {sessionActionLabel}
-                  </button>
+                  {!upToDate ? (
+                    <button
+                      onClick={handleDownload}
+                      className="update-btn update-btn-primary"
+                    >
+                      {failed ? (
+                        <RefreshCw size={14} />
+                      ) : (
+                        <Download size={14} />
+                      )}
+                      {sessionActionLabel}
+                    </button>
+                  ) : null}
                 </>
               )}
             </div>

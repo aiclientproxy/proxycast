@@ -77,6 +77,7 @@ export const METHOD_DIAGNOSTICS_TRACE_READ = "diagnostics/trace/read";
 export const METHOD_DIAGNOSTICS_WINDOWS_STARTUP_READ =
   "diagnostics/windowsStartup/read";
 export const METHOD_DISCORD_CHANNEL_PROBE = "discordChannel/probe";
+export const METHOD_ERROR = "error";
 export const METHOD_EVIDENCE_EXPORT = "evidence/export";
 export const METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT =
   "executionProcess/drainOutput";
@@ -176,6 +177,8 @@ export const METHOD_MCP_SERVER_ENABLED_SET = "mcpServer/enabled/set";
 export const METHOD_MCP_SERVER_IMPORT_FROM_APP = "mcpServer/importFromApp";
 export const METHOD_MCP_SERVER_LIST = "mcpServer/list";
 export const METHOD_MCP_SERVER_OAUTH_LOGIN = "mcpServer/oauth/login";
+export const METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED =
+  "mcpServer/oauthLogin/completed";
 export const METHOD_MCP_SERVER_START = "mcpServer/start";
 export const METHOD_MCP_SERVER_STOP = "mcpServer/stop";
 export const METHOD_MCP_SERVER_SYNC_ALL_TO_LIVE = "mcpServer/syncAllToLive";
@@ -310,6 +313,7 @@ export const METHOD_SKILL_REMOTE_INSPECT = "skillRemote/inspect";
 export const METHOD_SKILL_REPOSITORY_DELETE = "skillRepository/delete";
 export const METHOD_SKILL_REPOSITORY_LIST = "skillRepository/list";
 export const METHOD_SKILL_REPOSITORY_SAVE = "skillRepository/save";
+export const METHOD_SKILLS_CHANGED = "skills/changed";
 export const METHOD_SOUL_STYLE_PACK_INSTALL = "soulStylePack/install";
 export const METHOD_SOUL_STYLE_PACK_LIST = "soulStylePack/list";
 export const METHOD_SOUL_STYLE_PACK_STATUS_SET = "soulStylePack/status/set";
@@ -364,6 +368,7 @@ export const METHOD_THREAD_UNARCHIVED = "thread/unarchived";
 export const METHOD_THREAD_UNSUBSCRIBE = "thread/unsubscribe";
 export const METHOD_TURN_COMPLETED = "turn/completed";
 export const METHOD_TURN_INTERRUPT = "turn/interrupt";
+export const METHOD_TURN_PLAN_UPDATED = "turn/plan/updated";
 export const METHOD_TURN_START = "turn/start";
 export const METHOD_TURN_STARTED = "turn/started";
 export const METHOD_TURN_STEER = "turn/steer";
@@ -638,6 +643,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "discordChannel/probe",
+  },
+  {
+    kind: "notification",
+    method: "error",
   },
   {
     kind: "request",
@@ -942,6 +951,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "mcpServer/oauth/login",
+  },
+  {
+    kind: "notification",
+    method: "mcpServer/oauthLogin/completed",
   },
   {
     kind: "request",
@@ -1416,6 +1429,10 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "skillRepository/save",
   },
   {
+    kind: "notification",
+    method: "skills/changed",
+  },
+  {
     kind: "request",
     method: "soulStylePack/install",
   },
@@ -1606,6 +1623,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "turn/interrupt",
+  },
+  {
+    kind: "notification",
+    method: "turn/plan/updated",
   },
   {
     kind: "request",
@@ -4604,6 +4625,44 @@ export interface ClientResponse {
   result: unknown;
 }
 
+export type CodexErrorInfo =
+  | "badRequest"
+  | "contextWindowExceeded"
+  | "cyberPolicy"
+  | "internalServerError"
+  | "other"
+  | "sandboxError"
+  | "serverOverloaded"
+  | "sessionBudgetExceeded"
+  | "threadRollbackFailed"
+  | "unauthorized"
+  | "usageLimitExceeded"
+  | {
+      httpConnectionFailed: {
+        httpStatusCode?: number | null;
+      };
+    }
+  | {
+      responseStreamConnectionFailed: {
+        httpStatusCode?: number | null;
+      };
+    }
+  | {
+      responseStreamDisconnected: {
+        httpStatusCode?: number | null;
+      };
+    }
+  | {
+      responseTooManyFailedAttempts: {
+        httpStatusCode?: number | null;
+      };
+    }
+  | {
+      activeTurnNotSteerable: {
+        turnKind: NonSteerableTurnKind;
+      };
+    };
+
 export interface CollabAgentState {
   message?: null | string;
   status: CollabAgentStatus;
@@ -5144,6 +5203,13 @@ export type EndpointKind =
   | "oem_gateway"
   | "openai_compatible"
   | "provider_base_url";
+
+export interface ErrorNotification {
+  error: TurnError;
+  threadId: string;
+  turnId: string;
+  willRetry: boolean;
+}
 
 export interface EvidenceExportParams {
   includeArtifacts?: boolean | null;
@@ -5946,6 +6012,13 @@ export type McpServerLifecycleResponse = Record<string, unknown>;
 
 export interface McpServerListResponse {
   servers?: unknown[];
+}
+
+export interface McpServerOauthLoginCompletedNotification {
+  error?: null | string;
+  name: string;
+  success: boolean;
+  threadId: null | string;
 }
 
 export interface McpServerOauthLoginParams {
@@ -6897,6 +6970,8 @@ export interface ModelVerificationNotification {
   verifications: ModelVerification[];
 }
 
+export type NonSteerableTurnKind = "compact" | "review";
+
 export interface OpenDeepLinkPayload {
   action?: null | string;
   kind: string;
@@ -7725,6 +7800,18 @@ export type ServerNotification =
       params: WarningNotification;
     }
   | {
+      method: "error";
+      params: ErrorNotification;
+    }
+  | {
+      method: "skills/changed";
+      params: SkillsChangedNotification;
+    }
+  | {
+      method: "mcpServer/oauthLogin/completed";
+      params: McpServerOauthLoginCompletedNotification;
+    }
+  | {
       method: "thread/started";
       params: ThreadStartedNotification;
     }
@@ -7759,6 +7846,10 @@ export type ServerNotification =
   | {
       method: "turn/completed";
       params: TurnCompletedNotification;
+    }
+  | {
+      method: "turn/plan/updated";
+      params: TurnPlanUpdatedNotification;
     }
   | {
       method: "item/started";
@@ -8203,6 +8294,8 @@ export interface SkillWorkflowStep {
   id: string;
   name: string;
 }
+
+export type SkillsChangedNotification = Record<string, never>;
 
 export interface SleepItem {
   durationMs?: number | null;
@@ -9096,7 +9189,7 @@ export interface TurnEnvironmentParams {
 
 export interface TurnError {
   additionalDetails?: null | string;
-  errorInfo?: unknown;
+  codexErrorInfo?: CodexErrorInfo | null;
   message: string;
 }
 
@@ -9108,6 +9201,20 @@ export interface TurnInterruptParams {
 export type TurnInterruptResponse = Record<string, unknown>;
 
 export type TurnItemsView = "full" | "notLoaded" | "summary";
+
+export interface TurnPlanStep {
+  status: TurnPlanStepStatus;
+  step: string;
+}
+
+export type TurnPlanStepStatus = "completed" | "inProgress" | "pending";
+
+export interface TurnPlanUpdatedNotification {
+  explanation?: null | string;
+  plan: TurnPlanStep[];
+  threadId: string;
+  turnId: string;
+}
 
 export interface TurnStartParams {
   additionalContext?: null | Record<string, unknown>;

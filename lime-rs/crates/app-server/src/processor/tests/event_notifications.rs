@@ -51,6 +51,44 @@ fn event_notifications_jsonrpc_emits_direct_agent_message_delta() {
 }
 
 #[test]
+fn event_notifications_jsonrpc_emits_direct_turn_plan_update() {
+    let message = single_event_notification(AgentEvent {
+        event_id: "evt_plan_1".to_string(),
+        sequence: 2,
+        session_id: "sess_1".to_string(),
+        thread_id: Some("thread_1".to_string()),
+        turn_id: Some("turn_1".to_string()),
+        event_type: "turn.plan.updated".to_string(),
+        timestamp: "2026-07-05T00:00:00Z".to_string(),
+        payload: json!({
+            "explanation": "继续执行",
+            "plan": [
+                { "step": "读取现状", "status": "completed" },
+                { "step": "补齐主链", "status": "in_progress" }
+            ]
+        }),
+    })
+    .expect("notification");
+
+    let JsonRpcMessage::Notification(notification) = message else {
+        panic!("expected notification");
+    };
+    assert_eq!(notification.method, "turn/plan/updated");
+    assert_eq!(
+        notification.params.expect("params"),
+        json!({
+            "threadId": "thread_1",
+            "turnId": "turn_1",
+            "explanation": "继续执行",
+            "plan": [
+                { "step": "读取现状", "status": "completed" },
+                { "step": "补齐主链", "status": "inProgress" }
+            ]
+        })
+    );
+}
+
+#[test]
 fn event_notifications_jsonrpc_emits_typed_warning_with_localization_code() {
     let message = single_event_notification(AgentEvent {
         event_id: "evt_warning".to_string(),
@@ -128,9 +166,215 @@ fn warning_alias_does_not_activate_typed_notification() {
     assert_eq!(notification.method, "agentSession/event");
 }
 
+fn failed_turn_event(event_id: &str, message: &str) -> AgentEvent {
+    AgentEvent {
+        event_id: event_id.to_string(),
+        sequence: 9,
+        session_id: "sess_1".to_string(),
+        thread_id: Some("thread_1".to_string()),
+        turn_id: Some("turn_1".to_string()),
+        event_type: "turn.failed".to_string(),
+        timestamp: "2026-07-05T00:00:01Z".to_string(),
+        payload: json!({
+            "message": message,
+            "turn": {
+                "sessionId": "sess_1",
+                "threadId": "thread_1",
+                "turnId": "turn_1",
+                "status": "failed",
+                "createdAtMs": 100,
+                "updatedAtMs": 120,
+                "startedAtMs": 100,
+                "completedAtMs": 120,
+                "error": {"message": message}
+            }
+        }),
+    }
+}
+
 #[test]
-fn event_notifications_jsonrpc_lowers_turn_failed_to_direct_completion() {
-    let message = single_event_notification(AgentEvent {
+fn event_notifications_project_retry_and_terminal_errors_with_exact_semantics() {
+    let mut projector = V2NotificationProjector::default();
+    let retry = project_event_notifications_jsonrpc(
+        &mut projector,
+        AgentEvent {
+            event_id: "evt_retry".to_string(),
+            sequence: 7,
+            session_id: "sess_1".to_string(),
+            thread_id: Some("thread_1".to_string()),
+            turn_id: Some("turn_1".to_string()),
+            event_type: "plugin_worker.retry".to_string(),
+            timestamp: "2026-07-05T00:00:00Z".to_string(),
+            payload: json!({
+                "message": "provider stream reconnecting",
+                "errorCode": "PLUGIN_WORKER_RETRYABLE_FAILURE",
+                "retryable": false
+            }),
+        },
+    )
+    .expect("retry notification");
+    assert_eq!(retry.len(), 1);
+    let JsonRpcMessage::Notification(retry) = &retry[0] else {
+        panic!("expected retry notification");
+    };
+    assert_eq!(retry.method, "error");
+    assert_eq!(retry.params.as_ref().expect("params")["willRetry"], true);
+
+    let terminal = project_event_notifications_jsonrpc(
+        &mut projector,
+        failed_turn_event("evt_failed_after_retry", "retry budget exhausted"),
+    )
+    .expect("terminal notifications");
+    let terminal = terminal
+        .into_iter()
+        .map(|message| match message {
+            JsonRpcMessage::Notification(notification) => notification,
+            other => panic!("expected notification, got {other:?}"),
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        terminal
+            .iter()
+            .map(|notification| notification.method.as_str())
+            .collect::<Vec<_>>(),
+        ["error", "turn/completed"]
+    );
+    assert_eq!(
+        terminal[0].params.as_ref().expect("error params")["willRetry"],
+        false
+    );
+    assert_eq!(
+        terminal[1].params.as_ref().expect("completion params")["turn"]["status"],
+        "failed"
+    );
+}
+
+#[test]
+fn runtime_error_is_terminal_even_when_legacy_retryable_is_true_and_is_not_duplicated() {
+    let mut projector = V2NotificationProjector::default();
+    let runtime_error = project_event_notifications_jsonrpc(
+        &mut projector,
+        AgentEvent {
+            event_id: "evt_runtime_error".to_string(),
+            sequence: 8,
+            session_id: "sess_1".to_string(),
+            thread_id: Some("thread_1".to_string()),
+            turn_id: Some("turn_1".to_string()),
+            event_type: "runtime.error".to_string(),
+            timestamp: "2026-07-05T00:00:00Z".to_string(),
+            payload: json!({
+                "message": "retry budget exhausted",
+                "errorCode": "PLUGIN_WORKER_RETRYABLE_FAILURE",
+                "retryable": true
+            }),
+        },
+    )
+    .expect("runtime error notification");
+    let JsonRpcMessage::Notification(runtime_error) = &runtime_error[0] else {
+        panic!("expected runtime error notification");
+    };
+    let params = runtime_error.params.as_ref().expect("runtime error params");
+    assert_eq!(runtime_error.method, "error");
+    assert_eq!(params["willRetry"], false);
+    assert_eq!(params["error"]["codexErrorInfo"], "other");
+
+    let completion = project_event_notifications_jsonrpc(
+        &mut projector,
+        failed_turn_event("evt_failed_after_runtime_error", "retry budget exhausted"),
+    )
+    .expect("completion after terminal error");
+    assert_eq!(completion.len(), 1);
+    let JsonRpcMessage::Notification(completion) = &completion[0] else {
+        panic!("expected turn completion");
+    };
+    assert_eq!(completion.method, "turn/completed");
+}
+
+#[test]
+fn turn_failed_without_runtime_error_emits_error_before_completion() {
+    let messages = event_notifications_jsonrpc(failed_turn_event(
+        "evt_failed_without_error",
+        "provider stream timed out",
+    ))
+    .expect("failed turn notifications");
+    let methods = messages
+        .iter()
+        .map(|message| match message {
+            JsonRpcMessage::Notification(notification) => notification.method.as_str(),
+            other => panic!("expected notification, got {other:?}"),
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(methods, ["error", "turn/completed"]);
+}
+
+#[test]
+fn malformed_typed_error_sources_fail_closed() {
+    for (index, event) in [
+        AgentEvent {
+            event_id: "missing_thread".to_string(),
+            sequence: 1,
+            session_id: "sess_1".to_string(),
+            thread_id: None,
+            turn_id: Some("turn_1".to_string()),
+            event_type: "runtime.error".to_string(),
+            timestamp: "2026-07-05T00:00:00Z".to_string(),
+            payload: json!({"message": "failed"}),
+        },
+        AgentEvent {
+            event_id: "missing_turn".to_string(),
+            sequence: 1,
+            session_id: "sess_1".to_string(),
+            thread_id: Some("thread_1".to_string()),
+            turn_id: None,
+            event_type: "runtime.error".to_string(),
+            timestamp: "2026-07-05T00:00:00Z".to_string(),
+            payload: json!({"message": "failed"}),
+        },
+        AgentEvent {
+            event_id: "missing_message".to_string(),
+            sequence: 1,
+            session_id: "sess_1".to_string(),
+            thread_id: Some("thread_1".to_string()),
+            turn_id: Some("turn_1".to_string()),
+            event_type: "runtime.error".to_string(),
+            timestamp: "2026-07-05T00:00:00Z".to_string(),
+            payload: json!({}),
+        },
+        AgentEvent {
+            event_id: "invalid_retry".to_string(),
+            sequence: 1,
+            session_id: "sess_1".to_string(),
+            thread_id: Some("thread_1".to_string()),
+            turn_id: Some("turn_1".to_string()),
+            event_type: "runtime.error".to_string(),
+            timestamp: "2026-07-05T00:00:00Z".to_string(),
+            payload: json!({"message": "failed", "willRetry": "false"}),
+        },
+        AgentEvent {
+            event_id: "invalid_details".to_string(),
+            sequence: 1,
+            session_id: "sess_1".to_string(),
+            thread_id: Some("thread_1".to_string()),
+            turn_id: Some("turn_1".to_string()),
+            event_type: "runtime.error".to_string(),
+            timestamp: "2026-07-05T00:00:00Z".to_string(),
+            payload: json!({"message": "failed", "additionalDetails": 42}),
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let error = match event_notifications_jsonrpc(event) {
+            Ok(messages) => panic!("case {index} projected {messages:?}"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, app_server_protocol::error_codes::RUNTIME_ERROR);
+    }
+}
+
+#[test]
+fn event_notifications_jsonrpc_lowers_turn_failed_to_error_then_completion() {
+    let messages = event_notifications_jsonrpc(AgentEvent {
         event_id: "evt_failed".to_string(),
         sequence: 2,
         session_id: "sess_1".to_string(),
@@ -153,13 +397,14 @@ fn event_notifications_jsonrpc_lowers_turn_failed_to_direct_completion() {
             }
         }),
     })
-    .expect("notification");
+    .expect("notifications");
 
-    let JsonRpcMessage::Notification(notification) = message else {
+    assert_eq!(messages.len(), 2);
+    let JsonRpcMessage::Notification(notification) = &messages[1] else {
         panic!("expected notification");
     };
     assert_eq!(notification.method, "turn/completed");
-    let params = notification.params.expect("params");
+    let params = notification.params.as_ref().expect("params");
     assert_eq!(params["threadId"], "thread_1");
     assert_eq!(params["turn"]["id"], "turn_1");
     assert_eq!(params["turn"]["status"], "failed");

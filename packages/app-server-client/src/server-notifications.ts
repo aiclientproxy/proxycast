@@ -8,6 +8,8 @@ export type RuntimeServerNotification = Extract<
   ServerNotification,
   {
     method:
+      | "error"
+      | "turn/plan/updated"
       | "thread/started"
       | "turn/started"
       | "turn/completed"
@@ -30,6 +32,16 @@ export type ModelListUpdatedServerNotification = Extract<
   { method: "model/list/updated" }
 >;
 
+export type SkillsChangedServerNotification = Extract<
+  ServerNotification,
+  { method: "skills/changed" }
+>;
+
+export type McpServerOauthLoginCompletedServerNotification = Extract<
+  ServerNotification,
+  { method: "mcpServer/oauthLogin/completed" }
+>;
+
 export type ServerNotificationFor<
   Method extends RuntimeServerNotification["method"],
 > = Extract<RuntimeServerNotification, { method: Method }>;
@@ -42,6 +54,14 @@ export function serverNotification(
   }
 
   switch (message.method) {
+    case "error":
+      return hasErrorNotification(message.params)
+        ? (message as ServerNotificationFor<"error">)
+        : undefined;
+    case "turn/plan/updated":
+      return hasTurnPlanUpdatedNotification(message.params)
+        ? (message as ServerNotificationFor<"turn/plan/updated">)
+        : undefined;
     case "thread/started":
       return hasEntityId(record(message.params)?.thread)
         ? (message as ServerNotificationFor<"thread/started">)
@@ -146,10 +166,63 @@ export function isModelListUpdatedNotification(
   return modelListUpdatedServerNotification(message) !== undefined;
 }
 
+export function skillsChangedServerNotification(
+  message: JsonRpcMessage,
+): SkillsChangedServerNotification | undefined {
+  if (!isJsonRpcNotification(message) || message.method !== "skills/changed") {
+    return undefined;
+  }
+  const params = record(message.params);
+  if (!params || Object.keys(params).length !== 0) {
+    return undefined;
+  }
+  return message as SkillsChangedServerNotification;
+}
+
+export function isSkillsChangedNotification(
+  message: JsonRpcMessage,
+): message is SkillsChangedServerNotification {
+  return skillsChangedServerNotification(message) !== undefined;
+}
+
+export function mcpServerOauthLoginCompletedServerNotification(
+  message: JsonRpcMessage,
+): McpServerOauthLoginCompletedServerNotification | undefined {
+  if (
+    !isJsonRpcNotification(message) ||
+    message.method !== "mcpServer/oauthLogin/completed"
+  ) {
+    return undefined;
+  }
+  const params = record(message.params);
+  if (
+    !hasOnlyKeys(params, ["error", "name", "success", "threadId"]) ||
+    !hasString(params, "name") ||
+    typeof params?.success !== "boolean" ||
+    !hasRequiredNullableString(params, "threadId") ||
+    !hasOptionalString(params, "error")
+  ) {
+    return undefined;
+  }
+  return message as McpServerOauthLoginCompletedServerNotification;
+}
+
 export function isThreadStartedNotification(
   message: JsonRpcMessage,
 ): message is ServerNotificationFor<"thread/started"> {
   return serverNotification(message)?.method === "thread/started";
+}
+
+export function isErrorNotification(
+  message: JsonRpcMessage,
+): message is ServerNotificationFor<"error"> {
+  return serverNotification(message)?.method === "error";
+}
+
+export function isTurnPlanUpdatedNotification(
+  message: JsonRpcMessage,
+): message is ServerNotificationFor<"turn/plan/updated"> {
+  return serverNotification(message)?.method === "turn/plan/updated";
 }
 
 export function isTurnStartedNotification(
@@ -243,6 +316,133 @@ function hasTurnNotification(value: unknown, statuses: string[]): boolean {
     hasString(params, "threadId") &&
     hasEntityId(turn) &&
     statuses.includes(readString(turn, "status") ?? "")
+  );
+}
+
+function hasErrorNotification(value: unknown): boolean {
+  const params = record(value);
+  const error = record(params?.error);
+  const additionalDetails = error?.additionalDetails;
+  const codexErrorInfo = error?.codexErrorInfo;
+  return (
+    hasOnlyKeys(params, ["error", "threadId", "turnId", "willRetry"]) &&
+    hasOnlyKeys(error, ["additionalDetails", "codexErrorInfo", "message"]) &&
+    hasString(params, "threadId") &&
+    hasString(params, "turnId") &&
+    hasString(error, "message") &&
+    typeof params?.willRetry === "boolean" &&
+    hasCodexErrorInfo(codexErrorInfo) &&
+    (additionalDetails === undefined ||
+      additionalDetails === null ||
+      typeof additionalDetails === "string")
+  );
+}
+
+function hasTurnPlanUpdatedNotification(value: unknown): boolean {
+  const params = record(value);
+  if (
+    !hasOnlyKeys(params, ["explanation", "plan", "threadId", "turnId"]) ||
+    !hasString(params, "threadId") ||
+    !hasString(params, "turnId") ||
+    !Array.isArray(params?.plan) ||
+    (params.explanation !== undefined &&
+      params.explanation !== null &&
+      typeof params.explanation !== "string")
+  ) {
+    return false;
+  }
+  return params.plan.every((value) => {
+    const step = record(value);
+    return (
+      hasOnlyKeys(step, ["status", "step"]) &&
+      hasString(step, "step") &&
+      (step?.status === "pending" ||
+        step?.status === "inProgress" ||
+        step?.status === "completed")
+    );
+  });
+}
+
+function hasOnlyKeys(
+  value: Record<string, unknown> | undefined,
+  allowedKeys: string[],
+): boolean {
+  return Boolean(
+    value && Object.keys(value).every((key) => allowedKeys.includes(key)),
+  );
+}
+
+function hasRequiredNullableString(
+  value: Record<string, unknown> | undefined,
+  key: string,
+): boolean {
+  return Boolean(
+    value &&
+    Object.prototype.hasOwnProperty.call(value, key) &&
+    (value[key] === null || hasString(value, key)),
+  );
+}
+
+function hasOptionalString(
+  value: Record<string, unknown> | undefined,
+  key: string,
+): boolean {
+  return Boolean(
+    value &&
+    (!Object.prototype.hasOwnProperty.call(value, key) ||
+      typeof value[key] === "string"),
+  );
+}
+
+function hasCodexErrorInfo(value: unknown): boolean {
+  if (value === undefined || value === null) {
+    return true;
+  }
+  if (typeof value === "string") {
+    return [
+      "badRequest",
+      "contextWindowExceeded",
+      "cyberPolicy",
+      "internalServerError",
+      "other",
+      "sandboxError",
+      "serverOverloaded",
+      "sessionBudgetExceeded",
+      "threadRollbackFailed",
+      "unauthorized",
+      "usageLimitExceeded",
+    ].includes(value);
+  }
+
+  const variant = record(value);
+  if (!variant || Object.keys(variant).length !== 1) {
+    return false;
+  }
+  const variantName = Object.keys(variant)[0];
+  const details = record(variant[variantName]);
+  if (!details) {
+    return false;
+  }
+  if (variantName === "activeTurnNotSteerable") {
+    return details.turnKind === "review" || details.turnKind === "compact";
+  }
+  if (
+    ![
+      "httpConnectionFailed",
+      "responseStreamConnectionFailed",
+      "responseStreamDisconnected",
+      "responseTooManyFailedAttempts",
+    ].includes(variantName)
+  ) {
+    return false;
+  }
+  const status = details.httpStatusCode;
+  return (
+    status === undefined ||
+    status === null ||
+    (Number.isInteger(status) &&
+      (status as number) >= 0 &&
+      (status as number) <= 65_535)
   );
 }
 

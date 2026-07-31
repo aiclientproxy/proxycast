@@ -219,6 +219,10 @@
       "method": "discordChannel/probe"
     },
     {
+      "kind": "notification",
+      "method": "error"
+    },
+    {
       "kind": "request",
       "method": "evidence/export"
     },
@@ -521,6 +525,10 @@
     {
       "kind": "request",
       "method": "mcpServer/oauth/login"
+    },
+    {
+      "kind": "notification",
+      "method": "mcpServer/oauthLogin/completed"
     },
     {
       "kind": "request",
@@ -995,6 +1003,10 @@
       "method": "skillRepository/save"
     },
     {
+      "kind": "notification",
+      "method": "skills/changed"
+    },
+    {
       "kind": "request",
       "method": "soulStylePack/install"
     },
@@ -1185,6 +1197,10 @@
     {
       "kind": "request",
       "method": "turn/interrupt"
+    },
+    {
+      "kind": "notification",
+      "method": "turn/plan/updated"
     },
     {
       "kind": "request",
@@ -2190,6 +2206,7 @@
       "ArtifactWriteSidecar",
       "ClientRequest",
       "ClientResponse",
+      "CodexErrorInfo",
       "CollabAgentState",
       "CollabAgentStatus",
       "CollabAgentTool",
@@ -2212,6 +2229,7 @@
       "DynamicToolNamespaceSpec",
       "DynamicToolNamespaceTool",
       "DynamicToolSpec",
+      "ErrorNotification",
       "FileChangeApprovalDecision",
       "FileChangePatchUpdatedNotification",
       "FileChangeRequestApprovalParams",
@@ -2232,6 +2250,7 @@
       "McpServerElicitationAction",
       "McpServerElicitationRequestParams",
       "McpServerElicitationRequestResponse",
+      "McpServerOauthLoginCompletedNotification",
       "McpToolCallAppContext",
       "McpToolCallError",
       "McpToolCallProgressNotification",
@@ -2254,6 +2273,7 @@
       "ModelUpgradeInfo",
       "ModelVerification",
       "ModelVerificationNotification",
+      "NonSteerableTurnKind",
       "PatchApplyStatus",
       "PatchChangeKind",
       "PermissionGrantScope",
@@ -2268,6 +2288,7 @@
       "ServerNotification",
       "ServerRequest",
       "ServerRequestResolvedNotification",
+      "SkillsChangedNotification",
       "SleepItem",
       "SortDirection",
       "SubAgentActivityKind",
@@ -2379,6 +2400,9 @@
       "TurnInterruptParams",
       "TurnInterruptResponse",
       "TurnItemsView",
+      "TurnPlanStep",
+      "TurnPlanStepStatus",
+      "TurnPlanUpdatedNotification",
       "TurnStartParams",
       "TurnStartResponse",
       "TurnStartedNotification",

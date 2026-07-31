@@ -4,8 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TaskCenterUtilityToolbar } from "./TaskCenterUtilityToolbar";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
-  .IS_REACT_ACT_ENVIRONMENT = true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const { mockOpenProjectPathWithTool, mockReadProjectGitStatus } = vi.hoisted(
   () => ({
@@ -159,7 +160,13 @@ function renderToolbar(
     uncommittedFileCount: 0,
   });
 
-  return mount(
+  return mount(buildToolbar(props));
+}
+
+function buildToolbar(
+  props?: Partial<React.ComponentProps<typeof TaskCenterUtilityToolbar>>,
+) {
+  return (
     <TaskCenterUtilityToolbar
       projectRootPath="/tmp/project"
       showCanvasToggle
@@ -174,8 +181,20 @@ function renderToolbar(
       shellPanelOpen={false}
       onToggleShellPanel={vi.fn()}
       {...props}
-    />,
+    />
   );
+}
+
+function rerenderToolbar(
+  props?: Partial<React.ComponentProps<typeof TaskCenterUtilityToolbar>>,
+) {
+  const mounted = mountedRoots.at(-1);
+  if (!mounted) {
+    throw new Error("toolbar is not mounted");
+  }
+  act(() => {
+    mounted.root.render(buildToolbar(props));
+  });
 }
 
 async function flushEffects() {
@@ -238,6 +257,52 @@ describe("TaskCenterUtilityToolbar plan rail reveal", () => {
     ]);
   });
 
+  it("实时 todo checklist 到达时应自动揭示计划轨", async () => {
+    const container = renderToolbar({
+      taskRail: {
+        workflowSteps: [],
+        messages: [],
+      },
+    });
+
+    await flushEffects();
+    expect(
+      container.querySelector(
+        '[data-testid="task-center-environment-popover"]',
+      ),
+    ).toBeNull();
+
+    rerenderToolbar({
+      taskRail: {
+        workflowSteps: [],
+        messages: [],
+        todoItems: [
+          { content: "读取 current owner", status: "completed" },
+          { content: "验证实时计划", status: "in_progress" },
+          { content: "记录 Gate B", status: "pending" },
+        ],
+      },
+    });
+    await flushEffects();
+
+    const planSection = container.querySelector(
+      '[data-testid="task-center-run-control-plan"]',
+    );
+    const planItems = Array.from(
+      container.querySelectorAll(
+        '[data-testid="task-center-run-control-plan-item"]',
+      ),
+    );
+    expect(planSection?.textContent).toContain("读取 current owner");
+    expect(planSection?.textContent).toContain("验证实时计划");
+    expect(planSection?.textContent).toContain("记录 Gate B");
+    expect(planItems.map((item) => item.getAttribute("data-status"))).toEqual([
+      "completed",
+      "running",
+      "pending",
+    ]);
+  });
+
   it("没有计划项时不应自动打开环境弹窗", async () => {
     const container = renderToolbar({
       taskRail: {
@@ -249,7 +314,9 @@ describe("TaskCenterUtilityToolbar plan rail reveal", () => {
     await flushEffects();
 
     expect(
-      container.querySelector('[data-testid="task-center-environment-popover"]'),
+      container.querySelector(
+        '[data-testid="task-center-environment-popover"]',
+      ),
     ).toBeNull();
   });
 });

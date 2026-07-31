@@ -13804,6 +13804,150 @@
       "title": "ClientResponse",
       "type": "object"
     },
+    "CodexErrorInfo": {
+      "$defs": {
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Codex-compatible error classification exposed on the v2 wire.",
+      "oneOf": [
+        {
+          "enum": [
+            "badRequest",
+            "contextWindowExceeded",
+            "cyberPolicy",
+            "internalServerError",
+            "other",
+            "sandboxError",
+            "serverOverloaded",
+            "sessionBudgetExceeded",
+            "threadRollbackFailed",
+            "unauthorized",
+            "usageLimitExceeded"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "httpConnectionFailed": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "httpConnectionFailed"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseStreamConnectionFailed": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseStreamConnectionFailed"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseStreamDisconnected": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseStreamDisconnected"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseTooManyFailedAttempts": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseTooManyFailedAttempts"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "activeTurnNotSteerable": {
+              "properties": {
+                "turnKind": {
+                  "$ref": "#/$defs/NonSteerableTurnKind"
+                }
+              },
+              "required": [
+                "turnKind"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "activeTurnNotSteerable"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "CodexErrorInfo"
+    },
     "CollabAgentState": {
       "$defs": {
         "CollabAgentStatus": {
@@ -19787,6 +19931,204 @@
       ],
       "title": "EndpointKind",
       "type": "string"
+    },
+    "ErrorNotification": {
+      "$defs": {
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
+          ],
+          "type": "string"
+        },
+        "TurnError": {
+          "additionalProperties": false,
+          "properties": {
+            "additionalDetails": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "message"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Reports a transient retry or terminal error for the current turn.",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/TurnError"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "willRetry": {
+          "description": "True only when App Server has already decided to retry this turn.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "error",
+        "threadId",
+        "turnId",
+        "willRetry"
+      ],
+      "title": "ErrorNotification",
+      "type": "object"
     },
     "EvidenceExportParams": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -28290,6 +28632,37 @@
       "title": "McpServerListResponse",
       "type": "object"
     },
+    "McpServerOauthLoginCompletedNotification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "success",
+        "threadId"
+      ],
+      "title": "McpServerOauthLoginCompletedNotification",
+      "type": "object"
+    },
     "McpServerOauthLoginParams": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -35917,6 +36290,15 @@
       "title": "ModelVerificationNotification",
       "type": "object"
     },
+    "NonSteerableTurnKind": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "compact",
+        "review"
+      ],
+      "title": "NonSteerableTurnKind",
+      "type": "string"
+    },
     "OpenDeepLinkPayload": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -43260,6 +43642,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -43579,6 +44094,32 @@
           ],
           "type": "string"
         },
+        "ErrorNotification": {
+          "additionalProperties": false,
+          "description": "Reports a transient retry or terminal error for the current turn.",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/TurnError"
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": "string"
+            },
+            "willRetry": {
+              "description": "True only when App Server has already decided to retry this turn.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "error",
+            "threadId",
+            "turnId",
+            "willRetry"
+          ],
+          "type": "object"
+        },
         "FileChangePatchUpdatedNotification": {
           "properties": {
             "changes": {
@@ -43747,6 +44288,35 @@
             "startedAtMs",
             "threadId",
             "turnId"
+          ],
+          "type": "object"
+        },
+        "McpServerOauthLoginCompletedNotification": {
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "success": {
+              "type": "boolean"
+            },
+            "threadId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "success",
+            "threadId"
           ],
           "type": "object"
         },
@@ -44008,6 +44578,13 @@
           ],
           "type": "object"
         },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -44192,6 +44769,11 @@
             "requestId",
             "threadId"
           ],
+          "type": "object"
+        },
+        "SkillsChangedNotification": {
+          "additionalProperties": false,
+          "description": "Signals that the process-wide Skill catalog must be read again.",
           "type": "object"
         },
         "SleepItem": {
@@ -45465,6 +46047,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -45472,7 +46055,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -45489,6 +46081,61 @@
             "summary"
           ],
           "type": "string"
+        },
+        "TurnPlanStep": {
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "$ref": "#/$defs/TurnPlanStepStatus"
+            },
+            "step": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "step"
+          ],
+          "type": "object"
+        },
+        "TurnPlanStepStatus": {
+          "enum": [
+            "completed",
+            "inProgress",
+            "pending"
+          ],
+          "type": "string"
+        },
+        "TurnPlanUpdatedNotification": {
+          "additionalProperties": false,
+          "description": "Reports the latest turn-scoped execution checklist.",
+          "properties": {
+            "explanation": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "plan": {
+              "items": {
+                "$ref": "#/$defs/TurnPlanStep"
+              },
+              "type": "array"
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "plan",
+            "threadId",
+            "turnId"
+          ],
+          "type": "object"
         },
         "TurnStartedNotification": {
           "description": "Notification payloads are kept beside the request contract so the v2\nprojection can use the same Thread/Turn identity without a second DTO.",
@@ -45718,6 +46365,54 @@
         {
           "properties": {
             "method": {
+              "const": "error",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ErrorNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "skills/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/SkillsChangedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "mcpServer/oauthLogin/completed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/McpServerOauthLoginCompletedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "thread/started",
               "type": "string"
             },
@@ -45851,6 +46546,22 @@
             },
             "params": {
               "$ref": "#/$defs/TurnCompletedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turn/plan/updated",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnPlanUpdatedNotification"
             }
           },
           "required": [
@@ -49079,6 +49790,13 @@
       "title": "SkillWorkflowStep",
       "type": "object"
     },
+    "SkillsChangedNotification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Signals that the process-wide Skill catalog must be read again.",
+      "title": "SkillsChangedNotification",
+      "type": "object"
+    },
     "SleepItem": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -49676,6 +50394,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -50093,6 +50944,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -50916,6 +51774,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -50923,7 +51782,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -51708,6 +52576,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -52151,6 +53152,13 @@
               "type": "object"
             }
           ]
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
+          ],
+          "type": "string"
         },
         "PatchApplyStatus": {
           "enum": [
@@ -53113,6 +54121,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -53120,7 +54129,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -57851,6 +58869,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -58268,6 +59419,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -59232,6 +60390,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -59239,7 +60398,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -59616,6 +60784,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -60033,6 +61334,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -60997,6 +62305,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -61004,7 +62313,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -61239,6 +62557,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -61656,6 +63107,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -62620,6 +64078,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -62627,7 +64086,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -63029,6 +64497,139 @@
             "start"
           ],
           "type": "object"
+        },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
         },
         "CollabAgentState": {
           "properties": {
@@ -63474,6 +65075,13 @@
             }
           ]
         },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -64435,6 +66043,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -64442,7 +66051,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -64984,6 +66602,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -65401,6 +67152,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -66380,6 +68138,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -66387,7 +68146,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -66601,6 +68369,139 @@
             "start"
           ],
           "type": "object"
+        },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
         },
         "CollabAgentState": {
           "properties": {
@@ -67019,6 +68920,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -67983,6 +69891,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -67990,7 +69899,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -68917,6 +70835,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -69361,6 +71412,13 @@
             }
           ]
         },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -70322,6 +72380,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -70329,7 +72388,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -70586,6 +72654,139 @@
             "start"
           ],
           "type": "object"
+        },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
         },
         "CollabAgentState": {
           "properties": {
@@ -71007,6 +73208,13 @@
           ],
           "type": "string"
         },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
+          ],
+          "type": "string"
+        },
         "PatchApplyStatus": {
           "enum": [
             "completed",
@@ -71968,6 +74176,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -71975,7 +74184,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -72541,6 +74759,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -72935,6 +75286,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -73684,6 +76042,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -73691,7 +76050,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -73918,6 +76286,139 @@
             "start"
           ],
           "type": "object"
+        },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
         },
         "CollabAgentState": {
           "properties": {
@@ -74336,6 +76837,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -75300,6 +77808,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -75307,7 +77816,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -75825,6 +78343,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -76219,6 +78870,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -76911,6 +79569,7 @@
           ]
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -76918,7 +79577,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -77163,6 +79831,139 @@
             "start"
           ],
           "type": "object"
+        },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
         },
         "CollabAgentState": {
           "properties": {
@@ -77558,6 +80359,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -78307,6 +81115,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -78314,7 +81123,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -78523,7 +81341,150 @@
       "type": "object"
     },
     "TurnError": {
+      "$defs": {
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
+          ],
+          "type": "string"
+        }
+      },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
       "properties": {
         "additionalDetails": {
           "type": [
@@ -78531,7 +81492,16 @@
             "string"
           ]
         },
-        "errorInfo": true,
+        "codexErrorInfo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CodexErrorInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "message": {
           "type": "string"
         }
@@ -78573,6 +81543,103 @@
       ],
       "title": "TurnItemsView",
       "type": "string"
+    },
+    "TurnPlanStep": {
+      "$defs": {
+        "TurnPlanStepStatus": {
+          "enum": [
+            "completed",
+            "inProgress",
+            "pending"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/TurnPlanStepStatus"
+        },
+        "step": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "step"
+      ],
+      "title": "TurnPlanStep",
+      "type": "object"
+    },
+    "TurnPlanStepStatus": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "completed",
+        "inProgress",
+        "pending"
+      ],
+      "title": "TurnPlanStepStatus",
+      "type": "string"
+    },
+    "TurnPlanUpdatedNotification": {
+      "$defs": {
+        "TurnPlanStep": {
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "$ref": "#/$defs/TurnPlanStepStatus"
+            },
+            "step": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "step"
+          ],
+          "type": "object"
+        },
+        "TurnPlanStepStatus": {
+          "enum": [
+            "completed",
+            "inProgress",
+            "pending"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Reports the latest turn-scoped execution checklist.",
+      "properties": {
+        "explanation": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "plan": {
+          "items": {
+            "$ref": "#/$defs/TurnPlanStep"
+          },
+          "type": "array"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan",
+        "threadId",
+        "turnId"
+      ],
+      "title": "TurnPlanUpdatedNotification",
+      "type": "object"
     },
     "TurnStartParams": {
       "$defs": {
@@ -79007,6 +82074,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -79401,6 +82601,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -80150,6 +83357,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -80157,7 +83365,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -80357,6 +83574,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -80751,6 +84101,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -81500,6 +84857,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -81507,7 +84865,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -81974,6 +85341,139 @@
           ],
           "type": "object"
         },
+        "CodexErrorInfo": {
+          "description": "Codex-compatible error classification exposed on the v2 wire.",
+          "oneOf": [
+            {
+              "enum": [
+                "badRequest",
+                "contextWindowExceeded",
+                "cyberPolicy",
+                "internalServerError",
+                "other",
+                "sandboxError",
+                "serverOverloaded",
+                "sessionBudgetExceeded",
+                "threadRollbackFailed",
+                "unauthorized",
+                "usageLimitExceeded"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "httpConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "httpConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamConnectionFailed": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamConnectionFailed"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseStreamDisconnected": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseStreamDisconnected"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "responseTooManyFailedAttempts": {
+                  "properties": {
+                    "httpStatusCode": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "responseTooManyFailedAttempts"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "activeTurnNotSteerable": {
+                  "properties": {
+                    "turnKind": {
+                      "$ref": "#/$defs/NonSteerableTurnKind"
+                    }
+                  },
+                  "required": [
+                    "turnKind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "activeTurnNotSteerable"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "CollabAgentState": {
           "properties": {
             "message": {
@@ -82368,6 +85868,13 @@
           "enum": [
             "commentary",
             "final_answer"
+          ],
+          "type": "string"
+        },
+        "NonSteerableTurnKind": {
+          "enum": [
+            "compact",
+            "review"
           ],
           "type": "string"
         },
@@ -83117,6 +86624,7 @@
           "type": "object"
         },
         "TurnError": {
+          "additionalProperties": false,
           "properties": {
             "additionalDetails": {
               "type": [
@@ -83124,7 +86632,16 @@
                 "string"
               ]
             },
-            "errorInfo": true,
+            "codexErrorInfo": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CodexErrorInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "message": {
               "type": "string"
             }
@@ -87382,6 +90899,7 @@
             "enum": [
               "agentSession/event",
               "configWarning",
+              "error",
               "initialized",
               "item/agentMessage/delta",
               "item/commandExecution/outputDelta",
@@ -87393,11 +90911,13 @@
               "item/reasoning/summaryTextDelta",
               "item/reasoning/textDelta",
               "item/started",
+              "mcpServer/oauthLogin/completed",
               "model/list/updated",
               "model/rerouted",
               "model/safetyBuffering/updated",
               "model/verification",
               "serverRequest/resolved",
+              "skills/changed",
               "thread/archived",
               "thread/closed",
               "thread/deleted",
@@ -87410,6 +90930,7 @@
               "thread/tokenUsage/updated",
               "thread/unarchived",
               "turn/completed",
+              "turn/plan/updated",
               "turn/started",
               "warning",
               "workspaceRightSurface/pendingChanged"

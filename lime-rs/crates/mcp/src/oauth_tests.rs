@@ -6,27 +6,10 @@ use axum::http::{header::LOCATION, HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use lime_core::EventEmit;
-use serde_json::Value;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
-#[derive(Clone, Default)]
-struct RecordingEmitter {
-    events: Arc<Mutex<Vec<(String, Value)>>>,
-}
-
-impl EventEmit for RecordingEmitter {
-    fn emit_event(&self, event: &str, payload: &Value) -> Result<(), String> {
-        self.events
-            .lock()
-            .expect("events lock")
-            .push((event.to_string(), payload.clone()));
-        Ok(())
-    }
-}
 
 fn oauth_config_with_explicit_client_id() -> McpServerConfig {
     McpServerConfig {
@@ -141,28 +124,6 @@ fn require_test_header(state: &TestOAuthProviderState, headers: &HeaderMap) {
         .and_then(|value| value.to_str().ok())
         .expect("required OAuth provider header");
     assert_eq!(actual, expected);
-}
-
-async fn wait_for_event(
-    events: Arc<Mutex<Vec<(String, Value)>>>,
-    event_name: &str,
-    server_name: &str,
-) {
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let has_event = events
-                .lock()
-                .expect("events lock")
-                .iter()
-                .any(|(name, payload)| name == event_name && payload["server_name"] == server_name);
-            if has_event {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(25)).await;
-        }
-    })
-    .await
-    .expect("event should be emitted");
 }
 
 fn oauth_browser_client() -> reqwest::Client {
@@ -300,37 +261,6 @@ fn merge_loopback_no_proxy_hosts_returns_none_when_complete() {
     );
 }
 
-#[test]
-fn emit_oauth_completed_sends_server_event() {
-    let emitter = RecordingEmitter::default();
-    let events = emitter.events.clone();
-
-    emit_oauth_completed(Some(DynEmitter::new(emitter)), "remote-docs");
-
-    let events = events.lock().expect("events lock");
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].0, "mcp:oauth_completed");
-    assert_eq!(events[0].1["server_name"], "remote-docs");
-}
-
-#[test]
-fn emit_oauth_error_sends_server_error_event() {
-    let emitter = RecordingEmitter::default();
-    let events = emitter.events.clone();
-
-    emit_oauth_error(
-        Some(DynEmitter::new(emitter)),
-        "remote-docs",
-        "invalid_scope",
-    );
-
-    let events = events.lock().expect("events lock");
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].0, "mcp:server_error");
-    assert_eq!(events[0].1["server_name"], "remote-docs");
-    assert_eq!(events[0].1["error"], "invalid_scope");
-}
-
 #[tokio::test]
 async fn credential_lookup_fails_closed_without_injected_store_root() {
     let registry = McpOAuthRegistry::new();
@@ -355,22 +285,13 @@ async fn start_login_completes_against_local_oauth_provider_and_persists_token()
     let temp = tempfile::tempdir().expect("tempdir");
     let store_root = temp.path().join("oauth-store");
     let registry = McpOAuthRegistry::new_in(&store_root);
-    let emitter = RecordingEmitter::default();
-    let events = emitter.events.clone();
-
     let login = registry
-        .start_login(
-            "remote-docs",
-            &config,
-            None,
-            Some(30),
-            Some(DynEmitter::new(emitter)),
-        )
+        .start_login("remote-docs", &config, None, Some(30))
         .await
         .expect("start OAuth login");
 
     let response = oauth_browser_client()
-        .get(login.authorization_url)
+        .get(login.authorization_url.clone())
         .send()
         .await
         .expect("visit authorization URL");
@@ -379,29 +300,12 @@ async fn start_login_completes_against_local_oauth_provider_and_persists_token()
         "callback page should be successful"
     );
 
-    let store = PersistentCredentialStore::new_in(&store_root, "remote-docs", &server_url);
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let has_credentials = store
-                .has_credentials()
-                .await
-                .expect("credential store should be readable");
-            let has_event = events
-                .lock()
-                .expect("events lock")
-                .iter()
-                .any(|(name, payload)| {
-                    name == "mcp:oauth_completed" && payload["server_name"] == "remote-docs"
-                });
-            if has_credentials && has_event {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(25)).await;
-        }
-    })
-    .await
-    .expect("OAuth completion should persist token and emit event");
+    tokio::time::timeout(Duration::from_secs(5), login.wait())
+        .await
+        .expect("OAuth completion should finish")
+        .expect("OAuth completion should succeed");
 
+    let store = PersistentCredentialStore::new_in(&store_root, "remote-docs", &server_url);
     let credentials = store
         .load()
         .await
@@ -427,12 +331,12 @@ async fn start_login_uses_discovered_scopes_when_config_has_no_scopes() {
     let registry = McpOAuthRegistry::new_in(temp.path().join("oauth-store"));
 
     let login = registry
-        .start_login("remote-docs", &config, None, Some(30), None)
+        .start_login("remote-docs", &config, None, Some(30))
         .await
         .expect("start OAuth login");
 
     let response = oauth_browser_client()
-        .get(login.authorization_url)
+        .get(login.authorization_url.clone())
         .send()
         .await
         .expect("visit authorization URL");
@@ -450,6 +354,7 @@ async fn start_login_uses_discovered_scopes_when_config_has_no_scopes() {
         .and_then(|query| query.get("scope"))
         .expect("authorize URL should include discovered scopes");
     assert_eq!(scope, "search.read search.write");
+    login.wait().await.expect("OAuth completion should succeed");
 }
 
 #[tokio::test]
@@ -478,12 +383,12 @@ async fn start_login_applies_configured_headers_to_oauth_requests() {
     let registry = McpOAuthRegistry::new_in(&store_root);
 
     let login = registry
-        .start_login("remote-docs", &config, None, Some(30), None)
+        .start_login("remote-docs", &config, None, Some(30))
         .await
         .expect("start OAuth login");
 
     let response = oauth_browser_client()
-        .get(login.authorization_url)
+        .get(login.authorization_url.clone())
         .send()
         .await
         .expect("visit authorization URL");
@@ -492,41 +397,27 @@ async fn start_login_applies_configured_headers_to_oauth_requests() {
         "callback page should be successful"
     );
 
+    tokio::time::timeout(Duration::from_secs(5), login.wait())
+        .await
+        .expect("OAuth completion should finish")
+        .expect("OAuth completion should succeed");
+
     let store = PersistentCredentialStore::new_in(&store_root, "remote-docs", &server_url);
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            if store
-                .has_credentials()
-                .await
-                .expect("credential store should be readable")
-            {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(25)).await;
-        }
-    })
-    .await
-    .expect("OAuth completion should persist token");
+    assert!(store
+        .has_credentials()
+        .await
+        .expect("credential store should be readable"));
 }
 
 #[tokio::test]
-async fn oauth_callback_provider_error_emits_server_error_without_timeout() {
+async fn oauth_callback_provider_error_returns_without_timeout() {
     let provider = spawn_test_oauth_provider().await;
     let server_url = format!("{}/mcp", provider.base_url);
     let config = dynamic_oauth_config(server_url);
     let temp = tempfile::tempdir().expect("tempdir");
     let registry = McpOAuthRegistry::new_in(temp.path().join("oauth-store"));
-    let emitter = RecordingEmitter::default();
-    let events = emitter.events.clone();
-
     let login = registry
-        .start_login(
-            "remote-docs",
-            &config,
-            None,
-            Some(30),
-            Some(DynEmitter::new(emitter)),
-        )
+        .start_login("remote-docs", &config, None, Some(30))
         .await
         .expect("start OAuth login");
     let mut callback_url =
@@ -559,13 +450,10 @@ async fn oauth_callback_provider_error_emits_server_error_without_timeout() {
         .expect("visit callback URL");
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
-    wait_for_event(events.clone(), "mcp:server_error", "remote-docs").await;
-    let events = events.lock().expect("events lock");
-    let error = events
-        .iter()
-        .find(|(name, _)| name == "mcp:server_error")
-        .map(|(_, payload)| payload["error"].as_str().unwrap_or_default())
-        .expect("server error should be emitted");
-    assert!(error.contains("invalid_scope"));
-    assert!(error.contains("scope rejected"));
+    let error = tokio::time::timeout(Duration::from_secs(5), login.wait())
+        .await
+        .expect("OAuth failure should return without waiting for timeout")
+        .expect_err("provider error should fail OAuth completion");
+    assert!(error.to_string().contains("invalid_scope"));
+    assert!(error.to_string().contains("scope rejected"));
 }

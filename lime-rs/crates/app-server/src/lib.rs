@@ -35,6 +35,7 @@ mod runtime_backend;
 mod runtime_factory;
 mod server_request;
 mod skill_registry;
+mod skills_watcher;
 mod thread_listener;
 #[cfg(test)]
 mod thread_listener_tests;
@@ -295,6 +296,7 @@ pub struct AppServer {
     server_requests: server_request::ServerRequestRouter,
     current_time_requests: current_time::CurrentTimeRequestRouter,
     mcp_elicitation_requests: mcp_elicitation::ElicitationRequestSource,
+    _skills_watcher: Option<Arc<skills_watcher::SkillsWatcher>>,
 }
 
 #[derive(Clone)]
@@ -345,6 +347,7 @@ impl AppServer {
         };
         let interrupt_router = server_requests.clone();
         let notification_bridge = interrupt_bridge.clone();
+        let skills_watcher_bridge = notification_bridge.clone();
         let turn_interrupt_hook: processor::TurnInterruptHook =
             Arc::new(move |thread_id, turn_id| {
                 let bridge = interrupt_bridge.clone();
@@ -364,6 +367,11 @@ impl AppServer {
                         .await;
                 })
             });
+        let skills_watcher = if cfg!(test) {
+            None
+        } else {
+            skills_watcher::SkillsWatcher::start_default(skills_watcher_bridge)
+        };
         Self {
             processor: RequestProcessor::new_with_thread_states(runtime, thread_states.clone())
                 .with_turn_interrupt_hook(turn_interrupt_hook)
@@ -380,6 +388,7 @@ impl AppServer {
             server_requests,
             current_time_requests,
             mcp_elicitation_requests: mcp_elicitation::ElicitationRequestSource::default(),
+            _skills_watcher: skills_watcher,
         }
     }
 

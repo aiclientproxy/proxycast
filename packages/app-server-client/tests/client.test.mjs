@@ -3479,6 +3479,37 @@ test("agent runtime client facade subscribes to direct lifecycle notifications",
   assert.equal(received[0].message.method, "turn/started");
 });
 
+test("agent runtime client facade returns typed errors through the signal channel", async () => {
+  const notification = {
+    method: "error",
+    params: {
+      error: { message: "provider stream reconnecting" },
+      threadId: "thread_external",
+      turnId: "turn_external",
+      willRetry: true,
+    },
+  };
+  const runtime = new AppServerAgentRuntimeClient(
+    new AppServerConnection({
+      send() {},
+      async nextMessage() {
+        return notification;
+      },
+    }),
+  );
+  const signals = [];
+  const subscription = runtime.subscribeSignalEvents((event, message) => {
+    signals.push({ event, message });
+  });
+
+  assert.equal(await runtime.dispatchEvent(notification), true);
+  assert.equal((await runtime.nextEvent()).method, "error");
+  subscription.unsubscribe();
+  assert.equal(signals.length, 2);
+  assert.equal(signals[0].event.params.willRetry, true);
+  assert.equal(signals[0].message.method, "error");
+});
+
 test("agent runtime client facade subscribes to direct item lifecycle", async () => {
   const notification = {
     method: "item/started",
@@ -4626,6 +4657,53 @@ test("routes direct lifecycle notifications without wrapper projection", async (
       method: "item/completed",
     },
   ]);
+});
+
+test("routes typed error notifications through the signal router", async () => {
+  const notification = {
+    method: "error",
+    params: {
+      error: { message: "provider stream reconnecting" },
+      threadId: "thread_external",
+      turnId: "turn_external",
+      willRetry: true,
+    },
+  };
+  const router = new AppServerAgentEventRouter();
+  const signals = [];
+  const unsubscribeSignal = router.subscribeSignal((event) => {
+    signals.push(event);
+  });
+
+  assert.equal(agentRuntimeLifecycleNotification(notification), undefined);
+  assert.equal(await router.dispatch(notification), true);
+  unsubscribeSignal();
+  assert.deepEqual(signals, [notification]);
+});
+
+test("routes turn plan updates only through the signal router", async () => {
+  const notification = {
+    method: "turn/plan/updated",
+    params: {
+      explanation: "继续执行",
+      plan: [
+        { step: "读现状", status: "completed" },
+        { step: "补主链", status: "inProgress" },
+      ],
+      threadId: "thread_external",
+      turnId: "turn_external",
+    },
+  };
+  const router = new AppServerAgentEventRouter();
+  const lifecycle = [];
+  const signals = [];
+  router.subscribeLifecycle((event) => lifecycle.push(event));
+  router.subscribeSignal((event) => signals.push(event));
+
+  assert.equal(agentRuntimeLifecycleNotification(notification), undefined);
+  assert.equal(await router.dispatch(notification), true);
+  assert.deepEqual(lifecycle, []);
+  assert.deepEqual(signals, [notification]);
 });
 
 test("connection buffers request responses read by idle notification loop", async () => {

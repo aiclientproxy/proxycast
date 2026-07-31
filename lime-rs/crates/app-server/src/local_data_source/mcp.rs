@@ -20,7 +20,6 @@ use app_server_protocol::McpServerImportFromAppResponse;
 use app_server_protocol::McpServerLifecycleResponse;
 use app_server_protocol::McpServerListResponse;
 use app_server_protocol::McpServerOauthLoginParams;
-use app_server_protocol::McpServerOauthLoginResponse;
 use app_server_protocol::McpServerStartParams;
 use app_server_protocol::McpServerStatusListResponse;
 use app_server_protocol::McpServerStopParams;
@@ -165,7 +164,7 @@ pub(crate) async fn login_mcp_server_oauth(
     db: &DbConnection,
     manager: &McpManagerState,
     params: McpServerOauthLoginParams,
-) -> Result<McpServerOauthLoginResponse, RuntimeCoreError> {
+) -> Result<lime_mcp::McpOAuthLoginHandle, RuntimeCoreError> {
     let server = McpService::get_all(db)
         .map_err(data_error)?
         .into_iter()
@@ -184,10 +183,6 @@ pub(crate) async fn login_mcp_server_oauth(
         )
         .await
         .map_err(mcp_error)
-        .map(|response| McpServerOauthLoginResponse {
-            authorization_url: response.authorization_url,
-            state: response.state,
-        })
 }
 
 pub(crate) async fn list_mcp_tools(

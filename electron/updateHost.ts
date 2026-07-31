@@ -1,4 +1,9 @@
 import { app, autoUpdater } from "./electronRuntime";
+import {
+  assessUpdateCandidate,
+  normalizeUpdateVersion,
+  type UpdateCandidateAssessment,
+} from "./updateVersion";
 
 type UpdateInstallStage =
   | "idle"
@@ -84,7 +89,6 @@ export class ElectronUpdateHost {
   readonly #windowController: UpdateWindowController;
   #configured = false;
   #checkPromise: Promise<UpdateInfo | null> | null = null;
-  #downloadPromise: Promise<UpdateInfo> | null = null;
   #session: UpdateInstallSession;
   #latestInfo: UpdateInfo | null = null;
 
@@ -156,27 +160,40 @@ export class ElectronUpdateHost {
       };
     }
     this.#configure();
-    if (this.#hasPendingUpdate()) {
+    if (this.#hasConfirmedUpdate()) {
       return this.#currentVersionInfo();
     }
 
-    this.#setSession({
-      stage: "checking",
-      message: "正在检查更新",
-      isActive: true,
-    });
+    if (!this.#checkPromise) {
+      this.#setSession({
+        stage: "checking",
+        latestVersion: null,
+        downloadUrl: null,
+        error: null,
+        message: "正在检查更新",
+        isActive: true,
+        completedAt: null,
+      });
+    }
     try {
       const info = await this.#checkForUpdatesOnce();
       this.#latestInfo = info;
-      const hasUpdate = Boolean(info && info.version !== app.getVersion());
+      const assessment = this.#assessUpdateInfo(info);
+      if (assessment.status === "invalid") {
+        throw new Error("更新清单未提供有效的候选版本");
+      }
+      const hasUpdate = assessment.status === "newer";
       this.#setSession({
-        stage: hasUpdate ? "downloading" : "up_to_date",
-        latestVersion: info?.version ?? null,
-        message: hasUpdate ? "发现新版本，正在下载更新" : "当前已是最新版本",
-        isActive: hasUpdate,
-        completedAt: hasUpdate ? null : Date.now(),
+        stage: hasUpdate ? "completed" : "up_to_date",
+        latestVersion: assessment.version,
+        downloadUrl: hasUpdate ? this.#downloadUrl(info) : null,
+        percent: hasUpdate ? 1 : 0,
+        error: null,
+        message: hasUpdate ? "更新已下载，准备安装" : "当前已是最新版本",
+        isActive: false,
+        completedAt: Date.now(),
       });
-      return this.#versionInfo(info, hasUpdate);
+      return this.#versionInfo(info);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.#setSession({
@@ -204,13 +221,6 @@ export class ElectronUpdateHost {
     }
     this.#configure();
 
-    if (this.#session.stage === "downloading") {
-      return {
-        success: true,
-        message: "更新下载已开始",
-        filePath: null,
-      };
-    }
     if (this.#session.stage === "completed") {
       return {
         success: true,
@@ -226,50 +236,19 @@ export class ElectronUpdateHost {
       };
     }
 
-    this.#setSession({
-      stage: "checking",
-      latestVersion: this.#latestInfo?.version ?? null,
-      message: "正在检查并下载更新",
-      isActive: true,
-    });
-    try {
-      const info = await this.#checkForUpdatesOnce();
-      if (!info) {
-        this.#setSession({
-          stage: "up_to_date",
-          message: "当前已是最新版本",
-          isActive: false,
-          completedAt: Date.now(),
-        });
-        return {
-          success: false,
-          message: "当前已是最新版本",
-          filePath: null,
-        };
-      }
-      this.#latestInfo = info;
-      this.#setSession({
-        stage: "downloading",
-        latestVersion: info.version ?? null,
-        message: "更新下载已开始",
-        isActive: true,
-      });
+    const versionInfo = await this.checkForUpdates();
+    if (versionInfo.hasUpdate) {
       return {
         success: true,
-        message: "更新下载已开始",
+        message: "更新已下载，准备安装",
         filePath: null,
       };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.#setSession({
-        stage: "failed",
-        error: message,
-        message,
-        isActive: false,
-        completedAt: Date.now(),
-      });
-      return { success: false, message };
     }
+    return {
+      success: false,
+      message: versionInfo.error || "当前已是最新版本",
+      filePath: null,
+    };
   }
 
   async startInstallSession(): Promise<UpdateInstallSession> {
@@ -292,30 +271,48 @@ export class ElectronUpdateHost {
         return this.#session;
       }
       if (this.#session.stage !== "completed") {
-        if (this.#session.stage !== "downloading") {
+        if (!this.#checkPromise) {
           this.#setSession({
             stage: "checking",
+            latestVersion: null,
+            downloadUrl: null,
+            error: null,
             message: "正在检查并下载更新",
             isActive: true,
+            completedAt: null,
           });
-          const info = await this.#checkForUpdatesOnce();
-          if (!info) {
-            this.#setSession({
-              stage: "up_to_date",
-              message: "当前已是最新版本",
-              isActive: false,
-              completedAt: Date.now(),
-            });
-            return this.#session;
-          }
         }
-        await this.#waitForDownloadedUpdate();
+        const info = await this.#checkForUpdatesOnce();
+        this.#latestInfo = info;
+        const assessment = this.#assessUpdateInfo(info);
+        if (assessment.status === "invalid") {
+          throw new Error("更新清单未提供有效的候选版本");
+        }
+        if (assessment.status !== "newer") {
+          this.#setSession({
+            stage: "up_to_date",
+            latestVersion: assessment.version,
+            downloadUrl: null,
+            percent: 0,
+            error: null,
+            message: "当前已是最新版本",
+            isActive: false,
+            completedAt: Date.now(),
+          });
+          return this.#session;
+        }
       }
       if (this.#isInstallingUpdate()) {
         return this.#session;
       }
+      const installAssessment = this.#assessUpdateInfo(this.#latestInfo);
+      if (installAssessment.status !== "newer") {
+        throw new Error("更新版本未通过安装前校验");
+      }
       this.#setSession({
         stage: "restarting",
+        latestVersion: installAssessment.version,
+        error: null,
         message: "正在重启并安装更新",
         isActive: true,
         canCloseWindow: false,
@@ -350,18 +347,25 @@ export class ElectronUpdateHost {
       ),
     });
     autoUpdater.on("update-available", () => {
-      this.#latestInfo = {};
+      this.#latestInfo = null;
       this.#setSession({
         stage: "downloading",
         latestVersion: null,
         downloadUrl: null,
-        message: "发现新版本，正在下载更新",
+        error: null,
+        message: "正在下载并验证更新",
         isActive: true,
+        completedAt: null,
       });
     });
     autoUpdater.on("update-not-available", () => {
+      this.#latestInfo = null;
       this.#setSession({
         stage: "up_to_date",
+        latestVersion: null,
+        downloadUrl: null,
+        percent: 0,
+        error: null,
         message: "当前已是最新版本",
         isActive: false,
         completedAt: Date.now(),
@@ -376,16 +380,7 @@ export class ElectronUpdateHost {
           releaseDate,
           updateURL,
         );
-        this.#latestInfo = info;
-        this.#setSession({
-          stage: "completed",
-          latestVersion: info.version ?? null,
-          downloadUrl: updateURL || null,
-          percent: 1,
-          message: "更新已下载，准备安装",
-          isActive: false,
-          completedAt: Date.now(),
-        });
+        this.#applyDownloadedUpdate(info);
       },
     );
     autoUpdater.on("error", (error) => {
@@ -419,12 +414,14 @@ export class ElectronUpdateHost {
     return app.isPackaged;
   }
 
-  #versionInfo(info: UpdateInfo | null, hasUpdate: boolean): VersionInfo {
+  #versionInfo(info: UpdateInfo | null): VersionInfo {
+    const assessment = this.#assessUpdateInfo(info);
+    const hasUpdate = assessment.status === "newer";
     return {
       current: app.getVersion(),
-      latest: info?.version ?? null,
+      latest: assessment.version,
       hasUpdate,
-      downloadUrl: this.#downloadUrl(info),
+      downloadUrl: hasUpdate ? this.#downloadUrl(info) : null,
       releaseNotes:
         typeof info?.releaseNotes === "string" ? info.releaseNotes : null,
       releaseNotesUrl: null,
@@ -434,22 +431,15 @@ export class ElectronUpdateHost {
   }
 
   #currentVersionInfo(): VersionInfo {
-    const hasUpdate = Boolean(
-      this.#latestInfo && this.#latestInfo.version !== app.getVersion(),
-    );
-    return this.#versionInfo(this.#latestInfo, hasUpdate);
+    return this.#versionInfo(this.#latestInfo);
   }
 
   #downloadUrl(info: UpdateInfo | null): string | null {
     return info?.updateURL ?? null;
   }
 
-  #hasPendingUpdate(): boolean {
-    return (
-      this.#session.stage === "downloading" ||
-      this.#session.stage === "completed" ||
-      this.#isInstallingUpdate()
-    );
+  #hasConfirmedUpdate(): boolean {
+    return this.#session.stage === "completed" || this.#isInstallingUpdate();
   }
 
   #isInstallingUpdate(): boolean {
@@ -464,48 +454,6 @@ export class ElectronUpdateHost {
       return await this.#checkPromise;
     }
     const promise = new Promise<UpdateInfo | null>((resolve, reject) => {
-      const cleanup = () => {
-        autoUpdater.removeListener("update-available", onAvailable);
-        autoUpdater.removeListener("update-not-available", onNotAvailable);
-        autoUpdater.removeListener("error", onError);
-      };
-      const onAvailable = () => {
-        cleanup();
-        resolve(this.#latestInfo ?? {});
-      };
-      const onNotAvailable = () => {
-        cleanup();
-        resolve(null);
-      };
-      const onError = (error: Error) => {
-        cleanup();
-        reject(error);
-      };
-      autoUpdater.once("update-available", onAvailable);
-      autoUpdater.once("update-not-available", onNotAvailable);
-      autoUpdater.once("error", onError);
-      try {
-        autoUpdater.checkForUpdates();
-      } catch (error) {
-        cleanup();
-        reject(error);
-      }
-    }).finally(() => {
-      this.#checkPromise = null;
-    });
-    this.#checkPromise = promise;
-    return await promise;
-  }
-
-  async #waitForDownloadedUpdate(): Promise<UpdateInfo> {
-    if (this.#session.stage === "completed" && this.#latestInfo) {
-      return this.#latestInfo;
-    }
-    if (this.#downloadPromise) {
-      return await this.#downloadPromise;
-    }
-
-    const promise = new Promise<UpdateInfo>((resolve, reject) => {
       const cleanup = () => {
         autoUpdater.removeListener("update-downloaded", onDownloaded);
         autoUpdater.removeListener("update-not-available", onNotAvailable);
@@ -525,26 +473,72 @@ export class ElectronUpdateHost {
           releaseDate,
           updateURL,
         );
-        this.#latestInfo = info;
+        if (this.#assessUpdateInfo(info).status === "invalid") {
+          reject(new Error("更新清单未提供有效的候选版本"));
+          return;
+        }
         resolve(info);
       };
       const onNotAvailable = () => {
         cleanup();
-        reject(new Error("当前已是最新版本"));
+        resolve(null);
       };
       const onError = (error: Error) => {
         cleanup();
         reject(error);
       };
-
       autoUpdater.once("update-downloaded", onDownloaded);
       autoUpdater.once("update-not-available", onNotAvailable);
       autoUpdater.once("error", onError);
+      try {
+        autoUpdater.checkForUpdates();
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
     }).finally(() => {
-      this.#downloadPromise = null;
+      this.#checkPromise = null;
     });
-    this.#downloadPromise = promise;
+    this.#checkPromise = promise;
     return await promise;
+  }
+
+  #assessUpdateInfo(info: UpdateInfo | null): UpdateCandidateAssessment {
+    if (!info) {
+      return { status: "not_newer", version: null };
+    }
+    return assessUpdateCandidate(info.version, app.getVersion());
+  }
+
+  #applyDownloadedUpdate(info: UpdateInfo): void {
+    const assessment = this.#assessUpdateInfo(info);
+    if (assessment.status === "invalid") {
+      this.#latestInfo = null;
+      this.#setSession({
+        stage: "failed",
+        latestVersion: null,
+        downloadUrl: null,
+        percent: 0,
+        error: "更新清单未提供有效的候选版本",
+        message: "更新清单未提供有效的候选版本",
+        isActive: false,
+        completedAt: Date.now(),
+      });
+      return;
+    }
+
+    this.#latestInfo = info;
+    const hasUpdate = assessment.status === "newer";
+    this.#setSession({
+      stage: hasUpdate ? "completed" : "up_to_date",
+      latestVersion: assessment.version,
+      downloadUrl: hasUpdate ? this.#downloadUrl(info) : null,
+      percent: hasUpdate ? 1 : 0,
+      error: null,
+      message: hasUpdate ? "更新已下载，准备安装" : "当前已是最新版本",
+      isActive: false,
+      completedAt: Date.now(),
+    });
   }
 
   #setSession(update: Partial<UpdateInstallSession>): void {
@@ -657,7 +651,7 @@ function buildUpdateInfo(
     releaseName,
     releaseNotes: typeof releaseNotes === "string" ? releaseNotes : undefined,
     updateURL,
-    version: releaseName,
+    version: normalizeUpdateVersion(releaseName) ?? undefined,
   };
 }
 

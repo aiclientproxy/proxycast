@@ -6,6 +6,8 @@ import type {
 } from "./officialSkillMarketplace";
 import { assertNotDiagnosticFacade } from "./diagnosticFacade";
 import { revealPathInFinder } from "./fileSystem";
+import { skillExecutionApi } from "./skill-execution";
+import { projectRuntimeSkillCatalog } from "./runtimeSkillCatalog";
 import {
   METHOD_SKILL_LOCAL_DETAIL_INSPECT,
   METHOD_SKILL_LOCAL_IMPORT,
@@ -424,6 +426,12 @@ function assertSkillInspectionResult(
 }
 
 export const skillsApi = {
+  async getRuntimeCatalog(): Promise<Skill[]> {
+    return projectRuntimeSkillCatalog(
+      await skillExecutionApi.listExecutableSkills(),
+    );
+  },
+
   async getLocal(app: AppType = "lime"): Promise<Skill[]> {
     const result = await requestSkillAppServer<unknown>(
       METHOD_SKILL_MANAGEMENT_LIST,

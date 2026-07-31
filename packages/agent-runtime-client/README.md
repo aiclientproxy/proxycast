@@ -86,6 +86,7 @@ const thread = await runtime.readThread({
 | `readThread(params, options?)`     | `thread/read`                | Thread read model        | 供 projection hydration / repair 使用，建议 `includeTurns: true`。 |
 | `exportEvidence(params, options?)` | `evidence/export`             | evidence export response | 缺 surface 时 fail closed，不伪造空 evidence。          |
 | `subscribeLifecycleEvents(listener)` | direct v2 notifications    | unsubscribe handle       | 分发 Thread / Turn / Item lifecycle 与 message delta。   |
+| `subscribeSignalEvents(listener)`    | direct v2 `error`          | unsubscribe handle       | 分发 retry/terminal error signal，不进入 lifecycle verifier。 |
 | `dispatchEvent(message)`           | local event router            | boolean                  | 用于现有 gateway 把 JSON-RPC notification 喂给 client。 |
 | `nextEvent(timeoutMs?)`            | gateway event source          | notification             | 优先 gateway `nextEvent`，其次 `drainEvents`。          |
 
@@ -108,7 +109,7 @@ client 只传递 lifecycle intent 和 facts，不维护 tool 状态机、subagen
 
 ## Browser-Safe Session Gateway
 
-Renderer 宿主如果已经有自己的 App Server gateway，应从 browser-safe 子路径导入 session gateway 适配器，避免把根入口中的 Node 侧 sidecar / stdio client 打进前端包。该适配器仍返回标准 `AgentRuntimeClient`，覆盖 turn lifecycle、`readThread`、`exportEvidence`、`subscribeLifecycleEvents`、`dispatchEvent` 和 `nextEvent`；宿主缺少 evidence 或 event source 时会 fail closed，不会静默回退 mock。
+Renderer 宿主如果已经有自己的 App Server gateway，应从 browser-safe 子路径导入 session gateway 适配器，避免把根入口中的 Node 侧 sidecar / stdio client 打进前端包。该适配器仍返回标准 `AgentRuntimeClient`，覆盖 turn lifecycle、`readThread`、`exportEvidence`、`subscribeLifecycleEvents`、`subscribeSignalEvents`、`dispatchEvent` 和 `nextEvent`；宿主缺少 evidence 或 event source 时会 fail closed，不会静默回退 mock。
 
 `createAgentRuntimeClientFromSessionGateway(...)` 只适配现有 session gateway，
 不会创建第二套 transport、lifecycle state 或兼容协议。
@@ -154,7 +155,7 @@ const runtime: AgentRuntimeLifecycleClient =
 | Root entry              | 适合 Node / host owner，复用 `@limecloud/app-server-client` 的 `AppServerConnection`。                                                                |
 | `./sessionGateway`      | browser-safe，适合 renderer 复用已有 App Server gateway。                                                                                             |
 | Electron / Desktop Host | 只能由宿主 gateway 封装，不能在本包直接 import bridge helper。                                                                                        |
-| Event source            | `nextEvent(timeoutMs?)` 或 `drainEvents(limit?)`，只接受 direct v2 Thread / Turn / Item notification 与 message delta。                         |
+| Event source            | `nextEvent(timeoutMs?)` 或 `drainEvents(limit?)`，接受 direct v2 lifecycle notification、message delta 与 typed `error` signal。                         |
 | Mock / fixture          | 只允许测试显式传入，不允许 production transport fallback。                                                                                            |
 
 如果 gateway 方法来自 class instance，必须在宿主里包成闭包，避免丢失 `this`。本包不会替宿主绑定私有 client 实例。
@@ -200,7 +201,7 @@ Product App business context
 最小 runtime client conformance：
 
 - lifecycle：`startTurn -> steerTurn / readThread -> cancelTurn / respondAction` 均委托 gateway。
-- events：`subscribeLifecycleEvents`、`dispatchEvent`、`nextEvent` 只把 direct v2 Thread / Turn / Item 与 message delta 送入 lifecycle pipeline；raw channel 一律拒绝。
+- events：`subscribeLifecycleEvents` 只接收 direct v2 Thread / Turn / Item 与 message delta；`subscribeSignalEvents` 独立接收 typed `error`，不进入 lifecycle pipeline；raw channel 一律拒绝。
 - evidence：`exportEvidence` 有实现时委托，没有实现时 fail closed。
 - errors：transport error 原样传播，不切 mock。
 - bundle：`@limecloud/agent-runtime-client/sessionGateway` dist 不包含 Node builtin 或 sidecar/stdio 模块；只允许依赖 browser-safe App Server entry。

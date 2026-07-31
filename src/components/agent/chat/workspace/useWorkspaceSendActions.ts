@@ -55,6 +55,7 @@ import {
   parseUrlParseWorkbenchCommand,
 } from "../utils/urlParseWorkbenchCommand";
 import { parseVideoWorkbenchCommand } from "../utils/videoWorkbenchCommand";
+import { resolveAgentRuntimeSubmitErrorMessage } from "../utils/agentRuntimeErrorPresentation";
 import { parseVoiceWorkbenchCommand } from "../utils/voiceWorkbenchCommand";
 import { parseWritingWorkbenchCommand } from "../utils/writingWorkbenchCommand";
 import { parseWebpageWorkbenchCommand } from "../utils/webpageWorkbenchCommand";
@@ -3132,7 +3133,7 @@ export function useWorkspaceSendActions({
           error instanceof Error ? error.message : String(error);
         sendOptions?.observer?.onError?.(errorMessage);
         console.error("[AgentChat] 发送消息失败:", error);
-        toast.error(`发送失败: ${errorMessage}`);
+        toast.error(resolveAgentRuntimeSubmitErrorMessage(errorMessage));
         setInput(sourceText);
         return false;
       } finally {

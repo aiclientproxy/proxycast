@@ -215,6 +215,7 @@ export function TaskCenterUtilityToolbar({
   const normalizedProjectRootPath = projectRootPath?.trim() || null;
   const [environmentVisited, setEnvironmentVisited] = React.useState(false);
   const [environmentOpen, setEnvironmentOpen] = React.useState(false);
+  const autoRevealedPlanKeyRef = React.useRef<string | null>(null);
   const { status, loading, error } = useProjectGitStatus(
     environmentVisited ? normalizedProjectRootPath : null,
   );
@@ -428,17 +429,28 @@ export function TaskCenterUtilityToolbar({
     });
   }, [environmentOpen, taskRail, taskRailTranslate]);
   React.useEffect(() => {
-    if (environmentOpen || !taskRail?.threadItems?.length) {
+    if (environmentOpen || !taskRail) {
       return;
     }
-    if (
-      !hydrateAgentPlanState({ threadItems: taskRail.threadItems }).revisionId
-    ) {
+    const todoPlanKey = (taskRail.todoItems ?? [])
+      .filter((item) => item.content.trim().length > 0)
+      .map((item) => `${item.content.trim()}\u0000${item.status ?? ""}`)
+      .join("\u0001");
+    const revisionId = taskRail.threadItems?.length
+      ? hydrateAgentPlanState({ threadItems: taskRail.threadItems }).revisionId
+      : null;
+    const planKey = todoPlanKey
+      ? `todo:${todoPlanKey}`
+      : revisionId
+        ? `revision:${revisionId}`
+        : null;
+    if (!planKey || autoRevealedPlanKeyRef.current === planKey) {
       return;
     }
+    autoRevealedPlanKeyRef.current = planKey;
     setEnvironmentOpen(true);
     setEnvironmentVisited(true);
-  }, [environmentOpen, taskRail?.threadItems]);
+  }, [environmentOpen, taskRail?.threadItems, taskRail?.todoItems]);
   const runControlSurfaceProjection = React.useMemo(() => {
     if (!taskRailProjection) {
       return null;

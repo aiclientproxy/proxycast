@@ -1,0 +1,28 @@
+{
+  "$defs": {
+    "TurnPlanStepStatus": {
+      "enum": [
+        "completed",
+        "inProgress",
+        "pending"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "$ref": "#/$defs/TurnPlanStepStatus"
+    },
+    "step": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "step"
+  ],
+  "title": "TurnPlanStep",
+  "type": "object"
+}

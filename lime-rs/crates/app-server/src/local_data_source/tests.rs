@@ -18,6 +18,7 @@ use app_server_protocol::METHOD_MCP_SERVER_STATUS_LIST;
 use app_server_protocol::METHOD_MCP_SERVER_STOP;
 use app_server_protocol::METHOD_MCP_TOOL_CALL;
 use app_server_protocol::METHOD_MCP_TOOL_LIST;
+use app_server_protocol::METHOD_SKILL_CACHE_REFRESH;
 use app_server_protocol::SERVER_NAME;
 use app_server_transport::decode_message;
 use lime_core::database::schema::create_tables;
@@ -80,6 +81,55 @@ fn setup_data_source() -> LocalAppDataSource {
         )),
         sidecar_store: None,
     }
+}
+
+#[tokio::test]
+async fn successful_skill_catalog_mutation_emits_typed_invalidation() {
+    let server = AppServer::with_runtime(
+        RuntimeCore::with_backend(Arc::new(MockBackend))
+            .with_app_data_source(Arc::new(setup_data_source())),
+    );
+    let init = app_server_request(
+        &server,
+        1,
+        METHOD_INITIALIZE,
+        json!({
+            "clientInfo": { "name": "skills-changed-test", "version": "test" },
+            "capabilities": {}
+        }),
+    )
+    .await;
+    assert_eq!(
+        init.pointer("/result/serverInfo/name"),
+        Some(&json!(SERVER_NAME))
+    );
+    app_server_notification(&server, METHOD_INITIALIZED, json!({})).await;
+
+    let line = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": METHOD_SKILL_CACHE_REFRESH,
+        "params": {}
+    })
+    .to_string();
+    let responses = server
+        .handle_json_line(&line)
+        .await
+        .expect("handle Skill catalog mutation");
+
+    assert_eq!(responses.len(), 2, "{responses:?}");
+    let response: Value = serde_json::from_str(&responses[0]).expect("decode response");
+    let notification = decode_message(&responses[1]).expect("decode notification");
+    assert_eq!(response["result"], json!({ "success": true }));
+    assert_eq!(
+        notification,
+        app_server_protocol::JsonRpcMessage::Notification(
+            app_server_protocol::protocol::v2::ServerNotification::SkillsChanged(
+                app_server_protocol::protocol::v2::SkillsChangedNotification {},
+            )
+            .into(),
+        )
+    );
 }
 
 #[tokio::test]

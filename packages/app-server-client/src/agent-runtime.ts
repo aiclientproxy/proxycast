@@ -50,11 +50,23 @@ export type AgentRuntimeLifecycleNotification = Extract<
   }
 >;
 
-export type AgentRuntimeNotification = AgentRuntimeLifecycleNotification;
+export type AgentRuntimeSignalNotification = Extract<
+  ServerNotification,
+  { method: "error" | "turn/plan/updated" }
+>;
+
+export type AgentRuntimeNotification =
+  | AgentRuntimeLifecycleNotification
+  | AgentRuntimeSignalNotification;
 
 export type AgentRuntimeLifecycleEventListener = (
   event: AgentRuntimeLifecycleNotification,
   notification: AgentRuntimeLifecycleNotification,
+) => void | Promise<void>;
+
+export type AgentRuntimeSignalEventListener = (
+  event: AgentRuntimeSignalNotification,
+  notification: AgentRuntimeSignalNotification,
 ) => void | Promise<void>;
 
 export type AgentRuntimeClientOptions = {
@@ -109,12 +121,16 @@ export interface AgentRuntimeClient {
   subscribeLifecycleEvents(
     listener: AgentRuntimeLifecycleEventListener,
   ): AgentRuntimeClientSubscription;
+  subscribeSignalEvents(
+    listener: AgentRuntimeSignalEventListener,
+  ): AgentRuntimeClientSubscription;
   dispatchEvent(message: JsonRpcMessage): Promise<boolean>;
   nextEvent(timeoutMs?: number): Promise<AgentRuntimeNotification>;
 }
 
 export class AppServerAgentEventRouter {
   #lifecycleListeners = new Set<AgentRuntimeLifecycleEventListener>();
+  #signalListeners = new Set<AgentRuntimeSignalEventListener>();
 
   subscribeLifecycle(listener: AgentRuntimeLifecycleEventListener): () => void {
     this.#lifecycleListeners.add(listener);
@@ -123,7 +139,21 @@ export class AppServerAgentEventRouter {
     };
   }
 
+  subscribeSignal(listener: AgentRuntimeSignalEventListener): () => void {
+    this.#signalListeners.add(listener);
+    return () => {
+      this.#signalListeners.delete(listener);
+    };
+  }
+
   async dispatch(message: JsonRpcMessage): Promise<boolean> {
+    const signal = agentRuntimeSignalNotification(message);
+    if (signal) {
+      for (const listener of this.#signalListeners) {
+        await listener(signal, signal);
+      }
+      return true;
+    }
     const lifecycle = agentRuntimeLifecycleNotification(message);
     if (lifecycle) {
       for (const listener of this.#lifecycleListeners) {
@@ -254,6 +284,13 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
     return { unsubscribe };
   }
 
+  subscribeSignalEvents(
+    listener: AgentRuntimeSignalEventListener,
+  ): AgentRuntimeClientSubscription {
+    const unsubscribe = this.eventRouter.subscribeSignal(listener);
+    return { unsubscribe };
+  }
+
   async dispatchEvent(message: JsonRpcMessage): Promise<boolean> {
     return await this.eventRouter.dispatch(message);
   }
@@ -261,6 +298,11 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
   async nextEvent(timeoutMs?: number): Promise<AgentRuntimeNotification> {
     for (;;) {
       const notification = await this.connection.nextNotification(timeoutMs);
+      const signal = agentRuntimeSignalNotification(notification);
+      if (signal) {
+        await this.dispatchEvent(signal);
+        return signal;
+      }
       const lifecycle = agentRuntimeLifecycleNotification(notification);
       if (lifecycle) {
         await this.dispatchEvent(lifecycle);
@@ -273,7 +315,28 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
 export function agentRuntimeLifecycleNotification(
   message: JsonRpcMessage,
 ): AgentRuntimeLifecycleNotification | undefined {
-  return serverNotification(message);
+  const notification = serverNotification(message);
+  return notification && !isAgentRuntimeSignalNotification(notification)
+    ? notification
+    : undefined;
+}
+
+export function agentRuntimeSignalNotification(
+  message: JsonRpcMessage,
+): AgentRuntimeSignalNotification | undefined {
+  const notification = serverNotification(message);
+  return notification && isAgentRuntimeSignalNotification(notification)
+    ? notification
+    : undefined;
+}
+
+function isAgentRuntimeSignalNotification(
+  notification: ServerNotification,
+): notification is AgentRuntimeSignalNotification {
+  return (
+    notification.method === "error" ||
+    notification.method === "turn/plan/updated"
+  );
 }
 
 export function createAgentRuntimeClient(

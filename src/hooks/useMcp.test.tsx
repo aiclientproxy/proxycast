@@ -30,6 +30,10 @@ const bridgeMocks = vi.hoisted(() => ({
   safeListen: vi.fn(),
 }));
 
+const appServerEventBusMocks = vi.hoisted(() => ({
+  subscribeAppServerNotifications: vi.fn(),
+}));
+
 vi.mock("@/lib/api/mcp", async () => {
   const actual =
     await vi.importActual<typeof import("@/lib/api/mcp")>("@/lib/api/mcp");
@@ -60,6 +64,11 @@ vi.mock("@/lib/api/mcp", async () => {
 
 vi.mock("@/lib/dev-bridge", () => ({
   safeListen: (...args: unknown[]) => bridgeMocks.safeListen(...args),
+}));
+
+vi.mock("@/lib/api/appServerEventBus", () => ({
+  subscribeAppServerNotifications: (...args: unknown[]) =>
+    appServerEventBusMocks.subscribeAppServerNotifications(...args),
 }));
 
 interface HarnessProps {
@@ -135,6 +144,9 @@ describe("useMcp", () => {
     mcpApiMocks.subscribeResource.mockResolvedValue(undefined);
     mcpApiMocks.unsubscribeResource.mockResolvedValue(undefined);
     bridgeMocks.safeListen.mockResolvedValue(() => undefined);
+    appServerEventBusMocks.subscribeAppServerNotifications.mockReturnValue(
+      () => undefined,
+    );
   });
 
   afterEach(() => {
@@ -185,15 +197,29 @@ describe("useMcp", () => {
     expect(getLatestValue().error).toBeNull();
   });
 
+  it("Desktop event listener 挂起时也应立即订阅 OAuth typed notification", async () => {
+    bridgeMocks.safeListen.mockImplementation(() => new Promise(() => {}));
+
+    await renderHook((value) => {
+      latestValue = value;
+    });
+    await flushEffects(1);
+
+    expect(
+      appServerEventBusMocks.subscribeAppServerNotifications,
+    ).toHaveBeenCalledTimes(1);
+  });
+
   it("OAuth 完成事件应刷新服务器状态和工具列表", async () => {
-    const listeners = new Map<string, (event: { payload: unknown }) => void>();
-    bridgeMocks.safeListen.mockImplementation(
-      async (
-        eventName: string,
-        handler: (event: { payload: unknown }) => void,
-      ) => {
-        listeners.set(eventName, handler);
-        return () => listeners.delete(eventName);
+    let onNotifications:
+      | ((notifications: Record<string, unknown>[]) => void)
+      | undefined;
+    appServerEventBusMocks.subscribeAppServerNotifications.mockImplementation(
+      (subscription: {
+        onNotifications: (notifications: Record<string, unknown>[]) => void;
+      }) => {
+        onNotifications = subscription.onNotifications;
+        return () => undefined;
       },
     );
     mcpApiMocks.listServersWithStatus
@@ -226,9 +252,16 @@ describe("useMcp", () => {
     await flushEffects(4);
 
     await act(async () => {
-      listeners.get("mcp:oauth_completed")?.({
-        payload: { server_name: "remote-docs" },
-      });
+      onNotifications?.([
+        {
+          method: "mcpServer/oauthLogin/completed",
+          params: {
+            name: "remote-docs",
+            threadId: null,
+            success: true,
+          },
+        },
+      ]);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -241,6 +274,53 @@ describe("useMcp", () => {
       mode: "oauth",
       available: true,
     });
+  });
+
+  it("OAuth 失败通知不应触发成功完成态", async () => {
+    let onNotifications:
+      | ((notifications: Record<string, unknown>[]) => void)
+      | undefined;
+    appServerEventBusMocks.subscribeAppServerNotifications.mockImplementation(
+      (subscription: {
+        onNotifications: (notifications: Record<string, unknown>[]) => void;
+      }) => {
+        onNotifications = subscription.onNotifications;
+        return () => undefined;
+      },
+    );
+
+    await renderHook((value) => {
+      latestValue = value;
+    });
+    await flushEffects(4);
+
+    await act(async () => {
+      onNotifications?.([
+        {
+          method: "mcpServer/oauthLogin/completed",
+          params: {
+            name: "remote-docs",
+            threadId: null,
+            success: false,
+            error: "scope rejected",
+          },
+        },
+      ]);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushEffects(4);
+
+    expect(getLatestValue().oauthCompletion).toBeNull();
+    expect(getLatestValue().error).toBe("remote-docs: scope rejected");
+    expect(
+      getLatestValue().serverConnectionStates["remote-docs"],
+    ).toMatchObject({
+      phase: "idle",
+      error: "scope rejected",
+    });
+    expect(mcpApiMocks.listServersWithStatus).toHaveBeenCalledTimes(2);
+    expect(mcpApiMocks.listTools).toHaveBeenCalledTimes(2);
   });
 
   it("资源列表更新事件应刷新资源列表", async () => {

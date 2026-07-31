@@ -262,12 +262,56 @@ pub struct Turn {
     pub duration_ms: Option<i64>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum NonSteerableTurnKind {
+    Review,
+    Compact,
+}
+
+/// Codex-compatible error classification exposed on the v2 wire.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+pub enum CodexErrorInfo {
+    ContextWindowExceeded,
+    SessionBudgetExceeded,
+    UsageLimitExceeded,
+    ServerOverloaded,
+    CyberPolicy,
+    HttpConnectionFailed {
+        #[serde(rename = "httpStatusCode")]
+        http_status_code: Option<u16>,
+    },
+    ResponseStreamConnectionFailed {
+        #[serde(rename = "httpStatusCode")]
+        http_status_code: Option<u16>,
+    },
+    InternalServerError,
+    Unauthorized,
+    BadRequest,
+    ThreadRollbackFailed,
+    SandboxError,
+    ResponseStreamDisconnected {
+        #[serde(rename = "httpStatusCode")]
+        http_status_code: Option<u16>,
+    },
+    ResponseTooManyFailedAttempts {
+        #[serde(rename = "httpStatusCode")]
+        http_status_code: Option<u16>,
+    },
+    ActiveTurnNotSteerable {
+        #[serde(rename = "turnKind")]
+        turn_kind: NonSteerableTurnKind,
+    },
+    Other,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TurnError {
     pub message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error_info: Option<Value>,
+    pub codex_error_info: Option<CodexErrorInfo>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub additional_details: Option<String>,
 }

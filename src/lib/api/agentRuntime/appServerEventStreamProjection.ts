@@ -12,7 +12,10 @@ import {
   readString,
   readStringArray,
 } from "./appServerEventPayloadUtils";
-import { projectAppServerV2NotificationPayload } from "./appServerV2Notification";
+import {
+  isAppServerV2NotificationMethod,
+  projectAppServerV2NotificationPayload,
+} from "./appServerV2Notification";
 import { projectAppServerNotificationDriftPayload } from "./appServerNotificationDrift";
 
 const RAW_SIDE_CHANNEL_TYPES = new Set([
@@ -30,8 +33,14 @@ export function projectAppServerAgentEventPayload(
   if (direct) {
     return direct;
   }
+  if (isAppServerV2NotificationMethod(notification.method)) {
+    return null;
+  }
   const sideChannel = projectRawSideChannel(notification);
-  if (sideChannel || notification.method === APP_SERVER_METHOD_AGENT_SESSION_EVENT) {
+  if (
+    sideChannel ||
+    notification.method === APP_SERVER_METHOD_AGENT_SESSION_EVENT
+  ) {
     return sideChannel;
   }
   return projectAppServerNotificationDriftPayload(notification);
@@ -74,7 +83,8 @@ function projectRawSideChannel(
         type: "provider_trace",
         runtime_event_type: event.type,
         stage:
-          readString(payload, "stage") ?? providerTraceStageFromEventType(event.type),
+          readString(payload, "stage") ??
+          providerTraceStageFromEventType(event.type),
         provider: readString(payload, "provider", "providerId", "provider_id"),
         model: readString(payload, "model", "modelName", "model_name"),
         attempt: readFiniteNumber(payload, "attempt"),
@@ -206,6 +216,7 @@ function projectRawSideChannel(
 
 function isRawSideChannelType(type: string): boolean {
   return (
-    RAW_SIDE_CHANNEL_TYPES.has(type) || providerTraceStageFromEventType(type) !== undefined
+    RAW_SIDE_CHANNEL_TYPES.has(type) ||
+    providerTraceStageFromEventType(type) !== undefined
   );
 }

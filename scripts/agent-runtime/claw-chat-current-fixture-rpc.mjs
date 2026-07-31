@@ -32,6 +32,7 @@ import {
 
 const APP_SERVER_DIRECT_EVENT_TYPES = new Map([
   ["turn/started", "turn.started"],
+  ["turn/plan/updated", "turn.plan.updated"],
   ["turn/completed", "turn.completed"],
   ["item/started", "item.started"],
   ["item/completed", "item.completed"],

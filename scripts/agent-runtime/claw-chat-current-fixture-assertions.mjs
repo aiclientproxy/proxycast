@@ -5,13 +5,25 @@ import { buildNotApplicableAssertions } from "./claw-chat-current-fixture-not-ap
 import { buildScenarioAssertions } from "./claw-chat-current-fixture-scenario-assertions.mjs";
 import { assert } from "./claw-chat-current-fixture-utils.mjs";
 import { buildGateBContractAssertions } from "./claw-chat-current-fixture-gate-b-contract.mjs";
+import {
+  buildTurnPlanUpdateScenarioAssertions,
+  TURN_PLAN_UPDATE_SCENARIO,
+} from "./claw-chat-current-fixture-turn-plan-update.mjs";
 
 export function buildFixtureAssertionReport(input) {
   const backendSummary = summarizeBackendLedger(input.backendLedger);
   const context = buildAssertionContext(input);
-  const commonAssertions = buildCommonAssertions(context);
-  const scenarioAssertions = buildScenarioAssertions(context);
-  const notApplicableAssertions = buildNotApplicableAssertions(context);
+  const isTurnPlanUpdateScenario =
+    input.options?.scenario === TURN_PLAN_UPDATE_SCENARIO;
+  const commonAssertions = isTurnPlanUpdateScenario
+    ? {}
+    : buildCommonAssertions(context);
+  const scenarioAssertions = isTurnPlanUpdateScenario
+    ? buildTurnPlanUpdateScenarioAssertions(context)
+    : buildScenarioAssertions(context);
+  const notApplicableAssertions = isTurnPlanUpdateScenario
+    ? []
+    : buildNotApplicableAssertions(context);
   const gateBContractAssertions = buildGateBContractAssertions(
     context.gateBContract,
   );

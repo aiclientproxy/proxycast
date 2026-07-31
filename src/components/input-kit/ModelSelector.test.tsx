@@ -170,6 +170,16 @@ describe("ModelSelector", () => {
     expect(container.textContent).not.toContain("gpt-5.5");
   });
 
+  it("已保存的 Provider 被禁用后应 fail closed，不继续展示旧模型", () => {
+    const { container } = renderModelSelector({
+      providerType: "disabled-provider",
+      model: "disabled-model",
+    });
+
+    expect(container.textContent).toContain("当前已选供应商暂不可用");
+    expect(container.textContent).not.toContain("disabled-model");
+  });
+
   it("后端回填原始 providerId 时，应解析到真实受管 Provider 读取模型", () => {
     mockUseConfiguredProviders.mockReturnValue({
       providers: [
@@ -679,6 +689,46 @@ describe("ModelSelector", () => {
     const pageText = getBodyText();
     expect(pageText).toContain("fal-ai/nano-banana-pro");
     expect(pageText).not.toContain("gpt-5.2-pro");
+    expect(pageText).not.toContain("暂无可用模型");
+  });
+
+  it("应展示 Provider 显式添加但尚无权威能力快照的模型", () => {
+    mockUseConfiguredProviders.mockReturnValue({
+      providers: [
+        {
+          key: "deepseek",
+          label: "DeepSeek",
+          registryId: "deepseek",
+          type: "openai",
+          providerId: "deepseek",
+          apiHost: "https://api.deepseek.com",
+          models: ["deepseek-v4-pro"],
+        },
+      ],
+      loading: false,
+    });
+    mockUseProviderModels.mockReturnValue({
+      modelIds: ["deepseek-v4-pro"],
+      models: [
+        createModelMetadata("deepseek-v4-pro", {
+          capability_provenance: "inferred_hint",
+          provider_id: "deepseek",
+          provider_name: "DeepSeek",
+        }),
+      ],
+      loading: false,
+      error: null,
+    });
+
+    const { container } = renderModelSelector({
+      providerType: "deepseek",
+      model: "deepseek-v4-pro",
+    });
+
+    clickModelSelectorTrigger(container);
+
+    const pageText = getBodyText();
+    expect(pageText).toContain("deepseek-v4-pro");
     expect(pageText).not.toContain("暂无可用模型");
   });
 

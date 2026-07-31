@@ -130,6 +130,34 @@ describe("runtimeLifecycleProjection", () => {
     });
   });
 
+  it("typed error 不应提前生成 run.failed，终态只由 turn_failed 负责", () => {
+    expect(
+      buildRuntimeLifecycleEvents(
+        {
+          message: "provider stream disconnected",
+          protocol_method: "error",
+          type: "error",
+          will_retry: false,
+        },
+        baseContext,
+      ),
+    ).toEqual([]);
+
+    expect(
+      buildRuntimeLifecycleEvents(
+        {
+          message: "legacy synthetic error",
+          type: "error",
+        },
+        baseContext,
+      )[0],
+    ).toMatchObject({
+      phase: "failed",
+      sourceType: "error",
+      type: "run.failed",
+    });
+  });
+
   it("应把 runtime_status 映射为 run.status、permission 与 team projection", () => {
     const events = buildRuntimeStatusEvents(
       {

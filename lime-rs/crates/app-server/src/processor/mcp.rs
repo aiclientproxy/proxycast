@@ -1,12 +1,16 @@
 //! mcp domain handlers for the App Server processor.
 
 use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, RpcDispatch};
+use app_server_protocol::protocol::v2::{
+    McpServerOauthLoginCompletedNotification, ServerNotification,
+};
 use app_server_protocol::{
     JsonRpcError, McpPromptGetParams, McpResourceReadParams, McpResourceSubscribeParams,
     McpResourceUnsubscribeParams, McpServerCreateParams, McpServerDeleteParams,
     McpServerEnabledSetParams, McpServerImportFromAppParams, McpServerOauthLoginParams,
-    McpServerStartParams, McpServerStopParams, McpServerUpdateParams, McpToolCallParams,
-    McpToolCallWithCallerParams, McpToolListForContextParams, McpToolSearchParams,
+    McpServerOauthLoginResponse, McpServerStartParams, McpServerStopParams, McpServerUpdateParams,
+    McpToolCallParams, McpToolCallWithCallerParams, McpToolListForContextParams,
+    McpToolSearchParams,
 };
 
 impl RequestProcessor {
@@ -148,11 +152,33 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: McpServerOauthLoginParams = parse_params(params)?;
-        let response = self
+        let server_name = params.name.clone();
+        let handle = self
             .runtime
             .login_mcp_server_oauth(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        let response = McpServerOauthLoginResponse {
+            authorization_url: handle.authorization_url.clone(),
+            state: handle.state.clone(),
+        };
+        let processor = self.clone();
+        tokio::spawn(async move {
+            let (success, error) = match handle.wait().await {
+                Ok(()) => (true, None),
+                Err(error) => (false, Some(error.to_string())),
+            };
+            processor
+                .publish_server_notification(ServerNotification::McpServerOauthLoginCompleted(
+                    McpServerOauthLoginCompletedNotification {
+                        name: server_name,
+                        thread_id: None,
+                        success,
+                        error,
+                    },
+                ))
+                .await;
+        });
         dispatch_result(response)
     }
 

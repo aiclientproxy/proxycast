@@ -51,6 +51,8 @@
 - 旧 Tauri wrapper 清理入口已合并到生产命令 current 迁移计划；历史 quick cleanup 队列和机械 inventory 文件已删除，不再作为 current 执行计划入口。
 - Provider 模型能力 taxonomy 进度日志：`internal/exec-plans/provider-model-taxonomy-progress.md`
 - Windows Lime Hub 模型路由修复：`internal/exec-plans/windows-runtime-model-route-repair-plan.md`
+- Windows 模型目录与更新可靠性闭环：`internal/exec-plans/windows-model-catalog-and-updater-reliability.md`
+- Lime 核心用户主流程 E2E 审计：`internal/exec-plans/core-user-flow-e2e-audit-2026-07-31.md`
 - MCP 现代化进度：`internal/exec-plans/mcp-modernization-progress.md`
 - Right Surface 统一承载实施进度：`internal/exec-plans/right-surface-implementation-progress.md`
 - Soul Style 输出面收敛计划：`internal/exec-plans/soul-style-output-surface-convergence-plan.md`

@@ -51,7 +51,29 @@ describe("agent runtime current fixture regression smoke guard", () => {
       "src/components/agent/chat/hooks/agentStreamRuntimeHandler.unit.test.ts",
     );
     expect(content).toContain(
+      "src/components/agent/chat/hooks/agentStreamRuntimeHandler.typedError.test.ts",
+    );
+    expect(content).toContain(
       "src/components/agent/chat/components/MessageList.test.tsx",
+    );
+  });
+
+  it("runs both typed error Electron Gate B fixtures", () => {
+    const content = readSmokeScript();
+
+    expect(content).toContain(
+      "Claw typed error retry success Electron fixture",
+    );
+    expect(content).toContain("typed-error-retry-success");
+    expect(content).toContain(
+      "claw-chat-current-fixture-typed-error-retry-success-regression",
+    );
+    expect(content).toContain(
+      "Claw typed error retry failure Electron fixture",
+    );
+    expect(content).toContain("typed-error-retry-failure");
+    expect(content).toContain(
+      "claw-chat-current-fixture-typed-error-retry-failure-regression",
     );
   });
 

@@ -48,6 +48,7 @@ pub const METHOD_THREAD_NAME_UPDATED: &str = "thread/name/updated";
 pub const METHOD_THREAD_STATUS_CHANGED: &str = "thread/status/changed";
 pub const METHOD_TURN_STARTED: &str = "turn/started";
 pub const METHOD_TURN_COMPLETED: &str = "turn/completed";
+pub const METHOD_TURN_PLAN_UPDATED: &str = "turn/plan/updated";
 pub const METHOD_ITEM_STARTED: &str = "item/started";
 pub const METHOD_ITEM_COMPLETED: &str = "item/completed";
 pub const METHOD_AGENT_MESSAGE_DELTA: &str = "item/agentMessage/delta";
@@ -68,6 +69,9 @@ pub const METHOD_THREAD_GOAL_CLEARED: &str = "thread/goal/cleared";
 pub const METHOD_SERVER_REQUEST_RESOLVED: &str = "serverRequest/resolved";
 pub const METHOD_CONFIG_WARNING: &str = "configWarning";
 pub const METHOD_WARNING: &str = "warning";
+pub const METHOD_ERROR: &str = "error";
+pub const METHOD_SKILLS_CHANGED: &str = "skills/changed";
+pub const METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED: &str = "mcpServer/oauthLogin/completed";
 pub const METHOD_CURRENT_TIME_READ: &str = "currentTime/read";
 pub const METHOD_MCP_SERVER_ELICITATION_REQUEST: &str = "mcpServer/elicitation/request";
 pub const METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL: &str =
@@ -287,6 +291,9 @@ pub const METHODS: &[&str] = &[
 pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_CONFIG_WARNING,
     METHOD_WARNING,
+    METHOD_ERROR,
+    METHOD_SKILLS_CHANGED,
+    METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
     METHOD_THREAD_STARTED,
     METHOD_THREAD_ARCHIVED,
     METHOD_THREAD_DELETED,
@@ -296,6 +303,7 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_THREAD_STATUS_CHANGED,
     METHOD_TURN_STARTED,
     METHOD_TURN_COMPLETED,
+    METHOD_TURN_PLAN_UPDATED,
     METHOD_ITEM_STARTED,
     METHOD_ITEM_COMPLETED,
     METHOD_AGENT_MESSAGE_DELTA,

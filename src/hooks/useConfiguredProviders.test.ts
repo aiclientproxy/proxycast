@@ -64,6 +64,31 @@ function createOemRuntime(
 }
 
 describe("buildConfiguredProviders", () => {
+  it("应按设置页 sort_order 稳定排序，供无显式偏好时选择默认 Provider", () => {
+    const providers = buildConfiguredProviders([
+      createApiKeyProvider({
+        id: "custom-provider",
+        name: "Custom Provider",
+        sort_order: 10,
+        api_key_count: 1,
+      }),
+      createApiKeyProvider({
+        id: "openai",
+        name: "OpenAI",
+        sort_order: 1,
+        api_key_count: 1,
+      }),
+    ]);
+
+    expect(providers.map((provider) => provider.key)).toEqual([
+      "openai",
+      "custom-provider",
+    ]);
+    expect(providers[0]).toEqual(
+      expect.objectContaining({ sortOrder: 1 }),
+    );
+  });
+
   it("应将无 Key 但已启用且地址有效的 Ollama 视为已配置渠道", () => {
     const providers = buildConfiguredProviders([
       createApiKeyProvider({

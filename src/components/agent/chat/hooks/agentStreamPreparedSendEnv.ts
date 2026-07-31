@@ -1,5 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { AgentThreadItem, AgentThreadTurn } from "@/lib/api/agentProtocol";
+import type { AgentTodoItem } from "@/lib/api/agentRuntime/sessionTypes";
 import type {
   AgentExecutionStrategy,
   AgentSessionExecutionRuntime,
@@ -68,6 +69,7 @@ export interface AgentStreamPreparedSendEnv {
   setMessages: Dispatch<SetStateAction<Message[]>>;
   getThreadItems?: () => readonly AgentThreadItem[];
   setThreadItems: Dispatch<SetStateAction<AgentThreadItem[]>>;
+  setTodoItems?: Dispatch<SetStateAction<AgentTodoItem[]>>;
   setThreadTurns: Dispatch<SetStateAction<AgentThreadTurn[]>>;
   setCurrentTurnId: Dispatch<SetStateAction<string | null>>;
   setExecutionRuntime: Dispatch<

@@ -1,12 +1,247 @@
 import fs from "node:fs";
 import path from "node:path";
-import { evaluatePageSnapshot } from "./claw-chat-current-fixture-rpc.mjs";
+import { APP_SERVER_HANDLE_JSON_LINES_COMMAND } from "./claw-chat-current-fixture-constants.mjs";
+import {
+  decodeJsonRpcLines,
+  evaluatePageSnapshot,
+  readTraceMessages,
+} from "./claw-chat-current-fixture-rpc.mjs";
 import {
   assert,
   sanitizeJson,
   sleep,
   writeJsonFile,
 } from "./claw-chat-current-fixture-utils.mjs";
+
+const SKILLS_CHANGED_FIXTURE_SKILL_NAME = "notification-refresh";
+const SKILL_LIST_METHOD = "skill/list";
+const SKILLS_CHANGED_DEBUG_MARKER = "skillsChanged.received";
+
+async function readSkillListTrace(page) {
+  const traceRaw = await page.evaluate(() =>
+    window.localStorage.getItem("lime_invoke_trace_buffer_v1"),
+  );
+  const matchingEntries = readTraceMessages(traceRaw).filter((entry) => {
+    if (entry?.command !== APP_SERVER_HANDLE_JSON_LINES_COMMAND) {
+      return false;
+    }
+    return decodeJsonRpcLines(entry?.args_preview?.request?.lines).some(
+      (message) => message?.method === SKILL_LIST_METHOD,
+    );
+  });
+  return {
+    method: SKILL_LIST_METHOD,
+    totalCount: matchingEntries.length,
+    electronIpcSuccessCount: matchingEntries.filter(
+      (entry) =>
+        entry?.transport === "electron-ipc" && entry?.status === "success",
+    ).length,
+  };
+}
+
+async function readSkillSelectorSnapshot(page) {
+  return await evaluatePageSnapshot(
+    page,
+    (skillName) => {
+      const panel = document.querySelector(
+        '[data-testid="inputbar-plus-panel-skills"]',
+      );
+      const selector = document.querySelector(
+        '[data-testid="skill-selector-inline"]',
+      );
+      const refreshClicks = Number(
+        document.documentElement.dataset.skillsRuntimeRefreshClicks || "0",
+      );
+      return {
+        panelVisible:
+          panel instanceof HTMLElement && panel.offsetParent !== null,
+        selectorVisible:
+          selector instanceof HTMLElement && selector.offsetParent !== null,
+        skillVisible: Boolean(
+          selector?.textContent?.includes(String(skillName || "")),
+        ),
+        manualRefreshClickCount: Number.isFinite(refreshClicks)
+          ? refreshClicks
+          : null,
+      };
+    },
+    SKILLS_CHANGED_FIXTURE_SKILL_NAME,
+  );
+}
+
+async function installManualRefreshClickTracker(page) {
+  await page.evaluate(() => {
+    const runtimeWindow = window;
+    runtimeWindow.__limeSkillsRuntimeRefreshTrackerCleanup?.();
+    document.documentElement.dataset.skillsRuntimeRefreshClicks = "0";
+    const onClick = (event) => {
+      const target =
+        event.target instanceof Element
+          ? event.target.closest('[data-testid="skill-selector-refresh"]')
+          : null;
+      if (!target) {
+        return;
+      }
+      const count = Number(
+        document.documentElement.dataset.skillsRuntimeRefreshClicks || "0",
+      );
+      document.documentElement.dataset.skillsRuntimeRefreshClicks = String(
+        Number.isFinite(count) ? count + 1 : 1,
+      );
+    };
+    document.addEventListener("click", onClick, true);
+    runtimeWindow.__limeSkillsRuntimeRefreshTrackerCleanup = () => {
+      document.removeEventListener("click", onClick, true);
+      delete runtimeWindow.__limeSkillsRuntimeRefreshTrackerCleanup;
+    };
+  });
+}
+
+async function removeManualRefreshClickTracker(page) {
+  await page
+    .evaluate(() => {
+      window.__limeSkillsRuntimeRefreshTrackerCleanup?.();
+    })
+    .catch(() => undefined);
+}
+
+function writeSkillsChangedFixtureSkill(runtimeEnv) {
+  const home = runtimeEnv?.env?.HOME;
+  assert(home, "Skills changed fixture 缺少临时 HOME");
+  const skillDirectory = path.join(
+    home,
+    ".agents",
+    "skills",
+    SKILLS_CHANGED_FIXTURE_SKILL_NAME,
+  );
+  fs.mkdirSync(skillDirectory, { recursive: true });
+  fs.writeFileSync(
+    path.join(skillDirectory, "SKILL.md"),
+    [
+      "---",
+      `name: ${SKILLS_CHANGED_FIXTURE_SKILL_NAME}`,
+      "description: Proves typed skills changed catalog invalidation.",
+      "---",
+      "",
+      `# ${SKILLS_CHANGED_FIXTURE_SKILL_NAME}`,
+      "",
+      "Use only for the controlled Electron catalog refresh fixture.",
+      "",
+    ].join("\n"),
+  );
+  return { skillName: SKILLS_CHANGED_FIXTURE_SKILL_NAME };
+}
+
+export async function verifySkillsChangedCatalogRefresh(
+  page,
+  options,
+  runtimeEnv,
+) {
+  const beforeOpenTrace = await readSkillListTrace(page);
+  await page.locator('[data-testid="inputbar-plus-trigger"]').click();
+  await page.locator('[data-testid="inputbar-plus-skills"]').click();
+  await page
+    .locator('[data-testid="inputbar-plus-panel-skills"]')
+    .waitFor({ state: "visible", timeout: options.timeoutMs });
+  await page
+    .locator('[data-testid="skill-selector-inline"]')
+    .waitFor({ state: "visible", timeout: options.timeoutMs });
+
+  const initialStartedAt = Date.now();
+  let initialTrace = beforeOpenTrace;
+  let initialGui = null;
+  while (Date.now() - initialStartedAt < options.timeoutMs) {
+    initialTrace = await readSkillListTrace(page);
+    initialGui = await readSkillSelectorSnapshot(page);
+    if (
+      initialGui?.panelVisible &&
+      initialGui?.selectorVisible &&
+      initialTrace.electronIpcSuccessCount >
+        beforeOpenTrace.electronIpcSuccessCount
+    ) {
+      break;
+    }
+    await sleep(options.intervalMs);
+  }
+  assert(
+    initialTrace.electronIpcSuccessCount >
+      beforeOpenTrace.electronIpcSuccessCount,
+    `技能面板未触发初始 current skill/list: ${JSON.stringify(
+      sanitizeJson({ beforeOpenTrace, initialTrace, initialGui }),
+    )}`,
+  );
+
+  await installManualRefreshClickTracker(page);
+  const notificationMarkers = [];
+  const collectNotificationMarker = (message) => {
+    const text = String(message.text?.() || "");
+    if (text.includes(SKILLS_CHANGED_DEBUG_MARKER)) {
+      notificationMarkers.push(SKILLS_CHANGED_DEBUG_MARKER);
+    }
+  };
+  page.on("console", collectNotificationMarker);
+
+  let completed = null;
+  let lastSnapshot = null;
+  try {
+    const fixtureSkill = writeSkillsChangedFixtureSkill(runtimeEnv);
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < options.timeoutMs) {
+      const trace = await readSkillListTrace(page);
+      const gui = await readSkillSelectorSnapshot(page);
+      lastSnapshot = { trace, gui, markerCount: notificationMarkers.length };
+      if (
+        notificationMarkers.length > 0 &&
+        trace.electronIpcSuccessCount > initialTrace.electronIpcSuccessCount &&
+        gui?.panelVisible &&
+        gui?.selectorVisible &&
+        gui?.skillVisible &&
+        gui?.manualRefreshClickCount === 0
+      ) {
+        completed = {
+          skillName: fixtureSkill.skillName,
+          initialCatalog: {
+            beforeOpen: beforeOpenTrace,
+            afterPanelOpen: initialTrace,
+            gui: initialGui,
+          },
+          notification: {
+            method: "skills/changed",
+            marker: SKILLS_CHANGED_DEBUG_MARKER,
+            markerCount: notificationMarkers.length,
+          },
+          automaticRefresh: {
+            beforeCount: initialTrace.electronIpcSuccessCount,
+            afterCount: trace.electronIpcSuccessCount,
+            increment:
+              trace.electronIpcSuccessCount -
+              initialTrace.electronIpcSuccessCount,
+            method: SKILL_LIST_METHOD,
+            transport: "electron-ipc",
+          },
+          gui,
+          manualRefresh: {
+            clickCount: gui.manualRefreshClickCount,
+          },
+        };
+        break;
+      }
+      await sleep(options.intervalMs);
+    }
+  } finally {
+    page.off("console", collectNotificationMarker);
+    await removeManualRefreshClickTracker(page);
+  }
+
+  assert(
+    completed,
+    `skills/changed 未自动刷新 GUI catalog: ${JSON.stringify(
+      sanitizeJson(lastSnapshot),
+    )}`,
+  );
+  await page.keyboard.press("Escape").catch(() => undefined);
+  return sanitizeJson(completed);
+}
 
 export async function waitForExpertPanelSkillsRuntimeSessionReady(
   page,

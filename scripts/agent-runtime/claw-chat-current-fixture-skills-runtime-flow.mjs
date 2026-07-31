@@ -31,6 +31,7 @@ import {
   ensureManualEnableWorkspaceSkill,
   ensureUserVisibleCapabilityReportSkill,
   launchSkillsRuntimeFromWorkspacePanel,
+  verifySkillsChangedCatalogRefresh,
   waitForExpertPanelSkillsRuntimeSessionReady,
 } from "./claw-chat-current-fixture-skills-workspace.mjs";
 import {
@@ -57,6 +58,13 @@ export async function runSkillsRuntimeScenario({
   logStage,
 }) {
   const result = {};
+
+  logStage("verify-skills-changed-catalog-refresh");
+  result.skillsChangedCatalogRefresh = await verifySkillsChangedCatalogRefresh(
+    page,
+    options,
+    runtimeEnv,
+  );
 
   logStage("send-skills-runtime-prompt-from-gui");
   result.skillsRuntimeInputSend = sanitizeJson(

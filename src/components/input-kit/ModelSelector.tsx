@@ -123,6 +123,20 @@ function hasProviderDeclaredModel(provider: ConfiguredProvider): boolean {
   return Boolean(resolveInitialProviderModel(provider));
 }
 
+function isProviderDeclaredModel(
+  provider: ConfiguredProvider | null | undefined,
+  modelId: string,
+): boolean {
+  const normalizedModelId = modelId.trim().toLowerCase();
+  return Boolean(
+    normalizedModelId &&
+    provider?.models?.some(
+      (declaredModelId) =>
+        declaredModelId.trim().toLowerCase() === normalizedModelId,
+    ),
+  );
+}
+
 function resolveReasoningEffortOptions(
   model: EnhancedModelMetadata | null | undefined,
 ): ModelReasoningEffortPreset[] {
@@ -394,6 +408,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           configuredProviderType: selectedProvider?.type,
           model: item.id,
           capabilityProvenance: item.capability_provenance,
+          providerDeclaredModel: isProviderDeclaredModel(
+            selectedProvider,
+            item.id,
+          ),
           enforceExecutableCapability: true,
         });
 
@@ -411,7 +429,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           },
         ];
       }),
-    [providerType, selectedProvider?.type, visibleModels],
+    [providerType, selectedProvider, visibleModels],
   );
 
   const currentModels = useMemo(
@@ -599,6 +617,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const defaultHubProviderLabel = resolveOemLimeHubProviderName(
     resolveOemCloudRuntimeContext(),
   );
+  const selectedProviderUnavailable = Boolean(
+    providerType.trim() &&
+      shouldLoadProviders &&
+      !providersLoading &&
+      !selectedProvider,
+  );
   const compactProviderType =
     selectedProvider?.key || providerType || "lime-hub";
   const fallbackProviderLabel =
@@ -620,20 +644,26 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     emptyStateTitle ?? t("common.modelSelector.noProvider.title");
   const resolvedEmptyStateDescription =
     emptyStateDescription ?? t("common.modelSelector.noProvider.description");
-  const selectedProviderLabel = showPlaceholderSelection
+  const selectedProviderLabel = selectedProviderUnavailable
+    ? t("common.modelSelector.provider.selectedUnavailable")
+    : showPlaceholderSelection
     ? resolvedPlaceholderLabel
     : selectedProvider?.label ||
       (allowAutoProvider && !providerType.trim()
         ? resolvedAutoProviderLabel
         : fallbackProviderLabel);
-  const compactProviderLabel = showPlaceholderSelection
+  const compactProviderLabel = selectedProviderUnavailable
+    ? t("common.modelSelector.provider.selectedUnavailable")
+    : showPlaceholderSelection
     ? resolvedPlaceholderLabel
     : selectedProvider?.label ||
       (allowAutoProvider && !providerType.trim()
         ? resolvedAutoProviderLabel
         : fallbackProviderLabel);
   const selectedModelLabel =
-    !showPlaceholderSelection && selectedProviderBlocksModelLoad
+    selectedProviderUnavailable
+      ? t("common.modelSelector.model.selectedUnavailable")
+      : !showPlaceholderSelection && selectedProviderBlocksModelLoad
       ? t("common.modelSelector.state.loginRequired")
       : showPlaceholderSelection
         ? resolvedPlaceholderLabel
@@ -872,7 +902,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       ) : null}
                     </button>
                   ) : null}
-                  {selectedProvider && !selectedProviderVisible ? (
+                  {selectedProviderUnavailable ||
+                  (selectedProvider && !selectedProviderVisible) ? (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] leading-5 text-amber-700">
                       {t("common.modelSelector.provider.selectedUnavailable")}
                     </div>

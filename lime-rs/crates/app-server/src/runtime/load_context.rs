@@ -229,7 +229,7 @@ pub(in crate::runtime) async fn projection_load_context(
             .collect(),
     };
     let mut detail = if stored.events.is_empty() && params.history_limit.is_some() {
-        let (mut usage_events, warning_events): (Vec<_>, Vec<_>) = projection_support_events
+        let (mut usage_events, notification_events): (Vec<_>, Vec<_>) = projection_support_events
             .into_iter()
             .partition(is_turn_completed_usage_event);
         usage_events.extend(
@@ -243,7 +243,7 @@ pub(in crate::runtime) async fn projection_load_context(
             &projection,
             params,
             &usage_events,
-            &warning_events,
+            &notification_events,
             projection_store,
         )
         .await?
@@ -288,7 +288,7 @@ async fn projection_summary_detail(
     projection: &ProjectionReadSession,
     params: &AgentSessionReadParams,
     usage_events: &[AgentEvent],
-    warning_events: &[AgentEvent],
+    notification_events: &[AgentEvent],
     projection_store: &super::ProjectionStore,
 ) -> Result<serde_json::Value, RuntimeCoreError> {
     let messages = projection.messages.clone();
@@ -300,10 +300,10 @@ async fn projection_summary_detail(
     let canonical_items = read_model::canonical_items_from_thread_store(projection_store, stored)
         .await
         .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
-    let mut warning_stored = stored.clone();
-    warning_stored.events = warning_events.to_vec();
-    let items = Value::Array(read_model::merge_runtime_warning_items(
-        &warning_stored,
+    let mut notification_stored = stored.clone();
+    notification_stored.events = notification_events.to_vec();
+    let items = Value::Array(read_model::merge_runtime_notification_items(
+        &notification_stored,
         canonical_items,
     ));
     let thread_items = items.clone();

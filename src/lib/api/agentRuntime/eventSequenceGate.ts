@@ -125,7 +125,11 @@ function processNotification(
 ): GateResult {
   const directRoute = readAppServerV2NotificationRoute(notification);
   if (directRoute) {
-    if (notification.method === "warning") {
+    if (
+      notification.method === "warning" ||
+      notification.method === "error" ||
+      notification.method === "turn/plan/updated"
+    ) {
       return { kind: "accepted", notifications: [notification] };
     }
     if (isDirectStreamingNotification(notification.method)) {

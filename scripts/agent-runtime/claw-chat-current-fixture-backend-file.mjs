@@ -13,6 +13,11 @@ import {
   NEWS_PROMPT,
   TEXT_PROVIDER_FIXTURE_API_KEY,
   TEXT_FIXTURE_PROVIDER_NAME,
+  TURN_PLAN_UPDATE_DONE_TEXT,
+  TURN_PLAN_UPDATE_EXPLANATION,
+  TURN_PLAN_UPDATE_PROMPT,
+  TURN_PLAN_UPDATE_STEPS,
+  TURN_PLAN_UPDATE_TOOL_CALL_ID,
 } from "./claw-chat-current-fixture-constants.mjs";
 import { writeFixtureBackend } from "./claw-chat-current-fixture-backend-script.mjs";
 import {
@@ -87,6 +92,10 @@ export function createTempRuntimeEnv() {
   const backendPath = path.join(tempRoot, "claw-chat-backend.mjs");
   const backendLedgerPath = path.join(tempRoot, "claw-chat-backend.jsonl");
   const cancelSignalPath = path.join(tempRoot, "claw-chat-cancel.signal");
+  const typedErrorSignalPath = path.join(
+    tempRoot,
+    "claw-chat-typed-error.signal",
+  );
   const mediaReferenceSourcePath = path.join(
     tempRoot,
     "fixture-media-reference.png",
@@ -116,6 +125,7 @@ export function createTempRuntimeEnv() {
   writeFixtureConfig(homeConfigPath);
   writeFixtureConfig(macConfigPath);
   fs.writeFileSync(backendLedgerPath, "");
+  fs.writeFileSync(typedErrorSignalPath, "");
   fs.writeFileSync(
     mediaReferenceSourcePath,
     Buffer.from(IMAGE_PROVIDER_FIXTURE_DATA_URL.split(",")[1] || "", "base64"),
@@ -129,6 +139,7 @@ export function createTempRuntimeEnv() {
     backendPath,
     backendLedgerPath,
     cancelSignalPath,
+    typedErrorSignalPath,
     mediaReferenceSourcePath,
     configPath,
     macConfigPath,
@@ -266,6 +277,12 @@ export async function startImageProviderFixtureServer() {
 
 function fixtureTextForChatRequest(body) {
   const serialized = typeof body === "string" ? body : JSON.stringify(body);
+  if (
+    serialized.includes(TURN_PLAN_UPDATE_PROMPT) &&
+    serialized.includes("Plan updated")
+  ) {
+    return `执行清单已更新，主链继续运行。\n${TURN_PLAN_UPDATE_DONE_TEXT}`;
+  }
   if (serialized.includes(ACTIVE_STEER_INPUT)) {
     return `${ACTIVE_STEER_FINAL_TEXT}\n${ACTIVE_STEER_DONE_TEXT}`;
   }
@@ -347,6 +364,7 @@ function summarizeChatCompletionRequestBody(body, expectedSoulStyle) {
     parsed = {};
   }
   const messages = Array.isArray(parsed.messages) ? parsed.messages : [];
+  const tools = Array.isArray(parsed.tools) ? parsed.tools : [];
   const serialized = body || "";
   return {
     stream: parsed.stream ?? null,
@@ -355,6 +373,22 @@ function summarizeChatCompletionRequestBody(body, expectedSoulStyle) {
     responseFormatType:
       parsed.response_format?.type ?? parsed.responseFormat?.type ?? null,
     toolChoice: parsed.tool_choice ?? parsed.toolChoice ?? null,
+    toolNames: tools
+      .map((tool) => tool?.function?.name ?? tool?.name ?? null)
+      .filter(Boolean),
+    bodyIncludesUpdatePlanToolDefinition: tools.some(
+      (tool) => (tool?.function?.name ?? tool?.name) === "update_plan",
+    ),
+    bodyIncludesTurnPlanUpdatePrompt: messages.some(
+      (message) =>
+        message?.role === "user" &&
+        readChatContentText(message?.content).includes(TURN_PLAN_UPDATE_PROMPT),
+    ),
+    bodyIncludesPlanUpdatedToolResult: messages.some(
+      (message) =>
+        message?.role === "tool" &&
+        readChatContentText(message?.content).includes("Plan updated"),
+    ),
     soulMarkers: summarizeSoulPromptMarkers(serialized, expectedSoulStyle),
     bodyIncludesPresentationContract:
       serialized.includes("image_task_presentation.v1") ||
@@ -444,7 +478,45 @@ function openaiChatCompletionSseBody(content) {
   return `data: ${firstChunk}\n\ndata: ${finalChunk}\n\ndata: ${usageChunk}\n\ndata: [DONE]\n\n`;
 }
 
-function openaiModelsBody() {
+function openaiToolCallSseBody({ name, callId, argumentsValue }) {
+  const toolChunk = JSON.stringify({
+    id: "chatcmpl-claw-text-fixture",
+    object: "chat.completion.chunk",
+    created: Math.floor(Date.now() / 1000),
+    model: FIXTURE_MODEL,
+    choices: [
+      {
+        index: 0,
+        delta: {
+          role: "assistant",
+          tool_calls: [
+            {
+              index: 0,
+              id: callId,
+              type: "function",
+              function: {
+                name,
+                arguments: JSON.stringify(argumentsValue),
+              },
+            },
+          ],
+        },
+        finish_reason: null,
+      },
+    ],
+  });
+  const finalChunk = JSON.stringify({
+    id: "chatcmpl-claw-text-fixture",
+    object: "chat.completion.chunk",
+    created: Math.floor(Date.now() / 1000),
+    model: FIXTURE_MODEL,
+    choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+  });
+  const usageChunk = JSON.stringify(openaiChatCompletionUsageChunk());
+  return `data: ${toolChunk}\n\ndata: ${finalChunk}\n\ndata: ${usageChunk}\n\ndata: [DONE]\n\n`;
+}
+
+function openaiModelsBody({ supportsTools = false } = {}) {
   return {
     object: "list",
     data: [
@@ -456,10 +528,13 @@ function openaiModelsBody() {
         input_modalities: ["text", "image"],
         output_modalities: ["text"],
         task_families: ["chat", "vision_understanding"],
-        runtime_features: ["streaming"],
+        runtime_features: supportsTools
+          ? ["streaming", "tool_calling"]
+          : ["streaming"],
         capabilities: {
           vision: true,
           streaming: true,
+          tools: supportsTools,
         },
       },
     ],
@@ -469,6 +544,7 @@ function openaiModelsBody() {
 export async function startTextProviderFixtureServer({
   soulStyleExpectation = null,
   activeSteerDelayMs = 0,
+  turnPlanUpdate = false,
 } = {}) {
   const requests = [];
   const expectedAuthorization = `Bearer ${TEXT_PROVIDER_FIXTURE_API_KEY}`;
@@ -512,7 +588,9 @@ export async function startTextProviderFixtureServer({
         ["/models", "/v1/models"].includes(pathname)
       ) {
         response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify(openaiModelsBody()));
+        response.end(
+          JSON.stringify(openaiModelsBody({ supportsTools: turnPlanUpdate })),
+        );
         return;
       }
       if (
@@ -529,6 +607,44 @@ export async function startTextProviderFixtureServer({
         parsedBody = JSON.parse(body || "{}");
       } catch {
         parsedBody = {};
+      }
+      const messages = Array.isArray(parsedBody.messages)
+        ? parsedBody.messages
+        : [];
+      const hasTurnPlanPrompt = messages.some(
+        (message) =>
+          message?.role === "user" &&
+          readChatContentText(message?.content).includes(
+            TURN_PLAN_UPDATE_PROMPT,
+          ),
+      );
+      const hasPlanUpdatedToolResult = messages.some(
+        (message) =>
+          message?.role === "tool" &&
+          readChatContentText(message?.content).includes("Plan updated"),
+      );
+      if (
+        turnPlanUpdate &&
+        parsedBody.stream !== false &&
+        hasTurnPlanPrompt &&
+        !hasPlanUpdatedToolResult
+      ) {
+        const responseBody = openaiToolCallSseBody({
+          argumentsValue: {
+            explanation: TURN_PLAN_UPDATE_EXPLANATION,
+            plan: TURN_PLAN_UPDATE_STEPS,
+          },
+          callId: TURN_PLAN_UPDATE_TOOL_CALL_ID,
+          name: "update_plan",
+        });
+        response.writeHead(200, {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache",
+          connection: "close",
+          "content-length": Buffer.byteLength(responseBody),
+        });
+        response.end(responseBody);
+        return;
       }
       const content = fixtureTextForChatRequest(body);
       if (parsedBody.stream === false) {

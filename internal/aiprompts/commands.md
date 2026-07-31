@@ -18,13 +18,13 @@ Renderer typed gateway
 
 ## Owner 判定
 
-| 需求 | Owner |
-| --- | --- |
-| Thread / Turn / Item、read model、evidence、业务查询与写入 | App Server protocol + handler + current Rust domain |
-| 模型路由、canonical content、capability、provider wire lowering | `runtime-core` / `model-provider` |
-| 工具定义、审批、sandbox、dispatch、MCP | `tool-runtime` |
-| 窗口、系统文件选择、通知、Dock、tray、updater、sidecar | Electron Desktop Host |
-| UI request builder、response normalization、projection | Renderer `src/lib/api/` 或 typed package |
+| 需求                                                            | Owner                                               |
+| --------------------------------------------------------------- | --------------------------------------------------- |
+| Thread / Turn / Item、read model、evidence、业务查询与写入      | App Server protocol + handler + current Rust domain |
+| 模型路由、canonical content、capability、provider wire lowering | `runtime-core` / `model-provider`                   |
+| 工具定义、审批、sandbox、dispatch、MCP                          | `tool-runtime`                                      |
+| 窗口、系统文件选择、通知、Dock、tray、updater、sidecar          | Electron Desktop Host                               |
+| UI request builder、response normalization、projection          | Renderer `src/lib/api/` 或 typed package            |
 
 禁止为业务调用新增第二个 Electron 后端、renderer mock fallback、临时 DevBridge 命令或 legacy wrapper。生产失败必须显式失败；mock 仅在测试夹具中显式注入。
 
@@ -43,13 +43,13 @@ Renderer typed gateway
 
 ## 验证入口
 
-| 风险 | 最低验证 |
-| --- | --- |
-| Typed client / protocol | `npm run test:contracts` |
-| Rust domain | `npm run test:rust:related -- <paths...>` |
-| Desktop bridge | `npm run test:contracts` + `npm run verify:gui-smoke` |
-| Agent 主链 | `npm run smoke:agent-runtime-current-fixture` |
-| 真实桌面闭环 | Gate B Electron fixture / GUI smoke |
+| 风险                    | 最低验证                                              |
+| ----------------------- | ----------------------------------------------------- |
+| Typed client / protocol | `npm run test:contracts`                              |
+| Rust domain             | `npm run test:rust:related -- <paths...>`             |
+| Desktop bridge          | `npm run test:contracts` + `npm run verify:gui-smoke` |
+| Agent 主链              | `npm run smoke:agent-runtime-current-fixture`         |
+| 真实桌面闭环            | Gate B Electron fixture / GUI smoke                   |
 
 具体质量选择见 [quality-workflow.md](quality-workflow.md)。
 
@@ -59,7 +59,7 @@ MCP 管理、发现和调用只允许走：
 
 `src/lib/api/mcp.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server JSON-RPC -> lime-rs/crates/mcp`
 
-current method 为 `mcpServer/list`、`mcpServerStatus/list`、`mcpServer/create`、`mcpServer/update`、`mcpServer/delete`、`mcpServer/enabled/set`、`mcpServer/importFromApp`、`mcpServer/syncAllToLive`、`mcpServer/oauth/login`、`mcpServer/start`、`mcpServer/stop`、`mcpTool/list`、`mcpTool/listForContext`、`mcpTool/search`、`mcpTool/call`、`mcpTool/callWithCaller`、`mcpPrompt/list`、`mcpPrompt/get`、`mcpResource/list`、`mcpResource/read`、`mcpResource/subscribe` 与 `mcpResource/unsubscribe`。事件 `mcp:resources_updated` 和 `mcp:resource_updated` 必须经真实 MCP manager / Desktop Host event bridge 投影；浏览器模式不得静默退回 mock event fallback。
+current method 为 `mcpServer/list`、`mcpServerStatus/list`、`mcpServer/create`、`mcpServer/update`、`mcpServer/delete`、`mcpServer/enabled/set`、`mcpServer/importFromApp`、`mcpServer/syncAllToLive`、`mcpServer/oauth/login`、`mcpServer/oauthLogin/completed`、`mcpServer/start`、`mcpServer/stop`、`mcpTool/list`、`mcpTool/listForContext`、`mcpTool/search`、`mcpTool/call`、`mcpTool/callWithCaller`、`mcpPrompt/list`、`mcpPrompt/get`、`mcpResource/list`、`mcpResource/read`、`mcpResource/subscribe` 与 `mcpResource/unsubscribe`。OAuth 完成态只允许由 App Server v2 typed notification `mcpServer/oauthLogin/completed` 投影给 Renderer，不再经过 Desktop event。事件 `mcp:resources_updated` 和 `mcp:resource_updated` 必须经真实 MCP manager / Desktop Host event bridge 投影；浏览器模式不得静默退回 mock event fallback。
 
 live evidence 仅通过 `smoke:mcp-current -- --allow-live-provider` 显式开启，且需要 `LIME_MCP_LIVE_SERVER_URL`。该 URL 不得包含 username、password、query 或 hash；认证只能引用环境变量名，不允许 inline secret。`network-invoke.json` 仅可记录脱敏的 host、环境变量名、header 名、范围和工具/资源摘要。
 

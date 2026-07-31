@@ -54,8 +54,11 @@ export function buildRuntimeLifecycleEvents(
     case "turn_canceled":
       return [buildRunCanceledEvent(event, context)];
     case "turn_failed":
-    case "error":
       return [buildRunFailedEvent(event, context)];
+    case "error":
+      return event.protocol_method === "error"
+        ? []
+        : [buildRunFailedEvent(event, context)];
     case "runtime_status":
       return buildRuntimeStatusEvents(event, context);
     case "model_change":

@@ -210,6 +210,13 @@ fn snapshot_cache() -> &'static Mutex<Option<SnapshotCacheEntry>> {
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
+pub fn invalidate_agent_skill_snapshot_cache() {
+    let mut guard = snapshot_cache()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    *guard = None;
+}
+
 fn cached_snapshot(key: &str) -> Option<AgentSkillSnapshot> {
     let guard = snapshot_cache()
         .lock()

@@ -1,0 +1,198 @@
+{
+  "$defs": {
+    "CodexErrorInfo": {
+      "description": "Codex-compatible error classification exposed on the v2 wire.",
+      "oneOf": [
+        {
+          "enum": [
+            "badRequest",
+            "contextWindowExceeded",
+            "cyberPolicy",
+            "internalServerError",
+            "other",
+            "sandboxError",
+            "serverOverloaded",
+            "sessionBudgetExceeded",
+            "threadRollbackFailed",
+            "unauthorized",
+            "usageLimitExceeded"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "httpConnectionFailed": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "httpConnectionFailed"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseStreamConnectionFailed": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseStreamConnectionFailed"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseStreamDisconnected": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseStreamDisconnected"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseTooManyFailedAttempts": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseTooManyFailedAttempts"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "activeTurnNotSteerable": {
+              "properties": {
+                "turnKind": {
+                  "$ref": "#/$defs/NonSteerableTurnKind"
+                }
+              },
+              "required": [
+                "turnKind"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "activeTurnNotSteerable"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "NonSteerableTurnKind": {
+      "enum": [
+        "compact",
+        "review"
+      ],
+      "type": "string"
+    },
+    "TurnError": {
+      "additionalProperties": false,
+      "properties": {
+        "additionalDetails": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "codexErrorInfo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CodexErrorInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Reports a transient retry or terminal error for the current turn.",
+  "properties": {
+    "error": {
+      "$ref": "#/$defs/TurnError"
+    },
+    "threadId": {
+      "type": "string"
+    },
+    "turnId": {
+      "type": "string"
+    },
+    "willRetry": {
+      "description": "True only when App Server has already decided to retry this turn.",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "error",
+    "threadId",
+    "turnId",
+    "willRetry"
+  ],
+  "title": "ErrorNotification",
+  "type": "object"
+}

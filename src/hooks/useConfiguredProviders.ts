@@ -40,6 +40,8 @@ import {
 export interface ConfiguredProvider {
   /** Provider 唯一标识 */
   key: string;
+  /** 设置页中的稳定排序，首位作为无显式偏好时的默认 Provider */
+  sortOrder?: number;
   /** 显示标签 */
   label: string;
   /** 模型注册表中的 provider_id */
@@ -170,6 +172,7 @@ function buildConfiguredProviderFromApiKeyProvider(
 ): ConfiguredProvider {
   return {
     key: provider.id,
+    sortOrder: provider.sort_order,
     label: provider.name,
     registryId: provider.id,
     fallbackRegistryId: getRegistryIdFromType(provider.type, provider.api_host),
@@ -189,6 +192,7 @@ function buildSyntheticLimeHubLoginProvider(
 ): ConfiguredProvider {
   return {
     key: OEM_LIME_HUB_PROVIDER_ID,
+    sortOrder: Number.MAX_SAFE_INTEGER,
     label: resolveOemLimeHubProviderName(runtime),
     registryId: OEM_LIME_HUB_PROVIDER_ID,
     fallbackRegistryId: getRegistryIdFromType("openai", runtime.gatewayBaseUrl),
@@ -240,7 +244,14 @@ export function buildConfiguredProviders(
     );
   }
 
-  return Array.from(providerMap.values());
+  return Array.from(providerMap.values()).sort((a, b) => {
+    const sortOrderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    const sortOrderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    if (sortOrderA !== sortOrderB) {
+      return sortOrderA - sortOrderB;
+    }
+    return a.key.localeCompare(b.key);
+  });
 }
 
 export function findConfiguredProviderBySelection(

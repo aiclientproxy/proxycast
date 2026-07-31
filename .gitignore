@@ -69,6 +69,8 @@ internal/exec-plans/*
 !internal/exec-plans/right-surface-implementation-progress.md
 !internal/exec-plans/agent-app-host-v3-implementation.md
 !internal/exec-plans/windows-runtime-model-route-repair-plan.md
+!internal/exec-plans/windows-model-catalog-and-updater-reliability.md
+!internal/exec-plans/core-user-flow-e2e-audit-2026-07-31.md
 !internal/exec-plans/agent-app-uninstall-current-ui-progress.md
 !internal/exec-plans/writing-v2-workflow-completion-plan.md
 !internal/exec-plans/workflow-standardization-plan.md

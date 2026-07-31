@@ -62,6 +62,46 @@ function requiredContractContent(repoRoot, files, content) {
   return `${content}\n${fs.readFileSync(generatedPath, "utf8")}`;
 }
 
+function collectSourceFiles(root) {
+  if (!fs.existsSync(root)) {
+    return [];
+  }
+  const ignoredDirectories = new Set([
+    ".git",
+    "build",
+    "coverage",
+    "dist",
+    "node_modules",
+    "target",
+  ]);
+  const sourceExtensions = new Set([
+    ".cjs",
+    ".js",
+    ".jsx",
+    ".json",
+    ".mjs",
+    ".rs",
+    ".ts",
+    ".tsx",
+  ]);
+  const files = [];
+  const pending = [root];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const absolutePath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (!ignoredDirectories.has(entry.name)) {
+          pending.push(absolutePath);
+        }
+      } else if (sourceExtensions.has(path.extname(entry.name))) {
+        files.push(absolutePath);
+      }
+    }
+  }
+  return files;
+}
+
 export function checkMcpRuntimeCurrentContracts({ repoRoot, failures }) {
   const requiredByFile = new Map([
     [
@@ -107,6 +147,21 @@ export function checkMcpRuntimeCurrentContracts({ repoRoot, failures }) {
         "pub struct McpResourceSubscribeParams { #[schemars(length(min = 1))] pub server: String, #[schemars(length(min = 1))] pub uri: String",
         "pub struct McpResourceUnsubscribeParams { #[schemars(length(min = 1))] pub server: String, #[schemars(length(min = 1))] pub uri: String",
         "pub struct McpResourceSubscriptionResponse",
+      ],
+    ],
+    [
+      [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/mcp.rs",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/envelopes.rs",
+        "lime-rs/crates/app-server/src/processor/mcp.rs",
+      ],
+      [
+        'pub const METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED: &str = "mcpServer/oauthLogin/completed"',
+        "pub struct McpServerOauthLoginCompletedNotification",
+        "McpServerOauthLoginCompleted(McpServerOauthLoginCompletedNotification)",
+        "let (success, error) = match handle.wait().await",
+        "publish_server_notification(ServerNotification::McpServerOauthLoginCompleted(",
       ],
     ],
     [
@@ -361,9 +416,22 @@ export function checkMcpRuntimeCurrentContracts({ repoRoot, failures }) {
       ],
     ],
     [
+      "packages/app-server-client/src/server-notifications.ts",
+      [
+        'export type McpServerOauthLoginCompletedServerNotification = Extract<',
+        '{ method: "mcpServer/oauthLogin/completed" }',
+        "export function mcpServerOauthLoginCompletedServerNotification(",
+        'message.method !== "mcpServer/oauthLogin/completed"',
+        '!hasOnlyKeys(params, ["error", "name", "success", "threadId"])',
+        '!hasRequiredNullableString(params, "threadId")',
+      ],
+    ],
+    [
       "src/hooks/useMcpEvents.ts",
       [
         'import { safeListen } from "@/lib/api/bridgeEvents"',
+        'import { subscribeAppServerNotifications } from "@/lib/api/appServerEventBus"',
+        "mcpServerOauthLoginCompletedServerNotification",
         "export async function setupMcpEventListeners(",
         '"mcp:server_started"',
         '"mcp:server_stopped"',
@@ -371,7 +439,7 @@ export function checkMcpRuntimeCurrentContracts({ repoRoot, failures }) {
         '"mcp:tools_updated"',
         '"mcp:resources_updated"',
         '"mcp:resource_updated"',
-        '"mcp:oauth_completed"',
+        "subscribeAppServerNotifications({",
       ],
     ],
     [
@@ -464,6 +532,7 @@ export function checkMcpRuntimeCurrentContracts({ repoRoot, failures }) {
         "`mcpServer/importFromApp`",
         "`mcpServer/syncAllToLive`",
         "`mcpServer/oauth/login`",
+        "`mcpServer/oauthLogin/completed`",
         "`mcpServer/start`",
         "`mcpServer/stop`",
         "`mcpTool/list`",
@@ -575,6 +644,18 @@ export function checkMcpRuntimeCurrentContracts({ repoRoot, failures }) {
         )}`,
       );
     }
+  }
+
+  const legacyOAuthEvent = "mcp:oauth_completed";
+  const legacyOAuthEventFiles = ["electron", "lime-rs", "packages", "src"]
+    .flatMap((root) => collectSourceFiles(path.join(repoRoot, root)))
+    .filter((file) => fs.readFileSync(file, "utf8").includes(legacyOAuthEvent));
+  for (const file of legacyOAuthEventFiles) {
+    failures.push(
+      `MCP OAuth completion must use the typed App Server notification: forbidden ${JSON.stringify(
+        legacyOAuthEvent,
+      )} in ${path.relative(repoRoot, file)}`,
+    );
   }
 
   const appServerCurrentContent = [

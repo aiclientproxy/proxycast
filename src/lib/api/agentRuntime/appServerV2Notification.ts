@@ -2,11 +2,17 @@ import type {
   AppServerAgentEvent,
   AppServerJsonRpcNotification,
 } from "@/lib/api/appServer";
+import {
+  isErrorNotification,
+  isTurnPlanUpdatedNotification,
+} from "@limecloud/app-server-client";
 import { readCanonicalThreadItem } from "./appServerCanonicalItemReader";
 import { RENDER_PROJECTION_REFERENCE_REVISION } from "./conversationProjection";
 
 const DIRECT_V2_NOTIFICATION_METHODS = new Set([
+  "error",
   "warning",
+  "turn/plan/updated",
   "thread/started",
   "turn/started",
   "turn/completed",
@@ -65,6 +71,14 @@ export function readAppServerV2NotificationRoute(
   }
 
   switch (notification.method) {
+    case "error": {
+      if (!isErrorNotification(notification)) {
+        return null;
+      }
+      const threadId = readString(params, "threadId");
+      const turnId = readString(params, "turnId");
+      return threadId && turnId ? { terminal: false, threadId, turnId } : null;
+    }
     case "warning": {
       const threadId = readString(params, "threadId");
       const message = readString(params, "message");
@@ -74,6 +88,14 @@ export function readAppServerV2NotificationRoute(
       return threadId && message && validCode
         ? { terminal: false, threadId }
         : null;
+    }
+    case "turn/plan/updated": {
+      if (!isTurnPlanUpdatedNotification(notification)) {
+        return null;
+      }
+      const threadId = readString(params, "threadId");
+      const turnId = readString(params, "turnId");
+      return threadId && turnId ? { terminal: false, threadId, turnId } : null;
     }
     case "thread/started": {
       const thread = asRecord(params.thread);
@@ -196,6 +218,21 @@ export function projectAppServerV2NotificationPayload(
   };
 
   switch (notification.method) {
+    case "error": {
+      const error = asRecord(params.error);
+      const message = readString(error, "message");
+      if (!error || !message || typeof params.willRetry !== "boolean") {
+        return null;
+      }
+      return {
+        ...basePayload,
+        type: "error",
+        message,
+        will_retry: params.willRetry,
+        codex_error_info: error.codexErrorInfo ?? null,
+        additional_details: error.additionalDetails ?? null,
+      };
+    }
     case "warning": {
       const message = readString(params, "message");
       const code = readString(params, "code");
@@ -207,6 +244,19 @@ export function projectAppServerV2NotificationPayload(
             ...(code ? { code } : {}),
           }
         : null;
+    }
+    case "turn/plan/updated": {
+      const plan = readTurnPlan(params.plan);
+      if (!plan) {
+        return null;
+      }
+      const explanation = readString(params, "explanation");
+      return {
+        ...basePayload,
+        type: "turn_plan_updated",
+        plan,
+        ...(explanation === undefined ? {} : { explanation }),
+      };
     }
     case "thread/started":
       return {
@@ -432,6 +482,38 @@ export function projectAppServerV2NotificationPayload(
     default:
       return null;
   }
+}
+
+function readTurnPlan(value: unknown): Array<{
+  step: string;
+  status: "pending" | "in_progress" | "completed";
+}> | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const plan: Array<{
+    step: string;
+    status: "pending" | "in_progress" | "completed";
+  }> = [];
+  for (const candidate of value) {
+    const entry = asRecord(candidate);
+    const step = readString(entry, "step");
+    const status = readString(entry, "status");
+    if (!entry || step === undefined) {
+      return null;
+    }
+    const normalizedStatus =
+      status === "inProgress"
+        ? "in_progress"
+        : status === "pending" || status === "completed"
+          ? status
+          : null;
+    if (!normalizedStatus) {
+      return null;
+    }
+    plan.push({ step, status: normalizedStatus });
+  }
+  return plan;
 }
 
 function directItemSequence(

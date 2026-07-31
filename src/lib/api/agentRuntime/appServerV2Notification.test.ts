@@ -1061,4 +1061,54 @@ describe("App Server v2 direct notifications", () => {
     expect(received).toEqual([]);
     unlisten();
   });
+
+  it("projects turn/plan/updated as a strict checklist signal", () => {
+    const notification = directNotification("turn/plan/updated", {
+      explanation: "继续执行",
+      plan: [
+        { step: "读现状", status: "completed" },
+        { step: "补主链", status: "inProgress" },
+      ],
+      threadId,
+      turnId,
+    });
+
+    expect(readAppServerV2NotificationRoute(notification)).toEqual({
+      terminal: false,
+      threadId,
+      turnId,
+    });
+    expect(projectAppServerV2NotificationPayload(notification)).toMatchObject({
+      type: "turn_plan_updated",
+      explanation: "继续执行",
+      plan: [
+        { step: "读现状", status: "completed" },
+        { step: "补主链", status: "in_progress" },
+      ],
+    });
+    expect(
+      projectAgentRuntimeSequenceGateNotifications(
+        "agent_stream_direct_v2_turn_plan_updated",
+        notification,
+      ),
+    ).toEqual([notification]);
+
+    for (const params of [
+      {
+        explanation: "bad",
+        plan: [{ step: "补主链", status: "running" }],
+        threadId,
+        turnId,
+      },
+      {
+        plan: [{ step: "补主链", status: "inProgress", extra: true }],
+        threadId,
+        turnId,
+      },
+    ]) {
+      const malformed = directNotification("turn/plan/updated", params);
+      expect(readAppServerV2NotificationRoute(malformed)).toBeNull();
+      expect(projectAppServerV2NotificationPayload(malformed)).toBeNull();
+    }
+  });
 });

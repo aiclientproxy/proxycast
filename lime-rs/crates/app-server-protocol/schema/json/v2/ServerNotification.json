@@ -44,6 +44,139 @@
       ],
       "type": "object"
     },
+    "CodexErrorInfo": {
+      "description": "Codex-compatible error classification exposed on the v2 wire.",
+      "oneOf": [
+        {
+          "enum": [
+            "badRequest",
+            "contextWindowExceeded",
+            "cyberPolicy",
+            "internalServerError",
+            "other",
+            "sandboxError",
+            "serverOverloaded",
+            "sessionBudgetExceeded",
+            "threadRollbackFailed",
+            "unauthorized",
+            "usageLimitExceeded"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "httpConnectionFailed": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "httpConnectionFailed"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseStreamConnectionFailed": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseStreamConnectionFailed"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseStreamDisconnected": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseStreamDisconnected"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "responseTooManyFailedAttempts": {
+              "properties": {
+                "httpStatusCode": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "responseTooManyFailedAttempts"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "activeTurnNotSteerable": {
+              "properties": {
+                "turnKind": {
+                  "$ref": "#/$defs/NonSteerableTurnKind"
+                }
+              },
+              "required": [
+                "turnKind"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "activeTurnNotSteerable"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "CollabAgentState": {
       "properties": {
         "message": {
@@ -363,6 +496,32 @@
       ],
       "type": "string"
     },
+    "ErrorNotification": {
+      "additionalProperties": false,
+      "description": "Reports a transient retry or terminal error for the current turn.",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/TurnError"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "willRetry": {
+          "description": "True only when App Server has already decided to retry this turn.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "error",
+        "threadId",
+        "turnId",
+        "willRetry"
+      ],
+      "type": "object"
+    },
     "FileChangePatchUpdatedNotification": {
       "properties": {
         "changes": {
@@ -531,6 +690,35 @@
         "startedAtMs",
         "threadId",
         "turnId"
+      ],
+      "type": "object"
+    },
+    "McpServerOauthLoginCompletedNotification": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "success",
+        "threadId"
       ],
       "type": "object"
     },
@@ -792,6 +980,13 @@
       ],
       "type": "object"
     },
+    "NonSteerableTurnKind": {
+      "enum": [
+        "compact",
+        "review"
+      ],
+      "type": "string"
+    },
     "PatchApplyStatus": {
       "enum": [
         "completed",
@@ -976,6 +1171,11 @@
         "requestId",
         "threadId"
       ],
+      "type": "object"
+    },
+    "SkillsChangedNotification": {
+      "additionalProperties": false,
+      "description": "Signals that the process-wide Skill catalog must be read again.",
       "type": "object"
     },
     "SleepItem": {
@@ -2249,6 +2449,7 @@
       "type": "object"
     },
     "TurnError": {
+      "additionalProperties": false,
       "properties": {
         "additionalDetails": {
           "type": [
@@ -2256,7 +2457,16 @@
             "string"
           ]
         },
-        "errorInfo": true,
+        "codexErrorInfo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CodexErrorInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "message": {
           "type": "string"
         }
@@ -2273,6 +2483,61 @@
         "summary"
       ],
       "type": "string"
+    },
+    "TurnPlanStep": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/TurnPlanStepStatus"
+        },
+        "step": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "step"
+      ],
+      "type": "object"
+    },
+    "TurnPlanStepStatus": {
+      "enum": [
+        "completed",
+        "inProgress",
+        "pending"
+      ],
+      "type": "string"
+    },
+    "TurnPlanUpdatedNotification": {
+      "additionalProperties": false,
+      "description": "Reports the latest turn-scoped execution checklist.",
+      "properties": {
+        "explanation": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "plan": {
+          "items": {
+            "$ref": "#/$defs/TurnPlanStep"
+          },
+          "type": "array"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan",
+        "threadId",
+        "turnId"
+      ],
+      "type": "object"
     },
     "TurnStartedNotification": {
       "description": "Notification payloads are kept beside the request contract so the v2\nprojection can use the same Thread/Turn identity without a second DTO.",
@@ -2502,6 +2767,54 @@
     {
       "properties": {
         "method": {
+          "const": "error",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ErrorNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "skills/changed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/SkillsChangedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "mcpServer/oauthLogin/completed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/McpServerOauthLoginCompletedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
           "const": "thread/started",
           "type": "string"
         },
@@ -2635,6 +2948,22 @@
         },
         "params": {
           "$ref": "#/$defs/TurnCompletedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "turn/plan/updated",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/TurnPlanUpdatedNotification"
         }
       },
       "required": [

@@ -37,6 +37,7 @@ lime-browser-runtime.workspace = true
 lime-media-runtime.workspace = true
 lime-mcp.workspace = true
 model-provider.workspace = true
+notify.workspace = true
 runtime-core.workspace = true
 lime-skills.workspace = true
 lime-services = { workspace = true, features = ["local-sensevoice"] }

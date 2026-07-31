@@ -5,6 +5,7 @@ import type {
   AgentSessionExecutionRuntime,
 } from "@/lib/api/agentExecutionRuntime";
 import type { AutoContinueRequestPayload } from "@/lib/api/agentRuntime/sessionTypes";
+import type { AgentTodoItem } from "@/lib/api/agentRuntime/sessionTypes";
 import type { TurnSteerParams } from "@limecloud/app-server-client";
 import type { ModeKind } from "@limecloud/app-server-client";
 import { setThreadGoal } from "@/lib/api/agentRuntime/threadGoalClient";
@@ -129,6 +130,7 @@ interface ExecuteAgentStreamSubmitOptions {
   setPendingActions: Dispatch<SetStateAction<ActionRequired[]>>;
   getThreadItems?: () => readonly AgentThreadItem[];
   setThreadItems: Dispatch<SetStateAction<AgentThreadItem[]>>;
+  setTodoItems?: Dispatch<SetStateAction<AgentTodoItem[]>>;
   setThreadTurns: Dispatch<SetStateAction<AgentThreadTurn[]>>;
   setCurrentTurnId: Dispatch<SetStateAction<string | null>>;
   setExecutionRuntime: Dispatch<
@@ -249,6 +251,7 @@ export async function executeAgentStreamSubmit(
     setPendingActions,
     getThreadItems,
     setThreadItems,
+    setTodoItems,
     setThreadTurns,
     setCurrentTurnId,
     setExecutionRuntime,
@@ -416,6 +419,7 @@ export async function executeAgentStreamSubmit(
     setPendingActions,
     getThreadItems,
     setThreadItems,
+    setTodoItems,
     setThreadTurns,
     setCurrentTurnId,
     setExecutionRuntime,

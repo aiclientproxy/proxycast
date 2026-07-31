@@ -167,6 +167,11 @@ export const INPUTBAR_RICH_RESTORE_FORBIDDEN_ASSISTANT_TEXT =
   "CLAW_INPUTBAR_RICH_RESTORE_DONE";
 export const CONTINUE_DONE_TEXT = "CLAW_CONTINUE_FIXTURE_DONE";
 export const PLAN_DONE_TEXT = "CLAW_PLAN_FIXTURE_DONE";
+export const TURN_PLAN_UPDATE_SCENARIO = "turn-plan-update";
+export const TURN_PLAN_UPDATE_PROMPT = "请先更新执行清单，再给出本轮处理结果";
+export const TURN_PLAN_UPDATE_DONE_TEXT = "CLAW_TURN_PLAN_UPDATE_DONE";
+export const TURN_PLAN_UPDATE_EXPLANATION = "继续执行";
+export const TURN_PLAN_UPDATE_TOOL_CALL_ID = "call_turn_plan_update";
 export const GOAL_DONE_TEXT = "CLAW_GOAL_FIXTURE_DONE";
 export const WEB_TOOLS_RENDERING_DONE_TEXT = "CLAW_WEB_TOOLS_RENDERING_DONE";
 export const MCP_STRUCTURED_CONTENT_DONE_TEXT =
@@ -277,6 +282,36 @@ export const TERMINAL_CANCELED_AFTER_ANSWER_PARTIAL_TEXT =
   "TERMINAL_CANCELED_AFTER_ANSWER_PARTIAL: 正文已经先显示，取消终态不能覆盖或重复。";
 export const TERMINAL_CANCELED_AFTER_ANSWER_CANCELED_TEXT =
   "TERMINAL_CANCELED_AFTER_ANSWER_CANCELED: user canceled after partial answer";
+export const TYPED_ERROR_RETRY_SUCCESS_SCENARIO = "typed-error-retry-success";
+export const TYPED_ERROR_RETRY_FAILURE_SCENARIO = "typed-error-retry-failure";
+export const TYPED_ERROR_RETRY_SUCCESS_PROMPT = "验证插件重试后继续完成";
+export const TYPED_ERROR_RETRY_FAILURE_PROMPT = "验证重试耗尽后进入失败终态";
+export const TYPED_ERROR_RETRY_MESSAGE = "插件暂时不可用，正在重试当前回合。";
+export const TYPED_ERROR_RETRY_SECOND_MESSAGE =
+  "第二次插件重试仍在进行，当前回合保持打开。";
+export const TYPED_ERROR_RETRY_SUCCESS_TEXT =
+  "重试完成后，当前回合继续输出并正常收口。";
+export const TYPED_ERROR_RETRY_SUCCESS_DONE_TEXT =
+  "TYPED_ERROR_RETRY_SUCCESS_DONE";
+export const TYPED_ERROR_RETRY_FAILURE_TEXT =
+  "重试次数已耗尽，当前回合保留失败记录。";
+export const TYPED_ERROR_RETRY_FAILURE_PARTIAL_TEXT =
+  "失败终态前已保留的部分输出。";
+export const TYPED_ERROR_RETRY_FAILURE_ERROR_TEXT =
+  "TYPED_ERROR_RETRY_FAILURE_ERROR: plugin worker retry budget exhausted";
+export const TYPED_ERROR_RETRY_ASSERTION_KEYS = [
+  "typedErrorRetryPromptReachedBackend",
+  "typedErrorRetryBackendEventOrder",
+  "typedErrorRetryGuiRetryingStatusVisible",
+  "typedErrorRetryNoPrematureTerminal",
+  "typedErrorRetrySuccessGuiCompleted",
+  "typedErrorRetrySuccessReadModelCompleted",
+  "typedErrorRetryFailureGuiAwaitedTerminal",
+  "typedErrorRetryFailureGuiCompleted",
+  "typedErrorRetryFailureReadModelFailed",
+  "typedErrorRetryFailureNoPrematureTerminal",
+  "typedErrorRetryIdentityConsistent",
+];
 export const WEB_TOOLS_REASONING_ITEM_SIGNATURE =
   "web-tools-reasoning-item-signature";
 export const WEB_TOOLS_REASONING_NATIVE_ITEM_ID = "rs_web_tools_fixture";
@@ -297,6 +332,10 @@ export const PLAN_STEPS = [
   { step: "确认计划模式请求进入 App Server", status: "completed" },
   { step: "输出 proposed_plan", status: "in_progress" },
   { step: "验证右侧计划轨显示", status: "pending" },
+];
+export const TURN_PLAN_UPDATE_STEPS = [
+  { step: "读现状", status: "completed" },
+  { step: "补主链", status: "in_progress" },
 ];
 export const PROPOSED_PLAN_BLOCK = `<proposed_plan>
 ${PLAN_STEPS.map((step) => `- ${step.step}`).join("\n")}

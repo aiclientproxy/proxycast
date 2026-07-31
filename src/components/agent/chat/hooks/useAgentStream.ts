@@ -14,6 +14,7 @@ import type {
 } from "@/lib/api/agentExecutionRuntime";
 import type {
   AgentRuntimeThreadReadModel,
+  AgentTodoItem,
   AutoContinueRequestPayload,
 } from "@/lib/api/agentRuntime/sessionTypes";
 import {
@@ -152,6 +153,7 @@ interface UseAgentStreamOptions {
   setMessages: Dispatch<SetStateAction<Message[]>>;
   getThreadItems?: () => readonly AgentThreadItem[];
   setThreadItems: Dispatch<SetStateAction<AgentThreadItem[]>>;
+  setTodoItems: Dispatch<SetStateAction<AgentTodoItem[]>>;
   setThreadTurns: Dispatch<SetStateAction<AgentThreadTurn[]>>;
   setCurrentTurnId: Dispatch<SetStateAction<string | null>>;
   setExecutionRuntime: Dispatch<
@@ -198,6 +200,7 @@ export function useAgentStream(options: UseAgentStreamOptions) {
     setMessages,
     getThreadItems,
     setThreadItems,
+    setTodoItems,
     setThreadTurns,
     setCurrentTurnId,
     setExecutionRuntime,
@@ -271,6 +274,7 @@ export function useAgentStream(options: UseAgentStreamOptions) {
         setMessages,
         getThreadItems,
         setThreadItems,
+        setTodoItems,
         setThreadTurns,
         setCurrentTurnId,
         setExecutionRuntime,
@@ -310,6 +314,7 @@ export function useAgentStream(options: UseAgentStreamOptions) {
       setMessages,
       setPendingActions,
       setThreadItems,
+      setTodoItems,
       setThreadTurns,
       setWorkspacePathMissing,
       warnedKeysRef,

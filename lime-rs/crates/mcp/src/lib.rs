@@ -31,13 +31,12 @@ pub use elicitation::{
     ElicitationRequestRouter, ElicitationResponse, ElicitationRouterError,
 };
 pub use events::{
-    McpOAuthCompletedPayload, McpResourceUpdatedPayload, McpResourcesUpdatedPayload,
-    McpServerErrorPayload, McpServerStartedPayload, McpServerStoppedPayload,
-    McpToolsUpdatedPayload,
+    McpResourceUpdatedPayload, McpResourcesUpdatedPayload, McpServerErrorPayload,
+    McpServerStartedPayload, McpServerStoppedPayload, McpToolsUpdatedPayload,
 };
 pub use extension_surface::{build_runtime_extension_surface, runtime_extension_name};
 pub use manager::{McpBridgeSnapshot, McpClientManager, McpRuntimeOwner, McpRuntimeServerSpec};
-pub use oauth::{McpOAuthLoginParams, McpOAuthLoginResponse, McpOAuthRegistry};
+pub use oauth::{McpOAuthLoginHandle, McpOAuthLoginParams, McpOAuthRegistry};
 pub use tool_converter::ToolConverter;
 pub use types::{
     McpContent, McpError, McpManagerState, McpPromptArgument, McpPromptDefinition,

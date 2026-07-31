@@ -86,6 +86,47 @@ fn canonical_read_keeps_runtime_warning_message_and_localization_code() {
 }
 
 #[test]
+fn canonical_read_keeps_runtime_error_without_terminalizing_the_turn() {
+    let mut stored = stored_running_session("2026-07-31T00:00:00Z", "2026-07-31T00:00:01Z");
+    stored.events.push(AgentEvent {
+        event_id: "event-read-model-error".to_string(),
+        sequence: 2,
+        session_id: stored.session.session_id.clone(),
+        thread_id: Some(stored.session.thread_id.clone()),
+        turn_id: Some(stored.turns[0].turn_id.clone()),
+        event_type: "runtime.error".to_string(),
+        timestamp: "2026-07-31T00:00:02Z".to_string(),
+        payload: json!({
+            "errorCode": "server_overloaded",
+            "message": "服务暂时不可用，等待权威终态。",
+            "willRetry": false
+        }),
+    });
+
+    let detail = runtime_session_read_detail_with_item_source(
+        &stored,
+        ReadDetailOptions::default(),
+        &[],
+        Some(&[]),
+    );
+    let error = detail["items"]
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["type"] == "error"))
+        .expect("error item");
+
+    assert_eq!(error["thread_id"], stored.session.thread_id);
+    assert_eq!(error["turn_id"], stored.turns[0].turn_id);
+    assert_eq!(error["message"], "服务暂时不可用，等待权威终态。");
+    assert_eq!(detail["turns"][0]["status"], "running");
+    assert_eq!(
+        detail["thread_read"]["diagnostics"]["latest_turn_status"],
+        "running"
+    );
+    assert!(detail["turns"][0]["completed_at"].is_null());
+    assert_eq!(detail["thread_read"]["thread_items"], detail["items"]);
+}
+
+#[test]
 fn canonical_read_rejects_malformed_runtime_warning_shapes_and_identity() {
     let mut stored = stored_running_session("2026-07-31T00:00:00Z", "2026-07-31T00:00:01Z");
     let session_id = stored.session.session_id.clone();

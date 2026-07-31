@@ -9,6 +9,7 @@ import {
   flushEffects,
   mockCheckForUpdates,
   mockGetConfig,
+  mockGetUpdateInstallSession,
   mockOpenUpdateWindow,
   mountSidebarContainer,
   resetAppSidebarTest,
@@ -85,6 +86,37 @@ describe("AppSidebar preferences", () => {
     expect(
       accountSlot?.querySelector('[data-testid="app-sidebar-update-button"]'),
     ).not.toBeNull();
+  });
+
+  it("版本尚未确认的下载会话不应显示更新入口", async () => {
+    mockGetUpdateInstallSession.mockResolvedValue({
+      sessionId: "checking-update",
+      stage: "downloading",
+      currentVersion: "1.57.0",
+      latestVersion: null,
+      downloadUrl: null,
+      downloadedBytes: 0,
+      totalBytes: null,
+      percent: 0,
+      message: "正在下载并验证更新",
+      error: null,
+      startedAt: 1,
+      updatedAt: 2,
+      completedAt: null,
+      canCloseWindow: true,
+      isActive: true,
+    });
+
+    const container = mountSidebarContainer({
+      currentPageParams: {
+        agentEntry: "new-task",
+      } as AgentPageParams,
+    });
+    await flushEffects(3);
+
+    expect(
+      container.querySelector('[data-testid="app-sidebar-update-button"]'),
+    ).toBeNull();
   });
 
   it("旧 companion 配置不应复活可选系统入口", async () => {
@@ -319,7 +351,9 @@ describe("AppSidebar preferences", () => {
 
     await act(async () => {
       container
-        .querySelector<HTMLButtonElement>('button[aria-label="切换皮肤为奥特曼守护"]')
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="切换皮肤为奥特曼守护"]',
+        )
         ?.click();
       await Promise.resolve();
     });
@@ -377,7 +411,9 @@ describe("AppSidebar preferences", () => {
       container.querySelector('button[aria-label="Switch theme to Dark"]'),
     ).not.toBeNull();
     expect(
-      container.querySelector('button[aria-label="Switch skin to Ultraman Guardian"]'),
+      container.querySelector(
+        'button[aria-label="Switch skin to Ultraman Guardian"]',
+      ),
     ).not.toBeNull();
   });
 

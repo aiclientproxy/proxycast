@@ -6,6 +6,8 @@ import {
   type AgentRuntimeLifecycleEventListener,
   type AgentRuntimeLifecycleNotification,
   type AgentRuntimeNotification,
+  type AgentRuntimeSignalEventListener,
+  type AgentRuntimeSignalNotification,
   type JsonRpcError,
   type AgentSessionActionRespondParams,
   type AgentSessionActionRespondResponse,
@@ -31,7 +33,8 @@ import {
   type JsonRpcMessage,
   type RequestId,
   type StructuredOutputContract,
-  serverNotification,
+  agentRuntimeLifecycleNotification,
+  agentRuntimeSignalNotification,
 } from "@limecloud/app-server-client";
 
 export type { StructuredOutputContract };
@@ -57,6 +60,7 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
   readonly connection: AppServerConnection;
   readonly #base: BaseAppServerAgentRuntimeClient;
   readonly #lifecycleListeners = new Set<AgentRuntimeLifecycleEventListener>();
+  readonly #signalListeners = new Set<AgentRuntimeSignalEventListener>();
   readonly #eventPipeline: AgentRuntimeEventPipeline;
   readonly #pendingNextEvents: AgentRuntimeNotification[] = [];
 
@@ -158,13 +162,37 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
     };
   }
 
+  subscribeSignalEvents(
+    listener: AgentRuntimeSignalEventListener,
+  ): AgentRuntimeClientSubscription {
+    this.#signalListeners.add(listener);
+    return {
+      unsubscribe: () => {
+        this.#signalListeners.delete(listener);
+      },
+    };
+  }
+
   async dispatchEvent(message: JsonRpcMessage): Promise<boolean> {
-    const lifecycle = serverNotification(message);
+    const signal = agentRuntimeSignalNotification(message);
+    if (signal) {
+      await this.#dispatchSignal(signal);
+      return true;
+    }
+    const lifecycle = agentRuntimeLifecycleNotification(message);
     if (lifecycle) {
       const result = await this.#dispatchLifecycle(lifecycle);
       return result.accepted;
     }
     return false;
+  }
+
+  async #dispatchSignal(
+    notification: AgentRuntimeSignalNotification,
+  ): Promise<void> {
+    for (const listener of this.#signalListeners) {
+      await listener(notification, notification);
+    }
   }
 
   async #dispatchLifecycle(
@@ -189,7 +217,12 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
         return pending;
       }
       const notification = await this.connection.nextNotification(timeoutMs);
-      const lifecycle = serverNotification(notification);
+      const signal = agentRuntimeSignalNotification(notification);
+      if (signal) {
+        await this.#dispatchSignal(signal);
+        return signal;
+      }
+      const lifecycle = agentRuntimeLifecycleNotification(notification);
       if (lifecycle) {
         const result = await this.#dispatchLifecycle(lifecycle);
         if (result.accepted) {

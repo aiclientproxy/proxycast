@@ -13,20 +13,20 @@
 
 出口代码：TL 时间线，TP Turn 面板，PI pending interaction，HS Header/状态区，GN 应用通知，DX 仅开发诊断。
 
-实施快照：direct `item/started -> item/commandExecution/outputDelta* -> item/completed` 通过 typed adapter 和共享 reducer；production `thread/resume` 安装同一 replay reducer，后续 live notification 继续复用。completed snapshot 权威覆盖 delta 草稿，输出限制为 256 KiB。unknown Item 与 unknown/known-unprojected notification drift recorder 已接线，但 recorder 只提供 fail-visible 诊断，不能把 72 notification 中的 planned surface 标记完成。
+实施快照：direct `item/started -> item/commandExecution/outputDelta* -> item/completed` 通过 typed adapter 和共享 reducer；production `thread/resume` 安装同一 replay reducer，后续 live notification 继续复用。completed snapshot 权威覆盖 delta 草稿，输出限制为 256 KiB。`turn.plan.updated` 由 canonical `update_plan` 的 `ToolOutput.structured_content` 派生，实时与 canonical cold read 共用 checklist 投影；`update_plan` 工具项保留在 read model，但不生成 `ThreadItem.plan` 或 Plan UI。unknown Item 与 unknown/known-unprojected notification drift recorder 已接线，但 recorder 只提供 fail-visible 诊断，不能把 72 notification 中的 planned surface 标记完成。
 
 ## 1. Thread、Turn 与 Hook
 
 |   # | Method                          | 目标出口 | 当前裁决 | v2 投影                                               |
 | --: | ------------------------------- | -------- | -------- | ----------------------------------------------------- |
-|   1 | error                           | TP/HS    | planned  | thread/turn 错误；willRetry 只显示重试中              |
+|   1 | error                           | TP/HS    | current  | typed live/durable；true 重试，false 等权威 Turn      |
 |   2 | thread/started                  | HS       | current  | 建立 Thread metadata，不把空 turns 当完整 history     |
 |   3 | thread/status/changed           | HS/PI    | current  | notLoaded、idle、systemError、active 与 waiting flags |
 |   4 | thread/archived                 | GN/HS    | current  | 侧栏归档，当前页只读                                  |
 |   5 | thread/deleted                  | GN       | current  | 当前页已删除态，不删除 Project                        |
 |   6 | thread/unarchived               | GN/HS    | current  | 恢复可见/可操作状态                                   |
 |   7 | thread/closed                   | HS       | current  | 清除 live spinner 和 pending interaction              |
-|   8 | skills/changed                  | GN       | planned  | 刷新 Composer Skill catalog                           |
+|   8 | skills/changed                  | GN       | current  | 瞬时失效并重新读取 Composer current Skill catalog     |
 |   9 | thread/name/updated             | HS       | current  | Header 与侧栏名称                                     |
 |  10 | thread/goal/updated             | HS       | current  | goal/阶段入口，不映射 Rust ProductionPlan             |
 |  11 | thread/goal/cleared             | HS       | current  | 清除当前 goal indicator                               |
@@ -39,7 +39,7 @@
 |  18 | turn/completed                  | TL/TP    | current  | 权威 Turn 终态并清理 pending                          |
 |  19 | hook/completed                  | TL       | planned  | Hook status、duration、entries 与阻断结果             |
 |  20 | turn/diff/updated               | TP       | planned  | 替换聚合 Diff snapshot                                |
-|  21 | turn/plan/updated               | TP       | planned  | 执行 checklist，不等同 plan Item                      |
+|  21 | turn/plan/updated               | TP       | current  | canonical update_plan checklist，实时/冷恢复一致      |
 
 ## 2. Item 生命周期、流与进程
 
@@ -67,7 +67,7 @@
 
 |   # | Method                               | 目标出口 | 当前裁决               | v2 投影                                  |
 | --: | ------------------------------------ | -------- | ---------------------- | ---------------------------------------- |
-|  39 | mcpServer/oauthLogin/completed       | GN/PI    | planned                | 结束 OAuth 等待并刷新 MCP status         |
+|  39 | mcpServer/oauthLogin/completed       | GN/PI    | current                | 结束 OAuth 等待并刷新 MCP status         |
 |  40 | mcpServer/startupStatus/updated      | HS/GN    | planned                | starting/ready/failed，无假 MCP fallback |
 |  41 | account/updated                      | GN       | product-scope-excluded | 不写入对话 history                       |
 |  42 | account/rateLimits/updated           | HS/GN    | product-scope-excluded | 若未来纳入，独立产品范围变更             |
@@ -167,7 +167,7 @@ command/file approval、requestUserInput、MCP elicitation 与 permission approv
 
 ## 9. 非 Item 投影与状态终结
 
-Turn plan 是执行 checklist，不是 ThreadItem.plan 或 Rust ProductionPlan。Turn diff 是本 Turn 聚合 Diff，不能取代 fileChange Item。Header 只显示当前 model、reasoning、permission/sandbox、environment 与 active flags 的用户级摘要；底层 route、provider、credential 和 capability 明细进入受控运行详情。
+Turn plan 是 canonical `update_plan` 的执行 checklist，不是 ThreadItem.plan 或 Rust ProductionPlan；实时 `turn.plan.updated` 与 cold read 从同一结构化快照恢复，非法快照不覆盖上一份有效计划。Turn diff 是本 Turn 聚合 Diff，不能取代 fileChange Item。Header 只显示当前 model、reasoning、permission/sandbox、environment 与 active flags 的用户级摘要；底层 route、provider、credential 和 capability 明细进入受控运行详情。
 
 | 触发                        | 必须终结的 UI                                         |
 | --------------------------- | ----------------------------------------------------- |

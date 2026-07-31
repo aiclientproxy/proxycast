@@ -129,6 +129,13 @@ function isLikelyProviderChannelError(message: string): boolean {
   return message.includes("no available channel for model");
 }
 
+function isLikelyProviderRouteRejectedError(message: string): boolean {
+  return includesAny(message, [
+    "runtime model route is not executable",
+    "model route is not executable",
+  ]);
+}
+
 function isLikelyProviderUnavailableError(message: string): boolean {
   return (
     looksLikeHttpStatus(message, "503") ||
@@ -239,6 +246,7 @@ export function resolveAgentRuntimeErrorPresentation(errorMessage: string): {
   }
 
   if (
+    isLikelyProviderRouteRejectedError(lowerMessage) ||
     isLikelyProviderUnavailableError(lowerMessage) ||
     isLikelyProviderNotFoundError(lowerMessage)
   ) {
@@ -285,4 +293,14 @@ export function resolveAgentRuntimeErrorPresentation(errorMessage: string): {
     displayMessage: normalizedMessage,
     toastMessage: `响应错误: ${normalizedMessage}`,
   };
+}
+
+export function resolveAgentRuntimeSubmitErrorMessage(
+  errorMessage: string,
+): string {
+  const toastMessage =
+    resolveAgentRuntimeErrorPresentation(errorMessage).toastMessage;
+  return toastMessage.startsWith("响应错误:")
+    ? toastMessage.replace(/^响应错误:/, "发送失败:")
+    : toastMessage;
 }

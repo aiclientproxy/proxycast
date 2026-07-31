@@ -196,10 +196,41 @@ describe("AboutSection", () => {
     expect(text).toContain("Copyright © 2026 Lime");
     expect(text).toContain("Update available: 1.10.1");
     expect(text).toContain("Check for Updates");
-    expect(text).toContain("Download Update");
+    expect(text).toContain("Restart to Update");
     expect(text).not.toContain("Skill package opening");
     expect(text).not.toContain("可更新到 1.10.1");
     expect(text).not.toContain("settings.about");
+  });
+
+  it("下载完成事件应独立驱动可安装状态，不依赖检查请求返回时序", async () => {
+    mockCheckForUpdates.mockResolvedValue({
+      current: "1.10.0",
+      latest: null,
+      hasUpdate: false,
+      downloadUrl: null,
+      releaseNotesUrl: null,
+      releaseNotes: null,
+      pubDate: null,
+      error: null,
+    });
+    mockGetUpdateInstallSession.mockResolvedValue(
+      createInstallSession({
+        stage: "completed",
+        percent: 1,
+        message: "ready",
+        completedAt: 3,
+        isActive: false,
+      }),
+    );
+
+    const container = renderComponent();
+    await waitForLoad();
+
+    expect(container.textContent).toContain("Update available: 1.10.1");
+    expect(container.textContent).toContain("Ready to install");
+    expect(findButton(container, "Restart to Update")).toBeInstanceOf(
+      HTMLButtonElement,
+    );
   });
 
   it("应移除关于页里的营销与能力说明噪音", async () => {
@@ -243,7 +274,7 @@ describe("AboutSection", () => {
     expect(mockCheckForUpdates).toHaveBeenNthCalledWith(2);
 
     await act(async () => {
-      findButton(container, "Download Update").click();
+      findButton(container, "Restart to Update").click();
       await waitForLoad();
     });
 
@@ -300,7 +331,7 @@ describe("AboutSection", () => {
     await waitForLoad();
 
     await act(async () => {
-      findButton(container, "Download Update").click();
+      findButton(container, "Restart to Update").click();
       await waitForLoad();
     });
 

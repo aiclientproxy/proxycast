@@ -1,5 +1,5 @@
 use super::super::*;
-use app_server_protocol::{McpServerOauthLoginParams, McpServerOauthLoginResponse};
+use app_server_protocol::McpServerOauthLoginParams;
 use async_trait::async_trait;
 
 #[async_trait]
@@ -76,7 +76,7 @@ impl McpAppDataSource for LocalAppDataSource {
     async fn login_mcp_server_oauth(
         &self,
         params: McpServerOauthLoginParams,
-    ) -> Result<McpServerOauthLoginResponse, RuntimeCoreError> {
+    ) -> Result<lime_mcp::McpOAuthLoginHandle, RuntimeCoreError> {
         mcp::login_mcp_server_oauth(&self.db, &self.mcp_manager, params).await
     }
 

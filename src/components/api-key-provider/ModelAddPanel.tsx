@@ -57,6 +57,7 @@ import {
   ServerCog,
   SlidersHorizontal,
   Sparkles,
+  X,
   Zap,
 } from "lucide-react";
 import {
@@ -1085,6 +1086,9 @@ export const ModelAddPanel: React.FC<ModelAddPanelProps> = ({
       ? (existingProviderById.get(template.systemProviderId) ?? null)
       : null;
   }, [draftProviderId, existingProviderById, template.systemProviderId]);
+  const completableProviderId =
+    draftProviderId ?? configuredProvider?.id ?? null;
+  const hasPersistedProvider = Boolean(completableProviderId);
 
   const modelFetchProfile = useMemo<ProviderModelFetchProfile>(
     () => ({
@@ -1243,7 +1247,10 @@ export const ModelAddPanel: React.FC<ModelAddPanelProps> = ({
           api_host: request.api_host,
           enabled: true,
           prompt_cache_mode: request.prompt_cache_mode,
-          models: reconcileProviderModels(existingProvider?.models, state.models),
+          models: reconcileProviderModels(
+            existingProvider?.models,
+            state.models,
+          ),
         });
       } else {
         const created = await onAddProvider(request);
@@ -2297,12 +2304,24 @@ export const ModelAddPanel: React.FC<ModelAddPanelProps> = ({
 
       <button
         type="button"
-        onClick={onCancel}
+        onClick={() => {
+          if (completableProviderId) {
+            onActivated(completableProviderId);
+            return;
+          }
+          onCancel();
+        }}
         className="mt-4 inline-flex items-center gap-2 self-start rounded-full px-3 py-2 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
         data-testid="model-add-cancel-button"
       >
-        <Check className="h-4 w-4" />
-        {t("settings.providers.modelAdd.action.finish", "完成添加")}
+        {hasPersistedProvider ? (
+          <Check className="h-4 w-4" />
+        ) : (
+          <X className="h-4 w-4" />
+        )}
+        {hasPersistedProvider
+          ? t("settings.providers.modelAdd.action.finish", "完成添加")
+          : t("settings.providers.modelAdd.action.cancel", "取消")}
       </button>
     </div>
   );

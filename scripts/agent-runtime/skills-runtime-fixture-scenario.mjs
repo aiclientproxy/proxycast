@@ -25,6 +25,11 @@ export const EXPERT_SKILLS_RUNTIME_PANEL_PROMPT =
 export const EXPERT_SKILLS_RUNTIME_PANEL_DONE_TEXT =
   "CLAW_EXPERT_SKILLS_RUNTIME_PANEL_DONE";
 export const SKILLS_RUNTIME_ASSERTION_KEYS = [
+  "initialCurrentSkillListObserved",
+  "typedSkillsChangedConsumed",
+  "automaticSkillListRefreshObserved",
+  "guiSkillCatalogUpdated",
+  "skillsCatalogRefreshDidNotUseManualRefresh",
   "skillsRuntimePromptReachedBackend",
   "guiSkillsRuntimeInputSubmitted",
   "guiSkillsRuntimeCompleted",

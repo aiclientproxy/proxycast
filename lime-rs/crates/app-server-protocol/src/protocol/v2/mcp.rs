@@ -28,6 +28,21 @@ pub struct McpToolCallProgressNotification {
     pub message: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct McpServerOauthLoginCompletedNotification {
+    pub name: String,
+    #[schemars(schema_with = "nullable_string_schema")]
+    pub thread_id: Option<String>,
+    pub success: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+fn nullable_string_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    generator.subschema_for::<Option<String>>()
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct McpServerElicitationRequestParams {
@@ -237,5 +252,48 @@ mod tests {
             }))
             .is_err()
         );
+    }
+
+    #[test]
+    fn oauth_login_completed_matches_codex_wire_and_fails_closed() {
+        let success = McpServerOauthLoginCompletedNotification {
+            name: "remote-docs".to_string(),
+            thread_id: None,
+            success: true,
+            error: None,
+        };
+        assert_eq!(
+            serde_json::to_value(success).expect("serialize OAuth completion"),
+            json!({
+                "name": "remote-docs",
+                "threadId": null,
+                "success": true
+            })
+        );
+
+        assert!(
+            serde_json::from_value::<McpServerOauthLoginCompletedNotification>(json!({
+                "name": "remote-docs",
+                "threadId": null,
+                "success": false,
+                "error": "scope rejected",
+                "serverName": "legacy-name"
+            }))
+            .is_err()
+        );
+
+        let schema = serde_json::to_value(schemars::schema_for!(
+            McpServerOauthLoginCompletedNotification
+        ))
+        .expect("serialize OAuth completion schema");
+        let required = schema["required"]
+            .as_array()
+            .expect("OAuth completion schema required fields");
+        assert!(required.iter().any(|field| field == "threadId"));
+        let thread_id_types = schema["properties"]["threadId"]["type"]
+            .as_array()
+            .expect("OAuth completion threadId must be nullable");
+        assert!(thread_id_types.iter().any(|value| value == "null"));
+        assert!(thread_id_types.iter().any(|value| value == "string"));
     }
 }

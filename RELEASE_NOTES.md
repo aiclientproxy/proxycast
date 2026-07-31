@@ -1,39 +1,41 @@
-## Lime v1.117.0
+## Lime v1.118.0
 
 ### 新功能
 
-- 完成 `currentTime/read`、`item/permissions/requestApproval` 与 `item/tool/call` 三项 Host capability：系统时间读取、权限提升和桌面动态工具调用都经 Electron Host、App Server JSON-RPC 与 RuntimeCore 的同一条产品链闭环。
-- 动态工具调用升级为 canonical Thread Item，完整保留 namespace、tool、原始参数、有序文本/图片/音频输出、状态和耗时；恢复会话后仍能可靠呈现工具生命周期。
-- Multi-Agent 对话补齐六项 AgentControl 工具、typed wait state、子 Agent 活动投影和冷重启恢复；parent-owned 子线程现在明确禁止直接输入。
-- Lime Hub 可通过 bundled canonical registry 恢复已知模型的执行能力，并新增 Agnes 2.5 Flash/Pro canonical catalog；未知模型仍保持 fail-closed。
+- Skill 目录现在会在默认目录新增、修改或删除 Skill，以及 Lime 本地 Skill 管理成功后自动刷新；Composer 始终重新读取 App Server 的 current `skill/list`，无需手动刷新或重启应用。
+- Agent 执行计划接入 typed `turn/plan/updated` 通知，实时对话与冷恢复会展示同一份 checklist；失败或畸形的计划快照不会覆盖最近一次有效状态。
+- Agent 错误升级为 typed retry/terminal 链路：重试中、最终失败与权威 Turn terminal 各自有明确状态，并可从 canonical read model 恢复。
+- MCP OAuth 登录完成态改由 App Server v2 typed notification 直接投影到 Renderer，统一登录窗口、MCP 管理状态与事件 identity。
 
 ### 修复
 
-- 修复干净环境无法解析 `@limecloud/app-server-client/browser`、图片任务 fixture 使用错误 Chat 模型、模型列表 generation 基线漂移，以及非法模型参数返回错误 JSON-RPC code 的问题。
-- 修复模型选择器展示 RuntimeCore 无法执行的 inferred-only 模型、live provider metadata 被本地 hint 覆盖，以及 Windows Lime Hub 已保存模型无法进入首回合的问题。
-- 修复媒体预览依赖 transient chunk/completed 通知和 Renderer live-drain helper 的双轨行为；所有分段读取现在先校验 offset、length、digest 与大小再更新进度。
-- 修复初始会话和子 Agent 导航、canonical Item 读取、事件序列门控与待处理交互恢复中的边界问题。
+- 修复 Windows 用户已显式配置的 Provider 模型因缺少权威 capability 来源而不出现在聊天模型选择器中的问题；仅靠启发式推断且不可执行的模型继续 fail closed。
+- 修复 Electron updater 将同版本、旧版本、无效版本或缺失版本误报为可安装更新的问题；只有严格更高的语义版本进入下载和安装流程。
+- 修复更新失败、已是最新和发现新版本共用提示的问题，并统一侧边栏、关于页与更新通知页的下载、重试和重启安装状态。
+- 修复 Provider 路由不可执行错误在发送入口和 runtime 事件链中出现不一致提示，以及部分独立页面缺少全局 toast 宿主的问题。
+- 修复 Provider 添加流程在尚未保存配置时显示“完成添加”，并在已保存后正确返回可用模型上下文。
 
 ### 优化与重构
 
-- 将 `configWarning` 从 v0 DTO/schema 迁移到唯一的 typed v2 owner，Renderer 只投影解码后的全局告警，并提供五语言去重提示。
-- 删除 v0 配置告警、TextPosition/TextRange schema、媒体 transient notification 消费者、旧协议 facade 与重复预览同步模块，不保留生产兼容包装。
-- 收紧请求权限 profile、沙箱命令、动态工具路由、provider history 与 read model 的类型边界；保留名、schema 冲突、身份错配、重复或迟到响应全部 fail-closed。
-- Skill 安装目录改用后端权威 `localDirectoryPath`，Electron 对目录使用 `openPath`、对文件使用 `showItemInFolder`。
+- 将 `skills/changed`、`error`、`turn/plan/updated` 与 `mcpServer/oauthLogin/completed` 收敛到 App Server v2 protocol、schema、generated client 和 Renderer typed event bus，不新增生产 mock 或第二事件 owner。
+- Skill catalog cache 统一由 `lime-skills` 失效；默认 Skill roots 使用递归 watcher 与节流通知，重连和 remount 仍主动读取 current catalog。
+- canonical `update_plan` 工具项继续作为恢复事实源，但不再生成重复 Plan Item、工具卡或决策面板。
+- updater 的版本比较与会话状态拆到独立纯 owner，收紧 `available -> downloaded -> installing/restarting` 状态转换。
 
 ### 测试与质量
 
-- 新增 Host capability、动态工具、权限 profile、current time、AgentControl、parent-owned thread、配置告警 v2 与模型路由的 Rust、Electron、协议和 Renderer 回归。
-- 补充真实 Electron Gate B 证据，覆盖 preload/IPC、`app_server_handle_json_lines`、App Server、RuntimeCore、canonical read model、GUI 可见状态和冷重启 identity。
-- 加强 app-server-client browser 子路径、协议生成物、五语言资源、legacy surface 和 current bridge 的守卫。
+- 新增 Skills 自动刷新、typed error、执行计划、MCP OAuth、Provider 模型目录与 updater 语义的 Rust、Electron、协议、Renderer 和脚本回归。
+- 扩展 current Agent fixture，覆盖 typed error 成功/失败、计划实时更新与冷恢复、Skills runtime 自动刷新，以及真实 Electron/preload/IPC/App Server/read model identity。
+- 核心用户流程审计覆盖启动、Provider/模型选择、Agent 对话、停止后继续、历史恢复、关于页与更新状态；生产 mock fallback 命中为零。
 
 ### 文档
 
-- 更新 Host capability、DynamicTool canonical payload、配置告警 v2、媒体 transient retirement 与 Lime Hub capability provenance 的架构事实源。
-- 更新 Refactor v2 V2-04/V2-05 进度、Gate B evidence、Windows runtime 模型路由计划和 Soul 输出面路线图。
+- 更新 App Server v2 notification、Skills catalog invalidation、MCP OAuth、typed error/plan recovery 与 updater/模型目录的架构和执行事实源。
+- 记录 Windows 模型目录与更新可靠性、核心用户主流程 E2E 审计，以及 Refactor v2 V2-05 当前完成情况。
 
 ### 其他
 
-- 将根应用、CLI npm 包、Rust workspace 与锁文件版本统一提升到 `1.117.0`。
+- 将根应用、CLI npm 包、Rust workspace 与锁文件版本统一提升到 `1.118.0`。
+- Windows Squirrel 从 N-1 版本发现、下载、重启安装的 packaged Gate B 仍需 Windows 实机验收；macOS Electron 证据不替代该平台验证。
 
-**完整变更**: `v1.116.0` -> `v1.117.0`
+**完整变更**: `v1.117.0` -> `v1.118.0`

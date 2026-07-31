@@ -59,6 +59,27 @@ export function sanitizeBackendLedgerForEvidence(backendLedger) {
       });
     }
     if (
+      entry?.kind === "typedErrorRetryingAwaitingSignal" ||
+      entry?.kind === "typedErrorAwaitingTerminalSignal" ||
+      entry?.kind === "typedErrorTerminalEmitted"
+    ) {
+      return sanitizeJson({
+        kind: entry.kind,
+        scenario: entry.scenario,
+        sessionId: entry.sessionId,
+        threadId: entry.threadId,
+        turnId: entry.turnId,
+        eventType: entry.eventType,
+        eventTypes: entry.eventTypes,
+        retryCount: entry.retryCount,
+        expectedWillRetry: entry.expectedWillRetry,
+        retryable: entry.retryable,
+        signalStage: entry.signalStage,
+        terminalStatus: entry.terminalStatus,
+        recordedAt: entry.recordedAt,
+      });
+    }
+    if (
       entry?.kind === "actionRespond" ||
       entry?.kind === "approvalRequestResumeActionRespond" ||
       entry?.kind === "approvalRequestResumeActionRespondIgnored"

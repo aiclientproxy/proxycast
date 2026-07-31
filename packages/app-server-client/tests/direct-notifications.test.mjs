@@ -3,6 +3,7 @@ import { test } from "vitest";
 import {
   isAgentMessageDeltaNotification,
   isCommandExecutionOutputDeltaNotification,
+  isErrorNotification,
   isFileChangePatchUpdatedNotification,
   isItemCompletedNotification,
   isItemStartedNotification,
@@ -13,19 +14,121 @@ import {
   isReasoningSummaryTextDeltaNotification,
   isReasoningTextDeltaNotification,
   isServerNotification,
+  isSkillsChangedNotification,
   isThreadStartedNotification,
   isThreadSettingsUpdatedNotification,
+  isTurnPlanUpdatedNotification,
   isTurnCompletedNotification,
   isTurnStartedNotification,
   modelListUpdatedServerNotification,
+  mcpServerOauthLoginCompletedServerNotification,
   serverNotification,
+  skillsChangedServerNotification,
 } from "../dist/index.js";
 
 const threadId = "thread-1";
 const turnId = "turn-1";
 
+test("recognizes strict skills/changed catalog invalidation", () => {
+  const notification = { method: "skills/changed", params: {} };
+  assert.deepEqual(skillsChangedServerNotification(notification), notification);
+  assert.equal(isSkillsChangedNotification(notification), true);
+
+  for (const malformed of [
+    { method: "skills/changed" },
+    { method: "skills/changed", params: null },
+    { method: "skills/changed", params: { path: "/private/skill" } },
+  ]) {
+    assert.equal(skillsChangedServerNotification(malformed), undefined);
+    assert.equal(isSkillsChangedNotification(malformed), false);
+  }
+});
+
+test("recognizes strict mcpServer/oauthLogin/completed notifications", () => {
+  const success = {
+    method: "mcpServer/oauthLogin/completed",
+    params: {
+      name: "remote-docs",
+      threadId: null,
+      success: true,
+    },
+  };
+  const failure = {
+    method: "mcpServer/oauthLogin/completed",
+    params: {
+      name: "remote-docs",
+      threadId: "thread-1",
+      success: false,
+      error: "scope rejected",
+    },
+  };
+
+  assert.deepEqual(
+    mcpServerOauthLoginCompletedServerNotification(success),
+    success,
+  );
+  assert.deepEqual(
+    mcpServerOauthLoginCompletedServerNotification(failure),
+    failure,
+  );
+
+  for (const malformed of [
+    { method: "mcpServer/oauthLogin/completed" },
+    {
+      method: "mcpServer/oauthLogin/completed",
+      params: { name: "remote-docs", success: true },
+    },
+    {
+      method: "mcpServer/oauthLogin/completed",
+      params: { name: "", threadId: null, success: true },
+    },
+    {
+      method: "mcpServer/oauthLogin/completed",
+      params: { name: "remote-docs", threadId: 7, success: true },
+    },
+    {
+      method: "mcpServer/oauthLogin/completed",
+      params: {
+        name: "remote-docs",
+        threadId: null,
+        success: false,
+        error: null,
+      },
+    },
+    {
+      method: "mcpServer/oauthLogin/completed",
+      params: {
+        name: "remote-docs",
+        threadId: null,
+        success: true,
+        serverName: "legacy",
+      },
+    },
+  ]) {
+    assert.equal(
+      mcpServerOauthLoginCompletedServerNotification(malformed),
+      undefined,
+    );
+  }
+});
+
 test("recognizes native v2 lifecycle and reasoning notifications", () => {
   const notifications = [
+    {
+      method: "error",
+      params: {
+        error: {
+          message: "provider stream reconnecting",
+          codexErrorInfo: {
+            responseStreamDisconnected: { httpStatusCode: null },
+          },
+          additionalDetails: null,
+        },
+        threadId,
+        turnId,
+        willRetry: true,
+      },
+    },
     {
       method: "thread/started",
       params: { thread: { id: threadId } },
@@ -42,6 +145,18 @@ test("recognizes native v2 lifecycle and reasoning notifications", () => {
       params: {
         threadId,
         turn: { id: turnId, status: "completed" },
+      },
+    },
+    {
+      method: "turn/plan/updated",
+      params: {
+        explanation: "继续执行",
+        plan: [
+          { step: "读取现状", status: "completed" },
+          { step: "补齐主链", status: "inProgress" },
+        ],
+        threadId,
+        turnId,
       },
     },
     {
@@ -130,28 +245,30 @@ test("recognizes native v2 lifecycle and reasoning notifications", () => {
   ];
 
   assert.equal(notifications.every(isServerNotification), true);
-  assert.equal(isThreadStartedNotification(notifications[0]), true);
-  assert.equal(isTurnStartedNotification(notifications[1]), true);
-  assert.equal(isTurnCompletedNotification(notifications[2]), true);
-  assert.equal(isItemStartedNotification(notifications[3]), true);
-  assert.equal(isItemCompletedNotification(notifications[4]), true);
-  assert.equal(isAgentMessageDeltaNotification(notifications[5]), true);
+  assert.equal(isErrorNotification(notifications[0]), true);
+  assert.equal(isThreadStartedNotification(notifications[1]), true);
+  assert.equal(isTurnStartedNotification(notifications[2]), true);
+  assert.equal(isTurnCompletedNotification(notifications[3]), true);
+  assert.equal(isTurnPlanUpdatedNotification(notifications[4]), true);
+  assert.equal(isItemStartedNotification(notifications[5]), true);
+  assert.equal(isItemCompletedNotification(notifications[6]), true);
+  assert.equal(isAgentMessageDeltaNotification(notifications[7]), true);
   assert.equal(
-    isCommandExecutionOutputDeltaNotification(notifications[6]),
+    isCommandExecutionOutputDeltaNotification(notifications[8]),
     true,
   );
-  assert.equal(isFileChangePatchUpdatedNotification(notifications[7]), true);
-  assert.equal(isPlanDeltaNotification(notifications[8]), true);
-  assert.equal(isMcpToolCallProgressNotification(notifications[9]), true);
+  assert.equal(isFileChangePatchUpdatedNotification(notifications[9]), true);
+  assert.equal(isPlanDeltaNotification(notifications[10]), true);
+  assert.equal(isMcpToolCallProgressNotification(notifications[11]), true);
   assert.equal(
-    isReasoningSummaryTextDeltaNotification(notifications[10]),
+    isReasoningSummaryTextDeltaNotification(notifications[12]),
     true,
   );
   assert.equal(
-    isReasoningSummaryPartAddedNotification(notifications[11]),
+    isReasoningSummaryPartAddedNotification(notifications[13]),
     true,
   );
-  assert.equal(isReasoningTextDeltaNotification(notifications[12]), true);
+  assert.equal(isReasoningTextDeltaNotification(notifications[14]), true);
   assert.equal(
     isThreadSettingsUpdatedNotification({
       method: "thread/settings/updated",
@@ -164,6 +281,87 @@ test("recognizes native v2 lifecycle and reasoning notifications", () => {
         },
       },
     }),
+    true,
+  );
+});
+
+test("fails closed for malformed turn plan updates", () => {
+  const malformed = [
+    {
+      method: "turn/plan/updated",
+      params: {
+        plan: [{ step: "补齐主链", status: "running" }],
+        threadId,
+        turnId,
+      },
+    },
+    {
+      method: "turn/plan/updated",
+      params: {
+        plan: [{ step: "补齐主链", status: "inProgress", extra: true }],
+        threadId,
+        turnId,
+      },
+    },
+    {
+      method: "turn/plan/updated",
+      params: {
+        plan: [{ step: "", status: "completed" }],
+        threadId,
+        turnId,
+      },
+    },
+  ];
+
+  assert.equal(
+    malformed.every((message) => !isTurnPlanUpdatedNotification(message)),
+    true,
+  );
+});
+
+test("fails closed for malformed typed error notifications", () => {
+  const malformed = [
+    { error: { message: "failed" }, threadId, turnId },
+    { error: { message: "failed" }, threadId, turnId, willRetry: "false" },
+    { error: { message: "" }, threadId, turnId, willRetry: false },
+    { error: { message: "failed" }, threadId: "", turnId, willRetry: false },
+    { error: { message: "failed" }, threadId, turnId: "", willRetry: false },
+    {
+      error: { message: "failed", additionalDetails: 42 },
+      threadId,
+      turnId,
+      willRetry: false,
+    },
+    {
+      error: {
+        message: "failed",
+        codexErrorInfo: "responseStreamDisconnected",
+      },
+      threadId,
+      turnId,
+      willRetry: false,
+    },
+    {
+      error: { message: "failed", legacyCode: "retryable" },
+      threadId,
+      turnId,
+      willRetry: false,
+    },
+    {
+      error: { message: "failed" },
+      retryable: true,
+      threadId,
+      turnId,
+      willRetry: false,
+    },
+  ].map((params) => ({ method: "error", params }));
+
+  assert.equal(
+    malformed.every((message) => !isServerNotification(message)),
+    true,
+  );
+  assert.equal(
+    malformed.every((message) => !isErrorNotification(message)),
     true,
   );
 });

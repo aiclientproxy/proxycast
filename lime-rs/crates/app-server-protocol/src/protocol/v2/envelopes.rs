@@ -1,14 +1,15 @@
 use super::{
     AgentMessageDeltaNotification, ArtifactWriteParams, ArtifactWriteResponse,
     CommandExecutionOutputDeltaNotification, CommandExecutionRequestApprovalParams,
-    ConfigWarningNotification, CurrentTimeReadParams, DynamicToolCallParams,
+    ConfigWarningNotification, CurrentTimeReadParams, DynamicToolCallParams, ErrorNotification,
     FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, ItemCompletedNotification,
-    ItemStartedNotification, McpServerElicitationRequestParams, McpToolCallProgressNotification,
-    MediaReadParams, MediaReadResponse, Method, ModelListParams, ModelListUpdatedNotification,
+    ItemStartedNotification, McpServerElicitationRequestParams,
+    McpServerOauthLoginCompletedNotification, McpToolCallProgressNotification, MediaReadParams,
+    MediaReadResponse, Method, ModelListParams, ModelListUpdatedNotification,
     ModelReroutedNotification, ModelSafetyBufferingUpdatedNotification,
     ModelVerificationNotification, PermissionsRequestApprovalParams, PlanDeltaNotification,
     ReasoningSummaryPartAddedNotification, ReasoningSummaryTextDeltaNotification,
-    ReasoningTextDeltaNotification, ServerRequestResolvedNotification,
+    ReasoningTextDeltaNotification, ServerRequestResolvedNotification, SkillsChangedNotification,
     ThreadApproveGuardianDeniedActionParams, ThreadApproveGuardianDeniedActionResponse,
     ThreadArchiveParams, ThreadArchiveResponse, ThreadArchivedNotification,
     ThreadBackgroundTerminalsCleanParams, ThreadBackgroundTerminalsCleanResponse,
@@ -33,19 +34,21 @@ use super::{
     ThreadTokenUsageUpdatedNotification, ThreadTurnsListParams, ThreadTurnsListResponse,
     ThreadUnarchiveParams, ThreadUnarchiveResponse, ThreadUnarchivedNotification,
     ThreadUnsubscribeParams, ThreadUnsubscribeResponse, ToolRequestUserInputParams,
-    TurnCompletedNotification, TurnInterruptParams, TurnInterruptResponse, TurnStartParams,
-    TurnStartResponse, TurnStartedNotification, TurnSteerParams, TurnSteerResponse,
-    WarningNotification, METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_CONFIG_WARNING,
-    METHOD_CURRENT_TIME_READ, METHOD_FILE_CHANGE_PATCH_UPDATED,
-    METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL, METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
-    METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL, METHOD_ITEM_TOOL_CALL,
-    METHOD_ITEM_TOOL_REQUEST_USER_INPUT, METHOD_MCP_SERVER_ELICITATION_REQUEST,
+    TurnCompletedNotification, TurnInterruptParams, TurnInterruptResponse,
+    TurnPlanUpdatedNotification, TurnStartParams, TurnStartResponse, TurnStartedNotification,
+    TurnSteerParams, TurnSteerResponse, WarningNotification, METHOD_COMMAND_EXECUTION_OUTPUT_DELTA,
+    METHOD_CONFIG_WARNING, METHOD_CURRENT_TIME_READ, METHOD_ERROR,
+    METHOD_FILE_CHANGE_PATCH_UPDATED, METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
+    METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL, METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
+    METHOD_ITEM_TOOL_CALL, METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
+    METHOD_MCP_SERVER_ELICITATION_REQUEST, METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
     METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_LIST_UPDATED, METHOD_MODEL_REROUTED,
     METHOD_MODEL_SAFETY_BUFFERING_UPDATED, METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA,
     METHOD_REASONING_SUMMARY_PART_ADDED, METHOD_REASONING_SUMMARY_TEXT_DELTA,
-    METHOD_REASONING_TEXT_DELTA, METHOD_SERVER_REQUEST_RESOLVED, METHOD_THREAD_CLOSED,
-    METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED,
-    METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED, METHOD_WARNING,
+    METHOD_REASONING_TEXT_DELTA, METHOD_SERVER_REQUEST_RESOLVED, METHOD_SKILLS_CHANGED,
+    METHOD_THREAD_CLOSED, METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED,
+    METHOD_THREAD_NAME_UPDATED, METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED,
+    METHOD_TURN_PLAN_UPDATED, METHOD_WARNING,
 };
 use crate::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use schemars::JsonSchema;
@@ -645,6 +648,12 @@ pub enum ServerNotification {
     ConfigWarning(ConfigWarningNotification),
     #[serde(rename = "warning")]
     Warning(WarningNotification),
+    #[serde(rename = "error")]
+    Error(ErrorNotification),
+    #[serde(rename = "skills/changed")]
+    SkillsChanged(SkillsChangedNotification),
+    #[serde(rename = "mcpServer/oauthLogin/completed")]
+    McpServerOauthLoginCompleted(McpServerOauthLoginCompletedNotification),
     #[serde(rename = "thread/started")]
     ThreadStarted(ThreadStartedNotification),
     #[serde(rename = "thread/archived")]
@@ -663,6 +672,8 @@ pub enum ServerNotification {
     TurnStarted(TurnStartedNotification),
     #[serde(rename = "turn/completed")]
     TurnCompleted(TurnCompletedNotification),
+    #[serde(rename = "turn/plan/updated")]
+    TurnPlanUpdated(TurnPlanUpdatedNotification),
     #[serde(rename = "item/started")]
     ItemStarted(ItemStartedNotification),
     #[serde(rename = "item/completed")]
@@ -708,6 +719,9 @@ impl ServerNotification {
         match self {
             Self::ConfigWarning(_) => METHOD_CONFIG_WARNING,
             Self::Warning(_) => METHOD_WARNING,
+            Self::Error(_) => METHOD_ERROR,
+            Self::SkillsChanged(_) => METHOD_SKILLS_CHANGED,
+            Self::McpServerOauthLoginCompleted(_) => METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
             Self::ThreadStarted(_) => "thread/started",
             Self::ThreadArchived(_) => "thread/archived",
             Self::ThreadDeleted(_) => "thread/deleted",
@@ -717,6 +731,7 @@ impl ServerNotification {
             Self::ThreadStatusChanged(_) => METHOD_THREAD_STATUS_CHANGED,
             Self::TurnStarted(_) => "turn/started",
             Self::TurnCompleted(_) => "turn/completed",
+            Self::TurnPlanUpdated(_) => METHOD_TURN_PLAN_UPDATED,
             Self::ItemStarted(_) => "item/started",
             Self::ItemCompleted(_) => "item/completed",
             Self::AgentMessageDelta(_) => "item/agentMessage/delta",
@@ -743,7 +758,7 @@ impl ServerNotification {
 impl TryFrom<JsonRpcNotification> for ServerNotification {
     type Error = String;
 
-    fn try_from(notification: JsonRpcNotification) -> Result<Self, Self::Error> {
+    fn try_from(notification: JsonRpcNotification) -> Result<Self, String> {
         let params = notification.params.unwrap_or_else(|| serde_json::json!({}));
         match notification.method.as_str() {
             METHOD_CONFIG_WARNING => serde_json::from_value(params)
@@ -751,6 +766,15 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             METHOD_WARNING => serde_json::from_value(params)
                 .map(Self::Warning)
+                .map_err(|error| error.to_string()),
+            METHOD_ERROR => serde_json::from_value(params)
+                .map(Self::Error)
+                .map_err(|error| error.to_string()),
+            METHOD_SKILLS_CHANGED => serde_json::from_value(params)
+                .map(Self::SkillsChanged)
+                .map_err(|error| error.to_string()),
+            METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED => serde_json::from_value(params)
+                .map(Self::McpServerOauthLoginCompleted)
                 .map_err(|error| error.to_string()),
             "thread/started" => serde_json::from_value(params)
                 .map(Self::ThreadStarted)
@@ -778,6 +802,9 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             "turn/completed" => serde_json::from_value(params)
                 .map(Self::TurnCompleted)
+                .map_err(|error| error.to_string()),
+            METHOD_TURN_PLAN_UPDATED => serde_json::from_value(params)
+                .map(Self::TurnPlanUpdated)
                 .map_err(|error| error.to_string()),
             "item/started" => serde_json::from_value(params)
                 .map(Self::ItemStarted)
@@ -848,6 +875,13 @@ impl From<ServerNotification> for JsonRpcNotification {
                 jsonrpc_notification(METHOD_CONFIG_WARNING, params)
             }
             ServerNotification::Warning(params) => jsonrpc_notification(METHOD_WARNING, params),
+            ServerNotification::Error(params) => jsonrpc_notification(METHOD_ERROR, params),
+            ServerNotification::SkillsChanged(params) => {
+                jsonrpc_notification(METHOD_SKILLS_CHANGED, params)
+            }
+            ServerNotification::McpServerOauthLoginCompleted(params) => {
+                jsonrpc_notification(METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED, params)
+            }
             ServerNotification::ThreadStarted(params) => {
                 jsonrpc_notification("thread/started", params)
             }
@@ -872,6 +906,9 @@ impl From<ServerNotification> for JsonRpcNotification {
             ServerNotification::TurnStarted(params) => jsonrpc_notification("turn/started", params),
             ServerNotification::TurnCompleted(params) => {
                 jsonrpc_notification("turn/completed", params)
+            }
+            ServerNotification::TurnPlanUpdated(params) => {
+                jsonrpc_notification(METHOD_TURN_PLAN_UPDATED, params)
             }
             ServerNotification::ItemStarted(params) => jsonrpc_notification("item/started", params),
             ServerNotification::ItemCompleted(params) => {

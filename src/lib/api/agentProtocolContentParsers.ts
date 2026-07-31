@@ -313,9 +313,54 @@ export function parseAgentContentEvent(
             ...planEvent,
           };
     }
+    case "turn_plan_updated": {
+      const plan = readTurnPlanUpdate(event.plan);
+      if (
+        !plan ||
+        (event.explanation !== undefined &&
+          typeof event.explanation !== "string")
+      ) {
+        return null;
+      }
+      return {
+        type: "turn_plan_updated",
+        plan,
+        ...(typeof event.explanation === "string"
+          ? { explanation: event.explanation }
+          : {}),
+      };
+    }
     default:
       return null;
   }
+}
+
+function readTurnPlanUpdate(value: unknown): Array<{
+  step: string;
+  status: "pending" | "in_progress" | "completed";
+}> | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const plan = [] as Array<{
+    step: string;
+    status: "pending" | "in_progress" | "completed";
+  }>;
+  for (const candidate of value) {
+    const item = normalizeRecord(candidate);
+    if (
+      !item ||
+      Object.keys(item).some((key) => key !== "step" && key !== "status") ||
+      typeof item.step !== "string" ||
+      (item.status !== "pending" &&
+        item.status !== "in_progress" &&
+        item.status !== "completed")
+    ) {
+      return null;
+    }
+    plan.push({ step: item.step, status: item.status });
+  }
+  return plan;
 }
 
 function readReasoningItemIdentity(

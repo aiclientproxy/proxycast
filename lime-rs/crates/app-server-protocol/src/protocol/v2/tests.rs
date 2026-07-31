@@ -551,6 +551,121 @@ fn warning_notification_round_trips_thread_scoped_lime_shape() {
 }
 
 #[test]
+fn error_notification_round_trips_exact_codex_shape() {
+    let expected = json!({
+        "method": "error",
+        "params": {
+            "error": {
+                "message": "provider stream timed out",
+                "codexErrorInfo": {
+                    "responseStreamDisconnected": {
+                        "httpStatusCode": null
+                    }
+                },
+                "additionalDetails": "request id: req-1"
+            },
+            "willRetry": false,
+            "threadId": "thread-1",
+            "turnId": "turn-1"
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode error notification");
+    assert_eq!(notification.method(), METHOD_ERROR);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_ERROR);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC error notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode error notification"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_ERROR));
+
+    for malformed in [
+        json!({
+            "method": "error",
+            "params": {
+                "error": { "message": "failed" },
+                "threadId": "thread-1",
+                "turnId": "turn-1"
+            }
+        }),
+        json!({
+            "method": "error",
+            "params": {
+                "error": { "message": "failed" },
+                "willRetry": "false",
+                "threadId": "thread-1",
+                "turnId": "turn-1"
+            }
+        }),
+        json!({
+            "method": "error",
+            "params": {
+                "error": { "message": "failed", "errorInfo": "legacy" },
+                "willRetry": false,
+                "threadId": "thread-1",
+                "turnId": "turn-1"
+            }
+        }),
+        json!({
+            "method": "error",
+            "params": {
+                "error": { "message": "failed", "additionalDetails": 42 },
+                "willRetry": false,
+                "threadId": "thread-1",
+                "turnId": "turn-1"
+            }
+        }),
+        json!({
+            "method": "error",
+            "params": {
+                "error": { "message": "failed" },
+                "willRetry": false,
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "retryable": true
+            }
+        }),
+    ] {
+        assert!(serde_json::from_value::<ServerNotification>(malformed).is_err());
+    }
+}
+
+#[test]
+fn skills_changed_notification_round_trips_empty_invalidation_shape() {
+    let expected = json!({
+        "method": "skills/changed",
+        "params": {}
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode skills changed notification");
+    assert_eq!(notification.method(), METHOD_SKILLS_CHANGED);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_SKILLS_CHANGED);
+    assert_eq!(raw.params, Some(json!({})));
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC skills changed notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode skills changed notification"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_SKILLS_CHANGED));
+    assert!(serde_json::from_value::<ServerNotification>(json!({
+        "method": "skills/changed",
+        "params": { "path": "/private/skill" }
+    }))
+    .is_err());
+}
+
+#[test]
 fn thread_search_occurrences_round_trips_exact_codex_shape() {
     let expected = json!({
         "id": 6,
@@ -1111,6 +1226,41 @@ fn plan_delta_notification_round_trips_codex_shape() {
         expected
     );
     assert!(NOTIFICATION_METHODS.contains(&METHOD_PLAN_DELTA));
+}
+
+#[test]
+fn turn_plan_updated_notification_round_trips_codex_shape_and_rejects_unknown_fields() {
+    let expected = json!({
+        "method": "turn/plan/updated",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "explanation": "继续执行",
+            "plan": [
+                { "step": "读取现状", "status": "completed" },
+                { "step": "补齐主链", "status": "inProgress" }
+            ]
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode turn plan update");
+    assert_eq!(notification.method(), METHOD_TURN_PLAN_UPDATED);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_TURN_PLAN_UPDATED);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC turn plan update"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode turn plan update"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_TURN_PLAN_UPDATED));
+
+    let mut malformed = expected;
+    malformed["params"]["plan"][0]["unexpected"] = json!(true);
+    assert!(serde_json::from_value::<ServerNotification>(malformed).is_err());
 }
 
 #[test]
@@ -2119,6 +2269,9 @@ fn typed_v2_envelope_schema_names_are_stable() {
         [
             "configWarning",
             "warning",
+            "error",
+            "skills/changed",
+            "mcpServer/oauthLogin/completed",
             "thread/started",
             "thread/archived",
             "thread/deleted",
@@ -2128,6 +2281,7 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "thread/status/changed",
             "turn/started",
             "turn/completed",
+            "turn/plan/updated",
             "item/started",
             "item/completed",
             "item/agentMessage/delta",

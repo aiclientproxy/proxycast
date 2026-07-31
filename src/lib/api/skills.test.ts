@@ -110,6 +110,46 @@ describe("skillsApi", () => {
     );
   });
 
+  it("Composer runtime catalog 应读取 current skill/list", async () => {
+    appServerRequestMock.mockResolvedValueOnce({
+      result: {
+        skills: [
+          {
+            skillId: "user:article-writer",
+            name: "article-writer",
+            description: "Write structured articles.",
+            scope: "user",
+            source: "user",
+            authority: "user",
+            enabled: true,
+            interface: {
+              displayName: "Article Writer",
+              executionMode: "prompt",
+            },
+            dependencies: { tools: [] },
+            policy: { allowImplicitInvocation: true },
+            capabilities: [],
+            locator: {
+              directory: "/tmp/.agents/skills/article-writer",
+              skillFilePath: "/tmp/.agents/skills/article-writer/SKILL.md",
+            },
+          },
+        ],
+      },
+    });
+
+    await expect(skillsApi.getRuntimeCatalog()).resolves.toEqual([
+      expect.objectContaining({
+        key: "user:article-writer",
+        directory: "article-writer",
+        localDirectoryPath: "/tmp/.agents/skills/article-writer",
+        installed: true,
+        catalogSource: "user",
+      }),
+    ]);
+    expect(appServerRequestMock).toHaveBeenCalledWith("skill/list", {});
+  });
+
   it("本地技能列表缺少 App Server result 时应 fail closed", async () => {
     appServerRequestMock.mockResolvedValueOnce({
       result: {},

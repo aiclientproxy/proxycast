@@ -422,6 +422,7 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
     setMessages: session.setMessages,
     getThreadItems: () => session.threadItems,
     setThreadItems: session.setThreadItems,
+    setTodoItems: session.setTodoItems,
     setThreadTurns: session.setThreadTurns,
     setCurrentTurnId: session.setCurrentTurnId,
     setExecutionRuntime: session.setExecutionRuntime,

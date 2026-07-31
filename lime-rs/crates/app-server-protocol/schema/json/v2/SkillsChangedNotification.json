@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Signals that the process-wide Skill catalog must be read again.",
+  "title": "SkillsChangedNotification",
+  "type": "object"
+}

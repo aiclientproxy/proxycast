@@ -41,6 +41,9 @@ import {
   TERMINAL_CANCELED_AFTER_ANSWER_SCENARIO,
   TERMINAL_FAILED_AFTER_ANSWER_SCENARIO,
   TERMINAL_STALE_GUARD_SCENARIO,
+  TYPED_ERROR_RETRY_FAILURE_SCENARIO,
+  TYPED_ERROR_RETRY_SUCCESS_SCENARIO,
+  TURN_PLAN_UPDATE_SCENARIO,
 } from "./claw-chat-current-fixture-constants.mjs";
 import {
   runApprovalRequestDecisionScenario,
@@ -84,6 +87,8 @@ import {
   runTerminalFailedAfterAnswerScenario,
 } from "./claw-chat-current-fixture-terminal-after-answer.mjs";
 import { runTerminalStaleGuardScenario } from "./claw-chat-current-fixture-terminal-stale-guard.mjs";
+import { runTypedErrorScenario } from "./claw-chat-current-fixture-typed-error.mjs";
+import { runTurnPlanUpdateScenario } from "./claw-chat-current-fixture-turn-plan-update.mjs";
 import {
   createExpertSkillsRuntimeSession,
   openSessionFromSidebar,
@@ -522,6 +527,18 @@ export async function executeScenarioFlow({
         threadId: summary.threadId,
       }),
     );
+  } else if (options.scenario === TURN_PLAN_UPDATE_SCENARIO) {
+    Object.assign(
+      summary,
+      await runTurnPlanUpdateScenario({
+        page,
+        options,
+        summary,
+        appServerRequests,
+        readTextProviderRequests,
+        logStage,
+      }),
+    );
   } else if (options.scenario === "goal") {
     logStage("enable-goal-mode-from-gui");
     summary.goalModeEnabled = sanitizeJson(
@@ -679,6 +696,20 @@ export async function executeScenarioFlow({
     Object.assign(
       summary,
       await runTerminalStaleGuardScenario({
+        page,
+        options,
+        appServerRequests,
+        runtimeEnv,
+        logStage,
+      }),
+    );
+  } else if (
+    options.scenario === TYPED_ERROR_RETRY_SUCCESS_SCENARIO ||
+    options.scenario === TYPED_ERROR_RETRY_FAILURE_SCENARIO
+  ) {
+    Object.assign(
+      summary,
+      await runTypedErrorScenario({
         page,
         options,
         appServerRequests,
@@ -867,6 +898,9 @@ export async function executeScenarioFlow({
     options.scenario !== TERMINAL_FAILED_AFTER_ANSWER_SCENARIO &&
     options.scenario !== TERMINAL_CANCELED_AFTER_ANSWER_SCENARIO &&
     options.scenario !== TERMINAL_STALE_GUARD_SCENARIO &&
+    options.scenario !== TYPED_ERROR_RETRY_SUCCESS_SCENARIO &&
+    options.scenario !== TYPED_ERROR_RETRY_FAILURE_SCENARIO &&
+    options.scenario !== TURN_PLAN_UPDATE_SCENARIO &&
     options.scenario !== APPROVAL_REQUEST_RESUME_SCENARIO &&
     options.scenario !== APPROVAL_REQUEST_DECLINE_SCENARIO &&
     options.scenario !== APPROVAL_REQUEST_CANCEL_SCENARIO &&

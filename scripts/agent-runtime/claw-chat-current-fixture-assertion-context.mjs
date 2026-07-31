@@ -41,6 +41,10 @@ import {
   TERMINAL_STALE_GUARD_FIRST_PROMPT,
   TERMINAL_STALE_GUARD_SCENARIO,
   TERMINAL_STALE_GUARD_SECOND_PROMPT,
+  TYPED_ERROR_RETRY_FAILURE_PROMPT,
+  TYPED_ERROR_RETRY_FAILURE_SCENARIO,
+  TYPED_ERROR_RETRY_SUCCESS_PROMPT,
+  TYPED_ERROR_RETRY_SUCCESS_SCENARIO,
   WEB_TOOLS_RENDERING_PROMPT,
 } from "./claw-chat-current-fixture-constants.mjs";
 import { EXPERT_PANEL_SKILLS_RUNTIME_UI_SKILL_REF } from "./claw-chat-current-fixture-expert-actions.mjs";
@@ -113,6 +117,12 @@ export function resolveGateBExpectedIdentity({
 }
 
 function resolveScenarioTurnStart(summary, options) {
+  if (
+    options?.scenario === TYPED_ERROR_RETRY_SUCCESS_SCENARIO ||
+    options?.scenario === TYPED_ERROR_RETRY_FAILURE_SCENARIO
+  ) {
+    return summary?.typedErrorTurnStart ?? null;
+  }
   if (options?.scenario === "skills-runtime") {
     return summary?.manualEnableSkillsRuntimeTurnStart?.backend ?? null;
   }
@@ -370,6 +380,12 @@ export function buildAssertionContext({
       entry.kind === "turnStart" &&
       entry.inputText === TERMINAL_STALE_GUARD_SECOND_PROMPT,
   );
+  const typedErrorTurnStart = backendLedger.find(
+    (entry) =>
+      entry.kind === "turnStart" &&
+      (entry.inputText === TYPED_ERROR_RETRY_SUCCESS_PROMPT ||
+        entry.inputText === TYPED_ERROR_RETRY_FAILURE_PROMPT),
+  );
   const mcpStructuredContentTurnStart = backendLedger.find(
     (entry) =>
       entry.kind === "turnStart" &&
@@ -451,6 +467,12 @@ export function buildAssertionContext({
     options.scenario === TERMINAL_FAILED_AFTER_ANSWER_SCENARIO;
   const isTerminalStaleGuardScenario =
     options.scenario === TERMINAL_STALE_GUARD_SCENARIO;
+  const isTypedErrorRetrySuccessScenario =
+    options.scenario === TYPED_ERROR_RETRY_SUCCESS_SCENARIO;
+  const isTypedErrorRetryFailureScenario =
+    options.scenario === TYPED_ERROR_RETRY_FAILURE_SCENARIO;
+  const isTypedErrorRetryScenario =
+    isTypedErrorRetrySuccessScenario || isTypedErrorRetryFailureScenario;
   const isMcpStructuredContentScenario =
     options.scenario === "mcp-structured-content";
   const isMediaReferenceScenario =
@@ -502,19 +524,21 @@ export function buildAssertionContext({
                             ? terminalCanceledAfterAnswerTurnStart?.runtimeRequest
                             : isTerminalFailedAfterAnswerScenario
                               ? terminalFailedAfterAnswerTurnStart?.runtimeRequest
-                              : isMcpStructuredContentScenario
-                                ? mcpStructuredContentTurnStart?.runtimeRequest
-                                : isMediaReferenceScenario
-                                  ? mediaReferenceTurnStart?.runtimeRequest
-                                  : isSkillsRuntimeScenario
-                                    ? skillsRuntimeTurnStart?.runtimeRequest
-                                    : isAnyExpertSkillsRuntimeScenario
-                                      ? expertRuntimeTurnStartForAssertions?.runtimeRequest
-                                      : isContentFactoryArticleWorkspaceScenario
-                                        ? {}
-                                        : isHomeHotpathScenario
-                                          ? homeHotpathTurnStart?.runtimeRequest
-                                          : newsTurnStart?.runtimeRequest) ??
+                              : isTypedErrorRetryScenario
+                                ? typedErrorTurnStart?.runtimeRequest
+                                : isMcpStructuredContentScenario
+                                  ? mcpStructuredContentTurnStart?.runtimeRequest
+                                  : isMediaReferenceScenario
+                                    ? mediaReferenceTurnStart?.runtimeRequest
+                                    : isSkillsRuntimeScenario
+                                      ? skillsRuntimeTurnStart?.runtimeRequest
+                                      : isAnyExpertSkillsRuntimeScenario
+                                        ? expertRuntimeTurnStartForAssertions?.runtimeRequest
+                                        : isContentFactoryArticleWorkspaceScenario
+                                          ? {}
+                                          : isHomeHotpathScenario
+                                            ? homeHotpathTurnStart?.runtimeRequest
+                                            : newsTurnStart?.runtimeRequest) ??
     {};
   const hasCancelPhase = isCancelOnlyScenario || isCancelThenContinueScenario;
   const goalHarness = readHarnessMetadataFromTurnStart(goalTurnStart);
@@ -588,38 +612,43 @@ export function buildAssertionContext({
                             : isTerminalFailedAfterAnswerScenario
                               ? terminalFailedAfterAnswerTurnStart?.inputText ===
                                 TERMINAL_FAILED_AFTER_ANSWER_PROMPT
-                              : isTerminalStaleGuardScenario
-                                ? terminalStaleGuardFirstTurnStart?.inputText ===
-                                    TERMINAL_STALE_GUARD_FIRST_PROMPT &&
-                                  terminalStaleGuardSecondTurnStart?.inputText ===
-                                    TERMINAL_STALE_GUARD_SECOND_PROMPT
-                                : isMcpStructuredContentScenario
-                                  ? mcpStructuredContentTurnStart?.inputText ===
-                                    MCP_STRUCTURED_CONTENT_PROMPT
-                                  : isMediaReferenceScenario
-                                    ? mediaReferenceTurnStart?.inputText ===
-                                      MEDIA_REFERENCE_PROMPT
-                                    : isSkillsRuntimeScenario
-                                      ? skillsRuntimeTurnStart?.inputText ===
-                                          SKILLS_RUNTIME_PROMPT &&
-                                        explicitSkillsRuntimeTurnStart?.inputText ===
-                                          SKILLS_RUNTIME_EXPLICIT_PROMPT &&
-                                        manualEnableSkillsRuntimeTurnStart?.inputText ===
-                                          SKILLS_RUNTIME_MANUAL_ENABLE_PROMPT
-                                      : isAnyExpertSkillsRuntimeScenario
-                                        ? isExpertPanelSkillsRuntimeScenario
-                                          ? expertPanelSkillsRuntimeTurnStart?.inputText ===
-                                            EXPERT_SKILLS_RUNTIME_PANEL_PROMPT
-                                          : expertSkillsRuntimeTurnStart?.inputText?.includes(
-                                              EXPERT_SKILLS_RUNTIME_PROMPT,
-                                            ) === true
-                                        : isContentFactoryArticleWorkspaceScenario
-                                          ? true
-                                          : isSoulStyleScenario
-                                            ? newsTraceTurnStart?.inputText ===
-                                              NEWS_PROMPT
-                                            : newsTurnStart?.inputText ===
-                                              NEWS_PROMPT;
+                              : isTypedErrorRetryScenario
+                                ? typedErrorTurnStart?.inputText ===
+                                  (isTypedErrorRetrySuccessScenario
+                                    ? TYPED_ERROR_RETRY_SUCCESS_PROMPT
+                                    : TYPED_ERROR_RETRY_FAILURE_PROMPT)
+                                : isTerminalStaleGuardScenario
+                                  ? terminalStaleGuardFirstTurnStart?.inputText ===
+                                      TERMINAL_STALE_GUARD_FIRST_PROMPT &&
+                                    terminalStaleGuardSecondTurnStart?.inputText ===
+                                      TERMINAL_STALE_GUARD_SECOND_PROMPT
+                                  : isMcpStructuredContentScenario
+                                    ? mcpStructuredContentTurnStart?.inputText ===
+                                      MCP_STRUCTURED_CONTENT_PROMPT
+                                    : isMediaReferenceScenario
+                                      ? mediaReferenceTurnStart?.inputText ===
+                                        MEDIA_REFERENCE_PROMPT
+                                      : isSkillsRuntimeScenario
+                                        ? skillsRuntimeTurnStart?.inputText ===
+                                            SKILLS_RUNTIME_PROMPT &&
+                                          explicitSkillsRuntimeTurnStart?.inputText ===
+                                            SKILLS_RUNTIME_EXPLICIT_PROMPT &&
+                                          manualEnableSkillsRuntimeTurnStart?.inputText ===
+                                            SKILLS_RUNTIME_MANUAL_ENABLE_PROMPT
+                                        : isAnyExpertSkillsRuntimeScenario
+                                          ? isExpertPanelSkillsRuntimeScenario
+                                            ? expertPanelSkillsRuntimeTurnStart?.inputText ===
+                                              EXPERT_SKILLS_RUNTIME_PANEL_PROMPT
+                                            : expertSkillsRuntimeTurnStart?.inputText?.includes(
+                                                EXPERT_SKILLS_RUNTIME_PROMPT,
+                                              ) === true
+                                          : isContentFactoryArticleWorkspaceScenario
+                                            ? true
+                                            : isSoulStyleScenario
+                                              ? newsTraceTurnStart?.inputText ===
+                                                NEWS_PROMPT
+                                              : newsTurnStart?.inputText ===
+                                                NEWS_PROMPT;
   return {
     backendLedger,
     traceMessages,
@@ -656,6 +685,7 @@ export function buildAssertionContext({
     terminalFailedAfterAnswerTurnStart,
     terminalStaleGuardFirstTurnStart,
     terminalStaleGuardSecondTurnStart,
+    typedErrorTurnStart,
     mcpStructuredContentTurnStart,
     mediaReferenceTurnStart,
     skillsRuntimeTurnStart,
@@ -686,6 +716,9 @@ export function buildAssertionContext({
     isTerminalCanceledAfterAnswerScenario,
     isTerminalFailedAfterAnswerScenario,
     isTerminalStaleGuardScenario,
+    isTypedErrorRetrySuccessScenario,
+    isTypedErrorRetryFailureScenario,
+    isTypedErrorRetryScenario,
     isMcpStructuredContentScenario,
     isMediaReferenceScenario,
     isSkillsRuntimeScenario,

@@ -8,6 +8,7 @@ import type {
   AgentExecutionStrategy,
   AgentSessionExecutionRuntime,
 } from "@/lib/api/agentExecutionRuntime";
+import type { AgentTodoItem } from "@/lib/api/agentRuntime/sessionTypes";
 import type { ActionRequired, Message } from "../types";
 import type { AgentRuntimeAdapter } from "./agentRuntimeAdapter";
 import type { AgentUiPerformanceTraceMetadata } from "./agentStreamPerformanceMetrics";
@@ -128,6 +129,7 @@ export interface HandleTurnStreamEventOptions {
   setPendingActions: Dispatch<SetStateAction<ActionRequired[]>>;
   getThreadItems?: () => readonly AgentThreadItem[];
   setThreadItems: Dispatch<SetStateAction<AgentThreadItem[]>>;
+  setTodoItems?: Dispatch<SetStateAction<AgentTodoItem[]>>;
   setThreadTurns: Dispatch<SetStateAction<AgentThreadTurn[]>>;
   setCurrentTurnId: Dispatch<SetStateAction<string | null>>;
   setExecutionRuntime: Dispatch<

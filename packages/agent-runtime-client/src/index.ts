@@ -5,6 +5,8 @@ export {
   type AgentRuntimeLifecycleEventListener,
   type AgentRuntimeLifecycleNotification,
   type AgentRuntimeNotification,
+  type AgentRuntimeSignalEventListener,
+  type AgentRuntimeSignalNotification,
   type AgentSessionActionRespondParams,
   type AgentSessionActionRespondResponse,
   type ThreadReadParams,

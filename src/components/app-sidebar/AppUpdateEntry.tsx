@@ -21,8 +21,17 @@ interface AppUpdateEntryProps {
 function shouldShowInstallSession(
   session: UpdateInstallSession | null,
 ): boolean {
+  if (!session) {
+    return false;
+  }
+
+  if (session.stage === "installing" || session.stage === "restarting") {
+    return true;
+  }
+
   return Boolean(
-    session && session.stage !== "idle" && session.stage !== "up_to_date",
+    session.latestVersion &&
+    (session.stage === "completed" || session.stage === "failed"),
   );
 }
 

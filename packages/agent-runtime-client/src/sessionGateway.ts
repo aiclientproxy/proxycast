@@ -1,9 +1,12 @@
 import {
-  serverNotification,
+  agentRuntimeLifecycleNotification,
+  agentRuntimeSignalNotification,
   AgentRuntimeClient,
   AgentRuntimeClientSubscription,
   AgentRuntimeLifecycleEventListener,
   AgentRuntimeNotification,
+  AgentRuntimeSignalEventListener,
+  AgentRuntimeSignalNotification,
   AgentSessionActionRespondParams,
   AgentSessionActionRespondResponse,
   ThreadReadParams,
@@ -169,6 +172,9 @@ export function createAgentRuntimeClientFromSessionGateway(
     subscribeLifecycleEvents(listener) {
       return eventRouter.subscribeLifecycle(listener);
     },
+    subscribeSignalEvents(listener) {
+      return eventRouter.subscribeSignal(listener);
+    },
     async dispatchEvent(message) {
       const result = await eventRouter.dispatch(message);
       return result.accepted;
@@ -264,6 +270,7 @@ async function nextDrainedAgentRuntimeEvent(
 
 class AgentRuntimeGatewayEventRouter {
   readonly #lifecycleListeners = new Set<AgentRuntimeLifecycleEventListener>();
+  readonly #signalListeners = new Set<AgentRuntimeSignalEventListener>();
   readonly #eventPipeline: AgentRuntimeEventPipeline;
   readonly #pendingNextEvents: AgentRuntimeNotification[] = [];
 
@@ -287,10 +294,28 @@ class AgentRuntimeGatewayEventRouter {
     };
   }
 
+  subscribeSignal(
+    listener: AgentRuntimeSignalEventListener,
+  ): AgentRuntimeClientSubscription {
+    this.#signalListeners.add(listener);
+    return {
+      unsubscribe: () => {
+        this.#signalListeners.delete(listener);
+      },
+    };
+  }
+
   async dispatch(
     message: JsonRpcMessage,
   ): Promise<AgentRuntimeGatewayDispatchResult> {
-    const lifecycle = serverNotification(message);
+    const signal = agentRuntimeSignalNotification(message);
+    if (signal) {
+      for (const listener of this.#signalListeners) {
+        await listener(signal, signal);
+      }
+      return acceptedSignalResult(signal);
+    }
+    const lifecycle = agentRuntimeLifecycleNotification(message);
     if (!lifecycle) {
       return { accepted: false, reason: "dropped" };
     }
@@ -321,4 +346,22 @@ class AgentRuntimeGatewayEventRouter {
   }
 }
 
-type AgentRuntimeGatewayDispatchResult = AgentRuntimeEventPipelineResult;
+type AgentRuntimeSignalDispatchResult = {
+  accepted: true;
+  notification: AgentRuntimeSignalNotification;
+  notifications: [AgentRuntimeSignalNotification];
+};
+
+type AgentRuntimeGatewayDispatchResult =
+  | AgentRuntimeEventPipelineResult
+  | AgentRuntimeSignalDispatchResult;
+
+function acceptedSignalResult(
+  signal: AgentRuntimeSignalNotification,
+): AgentRuntimeSignalDispatchResult {
+  return {
+    accepted: true,
+    notification: signal,
+    notifications: [signal],
+  };
+}

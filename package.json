@@ -5,7 +5,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "1.117.0",
+  "version": "1.118.0",
   "description": "AI content workspace for Chinese creators: desktop writing, research, prompt management, knowledge base, and multi-model workflows.",
   "keywords": [
     "ai",
@@ -220,6 +220,7 @@
     "smoke:local-history-import-visual-audit": "node scripts/electron/local-history-import-visual-audit-smoke.mjs",
     "smoke:local-history-import-real-sample-visual-audit": "node scripts/electron/local-history-import-real-sample-visual-audit-smoke.mjs",
     "smoke:mcp-config-electron-fixture": "node scripts/electron/mcp-config-fixture-smoke.mjs",
+    "smoke:mcp-oauth-notification-electron-fixture": "npm run build:renderer:electron && node scripts/electron/mcp-oauth-notification-fixture-smoke.mjs",
     "smoke:settings-about-electron-fixture": "node scripts/electron/settings-about-fixture-smoke.mjs",
     "smoke:settings-stats-electron-fixture": "node scripts/electron/settings-stats-fixture-smoke.mjs",
     "smoke:settings-environment-electron-fixture": "node scripts/electron/settings-environment-fixture-smoke.mjs",

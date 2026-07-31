@@ -8,6 +8,157 @@ import {
 const CREATED_AT_SECONDS = 1_780_704_000;
 
 describe("appServerCanonicalThreadProjection", () => {
+  it("从最新成功 update_plan 恢复 checklist，且不生成 Plan Item", () => {
+    const detail = readCanonicalThreadDetail({
+      thread: {
+        id: "thread-plan-recovery",
+        sessionId: "session-plan-recovery",
+        status: { type: "idle" },
+        createdAt: CREATED_AT_SECONDS,
+        updatedAt: CREATED_AT_SECONDS + 5,
+        turns: [
+          {
+            id: "turn-plan-recovery",
+            status: "completed",
+            items: [
+              {
+                id: "tool-plan-old",
+                type: "dynamicToolCall",
+                tool: "update_plan",
+                status: "completed",
+                success: true,
+                arguments: {
+                  plan: [{ step: "旧步骤", status: "pending" }],
+                },
+              },
+              {
+                id: "tool-plan-failed",
+                type: "dynamicToolCall",
+                tool: "update_plan",
+                status: "failed",
+                success: false,
+                arguments: {
+                  plan: [{ step: "失败步骤", status: "completed" }],
+                },
+              },
+              {
+                id: "tool-plan-new",
+                type: "dynamicToolCall",
+                tool: "update_plan",
+                status: "completed",
+                success: true,
+                arguments: [
+                  { name: "explanation", value: "继续执行" },
+                  {
+                    name: "plan",
+                    value: JSON.stringify([
+                      { step: "读现状", status: "completed" },
+                      { step: "补主链", status: "in_progress" },
+                    ]),
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(detail?.todo_items).toEqual([
+      { content: "读现状", status: "completed" },
+      { content: "补主链", status: "in_progress" },
+    ]);
+    expect(detail?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "tool-plan-new",
+          type: "tool_call",
+          tool_name: "update_plan",
+        }),
+      ]),
+    );
+    expect(detail?.items.some((item) => item.type === "plan")).toBe(false);
+  });
+
+  it("空 plan 成功快照可以清空旧 checklist，非法快照不覆盖", () => {
+    const detail = readCanonicalThreadDetail({
+      thread: {
+        id: "thread-plan-empty",
+        sessionId: "session-plan-empty",
+        status: { type: "idle" },
+        createdAt: CREATED_AT_SECONDS,
+        updatedAt: CREATED_AT_SECONDS + 5,
+        turns: [
+          {
+            id: "turn-plan-empty",
+            status: "completed",
+            items: [
+              {
+                id: "tool-plan-valid",
+                type: "dynamicToolCall",
+                tool: "update_plan",
+                status: "completed",
+                success: true,
+                arguments: {
+                  plan: [{ step: "保留步骤", status: "pending" }],
+                },
+              },
+              {
+                id: "tool-plan-malformed",
+                type: "dynamicToolCall",
+                tool: "update_plan",
+                status: "completed",
+                success: true,
+                arguments: [{ name: "plan", value: "not-json" }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(detail?.todo_items).toEqual([
+      { content: "保留步骤", status: "pending" },
+    ]);
+
+    const cleared = readCanonicalThreadDetail({
+      thread: {
+        id: "thread-plan-clear",
+        sessionId: "session-plan-clear",
+        status: { type: "idle" },
+        createdAt: CREATED_AT_SECONDS,
+        updatedAt: CREATED_AT_SECONDS + 5,
+        turns: [
+          {
+            id: "turn-plan-clear",
+            status: "completed",
+            items: [
+              {
+                id: "tool-plan-before-clear",
+                type: "dynamicToolCall",
+                tool: "update_plan",
+                status: "completed",
+                success: true,
+                arguments: {
+                  plan: [{ step: "旧步骤", status: "pending" }],
+                },
+              },
+              {
+                id: "tool-plan-clear",
+                type: "dynamicToolCall",
+                tool: "update_plan",
+                status: "completed",
+                success: true,
+                arguments: { plan: [] },
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(cleared?.todo_items).toEqual([]);
+  });
+
   it("queued turn 不应进入普通历史投影", () => {
     const detail = readCanonicalThreadDetail({
       thread: {
@@ -314,7 +465,9 @@ describe("appServerCanonicalThreadProjection", () => {
     expect(completedMessage).toMatchObject({ status: "completed" });
 
     expect(detail?.messages).toEqual([]);
-    expect(detail?.items?.find((item) => item.id === "item-user")).toMatchObject({
+    expect(
+      detail?.items?.find((item) => item.id === "item-user"),
+    ).toMatchObject({
       type: "user_message",
       content: "分析",
       content_parts: [

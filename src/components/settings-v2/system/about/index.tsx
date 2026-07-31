@@ -65,6 +65,13 @@ export function AboutSection() {
     installSession !== null && installSession.stage !== "idle";
   const installFailed =
     installStartFailed || installSession?.stage === "failed";
+  const confirmedSessionUpdate = Boolean(
+    installSession?.stage === "completed" && installSession.latestVersion,
+  );
+  const updateAvailable = versionInfo.hasUpdate || confirmedSessionUpdate;
+  const latestAvailableVersion = confirmedSessionUpdate
+    ? installSession?.latestVersion
+    : versionInfo.latest;
   const installStatusLabel = useMemo(() => {
     if (!installSession) {
       return "";
@@ -96,7 +103,9 @@ export function AboutSection() {
   }, [installProgressPercent, installSession, t]);
   const installActionLabel = useMemo(() => {
     if (!installSession) {
-      return t("settings.about.action.download");
+      return versionInfo.hasUpdate
+        ? t("settings.about.action.restartToUpdate")
+        : t("settings.about.action.download");
     }
 
     switch (installSession.stage) {
@@ -110,10 +119,12 @@ export function AboutSection() {
         return t("settings.about.action.restarting");
       case "failed":
         return t("settings.about.action.retryDownload");
+      case "completed":
+        return t("settings.about.action.restartToUpdate");
       default:
         return t("settings.about.action.download");
     }
-  }, [installSession, t]);
+  }, [installSession, t, versionInfo.hasUpdate]);
 
   useEffect(() => {
     const loadCurrentVersion = async () => {
@@ -232,10 +243,10 @@ export function AboutSection() {
       };
     }
 
-    if (versionInfo.hasUpdate) {
+    if (updateAvailable) {
       return {
         label: t("settings.about.status.updateAvailable", {
-          version: versionInfo.latest ?? "",
+          version: latestAvailableVersion ?? "",
         }),
         className: "border-emerald-200 bg-emerald-50 text-emerald-700",
       };
@@ -263,9 +274,10 @@ export function AboutSection() {
     installFailed,
     installStatusLabel,
     installingUpdate,
+    latestAvailableVersion,
     t,
+    updateAvailable,
     versionInfo.error,
-    versionInfo.hasUpdate,
     versionInfo.latest,
   ]);
 
@@ -312,7 +324,7 @@ export function AboutSection() {
             {t("settings.about.action.check")}
           </button>
 
-          {versionInfo.hasUpdate ? (
+          {updateAvailable ? (
             <>
               <button
                 type="button"

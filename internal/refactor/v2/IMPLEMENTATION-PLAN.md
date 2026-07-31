@@ -4,9 +4,9 @@
 
 主目标：以 Codex 的 Thread / Turn / Item 生命周期和渲染语义替换 Lime 当前把 canonical Item 二次压缩为 Message、tool_call、extension 的对话渲染路径，同时保持 model-provider 的 Grok 多模型控制面和 OpenCode 多模态/多协议 lowering 不变。
 
-当前阶段：V2-05 notification、host capability 与 recovery；V2-00、V2-01、V2-02、V2-03、V2-04 已关闭，direct TurnTimeline、production replay、session history、长列表性能、MCP elicitation、Multi-Agent、三项 product-scope reverse request 与 media read v2 Gate B 已通过
+当前阶段：V2-05 notification、host capability 与 recovery；V2-00、V2-01、V2-02、V2-03、V2-04 已关闭，direct TurnTimeline、production replay、session history、长列表性能、MCP elicitation、Multi-Agent、三项 product-scope reverse request、media read v2、`skills/changed` catalog invalidation、typed `error` retry/terminal、`turn/plan/updated` checklist 与 `mcpServer/oauthLogin/completed` Gate B 已通过
 
-下一刀：V2-05 已关闭 media transient bypass、`configWarning` owner 迁移与 thread-scoped `warning` typed/recovery 链；继续审计 `skills/changed` 等具备真实 producer 的 notification，`guardianWarning` 在 Guardian runtime producer 落地前保持 planned。不重复改写已关闭的 V2-04 owner，也不恢复 Message synthesis、extension fallback、v0 media/config owner、旧 Team 工具或第二 pending store。
+下一刀：V2-05 已关闭 media transient bypass、`configWarning` owner 迁移、thread-scoped `warning` typed/recovery、`skills/changed` catalog invalidation、typed `error` retry/terminal、`turn/plan/updated` checklist 与 MCP OAuth typed completion 链；回到 `EVENT-PROJECTIONS.md` 审计下一项具备真实 producer/consumer 的 planned notification、host capability 或 recovery，`guardianWarning` 在 Guardian runtime producer 落地前保持 planned。不重复改写已关闭的 V2-04 owner，也不恢复 Message synthesis、extension fallback、v0 media/config owner、旧 MCP OAuth Desktop event、旧 Team 工具、第二 pending store、第二 Skill catalog owner、Plan ThreadItem 或由 error 抢占 Turn terminal 的旁路状态机。
 
 ## 1. 约束与非目标
 
@@ -252,14 +252,14 @@ Gate B 最少场景：Agent Markdown、Reasoning、Plan、Search、Shell output�
 
 ## 5. 分类与完成度
 
-| 分类           | v2 裁决                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| current        | App Server v2 主链、ConversationProjection、direct TurnTimeline、bounded restored Turn window、canonical long-message preview、production replay、统一 PendingInteraction、thread-scoped media read、typed `configWarning` producer/GUI、thread-scoped typed `warning` 与 durable recovery、六工具 AgentControl、canonical SubAgent activity、parent-owned child direct-input policy、`currentTime/read`、`item/permissions/requestApproval`、`item/tool/call`、typed DynamicToolCall、model-provider 多模型/多模态 owner |
-| compat         | 不保留长期生产 compat；仅可存在一次性迁移测试夹具                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| deprecated     | fileChange outputDelta、thread/compacted 与尚未完成 current producer 的旧 notification 裁决；只允许迁出                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| dead / deleted | canonical Item -> Message tool/agent/reasoning 合成、首帧无界历史挂载、canonical 长正文绕过 preview、unknown Item null drop、ContextCompaction hide、通用 extension fallback、重复 pending store、v0 media/config notification owner、media transient notification/raw subscription/live-drain 旁路、裸旧 Team 工具、raw output 状态推断与生产 mock fallback                                                                                                                                                              |
+| 分类           | v2 裁决                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| current        | App Server v2 主链、ConversationProjection、direct TurnTimeline、bounded restored Turn window、canonical long-message preview、production replay、统一 PendingInteraction、thread-scoped media read、typed `configWarning` producer/GUI、thread-scoped typed `warning` 与 durable recovery、typed `skills/changed` catalog invalidation 与 GUI 自动重读、typed `error` live/durable recovery 与 Turn terminal ownership、`turn/plan/updated` canonical checklist 与 cold recovery、typed `mcpServer/oauthLogin/completed` 与 GUI 自动刷新、六工具 AgentControl、canonical SubAgent activity、parent-owned child direct-input policy、`currentTime/read`、`item/permissions/requestApproval`、`item/tool/call`、typed DynamicToolCall、model-provider 多模型/多模态 owner |
+| compat         | 不保留长期生产 compat；仅可存在一次性迁移测试夹具                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| deprecated     | fileChange outputDelta、thread/compacted 与尚未完成 current producer 的旧 notification 裁决；只允许迁出                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| dead / deleted | canonical Item -> Message tool/agent/reasoning 合成、首帧无界历史挂载、canonical 长正文绕过 preview、unknown Item null drop、ContextCompaction hide、通用 extension fallback、重复 pending store、v0 media/config notification owner、media transient notification/raw subscription/live-drain 旁路、旧 MCP OAuth Desktop event、裸旧 Team 工具、raw output 状态推断与生产 mock fallback                                                                                                                                                                                                                                                                                                                                                                                 |
 
-计划完成度：保守估算 91%。该数字按 V2-00 至 V2-05 六个阶段退出条件与剩余风险折算：V2-00、V2-01、V2-02、V2-03、V2-04 已关闭，V2-05 的 media transient bypass、`configWarning` typed owner 和 thread-scoped `warning` typed/recovery 链已关闭；其余 planned notification、host capability 与全面 recovery 仍未完成。该估算不表示 v2 已可整体交付或 release-ready。
+计划完成度：保守估算 95%。该数字按 V2-00 至 V2-05 六个阶段退出条件与剩余风险折算：V2-00、V2-01、V2-02、V2-03、V2-04 已关闭，V2-05 的 media transient bypass、`configWarning` typed owner、thread-scoped `warning` typed/recovery、`skills/changed` catalog invalidation、typed `error` retry/terminal、`turn/plan/updated` canonical checklist 与 MCP OAuth typed completion 链已关闭；其余 planned notification、host capability 与全面 recovery 仍未完成。该估算不表示 v2 已可整体交付或 release-ready。
 
 ## 6. 执行台账
 
@@ -631,10 +631,90 @@ Gate B 证据：
 - full canonical 冷读与 history-limit projection summary 都从同一 durable warning event 派生历史 warning item，并保留 `code`；没有新增第二 persistence 或 canonical Item lifecycle 变体。
 - 实时与恢复都只接受精确 message/code shape；畸形 message/code、旧 alias、缺失或不匹配的 thread/turn identity 均 fail closed。raw `agentSession/event` 包装的 `runtime.warning` 被拒绝。`guardianWarning` 因没有 Guardian runtime producer 继续保持 planned。
 
-验证：protocol v2 50/50、schema fixture 1/1、App Server warning 12/12、projection-summary recovery 1/1、Renderer 3 files / 61 tests、generated TypeScript drift check 均通过。`npm run test:contracts` 通过 289 项 app-server-client checks 及全部附属 guards；Rust related 覆盖 19 个 scoped packages、18 个 lib 目标，共 3597 项（3593 passed、4 个既有环境/live 测试 ignored、0 failed）。`npm run smoke:agent-runtime-current-fixture` 完整通过且 `liveProviderUsed=false`；该聚合 smoke 没有普通 warning 专项 DOM 断言，不冒充 warning 专项 Gate B。通用 `npm run verify:gui-smoke` 21/21 assertions 通过，证据为 `.lime/qc/project-gates/standalone-shell-01-20260730191439-55464/shell-01-electron-smoke/summary.json`。`cargo fmt --all --check`、定向 Prettier、`git diff --check` 与 `npm run governance:legacy-report` 通过，治理结果为零引用候选 0、分类漂移 0、边界违规 0。
+验证：protocol v2 50/50、schema fixture 1/1、App Server warning 12/12、projection-summary recovery 1/1、Renderer 3 files / 61 tests、generated TypeScript drift check 均通过。`npm run test:contracts` 通过 289 项 app-server-client checks 及全部附属 guards；Rust related 覆盖 19 个 scoped packages、18 个 lib 目标，共 3597 项（3593 passed、4 个既有环境/live 测试 ignored、0 failed）。`npm run smoke:agent-runtime-current-fixture` 完整通过且 `liveProviderUsed=false`；该聚合 smoke 没有普通 warning 专项 DOM 断言，不冒充 warning 专项 Gate B。fresh `npm run verify:local` 通过 i18n、lint、typecheck、112/112 Vitest、contracts、Rust changed-scope、Electron renderer/host build 与真实 GUI smoke；后者 21/21 assertions 通过，证据为 `.lime/qc/project-gates/standalone-shell-01-20260730194114-24572/shell-01-electron-smoke/summary.json`。`cargo fmt --all --check`、定向 Prettier、`git diff --check` 与 `npm run governance:legacy-report` 通过，治理结果为零引用候选 0、分类漂移 0、边界违规 0。
 
 治理分类：v2 `warning` protocol/projector、thread-scoped Renderer toast 与 durable recovery 为 `current`；无 `compat`；raw warning wrapper 为 `dead / forbidden-to-restore`；`guardianWarning` 为 `planned`。`v2_notifications.rs` 已超过 1000 行且主要由 inline tests 构成，本刀只增加路由并把业务 projector 放入独立 `warning.rs`；后续触碰 inline test 区前应迁出专用测试模块。
 
 架构确认：typed notification/recovery owner 已同步 `internal/aiprompts/architecture.md` 第 27 节；唯一产品链保持不变。责任开发者确认：root，2026-07-31。
 
 下一刀：审计 `skills/changed` 与其真实 Skill catalog producer/consumer；只有能形成 typed producer -> GUI refresh -> Gate B 的垂直切片才改为 current。v2 总体完成度保守估算约 91%。
+
+### 2026-07-31：V2-05 `skills/changed` catalog invalidation
+
+状态：该垂直切片 `completed`；V2-05 与 v2 总体仍为 `in-progress`，不得标记 release-ready。
+
+本轮实现：
+
+- v2 protocol、schema、generated client 与 typed decoder 只接受 `skills/changed {}`；默认 Skill roots 的创建、修改、删除以及启动后首次出现都经 10 秒节流 watcher 失效 `lime-skills` snapshot cache 并广播通知。
+- 成功的 Lime catalog mutation 在 App Server processor 边界失效同一 cache 并附带 typed notification；失败 mutation 和其他 app 的 mutation 不发通知。
+- Composer `useLimeSkills` 的自动加载与 notification refresh 统一读取 current `skill/list`；管理中心 `skillManagement/list` 语义不变，`skillsApi.getRuntimeCatalog()` 复用既有 executable Skill decoder 与纯 catalog projection，不新增第二 catalog owner。
+- Renderer 只订阅 typed event bus；命中后记录 console-only `skillsChanged.received` marker 并自动重读，重连/重新挂载仍主动 list。该 notification 是进程级瞬时失效，不写入 Thread/Turn/Item、持久化或 recovery replay。
+
+验证：纯 projection、API、Hook 与 fixture guard 共 4 files / 99 tests 通过；`npm run typecheck`、`npm run test:contracts`（840 schema definitions、832 generated types、0 generation failures、290 app-server-client checks）、`npm run governance:legacy-report`、Prettier、MJS `node --check`、`cargo fmt --all --check` 与 `git diff --check` 通过。Rust workspace lib 汇总为 32 个 suite、4670 passed、5 ignored、0 failed。`npm run test:related` 因仓库既有 runner 把 `electron/` 目录当文件读取而报 `EISDIR`，未记为通过，已由精确 Vitest 覆盖本轮前端回归。
+
+产品证据：`npm run smoke:claw-chat-current-fixture -- --scenario skills-runtime` 通过，proof level 为 `Gate B controlled fixture`。真实 Electron/preload/IPC/App Server 链先产生初始 `skill/list`，随后隔离 HOME 默认 root 新建 `notification-refresh/SKILL.md`，typed `skills/changed` marker 为 1，`skill/list` 自动由 1 次增至 2 次且 transport 为 `electron-ipc`，GUI 新 Skill 可见，手动刷新点击为 0；console/page/actionable errors 与 failed assertions 均为 0。证据：`.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-summary.json`。
+
+整合复验：聚合 `npm run smoke:agent-runtime-current-fixture` 完整通过且 `liveProviderUsed=false`，包含 `skills/changed`、Inputbar rich restore、Skills Runtime 三入口及其余 current Agent/Electron fixture。首次聚合运行暴露的 Inputbar 失败属于 fixture DOM 定位合同：夹具用展示名 `Capability Report` 大小写敏感匹配 current catalog 的 `capability-report`，因此候选已可见但未点击；生产 CharacterMention 与 catalog identity 无缺陷。夹具现统一折叠大小写、空格、连字符和下划线，并用 source guard 锁定候选与 `@capability-report` badge 的同一等价规则。独立 `inputbar-rich-restore` Gate B 随后通过，text/image/path/skill 在 output-free cancel 后全部恢复，console/page error 与 mock fallback 为 0；证据为 `.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-inputbar-rich-restore-regression-summary.json`。
+
+通用 `npm run verify:gui-smoke` 通过，真实 Electron renderer、App Server sidecar、Claw shell reload 与 memory settings 均就绪；证据为 `.lime/qc/project-gates/standalone-shell-01-20260731043417-63564/shell-01-electron-smoke/summary.json`。fresh `npm run verify:local` 通过版本一致性和 i18n unused 后，在全仓 lint 被非本切片脏文件 `src/components/input-kit/ModelSelector.tsx:432` 的既有 `react-hooks/exhaustive-deps` warning 阻断，因此未记为通过；本切片未改该文件或越界修复。后续独立 `npm run typecheck`、contracts、99 项精确测试、GUI smoke、Rust fmt 与 Gate B 均已取得明确通过结果。
+
+治理分类：v2 `skills/changed` protocol/schema、App Server watcher/mutation producer、`lime-skills` cache invalidation、typed Renderer event bus 与 current `skill/list` GUI refresh 为 `current`；无 `compat`；`skillManagement/list` 仅保留管理中心原语义，不是 Composer catalog owner；持久化/replay、`skills/extraRoots/set`、第二 catalog owner 与生产 mock fallback 均未新增。
+
+架构确认：catalog invalidation owner 已同步 `internal/aiprompts/architecture.md` 第 28 节；唯一产品链保持不变。责任开发者确认：root，2026-07-31。
+
+下一刀：回到 `EVENT-PROJECTIONS.md` 审计下一项具备真实 producer/consumer 的 planned notification、host capability 或 recovery；`guardianWarning` 在 Guardian runtime producer 落地前保持 planned。v2 总体完成度保守估算约 92%。
+
+### 2026-07-31：V2-05 typed `error` retry/terminal closure
+
+状态：该垂直切片 `completed`；V2-05 与 v2 总体仍为 `in-progress`，不得标记 release-ready。
+
+本轮实现：
+
+- v2 protocol、schema、generated client 与 strict Renderer decoder 承接 typed `error`；App Server projector 将 durable `runtime.error` 投影到同一 thread/turn identity，raw `agentSession/event` 不再是 GUI owner。
+- `willRetry=true` 只进入可见重试状态，后续权威 `turn/completed(completed)` 清理提示并完成 Turn；一个或多个 retry error 后的 `willRetry=false` 只显示 terminal error，最终失败仍由权威 `turn/completed(failed)` 决定。
+- canonical full/limited read model 统一合入 durable runtime warning 与 error。恢复出的 runtime error 保留可见错误证据，但 Turn 保持 running，直到 durable Turn terminal 到达；没有新增第二 persistence、第二 terminal reducer 或 error 合成终态。
+- SDK 将 typed error 放在独立 signal 通道，不送入只接受 lifecycle sequence 的 verifier。Gate B assertion 把 provider first-text trace 与 App Server message delta、Renderer output/paint、current trace method、W3C 和 identity 证据拆分；typed-error 场景只豁免本来不会发生的 provider 首文本证据，不能豁免 current 主链证据。
+
+验证：typed-error Renderer/fixture 共 6 files / 94 tests、`packages/app-server-client` 8 files / 98 tests、`packages/agent-runtime-client` 22 tests 通过；Rust canonical runtime error recovery 与 `runtime_error_does_not_preempt_a_later_turn_failed_terminal` 两项定向回归分别通过。`npm run test:contracts` 通过，app-server-client contract 为 292 checks；`npm run smoke:agent-runtime-current-fixture` 完整通过且 `liveProviderUsed=false`；`npm run verify:gui-smoke` 21/21 assertions 通过，证据为 `.lime/qc/project-gates/standalone-shell-01-20260731104641-30858/shell-01-electron-smoke/summary.json`。
+
+产品证据：success 场景经真实 Electron、preload/IPC、`app_server_handle_json_lines`、App Server、RuntimeCore、read model 与 GUI 观察 `error(willRetry=true) -> turn/completed(completed)`，同一 identity、零生产 mock fallback，证据为 `.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-typed-error-retry-success-gateb-02-summary.json`。failure 场景经同一链观察 `error(true)* -> error(false) -> turn/completed(failed)`，pending read model、GUI failed 与最终 read-model/后台 terminal 一致，证据为 `.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-typed-error-retry-failure-gateb-03-summary.json`。两者 `ok=true`、proof level 均为 `Gate B controlled fixture`；聚合回归证据分别为 `claw-chat-current-fixture-typed-error-retry-success-regression-summary.json` 与 `claw-chat-current-fixture-typed-error-retry-failure-regression-summary.json`。
+
+治理分类：v2 typed `error` protocol/projector、durable runtime error recovery、strict Renderer signal 与权威 Turn terminal ownership 为 `current`；无 `compat`；raw error wrapper、provider trace 对 current 主链证据的错误替代和由 error 抢占 Turn terminal 的第二状态机为 `dead / forbidden-to-restore`；其余 V2-05 planned notification、host capability 与全面 recovery 仍为开放项。
+
+架构确认：本切片没有改变 public owner、唯一产品链或依赖方向，只补齐既有 notification/projector/read-model/Renderer 边界的 typed contract 与恢复语义；无需改写 `internal/aiprompts/architecture.md`。责任开发者确认：root，2026-07-31。
+
+下一刀：回到 `EVENT-PROJECTIONS.md` 审计下一项具备真实 producer/consumer 的 planned notification、host capability 或 recovery；`guardianWarning` 在 Guardian runtime producer 落地前保持 planned。v2 总体完成度保守估算约 93%。
+
+### 2026-07-31：V2-05 `turn/plan/updated` canonical checklist 与恢复
+
+状态：该垂直切片 `completed`；V2-05 与 v2 总体仍为 `in-progress`，不得标记 release-ready。
+
+本轮实现：
+
+- App Server 从 canonical `update_plan` `ToolOutput.structured_content` 派生 typed `turn.plan.updated`；Renderer 严格解析该通知并把实时快照投影到唯一 run-control checklist owner。
+- canonical cold read 从成功的 `update_plan` 工具项恢复最新有效计划，兼容 App Server 真实 wire 的 `[ { name: "plan", value: "[...]" } ]` 参数形状；空数组可以清空旧 checklist，失败或非法快照不会覆盖上一份有效计划。
+- read model 保留 canonical `update_plan` 工具项以支持恢复，但不生成 `ThreadItem.plan`，不从 Message/tool card 合成 checklist，也不展示 Plan UI、decision panel 或 `update_plan` 工具行。
+
+验证：`appServerCanonicalThreadProjection.test.ts` 10/10；`npm run test:contracts` 通过，app-server-client contract 为 292 checks；`npm run typecheck`、`npm run smoke:agent-runtime-current-fixture` 与 `npm run verify:gui-smoke` 均通过。Gate B 证据为 `.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-summary.json`：`scenario=turn-plan-update`、`proofLevel=Gate B controlled fixture`、`methodCount=1`、通知位于事件序列 `planIndex=16` 且 `turn/completed` 位于 `terminalIndex=27`；实时与 reload 后均可见 2 项 checklist，canonical read model `updatePlanToolCount=1`、`planItemCount=0`，Plan block/decision/update_plan tool row 均为 0，Electron IPC、App Server、read model 与 GUI identity 一致，invoke/page/console error 为 0。
+
+治理分类：`turn/plan/updated` typed producer、strict Renderer parser、canonical `update_plan` cold recovery 与 run-control checklist 为 `current`；无 `compat`；`update_plan` 场景下的 Plan ThreadItem、Message/tool card 合成、Plan UI/decision panel/tool card 和 renderer mock fallback 均为 `dead / forbidden-to-restore`，独立 Plan mode 的现役 UI 不在本切片范围内。本切片没有改变 public owner、唯一产品链或依赖方向，无需改写 `internal/aiprompts/architecture.md`。
+
+下一刀：回到 `EVENT-PROJECTIONS.md` 审计下一项具备真实 producer/consumer 的 planned notification、host capability 或 recovery；`guardianWarning` 在 Guardian runtime producer 落地前保持 planned。v2 总体完成度保守估算约 94%。
+
+### 2026-07-31：V2-05 MCP OAuth typed completion notification
+
+状态：该垂直切片 `completed`；V2-05 与 v2 总体仍为 `in-progress`，不得标记 release-ready。
+
+本轮实现：
+
+- Rust MCP OAuth 返回 `McpOAuthLoginHandle` completion future；App Server 等待 callback 成功或失败后发布 `mcpServer/oauthLogin/completed`，payload 固定为必填 `name`、必填可空 `threadId`、`success` 与可选 `error`。
+- protocol v2、schema、generated TypeScript 与 app-server-client strict decoder 使用同一 typed contract。Renderer 在任何异步 Desktop listener 注册前同步订阅 App Server event bus，避免快速 callback 被排空，并在完成后自动刷新 `mcpServerStatus/list` 与 `mcpTool/list`。
+- 生产路径已删除 `mcp:oauth_completed`；contract guard 禁止该字符串回流 `electron`、`lime-rs`、`packages` 与 `src`。没有新增 compat wrapper、第二 OAuth 状态 owner或生产 mock fallback。
+
+验证：`lime-mcp` OAuth 22 passed、app-server-protocol v2 59 passed、App Server MCP processor 4 passed、app-server-client 101 passed、`src/hooks/useMcp.test.tsx` 9 passed；`npm run test:contracts` 通过，包含 847 schema definitions、839 generated protocol types、0 generation failures 与 292 app-server-client checks。
+
+产品证据：`npm run smoke:mcp-oauth-notification-electron-fixture` 通过，proof level 为 `Gate B`。真实 Electron/preload/IPC、`app_server_handle_json_lines`、App Server OAuth login/event drain、本地 OAuth provider callback 与 Renderer GUI 链全部命中；授权前后状态和 completion toast 均可见，`mcpServer/oauth/login`、`mcpServerStatus/list`、`mcpTool/list` 自动刷新成立，`openExternalUrlHitCount=1`、`electronIpcHitCount=8`、`mockFallbackHitCount=0`、`failedInvokeCount=0`，console/page/invoke errors 均为 0。证据为 `.lime/qc/mcp-oauth-notification/mcp-oauth-notification-fixture-summary.json` 与同目录 PNG。
+
+治理分类：typed protocol/schema、App Server completion producer、strict client decoder、Renderer typed event bus 与自动刷新为 `current`；无 `compat`；`mcp:oauth_completed` 为 `dead / deleted / forbidden-to-restore`。本切片没有改变 public owner、唯一产品链或依赖方向，无需改写 `internal/aiprompts/architecture.md`。责任开发者确认：root，2026-07-31。
+
+下一刀：回到 `EVENT-PROJECTIONS.md` 继续审计具备真实 producer/consumer 的 planned notification、host capability 或 recovery；`guardianWarning` 在 Guardian runtime producer 落地前保持 planned。v2 总体完成度保守估算约 95%，仍非 release-ready。

@@ -228,6 +228,70 @@ describe("UpdateNotificationPage", () => {
     ).toBeInstanceOf(HTMLButtonElement);
   });
 
+  it("更新失败时应显示失败与重试，不再显示发现新版本或稍后", async () => {
+    mockGetUpdateInstallSession.mockResolvedValueOnce(
+      createInstallSession({
+        stage: "failed",
+        message: "signature mismatch",
+        error: "signature mismatch",
+        isActive: false,
+      }),
+    );
+
+    const container = await renderUpdateNotification(
+      "/update-notification?current=1.0.0&latest=1.2.0",
+    );
+    const text = getText(container);
+
+    expect(text).toContain("Update failed");
+    expect(text).toContain("Retry");
+    expect(text).not.toContain("New version");
+    expect(text).not.toContain("Later");
+  });
+
+  it("同版本状态应只显示已是最新和关闭操作", async () => {
+    mockGetUpdateInstallSession.mockResolvedValueOnce(
+      createInstallSession({
+        stage: "up_to_date",
+        latestVersion: "1.0.0",
+        message: "up to date",
+        error: null,
+        isActive: false,
+      }),
+    );
+
+    const container = await renderUpdateNotification(
+      "/update-notification?current=1.0.0&latest=1.0.0",
+    );
+    const text = getText(container);
+
+    expect(text).toContain("Already up to date");
+    expect(text).not.toContain("New version");
+    expect(text).not.toContain("Update now");
+    expect(text).not.toContain("Later");
+  });
+
+  it("已下载的新版本应明确提示已准备好并要求重启更新", async () => {
+    mockGetUpdateInstallSession.mockResolvedValueOnce(
+      createInstallSession({
+        stage: "completed",
+        percent: 1,
+        message: "ready",
+        completedAt: 3,
+        isActive: false,
+      }),
+    );
+
+    const container = await renderUpdateNotification(
+      "/update-notification?current=1.0.0&latest=1.2.0",
+    );
+    const text = getText(container);
+
+    expect(text).toContain("New version 1.2.0");
+    expect(text).toContain("Ready to install");
+    expect(text).toContain("Restart to update");
+  });
+
   it("立即更新过程中的按钮状态应使用 common namespace 文案", async () => {
     mockStartUpdateInstallSession.mockResolvedValueOnce(createInstallSession());
     const container = await renderUpdateNotification(

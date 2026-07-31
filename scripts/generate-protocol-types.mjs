@@ -194,6 +194,9 @@ function objectTypeToTs(schema, indent = 0) {
   }
 
   if (lines.length === 0) {
+    if (schema.additionalProperties === false) {
+      return "Record<string, never>";
+    }
     return "Record<string, unknown>";
   }
 

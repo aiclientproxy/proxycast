@@ -67,6 +67,17 @@ import {
   TERMINAL_STALE_GUARD_SECOND_TEXT,
   TERMINAL_STALE_GUARD_STALE_DONE_TEXT,
   THREAD_ID,
+  TYPED_ERROR_RETRY_FAILURE_ERROR_TEXT,
+  TYPED_ERROR_RETRY_FAILURE_PARTIAL_TEXT,
+  TYPED_ERROR_RETRY_FAILURE_PROMPT,
+  TYPED_ERROR_RETRY_FAILURE_SCENARIO,
+  TYPED_ERROR_RETRY_FAILURE_TEXT,
+  TYPED_ERROR_RETRY_MESSAGE,
+  TYPED_ERROR_RETRY_SECOND_MESSAGE,
+  TYPED_ERROR_RETRY_SUCCESS_DONE_TEXT,
+  TYPED_ERROR_RETRY_SUCCESS_PROMPT,
+  TYPED_ERROR_RETRY_SUCCESS_SCENARIO,
+  TYPED_ERROR_RETRY_SUCCESS_TEXT,
   WEB_TOOLS_BROKEN_MARKDOWN_TEXT,
   WEB_TOOLS_RENDERING_DONE_TEXT,
   WEB_TOOLS_RENDERING_PROMPT,
@@ -270,6 +281,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 
 const ledgerPath = process.argv[2];
 const cancelSignalPath = process.argv[3];
+const typedErrorSignalPath = process.argv[4];
 const mediaReferenceSourcePath = ${JSON.stringify(mediaReferenceSourcePath)};
 const input = JSON.parse(readFileSync(0, "utf8"));
 const runtimeRequest = input.request?.runtimeOptions?.runtimeRequest;
@@ -313,6 +325,31 @@ export function emitEvents(events) {
 
 export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function readTypedErrorSignals() {
+  if (!typedErrorSignalPath) {
+    return [];
+  }
+  try {
+    return readFileSync(typedErrorSignalPath, "utf8")
+      .split("\\n")
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line));
+  } catch {
+    return [];
+  }
+}
+
+export async function waitForTypedErrorSignal(stage) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 120000) {
+    if (readTypedErrorSignals().some((entry) => entry?.stage === stage)) {
+      return;
+    }
+    await sleep(50);
+  }
+  throw new Error("typed error scenario timed out waiting for signal: " + stage);
 }
 
 export function currentThreadId() {
@@ -432,6 +469,8 @@ if (input.kind === "turnStart") {
   const isTerminalFailedAfterAnswerPrompt = inputText.includes("${TERMINAL_FAILED_AFTER_ANSWER_PROMPT}");
   const isTerminalStaleGuardFirstPrompt = inputText.includes("${TERMINAL_STALE_GUARD_FIRST_PROMPT}");
   const isTerminalStaleGuardSecondPrompt = inputText.includes("${TERMINAL_STALE_GUARD_SECOND_PROMPT}");
+  const isTypedErrorRetrySuccessPrompt = inputText.includes("${TYPED_ERROR_RETRY_SUCCESS_PROMPT}");
+  const isTypedErrorRetryFailurePrompt = inputText.includes("${TYPED_ERROR_RETRY_FAILURE_PROMPT}");
   const isWebToolsRenderingPrompt = inputText.includes("${WEB_TOOLS_RENDERING_PROMPT}");
   const isMcpStructuredContentPrompt = inputText.includes("${MCP_STRUCTURED_CONTENT_PROMPT}");
   const isMediaReferencePrompt = inputText.includes("${MEDIA_REFERENCE_PROMPT}");
@@ -580,6 +619,153 @@ if (input.kind === "turnStart") {
         }
       }
     ];
+  }
+  if (isTypedErrorRetrySuccessPrompt || isTypedErrorRetryFailurePrompt) {
+    const scenario = isTypedErrorRetrySuccessPrompt
+      ? "${TYPED_ERROR_RETRY_SUCCESS_SCENARIO}"
+      : "${TYPED_ERROR_RETRY_FAILURE_SCENARIO}";
+    const retryEvents = [
+      {
+        type: "plugin_worker.retry",
+        payload: {
+          message: "${TYPED_ERROR_RETRY_MESSAGE}",
+          errorCode: "server_overloaded",
+          retryable: true,
+          retryAttempt: 1,
+          retryMaxAttempts: isTypedErrorRetrySuccessPrompt ? 1 : 2
+        }
+      },
+      ...(isTypedErrorRetryFailurePrompt
+        ? [{
+            type: "plugin_worker.retry",
+            payload: {
+              message: "${TYPED_ERROR_RETRY_SECOND_MESSAGE}",
+              errorCode: "server_overloaded",
+              retryable: true,
+              retryAttempt: 2,
+              retryMaxAttempts: 2
+            }
+          }]
+        : [])
+    ];
+    emitEvents(retryEvents);
+    appendLedgerEntry({
+      kind: "typedErrorRetryingAwaitingSignal",
+      scenario,
+      sessionId: input.request?.session?.sessionId,
+      threadId: currentThreadId(),
+      turnId: currentTurnId(),
+      eventTypes: retryEvents.map((event) => event.type),
+      retryCount: retryEvents.length,
+      expectedWillRetry: true,
+      signalStage: "retry-visible"
+    });
+    await waitForTypedErrorSignal("retry-visible");
+
+    if (isTypedErrorRetrySuccessPrompt) {
+      emitEvents([
+        {
+          type: "provider.first_text_delta.received",
+          payload: providerTracePayload("first_text_delta_received", 180, "running", {
+            attempt: 2,
+            text_chars: "${TYPED_ERROR_RETRY_SUCCESS_TEXT}".length,
+            textChars: "${TYPED_ERROR_RETRY_SUCCESS_TEXT}".length
+          })
+        },
+        {
+          type: "message.delta",
+          payload: messageDeltaPayload(
+            "${TYPED_ERROR_RETRY_SUCCESS_TEXT}\\n${TYPED_ERROR_RETRY_SUCCESS_DONE_TEXT}",
+            "final_answer",
+            finalAnswerItemId
+          )
+        },
+        {
+          type: "turn.completed",
+          payload: {
+            status: "completed",
+            text: "${TYPED_ERROR_RETRY_SUCCESS_DONE_TEXT}"
+          }
+        }
+      ]);
+      appendLedgerEntry({
+        kind: "typedErrorTerminalEmitted",
+        scenario,
+        sessionId: input.request?.session?.sessionId,
+        threadId: currentThreadId(),
+        turnId: currentTurnId(),
+        eventType: "turn.completed",
+        terminalStatus: "completed"
+      });
+      process.exit(0);
+    }
+
+    emitEvents([
+      {
+        type: "runtime.error",
+        payload: {
+          message: "${TYPED_ERROR_RETRY_FAILURE_ERROR_TEXT}",
+          errorCode: "server_overloaded",
+          retryable: true,
+          willRetry: false,
+          retryAttempt: 2,
+          retryMaxAttempts: 2,
+          failureCategory: "fixture_retry_exhausted"
+        }
+      }
+    ]);
+    appendLedgerEntry({
+      kind: "typedErrorAwaitingTerminalSignal",
+      scenario,
+      sessionId: input.request?.session?.sessionId,
+      threadId: currentThreadId(),
+      turnId: currentTurnId(),
+      eventType: "runtime.error",
+      expectedWillRetry: false,
+      retryable: true,
+      signalStage: "terminal-visible"
+    });
+    await waitForTypedErrorSignal("terminal-visible");
+    emitEvents([
+      {
+        type: "provider.first_text_delta.received",
+        payload: providerTracePayload("first_text_delta_received", 270, "running", {
+          attempt: 3,
+          text_chars: "${TYPED_ERROR_RETRY_FAILURE_PARTIAL_TEXT}".length,
+          textChars: "${TYPED_ERROR_RETRY_FAILURE_PARTIAL_TEXT}".length
+        })
+      },
+      {
+        type: "message.delta",
+        payload: messageDeltaPayload(
+          "${TYPED_ERROR_RETRY_FAILURE_PARTIAL_TEXT}",
+          "final_answer",
+          finalAnswerItemId
+        )
+      },
+      {
+        type: "turn.failed",
+        payload: {
+          status: "failed",
+          message: "${TYPED_ERROR_RETRY_FAILURE_ERROR_TEXT}",
+          errorCode: "server_overloaded",
+          retryable: true,
+          willRetry: false,
+          failureCategory: "fixture_retry_exhausted"
+        }
+      }
+    ]);
+    appendLedgerEntry({
+      kind: "typedErrorTerminalEmitted",
+      scenario,
+      sessionId: input.request?.session?.sessionId,
+      threadId: currentThreadId(),
+      turnId: currentTurnId(),
+      eventType: "turn.failed",
+      terminalStatus: "failed",
+      failureText: "${TYPED_ERROR_RETRY_FAILURE_TEXT}"
+    });
+    process.exit(0);
   }
   if (isImageTaskPresentationPrompt) {
     const presentationText = JSON.stringify({

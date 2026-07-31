@@ -5,6 +5,7 @@ import { MODEL_INPUT_CAPABILITY_GAP_ERROR_PREFIX } from "@/lib/model/modelCapabi
 import {
   MODEL_SELECTION_REQUIRED_ERROR_MESSAGE,
   resolveAgentRuntimeErrorPresentation,
+  resolveAgentRuntimeSubmitErrorMessage,
 } from "./agentRuntimeErrorPresentation";
 
 describe("agentRuntimeErrorPresentation", () => {
@@ -168,6 +169,34 @@ describe("agentRuntimeErrorPresentation", () => {
         "请先在输入框底部选择可用模型，或完成服务商登录后再发送。",
       toastMessage: "请先在输入框底部选择可用模型，或完成服务商登录后再发送。",
     });
+  });
+
+  it("模型路由不可执行时应隐藏内部路由错误", async () => {
+    await changeLimeLocale("zh-CN");
+
+    expect(
+      resolveAgentRuntimeErrorPresentation(
+        "runtime model route is not executable",
+      ),
+    ).toEqual({
+      displayMessage:
+        "当前模型通道暂时不可用，请稍后重试；如果持续失败，请检查 Provider 状态或切换到其他可用模型。",
+      toastMessage:
+        "当前模型通道暂时不可用，请稍后重试；如果持续失败，请检查 Provider 状态或切换到其他可用模型。",
+    });
+  });
+
+  it("提交失败文案统一使用发送失败前缀", () => {
+    expect(resolveAgentRuntimeSubmitErrorMessage("network down")).toBe(
+      "发送失败: network down",
+    );
+    expect(
+      resolveAgentRuntimeSubmitErrorMessage(
+        "runtime model route is not executable",
+      ),
+    ).toBe(
+      "当前模型通道暂时不可用，请稍后重试；如果持续失败，请检查 Provider 状态或切换到其他可用模型。",
+    );
   });
 
   it("普通错误里包含 402 字符串时不应误判为额度不足", () => {

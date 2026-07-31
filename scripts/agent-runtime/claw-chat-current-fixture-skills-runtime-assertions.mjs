@@ -25,6 +25,31 @@ export function buildSkillsRuntimeScenarioAssertions({
   workspace,
 }) {
   return {
+    initialCurrentSkillListObserved:
+      summary.skillsChangedCatalogRefresh?.initialCatalog?.afterPanelOpen
+        ?.method === "skill/list" &&
+      summary.skillsChangedCatalogRefresh?.initialCatalog?.afterPanelOpen
+        ?.electronIpcSuccessCount >
+        summary.skillsChangedCatalogRefresh?.initialCatalog?.beforeOpen
+          ?.electronIpcSuccessCount,
+    typedSkillsChangedConsumed:
+      summary.skillsChangedCatalogRefresh?.notification?.method ===
+        "skills/changed" &&
+      summary.skillsChangedCatalogRefresh?.notification?.marker ===
+        "skillsChanged.received" &&
+      summary.skillsChangedCatalogRefresh?.notification?.markerCount > 0,
+    automaticSkillListRefreshObserved:
+      summary.skillsChangedCatalogRefresh?.automaticRefresh?.method ===
+        "skill/list" &&
+      summary.skillsChangedCatalogRefresh?.automaticRefresh?.transport ===
+        "electron-ipc" &&
+      summary.skillsChangedCatalogRefresh?.automaticRefresh?.increment > 0,
+    guiSkillCatalogUpdated:
+      summary.skillsChangedCatalogRefresh?.gui?.panelVisible === true &&
+      summary.skillsChangedCatalogRefresh?.gui?.selectorVisible === true &&
+      summary.skillsChangedCatalogRefresh?.gui?.skillVisible === true,
+    skillsCatalogRefreshDidNotUseManualRefresh:
+      summary.skillsChangedCatalogRefresh?.manualRefresh?.clickCount === 0,
     skillsRuntimePromptReachedBackend:
       skillsRuntimeTurnStart?.inputText === SKILLS_RUNTIME_PROMPT,
     guiSkillsRuntimeInputSubmitted:
@@ -80,8 +105,8 @@ export function buildSkillsRuntimeScenarioAssertions({
     readModelExplicitSkillsRuntimeCompleted:
       summary.readModelExplicitSkillsRuntimeCompleted?.includesPrompt ===
         true &&
-      (summary.readModelExplicitSkillsRuntimeCompleted?.includesAssistantDone ===
-        true ||
+      (summary.readModelExplicitSkillsRuntimeCompleted
+        ?.includesAssistantDone === true ||
         summary.readModelExplicitSkillsRuntimeCompleted
           ?.includesAssistantSummary === true),
     readModelExplicitSkillSearchObserved:
@@ -128,8 +153,8 @@ export function buildSkillsRuntimeScenarioAssertions({
       summary.manualEnableSkillsRuntimeTurnStart?.launch?.clicked === true &&
       summary.manualEnableSkillsRuntimeTurnStart?.launch
         ?.registeredPanelVisible === true &&
-      summary.manualEnableSkillsRuntimeTurnStart?.launch?.enableButtonVisible ===
-        true &&
+      summary.manualEnableSkillsRuntimeTurnStart?.launch
+        ?.enableButtonVisible === true &&
       summary.manualEnableSkillsRuntimeTurnStart?.launch
         ?.enableButtonDisabled === false,
     manualEnableSkillsRuntimeUsedAgentSession:
@@ -357,8 +382,8 @@ export function buildExpertSkillsRuntimeScenarioAssertions({
           expertPanelEvidenceSkillInvocationObserved:
             summary.evidencePackExpertPanelSkillsRuntime
               ?.hasSkillInvocationSummary === true &&
-            summary.evidencePackExpertPanelSkillsRuntime?.invocationSkillName ===
-              SKILLS_RUNTIME_SKILL_NAME,
+            summary.evidencePackExpertPanelSkillsRuntime
+              ?.invocationSkillName === SKILLS_RUNTIME_SKILL_NAME,
           expertPanelSkillSearchBeforeSkillInvocation:
             summary.evidencePackExpertPanelSkillsRuntime
               ?.skillSearchBeforeSkillInvocation === true,

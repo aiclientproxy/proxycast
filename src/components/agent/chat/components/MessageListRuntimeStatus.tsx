@@ -40,6 +40,7 @@ export const MessageRuntimeStatusPill: React.FC<{
   return (
     <div
       data-testid="message-runtime-status-pill"
+      data-status={status.phase}
       aria-label={tooltip || undefined}
       className={[
         "inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] leading-none",
@@ -83,6 +84,7 @@ export const AssistantFirstTokenRuntimeStatus: React.FC<{
   return (
     <div
       data-testid="assistant-first-token-runtime-status"
+      data-status={phase}
       className="inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-[3px] text-[11px] font-medium leading-4 text-slate-500"
       aria-live="polite"
       aria-label={accessibleLabel || undefined}

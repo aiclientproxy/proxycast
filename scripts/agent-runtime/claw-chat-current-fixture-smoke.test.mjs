@@ -8,6 +8,9 @@ import {
   HOME_HOTPATH_SCENARIO,
   IMAGE_FIXTURE_MODEL,
   TEXT_PROVIDER_FIXTURE_API_KEY,
+  TURN_PLAN_UPDATE_DONE_TEXT,
+  TURN_PLAN_UPDATE_PROMPT,
+  TURN_PLAN_UPDATE_STEPS,
 } from "./claw-chat-current-fixture-constants.mjs";
 import {
   readTraceTurnStartInputText,
@@ -49,6 +52,7 @@ import {
   summarizeHomeHotpathPreTurnTrace,
 } from "./claw-chat-current-fixture-home-hotpath.mjs";
 import { runtimeEventFromDirectNotification } from "./claw-chat-current-fixture-rpc.mjs";
+import { readModelLatestTurnStatus } from "./claw-chat-current-fixture-read-model-core.mjs";
 import { isGuiChatCompletedSnapshotReady } from "./claw-chat-current-fixture-gui-completion-waits.mjs";
 import {
   IMAGE_PROVIDER_FIXTURE_API_KEY,
@@ -83,6 +87,7 @@ const fixtureSourceFiles = [
   "scripts/agent-runtime/claw-chat-current-fixture-gui-input-modes.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-gui-tool-waits.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-gui-web-tools-waits.mjs",
+  "scripts/agent-runtime/claw-chat-current-fixture-turn-plan-update.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-approval-resume.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-approval-gui.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-approval-read-model.mjs",
@@ -98,6 +103,7 @@ const fixtureSourceFiles = [
   "scripts/agent-runtime/claw-chat-current-fixture-skills-runtime-flow.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-terminal-after-answer.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-terminal-stale-guard.mjs",
+  "scripts/agent-runtime/claw-chat-current-fixture-typed-error.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-live-tail.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-resize-reflow.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-web-tools-rendering.mjs",
@@ -171,6 +177,17 @@ describe("Claw GUI canonical completion guard", () => {
         },
       }),
     ).toBe(true);
+  });
+});
+
+describe("Claw read model status guard", () => {
+  it("reads terminal status from canonical top-level turns", () => {
+    expect(
+      readModelLatestTurnStatus({
+        turns: [{ id: "turn-typed-error", status: "completed" }],
+        detail: { status: "running" },
+      }),
+    ).toBe("completed");
   });
 });
 
@@ -1098,6 +1115,21 @@ describe("claw chat current Electron fixture smoke guard", () => {
     });
     expect(
       runtimeEventFromDirectNotification({
+        method: "turn/plan/updated",
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          explanation: "继续执行",
+          plan: [{ step: "补主链", status: "inProgress" }],
+        },
+      }),
+    ).toMatchObject({
+      threadId: "thread-1",
+      turnId: "turn-1",
+      type: "turn.plan.updated",
+    });
+    expect(
+      runtimeEventFromDirectNotification({
         method: "turn/completed",
         params: {
           threadId: "thread-1",
@@ -1400,6 +1432,11 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain("attachFixtureImage");
     expect(content).toContain("dropPathReference");
     expect(content).toContain("selectCapabilityReportSkill");
+    expect(content).toContain("normalizeMentionText");
+    expect(content).toContain("toLocaleLowerCase()");
+    expect(content.split('.replace(/[\\s_-]+/g, "")')).toHaveLength(3);
+    expect(content).toContain("expectedSkillName");
+    expect(content).toContain("lastSelectionResult");
     expect(content).toContain("sendPromptFromGui");
     expect(content).toContain("waitForBackendLedgerTurnStart");
     expect(content).toContain("waitForStopButtonVisibleAndClick");
@@ -2043,6 +2080,88 @@ describe("claw chat current Electron fixture smoke guard", () => {
     }
   });
 
+  it("returns update_plan first and final text only after the tool result", async () => {
+    const fixture = await startTextProviderFixtureServer({
+      turnPlanUpdate: true,
+    });
+    const headers = {
+      Authorization: `Bearer ${TEXT_PROVIDER_FIXTURE_API_KEY}`,
+      "content-type": "application/json",
+    };
+    const tools = [
+      {
+        type: "function",
+        function: { name: "update_plan", parameters: { type: "object" } },
+      },
+    ];
+    try {
+      const firstResponse = await fetch(`${fixture.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          stream: true,
+          tools,
+          messages: [{ role: "user", content: TURN_PLAN_UPDATE_PROMPT }],
+        }),
+      });
+      const firstBody = await firstResponse.text();
+      expect(firstBody).toContain("update_plan");
+      for (const step of TURN_PLAN_UPDATE_STEPS) {
+        expect(firstBody).toContain(step.step);
+      }
+      expect(firstBody).not.toContain(TURN_PLAN_UPDATE_DONE_TEXT);
+
+      const secondResponse = await fetch(
+        `${fixture.baseUrl}/chat/completions`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            stream: true,
+            tools,
+            messages: [
+              { role: "user", content: TURN_PLAN_UPDATE_PROMPT },
+              {
+                role: "assistant",
+                tool_calls: [
+                  {
+                    id: "call_turn_plan_update",
+                    type: "function",
+                    function: { name: "update_plan", arguments: "{}" },
+                  },
+                ],
+              },
+              {
+                role: "tool",
+                tool_call_id: "call_turn_plan_update",
+                content: "Plan updated",
+              },
+            ],
+          }),
+        },
+      );
+      expect(await secondResponse.text()).toContain(TURN_PLAN_UPDATE_DONE_TEXT);
+
+      const requests = fixture
+        .requests()
+        .filter((request) => request.method === "POST");
+      expect(requests).toHaveLength(2);
+      expect(requests[0].bodySummary).toMatchObject({
+        bodyIncludesTurnPlanUpdatePrompt: true,
+        bodyIncludesUpdatePlanToolDefinition: true,
+        bodyIncludesPlanUpdatedToolResult: false,
+      });
+      expect(requests[1].bodySummary).toMatchObject({
+        bodyIncludesTurnPlanUpdatePrompt: true,
+        bodyIncludesUpdatePlanToolDefinition: true,
+        bodyIncludesPlanUpdatedToolResult: true,
+      });
+      expect(requests.every((request) => !("body" in request))).toBe(true);
+    } finally {
+      await fixture.close();
+    }
+  });
+
   it("requires scoped credential for text provider model discovery", async () => {
     const fixture = await startTextProviderFixtureServer();
     try {
@@ -2491,6 +2610,52 @@ describe("claw chat current Electron fixture smoke guard", () => {
     );
     expect(content).toContain('eventType: "turn.canceled"');
     expect(content).toContain('type: "turn.canceled"');
+    expect(content).not.toContain("agent_runtime_");
+  });
+
+  it("covers typed error retry success and failure in real Electron fixtures", () => {
+    const content = readSmokeScript();
+    const regressionContent = readCurrentFixtureRegressionSmokeScript();
+    const typedErrorBranchStart = content.indexOf(
+      "if (isTypedErrorRetrySuccessPrompt || isTypedErrorRetryFailurePrompt)",
+    );
+    const typedErrorBranch = content.slice(
+      typedErrorBranchStart,
+      content.indexOf(
+        "if (isImageTaskPresentationPrompt)",
+        typedErrorBranchStart,
+      ),
+    );
+
+    expect(content).toContain("typed-error-retry-success");
+    expect(content).toContain("typed-error-retry-failure");
+    expect(content).toContain("plugin_worker.retry");
+    expect(content).toContain('type: "runtime.error"');
+    expect(content).toContain("willRetry: false");
+    expect(content).toContain('type: "turn.failed"');
+    expect(content).toContain('type: "turn.completed"');
+    expect(content).toContain("wait-typed-error-retrying-gui");
+    expect(content).toContain("wait-typed-error-awaiting-terminal-gui");
+    expect(content).toContain("hasExpectedPhase");
+    expect(content).toContain('phase: "retrying"');
+    expect(content).toContain('phase: "failed"');
+    expect(content).toContain("typedErrorSignalPath");
+    expect(content).toContain("readModelTypedErrorPending");
+    expect(content).toContain("TYPED_ERROR_RETRY_ASSERTION_KEYS");
+    expect(content).toContain("typedErrorRetryFailureNoPrematureTerminal");
+    expect(content).toContain("typedErrorRetryIdentityConsistent");
+    expect(
+      typedErrorBranch.match(/type: "provider\.first_text_delta\.received"/g),
+    ).toHaveLength(2);
+    expect(regressionContent).toContain(
+      "Claw typed error retry success Electron fixture",
+    );
+    expect(regressionContent).toContain(
+      "Claw typed error retry failure Electron fixture",
+    );
+    expect(regressionContent).toContain(
+      "agentStreamRuntimeHandler.typedError.test.ts",
+    );
     expect(content).not.toContain("agent_runtime_");
   });
 
