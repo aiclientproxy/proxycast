@@ -2643,7 +2643,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     sessionIdRef,
     threadRead,
     todoItems,
-    setTodoItems,
     workspaceId,
   ]);
 

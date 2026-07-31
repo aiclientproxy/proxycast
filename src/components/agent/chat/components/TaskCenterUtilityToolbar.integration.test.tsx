@@ -1552,7 +1552,7 @@ describe("TaskCenterUtilityToolbar", () => {
   });
 
   it("环境信息区域应从历史计划事实恢复计划清单", async () => {
-    const container = renderToolbar({
+    renderToolbar({
       taskRail: {
         workflowSteps: [],
         messages: [],
@@ -1586,13 +1586,8 @@ describe("TaskCenterUtilityToolbar", () => {
         ],
       },
     });
-    const trigger = container.querySelector(
-      '[data-testid="task-center-environment-trigger"]',
-    ) as HTMLButtonElement | null;
-
     await act(async () => {
-      trigger?.click();
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await Promise.resolve();
     });
 
     const planSection = document.body.querySelector(
@@ -1626,7 +1621,7 @@ describe("TaskCenterUtilityToolbar", () => {
   });
 
   it("环境信息区域应从 todo items 恢复计划清单", async () => {
-    const container = renderToolbar({
+    renderToolbar({
       taskRail: {
         workflowSteps: [],
         messages: [],
@@ -1646,13 +1641,8 @@ describe("TaskCenterUtilityToolbar", () => {
         ],
       },
     });
-    const trigger = container.querySelector(
-      '[data-testid="task-center-environment-trigger"]',
-    ) as HTMLButtonElement | null;
-
     await act(async () => {
-      trigger?.click();
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await Promise.resolve();
     });
 
     const planSection = document.body.querySelector(
@@ -1676,7 +1666,7 @@ describe("TaskCenterUtilityToolbar", () => {
 
   it("历史恢复态应在同一运行控制区域恢复环境、计划、来源、审批、子任务和产物", async () => {
     const onOpenOutput = vi.fn();
-    const container = renderToolbar({
+    renderToolbar({
       taskRail: {
         workflowSteps: [],
         messages: [],
@@ -1838,13 +1828,8 @@ describe("TaskCenterUtilityToolbar", () => {
         onOpenOutput,
       },
     });
-    const trigger = container.querySelector(
-      '[data-testid="task-center-environment-trigger"]',
-    ) as HTMLButtonElement | null;
-
     await act(async () => {
-      trigger?.click();
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await Promise.resolve();
     });
 
     const taskRail = document.body.querySelector(

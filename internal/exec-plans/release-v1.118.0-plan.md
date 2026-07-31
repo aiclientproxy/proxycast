@@ -44,6 +44,7 @@
 - 工作树稳定性：2026-08-01 00:01:15 与 00:01:34 两次采样的 status、tracked diff、untracked content 三组 SHA-256 完全一致；最终候选保持 167 个 tracked diff 文件与 30 个未跟踪文件。本地 `HEAD`、`origin/main` 与远端 `main` 均为 `66752a277`，目标 tag 仍不存在。
 - Staged 边界：197 个候选文件全部暂存，摘要为 16,356 行新增、1,563 行删除；未暂存与未跟踪文件均为 0，`git diff --cached --check` 通过。
 - 发布结果：release commit、`v1.118.0` tag、`main`/tag 推送与远端引用复核完成；发布后工作树 clean。
+- 发布后质量收口：首轮 GitHub Quality run `30645798510` 的 Frontend Full 在全量 lint 阶段发现 2 条 hook 依赖告警；在不改写已发布 tag 的前提下，`main` 追加行为等价的依赖收敛与自动展开测试期望修复。`npm run lint` 通过，4 个相关测试文件 47/47 通过，`git diff --check` 通过；`npm run test:related` 的 Vite 收集器因既有 `EISDIR .../electron` 问题未进入测试，已由精确 Vitest 命令覆盖本次改动。
 - 平台限制：Windows Squirrel packaged Gate B 尚未执行；macOS Electron fixture 不能替代 Windows 实机证据。
 
 ## 分类

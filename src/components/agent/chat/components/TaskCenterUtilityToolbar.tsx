@@ -429,14 +429,14 @@ export function TaskCenterUtilityToolbar({
     });
   }, [environmentOpen, taskRail, taskRailTranslate]);
   React.useEffect(() => {
-    if (environmentOpen || !taskRail) {
+    if (environmentOpen) {
       return;
     }
-    const todoPlanKey = (taskRail.todoItems ?? [])
+    const todoPlanKey = (taskRail?.todoItems ?? [])
       .filter((item) => item.content.trim().length > 0)
       .map((item) => `${item.content.trim()}\u0000${item.status ?? ""}`)
       .join("\u0001");
-    const revisionId = taskRail.threadItems?.length
+    const revisionId = taskRail?.threadItems?.length
       ? hydrateAgentPlanState({ threadItems: taskRail.threadItems }).revisionId
       : null;
     const planKey = todoPlanKey
