@@ -150,8 +150,9 @@ export function toToolCallState(item: AgentThreadItem): ToolCallState | null {
       const commandOutput = stripCommandOutputWrapper(item.aggregated_output);
       const metadata = {
         ...itemMetadataRecord(item),
-        ...(item.command_status
-          ? { command_status: item.command_status }
+        ...(item.command_status ? { command_status: item.command_status } : {}),
+        ...(item.terminal_interactions?.length
+          ? { terminal_interactions: item.terminal_interactions }
           : {}),
       };
       return {
@@ -168,6 +169,7 @@ export function toToolCallState(item: AgentThreadItem): ToolCallState | null {
           item.error !== undefined ||
           item.exit_code !== undefined ||
           item.command_status !== undefined ||
+          item.terminal_interactions !== undefined ||
           item.metadata !== undefined
             ? {
                 success:
@@ -187,6 +189,9 @@ export function toToolCallState(item: AgentThreadItem): ToolCallState | null {
                     ? { exit_code: item.exit_code }
                     : {}),
                   cwd: item.cwd,
+                  ...(item.terminal_interactions?.length
+                    ? { terminal_interactions: item.terminal_interactions }
+                    : {}),
                 }),
               }
             : undefined,
@@ -255,8 +260,9 @@ export function toToolCallState(item: AgentThreadItem): ToolCallState | null {
     case "hook": {
       const metadata = itemMetadataRecord(item);
       const entriesText =
-        item.entries?.map((entry) => `${entry.kind}: ${entry.text}`).join("\n") ??
-        "";
+        item.entries
+          ?.map((entry) => `${entry.kind}: ${entry.text}`)
+          .join("\n") ?? "";
       return {
         id: item.id,
         name: "hook",
@@ -279,7 +285,8 @@ export function toToolCallState(item: AgentThreadItem): ToolCallState | null {
             ? {
                 success: item.status !== "failed",
                 output: item.output || entriesText || item.status_message || "",
-                error: item.status === "failed" ? item.status_message : undefined,
+                error:
+                  item.status === "failed" ? item.status_message : undefined,
                 metadata,
               }
             : undefined,

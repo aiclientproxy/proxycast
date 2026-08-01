@@ -70,6 +70,11 @@ export type ItemProjectionDelta =
       value: string;
       mode?: "append" | "replace";
     }
+  | {
+      kind: "terminal_interaction";
+      process_id: string;
+      stdin: string;
+    }
   | { kind: "reasoning_summary"; index: number; value: string }
   | { kind: "reasoning_content"; index: number; value: string }
   | { kind: "patch"; changes: readonly unknown[]; text?: string }

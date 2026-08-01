@@ -85,10 +85,13 @@ const DIAGNOSTIC_ONLY_NOTIFICATION_METHODS = new Set([
   "externalAgentConfig/import/completed",
   "externalAgentConfig/import/progress",
   "item/fileChange/outputDelta",
+  "process/exited",
+  "process/outputDelta",
   "rawResponse/completed",
   "rawResponseItem/completed",
   "remoteControl/status/changed",
   "thread/compacted",
+  "turn/diff/updated",
   "turn/moderationMetadata",
 ]);
 

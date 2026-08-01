@@ -30,10 +30,7 @@ pub use elicitation::{
     ClaimedElicitationResolution, ElicitationAction, ElicitationRequest, ElicitationRequestId,
     ElicitationRequestRouter, ElicitationResponse, ElicitationRouterError,
 };
-pub use events::{
-    McpResourceUpdatedPayload, McpResourcesUpdatedPayload, McpServerErrorPayload,
-    McpServerStartedPayload, McpServerStoppedPayload, McpToolsUpdatedPayload,
-};
+pub use events::{McpResourceUpdatedPayload, McpResourcesUpdatedPayload, McpToolsUpdatedPayload};
 pub use extension_surface::{build_runtime_extension_surface, runtime_extension_name};
 pub use manager::{McpBridgeSnapshot, McpClientManager, McpRuntimeOwner, McpRuntimeServerSpec};
 pub use oauth::{McpOAuthLoginHandle, McpOAuthLoginParams, McpOAuthRegistry};

@@ -40,6 +40,7 @@ export type AgentRuntimeLifecycleNotification = Extract<
       | "item/completed"
       | "item/agentMessage/delta"
       | "item/commandExecution/outputDelta"
+      | "item/commandExecution/terminalInteraction"
       | "item/fileChange/patchUpdated"
       | "item/mcpToolCall/progress"
       | "item/plan/delta"

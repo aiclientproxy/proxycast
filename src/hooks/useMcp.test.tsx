@@ -197,7 +197,7 @@ describe("useMcp", () => {
     expect(getLatestValue().error).toBeNull();
   });
 
-  it("Desktop event listener 挂起时也应立即订阅 OAuth typed notification", async () => {
+  it("Desktop event listener 挂起时也应立即订阅 MCP typed notification", async () => {
     bridgeMocks.safeListen.mockImplementation(() => new Promise(() => {}));
 
     await renderHook((value) => {
@@ -208,6 +208,70 @@ describe("useMcp", () => {
     expect(
       appServerEventBusMocks.subscribeAppServerNotifications,
     ).toHaveBeenCalledTimes(1);
+  });
+
+  it("MCP 启动状态通知应投影连接态并在终态刷新服务器和工具", async () => {
+    let onNotifications:
+      | ((notifications: Record<string, unknown>[]) => void)
+      | undefined;
+    appServerEventBusMocks.subscribeAppServerNotifications.mockImplementation(
+      (subscription: {
+        onNotifications: (notifications: Record<string, unknown>[]) => void;
+      }) => {
+        onNotifications = subscription.onNotifications;
+        return () => undefined;
+      },
+    );
+
+    await renderHook((value) => {
+      latestValue = value;
+    });
+    await flushEffects(4);
+
+    await act(async () => {
+      onNotifications?.([
+        {
+          method: "mcpServer/startupStatus/updated",
+          params: {
+            threadId: null,
+            name: "remote-docs",
+            status: "starting",
+            error: null,
+            failureReason: null,
+          },
+        },
+      ]);
+    });
+    expect(
+      getLatestValue().serverConnectionStates["remote-docs"],
+    ).toMatchObject({ phase: "starting", error: null });
+    expect(mcpApiMocks.listServersWithStatus).toHaveBeenCalledTimes(1);
+    expect(mcpApiMocks.listTools).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      onNotifications?.([
+        {
+          method: "mcpServer/startupStatus/updated",
+          params: {
+            threadId: null,
+            name: "remote-docs",
+            status: "failed",
+            error: "handshake rejected",
+            failureReason: null,
+          },
+        },
+      ]);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushEffects(4);
+
+    expect(
+      getLatestValue().serverConnectionStates["remote-docs"],
+    ).toMatchObject({ phase: "idle", error: "handshake rejected" });
+    expect(getLatestValue().error).toBe("remote-docs: handshake rejected");
+    expect(mcpApiMocks.listServersWithStatus).toHaveBeenCalledTimes(2);
+    expect(mcpApiMocks.listTools).toHaveBeenCalledTimes(2);
   });
 
   it("OAuth 完成事件应刷新服务器状态和工具列表", async () => {

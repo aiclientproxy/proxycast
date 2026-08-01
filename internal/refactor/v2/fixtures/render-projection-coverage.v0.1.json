@@ -69,7 +69,7 @@
     { "method": "hook/started", "outlets": ["timeline", "header"] },
     { "method": "turn/completed", "outlets": ["timeline", "turnPanel"] },
     { "method": "hook/completed", "outlets": ["timeline"] },
-    { "method": "turn/diff/updated", "outlets": ["turnPanel"] },
+    { "method": "turn/diff/updated", "outlets": ["diagnostics"] },
     { "method": "turn/plan/updated", "outlets": ["turnPanel"] },
     { "method": "item/started", "outlets": ["timeline"] },
     {
@@ -97,11 +97,8 @@
       "method": "command/exec/outputDelta",
       "outlets": ["diagnostics", "globalNotice"]
     },
-    {
-      "method": "process/outputDelta",
-      "outlets": ["diagnostics", "globalNotice"]
-    },
-    { "method": "process/exited", "outlets": ["diagnostics", "globalNotice"] },
+    { "method": "process/outputDelta", "outlets": ["diagnostics"] },
+    { "method": "process/exited", "outlets": ["diagnostics"] },
     { "method": "item/commandExecution/outputDelta", "outlets": ["timeline"] },
     {
       "method": "item/commandExecution/terminalInteraction",

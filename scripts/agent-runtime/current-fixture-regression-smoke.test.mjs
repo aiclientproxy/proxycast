@@ -158,6 +158,19 @@ describe("agent runtime current fixture regression smoke guard", () => {
     expect(content).toContain("240000");
   });
 
+  it("runs the unknown Item fail-visible and recovery Electron fixture", () => {
+    const content = readSmokeScript();
+
+    expect(content).toContain(
+      "Claw unknown Item fail-visible/recovery Electron fixture",
+    );
+    expect(content).toContain("--scenario");
+    expect(content).toContain("unknown-item");
+    expect(content).toContain(
+      "claw-chat-current-fixture-unknown-item-regression",
+    );
+  });
+
   it("runs the real Electron approval decision fixtures in the current regression set", () => {
     const content = readSmokeScript();
 

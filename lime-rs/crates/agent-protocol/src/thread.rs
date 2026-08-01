@@ -139,6 +139,7 @@ pub enum ItemKind {
     Media,
     SubAgent,
     ContextCompaction,
+    Unknown,
     Extension,
 }
 
@@ -294,8 +295,8 @@ pub struct PlanStep {
     pub status: PlanStepStatus,
 }
 
-/// Typed Item payload union. JSON `Value` is intentionally confined to the
-/// extension escape hatch; structured core families use explicit fields.
+/// Typed Item payload union. Unknown upstream items retain only their type and
+/// sanitized field names; raw values must not cross the canonical boundary.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ThreadItemPayload {
@@ -435,6 +436,11 @@ pub enum ThreadItemPayload {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tail_start_turn_id: Option<String>,
     },
+    Unknown {
+        upstream_type: String,
+        #[serde(default)]
+        field_names: Vec<String>,
+    },
     Extension {
         name: String,
         data: Value,
@@ -458,6 +464,7 @@ impl ThreadItemPayload {
             Self::Media { .. } => ItemKind::Media,
             Self::SubAgent { .. } => ItemKind::SubAgent,
             Self::ContextCompaction { .. } => ItemKind::ContextCompaction,
+            Self::Unknown { .. } => ItemKind::Unknown,
             Self::Extension { .. } => ItemKind::Extension,
         }
     }

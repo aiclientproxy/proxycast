@@ -1,27 +1,7 @@
 //! MCP 事件 Payload。
 
-use crate::types::{McpServerCapabilities, McpToolDefinition};
+use crate::types::McpToolDefinition;
 use serde::Serialize;
-
-/// 服务器启动事件
-#[derive(Debug, Clone, Serialize)]
-pub struct McpServerStartedPayload {
-    pub server_name: String,
-    pub server_info: Option<McpServerCapabilities>,
-}
-
-/// 服务器停止事件
-#[derive(Debug, Clone, Serialize)]
-pub struct McpServerStoppedPayload {
-    pub server_name: String,
-}
-
-/// 服务器错误事件
-#[derive(Debug, Clone, Serialize)]
-pub struct McpServerErrorPayload {
-    pub server_name: String,
-    pub error: String,
-}
 
 /// 工具列表更新事件
 #[derive(Debug, Clone, Serialize)]

@@ -5,10 +5,12 @@ import process from "node:process";
 
 export const APP_SERVER_HANDLE_JSON_LINES_COMMAND =
   "app_server_handle_json_lines";
+export const APP_SERVER_DRAIN_EVENTS_COMMAND = "app_server_drain_events";
 export const WORKSPACE_ID = "codex-import-continuation-workspace";
 export const SOURCE_THREAD_ID = "codex-import-continuation-thread";
 export const IMPORTED_TURN_ID = "codex-import-live-exec-turn";
 export const NORMAL_TURN_ID = "codex-normal-live-exec-turn";
+export const NORMAL_THREAD_TITLE = "Codex unified exec normal fixture";
 export const IMPORTED_USER_TEXT = "请运行测试并修复失败";
 export const IMPORTED_REASONING_TEXT =
   "I need to inspect the test failure first.";
@@ -18,13 +20,18 @@ export const NORMAL_USER_TEXT = "在普通会话中执行统一命令并汇报�
 export const IMPORTED_FINAL_TEXT = "CODEX_IMPORTED_UNIFIED_EXEC_DONE";
 export const NORMAL_FINAL_TEXT = "CODEX_NORMAL_UNIFIED_EXEC_DONE";
 export const COMMAND_OUTPUT_MARKER = "CODEX_UNIFIED_EXEC_OK";
+export const FIXTURE_MODEL = "lime-fixture-chat";
+export const TERMINAL_INTERACTION_CHARS = "continue\n";
+export const TERMINAL_INTERACTION_SUMMARY = "sent 9 chars";
 export const REQUIRED_METHODS = [
   "initialize",
   "conversationImport/thread/commit",
   "modelProvider/create",
   "modelProvider/update",
   "modelProviderKey/create",
+  "model/list",
   "thread/read",
+  "thread/resume",
   "thread/start",
   "thread/settings/update",
   "turn/start",
@@ -133,12 +140,33 @@ export function createTempRuntimeEnv() {
 
 export function buildProviderScriptedResponses(runtimeEnv) {
   const escapedNodePath = process.execPath.replaceAll('"', '\\"');
-  const command = `"${escapedNodePath}" -e "process.stdout.write('${COMMAND_OUTPUT_MARKER}')"`;
+  const command = `"${escapedNodePath}" -e "process.stdin.setEncoding('utf8');process.stdin.once('data',input=>{process.stdout.write('${COMMAND_OUTPUT_MARKER}');process.exit(0);})"`;
   const toolArguments = {
     cmd: command,
     workdir: runtimeEnv.workspaceRoot,
     yield_time_ms: 10_000,
     max_output_tokens: 2_000,
+  };
+  const writeStdinResponse = ({ body }) => {
+    const bodyText = JSON.stringify(body ?? {});
+    const matches = [
+      ...bodyText.matchAll(/(?:\\?"session_id\\?"|session_id)\s*:\s*(\d+)/g),
+    ];
+    const sessionId = Number(matches.at(-1)?.[1]);
+    if (!Number.isInteger(sessionId)) {
+      throw new Error("write_stdin fixture 未能从上一轮 tool result 提取 session_id");
+    }
+    return {
+      type: "tool_call",
+      id: "call-write-stdin",
+      name: "write_stdin",
+      arguments: {
+        session_id: sessionId,
+        chars: TERMINAL_INTERACTION_CHARS,
+        yield_time_ms: 10_000,
+        max_output_tokens: 2_000,
+      },
+    };
   };
   return {
     command,
@@ -149,6 +177,7 @@ export function buildProviderScriptedResponses(runtimeEnv) {
         name: "exec_command",
         arguments: toolArguments,
       },
+      writeStdinResponse,
       { type: "text", content: IMPORTED_FINAL_TEXT },
       {
         type: "tool_call",
@@ -156,6 +185,10 @@ export function buildProviderScriptedResponses(runtimeEnv) {
         name: "exec_command",
         arguments: toolArguments,
       },
+      ({ body }) => ({
+        ...writeStdinResponse({ body }),
+        id: "call-normal-write-stdin",
+      }),
       { type: "text", content: NORMAL_FINAL_TEXT },
     ],
   };
@@ -171,6 +204,7 @@ function writeCodexRolloutFixture(rolloutPath, workspaceRoot) {
         timestamp: "2026-06-16T00:00:00.000Z",
         cwd: workspaceRoot,
         source: "cli",
+        model: FIXTURE_MODEL,
         model_provider: "openai",
       },
     },
@@ -367,10 +401,50 @@ export function createPageAppServerClient(page) {
     return decoded;
   }
 
+  async function drainEvents(limit = 100) {
+    const envelope = await page.evaluate(
+      async ({ command, limit: drainLimit }) => {
+        const invoke = window.electronAPI?.invoke;
+        if (typeof invoke !== "function") {
+          throw new Error("Electron preload invoke bridge is unavailable");
+        }
+        return {
+          bridge: {
+            electron: window.__LIME_ELECTRON__ === true,
+            hasInvoke: true,
+            supportsCommand:
+              typeof window.electronAPI?.supportsCommand === "function" &&
+              window.electronAPI.supportsCommand(command),
+          },
+          response: await invoke(command, {
+            request: { includeRecent: true, limit: drainLimit },
+          }),
+        };
+      },
+      { command: APP_SERVER_DRAIN_EVENTS_COMMAND, limit },
+    );
+    bridgeFacts.push(envelope?.bridge ?? null);
+    const response = envelope?.response;
+    const decoded = Array.isArray(response?.lines)
+      ? response.lines
+          .map((line) => {
+            try {
+              return JSON.parse(line);
+            } catch {
+              return null;
+            }
+          })
+          .filter(Boolean)
+      : [];
+    messages.push(...decoded);
+    return decoded;
+  }
+
   return {
     requests,
     messages,
     bridgeFacts,
+    drainEvents,
     async call(method, params = {}) {
       const id = `codex-import-unified-exec-${++requestIndex}`;
       requests.push({ id, method });
@@ -443,6 +517,7 @@ export async function initializeAndCommitImport(
     capabilities: { eventMethods: ["agentSession/event"] },
   });
   await client.notify("initialized");
+  const beforeCommitResult = await options.beforeCommit?.();
   const commit = await client.call("conversationImport/thread/commit", {
     sourceClient: "codex",
     sourceRoot: runtimeEnv.sourceRoot,
@@ -460,7 +535,15 @@ export async function initializeAndCommitImport(
     threadId,
     includeTurns: true,
   });
-  return { initialize, commit, job, importedRead, sessionId, threadId };
+  return {
+    initialize,
+    beforeCommitResult,
+    commit,
+    job,
+    importedRead,
+    sessionId,
+    threadId,
+  };
 }
 
 function canonicalTurns(read) {
@@ -483,6 +566,16 @@ function contentTextFromUserItem(item) {
     .trim();
 }
 
+function findTurnByUserText(read, expectedText) {
+  return canonicalTurns(read).find((turn) =>
+    (Array.isArray(turn?.items) ? turn.items : []).some(
+      (item) =>
+        item?.type === "userMessage" &&
+        contentTextFromUserItem(item) === expectedText,
+    ),
+  );
+}
+
 function findCompletedCommand(read, turnId, expectedCommand) {
   return canonicalItems(read).find(
     ({ item, turnId: itemTurnId }) =>
@@ -495,6 +588,20 @@ function findCompletedCommand(read, turnId, expectedCommand) {
   )?.item;
 }
 
+function readTerminalInteractions(item) {
+  const interactions = item?.terminalInteractions ?? item?.terminal_interactions;
+  return Array.isArray(interactions) ? interactions : [];
+}
+
+function findTerminalInteractionNotification(messages, turnId) {
+  return messages.find(
+    (message) =>
+      message?.method === "item/commandExecution/terminalInteraction" &&
+      message?.params?.turnId === turnId &&
+      message?.params?.stdin === TERMINAL_INTERACTION_SUMMARY,
+  );
+}
+
 async function waitForTurnCompletion(
   client,
   { threadId, turnId, expectedCommand, finalText, timeoutMs, intervalMs },
@@ -502,6 +609,7 @@ async function waitForTurnCompletion(
   const startedAt = Date.now();
   let latestRead = null;
   while (Date.now() - startedAt < timeoutMs) {
+    await client.drainEvents();
     latestRead = await client.call("thread/read", {
       threadId,
       includeTurns: true,
@@ -529,9 +637,31 @@ async function waitForTurnCompletion(
   );
 }
 
-async function createRepositoryProvider(client, provider) {
+async function waitForTerminalInteractionNotification(
+  client,
+  { turnId, timeoutMs, intervalMs },
+) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    await client.drainEvents();
+    const notification = findTerminalInteractionNotification(
+      client.messages,
+      turnId,
+    );
+    if (notification) {
+      return notification;
+    }
+    await sleep(intervalMs);
+  }
+  throw new Error(
+    `等待 terminalInteraction notification 超时: turn=${turnId}`,
+  );
+}
+
+export async function createRepositoryProvider(client, provider) {
+  const providerName = `Codex import continuation fixture ${Date.now()}`;
   const created = await client.call("modelProvider/create", {
-    name: `Codex import continuation fixture ${Date.now()}`,
+    name: providerName,
     providerType: provider.providerName,
     apiHost: provider.providerConfig.baseUrl,
   });
@@ -541,7 +671,12 @@ async function createRepositoryProvider(client, provider) {
     providerId,
     enabled: true,
     sortOrder: 1,
-    models: [{ id: provider.modelPreference }],
+    models: [
+      {
+        id: provider.modelPreference,
+        capability: provider.providerConfig.modelCapabilities,
+      },
+    ],
   });
   const key = await client.call("modelProviderKey/create", {
     providerId,
@@ -550,7 +685,31 @@ async function createRepositoryProvider(client, provider) {
     replaceExisting: true,
   });
   assert(key?.key?.id, "modelProviderKey/create did not return key.id");
-  return { providerId, model: provider.modelPreference };
+  const catalog = await client.call("model/list", {
+    includeHidden: true,
+    limit: 500,
+  });
+  const catalogModel = Array.isArray(catalog?.data)
+    ? catalog.data.find(
+        (candidate) =>
+          candidate?.providerId === providerId &&
+          candidate?.model === provider.modelPreference,
+      )
+    : null;
+  assert(catalogModel, "model/list 未返回可执行 fixture route");
+  const capability = catalogModel.capabilitySnapshot;
+  assert(
+    capability?.taskFamilies?.includes("chat") &&
+      capability?.outputModalities?.includes("text") &&
+      capability?.runtimeFeatures?.includes("tool_calling"),
+    "fixture route 缺少 chat/text/tool_calling capability",
+  );
+  return {
+    catalogModel,
+    providerId,
+    providerName,
+    model: provider.modelPreference,
+  };
 }
 
 async function updateThreadProvider(client, threadId, route) {
@@ -594,13 +753,27 @@ export async function runImportedAndNormalTurns(
   {
     importedSessionId,
     importedThreadId,
-    provider,
+    route,
     runtimeEnv,
     command,
     options,
+    onNormalThreadReady,
+    runNormalTurnInRenderer,
+    onNormalTurnCompleted,
   },
 ) {
-  const route = await createRepositoryProvider(client, provider);
+  assert(
+    route?.providerId && route?.model,
+    "provider route 必须在导入 commit 前完成准备",
+  );
+  const importedResume = await client.call("thread/resume", {
+    threadId: importedThreadId,
+    excludeTurns: true,
+  });
+  assert(
+    importedResume?.thread?.id === importedThreadId,
+    "导入续聊 thread/resume 未返回同一 canonical thread",
+  );
   await updateThreadProvider(client, importedThreadId, route);
   const importedTurn = await startUnifiedExecTurn(client, {
     threadId: importedThreadId,
@@ -622,6 +795,14 @@ export async function runImportedAndNormalTurns(
     timeoutMs: options.timeoutMs,
     intervalMs: options.intervalMs,
   });
+  const importedTerminalInteraction = await waitForTerminalInteractionNotification(
+    client,
+    {
+      turnId: importedTurnId,
+      timeoutMs: options.timeoutMs,
+      intervalMs: options.intervalMs,
+    },
+  );
 
   const normalStart = await client.call("thread/start", {
     model: route.model,
@@ -629,7 +810,7 @@ export async function runImportedAndNormalTurns(
     cwd: runtimeEnv.workspaceRoot,
     runtimeWorkspaceRoots: [runtimeEnv.workspaceRoot],
     historyMode: "paginated",
-    serviceName: "Codex unified exec normal fixture",
+    serviceName: NORMAL_THREAD_TITLE,
     threadSource: "appServer",
   });
   const normalSessionId = String(normalStart?.thread?.sessionId || "").trim();
@@ -638,33 +819,81 @@ export async function runImportedAndNormalTurns(
     normalSessionId && normalThreadId,
     "thread/start did not return canonical session/thread identity",
   );
-  const normalTurn = await startUnifiedExecTurn(client, {
-    threadId: normalThreadId,
-    clientUserMessageId: NORMAL_TURN_ID,
-    text: NORMAL_USER_TEXT,
-    route,
-    runtimeEnv,
-  });
-  const normalTurnId = String(normalTurn?.turn?.id || "").trim();
-  assert(normalTurnId, "normal turn/start did not return canonical turn.id");
-  const normalRead = await waitForTurnCompletion(client, {
-    threadId: normalThreadId,
-    turnId: normalTurnId,
-    expectedCommand: command,
-    finalText: NORMAL_FINAL_TEXT,
-    timeoutMs: options.timeoutMs,
-    intervalMs: options.intervalMs,
+  await updateThreadProvider(client, normalThreadId, route);
+  await onNormalThreadReady?.({ normalSessionId, normalThreadId, route });
+  let normalTurn;
+  let normalTurnId;
+  let normalRead;
+  let normalRendererResult = null;
+  if (runNormalTurnInRenderer) {
+    normalRendererResult = await runNormalTurnInRenderer({
+      normalSessionId,
+      normalThreadId,
+      route,
+      text: NORMAL_USER_TEXT,
+    });
+    normalRead = await client.call("thread/read", {
+      threadId: normalThreadId,
+      includeTurns: true,
+    });
+    const projectedTurn = findTurnByUserText(normalRead, NORMAL_USER_TEXT);
+    normalTurnId = String(projectedTurn?.id || "").trim();
+    assert(
+      projectedTurn?.status === "completed" && normalTurnId,
+      "Renderer normal turn 未进入 canonical completed 状态",
+    );
+    assert(
+      findCompletedCommand(normalRead, normalTurnId, command),
+      "Renderer normal turn 未产生 completed Command Item",
+    );
+    assert(
+      (Array.isArray(projectedTurn?.items) ? projectedTurn.items : []).some(
+        (item) =>
+          item?.type === "agentMessage" &&
+          String(item?.text || "").includes(NORMAL_FINAL_TEXT),
+      ),
+      "Renderer normal turn canonical read 缺少最终文本",
+    );
+    normalTurn = { turn: projectedTurn };
+  } else {
+    normalTurn = await startUnifiedExecTurn(client, {
+      threadId: normalThreadId,
+      clientUserMessageId: NORMAL_TURN_ID,
+      text: NORMAL_USER_TEXT,
+      route,
+      runtimeEnv,
+    });
+    normalTurnId = String(normalTurn?.turn?.id || "").trim();
+    assert(normalTurnId, "normal turn/start did not return canonical turn.id");
+    normalRead = await waitForTurnCompletion(client, {
+      threadId: normalThreadId,
+      turnId: normalTurnId,
+      expectedCommand: command,
+      finalText: NORMAL_FINAL_TEXT,
+      timeoutMs: options.timeoutMs,
+      intervalMs: options.intervalMs,
+    });
+  }
+  await onNormalTurnCompleted?.({
+    normalSessionId,
+    normalThreadId,
+    normalTurnId,
+    normalRead,
+    normalRendererResult,
   });
   return {
     importedTurn,
+    importedResume,
     importedTurnId,
     importedRead,
+    importedTerminalInteraction,
     normalSessionId,
     normalThreadId,
     normalStart,
     normalTurn,
     normalTurnId,
     normalRead,
+    normalRendererResult,
     route,
   };
 }
@@ -703,6 +932,9 @@ function commandShape(item) {
     cwd: item?.cwd ?? null,
     aggregatedOutput: item?.aggregatedOutput ?? null,
     exitCode: item?.exitCode ?? null,
+    terminalInteractionSummaries: readTerminalInteractions(item).map(
+      (interaction) => interaction?.stdin ?? null,
+    ),
   };
 }
 
@@ -806,13 +1038,36 @@ export function summarizeAndAssertFixture({
   assert(historical.hasApprovalFidelity, "导入 approval fidelity 计数丢失");
   assert(importedCommand, "导入续聊未产生 completed Command Item");
   assert(normalCommand, "普通会话未产生 completed Command Item");
+  const importedInteractions = readTerminalInteractions(importedCommand);
+  const normalInteractions = readTerminalInteractions(normalCommand);
+  assert(
+    importedInteractions.some(
+      (interaction) => interaction?.stdin === TERMINAL_INTERACTION_SUMMARY,
+    ),
+    "导入续聊 canonical Command Item 未保留脱敏 terminal interaction",
+  );
+  assert(
+    normalInteractions.some(
+      (interaction) => interaction?.stdin === TERMINAL_INTERACTION_SUMMARY,
+    ),
+    "普通会话 canonical Command Item 未保留脱敏 terminal interaction",
+  );
+  assert(
+    findTerminalInteractionNotification(client.messages, turns.importedTurnId),
+    "未观察到导入续聊 terminalInteraction live notification",
+  );
+  assert(
+    turns.normalRendererResult?.terminalInteractionSummary ===
+      TERMINAL_INTERACTION_SUMMARY,
+    "普通会话 Renderer 未消费 terminalInteraction live notification",
+  );
   assert(
     JSON.stringify(importedShape) === JSON.stringify(normalShape),
     `导入续聊与普通会话 Command Item 不同构: ${JSON.stringify({ importedShape, normalShape })}`,
   );
   assert(
-    providerSummaries.length === 4,
-    "两个 unified exec turn 应产生 4 次 provider 请求",
+    providerSummaries.length === 6,
+    "两个 unified exec + write_stdin turn 应产生 6 次 provider 请求",
   );
   for (const request of providerSummaries) {
     assert(
@@ -837,6 +1092,12 @@ export function summarizeAndAssertFixture({
     historical,
     importedCommandShape: importedShape,
     normalCommandShape: normalShape,
+    importedTerminalInteractions: importedInteractions,
+    normalTerminalInteractions: normalInteractions,
+    liveTerminalInteractionTurnIds: [
+      turns.importedTurnId,
+      turns.normalTurnId,
+    ],
     commandShapesIsomorphic:
       JSON.stringify(importedShape) === JSON.stringify(normalShape),
   };
@@ -853,15 +1114,16 @@ export function summarizeAndAssertBridge(client) {
     ),
     "App Server 调用未全部经过真实 Electron preload bridge",
   );
-  assert(
-    turnStartCount === 2,
-    "未通过 current method 发起导入/普通两次 turn start",
-  );
+  assert(turnStartCount === 1, "导入 turn 未通过 current method 发起");
   return {
     electron: true,
     preloadInvoke: true,
     command: APP_SERVER_HANDLE_JSON_LINES_COMMAND,
     callCount: client.bridgeFacts.length,
-    turnStartCount,
+    directTurnStartCount: turnStartCount,
+    terminalInteractionNotificationCount: client.messages.filter(
+      (message) =>
+        message?.method === "item/commandExecution/terminalInteraction",
+    ).length,
   };
 }

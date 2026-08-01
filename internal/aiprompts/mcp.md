@@ -20,7 +20,7 @@ src/lib/api/
 
 src/hooks/
 ├── useMcp.ts              # MCP runtime 状态与事件刷新
-└── useMcpEvents.ts        # MCP Desktop events 与 App Server typed notification bridge
+└── useMcpEvents.ts        # MCP resource Desktop events 与 App Server typed notification bridge
 
 src/components/mcp/
 ├── McpPage.tsx            # 设置页入口
@@ -55,6 +55,7 @@ Current MCP method 固定为：
 - `mcpServer/syncAllToLive`
 - `mcpServer/oauth/login`
 - `mcpServer/oauthLogin/completed`
+- `mcpServer/startupStatus/updated`
 - `mcpServer/start`
 - `mcpServer/stop`
 - `mcpTool/list`
@@ -70,6 +71,13 @@ Current MCP method 固定为：
 - `mcpResource/unsubscribe`
 
 旧 Desktop facade 已归类为 `dead / retired guard-only`，包括 `get_mcp_servers`、`mcp_list_*`、`mcp_call_tool*`、`mcp_get_prompt`、`mcp_read_resource`、`mcp_start_server`、`mcp_stop_server`、`add_mcp_server`、`update_mcp_server`、`delete_mcp_server`、`toggle_mcp_server`、`import_mcp_from_app`、`sync_all_mcp_to_live`。这些名字只能出现在负向测试、contract forbidden snippet、smoke legacy 黑名单或历史 evidence 中。
+
+## Lifecycle notification
+
+- `mcpServer/start` 在调用 RuntimeCore 前发布 `mcpServer/startupStatus/updated { threadId: null, name, status: "starting", error: null, failureReason: null }`。
+- 启动成功发布 `ready`；启动失败先发布带 typed error 的 `failed`，再保留原 JSON-RPC error。`cancelled` 与 `reauthenticationRequired` 保留为 Codex 对齐的严格协议值，当前 app-scoped start producer 不伪造它们。
+- Renderer 必须同步订阅 App Server typed event bus；`starting` 投影 server connection phase，`ready` / `cancelled` / `failed` 刷新 `mcpServerStatus/list` 与 `mcpTool/list`，`failed` 显示连接错误。
+- `mcp:server_started`、`mcp:server_stopped`、`mcp:server_error` 与 `mcp:oauth_completed` 均为 `dead / deleted / forbidden-to-restore`。`mcp:tools_updated`、`mcp:resources_updated`、`mcp:resource_updated` 仍由各自 current owner 承接，不得与 startup notification 混成第二生命周期 owner。
 
 ## Server-Originated Elicitation
 
@@ -121,6 +129,7 @@ npm run smoke:mcp-current
 npm run smoke:mcp-current -- --allow-write-fixture
 npm run smoke:mcp-current -- --allow-oauth-fixture
 npm run smoke:mcp-oauth-notification-electron-fixture
+npm run smoke:mcp-startup-notification-electron-fixture
 npm run smoke:mcp-current -- --allow-live-provider
 ```
 

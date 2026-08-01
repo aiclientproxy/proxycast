@@ -200,6 +200,51 @@ fn shell_tool_output_delta_preserves_process_lifecycle_metadata() {
 }
 
 #[test]
+fn canonical_command_completion_emits_redacted_terminal_interaction_before_raw_item() {
+    let mut mirror = CodingEventMirror::default();
+    let payload = ThreadItemPayload::Command {
+        command: "printf ready".to_string(),
+        cwd: Some("/workspace".to_string()),
+        output: Some("ready".to_string()),
+        exit_code: Some(0),
+    };
+    let item = ThreadItem {
+        session_id: SessionId::new("session-test"),
+        thread_id: ThreadId::new("thread-test"),
+        turn_id: TurnId::new("turn-test"),
+        item_id: ItemId::new("exec-call"),
+        sequence: 2,
+        ordinal: 1,
+        created_at_ms: 1,
+        updated_at_ms: 2,
+        completed_at_ms: Some(2),
+        kind: payload.kind(),
+        status: ItemStatus::Completed,
+        payload,
+        metadata: json!({
+            "exec_command_call_id": "exec-call",
+            "terminal_interaction": {
+                "process_id": "process-7",
+                "stdin": "sent 9 chars"
+            }
+        }),
+    };
+
+    let output = mirror.process_event(&RuntimeAgentEvent::ItemCompleted { item });
+
+    assert_eq!(output.before_raw.len(), 1);
+    assert!(output.after_raw.is_empty());
+    assert_eq!(output.before_raw[0].event_type, "command.interaction");
+    assert_eq!(output.before_raw[0].payload["commandId"], "item_exec-call");
+    assert_eq!(output.before_raw[0].payload["processId"], "process-7");
+    assert_eq!(output.before_raw[0].payload["stdin"], "sent 9 chars");
+    assert!(!output.before_raw[0]
+        .payload
+        .to_string()
+        .contains("continue"));
+}
+
+#[test]
 fn shell_tool_metadata_only_delta_updates_process_lifecycle_without_consuming_output() {
     let mut mirror = CodingEventMirror::default();
 

@@ -19,6 +19,28 @@ describe("InlineToolProcessStep", () => {
     expect(row?.getAttribute("data-tool-status")).toBe("completed");
   });
 
+  it("命令工具行只显示已发送输入的脱敏摘要", () => {
+    const { container } = renderTool({
+      id: "command-terminal-interaction",
+      name: "exec_command",
+      arguments: JSON.stringify({ command: "read input" }),
+      status: "running",
+      metadata: {
+        terminal_interactions: [
+          { process_id: "unified-exec-1000", stdin: "sent 9 chars" },
+          {
+            process_id: "unified-exec-1000",
+            stdin: "raw-input-must-not-render",
+          },
+        ],
+      },
+      startTime: new Date("2026-07-15T01:30:00.000Z"),
+    });
+
+    expect(container.textContent).toContain("已发送输入：sent 9 chars");
+    expect(container.textContent).not.toContain("raw-input-must-not-render");
+  });
+
   it("内联工具过程节点应消费 Soul lifecycle descriptor metadata", () => {
     const { container } = renderTool({
       id: "tool-soul-lifecycle-inline-1",
@@ -495,9 +517,7 @@ describe("InlineToolProcessStep", () => {
       {
         id: "tool-read-file-open-named-array-1",
         name: "read_file",
-        arguments: JSON.stringify([
-          { name: "path", value: filePath },
-        ]),
+        arguments: JSON.stringify([{ name: "path", value: filePath }]),
         status: "completed",
         result: {
           success: true,
@@ -769,7 +789,9 @@ describe("InlineToolProcessStep", () => {
     expect(container.textContent).not.toContain("channel-preview");
     expect(container.textContent).not.toContain("实时输出");
     expect(container.textContent).not.toContain("兼容");
-    expect(container.querySelector('[data-testid="markdown-renderer"]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="markdown-renderer"]'),
+    ).toBeNull();
   });
 
   it("普通 SkillTool gate proof 不应渲染为 JSON 明细", () => {
@@ -832,11 +854,15 @@ describe("InlineToolProcessStep", () => {
     expect(container.textContent).not.toContain(
       "workspaceSkillRuntimeEnableAttached",
     );
-    expect(container.textContent).not.toContain("workspace_skill_runtime_enable");
+    expect(container.textContent).not.toContain(
+      "workspace_skill_runtime_enable",
+    );
     expect(container.textContent).not.toContain("sourceMetadata");
     expect(container.textContent).not.toContain("skill-source-session");
     expect(container.textContent).not.toContain("SkillTool allow/deny");
-    expect(container.querySelector('[data-testid="markdown-renderer"]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="markdown-renderer"]'),
+    ).toBeNull();
   });
 
   it("普通 SkillTool 正常输出不应被 gate 包络过滤误吞", () => {
@@ -897,7 +923,9 @@ describe("InlineToolProcessStep", () => {
     expect(container.textContent).not.toContain("request_metadata");
     expect(container.textContent).not.toContain("turn/start");
     expect(container.textContent).not.toContain("tool_result_projection");
-    expect(container.querySelector('[data-testid="markdown-renderer"]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="markdown-renderer"]'),
+    ).toBeNull();
   });
 
   it("命令工具的 JSON stdout 不应被协议包络过滤误吞", () => {
@@ -1116,5 +1144,4 @@ describe("InlineToolProcessStep", () => {
     expect(container.textContent).not.toContain("执行完成");
     expect(container.textContent).not.toContain("Ask User Question");
   });
-
 });

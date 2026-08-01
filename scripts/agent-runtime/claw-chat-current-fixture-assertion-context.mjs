@@ -66,6 +66,7 @@ import {
   ACTIVE_STEER_INITIAL_PROMPT,
   ACTIVE_STEER_SCENARIO,
 } from "./claw-chat-current-fixture-active-steer.mjs";
+import { UNKNOWN_ITEM_SCENARIO } from "./claw-chat-current-fixture-unknown-item.mjs";
 
 export function resolveGateBExpectedIdentity({
   summary,
@@ -478,6 +479,7 @@ export function buildAssertionContext({
   const isMediaReferenceScenario =
     options.scenario === MEDIA_REFERENCE_SCENARIO;
   const isSkillsRuntimeScenario = options.scenario === "skills-runtime";
+  const isUnknownItemScenario = options.scenario === UNKNOWN_ITEM_SCENARIO;
   const isSoulStyleScenario = options.scenario === SOUL_STYLE_SCENARIO;
   const isExpertPlazaSkillsRuntimeScenario =
     options.scenario === "expert-plaza-skills-runtime";
@@ -722,6 +724,7 @@ export function buildAssertionContext({
     isMcpStructuredContentScenario,
     isMediaReferenceScenario,
     isSkillsRuntimeScenario,
+    isUnknownItemScenario,
     isSoulStyleScenario,
     isExpertPlazaSkillsRuntimeScenario,
     isExpertPanelSkillsRuntimeScenario,

@@ -153,6 +153,8 @@ npm run smoke:mcp-current -- --allow-write-fixture
 npm run smoke:mcp-current -- --allow-plugin-runtime-fixture
 npm run smoke:mcp-current -- --allow-oauth-fixture
 npm run smoke:mcp-config-electron-fixture
+npm run smoke:mcp-oauth-notification-electron-fixture
+npm run smoke:mcp-startup-notification-electron-fixture
 npm run smoke:settings-about-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-stats-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-environment-electron-fixture -- --run-id <run-id>
@@ -174,6 +176,8 @@ npm run smoke:mcp-elicitation-gate-b
 
 默认入口只通过 `app_server_handle_json_lines -> App Server JSON-RPC` 验证 `mcpServer/list`、`mcpServerStatus/list`、`mcpTool/list|listForContext|search`、`mcpPrompt/list`、`mcpResource/list` 读链，并禁止旧 `mcp_*` / `get_mcp_servers` Tauri facade 作为成功证据。`--allow-write-fixture` 会创建临时 stdio MCP server，覆盖 `mcpServer/create|start|stop|delete`、`mcpTool/call` 与 `mcpResource/read`，并断言工具 `outputSchema` 暴露 `structuredContent`、调用结果保留 `structuredContent`。同一轮还会启动一个必然失败的 server，要求其 `mcpServer/start` 错误以 JSON-RPC error 穿过 Desktop Host 返回，同时健康 server 继续保持 running，且 tool list/call 与 resource read 均可用。`--allow-plugin-runtime-fixture` 会复用临时 stdio MCP server，覆盖 `agentSession/toolInventory/read` 中 `plugin_runtime_capabilities.mcpBindings` 到 `plugin_mcp_targets` 的投影、caller-scoped `mcpTool/listForContext` proof、显式 `mcpTool/callWithCaller` proof，并断言无显式 `callProof` 时默认 list proof 不会调用工具。
 `--allow-oauth-fixture` 会创建本地 OAuth provider，覆盖 `mcpServer/oauth/login`、Electron `open_external_url` 系统浏览器网关、callback token exchange 与 `runtime_status.auth_status` 授权回流，用于复验动态 OAuth current 链路；该模式不依赖真实外部账号或 live Provider。
+
+`npm run smoke:mcp-oauth-notification-electron-fixture` 验证 OAuth callback completion 的 App Server typed notification 与 GUI 自动刷新；`npm run smoke:mcp-startup-notification-electron-fixture` 验证 MCP startup 的 `starting -> ready`、`starting -> failed` typed notification、Settings 连接态与终态 status/tool 刷新。两者都启动隔离的真实 Electron Desktop Host、preload/IPC 与 App Server runtime，不调用正式模型或 live Provider，并要求旧 MCP lifecycle Desktop event、renderer mock fallback 与 App Server mock backend 命中为零。
 
 `npm run smoke:mcp-config-electron-fixture -- --run-id <run-id>` 是真实 Electron 设置页配置闭环 fixture：从桌面壳侧栏进入设置页，切到 MCP 配置管理，选择 Context7 preset，编辑 streamable HTTP URL 与 `env_http_headers` 环境变量名并保存，再通过 preload `app_server_handle_json_lines -> mcpServer/create|list` 验证 App Server current read model。显式 run-id 时证据写入 `.lime/qc/project-gates/<run-id>/settings-mcp-create-list/`，只有 Electron、preload、`electron-ipc`、current methods、GUI readback、零 legacy/mock/error 与截图全部成立才输出 `settingsScenarioProof={scenarioId:mcp-create-list,complete:true}`。该入口不启动 Context7、不调用真实 provider、不读取或写入真实 key，不走 App Server mock backend、renderer mock fallback 或旧 `mcp_*` Desktop facade。
 
@@ -313,6 +317,8 @@ Agent Runtime smoke 与 Service Skill 入口 smoke 已迁到 `scripts/agent-runt
 `npm run smoke:code-artifact-workbench-electron-fixture` 是真实 Electron 代码产物工作台 fixture：使用本地 external backend fixture 生成 `artifact.snapshot`、标准 coding facts 与 current `turn.completed`，再从 GUI 历史会话打开工作台，验证代码产物入口、变更 / 输出 / 日志面板和工作台可见性；传入 `--scenario gui-coding-input` 时会先通过真实 GUI 输入框发送 coding 请求，再验证同一套 Workbench 证据。它不调用正式模型，不走 App Server mock backend。
 
 `npm run smoke:claw-chat-current-fixture` 是更重的真实 Electron GUI fixture：通过真实输入框发送“整理今天的国际新闻”，验证用户输入可见、assistant 完成态输出可见、输入框不消失、App Server `agentSession/turn/start` 走 current JSON-RPC、WebSearch 不按关键词强制 required，并使用本地 external backend fixture 代替正式模型后端。修 Agent Runtime / Claw 输入、流式卡住、历史 hydrate 或新闻请求链路时，先跑聚合 guard，再按需要显式跑该入口；修无法停止或停止后无法继续输出时，还必须跑 `--scenario cancel-then-continue`，证明同一 current session 停止后能再次从 GUI 输入“继续输出”并完成第二轮。
+
+`npm run smoke:unknown-item-recovery-electron-fixture` 复用同一真实 Electron fixture 注入一个受控 future Item type，验证 `item.started -> item.completed -> turn.completed` 经 preload/IPC、App Server runtime/read model 与 direct TurnTimeline fail-visible；GUI 和 cold read 只保留 upstream type 与脱敏字段名，不允许原始字段值、secret、raw payload 或生产 mock fallback。
 
 `npm run smoke:claw-image-live` 是 `@配图` 真实 Provider live 验收入口：默认 fail-closed，必须显式传 `--allow-live-provider` 或设置 `LIME_ALLOW_LIVE_PROVIDER_SMOKE=1 / LIME_REAL_API_TEST=1`。它启动真实 Electron Desktop Host 与 `APP_SERVER_BACKEND_MODE=runtime`，通过 GUI 输入框发送 `@配图`，验证 Agent 普通对话流里的思考 / 引导文字、`Image Generation` 图片任务卡、真实图片预览、Token 显示、右侧 viewer 不自动展开，以及普通 UI 不暴露 task path、workflow 字段、provider 内部字段或模板 task id。传 `--setup-agnes-from-env` 时只从 `AGNES_API_KEY`（或 `--api-key-env` 指定变量）读取 key，summary 仅记录 `apiKeyConfigured: true`，不记录 key 值。该入口还会经 `mediaTaskArtifact/list|get`、`workflow/read` 与 task audit JSONL 验证后端事实源，确保图片任务只落可审计 JSONL / workflow summary，不靠 mock worker、renderer mock fallback 或右侧 viewer 展示内部 JSON。
 

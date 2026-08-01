@@ -5,7 +5,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "1.118.0",
+  "version": "1.119.0",
   "description": "AI content workspace for Chinese creators: desktop writing, research, prompt management, knowledge base, and multi-model workflows.",
   "keywords": [
     "ai",
@@ -221,6 +221,7 @@
     "smoke:local-history-import-real-sample-visual-audit": "node scripts/electron/local-history-import-real-sample-visual-audit-smoke.mjs",
     "smoke:mcp-config-electron-fixture": "node scripts/electron/mcp-config-fixture-smoke.mjs",
     "smoke:mcp-oauth-notification-electron-fixture": "npm run build:renderer:electron && node scripts/electron/mcp-oauth-notification-fixture-smoke.mjs",
+    "smoke:mcp-startup-notification-electron-fixture": "npm run build:renderer:electron && node scripts/electron/mcp-startup-notification-fixture-smoke.mjs",
     "smoke:settings-about-electron-fixture": "node scripts/electron/settings-about-fixture-smoke.mjs",
     "smoke:settings-stats-electron-fixture": "node scripts/electron/settings-stats-fixture-smoke.mjs",
     "smoke:settings-environment-electron-fixture": "node scripts/electron/settings-environment-fixture-smoke.mjs",
@@ -244,6 +245,7 @@
     "smoke:plugin-runtime-electron-fixture": "node scripts/plugin/runtime-electron-fixture-smoke.mjs",
     "smoke:plugin-runtime-task-electron-fixture": "node scripts/plugin/runtime-electron-task-fixture-smoke.mjs",
     "smoke:claw-chat-current-fixture": "node scripts/agent-runtime/claw-chat-current-fixture-smoke.mjs",
+    "smoke:unknown-item-recovery-electron-fixture": "node scripts/agent-runtime/claw-chat-current-fixture-smoke.mjs --scenario unknown-item --prefix claw-chat-current-fixture-unknown-item-regression --timeout-ms 240000",
     "smoke:claw-image-live": "node scripts/agent-runtime/claw-image-live-smoke.mjs",
     "smoke:claw-chat-ready-streaming": "node scripts/claw-chat-ready-streaming-smoke.mjs",
     "smoke:at-command-registry": "node scripts/at-command-registry-e2e.mjs",

@@ -1,0 +1,60 @@
+{
+  "$defs": {
+    "McpServerStartupFailureReason": {
+      "enum": [
+        "reauthenticationRequired"
+      ],
+      "type": "string"
+    },
+    "McpServerStartupState": {
+      "enum": [
+        "cancelled",
+        "failed",
+        "ready",
+        "starting"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "error": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "failureReason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/McpServerStartupFailureReason"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/McpServerStartupState"
+    },
+    "threadId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "error",
+    "failureReason",
+    "name",
+    "status",
+    "threadId"
+  ],
+  "title": "McpServerStatusUpdatedNotification",
+  "type": "object"
+}

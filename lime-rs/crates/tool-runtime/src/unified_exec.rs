@@ -328,6 +328,7 @@ async fn write_stdin(
             unified_exec_error(format!("write_stdin arguments are invalid: {error}"))
         })?;
     let session = find_session(input.session_id)?;
+    let process_id = session_facts(&session).await.process_id;
     {
         let session = session.lock().await;
         if session.thread_id != request.thread_id {
@@ -343,6 +344,7 @@ async fn write_stdin(
             })
             .map_err(unified_exec_error)?;
     }
+    let stdin_summary = terminal_interaction_summary(&input.chars);
     let output = collect_process_output(
         gateway,
         input.session_id,
@@ -352,7 +354,22 @@ async fn write_stdin(
         request.cancel_token,
     )
     .await?;
-    Ok(project_output(output))
+    let mut result = project_output(output);
+    result.metadata.insert(
+        "terminal_interaction".to_string(),
+        json!({"stdin": stdin_summary, "process_id": process_id}),
+    );
+    Ok(result)
+}
+
+fn terminal_interaction_summary(chars: &str) -> String {
+    if chars.is_empty() {
+        return "(poll)".to_string();
+    }
+    if chars == "\u{3}" {
+        return "(interrupt)".to_string();
+    }
+    format!("sent {} chars", chars.chars().count())
 }
 
 async fn collect_process_output(

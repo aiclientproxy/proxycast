@@ -753,6 +753,11 @@ pub(super) fn v2_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<v2::McpServerOauthLoginCompletedNotification>(
             "McpServerOauthLoginCompletedNotification",
         ),
+        typed_schema::<v2::McpServerStartupFailureReason>("McpServerStartupFailureReason"),
+        typed_schema::<v2::McpServerStartupState>("McpServerStartupState"),
+        typed_schema::<v2::McpServerStatusUpdatedNotification>(
+            "McpServerStatusUpdatedNotification",
+        ),
         typed_schema::<v2::CurrentTimeReadParams>("CurrentTimeReadParams"),
         typed_schema::<v2::CurrentTimeReadResponse>("CurrentTimeReadResponse"),
         typed_schema::<v2::AdditionalNetworkPermissions>("AdditionalNetworkPermissions"),
@@ -838,6 +843,9 @@ pub(super) fn v2_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<v2::CommandAction>("CommandAction"),
         typed_schema::<v2::CommandExecutionSource>("CommandExecutionSource"),
         typed_schema::<v2::CommandExecutionStatus>("CommandExecutionStatus"),
+        typed_schema::<v2::CommandExecutionTerminalInteraction>(
+            "CommandExecutionTerminalInteraction",
+        ),
         typed_schema::<v2::FileUpdateChange>("FileUpdateChange"),
         typed_schema::<v2::PatchChangeKind>("PatchChangeKind"),
         typed_schema::<v2::PatchApplyStatus>("PatchApplyStatus"),
@@ -987,6 +995,9 @@ pub(super) fn v2_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<v2::AgentMessageDeltaNotification>("AgentMessageDeltaNotification"),
         typed_schema::<v2::CommandExecutionOutputDeltaNotification>(
             "CommandExecutionOutputDeltaNotification",
+        ),
+        typed_schema::<v2::CommandExecutionTerminalInteractionNotification>(
+            "CommandExecutionTerminalInteractionNotification",
         ),
         typed_schema::<v2::FileChangePatchUpdatedNotification>(
             "FileChangePatchUpdatedNotification",

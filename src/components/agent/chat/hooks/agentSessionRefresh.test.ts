@@ -4,6 +4,7 @@ import type { AgentSessionDetail } from "@/lib/api/agentRuntime/sessionTypes";
 import {
   createAgentSessionReadModelSnapshot,
   hydrateFreshAgentSessionReadModel,
+  mergeAgentSessionReadModelThreadItems,
   refreshAgentSessionDetailState,
   refreshAgentSessionReadModelState,
   resolveDefaultAgentSessionDetailMergeMode,
@@ -26,6 +27,46 @@ describe("agentSessionRefresh", () => {
       thread_id: "thread-1",
       status: "queued",
     });
+  });
+
+  it("read model 刷新应把 typed unknown item 合入当前时间线", () => {
+    const unknownItem = {
+      id: "unknown-item-1",
+      thread_id: "thread-1",
+      turn_id: "turn-1",
+      sequence: 1,
+      type: "unknown_item",
+      status: "completed",
+      started_at: "2026-07-31T00:00:00.000Z",
+      updated_at: "2026-07-31T00:00:01.000Z",
+      completed_at: "2026-07-31T00:00:01.000Z",
+      upstream_type: "futureCapability",
+      field_names: ["[redacted]", "label", "status"],
+    } as const;
+    const currentItem = {
+      id: "user-item-1",
+      thread_id: "thread-1",
+      turn_id: "turn-1",
+      sequence: 0,
+      type: "user_message",
+      status: "completed",
+      started_at: "2026-07-31T00:00:00.000Z",
+      updated_at: "2026-07-31T00:00:00.000Z",
+      completed_at: "2026-07-31T00:00:00.000Z",
+      content: "继续",
+    } as const;
+
+    const result = mergeAgentSessionReadModelThreadItems(
+      [currentItem],
+      createAgentSessionReadModelSnapshot({
+        thread_id: "thread-1",
+        status: "completed",
+        thread_items: [currentItem, unknownItem],
+      }),
+    );
+
+    expect(result).toEqual([currentItem, unknownItem]);
+    expect(JSON.stringify(result)).not.toContain("opaque-value-must-not-render");
   });
 
   it("新会话应在 submit 前 hydrate canonical threadId", async () => {

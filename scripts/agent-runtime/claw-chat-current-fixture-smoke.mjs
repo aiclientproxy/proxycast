@@ -85,6 +85,7 @@ import {
 } from "./claw-chat-current-fixture-invoke-trace.mjs";
 import { summarizeHomeHotpathPreTurnTrace } from "./claw-chat-current-fixture-home-hotpath.mjs";
 import { executeScenarioFlow } from "./claw-chat-current-fixture-scenario-flow.mjs";
+import { UNKNOWN_ITEM_SCENARIO } from "./claw-chat-current-fixture-unknown-item.mjs";
 import {
   MEDIA_REFERENCE_PROMPT,
   MEDIA_REFERENCE_SCENARIO,
@@ -139,7 +140,7 @@ Claw Chat Current Electron Fixture Smoke
   --evidence-dir <path>  证据目录
   --prefix <name>        证据文件前缀
   --run-id <id>          Gate 项目 run-id；也可通过 LIME_GATE_RUN_ID 注入
-  --scenario <name>      complete | home-hotpath | home-hotpath-greeting | cancel | cancel-then-continue | inputbar-rich-restore | inputbar-active-steer | plan | turn-plan-update | goal | soul-style | image-command | plain-image-intent | media-reference | reasoning-first-visible | live-tail-commit | electron-resize-reflow | approval-request-resume | approval-request-decline | approval-request-cancel | approval-request-host-interrupt | approval-request-full-access | terminal-failed-after-answer | terminal-canceled-after-answer | terminal-stale-guard | typed-error-retry-success | typed-error-retry-failure | web-tools-rendering | mcp-structured-content | skills-runtime | expert-plaza-skills-runtime | expert-panel-skills-runtime | right-surface-visual-matrix | content-factory-article-workspace | content-factory-inline-image-article-workspace，默认 complete
+  --scenario <name>      complete | unknown-item | home-hotpath | home-hotpath-greeting | cancel | cancel-then-continue | inputbar-rich-restore | inputbar-active-steer | plan | turn-plan-update | goal | soul-style | image-command | plain-image-intent | media-reference | reasoning-first-visible | live-tail-commit | electron-resize-reflow | approval-request-resume | approval-request-decline | approval-request-cancel | approval-request-host-interrupt | approval-request-full-access | terminal-failed-after-answer | terminal-canceled-after-answer | terminal-stale-guard | typed-error-retry-success | typed-error-retry-failure | web-tools-rendering | mcp-structured-content | skills-runtime | expert-plaza-skills-runtime | expert-panel-skills-runtime | right-surface-visual-matrix | content-factory-article-workspace | content-factory-inline-image-article-workspace，默认 complete
   --prompt <text>        仅 home-hotpath 场景可用，覆盖默认新闻输入
   --soul-style-profile <id>   soul-style 场景使用的 profile，默认 ${DEFAULT_SOUL_STYLE_FIXTURE_PROFILE_ID}
   --cdp-port <port>      可选 Electron remote debugging port；传入后通过 CDP renderer 执行 GUI 动作
@@ -251,6 +252,7 @@ function parseArgs(argv) {
   }
   const allowedScenarios = [
     "complete",
+    UNKNOWN_ITEM_SCENARIO,
     HOME_HOTPATH_SCENARIO,
     HOME_HOTPATH_GREETING_SCENARIO,
     "cancel",

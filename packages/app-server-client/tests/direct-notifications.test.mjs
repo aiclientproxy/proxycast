@@ -3,6 +3,7 @@ import { test } from "vitest";
 import {
   isAgentMessageDeltaNotification,
   isCommandExecutionOutputDeltaNotification,
+  isCommandExecutionTerminalInteractionNotification,
   isErrorNotification,
   isFileChangePatchUpdatedNotification,
   isItemCompletedNotification,
@@ -22,6 +23,7 @@ import {
   isTurnStartedNotification,
   modelListUpdatedServerNotification,
   mcpServerOauthLoginCompletedServerNotification,
+  mcpServerStatusUpdatedServerNotification,
   serverNotification,
   skillsChangedServerNotification,
 } from "../dist/index.js";
@@ -112,6 +114,90 @@ test("recognizes strict mcpServer/oauthLogin/completed notifications", () => {
   }
 });
 
+test("recognizes strict mcpServer/startupStatus/updated notifications", () => {
+  const ready = {
+    method: "mcpServer/startupStatus/updated",
+    params: {
+      threadId: null,
+      name: "remote-docs",
+      status: "ready",
+      error: null,
+      failureReason: null,
+    },
+  };
+  const failed = {
+    method: "mcpServer/startupStatus/updated",
+    params: {
+      threadId: "thread-1",
+      name: "remote-docs",
+      status: "failed",
+      error: "OAuth credentials expired",
+      failureReason: "reauthenticationRequired",
+    },
+  };
+
+  assert.deepEqual(mcpServerStatusUpdatedServerNotification(ready), ready);
+  assert.deepEqual(mcpServerStatusUpdatedServerNotification(failed), failed);
+
+  for (const malformed of [
+    { method: "mcpServer/startupStatus/updated" },
+    {
+      method: "mcpServer/startupStatus/updated",
+      params: {
+        name: "remote-docs",
+        status: "ready",
+        error: null,
+        failureReason: null,
+      },
+    },
+    {
+      method: "mcpServer/startupStatus/updated",
+      params: {
+        threadId: null,
+        name: "",
+        status: "ready",
+        error: null,
+        failureReason: null,
+      },
+    },
+    {
+      method: "mcpServer/startupStatus/updated",
+      params: {
+        threadId: null,
+        name: "remote-docs",
+        status: "stopped",
+        error: null,
+        failureReason: null,
+      },
+    },
+    {
+      method: "mcpServer/startupStatus/updated",
+      params: {
+        threadId: null,
+        name: "remote-docs",
+        status: "failed",
+        error: null,
+      },
+    },
+    {
+      method: "mcpServer/startupStatus/updated",
+      params: {
+        threadId: null,
+        name: "remote-docs",
+        status: "ready",
+        error: null,
+        failureReason: null,
+        serverName: "legacy",
+      },
+    },
+  ]) {
+    assert.equal(
+      mcpServerStatusUpdatedServerNotification(malformed),
+      undefined,
+    );
+  }
+});
+
 test("recognizes native v2 lifecycle and reasoning notifications", () => {
   const notifications = [
     {
@@ -186,6 +272,16 @@ test("recognizes native v2 lifecycle and reasoning notifications", () => {
       params: { delta: "stdout\n", itemId: "command-1", threadId, turnId },
     },
     {
+      method: "item/commandExecution/terminalInteraction",
+      params: {
+        itemId: "command-1",
+        processId: "unified-exec-1000",
+        stdin: "sent 9 chars",
+        threadId,
+        turnId,
+      },
+    },
+    {
       method: "item/fileChange/patchUpdated",
       params: {
         changes: [
@@ -257,18 +353,22 @@ test("recognizes native v2 lifecycle and reasoning notifications", () => {
     isCommandExecutionOutputDeltaNotification(notifications[8]),
     true,
   );
-  assert.equal(isFileChangePatchUpdatedNotification(notifications[9]), true);
-  assert.equal(isPlanDeltaNotification(notifications[10]), true);
-  assert.equal(isMcpToolCallProgressNotification(notifications[11]), true);
   assert.equal(
-    isReasoningSummaryTextDeltaNotification(notifications[12]),
+    isCommandExecutionTerminalInteractionNotification(notifications[9]),
+    true,
+  );
+  assert.equal(isFileChangePatchUpdatedNotification(notifications[10]), true);
+  assert.equal(isPlanDeltaNotification(notifications[11]), true);
+  assert.equal(isMcpToolCallProgressNotification(notifications[12]), true);
+  assert.equal(
+    isReasoningSummaryTextDeltaNotification(notifications[13]),
     true,
   );
   assert.equal(
-    isReasoningSummaryPartAddedNotification(notifications[13]),
+    isReasoningSummaryPartAddedNotification(notifications[14]),
     true,
   );
-  assert.equal(isReasoningTextDeltaNotification(notifications[14]), true);
+  assert.equal(isReasoningTextDeltaNotification(notifications[15]), true);
   assert.equal(
     isThreadSettingsUpdatedNotification({
       method: "thread/settings/updated",
@@ -283,6 +383,37 @@ test("recognizes native v2 lifecycle and reasoning notifications", () => {
     }),
     true,
   );
+});
+
+test("fails closed for malformed terminal interaction notifications", () => {
+  for (const params of [
+    { itemId: "command-1", processId: "process-1", threadId, turnId },
+    {
+      itemId: "command-1",
+      processId: "process-1",
+      stdin: "raw-input-must-not-pass",
+      threadId,
+      turnId,
+    },
+    {
+      itemId: "command-1",
+      processId: "process-1",
+      stdin: "sent 1 chars",
+      threadId,
+      turnId,
+      raw: "x",
+    },
+  ]) {
+    const notification = {
+      method: "item/commandExecution/terminalInteraction",
+      params,
+    };
+    assert.equal(serverNotification(notification), undefined);
+    assert.equal(
+      isCommandExecutionTerminalInteractionNotification(notification),
+      false,
+    );
+  }
 });
 
 test("fails closed for malformed turn plan updates", () => {

@@ -149,6 +149,32 @@ describe("MessageList direct canonical timeline", () => {
     );
   });
 
+  it("已完成 canonical Turn 应常显脱敏后的未知 Item 诊断", () => {
+    const completedTurn = turn("turn-direct-unknown-item");
+    const container = render([], {
+      currentTurnId: completedTurn.id,
+      turns: [completedTurn],
+      threadItems: [
+        item("completed-unknown-item", completedTurn.id, 1, {
+          type: "unknown_item",
+          upstream_type: "futureCapability",
+          field_names: ["[redacted]", "label", "status"],
+        }),
+      ],
+    });
+
+    const diagnostic = container.querySelector(
+      '[data-testid="timeline-unsupported-item"]',
+    );
+    expect(diagnostic?.textContent).toContain("futureCapability");
+    expect(diagnostic?.textContent).toContain("[redacted]");
+    expect(diagnostic?.textContent).toContain("label");
+    expect(diagnostic?.textContent).toContain("status");
+    expect(container.textContent).not.toContain("unknown_item");
+    expect(container.textContent).not.toContain("opaque-value-must-not-render");
+    expect(mockAgentThreadTimeline).not.toHaveBeenCalled();
+  });
+
   it("聚焦 completed process Item 时直接展开并保留精确定位参数", () => {
     const completedTurn = turn("turn-focused-completed");
     render([], {

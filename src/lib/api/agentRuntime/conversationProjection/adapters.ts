@@ -122,6 +122,33 @@ export function conversationProjectionEventFromPayload(
           }
         : null;
     }
+    case "terminal_interaction": {
+      const threadId = readString(
+        payload,
+        "thread_id",
+        "threadId",
+        "session_id",
+      );
+      const turnId = readString(payload, "turn_id", "turnId");
+      const itemId = readString(payload, "item_id", "itemId");
+      const processId = readString(payload, "process_id", "processId");
+      const stdin = readString(payload, "stdin");
+      return threadId && turnId && itemId && processId && stdin
+        ? {
+            ...base,
+            type: "item_delta",
+            thread_id: threadId,
+            turn_id: turnId,
+            item_id: itemId,
+            sequence: readFiniteNumber(payload, "sequence") ?? 0,
+            delta: {
+              kind: "terminal_interaction",
+              process_id: processId,
+              stdin,
+            },
+          }
+        : null;
+    }
     case "reasoning_summary_delta":
     case "reasoning_content_delta": {
       const threadId = readString(

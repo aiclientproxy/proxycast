@@ -271,4 +271,54 @@ mod tests {
         assert_eq!(turn["items"][0]["payload"]["phase"], "final_answer");
         assert_eq!(turn["items"][0]["payload"]["text"], "final answer");
     }
+
+    #[test]
+    fn unknown_item_notification_attaches_sanitized_canonical_entity() {
+        let event = AgentEvent {
+            event_id: "event-unknown-started".to_string(),
+            sequence: 1,
+            session_id: "session-1".to_string(),
+            thread_id: Some("thread-1".to_string()),
+            turn_id: Some("turn-1".to_string()),
+            event_type: "item.started".to_string(),
+            timestamp: "2026-07-13T00:00:01Z".to_string(),
+            payload: json!({"item": {
+                "id": "unknown-1",
+                "type": "futureCapability",
+                "label": "future capability",
+                "secretToken": "UNKNOWN_ITEM_SECRET_MUST_NOT_LEAK",
+                "status": "inProgress"
+            }}),
+        };
+
+        let notifications =
+            notification_events_with_canonical_entities(&stored_session(), &[event])
+                .expect("unknown item canonical notification");
+        let item = &notifications[0].payload["item"];
+        assert_eq!(item["kind"], "unknown");
+        assert_eq!(item["payload"]["type"], "unknown");
+        assert_eq!(item["payload"]["upstream_type"], "futureCapability");
+        assert_eq!(
+            item["payload"]["field_names"],
+            json!(["[redacted]", "label", "status"])
+        );
+        let wire = item.to_string();
+        assert!(!wire.contains("UNKNOWN_ITEM_SECRET_MUST_NOT_LEAK"));
+        assert!(!wire.contains("future capability"));
+    }
+
+    #[test]
+    fn malformed_unknown_item_notification_fails_closed() {
+        let mut malformed = event("item.started");
+        malformed.payload = json!({"item": {
+            "id": "unknown-1",
+            "type": "future_capability"
+        }});
+
+        let error = notification_events_with_canonical_entities(&stored_session(), &[malformed])
+            .expect_err("malformed unknown item must fail closed");
+        assert!(error
+            .to_string()
+            .contains("canonical materializer produced no item"));
+    }
 }

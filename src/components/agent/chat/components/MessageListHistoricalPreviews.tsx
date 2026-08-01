@@ -181,6 +181,10 @@ export const HistoricalTimelinePreview: React.FC<{
     (item): item is Extract<AgentThreadItem, { type: "file_artifact" }> =>
       item.type === "file_artifact",
   );
+  const unknownItems = items.filter(
+    (item): item is Extract<AgentThreadItem, { type: "unknown_item" }> =>
+      item.type === "unknown_item",
+  );
   const summaryRow = (
     <>
       <span className="font-medium">{title}</span>
@@ -223,6 +227,16 @@ export const HistoricalTimelinePreview: React.FC<{
               sourceMessageId={sourceMessageId}
               onSaveFileArtifactAsKnowledge={onSaveFileArtifactAsKnowledge}
             />
+          ))}
+        </div>
+      ) : null}
+      {unknownItems.length > 0 ? (
+        <div
+          data-testid="historical-unknown-item-group"
+          className="space-y-1"
+        >
+          {unknownItems.map((item) => (
+            <TimelineItemDetails key={item.id} item={item} />
           ))}
         </div>
       ) : null}

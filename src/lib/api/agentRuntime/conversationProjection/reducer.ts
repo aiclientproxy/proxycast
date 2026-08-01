@@ -167,6 +167,12 @@ function applyItemSnapshot(
         ...snapshot,
         sequence: existing.sequence,
         started_at: existing.started_at,
+        ...(snapshot.type === "command_execution" &&
+        existing.type === "command_execution" &&
+        !snapshot.terminal_interactions?.length &&
+        existing.terminal_interactions?.length
+          ? { terminal_interactions: existing.terminal_interactions }
+          : {}),
       }
     : snapshot;
   if (
@@ -409,6 +415,22 @@ function applyItemDelta(
             delta.value,
             delta.mode,
           ),
+        },
+      };
+    case "terminal_interaction":
+      if (item.type !== "command_execution") {
+        return {
+          item,
+          unsupported: `Terminal interaction is not supported for ${item.type}.`,
+        };
+      }
+      return {
+        item: {
+          ...item,
+          terminal_interactions: [
+            ...(item.terminal_interactions ?? []),
+            { process_id: delta.process_id, stdin: delta.stdin },
+          ].slice(-20),
         },
       };
     case "reasoning_summary":

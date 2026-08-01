@@ -16,6 +16,7 @@ import {
   getToolDisplayInfo,
 } from "../utils/toolDisplayInfo";
 import { resolveToolProcessNarrative } from "../utils/toolProcessSummary";
+import { resolveTerminalInteractionSummaries } from "../utils/toolProcessSummaryMetadata";
 import type { StreamingProcessEntry } from "./StreamingProcessGroupModel";
 import { resolveWorkspaceSkillRuntimeEnableResultDisplay } from "../utils/toolResultEnvelopeDisplay";
 
@@ -330,8 +331,25 @@ export const StreamingProcessGroup: React.FC<{
     }
     return summaries.length > 0 ? summaries.join(separator) : null;
   }, [entries, separator, t]);
+  const terminalInteractionMetaText = useMemo(() => {
+    const summaries = entries.flatMap((entry) =>
+      entry.kind === "tool"
+        ? resolveTerminalInteractionSummaries(
+            resolveToolCallMetadata(entry.toolCall),
+          )
+        : [],
+    );
+    return summaries.length > 0
+      ? String(
+          t("agentChat.processGroup.terminalInteractions", {
+            defaultValue: "Input sent: {{value}}",
+            value: summaries.join(separator),
+          }),
+        )
+      : null;
+  }, [entries, separator, t]);
   const combinedMetaText = joinSummaryParts(
-    [metaText, runtimeEnableMetaText],
+    [metaText, runtimeEnableMetaText, terminalInteractionMetaText],
     separator,
   );
   const nonToolEntries = entries.filter((entry) => entry.kind !== "tool");

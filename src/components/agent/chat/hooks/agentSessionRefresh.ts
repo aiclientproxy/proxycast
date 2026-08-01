@@ -1,11 +1,13 @@
 import type { MutableRefObject } from "react";
 import type { AgentExecutionStrategy } from "@/lib/api/agentExecutionRuntime";
 import type { AgentRuntimeThreadReadModel } from "@/lib/api/agentRuntime/sessionTypes";
+import type { AgentThreadItem } from "../types";
 import { normalizeExecutionStrategy } from "./agentChatCoreUtils";
 import type { AgentAccessMode } from "./agentChatStorage";
 import { createSessionAccessModeFromExecutionRuntime } from "../utils/sessionExecutionRuntime";
 import type { AgentRuntimeAdapter } from "./agentRuntimeAdapter";
 import type { AgentSessionDetailMergeMode } from "./agentSessionState";
+import { mergeRuntimeSyncThreadItems } from "./agentSessionTimelineMergePolicy";
 
 export interface AgentSessionDetailRefreshRequest {
   source?: string | null;
@@ -22,6 +24,17 @@ export function createAgentSessionReadModelSnapshot(
   return {
     threadRead: threadRead ?? null,
   };
+}
+
+export function mergeAgentSessionReadModelThreadItems(
+  currentItems: AgentThreadItem[],
+  snapshot: AgentSessionReadModelSnapshot,
+): AgentThreadItem[] {
+  const incomingItems = snapshot.threadRead?.thread_items;
+  if (!Array.isArray(incomingItems) || incomingItems.length === 0) {
+    return currentItems;
+  }
+  return mergeRuntimeSyncThreadItems(currentItems, incomingItems);
 }
 
 export async function hydrateFreshAgentSessionReadModel(

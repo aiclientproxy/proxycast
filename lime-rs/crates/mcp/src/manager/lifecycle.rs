@@ -32,7 +32,6 @@ impl McpClientManager {
     /// 3. 建立 MCP 连接
     /// 4. 初始化 MCP 客户端
     /// 5. 失效工具缓存
-    /// 6. 发送 mcp:server_started 事件
     pub async fn start_server(&self, name: &str, config: &McpServerConfig) -> Result<(), McpError> {
         config.validate().map_err(McpError::ConfigError)?;
         if !config.enabled {
@@ -75,7 +74,6 @@ impl McpClientManager {
             Err(e) => {
                 let error_msg = format!("无法启动服务器进程: {e}");
                 error!(server_name = %name, error = %e, "启动 MCP 服务器进程失败");
-                self.emit_server_error(name, &error_msg);
                 return Err(McpError::ProcessSpawnFailed(error_msg));
             }
         };
@@ -100,7 +98,6 @@ impl McpClientManager {
                 }
                 let error_msg = format!("MCP 连接失败: {e}");
                 error!(server_name = %name, error = %e, "MCP 客户端初始化失败");
-                self.emit_server_error(name, &error_msg);
                 return Err(McpError::ConnectionFailed(error_msg));
             }
             Err(_) => {
@@ -108,9 +105,7 @@ impl McpClientManager {
                 if let Some(task) = stderr_task.take() {
                     task.abort();
                 }
-                let error_msg = format!("MCP 连接超时（{timeout_secs}秒）");
                 error!(server_name = %name, timeout = timeout_secs, "MCP 连接超时");
-                self.emit_server_error(name, &error_msg);
                 return Err(McpError::Timeout);
             }
         };
@@ -137,9 +132,6 @@ impl McpClientManager {
 
         // 5. 失效工具缓存
         self.invalidate_tool_cache().await;
-
-        // 6. 发送 mcp:server_started 事件
-        self.emit_server_started(name, server_info);
 
         info!(server_name = %name, "MCP 服务器启动成功");
         Ok(())
@@ -202,13 +194,10 @@ impl McpClientManager {
             Ok(Err(error)) => {
                 let error_msg = format!("MCP streamable HTTP 连接失败: {error}");
                 error!(server_name = %name, url = %url, error = %error, "MCP HTTP 客户端初始化失败");
-                self.emit_server_error(name, &error_msg);
                 return Err(McpError::ConnectionFailed(error_msg));
             }
             Err(_) => {
-                let error_msg = format!("MCP streamable HTTP 连接超时（{timeout_secs}秒）");
                 error!(server_name = %name, url = %url, timeout = timeout_secs, "MCP HTTP 连接超时");
-                self.emit_server_error(name, &error_msg);
                 return Err(McpError::Timeout);
             }
         };
@@ -227,8 +216,6 @@ impl McpClientManager {
         wrapper.set_running_service(running_service);
         self.add_client(name.to_string(), wrapper).await?;
         self.invalidate_tool_cache().await;
-        self.emit_server_started(name, server_info);
-
         info!(server_name = %name, url = %url, "MCP streamable HTTP 服务器启动成功");
         Ok(())
     }
@@ -277,7 +264,6 @@ impl McpClientManager {
     /// 2. 终止子进程
     /// 3. 清理客户端连接
     /// 4. 失效工具缓存
-    /// 5. 发送 mcp:server_stopped 事件
     pub async fn stop_server(&self, name: &str) -> Result<(), McpError> {
         info!(server_name = %name, "停止 MCP 服务器");
 
@@ -302,9 +288,6 @@ impl McpClientManager {
 
         // 4. 失效工具缓存
         self.invalidate_tool_cache().await;
-
-        // 5. 发送 mcp:server_stopped 事件
-        self.emit_server_stopped(name);
 
         info!(server_name = %name, "MCP 服务器已停止");
         Ok(())

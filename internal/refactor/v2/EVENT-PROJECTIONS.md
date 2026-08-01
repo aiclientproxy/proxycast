@@ -13,7 +13,7 @@
 
 出口代码：TL 时间线，TP Turn 面板，PI pending interaction，HS Header/状态区，GN 应用通知，DX 仅开发诊断。
 
-实施快照：direct `item/started -> item/commandExecution/outputDelta* -> item/completed` 通过 typed adapter 和共享 reducer；production `thread/resume` 安装同一 replay reducer，后续 live notification 继续复用。completed snapshot 权威覆盖 delta 草稿，输出限制为 256 KiB。`turn.plan.updated` 由 canonical `update_plan` 的 `ToolOutput.structured_content` 派生，实时与 canonical cold read 共用 checklist 投影；`update_plan` 工具项保留在 read model，但不生成 `ThreadItem.plan` 或 Plan UI。unknown Item 与 unknown/known-unprojected notification drift recorder 已接线，但 recorder 只提供 fail-visible 诊断，不能把 72 notification 中的 planned surface 标记完成。
+实施快照：direct `item/started -> item/commandExecution/outputDelta* -> item/completed` 通过 typed adapter 和共享 reducer；production `thread/resume` 安装同一 replay reducer，后续 live notification 继续复用。completed snapshot 权威覆盖 delta 草稿，输出限制为 256 KiB。`write_stdin` 复用原始 `exec_command` Item identity，typed terminal interaction 与 canonical cold read 只保留 `sent N chars` 脱敏摘要。`turn.plan.updated` 由 canonical `update_plan` 的 `ToolOutput.structured_content` 派生，实时与 canonical cold read 共用 checklist 投影；`update_plan` 工具项保留在 read model，但不生成 `ThreadItem.plan` 或 Plan UI。unknown Item 已沿 canonical typed payload、v2 `thread/read`、Renderer 终态合并与 direct TurnTimeline fail-visible，只保留 upstream type 和脱敏字段名，并有专项 Electron Gate B；unknown/known-unprojected notification drift recorder 仍只提供诊断，不能把 72 notification 中的 planned surface 标记完成。
 
 ## 1. Thread、Turn 与 Hook
 
@@ -38,14 +38,14 @@
 |  17 | hook/started                    | TL/HS    | planned  | Hook activity，run id 保留                            |
 |  18 | turn/completed                  | TL/TP    | current  | 权威 Turn 终态并清理 pending                          |
 |  19 | hook/completed                  | TL       | planned  | Hook status、duration、entries 与阻断结果             |
-|  20 | turn/diff/updated               | TP       | planned  | 替换聚合 Diff snapshot                                |
+|  20 | turn/diff/updated               | DX       | product-scope-excluded | Codex raw unified diff；Lime 以 canonical FileChange 为唯一事实源 |
 |  21 | turn/plan/updated               | TP       | current  | canonical update_plan checklist，实时/冷恢复一致      |
 
 ## 2. Item 生命周期、流与进程
 
 |   # | Method                                    | 目标出口 | 当前裁决               | v2 投影                                     |
 | --: | ----------------------------------------- | -------- | ---------------------- | ------------------------------------------- |
-|  22 | item/started                              | TL       | current                | 按 18 类联合建立 Item；未知 fail visible    |
+|  22 | item/started                              | TL       | current                | 按 typed 联合建立 Item；未知安全 fail visible |
 |  23 | item/autoApprovalReview/started           | PI/TL    | planned                | 目标 Item 的 Guardian review 进行中         |
 |  24 | item/autoApprovalReview/completed         | PI/TL    | planned                | approved/denied/timedOut/aborted 与风险摘要 |
 |  25 | item/completed                            | TL       | current                | Item 权威终态覆盖流式草稿                   |
@@ -54,10 +54,10 @@
 |  28 | item/agentMessage/delta                   | TL       | current                | 合批 Markdown stream                        |
 |  29 | item/plan/delta                           | TL       | current                | 临时计划草稿，completed 整体替换            |
 |  30 | command/exec/outputDelta                  | DX/GN    | product-scope-excluded | 独立 command API，不能混入 Agent command    |
-|  31 | process/outputDelta                       | DX/GN    | planned                | 专用 process 面板，不推导 Turn 状态         |
-|  32 | process/exited                            | DX/GN    | planned                | 终结 process 面板                           |
+|  31 | process/outputDelta                       | DX       | product-scope-excluded | standalone unsandboxed process/spawn 流；不进入 Lime 产品链 |
+|  32 | process/exited                            | DX       | product-scope-excluded | standalone process 终态；不进入 Lime 产品链 |
 |  33 | item/commandExecution/outputDelta         | TL       | current                | 有界 stdout/stderr buffer                   |
-|  34 | item/commandExecution/terminalInteraction | TL/DX    | planned                | 已发送输入的脱敏摘要                        |
+|  34 | item/commandExecution/terminalInteraction | TL/DX    | current                | 复用原 Command Item；typed/cold read 仅保留脱敏摘要 |
 |  35 | item/fileChange/outputDelta               | DX       | deprecated             | 只记录兼容诊断，不覆盖 patch                |
 |  36 | item/fileChange/patchUpdated              | TL/TP    | current                | replace changes snapshot                    |
 |  37 | serverRequest/resolved                    | PI       | current                | 按 interaction identity 终结表单            |
@@ -65,21 +65,21 @@
 
 ## 3. MCP、账号、应用与系统资源
 
-|   # | Method                               | 目标出口 | 当前裁决               | v2 投影                                  |
-| --: | ------------------------------------ | -------- | ---------------------- | ---------------------------------------- |
-|  39 | mcpServer/oauthLogin/completed       | GN/PI    | current                | 结束 OAuth 等待并刷新 MCP status         |
-|  40 | mcpServer/startupStatus/updated      | HS/GN    | planned                | starting/ready/failed，无假 MCP fallback |
-|  41 | account/updated                      | GN       | product-scope-excluded | 不写入对话 history                       |
-|  42 | account/rateLimits/updated           | HS/GN    | product-scope-excluded | 若未来纳入，独立产品范围变更             |
-|  43 | app/list/updated                     | GN       | planned                | 刷新 Apps/connectors/mention catalog     |
-|  44 | remoteControl/status/changed         | GN       | product-scope-excluded | 不进入 Thread                            |
-|  45 | externalAgentConfig/import/progress  | GN       | product-scope-excluded | 仅设置页导入任务                         |
-|  46 | externalAgentConfig/import/completed | GN       | product-scope-excluded | 同上                                     |
-|  47 | fs/changed                           | GN/DX    | planned                | 只路由给对应 watch consumer              |
-|  48 | item/reasoning/summaryTextDelta      | TL       | current                | 按 summaryIndex 更新分段                 |
-|  49 | item/reasoning/summaryPartAdded      | TL       | current                | 创建指定 summary 分段                    |
-|  50 | item/reasoning/textDelta             | TL       | current                | 按 contentIndex 更新受控原始推理         |
-|  51 | thread/compacted                     | TL/DX    | deprecated             | 无 ContextCompaction Item 时仅显示一次   |
+|   # | Method                               | 目标出口 | 当前裁决               | v2 投影                                   |
+| --: | ------------------------------------ | -------- | ---------------------- | ----------------------------------------- |
+|  39 | mcpServer/oauthLogin/completed       | GN/PI    | current                | 结束 OAuth 等待并刷新 MCP status          |
+|  40 | mcpServer/startupStatus/updated      | HS/GN    | current                | typed starting/ready/failed，终态刷新 GUI |
+|  41 | account/updated                      | GN       | product-scope-excluded | 不写入对话 history                        |
+|  42 | account/rateLimits/updated           | HS/GN    | product-scope-excluded | 若未来纳入，独立产品范围变更              |
+|  43 | app/list/updated                     | GN       | planned                | 刷新 Apps/connectors/mention catalog      |
+|  44 | remoteControl/status/changed         | GN       | product-scope-excluded | 不进入 Thread                             |
+|  45 | externalAgentConfig/import/progress  | GN       | product-scope-excluded | 仅设置页导入任务                          |
+|  46 | externalAgentConfig/import/completed | GN       | product-scope-excluded | 同上                                      |
+|  47 | fs/changed                           | GN/DX    | planned                | 只路由给对应 watch consumer               |
+|  48 | item/reasoning/summaryTextDelta      | TL       | current                | 按 summaryIndex 更新分段                  |
+|  49 | item/reasoning/summaryPartAdded      | TL       | current                | 创建指定 summary 分段                     |
+|  50 | item/reasoning/textDelta             | TL       | current                | 按 contentIndex 更新受控原始推理          |
+|  51 | thread/compacted                     | TL/DX    | deprecated             | 无 ContextCompaction Item 时仅显示一次    |
 
 ## 4. Model、安全、告警与搜索
 
@@ -112,7 +112,7 @@
 |  71 | windowsSandbox/setupCompleted     | GN/PI    | planned                | setup success/error 与下一步                 |
 |  72 | account/login/completed           | GN/PI    | product-scope-excluded | credential 流程不进入对话                    |
 
-v2 的实现门槛不是把所有 planned method 同时实现，而是首先将这张表固化为类型检查的 coverage map。新增 Codex method 时，CI 必须要求它先获得裁决，不能落入 default silent return。
+v2 的实现门槛不是把所有 planned method 同时实现，而是首先将这张表固化为类型检查的 coverage map。新增 Codex method 时，CI 必须要求它先获得裁决，不能落入 default silent return。`turn/diff/updated`、`process/outputDelta` 与 `process/exited` 虽保留在 upstream method inventory 和 drift recorder 中，但明确为 `product-scope-excluded`：不得进入 Lime current protocol、Renderer projector、时间线或用户级通知；对应 standalone `process/spawn` 控制面与 raw unified diff 不能借 planned 名义回流。
 
 ## 6. Lime-owned 扩展事件
 
@@ -188,5 +188,5 @@ Turn plan 是 canonical `update_plan` 的执行 checklist，不是 ThreadItem.pl
 - MCP content 的 text/image/audio/resource/resourceLink/unknown JSON、structuredContent 和 error；
 - approval 的 accept/session/policy/network/decline/cancel 与 Guardian 五终态；
 - 乱序、重复、late delta、completed overwrite、disconnect、resume/read、itemsView 非 full；
-- unknown Item/notification fail visible，unknown reverse request fail closed；
-- Gate B 真实覆盖 Markdown、Search、Shell output、Diff、MCP、dynamic tool、审批、用户输入、interrupt、媒体与历史恢复。
+- unknown Item live/terminal/cold read 均 fail visible 且不泄漏 raw values；unknown notification fail visible，unknown reverse request fail closed；
+- Gate B 真实覆盖 Markdown、Search、Shell output、Diff、MCP、dynamic tool、审批、用户输入、interrupt、媒体、历史恢复与 unknown Item 专项恢复。

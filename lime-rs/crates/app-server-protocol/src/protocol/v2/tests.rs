@@ -40,6 +40,18 @@ fn v2_display_items_match_codex_tagged_nullable_wire() {
     let decoded: ThreadItem = serde_json::from_value(mcp.clone()).expect("MCP item");
     assert_eq!(serde_json::to_value(decoded).expect("MCP wire"), mcp);
 
+    let unknown = json!({
+        "type": "unknownItem",
+        "id": "unknown-1",
+        "upstreamType": "futureCapability",
+        "fieldNames": ["[redacted]", "label", "opaquePayload"]
+    });
+    let decoded: ThreadItem = serde_json::from_value(unknown.clone()).expect("unknown item");
+    assert_eq!(
+        serde_json::to_value(decoded).expect("unknown wire"),
+        unknown
+    );
+
     for content_item in [
         json!({"type": "inputText", "text": "ok"}),
         json!({"type": "inputImage", "imageUrl": "https://example.test/a.png"}),
@@ -2272,6 +2284,7 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "error",
             "skills/changed",
             "mcpServer/oauthLogin/completed",
+            "mcpServer/startupStatus/updated",
             "thread/started",
             "thread/archived",
             "thread/deleted",
@@ -2286,6 +2299,7 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "item/completed",
             "item/agentMessage/delta",
             "item/commandExecution/outputDelta",
+            "item/commandExecution/terminalInteraction",
             "item/fileChange/patchUpdated",
             "item/plan/delta",
             "item/mcpToolCall/progress",

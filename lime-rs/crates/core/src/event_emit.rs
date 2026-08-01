@@ -13,7 +13,7 @@ pub trait EventEmit: Send + Sync + 'static {
     /// 发送事件
     ///
     /// # Arguments
-    /// * `event` - 事件名称（如 "mcp:server_started"）
+    /// * `event` - 事件名称（如 "mcp:tools_updated"）
     /// * `payload` - JSON 格式的事件数据
     fn emit_event(&self, event: &str, payload: &serde_json::Value) -> Result<(), String>;
 }

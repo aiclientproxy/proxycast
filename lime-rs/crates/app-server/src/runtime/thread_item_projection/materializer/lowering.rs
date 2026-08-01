@@ -9,6 +9,10 @@ use agent_protocol::{
     SubAgentActivityKind, ThreadId, ThreadItemPayload, ToolOutput,
 };
 use serde_json::{Map, Value};
+use std::collections::BTreeSet;
+
+const UNKNOWN_ITEM_FIELD_NAME_LIMIT: usize = 12;
+const UNKNOWN_ITEM_REDACTED_FIELD_NAME: &str = "[redacted]";
 
 #[derive(Clone, Copy)]
 pub(super) enum ItemFamily {
@@ -25,6 +29,7 @@ pub(super) enum ItemFamily {
     Media,
     SubAgent,
     ContextCompaction,
+    Unknown,
 }
 
 impl ItemFamily {
@@ -61,6 +66,7 @@ impl ItemFamily {
             Self::Media => "media",
             Self::SubAgent => "subagent",
             Self::ContextCompaction => "compaction",
+            Self::Unknown => "unknown",
         }
     }
 
@@ -70,6 +76,9 @@ impl ItemFamily {
         turn_id: &str,
         event_id: &str,
     ) -> Option<String> {
+        if matches!(self, Self::Unknown) {
+            return explicit_item_id(payload);
+        }
         if matches!(self, Self::Plan) {
             if let Some(item_id) = explicit_item_id(payload) {
                 return Some(item_id);
@@ -97,8 +106,8 @@ pub(super) fn item_family(event_type: &str, payload: &Value) -> Option<ItemFamil
     let normalized = event_type.to_ascii_lowercase();
     if normalized.starts_with("item.") {
         let source = payload_source(payload);
-        let kind =
-            map_string(source, &["kind", "type", "itemType", "item_type"])?.to_ascii_lowercase();
+        let upstream_type = map_string(source, &["kind", "type", "itemType", "item_type"])?;
+        let kind = upstream_type.to_ascii_lowercase();
         return match kind.as_str() {
             "user_message" | "usermessage" | "user" => Some(ItemFamily::UserMessage),
             "agent_message" | "agentmessage" | "assistant" | "message" => {
@@ -117,6 +126,13 @@ pub(super) fn item_family(event_type: &str, payload: &Value) -> Option<ItemFamil
             "media" | "artifact" | "image" | "video" | "audio" => Some(ItemFamily::Media),
             "subagent" | "sub_agent" | "subagent_activity" => Some(ItemFamily::SubAgent),
             "context_compaction" | "compaction" => Some(ItemFamily::ContextCompaction),
+            _ if matches!(
+                normalized.as_str(),
+                "item.started" | "item.updated" | "item.completed"
+            ) && is_canonical_unknown_item_type(&upstream_type) =>
+            {
+                Some(ItemFamily::Unknown)
+            }
             _ => None,
         };
     }
@@ -369,7 +385,103 @@ pub(super) fn typed_payload(
             window_id: map_string(payload, &["windowId", "window_id", "contextWindowId"]),
             tail_start_turn_id: map_string(payload, &["tailStartTurnId", "tail_start_turn_id"]),
         },
+        ItemFamily::Unknown => ThreadItemPayload::Unknown {
+            upstream_type: unknown_item_upstream_type(payload)?,
+            field_names: unknown_item_field_names(payload),
+        },
     })
+}
+
+fn unknown_item_upstream_type(payload: &Map<String, Value>) -> Option<String> {
+    let upstream_type = map_string(payload, &["kind", "type", "itemType", "item_type"])?;
+    is_canonical_unknown_item_type(&upstream_type).then_some(upstream_type)
+}
+
+fn is_canonical_unknown_item_type(value: &str) -> bool {
+    let mut chars = value.chars();
+    chars.next().is_some_and(|first| first.is_ascii_lowercase())
+        && chars.all(|character| character.is_ascii_alphanumeric())
+}
+
+pub(super) fn unknown_payload_is_safe(upstream_type: &str, field_names: &[String]) -> bool {
+    if !is_canonical_unknown_item_type(upstream_type)
+        || field_names.len() > UNKNOWN_ITEM_FIELD_NAME_LIMIT
+    {
+        return false;
+    }
+    let sanitized = field_names.iter().cloned().collect::<BTreeSet<_>>();
+    sanitized.len() == field_names.len()
+        && sanitized.iter().eq(field_names.iter())
+        && field_names.iter().all(|name| {
+            name == UNKNOWN_ITEM_REDACTED_FIELD_NAME
+                || (is_safe_unknown_item_field_name(name)
+                    && !is_sensitive_unknown_item_field_name(name))
+        })
+}
+
+fn unknown_item_field_names(payload: &Map<String, Value>) -> Vec<String> {
+    payload
+        .keys()
+        .filter(|name| !is_unknown_item_identity_field(name))
+        .map(|name| sanitize_unknown_item_field_name(name))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .take(UNKNOWN_ITEM_FIELD_NAME_LIMIT)
+        .collect()
+}
+
+fn is_unknown_item_identity_field(name: &str) -> bool {
+    matches!(
+        name,
+        "id" | "itemId"
+            | "item_id"
+            | "kind"
+            | "type"
+            | "itemType"
+            | "item_type"
+            | "sessionId"
+            | "session_id"
+            | "threadId"
+            | "thread_id"
+            | "turnId"
+            | "turn_id"
+    )
+}
+
+fn sanitize_unknown_item_field_name(name: &str) -> String {
+    if is_safe_unknown_item_field_name(name) && !is_sensitive_unknown_item_field_name(name) {
+        name.to_string()
+    } else {
+        UNKNOWN_ITEM_REDACTED_FIELD_NAME.to_string()
+    }
+}
+
+fn is_safe_unknown_item_field_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_alphabetic()
+        && name.len() <= 64
+        && chars
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
+}
+
+fn is_sensitive_unknown_item_field_name(name: &str) -> bool {
+    let normalized = name.to_ascii_lowercase();
+    [
+        "authorization",
+        "cookie",
+        "credential",
+        "password",
+        "secret",
+        "token",
+    ]
+    .iter()
+    .any(|sensitive| normalized.contains(sensitive))
+        || normalized.contains("apikey")
+        || normalized.contains("api_key")
+        || normalized.contains("api-key")
 }
 
 fn user_message_content(payload: &Map<String, Value>) -> Option<Vec<AgentInput>> {

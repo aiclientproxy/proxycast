@@ -46,14 +46,35 @@ describe("App Server notification drift", () => {
   });
 
   it("keeps excluded and deprecated notifications diagnostic-only", () => {
-    expect(
-      projectAppServerNotificationDriftPayload(
-        notification("rawResponse/completed", {
+    for (const method of [
+      "rawResponse/completed",
+      "turn/diff/updated",
+      "process/outputDelta",
+      "process/exited",
+    ]) {
+      const diagnostic = readAppServerNotificationDrift(
+        notification(method, {
           threadId: "thread-1",
+          turnId: "turn-1",
+          diff: "raw unified diff must not reach the renderer",
+          delta: "raw process output must not reach the renderer",
           response: { raw: "not-for-renderer" },
         }),
-      ),
-    ).toBeNull();
+      );
+      expect(diagnostic.disposition).toBe("known_diagnostic_only");
+      expect(JSON.stringify(diagnostic)).not.toContain("must not reach");
+      expect(
+        projectAppServerNotificationDriftPayload(
+          notification(method, {
+            threadId: "thread-1",
+            turnId: "turn-1",
+            diff: "raw unified diff must not reach the renderer",
+            delta: "raw process output must not reach the renderer",
+            response: { raw: "not-for-renderer" },
+          }),
+        ),
+      ).toBeNull();
+    }
   });
 
   it("fails unknown notifications visibly when canonical identity is present", () => {

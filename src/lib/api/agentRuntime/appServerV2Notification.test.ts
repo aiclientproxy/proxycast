@@ -214,7 +214,9 @@ describe("App Server v2 direct notifications", () => {
       directNotification("item/started", {
         item: {
           id: "future-item-v2",
-          type: "futureWidget",
+          type: "unknownItem",
+          upstreamType: "futureWidget",
+          fieldNames: ["[redacted]", "displayName"],
           displayName: "safe display value",
           authorization: secretValue,
           apiKey: secretValue,
@@ -481,6 +483,34 @@ describe("App Server v2 direct notifications", () => {
     });
   });
 
+  it("projects a terminal interaction as a redacted command item delta", () => {
+    const notification = directNotification(
+      "item/commandExecution/terminalInteraction",
+      {
+        itemId: "command-v2",
+        processId: "unified-exec-1000",
+        stdin: "sent 9 chars",
+        threadId,
+        turnId,
+      },
+    );
+
+    expect(readAppServerV2NotificationRoute(notification)).toEqual({
+      itemId: "command-v2",
+      terminal: false,
+      threadId,
+      turnId,
+    });
+    expect(projectAppServerV2NotificationPayload(notification)).toMatchObject({
+      type: "terminal_interaction",
+      item_id: "command-v2",
+      process_id: "unified-exec-1000",
+      stdin: "sent 9 chars",
+      thread_id: threadId,
+      turn_id: turnId,
+    });
+  });
+
   it("feeds direct command notifications through the projection reducer and lets completed snapshot win", () => {
     const reducer = createConversationProjectionReducer({ threadId });
     const dispatch = (
@@ -527,12 +557,22 @@ describe("App Server v2 direct notifications", () => {
       threadId,
       turnId,
     });
+    dispatch("command-input-1", "item/commandExecution/terminalInteraction", {
+      itemId: "command-v2",
+      processId: "unified-exec-1000",
+      stdin: "sent 9 chars",
+      threadId,
+      turnId,
+    });
 
     expect(reducer.getProjection().items[0]).toMatchObject({
       id: "command-v2",
       type: "command_execution",
       status: "in_progress",
       aggregated_output: "first\nsecond\n",
+      terminal_interactions: [
+        { process_id: "unified-exec-1000", stdin: "sent 9 chars" },
+      ],
     });
 
     dispatch("command-complete", "item/completed", {
@@ -556,6 +596,9 @@ describe("App Server v2 direct notifications", () => {
       status: "completed",
       aggregated_output: "authoritative snapshot\n",
       exit_code: 0,
+      terminal_interactions: [
+        { process_id: "unified-exec-1000", stdin: "sent 9 chars" },
+      ],
     });
   });
 

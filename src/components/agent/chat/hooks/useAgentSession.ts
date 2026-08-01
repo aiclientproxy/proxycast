@@ -112,6 +112,7 @@ import {
   refreshAgentSessionDetailState,
   refreshAgentSessionReadModelState,
   hydrateFreshAgentSessionReadModel,
+  mergeAgentSessionReadModelThreadItems,
   type AgentSessionDetailRefreshRequest,
 } from "./agentSessionRefresh";
 import { reuseStableAgentSessionSnapshotReferences } from "./agentSessionSnapshotStability";
@@ -749,10 +750,13 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       if (!snapshot.threadRead) {
         return;
       }
+      setThreadItemsState((currentItems) =>
+        mergeAgentSessionReadModelThreadItems(currentItems, snapshot),
+      );
       threadReadRef.current = snapshot.threadRead;
       setThreadRead(snapshot.threadRead);
     },
-    [],
+    [setThreadItemsState],
   );
   const getThreadIdForSubmit = useCallback(
     () => threadReadRef.current?.thread_id,

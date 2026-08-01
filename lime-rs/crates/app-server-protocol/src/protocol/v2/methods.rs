@@ -53,6 +53,8 @@ pub const METHOD_ITEM_STARTED: &str = "item/started";
 pub const METHOD_ITEM_COMPLETED: &str = "item/completed";
 pub const METHOD_AGENT_MESSAGE_DELTA: &str = "item/agentMessage/delta";
 pub const METHOD_COMMAND_EXECUTION_OUTPUT_DELTA: &str = "item/commandExecution/outputDelta";
+pub const METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION: &str =
+    "item/commandExecution/terminalInteraction";
 pub const METHOD_FILE_CHANGE_PATCH_UPDATED: &str = "item/fileChange/patchUpdated";
 pub const METHOD_PLAN_DELTA: &str = "item/plan/delta";
 pub const METHOD_MCP_TOOL_CALL_PROGRESS: &str = "item/mcpToolCall/progress";
@@ -72,6 +74,7 @@ pub const METHOD_WARNING: &str = "warning";
 pub const METHOD_ERROR: &str = "error";
 pub const METHOD_SKILLS_CHANGED: &str = "skills/changed";
 pub const METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED: &str = "mcpServer/oauthLogin/completed";
+pub const METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED: &str = "mcpServer/startupStatus/updated";
 pub const METHOD_CURRENT_TIME_READ: &str = "currentTime/read";
 pub const METHOD_MCP_SERVER_ELICITATION_REQUEST: &str = "mcpServer/elicitation/request";
 pub const METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL: &str =

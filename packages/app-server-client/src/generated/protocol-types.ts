@@ -4750,6 +4750,19 @@ export type CommandExecutionStatus =
   | "failed"
   | "inProgress";
 
+export interface CommandExecutionTerminalInteraction {
+  processId: string;
+  stdin: string;
+}
+
+export interface CommandExecutionTerminalInteractionNotification {
+  itemId: string;
+  processId: string;
+  stdin: string;
+  threadId: string;
+  turnId: string;
+}
+
 export interface ConfigWarningNotification {
   details?: null | string;
   path?: null | string;
@@ -6036,8 +6049,24 @@ export interface McpServerStartParams {
   name: string;
 }
 
+export type McpServerStartupFailureReason = "reauthenticationRequired";
+
+export type McpServerStartupState =
+  | "cancelled"
+  | "failed"
+  | "ready"
+  | "starting";
+
 export interface McpServerStatusListResponse {
   servers?: unknown[];
+}
+
+export interface McpServerStatusUpdatedNotification {
+  error: null | string;
+  failureReason: McpServerStartupFailureReason | null;
+  name: string;
+  status: McpServerStartupState;
+  threadId: null | string;
 }
 
 export interface McpServerStopParams {
@@ -7812,6 +7841,10 @@ export type ServerNotification =
       params: McpServerOauthLoginCompletedNotification;
     }
   | {
+      method: "mcpServer/startupStatus/updated";
+      params: McpServerStatusUpdatedNotification;
+    }
+  | {
       method: "thread/started";
       params: ThreadStartedNotification;
     }
@@ -7866,6 +7899,10 @@ export type ServerNotification =
   | {
       method: "item/commandExecution/outputDelta";
       params: CommandExecutionOutputDeltaNotification;
+    }
+  | {
+      method: "item/commandExecution/terminalInteraction";
+      params: CommandExecutionTerminalInteractionNotification;
     }
   | {
       method: "item/fileChange/patchUpdated";
@@ -8671,6 +8708,7 @@ export type ThreadItem =
       processId?: null | string;
       source?: CommandExecutionSource;
       status: CommandExecutionStatus;
+      terminalInteractions?: CommandExecutionTerminalInteraction[];
       type: "commandExecution";
     }
   | {
@@ -8750,6 +8788,12 @@ export type ThreadItem =
   | {
       id: string;
       type: "contextCompaction";
+    }
+  | {
+      fieldNames: string[];
+      id: string;
+      type: "unknownItem";
+      upstreamType: string;
     };
 
 export interface ThreadItemEntry {

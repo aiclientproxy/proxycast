@@ -52,6 +52,7 @@ import {
   resolveToolErrorDetailText,
   resolveToolProcessNarrative,
 } from "../utils/toolProcessSummary";
+import { resolveTerminalInteractionSummaries } from "../utils/toolProcessSummaryMetadata";
 import { resolveToolSoulMetadataDomAttributes } from "../utils/toolSoulLifecycleMetadata";
 import {
   isLimeTaskProtocolFailure,
@@ -180,6 +181,17 @@ export const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
     };
     return Object.keys(metadata).length > 0 ? metadata : undefined;
   }, [toolCall.metadata, toolCall.result?.metadata]);
+  const terminalInteractionSummary = useMemo(() => {
+    const summaries = resolveTerminalInteractionSummaries(resultMetadata);
+    return summaries.length > 0
+      ? t("agentChat.processGroup.terminalInteractions", {
+          defaultValue: "Input sent: {{value}}",
+          value: summaries.join(
+            t("agentChat.processGroup.separator", { defaultValue: ", " }),
+          ),
+        })
+      : null;
+  }, [resultMetadata, t]);
   const skillInvocationContentInfo = useMemo(
     () =>
       resolveSkillInvocationContentInfo({
@@ -738,6 +750,14 @@ export const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
             <div className="truncate text-sm text-slate-700">
               {groupedChildLine}
             </div>
+            {terminalInteractionSummary ? (
+              <div
+                className="mt-0.5 text-xs leading-5 text-slate-500"
+                data-testid="tool-call-terminal-interactions"
+              >
+                {terminalInteractionSummary}
+              </div>
+            ) : null}
           </div>
           <div className="ml-auto flex items-center gap-1 pt-0.5">
             {skillContentButton}
@@ -793,6 +813,14 @@ export const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
             <div className="truncate text-sm text-slate-900">
               {toolHeadline}
             </div>
+            {terminalInteractionSummary ? (
+              <div
+                className="mt-0.5 text-xs leading-5 text-slate-500"
+                data-testid="tool-call-terminal-interactions"
+              >
+                {terminalInteractionSummary}
+              </div>
+            ) : null}
           </div>
 
           <div className="ml-auto flex items-center gap-1 pt-0.5">

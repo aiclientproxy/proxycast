@@ -6,6 +6,7 @@ import { join } from "node:path";
 import process from "node:process";
 import { describe, expect, it } from "vitest";
 import { listCodexV2NotificationMethods } from "@/lib/api/agentRuntime/appServerNotificationDrift";
+import { isAppServerV2NotificationMethod } from "@/lib/api/agentRuntime/appServerV2Notification";
 
 const REPO_ROOT = process.cwd();
 const COVERAGE_PATH =
@@ -220,6 +221,24 @@ function methodsByDirection(
 }
 
 describe("Codex render projection coverage boundary", () => {
+  it("product-scope-excluded notifications remain diagnostics-only and outside the current projector", () => {
+    const coverage = readJson<CoverageFixture>(COVERAGE_PATH);
+    const excludedMethods = [
+      "turn/diff/updated",
+      "process/outputDelta",
+      "process/exited",
+    ];
+
+    for (const method of excludedMethods) {
+      const entry = coverage.notifications.find(
+        (candidate) => candidate.method === method,
+      );
+      expect(entry).toBeDefined();
+      expect(entry?.outlets).toEqual(["diagnostics"]);
+      expect(isAppServerV2NotificationMethod(method)).toBe(false);
+    }
+  });
+
   it("18 / 72 / 11 coverage entries must be complete and unique", () => {
     const coverage = readJson<CoverageFixture>(COVERAGE_PATH);
     const itemTypes = coverage.items.map((entry) => entry.type);

@@ -16,7 +16,7 @@ use self::lifecycle::{
     event_timestamp_ms, item_status, parse_timestamp_ms, queued_turn_id, rollback_target,
     turn_approval_state, turn_queue_state,
 };
-use self::lowering::{item_family, typed_payload, ItemFamily};
+use self::lowering::{item_family, typed_payload, unknown_payload_is_safe, ItemFamily};
 use super::change_set::{ChangeSetAccumulator, MaterializationError};
 use super::helpers::event_metadata;
 use agent_protocol::{
@@ -267,6 +267,9 @@ fn materialized_item_metadata(
     source: &serde_json::Map<String, Value>,
     family: ItemFamily,
 ) -> Value {
+    if matches!(family, ItemFamily::Unknown) {
+        return Value::Null;
+    }
     let mut metadata = event_metadata(event)
         .as_object()
         .cloned()
@@ -277,6 +280,18 @@ fn materialized_item_metadata(
     if matches!(family, ItemFamily::Command) {
         if let Some(command_id) = map_string(source, &["commandId", "command_id"]) {
             metadata.insert("source_call_id".to_string(), Value::String(command_id));
+        }
+        if event.event_type == "command.interaction" {
+            if let (Some(process_id), Some(stdin)) = (
+                map_string(source, &["processId", "process_id"]),
+                map_string(source, &["stdin"])
+                    .filter(|value| terminal_interaction_summary_is_safe(value)),
+            ) {
+                metadata.insert(
+                    "terminalInteractions".to_string(),
+                    serde_json::json!([{"processId": process_id, "stdin": stdin}]),
+                );
+            }
         }
     }
     Value::Object(metadata)
@@ -325,11 +340,25 @@ fn canonical_item_from_event(
     Some(item)
 }
 
+fn terminal_interaction_summary_is_safe(value: &str) -> bool {
+    if matches!(value, "(poll)" | "(interrupt)") {
+        return true;
+    }
+    value
+        .strip_prefix("sent ")
+        .and_then(|value| value.strip_suffix(" chars"))
+        .is_some_and(|count| !count.is_empty() && count.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
 fn canonical_payload_is_safe(payload: &ThreadItemPayload) -> bool {
     match payload {
         ThreadItemPayload::AgentMessage { content_parts, .. } => content_parts
             .iter()
             .all(agent_protocol::MessageContentPart::is_safe),
+        ThreadItemPayload::Unknown {
+            upstream_type,
+            field_names,
+        } => unknown_payload_is_safe(upstream_type, field_names),
         _ => true,
     }
 }

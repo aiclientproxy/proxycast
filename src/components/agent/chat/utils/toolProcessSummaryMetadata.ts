@@ -59,6 +59,29 @@ const TOOL_PROCESS_OPERATION_KINDS = new Set<ToolOperationKind>([
   "other",
 ]);
 
+const TERMINAL_INTERACTION_SUMMARY_RE = /^sent [0-9]+ chars$/u;
+
+export function resolveTerminalInteractionSummaries(
+  metadata: unknown,
+): string[] {
+  const interactions = asRecord(metadata)?.terminal_interactions;
+  if (!Array.isArray(interactions)) {
+    return [];
+  }
+  return interactions.flatMap((value) => {
+    const stdin = asRecord(value)?.stdin;
+    if (
+      typeof stdin !== "string" ||
+      (stdin !== "(poll)" &&
+        stdin !== "(interrupt)" &&
+        !TERMINAL_INTERACTION_SUMMARY_RE.test(stdin))
+    ) {
+      return [];
+    }
+    return [stdin];
+  });
+}
+
 function readSummaryContainer(
   metadata: unknown,
 ): Record<string, unknown> | null {

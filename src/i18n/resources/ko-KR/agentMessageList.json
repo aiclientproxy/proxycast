@@ -410,6 +410,7 @@
   "agentChat.processGroup.processMessages": "과정 메시지 {{count}}개",
   "agentChat.processGroup.thinkingNotes": "사고 메모 {{count}}개",
   "agentChat.processGroup.separator": ", ",
+  "agentChat.processGroup.terminalInteractions": "전송한 입력: {{value}}",
   "agentChat.processGroup.webSearch.section.webSearchSources": "검색 출처",
   "agentChat.processGroup.webSearch.section.webFetchPages": "읽은 페이지",
   "agentChat.toolCall.diffReview.title": "변경 검토",

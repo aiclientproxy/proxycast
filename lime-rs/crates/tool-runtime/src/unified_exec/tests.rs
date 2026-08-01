@@ -366,6 +366,13 @@ async fn write_stdin_resumes_and_completes_original_exec_command() {
         completed.metadata.get("exec_command_call_id"),
         Some(&json!("call-long"))
     );
+    assert_eq!(
+        completed.metadata.get("terminal_interaction"),
+        Some(&json!({
+            "process_id": format!("unified-exec-{}", session_id),
+            "stdin": "sent 9 chars",
+        }))
+    );
 }
 
 #[tokio::test]

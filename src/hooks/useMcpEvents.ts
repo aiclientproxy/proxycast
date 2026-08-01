@@ -1,22 +1,11 @@
-import { mcpServerOauthLoginCompletedServerNotification } from "@limecloud/app-server-client";
+import {
+  mcpServerOauthLoginCompletedServerNotification,
+  mcpServerStatusUpdatedServerNotification,
+} from "@limecloud/app-server-client";
 import { safeListen } from "@/lib/api/bridgeEvents";
 import { subscribeAppServerNotifications } from "@/lib/api/appServerEventBus";
 import type { UnlistenFn } from "@/lib/desktop-host/event";
-import type { McpServerCapabilities, McpToolDefinition } from "@/lib/api/mcp";
-
-interface McpServerStartedPayload {
-  server_name: string;
-  server_info?: McpServerCapabilities;
-}
-
-interface McpServerStoppedPayload {
-  server_name: string;
-}
-
-interface McpServerErrorPayload {
-  server_name: string;
-  error: string;
-}
+import type { McpToolDefinition } from "@/lib/api/mcp";
 
 interface McpToolsUpdatedPayload {
   tools: McpToolDefinition[];
@@ -71,10 +60,45 @@ export async function setupMcpEventListeners({
   const unlisteners: UnlistenFn[] = [];
 
   try {
-    // 必须先同步订阅；否则快速 OAuth 回调可能在 Desktop listener 就绪前被排空。
-    const unlistenOAuthCompleted = subscribeAppServerNotifications({
+    // 必须先同步订阅；否则快速 MCP 通知可能在 Desktop listener 就绪前被排空。
+    const unlistenAppServerMcpNotifications = subscribeAppServerNotifications({
       onNotifications: (notifications) => {
         for (const message of notifications) {
+          const startupNotification =
+            mcpServerStatusUpdatedServerNotification(message);
+          if (startupNotification) {
+            const { error, name, status } = startupNotification.params;
+            if (status === "starting") {
+              console.log("[useMcp] 服务器正在启动:", name);
+              updateServerConnectionState(name, {
+                phase: "starting",
+              });
+              continue;
+            }
+
+            if (status === "failed") {
+              console.warn("[useMcp] 服务器启动失败:", name, error);
+            } else {
+              console.log("[useMcp] 服务器启动状态已更新:", name, status);
+            }
+            updateServerConnectionState(name, {
+              phase: "idle",
+              error: status === "failed" ? error : null,
+            });
+            const refresh = Promise.all([
+              Promise.resolve(refreshServers()),
+              Promise.resolve(refreshTools()),
+            ]);
+            if (status === "failed" && error) {
+              void refresh.then(() => {
+                if (isMounted()) {
+                  setError(`${name}: ${error}`);
+                }
+              });
+            }
+            continue;
+          }
+
           const notification =
             mcpServerOauthLoginCompletedServerNotification(message);
           if (!notification) {
@@ -113,52 +137,7 @@ export async function setupMcpEventListeners({
         }
       },
     });
-    unlisteners.push(unlistenOAuthCompleted);
-
-    const unlistenStarted = await safeListen<McpServerStartedPayload>(
-      "mcp:server_started",
-      (event) => {
-        console.log("[useMcp] 服务器已启动:", event.payload.server_name);
-        updateServerConnectionState(event.payload.server_name, {
-          phase: "idle",
-        });
-        refreshServers();
-        refreshTools();
-      },
-    );
-    unlisteners.push(unlistenStarted);
-
-    const unlistenStopped = await safeListen<McpServerStoppedPayload>(
-      "mcp:server_stopped",
-      (event) => {
-        console.log("[useMcp] 服务器已停止:", event.payload.server_name);
-        updateServerConnectionState(event.payload.server_name, {
-          phase: "idle",
-        });
-        refreshServers();
-        refreshTools();
-      },
-    );
-    unlisteners.push(unlistenStopped);
-
-    const unlistenError = await safeListen<McpServerErrorPayload>(
-      "mcp:server_error",
-      (event) => {
-        console.error(
-          "[useMcp] 服务器错误:",
-          event.payload.server_name,
-          event.payload.error,
-        );
-        if (isMounted()) {
-          setError(`${event.payload.server_name}: ${event.payload.error}`);
-        }
-        updateServerConnectionState(event.payload.server_name, {
-          phase: "idle",
-          error: event.payload.error,
-        });
-      },
-    );
-    unlisteners.push(unlistenError);
+    unlisteners.push(unlistenAppServerMcpNotifications);
 
     const unlistenTools = await safeListen<McpToolsUpdatedPayload>(
       "mcp:tools_updated",

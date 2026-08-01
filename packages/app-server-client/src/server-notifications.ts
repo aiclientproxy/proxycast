@@ -17,6 +17,7 @@ export type RuntimeServerNotification = Extract<
       | "item/completed"
       | "item/agentMessage/delta"
       | "item/commandExecution/outputDelta"
+      | "item/commandExecution/terminalInteraction"
       | "item/fileChange/patchUpdated"
       | "item/mcpToolCall/progress"
       | "item/plan/delta"
@@ -40,6 +41,11 @@ export type SkillsChangedServerNotification = Extract<
 export type McpServerOauthLoginCompletedServerNotification = Extract<
   ServerNotification,
   { method: "mcpServer/oauthLogin/completed" }
+>;
+
+export type McpServerStatusUpdatedServerNotification = Extract<
+  ServerNotification,
+  { method: "mcpServer/startupStatus/updated" }
 >;
 
 export type ServerNotificationFor<
@@ -93,6 +99,10 @@ export function serverNotification(
     case "item/commandExecution/outputDelta":
       return hasItemTextDelta(message.params)
         ? (message as ServerNotificationFor<"item/commandExecution/outputDelta">)
+        : undefined;
+    case "item/commandExecution/terminalInteraction":
+      return hasTerminalInteraction(message.params)
+        ? (message as ServerNotificationFor<"item/commandExecution/terminalInteraction">)
         : undefined;
     case "item/fileChange/patchUpdated":
       return hasFileChangePatchUpdated(message.params)
@@ -207,6 +217,41 @@ export function mcpServerOauthLoginCompletedServerNotification(
   return message as McpServerOauthLoginCompletedServerNotification;
 }
 
+export function mcpServerStatusUpdatedServerNotification(
+  message: JsonRpcMessage,
+): McpServerStatusUpdatedServerNotification | undefined {
+  if (
+    !isJsonRpcNotification(message) ||
+    message.method !== "mcpServer/startupStatus/updated"
+  ) {
+    return undefined;
+  }
+  const params = record(message.params);
+  const status = params?.status;
+  const failureReason = params?.failureReason;
+  if (
+    !hasOnlyKeys(params, [
+      "error",
+      "failureReason",
+      "name",
+      "status",
+      "threadId",
+    ]) ||
+    !hasRequiredNullableString(params, "threadId") ||
+    !hasString(params, "name") ||
+    (status !== "starting" &&
+      status !== "ready" &&
+      status !== "failed" &&
+      status !== "cancelled") ||
+    !hasRequiredNullableString(params, "error") ||
+    !Object.prototype.hasOwnProperty.call(params, "failureReason") ||
+    (failureReason !== null && failureReason !== "reauthenticationRequired")
+  ) {
+    return undefined;
+  }
+  return message as McpServerStatusUpdatedServerNotification;
+}
+
 export function isThreadStartedNotification(
   message: JsonRpcMessage,
 ): message is ServerNotificationFor<"thread/started"> {
@@ -260,6 +305,15 @@ export function isCommandExecutionOutputDeltaNotification(
 ): message is ServerNotificationFor<"item/commandExecution/outputDelta"> {
   return (
     serverNotification(message)?.method === "item/commandExecution/outputDelta"
+  );
+}
+
+export function isCommandExecutionTerminalInteractionNotification(
+  message: JsonRpcMessage,
+): message is ServerNotificationFor<"item/commandExecution/terminalInteraction"> {
+  return (
+    serverNotification(message)?.method ===
+    "item/commandExecution/terminalInteraction"
   );
 }
 
@@ -468,6 +522,32 @@ function hasItemTextDelta(value: unknown): boolean {
     hasString(params, "turnId") &&
     hasString(params, "itemId") &&
     typeof params?.delta === "string"
+  );
+}
+
+function hasTerminalInteraction(value: unknown): boolean {
+  const params = record(value);
+  return (
+    hasOnlyKeys(params, [
+      "itemId",
+      "processId",
+      "stdin",
+      "threadId",
+      "turnId",
+    ]) &&
+    hasString(params, "threadId") &&
+    hasString(params, "turnId") &&
+    hasString(params, "itemId") &&
+    hasString(params, "processId") &&
+    isTerminalInteractionSummary(params?.stdin)
+  );
+}
+
+function isTerminalInteractionSummary(value: unknown): value is string {
+  return (
+    value === "(poll)" ||
+    value === "(interrupt)" ||
+    (typeof value === "string" && /^sent [0-9]+ chars$/u.test(value))
   );
 }
 

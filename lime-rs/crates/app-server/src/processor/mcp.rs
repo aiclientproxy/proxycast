@@ -2,7 +2,8 @@
 
 use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, RpcDispatch};
 use app_server_protocol::protocol::v2::{
-    McpServerOauthLoginCompletedNotification, ServerNotification,
+    McpServerOauthLoginCompletedNotification, McpServerStartupState,
+    McpServerStatusUpdatedNotification, ServerNotification,
 };
 use app_server_protocol::{
     JsonRpcError, McpPromptGetParams, McpResourceReadParams, McpResourceSubscribeParams,
@@ -124,12 +125,47 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: McpServerStartParams = parse_params(params)?;
-        let response = self
-            .runtime
-            .start_mcp_server(params)
-            .await
-            .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
+        let server_name = params.name.clone();
+        self.publish_server_notification(ServerNotification::McpServerStatusUpdated(
+            McpServerStatusUpdatedNotification {
+                thread_id: None,
+                name: server_name.clone(),
+                status: McpServerStartupState::Starting,
+                error: None,
+                failure_reason: None,
+            },
+        ))
+        .await;
+
+        match self.runtime.start_mcp_server(params).await {
+            Ok(response) => {
+                self.publish_server_notification(ServerNotification::McpServerStatusUpdated(
+                    McpServerStatusUpdatedNotification {
+                        thread_id: None,
+                        name: server_name,
+                        status: McpServerStartupState::Ready,
+                        error: None,
+                        failure_reason: None,
+                    },
+                ))
+                .await;
+                dispatch_result(response)
+            }
+            Err(error) => {
+                let error_message = error.to_string();
+                self.publish_server_notification(ServerNotification::McpServerStatusUpdated(
+                    McpServerStatusUpdatedNotification {
+                        thread_id: None,
+                        name: server_name,
+                        status: McpServerStartupState::Failed,
+                        error: Some(error_message),
+                        failure_reason: None,
+                    },
+                ))
+                .await;
+                Err(to_jsonrpc_error(error))
+            }
+        }
     }
 
     pub(super) async fn handle_mcp_server_stop_impl(

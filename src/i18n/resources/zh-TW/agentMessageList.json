@@ -410,6 +410,7 @@
   "agentChat.processGroup.processMessages": "{{count}} 則過程訊息",
   "agentChat.processGroup.thinkingNotes": "{{count}} 條思路",
   "agentChat.processGroup.separator": "，",
+  "agentChat.processGroup.terminalInteractions": "已傳送輸入：{{value}}",
   "agentChat.processGroup.webSearch.section.webSearchSources": "搜尋來源",
   "agentChat.processGroup.webSearch.section.webFetchPages": "讀取頁面",
   "agentChat.toolCall.diffReview.title": "變更審閱",

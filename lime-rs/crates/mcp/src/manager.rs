@@ -98,10 +98,9 @@ pub struct McpClientManager {
     /// 事件发射器
     ///
     /// 用于向前端发送 MCP 相关事件，如：
-    /// - mcp:server_started
-    /// - mcp:server_stopped
-    /// - mcp:server_error
     /// - mcp:tools_updated
+    /// - mcp:resources_updated
+    /// - mcp:resource_updated
     emitter: Option<DynEmitter>,
 
     oauth_registry: McpOAuthRegistry,
@@ -535,45 +534,6 @@ impl McpClientManager {
                 }
             }
         }
-    }
-
-    /// 发送服务器启动事件
-    pub fn emit_server_started(
-        &self,
-        server_name: &str,
-        server_info: Option<McpServerCapabilities>,
-    ) {
-        info!(server_name = %server_name, "MCP 服务器已启动");
-        self.emit_event(
-            "mcp:server_started",
-            McpServerStartedPayload {
-                server_name: server_name.to_string(),
-                server_info,
-            },
-        );
-    }
-
-    /// 发送服务器停止事件
-    pub fn emit_server_stopped(&self, server_name: &str) {
-        info!(server_name = %server_name, "MCP 服务器已停止");
-        self.emit_event(
-            "mcp:server_stopped",
-            McpServerStoppedPayload {
-                server_name: server_name.to_string(),
-            },
-        );
-    }
-
-    /// 发送服务器错误事件
-    pub fn emit_server_error(&self, server_name: &str, error: &str) {
-        warn!(server_name = %server_name, error = %error, "MCP 服务器错误");
-        self.emit_event(
-            "mcp:server_error",
-            McpServerErrorPayload {
-                server_name: server_name.to_string(),
-                error: error.to_string(),
-            },
-        );
     }
 
     /// 发送工具列表更新事件

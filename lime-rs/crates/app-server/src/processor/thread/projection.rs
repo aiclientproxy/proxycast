@@ -483,6 +483,7 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             exit_code,
             duration_ms: metadata_u64(&metadata, &["durationMs", "duration_ms"])
                 .map(saturating_i64),
+            terminal_interactions: project_terminal_interactions(&metadata),
         }),
         canonical::ThreadItemPayload::File { changes, status } => Ok(v2::ThreadItem::FileChange {
             id,
@@ -518,6 +519,14 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
         canonical::ThreadItemPayload::ContextCompaction { .. } => {
             Ok(v2::ThreadItem::ContextCompaction { id })
         }
+        canonical::ThreadItemPayload::Unknown {
+            upstream_type,
+            field_names,
+        } => Ok(v2::ThreadItem::UnknownItem {
+            id,
+            upstream_type,
+            field_names,
+        }),
         canonical::ThreadItemPayload::Extension { name, .. } => Err(projection_error(format!(
             "canonical extension item {id} ({name}) has no v2 ThreadItem representation"
         ))),
@@ -552,6 +561,25 @@ fn project_command_source(metadata: &Value) -> v2::CommandExecutionSource {
         Some("userShell") | Some("user_shell") => v2::CommandExecutionSource::UserShell,
         _ => v2::CommandExecutionSource::Agent,
     }
+}
+
+fn project_terminal_interactions(metadata: &Value) -> Vec<v2::CommandExecutionTerminalInteraction> {
+    metadata
+        .get("terminalInteractions")
+        .or_else(|| metadata.get("terminal_interactions"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|interaction| {
+            let process_id = metadata_string(interaction, &["processId", "process_id"])?;
+            let stdin = metadata_string(interaction, &["stdin"])?;
+            Some(v2::CommandExecutionTerminalInteraction {
+                process_id,
+                stdin: bounded_safe_text(&stdin, MAX_DISPLAY_STRING_BYTES).0,
+            })
+        })
+        .take(20)
+        .collect()
 }
 
 fn thread_matches_list_filters(thread: &canonical::Thread, params: &v2::ThreadListParams) -> bool {

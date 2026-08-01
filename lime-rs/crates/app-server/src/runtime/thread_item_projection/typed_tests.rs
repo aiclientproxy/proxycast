@@ -670,6 +670,59 @@ fn user_message_snapshot_does_not_restore_empty_content_from_a_previous_item() {
 }
 
 #[test]
+fn command_interactions_survive_terminal_snapshot_and_keep_the_latest_twenty() {
+    let mut events = vec![event(
+        "command-started",
+        1,
+        "command.started",
+        "turn-1",
+        json!({
+            "commandId": "command-1",
+            "command": "read input",
+            "cwd": "/workspace"
+        }),
+    )];
+    events.extend((0..21).map(|index| {
+        event(
+            &format!("command-interaction-{index}"),
+            index + 2,
+            "command.interaction",
+            "turn-1",
+            json!({
+                "commandId": "command-1",
+                "processId": "unified-exec-1000",
+                "stdin": format!("sent {index} chars")
+            }),
+        )
+    }));
+    events.push(event(
+        "command-completed",
+        23,
+        "command.completed",
+        "turn-1",
+        json!({
+            "commandId": "command-1",
+            "command": "read input",
+            "cwd": "/workspace",
+            "status": "completed",
+            "exitCode": 0
+        }),
+    ));
+
+    let changes = materialize_events(&events, "session-1", "thread-1")
+        .expect("materialize command interactions");
+    assert_eq!(changes.changed_items.len(), 1);
+    let interactions = changes.changed_items[0]
+        .metadata
+        .get("terminalInteractions")
+        .and_then(serde_json::Value::as_array)
+        .expect("terminal interactions");
+    assert_eq!(interactions.len(), 20);
+    assert_eq!(interactions[0]["stdin"], json!("sent 1 chars"));
+    assert_eq!(interactions[19]["stdin"], json!("sent 20 chars"));
+}
+
+#[test]
 fn canonical_display_payloads_merge_create_update_and_terminal_fields() {
     let changes = materialize_events(
         &[

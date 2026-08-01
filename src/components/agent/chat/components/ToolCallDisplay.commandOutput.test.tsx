@@ -3,6 +3,36 @@ import { describe, expect, it, vi } from "vitest";
 import { renderTool, renderToolList } from "./ToolCallDisplay.testFixtures";
 
 describe("ToolCallDisplay command output", () => {
+  it("命令行显示已发送输入的脱敏摘要", () => {
+    const { container } = renderTool({
+      id: "tool-terminal-interaction",
+      name: "exec_command",
+      arguments: JSON.stringify({ command: "read input" }),
+      status: "completed",
+      result: {
+        success: true,
+        output: "done",
+        metadata: {
+          terminal_interactions: [
+            { process_id: "unified-exec-1000", stdin: "sent 9 chars" },
+            {
+              process_id: "unified-exec-1000",
+              stdin: "raw-input-must-not-render",
+            },
+          ],
+        },
+      },
+      startTime: new Date("2026-03-20T11:59:58.000Z"),
+      endTime: new Date("2026-03-20T11:59:59.000Z"),
+    });
+
+    expect(
+      container.querySelector('[data-testid="tool-call-terminal-interactions"]')
+        ?.textContent,
+    ).toContain("已发送输入：sent 9 chars");
+    expect(container.textContent).not.toContain("raw-input-must-not-render");
+  });
+
   it("连续完成的命令工具应聚合成一个 work group", () => {
     const { container } = renderToolList({
       toolCalls: [

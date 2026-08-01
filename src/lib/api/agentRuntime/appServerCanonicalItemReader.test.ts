@@ -37,14 +37,13 @@ describe("readCanonicalThreadItem", () => {
     }
   });
 
-  it("projects an unknown canonical v2 item without retaining raw values", () => {
+  it("projects a typed unknown canonical v2 item without retaining raw values", () => {
     const projected = readCanonicalThreadItem(
       item({
-        type: "futureCapability",
-        label: "safe-but-unsupported-value",
-        password: "secret-value",
-        metadata: { rawPayload: "must-not-survive" },
-        "invalid field": "must-not-survive-either",
+        type: "unknownItem",
+        upstreamType: "futureCapability",
+        fieldNames: ["[redacted]", "label", "metadata"],
+        rawPayload: "must-not-survive",
       }),
       event,
     );
@@ -57,11 +56,16 @@ describe("readCanonicalThreadItem", () => {
       status: "in_progress",
     });
     expect(projected).not.toHaveProperty("metadata");
-    expect(JSON.stringify(projected)).not.toContain(
-      "safe-but-unsupported-value",
-    );
-    expect(JSON.stringify(projected)).not.toContain("secret-value");
     expect(JSON.stringify(projected)).not.toContain("must-not-survive");
+  });
+
+  it("rejects raw unknown v2 items outside the typed App Server diagnostic", () => {
+    expect(
+      readCanonicalThreadItem(
+        item({ type: "futureCapability", label: "raw value" }),
+        event,
+      ),
+    ).toBeNull();
   });
 
   it.each([
@@ -184,6 +188,10 @@ describe("readCanonicalThreadItem", () => {
         processId: "process-1",
         source: "agent",
         commandActions: [{ type: "read", path: "package.json" }],
+        terminalInteractions: [
+          { processId: "process-1", stdin: "sent 9 chars" },
+          { processId: "process-1", stdin: "raw-input-must-not-project" },
+        ],
         aggregatedOutput: "passed",
         exitCode: 0,
         durationMs: 18,
@@ -197,6 +205,9 @@ describe("readCanonicalThreadItem", () => {
         process_id: "process-1",
         source: "agent",
         command_actions: [{ type: "read", path: "package.json" }],
+        terminal_interactions: [
+          { process_id: "process-1", stdin: "sent 9 chars" },
+        ],
         aggregated_output: "passed",
         exit_code: 0,
         duration_ms: 18,
@@ -760,6 +771,24 @@ describe("readCanonicalThreadItem", () => {
         type: "webSearch",
         query: "Codex",
         results: { title: "invalid" },
+      },
+      {
+        id: "item-1",
+        type: "unknownItem",
+        upstreamType: "FutureCapability",
+        fieldNames: ["label"],
+      },
+      {
+        id: "item-1",
+        type: "unknownItem",
+        upstreamType: "futureCapability",
+        fieldNames: ["secretToken"],
+      },
+      {
+        id: "item-1",
+        type: "unknownItem",
+        upstreamType: "futureCapability",
+        fieldNames: ["label", "label"],
       },
     ]) {
       expect(readCanonicalThreadItem(malformed, event)).toBeNull();

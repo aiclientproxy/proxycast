@@ -202,6 +202,55 @@ describe("ConversationProjection reducer", () => {
     });
   });
 
+  it("CommandExecution 只保留最新 20 条 terminal interaction 摘要", () => {
+    const reducer = createConversationProjectionReducer({
+      threadId: THREAD_ID,
+    });
+    const command: AgentThreadItem = {
+      id: "item-command-interactions",
+      thread_id: THREAD_ID,
+      turn_id: TURN_ID,
+      sequence: 2,
+      status: "in_progress",
+      started_at: "2026-07-28T00:00:00.000Z",
+      updated_at: "2026-07-28T00:00:00.000Z",
+      type: "command_execution",
+      command: "read input",
+      cwd: "/workspace",
+    };
+    reducer.dispatch({
+      type: "item_started",
+      source: "live",
+      event_id: "command-interactions-start",
+      item: command,
+    });
+    for (let index = 0; index < 21; index += 1) {
+      reducer.dispatch({
+        type: "item_delta",
+        source: "live",
+        event_id: `command-interaction-${index}`,
+        thread_id: THREAD_ID,
+        turn_id: TURN_ID,
+        item_id: command.id,
+        sequence: 3 + index,
+        delta: {
+          kind: "terminal_interaction",
+          process_id: "unified-exec-1000",
+          stdin: `sent ${index} chars`,
+        },
+      });
+    }
+
+    const projected = reducer.getProjection().items[0];
+    expect(projected?.type).toBe("command_execution");
+    if (projected?.type !== "command_execution") {
+      throw new Error("expected command_execution projection");
+    }
+    expect(projected.terminal_interactions).toHaveLength(20);
+    expect(projected.terminal_interactions?.[0]?.stdin).toBe("sent 1 chars");
+    expect(projected.terminal_interactions?.[19]?.stdin).toBe("sent 20 chars");
+  });
+
   it("CommandExecution delta 与 completed snapshot 都应限制在 256 KiB 并保留尾部", () => {
     const reducer = createConversationProjectionReducer({
       threadId: THREAD_ID,

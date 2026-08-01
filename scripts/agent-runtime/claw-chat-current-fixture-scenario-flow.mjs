@@ -90,6 +90,10 @@ import { runTerminalStaleGuardScenario } from "./claw-chat-current-fixture-termi
 import { runTypedErrorScenario } from "./claw-chat-current-fixture-typed-error.mjs";
 import { runTurnPlanUpdateScenario } from "./claw-chat-current-fixture-turn-plan-update.mjs";
 import {
+  collectUnknownItemScenarioEvidence,
+  UNKNOWN_ITEM_SCENARIO,
+} from "./claw-chat-current-fixture-unknown-item.mjs";
+import {
   createExpertSkillsRuntimeSession,
   openSessionFromSidebar,
   sendNewsPromptFromGui,
@@ -964,6 +968,16 @@ export async function executeScenarioFlow({
           }
         : {}),
     });
+
+    if (options.scenario === UNKNOWN_ITEM_SCENARIO) {
+      logStage("collect-unknown-item-live-and-recovery-evidence");
+      summary.unknownItem = sanitizeJson(
+        await collectUnknownItemScenarioEvidence({
+          page,
+          readModel: readModelCompleted,
+        }),
+      );
+    }
 
     if (options.scenario !== SOUL_STYLE_SCENARIO) {
       logStage("probe-direct-v2-event-read");

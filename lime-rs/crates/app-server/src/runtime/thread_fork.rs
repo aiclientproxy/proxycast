@@ -616,9 +616,9 @@ fn validate_fork_canonical_item(item: &ThreadItem) -> Result<(), RuntimeCoreErro
                     )
                 })?;
         }
-        ThreadItemPayload::Extension { .. } => {
+        ThreadItemPayload::Unknown { .. } | ThreadItemPayload::Extension { .. } => {
             return Err(invalid(
-                "thread/fork cannot preserve extension provider history from canonical history",
+                "thread/fork cannot preserve unknown or extension provider history from canonical history",
             ));
         }
         _ => {}

@@ -399,6 +399,48 @@
       ],
       "type": "string"
     },
+    "CommandExecutionTerminalInteraction": {
+      "properties": {
+        "processId": {
+          "type": "string"
+        },
+        "stdin": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "processId",
+        "stdin"
+      ],
+      "type": "object"
+    },
+    "CommandExecutionTerminalInteractionNotification": {
+      "properties": {
+        "itemId": {
+          "type": "string"
+        },
+        "processId": {
+          "type": "string"
+        },
+        "stdin": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "itemId",
+        "processId",
+        "stdin",
+        "threadId",
+        "turnId"
+      ],
+      "type": "object"
+    },
     "ConfigWarningNotification": {
       "properties": {
         "details": {
@@ -718,6 +760,62 @@
       "required": [
         "name",
         "success",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "McpServerStartupFailureReason": {
+      "enum": [
+        "reauthenticationRequired"
+      ],
+      "type": "string"
+    },
+    "McpServerStartupState": {
+      "enum": [
+        "cancelled",
+        "failed",
+        "ready",
+        "starting"
+      ],
+      "type": "string"
+    },
+    "McpServerStatusUpdatedNotification": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "failureReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpServerStartupFailureReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/McpServerStartupState"
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "error",
+        "failureReason",
+        "name",
+        "status",
         "threadId"
       ],
       "type": "object"
@@ -1730,6 +1828,12 @@
             "status": {
               "$ref": "#/$defs/CommandExecutionStatus"
             },
+            "terminalInteractions": {
+              "items": {
+                "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+              },
+              "type": "array"
+            },
             "type": {
               "const": "commandExecution",
               "type": "string"
@@ -2119,6 +2223,33 @@
           "required": [
             "id",
             "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "fieldNames": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "unknownItem",
+              "type": "string"
+            },
+            "upstreamType": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fieldNames",
+            "id",
+            "type",
+            "upstreamType"
           ],
           "type": "object"
         }
@@ -2815,6 +2946,22 @@
     {
       "properties": {
         "method": {
+          "const": "mcpServer/startupStatus/updated",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/McpServerStatusUpdatedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
           "const": "thread/started",
           "type": "string"
         },
@@ -3028,6 +3175,22 @@
         },
         "params": {
           "$ref": "#/$defs/CommandExecutionOutputDeltaNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "item/commandExecution/terminalInteraction",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/CommandExecutionTerminalInteractionNotification"
         }
       },
       "required": [

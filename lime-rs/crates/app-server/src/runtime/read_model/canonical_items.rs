@@ -323,6 +323,14 @@ fn canonical_payload_to_agent_detail(
             }
             "context_compaction"
         }
+        ThreadItemPayload::Unknown {
+            upstream_type,
+            field_names,
+        } => {
+            detail.insert("upstream_type".to_string(), json!(upstream_type));
+            detail.insert("field_names".to_string(), json!(field_names));
+            "unknown_item"
+        }
         ThreadItemPayload::Extension { name, data } => {
             detail.insert("extension_name".to_string(), json!(name));
             detail.insert("extension_data".to_string(), data.clone());

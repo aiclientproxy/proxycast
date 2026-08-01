@@ -251,6 +251,12 @@ export interface AgentThreadCommandExecutionItem extends AgentThreadItemBase {
   aggregated_output?: string;
   exit_code?: number;
   error?: string;
+  terminal_interactions?: AgentThreadTerminalInteraction[];
+}
+
+export interface AgentThreadTerminalInteraction {
+  process_id: string;
+  stdin: string;
 }
 
 export type AgentThreadPatchChangeKind =

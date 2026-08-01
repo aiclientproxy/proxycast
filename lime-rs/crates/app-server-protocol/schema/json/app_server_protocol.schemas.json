@@ -14265,6 +14265,52 @@
       "title": "CommandExecutionStatus",
       "type": "string"
     },
+    "CommandExecutionTerminalInteraction": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "processId": {
+          "type": "string"
+        },
+        "stdin": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "processId",
+        "stdin"
+      ],
+      "title": "CommandExecutionTerminalInteraction",
+      "type": "object"
+    },
+    "CommandExecutionTerminalInteractionNotification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "itemId": {
+          "type": "string"
+        },
+        "processId": {
+          "type": "string"
+        },
+        "stdin": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "itemId",
+        "processId",
+        "stdin",
+        "threadId",
+        "turnId"
+      ],
+      "title": "CommandExecutionTerminalInteractionNotification",
+      "type": "object"
+    },
     "ConfigWarningNotification": {
       "$defs": {
         "TextPosition": {
@@ -24720,6 +24766,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -25252,6 +25313,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -25641,6 +25708,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -25991,6 +26085,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -26523,6 +26632,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -26912,6 +27027,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -28723,6 +28865,25 @@
       "title": "McpServerStartParams",
       "type": "object"
     },
+    "McpServerStartupFailureReason": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "reauthenticationRequired"
+      ],
+      "title": "McpServerStartupFailureReason",
+      "type": "string"
+    },
+    "McpServerStartupState": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "cancelled",
+        "failed",
+        "ready",
+        "starting"
+      ],
+      "title": "McpServerStartupState",
+      "type": "string"
+    },
     "McpServerStatusListResponse": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -28733,6 +28894,66 @@
         }
       },
       "title": "McpServerStatusListResponse",
+      "type": "object"
+    },
+    "McpServerStatusUpdatedNotification": {
+      "$defs": {
+        "McpServerStartupFailureReason": {
+          "enum": [
+            "reauthenticationRequired"
+          ],
+          "type": "string"
+        },
+        "McpServerStartupState": {
+          "enum": [
+            "cancelled",
+            "failed",
+            "ready",
+            "starting"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "failureReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpServerStartupFailureReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/McpServerStartupState"
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "error",
+        "failureReason",
+        "name",
+        "status",
+        "threadId"
+      ],
+      "title": "McpServerStatusUpdatedNotification",
       "type": "object"
     },
     "McpServerStopParams": {
@@ -43997,6 +44218,48 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
+        "CommandExecutionTerminalInteractionNotification": {
+          "properties": {
+            "itemId": {
+              "type": "string"
+            },
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            },
+            "threadId": {
+              "type": "string"
+            },
+            "turnId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "itemId",
+            "processId",
+            "stdin",
+            "threadId",
+            "turnId"
+          ],
+          "type": "object"
+        },
         "ConfigWarningNotification": {
           "properties": {
             "details": {
@@ -44316,6 +44579,62 @@
           "required": [
             "name",
             "success",
+            "threadId"
+          ],
+          "type": "object"
+        },
+        "McpServerStartupFailureReason": {
+          "enum": [
+            "reauthenticationRequired"
+          ],
+          "type": "string"
+        },
+        "McpServerStartupState": {
+          "enum": [
+            "cancelled",
+            "failed",
+            "ready",
+            "starting"
+          ],
+          "type": "string"
+        },
+        "McpServerStatusUpdatedNotification": {
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "failureReason": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/McpServerStartupFailureReason"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "status": {
+              "$ref": "#/$defs/McpServerStartupState"
+            },
+            "threadId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "error",
+            "failureReason",
+            "name",
+            "status",
             "threadId"
           ],
           "type": "object"
@@ -45328,6 +45647,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -45717,6 +46042,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -46413,6 +46765,22 @@
         {
           "properties": {
             "method": {
+              "const": "mcpServer/startupStatus/updated",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/McpServerStatusUpdatedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "thread/started",
               "type": "string"
             },
@@ -46626,6 +46994,22 @@
             },
             "params": {
               "$ref": "#/$defs/CommandExecutionOutputDeltaNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "item/commandExecution/terminalInteraction",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CommandExecutionTerminalInteractionNotification"
             }
           },
           "required": [
@@ -50686,6 +51070,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -51262,6 +51661,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -51651,6 +52056,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -52868,6 +53300,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -53609,6 +54056,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -53998,6 +54451,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -55017,6 +55497,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -55687,6 +56182,12 @@
             "status": {
               "$ref": "#/$defs/CommandExecutionStatus"
             },
+            "terminalInteractions": {
+              "items": {
+                "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+              },
+              "type": "array"
+            },
             "type": {
               "const": "commandExecution",
               "type": "string"
@@ -56078,6 +56579,33 @@
             "type"
           ],
           "type": "object"
+        },
+        {
+          "properties": {
+            "fieldNames": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "unknownItem",
+              "type": "string"
+            },
+            "upstreamType": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fieldNames",
+            "id",
+            "type",
+            "upstreamType"
+          ],
+          "type": "object"
         }
       ],
       "title": "ThreadItem"
@@ -56263,6 +56791,21 @@
             "inProgress"
           ],
           "type": "string"
+        },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
         },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
@@ -56796,6 +57339,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -57185,6 +57734,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -57578,6 +58154,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -58110,6 +58701,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -58499,6 +59096,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -59160,6 +59784,21 @@
             "inProgress"
           ],
           "type": "string"
+        },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
         },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
@@ -59878,6 +60517,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -60267,6 +60912,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -61076,6 +61748,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -61793,6 +62480,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -62182,6 +62875,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -62849,6 +63569,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -63566,6 +64301,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -63955,6 +64696,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -64790,6 +65558,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -65531,6 +66314,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -65920,6 +66709,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -66894,6 +67710,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -67611,6 +68442,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -68000,6 +68837,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -68662,6 +69526,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -69379,6 +70258,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -69768,6 +70653,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -71127,6 +72039,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -71868,6 +72795,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -72257,6 +73190,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -72946,6 +73906,21 @@
             "inProgress"
           ],
           "type": "string"
+        },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
         },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
@@ -73664,6 +74639,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -74053,6 +75034,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -75051,6 +76059,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -75590,6 +76613,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -75979,6 +77008,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -76578,6 +77634,21 @@
             "inProgress"
           ],
           "type": "string"
+        },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
         },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
@@ -77296,6 +78367,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -77685,6 +78762,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -78635,6 +79739,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -79174,6 +80293,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -79563,6 +80688,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -80124,6 +81276,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -80663,6 +81830,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -81052,6 +82225,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -82366,6 +83566,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -82905,6 +84120,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -83294,6 +84515,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -83866,6 +85114,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -84405,6 +85668,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -84794,6 +86063,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }
@@ -85633,6 +86929,21 @@
           ],
           "type": "string"
         },
+        "CommandExecutionTerminalInteraction": {
+          "properties": {
+            "processId": {
+              "type": "string"
+            },
+            "stdin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processId",
+            "stdin"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -86172,6 +87483,12 @@
                 "status": {
                   "$ref": "#/$defs/CommandExecutionStatus"
                 },
+                "terminalInteractions": {
+                  "items": {
+                    "$ref": "#/$defs/CommandExecutionTerminalInteraction"
+                  },
+                  "type": "array"
+                },
                 "type": {
                   "const": "commandExecution",
                   "type": "string"
@@ -86561,6 +87878,33 @@
               "required": [
                 "id",
                 "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "fieldNames": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "unknownItem",
+                  "type": "string"
+                },
+                "upstreamType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fieldNames",
+                "id",
+                "type",
+                "upstreamType"
               ],
               "type": "object"
             }

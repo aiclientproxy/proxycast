@@ -2,12 +2,17 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-export async function writeMcpFixture() {
+export async function writeMcpFixture({ initializeDelayMs = 0 } = {}) {
+  if (!Number.isFinite(initializeDelayMs) || initializeDelayMs < 0) {
+    throw new Error("initializeDelayMs must be a non-negative number");
+  }
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "lime-mcp-current-"));
   const serverPath = path.join(root, "mcp-current-fixture.mjs");
   await fsp.writeFile(
     serverPath,
     `import readline from "node:readline";
+
+const INITIALIZE_DELAY_MS = ${Math.floor(initializeDelayMs)};
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -32,17 +37,23 @@ rl.on("line", (line) => {
   const { id, method, params } = message;
 
   if (method === "initialize") {
-    result(id, {
-      protocolVersion: "2025-03-26",
-      capabilities: {
-        tools: {},
-        resources: {},
-      },
-      serverInfo: {
-        name: "fixture-mcp",
-        version: "1.0.0",
-      },
-    });
+    const respond = () =>
+      result(id, {
+        protocolVersion: "2025-03-26",
+        capabilities: {
+          tools: {},
+          resources: {},
+        },
+        serverInfo: {
+          name: "fixture-mcp",
+          version: "1.0.0",
+        },
+      });
+    if (INITIALIZE_DELAY_MS > 0) {
+      setTimeout(respond, INITIALIZE_DELAY_MS);
+    } else {
+      respond();
+    }
     return;
   }
 

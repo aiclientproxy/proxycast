@@ -19,28 +19,6 @@ const SENSITIVE_UNKNOWN_FIELD_NAME_RE =
   /(authorization|cookie|credential|password|secret|token|api[_-]?key)/iu;
 const UNKNOWN_ITEM_FIELD_NAME_LIMIT = 12;
 const MAX_DISPLAY_JSON_BYTES = 256 * 1024;
-const INTERNAL_THREAD_ITEM_TYPES = new Set([
-  "agent_message",
-  "approval_request",
-  "command_execution",
-  "context_compaction",
-  "error",
-  "expert_profile_switch",
-  "extension",
-  "file_artifact",
-  "hook",
-  "image_generation",
-  "media",
-  "patch",
-  "request_user_input",
-  "subagent_activity",
-  "tool_call",
-  "turn_summary",
-  "unknown_item",
-  "user_message",
-  "warning",
-  "web_search",
-]);
 const TOOL_ITEM_TYPES = new Set([
   "mcpToolCall",
   "dynamicToolCall",
@@ -160,6 +138,9 @@ export function readCanonicalThreadItem(
         exit_code: readFiniteNumber(item, "exitCode"),
         duration_ms: readFiniteNumber(item, "durationMs"),
         error: readDisplayText(item.error),
+        terminal_interactions: readTerminalInteractions(
+          item.terminalInteractions,
+        ),
       };
     }
     case "fileChange": {
@@ -198,6 +179,23 @@ export function readCanonicalThreadItem(
         type: "context_compaction",
         stage: isTerminalItemStatus(status) ? "completed" : "started",
       };
+    case "unknownItem": {
+      const upstreamType = readString(item, "upstreamType");
+      const fieldNames = readTypedUnknownItemFieldNames(item.fieldNames);
+      if (
+        !upstreamType ||
+        !CANONICAL_ITEM_TYPE_RE.test(upstreamType) ||
+        !fieldNames
+      ) {
+        return null;
+      }
+      return {
+        ...lifecycle,
+        type: "unknown_item",
+        upstream_type: upstreamType,
+        field_names: fieldNames,
+      };
+    }
     case "imageView": {
       const source = readString(item, "path") ?? "";
       const uri = isSafeMediaReference(source) ? source : "";
@@ -262,28 +260,56 @@ export function readCanonicalThreadItem(
       };
     }
     default:
-      return CANONICAL_ITEM_TYPE_RE.test(type) &&
-        !INTERNAL_THREAD_ITEM_TYPES.has(type)
-        ? {
-            ...lifecycle,
-            type: "unknown_item",
-            upstream_type: type,
-            field_names: readUnknownItemFieldNames(item),
-          }
-        : null;
+      return null;
   }
 }
 
-function readUnknownItemFieldNames(item: Record<string, unknown>): string[] {
-  const names = Object.keys(item)
-    .filter((name) => name !== "id" && name !== "type")
-    .map((name) =>
-      SAFE_UNKNOWN_FIELD_NAME_RE.test(name) &&
-      !SENSITIVE_UNKNOWN_FIELD_NAME_RE.test(name)
-        ? name
-        : "[redacted]",
-    );
-  return [...new Set(names)].sort().slice(0, UNKNOWN_ITEM_FIELD_NAME_LIMIT);
+function readTerminalInteractions(
+  value: unknown,
+): Array<{ process_id: string; stdin: string }> | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const interactions = value
+    .flatMap((entry) => {
+      const interaction = normalizeRecord(entry);
+      const processId = readString(interaction ?? {}, "processId");
+      const stdin = readTerminalInteractionSummary(interaction ?? {});
+      return processId && stdin ? [{ process_id: processId, stdin }] : [];
+    })
+    .slice(-20);
+  return interactions.length > 0 ? interactions : undefined;
+}
+
+function readTerminalInteractionSummary(
+  value: Record<string, unknown>,
+): string | undefined {
+  const summary = readString(value, "stdin");
+  return summary === "(poll)" ||
+    summary === "(interrupt)" ||
+    (summary !== undefined && /^sent [0-9]+ chars$/u.test(summary))
+    ? summary
+    : undefined;
+}
+
+function readTypedUnknownItemFieldNames(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length > UNKNOWN_ITEM_FIELD_NAME_LIMIT) {
+    return null;
+  }
+  const names: string[] = [];
+  for (const name of value) {
+    if (
+      typeof name !== "string" ||
+      (name !== "[redacted]" &&
+        (!SAFE_UNKNOWN_FIELD_NAME_RE.test(name) ||
+          SENSITIVE_UNKNOWN_FIELD_NAME_RE.test(name))) ||
+      names.includes(name)
+    ) {
+      return null;
+    }
+    names.push(name);
+  }
+  return names;
 }
 
 function readHookPromptFragments(

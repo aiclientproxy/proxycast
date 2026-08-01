@@ -410,6 +410,7 @@
   "agentChat.processGroup.processMessages": "{{count}} 件のプロセスメッセージ",
   "agentChat.processGroup.thinkingNotes": "{{count}} 件の思考メモ",
   "agentChat.processGroup.separator": "、",
+  "agentChat.processGroup.terminalInteractions": "送信した入力: {{value}}",
   "agentChat.processGroup.webSearch.section.webSearchSources": "検索ソース",
   "agentChat.processGroup.webSearch.section.webFetchPages": "読み取ったページ",
   "agentChat.toolCall.diffReview.title": "変更レビュー",

@@ -55,6 +55,7 @@ type ItemStreamingNotification = Extract<
     method:
       | "item/agentMessage/delta"
       | "item/commandExecution/outputDelta"
+      | "item/commandExecution/terminalInteraction"
       | "item/fileChange/patchUpdated"
       | "item/mcpToolCall/progress"
       | "item/plan/delta"
@@ -155,6 +156,7 @@ function isItemStreamingNotification(
   return (
     method === "item/agentMessage/delta" ||
     method === "item/commandExecution/outputDelta" ||
+    method === "item/commandExecution/terminalInteraction" ||
     method === "item/fileChange/patchUpdated" ||
     method === "item/mcpToolCall/progress" ||
     method === "item/plan/delta" ||

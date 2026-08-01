@@ -575,6 +575,7 @@ test("item streaming notifications cross the pipeline without synthesizing verif
   const notifications = [
     agentMessageDeltaNotification(),
     commandOutputDeltaNotification(),
+    commandTerminalInteractionNotification(),
     fileChangePatchUpdatedNotification(),
     mcpToolCallProgressNotification(),
     planDeltaNotification(),
@@ -597,7 +598,7 @@ test("item streaming notifications cross the pipeline without synthesizing verif
 
   assert.deepEqual(
     processed.map((result) => result.accepted),
-    [true, true, true, true, true, true, true, true],
+    [true, true, true, true, true, true, true, true, true],
   );
   assert.deepEqual(
     processed.map((result) => result.notification.method),
@@ -867,6 +868,20 @@ function commandOutputDeltaNotification(overrides = {}) {
     params: {
       delta: "stdout\n",
       itemId: "command-1",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      ...overrides,
+    },
+  };
+}
+
+function commandTerminalInteractionNotification(overrides = {}) {
+  return {
+    method: "item/commandExecution/terminalInteraction",
+    params: {
+      itemId: "command-1",
+      processId: "unified-exec-1000",
+      stdin: "sent 9 chars",
       threadId: "thread-1",
       turnId: "turn-1",
       ...overrides,

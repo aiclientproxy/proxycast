@@ -410,6 +410,7 @@
   "agentChat.processGroup.processMessages": "{{count}} process messages",
   "agentChat.processGroup.thinkingNotes": "{{count}} reasoning notes",
   "agentChat.processGroup.separator": ", ",
+  "agentChat.processGroup.terminalInteractions": "Input sent: {{value}}",
   "agentChat.processGroup.webSearch.section.webSearchSources": "Search sources",
   "agentChat.processGroup.webSearch.section.webFetchPages": "Read pages",
   "agentChat.toolCall.diffReview.title": "Change review",

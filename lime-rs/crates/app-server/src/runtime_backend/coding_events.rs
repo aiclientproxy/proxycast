@@ -1,5 +1,5 @@
 use crate::RuntimeEvent;
-use agent_protocol::{ItemStatus, ThreadItem, ThreadItemPayload, ToolArgument, ToolOutput};
+use agent_protocol::{ItemId, ItemStatus, ThreadItem, ThreadItemPayload, ToolArgument, ToolOutput};
 use lime_agent::{AgentEvent as RuntimeAgentEvent, AgentToolResult};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -65,14 +65,20 @@ impl CodingEventMirror {
                 ),
                 ..CodingMirrorEvents::default()
             },
-            RuntimeAgentEvent::ItemCompleted { item } => canonical_tool_item(item)
-                .and_then(|tool| {
-                    tool.output.map(|output| {
-                        let result = canonical_agent_tool_result(item, output);
-                        self.handle_tool_end(tool.call_id, &result)
+            RuntimeAgentEvent::ItemCompleted { item } => {
+                let mut events = canonical_tool_item(item)
+                    .and_then(|tool| {
+                        tool.output.map(|output| {
+                            let result = canonical_agent_tool_result(item, output);
+                            self.handle_tool_end(tool.call_id, &result)
+                        })
                     })
-                })
-                .unwrap_or_default(),
+                    .unwrap_or_default();
+                if let Some(interaction) = terminal_interaction_event(item) {
+                    events.before_raw.push(interaction);
+                }
+                events
+            }
             _ => CodingMirrorEvents::default(),
         }
     }
@@ -295,6 +301,45 @@ impl CodingEventMirror {
 
         events
     }
+}
+
+fn terminal_interaction_event(item: &ThreadItem) -> Option<RuntimeEvent> {
+    let metadata = item.metadata.as_object()?;
+    let interaction = metadata.get("terminal_interaction")?.as_object()?;
+    let process_id = interaction.get("process_id")?.as_str()?;
+    let stdin = interaction
+        .get("stdin")?
+        .as_str()
+        .filter(|value| terminal_interaction_summary_is_safe(value))?;
+    let command_id = match &item.payload {
+        ThreadItemPayload::Command { .. } => item.item_id.as_str().to_string(),
+        ThreadItemPayload::Tool { .. } => {
+            ItemId::new(metadata.get("exec_command_call_id")?.as_str()?.to_string())
+                .as_str()
+                .to_string()
+        }
+        _ => return None,
+    };
+    let mut payload = json!({
+        "commandId": command_id,
+        "processId": process_id,
+        "stdin": stdin,
+        "source": "unified_exec",
+    });
+    if let ThreadItemPayload::Tool { call_id, .. } = &item.payload {
+        payload["toolCallId"] = Value::String(call_id.clone());
+    }
+    Some(RuntimeEvent::new("command.interaction", payload))
+}
+
+fn terminal_interaction_summary_is_safe(value: &str) -> bool {
+    if matches!(value, "(poll)" | "(interrupt)") {
+        return true;
+    }
+    value
+        .strip_prefix("sent ")
+        .and_then(|value| value.strip_suffix(" chars"))
+        .is_some_and(|count| !count.is_empty() && count.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
 struct CanonicalToolItem<'a> {

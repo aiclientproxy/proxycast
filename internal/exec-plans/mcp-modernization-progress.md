@@ -413,6 +413,8 @@
 
 - 2026-07-31：OAuth completion 已从 `mcp:oauth_completed` Desktop event 迁到 App Server `mcpServer/oauthLogin/completed` typed notification。Rust MCP 只返回 completion handle；App Server 投影成功/失败；Renderer 在任何异步 Desktop listener 前同步订阅 typed event bus，并自动刷新 status/tools。旧事件字符串受 contract guard 禁止回流 `electron`、`lime-rs`、`packages` 与 `src`。
 - 2026-07-31：`npm run smoke:mcp-oauth-notification-electron-fixture` 专用 Gate B 通过。证据 `.lime/qc/mcp-oauth-notification/mcp-oauth-notification-fixture-summary.json` 为 `ok=true`：真实 Electron/preload/IPC、`app_server_handle_json_lines`、App Server event drain、本地 OAuth provider callback 与 GUI 状态/toast 全链命中；自动刷新 `mcpServer/oauth/login`、`mcpServerStatus/list`、`mcpTool/list`，`mockFallbackHitCount=0`、`failedInvokeCount=0`、console/page/invoke errors 为 0。
+- 2026-07-31：MCP startup lifecycle 已从 `mcp:server_started`、`mcp:server_stopped`、`mcp:server_error` Desktop events 迁到 App Server `mcpServer/startupStatus/updated` typed notification。`mcpServer/start` 在 runtime 前发布 `starting`，成功发布 `ready`，失败发布带 error 的 `failed` 后保留原 JSON-RPC error；Renderer 同步订阅 typed event bus，投影连接态并在终态自动刷新 status/tools。四条旧 MCP lifecycle event（含 OAuth）均受 contract guard 禁止回流生产路径。
+- 2026-07-31：`npm run smoke:mcp-startup-notification-electron-fixture` 专用 Gate B 通过。证据 `.lime/qc/mcp-startup-notification/mcp-startup-notification-fixture-summary.json` 为 `ok=true`：真实 Electron/preload/IPC、`app_server_handle_json_lines`、App Server event drain、runtime stdio MCP server 与 Settings GUI 全链命中；`starting -> ready`、`starting -> failed` 均可见，自动刷新 `mcpServerStatus/list` 与 `mcpTool/list`，`electronIpcHitCount=11`、`mockFallbackHitCount=0`、`failedInvokeCount=0`、console/page/invoke errors 为 0。
 
 ## 当前缺口
 

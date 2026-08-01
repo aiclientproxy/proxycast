@@ -20,6 +20,7 @@ const DIRECT_V2_NOTIFICATION_METHODS = new Set([
   "item/completed",
   "item/agentMessage/delta",
   "item/commandExecution/outputDelta",
+  "item/commandExecution/terminalInteraction",
   "item/fileChange/patchUpdated",
   "item/mcpToolCall/progress",
   "item/plan/delta",
@@ -151,6 +152,16 @@ export function readAppServerV2NotificationRoute(
       const turnId = readString(params, "turnId");
       const itemId = readString(params, "itemId");
       return threadId && turnId && itemId && typeof params.delta === "string"
+        ? { itemId, terminal: false, threadId, turnId }
+        : null;
+    }
+    case "item/commandExecution/terminalInteraction": {
+      const threadId = readString(params, "threadId");
+      const turnId = readString(params, "turnId");
+      const itemId = readString(params, "itemId");
+      const processId = readString(params, "processId");
+      const stdin = readTerminalInteractionSummary(params);
+      return threadId && turnId && itemId && processId && stdin
         ? { itemId, terminal: false, threadId, turnId }
         : null;
     }
@@ -345,6 +356,19 @@ export function projectAppServerV2NotificationPayload(
           source_item_id: route.itemId,
         },
       };
+    case "item/commandExecution/terminalInteraction": {
+      const processId = readString(params, "processId");
+      const stdin = readTerminalInteractionSummary(params);
+      return route.itemId && route.turnId && processId && stdin
+        ? {
+            ...basePayload,
+            type: "terminal_interaction",
+            item_id: route.itemId,
+            process_id: processId,
+            stdin,
+          }
+        : null;
+    }
     case "item/fileChange/patchUpdated": {
       const changes = readFileChangePatchUpdatedChanges(params);
       if (!changes || !route.itemId || !route.turnId) {
@@ -482,6 +506,17 @@ export function projectAppServerV2NotificationPayload(
     default:
       return null;
   }
+}
+
+function readTerminalInteractionSummary(
+  value: Record<string, unknown>,
+): string | undefined {
+  const summary = readString(value, "stdin");
+  return summary === "(poll)" ||
+    summary === "(interrupt)" ||
+    (summary !== undefined && /^sent [0-9]+ chars$/u.test(summary))
+    ? summary
+    : undefined;
 }
 
 function readTurnPlan(value: unknown): Array<{

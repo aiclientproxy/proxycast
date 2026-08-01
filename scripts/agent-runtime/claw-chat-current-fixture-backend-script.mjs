@@ -5,6 +5,7 @@ import {
   renderApprovalRequestResumeTurnStartScript,
 } from "./claw-chat-current-fixture-approval-backend-events.mjs";
 import { renderBackendToolAndSkillEventScript } from "./claw-chat-current-fixture-backend-tool-skill-events.mjs";
+import { renderUnknownItemBackendEventsExpression } from "./claw-chat-current-fixture-unknown-item.mjs";
 import {
   APPROVAL_REQUEST_RESUME_PROMPT,
   APPROVAL_REQUEST_FULL_ACCESS_DONE_TEXT,
@@ -833,6 +834,7 @@ ${renderApprovalRequestResumeTurnStartScript()}
                             : "以下是今日国际新闻简要整理：\\n";
   const initialEvents = [
     ...approvalSessionCacheEvents(),
+${renderUnknownItemBackendEventsExpression()}
     ...(isLiveTailCommitPrompt
       ? [
           {

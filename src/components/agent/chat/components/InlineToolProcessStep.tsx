@@ -39,6 +39,7 @@ import {
   resolveToolProcessNarrative,
   isLikelyWebRetrievalDiagnosticNoise,
 } from "../utils/toolProcessSummary";
+import { resolveTerminalInteractionSummaries } from "../utils/toolProcessSummaryMetadata";
 import { resolveToolSoulMetadataDomAttributes } from "../utils/toolSoulLifecycleMetadata";
 import { resolveMemoryToolEvidence } from "../utils/memoryToolEvidence";
 import {
@@ -214,6 +215,21 @@ export const InlineToolProcessStep: React.FC<InlineToolProcessStepProps> = ({
       }),
     [metadata, rawResultText, t, toolCall.name],
   );
+  const terminalInteractionSummary = useMemo(() => {
+    const summaries = resolveTerminalInteractionSummaries(metadata);
+    if (summaries.length === 0) {
+      return null;
+    }
+    const separator = String(
+      t("agentChat.processGroup.separator", { defaultValue: ", " }),
+    );
+    return String(
+      t("agentChat.processGroup.terminalInteractions", {
+        defaultValue: "Input sent: {{value}}",
+        value: summaries.join(separator),
+      }),
+    );
+  }, [metadata, t]);
   const limeTaskProtocolFailureText = useMemo(() => {
     if (toolCall.status !== "failed") {
       return null;
@@ -635,6 +651,7 @@ export const InlineToolProcessStep: React.FC<InlineToolProcessStepProps> = ({
       ? t("agentChat.toolCall.inline.badge.skill", { title: skillTitle })
       : null,
     workspaceSkillRuntimeEnableSummary,
+    terminalInteractionSummary,
     toolCall.status === "running" || toolCall.status === "failed"
       ? toolDisplay.action
       : null,

@@ -147,9 +147,24 @@ function main() {
     "scripts/electron/session-history-fixture-smoke.test.mjs",
     "scripts/electron/code-artifact-workbench-fixture-smoke.test.mjs",
     "scripts/agent-runtime/claw-chat-current-fixture-smoke.test.mjs",
+    "scripts/agent-runtime/claw-chat-current-fixture-unknown-item.test.mjs",
   ]);
 
   ensureElectronFixtureBuild(options);
+
+  runElectronFixtureSmoke(
+    "Claw unknown Item fail-visible/recovery Electron fixture",
+    [
+      "scripts/agent-runtime/claw-chat-current-fixture-smoke.mjs",
+      "--scenario",
+      "unknown-item",
+      "--prefix",
+      "claw-chat-current-fixture-unknown-item-regression",
+      "--timeout-ms",
+      "240000",
+    ],
+    options,
+  );
 
   runElectronFixtureSmoke(
     "Claw 首页首发热路径 Electron fixture",

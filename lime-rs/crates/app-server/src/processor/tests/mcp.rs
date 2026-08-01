@@ -16,30 +16,44 @@ use async_trait::async_trait;
 use serde_json::json;
 
 #[derive(Default)]
-struct OAuthTestDataSource {
+struct McpNotificationTestDataSource {
     login: std::sync::Mutex<Option<lime_mcp::McpOAuthLoginHandle>>,
+    start_result: std::sync::Mutex<Option<Result<(), String>>>,
 }
 
-impl crate::SessionAppDataSource for OAuthTestDataSource {}
-impl crate::WorkspaceAppDataSource for OAuthTestDataSource {}
-impl crate::SkillAppDataSource for OAuthTestDataSource {}
-impl crate::WorkspaceSkillBindingAppDataSource for OAuthTestDataSource {}
-impl crate::GatewayAppDataSource for OAuthTestDataSource {}
-impl crate::MediaAppDataSource for OAuthTestDataSource {}
-impl crate::VoiceAppDataSource for OAuthTestDataSource {}
-impl crate::PluginDataSource for OAuthTestDataSource {}
-impl crate::KnowledgeAppDataSource for OAuthTestDataSource {}
-impl crate::AutomationOverviewAppDataSource for OAuthTestDataSource {}
-impl crate::AutomationManagementAppDataSource for OAuthTestDataSource {}
-impl crate::MemoryAppDataSource for OAuthTestDataSource {}
-impl crate::DiagnosticsAppDataSource for OAuthTestDataSource {}
-impl crate::UsageStatsAppDataSource for OAuthTestDataSource {}
-impl crate::ModelProviderAppDataSource for OAuthTestDataSource {}
-impl crate::ConnectAppDataSource for OAuthTestDataSource {}
-impl crate::RightSurfaceAppDataSource for OAuthTestDataSource {}
+impl crate::SessionAppDataSource for McpNotificationTestDataSource {}
+impl crate::WorkspaceAppDataSource for McpNotificationTestDataSource {}
+impl crate::SkillAppDataSource for McpNotificationTestDataSource {}
+impl crate::WorkspaceSkillBindingAppDataSource for McpNotificationTestDataSource {}
+impl crate::GatewayAppDataSource for McpNotificationTestDataSource {}
+impl crate::MediaAppDataSource for McpNotificationTestDataSource {}
+impl crate::VoiceAppDataSource for McpNotificationTestDataSource {}
+impl crate::PluginDataSource for McpNotificationTestDataSource {}
+impl crate::KnowledgeAppDataSource for McpNotificationTestDataSource {}
+impl crate::AutomationOverviewAppDataSource for McpNotificationTestDataSource {}
+impl crate::AutomationManagementAppDataSource for McpNotificationTestDataSource {}
+impl crate::MemoryAppDataSource for McpNotificationTestDataSource {}
+impl crate::DiagnosticsAppDataSource for McpNotificationTestDataSource {}
+impl crate::UsageStatsAppDataSource for McpNotificationTestDataSource {}
+impl crate::ModelProviderAppDataSource for McpNotificationTestDataSource {}
+impl crate::ConnectAppDataSource for McpNotificationTestDataSource {}
+impl crate::RightSurfaceAppDataSource for McpNotificationTestDataSource {}
 
 #[async_trait]
-impl crate::McpAppDataSource for OAuthTestDataSource {
+impl crate::McpAppDataSource for McpNotificationTestDataSource {
+    async fn start_mcp_server(
+        &self,
+        _params: app_server_protocol::McpServerStartParams,
+    ) -> Result<app_server_protocol::McpServerLifecycleResponse, RuntimeCoreError> {
+        self.start_result
+            .lock()
+            .expect("MCP test start mutex poisoned")
+            .take()
+            .ok_or_else(|| RuntimeCoreError::Backend("MCP test start result missing".to_string()))?
+            .map(|()| app_server_protocol::McpServerLifecycleResponse::default())
+            .map_err(RuntimeCoreError::Backend)
+    }
+
     async fn login_mcp_server_oauth(
         &self,
         _params: app_server_protocol::McpServerOauthLoginParams,
@@ -53,7 +67,7 @@ impl crate::McpAppDataSource for OAuthTestDataSource {
 }
 
 fn oauth_test_data_source() -> (
-    Arc<OAuthTestDataSource>,
+    Arc<McpNotificationTestDataSource>,
     tokio::sync::oneshot::Sender<Result<(), String>>,
 ) {
     let (completion_tx, completion_rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
@@ -68,11 +82,35 @@ fn oauth_test_data_source() -> (
         },
     );
     (
-        Arc::new(OAuthTestDataSource {
+        Arc::new(McpNotificationTestDataSource {
             login: std::sync::Mutex::new(Some(handle)),
+            start_result: std::sync::Mutex::new(None),
         }),
         completion_tx,
     )
+}
+
+async fn start_mcp_notification_test(
+    start_result: Result<(), String>,
+) -> (
+    RequestProcessor,
+    tokio::sync::mpsc::UnboundedReceiver<app_server_protocol::protocol::v2::ServerNotification>,
+) {
+    let data_source = Arc::new(McpNotificationTestDataSource {
+        login: std::sync::Mutex::new(None),
+        start_result: std::sync::Mutex::new(Some(start_result)),
+    });
+    let runtime = RuntimeCore::default().with_app_data_source(data_source);
+    let (notification_tx, notification_rx) = tokio::sync::mpsc::unbounded_channel();
+    let hook: ServerNotificationHook = Arc::new(move |notification| {
+        let notification_tx = notification_tx.clone();
+        Box::pin(async move {
+            let _ = notification_tx.send(notification);
+        })
+    });
+    let processor = RequestProcessor::new(runtime).with_server_notification_hook(hook);
+    initialize_processor(&processor).await;
+    (processor, notification_rx)
 }
 
 async fn start_oauth_test() -> (
@@ -312,6 +350,95 @@ async fn mcp_runtime_methods_require_initialized_and_fail_closed_without_manager
             other => panic!("expected runtime error, got {other:?}"),
         }
     }
+}
+
+#[tokio::test]
+async fn mcp_start_publishes_starting_then_ready_before_success_response() {
+    let (processor, mut notification_rx) = start_mcp_notification_test(Ok(())).await;
+    let messages = processor
+        .handle_request(JsonRpcRequest::new(
+            RequestId::Integer(28),
+            METHOD_MCP_SERVER_START,
+            Some(json!({ "name": "remote-docs" })),
+        ))
+        .await
+        .expect("MCP start response");
+    assert!(matches!(messages.as_slice(), [JsonRpcMessage::Response(_)]));
+
+    let starting = notification_rx.recv().await.expect("starting notification");
+    let ready = notification_rx.recv().await.expect("ready notification");
+    assert_eq!(
+        starting,
+        app_server_protocol::protocol::v2::ServerNotification::McpServerStatusUpdated(
+            app_server_protocol::protocol::v2::McpServerStatusUpdatedNotification {
+                thread_id: None,
+                name: "remote-docs".to_string(),
+                status: app_server_protocol::protocol::v2::McpServerStartupState::Starting,
+                error: None,
+                failure_reason: None,
+            }
+        )
+    );
+    assert_eq!(
+        ready,
+        app_server_protocol::protocol::v2::ServerNotification::McpServerStatusUpdated(
+            app_server_protocol::protocol::v2::McpServerStatusUpdatedNotification {
+                thread_id: None,
+                name: "remote-docs".to_string(),
+                status: app_server_protocol::protocol::v2::McpServerStartupState::Ready,
+                error: None,
+                failure_reason: None,
+            }
+        )
+    );
+    assert!(notification_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn mcp_start_publishes_starting_then_failed_before_error_response() {
+    let (processor, mut notification_rx) =
+        start_mcp_notification_test(Err("handshake rejected".to_string())).await;
+    let messages = processor
+        .handle_request(JsonRpcRequest::new(
+            RequestId::Integer(29),
+            METHOD_MCP_SERVER_START,
+            Some(json!({ "name": "remote-docs" })),
+        ))
+        .await
+        .expect("MCP start error response");
+    assert!(matches!(
+        messages.as_slice(),
+        [JsonRpcMessage::Error(error)] if error.error.code == error_codes::RUNTIME_ERROR
+    ));
+
+    let starting = notification_rx.recv().await.expect("starting notification");
+    let failed = notification_rx.recv().await.expect("failed notification");
+    let app_server_protocol::protocol::v2::ServerNotification::McpServerStatusUpdated(starting) =
+        starting
+    else {
+        panic!("expected starting status notification");
+    };
+    assert_eq!(
+        starting.status,
+        app_server_protocol::protocol::v2::McpServerStartupState::Starting
+    );
+    let app_server_protocol::protocol::v2::ServerNotification::McpServerStatusUpdated(failed) =
+        failed
+    else {
+        panic!("expected failed status notification");
+    };
+    assert_eq!(
+        failed.status,
+        app_server_protocol::protocol::v2::McpServerStartupState::Failed
+    );
+    assert_eq!(failed.thread_id, None);
+    assert_eq!(failed.name, "remote-docs");
+    assert!(failed
+        .error
+        .as_deref()
+        .is_some_and(|error| error.contains("handshake rejected")));
+    assert_eq!(failed.failure_reason, None);
+    assert!(notification_rx.try_recv().is_err());
 }
 
 #[tokio::test]

@@ -383,6 +383,35 @@ fn canonical_approval_detail_uses_typed_terminal_response() {
 }
 
 #[test]
+fn canonical_unknown_item_detail_contains_no_raw_values() {
+    let item = ThreadItem {
+        session_id: SessionId::new("session-unknown-read"),
+        thread_id: ThreadId::new("thread-unknown-read"),
+        turn_id: TurnId::new("turn-unknown-read"),
+        item_id: ItemId::new("unknown-read"),
+        sequence: 3,
+        ordinal: 2,
+        created_at_ms: 1,
+        updated_at_ms: 2,
+        completed_at_ms: Some(2),
+        kind: agent_protocol::ItemKind::Unknown,
+        status: ItemStatus::Completed,
+        payload: ThreadItemPayload::Unknown {
+            upstream_type: "futureCapability".to_string(),
+            field_names: vec!["[redacted]".to_string(), "label".to_string()],
+        },
+        metadata: serde_json::Value::Null,
+    };
+
+    let detail = canonical_item_to_agent_detail(&item);
+    assert_eq!(detail["type"], "unknown_item");
+    assert_eq!(detail["upstream_type"], "futureCapability");
+    assert_eq!(detail["field_names"], json!(["[redacted]", "label"]));
+    assert_eq!(detail["metadata"], serde_json::Value::Null);
+    assert!(!detail.to_string().contains("raw"));
+}
+
+#[test]
 fn canonical_wait_collab_tool_projects_as_completed_tool_call() {
     let item = ThreadItem {
         session_id: SessionId::new("session-wait-read"),

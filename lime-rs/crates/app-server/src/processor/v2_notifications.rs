@@ -95,6 +95,13 @@ impl V2NotificationProjector {
                     event,
                 )
             }
+            "command.interaction" => {
+                return command::project_terminal_interaction(
+                    &self.started_command_item_ids,
+                    &self.completed_command_item_ids,
+                    event,
+                )
+            }
             "patch.started" => {
                 return file_change::project_started(
                     &mut self.started_file_change_item_ids,
@@ -1151,6 +1158,44 @@ mod tests {
                 ))
                 .is_err(),
             "late command output must fail closed"
+        );
+    }
+
+    #[test]
+    fn maps_terminal_interaction_to_typed_notification_for_active_command() {
+        let mut projector = V2NotificationProjector::default();
+        projector
+            .project(event(
+                "command.started",
+                json!({"item": canonical_command_item("inProgress")}),
+            ))
+            .expect("command started");
+
+        let interaction = projector
+            .project(event(
+                "command.interaction",
+                json!({
+                    "commandId": "shell-1",
+                    "processId": "process-1",
+                    "stdin": "sent 8 chars"
+                }),
+            ))
+            .expect("terminal interaction");
+
+        assert_eq!(interaction.len(), 1);
+        assert_eq!(
+            interaction[0].method,
+            "item/commandExecution/terminalInteraction"
+        );
+        assert_eq!(
+            interaction[0].params.as_ref().expect("interaction params"),
+            &json!({
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "itemId": "shell-1",
+                "processId": "process-1",
+                "stdin": "sent 8 chars"
+            })
         );
     }
 

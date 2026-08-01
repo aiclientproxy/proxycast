@@ -566,6 +566,41 @@ fn unsupported_canonical_item_fails_closed() {
 }
 
 #[test]
+fn canonical_unknown_item_projects_typed_v2_diagnostic() {
+    let mut thread = canonical_thread(false);
+    thread.turns[0].items[0].kind = canonical::ItemKind::Unknown;
+    thread.turns[0].items[0].status = canonical::ItemStatus::Completed;
+    thread.turns[0].items[0].payload = canonical::ThreadItemPayload::Unknown {
+        upstream_type: "futureCapability".to_string(),
+        field_names: vec![
+            "[redacted]".to_string(),
+            "label".to_string(),
+            "opaquePayload".to_string(),
+        ],
+    };
+
+    let projected = project_thread(thread).expect("project typed unknown item");
+    let v2::ThreadItem::UnknownItem {
+        id,
+        upstream_type,
+        field_names,
+    } = &projected.turns[0].items[0]
+    else {
+        panic!("typed unknown item");
+    };
+    assert_eq!(id, "item_message-1");
+    assert_eq!(upstream_type, "futureCapability");
+    assert_eq!(
+        field_names,
+        &vec![
+            "[redacted]".to_string(),
+            "label".to_string(),
+            "opaquePayload".to_string(),
+        ]
+    );
+}
+
+#[test]
 fn approval_control_items_stay_out_of_codex_v2_thread_items() {
     let mut thread = canonical_thread(false);
     let approval = canonical::ThreadItem {

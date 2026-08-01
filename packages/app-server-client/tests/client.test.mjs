@@ -4659,6 +4659,26 @@ test("routes direct lifecycle notifications without wrapper projection", async (
   ]);
 });
 
+test("routes terminal interaction notifications through the lifecycle router", async () => {
+  const notification = {
+    method: "item/commandExecution/terminalInteraction",
+    params: {
+      itemId: "command-1",
+      processId: "unified-exec-1000",
+      stdin: "sent 9 chars",
+      threadId: "thread_external",
+      turnId: "turn_external",
+    },
+  };
+  const lifecycle = [];
+  const router = new AppServerAgentEventRouter();
+  router.subscribeLifecycle((event) => lifecycle.push(event));
+
+  assert.equal(agentRuntimeLifecycleNotification(notification), notification);
+  assert.equal(await router.dispatch(notification), true);
+  assert.deepEqual(lifecycle, [notification]);
+});
+
 test("routes typed error notifications through the signal router", async () => {
   const notification = {
     method: "error",

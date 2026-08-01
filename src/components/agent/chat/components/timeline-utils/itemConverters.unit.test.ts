@@ -76,6 +76,36 @@ describe("timeline item converters", () => {
     expect(toolCall?.result?.output).not.toContain("Output:");
   });
 
+  it("CommandExecution item 应把脱敏 terminal interactions 交给过程摘要", () => {
+    const item: AgentThreadItem = {
+      id: "command-terminal-interactions",
+      thread_id: "thread-1",
+      turn_id: "turn-1",
+      sequence: 4,
+      type: "command_execution",
+      status: "in_progress",
+      command: "read input",
+      cwd: "/workspace/lime",
+      terminal_interactions: [
+        { process_id: "unified-exec-1000", stdin: "sent 9 chars" },
+        { process_id: "unified-exec-1000", stdin: "(interrupt)" },
+      ],
+      started_at: "2026-06-21T13:10:00.000Z",
+      updated_at: "2026-06-21T13:10:01.000Z",
+    };
+
+    expect(toToolCallState(item)).toMatchObject({
+      metadata: {
+        terminal_interactions: item.terminal_interactions,
+      },
+      result: {
+        metadata: {
+          terminal_interactions: item.terminal_interactions,
+        },
+      },
+    });
+  });
+
   it("CommandExecution declined 应保持终态但不伪装成执行失败", () => {
     const item: AgentThreadItem = {
       id: "command-declined",

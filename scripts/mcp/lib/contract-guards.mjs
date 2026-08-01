@@ -158,10 +158,14 @@ export function checkMcpRuntimeCurrentContracts({ repoRoot, failures }) {
       ],
       [
         'pub const METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED: &str = "mcpServer/oauthLogin/completed"',
+        'pub const METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED: &str = "mcpServer/startupStatus/updated"',
         "pub struct McpServerOauthLoginCompletedNotification",
+        "pub struct McpServerStatusUpdatedNotification",
         "McpServerOauthLoginCompleted(McpServerOauthLoginCompletedNotification)",
+        "McpServerStatusUpdated(McpServerStatusUpdatedNotification)",
         "let (success, error) = match handle.wait().await",
         "publish_server_notification(ServerNotification::McpServerOauthLoginCompleted(",
+        "publish_server_notification(ServerNotification::McpServerStatusUpdated(",
       ],
     ],
     [
@@ -418,12 +422,17 @@ export function checkMcpRuntimeCurrentContracts({ repoRoot, failures }) {
     [
       "packages/app-server-client/src/server-notifications.ts",
       [
-        'export type McpServerOauthLoginCompletedServerNotification = Extract<',
+        "export type McpServerOauthLoginCompletedServerNotification = Extract<",
         '{ method: "mcpServer/oauthLogin/completed" }',
         "export function mcpServerOauthLoginCompletedServerNotification(",
         'message.method !== "mcpServer/oauthLogin/completed"',
         '!hasOnlyKeys(params, ["error", "name", "success", "threadId"])',
         '!hasRequiredNullableString(params, "threadId")',
+        "export type McpServerStatusUpdatedServerNotification = Extract<",
+        '{ method: "mcpServer/startupStatus/updated" }',
+        "export function mcpServerStatusUpdatedServerNotification(",
+        'message.method !== "mcpServer/startupStatus/updated"',
+        '!hasRequiredNullableString(params, "error")',
       ],
     ],
     [
@@ -432,10 +441,8 @@ export function checkMcpRuntimeCurrentContracts({ repoRoot, failures }) {
         'import { safeListen } from "@/lib/api/bridgeEvents"',
         'import { subscribeAppServerNotifications } from "@/lib/api/appServerEventBus"',
         "mcpServerOauthLoginCompletedServerNotification",
+        "mcpServerStatusUpdatedServerNotification",
         "export async function setupMcpEventListeners(",
-        '"mcp:server_started"',
-        '"mcp:server_stopped"',
-        '"mcp:server_error"',
         '"mcp:tools_updated"',
         '"mcp:resources_updated"',
         '"mcp:resource_updated"',
@@ -646,16 +653,26 @@ export function checkMcpRuntimeCurrentContracts({ repoRoot, failures }) {
     }
   }
 
-  const legacyOAuthEvent = "mcp:oauth_completed";
-  const legacyOAuthEventFiles = ["electron", "lime-rs", "packages", "src"]
-    .flatMap((root) => collectSourceFiles(path.join(repoRoot, root)))
-    .filter((file) => fs.readFileSync(file, "utf8").includes(legacyOAuthEvent));
-  for (const file of legacyOAuthEventFiles) {
-    failures.push(
-      `MCP OAuth completion must use the typed App Server notification: forbidden ${JSON.stringify(
-        legacyOAuthEvent,
-      )} in ${path.relative(repoRoot, file)}`,
+  const legacyMcpEvents = [
+    "mcp:oauth_completed",
+    "mcp:server_started",
+    "mcp:server_stopped",
+    "mcp:server_error",
+  ];
+  const currentSourceFiles = ["electron", "lime-rs", "packages", "src"].flatMap(
+    (root) => collectSourceFiles(path.join(repoRoot, root)),
+  );
+  for (const legacyEvent of legacyMcpEvents) {
+    const legacyEventFiles = currentSourceFiles.filter((file) =>
+      fs.readFileSync(file, "utf8").includes(legacyEvent),
     );
+    for (const file of legacyEventFiles) {
+      failures.push(
+        `MCP lifecycle must use typed App Server notifications: forbidden ${JSON.stringify(
+          legacyEvent,
+        )} in ${path.relative(repoRoot, file)}`,
+      );
+    }
   }
 
   const appServerCurrentContent = [

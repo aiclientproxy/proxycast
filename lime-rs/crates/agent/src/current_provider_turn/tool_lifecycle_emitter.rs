@@ -74,8 +74,13 @@ impl CurrentTurnToolLifecycleEmitter {
     }
 
     pub(super) fn project_all(&self, event: ToolLifecycleEvent) -> Vec<AgentEvent> {
-        let terminal = matches!(event.phase, ToolLifecyclePhase::Completed);
-        if terminal && event.output.is_none() {
+        let lifecycle_completed = matches!(event.phase, ToolLifecyclePhase::Completed);
+        if lifecycle_completed && event.output.is_none() {
+            return Vec::new();
+        }
+        if event.tool_name == tool_runtime::unified_exec::WRITE_STDIN_TOOL_NAME
+            && matches!(event.phase, ToolLifecyclePhase::Started)
+        {
             return Vec::new();
         }
 
@@ -84,7 +89,13 @@ impl CurrentTurnToolLifecycleEmitter {
         let dynamic_tool_route = self.dynamic_tool_routes.get(&event.tool_name);
         let dynamic_tool_arguments = dynamic_tool_route.as_ref().map(|_| event.arguments.clone());
         let now = chrono::Utc::now().timestamp_millis();
-        let key = format!("{}\0{}", event.turn_id, event.call_id);
+        let lifecycle_call_id = event
+            .output
+            .as_ref()
+            .and_then(|output| output.metadata.get("exec_command_call_id"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(&event.call_id);
+        let key = format!("{}\0{}", event.turn_id, lifecycle_call_id);
         let state = {
             let mut items = self
                 .items
@@ -98,9 +109,6 @@ impl CurrentTurnToolLifecycleEmitter {
                 items.insert(key.clone(), state);
                 state
             });
-            if terminal {
-                items.remove(&key);
-            }
             state
         };
         let event_count = if subagent_activity.is_some() { 2 } else { 1 };
@@ -117,6 +125,12 @@ impl CurrentTurnToolLifecycleEmitter {
                 updated_at_ms: now,
             },
         ) {
+            if matches!(&event, AgentEvent::ItemCompleted { .. }) {
+                self.items
+                    .lock()
+                    .expect("tool item lifecycle mutex poisoned")
+                    .remove(&key);
+            }
             let event = project_dynamic_tool_event(
                 event,
                 dynamic_tool_route.as_ref(),

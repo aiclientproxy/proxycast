@@ -2100,6 +2100,118 @@ Gate B：npm run smoke:mcp-oauth-notification-electron-fixture 通过，proofLev
 OPEN_REF：下一刀回到 EVENT-PROJECTIONS.md，继续审计具备真实 producer/consumer 的 planned notification、host capability 或 recovery；guardianWarning 在 Guardian runtime producer 落地前保持 planned。v2 总体完成度保守估算约 95%，仍非 release-ready。
 ```
 
+### 9.76 V2-05 MCP startup status typed notification closure
+
+```text
+状态：completed（2026-07-31）；只关闭 mcpServer/startupStatus/updated 垂直切片，V2-05 与 v2 总体仍为 in-progress，不是 release-ready。
+
+主目标：把 MCP server startup lifecycle 从旧 Desktop events 收敛到 App Server v2 typed notification，使 starting/ready/failed、Renderer 连接态、终态自动刷新与失败可见错误走唯一产品链；不保留 mcp:server_started/stopped/error compat，不新增第二 MCP 状态 owner或生产 mock fallback。
+
+本轮窄写集：lime-mcp lifecycle legacy event 删除；App Server mcpServer/start notification producer；app-server-protocol v2 notification/schema/generated client；app-server-client strict decoder；Renderer useMcp typed event subscription 与回归；MCP startup 专用 Electron fixture；共享 MCP fixture delay；contract guard；MCP/V2 文档与本执行计划。保留共享工作树其他 V2-05 notification、host capability、recovery 与版本改动，不做无关重写。
+
+退出条件：mcpServer/start 在 runtime 调用前发 starting，成功发 ready，失败发 failed 后保留原 JSON-RPC error；threadId/error/failureReason 必填可空、name 必填非空、status 为 starting|ready|failed|cancelled，decoder 对缺字段和未知字段 fail closed；Renderer 同步订阅 typed event bus，starting 投影连接态，终态自动刷新 status/tools，failed 显示 typed error；生产路径无 mcp:server_started/stopped/error；Rust/TS/contracts/governance/scripts 通过；真实 Electron Gate B 证明 preload/IPC、app_server_handle_json_lines、App Server event drain、runtime MCP server、GUI 状态与零 mock fallback。
+
+实现事实：App Server processor 在 mcpServer/start 边界发布 ServerNotification::McpServerStatusUpdated；protocol、schema、generated TypeScript 与 app-server-client strict decoder 使用同一五字段 payload。Renderer setupMcpEventListeners 在串行 Desktop safeListen 前同步注册 App Server notification；starting 更新 connection phase，ready/cancelled/failed 复位 phase 并刷新 mcpServerStatus/list 与 mcpTool/list，failed 同步 server error 与 global error。lime-mcp 删除旧 start/stop/error payload、emitter 与生命周期调用；资源和工具更新事件保持 current。
+
+验证：lime-mcp 151/151、App Server protocol MCP 6/6、App Server MCP processor 6/6、useMcp 10/10、app-server-client 102/102、MCP workspace fixture 3/3。npm run test:contracts 通过，包含 850 schema definitions、842 generated protocol types、0 generation failures、292 app-server-client checks，以及 command/scripts/docs guards；npm run test:rust:related、npm run governance:legacy-report、npm run governance:scripts 与 npm run verify:gui-smoke 均通过。
+
+Gate B：npm run smoke:mcp-startup-notification-electron-fixture 通过，proofLevel=Gate B、ok=true。真实 Electron/preload/IPC、app_server_handle_json_lines、App Server event drain、runtime stdio MCP server 与 Renderer Settings GUI 全部命中；startingVisible、readyVisible、failedVisible 均为 true，通知序列分别为 starting->ready 与 starting->failed，自动刷新 methods 为 mcpServerStatus/list、mcpTool/list。appServerHandleJsonLinesHitCount=4、appServerDrainEventsHitCount=7、electronIpcHitCount=11、mockFallbackHitCount=0、failedInvokeCount=0，legacy MCP commands 与 console/page/invoke errors 为 0。证据：.lime/qc/mcp-startup-notification/mcp-startup-notification-fixture-summary.json 与同目录 PNG。
+
+架构确认：本切片没有改变 public owner、唯一产品链或依赖方向，只把既有 MCP startup lifecycle 从 legacy Desktop events 迁到 App Server v2 typed notification，并补齐 Renderer/Gate B；无需改写 internal/aiprompts/architecture.md。责任开发者确认：root，2026-07-31。
+
+治理分类：typed protocol/schema、App Server startup producer、strict client decoder、Renderer typed event bus、GUI 连接态与专用 Gate B 为 current；无 compat；mcp:server_started、mcp:server_stopped、mcp:server_error 为 dead/deleted/forbidden-to-restore。
+
+OPEN_REF：下一刀回到 EVENT-PROJECTIONS.md，继续审计具备真实 producer/consumer 的 planned notification、host capability 或 recovery；guardianWarning 在 Guardian runtime producer 落地前保持 planned。v2 总体完成度保守估算约 96%，仍非 release-ready。
+```
+
+### 9.77 V2-05 unknown Item fail-visible Gate B closure
+
+```text
+状态：completed（2026-07-31）；unknown canonical Item 的真实 Electron fail-visible 与恢复证据已关闭；不改变 Codex 72 notification 裁决，也不新增 unknown Item 业务 fallback。V2-05 与 v2 总体仍为 in-progress / 非 release-ready。
+
+主目标：通过受控 external backend 产生一个未来 Item type，使真实 Electron/preload/IPC、app_server_handle_json_lines、App Server runtime/read model 与 direct TurnTimeline 使用同一 thread/turn/item identity；GUI 只显示 upstream type 与脱敏字段名，禁止显示原始字段值、secret、raw payload 或 unknown_item 内部类型名。
+
+实现事实：App Server canonical owner 新增 typed Unknown payload，只保留 upstream type 与排序、限量、敏感名脱敏后的字段名；raw values、metadata 与 Extension escape hatch 均不得承接未知协议数据。v2 ThreadItem、thread/read 与 Agent read model 使用同一 typed identity。Renderer 终态刷新此前只更新 threadRead、没有把 canonical thread_items 合入 direct timeline，导致 live Unknown 在完成后消失；现由 applyReadModelSnapshot 合并 read-model items 到 threadItems，完成态历史摘要持续显示同一安全诊断。
+
+测试与守卫：定向 Vitest 66/66，unknown fixture/合并/UI 回归 23/23；typecheck、test:contracts、governance:scripts、governance:legacy-report 与 git diff --check 通过。npm run smoke:agent-runtime-current-fixture 聚合门禁完整通过且 liveProviderUsed=false；npm run verify:gui-smoke 21/21 assertions 通过，证据为 .lime/qc/project-gates/standalone-shell-01-20260731194839-48452/shell-01-electron-smoke/summary.json。npm run test:rust:related 按协议反向依赖扩圈并以退出码 0 完成，关键结果包括 agent-protocol 41/41、app-server 1659/1659、app-server-protocol 99/99、lime-mcp 151/151。
+
+Gate B：npm run smoke:unknown-item-recovery-electron-fixture 通过，proofLevel=Gate B controlled fixture、ok=true。真实 Electron/preload/IPC、app_server_handle_json_lines、App Server external runtime/read model 与 direct TurnTimeline 使用同一 thread/turn/item identity；item.started -> item.completed -> turn.completed 稳定。GUI 仅有 1 个 Unknown，futureCapability 与 [redacted]/label/opaquePayload/status 可见，raw values、secret 与 unknown_item 内部名不可见；thread/read 恢复同一 completed Item，console/page/invoke errors 与生产 mock fallback 均为 0。证据：.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-unknown-item-regression-summary.json。
+
+架构确认：本切片没有改变唯一产品链、public owner 或依赖方向，只补齐既有 canonical Item -> v2 read model -> direct TurnTimeline 的 typed 安全投影和终态恢复；无需改写 internal/aiprompts/architecture.md。责任开发者确认：root，2026-07-31。
+
+治理分类：typed Unknown protocol/canonical payload、App Server materializer/read model、Renderer terminal merge、GUI fail-visible 与专项 Gate B 为 current；无 compat；unknown Item null drop、raw payload/metadata 透传、Extension fallback 与生产 mock fallback 为 dead / deleted / forbidden-to-restore。
+
+OPEN_REF：下一刀回到 EVENT-PROJECTIONS.md，继续审计具备真实 producer/consumer 的 planned notification、host capability 或 recovery；guardianWarning 在 Guardian runtime producer 落地前保持 planned。v2 总体完成度保守估算约 97%，仍非 release-ready。
+```
+
+### 9.78 V2-05 product-scope-excluded notification classification
+
+```text
+状态：completed（2026-07-31）；本刀只收口三项 upstream notification 的产品范围裁决，不把 exclusion 误报为 current 实现。V2-05 与 v2 总体仍为 in-progress / 非 release-ready。
+
+主目标：将 Codex `turn/diff/updated`、`process/outputDelta`、`process/exited` 从 Lime planned notification surface 移出。Codex turn diff payload 是整段 raw unified diff，而 Lime current 事实源是 canonical structured FileChange；Codex process 通知属于标记为 experimental 的 standalone `process/spawn`，且在 app server host 上无 Codex sandbox。Lime 当前没有该 upstream notification 的产品 producer/consumer，不能新增 Renderer 面板、protocol facade、compat wrapper 或生产 mock 来制造支持；未来若 standalone process 成为产品需求，必须重新建立独立 typed owner，不得复用本次 excluded 事件。
+
+实现事实：EVENT-PROJECTIONS 与 render projection coverage 将三项标为 `product-scope-excluded`，仅保留 `diagnostics` outlet；`isAppServerV2NotificationMethod` 不接入三项，notification drift recorder 仍识别 upstream method 但只记录方法、路径和脱敏 field names，`projectAppServerNotificationDriftPayload` 不生成用户级 warning。canonical FileChange / `item/fileChange/patchUpdated` 继续是 Lime diff owner，`item/commandExecution/*` 与既有 execution-process 内部投影继续承接产品命令生命周期。
+
+守卫与验证：coverage boundary 断言三项仅 diagnostics 且不在 current projector；drift test 断言 raw diff、process output、process exit 不生成 Renderer payload，且不保留原始值。同步更新 V2 分类表、coverage fixture 与本执行计划；不改 Codex upstream inventory、schema hash、Lime manifest 或 v1 method count。
+
+治理分类：canonical FileChange 与 item/commandExecution lifecycle 为 `current`；无 `compat`；三项 upstream notification 为 `product-scope-excluded`；raw unified diff renderer、standalone process panel、process notification facade 与生产 mock fallback 为 `dead / deleted / forbidden-to-restore`。本刀没有改变唯一产品链、public owner 或依赖方向，无需改写 `internal/aiprompts/architecture.md`。责任开发者确认：root，2026-07-31。
+
+OPEN_REF：继续审计 EVENT-PROJECTIONS 中仍有真实 producer/consumer 的 planned notification、host capability 或 recovery；`guardianWarning` 在 Guardian runtime producer 落地前保持 planned。三项 excluded surface 不再作为 planned 实现目标，v2 总体完成度保守估算约 97%，仍非 release-ready。
+```
+
+### 9.79 V2-05 remaining planned notification producer audit
+
+```text
+状态：审计完成（2026-07-31）；本轮没有把缺少真实 producer/consumer 的通知错误升格为 current，也没有新增协议或 compat。V2-05 与 v2 总体仍为 in-progress / 非 release-ready。
+
+审计范围：`app/list/updated`、`thread/environment/connected`、`thread/environment/disconnected`、`fs/changed`、`fuzzyFileSearch/sessionUpdated`、`fuzzyFileSearch/sessionCompleted`、`guardianWarning`、`thread/realtime/*`、`windows/worldWritableWarning`、`windowsSandbox/setupCompleted` 与 `hook/started` / `hook/completed`。
+
+事实：这些 method 在 Lime current 代码中没有 App Server typed producer、manifest contract、Renderer consumer 和 Gate B 证据；工作树中唯一相近的 Hook producer 是 `workflow.hook.started/completed`，由插件宿主追加到 `workflow-events.jsonl` 的 audit-only 旁路，不进入普通 runtime event stream、worker evidence 或 Article Workspace。Realtime projection 仅提供 `not_current` 安全守卫，明确要求 current owner 后才能进 Thread/Turn/Item；当前没有该 owner。其余通知只有 upstream drift recorder 诊断命中。
+
+治理裁决：上述仍属于 Lime 产品候选的通知继续保持 `planned`，因为 Apps、environment、filesystem/search、Guardian、Realtime、Windows sandbox 与 Hook 仍需独立产品 owner 决策；当前没有 `compat`。`workflow.hook.*` audit-only 事件、realtime guard-only projection 与 drift recorder 为诊断/旁路，不得冒充 Codex notification current 实现；没有证据支持将它们标为 current 或恢复第二事件流。
+
+验证：`node --test packages/agent-runtime-projection/tests/realtimeConversationItem.test.mjs` 4/4；`rg` producer/consumer 盘点确认除 drift recorder 外无匹配 current producer；前一刀的 boundary/drift 8/8、contracts、governance report 与 typecheck 均通过。未运行 Electron Gate B，因为当前没有可执行 producer/consumer 垂直链；这不是测试失败，而是本轮明确记录的 blocker。
+
+OPEN_REF：下一刀只从上述 planned 集合中选择能同时提供 typed producer、真实 consumer、持久化/恢复语义与风险匹配 Gate B 的垂直切片；在 owner 出现前，不扩展 protocol、Renderer 或 fixture。v2 总体完成度保守估算仍为 97%，仍非 release-ready。
+```
+
+### 9.80 V2-05 unified exec terminal interaction closure
+
+```text
+状态：completed（2026-08-01）；本刀只关闭 unified exec `write_stdin` 的 canonical lifecycle、typed notification、cold read 与真实 GUI recovery，V2-05 与 v2 总体仍为 in-progress / 非 release-ready。
+
+主目标：让 `write_stdin` 归属其原始 `exec_command` Command Item，不创建第二个工具项；只暴露脱敏摘要 `sent N chars`，通过 App Server typed `item/commandExecution/terminalInteraction`、canonical `terminalInteractions` 和 GUI timeline 以同一 thread/turn/item identity 显示，reload 后仍可从 canonical read 恢复。禁止写入原始 stdin、恢复 retired shell tool 或生产 mock fallback。
+
+实现事实：tool-runtime 将 terminal interaction 绑定原始 exec call identity；agent lifecycle emitter 忽略 `write_stdin` 的 Started 事件并在终态后释放绑定；App Server 只投影 active Command Item 的 typed interaction，并把脱敏数据写入 canonical CommandExecution metadata。Renderer live timeline 与 historical direct timeline 都消费同一 `terminalInteractions` 字段。Electron fixture 在导入续聊前走 current `thread/resume` 建立 thread subscription，再经真实 `app_server_drain_events` 等待 typed notification；这修正了 fixture 仅读取同步 JSON-RPC response、遗漏后台通知的观察缺口，不改变生产协议。
+
+验证：tool-runtime 定向回归覆盖跨 thread `write_stdin` 归属与原 `exec_command` 完成；Renderer 定向测试 7 files / 159 tests、`npm run build:renderer:electron` 与 fixture guard 6/6 通过；`git diff --check` 通过。`npm run smoke:codex-import-continuation-electron-fixture -- --timeout-ms 240000` 通过：本地 provider 共 6 次请求，导入和普通会话的 completed Command Item 同构，分别保存 `sent 9 chars`，导入侧 terminal interaction typed notification count=1；普通会话实时 GUI 与 reload GUI 均显示摘要、隐藏原始 stdin、各有一个 completed command row，console errors 为 0。通用 `npm run verify:gui-smoke` 也以退出码 0 通过，真实 Electron renderer、App Server sidecar、Claw shell reload 与 memory settings 均就绪；证据为 `.lime/qc/project-gates/standalone-shell-01-20260801154238-47878/shell-01-electron-smoke/summary.json`。
+
+Gate B：证据 `.lime/qc/gui-evidence/codex-import-continuation-fixture/codex-import-continuation-fixture-summary.json` 为 `ok=true`。真实 Electron/preload/IPC、`app_server_handle_json_lines`、`app_server_drain_events`、App Server runtime/read model 和 GUI 都已命中；`rendererTurnStart.transport=electron-ipc`，`commandShapesIsomorphic=true`，导入与普通会话使用独立 canonical identity，生产 mock fallback 为零。
+
+架构确认：本切片未改变唯一产品链、public owner 或依赖方向；只补齐既有 `tool-runtime -> agent -> App Server -> Thread/Turn/Item -> GUI` 的 lifecycle 投影、冷恢复与 Gate B 观察，故无需修改 `internal/aiprompts/architecture.md`。责任开发者确认：root，2026-08-01。
+
+治理分类：unified exec、canonical CommandExecution `terminalInteractions`、typed terminal interaction notification、Renderer live/historical projection 与 Electron Gate B fixture 为 current；无 compat；原始 stdin、独立 write_stdin Tool Item、retired Bash/PowerShell tools 与生产 mock fallback 为 dead / forbidden-to-restore。
+
+OPEN_REF：继续审计 EVENT-PROJECTIONS 中有完整 producer/consumer 的 notification/recovery 链；不能因本刀 fixture 通过而把无 producer 的 planned surface 升格为 current。v2 总体完成度保守估算仍为 97%，仍非 release-ready。
+```
+
+### 9.81 V2-05 remaining planned producer/consumer audit
+
+```text
+状态：审计完成（2026-08-02）；本轮没有发现可安全升格为 current 的 planned notification，也没有新增 protocol facade、compat 或生产 mock。V2-05 与 v2 总体仍为 in-progress / 非 release-ready。
+
+审计范围：`item/autoApprovalReview/started`、`item/autoApprovalReview/completed`、`app/list/updated`、`thread/environment/connected`、`thread/environment/disconnected`、`fs/changed`、`fuzzyFileSearch/sessionUpdated`、`fuzzyFileSearch/sessionCompleted`、`guardianWarning`、`thread/realtime/*`、`windows/worldWritableWarning`、`windowsSandbox/setupCompleted` 与 `hook/started` / `hook/completed`。
+
+事实：当前代码中这些 Codex method 仍没有同时具备 App Server typed producer、current manifest/schema contract、Renderer consumer、canonical persistence/recovery 与风险匹配 Gate B。Guardian 现有能力是 `thread/approveGuardianDeniedAction` 与 evidence/projection 读写，不是 `item/autoApprovalReview/*` producer；插件侧 `workflow.hook.started/completed` 只是 `workflow-events.jsonl` audit-only 旁路，不进入普通 runtime event stream、worker evidence 或 Article Workspace。Realtime 只有 `packages/agent-runtime-projection` 的 `not_current` guard，明确禁止把 transcript/audio/raw payload 接入 Thread/Turn/Item；Apps、environment、filesystem/search 与 Windows sandbox 只有 drift recorder 或静态 UI 资料，没有 current App Server producer。
+
+治理裁决：上述仍属于 Lime 产品候选的通知继续保持 `planned`；无 `compat`。`workflow.hook.*` audit-only、Guardian denied-action/evidence、realtime guard-only projection、旧 scene/app catalog 与 notification drift recorder 都不能冒充 Codex notification current owner，也不能恢复第二事件流、第二 catalog 或 renderer mock fallback。
+
+验证：`rg` producer/consumer/owner 盘点确认除 drift recorder、guard-only projection、插件 audit-only hook 与 Guardian denied-action/evidence 外无匹配 current producer；现有 `packages/agent-runtime-projection/tests/realtimeConversationItem.test.mjs` 4/4 继续通过。未运行 Electron Gate B，因为本轮没有可执行的 typed producer/consumer 垂直链；这是明确的 owner blocker，不是测试失败。
+
+下一刀：只有当某一 planned 项同时提供唯一 current owner、typed producer、真实 consumer、持久化/恢复语义与 Gate B 场景时才继续实现；在此之前保持 fail closed，v2 总体完成度保守估算仍为 97%，仍非 release-ready。
+```
+
 ## 10. 完成定义
 
 v2 实施不能因为“几个进程都有改动”而标记完成。每个 slice 必须同时具备：

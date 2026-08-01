@@ -410,6 +410,7 @@
   "agentChat.processGroup.processMessages": "{{count}} 条过程消息",
   "agentChat.processGroup.thinkingNotes": "{{count}} 条思路",
   "agentChat.processGroup.separator": "，",
+  "agentChat.processGroup.terminalInteractions": "已发送输入：{{value}}",
   "agentChat.processGroup.webSearch.section.webSearchSources": "搜索来源",
   "agentChat.processGroup.webSearch.section.webFetchPages": "读取页面",
   "agentChat.toolCall.diffReview.title": "变更审阅",

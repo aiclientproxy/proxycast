@@ -39,8 +39,59 @@ pub struct McpServerOauthLoginCompletedNotification {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub enum McpServerStartupFailureReason {
+    ReauthenticationRequired,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub enum McpServerStartupState {
+    Starting,
+    Ready,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct McpServerStatusUpdatedNotification {
+    #[schemars(required, schema_with = "nullable_string_schema")]
+    #[serde(deserialize_with = "deserialize_required_nullable_string")]
+    pub thread_id: Option<String>,
+    pub name: String,
+    pub status: McpServerStartupState,
+    #[schemars(required, schema_with = "nullable_string_schema")]
+    #[serde(deserialize_with = "deserialize_required_nullable_string")]
+    pub error: Option<String>,
+    #[schemars(required, schema_with = "nullable_failure_reason_schema")]
+    #[serde(deserialize_with = "deserialize_required_nullable_failure_reason")]
+    pub failure_reason: Option<McpServerStartupFailureReason>,
+}
+
 fn nullable_string_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
     generator.subschema_for::<Option<String>>()
+}
+
+fn nullable_failure_reason_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    generator.subschema_for::<Option<McpServerStartupFailureReason>>()
+}
+
+fn deserialize_required_nullable_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer)
+}
+
+fn deserialize_required_nullable_failure_reason<'de, D>(
+    deserializer: D,
+) -> Result<Option<McpServerStartupFailureReason>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<McpServerStartupFailureReason>::deserialize(deserializer)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -295,5 +346,58 @@ mod tests {
             .expect("OAuth completion threadId must be nullable");
         assert!(thread_id_types.iter().any(|value| value == "null"));
         assert!(thread_id_types.iter().any(|value| value == "string"));
+    }
+
+    #[test]
+    fn startup_status_updated_matches_codex_wire_and_fails_closed() {
+        let failed = McpServerStatusUpdatedNotification {
+            thread_id: None,
+            name: "remote-docs".to_string(),
+            status: McpServerStartupState::Failed,
+            error: Some("scope rejected".to_string()),
+            failure_reason: Some(McpServerStartupFailureReason::ReauthenticationRequired),
+        };
+        assert_eq!(
+            serde_json::to_value(failed).expect("serialize startup status"),
+            json!({
+                "threadId": null,
+                "name": "remote-docs",
+                "status": "failed",
+                "error": "scope rejected",
+                "failureReason": "reauthenticationRequired"
+            })
+        );
+
+        let valid = json!({
+            "threadId": null,
+            "name": "remote-docs",
+            "status": "ready",
+            "error": null,
+            "failureReason": null
+        });
+        for field in ["threadId", "name", "status", "error", "failureReason"] {
+            let mut missing = valid.clone();
+            missing
+                .as_object_mut()
+                .expect("startup status object")
+                .remove(field);
+            assert!(
+                serde_json::from_value::<McpServerStatusUpdatedNotification>(missing).is_err(),
+                "missing {field} must fail closed"
+            );
+        }
+        let mut unknown = valid;
+        unknown["serverName"] = json!("legacy-name");
+        assert!(serde_json::from_value::<McpServerStatusUpdatedNotification>(unknown).is_err());
+
+        let schema =
+            serde_json::to_value(schemars::schema_for!(McpServerStatusUpdatedNotification))
+                .expect("serialize startup status schema");
+        let required = schema["required"]
+            .as_array()
+            .expect("startup status schema required fields");
+        for field in ["threadId", "name", "status", "error", "failureReason"] {
+            assert!(required.iter().any(|required| required == field));
+        }
     }
 }

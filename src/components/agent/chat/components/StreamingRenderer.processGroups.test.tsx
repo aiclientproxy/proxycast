@@ -87,6 +87,40 @@ describe("StreamingRenderer process groups", () => {
     expect(container.textContent).toContain("最终结论");
   });
 
+  it("命令过程组应显示已发送输入的脱敏摘要", () => {
+    const { container } = renderHarness({
+      content: "",
+      contentParts: [
+        {
+          type: "tool_use",
+          toolCall: {
+            id: "command-terminal-interactions",
+            name: "exec_command",
+            arguments: JSON.stringify({ command: "read input" }),
+            status: "running",
+            metadata: {
+              terminal_interactions: [
+                {
+                  process_id: "unified-exec-1000",
+                  stdin: "sent 9 chars",
+                },
+                {
+                  process_id: "unified-exec-1000",
+                  stdin: "raw-input-must-not-render",
+                },
+              ],
+            },
+            startTime: new Date("2026-03-25T10:02:00.000Z"),
+          },
+        },
+      ],
+      isStreaming: true,
+    });
+
+    expect(container.textContent).toContain("已发送输入：sent 9 chars");
+    expect(container.textContent).not.toContain("raw-input-must-not-render");
+  });
+
   it("交错内容中的思考与工具应按连续执行流逐条渲染", () => {
     const { container } = renderHarness({
       content: "",

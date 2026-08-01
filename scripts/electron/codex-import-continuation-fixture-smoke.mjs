@@ -9,6 +9,7 @@ import { startOpenAiCompatibleFixtureServer } from "../lib/openai-compatible-fix
 import { resolveElectronAppServerRuntimeEnv } from "../lib/electron-app-server-assets.mjs";
 import { resolveDevAppServerBinary } from "../lib/electron-dev-sidecar.mjs";
 import {
+  NORMAL_FINAL_TEXT,
   REQUIRED_METHODS,
   SOURCE_THREAD_ID,
   WORKSPACE_ID,
@@ -16,6 +17,7 @@ import {
   buildProviderScriptedResponses,
   clearInvokeBuffers,
   createPageAppServerClient,
+  createRepositoryProvider,
   createTempRuntimeEnv,
   initializeAndCommitImport,
   providerRequestSummaries,
@@ -24,6 +26,8 @@ import {
   sanitizeText,
   summarizeAndAssertBridge,
   summarizeAndAssertFixture,
+  TERMINAL_INTERACTION_CHARS,
+  TERMINAL_INTERACTION_SUMMARY,
   waitForRendererReady,
   writeJsonFile,
 } from "./lib/codex-import-continuation-fixture.mjs";
@@ -44,6 +48,7 @@ const DEFAULTS = {
 };
 
 const LOG_PREFIX = "[smoke:codex-import-continuation-fixture]";
+const NAVIGATION_RESTORE_STORAGE_KEY = "lime.appNavigation.restore.v1";
 
 function printHelp() {
   console.log(`
@@ -145,6 +150,293 @@ function evidencePaths(options) {
   };
 }
 
+async function openSessionInRenderer(page, options, sessionId) {
+  await page.evaluate(
+    ({ navigationKey, activeSessionId }) => {
+      window.sessionStorage.setItem(
+        navigationKey,
+        JSON.stringify({
+          page: "agent",
+          params: { initialSessionId: activeSessionId },
+        }),
+      );
+    },
+    {
+      navigationKey: NAVIGATION_RESTORE_STORAGE_KEY,
+      activeSessionId: sessionId,
+    },
+  );
+  await page.reload({
+    waitUntil: "domcontentloaded",
+    timeout: options.timeoutMs,
+  });
+  await waitForRendererReady(page, options);
+  const input = page.locator(
+    `textarea[name="agent-chat-message"][data-session-id="${sessionId}"]`,
+  );
+  await input.waitFor({ state: "visible", timeout: options.timeoutMs });
+  assert(
+    (await input.getAttribute("data-session-id")) === sessionId,
+    "Renderer 未恢复 unified exec canonical session",
+  );
+}
+
+async function waitForGuiTerminalInteraction(
+  page,
+  options,
+  { sessionId, threadId, finalText, phase },
+) {
+  const startedAt = Date.now();
+  const timeoutMs = Math.min(options.timeoutMs, 30_000);
+  let lastSnapshot = null;
+  while (Date.now() - startedAt < timeoutMs) {
+    const historicalPreview = page
+      .locator('[data-testid^="message-list-historical-timeline-preview:"]')
+      .first();
+    if (await historicalPreview.isVisible().catch(() => false)) {
+      await historicalPreview.click();
+    }
+    // Completed process groups are collapsed by the production timeline. Expand
+    // the command group before inspecting its real tool row.
+    await page.evaluate(() => {
+      for (const group of document.querySelectorAll(
+        '[data-testid="streaming-process-group"]',
+      )) {
+        const button = group.querySelector("button[aria-expanded]");
+        if (button?.getAttribute("aria-expanded") !== "true") {
+          button?.click();
+        }
+      }
+    });
+    lastSnapshot = await page.evaluate(
+      ({ finalText, rawStdinText, threadId }) => {
+      const bodyText = document.body?.innerText || "";
+      const rows = Array.from(
+        document.querySelectorAll('[data-testid="tool-call-row"]'),
+      ).map((row) => ({
+        text: row.textContent || "",
+        toolName: row.getAttribute("data-tool-name") || null,
+        status: row.getAttribute("data-tool-status") || null,
+      }));
+      const messageListFrame = document.querySelector(
+        '[data-testid="message-list-frame"]',
+      );
+      const turnStartTrace = (() => {
+        try {
+          const entries = JSON.parse(
+            window.localStorage.getItem("lime_invoke_trace_buffer_v1") || "[]",
+          );
+          if (!Array.isArray(entries)) {
+            return null;
+          }
+          for (const entry of entries) {
+            if (entry?.command !== "app_server_handle_json_lines") {
+              continue;
+            }
+            const lines = entry?.args_preview?.request?.lines;
+            if (!Array.isArray(lines)) {
+              continue;
+            }
+            for (const line of lines) {
+              try {
+                const message = JSON.parse(String(line));
+                if (
+                  message?.method === "turn/start" &&
+                  message?.params?.threadId === threadId
+                ) {
+                  return {
+                    method: message.method,
+                    threadId: message.params.threadId,
+                    transport: entry.transport || null,
+                    status: entry.status || null,
+                  };
+                }
+              } catch {
+                // Ignore unrelated malformed diagnostic lines.
+              }
+            }
+          }
+        } catch {
+          return null;
+        }
+        return null;
+      })();
+      return {
+        url: window.location.href,
+        messageListSessionId:
+          messageListFrame?.getAttribute("data-session-id") || null,
+        commandRows: rows.filter((row) => row.toolName === "exec_command"),
+        hasSummary: bodyText.includes("sent 9 chars"),
+        hasRawStdin: bodyText.includes(rawStdinText),
+        hasFinalText: bodyText.includes(finalText),
+        turnStartTrace,
+      };
+      },
+      {
+        finalText,
+        rawStdinText: TERMINAL_INTERACTION_CHARS.trim(),
+        threadId,
+      },
+    );
+    if (
+      lastSnapshot?.messageListSessionId &&
+      lastSnapshot.messageListSessionId === sessionId &&
+      lastSnapshot.hasSummary &&
+      lastSnapshot.hasFinalText &&
+      !lastSnapshot.hasRawStdin &&
+      lastSnapshot.commandRows.some((row) => row.status === "completed")
+    ) {
+      return {
+        phase,
+        sessionId,
+        threadId,
+        url: lastSnapshot.url,
+        messageListSessionId: lastSnapshot.messageListSessionId,
+        commandRowCount: lastSnapshot.commandRows.length,
+        terminalInteractionSummary: TERMINAL_INTERACTION_SUMMARY,
+        turnStartTrace: lastSnapshot.turnStartTrace,
+        rawStdinProjected: false,
+        finalTextVisible: true,
+      };
+    }
+    await new Promise((resolve) => setTimeout(resolve, options.intervalMs));
+  }
+  throw new Error(
+    `${phase} GUI terminal interaction 摘要未出现: ${JSON.stringify(
+      sanitizeJson(lastSnapshot),
+    )}`,
+  );
+}
+
+async function selectRuntimeRouteInRenderer(
+  page,
+  options,
+  { sessionId, route },
+) {
+  assert(
+    route?.providerName && route?.model,
+    "Renderer 模型选择缺少 provider/model route",
+  );
+  const input = page.locator(
+    `textarea[name="agent-chat-message"][data-session-id="${sessionId}"]`,
+  );
+  const modelSelector = input.locator(
+    'xpath=ancestor::*[@data-testid="inputbar-core-container"][1]//*[@data-testid="model-selector"]',
+  );
+  await modelSelector.waitFor({
+    state: "visible",
+    timeout: Math.min(options.timeoutMs, 10_000),
+  });
+  await modelSelector.click();
+
+  const popover = page.locator('[data-model-selector-popover="true"]');
+  await popover.waitFor({
+    state: "visible",
+    timeout: Math.min(options.timeoutMs, 10_000),
+  });
+  const providerButton = popover
+    .locator("button")
+    .filter({ hasText: route.providerName })
+    .first();
+  await providerButton.waitFor({
+    state: "visible",
+    timeout: Math.min(options.timeoutMs, 10_000),
+  });
+  await providerButton.click();
+
+  const modelButton = popover
+    .locator("button")
+    .filter({ hasText: route.model })
+    .first();
+  await modelButton.waitFor({
+    state: "visible",
+    timeout: Math.min(options.timeoutMs, 10_000),
+  });
+  await modelButton.click();
+  await popover.waitFor({
+    state: "hidden",
+    timeout: Math.min(options.timeoutMs, 10_000),
+  });
+
+  const selectionHandle = await page.waitForFunction(
+    ({ expectedModel, expectedProvider, activeSessionId }) => {
+      const textarea = document.querySelector(
+        `textarea[name="agent-chat-message"][data-session-id="${activeSessionId}"]`,
+      );
+      const container = textarea?.closest(
+        '[data-testid="inputbar-core-container"]',
+      );
+      const trigger = container?.querySelector('[data-testid="model-selector"]');
+      const text = trigger?.textContent?.trim() || "";
+      const title = trigger?.getAttribute("title") || "";
+      return text.includes(expectedModel) && title.includes(expectedProvider)
+        ? { text, title }
+        : null;
+    },
+    {
+      expectedModel: route.model,
+      expectedProvider: route.providerName,
+      activeSessionId: sessionId,
+    },
+    { timeout: Math.min(options.timeoutMs, 10_000) },
+  );
+  const selection = await selectionHandle.jsonValue();
+  return {
+    sessionId,
+    providerId: route.providerId,
+    providerName: route.providerName,
+    model: route.model,
+    triggerText: selection.text,
+    triggerTitle: selection.title,
+  };
+}
+
+async function runNormalTurnInRenderer(
+  page,
+  options,
+  { normalSessionId, normalThreadId, route, text },
+) {
+  const input = page.locator(
+    `textarea[name="agent-chat-message"][data-session-id="${normalSessionId}"]`,
+  );
+  await input.fill(text);
+  const sendButton = input.locator(
+    'xpath=ancestor::*[@data-testid="inputbar-core-container"][1]//*[@data-testid="send-btn"]',
+  );
+  await page.waitForFunction(
+    ({ activeSessionId, expectedModel, expectedText }) => {
+      const textarea = document.querySelector(
+        `textarea[name="agent-chat-message"][data-session-id="${activeSessionId}"]`,
+      );
+      const container = textarea?.closest(
+        '[data-testid="inputbar-core-container"]',
+      );
+      const trigger = container?.querySelector('[data-testid="model-selector"]');
+      const button = container?.querySelector('[data-testid="send-btn"]');
+      return Boolean(
+        textarea instanceof HTMLTextAreaElement &&
+          textarea.value === expectedText &&
+          trigger?.textContent?.includes(expectedModel) &&
+          button instanceof HTMLButtonElement &&
+          !button.disabled,
+      );
+    },
+    {
+      activeSessionId: normalSessionId,
+      expectedModel: route.model,
+      expectedText: text,
+    },
+    { timeout: Math.min(options.timeoutMs, 10_000) },
+  );
+  await sendButton.click({ timeout: Math.min(options.timeoutMs, 10_000) });
+  return await waitForGuiTerminalInteraction(page, options, {
+    sessionId: normalSessionId,
+    threadId: normalThreadId,
+    finalText: NORMAL_FINAL_TEXT,
+    phase: "live",
+  });
+}
+
 async function run() {
   const options = parseArgs(process.argv.slice(2));
   fs.mkdirSync(options.evidenceDir, { recursive: true });
@@ -154,7 +446,10 @@ async function run() {
   let providerFixture = null;
   let app = null;
   let page = null;
+  let client = null;
   const consoleErrors = [];
+  const guiTerminalInteraction = { live: null, reloaded: null };
+  let guiModelSelection = null;
 
   const appServerBinary = resolveDevAppServerBinary({
     env: runtimeEnv.env,
@@ -177,6 +472,9 @@ async function run() {
     providerBaseUrl: null,
     gateBBridge: null,
     fixtureSummary: null,
+    importedIdentity: null,
+    guiTerminalInteraction,
+    guiModelSelection,
     consoleErrors,
     screenshot: null,
     rawEvidence: paths.raw,
@@ -225,14 +523,25 @@ async function run() {
     summary.electronPreloadBridge =
       renderer.electron && renderer.hasInvokeBridge;
     await clearInvokeBuffers(page);
-    const client = createPageAppServerClient(page);
+    client = createPageAppServerClient(page);
 
     logStage("commit-import-zero-replay");
     const initial = await initializeAndCommitImport(
       client,
       runtimeEnv,
-      options,
+      {
+        ...options,
+        beforeCommit: () =>
+          createRepositoryProvider(client, providerFixture.provider),
+      },
     );
+    const route = initial.beforeCommitResult;
+    summary.importedIdentity = sanitizeJson({
+      jobSessionId: initial.sessionId,
+      jobThreadId: initial.threadId,
+      readSessionId: initial.importedRead?.thread?.sessionId ?? null,
+      readThreadId: initial.importedRead?.thread?.id ?? null,
+    });
     const providerRequestsAfterCommit = providerFixture.requests.length;
     assert(
       providerRequestsAfterCommit === 0,
@@ -243,10 +552,52 @@ async function run() {
     const turns = await runImportedAndNormalTurns(client, {
       importedSessionId: initial.sessionId,
       importedThreadId: initial.threadId,
-      provider: providerFixture.provider,
+      route,
       runtimeEnv,
       command: providerScript.command,
       options,
+      onNormalThreadReady: async ({
+        normalSessionId,
+        normalThreadId,
+        route: normalRoute,
+      }) => {
+        logStage("open-normal-thread-before-live-turn");
+        summary.normalIdentity = {
+          sessionId: normalSessionId,
+          threadId: normalThreadId,
+        };
+        await openSessionInRenderer(page, options, normalSessionId);
+        assert(normalThreadId, "normal thread identity 不能为空");
+        logStage("select-normal-thread-fixture-model");
+        guiModelSelection = await selectRuntimeRouteInRenderer(page, options, {
+          sessionId: normalSessionId,
+          route: normalRoute,
+        });
+        summary.guiModelSelection = sanitizeJson(guiModelSelection);
+      },
+      runNormalTurnInRenderer: async (context) => {
+        logStage("send-normal-turn-through-renderer");
+        guiTerminalInteraction.live = await runNormalTurnInRenderer(
+          page,
+          options,
+          context,
+        );
+        return guiTerminalInteraction.live;
+      },
+      onNormalTurnCompleted: async ({
+        normalSessionId,
+        normalThreadId,
+      }) => {
+        logStage("reload-and-assert-terminal-interaction-recovery");
+        await openSessionInRenderer(page, options, normalSessionId);
+        guiTerminalInteraction.reloaded =
+          await waitForGuiTerminalInteraction(page, options, {
+            sessionId: normalSessionId,
+            threadId: normalThreadId,
+            finalText: NORMAL_FINAL_TEXT,
+            phase: "reloaded",
+          });
+      },
     });
     writeJsonFile(
       paths.raw,
@@ -256,7 +607,10 @@ async function run() {
       paths.provider,
       sanitizeJson(providerRequestSummaries(providerFixture.requests)),
     );
-    summary.gateBBridge = sanitizeJson(summarizeAndAssertBridge(client));
+    summary.gateBBridge = sanitizeJson({
+      ...summarizeAndAssertBridge(client),
+      rendererTurnStart: guiTerminalInteraction.live?.turnStartTrace ?? null,
+    });
     const fixtureSummary = summarizeAndAssertFixture({
       client,
       initial,
@@ -284,6 +638,64 @@ async function run() {
     );
   } catch (error) {
     summary.error = error instanceof Error ? error.message : String(error);
+    if (page) {
+      try {
+        summary.failureDiagnostics = await page.evaluate(() => {
+          const readJson = (key) => {
+            try {
+              const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          };
+          const trace = readJson("lime_invoke_trace_buffer_v1");
+          return {
+            bodyText: document.body?.innerText || "",
+            processGroups: Array.from(
+              document.querySelectorAll('[data-testid="streaming-process-group"]'),
+            ).map((group) => ({
+              text: group.textContent || "",
+              expanded:
+                group.querySelector("button")?.getAttribute("aria-expanded") ||
+                null,
+            })),
+            toolRows: Array.from(
+              document.querySelectorAll('[data-testid="tool-call-row"]'),
+            ).map((row) => ({
+              text: row.textContent || "",
+              toolName: row.getAttribute("data-tool-name") || null,
+              status: row.getAttribute("data-tool-status") || null,
+            })),
+            trace: trace.slice(-40),
+            invokeErrors: readJson("lime_invoke_error_buffer_v1").slice(-20),
+          };
+        });
+      } catch {
+        summary.failureDiagnostics = { unavailable: true };
+      }
+    }
+    summary.failureClient = sanitizeJson({
+      requests: client?.requests ?? [],
+      messages: client?.messages ?? [],
+    });
+    if (client && summary.normalIdentity?.threadId) {
+      try {
+        summary.failureThreadRead = sanitizeJson(
+          await client.call("thread/read", {
+            threadId: summary.normalIdentity.threadId,
+            includeTurns: true,
+          }),
+        );
+      } catch {
+        summary.failureThreadRead = null;
+      }
+    }
+    if (providerFixture) {
+      summary.failureProviderRequests = sanitizeJson(
+        providerRequestSummaries(providerFixture.requests),
+      );
+    }
     if (page) {
       try {
         await page.screenshot({

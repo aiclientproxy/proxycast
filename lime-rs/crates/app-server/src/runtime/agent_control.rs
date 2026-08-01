@@ -935,7 +935,9 @@ fn validate_agent_control_fork_items(turn: &agent_protocol::Turn) -> Result<(), 
                 }
             }
             ThreadItemPayload::AgentMessage { .. } => {}
-            ThreadItemPayload::ContextCompaction { .. } | ThreadItemPayload::Extension { .. } => {}
+            ThreadItemPayload::ContextCompaction { .. }
+            | ThreadItemPayload::Unknown { .. }
+            | ThreadItemPayload::Extension { .. } => {}
         }
     }
     Ok(())

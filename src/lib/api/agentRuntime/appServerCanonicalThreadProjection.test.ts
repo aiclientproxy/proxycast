@@ -563,7 +563,9 @@ describe("appServerCanonicalThreadProjection", () => {
             items: [
               {
                 id: "item-unknown",
-                type: "futureUnknownItem",
+                type: "unknownItem",
+                upstreamType: "futureUnknownItem",
+                fieldNames: [],
               },
             ],
           },

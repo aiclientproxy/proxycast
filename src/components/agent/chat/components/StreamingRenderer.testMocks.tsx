@@ -167,6 +167,9 @@ vi.mock("react-i18next", () => ({
       if (key === "agentChat.processGroup.separator") {
         return "，";
       }
+      if (key === "agentChat.processGroup.terminalInteractions") {
+        return `已发送输入：${values?.value ?? ""}`;
+      }
       if (key === "agentChat.processGroup.webSearch.section.webSearchSources") {
         return "搜索来源";
       }

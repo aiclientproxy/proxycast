@@ -56,6 +56,121 @@ fn canonical_nested_item_uses_outer_event_identity_time_and_lifecycle_status() {
 }
 
 #[test]
+fn unknown_item_lifecycle_retains_only_sanitized_field_names() {
+    let changes = materialize_events(
+        &[
+            event(
+                "unknown-start",
+                1,
+                "item.started",
+                "turn-unknown",
+                json!({"item": {
+                    "id": "unknown-1",
+                    "threadId": "thread-1",
+                    "turnId": "turn-unknown",
+                    "type": "futureCapability",
+                    "label": "future capability",
+                    "opaquePayload": "opaque-value-must-not-survive",
+                    "secretToken": "UNKNOWN_ITEM_SECRET_MUST_NOT_LEAK",
+                    "status": "inProgress"
+                }}),
+            ),
+            event(
+                "unknown-completed",
+                2,
+                "item.completed",
+                "turn-unknown",
+                json!({"item": {
+                    "id": "unknown-1",
+                    "threadId": "thread-1",
+                    "turnId": "turn-unknown",
+                    "type": "futureCapability",
+                    "label": "future capability",
+                    "opaquePayload": "opaque-value-must-not-survive",
+                    "secretToken": "UNKNOWN_ITEM_SECRET_MUST_NOT_LEAK",
+                    "status": "completed"
+                }}),
+            ),
+        ],
+        "session-1",
+        "thread-1",
+    )
+    .expect("materialize unknown item lifecycle");
+
+    assert_eq!(changes.changed_items.len(), 1);
+    let item = &changes.changed_items[0];
+    assert_eq!(item.kind, ItemKind::Unknown);
+    assert_eq!(item.status, ItemStatus::Completed);
+    assert_eq!(item.item_id.as_str(), "item_unknown-1");
+    assert_eq!(item.metadata, serde_json::Value::Null);
+    assert_eq!(
+        item.payload,
+        ThreadItemPayload::Unknown {
+            upstream_type: "futureCapability".to_string(),
+            field_names: vec![
+                "[redacted]".to_string(),
+                "label".to_string(),
+                "opaquePayload".to_string(),
+                "status".to_string(),
+            ],
+        }
+    );
+    let wire = serde_json::to_string(item).expect("serialize unknown item");
+    assert!(!wire.contains("UNKNOWN_ITEM_SECRET_MUST_NOT_LEAK"));
+    assert!(!wire.contains("opaque-value-must-not-survive"));
+    assert!(!wire.contains("future capability"));
+}
+
+#[test]
+fn malformed_unknown_item_lifecycle_fails_closed() {
+    for payload in [
+        json!({"item": {"type": "futureCapability", "label": "missing id"}}),
+        json!({"item": {"id": "unknown-1", "label": "missing type"}}),
+        json!({"item": {"id": "unknown-1", "type": "FutureCapability"}}),
+        json!({"item": {"id": "unknown-1", "type": "future_capability"}}),
+    ] {
+        let changes = materialize_events(
+            &[event(
+                "malformed-unknown",
+                1,
+                "item.started",
+                "turn-unknown",
+                payload,
+            )],
+            "session-1",
+            "thread-1",
+        )
+        .expect("malformed unknown item does not create canonical state");
+        assert!(changes.changed_items.is_empty());
+    }
+}
+
+#[test]
+fn unsafe_nested_canonical_unknown_item_fails_closed() {
+    let mut nested = canonical_tool_item("unknown-nested", "completed", 1);
+    nested["kind"] = json!("unknown");
+    nested["payload"] = json!({
+        "type": "unknown",
+        "upstream_type": "futureCapability",
+        "field_names": ["secretToken"]
+    });
+
+    let changes = materialize_events(
+        &[event(
+            "unsafe-nested-unknown",
+            1,
+            "item.started",
+            "turn-unknown",
+            json!({"item": nested}),
+        )],
+        "session-1",
+        "thread-1",
+    )
+    .expect("unsafe nested unknown does not create canonical state");
+    assert!(changes.changed_items.is_empty());
+}
+
+#[test]
 fn canonical_nested_tool_output_and_metadata_are_preserved_across_lifecycle() {
     let mut started = canonical_tool_item("nested-tool", "pending", 7);
     started["payload"]["arguments"] = json!([

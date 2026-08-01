@@ -58,6 +58,8 @@ pub enum ThreadItem {
         exit_code: Option<i32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         duration_ms: Option<i64>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        terminal_interactions: Vec<CommandExecutionTerminalInteraction>,
     },
     FileChange {
         id: String,
@@ -136,6 +138,18 @@ pub enum ThreadItem {
     ContextCompaction {
         id: String,
     },
+    UnknownItem {
+        id: String,
+        upstream_type: String,
+        field_names: Vec<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandExecutionTerminalInteraction {
+    pub process_id: String,
+    pub stdin: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -409,6 +423,16 @@ pub struct CommandExecutionOutputDeltaNotification {
     pub turn_id: String,
     pub item_id: String,
     pub delta: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandExecutionTerminalInteractionNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub item_id: String,
+    pub process_id: String,
+    pub stdin: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

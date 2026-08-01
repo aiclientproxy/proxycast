@@ -208,6 +208,7 @@ pub(in crate::runtime) fn merge_item_snapshot(
     previous: ThreadItem,
     mut next: ThreadItem,
 ) -> ThreadItem {
+    let previous_terminal_interactions = previous.metadata.get("terminalInteractions").cloned();
     let source_event_type = next
         .metadata
         .get("source_event_type")
@@ -222,6 +223,29 @@ pub(in crate::runtime) fn merge_item_snapshot(
         next.status = previous.status;
     }
     next.payload = merge_payload(previous.payload, next.payload, source_event_type.as_deref());
+    if matches!(
+        next.payload,
+        agent_protocol::ThreadItemPayload::Command { .. }
+    ) {
+        if let Some(interactions) = previous_terminal_interactions {
+            if let Some(metadata) = next.metadata.as_object_mut() {
+                let next_interactions = metadata
+                    .get("terminalInteractions")
+                    .and_then(serde_json::Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
+                let mut merged = interactions.as_array().cloned().unwrap_or_default();
+                merged.extend(next_interactions);
+                if merged.len() > 20 {
+                    merged.drain(..merged.len() - 20);
+                }
+                metadata.insert(
+                    "terminalInteractions".to_string(),
+                    serde_json::Value::Array(merged),
+                );
+            }
+        }
+    }
     next
 }
 
