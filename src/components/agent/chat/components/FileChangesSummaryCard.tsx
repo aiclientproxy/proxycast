@@ -6,6 +6,7 @@ import {
   FileDiff,
   FileText,
   Loader2,
+  Pencil,
   RotateCcw,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -22,6 +23,7 @@ import {
 
 interface FileChangesSummaryCardProps {
   aggregate: FileChangesAggregate;
+  variant?: "default" | "timeline";
   isStreaming?: boolean;
   onFileClick?: (path: string, content: string) => void;
   onOpenFile?: (file: FileChangeSummary) => void;
@@ -114,6 +116,7 @@ function resolveUndoErrorMessage(
 
 export function FileChangesSummaryCard({
   aggregate,
+  variant = "default",
   isStreaming = false,
   onFileClick,
   onOpenFile,
@@ -121,7 +124,9 @@ export function FileChangesSummaryCard({
 }: FileChangesSummaryCardProps) {
   const { t } = useTranslation("agent");
   const { files, totalAdded, totalRemoved, fileCount } = aggregate;
-  const [isFileListExpanded, setIsFileListExpanded] = useState(false);
+  const [isFileListExpanded, setIsFileListExpanded] = useState(
+    variant === "timeline",
+  );
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [undoState, setUndoState] = useState<UndoState>("idle");
   const [undoError, setUndoError] = useState<string | null>(null);
@@ -167,6 +172,101 @@ export function FileChangesSummaryCard({
 
     onFileClick?.(file.path, content);
   };
+
+  if (variant === "timeline") {
+    return (
+      <div
+        data-testid="file-changes-summary-card"
+        data-file-status={files[0]?.fileStatus}
+        className="space-y-0.5 py-1 text-slate-500"
+      >
+        <button
+          type="button"
+          data-testid="file-changes-summary-timeline-toggle"
+          aria-expanded={isFileListExpanded}
+          className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm transition-colors hover:bg-slate-50 hover:text-slate-700"
+          onClick={() => setIsFileListExpanded((current) => !current)}
+        >
+          <Pencil className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate">
+            {t("agentChat.messageList.historicalTimeline.fileChangesTitle")}
+            <span className="sr-only">
+              {t("agentChat.fileChangesSummary.summary", { count: fileCount })}
+              {` +${totalAdded} -${totalRemoved}`}
+            </span>
+          </span>
+          {isFileListExpanded ? (
+            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+          )}
+        </button>
+        {isFileListExpanded ? (
+          <div className="space-y-0.5 pl-1">
+            {visibleFiles.map((file) => {
+              const statusKey =
+                file.kind === "add"
+                  ? "agentChat.toolCall.actionOverride.create.completed"
+                  : file.kind === "delete"
+                    ? "agentChat.toolCall.actionOverride.delete.completed"
+                    : "agentChat.toolCall.action.edit.completed";
+              const isSelected = file.path === selectedPath;
+              return (
+                <button
+                  key={file.path}
+                  type="button"
+                  data-testid="file-changes-summary-file-row"
+                  data-file-status={file.fileStatus}
+                  aria-expanded={isSelected}
+                  className={cn(
+                    "flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs leading-5 transition-colors hover:bg-slate-50",
+                    isSelected && "bg-slate-50",
+                  )}
+                  onClick={() => openFileReview(file)}
+                  title={
+                    file.movePath
+                      ? `${file.path} -> ${file.movePath}`
+                      : file.path
+                  }
+                >
+                  <Pencil
+                    className="h-3 w-3 shrink-0 text-slate-400"
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-slate-500">
+                    <span>{t(statusKey)}</span>{" "}
+                    <span className="underline decoration-slate-300 underline-offset-2">
+                      {resolveDisplayFilePath(file)}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 font-mono text-[11px] text-slate-400">
+                    <span className="text-emerald-600">+{file.linesAdded}</span>
+                    <span className="text-red-500">-{file.linesRemoved}</span>
+                    <span
+                      className="h-1.5 w-1.5 rounded-full bg-sky-500"
+                      aria-hidden="true"
+                    />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        {!isStreaming && hasCollapsibleFileList && isFileListExpanded ? (
+          <button
+            type="button"
+            data-testid="file-changes-summary-toggle"
+            aria-expanded={isFileListExpanded}
+            className="flex items-center gap-1 px-1 py-1 text-xs font-medium text-slate-500 hover:text-slate-700"
+            onClick={() => setIsFileListExpanded(false)}
+          >
+            {t("agentChat.fileChangesSummary.collapseFiles")}
+            <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   const requestUndo = () => {
     if (!canUndo) {

@@ -501,6 +501,7 @@ export function WorkspaceConversationScene({
   const taskCenterUtilityToolbarNode = shouldUseTaskCenterUtilityToolbar ? (
     <TaskCenterUtilityToolbar
       projectRootPath={projectRootPath}
+      onProjectChange={onProjectChange}
       taskRail={taskRail}
       placement={layoutMode !== "chat" ? "workbench-header" : "task-strip"}
       showCanvasToggle={!isThemeWorkbench}

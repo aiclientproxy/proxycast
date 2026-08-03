@@ -398,6 +398,41 @@ describe("messageTimelineRenderProjection", () => {
     });
   });
 
+  it("同一 turn 映射到多个消息组时只保留一个 timeline owner", () => {
+    const messages = [
+      messageAt("user-first", "user", "2026-05-05T00:00:00.000Z"),
+      messageAt("assistant-first", "assistant", "2026-05-05T00:00:01.000Z"),
+      messageAt("user-second", "user", "2026-05-05T00:00:02.000Z"),
+      messageAt("assistant-second", "assistant", "2026-05-05T00:00:03.000Z"),
+    ];
+    const groups = buildMessageGroupsProjection(messages);
+    const sharedTimeline = {
+      turn: turn("turn-shared"),
+      items: [item("item-shared", "turn-shared")],
+    };
+
+    const renderGroups = buildMessageRenderGroupsProjection({
+      messageGroups: groups,
+      timelineByMessageId: new Map([
+        [
+          "assistant-first",
+          { ...sharedTimeline, messageId: "assistant-first" },
+        ],
+        [
+          "assistant-second",
+          { ...sharedTimeline, messageId: "assistant-second" },
+        ],
+      ]),
+      currentTurnTimeline: null,
+      lastAssistantMessageId: "assistant-second",
+    });
+
+    expect(
+      renderGroups.map((group) => group.timeline?.turn.id ?? null),
+    ).toEqual(["turn-shared", null]);
+    expect(renderGroups[1]?.timelineMessageId).toBeNull();
+  });
+
   it("当前 turn 与历史映射指向同一消息时应优先保留完整持久化 timeline", () => {
     const messages = [
       messageAt("user-web-tools", "user", "2026-06-20T12:00:00.000Z"),

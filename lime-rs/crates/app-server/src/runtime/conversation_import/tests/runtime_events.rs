@@ -1508,6 +1508,153 @@ fn commit_merges_duplicate_user_messages_when_response_item_precedes_event_msg()
 }
 
 #[test]
+fn commit_keeps_non_adjacent_duplicate_user_messages_as_separate_turns() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let rollout_path = temp
+        .path()
+        .join("rollout-non-adjacent-duplicate-user.jsonl");
+    fs::write(
+        &rollout_path,
+        [
+            session_meta("thread-non-adjacent-duplicate-user"),
+            response_user_message("same request"),
+            response_reasoning("intervening source event"),
+            event_user_message("same request"),
+            event_agent_message("second answer"),
+        ]
+        .join("\n"),
+    )
+    .expect("write rollout");
+    let core = current_import_core(temp.path());
+
+    let response = commit::commit_conversation_import_thread(
+        &core,
+        ConversationImportThreadCommitParams {
+            source_root: Some(temp.path().to_string_lossy().into_owned()),
+            source_path: Some(rollout_path.to_string_lossy().into_owned()),
+            confirmed: true,
+            ..Default::default()
+        },
+    )
+    .expect("commit");
+
+    assert_eq!(response.imported_turns, 2);
+    let read = core
+        .read_session(AgentSessionReadParams {
+            session_id: response.session.session_id,
+            history_limit: None,
+            history_offset: None,
+            history_before_message_id: None,
+        })
+        .expect("read imported session");
+    let detail = read.detail.expect("detail");
+    let messages = detail["messages"].as_array().expect("messages");
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| message["role"] == "user")
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn commit_merges_image_user_sources_without_duplicate_turn_or_attachment() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let rollout_path = temp.path().join("rollout-duplicate-image-user.jsonl");
+    fs::write(
+        &rollout_path,
+        [
+            session_meta("thread-duplicate-image-user"),
+            serde_json::json!({
+                "timestamp": "2026-06-16T00:00:01.000Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": "<image name=[Image #1] path=\"/tmp/photo.png\">\n</image>\n[Image #1] inspect this image"
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": "data:image/png;base64,aW1hZ2U="
+                        }
+                    ]
+                }
+            })
+            .to_string(),
+            serde_json::json!({
+                "timestamp": "2026-06-16T00:00:01.100Z",
+                "type": "event_msg",
+                "payload": {
+                    "type": "user_message",
+                    "message": "## My request for Codex: [Image #1] inspect this image",
+                    "local_images": ["/tmp/photo.png"]
+                }
+            })
+            .to_string(),
+            event_agent_message("image answer"),
+        ]
+        .join("\n"),
+    )
+    .expect("write rollout");
+    let core = current_import_core(temp.path());
+
+    let response = commit::commit_conversation_import_thread(
+        &core,
+        ConversationImportThreadCommitParams {
+            source_root: Some(temp.path().to_string_lossy().into_owned()),
+            source_path: Some(rollout_path.to_string_lossy().into_owned()),
+            confirmed: true,
+            ..Default::default()
+        },
+    )
+    .expect("commit");
+
+    assert_eq!(response.imported_turns, 1);
+    let read = read_current_session(
+        &core,
+        AgentSessionReadParams {
+            session_id: response.session.session_id,
+            history_limit: None,
+            history_offset: None,
+            history_before_message_id: None,
+        },
+    )
+    .expect("read imported session");
+    let detail = read.detail.expect("detail");
+    let messages = detail["messages"].as_array().expect("messages");
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| message["role"] == "user")
+            .count(),
+        1
+    );
+    assert_eq!(
+        messages[0]["content"][0]["text"],
+        "[Image #1] inspect this image"
+    );
+
+    let items = detail["thread_read"]["thread_items"]
+        .as_array()
+        .expect("canonical thread items");
+    let user = items
+        .iter()
+        .find(|item| item["type"] == "user_message")
+        .expect("canonical user item");
+    let image_count = user["content"]
+        .as_array()
+        .expect("user content")
+        .iter()
+        .filter(|part| part["type"] == "image")
+        .count();
+    assert_eq!(image_count, 1);
+}
+
+#[test]
 fn commit_closes_incomplete_imported_lifecycles_as_failed_timeline_items() {
     let temp = tempfile::tempdir().expect("tempdir");
     let rollout_path = temp.path().join("rollout-incomplete-lifecycle.jsonl");

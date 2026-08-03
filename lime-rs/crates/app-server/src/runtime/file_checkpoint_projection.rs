@@ -59,6 +59,24 @@ fn file_artifact_item_from_event(event: &AgentEvent) -> Option<Value> {
     metadata.insert("artifactVersionNo".to_string(), json!(event.sequence));
     metadata.insert("artifactKind".to_string(), json!("code_file"));
     metadata.insert("artifactStatus".to_string(), json!("ready"));
+    insert_string_metadata(
+        &mut metadata,
+        "eventClass",
+        &event.payload,
+        &["eventClass", "event_class"],
+    );
+    insert_string_metadata(
+        &mut metadata,
+        "operation",
+        &event.payload,
+        &["operation", "action"],
+    );
+    insert_string_metadata(
+        &mut metadata,
+        "toolName",
+        &event.payload,
+        &["toolName", "tool_name"],
+    );
     metadata.insert(
         "previewText".to_string(),
         json!(preview.clone().unwrap_or_else(|| path.clone())),

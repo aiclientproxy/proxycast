@@ -21,6 +21,7 @@ export interface MessageRenderGroupProjection extends MessageTurnGroup {
   timelineMessageId: string | null;
   timeline: MessageTurnTimeline | CurrentTurnTimelineProjection | null;
   isActiveGroup: boolean;
+  isImportedHistory?: boolean;
 }
 
 export function buildTimelineByMessageIdProjection(params: {
@@ -337,6 +338,8 @@ export function buildMessageRenderGroupsProjection(params: {
   currentTurnTimeline: CurrentTurnTimelineProjection | null;
   lastAssistantMessageId: string | null;
 }): MessageRenderGroupProjection[] {
+  const renderedTimelineTurnIds = new Set<string>();
+
   return params.messageGroups.map((group) => {
     const lastAssistantId =
       group.assistantMessages[group.assistantMessages.length - 1]?.id ?? null;
@@ -357,8 +360,18 @@ export function buildMessageRenderGroupsProjection(params: {
     const isActiveGroup =
       Boolean(lastAssistantId) &&
       lastAssistantId === params.lastAssistantMessageId;
+    const mappedGroupTimeline =
+      mappedTimeline ||
+      (isCurrentTurnGroup ? params.currentTurnTimeline : null);
+    const timelineTurnId = mappedGroupTimeline?.turn.id ?? null;
     const timeline =
-      mappedTimeline || (isCurrentTurnGroup ? params.currentTurnTimeline : null);
+      mappedGroupTimeline &&
+      (!timelineTurnId || !renderedTimelineTurnIds.has(timelineTurnId))
+        ? mappedGroupTimeline
+        : null;
+    if (timelineTurnId && timeline) {
+      renderedTimelineTurnIds.add(timelineTurnId);
+    }
 
     return {
       ...group,

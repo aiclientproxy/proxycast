@@ -339,28 +339,28 @@ fn history_turns(timeline: &[CodexTimelineItem]) -> Vec<HistoryTurn> {
                 "user" => {
                     if pending_user.as_mut().is_some_and(
                         |(text, attachments, source_type, timestamp, provenance)| {
-                            if text.trim() != message.preview.text.trim()
+                            if normalized_duplicate_user_message_text(text)
+                                != normalized_duplicate_user_message_text(&message.preview.text)
                                 || !is_duplicate_source_user_message(
                                     source_type.as_deref(),
                                     message.preview.source_type.as_deref(),
                                 )
+                                || has_intervening_runtime_event(&pending_events)
                             {
                                 return false;
                             }
-                            for attachment in &message.preview.attachments {
-                                let already_present = attachments.iter().any(|existing| {
-                                    existing.kind == attachment.kind
-                                        && existing.uri == attachment.uri
-                                });
-                                if !already_present {
-                                    attachments.push(attachment.clone());
-                                }
-                            }
+                            merge_duplicate_user_attachments(
+                                attachments,
+                                &message.preview.attachments,
+                            );
                             if timestamp.is_none() {
                                 *timestamp = message.preview.timestamp.clone();
                             }
                             if provenance.is_none() {
                                 *provenance = message.preview.provenance.clone();
+                            }
+                            if message.preview.source_type.as_deref() == Some("event_msg") {
+                                *text = message.preview.text.clone();
                             }
                             true
                         },
@@ -453,11 +453,118 @@ fn history_turn_event_timestamp(event: &HistoryTurnEvent) -> Option<String> {
     }
 }
 
-fn is_duplicate_source_user_message(existing: Option<&str>, candidate: Option<&str>) -> bool {
+fn is_duplicate_source_user_message(
+    existing_type: Option<&str>,
+    candidate_type: Option<&str>,
+) -> bool {
     matches!(
-        (existing, candidate),
+        (existing_type, candidate_type),
         (Some("event_msg"), Some("response_item")) | (Some("response_item"), Some("event_msg"))
     )
+}
+
+fn has_intervening_runtime_event(events: &[HistoryTurnEvent]) -> bool {
+    events
+        .iter()
+        .any(|event| matches!(event, HistoryTurnEvent::Runtime { .. }))
+}
+
+fn normalized_duplicate_user_message_text(value: &str) -> String {
+    let mut without_image_tags = String::with_capacity(value.len());
+    let lower = value.to_ascii_lowercase();
+    let mut cursor = 0;
+    while let Some(relative_start) = lower[cursor..].find("<image") {
+        let start = cursor + relative_start;
+        without_image_tags.push_str(&value[cursor..start]);
+        let Some(relative_end) = lower[start..].find('>') else {
+            without_image_tags.push_str(&value[start..]);
+            cursor = value.len();
+            break;
+        };
+        cursor = start + relative_end + 1;
+    }
+    if cursor < value.len() {
+        without_image_tags.push_str(&value[cursor..]);
+    }
+
+    let without_closing_tags = without_image_tags
+        .replace("</image>", "")
+        .replace("</IMAGE>", "");
+    let mut without_placeholders = String::with_capacity(without_closing_tags.len());
+    let lower = without_closing_tags.to_ascii_lowercase();
+    let mut cursor = 0;
+    while let Some(relative_start) = lower[cursor..].find("[image") {
+        let start = cursor + relative_start;
+        let Some(relative_end) = lower[start..].find(']') else {
+            without_placeholders.push_str(&without_closing_tags[cursor..]);
+            cursor = without_closing_tags.len();
+            break;
+        };
+        let end = start + relative_end;
+        let marker = &lower[start..=end];
+        let numbered_placeholder = marker
+            .strip_prefix("[image #")
+            .and_then(|value| value.strip_suffix(']'));
+        let is_image_placeholder = marker == "[image]"
+            || numbered_placeholder.is_some_and(|value| {
+                !value.is_empty() && value.chars().all(|character| character.is_ascii_digit())
+            });
+        if !is_image_placeholder {
+            without_placeholders.push_str(&without_closing_tags[cursor..=end]);
+        } else {
+            without_placeholders.push_str(&without_closing_tags[cursor..start]);
+        }
+        cursor = end + 1;
+    }
+    if cursor < without_closing_tags.len() {
+        without_placeholders.push_str(&without_closing_tags[cursor..]);
+    }
+
+    without_placeholders
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+fn attachment_index(attachment: &AgentAttachment) -> Option<u64> {
+    attachment
+        .metadata
+        .as_ref()
+        .and_then(serde_json::Value::as_object)
+        .and_then(|metadata| metadata.get("index"))
+        .and_then(|value| value.as_u64())
+}
+
+fn attachment_is_inline_image(attachment: &AgentAttachment) -> bool {
+    attachment.kind.eq_ignore_ascii_case("image")
+        && attachment
+            .uri
+            .as_deref()
+            .is_some_and(|uri| uri.trim().to_ascii_lowercase().starts_with("data:"))
+}
+
+fn merge_duplicate_user_attachments(
+    attachments: &mut Vec<AgentAttachment>,
+    candidates: &[AgentAttachment],
+) {
+    for candidate in candidates {
+        let candidate_index = attachment_index(candidate);
+        let existing_index = attachments.iter().position(|existing| {
+            existing.kind.eq_ignore_ascii_case(&candidate.kind)
+                && ((candidate_index.is_some() && candidate_index == attachment_index(existing))
+                    || existing.uri == candidate.uri)
+        });
+        if let Some(existing_index) = existing_index {
+            if attachment_is_inline_image(candidate)
+                && !attachment_is_inline_image(&attachments[existing_index])
+            {
+                attachments[existing_index] = candidate.clone();
+            }
+            continue;
+        }
+        attachments.push(candidate.clone());
+    }
 }
 
 fn append_history_turns(
@@ -521,6 +628,7 @@ fn append_history_turns(
             session_id,
             &thread_id,
             &turn_id,
+            history_turn.user_timestamp.as_deref(),
             history_turn.completed_timestamp.as_deref(),
         );
         core.append_runtime_events(session_id, &thread_id, Some(&turn_id), events)?;

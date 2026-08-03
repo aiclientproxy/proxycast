@@ -23,6 +23,7 @@ import {
   resolveTimelineArtifactNavigation,
   type ArtifactTimelineOpenTarget,
 } from "../utils/artifactTimelineNavigation";
+import { isTimelineReadOnlyFileArtifact } from "../utils/timelineFileArtifactKind";
 import { useLatestAgentUiProjectionEventForArtifact } from "../projection/useConversationProjectionStore";
 import {
   formatAgentUiProjectionEventType,
@@ -382,6 +383,9 @@ export function isPlainTimelineFileAttachment(
 ): item is Extract<AgentThreadItem, { type: "file_artifact" }> {
   if (item.type !== "file_artifact") {
     return false;
+  }
+  if (isTimelineReadOnlyFileArtifact(item)) {
+    return true;
   }
   const metadata = asRecord(item.metadata);
   const document = resolveArtifactProtocolDocumentPayload({

@@ -5,7 +5,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "1.119.0",
+  "version": "1.120.0",
   "description": "AI content workspace for Chinese creators: desktop writing, research, prompt management, knowledge base, and multi-model workflows.",
   "keywords": [
     "ai",

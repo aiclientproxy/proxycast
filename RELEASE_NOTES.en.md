@@ -1,37 +1,36 @@
-## Lime v1.119.0
+## Lime v1.120.0
 
 Simplified Chinese release notes are the primary version.
 
 ### New Features
 
-- MCP server startup now uses typed App Server status notifications, allowing Settings to show `starting`, `ready`, `failed`, and `cancelled` states and refresh server and tool catalogs at terminal states.
-- Agent conversations now surface future-protocol unknown Items safely. Live streaming, completion, history recovery, and reload share the same canonical Item instead of silently dropping unknown capabilities.
-- Follow-up terminal input in unified exec is attached to the original Command Item and shown as a redacted summary in live and historical conversations; raw stdin never enters notifications, persistence, or the GUI.
+- Codex history import now carries canonical provenance and safe metadata, keeping imported messages, images, command executions, file changes, and dynamic tool records on one identity across live, completed, and cold-recovery states.
+- Task Center adds compact location and environment menus for the local project, Git change summary, and current branch, with branch search, checkout/create actions, worktree creation, and a Codex web entry point.
+- Conversation timelines add turn-level process summaries and file-artifact classification; completed turns collapse into one readable summary and read-only file history is presented with the correct semantics.
 
 ### Fixes
 
-- Fixed unknown Items disappearing from the direct timeline after the terminal turn refresh, while preserving the same thread, turn, and item identity during cold recovery.
-- Fixed `write_stdin` being projected as a separate Tool Item, stale session bindings after completion, and cross-thread writes not failing explicitly.
-- Fixed MCP connection state relying on legacy Desktop events that could drift from the authoritative App Server state.
+- Fixed duplicate imported user messages when Codex emits both `response_item` and `event_msg`, while retaining the most complete text and image data.
+- Fixed inconsistent canonical Thread/Turn/Item projection, repeated tool details, and missing historical previews across history windows, pagination, reload, and turn completion refreshes.
+- Fixed image attachments, file-change summaries, and imported-history source markers being lost across rendering paths.
 
 ### Improvements and Refactoring
 
-- Consolidated MCP lifecycle ownership under `mcpServer/startupStatus/updated`, removed the production paths for `mcp:server_started`, `mcp:server_stopped`, and `mcp:server_error`, and added regression guards.
-- Unified the typed representation of command terminal interactions and unknown Items across protocol schemas, App Server projections, read models, clients, and the Renderer.
-- Restricted unknown Items to upstream type and redacted field names, preventing raw values, event metadata, and generic extension fallbacks from entering the product path.
+- Propagated controlled typed import metadata through App Server, protocol schemas, generated clients, read models, and the Renderer without allowing raw source payloads into the product path.
+- Unified the Codex-style reading column for message text, assistant bubbles, turn summaries, and composers; split Task Center location/environment panels while reusing the existing Git gateway.
+- Added focused unit, component, and integration coverage for history import, canonical projection, timeline aggregation, image attachments, file artifacts, and environment menus.
 
 ### Testing and Quality
 
-- Added a real Electron Gate B fixture for MCP startup notifications, covering successful and failed startup, automatic refresh, IPC/App Server hits, and zero production mock fallback.
-- Added a Gate B fixture for live and cold unknown Item recovery, covering safe field display, terminal recovery, identity consistency, and sensitive-value redaction.
-- Expanded Codex import continuation, Agent runtime fixture, protocol contract, Rust owner, and Renderer regressions for live, historical, and reload terminal-input summaries.
+- Expanded Codex import click-through, current runtime fixture, App Server projection, protocol schema, Rust owner, and Renderer coverage for live streaming, history recovery, pagination, and reload.
+- Synchronized five-language resources and added stable DOM and environment-menu interaction assertions.
 
 ### Documentation
 
-- Updated the MCP current lifecycle, command boundaries, Refactor v2 event projections, and execution progress with current, excluded, and dead-surface decisions.
+- Updated Codex GUI alignment, conversation compatibility refactoring, Trace layout, and Refactor v1/v2 progress records with current owners, evidence, and remaining boundaries.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and lockfile versions to `1.119.0`.
+- Bumped the root app, CLI npm package, Rust workspace, and lockfile versions to `1.120.0`.
 
-**Full changes**: `v1.118.0` -> `v1.119.0`
+**Full changes**: `v1.119.0` -> `v1.120.0`

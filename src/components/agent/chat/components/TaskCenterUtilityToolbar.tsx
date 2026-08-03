@@ -2,12 +2,8 @@ import React from "react";
 import type { ThreadGoal } from "@limecloud/app-server-client";
 import {
   ChevronDown,
-  CircleDot,
   Code2,
   FileText,
-  FolderOpen,
-  GitBranch,
-  GitCommitHorizontal,
   Globe2,
   Monitor,
   PanelRightClose,
@@ -20,19 +16,18 @@ import {
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
+import { openProjectPathWithTool } from "@/lib/api/fileSystem";
+import { openExternalUrlWithSystemBrowser } from "@/lib/api/externalUrl";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  openProjectPathWithTool,
-  type ProjectPathOpenTool,
-} from "@/lib/api/fileSystem";
-import {
+  checkoutProjectGitBranch,
+  createProjectGitWorktree,
+  createProjectGitBranch,
+  readProjectGitDiff,
   readProjectGitStatus,
   type ProjectGitStatus,
 } from "@/lib/api/projectGit";
+import { ensureProjectWorkspace } from "@/lib/api/project";
 import { cn } from "@/lib/utils";
 import { agentText } from "./harnessPanelText";
 import type { AgentSessionExecutionRuntime } from "@/lib/api/agentExecutionRuntime";
@@ -47,33 +42,19 @@ import type {
   ConfirmResponse,
   Message,
 } from "../types";
-import {
-  buildGeneralWorkbenchTaskRailProjection,
-  type GeneralWorkbenchTaskRailContextInput,
-} from "./generalWorkbenchTaskRailViewModel";
-import {
-  buildGeneralWorkbenchRunControlSurfaceProjection,
-  type GeneralWorkbenchRunControlEnvironmentInput,
-  type GeneralWorkbenchRunControlSplitLaneInput,
-} from "./generalWorkbenchRunControlSurfaceViewModel";
+import type { GeneralWorkbenchTaskRailContextInput } from "./generalWorkbenchTaskRailViewModel";
 import type { SidebarActivityLog } from "../hooks/useThemeContextWorkspace";
-import {
-  calculateWorkflowProgressPercent,
-  countCompletedWorkflowSteps,
-  type GeneralWorkbenchWorkflowStepInput,
-} from "./generalWorkbenchWorkflowPanelViewModel";
-import {
-  buildGeneralWorkbenchActivityLogGroups,
-  buildGeneralWorkbenchCreationTaskGroups,
-  type GeneralWorkbenchCreationTaskEvent,
-} from "./generalWorkbenchWorkflowData";
-import { TaskCenterTaskRail } from "./TaskCenterTaskRail";
+import type { GeneralWorkbenchWorkflowStepInput } from "./generalWorkbenchWorkflowPanelViewModel";
+import type { GeneralWorkbenchCreationTaskEvent } from "./generalWorkbenchWorkflowData";
+import { TaskCenterEnvironmentPanel } from "./TaskCenterEnvironmentPanel";
+import { TaskCenterLocationPanel } from "./TaskCenterLocationPanel";
+import { markProjectOpened } from "../hooks/agentProjectStorage";
 import { hydrateAgentPlanState } from "../utils/planState";
 import type { WorkspaceRightSurfaceLauncherProjection } from "../workspace/right-surface";
-import { buildWorkspaceTaskRailRuntimeContext } from "../workspace/useWorkspaceTaskRailRuntime";
 
 interface TaskCenterUtilityToolbarProps {
   projectRootPath?: string | null;
+  onProjectChange?: (projectId: string | null) => void;
   taskRail?: {
     sessionId?: string | null;
     workflowSteps: GeneralWorkbenchWorkflowStepInput[];
@@ -146,49 +127,94 @@ function extractErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function resolveWorktreeName(path: string): string {
+  const normalized = path.replace(/[\\/]+$/, "");
+  return normalized.split(/[\\/]/).at(-1)?.trim() || "";
+}
+
+function summarizeGitPatch(patch: string): {
+  additions: number;
+  deletions: number;
+} {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("+++") || line.startsWith("---")) {
+      continue;
+    }
+    if (line.startsWith("+")) {
+      additions += 1;
+    } else if (line.startsWith("-")) {
+      deletions += 1;
+    }
+  }
+  return { additions, deletions };
+}
+
 function useProjectGitStatus(rootPath?: string | null) {
   const normalizedRootPath = rootPath?.trim() || null;
   const [status, setStatus] = React.useState<ProjectGitStatus | null>(null);
+  const [changeSummary, setChangeSummary] = React.useState<{
+    additions: number;
+    deletions: number;
+  } | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const requestIdRef = React.useRef(0);
 
-  React.useEffect(() => {
+  const refresh = React.useCallback(async () => {
     if (!normalizedRootPath) {
       setStatus(null);
+      setChangeSummary(null);
       setLoading(false);
       setError(null);
       return;
     }
 
-    let cancelled = false;
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
-    void readProjectGitStatus(normalizedRootPath)
-      .then((nextStatus) => {
-        if (cancelled) return;
+    setChangeSummary(null);
+    try {
+      const nextStatus = await readProjectGitStatus(normalizedRootPath);
+      if (requestId === requestIdRef.current) {
         setStatus(nextStatus);
-      })
-      .catch((readError) => {
-        if (cancelled) return;
+      }
+    } catch (readError) {
+      if (requestId === requestIdRef.current) {
         setStatus(null);
         setError(extractErrorMessage(readError));
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
+      }
+    }
+    try {
+      const diff = await readProjectGitDiff(normalizedRootPath);
+      if (requestId === requestIdRef.current) {
+        setChangeSummary(summarizeGitPatch(diff.patch));
+      }
+    } catch {
+      if (requestId === requestIdRef.current) {
+        setChangeSummary(null);
+      }
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
+    }
   }, [normalizedRootPath]);
 
-  return { status, loading, error };
+  React.useEffect(() => {
+    void refresh();
+    return () => {
+      requestIdRef.current += 1;
+    };
+  }, [refresh]);
+
+  return { status, changeSummary, loading, error, refresh };
 }
 
 export function TaskCenterUtilityToolbar({
   projectRootPath,
+  onProjectChange,
   taskRail,
   placement = "task-strip",
   showCanvasToggle,
@@ -216,9 +242,8 @@ export function TaskCenterUtilityToolbar({
   const [environmentVisited, setEnvironmentVisited] = React.useState(false);
   const [environmentOpen, setEnvironmentOpen] = React.useState(false);
   const autoRevealedPlanKeyRef = React.useRef<string | null>(null);
-  const { status, loading, error } = useProjectGitStatus(
-    environmentVisited ? normalizedProjectRootPath : null,
-  );
+  const { status, changeSummary, loading, error, refresh } =
+    useProjectGitStatus(environmentVisited ? normalizedProjectRootPath : null);
   const shouldRenderHarnessToggle =
     showHarnessToggle || Boolean(onToggleHarnessPanel);
   const isWorkbenchHeaderPlacement = placement === "workbench-header";
@@ -329,32 +354,77 @@ export function TaskCenterUtilityToolbar({
     effectiveExpertInfoPanelVisible ? "关闭专家信息" : "打开专家信息",
   );
 
-  const handleOpenTool = React.useCallback(
-    async (tool: ProjectPathOpenTool) => {
-      if (!normalizedProjectRootPath) {
-        toast.error(
-          agentText(
-            "agentChat.navbar.appSwitcher.toast.noProjectRoot",
-            "当前项目缺少本地目录",
-          ),
-        );
-        return;
-      }
+  const handleOpenLocalLocation = React.useCallback(async () => {
+    if (!normalizedProjectRootPath) {
+      toast.error(
+        agentText(
+          "agentChat.navbar.appSwitcher.toast.noProjectRoot",
+          "当前项目缺少本地目录",
+        ),
+      );
+      return;
+    }
 
-      try {
-        await openProjectPathWithTool(normalizedProjectRootPath, tool);
-      } catch (openError) {
-        toast.error(
-          agentText(
-            "agentChat.navbar.appSwitcher.toast.openFailed",
-            "打开项目失败：{{message}}",
-            { message: extractErrorMessage(openError) },
-          ),
-        );
-      }
-    },
-    [normalizedProjectRootPath],
-  );
+    try {
+      await openProjectPathWithTool(normalizedProjectRootPath, "finder");
+    } catch (openError) {
+      toast.error(
+        agentText(
+          "agentChat.navbar.appSwitcher.toast.openFailed",
+          "打开项目失败：{{message}}",
+          { message: extractErrorMessage(openError) },
+        ),
+      );
+    }
+  }, [normalizedProjectRootPath]);
+
+  const handleOpenCodexWeb = React.useCallback(async () => {
+    try {
+      await openExternalUrlWithSystemBrowser("https://chatgpt.com/codex");
+    } catch (openError) {
+      toast.error(
+        agentText(
+          "agentChat.navbar.appSwitcher.toast.codexWebFailed",
+          "打开 Codex web 失败：{{message}}",
+          { message: extractErrorMessage(openError) },
+        ),
+      );
+    }
+  }, []);
+
+  const handleCreateWorktree = React.useCallback(async () => {
+    if (!normalizedProjectRootPath || !onProjectChange) {
+      return;
+    }
+    try {
+      const worktree = await createProjectGitWorktree(
+        normalizedProjectRootPath,
+        undefined,
+        status?.currentBranch ?? undefined,
+      );
+      const project = await ensureProjectWorkspace({
+        name: resolveWorktreeName(worktree.worktreePath) || "Worktree",
+        rootPath: worktree.worktreePath,
+        workspaceType: "general",
+      });
+      markProjectOpened(project.id);
+      onProjectChange(project.id);
+      toast.success(
+        agentText(
+          "agentChat.navbar.appSwitcher.worktreeCreated",
+          "工作树已创建",
+        ),
+      );
+    } catch (createError) {
+      toast.error(
+        agentText(
+          "agentChat.navbar.appSwitcher.worktreeCreateFailed",
+          "创建工作树失败：{{message}}",
+          { message: extractErrorMessage(createError) },
+        ),
+      );
+    }
+  }, [normalizedProjectRootPath, onProjectChange, status?.currentBranch]);
 
   const branchLabel =
     status?.currentBranch?.trim() ||
@@ -362,6 +432,46 @@ export function TaskCenterUtilityToolbar({
   const changeCount = status?.hasGitRepository
     ? status.uncommittedFileCount
     : 0;
+  const handleCheckoutBranch = React.useCallback(
+    async (branch: string) => {
+      if (!normalizedProjectRootPath || !status?.hasGitRepository) {
+        return;
+      }
+      try {
+        await checkoutProjectGitBranch(normalizedProjectRootPath, branch);
+        await refresh();
+      } catch (checkoutError) {
+        toast.error(
+          agentText(
+            "agentChat.navbar.environment.branchSwitchFailed",
+            "切换分支失败：{{message}}",
+            { message: extractErrorMessage(checkoutError) },
+          ),
+        );
+      }
+    },
+    [normalizedProjectRootPath, refresh, status?.hasGitRepository],
+  );
+  const handleCreateBranch = React.useCallback(
+    async (branch: string) => {
+      if (!normalizedProjectRootPath || !status?.hasGitRepository) {
+        return;
+      }
+      try {
+        await createProjectGitBranch(normalizedProjectRootPath, branch);
+        await refresh();
+      } catch (createError) {
+        toast.error(
+          agentText(
+            "agentChat.navbar.environment.branchCreateFailed",
+            "创建分支失败：{{message}}",
+            { message: extractErrorMessage(createError) },
+          ),
+        );
+      }
+    },
+    [normalizedProjectRootPath, refresh, status?.hasGitRepository],
+  );
   const environmentStatusLabel = loading
     ? agentText("agentChat.navbar.environment.loading", "读取中")
     : error
@@ -385,49 +495,6 @@ export function TaskCenterUtilityToolbar({
       )(key, options),
     [t],
   );
-  const taskRailProjection = React.useMemo(() => {
-    if (!environmentOpen || !taskRail) {
-      return null;
-    }
-    const completedSteps = countCompletedWorkflowSteps(taskRail.workflowSteps);
-    const taskRailContext =
-      taskRail.context ??
-      buildWorkspaceTaskRailRuntimeContext({
-        providerType: taskRail.providerType,
-        model: taskRail.model,
-        accessMode: taskRail.accessMode,
-        reasoningEffort: taskRail.reasoningEffort,
-        workspaceRootPath: taskRail.workspaceRootPath ?? null,
-        threadGoal: taskRail.threadGoal,
-        threadRead: taskRail.threadRead,
-        threadItems: taskRail.threadItems,
-        canonicalChildren: taskRail.canonicalChildren,
-      });
-    return buildGeneralWorkbenchTaskRailProjection({
-      workflowSteps: taskRail.workflowSteps,
-      completedSteps,
-      progressPercent: calculateWorkflowProgressPercent({
-        completedSteps,
-        totalSteps: taskRail.workflowSteps.length,
-      }),
-      messages: taskRail.messages,
-      groupedActivityLogs: buildGeneralWorkbenchActivityLogGroups(
-        taskRail.activityLogs ?? [],
-      ),
-      groupedCreationTaskEvents: buildGeneralWorkbenchCreationTaskGroups(
-        taskRail.creationTaskEvents ?? [],
-      ),
-      pendingActions: taskRail.pendingActions,
-      submittedActionsInFlight: taskRail.submittedActionsInFlight,
-      threadItems: taskRail.threadItems,
-      todoItems: taskRail.todoItems,
-      threadGoal: taskRail.threadGoal,
-      threadRead: taskRail.threadRead,
-      canonicalChildren: taskRail.canonicalChildren,
-      context: taskRailContext,
-      t: taskRailTranslate,
-    });
-  }, [environmentOpen, taskRail, taskRailTranslate]);
   React.useEffect(() => {
     if (environmentOpen) {
       return;
@@ -451,60 +518,6 @@ export function TaskCenterUtilityToolbar({
     setEnvironmentOpen(true);
     setEnvironmentVisited(true);
   }, [environmentOpen, taskRail?.threadItems, taskRail?.todoItems]);
-  const runControlSurfaceProjection = React.useMemo(() => {
-    if (!taskRailProjection) {
-      return null;
-    }
-
-    const environment: GeneralWorkbenchRunControlEnvironmentInput = {
-      modeLabel: normalizedProjectRootPath
-        ? agentText("agentChat.navbar.environment.local", "本地")
-        : null,
-      branchLabel: status?.currentBranch?.trim() || null,
-      gitStatusLabel: status
-        ? agentText(
-            "agentChat.navbar.environment.uncommittedFiles",
-            "{{count}} 个文件",
-            {
-              count: status.hasGitRepository ? status.uncommittedFileCount : 0,
-            },
-          )
-        : null,
-    };
-    const splitLane: GeneralWorkbenchRunControlSplitLaneInput = {
-      state: shellPanelOpen
-        ? "open"
-        : showCanvasToggle
-          ? "available"
-          : "unavailable",
-    };
-
-    return buildGeneralWorkbenchRunControlSurfaceProjection({
-      contextItems: taskRailProjection.contextItems,
-      planItems: taskRailProjection.planItems,
-      planRevision: taskRailProjection.planRevision,
-      planOverflowCount: taskRailProjection.planOverflowCount,
-      activityItems: taskRailProjection.activityItems,
-      activityOverflowCount: taskRailProjection.activityOverflowCount,
-      approvalItems: taskRailProjection.approvalItems,
-      approvalOverflowCount: taskRailProjection.approvalOverflowCount,
-      outputItems: taskRailProjection.outputItems.slice(0, 4),
-      outputOverflowCount: taskRailProjection.outputOverflowCount,
-      threadRead: taskRail?.threadRead,
-      environment,
-      splitLane,
-      t: taskRailTranslate,
-    });
-  }, [
-    normalizedProjectRootPath,
-    shellPanelOpen,
-    showCanvasToggle,
-    status,
-    taskRail,
-    taskRailProjection,
-    taskRailTranslate,
-  ]);
-
   return (
     <div
       className={cn(
@@ -542,43 +555,16 @@ export function TaskCenterUtilityToolbar({
               <ChevronDown className="h-3 w-3" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            sideOffset={8}
-            className="w-[min(11rem,calc(100vw-1rem))] rounded-2xl border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] p-2 text-[color:var(--lime-text)] shadow-xl shadow-slate-950/10"
-            data-testid="task-center-app-switcher-popover"
-          >
-            <AppSwitcherAction
-              icon={<VisualStudioCodeIcon className="h-3.5 w-3.5" />}
-              label={agentText(
-                "agentChat.navbar.appSwitcher.vscode",
-                "VS Code",
-              )}
-              disabled={!normalizedProjectRootPath}
-              onClick={() => void handleOpenTool("vscode")}
-            />
-            <AppSwitcherAction
-              icon={<SquareTerminal className="h-3.5 w-3.5 text-slate-500" />}
-              label={agentText("agentChat.navbar.appSwitcher.cursor", "Cursor")}
-              disabled={!normalizedProjectRootPath}
-              onClick={() => void handleOpenTool("cursor")}
-            />
-            <AppSwitcherAction
-              icon={<FolderOpen className="h-3.5 w-3.5 text-sky-500" />}
-              label={agentText("agentChat.navbar.appSwitcher.finder", "Finder")}
-              disabled={!normalizedProjectRootPath}
-              onClick={() => void handleOpenTool("finder")}
-            />
-            <AppSwitcherAction
-              icon={<SquareTerminal className="h-3.5 w-3.5 text-slate-500" />}
-              label={agentText(
-                "agentChat.navbar.appSwitcher.terminal",
-                "Terminal",
-              )}
-              disabled={!normalizedProjectRootPath}
-              onClick={() => void handleOpenTool("terminal")}
-            />
-          </PopoverContent>
+          <TaskCenterLocationPanel
+            canOpenLocal={Boolean(normalizedProjectRootPath)}
+            onOpenLocal={() => void handleOpenLocalLocation()}
+            onOpenCodexWeb={() => void handleOpenCodexWeb()}
+            canCreateWorktree={Boolean(
+              normalizedProjectRootPath && onProjectChange,
+            )}
+            onCreateWorktree={() => void handleCreateWorktree()}
+            translate={taskRailTranslate}
+          />
         </Popover>
       </div>
 
@@ -614,74 +600,17 @@ export function TaskCenterUtilityToolbar({
               <SlidersHorizontal className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            sideOffset={8}
-            className="w-[min(30rem,calc(100vw-1rem))] rounded-3xl border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] p-4 text-[color:var(--lime-text)] shadow-xl shadow-slate-950/10"
-            data-testid="task-center-environment-popover"
-          >
-            <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <span className="min-w-0 text-xs font-medium text-[color:var(--lime-text-muted)]">
-                {agentText("agentChat.navbar.environment.title", "环境信息")}
-              </span>
-              <span className="min-w-0 max-w-full truncate text-[11px] text-[color:var(--lime-text-muted)]">
-                {environmentStatusLabel}
-              </span>
-            </div>
-            <div className="mt-3 space-y-2 text-sm">
-              <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <span className="flex min-w-0 items-center gap-2">
-                  <GitCommitHorizontal className="h-4 w-4" />
-                  {agentText("agentChat.navbar.environment.changes", "变更")}
-                </span>
-                <span className="min-w-0 truncate text-xs text-[color:var(--lime-text-muted)]">
-                  {status?.hasGitRepository
-                    ? agentText(
-                        "agentChat.navbar.environment.uncommittedFiles",
-                        "{{count}} 个文件",
-                        { count: changeCount },
-                      )
-                    : environmentStatusLabel}
-                </span>
-              </div>
-              <div className="flex min-w-0 items-center gap-2">
-                <Monitor className="h-4 w-4" />
-                <span className="min-w-0 truncate">
-                  {agentText("agentChat.navbar.environment.local", "本地")}
-                </span>
-              </div>
-              <div className="flex min-w-0 items-center gap-2">
-                <GitBranch className="h-4 w-4" />
-                <span className="min-w-0 truncate">{branchLabel}</span>
-              </div>
-              <button
-                type="button"
-                className="flex w-full cursor-not-allowed items-center gap-2 rounded-xl py-1 text-left text-[color:var(--lime-text-muted)] opacity-70"
-                disabled
-                title={agentText(
-                  "agentChat.navbar.environment.submitUnavailable",
-                  "提交和推送需要后续接入 Git 写操作",
-                )}
-              >
-                <CircleDot className="h-4 w-4" />
-                <span>
-                  {agentText(
-                    "agentChat.navbar.environment.submit",
-                    "提交或推送",
-                  )}
-                </span>
-              </button>
-            </div>
-            {taskRailProjection ? (
-              <TaskCenterTaskRail
-                projection={taskRailProjection}
-                runControlSurfaceProjection={runControlSurfaceProjection}
-                onOpenOutput={taskRail?.onOpenOutput}
-                onRespondToAction={taskRail?.onRespondToAction}
-                t={taskRailTranslate}
-              />
-            ) : null}
-          </PopoverContent>
+          <TaskCenterEnvironmentPanel
+            normalizedProjectRootPath={normalizedProjectRootPath}
+            status={status}
+            environmentStatusLabel={environmentStatusLabel}
+            changeSummary={changeSummary}
+            branchLabel={branchLabel}
+            changeCount={changeCount}
+            onCheckoutBranch={handleCheckoutBranch}
+            onCreateBranch={handleCreateBranch}
+            translate={taskRailTranslate}
+          />
         </Popover>
       </div>
 
@@ -963,29 +892,5 @@ export function TaskCenterUtilityToolbar({
         </div>
       ) : null}
     </div>
-  );
-}
-
-function AppSwitcherAction({
-  icon,
-  label,
-  disabled,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs transition hover:bg-[color:var(--lime-surface-hover)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
   );
 }

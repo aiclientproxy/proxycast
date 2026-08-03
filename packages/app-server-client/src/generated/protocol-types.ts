@@ -5694,6 +5694,7 @@ export interface HookPromptFragment {
 
 export interface ImageGenerationItem {
   id: string;
+  metadata?: ThreadItemMetadata | null;
   result: string;
   revisedPrompt?: null | string;
   savedPath?: null | string;
@@ -8337,6 +8338,7 @@ export type SkillsChangedNotification = Record<string, never>;
 export interface SleepItem {
   durationMs?: number | null;
   id: string;
+  metadata?: ThreadItemMetadata | null;
 }
 
 export type SortDirection = "asc" | "desc";
@@ -8672,28 +8674,33 @@ export type ThreadItem =
       clientId?: null | string;
       content: UserInput[];
       id: string;
+      metadata?: ThreadItemMetadata | null;
       type: "userMessage";
     }
   | {
       fragments: HookPromptFragment[];
       id: string;
+      metadata?: ThreadItemMetadata | null;
       type: "hookPrompt";
     }
   | {
       id: string;
       memoryCitation?: MemoryCitation | null;
+      metadata?: ThreadItemMetadata | null;
       phase?: MessagePhase | null;
       text: string;
       type: "agentMessage";
     }
   | {
       id: string;
+      metadata?: ThreadItemMetadata | null;
       text: string;
       type: "plan";
     }
   | {
       content?: string[];
       id: string;
+      metadata?: ThreadItemMetadata | null;
       summary?: string[];
       type: "reasoning";
     }
@@ -8705,6 +8712,7 @@ export type ThreadItem =
       durationMs?: number | null;
       exitCode?: number | null;
       id: string;
+      metadata?: ThreadItemMetadata | null;
       processId?: null | string;
       source?: CommandExecutionSource;
       status: CommandExecutionStatus;
@@ -8714,6 +8722,7 @@ export type ThreadItem =
   | {
       changes: FileUpdateChange[];
       id: string;
+      metadata?: ThreadItemMetadata | null;
       status: PatchApplyStatus;
       type: "fileChange";
     }
@@ -8726,6 +8735,7 @@ export type ThreadItem =
       };
       id: string;
       mcpAppResourceUri?: null | string;
+      metadata?: ThreadItemMetadata | null;
       pluginId?: null | string;
       result: null | {
         _meta: unknown;
@@ -8742,6 +8752,7 @@ export type ThreadItem =
       contentItems?: DynamicToolCallOutputContentItem[] | null;
       durationMs?: number | null;
       id: string;
+      metadata?: ThreadItemMetadata | null;
       namespace?: null | string;
       status: DynamicToolCallStatus;
       success?: boolean | null;
@@ -8751,6 +8762,7 @@ export type ThreadItem =
   | {
       agentsStates?: Record<string, unknown>;
       id: string;
+      metadata?: ThreadItemMetadata | null;
       model?: null | string;
       prompt?: null | string;
       reasoningEffort?: null | string;
@@ -8765,11 +8777,13 @@ export type ThreadItem =
       agentThreadId: string;
       id: string;
       kind: SubAgentActivityKind;
+      metadata?: ThreadItemMetadata | null;
       type: "subAgentActivity";
     }
   | WebSearchItem
   | {
       id: string;
+      metadata?: ThreadItemMetadata | null;
       path: string;
       type: "imageView";
     }
@@ -8777,21 +8791,25 @@ export type ThreadItem =
   | ImageGenerationItem
   | {
       id: string;
+      metadata?: ThreadItemMetadata | null;
       review: string;
       type: "enteredReviewMode";
     }
   | {
       id: string;
+      metadata?: ThreadItemMetadata | null;
       review: string;
       type: "exitedReviewMode";
     }
   | {
       id: string;
+      metadata?: ThreadItemMetadata | null;
       type: "contextCompaction";
     }
   | {
       fieldNames: string[];
       id: string;
+      metadata?: ThreadItemMetadata | null;
       type: "unknownItem";
       upstreamType: string;
     };
@@ -9551,6 +9569,7 @@ export interface WarningNotification {
 export interface WebSearchItem {
   action?: unknown;
   id: string;
+  metadata?: ThreadItemMetadata | null;
   query?: null | string;
 }
 
@@ -9942,6 +9961,32 @@ export type MultiAgentMode =
 export interface TextElement {
   byteRange: ByteRange;
   placeholder?: null | string;
+}
+
+export interface ThreadItemMetadata {
+  imported?: boolean | null;
+  importedIncomplete?: boolean | null;
+  importedReadOnly?: boolean | null;
+  importedSynthetic?: boolean | null;
+  importedSyntheticId?: boolean | null;
+  sourceCallId?: null | string;
+  sourceClient?: null | string;
+  sourceEventSeq?: number | null;
+  sourceEventType?: null | string;
+  sourceProvenance?: ThreadItemSourceProvenance | null;
+  sourceThreadId?: null | string;
+}
+
+export interface ThreadItemSourceProvenance {
+  sourceCallId?: null | string;
+  sourceChannel?: null | string;
+  sourceClient?: null | string;
+  sourceEventSeq?: number | null;
+  sourceEventType?: null | string;
+  sourcePath?: null | string;
+  sourcePayloadType?: null | string;
+  sourceRole?: null | string;
+  sourceThreadId?: null | string;
 }
 
 export type MessagePhase = "commentary" | "final_answer";

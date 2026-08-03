@@ -4,10 +4,15 @@ import { useTranslation } from "react-i18next";
 import type { AgentThreadItem } from "../types";
 import type { ConfirmResponse, SiteSavedContentTarget } from "../types";
 import type { ArtifactTimelineOpenTarget } from "../utils/artifactTimelineNavigation";
+import { isHiddenConversationArtifactPath } from "../utils/internalArtifactVisibility";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { AgentThreadTimelineAttachmentList } from "./AgentThreadTimelineAttachmentList";
 import { TimelineItemDetails } from "./AgentThreadTimelineItemRenderers";
+import { hasTimelineFileChangeEvidence } from "./AgentThreadTimelineFileChangesCard";
 import {
   formatHistoricalContentLength,
+  formatHistoricalTimelineDuration,
+  resolveHistoricalTimelineDurationMs,
   summarizeHistoricalTimelineItems,
 } from "./messageListHistoricalPreviewText";
 
@@ -109,9 +114,6 @@ export const HistoricalTimelinePreview: React.FC<{
   completedAt,
   onFileClick,
   onOpenArtifactFromTimeline,
-  onOpenSavedSiteContent,
-  onOpenSubagentSession,
-  onPermissionResponse,
   onSaveFileArtifactAsKnowledge,
   sourceMessageId,
   onExpand,
@@ -153,43 +155,73 @@ export const HistoricalTimelinePreview: React.FC<{
           meta: summaryMetaText,
         })
       : t("agentChat.messageList.historicalTimeline.deferredMeta");
-  const startedAtMs = startedAt ? new Date(startedAt).getTime() : Number.NaN;
-  const completedAtMs = completedAt
-    ? new Date(completedAt).getTime()
-    : Number.NaN;
-  const durationMs =
-    Number.isFinite(startedAtMs) &&
-    Number.isFinite(completedAtMs) &&
-    completedAtMs >= startedAtMs
-      ? completedAtMs - startedAtMs
-      : null;
-  const durationLabel = (() => {
-    if (durationMs === null) {
-      return null;
-    }
-    const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-  })();
+  const durationLabel = formatHistoricalTimelineDuration(
+    resolveHistoricalTimelineDurationMs(items, startedAt, completedAt),
+  );
   const title = durationLabel
     ? t("agentChat.messageList.historicalTimeline.titleWithDuration", {
         duration: durationLabel,
       })
     : t("agentChat.messageList.historicalTimeline.title");
-  const fileArtifacts = items.filter(
-    (item): item is Extract<AgentThreadItem, { type: "file_artifact" }> =>
-      item.type === "file_artifact",
+  const evidencePaths = Array.from(
+    new Set(
+      items
+        .filter(hasTimelineFileChangeEvidence)
+        .flatMap((item) =>
+          item.type === "patch"
+            ? item.paths
+            : item.type === "file_artifact"
+              ? [item.path]
+              : [],
+        ),
+    ),
+  )
+    .filter(
+      (path): path is string =>
+        typeof path === "string" &&
+        Boolean(path.trim()) &&
+        !isHiddenConversationArtifactPath(path),
+    )
+    .map((path) => {
+      const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
+      return parts.length > 1 ? parts.slice(-2).join("/") : path;
+    })
+    .filter((path, index, paths) => paths.indexOf(path) === index);
+  const hasPatchEvidence = items.some((item) => item.type === "patch");
+  const evidenceLimit = 2;
+  const visibleEvidencePaths = evidencePaths.slice(0, evidenceLimit);
+  const hiddenEvidenceCount = Math.max(
+    0,
+    evidencePaths.length - visibleEvidencePaths.length,
   );
+  const evidenceLabel = hasPatchEvidence
+    ? t("agentChat.messageList.historicalTimeline.patchEvidenceCount", {
+        count: evidencePaths.length,
+      })
+    : t("agentChat.messageList.historicalTimeline.fileEvidenceCount", {
+        count: evidencePaths.length,
+      });
   const unknownItems = items.filter(
     (item): item is Extract<AgentThreadItem, { type: "unknown_item" }> =>
       item.type === "unknown_item",
   );
+  const hasFileChangeEvidence = items.some(hasTimelineFileChangeEvidence);
+  const fileArtifactItems = hasFileChangeEvidence
+    ? []
+    : items.filter(
+        (item): item is Extract<AgentThreadItem, { type: "file_artifact" }> =>
+          item.type === "file_artifact" &&
+          !isHiddenConversationArtifactPath(item.path),
+      );
   const summaryRow = (
     <>
-      <span className="font-medium">{title}</span>
-      <span className="sr-only">{metaText}</span>
-      {onExpand ? <ChevronDown className="ml-auto h-4 w-4" /> : null}
+      <span className="shrink-0 whitespace-nowrap font-medium">{title}</span>
+      <span className="min-w-0 flex-1 truncate text-xs text-slate-400">
+        {metaText}
+      </span>
+      {onExpand ? (
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+      ) : null}
     </>
   );
 
@@ -199,8 +231,9 @@ export const HistoricalTimelinePreview: React.FC<{
         <button
           type="button"
           data-testid={`message-list-historical-timeline-preview:${placement}`}
-          className="flex w-full items-center gap-1.5 border-b border-slate-200 py-2 text-left text-sm text-slate-500 transition-colors hover:text-slate-700"
+          className="group flex w-full min-w-0 items-center border-b border-slate-200/80 py-2 text-left text-sm text-slate-500 transition-colors hover:text-slate-700"
           aria-label={`${title}. ${metaText}`}
+          aria-expanded={false}
           onClick={onExpand}
         >
           {summaryRow}
@@ -208,33 +241,50 @@ export const HistoricalTimelinePreview: React.FC<{
       ) : (
         <div
           data-testid={`message-list-historical-timeline-preview:${placement}`}
-          className="flex w-full items-center gap-1.5 border-b border-slate-200 py-2 text-left text-sm text-slate-500"
+          className="flex w-full min-w-0 items-center border-b border-slate-200/80 py-2 text-left text-sm text-slate-500"
         >
           {summaryRow}
         </div>
       )}
-      {fileArtifacts.length > 0 ? (
-        <div data-testid="historical-file-artifact-group" className="space-y-1">
-          {fileArtifacts.map((item) => (
-            <TimelineItemDetails
-              key={item.id}
-              item={item}
-              onFileClick={onFileClick}
-              onOpenArtifactFromTimeline={onOpenArtifactFromTimeline}
-              onOpenSavedSiteContent={onOpenSavedSiteContent}
-              onOpenSubagentSession={onOpenSubagentSession}
-              onPermissionResponse={onPermissionResponse}
-              sourceMessageId={sourceMessageId}
-              onSaveFileArtifactAsKnowledge={onSaveFileArtifactAsKnowledge}
-            />
+      {evidencePaths.length > 0 ? (
+        <div
+          data-testid="historical-file-artifact-summary"
+          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-1 text-xs text-slate-500"
+          title={evidencePaths.join(", ")}
+        >
+          <span className="shrink-0 font-medium text-slate-600">
+            {evidenceLabel}
+          </span>
+          {visibleEvidencePaths.map((path) => (
+            <span key={path} className="min-w-0 truncate font-mono">
+              {path}
+            </span>
           ))}
+          {hiddenEvidenceCount > 0 ? (
+            <span className="shrink-0 text-slate-400">
+              {t(
+                "agentChat.messageList.historicalTimeline.patchEvidenceOverflow",
+                {
+                  count: hiddenEvidenceCount,
+                },
+              )}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      {fileArtifactItems.length > 0 ? (
+        <div data-testid="historical-file-artifact-group" className="space-y-1">
+          <AgentThreadTimelineAttachmentList
+            items={fileArtifactItems}
+            onFileClick={onFileClick}
+            onOpenArtifactFromTimeline={onOpenArtifactFromTimeline}
+            sourceMessageId={sourceMessageId}
+            onSaveFileArtifactAsKnowledge={onSaveFileArtifactAsKnowledge}
+          />
         </div>
       ) : null}
       {unknownItems.length > 0 ? (
-        <div
-          data-testid="historical-unknown-item-group"
-          className="space-y-1"
-        >
+        <div data-testid="historical-unknown-item-group" className="space-y-1">
           {unknownItems.map((item) => (
             <TimelineItemDetails key={item.id} item={item} />
           ))}

@@ -185,4 +185,7 @@ fn read_file_terminal_projects_a_file_changed_event_for_history_artifacts() {
     let payload = file_event.payload().expect("file event payload");
     assert_eq!(payload["path"], "/workspace/docs/readme.md");
     assert_eq!(payload["content"], "readme content");
+    assert_eq!(payload["eventClass"], "file.read");
+    assert_eq!(payload["operation"], "read");
+    assert_eq!(payload["toolName"], "read_file");
 }

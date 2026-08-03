@@ -60,6 +60,34 @@ describe("sessionHistoryPaginationController", () => {
     ).toBeNull();
   });
 
+  it("historyLimit 为 0 时应标记为全量历史，即使没有后续 cursor", () => {
+    expect(
+      resolveSessionHistoryWindowFromDetail({
+        history_limit: 0,
+        items: [{ id: "item-1" }],
+        turns: [{ id: "turn-1" }],
+        history_cursor: {
+          item_cursor: null,
+          turn_cursor: null,
+          loaded_entry_count: 2,
+          loaded_turn_count: 1,
+          loaded_item_count: 1,
+          has_more: false,
+        },
+      }),
+    ).toEqual({
+      loadedEntries: 2,
+      loadedTurns: 1,
+      loadedItems: 1,
+      hasMore: false,
+      itemCursor: null,
+      turnCursor: null,
+      isLoadingFull: false,
+      error: null,
+      isFullyLoaded: true,
+    });
+  });
+
   it("应使用两个 owner cursor 构造下一页请求", () => {
     const currentHistoryWindow = {
       loadedEntries: 60,

@@ -183,4 +183,164 @@ describe("agentChatHistoryThreadItems", () => {
 
     expect(collectDetailThreadItems(detail)).toHaveLength(1);
   });
+
+  it("canonical user content_parts 中的图片应进入历史 Message，图片-only 也不能丢失", () => {
+    const detail = {
+      id: "history-user-images",
+      created_at: 1,
+      updated_at: 2,
+      messages: [],
+      turns: [
+        {
+          id: "turn-images",
+          thread_id: "thread-images",
+          status: "completed",
+        },
+      ],
+      items: [
+        {
+          id: "user-images",
+          type: "user_message",
+          thread_id: "thread-images",
+          turn_id: "turn-images",
+          sequence: 1,
+          status: "completed",
+          content: "",
+          content_parts: [
+            {
+              type: "image",
+              mime_type: "image/png",
+              data: "aW1hZ2U=",
+            },
+            {
+              type: "image",
+              mime_type: "image/jpeg",
+              data: "",
+              source_path: "/tmp/imported-photo.jpg",
+            },
+          ],
+          started_at: "2026-07-29T10:00:00.000Z",
+          updated_at: "2026-07-29T10:00:00.000Z",
+        },
+      ],
+    } as unknown as AgentSessionDetail;
+
+    const messages = hydrateSessionDetailMessagesFromThreadItems(
+      detail,
+      "history-user-images",
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      role: "user",
+      content: "",
+      images: [
+        expect.objectContaining({
+          mediaType: "image/png",
+          data: "aW1hZ2U=",
+        }),
+        expect.objectContaining({
+          mediaType: "image/jpeg",
+          sourcePath: "/tmp/imported-photo.jpg",
+        }),
+      ],
+    });
+  });
+
+  it("Codex response_item 与 event_msg 图片输入跨 turn 只保留一条且优先内联图片", () => {
+    const sourceThreadId = "codex-thread-duplicate-image";
+    const responseItem = {
+      id: "imported-user-response",
+      type: "user_message",
+      thread_id: "thread-images",
+      turn_id: "turn-response",
+      sequence: 1,
+      status: "completed",
+      content:
+        '<image name=[Image #1] path="/tmp/imported-photo.jpg">\n</image>\n[Image #1] 请检查这张图',
+      content_parts: [
+        {
+          type: "image",
+          mime_type: "image/png",
+          data: "inline-image-data",
+        },
+      ],
+      metadata: {
+        imported: true,
+        source_event_seq: 9,
+        source_provenance: {
+          sourceEventType: "message",
+          sourceEventSeq: 9,
+          sourceThreadId,
+        },
+      },
+      started_at: "2026-07-29T10:00:00.000Z",
+      updated_at: "2026-07-29T10:00:00.000Z",
+    };
+    const eventItem = {
+      id: "imported-user-event",
+      type: "user_message",
+      thread_id: "thread-images",
+      turn_id: "turn-event",
+      sequence: 1,
+      status: "completed",
+      content: "[Image #1] 请检查这张图",
+      content_parts: [
+        {
+          type: "image",
+          mime_type: "image/png",
+          data: "",
+          source_path: "/tmp/imported-photo.jpg",
+        },
+      ],
+      metadata: {
+        imported: true,
+        source_event_seq: 10,
+        source_provenance: {
+          sourceEventType: "user_message",
+          sourceEventSeq: 10,
+          sourceThreadId,
+        },
+      },
+      started_at: "2026-07-29T10:00:00.100Z",
+      updated_at: "2026-07-29T10:00:00.100Z",
+    };
+    const detail = {
+      id: "duplicate-imported-image",
+      created_at: 1,
+      updated_at: 2,
+      messages: [],
+      items: [responseItem, eventItem],
+    } as unknown as AgentSessionDetail;
+
+    const items = collectDetailThreadItems(detail);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: "imported-user-event",
+      turn_id: "turn-event",
+      content: "[Image #1] 请检查这张图",
+      content_parts: [
+        expect.objectContaining({
+          type: "image",
+          data: "inline-image-data",
+        }),
+      ],
+    });
+    expect(items[0]).not.toMatchObject({
+      content_parts: [
+        expect.objectContaining({ source_path: "/tmp/imported-photo.jpg" }),
+      ],
+    });
+
+    const messages = hydrateSessionDetailMessagesFromThreadItems(
+      detail,
+      "duplicate-imported-image",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      role: "user",
+      content: "图片请检查这张图",
+      images: [expect.objectContaining({ data: "inline-image-data" })],
+    });
+  });
 });

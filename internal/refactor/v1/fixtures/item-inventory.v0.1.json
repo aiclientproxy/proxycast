@@ -21,7 +21,7 @@
     { "method": "item/agentMessage/delta", "kind": "notification", "codex": "current", "lime": "current" },
     { "method": "item/plan/delta", "kind": "notification", "codex": "experimental", "lime": "current" },
     { "method": "item/commandExecution/outputDelta", "kind": "notification", "codex": "current", "lime": "current" },
-    { "method": "item/commandExecution/terminalInteraction", "kind": "notification", "codex": "current", "lime": "gap" },
+    { "method": "item/commandExecution/terminalInteraction", "kind": "notification", "codex": "current", "lime": "current" },
     { "method": "item/fileChange/outputDelta", "kind": "notification", "codex": "deprecated", "lime": "excluded" },
     { "method": "item/fileChange/patchUpdated", "kind": "notification", "codex": "current", "lime": "current" },
     { "method": "item/mcpToolCall/progress", "kind": "notification", "codex": "current", "lime": "current" },
@@ -40,7 +40,7 @@
     {
       "type": "userMessage",
       "codexFields": ["id", "clientId", "content"],
-      "limeFields": ["id", "clientId", "content"],
+      "limeFields": ["id", "clientId", "content", "metadata"],
       "statusful": false,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -50,7 +50,7 @@
     {
       "type": "hookPrompt",
       "codexFields": ["id", "fragments"],
-      "limeFields": ["id", "fragments"],
+      "limeFields": ["id", "fragments", "metadata"],
       "statusful": false,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -59,7 +59,7 @@
     {
       "type": "agentMessage",
       "codexFields": ["id", "text", "phase", "memoryCitation"],
-      "limeFields": ["id", "text", "phase", "memoryCitation"],
+      "limeFields": ["id", "text", "phase", "memoryCitation", "metadata"],
       "statusful": false,
       "codexStreamMethods": ["item/agentMessage/delta"],
       "limeStreamMethods": ["item/agentMessage/delta"],
@@ -69,7 +69,7 @@
     {
       "type": "plan",
       "codexFields": ["id", "text"],
-      "limeFields": ["id", "text"],
+      "limeFields": ["id", "text", "metadata"],
       "statusful": false,
       "codexStreamMethods": ["item/plan/delta"],
       "limeStreamMethods": ["item/plan/delta"],
@@ -79,7 +79,7 @@
     {
       "type": "reasoning",
       "codexFields": ["id", "summary", "content"],
-      "limeFields": ["id", "summary", "content"],
+      "limeFields": ["id", "summary", "content", "metadata"],
       "statusful": false,
       "codexStreamMethods": [
         "item/reasoning/summaryTextDelta",
@@ -119,21 +119,26 @@
         "commandActions",
         "aggregatedOutput",
         "exitCode",
-        "durationMs"
+        "durationMs",
+        "metadata",
+        "terminalInteractions"
       ],
       "statusful": true,
       "codexStreamMethods": [
         "item/commandExecution/outputDelta",
         "item/commandExecution/terminalInteraction"
       ],
-      "limeStreamMethods": ["item/commandExecution/outputDelta"],
+      "limeStreamMethods": [
+        "item/commandExecution/outputDelta",
+        "item/commandExecution/terminalInteraction"
+      ],
       "shape": "gap",
-      "fieldNotes": ["Lime 尚未承接 Codex pluginId/scriptPath 的 host-safe display reference", "cwd 当前 Lime wire 类型为 string，Codex 使用路径 URI 类型", "terminalInteraction 尚无 Runtime source event，保持 gap；outputDelta 已接入并复用 canonical itemId"]
+      "fieldNotes": ["Lime 尚未承接 Codex pluginId/scriptPath 的 host-safe display reference", "cwd 当前 Lime wire 类型为 string，Codex 使用路径 URI 类型", "terminalInteraction 与 outputDelta 均复用 canonical itemId；pluginId/scriptPath 仍保持 gap"]
     },
     {
       "type": "fileChange",
       "codexFields": ["id", "changes", "status"],
-      "limeFields": ["id", "changes", "status"],
+      "limeFields": ["id", "changes", "status", "metadata"],
       "statusful": true,
       "codexStreamMethods": ["item/fileChange/patchUpdated"],
       "limeStreamMethods": ["item/fileChange/patchUpdated"],
@@ -167,7 +172,8 @@
         "pluginId",
         "result",
         "error",
-        "durationMs"
+        "durationMs",
+        "metadata"
       ],
       "statusful": true,
       "codexStreamMethods": ["item/mcpToolCall/progress"],
@@ -178,7 +184,7 @@
     {
       "type": "dynamicToolCall",
       "codexFields": ["id", "namespace", "tool", "arguments", "status", "contentItems", "success", "durationMs"],
-      "limeFields": ["id", "namespace", "tool", "arguments", "status", "contentItems", "success", "durationMs"],
+      "limeFields": ["id", "namespace", "tool", "arguments", "status", "contentItems", "success", "durationMs", "metadata"],
       "statusful": true,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -188,7 +194,7 @@
     {
       "type": "collabAgentToolCall",
       "codexFields": ["id", "tool", "status", "senderThreadId", "receiverThreadIds", "prompt", "model", "reasoningEffort", "agentsStates"],
-      "limeFields": ["id", "tool", "status", "senderThreadId", "receiverThreadIds", "prompt", "model", "reasoningEffort", "agentsStates"],
+      "limeFields": ["id", "tool", "status", "senderThreadId", "receiverThreadIds", "prompt", "model", "reasoningEffort", "agentsStates", "metadata"],
       "statusful": true,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -198,7 +204,7 @@
     {
       "type": "subAgentActivity",
       "codexFields": ["id", "kind", "agentThreadId", "agentPath"],
-      "limeFields": ["id", "kind", "agentThreadId", "agentPath"],
+      "limeFields": ["id", "kind", "agentThreadId", "agentPath", "metadata"],
       "statusful": false,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -207,7 +213,7 @@
     {
       "type": "webSearch",
       "codexFields": ["id", "query", "action", "results"],
-      "limeFields": ["id", "query", "action"],
+      "limeFields": ["id", "query", "action", "metadata"],
       "statusful": false,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -217,7 +223,7 @@
     {
       "type": "imageView",
       "codexFields": ["id", "path"],
-      "limeFields": ["id", "path"],
+      "limeFields": ["id", "path", "metadata"],
       "statusful": false,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -227,7 +233,7 @@
     {
       "type": "sleep",
       "codexFields": ["id", "durationMs"],
-      "limeFields": ["id", "durationMs"],
+      "limeFields": ["id", "durationMs", "metadata"],
       "statusful": false,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -237,7 +243,7 @@
     {
       "type": "imageGeneration",
       "codexFields": ["id", "status", "revisedPrompt", "result", "savedPath"],
-      "limeFields": ["id", "status", "revisedPrompt", "result", "savedPath"],
+      "limeFields": ["id", "status", "revisedPrompt", "result", "savedPath", "metadata"],
       "statusful": true,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -246,7 +252,7 @@
     {
       "type": "enteredReviewMode",
       "codexFields": ["id", "review"],
-      "limeFields": ["id", "review"],
+      "limeFields": ["id", "review", "metadata"],
       "statusful": false,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -255,7 +261,7 @@
     {
       "type": "exitedReviewMode",
       "codexFields": ["id", "review"],
-      "limeFields": ["id", "review"],
+      "limeFields": ["id", "review", "metadata"],
       "statusful": false,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -264,7 +270,7 @@
     {
       "type": "contextCompaction",
       "codexFields": ["id"],
-      "limeFields": ["id"],
+      "limeFields": ["id", "metadata"],
       "statusful": false,
       "codexStreamMethods": [],
       "limeStreamMethods": [],
@@ -280,6 +286,16 @@
       "limeStreamMethods": [],
       "shape": "aligned",
       "fieldNotes": ["MemoryCitation 不是独立 ThreadItem variant，不能生成平行 item 生命周期"]
+    },
+    {
+      "type": "unknownItem",
+      "codexFields": [],
+      "limeFields": ["id", "metadata", "upstreamType", "fieldNames"],
+      "statusful": false,
+      "codexStreamMethods": [],
+      "limeStreamMethods": [],
+      "shape": "gap",
+      "fieldNotes": ["Lime v2 为未知上游 item 提供显式只读保留形态；Codex v2 无对应独立 variant"]
     }
   ],
   "evidenceRequiredForCompletion": [

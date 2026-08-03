@@ -661,6 +661,16 @@
         "id": {
           "type": "string"
         },
+        "metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadItemMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "result": {
           "type": "string"
         },
@@ -1288,6 +1298,16 @@
         },
         "id": {
           "type": "string"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadItemMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1652,6 +1672,16 @@
             "id": {
               "type": "string"
             },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "type": {
               "const": "userMessage",
               "type": "string"
@@ -1675,6 +1705,16 @@
             "id": {
               "type": "string"
             },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "type": {
               "const": "hookPrompt",
               "type": "string"
@@ -1696,6 +1736,16 @@
               "anyOf": [
                 {
                   "$ref": "#/$defs/MemoryCitation"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
                 },
                 {
                   "type": "null"
@@ -1732,6 +1782,16 @@
             "id": {
               "type": "string"
             },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "text": {
               "type": "string"
             },
@@ -1758,6 +1818,16 @@
             },
             "id": {
               "type": "string"
+            },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "summary": {
               "default": [],
@@ -1815,6 +1885,16 @@
             "id": {
               "type": "string"
             },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "processId": {
               "type": [
                 "null",
@@ -1858,6 +1938,16 @@
             },
             "id": {
               "type": "string"
+            },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "status": {
               "$ref": "#/$defs/PatchApplyStatus"
@@ -1916,6 +2006,16 @@
               "type": [
                 "null",
                 "string"
+              ]
+            },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "pluginId": {
@@ -1991,6 +2091,16 @@
             "id": {
               "type": "string"
             },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "namespace": {
               "type": [
                 "null",
@@ -2034,6 +2144,16 @@
             },
             "id": {
               "type": "string"
+            },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "model": {
               "type": [
@@ -2097,6 +2217,16 @@
             "kind": {
               "$ref": "#/$defs/SubAgentActivityKind"
             },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "type": {
               "const": "subAgentActivity",
               "type": "string"
@@ -2128,6 +2258,16 @@
           "properties": {
             "id": {
               "type": "string"
+            },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "path": {
               "type": "string"
@@ -2175,6 +2315,16 @@
             "id": {
               "type": "string"
             },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "review": {
               "type": "string"
             },
@@ -2195,6 +2345,16 @@
             "id": {
               "type": "string"
             },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "review": {
               "type": "string"
             },
@@ -2214,6 +2374,16 @@
           "properties": {
             "id": {
               "type": "string"
+            },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "type": {
               "const": "contextCompaction",
@@ -2237,6 +2407,16 @@
             "id": {
               "type": "string"
             },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "type": {
               "const": "unknownItem",
               "type": "string"
@@ -2254,6 +2434,145 @@
           "type": "object"
         }
       ]
+    },
+    "ThreadItemMetadata": {
+      "description": "Safe, display-only provenance carried by imported historical items.\n\nThe canonical store keeps richer metadata, but only these stable markers\ncross the v2 boundary. In particular, raw source payloads and capabilities\nare intentionally excluded.",
+      "properties": {
+        "imported": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "importedIncomplete": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "importedReadOnly": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "importedSynthetic": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "importedSyntheticId": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "sourceCallId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourceClient": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourceEventSeq": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sourceEventType": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourceProvenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadItemSourceProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceThreadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ThreadItemSourceProvenance": {
+      "properties": {
+        "sourceCallId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourceChannel": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourceClient": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourceEventSeq": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sourceEventType": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourcePath": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourcePayloadType": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourceRole": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourceThreadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
     },
     "ThreadNameUpdatedNotification": {
       "properties": {
@@ -2846,6 +3165,16 @@
         "action": true,
         "id": {
           "type": "string"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadItemMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "query": {
           "type": [

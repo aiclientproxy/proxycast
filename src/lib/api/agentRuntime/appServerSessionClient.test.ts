@@ -622,6 +622,122 @@ describe("appServerSessionClient", () => {
     );
   });
 
+  it("导入 canonical Thread 应自动读取 Item/Turn 到 EOF，不能从中间开始", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.readThread).mockResolvedValueOnce(
+      rpcResult({
+        thread: canonicalThread({
+          id: "thread-imported-full-history",
+          sessionId: "session-imported-full-history",
+          historyMode: "paginated",
+          metadata: {
+            source_client: "codex",
+            source_thread_id: "codex-thread-20260729",
+          },
+          turns: [],
+        }),
+      }),
+    );
+    vi.mocked(appServerClient.request)
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              turnId: "turn-imported",
+              item: {
+                id: "item-latest",
+                type: "agentMessage",
+                text: "最新回复",
+              },
+            },
+          ],
+          nextCursor: "item-page-2",
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              turnId: "turn-imported",
+              item: {
+                id: "item-earliest",
+                type: "userMessage",
+                content: [{ type: "text", text: "最早问题" }],
+              },
+            },
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            {
+              id: "turn-imported",
+              status: "completed",
+              startedAt: 1780704000,
+              completedAt: 1780704001,
+            },
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      );
+    const client = createAppServerSessionClient({ appServerClient });
+
+    await expect(
+      client.getAgentRuntimeSession("session-imported-full-history", {
+        historyLimit: 40,
+      }),
+    ).resolves.toMatchObject({
+      history_limit: 0,
+      history_cursor: {
+        item_cursor: null,
+        turn_cursor: null,
+        loaded_item_count: 2,
+        has_more: false,
+      },
+      items: [
+        { id: "item-earliest", type: "user_message" },
+        { id: "item-latest", type: "agent_message" },
+      ],
+      history_truncated: false,
+    });
+
+    expect(appServerClient.request).toHaveBeenNthCalledWith(
+      1,
+      "thread/items/list",
+      {
+        threadId: "thread-imported-full-history",
+        limit: 100,
+        sortDirection: "desc",
+      },
+    );
+    expect(appServerClient.request).toHaveBeenNthCalledWith(
+      2,
+      "thread/items/list",
+      {
+        threadId: "thread-imported-full-history",
+        cursor: "item-page-2",
+        limit: 100,
+        sortDirection: "desc",
+      },
+    );
+    expect(appServerClient.request).toHaveBeenNthCalledWith(
+      3,
+      "thread/turns/list",
+      {
+        threadId: "thread-imported-full-history",
+        limit: 100,
+        sortDirection: "desc",
+        itemsView: "summary",
+      },
+    );
+    expect(appServerClient.request).toHaveBeenCalledTimes(3);
+  });
+
   it("get 应允许一个 owner 到 EOF 后只继续另一个 opaque cursor", async () => {
     const appServerClient = appServerClientMock();
     vi.mocked(appServerClient.readThread).mockResolvedValueOnce(

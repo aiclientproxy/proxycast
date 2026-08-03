@@ -12,14 +12,14 @@
     "notificationSchemaSha256": "61341f7cc0730e6b0c4f59be97d18acec190fa87aa7551ae03d1abfef0536311",
     "requestSchemaSource": "codex-rs/app-server-protocol/schema/json/ServerRequest.json",
     "requestSchemaSha256": "27ce8a1fc4b9326911f7c42379ff9fa661eee70060a7a2af942813247625d887",
-    "schemaSnapshotSha256": "70f1fc9b1e6fdf0e9e7dc2791cc5e019145384f71974119002b1a35a3c0f52ad"
+    "schemaSnapshotSha256": "3e4d26e4e12bd13b1d72a3edc9e3ce81a77273c72603e1182f032a4b8ee14503"
   },
   "factSources": {
     "itemInventory": "internal/refactor/v1/fixtures/item-inventory.v0.1.json",
     "methodScope": "internal/refactor/v1/fixtures/codex-method-product-scope.v0.1.json"
   },
   "expected": {
-    "items": 18,
+    "items": 19,
     "notifications": 72,
     "serverRequests": 11
   },
@@ -41,7 +41,8 @@
     { "type": "imageGeneration", "outlet": "timeline" },
     { "type": "enteredReviewMode", "outlet": "timeline" },
     { "type": "exitedReviewMode", "outlet": "timeline" },
-    { "type": "contextCompaction", "outlet": "timeline" }
+    { "type": "contextCompaction", "outlet": "timeline" },
+    { "type": "unknownItem", "outlet": "timeline" }
   ],
   "notifications": [
     { "method": "error", "outlets": ["turnPanel", "header"] },

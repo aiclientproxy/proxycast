@@ -83,6 +83,7 @@ const CANONICAL_ITEM_TYPES = [
   "enteredReviewMode",
   "exitedReviewMode",
   "contextCompaction",
+  "unknownItem",
 ] as const;
 type CanonicalItemType = (typeof CANONICAL_ITEM_TYPES)[number];
 const CANONICAL_ITEM_TYPE_SET = new Set<string>(CANONICAL_ITEM_TYPES);
@@ -411,6 +412,8 @@ function itemEventFamily(type: CanonicalItemType): string {
       return "handoff";
     case "enteredReviewMode":
     case "exitedReviewMode":
+      return "runtime";
+    case "unknownItem":
       return "runtime";
     case "commandExecution":
       return "command";

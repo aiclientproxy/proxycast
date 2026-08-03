@@ -151,6 +151,54 @@ fn user_shell_command_metadata_projects_to_the_v2_item() {
 }
 
 #[test]
+fn imported_item_metadata_projects_only_safe_provenance_markers() {
+    let mut thread = canonical_thread(false);
+    thread.turns[0].items[0].metadata = json!({
+        "imported": true,
+        "imported_read_only": true,
+        "source_client": "codex",
+        "source_event_seq": 9,
+        "source_event_type": "message",
+        "source_thread_id": "source-thread",
+        "source_call_id": "call-9",
+        "source_provenance": {
+            "sourceClient": "codex",
+            "sourceThreadId": "source-thread",
+            "sourceEventType": "response_item",
+            "sourceEventSeq": 8,
+            "sourcePayloadType": "message",
+            "rawPayload": {"secret": "must-not-cross"}
+        },
+        "rawPayload": {"secret": "must-not-cross"}
+    });
+
+    let projected = project_thread(thread).expect("project imported metadata");
+    let item = &projected.turns[0].items[0];
+    let v2::ThreadItem::UserMessage { metadata, .. } = item else {
+        panic!("user message item projection");
+    };
+    let metadata = metadata.as_ref().expect("import metadata");
+    assert_eq!(metadata.imported, Some(true));
+    assert_eq!(metadata.imported_read_only, Some(true));
+    assert_eq!(metadata.source_event_seq, Some(9));
+    assert_eq!(metadata.source_thread_id.as_deref(), Some("source-thread"));
+    assert_eq!(
+        metadata
+            .source_provenance
+            .as_ref()
+            .and_then(|value| value.source_event_seq),
+        Some(8)
+    );
+
+    let wire = serde_json::to_value(item).expect("serialize imported item");
+    assert_eq!(wire["metadata"]["imported"], true);
+    assert_eq!(wire["metadata"]["sourceEventSeq"], 9);
+    assert_eq!(wire["metadata"]["sourceProvenance"]["sourceEventSeq"], 8);
+    assert!(wire.to_string().contains("source-thread"));
+    assert!(!wire.to_string().contains("must-not-cross"));
+}
+
+#[test]
 fn canonical_mcp_output_projects_codex_result_shape_when_only_truncation_remains() {
     let mut thread = canonical_thread(false);
     thread.turns[0].items[0] = canonical::ThreadItem {
@@ -408,6 +456,7 @@ fn provider_image_generation_projects_exact_codex_item() {
         projected.turns[0].items[0],
         v2::ThreadItem::ImageGeneration(v2::ImageGenerationItem {
             id: "ig_1".to_string(),
+            metadata: None,
             status: "completed".to_string(),
             revised_prompt: Some("a blue square".to_string()),
             result: "Zm9v".to_string(),
@@ -584,6 +633,7 @@ fn canonical_unknown_item_projects_typed_v2_diagnostic() {
         id,
         upstream_type,
         field_names,
+        ..
     } = &projected.turns[0].items[0]
     else {
         panic!("typed unknown item");

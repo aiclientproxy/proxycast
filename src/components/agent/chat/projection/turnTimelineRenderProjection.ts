@@ -1,5 +1,10 @@
 import type { AgentThreadItem, AgentThreadTurn, Message } from "../types";
 import type { MessageRenderGroupProjection } from "./messageTimelineRenderProjection";
+import {
+  dedupeImportedUserMessageItems,
+  isImportedHistoryMetadata,
+  messageMatchesCanonicalUserMessage,
+} from "../utils/importedUserMessageDedupe";
 import { filterConversationThreadItems } from "../utils/threadTimelineView";
 
 type CanonicalMessageItem = Extract<
@@ -70,8 +75,18 @@ export function buildTurnTimelineRenderProjection(params: {
   const emittedTurnIds = new Set<string>();
 
   for (const group of params.messageGroups) {
-    const hasAnchoredOwner = group.messages.some(
-      (message) => resolveMessageOwners(message, owners).length > 0,
+    const messageOwners = new Map<Message, CanonicalTurnOwner[]>();
+    const groupOwners = new Map<string, CanonicalTurnOwner>();
+    for (const message of group.messages) {
+      const ownersForMessage = resolveMessageOwners(message, owners);
+      messageOwners.set(message, ownersForMessage);
+      for (const owner of ownersForMessage) {
+        groupOwners.set(owner.turn.id, owner);
+      }
+    }
+    const hasAnchoredOwner = groupOwners.size > 0;
+    const isImportedHistoryGroup = [...groupOwners.values()].some((owner) =>
+      owner.items.some((item) => isImportedHistoryMetadata(item.metadata)),
     );
     let residualMessages: Message[] = [];
     const flushResidualMessages = () => {
@@ -79,6 +94,7 @@ export function buildTurnTimelineRenderProjection(params: {
         group,
         residualMessages,
         hasAnchoredOwner,
+        isImportedHistoryGroup,
       );
       residualMessages = [];
       if (!residualGroup) return;
@@ -90,17 +106,21 @@ export function buildTurnTimelineRenderProjection(params: {
     };
 
     for (const message of group.messages) {
-      const messageOwners = resolveMessageOwners(message, owners);
-      if (messageOwners.length > 0) {
+      const ownersForMessage = messageOwners.get(message) ?? [];
+      if (ownersForMessage.length > 0) {
         flushResidualMessages();
-        for (const owner of messageOwners) {
+        for (const owner of ownersForMessage) {
           if (emittedTurnIds.has(owner.turn.id)) continue;
           entries.push(buildCanonicalTurnEntry(owner, params.currentTurnId));
           emittedTurnIds.add(owner.turn.id);
         }
       }
       if (!isMessageOwnedByCanonicalTurn(message, owners)) {
-        const residualMessage = buildResidualMessage(message, messageOwners);
+        const residualMessage = buildResidualMessage(
+          message,
+          ownersForMessage,
+          [...groupOwners.values()],
+        );
         if (residualMessage) residualMessages.push(residualMessage);
       }
     }
@@ -137,8 +157,8 @@ function buildCanonicalTurnOwners(params: {
   renderedTurns: readonly AgentThreadTurn[];
   renderedThreadItems: readonly AgentThreadItem[];
 }): Map<string, CanonicalTurnOwner> {
-  const visibleItems = filterConversationThreadItems(
-    params.renderedThreadItems,
+  const visibleItems = dedupeImportedUserMessageItems(
+    filterConversationThreadItems(params.renderedThreadItems),
   );
   const itemsByTurnId = new Map<string, AgentThreadItem[]>();
   for (const item of visibleItems) {
@@ -239,8 +259,10 @@ function messageMatchesItem(
   item: CanonicalMessageItem,
 ): boolean {
   if (message.role !== itemRole(item)) return false;
-  if (message.id === item.id) return true;
-  return item.type === "user_message" && item.client_id === message.id;
+  if (item.type === "user_message") {
+    return messageMatchesCanonicalUserMessage(message, item);
+  }
+  return message.id === item.id;
 }
 
 function hasMessageOnlySurface(message: Message): boolean {
@@ -261,7 +283,12 @@ function hasMessageOnlySurface(message: Message): boolean {
 function buildResidualMessage(
   message: Message,
   canonicalOwners: readonly CanonicalTurnOwner[],
+  groupCanonicalOwners: readonly CanonicalTurnOwner[] = canonicalOwners,
 ): Message | null {
+  if (shouldSuppressPendingAssistantResidual(message, groupCanonicalOwners)) {
+    return null;
+  }
+
   if (canonicalOwners.length === 0 || !hasMessageOnlySurface(message)) {
     return message;
   }
@@ -291,6 +318,68 @@ function buildResidualMessage(
   return hasMessageOnlySurface(residualMessage) ? residualMessage : null;
 }
 
+function shouldSuppressPendingAssistantResidual(
+  message: Message,
+  groupOwners: readonly CanonicalTurnOwner[],
+): boolean {
+  if (
+    message.role !== "assistant" ||
+    !isFirstTokenRuntimeStatusPhase(message.runtimeStatus?.phase) ||
+    hasVisibleAssistantSurface(message)
+  ) {
+    return false;
+  }
+
+  return groupOwners.some(
+    (owner) =>
+      owner.turn.status === "running" &&
+      owner.items.some(isCanonicalProcessItem),
+  );
+}
+
+function isFirstTokenRuntimeStatusPhase(
+  phase?: NonNullable<Message["runtimeStatus"]>["phase"],
+): boolean {
+  return (
+    phase === "routing" ||
+    phase === "preparing" ||
+    phase === "context" ||
+    phase === "synthesizing" ||
+    phase === "continuing" ||
+    phase === "retrying"
+  );
+}
+
+function hasVisibleAssistantSurface(message: Message): boolean {
+  return Boolean(
+    message.content.trim() ||
+    message.thinkingContent?.trim() ||
+    message.contentParts?.some((part) => {
+      if (part.type === "text" || part.type === "thinking") {
+        return part.text.trim().length > 0;
+      }
+      return true;
+    }) ||
+    message.toolCalls?.length ||
+    message.actionRequests?.length ||
+    message.images?.length ||
+    message.artifacts?.length ||
+    message.contextTrace?.length ||
+    message.search_results?.length ||
+    message.imageWorkbenchPreview ||
+    message.taskPreview ||
+    message.inputCapabilityRoute,
+  );
+}
+
+function isCanonicalProcessItem(item: AgentThreadItem): boolean {
+  return (
+    item.type !== "user_message" &&
+    item.type !== "agent_message" &&
+    item.type !== "turn_summary"
+  );
+}
+
 function isCanonicalUserMessageOwner(
   message: Message,
   owners: readonly CanonicalTurnOwner[],
@@ -299,7 +388,8 @@ function isCanonicalUserMessageOwner(
     message.role === "user" &&
     owners.some((owner) =>
       owner.messageItems.some(
-        (item) => item.type === "user_message" && messageMatchesItem(message, item),
+        (item) =>
+          item.type === "user_message" && messageMatchesItem(message, item),
       ),
     )
   );
@@ -403,6 +493,7 @@ function buildResidualMessageGroup(
   group: MessageRenderGroupProjection,
   messages: Message[],
   clearCanonicalTimeline: boolean,
+  isImportedHistory: boolean,
 ): MessageRenderGroupProjection | null {
   if (messages.length === 0) return null;
   if (!clearCanonicalTimeline && messages.length === group.messages.length) {
@@ -430,6 +521,7 @@ function buildResidualMessageGroup(
     lastAssistantId: assistantMessages.at(-1)?.id ?? null,
     timelineMessageId: null,
     timeline: null,
+    isImportedHistory,
   };
 }
 

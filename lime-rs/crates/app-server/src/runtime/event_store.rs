@@ -1030,14 +1030,23 @@ fn is_turn_terminal_event_class(event_class: &str) -> bool {
 }
 
 fn runtime_event_timestamp(event_class: &str, payload: &Value) -> String {
-    if is_turn_terminal_event_class(event_class)
-        && payload.get("imported").and_then(Value::as_bool) == Some(true)
+    let is_imported_codex_event = payload.get("imported").and_then(Value::as_bool) == Some(true)
         && payload
             .get("sourceClient")
             .or_else(|| payload.get("source_client"))
             .and_then(Value::as_str)
-            == Some("codex")
-    {
+            == Some("codex");
+    if is_imported_codex_event && event_class == "turn.started" {
+        if let Some(started_at) = payload
+            .get("startedAt")
+            .or_else(|| payload.get("started_at"))
+            .and_then(Value::as_str)
+            .filter(|value| chrono::DateTime::parse_from_rfc3339(value).is_ok())
+        {
+            return started_at.to_string();
+        }
+    }
+    if is_imported_codex_event && is_turn_terminal_event_class(event_class) {
         if let Some(completed_at) = payload
             .get("completedAt")
             .or_else(|| payload.get("completed_at"))

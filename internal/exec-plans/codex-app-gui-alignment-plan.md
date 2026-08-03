@@ -254,3 +254,27 @@ npm run smoke:agent-runtime-current-fixture
 ```
 
 完成标准：G1-G6 退出条件全部满足，必跑命令通过，五语言回归完成，Gate B 证明同一 Thread/Turn/Item identity 且生产 mock fallback 为 0。当前尚不可进入 release evidence；下一刀仍为 G1。
+
+## 10. 2026-08-03 环境菜单对齐增量
+
+- 范围：继续收口 G1 顶部工具栏与 G4 环境面，只调整既有 project Git current gateway 的 GUI 投影，不新增协议或第二套 Git owner。
+
+- 写集：`TaskCenterUtilityToolbar.tsx`、`TaskCenterLocationPanel.tsx`、`TaskCenterEnvironmentPanel.tsx`、工具栏集成测试和五语言 `agent.json`。
+- 结果：打开位置收为单一紧凑菜单；环境面展示真实增删行、运行位置和当前分支；分支菜单复用既有 checkout/create API，提供搜索、当前分支未提交摘要、分支切换和创建入口。分支操作后只刷新局部 Git projection，不重载窗口或中断对话。
+- 稳定回归：`TaskCenterUtilityToolbar.integration.test.tsx` 30 项通过，覆盖菜单结构、分支列表和真实 checkout gateway 调用；TypeScript、Prettier、五语言完整性检查通过。
+- GUI 证据：`npm run verify:gui-smoke` 通过，Electron Host、preload/App Server 初始化、Renderer 首次加载和重载均成功；最新 evidence summary 位于 `.lime/qc/project-gates/standalone-shell-01-20260803115109-24101/shell-01-electron-smoke/summary.json`。
+- 视觉续测：系统 Chrome + Playwright 在 `1536x960` 的 browser mirror 中实测“打开位置”为 `216x159.5px`、“环境信息”为 `300x200px`，“比较分支”同时包含比较与外链图标，console error 为 0；该证据等级为 Gate A，不替代真实 Electron CDP 的 Gate B 交互证据。
+- 未完成：本增量不实现 commit/push、比较基线选择、environment protocol 或 Thread-bound environment identity，G4 仍为进行中，不能进入 release evidence。
+
+## 11. 2026-08-03 会话阅读列与回合摘要收口
+
+- 范围：G1/G2 的视觉对齐，只调整现有消息列、输入栏共用的阅读宽度 token 和历史回合摘要布局，不触碰 Thread/Turn/Item 协议与 runtime 投影。
+- 结果：正文、文件变更卡片、回合状态线、inline/floating composer 统一使用 `clamp(640px, 68%, 720px)`；历史回合摘要固定按“已处理与耗时 / 步骤和工具数 / 展开”三段横向排布，并使用整列分隔线保持与正文、卡片对齐。
+- 稳定回归：导入 Codex 历史 fixture 断言回合摘要始终输出步骤数和工具步骤数，避免元信息再次被挤压为只剩耗时。
+
+## 12. 2026-08-03 Canonical timeline 合并增量
+
+- 范围：收口 G2 canonical Thread/Turn/Item 时间线的回合级显示，不新增协议或第二套消息 owner。
+- 实现：运行中的 turn 保留 process segment 时序；已结束 turn 将多个 process segment 合并为一个 `process:<turn>:merged` 摘要 owner；canonical turn 的普通 assistant 操作栏仅保留最后一个有正文的 assistant segment。
+- 退出条件：同一已结束 turn 只渲染一条历史过程摘要；同一 turn 的普通正文不再逐段重复圆形操作栏；产物、审批和文件卡片仍由既有 timeline owner 渲染。
+- 验证：`MessageList.directTimeline.test.tsx`、`MessageList.messageActions.test.tsx` 及历史/产物/失败工具/reasoning 相关定向测试通过；`i18n:check:json`、`git diff --check`、`verify:gui-smoke` 通过。

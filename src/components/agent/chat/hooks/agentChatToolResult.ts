@@ -165,9 +165,37 @@ export const normalizeHistoryImagePart = (
   rawPart: Record<string, unknown>,
 ): MessageImage | null => {
   const metadata = normalizeHistoryImageMetadata(rawPart.metadata);
+  const sourcePath = readStringField(rawPart, "source_path", "sourcePath");
+  const rawData = readStringField(rawPart, "data");
+
+  // Inline data is the only self-contained preview. Prefer it over a stale
+  // host path that may have been carried alongside the same imported image.
+  if (rawData) {
+    const dataUrlImage = parseDataUrlToHistoryImage(rawData);
+    const mediaType =
+      readStringField(rawPart, "mime_type", "media_type", "mediaType") ||
+      dataUrlImage?.mediaType ||
+      "image/png";
+    if (dataUrlImage) {
+      return {
+        ...dataUrlImage,
+        mediaType,
+        metadata,
+        index: readOptionalNumber(metadata?.index),
+      };
+    }
+    return {
+      data: rawData,
+      mediaType,
+      metadata,
+      index: readOptionalNumber(metadata?.index),
+      ...(sourcePath ? { sourcePath } : {}),
+    };
+  }
+
   const uri = readStringField(rawPart, "uri");
   if (uri) {
-    return normalizeHistoryImageFromUri({
+    const image = normalizeHistoryImageFromUri({
       uri,
       metadata,
       fallbackMediaType: readStringField(
@@ -177,18 +205,23 @@ export const normalizeHistoryImagePart = (
         "mediaType",
       ),
     });
+    if (image && sourcePath && !image.sourcePath) {
+      image.sourcePath = sourcePath;
+    }
+    return image;
   }
 
-  if (typeof rawPart.data === "string" && rawPart.data.trim()) {
-    const mediaType =
-      readStringField(rawPart, "mime_type", "media_type", "mediaType") ||
-      "image/png";
-    return {
-      mediaType,
-      data: rawPart.data.trim(),
+  if (sourcePath) {
+    return normalizeHistoryImageFromUri({
+      uri: sourcePath,
       metadata,
-      index: readOptionalNumber(metadata?.index),
-    };
+      fallbackMediaType: readStringField(
+        rawPart,
+        "mime_type",
+        "media_type",
+        "mediaType",
+      ),
+    });
   }
 
   const imageUrlValue = rawPart.image_url ?? rawPart.url;

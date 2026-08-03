@@ -239,7 +239,7 @@ describe("Codex render projection coverage boundary", () => {
     }
   });
 
-  it("18 / 72 / 11 coverage entries must be complete and unique", () => {
+  it("19 / 72 / 11 coverage entries must be complete and unique", () => {
     const coverage = readJson<CoverageFixture>(COVERAGE_PATH);
     const itemTypes = coverage.items.map((entry) => entry.type);
     const notifications = coverage.notifications.map((entry) => entry.method);
@@ -350,7 +350,9 @@ describe("Codex render projection coverage boundary", () => {
       )
       .toSorted((left, right) => left.type.localeCompare(right.type));
     const inventoriedItems = itemInventory.items
-      .filter((item) => item.location === undefined)
+      .filter(
+        (item) => item.location === undefined && item.codexFields.length > 0,
+      )
       .map((item) => ({
         type: item.type,
         fields: item.codexFields.toSorted(),

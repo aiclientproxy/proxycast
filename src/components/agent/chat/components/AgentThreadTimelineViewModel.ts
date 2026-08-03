@@ -49,7 +49,7 @@ export function resolveTimelineBlockEmphasis(params: {
 }): TimelineBlockEmphasis {
   const hasFocusedItem = Boolean(
     params.focusedItemId &&
-      params.block.items.some((item) => item.id === params.focusedItemId),
+    params.block.items.some((item) => item.id === params.focusedItemId),
   );
 
   if (hasFocusedItem || params.activeBlockIndex === params.index) {
@@ -100,10 +100,14 @@ export function buildTimelineBlockRenderPlan(params: {
     focusedItemId && block.items.some((item) => item.id === focusedItemId),
   );
   const hasDetailEntries = block.items.length > 0;
+  const hasPatchItem = block.items.some((item) => item.type === "patch");
   const shouldRenderArtifactCardsInline =
-    block.kind === "artifact" &&
     hasDetailEntries &&
-    block.items.every((item) => item.type === "file_artifact");
+    ((block.kind === "artifact" &&
+      block.items.every(
+        (item) => item.type === "file_artifact" || item.type === "patch",
+      )) ||
+      (block.kind === "process" && hasPatchItem));
   const singleThinkingItem =
     block.items.length === 1 && isThinkingTimelineItem(block.items[0]!)
       ? block.items[0]!

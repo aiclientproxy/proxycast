@@ -112,9 +112,11 @@ async function waitForUiSnapshot(page, options, predicate, failureLabel) {
         operationalDetailRowCount: document.querySelectorAll(
           '[data-testid="tool-call-row"]',
         ).length,
-        operationalTimelineDetailsCount: document.querySelectorAll(
-          'details[data-testid^="agent-thread-block:"][data-testid$=":process"], details[data-testid^="agent-thread-block:"][data-testid$=":approval"]',
-        ).length,
+        operationalTimelineDetailsCount: Array.from(
+          document.querySelectorAll(
+            'details[data-testid^="agent-thread-block:"][data-testid$=":process"], details[data-testid^="agent-thread-block:"][data-testid$=":approval"]',
+          ),
+        ).filter((details) => details.open).length,
         deferredHistoricalPreviewCount: document.querySelectorAll(
           '[data-testid="message-list-historical-markdown-preview"], [data-testid="message-list-historical-assistant-preview"], [data-testid="message-list-long-history-preview"]',
         ).length,
@@ -318,58 +320,180 @@ export async function confirmImport(page, options) {
 export async function inspectImportedHistoricalTimelineSummary(page, options) {
   const selector =
     '[data-testid="message-list-historical-timeline-preview:leading"]';
+  const processDetailsSelector =
+    'details[data-testid$=":process"][data-details-available="true"]';
+  const processSummarySelector = `${processDetailsSelector} > summary`;
   const startedAt = Date.now();
   let lastSnapshot = null;
+  const readTimelineSnapshot = async () =>
+    page.evaluate(
+      ({ processDetailsSelector, timelineSelector }) => {
+        const preview = document.querySelector(timelineSelector);
+        const processDetails = Array.from(
+          document.querySelectorAll(processDetailsSelector),
+        );
+        return {
+          previewVisible: preview instanceof HTMLElement,
+          historicalSummaryVisible: preview instanceof HTMLElement,
+          interactive:
+            preview instanceof HTMLButtonElement ||
+            preview instanceof HTMLAnchorElement ||
+            preview?.getAttribute("role") === "button",
+          previewAriaExpanded: preview?.getAttribute("aria-expanded") || null,
+          previewText: preview?.textContent || "",
+          timelineVisible: Boolean(
+            document.querySelector('[data-testid="agent-thread-flow"]'),
+          ),
+          expandableProcessCount: processDetails.length,
+          openExpandableProcessCount: processDetails.filter(
+            (details) => details.open,
+          ).length,
+          expandedProcessDetailsVisible: processDetails.some(
+            (details) =>
+              details.open &&
+              details.querySelector(
+                '[data-testid^="agent-thread-block:"][data-testid$=":details"]',
+              ) instanceof HTMLElement,
+          ),
+          fileChangeRowCount: document.querySelectorAll(
+            '[data-testid="file-changes-summary-file-row"]',
+          ).length,
+          toolRowSamples: Array.from(
+            document.querySelectorAll('[data-testid="tool-call-row"]'),
+          )
+            .slice(0, 3)
+            .map((row) => ({
+              text: row.textContent || "",
+              outer: row.outerHTML.slice(0, 500),
+              parentTestId:
+                row.parentElement?.getAttribute("data-testid") || null,
+            })),
+        };
+      },
+      { processDetailsSelector, timelineSelector: selector },
+    );
+
   while (Date.now() - startedAt < options.timeoutMs) {
-    lastSnapshot = await page.evaluate((timelineSelector) => {
-      const preview = document.querySelector(timelineSelector);
-      return {
-        previewVisible: preview instanceof HTMLDivElement,
-        historicalSummaryVisible: preview instanceof HTMLDivElement,
-        interactive:
-          preview instanceof HTMLButtonElement ||
-          preview instanceof HTMLAnchorElement ||
-          preview?.getAttribute("role") === "button",
-        previewText: preview?.textContent || "",
-        toolRowSamples: Array.from(
-          document.querySelectorAll('[data-testid="tool-call-row"]'),
-        )
-          .slice(0, 3)
-          .map((row) => ({
-            text: row.textContent || "",
-            outer: row.outerHTML.slice(0, 500),
-            parentTestId:
-              row.parentElement?.getAttribute("data-testid") || null,
-          })),
-      };
-    }, selector);
+    lastSnapshot = await readTimelineSnapshot();
     if (!lastSnapshot?.previewVisible) {
       await sleep(options.intervalMs);
       continue;
     }
-    const operationalDetailRowCount = await page
-      .locator('[data-testid="tool-call-row"]')
+    if (!lastSnapshot.interactive) {
+      return {
+        expanded: false,
+        previewVisible: lastSnapshot.previewVisible,
+        historicalSummaryVisible: lastSnapshot.historicalSummaryVisible,
+        interactive: false,
+        previewAriaExpanded: lastSnapshot.previewAriaExpanded,
+        operationalDetailRowCount: await page
+          .locator('[data-testid="tool-call-row"]')
+          .count(),
+        operationalTimelineDetailsCount: await page
+          .locator(
+            'details[data-testid$=":process"][data-details-available="true"], details[data-testid$=":approval"][data-details-available="true"]',
+          )
+          .count(),
+        deferredHistoricalPreviewCount: await page
+          .locator(
+            '[data-testid="message-list-historical-markdown-preview"], [data-testid="message-list-historical-assistant-preview"], [data-testid="message-list-long-history-preview"]',
+          )
+          .count(),
+        previewText: lastSnapshot.previewText,
+        toolRowSamples: lastSnapshot.toolRowSamples,
+      };
+    }
+
+    const initialSnapshot = lastSnapshot;
+    await page.locator(selector).click();
+    await page
+      .locator('[data-testid="agent-thread-flow"]')
+      .first()
+      .waitFor({ state: "visible", timeout: options.timeoutMs });
+    const expandedSnapshot = await readTimelineSnapshot();
+
+    const processSummary = page.locator(processSummarySelector).first();
+    const expandableProcessSummaryCount = await page
+      .locator(processSummarySelector)
       .count();
-    const operationalTimelineDetailsCount = await page
-      .locator(
-        'details[data-testid^="agent-thread-block:"][data-testid$=":process"], details[data-testid^="agent-thread-block:"][data-testid$=":approval"]',
-      )
-      .count();
-    const deferredHistoricalPreviewCount = await page
-      .locator(
-        '[data-testid="message-list-historical-markdown-preview"], [data-testid="message-list-historical-assistant-preview"], [data-testid="message-list-long-history-preview"]',
-      )
-      .count();
+    let processDetailsSnapshot = expandedSnapshot;
+    if (
+      expandableProcessSummaryCount > 0 &&
+      expandedSnapshot.openExpandableProcessCount === 0
+    ) {
+      if (await processSummary.count()) {
+        await processSummary.click();
+      } else {
+        await page.locator(processSummarySelector).first().click();
+      }
+      await page.waitForFunction(
+        (detailsSelector) =>
+          Array.from(document.querySelectorAll(detailsSelector)).some(
+            (details) =>
+              details.open &&
+              (details.querySelector('[data-testid$=":details"]') ||
+                details.querySelector('[data-testid="tool-call-row"]')),
+          ),
+        processDetailsSelector,
+        { timeout: options.timeoutMs },
+      );
+      processDetailsSnapshot = await readTimelineSnapshot();
+    }
+
+    if (
+      expandableProcessSummaryCount > 0 &&
+      processDetailsSnapshot.openExpandableProcessCount > 0
+    ) {
+      const openProcessDetailsSelector = `${processDetailsSelector}[open]`;
+      while (
+        (await page.locator(openProcessDetailsSelector).count()) > 0
+      ) {
+        const openCount = await page
+          .locator(openProcessDetailsSelector)
+          .count();
+        await page
+          .locator(`${openProcessDetailsSelector} > summary`)
+          .first()
+          .click();
+        await page.waitForFunction(
+          ({ detailsSelector, previousCount }) =>
+            document.querySelectorAll(detailsSelector).length < previousCount,
+          { detailsSelector: openProcessDetailsSelector, previousCount: openCount },
+          { timeout: options.timeoutMs },
+        );
+      }
+    }
+
+    const collapsedAfterInteraction = await waitForUiSnapshot(
+      page,
+      options,
+      (snapshot) =>
+        snapshot.dialogVisible === false &&
+        snapshot.operationalDetailRowCount === 0 &&
+        snapshot.operationalTimelineDetailsCount === 0 &&
+        snapshot.deferredHistoricalPreviewCount === 0,
+      "展开历史步骤后未能恢复折叠态",
+    );
+
     return {
-      expanded: false,
-      previewVisible: lastSnapshot.previewVisible,
-      historicalSummaryVisible: lastSnapshot.historicalSummaryVisible,
-      interactive: lastSnapshot.interactive === true,
-      operationalDetailRowCount,
-      operationalTimelineDetailsCount,
-      deferredHistoricalPreviewCount,
-      previewText: lastSnapshot.previewText,
-      toolRowSamples: lastSnapshot.toolRowSamples,
+      expanded: true,
+      previewVisible: initialSnapshot.previewVisible,
+      historicalSummaryVisible: initialSnapshot.historicalSummaryVisible,
+      interactive: initialSnapshot.interactive === true,
+      previewAriaExpanded: initialSnapshot.previewAriaExpanded,
+      timelineVisible: expandedSnapshot.timelineVisible,
+      expandableProcessCount: expandedSnapshot.expandableProcessCount,
+      expandedProcessDetailsVisible:
+        processDetailsSnapshot.expandedProcessDetailsVisible,
+      fileChangeRowCount: expandedSnapshot.fileChangeRowCount,
+      operationalDetailRowCount:
+        collapsedAfterInteraction.operationalDetailRowCount,
+      operationalTimelineDetailsCount:
+        collapsedAfterInteraction.operationalTimelineDetailsCount,
+      deferredHistoricalPreviewCount:
+        collapsedAfterInteraction.deferredHistoricalPreviewCount,
+      previewText: initialSnapshot.previewText,
+      toolRowSamples: processDetailsSnapshot.toolRowSamples,
     };
   }
   throw new Error(
@@ -1122,9 +1246,6 @@ async function inspectImportedSessionVisualViewport(
       bodyText.includes(CONTINUE_ASSISTANT_TEXT) &&
       hasPatchEvidenceText(bodyText) &&
       bodyText.includes(IMPORTED_PREVIEW_MARKDOWN_FILE) &&
-      current.operationalDetailRowCount === 0 &&
-      current.operationalTimelineDetailsCount === 0 &&
-      current.deferredHistoricalPreviewCount === 0 &&
       !bodyText.includes("imported_read_only") &&
       !bodyText.includes("thread-codex") &&
       !bodyText.includes("Approve Codex command")
@@ -1338,6 +1459,16 @@ async function inspectImportedSessionVisualViewport(
           operationalDetailRows.length === 0 && !searchToolContainer,
         hasContinueUserMessage: bodyText.includes(continueUserText),
         hasContinueAssistantMessage: bodyText.includes(continueAssistantText),
+        historicalTimelinePreviewCount: document.querySelectorAll(
+          '[data-testid^="message-list-historical-timeline-preview:"]',
+        ).length,
+        deferredHistoricalPreviewCount: document.querySelectorAll(
+          [
+            '[data-testid="message-list-historical-markdown-preview"]',
+            '[data-testid="message-list-historical-assistant-preview"]',
+            '[data-testid="message-list-long-history-preview"]',
+          ].join(","),
+        ).length,
         hasReasoningVisible: bodyText.includes(importedReasoningText),
         hasReasoningStatusVisible: bodyText.includes("已完成思考"),
         hasCommandExecutionVisible: bodyText.includes("npm test"),

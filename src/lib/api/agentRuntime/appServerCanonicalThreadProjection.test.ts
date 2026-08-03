@@ -481,6 +481,7 @@ describe("appServerCanonicalThreadProjection", () => {
           type: "image",
           data: "",
           display_name: "a.png",
+          source_path: "/tmp/a.png",
           unavailable_reason: "host_reference_required",
         },
       ],

@@ -642,6 +642,59 @@ function canonicalThreadMetadata(
     : undefined;
 }
 
+/**
+ * Imported threads are restored from another client and need the complete
+ * canonical history before the renderer builds its timeline.
+ */
+export function isImportedCanonicalThread(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const metadata = canonicalThreadMetadata(value);
+  return hasImportedMetadata(metadata) || hasImportedMetadata(value);
+}
+
+function hasImportedMetadata(
+  value: Record<string, unknown> | undefined,
+): boolean {
+  if (!value) {
+    return false;
+  }
+
+  for (const key of [
+    "imported",
+    "isImported",
+    "importedContinuation",
+    "imported_continuation",
+    "importedThreadSettings",
+    "imported_thread_settings",
+    "sourceClient",
+    "source_client",
+    "sourceThreadId",
+    "source_thread_id",
+    "sourceProvenance",
+    "source_provenance",
+    "codexImportFidelity",
+    "codex_import_fidelity",
+    "conversationImport",
+    "conversation_import",
+  ]) {
+    const marker = value[key];
+    if (marker === true) {
+      return true;
+    }
+    if (typeof marker === "string" && marker.trim()) {
+      return true;
+    }
+    if (isRecord(marker) && hasImportedMetadata(marker)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function metadataString(
   metadata: Record<string, unknown> | undefined,
   ...keys: string[]

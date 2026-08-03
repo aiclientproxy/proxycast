@@ -134,4 +134,18 @@ describe("MessageImageAttachments", () => {
     expect(image?.getAttribute("src")).toBe("data:image/png;base64,iVBORw==");
     expect(container.querySelector('img[src^="sidecar://"]')).toBeNull();
   });
+
+  it("同时带内联数据和本地路径时应优先展示内联图片", () => {
+    const container = renderAttachments([
+      {
+        data: "aW1hZ2U=",
+        mediaType: "image/png",
+        sourcePath: "/tmp/stale-imported-image.png",
+      },
+    ]);
+
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(
+      "data:image/png;base64,aW1hZ2U=",
+    );
+  });
 });

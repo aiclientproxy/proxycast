@@ -226,6 +226,9 @@ fn imported_file_changed_event(tool: &CodexToolCall) -> Option<CodexRolloutEvent
             "content": content,
             "artifactId": format!("codex-import-file-{call_id}"),
             "sourceClient": "codex",
+            "eventClass": "file.read",
+            "operation": "read",
+            "toolName": "read_file",
             "sourceEventType": "function_call_output",
             "sourceProvenance": tool.source.source_provenance.clone(),
             "imported": true,
@@ -409,10 +412,21 @@ pub(in crate::runtime::conversation_import) fn build_canonical_history_events(
     session_id: &str,
     thread_id: &str,
     turn_id: &str,
+    started_at: Option<&str>,
     completed_at: Option<&str>,
 ) -> Vec<RuntimeEvent> {
     let mut builder = CodexHistoryBuilder::new();
     let mut normalized = Vec::new();
+    normalized.push(CodexRolloutEvent::new(
+        "turn.started",
+        json!({
+            "startedAt": started_at,
+            "imported": true,
+            "sourceClient": "codex",
+            "sourceEventType": "synthetic_turn_started",
+            "importedSynthetic": true,
+        }),
+    ));
     for event in events {
         normalized.extend(builder.push(event));
     }

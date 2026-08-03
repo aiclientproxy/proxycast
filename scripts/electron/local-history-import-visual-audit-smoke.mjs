@@ -38,6 +38,8 @@ const ALLOWED_SOURCE_BRAND_CONTEXTS = [
   "backendPath",
   "backendLedgerPath",
   "appServerBinary",
+  "importedDetailsSnapshot",
+  "continuationSnapshot",
 ];
 const VISIBLE_TEXT_KEYS = new Set([
   "bodyText",

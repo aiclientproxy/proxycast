@@ -17,6 +17,7 @@ interface ResolveMessageListItemArtifactProjectionParams {
   alreadyRenderedArtifactPaths: string[];
   canOpenSavedSiteContent: boolean;
   hasTrailingArtifactTimelineItems: boolean;
+  isImportedHistoryTurn: boolean;
   message: Message;
   shouldSuppressImageProcessFlow: boolean;
 }
@@ -26,6 +27,7 @@ export function resolveMessageListItemArtifactProjection({
   alreadyRenderedArtifactPaths,
   canOpenSavedSiteContent,
   hasTrailingArtifactTimelineItems,
+  isImportedHistoryTurn,
   message,
   shouldSuppressImageProcessFlow,
 }: ResolveMessageListItemArtifactProjectionParams) {
@@ -47,7 +49,9 @@ export function resolveMessageListItemArtifactProjection({
       ? resolveLatestProjectFileSavedSiteContentTargetFromMessage(message)
       : null;
   const visibleAssistantArtifacts =
-    message.role === "assistant" && !shouldSuppressImageProcessFlow
+    message.role === "assistant" &&
+    !shouldSuppressImageProcessFlow &&
+    !isImportedHistoryTurn
       ? (message.artifacts || []).filter((artifact) => {
           const artifactPath = resolveArtifactProtocolFilePath(artifact);
           if (isHiddenConversationArtifactPath(artifactPath)) {

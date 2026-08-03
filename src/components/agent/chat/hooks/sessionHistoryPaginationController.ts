@@ -7,9 +7,12 @@ export interface SessionHistoryWindowState {
   turnCursor: string | null;
   isLoadingFull: boolean;
   error: string | null;
+  /** The initial response already contains the complete history. */
+  isFullyLoaded?: boolean;
 }
 
 export interface SessionHistoryDetailLike {
+  history_limit?: number | null;
   history_cursor?: {
     item_cursor?: string | null;
     turn_cursor?: string | null;
@@ -80,7 +83,21 @@ export function resolveSessionHistoryWindowFromDetail(
   const turnCursor = normalizeOpaqueCursor(detail.history_cursor?.turn_cursor);
   const hasMore = itemCursor !== null || turnCursor !== null;
   if (!hasMore) {
-    return null;
+    if (detail.history_limit !== 0) {
+      return null;
+    }
+    const loaded = resolveDetailLoadedCounts(detail);
+    return {
+      loadedEntries: loaded.entries,
+      loadedTurns: loaded.turns,
+      loadedItems: loaded.items,
+      hasMore: false,
+      itemCursor: null,
+      turnCursor: null,
+      isLoadingFull: false,
+      error: null,
+      isFullyLoaded: true,
+    };
   }
 
   const loaded = resolveDetailLoadedCounts(detail);

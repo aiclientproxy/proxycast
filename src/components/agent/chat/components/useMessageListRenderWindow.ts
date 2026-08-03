@@ -17,6 +17,7 @@ import { MESSAGE_LIST_RENDER_WINDOW_SETTINGS } from "./messageListConstants";
 
 interface SessionHistoryWindow {
   hasMore?: boolean;
+  isFullyLoaded?: boolean;
 }
 
 interface UseMessageListRenderWindowOptions {
@@ -169,6 +170,7 @@ export function useMessageListRenderWindow({
   const visibleEntryFirstId = visibleEntries[0]?.id ?? null;
   const visibleEntryLastId = visibleEntries.at(-1)?.id ?? null;
   const hasPersistedHistory = hasPersistedOlderHistory(sessionHistoryWindow);
+  const isFullyLoadedHistory = sessionHistoryWindow?.isFullyLoaded === true;
   const isRestoredHistoryWindow = isRestoringSession || hasPersistedHistory;
   const [restoredPromptCacheNoticeReady, setRestoredPromptCacheNoticeReady] =
     useState(() => !isRestoredHistoryWindow);
@@ -198,6 +200,7 @@ export function useMessageListRenderWindow({
   const progressiveRenderBatchSize = renderWindowSettings.renderBatchSize;
   const progressiveRenderMinimumDelayMs = renderWindowSettings.minimumDelayMs;
   const shouldUseProgressiveRender =
+    !isFullyLoadedHistory &&
     (!isSending || isRestoredHistoryWindow) &&
     visibleEntries.length > progressiveInitialRenderCount;
   const visibleEntryWindowRef = useRef<RenderEntryWindowSnapshot | null>(null);

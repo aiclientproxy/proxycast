@@ -115,4 +115,21 @@ describe("agentChatToolResult", () => {
       index: 1,
     });
   });
+
+  it("data 字段为完整 data URL 时不应重复拼接协议头", () => {
+    expect(
+      normalizeHistoryImagePart({
+        type: "image",
+        mime_type: "image/jpeg",
+        data: "data:image/jpeg;base64,aW1hZ2U=",
+      }),
+    ).toEqual({
+      data: "aW1hZ2U=",
+      mediaType: "image/jpeg",
+      sourceUri: "data:image/jpeg;base64,aW1hZ2U=",
+      previewUrl: "data:image/jpeg;base64,aW1hZ2U=",
+      metadata: undefined,
+      index: undefined,
+    });
+  });
 });

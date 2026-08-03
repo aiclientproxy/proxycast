@@ -164,6 +164,9 @@ function logStage(stage) {
 }
 
 function contentTextFromMessage(message) {
+  if (typeof message?.text === "string") {
+    return message.text.trim();
+  }
   return (Array.isArray(message?.content) ? message.content : [])
     .map((part) => {
       if (!part || typeof part !== "object") {
@@ -179,12 +182,152 @@ function normalizeComparablePath(value) {
   return String(value ?? "").replace(/\\/g, "/");
 }
 
-function summarizeReadModel(readResult) {
-  const detail = readResult?.detail ?? null;
-  const messages = Array.isArray(detail?.messages) ? detail.messages : [];
-  const items = Array.isArray(detail?.items) ? detail.items : [];
+function canonicalItemText(value) {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value && typeof value === "object" && typeof value.text === "string") {
+    return value.text;
+  }
+  return "";
+}
+
+function canonicalDynamicToolArgument(item, name) {
+  const argumentsValue = item?.arguments;
+  if (Array.isArray(argumentsValue)) {
+    const argument = argumentsValue.find(
+      (candidate) => candidate?.name === name,
+    );
+    return argument?.value;
+  }
+  if (argumentsValue && typeof argumentsValue === "object") {
+    return argumentsValue[name];
+  }
+  return undefined;
+}
+
+function canonicalThreadReadProjection(readResult) {
+  const thread = readResult?.thread ?? null;
+  const turns = Array.isArray(thread?.turns) ? thread.turns : [];
+  const canonicalItems = turns.flatMap((turn) =>
+    Array.isArray(turn?.items) ? turn.items : [],
+  );
+  const messages = canonicalItems.flatMap((item) => {
+    if (item?.type === "userMessage") {
+      return [
+        {
+          role: "user",
+          content: Array.isArray(item.content) ? item.content : [],
+        },
+      ];
+    }
+    if (item?.type === "agentMessage") {
+      return [
+        {
+          role: "assistant",
+          content: [{ text: typeof item.text === "string" ? item.text : "" }],
+        },
+      ];
+    }
+    return [];
+  });
+
+  const items = canonicalItems.flatMap((item) => {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+    switch (item.type) {
+      case "userMessage":
+        return [{ ...item, type: "user_message" }];
+      case "agentMessage":
+        return [{ ...item, type: "agent_message" }];
+      case "commandExecution":
+        return [{ ...item, type: "command_execution" }];
+      case "reasoning":
+        return [
+          {
+            ...item,
+            type: "reasoning",
+            text: [
+              ...(Array.isArray(item.summary) ? item.summary : []),
+              ...(Array.isArray(item.content) ? item.content : []),
+            ]
+              .map(canonicalItemText)
+              .filter(Boolean)
+              .join("\n\n"),
+          },
+        ];
+      case "fileChange": {
+        const metadata = item.metadata ?? {};
+        const sourceEventType = String(metadata.sourceEventType ?? "");
+        const sourceCallId = String(metadata.sourceCallId ?? "");
+        const readOnly =
+          metadata.importedReadOnly === true ||
+          sourceEventType === "file.read" ||
+          sourceCallId.startsWith("call_read_");
+        const changes = Array.isArray(item.changes) ? item.changes : [];
+        return [
+          {
+            ...item,
+            type: readOnly ? "file_artifact" : "patch",
+            paths: changes
+              .map((change) => change?.path)
+              .filter((filePath) => typeof filePath === "string"),
+          },
+        ];
+      }
+      case "dynamicToolCall": {
+        const toolName = String(item.tool ?? "").trim().toLowerCase();
+        if (toolName !== "web_search") {
+          return [{ ...item, type: "dynamic_tool_call" }];
+        }
+        return [
+          {
+            ...item,
+            type: "web_search",
+            query: canonicalDynamicToolArgument(item, "query"),
+            action: canonicalDynamicToolArgument(item, "action"),
+          },
+        ];
+      }
+      case "webSearch":
+        return [{ ...item, type: "web_search" }];
+      default:
+        return [{ ...item }];
+    }
+  });
+
+  const importFidelity =
+    thread?.extra && typeof thread.extra === "object"
+      ? thread.extra.codexImportFidelity
+      : null;
+  const hasApprovalRecord = Boolean(
+    items.some(
+      (item) =>
+        (item?.type === "approvalRequest" ||
+          item?.type === "approval_request") &&
+        (item?.requestId === "call_exec" || item?.request_id === "call_exec"),
+    ) ||
+    (importFidelity &&
+      typeof importFidelity === "object" &&
+      Number(importFidelity.approvals) > 0),
+  );
+
   return {
-    sessionId: readResult?.session?.sessionId ?? null,
+    thread,
+    turns,
+    messages,
+    items,
+    hasApprovalRecord,
+  };
+}
+
+function summarizeReadModel(readResult) {
+  const projection = canonicalThreadReadProjection(readResult);
+  const messages = projection.messages;
+  const items = projection.items;
+  return {
+    sessionId: readResult?.thread?.sessionId ?? readResult?.session?.sessionId ?? null,
     messagesLength: messages.length,
     itemsLength: items.length,
     itemTypes: [...new Set(items.map((item) => item?.type).filter(Boolean))],
@@ -240,36 +383,39 @@ function summarizeReadModel(readResult) {
       }
       const sourceCallId =
         item?.call_id ??
-        item?.id ??
         item?.metadata?.source_call_id ??
         item?.metadata?.sourceCallId ??
         item?.metadata?.source_provenance?.source_call_id ??
         item?.metadata?.sourceProvenance?.sourceCallId;
+      const hasSourceCallId =
+        sourceCallId === "call_search" ||
+        String(item?.id ?? "").includes("call_search");
       return (
-        sourceCallId === "call_search" &&
+        hasSourceCallId &&
         item?.query === IMPORTED_WEB_SEARCH_QUERY &&
         (String(item?.action || "").includes("search_query") ||
           String(item?.action || "").includes("search") ||
           String(item?.tool_name || "").includes("web_search") ||
           String(item?.output || item?.output_preview || "").includes(
             "search_query",
-          ))
+          ) ||
+          String(item?.tool || "").includes("web_search"))
       );
     }),
-    hasApprovalItem: items.some(
-      (item) =>
-        item?.type === "approval_request" && item?.request_id === "call_exec",
-    ),
+    hasApprovalItem: projection.hasApprovalRecord,
     hasImportedAttachment: messages.some(
       (message) =>
         message?.role === "user" &&
-        Array.isArray(message?.attachments) &&
-        message.attachments.some((attachment) => attachment?.kind === "image"),
+        Array.isArray(message?.content) &&
+        message.content.some(
+          (part) =>
+            part?.type === "image" || part?.type === "localImage",
+        ),
     ),
   };
 }
 
-async function waitForImportedReadModel(page, options, sessionId) {
+async function waitForImportedReadModel(page, options, threadId) {
   const startedAt = Date.now();
   let latest = null;
   while (Date.now() - startedAt < options.timeoutMs) {
@@ -277,8 +423,8 @@ async function waitForImportedReadModel(page, options, sessionId) {
       page,
       "thread/read",
       {
-        sessionId,
-        historyLimit: 100,
+        threadId,
+        includeTurns: true,
       },
       { idPrefix: RPC_ID_PREFIX },
     );
@@ -350,11 +496,26 @@ function summarizeBackendLedger(backendLedger, sessionId) {
     backendTurnStart?.request?.runtimeOptions ??
     backendTurnStart?.request?.runtime_options ??
     null;
+  const input = backendTurnStart?.request?.input;
+  const backendInputText =
+    typeof input?.text === "string"
+      ? input.text
+      : Array.isArray(input?.parts)
+        ? input.parts
+            .map((part) =>
+              typeof part?.text === "string"
+                ? part.text
+                : typeof part?.Text?.text === "string"
+                  ? part.Text.text
+                  : "",
+            )
+            .join("")
+        : null;
   return {
     backendTurnStartSeen: Boolean(backendTurnStart),
     backendSessionId: backendTurnStart?.request?.session?.sessionId ?? null,
     backendTurnId: backendTurnStart?.request?.turn?.turnId ?? null,
-    backendInputText: backendTurnStart?.request?.input?.text ?? null,
+    backendInputText,
     backendMetadataImported:
       backendRuntimeOptions?.runtimeRequest?.metadata?.imported === true,
     backendCwd: backendRuntimeOptions?.runtimeRequest?.workingDir ?? null,
@@ -685,8 +846,22 @@ async function run() {
       "导入历史未显示 terminal 摘要",
     );
     assert(
-      !importedHistoricalTimelineExpansion.interactive,
-      "导入历史摘要不应是可交互控件",
+      importedHistoricalTimelineExpansion.interactive,
+      "导入历史摘要应支持点击展开步骤",
+    );
+    assert(
+      importedHistoricalTimelineExpansion.previewAriaExpanded === "false",
+      "导入历史摘要初始状态应保持折叠",
+    );
+    assert(
+      importedHistoricalTimelineExpansion.expanded === true &&
+        importedHistoricalTimelineExpansion.timelineVisible,
+      "导入历史摘要点击后未显示真实时间线",
+    );
+    assert(
+      importedHistoricalTimelineExpansion.expandableProcessCount > 0 &&
+        importedHistoricalTimelineExpansion.expandedProcessDetailsVisible,
+      "导入历史步骤不可继续展开",
     );
     assert(
       importedHistoricalTimelineExpansion.previewText.includes("9s"),
@@ -697,13 +872,11 @@ async function run() {
       "导入历史仍挂载运行期工具明细",
     );
     assert(
-      importedHistoricalTimelineExpansion.operationalTimelineDetailsCount ===
-        0,
+      importedHistoricalTimelineExpansion.operationalTimelineDetailsCount === 0,
       "导入历史仍挂载 operational details",
     );
     assert(
-      importedHistoricalTimelineExpansion.deferredHistoricalPreviewCount ===
-        0,
+      importedHistoricalTimelineExpansion.deferredHistoricalPreviewCount === 0,
       "导入历史仍挂载 deferred preview",
     );
 
@@ -767,14 +940,21 @@ async function run() {
       (entry) => entry.kind === "turnStart",
     );
     const sessionId = backendTurnStart?.request?.session?.sessionId ?? null;
+    const threadId =
+      backendTurnStart?.request?.session?.threadId ??
+      backendTurnStart?.request?.turn?.threadId ??
+      null;
     assert(sessionId, "backend ledger 未记录导入 sessionId");
+    assert(threadId, "backend ledger 未记录导入 threadId");
     summary.sessionId = sessionId;
+    summary.threadId = threadId;
     appServerRequests.push({
       method: "thread/read",
       source: "script-probe",
       sessionId,
+      threadId,
     });
-    readModel = await waitForImportedReadModel(page, options, sessionId);
+    readModel = await waitForImportedReadModel(page, options, threadId);
     const backendSummary = summarizeBackendLedger(backendLedger, sessionId);
     summary.backendSummary = sanitizeJson(backendSummary);
     assert(

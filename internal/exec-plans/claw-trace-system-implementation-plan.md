@@ -103,7 +103,7 @@ Trace 诊断必须同时满足两类消费者：
 - S44 验证：`./node_modules/.bin/vitest run "src/components/agent/chat/workspace/WorkspaceTraceTab.test.tsx"` 通过，覆盖 history restore 不渲染 first-token / baseline / regression 空面板；`./node_modules/.bin/eslint` 覆盖 Trace Tab 写集通过；`git diff --check` 覆盖本轮写集通过。
 - S45 收口：Trace Tab 的 recorded phases 不再直接渲染 `messageList.paint` / `agentRuntime.getSession.success` 等 raw checkpoint chip，改为 View Model 投影出的阶段组和记录次数；raw checkpoint 继续保留在 compact summary / 复制摘要中，供 AI 和自动化排查使用。
 - S45 验证：`./node_modules/.bin/vitest run "src/components/agent/chat/workspace/WorkspaceTraceTab.test.tsx"` 通过，覆盖阶段组计数与 UI 不泄露 raw checkpoint；`./node_modules/.bin/eslint "src/components/agent/chat/workspace/workspaceTracePanelModel.ts" "src/components/agent/chat/workspace/WorkspaceTraceTab.tsx" "src/components/agent/chat/workspace/WorkspaceTraceTab.test.tsx"` 通过。
-- S46 收口：Trace / Harness 这类 Right Surface 属于辅助诊断面板，打开后保留主对话作为工作台主任务画布；消息列、助手气泡、inline 输入框和 floating 输入框使用同一自适应阅读宽度事实源 `clamp(900px, 76%, 1280px)`，避免宽屏下正文与输入框错位，或 Trace 打开后主对话被挤成窄列。
+- S46 收口：Trace / Harness 这类 Right Surface 属于辅助诊断面板，打开后保留主对话作为工作台主任务画布；消息列、助手气泡、inline 输入框和 floating 输入框使用同一 Codex-style 阅读宽度事实源 `clamp(640px, 68%, 720px)`，避免宽屏下正文与输入框错位，或 Trace 打开后主对话被挤成窄列。
 - S46 验证：`./node_modules/.bin/vitest run "src/components/agent/chat/workspace/WorkspaceMainArea.test.tsx" "src/components/agent/chat/components/MessageList.test.tsx" "src/components/agent/chat/components/MessageList.messageActions.test.tsx"` 通过，3 个文件、39 个用例，覆盖 Right Surface 默认聊天宽度、显式宽度不被覆盖、消息列与助手气泡阅读宽度；`./node_modules/.bin/eslint` 覆盖 S46 TS/TSX 写集通过；`git diff --check` 覆盖 S46 写集通过；`npm run verify:gui-smoke` 通过，覆盖 renderer smoke build、Electron host build、App Server sidecar、renderer loaded、app-server initialized、claw workbench shell ready 和 memory settings ready。
 
 ## 5. 事实源与拟写集
@@ -906,7 +906,7 @@ npm run smoke:agent-runtime-current-fixture
 - 验证未完成：前端全量 `npx tsc --noEmit --project "tsconfig.json" --pretty false` 运行超过 5 分钟无输出后手动中断，退出码 `130`。本轮已有定向 ESLint、Vitest、Electron typecheck（经 `verify:gui-smoke`）、App Server client build、contract guard 和 GUI smoke 覆盖新增写集；全量前端 typecheck 仍需后续单独窗口重跑或定位仓库级耗时问题。
 - 开始 S46 Workspace Trace adaptive layout：
   - 决策：Trace / Harness / expert info 等 Right Surface 是辅助诊断或辅助信息面板，打开后不能按普通代码画布比例压缩主对话；没有显式 `chatPanelWidth` 时使用 Right Surface 专用默认聊天宽度。
-  - 决策：普通对话态不能把消息正文、助手气泡和输入框分别写死成不同宽度；统一走自适应对话内容轨道 `clamp(900px, 76%, 1280px)`，宽屏跟随主区域增长，中窄屏继续按容器可用宽度自适应。
+  - 决策：普通对话态不能把消息正文、助手气泡和输入框分别写死成不同宽度；统一走 Codex-style 自适应对话内容轨道 `clamp(640px, 68%, 720px)`，宽屏保持窄阅读列，中窄屏继续按容器可用宽度自适应。
   - 决策：不新增协议、不新增文案、不改变 Trace 数据采集；本轮只修 Workspace 可见布局。
 - 完成 S46 Workspace Trace adaptive layout：
   - 新增 `conversationLayoutTokens.ts`，集中定义对话内容轨道宽度；`MessageList`、assistant bubble、inline input、floating input 和 plan decision inputbar replacement 统一消费该 token。
@@ -953,5 +953,5 @@ npm run smoke:agent-runtime-current-fixture
 24. 已完成 S39：Agent App shell 本地壳能力已拆入 `electron/agentAppShellHost.ts`；`hostCommands.test.ts` 只保留分发 smoke，不再承接 directory picker、shell prepare、UI runtime lifecycle 与 BrowserWindow 细节。
 25. 已完成 S40：Agent App runtime task start/read/cancel/host response 已拆入 `electron/agentAppRuntimeTaskHost.ts`；`hostCommands.test.ts` 只保留分发 smoke，不再承接 `turnConfig` 透传、`runWorker=false` 或 task lifecycle current 细节。
 26. 已完成 S41：Workspace 右侧 surface 已增加与 Harness 同级的 Trace Tab；主视图展示人读首字分段、慢段归因、客户端健康和阶段缺口，compact JSON evidence 只作为复制摘要动作，不作为主界面。
-27. 已完成 S46：Workspace 对话内容轨道已统一到自适应宽度 `clamp(900px, 76%, 1280px)`，消息正文 / 助手气泡 / 输入框统一口径；Right Surface 打开时使用辅助栏专用聊天宽度，不再沿用旧 `chat-canvas` 默认比例挤压主对话。
+27. 已完成 S46：Workspace 对话内容轨道已统一到 Codex-style 自适应宽度 `clamp(640px, 68%, 720px)`，消息正文 / 助手气泡 / 输入框统一口径；Right Surface 打开时使用辅助栏专用聊天宽度，不再沿用旧 `chat-canvas` 默认比例挤压主对话。
 28. 仍未完成：系统级后台 daemon / 应用完全关闭后的告警、Trace Tab retained baseline / App Server timeline drilldown 的进一步人读化、以及 `agentProtocol.ts` / `agent.rs` / `electron/hostCommands.ts` 等超大文件的后续拆分；`hostCommands.ts` 当前约 `2221` 行，下一刀优先继续拆 voice model / layered design export 等剩余大块。

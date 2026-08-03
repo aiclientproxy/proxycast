@@ -15,15 +15,21 @@ pub enum ThreadItem {
     UserMessage {
         id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         client_id: Option<String>,
         content: Vec<super::UserInput>,
     },
     HookPrompt {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         fragments: Vec<HookPromptFragment>,
     },
     AgentMessage {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         text: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         phase: Option<agent_protocol::response_item::MessagePhase>,
@@ -32,10 +38,14 @@ pub enum ThreadItem {
     },
     Plan {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         text: String,
     },
     Reasoning {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         #[serde(default)]
         summary: Vec<String>,
         #[serde(default)]
@@ -43,6 +53,8 @@ pub enum ThreadItem {
     },
     CommandExecution {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         command: String,
         cwd: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -63,11 +75,15 @@ pub enum ThreadItem {
     },
     FileChange {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         changes: Vec<FileUpdateChange>,
         status: PatchApplyStatus,
     },
     McpToolCall {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         server: String,
         tool: String,
         status: McpToolCallStatus,
@@ -88,6 +104,8 @@ pub enum ThreadItem {
     DynamicToolCall {
         id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         namespace: Option<String>,
         tool: String,
         arguments: Value,
@@ -101,6 +119,8 @@ pub enum ThreadItem {
     },
     CollabAgentToolCall {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         tool: CollabAgentTool,
         status: CollabAgentToolCallStatus,
         sender_thread_id: String,
@@ -116,6 +136,8 @@ pub enum ThreadItem {
     },
     SubAgentActivity {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         kind: SubAgentActivityKind,
         agent_thread_id: String,
         agent_path: String,
@@ -123,26 +145,91 @@ pub enum ThreadItem {
     WebSearch(WebSearchItem),
     ImageView {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         path: String,
     },
     Sleep(SleepItem),
     ImageGeneration(ImageGenerationItem),
     EnteredReviewMode {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         review: String,
     },
     ExitedReviewMode {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         review: String,
     },
     ContextCompaction {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
     },
     UnknownItem {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
         upstream_type: String,
         field_names: Vec<String>,
     },
+}
+
+/// Safe, display-only provenance carried by imported historical items.
+///
+/// The canonical store keeps richer metadata, but only these stable markers
+/// cross the v2 boundary. In particular, raw source payloads and capabilities
+/// are intentionally excluded.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadItemMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imported: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imported_read_only: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imported_synthetic: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imported_incomplete: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imported_synthetic_id: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_client: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_thread_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_event_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_event_seq: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_provenance: Option<ThreadItemSourceProvenance>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadItemSourceProvenance {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_client: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_thread_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_event_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_event_seq: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_payload_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_role: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_channel: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -364,6 +451,8 @@ pub enum CollabAgentStatus {
 pub struct WebSearchItem {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<ThreadItemMetadata>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub query: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<Value>,
@@ -374,6 +463,8 @@ pub struct WebSearchItem {
 pub struct SleepItem {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<ThreadItemMetadata>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u64>,
 }
 
@@ -381,6 +472,8 @@ pub struct SleepItem {
 #[serde(rename_all = "camelCase")]
 pub struct ImageGenerationItem {
     pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<ThreadItemMetadata>,
     pub status: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revised_prompt: Option<String>,

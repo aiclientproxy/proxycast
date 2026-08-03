@@ -42,6 +42,7 @@ export interface MessageListProps {
     loadedMessages?: number;
     totalMessages?: number | null;
     hasMore?: boolean;
+    isFullyLoaded?: boolean;
     isLoadingFull: boolean;
     error?: string | null;
   } | null;

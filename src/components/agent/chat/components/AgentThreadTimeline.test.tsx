@@ -156,6 +156,39 @@ describe("AgentThreadTimeline", () => {
       }),
     );
   });
+  it("patch 应独立渲染为 Codex 风格的文件变更时间线块", () => {
+    const container = renderTimeline([
+      {
+        ...createBaseItem("patch-1", 1),
+        type: "patch",
+        text: "已应用补丁",
+        paths: ["src/lib.rs"],
+        file_status: "completed",
+        success: true,
+        changes: [
+          {
+            path: "src/lib.rs",
+            kind: { type: "update" },
+            diff: "@@ -1 +1 @@\n-old line\n+new line",
+          },
+        ],
+      },
+    ]);
+
+    expect(
+      container.querySelector('[data-testid="timeline-file-artifact-group"]'),
+    ).not.toBeNull();
+    expect(container.textContent).toContain("编辑了文件");
+    expect(container.textContent).toContain("已编辑");
+    expect(container.textContent).toContain("src/lib.rs");
+    expect(container.textContent).toContain("+1");
+    expect(container.textContent).toContain("-1");
+    expect(
+      container.querySelectorAll(
+        '[data-testid="file-changes-summary-file-row"]',
+      ),
+    ).toHaveLength(1);
+  });
   it("多个只读 file_artifact 不应聚合成文件变更框", () => {
     const container = renderTimeline([
       createFileArtifactItem({
@@ -194,6 +227,54 @@ describe("AgentThreadTimeline", () => {
     expect(container.textContent).not.toContain("已编辑 2 个文件");
     expect(container.textContent).toContain("imagegen.md");
     expect(container.textContent).toContain("browser.md");
+  });
+  it("只读 file_artifact 与真实变更混合时应分别渲染", () => {
+    const container = renderTimeline([
+      createFileArtifactItem({
+        path: "workspace/src/App.tsx",
+        metadata: {
+          file_change: {
+            path: "workspace/src/App.tsx",
+            kind: "update",
+            lines_added: 2,
+            lines_removed: 1,
+          },
+        },
+      }),
+      createFileArtifactItem({
+        ...createBaseItem("read-1", 2),
+        path: "workspace/docs/imported-preview.md",
+        source: "file_read",
+        content: "# Imported preview",
+        metadata: {
+          eventClass: "file.read",
+          file_change: {
+            path: "workspace/docs/imported-preview.md",
+            kind: "update",
+            lines_added: 99,
+            lines_removed: 99,
+          },
+        },
+      }),
+    ]);
+
+    const fileChangeGroup = container.querySelector(
+      '[data-testid="timeline-file-artifact-group"]',
+    );
+    expect(fileChangeGroup).not.toBeNull();
+    expect(
+      fileChangeGroup?.querySelectorAll(
+        '[data-testid="file-changes-summary-file-row"]',
+      ),
+    ).toHaveLength(1);
+    expect(fileChangeGroup?.textContent).toContain("App.tsx");
+    expect(fileChangeGroup?.textContent).not.toContain("imported-preview.md");
+
+    expect(
+      container.querySelector('[data-testid="timeline-file-attachment-list"]'),
+    ).not.toBeNull();
+    expect(container.textContent).toContain("imported-preview.md");
+    expect(container.textContent).not.toContain("已编辑 2 个文件");
   });
   it("普通文件附件列表应默认显示前三项，并可展开剩余文件", () => {
     const items = Array.from({ length: 5 }, (_, index) =>

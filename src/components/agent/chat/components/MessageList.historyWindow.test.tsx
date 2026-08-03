@@ -92,6 +92,25 @@ describe("MessageList history window", () => {
     ).toBeNull();
   });
 
+  it("导入历史已全量加载时应首帧渲染全部 entries，不再截取尾部", () => {
+    const container = render(createConversationMessages(40), {
+      sessionHistoryWindow: {
+        loadedMessages: 40,
+        totalMessages: 40,
+        hasMore: false,
+        isFullyLoaded: true,
+        isLoadingFull: false,
+        error: null,
+      },
+    });
+
+    expect(container.textContent).toContain("消息 1");
+    expect(container.textContent).toContain("消息 40");
+    expect(
+      container.querySelector('[data-testid="message-list-history-window"]'),
+    ).toBeNull();
+  });
+
   it("canonical Turn 与 residual Message 数量不同时应由 render entry 负责加载计数", () => {
     const timestamp = "2026-04-25T10:00:00.000Z";
     const turns: AgentThreadTurn[] = Array.from({ length: 3 }, (_, index) => ({
@@ -929,7 +948,8 @@ describe("MessageList history window", () => {
       '[data-testid="message-list-historical-timeline-preview:leading"]',
     ) as HTMLElement | null;
 
-    expect(historicalSummary?.tagName).toBe("DIV");
+    expect(historicalSummary?.tagName).toBe("BUTTON");
+    expect(historicalSummary?.getAttribute("aria-expanded")).toBe("false");
     expect(mockAgentThreadTimeline).not.toHaveBeenCalled();
     expect(mockStreamingRenderer).toHaveBeenLastCalledWith(
       expect.objectContaining({

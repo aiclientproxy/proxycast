@@ -246,6 +246,32 @@ describe("MessageList imported history codex import", () => {
       '[data-testid="message-list-historical-timeline-preview:leading"]',
     );
     expect(preview).not.toBeNull();
+    expect(preview?.tagName).toBe("BUTTON");
+    expect(preview?.textContent).toMatch(/8\s*(?:steps|步)/);
+    expect(preview?.textContent).toMatch(/5\s*(?:tool steps|个工具步骤)/);
+    expect(
+      container.querySelector(
+        '[data-testid="historical-file-artifact-summary"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(
+        '[data-testid="historical-file-artifact-summary"]',
+      )?.textContent,
+    ).toContain("src/lib.rs");
+    expect(
+      container.querySelector(
+        '[data-testid="historical-file-artifact-summary"]',
+      )?.textContent,
+    ).toMatch(/(?:1\s+files?|1\s*个文件)/i);
+    expect(
+      container.querySelector(
+        '[data-testid="historical-file-artifact-summary"]',
+      )?.textContent,
+    ).not.toContain("imported-preview");
+    expect(
+      container.querySelector('[data-testid="historical-file-artifact-group"]'),
+    ).toBeNull();
     const importedAssistantRendererCall = mockStreamingRenderer.mock.calls.find(
       ([props]) => {
         const rendererProps = props as {
@@ -263,11 +289,17 @@ describe("MessageList imported history codex import", () => {
       "我会先运行测试并检查失败。",
     );
     expect(importedAssistantRendererCall?.contentParts).toBeUndefined();
+    expect(mockAgentThreadTimeline).not.toHaveBeenCalled();
+
     act(() => preview?.click());
-    expect(
-      mockAgentThreadTimeline.mock.calls.some(([props]) =>
-        props.items?.some((item) => item.id === "imported-file-artifact"),
-      ),
-    ).toBe(true);
+    expect(mockAgentThreadTimeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({ id: "imported-patch" }),
+          expect.objectContaining({ id: "imported-file-artifact" }),
+        ]),
+        expandCompletedProcessDetails: true,
+      }),
+    );
   });
 });

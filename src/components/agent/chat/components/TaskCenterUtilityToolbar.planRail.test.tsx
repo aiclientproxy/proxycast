@@ -8,18 +8,22 @@ import { TaskCenterUtilityToolbar } from "./TaskCenterUtilityToolbar";
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-const { mockOpenProjectPathWithTool, mockReadProjectGitStatus } = vi.hoisted(
-  () => ({
-    mockOpenProjectPathWithTool: vi.fn(),
-    mockReadProjectGitStatus: vi.fn(),
-  }),
-);
+const {
+  mockOpenProjectPathWithTool,
+  mockReadProjectGitDiff,
+  mockReadProjectGitStatus,
+} = vi.hoisted(() => ({
+  mockOpenProjectPathWithTool: vi.fn(),
+  mockReadProjectGitDiff: vi.fn(),
+  mockReadProjectGitStatus: vi.fn(),
+}));
 
 vi.mock("@/lib/api/fileSystem", () => ({
   openProjectPathWithTool: mockOpenProjectPathWithTool,
 }));
 
 vi.mock("@/lib/api/projectGit", () => ({
+  readProjectGitDiff: mockReadProjectGitDiff,
   readProjectGitStatus: mockReadProjectGitStatus,
 }));
 
@@ -159,6 +163,14 @@ function renderToolbar(
     currentBranch: null,
     uncommittedFileCount: 0,
   });
+  mockReadProjectGitDiff.mockResolvedValue({
+    rootPath: "/tmp/project",
+    hasGitRepository: true,
+    patch: "",
+    uncommittedFileCount: 0,
+    currentRef: "main",
+    comparisonBaseRef: null,
+  });
 
   return mount(buildToolbar(props));
 }
@@ -204,7 +216,7 @@ async function flushEffects() {
 }
 
 describe("TaskCenterUtilityToolbar plan rail reveal", () => {
-  it("有 revisioned plan item 时应自动揭示计划轨", async () => {
+  it("有 revisioned plan item 时应自动揭示紧凑环境面板", async () => {
     const container = renderToolbar({
       taskRail: {
         workflowSteps: [],
@@ -233,31 +245,14 @@ describe("TaskCenterUtilityToolbar plan rail reveal", () => {
     const popover = container.querySelector(
       '[data-testid="task-center-environment-popover"]',
     );
-    const planSection = container.querySelector(
-      '[data-testid="task-center-run-control-plan"]',
-    );
-    const planRevision = container.querySelector(
-      '[data-testid="task-center-run-control-plan-revision"]',
-    );
-    const planItems = Array.from(
-      container.querySelectorAll(
-        '[data-testid="task-center-run-control-plan-item"]',
-      ),
-    );
-
     expect(popover).not.toBeNull();
-    expect(planSection?.textContent).toContain("读取任务区域");
-    expect(planSection?.textContent).toContain("恢复运行计划");
-    expect(planRevision?.getAttribute("data-plan-revision-id")).toBe(
-      "proposed_plan:task-rail-2",
-    );
-    expect(planItems.map((item) => item.getAttribute("data-status"))).toEqual([
-      "completed",
-      "running",
-    ]);
+    expect(popover?.className).toContain("w-[min(300px,calc(100vw-1rem))]");
+    expect(
+      container.querySelector('[data-testid="task-center-task-rail"]'),
+    ).toBeNull();
   });
 
-  it("实时 todo checklist 到达时应自动揭示计划轨", async () => {
+  it("实时 todo checklist 到达时应自动揭示紧凑环境面板", async () => {
     const container = renderToolbar({
       taskRail: {
         workflowSteps: [],
@@ -285,22 +280,11 @@ describe("TaskCenterUtilityToolbar plan rail reveal", () => {
     });
     await flushEffects();
 
-    const planSection = container.querySelector(
-      '[data-testid="task-center-run-control-plan"]',
+    const popover = container.querySelector(
+      '[data-testid="task-center-environment-popover"]',
     );
-    const planItems = Array.from(
-      container.querySelectorAll(
-        '[data-testid="task-center-run-control-plan-item"]',
-      ),
-    );
-    expect(planSection?.textContent).toContain("读取 current owner");
-    expect(planSection?.textContent).toContain("验证实时计划");
-    expect(planSection?.textContent).toContain("记录 Gate B");
-    expect(planItems.map((item) => item.getAttribute("data-status"))).toEqual([
-      "completed",
-      "running",
-      "pending",
-    ]);
+    expect(popover).not.toBeNull();
+    expect(popover?.className).toContain("w-[min(300px,calc(100vw-1rem))]");
   });
 
   it("没有计划项时不应自动打开环境弹窗", async () => {

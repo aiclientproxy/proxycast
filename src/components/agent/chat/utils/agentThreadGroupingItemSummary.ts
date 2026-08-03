@@ -341,7 +341,7 @@ export function classifyItemKind(item: AgentThreadItem): AgentThreadGroupKind {
     return "subagent";
   }
 
-  if (item.type === "file_artifact") {
+  if (item.type === "file_artifact" || item.type === "patch") {
     return "artifact";
   }
 

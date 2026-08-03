@@ -2,6 +2,8 @@ import { formatNumber } from "@/i18n/format";
 import type { AgentThreadItem } from "../types";
 import { isHiddenConversationArtifactPath } from "../utils/internalArtifactVisibility";
 
+const MAX_REASONABLE_TURN_TO_ITEM_RATIO = 4;
+
 export function formatHistoricalContentLength(value: number): string {
   return formatNumber(value);
 }
@@ -16,6 +18,88 @@ export function buildHistoricalMessagePreview(
   }
 
   return `${normalized.slice(0, previewChars)}\n\n...`;
+}
+
+export function resolveHistoricalTimelineDurationMs(
+  items: readonly AgentThreadItem[],
+  startedAt?: string | null,
+  completedAt?: string | null,
+): number | null {
+  const turnDurationMs = resolveDurationMs(startedAt, completedAt);
+  const itemTimes = items.flatMap((item) => {
+    const itemStartedAt = parseTimestamp(item.started_at);
+    const itemCompletedAt = parseTimestamp(
+      item.completed_at ?? item.updated_at,
+    );
+    return (
+      itemStartedAt !== null &&
+      itemCompletedAt !== null &&
+      itemCompletedAt >= itemStartedAt
+    )
+      ? [{ startedAt: itemStartedAt, completedAt: itemCompletedAt }]
+      : [];
+  });
+  if (itemTimes.length > 0) {
+    const earliestStartedAt = Math.min(
+      ...itemTimes.map((item) => item.startedAt),
+    );
+    const latestCompletedAt = Math.max(
+      ...itemTimes.map((item) => item.completedAt),
+    );
+    const itemDurationMs = latestCompletedAt - earliestStartedAt;
+    if (itemDurationMs > 0) {
+      if (
+        turnDurationMs !== null &&
+        turnDurationMs > 0 &&
+        turnDurationMs > itemDurationMs * MAX_REASONABLE_TURN_TO_ITEM_RATIO
+      ) {
+        return itemDurationMs;
+      }
+
+      if (turnDurationMs !== null && turnDurationMs > 0) {
+        return turnDurationMs;
+      }
+
+      return itemDurationMs;
+    }
+  }
+
+  return turnDurationMs;
+}
+
+export function formatHistoricalTimelineDuration(
+  durationMs: number | null,
+): string | null {
+  if (durationMs === null || !Number.isFinite(durationMs) || durationMs <= 0) {
+    return null;
+  }
+
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
+function resolveDurationMs(
+  startedAt?: string | null,
+  completedAt?: string | null,
+): number | null {
+  const startedAtMs = parseTimestamp(startedAt);
+  const completedAtMs = parseTimestamp(completedAt);
+  if (
+    startedAtMs === null ||
+    completedAtMs === null ||
+    completedAtMs < startedAtMs
+  ) {
+    return null;
+  }
+  return completedAtMs - startedAtMs;
+}
+
+function parseTimestamp(value?: string | null): number | null {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 export function summarizeHistoricalTimelineItems(items: AgentThreadItem[]): {

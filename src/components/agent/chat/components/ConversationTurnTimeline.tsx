@@ -21,7 +21,9 @@ import type { SearchResultPreviewItem } from "../utils/searchResultPreview";
 import type {
   CanonicalTurnMediaSegment,
   CanonicalTurnMessageSegment,
+  CanonicalTurnProcessSegment,
   CanonicalTurnRenderEntry,
+  CanonicalTurnRenderSegment,
 } from "../projection/turnTimelineRenderProjection";
 import {
   imageGenerationContentPartFromThreadItem,
@@ -248,6 +250,46 @@ export function ConversationTurnTimeline({
         .map((segment) => segment.id),
     [entry.segments],
   );
+  const isActiveOperationalTurn =
+    entry.isActive &&
+    isActiveThreadTurnStatus(entry.turn.status) &&
+    !isTerminalThreadTurnStatus(entry.turn.status);
+  const renderSegments = useMemo<CanonicalTurnRenderSegment[]>(() => {
+    if (isActiveOperationalTurn) {
+      return entry.segments;
+    }
+
+    const processSegments = entry.segments.filter(
+      (segment): segment is CanonicalTurnProcessSegment =>
+        segment.kind === "process",
+    );
+    if (processSegments.length <= 1) {
+      return entry.segments;
+    }
+
+    // 已结束回合只保留一个回合级过程摘要，避免每个 assistant 段重复显示整轮时长。
+    const mergedProcessSegment: CanonicalTurnProcessSegment = {
+      kind: "process",
+      id: `process:${entry.turn.id}:merged`,
+      items: processSegments.flatMap((segment) => segment.items),
+    };
+    return [
+      ...entry.segments.filter((segment) => segment.kind !== "process"),
+      mergedProcessSegment,
+    ];
+  }, [entry.segments, entry.turn.id, isActiveOperationalTurn]);
+  const assistantActionOwnerId = useMemo(
+    () =>
+      entry.segments
+        .filter(
+          (segment): segment is CanonicalTurnMessageSegment =>
+            segment.kind === "message" &&
+            segment.item.type === "agent_message" &&
+            segment.item.text.trim().length > 0,
+        )
+        .at(-1)?.id ?? null,
+    [entry.segments],
+  );
   const canonicalMediaReferenceKeys = useMemo(
     () =>
       new Set(
@@ -261,10 +303,6 @@ export function ConversationTurnTimeline({
       ),
     [entry.segments],
   );
-  const isActiveOperationalTurn =
-    entry.isActive &&
-    isActiveThreadTurnStatus(entry.turn.status) &&
-    !isTerminalThreadTurnStatus(entry.turn.status);
   const actionRequests = useMemo(() => {
     if (!isActiveOperationalTurn) return [];
     const scoped = [...pendingActions, ...submittedActionsInFlight].filter(
@@ -290,7 +328,7 @@ export function ConversationTurnTimeline({
       data-runtime-turn-id={entry.turn.id}
       data-runtime-turn-status={entry.turn.status}
     >
-      {entry.segments.map((segment) => {
+      {renderSegments.map((segment) => {
         if (segment.kind === "process") {
           const isFocusedProcess = segment.items.some(
             (item) => item.id === focusedTimelineItemId,
@@ -318,6 +356,7 @@ export function ConversationTurnTimeline({
                       isActiveOperationalTurn ? !isSending : false
                     }
                     expandCompletedProcessDetails={!isActiveOperationalTurn}
+                    deferCompletedSingleDetails={!isActiveOperationalTurn}
                     placement="leading"
                     showOperationalDetails={true}
                     showInlineStatusHint={processSegmentIds[0] === segment.id}
@@ -595,7 +634,9 @@ export function ConversationTurnTimeline({
                   />
                 )}
 
-                {!isUser && content.trim() ? (
+                {!isUser &&
+                content.trim() &&
+                segment.id === assistantActionOwnerId ? (
                   <MessageActionButtons
                     actionContent={content}
                     canCopyMessage={true}

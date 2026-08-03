@@ -24,7 +24,7 @@ use agent_protocol::{
     Turn, TurnError, TurnId, TurnItemsView, TurnStatus,
 };
 use app_server_protocol::AgentEvent;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 
 /// Materialize durable AgentEvents.  Events may contain gaps, but must be in
@@ -277,6 +277,9 @@ fn materialized_item_metadata(
     if let Some(source_metadata) = source.get("metadata").and_then(Value::as_object) {
         metadata.extend(source_metadata.clone());
     }
+    if matches!(family, ItemFamily::File) {
+        preserve_file_event_markers(&mut metadata, source);
+    }
     if matches!(family, ItemFamily::Command) {
         if let Some(command_id) = map_string(source, &["commandId", "command_id"]) {
             metadata.insert("source_call_id".to_string(), Value::String(command_id));
@@ -295,6 +298,67 @@ fn materialized_item_metadata(
         }
     }
     Value::Object(metadata)
+}
+
+fn preserve_file_event_markers(metadata: &mut Map<String, Value>, source: &Map<String, Value>) {
+    let event_class = map_string(source, &["eventClass", "event_class"])
+        .or_else(|| map_string(metadata, &["eventClass", "event_class"]));
+    let operation = map_string(source, &["operation", "operationKind", "operation_kind"])
+        .or_else(|| map_string(metadata, &["operation", "operationKind", "operation_kind"]));
+    let tool_name = map_string(source, &["toolName", "tool_name"])
+        .or_else(|| map_string(metadata, &["toolName", "tool_name"]));
+
+    if let Some(event_class) = event_class.as_deref() {
+        metadata.insert(
+            "event_class".to_string(),
+            Value::String(event_class.to_string()),
+        );
+    }
+    if let Some(operation) = operation.as_deref() {
+        metadata.insert(
+            "operation".to_string(),
+            Value::String(operation.to_string()),
+        );
+    }
+    if let Some(tool_name) = tool_name.as_deref() {
+        metadata.insert(
+            "tool_name".to_string(),
+            Value::String(tool_name.to_string()),
+        );
+    }
+
+    let semantic_event_type = event_class
+        .as_deref()
+        .filter(|value| is_read_file_marker(value))
+        .or_else(|| {
+            operation
+                .as_deref()
+                .filter(|value| is_read_file_marker(value))
+        })
+        .or_else(|| {
+            tool_name
+                .as_deref()
+                .filter(|value| is_read_file_marker(value))
+        });
+    if let Some(semantic_event_type) = semantic_event_type {
+        metadata.insert(
+            "source_event_type".to_string(),
+            Value::String(semantic_event_type.to_string()),
+        );
+    }
+}
+
+fn is_read_file_marker(value: &str) -> bool {
+    let normalized = value
+        .trim()
+        .to_ascii_lowercase()
+        .replace('_', ".")
+        .replace('-', ".")
+        .replace(' ', ".");
+    matches!(
+        normalized.as_str(),
+        "read" | "file.read" | "read.file" | "file.read.item"
+    )
 }
 
 fn canonical_item_from_event(

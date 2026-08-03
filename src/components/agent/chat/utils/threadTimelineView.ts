@@ -1,5 +1,6 @@
 import type { AgentThreadItem, AgentThreadTurn, Message } from "../types";
 import { shouldHideTurnSummaryFromConversation } from "./turnSummaryPresentation";
+import { dedupeImportedUserMessageItems } from "./importedUserMessageDedupe";
 
 const HIDDEN_CONVERSATION_WARNING_CODES = new Set([
   "artifact_document_repaired",
@@ -237,7 +238,9 @@ export function mergeThreadItems(
     }
   }
 
-  return sortThreadItems(Array.from(merged.values()));
+  return sortThreadItems(
+    dedupeImportedUserMessageItems(Array.from(merged.values())),
+  );
 }
 
 function resolveTimestampMs(value?: string | Date | null): number | null {

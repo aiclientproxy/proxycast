@@ -91,6 +91,36 @@ fn artifact_snapshot_lowers_to_applied_file_change() {
 }
 
 #[test]
+fn imported_file_read_preserves_read_only_markers_in_item_metadata() {
+    let changes = materialize_events(
+        &[event(
+            "imported-file-read",
+            1,
+            "file.changed",
+            "turn-1",
+            json!({
+                "path": "docs/imported-preview.md",
+                "content": "# imported preview",
+                "artifactId": "codex-import-file-read",
+                "eventClass": "file.read",
+                "operation": "read",
+                "toolName": "read_file",
+                "imported": true,
+            }),
+        )],
+        "session-1",
+        "thread-1",
+    )
+    .expect("materialize imported file read");
+
+    let item = &changes.changed_items[0];
+    assert_eq!(item.metadata["event_class"], "file.read");
+    assert_eq!(item.metadata["operation"], "read");
+    assert_eq!(item.metadata["tool_name"], "read_file");
+    assert_eq!(item.metadata["source_event_type"], "file.read");
+}
+
+#[test]
 fn patch_batch_preserves_changes_when_declined_terminal_omits_snapshot() {
     let changes = materialize_events(
         &[

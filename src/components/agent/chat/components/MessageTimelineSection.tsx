@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { AgentRuntimeThreadReadModel } from "@/lib/api/agentRuntime/sessionTypes";
 import { AgentThreadTimeline } from "./AgentThreadTimeline";
 import { HistoricalTimelinePreview } from "./MessageListHistoricalPreviews";
@@ -63,14 +64,20 @@ export function MessageTimelineSection({
   threadRead,
   timeline,
 }: MessageTimelineSectionProps) {
+  const [expandedTimelineKey, setExpandedTimelineKey] = useState<string | null>(
+    null,
+  );
+  const timelineKey = `${placement}:${timeline.turn.id}`;
   const isActiveOperationalTurn =
     timeline.turn.id === activeCurrentTurnId &&
     isActiveThreadTurnStatus(timeline.turn.status) &&
     !isTerminalThreadTurnStatus(timeline.turn.status);
   const shouldRenderHistoricalCompactPreview =
     renderCompactPreview || !isActiveOperationalTurn;
+  const shouldExpandHistoricalTimeline =
+    shouldRenderHistoricalCompactPreview && expandedTimelineKey === timelineKey;
 
-  if (shouldRenderHistoricalCompactPreview) {
+  if (shouldRenderHistoricalCompactPreview && !shouldExpandHistoricalTimeline) {
     return (
       <HistoricalTimelinePreview
         items={timeline.items}
@@ -85,6 +92,7 @@ export function MessageTimelineSection({
         onPermissionResponse={onPermissionResponse}
         onSaveFileArtifactAsKnowledge={onSaveMessageAsKnowledge}
         sourceMessageId={messageId}
+        onExpand={() => setExpandedTimelineKey(timelineKey)}
       />
     );
   }

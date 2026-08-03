@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentThreadItem, AgentThreadTurn, Message } from "../types";
 import type { MessageRenderGroupProjection } from "./messageTimelineRenderProjection";
 import { buildTurnTimelineRenderProjection } from "./turnTimelineRenderProjection";
+import { messageMatchesCanonicalUserMessage } from "../utils/importedUserMessageDedupe";
 
 const timestamp = "2026-07-29T04:00:00.000Z";
 
@@ -80,6 +81,20 @@ function group(
 }
 
 describe("turnTimelineRenderProjection", () => {
+  it("相同文本的不同 canonical 回合不会互相接管用户消息", () => {
+    const firstMessage = message("first-message", "user", "turn-first", {
+      content: "相同的问题",
+    });
+    const secondItem = item("second-user", "turn-second", 1, {
+      type: "user_message",
+      content: "相同的问题",
+    });
+
+    expect(
+      messageMatchesCanonicalUserMessage(firstMessage, secondItem),
+    ).toBe(false);
+  });
+
   it("无 Message 锚点时仍按 canonical sequence 保留正文与过程交错顺序", () => {
     const currentTurn = turn("turn-direct");
     const projection = buildTurnTimelineRenderProjection({
@@ -151,6 +166,101 @@ describe("turnTimelineRenderProjection", () => {
     expect(projection.map((entry) => entry.kind)).toEqual(["canonical_turn"]);
   });
 
+  it("canonical reasoning 接管用户消息时应隐藏 pending assistant 首字占位", () => {
+    const currentTurn = turn("turn-pending-assistant");
+    currentTurn.status = "running";
+    delete currentTurn.completed_at;
+    const user = message("pending-user", "user", "pending-turn:1");
+    const pendingAssistant = message(
+      "pending-assistant",
+      "assistant",
+      "pending-turn:1",
+      {
+        content: "",
+        isThinking: true,
+        runtimeStatus: {
+          phase: "routing",
+          title: "正在生成回复",
+          detail: "等待首个输出。",
+        },
+      },
+    );
+
+    const projection = buildTurnTimelineRenderProjection({
+      messageGroups: [group("pending", [user, pendingAssistant])],
+      renderedTurns: [currentTurn],
+      currentTurnId: currentTurn.id,
+      renderedThreadItems: [
+        item("canonical-user", currentTurn.id, 1, {
+          type: "user_message",
+          client_id: user.id,
+          content: "你好",
+        }),
+        item("canonical-reasoning", currentTurn.id, 2, {
+          type: "reasoning",
+          status: "in_progress",
+          text: "先确认用户意图。",
+          summary: ["先确认用户意图。"],
+        }),
+      ],
+    });
+
+    expect(projection).toMatchObject([
+      {
+        kind: "canonical_turn",
+        segments: [
+          { kind: "message", item: { id: "canonical-user" } },
+          { kind: "process", items: [{ id: "canonical-reasoning" }] },
+        ],
+      },
+    ]);
+  });
+
+  it("canonical turn 只有用户消息时仍保留 pending assistant 首字占位", () => {
+    const currentTurn = turn("turn-pending-without-process");
+    currentTurn.status = "running";
+    delete currentTurn.completed_at;
+    const user = message("pending-user-without-process", "user");
+    const pendingAssistant = message(
+      "pending-assistant-without-process",
+      "assistant",
+      "pending-turn:2",
+      {
+        content: "",
+        isThinking: true,
+        runtimeStatus: {
+          phase: "routing",
+          title: "正在生成回复",
+          detail: "等待首个输出。",
+        },
+      },
+    );
+
+    const projection = buildTurnTimelineRenderProjection({
+      messageGroups: [
+        group("pending-without-process", [user, pendingAssistant]),
+      ],
+      renderedTurns: [currentTurn],
+      renderedThreadItems: [
+        item("canonical-user-without-process", currentTurn.id, 1, {
+          type: "user_message",
+          client_id: user.id,
+          content: "你好",
+        }),
+      ],
+    });
+
+    expect(projection).toMatchObject([
+      { kind: "canonical_turn" },
+      {
+        kind: "message_group",
+        group: {
+          messages: [{ id: pendingAssistant.id }],
+        },
+      },
+    ]);
+  });
+
   it("canonical User Item 接管同一历史 Message 的图片附件", () => {
     const currentTurn = turn("turn-owned-user-image");
     const legacyUser = message("client-user-image", "user", currentTurn.id, {
@@ -189,6 +299,50 @@ describe("turnTimelineRenderProjection", () => {
         {
           kind: "message",
           item: { id: "canonical-user-image", type: "user_message" },
+        },
+      ],
+    });
+  });
+
+  it("legacy image wrapper 与 canonical user_message 同图时只渲染一条用户消息", () => {
+    const currentTurn = turn("turn-owned-user-image-wrapper");
+    const imagePath = "/tmp/waveterm_paste_20260729.png";
+    const legacyUser = message("legacy-user-image-wrapper", "user", undefined, {
+      content: `<image name=[Image #1] path="${imagePath}"> [Image #1] 为什么会有这种两个同时回复的情况呢`,
+      images: [
+        {
+          data: "",
+          mediaType: "image/png",
+          sourcePath: imagePath,
+        },
+      ],
+    });
+    const projection = buildTurnTimelineRenderProjection({
+      messageGroups: [group("legacy-user-image-wrapper", [legacyUser])],
+      renderedTurns: [currentTurn],
+      renderedThreadItems: [
+        item("canonical-user-image-wrapper", currentTurn.id, 1, {
+          type: "user_message",
+          content: "[Image #1] 为什么会有这种两个同时回复的情况呢",
+          content_parts: [
+            {
+              type: "image",
+              data: "",
+              mime_type: "image/png",
+              source_path: imagePath,
+            },
+          ],
+        }),
+      ],
+    });
+
+    expect(projection).toHaveLength(1);
+    expect(projection[0]).toMatchObject({
+      kind: "canonical_turn",
+      segments: [
+        {
+          kind: "message",
+          item: { id: "canonical-user-image-wrapper", type: "user_message" },
         },
       ],
     });

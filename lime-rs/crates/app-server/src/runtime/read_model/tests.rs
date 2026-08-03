@@ -492,6 +492,45 @@ fn canonical_file_change_matches_v2_patch_projection_for_decline() {
 }
 
 #[test]
+fn canonical_file_read_projects_as_file_artifact() {
+    let item = ThreadItem {
+        session_id: SessionId::new("session-file-read"),
+        thread_id: ThreadId::new("thread-file-read"),
+        turn_id: TurnId::new("turn-file-read"),
+        item_id: ItemId::new("file-read"),
+        sequence: 1,
+        ordinal: 0,
+        created_at_ms: 1,
+        updated_at_ms: 2,
+        completed_at_ms: Some(2),
+        kind: agent_protocol::ItemKind::File,
+        status: ItemStatus::Completed,
+        payload: ThreadItemPayload::File {
+            changes: vec![FileChange {
+                path: "docs/imported-preview.md".to_string(),
+                kind: FileChangeKind::Update { move_path: None },
+                diff: "# imported preview".to_string(),
+            }],
+            status: FileChangeStatus::Applied,
+        },
+        metadata: json!({
+            "event_class": "file.read",
+            "operation": "read",
+            "tool_name": "read_file",
+            "source_event_type": "file.read",
+        }),
+    };
+
+    let detail = canonical_item_to_agent_detail(&item);
+
+    assert_eq!(detail["type"], "file_artifact");
+    assert_eq!(detail["path"], "docs/imported-preview.md");
+    assert_eq!(detail["source"], "file_read");
+    assert_eq!(detail["content"], "# imported preview");
+    assert_eq!(detail["status"], "completed");
+}
+
+#[test]
 fn read_detail_projects_thread_items_into_thread_read() {
     let session_id = "sess_read_model_thread_items".to_string();
     let thread_id = "thread_read_model_thread_items".to_string();

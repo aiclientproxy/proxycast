@@ -82,6 +82,7 @@ import {
   shouldUseFirstTokenRuntimeStatus,
 } from "./messageListItemProjectionHelpers";
 import { resolveMessageListItemArtifactProjection } from "./messageListItemProjectionArtifacts";
+import { isImportedHistoryMetadata } from "../utils/importedUserMessageDedupe";
 import type { ResolveMessageListItemProjectionOptions } from "./messageListItemProjectionTypes";
 import type { Message } from "../types";
 
@@ -175,6 +176,18 @@ export function resolveMessageListItemProjection({
       : isTimelineOwnerAssistant
         ? group.timeline
         : null;
+  const isImportedHistoryTurn = Boolean(
+    group.isImportedHistory ||
+      [...(group.timeline?.items ?? []), ...(timeline?.items ?? [])].some(
+        (item) => isImportedHistoryMetadata(item.metadata),
+      ) ||
+      message.artifacts?.some((artifact) =>
+        isImportedHistoryMetadata(artifact.meta),
+      ) ||
+      message.contentParts?.some((part) =>
+        isImportedHistoryMetadata(part.metadata),
+      ),
+  );
   const groupTimelineTurnId = group.timeline?.turn.id?.trim() || null;
   const messageTurnId = message.runtimeTurnId?.trim() || groupTimelineTurnId;
   // 一个 canonical turn 可能在 hydration 后对应多个 assistant message。
@@ -854,6 +867,7 @@ export function resolveMessageListItemProjection({
     alreadyRenderedArtifactPaths,
     canOpenSavedSiteContent,
     hasTrailingArtifactTimelineItems,
+    isImportedHistoryTurn,
     message,
     shouldSuppressImageProcessFlow,
   });

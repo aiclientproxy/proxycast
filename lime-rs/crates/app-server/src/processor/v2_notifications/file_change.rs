@@ -97,6 +97,7 @@ fn file_change_projection(
         id,
         changes,
         status,
+        ..
     } = &item
     else {
         return None;

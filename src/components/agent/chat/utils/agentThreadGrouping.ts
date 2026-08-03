@@ -101,6 +101,29 @@ function shouldSplitProcessBlockBeforeItem(
   return true;
 }
 
+function isImportedHistoryItem(item: AgentThreadItem): boolean {
+  const metadata = item.metadata as Record<string, unknown> | undefined;
+  return metadata?.imported === true;
+}
+
+function shouldMergeImportedPatchIntoProcess(
+  current: {
+    kind: AgentThreadGroupKind;
+    items: AgentThreadItem[];
+  } | null,
+  kind: AgentThreadGroupKind,
+  item: AgentThreadItem,
+): boolean {
+  return Boolean(
+    current &&
+      current.kind === "process" &&
+      kind === "artifact" &&
+      item.type === "patch" &&
+      isImportedHistoryItem(item) &&
+      current.items.some(isImportedHistoryItem),
+  );
+}
+
 function resolveGroupTitle(
   kind: Exclude<AgentThreadGroupKind, "other">,
 ): string {
@@ -255,6 +278,11 @@ export function buildAgentThreadDisplayModel(
 
   for (const item of sortedItems) {
     const kind = classifyItemKind(item);
+    if (shouldMergeImportedPatchIntoProcess(current, kind, item)) {
+      current!.items.push(item);
+      continue;
+    }
+
     if (!current || current.kind !== kind) {
       pushCurrentBlock();
       current = { kind, items: [item] };

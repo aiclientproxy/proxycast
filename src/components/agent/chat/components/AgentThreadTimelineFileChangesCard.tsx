@@ -11,16 +11,20 @@ import type {
   FileChangeSummary,
 } from "../utils/fileChangeSummary";
 import type { AgentThreadItem } from "../types";
+import { buildTimelinePatchContentPart } from "./messageListTimelineContentPartBuilders";
 import {
   resolveTimelineArtifactNavigation,
   type ArtifactTimelineOpenTarget,
 } from "../utils/artifactTimelineNavigation";
+import { isTimelineReadOnlyFileArtifact } from "../utils/timelineFileArtifactKind";
 import { FileChangesSummaryCard } from "./FileChangesSummaryCard";
 
 type FileArtifactItem = Extract<AgentThreadItem, { type: "file_artifact" }>;
+type PatchItem = Extract<AgentThreadItem, { type: "patch" }>;
+type FileChangeEvidenceItem = FileArtifactItem | PatchItem;
 
 interface AgentThreadTimelineFileChangesCardProps {
-  items: FileArtifactItem[];
+  items: FileChangeEvidenceItem[];
   onFileClick?: (fileName: string, content: string) => void;
   onOpenArtifactFromTimeline?: (target: ArtifactTimelineOpenTarget) => void;
   readTimelineArtifactContent?: (
@@ -76,10 +80,18 @@ function resolveFileChangeRecord(
 // eslint-disable-next-line react-refresh/only-export-components
 export function hasTimelineFileChangeEvidence(
   item: AgentThreadItem,
-): item is FileArtifactItem {
-  return (
-    item.type === "file_artifact" && Boolean(resolveFileChangeRecord(item))
-  );
+): item is FileChangeEvidenceItem {
+  if (item.type === "patch") {
+    const part = buildTimelinePatchContentPart(item);
+    return part?.type === "file_changes_batch" && part.aggregate.fileCount > 0;
+  }
+  if (item.type !== "file_artifact") {
+    return false;
+  }
+  if (isTimelineReadOnlyFileArtifact(item)) {
+    return false;
+  }
+  return Boolean(resolveFileChangeRecord(item));
 }
 
 function normalizeFileChangeKind(value: unknown): FileChangeKind {
@@ -182,14 +194,32 @@ function buildFileChangeSummary(item: FileArtifactItem): FileChangeSummary {
   };
 }
 
-function buildAggregate(items: FileArtifactItem[]): FileChangesAggregate {
-  const files = items.map(buildFileChangeSummary);
+function buildFileChangeSummaries(
+  item: FileChangeEvidenceItem,
+): FileChangeSummary[] {
+  if (item.type === "patch") {
+    const part = buildTimelinePatchContentPart(item);
+    return part?.type === "file_changes_batch" ? part.aggregate.files : [];
+  }
+  return [buildFileChangeSummary(item)];
+}
+
+function buildAggregate(items: FileChangeEvidenceItem[]): FileChangesAggregate {
+  const files = items.flatMap(buildFileChangeSummaries);
   return {
     files,
     totalAdded: files.reduce((total, file) => total + file.linesAdded, 0),
     totalRemoved: files.reduce((total, file) => total + file.linesRemoved, 0),
     fileCount: files.length,
   };
+}
+
+function resolvePatchFilePath(item: PatchItem): string {
+  return (
+    item.paths?.find((path) => path.trim())?.trim() ||
+    item.summary?.find((path) => path.trim())?.trim() ||
+    ""
+  );
 }
 
 export function AgentThreadTimelineFileChangesCard({
@@ -200,18 +230,37 @@ export function AgentThreadTimelineFileChangesCard({
 }: AgentThreadTimelineFileChangesCardProps) {
   const aggregate = useMemo(() => buildAggregate(items), [items]);
   const itemByPath = useMemo(() => {
-    const entries = new Map<string, FileArtifactItem>();
+    const entries = new Map<string, FileChangeEvidenceItem>();
     for (const item of items) {
-      const summary = buildFileChangeSummary(item);
-      entries.set(summary.path, item);
-      entries.set(item.path, item);
+      for (const summary of buildFileChangeSummaries(item)) {
+        entries.set(summary.path, item);
+      }
+      if (item.type === "file_artifact") {
+        entries.set(item.path, item);
+      }
     }
     return entries;
   }, [items]);
 
   const openTimelineItem = useCallback(
-    (item: FileArtifactItem) => {
+    (item: FileChangeEvidenceItem) => {
       void (async () => {
+        if (item.type === "patch") {
+          const target = {
+            filePath: resolvePatchFilePath(item),
+            content: [item.text, item.stdout, item.stderr]
+              .filter((value): value is string => Boolean(value?.trim()))
+              .join("\n"),
+            timelineItemId: item.id,
+            openMode: "file_preview" as const,
+          };
+          if (onOpenArtifactFromTimeline) {
+            onOpenArtifactFromTimeline(target);
+            return;
+          }
+          onFileClick?.(target.filePath, target.content);
+          return;
+        }
         const navigation = resolveTimelineArtifactNavigation(item);
         const baseTarget = navigation?.rootTarget ?? {
           filePath: item.path,
@@ -250,6 +299,7 @@ export function AgentThreadTimelineFileChangesCard({
     <div className="py-1.5" data-testid="timeline-file-artifact-group">
       <FileChangesSummaryCard
         aggregate={aggregate}
+        variant="timeline"
         onOpenFile={(file) => {
           const item = itemByPath.get(file.path);
           if (item) {

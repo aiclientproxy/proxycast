@@ -1,3 +1,4 @@
+import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
   findStreamingRendererCallByContent,
@@ -113,14 +114,26 @@ describe("MessageList artifact filtering", () => {
     ).toBeNull();
     expect(
       container.querySelectorAll(
-        '[data-testid="timeline-file-attachment-card"]',
+        '[data-testid="timeline-file-artifact-card"]',
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(0);
     expect(
       container.querySelector(
         '[data-testid="message-list-historical-timeline-preview:trailing"]',
       ),
     ).not.toBeNull();
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="message-list-historical-timeline-preview:trailing"]',
+        )
+        ?.click(),
+    );
+    expect(
+      container.querySelectorAll(
+        '[data-testid="timeline-file-artifact-card"]',
+      ),
+    ).toHaveLength(2);
     expect(
       container
         .querySelector('[data-testid="streaming-renderer"]')

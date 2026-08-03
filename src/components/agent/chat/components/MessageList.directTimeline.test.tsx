@@ -149,6 +149,51 @@ describe("MessageList direct canonical timeline", () => {
     );
   });
 
+  it("已结束回合合并多个过程段，并只在最后一条 assistant 正文保留操作栏", () => {
+    const completedTurn = turn("turn-merged-history");
+    completedTurn.completed_at = "2026-07-29T04:00:02.000Z";
+    completedTurn.updated_at = completedTurn.completed_at;
+    const container = render([], {
+      currentTurnId: completedTurn.id,
+      onQuoteMessage: vi.fn(),
+      turns: [completedTurn],
+      threadItems: [
+        item("merged-user", completedTurn.id, 1, {
+          type: "user_message",
+          content: "请检查并修复这个回合",
+        }),
+        item("merged-commentary", completedTurn.id, 2, {
+          type: "agent_message",
+          text: "我先检查相关文件。",
+          phase: "commentary",
+        }),
+        item("merged-command", completedTurn.id, 3, {
+          type: "command_execution",
+          command: "npm test",
+          cwd: "/repo",
+        }),
+        item("merged-final", completedTurn.id, 4, {
+          type: "agent_message",
+          text: "检查完成，问题已经修复。",
+          phase: "final_answer",
+        }),
+        item("merged-tool", completedTurn.id, 5, {
+          type: "tool_call",
+          tool_name: "read_file",
+        }),
+      ],
+    });
+
+    const previews = container.querySelectorAll(
+      '[data-testid="message-list-historical-timeline-preview:leading"]',
+    );
+    expect(previews).toHaveLength(1);
+    expect(previews[0]?.textContent).toMatch(/(?:已处理|Processed)/);
+    expect(
+      container.querySelectorAll('[data-testid="message-actions"]'),
+    ).toHaveLength(1);
+  });
+
   it("已完成 canonical Turn 应常显脱敏后的未知 Item 诊断", () => {
     const completedTurn = turn("turn-direct-unknown-item");
     const container = render([], {
@@ -287,6 +332,12 @@ describe("MessageList direct canonical timeline", () => {
               mime_type: "image/png",
               data: "aW1hZ2U=",
             },
+            {
+              type: "image",
+              mime_type: "image/jpeg",
+              data: "",
+              source_path: "/tmp/imported-reference.jpg",
+            },
           ],
         }),
       ],
@@ -296,7 +347,13 @@ describe("MessageList direct canonical timeline", () => {
       container.querySelectorAll('[data-testid="message-user-skill-content"]'),
     ).toHaveLength(2);
     expect(
+      container.querySelectorAll('[data-testid^="message-image-attachment-"]'),
+    ).toHaveLength(4);
+    expect(
       container.querySelector('[data-testid="message-image-attachment-0"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="message-image-attachment-1"]'),
     ).not.toBeNull();
 
     act(() => {

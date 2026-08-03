@@ -131,6 +131,7 @@ describe("readCanonicalThreadItem", () => {
             type: "image",
             mime_type: "image/webp",
             data: "",
+            source_path: "/tmp/local.webp",
             display_name: "local.webp",
             unavailable_reason: "host_reference_required",
             detail: "auto",
@@ -671,6 +672,33 @@ describe("readCanonicalThreadItem", () => {
       success: false,
       completed_at: event.timestamp,
     });
+  });
+
+  it("projects a read-only fileChange as a file artifact", () => {
+    const projected = readCanonicalThreadItem(
+      item({
+        type: "fileChange",
+        metadata: { sourceEventType: "file.read" },
+        changes: [
+          {
+            path: "docs/imported-preview.md",
+            kind: { type: "update" },
+            diff: "# imported preview",
+          },
+        ],
+        status: "completed",
+      }),
+      event,
+    );
+
+    expect(projected).toMatchObject({
+      type: "file_artifact",
+      path: "docs/imported-preview.md",
+      source: "file_read",
+      content: "# imported preview",
+      status: "completed",
+    });
+    expect(projected).not.toHaveProperty("changes");
   });
 
   it("derives terminal lifecycle from the raw event envelope", () => {

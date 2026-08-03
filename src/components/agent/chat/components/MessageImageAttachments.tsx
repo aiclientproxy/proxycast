@@ -28,6 +28,13 @@ function isDirectPreviewUri(uri: string): boolean {
 }
 
 function resolveMessageImageSrc(image: NonNullable<Message["images"]>[number]) {
+  const data = image.data.trim();
+  if (data) {
+    return data.toLowerCase().startsWith("data:")
+      ? data
+      : buildMessageImageDataUrl(image);
+  }
+
   const previewUrl = image.previewUrl?.trim();
   if (previewUrl && isDirectPreviewUri(previewUrl)) {
     return previewUrl;
@@ -38,9 +45,6 @@ function resolveMessageImageSrc(image: NonNullable<Message["images"]>[number]) {
   const sourceUri = image.sourceUri?.trim();
   if (sourceUri && isDirectPreviewUri(sourceUri)) {
     return sourceUri;
-  }
-  if (image.data.trim()) {
-    return buildMessageImageDataUrl(image);
   }
   return "";
 }

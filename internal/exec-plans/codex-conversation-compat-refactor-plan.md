@@ -3,7 +3,7 @@
 状态：ready-for-gate
 责任域：app-server-runtime / agent-ui
 开始日期：2026-07-15
-最近验证：2026-07-21
+最近验证：2026-08-03
 预算标签：high，重大架构重构
 
 ## 目标
@@ -147,6 +147,7 @@ model 与 GUI 单轨。
 - 本轮针对真实 click-through 发现的身份错配已修复：同一 canonical turn 在 hydration 后产生多个 assistant message 时，非 timeline owner 现在继承 message group 的终态，历史不再把完整工具 `contentParts` 当作当前运行态渲染。回归证据 `codex-import-click-through-fixture-summary.json` 显示历史工具行 0、运行期详情 0、后台 job 重附着只发生 1 次 commit，console error 0。
 - 续接 fixture 已对齐 current 异步协议：`conversationImport/thread/commit` 只启动 job，轮询 `conversationImport/job/read` 至 completed 后从 `job.result.session` 读取 session；真实 runtime provider fixture 验证导入与普通 session 的 unified exec `Command Item` 同构，导入阶段 provider 请求数为 0。
 - 真实大样本审计补齐 1 turn/785 items 的虚拟化边界：审计 helper 同时按 turn 数和 operational item 数识别长历史，9 组视口/滚动组合均通过，最大滚动范围约 12.3k px，未挂载运行期工具明细；相关 guard 与定向测试通过。
+- 2026-08-03 current v2 read model 续接收口：Electron click-through fixture 改为从 `thread.turns[].items[]` 归一化 `userMessage`、`agentMessage`、`reasoning.content`、`commandExecution`、`fileChange`、`dynamicToolCall(web_search)` 与图片输入；v2 明确过滤 out-of-band approval item，fixture 改以 `thread.extra.codexImportFidelity.approvals` 验证历史确认记录。真实 Electron click-through 通过（200 items / 4 messages），续聊输入按 `input.parts[].Text.text` 校验；三视口 visual audit 通过，摘要预览 1 个、运行期工具行/详情/延迟预览均为 0、输入框与消息列表可见、无导入主线卡和来源品牌泄漏。定向脚本回归 8/8、lint、typecheck、`npm run test:contracts`（846 generated protocol types / 292 checks）和 `npm run verify:gui-smoke` 均通过。
 
 失败必须回写 Rust golden corpus、Electron fixture 或 contract guard。只有主链验证、删除证明、
 架构确认三者齐全后才可进入 release evidence。

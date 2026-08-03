@@ -3,7 +3,16 @@ use agent_protocol::{FileChangeStatus, ItemStatus, ThreadItem, ThreadItemPayload
 use serde_json::json;
 
 pub(in crate::runtime) fn canonical_item_to_agent_detail(item: &ThreadItem) -> serde_json::Value {
-    let (item_type, payload) = canonical_payload_to_agent_detail(&item.payload);
+    let read_only_file = is_read_only_file_item(item);
+    let (projected_item_type, payload) = canonical_payload_to_agent_detail(&item.payload);
+    let (item_type, payload) = if read_only_file {
+        (
+            "file_artifact",
+            canonical_file_artifact_detail(&item.payload),
+        )
+    } else {
+        (projected_item_type, payload)
+    };
     let metadata = canonical_item_agent_metadata(item);
     let status = agent_item_status_for_payload(item.status, &item.payload);
     let mut detail = serde_json::Map::from_iter([
@@ -43,6 +52,73 @@ pub(in crate::runtime) fn canonical_item_to_agent_detail(item: &ThreadItem) -> s
         }
     }
     serde_json::Value::Object(detail)
+}
+
+fn is_read_only_file_item(item: &ThreadItem) -> bool {
+    matches!(
+        &item.payload,
+        ThreadItemPayload::File { changes, .. }
+            if !changes.is_empty() && is_read_only_file_metadata(&item.metadata)
+    )
+}
+
+fn is_read_only_file_metadata(metadata: &serde_json::Value) -> bool {
+    let has_read_marker =
+        |value: &serde_json::Value| value.as_str().is_some_and(is_read_file_marker);
+    let has_read_marker_in = |object: &serde_json::Map<String, serde_json::Value>| {
+        [
+            "eventClass",
+            "event_class",
+            "operation",
+            "operationKind",
+            "operation_kind",
+            "toolName",
+            "tool_name",
+            "sourceEventType",
+            "source_event_type",
+        ]
+        .iter()
+        .filter_map(|key| object.get(*key))
+        .any(has_read_marker)
+    };
+
+    metadata.as_object().is_some_and(|object| {
+        has_read_marker_in(object)
+            || object
+                .get("sourceProvenance")
+                .or_else(|| object.get("source_provenance"))
+                .and_then(serde_json::Value::as_object)
+                .is_some_and(has_read_marker_in)
+    })
+}
+
+fn is_read_file_marker(value: &str) -> bool {
+    let normalized = value
+        .trim()
+        .to_ascii_lowercase()
+        .replace('_', ".")
+        .replace('-', ".")
+        .replace(' ', ".");
+    matches!(
+        normalized.as_str(),
+        "read" | "file.read" | "read.file" | "file.read.item"
+    )
+}
+
+fn canonical_file_artifact_detail(
+    payload: &ThreadItemPayload,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut detail = serde_json::Map::new();
+    let ThreadItemPayload::File { changes, .. } = payload else {
+        return detail;
+    };
+    let change = changes
+        .first()
+        .expect("read-only file items are validated before projection");
+    detail.insert("path".to_string(), json!(change.path));
+    detail.insert("source".to_string(), json!("file_read"));
+    detail.insert("content".to_string(), json!(change.diff));
+    detail
 }
 
 fn canonical_item_agent_metadata(item: &ThreadItem) -> serde_json::Value {

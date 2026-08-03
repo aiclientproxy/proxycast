@@ -315,10 +315,12 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
     let id = item.item_id.as_str().to_string();
     let status = item.status;
     let metadata = item.metadata;
+    let projected_metadata = project_item_metadata(&metadata);
     match item.payload {
         canonical::ThreadItemPayload::UserMessage { content, client_id } => {
             Ok(v2::ThreadItem::UserMessage {
                 id,
+                metadata: projected_metadata,
                 client_id,
                 content: content.into_iter().map(project_user_input).collect(),
             })
@@ -326,17 +328,23 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
         canonical::ThreadItemPayload::AgentMessage { text, phase, .. } => {
             Ok(v2::ThreadItem::AgentMessage {
                 id,
+                metadata: projected_metadata,
                 text,
                 phase,
                 memory_citation: None,
             })
         }
         canonical::ThreadItemPayload::Plan { text, .. } => {
-            Ok(v2::ThreadItem::Plan { id, text })
+            Ok(v2::ThreadItem::Plan {
+                id,
+                metadata: projected_metadata,
+                text,
+            })
         }
         canonical::ThreadItemPayload::Reasoning { summary, content } => {
             Ok(v2::ThreadItem::Reasoning {
                 id,
+                metadata: projected_metadata,
                 summary,
                 content,
             })
@@ -347,7 +355,9 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             output,
             ..
         } => {
-            if let Some(image) = project_image_generation_item(&id, status, &metadata)? {
+            if let Some(image) =
+                project_image_generation_item(&id, status, &metadata, projected_metadata.clone())?
+            {
                 return Ok(v2::ThreadItem::ImageGeneration(image));
             }
             let duration_ms = output.as_ref().and_then(|value| value.duration_ms);
@@ -357,6 +367,7 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                 .or_else(|| terminal_success(status));
             Ok(v2::ThreadItem::DynamicToolCall {
                 id,
+                metadata: projected_metadata,
                 namespace: None,
                 tool: name,
                 arguments: bounded_safe_json(
@@ -380,6 +391,7 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             ..
         } => Ok(v2::ThreadItem::DynamicToolCall {
             id,
+            metadata: projected_metadata,
             namespace,
             tool,
             arguments: bounded_safe_json(arguments).0,
@@ -413,6 +425,7 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                 .map(Box::new);
             Ok(v2::ThreadItem::McpToolCall {
                 id,
+                metadata: projected_metadata,
                 server: server_name,
                 tool: tool_name,
                 status: project_mcp_status(status),
@@ -440,6 +453,7 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             ..
         } => Ok(v2::ThreadItem::CollabAgentToolCall {
             id,
+            metadata: projected_metadata,
             tool: project_collab_tool(operation),
             status: project_collab_status(status),
             sender_thread_id: item.thread_id.as_str().to_string(),
@@ -472,6 +486,7 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             exit_code,
         } => Ok(v2::ThreadItem::CommandExecution {
             id,
+            metadata: projected_metadata,
             command,
             cwd: cwd.unwrap_or_default(),
             process_id: metadata_string(&metadata, &["processId", "process_id"]),
@@ -485,23 +500,30 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                 .map(saturating_i64),
             terminal_interactions: project_terminal_interactions(&metadata),
         }),
-        canonical::ThreadItemPayload::File { changes, status } => Ok(v2::ThreadItem::FileChange {
-            id,
-            changes: changes
-                .into_iter()
-                .map(|change| v2::FileUpdateChange {
-                    path: change.path,
-                    kind: project_patch_change_kind(change.kind),
-                    diff: change.diff,
-                })
-                .collect(),
-            status: project_patch_status(status),
-        }),
+        canonical::ThreadItemPayload::File { changes, status } => {
+            Ok(v2::ThreadItem::FileChange {
+                id,
+                metadata: projected_metadata,
+                changes: changes
+                    .into_iter()
+                    .map(|change| v2::FileUpdateChange {
+                        path: change.path,
+                        kind: project_patch_change_kind(change.kind),
+                        diff: change.diff,
+                    })
+                    .collect(),
+                status: project_patch_status(status),
+            })
+        }
         canonical::ThreadItemPayload::Media {
             uri,
             mime_type,
             ..
-        } if mime_type.starts_with("image/") => Ok(v2::ThreadItem::ImageView { id, path: uri }),
+        } if mime_type.starts_with("image/") => Ok(v2::ThreadItem::ImageView {
+            id,
+            metadata: projected_metadata,
+            path: uri,
+        }),
         canonical::ThreadItemPayload::Media { mime_type, .. } => Err(projection_error(format!(
             "canonical media item {id} with MIME type {mime_type} has no v2 ThreadItem representation"
         ))),
@@ -511,19 +533,24 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             ..
         } => Ok(v2::ThreadItem::SubAgentActivity {
             id,
+            metadata: projected_metadata,
             kind: project_subagent_activity(activity),
             agent_thread_id: child_thread_id.as_str().to_string(),
             agent_path: metadata_string(&metadata, &["agentPath", "agent_path"])
                 .unwrap_or_else(|| child_thread_id.as_str().to_string()),
         }),
         canonical::ThreadItemPayload::ContextCompaction { .. } => {
-            Ok(v2::ThreadItem::ContextCompaction { id })
+            Ok(v2::ThreadItem::ContextCompaction {
+                id,
+                metadata: projected_metadata,
+            })
         }
         canonical::ThreadItemPayload::Unknown {
             upstream_type,
             field_names,
         } => Ok(v2::ThreadItem::UnknownItem {
             id,
+            metadata: projected_metadata,
             upstream_type,
             field_names,
         }),
@@ -803,10 +830,115 @@ fn project_dynamic_tool_status(status: canonical::ItemStatus) -> v2::DynamicTool
     }
 }
 
+fn project_item_metadata(metadata: &Value) -> Option<v2::ThreadItemMetadata> {
+    let raw_provenance = metadata
+        .get("sourceProvenance")
+        .or_else(|| metadata.get("source_provenance"));
+    let provenance = raw_provenance.and_then(project_item_source_provenance);
+
+    let projected = v2::ThreadItemMetadata {
+        imported: metadata_bool(metadata, &["imported"]),
+        imported_read_only: metadata_bool(metadata, &["importedReadOnly", "imported_read_only"]),
+        imported_synthetic: metadata_bool(metadata, &["importedSynthetic", "imported_synthetic"]),
+        imported_incomplete: metadata_bool(
+            metadata,
+            &["importedIncomplete", "imported_incomplete"],
+        ),
+        imported_synthetic_id: metadata_bool(
+            metadata,
+            &["importedSyntheticId", "imported_synthetic_id"],
+        ),
+        source_client: metadata_string(metadata, &["sourceClient", "source_client"]).or_else(
+            || {
+                raw_provenance
+                    .and_then(|value| metadata_string(value, &["sourceClient", "source_client"]))
+            },
+        ),
+        source_thread_id: metadata_string(metadata, &["sourceThreadId", "source_thread_id"])
+            .or_else(|| {
+                raw_provenance.and_then(|value| {
+                    metadata_string(value, &["sourceThreadId", "source_thread_id"])
+                })
+            }),
+        source_event_type: metadata_string(metadata, &["sourceEventType", "source_event_type"])
+            .or_else(|| {
+                raw_provenance.and_then(|value| {
+                    metadata_string(
+                        value,
+                        &[
+                            "sourceEventType",
+                            "source_event_type",
+                            "sourcePayloadType",
+                            "source_payload_type",
+                        ],
+                    )
+                })
+            }),
+        source_event_seq: metadata_u64(metadata, &["sourceEventSeq", "source_event_seq"]).or_else(
+            || {
+                raw_provenance
+                    .and_then(|value| metadata_u64(value, &["sourceEventSeq", "source_event_seq"]))
+            },
+        ),
+        source_call_id: metadata_string(metadata, &["sourceCallId", "source_call_id"]).or_else(
+            || {
+                raw_provenance
+                    .and_then(|value| metadata_string(value, &["sourceCallId", "source_call_id"]))
+            },
+        ),
+        source_provenance: provenance,
+    };
+
+    (!item_metadata_is_empty(&projected)).then_some(projected)
+}
+
+fn project_item_source_provenance(value: &Value) -> Option<v2::ThreadItemSourceProvenance> {
+    let projected = v2::ThreadItemSourceProvenance {
+        source_client: metadata_string(value, &["sourceClient", "source_client"]),
+        source_thread_id: metadata_string(value, &["sourceThreadId", "source_thread_id"]),
+        source_path: metadata_string(value, &["sourcePath", "source_path"]),
+        source_event_type: metadata_string(value, &["sourceEventType", "source_event_type"]),
+        source_event_seq: metadata_u64(value, &["sourceEventSeq", "source_event_seq"]),
+        source_payload_type: metadata_string(value, &["sourcePayloadType", "source_payload_type"]),
+        source_call_id: metadata_string(value, &["sourceCallId", "source_call_id"]),
+        source_role: metadata_string(value, &["sourceRole", "source_role"]),
+        source_channel: metadata_string(value, &["sourceChannel", "source_channel"]),
+    };
+
+    (!source_provenance_is_empty(&projected)).then_some(projected)
+}
+
+fn item_metadata_is_empty(metadata: &v2::ThreadItemMetadata) -> bool {
+    metadata.imported.is_none()
+        && metadata.imported_read_only.is_none()
+        && metadata.imported_synthetic.is_none()
+        && metadata.imported_incomplete.is_none()
+        && metadata.imported_synthetic_id.is_none()
+        && metadata.source_client.is_none()
+        && metadata.source_thread_id.is_none()
+        && metadata.source_event_type.is_none()
+        && metadata.source_event_seq.is_none()
+        && metadata.source_call_id.is_none()
+        && metadata.source_provenance.is_none()
+}
+
+fn source_provenance_is_empty(provenance: &v2::ThreadItemSourceProvenance) -> bool {
+    provenance.source_client.is_none()
+        && provenance.source_thread_id.is_none()
+        && provenance.source_path.is_none()
+        && provenance.source_event_type.is_none()
+        && provenance.source_event_seq.is_none()
+        && provenance.source_payload_type.is_none()
+        && provenance.source_call_id.is_none()
+        && provenance.source_role.is_none()
+        && provenance.source_channel.is_none()
+}
+
 fn project_image_generation_item(
     item_id: &str,
     item_status: canonical::ItemStatus,
     metadata: &Value,
+    projected_metadata: Option<v2::ThreadItemMetadata>,
 ) -> Result<Option<v2::ImageGenerationItem>, JsonRpcError> {
     let Some(raw_item) = metadata.pointer("/provider_metadata/raw_response_item") else {
         return Ok(None);
@@ -837,6 +969,7 @@ fn project_image_generation_item(
             .filter(|value| !value.trim().is_empty())
             .unwrap_or(item_id)
             .to_string(),
+        metadata: projected_metadata,
         status,
         revised_prompt: raw_item
             .get("revised_prompt")
@@ -1072,8 +1205,13 @@ fn metadata_bool(value: &Value, keys: &[&str]) -> Option<bool> {
 }
 
 fn metadata_u64(value: &Value, keys: &[&str]) -> Option<u64> {
-    keys.iter()
-        .find_map(|key| value.get(key).and_then(Value::as_u64))
+    keys.iter().find_map(|key| {
+        value.get(key).and_then(|value| {
+            value
+                .as_u64()
+                .or_else(|| value.as_str()?.parse::<u64>().ok())
+        })
+    })
 }
 
 fn millis_to_seconds(value: i64) -> i64 {

@@ -1,6 +1,6 @@
 import type { AgentThreadItem } from "@/lib/api/agentProtocol";
 import type { AgentSessionDetail } from "@/lib/api/agentRuntime/sessionTypes";
-import type { Message } from "../types";
+import type { Message, MessageImage } from "../types";
 import { sanitizeMessageTextForDisplay } from "../utils/messageDisplaySanitizer";
 import {
   resolveFinalAgentMessageItemIds,
@@ -12,7 +12,33 @@ import {
   resolveThreadItemTimelinePosition,
 } from "./agentChatHistoryPrimitives";
 import { dedupeAdjacentHistoryMessages } from "./agentChatHistorySignatures";
-import { isAuxiliaryHistoryTurn, readThreadItemText } from "./agentChatHistoryTimelineBasics";
+import { appendUniqueMessageImage } from "./agentChatHistoryImages";
+import { normalizeHistoryImagePart } from "./agentChatToolResult";
+import {
+  isAuxiliaryHistoryTurn,
+  readThreadItemText,
+} from "./agentChatHistoryTimelineBasics";
+import { dedupeImportedUserMessageItems } from "../utils/importedUserMessageDedupe";
+
+function readUserMessageImages(item: AgentThreadItem): MessageImage[] {
+  if (item.type !== "user_message" || !Array.isArray(item.content_parts)) {
+    return [];
+  }
+
+  const images: MessageImage[] = [];
+  for (const part of item.content_parts) {
+    if (!part || typeof part !== "object" || part.type !== "image") {
+      continue;
+    }
+    const image = normalizeHistoryImagePart(
+      part as unknown as Record<string, unknown>,
+    );
+    if (image) {
+      appendUniqueMessageImage(images, image);
+    }
+  }
+  return images;
+}
 
 function buildMessageFromThreadItem(
   item: AgentThreadItem,
@@ -35,11 +61,12 @@ function buildMessageFromThreadItem(
       ? readThreadItemText(item, ["content", "text", "message"])
       : readThreadItemText(item, ["text", "content", "message"]);
   const role = item.type === "user_message" ? "user" : "assistant";
+  const images = readUserMessageImages(item);
   const sanitizedContent = sanitizeMessageTextForDisplay(content, {
     role,
-    hasImages: false,
+    hasImages: images.length > 0,
   });
-  if (!sanitizedContent) {
+  if (!sanitizedContent && images.length === 0) {
     return null;
   }
 
@@ -58,6 +85,7 @@ function buildMessageFromThreadItem(
     id: `${topicId}-timeline-${item.id}`,
     role,
     content: sanitizedContent,
+    images: images.length > 0 ? images : undefined,
     contentParts:
       role === "assistant"
         ? [
@@ -146,5 +174,5 @@ export function collectDetailThreadItems(
     seen.add(item.id);
     items.push(item);
   }
-  return items;
+  return dedupeImportedUserMessageItems(items);
 }

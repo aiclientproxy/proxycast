@@ -21,6 +21,7 @@ import {
 } from "./AgentThreadTimelineFileChangesCard";
 import { AgentThreadTimelineAttachmentList } from "./AgentThreadTimelineAttachmentList";
 import { isPlainTimelineFileAttachment } from "./AgentThreadTimelineArtifactCard";
+import { isTimelineReadOnlyFileArtifact } from "../utils/timelineFileArtifactKind";
 import type { ArtifactTimelineOpenTarget } from "../utils/artifactTimelineNavigation";
 import {
   buildTimelineBlockRenderPlan,
@@ -179,18 +180,27 @@ function TimelineBlockCard({
     (item): item is Extract<AgentThreadItem, { type: "file_artifact" }> =>
       item.type === "file_artifact",
   );
-  const containsOnlyFileArtifacts =
-    fileArtifactItems.length === block.items.length;
-  const rendersFileChangeCollection =
-    fileArtifactItems.length > 1 &&
-    containsOnlyFileArtifacts &&
-    fileArtifactItems.every(hasTimelineFileChangeEvidence);
+  const fileChangeItems = block.items.filter(hasTimelineFileChangeEvidence);
+  const readOnlyFileArtifactItems = fileArtifactItems.filter(
+    isTimelineReadOnlyFileArtifact,
+  );
+  const rendersFileChangeCollection = fileChangeItems.length > 0;
   const rendersAttachmentCollection =
+    rendersFileChangeCollection === false &&
     fileArtifactItems.length > 1 &&
-    containsOnlyFileArtifacts &&
+    fileArtifactItems.length === block.items.length &&
     fileArtifactItems.every(isPlainTimelineFileAttachment);
+  const rendersReadOnlyAttachmentCollection =
+    rendersAttachmentCollection === false &&
+    readOnlyFileArtifactItems.length > 0;
+  const renderedInlineItemIds = new Set<string>([
+    ...fileChangeItems.map((item) => item.id),
+    ...(rendersAttachmentCollection
+      ? fileArtifactItems.map((item) => item.id)
+      : readOnlyFileArtifactItems.map((item) => item.id)),
+  ]);
   const rendersAggregatedArtifactCollection =
-    rendersFileChangeCollection || rendersAttachmentCollection;
+    renderedInlineItemIds.size === block.items.length;
   const hasInteractiveDetails =
     renderPlan.hasDetailEntries &&
     (block.kind === "artifact" || allowOperationalDetails);
@@ -258,6 +268,9 @@ function TimelineBlockCard({
     DETAIL_ITEM_BATCH_SIZE,
     remainingDetailItemCount,
   );
+  const remainingInlineDetailEntries = detailEntries.filter(
+    (entry) => !renderedInlineItemIds.has(entry.id),
+  );
 
   if (renderPlan.shouldRenderArtifactCardsInline) {
     return (
@@ -268,11 +281,12 @@ function TimelineBlockCard({
       >
         {rendersFileChangeCollection ? (
           <AgentThreadTimelineFileChangesCard
-            items={fileArtifactItems}
+            items={fileChangeItems}
             onFileClick={onFileClick}
             onOpenArtifactFromTimeline={onOpenArtifactFromTimeline}
           />
-        ) : rendersAttachmentCollection ? (
+        ) : null}
+        {rendersAttachmentCollection ? (
           <AgentThreadTimelineAttachmentList
             items={fileArtifactItems}
             onFileClick={onFileClick}
@@ -280,21 +294,28 @@ function TimelineBlockCard({
             sourceMessageId={sourceMessageId}
             onSaveFileArtifactAsKnowledge={onSaveFileArtifactAsKnowledge}
           />
-        ) : (
-          detailEntries.map((entry) => (
-            <div
-              key={entry.id}
-              data-thread-item-id={entry.id}
-              ref={entry.id === focusedItemId ? focusedEntryRef : null}
-              className={cn(
-                entry.id === focusedItemId &&
-                  "rounded-2xl ring-2 ring-sky-200 ring-offset-2 ring-offset-white",
-              )}
-            >
-              {entry.content}
-            </div>
-          ))
-        )}
+        ) : rendersReadOnlyAttachmentCollection ? (
+          <AgentThreadTimelineAttachmentList
+            items={readOnlyFileArtifactItems}
+            onFileClick={onFileClick}
+            onOpenArtifactFromTimeline={onOpenArtifactFromTimeline}
+            sourceMessageId={sourceMessageId}
+            onSaveFileArtifactAsKnowledge={onSaveFileArtifactAsKnowledge}
+          />
+        ) : null}
+        {remainingInlineDetailEntries.map((entry) => (
+          <div
+            key={entry.id}
+            data-thread-item-id={entry.id}
+            ref={entry.id === focusedItemId ? focusedEntryRef : null}
+            className={cn(
+              entry.id === focusedItemId &&
+                "rounded-2xl ring-2 ring-sky-200 ring-offset-2 ring-offset-white",
+            )}
+          >
+            {entry.content}
+          </div>
+        ))}
       </div>
     );
   }

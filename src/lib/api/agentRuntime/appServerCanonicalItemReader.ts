@@ -151,6 +151,18 @@ export function readCanonicalThreadItem(
         const path = readString(record ?? {}, "path");
         return path ? [path] : [];
       });
+      const readOnlyChange = readOnlyFileChangeMetadata(item.metadata);
+      const firstChange = changes[0];
+      const firstPath = readString(firstChange ?? {}, "path");
+      if (readOnlyChange && firstPath) {
+        return {
+          ...base,
+          type: "file_artifact",
+          path: firstPath,
+          source: "file_read",
+          content: readString(firstChange ?? {}, "diff") ?? "",
+        };
+      }
       return {
         ...base,
         type: "patch",
@@ -262,6 +274,41 @@ export function readCanonicalThreadItem(
     default:
       return null;
   }
+}
+
+function readOnlyFileChangeMetadata(value: unknown): boolean {
+  const metadata = normalizeRecord(value);
+  if (!metadata) {
+    return false;
+  }
+  const sourceProvenance =
+    normalizeRecord(metadata.sourceProvenance) ??
+    normalizeRecord(metadata.source_provenance);
+  return [metadata, sourceProvenance].some((record) =>
+    record
+      ? [
+          "eventClass",
+          "event_class",
+          "operation",
+          "operationKind",
+          "operation_kind",
+          "toolName",
+          "tool_name",
+          "sourceEventType",
+          "source_event_type",
+        ].some((key) => isReadFileMarker(readString(record, key)))
+      : false,
+  );
+}
+
+function isReadFileMarker(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/gu, ".");
+  return new Set(["read", "file.read", "read.file", "file.read.item"]).has(
+    normalized,
+  );
 }
 
 function readTerminalInteractions(
@@ -636,6 +683,7 @@ function readUserMessageContent(
           type: "image",
           mime_type: imageMimeType(path),
           data: "",
+          source_path: path,
           display_name: safeDisplayPath(path),
           unavailable_reason: "host_reference_required",
           ...(detail ? { detail } : {}),
