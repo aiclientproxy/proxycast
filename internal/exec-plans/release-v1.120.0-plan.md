@@ -1,6 +1,6 @@
 # Lime v1.120.0 发布执行计划
 
-状态：ready-for-git
+状态：completed
 日期：2026-08-03
 目标版本：`1.120.0`
 目标 tag：`v1.120.0`
@@ -11,8 +11,8 @@
 
 ## 当前阶段与下一刀
 
-- 当前阶段：候选盘点、版本与 release notes、版本校验、协议/Rust/前端/Electron 门禁均已完成；待 staged 边界复核与 Git 写操作确认。
-- 下一刀：请求一次 commit/tag/push 危险操作确认；确认后连续完成 release commit、`v1.120.0` tag、`main`/tag 推送和远端引用复核。
+- 当前阶段：`v1.120.0` 已完成 commit、tag、`main`/tag 推送和远端发布资产聚合。
+- 下一刀：无；发布后质量流水线发现的 Rust metadata 边界问题转入 `release-v1.120.1` 补丁计划。
 
 ## Release Candidate
 
@@ -43,7 +43,14 @@
 - `npm run smoke:local-history-import-visual-audit`：通过；summary=`.lime/qc/gui-evidence/local-history-import-visual-audit/local-history-import-visual-audit-summary.json`。
 - `npm run verify:gui-smoke`：通过；真实 Electron/App Server 版本 `1.120.0`，renderer/host/reload/workbench/memory settings smoke 通过；summary=`.lime/qc/project-gates/standalone-shell-01-20260803152335-39638/shell-01-electron-smoke/summary.json`。
 - `git diff --check`：通过。
-- 待补：staged 候选摘要、release commit、tag、远端 `main` 与 tag 引用复核。
+- 已完成：staged 候选摘要、release commit `944b7f40b`、`v1.120.0` tag、远端 `main` 与 tag 引用复核。
+- 发布后质量流水线：GUI Smoke、Windows Shell Runtime、Integrity 通过；Frontend Full 因 layer budget `35 > 30` 失败，Rust Full 因 `contextCompaction` 泄漏私有 `sourceEventType` metadata 失败。
+
+## 发布后质量收尾
+
+- `v1.120.0` tag 保持不变，不删除、不重建、不 force-push。
+- `projection.rs` 已将 typed item metadata 限制为 `imported=true` 的历史导入项；projection library 20/20 与 fork-compaction JSON-RPC 集成回归均通过。
+- 补丁版本执行记录：`internal/exec-plans/release-v1.120.1-plan.md`。
 
 ## 分类
 
@@ -54,4 +61,4 @@
 
 ## 完成度
 
-- 当前完成度：80%。候选、版本事实源、notes、协议/Rust/前端/Electron 门禁已完成；staging、commit、tag、push 和远端复核尚未完成。
+- 当前完成度：100%。`v1.120.0` 已完成候选收口、版本事实源、notes、门禁、commit、tag、push 和远端复核；后续质量修复由补丁计划承接。

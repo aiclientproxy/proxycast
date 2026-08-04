@@ -831,6 +831,10 @@ fn project_dynamic_tool_status(status: canonical::ItemStatus) -> v2::DynamicTool
 }
 
 fn project_item_metadata(metadata: &Value) -> Option<v2::ThreadItemMetadata> {
+    if metadata_bool(metadata, &["imported"]) != Some(true) {
+        return None;
+    }
+
     let raw_provenance = metadata
         .get("sourceProvenance")
         .or_else(|| metadata.get("source_provenance"));
