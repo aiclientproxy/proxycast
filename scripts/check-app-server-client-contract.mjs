@@ -7850,7 +7850,7 @@ const checks = [
     ],
   },
   {
-    name: "Renderer Agent chat sync refreshes read model from current App Server turn events",
+    name: "Renderer Agent chat sync refreshes session detail from current App Server turn events",
     file: "src/components/agent/chat/hooks/useAgentRuntimeSyncEffects.ts",
     snippets: [
       "currentTurnEventName?: string | null",
@@ -7891,12 +7891,12 @@ const checks = [
     ],
   },
   {
-    name: "Renderer Agent chat sync tests lock App Server event read-model refresh boundary",
+    name: "Renderer Agent chat sync tests lock App Server event session-detail refresh boundary",
     file: "src/components/agent/chat/hooks/useAgentRuntimeSyncEffects.test.tsx",
     snippets: [
-      "收到当前 turn 的 App Server runtime event 后应刷新 read model",
+      "收到当前 turn 的 App Server runtime event 后应刷新会话详情",
       "当前 turn 的 text_delta 不应触发完整 read model 刷新",
-      "App Server turn notification 应通过当前 stream event 触发 read model 刷新",
+      "App Server turn notification 应通过当前 stream event 触发会话详情刷新",
       "createThreadClient",
       "listenAgentRuntimeEvent(name, handler)",
       'method: "turn/completed"',

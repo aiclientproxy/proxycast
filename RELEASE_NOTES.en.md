@@ -14,6 +14,7 @@ Simplified Chinese release notes are the primary version.
 - Fixed Skills watcher changes being dropped inside the throttle window by notifying on the leading edge and coalescing a trailing update.
 - Fixed stale session-switch, initial-navigation, and Plugin Right Surface state, and made uninstalled plugins retain history without restarting runtimes or replaying tools.
 - Fixed canonical history persistence merging already-materialized snapshots a second time, which duplicated reasoning deltas, dropped repeated fragments, and regressed large Codex history imports; added bounded waits for transient SQLite lock contention.
+- Fixed the Agent chat App Server terminal-event sync boundary by refreshing session detail with terminal reconciliation so current state remains consistent.
 
 ### Improvements and Refactoring
 
@@ -25,6 +26,7 @@ Simplified Chinese release notes are the primary version.
 - Added Rust, Vitest, contract, and real Electron Gate B coverage for Plugin v2 App Center, typed gateway, mention/activation, MCP resources, Right Surface, history restoration, and uninstall semantics.
 - Added regression guards for Electron packaged assets, embedded Browser HTML, GUI smoke, Skills watcher behavior, and the tool lifecycle.
 - Added canonical reasoning linear-persistence and 1,200-command history-import performance regressions covering repeated deltas, final snapshot replacement, and background progress completion.
+- Added a macOS release-signing policy that disables timestamps for nested resources and retries when Apple's timestamp service is unavailable.
 
 ### Documentation
 

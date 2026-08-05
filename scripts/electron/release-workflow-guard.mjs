@@ -340,6 +340,7 @@ function assertBuildSteps(buildJob) {
     "Response code 502 \\\\(Bad Gateway\\\\)",
     "Response code 504 \\\\(Gateway Time-out\\\\)",
     "A timestamp was expected but was not found",
+    "The timestamp service is not available",
     "retrying package attempt",
     "npx electron-forge make",
     "FORGE_MAKE_LOG",

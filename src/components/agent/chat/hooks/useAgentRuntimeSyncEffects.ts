@@ -529,13 +529,13 @@ export function useAgentRuntimeSyncEffects(
   const scheduleRuntimeSyncRefresh = useCallback(
     (targetSessionId: string, request: AgentSessionDetailRefreshRequest) => {
       if (request.detailMergeMode === "terminal_reconcile") {
-        scheduleRefreshSessionReadModel(targetSessionId);
+        scheduleRefreshSessionDetail(targetSessionId, request);
         return;
       }
 
       scheduleRefreshSessionDetail(targetSessionId, request);
     },
-    [scheduleRefreshSessionDetail, scheduleRefreshSessionReadModel],
+    [scheduleRefreshSessionDetail],
   );
 
   useEffect(

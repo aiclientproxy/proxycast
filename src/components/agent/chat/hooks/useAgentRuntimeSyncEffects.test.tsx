@@ -291,7 +291,7 @@ describe("useAgentRuntimeSyncEffects", () => {
     }
   });
 
-  it("收到当前 turn 的 App Server runtime event 后应刷新 read model", async () => {
+  it("收到当前 turn 的 App Server runtime event 后应刷新会话详情", async () => {
     const refreshSessionDetail = vi.fn(async () => true);
     const refreshSessionReadModel = vi.fn(async () => true);
     const listeners = new Map<string, (event: { payload: unknown }) => void>();
@@ -421,9 +421,12 @@ describe("useAgentRuntimeSyncEffects", () => {
       });
       await flushCoalescedRefresh();
 
-      expect(refreshSessionDetail).not.toHaveBeenCalled();
-      expect(refreshSessionReadModel).toHaveBeenCalledTimes(1);
-      expect(refreshSessionReadModel).toHaveBeenCalledWith("session-1");
+      expect(refreshSessionDetail).toHaveBeenCalledTimes(1);
+      expect(refreshSessionDetail).toHaveBeenCalledWith(
+        "session-1",
+        terminalRefreshRequest("runtimeSync.event"),
+      );
+      expect(refreshSessionReadModel).not.toHaveBeenCalled();
     } finally {
       harness.unmount();
     }
@@ -651,19 +654,22 @@ describe("useAgentRuntimeSyncEffects", () => {
       });
       await flushCoalescedRefresh();
 
-      expect(refreshSessionDetail).not.toHaveBeenCalled();
       expect(terminalRefreshRequest("runtimeSync.event")).toEqual({
         source: "runtimeSync.event",
         detailMergeMode: "terminal_reconcile",
       });
-      expect(refreshSessionReadModel).toHaveBeenCalledTimes(1);
-      expect(refreshSessionReadModel).toHaveBeenCalledWith("session-1");
+      expect(refreshSessionDetail).toHaveBeenCalledTimes(1);
+      expect(refreshSessionDetail).toHaveBeenCalledWith(
+        "session-1",
+        terminalRefreshRequest("runtimeSync.event"),
+      );
+      expect(refreshSessionReadModel).not.toHaveBeenCalled();
     } finally {
       harness.unmount();
     }
   });
 
-  it("App Server turn notification 应通过当前 stream event 触发 read model 刷新", async () => {
+  it("App Server turn notification 应通过当前 stream event 触发会话详情刷新", async () => {
     const eventName = "agent_stream_app-server-p3-126";
     const refreshSessionDetail = vi.fn(async () => true);
     const refreshSessionReadModel = vi.fn(async () => true);
@@ -766,15 +772,18 @@ describe("useAgentRuntimeSyncEffects", () => {
       });
       await flushCoalescedRefresh();
 
-      expect(refreshSessionDetail).not.toHaveBeenCalled();
-      expect(refreshSessionReadModel).toHaveBeenCalledTimes(1);
-      expect(refreshSessionReadModel).toHaveBeenCalledWith("session-1");
+      expect(refreshSessionDetail).toHaveBeenCalledTimes(1);
+      expect(refreshSessionDetail).toHaveBeenCalledWith(
+        "session-1",
+        terminalRefreshRequest("runtimeSync.event"),
+      );
+      expect(refreshSessionReadModel).not.toHaveBeenCalled();
     } finally {
       harness.unmount();
     }
   });
 
-  it("收到当前 turn 的取消终态后应刷新 read model", async () => {
+  it("收到当前 turn 的取消终态后应刷新会话详情", async () => {
     const refreshSessionDetail = vi.fn(async () => true);
     const refreshSessionReadModel = vi.fn(async () => true);
     const listeners = new Map<string, (event: { payload: unknown }) => void>();
@@ -833,9 +842,12 @@ describe("useAgentRuntimeSyncEffects", () => {
       });
       await flushCoalescedRefresh();
 
-      expect(refreshSessionDetail).not.toHaveBeenCalled();
-      expect(refreshSessionReadModel).toHaveBeenCalledTimes(1);
-      expect(refreshSessionReadModel).toHaveBeenCalledWith("session-1");
+      expect(refreshSessionDetail).toHaveBeenCalledTimes(1);
+      expect(refreshSessionDetail).toHaveBeenCalledWith(
+        "session-1",
+        terminalRefreshRequest("runtimeSync.event"),
+      );
+      expect(refreshSessionReadModel).not.toHaveBeenCalled();
     } finally {
       harness.unmount();
     }

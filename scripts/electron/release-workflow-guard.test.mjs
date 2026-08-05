@@ -212,6 +212,20 @@ describe("Electron release workflow guard", () => {
     );
   });
 
+  it("rejects missing macOS timestamp service retry classification in Forge package step", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        "The timestamp service is not available",
+        "The timestamp service is unavailable",
+      ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /Electron Forge make step must include The timestamp service is not available/,
+    );
+  });
+
   it("rejects Forge make without the existing package output", () => {
     const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
     const workflowPath = tempWorkflowPath(

@@ -261,7 +261,17 @@ describe("agentSessionState runtimeSync detail refresh", () => {
           content: "正在生成回复",
         }),
       ],
-      currentThreadTurns: [],
+      currentThreadTurns: [
+        {
+          id: "pending-turn:stale-renderer-shell",
+          thread_id: "topic-runtime-sync-terminal-thread",
+          prompt_text: "pending 壳里的临时问题",
+          status: "running",
+          started_at: "2026-06-30T10:00:00.000Z",
+          created_at: "2026-06-30T10:00:00.000Z",
+          updated_at: "2026-06-30T10:00:01.000Z",
+        },
+      ],
       currentThreadItems: [],
       currentExecutionRuntime: null,
       currentExecutionStrategy: "react",
@@ -275,6 +285,9 @@ describe("agentSessionState runtimeSync detail refresh", () => {
     ]);
     expect(result.snapshot.currentTurnId).toBe("turn-runtime-sync-terminal");
     expect(result.snapshot.threadRead?.status).toBe("completed");
+    expect(result.snapshot.threadTurns.map((turn) => turn.id)).toEqual([
+      "turn-runtime-sync-terminal",
+    ]);
   });
 
   it("runtimeSync terminal detail 接管 pending 壳时应迁移本地已停止标记", () => {

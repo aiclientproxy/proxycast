@@ -61,7 +61,7 @@ describe("Electron Forge config", () => {
       macSignOptions({ env, platform: "darwin" }).optionsForFile(
         "release-electron/Lime-darwin-arm64/Lime.app/Contents/MacOS/Lime",
       ),
-    ).toBeNull();
+    ).toEqual({ timestamp: "none" });
     expect(macNotarizeOptions({ env, platform: "darwin" })).toEqual({
       appleId: "release@example.com",
       appleIdPassword: "app-specific-password",

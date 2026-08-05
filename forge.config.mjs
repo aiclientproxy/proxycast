@@ -80,7 +80,7 @@ function macSignOptions({
     optionsForFile: (filePath) => {
       if (!isTopLevelAppBundle(filePath)) {
         return releaseSigning
-          ? null
+          ? { timestamp: "none" }
           : { hardenedRuntime: false, timestamp: "none" };
       }
       return {
