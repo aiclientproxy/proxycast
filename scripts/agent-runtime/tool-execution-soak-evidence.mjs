@@ -238,6 +238,24 @@ function countByKind(records) {
   return counts;
 }
 
+export function resolveSoakRoundThreadIdentity(evidence) {
+  const sessionId = String(evidence?.runtime?.sessionId || "").trim();
+  const threadId = String(evidence?.runtime?.threadId || "").trim();
+  if (!sessionId || !threadId) {
+    throw new Error(
+      "SOAK evidence 缺少 canonical sessionId/threadId，拒绝使用 sessionId 代替 threadId",
+    );
+  }
+  return { sessionId, threadId };
+}
+
+export function containsCanonicalThread(threads, { sessionId, threadId }) {
+  return threads.some(
+    (thread) =>
+      thread?.id === threadId && thread?.sessionId === sessionId,
+  );
+}
+
 export async function collectSoakRoundObservation({
   evidence,
   outputPath,
@@ -257,16 +275,19 @@ export async function collectSoakRoundObservation({
       });
     }
   };
-  const sessionId = String(evidence?.runtime?.sessionId || "").trim();
-  const sessionRead = await invokeObserved("thread/read", {
-    sessionId,
-    historyLimit: 500,
+  const { sessionId, threadId } = resolveSoakRoundThreadIdentity(evidence);
+  const threadRead = await invokeObserved("thread/read", {
+    threadId,
+    includeTurns: true,
   });
-  const threadId = String(sessionRead?.session?.threadId || "").trim();
+  const canonicalThread = threadRead?.thread;
+  if (!canonicalThread || typeof canonicalThread !== "object") {
+    throw new Error("thread/read 未返回 canonical thread");
+  }
   const [itemsResponse, threadsResponse, turnsResponse] = await Promise.all([
     invokeObserved("thread/items/list", { threadId, limit: 500 }),
     invokeObserved("thread/list", {
-      includeArchived: true,
+      archived: false,
       limit: 500,
       turnsView: "summary",
     }),
@@ -292,7 +313,7 @@ export async function collectSoakRoundObservation({
     status: evidence?.status || "unknown",
     sessionId,
     threadId,
-    sessionStatus: sessionRead?.session?.status ?? null,
+    sessionStatus: canonicalThread.status ?? null,
     threadCount: threads.length,
     sessionThreadCount: threads.filter(
       (thread) => thread?.sessionId === sessionId,
@@ -310,9 +331,10 @@ export async function collectSoakRoundObservation({
     assertions: {
       roundEvidencePassed: evidence?.status === "pass",
       canonicalSessionIdentityPresent: Boolean(sessionId && threadId),
-      canonicalThreadListed: threads.some(
-        (thread) => thread?.threadId === threadId,
-      ),
+      canonicalThreadListed: containsCanonicalThread(threads, {
+        sessionId,
+        threadId,
+      }),
       exactlyOneTurnRecorded: turns.length === 1,
       terminalTurnRecordedOnce: terminalTurns.length === 1,
       turnIdentityUnique: new Set(turnIds).size === turnIds.length,

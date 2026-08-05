@@ -88,6 +88,21 @@ function requireMcpResourceTarget(server: string, uri: string) {
   return { server: normalizedServer, uri: normalizedUri };
 }
 
+function requireMcpRuntimeOwner(owner: {
+  sessionId: string;
+  threadId: string;
+}) {
+  const sessionId = owner.sessionId.trim();
+  const threadId = owner.threadId.trim();
+  if (!sessionId) {
+    throw new Error("MCP runtime sessionId cannot be empty");
+  }
+  if (!threadId) {
+    throw new Error("MCP runtime threadId cannot be empty");
+  }
+  return { sessionId, threadId };
+}
+
 function requireMcpPromptTarget(server: string, name: string) {
   const normalizedServer = server.trim();
   const normalizedName = name.trim();
@@ -375,12 +390,14 @@ export const mcpApi = {
   readResource: async (
     server: string,
     uri: string,
+    runtimeOwner?: { sessionId: string; threadId: string },
   ): Promise<McpResourceContent> => {
     const target = requireMcpResourceTarget(server, uri);
+    const owner = runtimeOwner ? requireMcpRuntimeOwner(runtimeOwner) : {};
     const response =
       await requestMcpAppServer<AppServerMcpResourceReadResponse>(
         METHOD_MCP_RESOURCE_READ,
-        target,
+        { ...target, ...owner },
       );
     return assertMcpResourceContent(METHOD_MCP_RESOURCE_READ, response);
   },

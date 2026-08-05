@@ -124,6 +124,7 @@ pub struct McpRuntimeOwner {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct McpRuntimeServerSpec {
     pub name: String,
+    pub plugin_id: Option<String>,
     pub config: McpServerConfig,
 }
 
@@ -135,6 +136,7 @@ pub struct McpRuntimeServerSpec {
 #[derive(Clone)]
 pub struct McpBridgeSnapshot {
     pub server_name: String,
+    pub plugin_id: Option<String>,
     pub environment_id: String,
     pub description: String,
     pub tools: Vec<McpToolDefinition>,
@@ -443,6 +445,7 @@ impl McpClientManager {
 
             snapshots.push(McpBridgeSnapshot {
                 server_name: server_name.clone(),
+                plugin_id: None,
                 environment_id: wrapper.config.environment_id.clone(),
                 description,
                 tools: server_tools,

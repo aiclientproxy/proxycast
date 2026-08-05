@@ -63,6 +63,7 @@ export interface RenderWorkspaceRightSurfaceHostRuntimeParams {
   rightSurfaceTraceEnabled: boolean;
   runtimeWorkspaceId?: string | null;
   sceneSessionId?: string | null;
+  sceneThreadId?: string | null;
   onArticleActionIntent: ArticleEditorRightSurfaceProps["onActionIntent"];
   onArticleMarkdownChange: ArticleEditorRightSurfaceProps["onArticleMarkdownChange"];
   onArticleSelectedObjectChange: ArticleEditorRightSurfaceProps["onSelectedObjectChange"];
@@ -104,6 +105,7 @@ export function renderWorkspaceRightSurfaceHostRuntime({
   rightSurfaceTraceEnabled,
   runtimeWorkspaceId,
   sceneSessionId,
+  sceneThreadId,
   onArticleActionIntent,
   onArticleMarkdownChange,
   onArticleSelectedObjectChange,
@@ -123,6 +125,11 @@ export function renderWorkspaceRightSurfaceHostRuntime({
           appSurface: () => (
             <WorkspacePluginSurface
               activeContainerId={activePluginSurfaceContainerId}
+              runtimeOwner={
+                sceneSessionId && sceneThreadId
+                  ? { sessionId: sceneSessionId, threadId: sceneThreadId }
+                  : null
+              }
               surfaces={pluginSurfaceRightSurfaces}
               surface={pluginSurfaceRightSurface}
               onCloseSurface={onClosePluginSurface}

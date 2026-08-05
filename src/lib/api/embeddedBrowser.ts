@@ -78,15 +78,32 @@ export interface EmbeddedBrowserPermissionRequestEvent {
 
 interface EmbeddedBrowserCommandParams extends Record<string, unknown> {
   viewId: string;
+  leaseId?: string;
   url?: string;
   bounds?: EmbeddedBrowserBounds;
   visible?: boolean;
+}
+
+export interface EmbeddedBrowserHtmlParams
+  extends
+    Record<string, unknown>,
+    Pick<EmbeddedBrowserCommandParams, "viewId"> {
+  html: string;
+  csp?: {
+    baseUriDomains?: string[];
+    connectDomains?: string[];
+    frameDomains?: string[];
+    resourceDomains?: string[];
+  };
+  source: "mcpApp";
+  sourceUri: string;
 }
 
 const EMBEDDED_BROWSER_REQUIRED_COMMANDS = [
   "embedded_browser_view_mount",
   "embedded_browser_view_set_bounds",
   "embedded_browser_view_navigate",
+  "embedded_browser_view_load_html",
   "embedded_browser_view_reload",
   "embedded_browser_view_stop",
   "embedded_browser_view_find_in_page",
@@ -153,6 +170,12 @@ export async function navigateEmbeddedBrowserView(
   return invokeEmbeddedBrowser("embedded_browser_view_navigate", params);
 }
 
+export async function loadEmbeddedBrowserViewHtml(
+  params: EmbeddedBrowserHtmlParams,
+): Promise<EmbeddedBrowserViewState> {
+  return invokeEmbeddedBrowser("embedded_browser_view_load_html", params);
+}
+
 export async function reloadEmbeddedBrowserView(
   viewId: string,
 ): Promise<EmbeddedBrowserViewState> {
@@ -206,8 +229,12 @@ export async function goForwardEmbeddedBrowserView(
 
 export async function destroyEmbeddedBrowserView(
   viewId: string,
+  leaseId?: string,
 ): Promise<void> {
-  await safeInvoke("embedded_browser_view_destroy", { viewId });
+  await safeInvoke("embedded_browser_view_destroy", {
+    viewId,
+    ...(leaseId ? { leaseId } : {}),
+  });
 }
 
 export function listenEmbeddedBrowserViewState(

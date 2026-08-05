@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyInputbarPluginSelection,
+  buildInputbarPluginMention,
   isCompleteInputbarPluginTriggerQuery,
   normalizeInputbarPluginTrigger,
   removeInputbarPluginSelection,
@@ -9,6 +10,19 @@ import {
 } from "./pluginInputCapability";
 
 describe("pluginInputCapability", () => {
+  it("应从稳定 Plugin ID 构造结构化 mention", () => {
+    expect(
+      buildInputbarPluginMention({
+        pluginId: "browser",
+        displayName: "Browser",
+      }),
+    ).toEqual({
+      type: "mention",
+      name: "Browser",
+      path: "plugin://browser",
+    });
+  });
+
   it("展示名称为空时应回退显示插件 id", () => {
     expect(
       resolveInputbarPluginDisplayName({

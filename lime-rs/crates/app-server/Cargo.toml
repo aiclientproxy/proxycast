@@ -54,6 +54,7 @@ scopeguard.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
+semver.workspace = true
 sha2.workspace = true
 portable-pty.workspace = true
 patch-apply.workspace = true

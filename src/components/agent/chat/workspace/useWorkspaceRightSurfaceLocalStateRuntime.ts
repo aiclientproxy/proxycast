@@ -27,6 +27,10 @@ export function useWorkspaceRightSurfaceLocalStateRuntime() {
   >([]);
   const [activePluginSurfaceContainerId, setActivePluginSurfaceContainerId] =
     useState<string | null>(null);
+  const [
+    dismissedPluginSurfaceContainerIds,
+    setDismissedPluginSurfaceContainerIds,
+  ] = useState<string[]>([]);
 
   const clearActiveRightSurfaceTargets = useCallback(() => {
     setManualRightSurface(null);
@@ -53,6 +57,7 @@ export function useWorkspaceRightSurfaceLocalStateRuntime() {
     activePluginSurfaceContainerId,
     activePluginSurfaces,
     clearActiveRightSurfaceTargets,
+    dismissedPluginSurfaceContainerIds,
     manualRightSurface,
     openArticleWorkspaceRightSurface,
     rightSurfaceBrowserTitle,
@@ -62,6 +67,7 @@ export function useWorkspaceRightSurfaceLocalStateRuntime() {
     setActiveObjectCanvasRightSurfaceCandidate,
     setActivePluginSurfaceContainerId,
     setActivePluginSurfaces,
+    setDismissedPluginSurfaceContainerIds,
     setManualRightSurface,
     setRightSurfaceBrowserTitle,
   };

@@ -190,6 +190,12 @@ pub struct McpResourceReadParams {
     pub server: String,
     #[schemars(length(min = 1))]
     pub uri: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(length(min = 1))]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(length(min = 1))]
+    pub thread_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -223,6 +229,8 @@ pub struct McpResourceReadResponse {
     pub text: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blob: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

@@ -1,7 +1,10 @@
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   FolderOpen,
+  MoreHorizontal,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -119,16 +122,42 @@ export function PluginAppCenterList({
   onTogglePublishWorkbench: () => void;
   onToggleReleaseReviewWorkbench: () => void;
 }) {
+  const [moreActionsOpen, setMoreActionsOpen] = useState(false);
+  const moreActionsRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!moreActionsOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!moreActionsRef.current?.contains(event.target as Node)) {
+        setMoreActionsOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMoreActionsOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [moreActionsOpen]);
+
+  const closeMoreActions = () => setMoreActionsOpen(false);
+
   return (
     <>
-      <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      <header className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
           <h1 className="text-[28px] font-semibold text-[color:var(--lime-text-strong)]">
             {t("plugin.apps.center.title")}
           </h1>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-[color:var(--lime-text-muted)]">
-            {t("plugin.apps.center.description")}
-          </p>
           {issueCount > 0 ? (
             <p
               className="mt-2 text-sm font-medium text-amber-700"
@@ -138,8 +167,8 @@ export function PluginAppCenterList({
             </p>
           ) : null}
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <label className="relative w-full sm:w-[360px]">
+        <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center">
+          <label className="relative w-full min-w-0 xl:w-[360px]">
             <Search
               className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--lime-text-muted)]"
               size={18}
@@ -155,28 +184,10 @@ export function PluginAppCenterList({
               data-testid="plugins-search"
             />
           </label>
-          <div className="flex gap-3">
+          <div className="flex min-w-0 flex-wrap gap-3">
             <button
               type="button"
-              className="inline-flex h-9 items-center gap-2 rounded-full border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] px-4 text-sm font-semibold text-[color:var(--lime-text-strong)] shadow-none transition hover:bg-[color:var(--lime-surface-hover)]"
-              onClick={onTogglePublishWorkbench}
-              data-testid="plugins-open-publish"
-            >
-              <UploadCloud size={16} />
-              {t("plugin.apps.center.publish")}
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-9 items-center gap-2 rounded-full border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] px-4 text-sm font-semibold text-[color:var(--lime-text-strong)] shadow-none transition hover:bg-[color:var(--lime-surface-hover)]"
-              onClick={onToggleReleaseReviewWorkbench}
-              data-testid="plugins-open-release-review"
-            >
-              <ShieldCheck size={16} />
-              {t("plugin.apps.center.review")}
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-9 items-center gap-2 rounded-full bg-[color:var(--lime-text-strong)] px-5 text-sm font-semibold text-[color:var(--lime-surface)] shadow-none transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-[color:var(--lime-text-strong)] px-5 text-sm font-semibold text-[color:var(--lime-surface)] shadow-none transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={Boolean(busyAction)}
               onClick={() => void onInstallLocal()}
               data-testid="plugins-install-local"
@@ -184,16 +195,74 @@ export function PluginAppCenterList({
               <FolderOpen size={16} />
               {t("plugin.apps.center.installLocal")}
             </button>
-            <button
-              type="button"
-              className="inline-flex h-9 items-center gap-2 rounded-full border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] px-4 text-sm font-semibold text-[color:var(--lime-text-strong)] shadow-none transition hover:bg-[color:var(--lime-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => void onRefresh()}
-              disabled={loading}
-              data-testid="plugins-refresh"
-            >
-              <RefreshCw size={16} />
-              {t("plugin.apps.center.refresh")}
-            </button>
+            <div className="relative shrink-0" ref={moreActionsRef}>
+              <button
+                type="button"
+                className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] px-4 text-sm font-semibold text-[color:var(--lime-text-strong)] shadow-none transition hover:bg-[color:var(--lime-surface-hover)]"
+                aria-haspopup="menu"
+                aria-expanded={moreActionsOpen}
+                aria-controls="plugins-more-actions-menu"
+                onClick={() => setMoreActionsOpen((current) => !current)}
+                data-testid="plugins-more-actions"
+              >
+                <MoreHorizontal size={16} />
+                {t("plugin.apps.center.moreActions")}
+                <ChevronDown
+                  className={`transition-transform ${moreActionsOpen ? "rotate-180" : ""}`}
+                  size={14}
+                />
+              </button>
+              {moreActionsOpen ? (
+                <div
+                  id="plugins-more-actions-menu"
+                  className="absolute right-0 top-full z-30 mt-2 min-w-[188px] overflow-hidden rounded-xl border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] py-1 text-[color:var(--lime-text-strong)] shadow-lg shadow-slate-950/10"
+                  role="menu"
+                  aria-label={t("plugin.apps.center.moreActions")}
+                  data-testid="plugins-more-actions-menu"
+                >
+                  <button
+                    type="button"
+                    className="flex h-9 w-full items-center gap-2 whitespace-nowrap px-3 text-left text-sm font-semibold transition hover:bg-[color:var(--lime-surface-hover)]"
+                    onClick={() => {
+                      closeMoreActions();
+                      onTogglePublishWorkbench();
+                    }}
+                    role="menuitem"
+                    data-testid="plugins-open-publish"
+                  >
+                    <UploadCloud size={16} />
+                    {t("plugin.apps.center.publish")}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex h-9 w-full items-center gap-2 whitespace-nowrap px-3 text-left text-sm font-semibold transition hover:bg-[color:var(--lime-surface-hover)]"
+                    onClick={() => {
+                      closeMoreActions();
+                      onToggleReleaseReviewWorkbench();
+                    }}
+                    role="menuitem"
+                    data-testid="plugins-open-release-review"
+                  >
+                    <ShieldCheck size={16} />
+                    {t("plugin.apps.center.review")}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex h-9 w-full items-center gap-2 whitespace-nowrap px-3 text-left text-sm font-semibold transition hover:bg-[color:var(--lime-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => {
+                      closeMoreActions();
+                      void onRefresh();
+                    }}
+                    disabled={loading}
+                    role="menuitem"
+                    data-testid="plugins-refresh"
+                  >
+                    <RefreshCw size={16} />
+                    {t("plugin.apps.center.refresh")}
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>

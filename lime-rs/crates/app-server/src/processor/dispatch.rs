@@ -502,6 +502,24 @@ impl RequestProcessor {
             METHOD_BROWSER_SESSION_ACTION_EXECUTE => self
                 .handle_browser_session_action_execute_impl(params)
                 .boxed(),
+            app_server_protocol::protocol::v2::METHOD_PLUGIN_LIST => {
+                self.handle_plugin_catalog_list_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_PLUGIN_READ => {
+                self.handle_plugin_catalog_read_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_PLUGIN_INSTALL => {
+                self.handle_plugin_catalog_install_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_PLUGIN_UNINSTALL => {
+                self.handle_plugin_catalog_uninstall_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_PLUGIN_INSTALLED => {
+                self.handle_plugin_catalog_installed_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_PLUGIN_ENABLED_SET => self
+                .handle_plugin_catalog_enabled_set_v2_impl(params)
+                .boxed(),
             METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT => self
                 .handle_plugin_local_package_inspect_impl(params)
                 .boxed(),

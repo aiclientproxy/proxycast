@@ -36,6 +36,7 @@
 - Lime v1.114.0 发布执行计划：`internal/exec-plans/release-v1.114.0-plan.md`
 - Lime v1.115.0 发布执行计划：`internal/exec-plans/release-v1.115.0-plan.md`
 - Lime v1.116.0 发布执行计划：`internal/exec-plans/release-v1.116.0-plan.md`
+- Lime v1.121.0 发布执行计划：`internal/exec-plans/release-v1.121.0-plan.md`
 - Codex App GUI 对齐执行计划：`internal/exec-plans/codex-app-gui-alignment-plan.md`
 - Codex 对话兼容重构：`internal/exec-plans/codex-conversation-compat-refactor-plan.md`
 - Codex 对齐 v1 并行协调：`internal/exec-plans/codex-alignment-v1-coordination-plan.md`
@@ -64,6 +65,7 @@
 - `@` 命令本地执行纠偏计划：`internal/exec-plans/at-command-local-execution-alignment-plan.md`
 - Agent QC 运营级测试体系执行计划：`internal/exec-plans/agent-qc-ops-testing-plan.md`
 - Agent App v2 独立安装与 Runtime 底座拆分执行计划：`internal/exec-plans/agentapp-v2-standalone-runtime.md`
+- Plugin v2 current 实施与 Gate B 计划：`internal/exec-plans/plugin-v2-current-plan.md`
 - AI 图层化设计实现计划：`internal/exec-plans/ai-layered-design-implementation-plan.md`
 - 图片能力 feature-flag / extension-tool 执行计划：`internal/exec-plans/image-capability-feature-flag-extension-tool-plan.md`
 - 图片能力 feature-flag / extension-tool 进度：`internal/exec-plans/image-capability-feature-flag-extension-tool-progress.md`

@@ -243,6 +243,12 @@ export const METHOD_MODEL_PROVIDER_UI_STATE_READ = "modelProviderUiState/read";
 export const METHOD_MODEL_PROVIDER_UI_STATE_WRITE =
   "modelProviderUiState/write";
 export const METHOD_MODEL_SYNC_STATE_READ = "modelSyncState/read";
+export const METHOD_PLUGIN_ENABLED_SET = "plugin/enabled/set";
+export const METHOD_PLUGIN_INSTALL = "plugin/install";
+export const METHOD_PLUGIN_INSTALLED = "plugin/installed";
+export const METHOD_PLUGIN_LIST = "plugin/list";
+export const METHOD_PLUGIN_READ = "plugin/read";
+export const METHOD_PLUGIN_UNINSTALL = "plugin/uninstall";
 export const METHOD_PLUGIN_HOST_LIFECYCLE_LIST = "pluginHostLifecycle/list";
 export const METHOD_PLUGIN_INSTALLED_DISABLED_SET =
   "pluginInstalled/disabled/set";
@@ -1175,6 +1181,30 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "modelSyncState/read",
+  },
+  {
+    kind: "request",
+    method: "plugin/enabled/set",
+  },
+  {
+    kind: "request",
+    method: "plugin/install",
+  },
+  {
+    kind: "request",
+    method: "plugin/installed",
+  },
+  {
+    kind: "request",
+    method: "plugin/list",
+  },
+  {
+    kind: "request",
+    method: "plugin/read",
+  },
+  {
+    kind: "request",
+    method: "plugin/uninstall",
   },
   {
     kind: "request",
@@ -4606,6 +4636,36 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "plugin/list";
+      params: PluginCatalogListParams;
+    }
+  | {
+      id: number | string;
+      method: "plugin/read";
+      params: PluginCatalogReadParams;
+    }
+  | {
+      id: number | string;
+      method: "plugin/install";
+      params: PluginCatalogInstallParams;
+    }
+  | {
+      id: number | string;
+      method: "plugin/uninstall";
+      params: PluginCatalogUninstallParams;
+    }
+  | {
+      id: number | string;
+      method: "plugin/installed";
+      params: PluginCatalogInstalledParams;
+    }
+  | {
+      id: number | string;
+      method: "plugin/enabled/set";
+      params: PluginCatalogEnabledSetParams;
+    }
+  | {
+      id: number | string;
       method: "turn/start";
       params: TurnStartParams;
     }
@@ -5958,11 +6018,14 @@ export interface McpResourceListResponse {
 
 export interface McpResourceReadParams {
   server: string;
+  sessionId?: null | string;
+  threadId?: null | string;
   uri: string;
 }
 
 export interface McpResourceReadResponse {
   blob?: null | string;
+  meta?: unknown;
   mime_type?: null | string;
   text?: null | string;
   uri: string;
@@ -6563,6 +6626,12 @@ export type Method =
   | "artifact/write"
   | "media/read"
   | "model/list"
+  | "plugin/enabled/set"
+  | "plugin/install"
+  | "plugin/installed"
+  | "plugin/list"
+  | "plugin/read"
+  | "plugin/uninstall"
   | "thread/approveGuardianDeniedAction"
   | "thread/archive"
   | "thread/backgroundTerminals/clean"
@@ -7072,6 +7141,105 @@ export interface PluginArticleWorkspaceObject {
   kind: string;
   primary: boolean;
   title: string;
+}
+
+export interface PluginCatalogCapability {
+  description: string;
+  id: string;
+  name: string;
+  requiresAuth: boolean;
+}
+
+export interface PluginCatalogDetail {
+  apps: PluginCatalogCapability[];
+  hooks: PluginCatalogHook[];
+  mcpServers: PluginCatalogCapability[];
+  skills: PluginCatalogCapability[];
+  summary: PluginCatalogSummary;
+  uiResources: PluginCatalogUiResource[];
+}
+
+export interface PluginCatalogEnabledSetParams {
+  enabled: boolean;
+  pluginId: string;
+}
+
+export interface PluginCatalogEnabledSetResponse {
+  plugin: PluginCatalogSummary;
+}
+
+export interface PluginCatalogHook {
+  event: string;
+  id: string;
+}
+
+export interface PluginCatalogInstallParams {
+  expectedDigest?: null | string;
+  marketplaceId?: null | string;
+  source?: null | string;
+  sourcePath: string;
+}
+
+export interface PluginCatalogInstallResponse {
+  plugin: PluginCatalogSummary;
+}
+
+export type PluginCatalogInstalledParams = Record<string, unknown>;
+
+export interface PluginCatalogListParams {
+  marketplacePaths?: string[];
+  query?: null | string;
+  source?: null | string;
+}
+
+export interface PluginCatalogListResponse {
+  generatedAt: string;
+  plugins: PluginCatalogSummary[];
+}
+
+export interface PluginCatalogReadParams {
+  pluginId: string;
+}
+
+export interface PluginCatalogReadResponse {
+  plugin: PluginCatalogDetail;
+}
+
+export interface PluginCatalogSummary {
+  appsCount: number;
+  authPolicy: string;
+  availability: string;
+  contentDigest: string;
+  description: string;
+  disabledReason?: null | string;
+  enabled: boolean;
+  hooksCount: number;
+  id: string;
+  installPolicy: string;
+  installed: boolean;
+  localVersion?: null | string;
+  marketplaceId: string;
+  mcpServersCount: number;
+  name: string;
+  skillsCount: number;
+  source: string;
+  sourceUri: string;
+  version: string;
+}
+
+export interface PluginCatalogUiResource {
+  id: string;
+  kind: string;
+  resourceUri: string;
+}
+
+export interface PluginCatalogUninstallParams {
+  pluginId: string;
+}
+
+export interface PluginCatalogUninstallResponse {
+  pluginId: string;
+  uninstalled: boolean;
 }
 
 export interface PluginCloudReleaseDescriptor {

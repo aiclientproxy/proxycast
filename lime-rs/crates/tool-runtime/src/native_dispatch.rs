@@ -454,6 +454,7 @@ mod tests {
                 mime_type: None,
                 text: Some("resource".to_string()),
                 blob: None,
+                meta: None,
             })
         }
     }

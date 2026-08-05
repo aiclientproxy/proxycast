@@ -241,6 +241,8 @@ fn project_mcp_tool_item(
             call_id,
             server_name: route.server_name.clone(),
             tool_name: route.tool_name.clone(),
+            mcp_app_resource_uri: route.mcp_app_resource_uri.clone(),
+            plugin_id: route.plugin_id.clone(),
             arguments,
             output,
         },
@@ -277,6 +279,8 @@ mod tests {
             server_name: "docs".to_string(),
             tool_name: "search".to_string(),
             runtime_tool_name: "docs__search".to_string(),
+            mcp_app_resource_uri: Some("ui://plugin/docs.html".to_string()),
+            plugin_id: Some("docs-plugin".to_string()),
         }]);
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let emitter = CurrentTurnToolLifecycleEmitter::with_tool_routes(
@@ -309,8 +313,13 @@ mod tests {
             ThreadItemPayload::McpToolCall {
                 ref server_name,
                 ref tool_name,
+                ref mcp_app_resource_uri,
+                ref plugin_id,
                 ..
-            } if server_name == "docs" && tool_name == "search"
+            } if server_name == "docs"
+                && tool_name == "search"
+                && mcp_app_resource_uri.as_deref() == Some("ui://plugin/docs.html")
+                && plugin_id.as_deref() == Some("docs-plugin")
         ));
     }
 

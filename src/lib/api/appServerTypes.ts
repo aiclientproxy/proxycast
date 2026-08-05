@@ -122,6 +122,31 @@ export type AppServerAgentSessionListResponse =
 export type AppServerAgentSessionReadParams = protocol.AgentSessionReadParams;
 export type AppServerMediaReadParams = protocol.MediaReadParams;
 export type AppServerMediaReadResponse = protocol.MediaReadResponse;
+export type AppServerPluginCatalogListParams = protocol.PluginCatalogListParams;
+export type AppServerPluginCatalogListResponse =
+  protocol.PluginCatalogListResponse;
+export type AppServerPluginCatalogSummary = protocol.PluginCatalogSummary;
+export type AppServerPluginCatalogDetail = protocol.PluginCatalogDetail;
+export type AppServerPluginCatalogCapability = protocol.PluginCatalogCapability;
+export type AppServerPluginCatalogHook = protocol.PluginCatalogHook;
+export type AppServerPluginCatalogUiResource = protocol.PluginCatalogUiResource;
+export type AppServerPluginCatalogReadParams = protocol.PluginCatalogReadParams;
+export type AppServerPluginCatalogReadResponse =
+  protocol.PluginCatalogReadResponse;
+export type AppServerPluginCatalogInstallParams =
+  protocol.PluginCatalogInstallParams;
+export type AppServerPluginCatalogInstallResponse =
+  protocol.PluginCatalogInstallResponse;
+export type AppServerPluginCatalogUninstallParams =
+  protocol.PluginCatalogUninstallParams;
+export type AppServerPluginCatalogUninstallResponse =
+  protocol.PluginCatalogUninstallResponse;
+export type AppServerPluginCatalogInstalledParams =
+  protocol.PluginCatalogInstalledParams;
+export type AppServerPluginCatalogEnabledSetParams =
+  protocol.PluginCatalogEnabledSetParams;
+export type AppServerPluginCatalogEnabledSetResponse =
+  protocol.PluginCatalogEnabledSetResponse;
 export type AppServerAgentSessionToolInventoryReadParams =
   protocol.AgentSessionToolInventoryReadParams;
 export type AppServerAgentInput = protocol.AgentInput;

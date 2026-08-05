@@ -5,18 +5,110 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tokio::task::AbortHandle;
 
 const WATCHER_THROTTLE_INTERVAL: Duration = Duration::from_secs(10);
 
 pub(crate) struct SkillsWatcher {
     _watcher: Arc<Mutex<RecommendedWatcher>>,
     _watched_roots: Arc<Mutex<HashSet<PathBuf>>>,
+    notifier: CatalogChangeNotifier,
     reconcile_task: tokio::task::JoinHandle<()>,
 }
 
 impl Drop for SkillsWatcher {
     fn drop(&mut self) {
         self.reconcile_task.abort();
+        self.notifier.cancel_pending();
+    }
+}
+
+#[derive(Default)]
+struct NotificationState {
+    last_notification: Option<Instant>,
+    trailing_task: Option<AbortHandle>,
+}
+
+#[derive(Clone)]
+struct CatalogChangeNotifier {
+    bridge: AppServerEventBridge,
+    handle: tokio::runtime::Handle,
+    throttle_interval: Duration,
+    state: Arc<Mutex<NotificationState>>,
+}
+
+impl CatalogChangeNotifier {
+    fn new(
+        bridge: AppServerEventBridge,
+        handle: tokio::runtime::Handle,
+        throttle_interval: Duration,
+    ) -> Self {
+        Self {
+            bridge,
+            handle,
+            throttle_interval,
+            state: Arc::new(Mutex::new(NotificationState::default())),
+        }
+    }
+
+    fn notify(&self) {
+        let now = Instant::now();
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+
+        if state.trailing_task.is_some() {
+            return;
+        }
+
+        let Some(last_notification) = state.last_notification else {
+            state.last_notification = Some(now);
+            drop(state);
+            self.broadcast();
+            return;
+        };
+        let elapsed = now.duration_since(last_notification);
+        if elapsed >= self.throttle_interval {
+            state.last_notification = Some(now);
+            drop(state);
+            self.broadcast();
+            return;
+        }
+
+        let delay = self.throttle_interval - elapsed;
+        let notifier = self.clone();
+        let task = self.handle.spawn(async move {
+            tokio::time::sleep(delay).await;
+            notifier.flush_trailing();
+        });
+        state.trailing_task = Some(task.abort_handle());
+    }
+
+    fn flush_trailing(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if state.trailing_task.take().is_none() {
+            return;
+        }
+        state.last_notification = Some(Instant::now());
+        drop(state);
+        self.broadcast();
+    }
+
+    fn cancel_pending(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if let Some(task) = state.trailing_task.take() {
+            task.abort();
+        }
+    }
+
+    fn broadcast(&self) {
+        lime_skills::invalidate_agent_skill_snapshot_cache();
+        let bridge = self.bridge.clone();
+        self.handle.spawn(async move {
+            bridge
+                .broadcast_message(JsonRpcMessage::Notification(
+                    ServerNotification::SkillsChanged(SkillsChangedNotification {}).into(),
+                ))
+                .await;
+        });
     }
 }
 
@@ -48,10 +140,8 @@ impl SkillsWatcher {
             tracing::warn!("skills watcher has no default Skill roots");
             return None;
         }
-        let last_notification = Arc::new(Mutex::new(None::<Instant>));
-        let callback_last_notification = last_notification.clone();
-        let callback_bridge = bridge.clone();
-        let callback_handle = handle.clone();
+        let notifier = CatalogChangeNotifier::new(bridge, handle, throttle_interval);
+        let callback_notifier = notifier.clone();
         let watcher = match notify::recommended_watcher(move |result: notify::Result<Event>| {
             let event = match result {
                 Ok(event) if is_catalog_change(&event.kind) => event,
@@ -64,12 +154,7 @@ impl SkillsWatcher {
             if event.paths.is_empty() {
                 return;
             }
-            notify_catalog_changed(
-                &callback_bridge,
-                &callback_handle,
-                &callback_last_notification,
-                throttle_interval,
-            );
+            callback_notifier.notify();
         }) {
             Ok(watcher) => watcher,
             Err(error) => {
@@ -83,21 +168,15 @@ impl SkillsWatcher {
 
         let reconcile_watcher = watcher.clone();
         let reconcile_watched_roots = watched_roots.clone();
-        let reconcile_last_notification = last_notification.clone();
-        let reconcile_handle = handle.clone();
-        let reconcile_task = handle.spawn(async move {
+        let reconcile_notifier = notifier.clone();
+        let reconcile_task = notifier.handle.spawn(async move {
             let mut interval = tokio::time::interval(throttle_interval);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             interval.tick().await;
             loop {
                 interval.tick().await;
                 if reconcile_watches(&reconcile_watcher, &reconcile_watched_roots, &roots) {
-                    notify_catalog_changed(
-                        &bridge,
-                        &reconcile_handle,
-                        &reconcile_last_notification,
-                        throttle_interval,
-                    );
+                    reconcile_notifier.notify();
                 }
             }
         });
@@ -105,6 +184,7 @@ impl SkillsWatcher {
         Some(Arc::new(Self {
             _watcher: watcher,
             _watched_roots: watched_roots,
+            notifier,
             reconcile_task,
         }))
     }
@@ -153,33 +233,6 @@ fn reconcile_watches(
         }
     }
     changed
-}
-
-fn notify_catalog_changed(
-    bridge: &AppServerEventBridge,
-    handle: &tokio::runtime::Handle,
-    last_notification: &Mutex<Option<Instant>>,
-    throttle_interval: Duration,
-) {
-    let now = Instant::now();
-    let mut last = last_notification
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
-    if last.is_some_and(|last| now.duration_since(last) < throttle_interval) {
-        return;
-    }
-    *last = Some(now);
-    drop(last);
-
-    lime_skills::invalidate_agent_skill_snapshot_cache();
-    let bridge = bridge.clone();
-    handle.spawn(async move {
-        bridge
-            .broadcast_message(JsonRpcMessage::Notification(
-                ServerNotification::SkillsChanged(SkillsChangedNotification {}).into(),
-            ))
-            .await;
-    });
 }
 
 fn is_catalog_change(kind: &EventKind) -> bool {
@@ -252,6 +305,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn throttled_change_is_coalesced_into_trailing_notification() {
+        let server = AppServer::new();
+        let mut outbound = server.subscribe_outbound_messages();
+        let notifier = CatalogChangeNotifier::new(
+            server.event_bridge(),
+            tokio::runtime::Handle::current(),
+            Duration::from_millis(500),
+        );
+
+        notifier.notify();
+        receive_skills_changed(&mut outbound, Duration::from_secs(1)).await;
+
+        notifier.notify();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), outbound.recv())
+                .await
+                .is_err(),
+            "throttled change must not broadcast immediately"
+        );
+        receive_skills_changed(&mut outbound, Duration::from_secs(1)).await;
+        notifier.cancel_pending();
+    }
+
+    #[tokio::test]
     async fn skill_root_created_after_start_broadcasts_typed_invalidation() {
         let temp = tempfile::tempdir().expect("tempdir");
         let root = temp.path().join("skills");
@@ -292,5 +369,25 @@ mod tests {
                 ServerNotification::SkillsChanged(SkillsChangedNotification {}).into()
             )
         );
+    }
+
+    async fn receive_skills_changed(
+        outbound: &mut tokio::sync::broadcast::Receiver<JsonRpcMessage>,
+        timeout: Duration,
+    ) -> JsonRpcMessage {
+        tokio::time::timeout(timeout, async {
+            loop {
+                let message = outbound.recv().await.expect("watcher notification");
+                if matches!(
+                    &message,
+                    JsonRpcMessage::Notification(notification)
+                        if notification.method == "skills/changed"
+                ) {
+                    break message;
+                }
+            }
+        })
+        .await
+        .expect("wait for skills/changed")
     }
 }

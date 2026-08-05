@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "expectedDigest": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "marketplaceId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "source": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "sourcePath": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "sourcePath"
+  ],
+  "title": "PluginCatalogInstallParams",
+  "type": "object"
+}

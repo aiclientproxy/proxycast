@@ -217,6 +217,8 @@ fn canonical_mcp_output_projects_codex_result_shape_when_only_truncation_remains
             call_id: "mcp-1".to_string(),
             server_name: "node_repl".to_string(),
             tool_name: "exec".to_string(),
+            mcp_app_resource_uri: None,
+            plugin_id: None,
             arguments: Vec::new(),
             output: Some(canonical::ToolOutput {
                 error: Some("tool output unavailable".to_string()),
@@ -267,6 +269,8 @@ fn canonical_mcp_output_is_size_bounded_and_redacts_sensitive_fields() {
             call_id: "mcp-safe".to_string(),
             server_name: "docs".to_string(),
             tool_name: "search".to_string(),
+            mcp_app_resource_uri: Some("ui://plugin/docs.html".to_string()),
+            plugin_id: Some("docs-plugin".to_string()),
             arguments: vec![canonical::ToolArgument {
                 name: "token".to_string(),
                 value: "secret-value".to_string(),
@@ -286,7 +290,11 @@ fn canonical_mcp_output_is_size_bounded_and_redacts_sensitive_fields() {
 
     let projected = project_thread(thread).expect("project bounded MCP result");
     let v2::ThreadItem::McpToolCall {
-        arguments, result, ..
+        arguments,
+        mcp_app_resource_uri,
+        plugin_id,
+        result,
+        ..
     } = &projected.turns[0].items[0]
     else {
         panic!("MCP item");
@@ -295,6 +303,11 @@ fn canonical_mcp_output_is_size_bounded_and_redacts_sensitive_fields() {
     let wire = serde_json::to_value(result).expect("MCP result wire");
     assert!(serde_json::to_vec(result).unwrap().len() <= MAX_DISPLAY_JSON_BYTES);
     assert_eq!(arguments[0]["value"], "[redacted]");
+    assert_eq!(
+        mcp_app_resource_uri.as_deref(),
+        Some("ui://plugin/docs.html")
+    );
+    assert_eq!(plugin_id.as_deref(), Some("docs-plugin"));
     assert_eq!(wire["structuredContent"]["password"], "[redacted]");
     assert_eq!(wire["structuredContent"]["safe"], "visible");
     assert_eq!(wire["_meta"]["truncated"], true);

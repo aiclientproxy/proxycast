@@ -1,0 +1,20 @@
+{
+  "name": "openai-bundled",
+  "interface": {
+    "displayName": "Lime Bundled"
+  },
+  "plugins": [
+    {
+      "name": "browser",
+      "source": {
+        "source": "local",
+        "path": "./plugins/browser"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

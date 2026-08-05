@@ -752,6 +752,30 @@
     },
     {
       "kind": "request",
+      "method": "plugin/enabled/set"
+    },
+    {
+      "kind": "request",
+      "method": "plugin/install"
+    },
+    {
+      "kind": "request",
+      "method": "plugin/installed"
+    },
+    {
+      "kind": "request",
+      "method": "plugin/list"
+    },
+    {
+      "kind": "request",
+      "method": "plugin/read"
+    },
+    {
+      "kind": "request",
+      "method": "plugin/uninstall"
+    },
+    {
+      "kind": "request",
       "method": "pluginHostLifecycle/list"
     },
     {
@@ -2285,6 +2309,22 @@
       "PermissionsRequestApprovalParams",
       "PermissionsRequestApprovalResponse",
       "PlanDeltaNotification",
+      "PluginCatalogCapability",
+      "PluginCatalogDetail",
+      "PluginCatalogEnabledSetParams",
+      "PluginCatalogEnabledSetResponse",
+      "PluginCatalogHook",
+      "PluginCatalogInstallParams",
+      "PluginCatalogInstallResponse",
+      "PluginCatalogInstalledParams",
+      "PluginCatalogListParams",
+      "PluginCatalogListResponse",
+      "PluginCatalogReadParams",
+      "PluginCatalogReadResponse",
+      "PluginCatalogSummary",
+      "PluginCatalogUiResource",
+      "PluginCatalogUninstallParams",
+      "PluginCatalogUninstallResponse",
       "ReasoningEffortOption",
       "ReasoningSummaryPartAddedNotification",
       "ReasoningSummaryTextDeltaNotification",

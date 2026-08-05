@@ -2691,6 +2691,9 @@ export function useWorkspaceSendActions({
         !sendOptions?.purpose &&
         !hasBoundSkillLaunch &&
         !hasMatchedWorkspaceMentionCommandWithoutAgentTurnRoute &&
+        !sendOptions?.inputMentions?.some((mention) =>
+          mention.path.startsWith("plugin://"),
+        ) &&
         sourceText.trim().startsWith("@");
       if (shouldResolvePluginActivation) {
         const pluginSessionId = await ensureCommandSessionId();

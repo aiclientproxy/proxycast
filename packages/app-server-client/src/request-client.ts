@@ -175,6 +175,24 @@ export interface AppServerClient {
   executeBrowserSessionAction(
     params: protocol.BrowserSessionActionExecuteParams,
   ): protocol.JsonRpcRequest;
+  listPluginCatalog(
+    params?: protocol.PluginCatalogListParams,
+  ): protocol.JsonRpcRequest;
+  setPluginCatalogEnabled(
+    params: protocol.PluginCatalogEnabledSetParams,
+  ): protocol.JsonRpcRequest;
+  readPluginCatalog(
+    params: protocol.PluginCatalogReadParams,
+  ): protocol.JsonRpcRequest;
+  installPluginCatalog(
+    params: protocol.PluginCatalogInstallParams,
+  ): protocol.JsonRpcRequest;
+  uninstallPluginCatalog(
+    params: protocol.PluginCatalogUninstallParams,
+  ): protocol.JsonRpcRequest;
+  listInstalledPluginCatalog(
+    params?: protocol.PluginCatalogInstalledParams,
+  ): protocol.JsonRpcRequest;
   listSkills(): protocol.JsonRpcRequest;
   readSkill(params: protocol.SkillReadParams): protocol.JsonRpcRequest;
   listManagementSkills(

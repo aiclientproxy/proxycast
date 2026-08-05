@@ -111,6 +111,8 @@ impl RuntimeToolExecutor for RuntimeMcpResourceExecutor {
                         .read_mcp_resource(McpResourceReadParams {
                             server: server.to_string(),
                             uri: uri.to_string(),
+                            session_id: None,
+                            thread_id: None,
                         })
                         .await
                         .map_err(|error| {
@@ -311,6 +313,7 @@ mod tests {
                 mime_type: Some("text/markdown".to_string()),
                 text: Some("hello".to_string()),
                 blob: None,
+                meta: None,
             })
         }
     }

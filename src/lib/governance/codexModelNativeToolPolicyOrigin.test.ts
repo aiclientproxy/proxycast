@@ -185,10 +185,13 @@ describe("Codex model native tool policy origin", () => {
     }
 
     expect(codexSpecPlanSource).toContain(
-      "turn_context.model_info.apply_patch_tool_type.is_some()",
+      "environment_mode.has_environment() && turn_context.model_info.apply_patch_tool_type.is_some()",
     );
-    expect(codexSpecPlanSource).toContain("planned_tools.add(ApplyPatchHandler");
+    expect(codexSpecPlanSource).toContain(
+      "registry.add(ApplyPatchHandler::new(include_environment_id));",
+    );
     expect(codexSpecPlanSource).toContain(".experimental_supported_tools");
     expect(codexSpecPlanSource).toContain('tool == "test_sync_tool"');
+    expect(codexSpecPlanSource).toContain("registry.add(TestSyncHandler);");
   });
 });

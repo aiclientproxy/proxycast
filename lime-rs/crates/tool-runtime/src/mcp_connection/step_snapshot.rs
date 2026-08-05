@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 struct McpStepRoute {
     server_name: String,
     tool_name: String,
+    mcp_app_resource_uri: Option<String>,
     allowed_callers: Option<Vec<String>>,
     provenance: McpConnectionProvenance,
     supports_parallel_tool_calls: bool,
@@ -25,6 +26,8 @@ pub struct McpStepRouteIdentity {
     pub server_name: String,
     pub tool_name: String,
     pub runtime_tool_name: String,
+    pub mcp_app_resource_uri: Option<String>,
+    pub plugin_id: Option<String>,
 }
 
 #[derive(Clone)]
@@ -76,6 +79,8 @@ impl McpStepSnapshot {
                 server_name: route.server_name.clone(),
                 tool_name: route.tool_name.clone(),
                 runtime_tool_name: runtime_tool_name.to_string(),
+                mcp_app_resource_uri: route.mcp_app_resource_uri.clone(),
+                plugin_id: route.provenance.plugin_id().map(ToOwned::to_owned),
             })
     }
 
@@ -207,6 +212,7 @@ async fn capture_connection(
         loop {
             for tool in page.tools {
                 let tool_name = tool.name.to_string();
+                let mcp_app_resource_uri = mcp_app_resource_uri(&tool);
                 let prefixed_name = format!("{connection_name}__{tool_name}");
                 let visible = config.is_tool_exposed_by_default(&tool.name)
                     || selected_deferred_tools.contains(&prefixed_name);
@@ -230,8 +236,12 @@ async fn capture_connection(
                         meta: tool.meta,
                     },
                     McpStepRoute {
-                        server_name: connection_name.clone(),
+                        server_name: provenance
+                            .server_name()
+                            .unwrap_or(&connection_name)
+                            .to_string(),
                         tool_name,
+                        mcp_app_resource_uri,
                         allowed_callers,
                         provenance: provenance.clone(),
                         supports_parallel_tool_calls,
@@ -259,6 +269,19 @@ async fn capture_connection(
     }
 }
 
+fn mcp_app_resource_uri(tool: &Tool) -> Option<String> {
+    let meta = tool.meta.as_ref()?;
+    meta.get("ui")
+        .and_then(Value::as_object)
+        .and_then(|ui| ui.get("resourceUri"))
+        .and_then(Value::as_str)
+        .or_else(|| meta.get("ui/resourceUri").and_then(Value::as_str))
+        .or_else(|| meta.get("openai/outputTemplate").and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 fn tool_allowed_callers(tool: &Tool, config: &RuntimeExtensionConfig) -> Option<Vec<String>> {
     extract_tool_surface_metadata(
         tool.name.as_ref(),
@@ -284,7 +307,7 @@ mod tests {
     use super::*;
     use crate::mcp_connection::{McpConnection, McpConnectionError, McpConnectionRegistry};
     use async_trait::async_trait;
-    use rmcp::model::{CallToolResult, Content, JsonObject, ListToolsResult};
+    use rmcp::model::{CallToolResult, Content, JsonObject, ListToolsResult, Meta};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::sync::Mutex;
 
@@ -452,9 +475,67 @@ mod tests {
                 server_name: "docs".to_string(),
                 tool_name: "search".to_string(),
                 runtime_tool_name: "docs__search".to_string(),
+                mcp_app_resource_uri: None,
+                plugin_id: None,
             })
         );
         assert_eq!(parallel.route_identity("missing"), None);
+    }
+
+    #[tokio::test]
+    async fn snapshot_freezes_plugin_identity_and_mcp_app_resource_uri() {
+        let registry = McpConnectionRegistry::new();
+        let config = RuntimeExtensionConfig::new(
+            "mcp__plugin__docs__demo",
+            "Plugin docs tools",
+            vec!["search".to_string()],
+            false,
+            vec!["search".to_string()],
+            None,
+        );
+        let mut app_tool = tool("search", None);
+        app_tool.meta = Some(Meta(
+            serde_json::json!({
+                "ui": { "resourceUri": "ui://plugin/docs.html" },
+                "ui/resourceUri": "ui://plugin/flat.html",
+                "openai/outputTemplate": "ui://plugin/fallback.html"
+            })
+            .as_object()
+            .expect("tool meta object")
+            .clone(),
+        ));
+        let connection: McpConnectionHandle = Arc::new(Mutex::new(Box::new(TestConnection {
+            tools: vec![app_tool],
+            output: "docs".to_string(),
+            discovery_mode: DiscoveryMode::Ready,
+            call_count: Arc::new(AtomicUsize::new(0)),
+            observed_scope: None,
+        })));
+        registry
+            .register(
+                "mcp__plugin__docs__demo".to_string(),
+                config,
+                McpConnectionProvenance::default()
+                    .with_server_name(Some("plugin__docs__demo".to_string()))
+                    .with_plugin_id(Some("docs-plugin".to_string())),
+                false,
+                connection,
+            )
+            .await;
+
+        let captured = snapshot(&registry, HashSet::new(), Duration::from_secs(1)).await;
+        registry.remove("mcp__plugin__docs__demo").await;
+
+        assert_eq!(
+            captured.route_identity("mcp__plugin__docs__demo__search"),
+            Some(McpStepRouteIdentity {
+                server_name: "plugin__docs__demo".to_string(),
+                tool_name: "search".to_string(),
+                runtime_tool_name: "mcp__plugin__docs__demo__search".to_string(),
+                mcp_app_resource_uri: Some("ui://plugin/docs.html".to_string()),
+                plugin_id: Some("docs-plugin".to_string()),
+            })
+        );
     }
 
     #[tokio::test]
@@ -651,6 +732,7 @@ mod tests {
         let denied_route = McpStepRoute {
             server_name: "mixed".to_string(),
             tool_name: "execute".to_string(),
+            mcp_app_resource_uri: None,
             allowed_callers: Some(vec!["code_execution".to_string()]),
             provenance: McpConnectionProvenance::default(),
             supports_parallel_tool_calls: false,

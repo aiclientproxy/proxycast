@@ -78,6 +78,14 @@ pub(super) fn into_parts(
         ClientRequest::ArtifactWrite { id, params } => parts(id, Method::ArtifactWrite, params),
         ClientRequest::MediaRead { id, params } => parts(id, Method::MediaRead, params),
         ClientRequest::ModelList { id, params } => parts(id, Method::ModelList, params),
+        ClientRequest::PluginList { id, params } => parts(id, Method::PluginList, params),
+        ClientRequest::PluginRead { id, params } => parts(id, Method::PluginRead, params),
+        ClientRequest::PluginInstall { id, params } => parts(id, Method::PluginInstall, params),
+        ClientRequest::PluginUninstall { id, params } => parts(id, Method::PluginUninstall, params),
+        ClientRequest::PluginInstalled { id, params } => parts(id, Method::PluginInstalled, params),
+        ClientRequest::PluginEnabledSet { id, params } => {
+            parts(id, Method::PluginEnabledSet, params)
+        }
         ClientRequest::ThreadSettingsUpdate { id, params } => {
             parts(id, Method::ThreadSettingsUpdate, params)
         }
@@ -123,7 +131,9 @@ fn parts(
 mod tests {
     use super::*;
     use app_server_protocol::protocol::v2::{
-        METHOD_MEDIA_READ, METHOD_THREAD_READ, METHOD_THREAD_RESUME, METHOD_TURN_INTERRUPT,
+        METHOD_MEDIA_READ, METHOD_PLUGIN_ENABLED_SET, METHOD_PLUGIN_INSTALL,
+        METHOD_PLUGIN_INSTALLED, METHOD_PLUGIN_LIST, METHOD_PLUGIN_READ, METHOD_PLUGIN_UNINSTALL,
+        METHOD_THREAD_READ, METHOD_THREAD_RESUME, METHOD_TURN_INTERRUPT,
     };
     use app_server_protocol::RequestId;
     use serde_json::json;
@@ -211,5 +221,29 @@ mod tests {
 
         let (_, method, _) = into_parts(request).expect("lower request");
         assert_eq!(method, METHOD_TURN_INTERRUPT);
+    }
+
+    #[test]
+    fn plugin_v2_methods_lower_through_typed_ingress() {
+        for (method, params) in [
+            (METHOD_PLUGIN_LIST, json!({})),
+            (METHOD_PLUGIN_READ, json!({ "pluginId": "demo" })),
+            (
+                METHOD_PLUGIN_INSTALL,
+                json!({ "sourcePath": "/tmp/demo-plugin" }),
+            ),
+            (METHOD_PLUGIN_UNINSTALL, json!({ "pluginId": "demo" })),
+            (METHOD_PLUGIN_INSTALLED, json!({})),
+            (
+                METHOD_PLUGIN_ENABLED_SET,
+                json!({ "pluginId": "demo", "enabled": true }),
+            ),
+        ] {
+            let request = decode(&request(method, params))
+                .expect("decode plugin request")
+                .expect("plugin method is v2");
+            let (_, lowered_method, _) = into_parts(request).expect("lower plugin request");
+            assert_eq!(lowered_method, method);
+        }
     }
 }

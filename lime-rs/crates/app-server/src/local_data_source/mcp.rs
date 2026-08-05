@@ -38,6 +38,8 @@ use lime_mcp::McpServerConfig;
 use lime_services::mcp_service::McpService;
 use serde_json::json;
 use serde_json::Value;
+use std::collections::HashSet;
+use std::path::Path;
 
 pub(crate) fn list_mcp_servers(
     db: &DbConnection,
@@ -196,8 +198,9 @@ pub(crate) async fn list_mcp_tools(
 
 pub(crate) fn list_mcp_runtime_server_specs(
     db: &DbConnection,
+    plugin_data_root: &Path,
 ) -> Result<Vec<lime_mcp::McpRuntimeServerSpec>, RuntimeCoreError> {
-    Ok(McpService::get_all(db)
+    let mut specs = McpService::get_all(db)
         .map_err(data_error)?
         .into_iter()
         .filter(|server| server.enabled_lime)
@@ -205,10 +208,34 @@ pub(crate) fn list_mcp_runtime_server_specs(
             let config = parse_mcp_server_config(&server.server_config);
             config.enabled.then(|| lime_mcp::McpRuntimeServerSpec {
                 name: server.name,
+                plugin_id: None,
                 config,
             })
         })
-        .collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+    let mut names = specs
+        .iter()
+        .map(|spec| spec.name.clone())
+        .collect::<HashSet<_>>();
+    match super::plugin_catalog::list_plugin_mcp_runtime_server_specs(plugin_data_root) {
+        Ok(plugin_specs) => {
+            for spec in plugin_specs {
+                if !names.insert(spec.name.clone()) {
+                    tracing::warn!(
+                        server_name = %spec.name,
+                        "跳过与现有 MCP server 同名的 Plugin MCP server"
+                    );
+                    continue;
+                }
+                specs.push(spec);
+            }
+        }
+        Err(error) => {
+            tracing::warn!(%error, "Plugin MCP runtime 配置读取失败，跳过 Plugin MCP servers")
+        }
+    }
+    specs.sort_by(|left, right| left.name.cmp(&right.name));
+    Ok(specs)
 }
 
 pub(crate) async fn list_mcp_tools_for_context(
@@ -318,6 +345,7 @@ pub(crate) async fn read_mcp_resource(
         mime_type: result.mime_type,
         text: result.text,
         blob: result.blob,
+        meta: result.meta,
     })
 }
 

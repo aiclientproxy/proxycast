@@ -11,6 +11,7 @@ import type { AgentSessionExecutionRuntime } from "@/lib/api/agentExecutionRunti
 import type { CollaborationMode, ModeKind } from "@limecloud/app-server-client";
 import type { AgentAccessMode } from "../hooks/agentChatStorage";
 import type { SessionModelPreference } from "../hooks/agentChatShared";
+import type { AgentInputMention } from "../hooks/agentChatShared";
 import type { MessageImage } from "../types";
 import type { ChatToolPreferences } from "./chatToolPreferences";
 import { createRuntimePoliciesFromAccessMode } from "./accessModeRuntime";
@@ -34,12 +35,14 @@ export interface BuildUserInputSubmitOpOptions {
   modelOverride?: string;
   reasoningEffort?: string;
   modelCapabilitySummary?: ModelCapabilitySummary | null;
+  inputMentions?: readonly AgentInputMention[];
 }
 
 export interface BuildTurnInputOptions {
   content: string;
   images: MessageImage[];
   modelCapabilitySummary?: ModelCapabilitySummary | null;
+  inputMentions?: readonly AgentInputMention[];
 }
 
 function buildCollaborationMode(
@@ -64,7 +67,12 @@ function buildCollaborationMode(
 export function buildTurnInput(
   options: BuildTurnInputOptions,
 ): AgentUserInputOp["turn"]["input"] {
-  const { content, images, modelCapabilitySummary } = options;
+  const {
+    content,
+    images,
+    inputMentions = [],
+    modelCapabilitySummary,
+  } = options;
   if (modelCapabilitySummary !== undefined) {
     assertModelInputCapabilityAllowed(
       modelCapabilitySummary,
@@ -78,6 +86,7 @@ export function buildTurnInput(
 
   return [
     { type: "text", text: content },
+    ...inputMentions.map((mention) => ({ ...mention })),
     ...images.map((image) => ({
       type: "image" as const,
       url: buildMessageImageDataUrl(image),
@@ -105,6 +114,7 @@ export function buildUserInputSubmitOp(
     modelOverride,
     reasoningEffort,
     modelCapabilitySummary,
+    inputMentions,
   } = options;
 
   const turnModel = modelOverride?.trim() || effectiveModel.trim();
@@ -139,7 +149,12 @@ export function buildUserInputSubmitOp(
       ...(clientUserMessageId?.trim()
         ? { clientUserMessageId: clientUserMessageId.trim() }
         : {}),
-      input: buildTurnInput({ content, images, modelCapabilitySummary }),
+      input: buildTurnInput({
+        content,
+        images,
+        inputMentions,
+        modelCapabilitySummary,
+      }),
       ...(collaborationMode ? { collaborationMode } : {}),
       ...(compaction.shouldSubmitModel ? { model: turnModel } : {}),
       ...(reasoningEffort?.trim() ? { effort: reasoningEffort.trim() } : {}),

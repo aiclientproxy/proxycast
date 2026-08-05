@@ -86,6 +86,8 @@ import {
   buildSessionSwitchStartStatePlan,
   buildSessionSwitchStartMetricContext,
   shouldApplyPendingSessionShell,
+  shouldReuseHydratedCurrentSession,
+  shouldReusePendingCurrentSessionHydration,
   shouldReuseActiveSessionSwitch,
 } from "./sessionSwitchSnapshotController";
 import {
@@ -495,6 +497,10 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     promise: Promise<"success" | "error">;
   } | null>(null);
   const deferredSessionHydrationCancelRef = useRef<(() => void) | null>(null);
+  const pendingSessionDetailHydrationRef = useRef<{
+    requestVersion: number;
+    topicId: string;
+  } | null>(null);
   const pendingSessionMetadataSyncCancelRef = useRef<(() => void) | null>(null);
   const createFreshSessionPromiseRef = useRef<Promise<string | null> | null>(
     null,
@@ -629,6 +635,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
   const invalidatePendingSessionSwitches = useCallback(() => {
     deferredSessionHydrationCancelRef.current?.();
     deferredSessionHydrationCancelRef.current = null;
+    pendingSessionDetailHydrationRef.current = null;
     pendingSessionMetadataSyncCancelRef.current?.();
     pendingSessionMetadataSyncCancelRef.current = null;
     sessionSwitchRequestVersionRef.current += 1;
@@ -1498,7 +1505,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       setRecoveredStreamBindingSessionId(null);
       resetPendingActions();
       resetStreamingRefs();
-      hydratedSessionRef.current = resolvedSessionId;
       restoredWorkspaceRef.current = resolvedWorkspaceId || null;
       persistSessionRestoreCandidate(resolvedSessionId);
 
@@ -1657,7 +1663,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         selectedTopic,
         topicId,
       });
-      hydratedSessionRef.current = topicId;
       applySessionSnapshot({
         ...createEmptyAgentSessionSnapshot(),
         sessionId: cachedTopicViewModel.sessionId,
@@ -1878,7 +1883,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       const shadowAccessMode = loadSessionAccessMode(topicId);
 
       persistSessionRestoreCandidate(topicId);
-      hydratedSessionRef.current = topicId;
       const applyFinalizeSuccessState = () => {
         const finalizeSuccessStatePlan = buildSessionFinalizeSuccessStatePlan();
         if (finalizeSuccessStatePlan.shouldClearAutoRestoringSession) {
@@ -1898,6 +1902,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
             shadowExecutionStrategyFallback,
           }),
         });
+        hydratedSessionRef.current = topicId;
         applyFinalizeSuccessState();
       };
 
@@ -2150,9 +2155,24 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       },
     ) => {
       if (
-        !options?.forceRefresh &&
-        topicId === sessionIdRef.current &&
-        messages.length > 0
+        shouldReuseHydratedCurrentSession({
+          currentSessionId: sessionIdRef.current,
+          forceRefresh: options?.forceRefresh,
+          hydratedSessionId: hydratedSessionRef.current,
+          messagesCount: messages.length,
+          topicId,
+        })
+      ) {
+        return;
+      }
+      if (
+        shouldReusePendingCurrentSessionHydration({
+          currentSessionId: sessionIdRef.current,
+          forceRefresh: options?.forceRefresh,
+          pendingSessionId:
+            pendingSessionDetailHydrationRef.current?.topicId ?? null,
+          topicId,
+        })
       ) {
         return;
       }
@@ -2311,9 +2331,20 @@ export function useAgentSession(options: UseAgentSessionOptions) {
             deferHydrationMetricContext,
           );
           let deferredHydrationRetryCount = 0;
+          const pendingHydration = {
+            requestVersion: switchRequestVersion,
+            topicId,
+          };
+          pendingSessionDetailHydrationRef.current = pendingHydration;
+          const clearPendingHydration = () => {
+            if (pendingSessionDetailHydrationRef.current === pendingHydration) {
+              pendingSessionDetailHydrationRef.current = null;
+            }
+          };
           const hydrateCachedTopic = () => {
             deferredSessionHydrationCancelRef.current = null;
             void (async () => {
+              let keepPendingHydration = false;
               try {
                 const detail = await loadRuntimeSessionDetail({
                   topicId,
@@ -2356,6 +2387,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
                   workspaceId,
                 });
                 if (retryAction.kind === "retry") {
+                  keepPendingHydration = true;
                   deferredHydrationRetryCount = retryAction.nextRetryCount;
                   recordAgentUiPerformanceMetric(
                     retryAction.metricName,
@@ -2390,6 +2422,10 @@ export function useAgentSession(options: UseAgentSessionOptions) {
                 handleSwitchTopicError(retryAction.error, topicId, {
                   preserveCurrentSnapshot: true,
                 });
+              } finally {
+                if (!keepPendingHydration) {
+                  clearPendingHydration();
+                }
               }
             })();
           };
@@ -2408,7 +2444,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
           const pendingShellPlan = buildSessionSwitchPendingShellPlan({
             topicId,
           });
-          hydratedSessionRef.current = pendingShellPlan.sessionId;
           if (pendingShellPlan.shouldApplyEmptySessionSnapshot) {
             applySessionSnapshot({
               ...createEmptyAgentSessionSnapshot(),
@@ -3100,6 +3135,9 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     if (activeSessionSwitchRef.current?.topicId === sessionId) {
       return;
     }
+    if (pendingSessionDetailHydrationRef.current?.topicId === sessionId) {
+      return;
+    }
 
     const restoreCandidateSessionId =
       restoreCandidateSessionIdRef.current?.trim() || null;
@@ -3248,7 +3286,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       return;
     }
 
-    hydratedSessionRef.current = sessionId;
     const shouldResumeHydrationSession = shouldResumeTaskSession(selectedTopic);
     logAgentDebug("useAgentSession", "hydrateSession.start", {
       cacheMode: hasLocalTimelineCache

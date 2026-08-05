@@ -8,10 +8,10 @@
 
 - `internal/roadmap/rightsurface/README.md`
 - `internal/roadmap/plugin/README.md`
-- `internal/roadmap/plugin/prd.md`
-- `internal/roadmap/plugin/architecture.md`
-- `internal/roadmap/plugin/interface-contracts.md`
-- `internal/roadmap/plugin/technical-baseline.md`
+- `internal/roadmap/plugin/v2/01-product-contract.md`
+- `internal/roadmap/plugin/v2/03-architecture-and-command-contracts.md`
+- `internal/roadmap/plugin/v2/04-app-center-and-claw-surfaces.md`
+- `internal/roadmap/plugin/v2/07-verification-contract.md`
 - `internal/roadmap/agentworkbench/README.md`
 - `internal/aiprompts/commands.md`
 - `internal/aiprompts/quality-workflow.md`

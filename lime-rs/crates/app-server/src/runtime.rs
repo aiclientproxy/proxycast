@@ -459,6 +459,15 @@ pub trait ExecutionBackend: Send + Sync {
         ))
     }
 
+    async fn read_mcp_runtime_resource(
+        &self,
+        _params: app_server_protocol::McpResourceReadParams,
+    ) -> Result<app_server_protocol::McpResourceReadResponse, RuntimeCoreError> {
+        Err(RuntimeCoreError::Backend(
+            "runtime backend does not expose MCP resources".to_string(),
+        ))
+    }
+
     async fn prepare_runtime_worker_artifact_events(
         &self,
         _request: &ExecutionRequest,

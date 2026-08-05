@@ -1,4 +1,5 @@
 import type { WorkspaceRightSurfacePendingRequest } from "@/lib/api/workspaceRightSurface";
+import type { AgentThreadItem } from "@/lib/api/agentProtocol";
 
 export type WorkspacePluginSurfaceStrategy =
   | "controlledBrowserWindow"
@@ -7,19 +8,123 @@ export type WorkspacePluginSurfaceStrategy =
 export interface WorkspacePluginSurfaceDescriptor {
   appId: string;
   title: string;
-  entryUrl: string;
+  entryUrl?: string;
+  mcpApp?: {
+    resourceUri: string;
+    serverName: string;
+    toolItemId: string;
+  };
   containerId: string;
   activeStrategy: WorkspacePluginSurfaceStrategy;
   supportedStrategies: WorkspacePluginSurfaceStrategy[];
   sourceRequestId?: string;
 }
 
+export interface WorkspacePluginSurfaceSessionEpoch {
+  sessionId: string;
+  threadId: string;
+}
+
+export function resolveWorkspacePluginSurfaceThreadId(
+  currentThreadId: string | null | undefined,
+  threadItems: readonly AgentThreadItem[],
+): string | null {
+  const explicitThreadId = normalizeKey(currentThreadId);
+  if (explicitThreadId) {
+    return explicitThreadId;
+  }
+
+  const itemThreadIds = new Set(
+    threadItems.map((item) => normalizeKey(item.thread_id)).filter(Boolean),
+  );
+  return itemThreadIds.size === 1 ? [...itemThreadIds][0] ?? null : null;
+}
+
+export function resolveWorkspacePluginSurfaceSessionEpoch({
+  currentSessionId,
+  currentThreadId,
+  previousEpoch,
+}: {
+  currentSessionId?: string | null;
+  currentThreadId?: string | null;
+  previousEpoch?: WorkspacePluginSurfaceSessionEpoch | null;
+}): {
+  epoch: WorkspacePluginSurfaceSessionEpoch | null;
+  ready: boolean;
+} {
+  const sessionId = normalizeKey(currentSessionId);
+  const threadId = normalizeKey(currentThreadId);
+  if (!sessionId || !threadId) {
+    return { epoch: previousEpoch ?? null, ready: false };
+  }
+  if (
+    previousEpoch &&
+    previousEpoch.sessionId !== sessionId &&
+    previousEpoch.threadId === threadId
+  ) {
+    return { epoch: previousEpoch, ready: false };
+  }
+  return {
+    epoch: { sessionId, threadId },
+    ready: true,
+  };
+}
+
+export function buildWorkspacePluginSurfacesFromThreadItems(
+  threadItems: readonly AgentThreadItem[],
+  dismissedContainerIds: readonly string[] = [],
+  threadId?: string | null,
+): WorkspacePluginSurfaceDescriptor[] {
+  const dismissed = new Set(
+    dismissedContainerIds.map(normalizeKey).filter(Boolean),
+  );
+  const normalizedThreadId = normalizeKey(threadId);
+  const next: WorkspacePluginSurfaceDescriptor[] = [];
+  for (const item of threadItems) {
+    if (
+      normalizedThreadId &&
+      normalizeKey(item.thread_id) !== normalizedThreadId
+    ) {
+      continue;
+    }
+    if (item.type !== "tool_call" || item.status !== "completed") {
+      continue;
+    }
+    const metadata = asRecord(item.metadata);
+    if (firstString(metadata?.canonical_type) !== "mcpToolCall") {
+      continue;
+    }
+    const pluginId = firstString(metadata?.plugin_id);
+    const resourceUri = firstString(metadata?.mcp_app_resource_uri);
+    const serverName = firstString(metadata?.server);
+    if (!pluginId || !resourceUri || !serverName || !isMcpAppUri(resourceUri)) {
+      continue;
+    }
+    const containerId = `mcp-app-${item.id}`;
+    if (dismissed.has(normalizeKey(containerId))) {
+      continue;
+    }
+    upsertWorkspacePluginSurfaceDescriptor(next, {
+      appId: pluginId,
+      title: pluginId,
+      containerId,
+      activeStrategy: "webContentsView",
+      supportedStrategies: ["webContentsView"],
+      mcpApp: {
+        resourceUri,
+        serverName,
+        toolItemId: item.id,
+      },
+    });
+  }
+  return next;
+}
+
 export function buildWorkspacePluginSurfaceFromPendingRequests(
   pendingRequests: readonly WorkspaceRightSurfacePendingRequest[],
 ): WorkspacePluginSurfaceDescriptor | null {
   return (
-    buildWorkspacePluginSurfacesFromPendingRequests(pendingRequests)[0] ??
-    null
+    buildWorkspacePluginSurfacesFromPendingRequests(pendingRequests)[0] ?? null
   );
 }
 
@@ -264,4 +369,12 @@ function firstString(...values: unknown[]): string | null {
 function normalizeKey(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function isMcpAppUri(value: string): boolean {
+  try {
+    return new URL(value).protocol === "ui:";
+  } catch {
+    return false;
+  }
 }

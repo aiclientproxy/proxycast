@@ -36,7 +36,11 @@ const RENDERER_SOURCE_FILES = [
   "scripts/electron/renderer-build-env.mjs",
   "scripts/generate-extension-site-adapter-runners.mjs",
 ];
-const HOST_SOURCE_DIRS = ["electron", "packages/app-server-client/src"];
+const HOST_SOURCE_DIRS = [
+  "electron",
+  "packages/app-server-client/src",
+  "assets/plugins",
+];
 const HOST_SOURCE_FILES = [
   "package-lock.json",
   "package.json",
@@ -143,6 +147,15 @@ function electronFixtureBuildSegments({ rootDir }) {
       requiredFiles: [
         path.join(rootDir, "dist-electron", "main", "main.js"),
         path.join(rootDir, "dist-electron", "preload", "preload.cjs"),
+        path.join(
+          rootDir,
+          "dist-electron",
+          "plugins",
+          "openai-bundled",
+          ".agents",
+          "plugins",
+          "marketplace.json",
+        ),
       ],
       sourceDirs: HOST_SOURCE_DIRS,
       sourceFiles: HOST_SOURCE_FILES,

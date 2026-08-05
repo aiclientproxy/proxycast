@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "resourceUri": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "resourceUri"
+  ],
+  "title": "PluginCatalogUiResource",
+  "type": "object"
+}

@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 use agent_protocol::{
     CollabAgentState, CollabAgentStatus, SortDirection, Thread, ThreadActiveFlag,
@@ -48,6 +49,7 @@ use queries::{
 };
 
 const MAX_PAGE_SIZE: u32 = 500;
+const THREAD_STORE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -374,6 +376,8 @@ impl ProjectionStore {
 
     pub(super) fn open_thread_store(&self) -> ThreadStoreResult<Connection> {
         let conn = Connection::open(self.state_path()).map_err(store_error)?;
+        conn.busy_timeout(THREAD_STORE_BUSY_TIMEOUT)
+            .map_err(store_error)?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")
             .map_err(store_error)?;
         if self.state_path() != self.thread_history_path() {

@@ -38,6 +38,34 @@ export interface SessionSwitchPendingShellPlan {
   shouldSetSessionHydrating: boolean;
 }
 
+export function shouldReuseHydratedCurrentSession(params: {
+  currentSessionId?: string | null;
+  forceRefresh?: boolean;
+  hydratedSessionId?: string | null;
+  messagesCount: number;
+  topicId: string;
+}): boolean {
+  return Boolean(
+    params.forceRefresh !== true &&
+      params.currentSessionId === params.topicId &&
+      params.hydratedSessionId === params.topicId &&
+      params.messagesCount > 0,
+  );
+}
+
+export function shouldReusePendingCurrentSessionHydration(params: {
+  currentSessionId?: string | null;
+  forceRefresh?: boolean;
+  pendingSessionId?: string | null;
+  topicId: string;
+}): boolean {
+  return Boolean(
+    params.forceRefresh !== true &&
+      params.currentSessionId === params.topicId &&
+      params.pendingSessionId === params.topicId,
+  );
+}
+
 export function shouldLoadCachedTopicSnapshot(params: {
   currentSessionId?: string | null;
   topicId: string;

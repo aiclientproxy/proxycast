@@ -9,7 +9,9 @@ use super::{
     McpToolCallProgressNotification, MediaReadParams, MediaReadResponse, Method, ModelListParams,
     ModelListUpdatedNotification, ModelReroutedNotification,
     ModelSafetyBufferingUpdatedNotification, ModelVerificationNotification,
-    PermissionsRequestApprovalParams, PlanDeltaNotification, ReasoningSummaryPartAddedNotification,
+    PermissionsRequestApprovalParams, PlanDeltaNotification, PluginCatalogEnabledSetParams,
+    PluginCatalogInstallParams, PluginCatalogInstalledParams, PluginCatalogListParams,
+    PluginCatalogReadParams, PluginCatalogUninstallParams, ReasoningSummaryPartAddedNotification,
     ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification,
     ServerRequestResolvedNotification, SkillsChangedNotification,
     ThreadApproveGuardianDeniedActionParams, ThreadApproveGuardianDeniedActionResponse,
@@ -236,6 +238,36 @@ pub enum ClientRequest {
         id: RequestId,
         params: ModelListParams,
     },
+    #[serde(rename = "plugin/list")]
+    PluginList {
+        id: RequestId,
+        params: PluginCatalogListParams,
+    },
+    #[serde(rename = "plugin/read")]
+    PluginRead {
+        id: RequestId,
+        params: PluginCatalogReadParams,
+    },
+    #[serde(rename = "plugin/install")]
+    PluginInstall {
+        id: RequestId,
+        params: PluginCatalogInstallParams,
+    },
+    #[serde(rename = "plugin/uninstall")]
+    PluginUninstall {
+        id: RequestId,
+        params: PluginCatalogUninstallParams,
+    },
+    #[serde(rename = "plugin/installed")]
+    PluginInstalled {
+        id: RequestId,
+        params: PluginCatalogInstalledParams,
+    },
+    #[serde(rename = "plugin/enabled/set")]
+    PluginEnabledSet {
+        id: RequestId,
+        params: PluginCatalogEnabledSetParams,
+    },
     #[serde(rename = "turn/start")]
     TurnStart {
         id: RequestId,
@@ -289,6 +321,12 @@ impl ClientRequest {
             | Self::ArtifactWrite { id, .. }
             | Self::MediaRead { id, .. }
             | Self::ModelList { id, .. }
+            | Self::PluginList { id, .. }
+            | Self::PluginRead { id, .. }
+            | Self::PluginInstall { id, .. }
+            | Self::PluginUninstall { id, .. }
+            | Self::PluginInstalled { id, .. }
+            | Self::PluginEnabledSet { id, .. }
             | Self::TurnStart { id, .. }
             | Self::TurnSteer { id, .. }
             | Self::TurnInterrupt { id, .. } => id,
@@ -334,6 +372,12 @@ impl ClientRequest {
             Self::ArtifactWrite { .. } => Method::ArtifactWrite,
             Self::MediaRead { .. } => Method::MediaRead,
             Self::ModelList { .. } => Method::ModelList,
+            Self::PluginList { .. } => Method::PluginList,
+            Self::PluginRead { .. } => Method::PluginRead,
+            Self::PluginInstall { .. } => Method::PluginInstall,
+            Self::PluginUninstall { .. } => Method::PluginUninstall,
+            Self::PluginInstalled { .. } => Method::PluginInstalled,
+            Self::PluginEnabledSet { .. } => Method::PluginEnabledSet,
             Self::TurnStart { .. } => Method::TurnStart,
             Self::TurnSteer { .. } => Method::TurnSteer,
             Self::TurnInterrupt { .. } => Method::TurnInterrupt,

@@ -472,6 +472,7 @@ describe("readCanonicalThreadItem", () => {
             connectorId: "connector-docs",
             resourceUri: "docs://codex",
           },
+          mcpAppResourceUri: "ui://plugin/docs.html",
           pluginId: "plugin-docs",
           result: {
             content,
@@ -498,6 +499,7 @@ describe("readCanonicalThreadItem", () => {
           connectorId: "connector-docs",
           resourceUri: "docs://codex",
         },
+        mcp_app_resource_uri: "ui://plugin/docs.html",
         plugin_id: "plugin-docs",
         result_content: content,
         result_meta: { requestId: "request-1" },

@@ -17,6 +17,7 @@ fn stdio_server_spec(
 ) -> McpRuntimeServerSpec {
     McpRuntimeServerSpec {
         name: name.to_string(),
+        plugin_id: None,
         config: McpServerConfig {
             transport: McpServerTransport::Stdio {
                 command,
@@ -229,6 +230,111 @@ lines.on("line", (line) => {
             .await
             .expect("published runtime generation"),
     ));
+    state.clear_mcp_runtimes().await;
+}
+
+#[tokio::test]
+async fn session_owned_mcp_runtime_reads_app_resource_with_meta() {
+    let Some(node) = node_binary() else {
+        return;
+    };
+    let temp_dir = tempfile::tempdir().expect("create runtime MCP app fixture directory");
+    let server_path = temp_dir.path().join("mcp-app-resource-server.mjs");
+    std::fs::write(
+        &server_path,
+        r#"
+import readline from "node:readline";
+
+const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+const send = (message) => process.stdout.write(JSON.stringify(message) + "\n");
+
+lines.on("line", (line) => {
+  if (!line.trim()) return;
+  const message = JSON.parse(line);
+  if (message.method === "initialize") {
+    send({
+      jsonrpc: "2.0",
+      id: message.id,
+      result: {
+        protocolVersion: "2025-03-26",
+        capabilities: { resources: {}, tools: {} },
+        serverInfo: { name: "mcp-app-resource-fixture", version: "1.0.0" },
+      },
+    });
+    return;
+  }
+  if (message.method === "notifications/initialized") return;
+  if (message.method === "tools/list") {
+    send({ jsonrpc: "2.0", id: message.id, result: { tools: [] } });
+    return;
+  }
+  if (message.method === "resources/read") {
+    send({
+      jsonrpc: "2.0",
+      id: message.id,
+      result: {
+        contents: [{
+          uri: message.params?.uri,
+          mimeType: "text/html;profile=mcp-app",
+          text: "<!doctype html><main>MCP App</main>",
+          _meta: {
+            ui: { csp: { connectDomains: ["https://api.example.com"] } },
+          },
+        }],
+      },
+    });
+  }
+});
+"#,
+    )
+    .expect("write runtime MCP app fixture");
+
+    let state = AgentRuntimeState::new();
+    state
+        .ensure_mcp_runtime_generation(
+            "session-app".to_string(),
+            "thread-app".to_string(),
+            ElicitationRequestRouter::default(),
+            vec![stdio_server_spec(
+                "plugin__demo__server",
+                node,
+                vec![server_path.to_string_lossy().into_owned()],
+                true,
+            )],
+        )
+        .await
+        .expect("publish MCP App runtime generation");
+
+    let content = state
+        .read_mcp_resource(
+            "session-app",
+            "thread-app",
+            "plugin__demo__server",
+            "ui://demo/report.html",
+        )
+        .await
+        .expect("read MCP App resource from session runtime");
+    assert_eq!(content.uri, "ui://demo/report.html");
+    assert_eq!(
+        content.mime_type.as_deref(),
+        Some("text/html;profile=mcp-app")
+    );
+    assert_eq!(
+        content
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.pointer("/ui/csp/connectDomains/0")),
+        Some(&serde_json::json!("https://api.example.com"))
+    );
+    assert!(state
+        .read_mcp_resource(
+            "session-app",
+            "thread-other",
+            "plugin__demo__server",
+            "ui://demo/report.html",
+        )
+        .await
+        .is_err());
     state.clear_mcp_runtimes().await;
 }
 

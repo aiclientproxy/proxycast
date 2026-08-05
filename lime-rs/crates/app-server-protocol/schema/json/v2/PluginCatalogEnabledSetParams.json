@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "pluginId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "enabled",
+    "pluginId"
+  ],
+  "title": "PluginCatalogEnabledSetParams",
+  "type": "object"
+}

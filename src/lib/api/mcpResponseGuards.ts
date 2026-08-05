@@ -146,7 +146,11 @@ export function assertMcpResourceContent(
     typeof record.uri !== "string" ||
     (record.mime_type !== undefined && typeof record.mime_type !== "string") ||
     (record.text !== undefined && typeof record.text !== "string") ||
-    (record.blob !== undefined && typeof record.blob !== "string")
+    (record.blob !== undefined && typeof record.blob !== "string") ||
+    (record.meta !== undefined &&
+      (!record.meta ||
+        typeof record.meta !== "object" ||
+        Array.isArray(record.meta)))
   ) {
     throw new Error(`${method} did not return resource content`);
   }

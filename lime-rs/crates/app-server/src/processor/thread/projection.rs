@@ -408,6 +408,8 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
         canonical::ThreadItemPayload::McpToolCall {
             server_name,
             tool_name,
+            mcp_app_resource_uri,
+            plugin_id,
             arguments,
             output,
             ..
@@ -435,8 +437,8 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                 )
                 .0,
                 app_context: None,
-                mcp_app_resource_uri: None,
-                plugin_id: None,
+                mcp_app_resource_uri,
+                plugin_id,
                 result,
                 error,
                 duration_ms: output

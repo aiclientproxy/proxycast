@@ -246,4 +246,10 @@ describe("Electron Forge config", () => {
       ignorePackagerInput(`${process.cwd()}/scripts/electron/smoke.mjs`),
     ).toBe(true);
   });
+
+  it("packages the bundled Plugin marketplace beside the app-server resources", () => {
+    expect(forgeConfig.packagerConfig.extraResource).toContain(
+      "dist-electron/plugins",
+    );
+  });
 });

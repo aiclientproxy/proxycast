@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ExpertAgentLaunchParams } from "@/types/page";
 import { useExpertWorkspaceSkillRuntime } from "./useExpertWorkspaceSkillRuntime";
 import { useWorkspaceExpertAgentLaunchSyncRuntime } from "./useWorkspaceExpertAgentLaunchSyncRuntime";
+import { useWorkspacePluginCatalogSuggestions } from "./useWorkspacePluginCatalogSuggestions";
 import { useWorkspacePluginRuntimeContext } from "./useWorkspacePluginRuntimeContext";
-import { buildWorkspacePluginInputSuggestions } from "./workspacePluginInputSuggestions";
 import {
   resolveExpertPanelRequestMetadata,
   resolveSessionExpertRequestMetadata,
@@ -118,22 +118,16 @@ export function useWorkspaceExpertSkillPanelRuntime({
   const [pluginSuggestionsEnabled, setPluginSuggestionsEnabled] =
     useState(false);
   const workspacePluginRuntimeContext = useWorkspacePluginRuntimeContext({
-    enabled: pluginSuggestionsEnabled,
     requestMetadata: workspaceRequestMetadataWithExpertSkills ?? undefined,
   });
-  const refreshWorkspacePluginRuntimeContext =
-    workspacePluginRuntimeContext.refresh;
+  const workspacePluginCatalogSuggestions =
+    useWorkspacePluginCatalogSuggestions({ enabled: pluginSuggestionsEnabled });
+  const refreshWorkspacePluginCatalogSuggestions =
+    workspacePluginCatalogSuggestions.refresh;
   const handlePluginSuggestionsNeeded = useCallback(() => {
     setPluginSuggestionsEnabled(true);
-    refreshWorkspacePluginRuntimeContext();
-  }, [refreshWorkspacePluginRuntimeContext]);
-  const workspacePluginInputSuggestions = useMemo(
-    () =>
-      buildWorkspacePluginInputSuggestions(
-        workspacePluginRuntimeContext.context,
-      ),
-    [workspacePluginRuntimeContext.context],
-  );
+    refreshWorkspacePluginCatalogSuggestions();
+  }, [refreshWorkspacePluginCatalogSuggestions]);
 
   return {
     combinedSkillsLoading,
@@ -151,7 +145,11 @@ export function useWorkspaceExpertSkillPanelRuntime({
     handleExpertSkillRefsChange,
     handlePluginSuggestionsNeeded,
     handleThreadExpertProfileSwitch,
-    workspacePluginInputSuggestions,
+    workspacePluginInputSuggestions:
+      workspacePluginCatalogSuggestions.suggestions,
+    workspacePluginSuggestionsError: workspacePluginCatalogSuggestions.error,
+    workspacePluginSuggestionsLoading:
+      workspacePluginCatalogSuggestions.loading,
     workspacePluginRuntimeContext,
     workspaceRequestMetadataWithExpertSkills,
     workspaceSkillBindings,

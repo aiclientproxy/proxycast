@@ -82,7 +82,9 @@ impl McpBridgeRuntimeRegistry {
                     McpConnectionProvenance::new(
                         snapshot.environment_id.clone(),
                         snapshot.auth_scopes.clone(),
-                    ),
+                    )
+                    .with_server_name(Some(snapshot.server_name.clone()))
+                    .with_plugin_id(snapshot.plugin_id.clone()),
                     snapshot.supports_parallel_tool_calls,
                     client,
                 )

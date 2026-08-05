@@ -28,7 +28,9 @@ mod session_config;
 mod turn_context;
 mod workspace_scope;
 
+#[cfg(test)]
 pub(super) use session_config::session_config_from_request;
+pub(super) use session_config::session_config_from_request_with_plugin_activations;
 pub(super) use turn_context::turn_context_from_request;
 pub(super) use workspace_scope::request_workspace_scope;
 

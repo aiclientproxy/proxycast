@@ -342,6 +342,8 @@ mod tests {
                 call_id: "mcp-call".to_string(),
                 server_name: "docs".to_string(),
                 tool_name: tool_name.to_string(),
+                mcp_app_resource_uri: None,
+                plugin_id: None,
                 arguments: vec![ToolArgument {
                     name: "query".to_string(),
                     value: "\"fork\"".to_string(),

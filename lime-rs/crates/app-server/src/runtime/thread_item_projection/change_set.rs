@@ -323,8 +323,16 @@ fn merge_payload(
         ) => match source_event_type {
             Some("reasoning.final" | "item.completed" | "item.updated") => {
                 ThreadItemPayload::Reasoning {
-                    summary: next_summary,
-                    content: next_content,
+                    summary: if next_summary.is_empty() {
+                        summary
+                    } else {
+                        next_summary
+                    },
+                    content: if next_content.is_empty() {
+                        content
+                    } else {
+                        next_content
+                    },
                 }
             }
             _ => {
@@ -365,6 +373,8 @@ fn merge_payload(
                 call_id: previous_call_id,
                 server_name: previous_server_name,
                 tool_name: previous_tool_name,
+                mcp_app_resource_uri: previous_mcp_app_resource_uri,
+                plugin_id: previous_plugin_id,
                 arguments: previous_arguments,
                 output: previous_output,
             },
@@ -372,6 +382,8 @@ fn merge_payload(
                 call_id,
                 server_name,
                 tool_name,
+                mcp_app_resource_uri,
+                plugin_id,
                 arguments,
                 output,
             },
@@ -379,6 +391,8 @@ fn merge_payload(
             call_id: prefer_string(previous_call_id, call_id, ""),
             server_name: prefer_string(previous_server_name, server_name, "unknown"),
             tool_name: prefer_string(previous_tool_name, tool_name, "tool"),
+            mcp_app_resource_uri: mcp_app_resource_uri.or(previous_mcp_app_resource_uri),
+            plugin_id: plugin_id.or(previous_plugin_id),
             arguments: if arguments.is_empty() {
                 previous_arguments
             } else {

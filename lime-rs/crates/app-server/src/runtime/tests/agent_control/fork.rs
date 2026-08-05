@@ -173,6 +173,8 @@ async fn fork_uses_codex_sanitize_profile_for_internal_items() {
             call_id: "mcp-call".to_string(),
             server_name: "docs".to_string(),
             tool_name: "search".to_string(),
+            mcp_app_resource_uri: None,
+            plugin_id: None,
             arguments: Vec::new(),
             output: Some(ToolOutput {
                 text: Some("mcp output".to_string()),

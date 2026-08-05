@@ -14,6 +14,8 @@ pub use step_snapshot::{McpStepRouteIdentity, McpStepSnapshot};
 pub struct McpConnectionProvenance {
     environment_id: String,
     auth_scopes: Option<Vec<String>>,
+    server_name: Option<String>,
+    plugin_id: Option<String>,
 }
 
 impl Default for McpConnectionProvenance {
@@ -27,7 +29,23 @@ impl McpConnectionProvenance {
         Self {
             environment_id: environment_id.into(),
             auth_scopes,
+            server_name: None,
+            plugin_id: None,
         }
+    }
+
+    pub fn with_server_name(mut self, server_name: Option<String>) -> Self {
+        self.server_name = server_name
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        self
+    }
+
+    pub fn with_plugin_id(mut self, plugin_id: Option<String>) -> Self {
+        self.plugin_id = plugin_id
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        self
     }
 
     pub fn environment_id(&self) -> &str {
@@ -36,6 +54,14 @@ impl McpConnectionProvenance {
 
     pub fn auth_scopes(&self) -> Option<&[String]> {
         self.auth_scopes.as_deref()
+    }
+
+    pub fn server_name(&self) -> Option<&str> {
+        self.server_name.as_deref()
+    }
+
+    pub fn plugin_id(&self) -> Option<&str> {
+        self.plugin_id.as_deref()
     }
 }
 

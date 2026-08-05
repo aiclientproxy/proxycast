@@ -21,6 +21,7 @@ import type { WorkspaceHandleSend } from "./useWorkspaceSendActions";
 import {
   createTaskCenterDraftSendRequestId,
   resolveTaskCenterDraftSendTitle,
+  scheduleAfterCommit,
   scheduleAfterNextPaint,
   type TaskCenterDraftTab,
 } from "./agentChatWorkspaceHelpers";
@@ -291,7 +292,7 @@ export function useTaskCenterEmptyStateSendRuntime({
           return;
         }
 
-        scheduleAfterNextPaint(() => {
+        scheduleAfterCommit(() => {
           setTaskCenterDraftTabs((current) =>
             markTaskCenterDraftTabRunning({
               current,
@@ -436,7 +437,7 @@ export function useTaskCenterEmptyStateSendRuntime({
             source: "empty-state",
             workspaceId: taskCenterWorkspaceId,
           });
-          scheduleAfterNextPaint(() => {
+          scheduleAfterCommit(() => {
             recordAgentUiPerformanceMetric("homeInput.sendDispatch.start", {
               elapsedMs: Date.now() - submittedAt,
               requestId,
@@ -564,7 +565,7 @@ export function useTaskCenterEmptyStateSendRuntime({
           setTaskCenterDraftSendRequest(previewRequest);
           setHomePendingPreviewRequest(previewRequest);
         });
-        scheduleAfterNextPaint(() => {
+        scheduleAfterCommit(() => {
           recordAgentUiPerformanceMetric("homeInput.sendDispatch.start", {
             elapsedMs: Date.now() - submittedAt,
             requestId,

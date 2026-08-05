@@ -12,6 +12,8 @@ import {
   shouldApplyPendingSessionShell,
   shouldLoadCachedTopicSnapshot,
   shouldRefreshCachedSnapshotImmediately,
+  shouldReuseHydratedCurrentSession,
+  shouldReusePendingCurrentSessionHydration,
   shouldReuseActiveSessionSwitch,
 } from "./sessionSwitchSnapshotController";
 import type { AgentSessionCachedSnapshot } from "./agentSessionScopedStorage";
@@ -49,6 +51,59 @@ function snapshot(
 }
 
 describe("sessionSwitchSnapshotController", () => {
+  it("仅 canonical detail 已应用时才复用当前会话", () => {
+    expect(
+      shouldReuseHydratedCurrentSession({
+        currentSessionId: "topic-a",
+        hydratedSessionId: null,
+        messagesCount: 2,
+        topicId: "topic-a",
+      }),
+    ).toBe(false);
+    expect(
+      shouldReuseHydratedCurrentSession({
+        currentSessionId: "topic-a",
+        hydratedSessionId: "topic-a",
+        messagesCount: 2,
+        topicId: "topic-a",
+      }),
+    ).toBe(true);
+    expect(
+      shouldReuseHydratedCurrentSession({
+        currentSessionId: "topic-a",
+        forceRefresh: true,
+        hydratedSessionId: "topic-a",
+        messagesCount: 2,
+        topicId: "topic-a",
+      }),
+    ).toBe(false);
+  });
+
+  it("当前会话已在后台水合时应复用 pending 请求", () => {
+    expect(
+      shouldReusePendingCurrentSessionHydration({
+        currentSessionId: "topic-a",
+        pendingSessionId: "topic-a",
+        topicId: "topic-a",
+      }),
+    ).toBe(true);
+    expect(
+      shouldReusePendingCurrentSessionHydration({
+        currentSessionId: "topic-a",
+        forceRefresh: true,
+        pendingSessionId: "topic-a",
+        topicId: "topic-a",
+      }),
+    ).toBe(false);
+    expect(
+      shouldReusePendingCurrentSessionHydration({
+        currentSessionId: "topic-a",
+        pendingSessionId: "topic-b",
+        topicId: "topic-a",
+      }),
+    ).toBe(false);
+  });
+
   it("当前会话不应重复加载或应用 cached snapshot", () => {
     expect(
       shouldLoadCachedTopicSnapshot({

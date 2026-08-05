@@ -5,6 +5,20 @@
       "minLength": 1,
       "type": "string"
     },
+    "sessionId": {
+      "minLength": 1,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "threadId": {
+      "minLength": 1,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
     "uri": {
       "minLength": 1,
       "type": "string"

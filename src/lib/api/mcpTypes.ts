@@ -294,4 +294,5 @@ export interface McpResourceContent {
   mime_type?: string;
   text?: string;
   blob?: string;
+  meta?: Record<string, unknown>;
 }

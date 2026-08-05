@@ -30,6 +30,23 @@ fn item(sequence: u64, ordinal: u64, id: &str, text: &str) -> ThreadItem {
     }
 }
 
+fn reasoning_item(sequence: u64, content: &str, source_event_type: &str) -> ThreadItem {
+    let mut item = ThreadItem::new(
+        SessionId::new("session-1"),
+        ThreadId::new("thread-1"),
+        TurnId::new("turn-1"),
+        sequence,
+        1,
+        ThreadItemPayload::Reasoning {
+            summary: Vec::new(),
+            content: vec![content.to_string()],
+        },
+    );
+    item.item_id = ItemId::new("reasoning-1");
+    item.metadata = serde_json::json!({"source_event_type": source_event_type});
+    item
+}
+
 fn turn(id: &str, status: TurnStatus) -> Turn {
     Turn {
         session_id: SessionId::new("session-1"),
@@ -100,6 +117,50 @@ fn coalesces_repeated_item_snapshots_and_preserves_first_order() {
         &builder.raw_items()[0].payload,
         ThreadItemPayload::AgentMessage { text, .. } if text == "firstlatest"
     ));
+}
+
+#[test]
+fn reasoning_history_preserves_repeated_deltas_and_replaces_final_snapshot() {
+    let mut builder = ThreadHistoryBuilder::new();
+    builder
+        .append_turns_at(1, vec![turn("turn-1", TurnStatus::InProgress)])
+        .expect("turn append");
+    builder
+        .append_items_at(2, vec![reasoning_item(2, ".", "reasoning.delta")])
+        .expect("first reasoning delta");
+    builder
+        .append_items_at(3, vec![reasoning_item(3, ".", "reasoning.delta")])
+        .expect("repeated reasoning delta");
+
+    assert!(matches!(
+        &builder.raw_items()[0].payload,
+        ThreadItemPayload::Reasoning { content, .. }
+            if content == &[".".to_string(), ".".to_string()]
+    ));
+
+    builder
+        .append_items_at(4, vec![reasoning_item(4, "done", "reasoning.final")])
+        .expect("reasoning final snapshot");
+    assert!(matches!(
+        &builder.raw_items()[0].payload,
+        ThreadItemPayload::Reasoning { content, .. } if content == &["done".to_string()]
+    ));
+
+    let mut completed = reasoning_item(5, "", "item.completed");
+    completed.status = ItemStatus::Completed;
+    completed.completed_at_ms = Some(5);
+    completed.payload = ThreadItemPayload::Reasoning {
+        summary: Vec::new(),
+        content: Vec::new(),
+    };
+    builder
+        .append_items_at(5, vec![completed])
+        .expect("empty reasoning completion");
+    assert!(matches!(
+        &builder.raw_items()[0].payload,
+        ThreadItemPayload::Reasoning { content, .. } if content == &["done".to_string()]
+    ));
+    assert_eq!(builder.raw_items()[0].status, ItemStatus::Completed);
 }
 
 #[test]

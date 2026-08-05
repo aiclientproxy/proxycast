@@ -1,4 +1,5 @@
 import type {
+  AgentInputMention,
   AssistantDraftState,
   SlashSkillRequest,
   ThreadGoalInput,
@@ -27,6 +28,7 @@ export interface HandleSendOptions {
   skillRequest?: SlashSkillRequest;
   capabilityRoute?: InputCapabilitySendRoute;
   inputRestoreDraft?: InterruptedInputDraftSnapshot;
+  inputMentions?: readonly AgentInputMention[];
   providerOverride?: string;
   modelOverride?: string;
   reasoningEffort?: string;

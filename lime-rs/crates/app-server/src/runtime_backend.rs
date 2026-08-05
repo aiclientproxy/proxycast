@@ -65,11 +65,14 @@ mod request_context;
 pub(crate) use model_routing::configured_provider_readiness;
 pub(crate) use provider_config::current_agent_runtime_config_metadata;
 use provider_config::{initialize_runtime_database, model_effective_event_from_runtime};
+#[cfg(test)]
+use request_context::session_config_from_request;
 use request_context::{
     apply_app_server_turn_policy, direct_provider_config_from_request,
     request_tool_policy_from_request, resolve_runtime_model_selection,
-    runtime_request_from_request, service_tier_from_request, session_config_from_request,
-    session_scope_from_request, should_use_compact_tool_surface,
+    runtime_request_from_request, service_tier_from_request,
+    session_config_from_request_with_plugin_activations, session_scope_from_request,
+    should_use_compact_tool_surface,
 };
 use route_support::{
     agent_control_route_snapshot_for_resolved_route, durable_credential_ref_for_generation,
@@ -418,8 +421,15 @@ impl RuntimeBackend {
         let soul_style = tool_process_metadata::SoulStyleMetadata::from_config_metadata(
             config_metadata.as_ref(),
         );
-        let mention_selection =
-            mention_selection::resolve_mentions(&request, self.current_app_data_source()?).await;
+        let plugin_activations = self.current_plugin_activations().await?;
+        let mention_selection = mention_selection::resolve_mentions(
+            &request,
+            self.current_app_data_source()?,
+            &plugin_activations,
+        )
+        .await;
+        let turn_plugin_activations =
+            mention_selection.plugin_activations_for_turn(&plugin_activations);
         let mut emit_error = None;
         let mut coding_event_mirror = coding_events::CodingEventMirror::default();
         let mut proposed_plan_parser = proposed_plan_parser::ProposedPlanParser::default();
@@ -493,13 +503,14 @@ impl RuntimeBackend {
                 runtime_initialized = true;
             }
 
-            let mut session_config = session_config_from_request(
+            let mut session_config = session_config_from_request_with_plugin_activations(
                 &request,
                 host_request.as_ref(),
                 &session_scope,
                 &selection,
                 &request_tool_policy,
                 config_metadata.clone(),
+                &turn_plugin_activations,
             );
             mention_selection.apply_to_session_config(&mut session_config);
             let model_context_window = lime_agent::model_request_policy_from_turn_context(
@@ -709,6 +720,13 @@ impl RuntimeBackend {
                 )
             })
             .map(|guard| guard.clone())
+    }
+
+    async fn current_plugin_activations(&self) -> Result<Vec<Value>, RuntimeCoreError> {
+        let Some(app_data_source) = self.current_app_data_source()? else {
+            return Ok(Vec::new());
+        };
+        app_data_source.list_plugin_catalog_activations().await
     }
 }
 

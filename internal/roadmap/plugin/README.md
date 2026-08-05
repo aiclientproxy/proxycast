@@ -1,91 +1,58 @@
-# Lime 插件路线图
+# Lime Plugin 路线图
 
-更新时间：2026-06-27
-状态：Skeleton Implemented / Productization In Progress
+更新时间：2026-08-04
 
-## 1. 定位
+状态：`Plugin v2 proposed / implementation-ready`
 
-Lime 的一级产品概念统一为 **插件**。插件负责安装、授权、发布、启用与分发；`插件工作区能力` 只作为插件内部的一种能力形态，表示“带独立 UI 的工作台能力”。旧 `Plugin / 工作台应用` 命名只允许作为迁移输入或历史证据，不再作为插件中心的产品根对象。
+## 当前事实源
 
-```text
-插件 = 分发与授权根对象
-插件工作区能力 = 插件内部 UI 子能力
-Right Surface = Host 管理的产物渲染工作区
-```
-
-这条路线参考上游插件与市场模型：插件使用 `<plugin>@<marketplace>` 稳定 ID，marketplace 下发 manifest 摘要、安装策略和认证策略，用户通过显式选择或 `@` 调用，而不是靠语义猜测。
-
-服务端 marketplace 事实源在 LimeCore：
+Plugin 当前路线图统一进入 [v2/README.md](./v2/README.md)。v2 直接采用 Codex-compatible `.codex-plugin/plugin.json`、marketplace、Skills、MCP servers/apps 与 Hooks 模型，并固定以下生产主链：
 
 ```text
-LimeCore 外仓 plugin roadmap / control-plane 文档
-GET /api/v1/public/tenants/{tenantId}/client/plugins/marketplace
+Electron Desktop Host
+  -> App Server JSON-RPC
+  -> RuntimeCore / MCP / Skills / Hooks
+  -> Thread / Turn / Item projection
+  -> App Center / Claw / Right Surface
 ```
 
-Lime Desktop 只负责本地安装态、显式激活、Right Surface 渲染和 App Server prompt context；不在 Lime App Server 内新增 marketplace 服务端。
+App Center 参考 Codex 的信息架构和状态语义，但继续使用 Lime 当前主题。Claw 通过 `@plugin` 调用能力，并在唯一 Right Surface 中承载 MCP/App UI、Browser、结构化结果和文件预览。
 
-## 2. 文档索引
+## 阅读顺序
 
-| 文档                                                                                                   | 用途                                                                           |
-| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| [`prd.md`](./prd.md)                                                                                   | 插件产品定义、背景、用户路径、需求、里程碑和验收。                             |
-| [`architecture.md`](./architecture.md)                                                                 | 插件/工作区能力/Renderer/Claw/Right Surface 的分层架构。                       |
-| [`technical-baseline.md`](./technical-baseline.md)                                                     | 插件运行的宿主基线、承载方式、current / deprecated / dead 分类。               |
-| [`interface-contracts.md`](./interface-contracts.md)                                                   | 插件 manifest、激活上下文、renderer contract、surface action contract。        |
-| [`implementation-plan.md`](./implementation-plan.md)                                                   | 插件中心、composer 激活、renderer host、迁移收口的实施顺序。                   |
-| [`../../tech/plugin/README.md`](../../tech/plugin/README.md)                                           | Lime Plugin Package v1 技术标准：`plugin.json`、runtime/workbench、skills、worker 和验证口径。 |
-| [`history-product-workspace.md`](./history-product-workspace.md)                                       | 历史对话、插件上下文和产物 tab 的恢复规则。                                    |
-| [`user-operations-guide.md`](./user-operations-guide.md)                                               | 插件中心消费、授权、本地安装态、显式激活、Right Surface 和运营排查指南。       |
-| [`e2e-evidence.md`](./e2e-evidence.md)                                                                 | 第二轮跨仓端到端证据包，串联 LimeCore 发布 / 审计与 Lime Desktop GUI fixture。 |
-| [`evidence/plugin-productization-e2e-summary.json`](./evidence/plugin-productization-e2e-summary.json) | 本轮桌面 GUI fixture 的版本化精简 summary。                                    |
-| [`prototype.html`](./prototype.html)                                                                   | 可直接打开的静态 HTML 原型。                                                   |
-| [`prototype.md`](./prototype.md)                                                                       | 插件中心、插件详情、激活 strip、右侧 dock 的低保真原型。                       |
+1. [研究结论](./v2/00-research-findings.md)
+2. [产品合同](./v2/01-product-contract.md)
+3. [包、市场与安装](./v2/02-package-marketplace-installation.md)
+4. [架构与命令合同](./v2/03-architecture-and-command-contracts.md)
+5. [App Center 与 Claw Surface](./v2/04-app-center-and-claw-surfaces.md)
+6. [迁移与清理账本](./v2/05-migration-and-cleanup.md)
+7. [实施计划](./v2/06-implementation-plan.md)
+8. [Gate B 验收合同](./v2/07-verification-contract.md)
 
-## 2.1 图表索引
+## Legacy 声明
 
-| 图表                   | 位置                                                                      | 用途                                                                                                            |
-| ---------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 跨仓职责图             | [`architecture.md`](./architecture.md#31-跨仓职责图)                      | 固定 LimeCore marketplace、Lime Desktop、本地 registry、App Server prompt context 与 Right Surface 的职责边界。 |
-| 分层架构图             | [`architecture.md`](./architecture.md#4-分层架构)                         | 固定 Plugin Contract、Runtime、Session Plugin Workspace、Right Surface 的分层。                                 |
-| 显式激活时序图         | [`architecture.md`](./architecture.md#显式激活时序图)                     | 描述 `@plugin` 从 composer 到 App Server prompt context 的时序。                                                |
-| Marketplace 消费流程图 | [`architecture.md`](./architecture.md#marketplace-消费流程图)             | 描述客户端拉取 LimeCore marketplace、合并本地安装态和构造 activation metadata。                                 |
-| 历史恢复拓扑           | [`architecture.md`](./architecture.md#8-历史恢复拓扑)                     | 描述历史会话、plugin workspace 和 Right Surface 恢复关系。                                                      |
-| Surface Action 回流图  | [`architecture.md`](./architecture.md#9-surface-action-回流)              | 固定右侧 action 必须回流 runtime，不直连 provider 或文件系统。                                                  |
-| 开发切片总览           | [`implementation-plan.md`](./implementation-plan.md#2-开发切片总览)       | 跟踪从文档 contract 到内容工厂 dogfood 的实施顺序。                                                             |
-| 客户端消费流程图       | [`user-operations-guide.md`](./user-operations-guide.md#3-端到端消费流程) | 描述插件中心拉取、合并本地 registry、安装、上报和显式激活。                                                     |
-| 显式激活时序图         | [`user-operations-guide.md`](./user-operations-guide.md#4-用户路径)       | 描述 `@插件` 从 UI 到 App Server current 运行链的时序。                                                         |
-| 安装态与审计流程图     | [`user-operations-guide.md`](./user-operations-guide.md#7-安装态与审计)   | 描述本地 installed registry 与 LimeCore 审计之间的边界。                                                        |
-| 跨仓证据流程图         | [`e2e-evidence.md`](./e2e-evidence.md#2-跨仓证据流程图)                   | 描述平台发布、客户端消费、安装态报告、显式激活、Right Surface 和审计证据。                                      |
+本目录根部旧 PRD、架构、接口、原型、证据和实施跟踪文件保留为 `historical reference`，用于回看产品洞察、交互方案、历史决策和既有证据。它们不再是 current 设计、实现或验收事实源，也不得独立继续演进。
 
-## 3. 当前决策
+旧 `lime.plugin.package.v1`、根 `plugin.json`、`contributions.runtime/workbench`、插件专用 worker 和 renderer registry 仍处于 `deprecated`，不得新增调用或能力；只有 current 主链迁移和 Gate B 验收完成后才能删除。文档保留与旧实现退役是两个独立治理维度，详见 [迁移与清理账本](./v2/05-migration-and-cleanup.md)。
 
-| 决策               | 口径                                                                                                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 根对象             | 插件是用户侧可安装、可授权、可发布的根对象。                                                                                                            |
-| Marketplace 服务端 | `current` 在 LimeCore control-plane，不在 Lime App Server。                                                                                             |
-| 插件工作区能力     | 作为插件内独立 UI 能力；旧 Plugin / 工作台应用只允许作为迁移输入，不再作为插件 marketplace 的设计模板。                                               |
-| 右侧渲染           | Right Surface 继续作为 Host 的唯一物理右栏，插件只提供数据模型、视图与 action。                                                                         |
-| 激活方式           | 不再在每次发送消息时全量读取插件列表做语义猜测；激活必须显式。                                                                                          |
-| Renderer 输出合同  | manifest / marketplace summary 可以声明 `outputArtifactKind`、`paneKind` 和 action，但 runtime 当前只接管内容工厂 workspace patch，不开放任意插件执行。 |
-| 内容工厂           | 内容工厂应作为插件重建，而不是复用旧 `旧内容工作台` 代码。                                                                                              |
-| 现有路线上下文     | 现有 `rightsurface` 负责统一右侧 dock；plugin 路线只定义该 dock 如何承载插件产物。                                                                      |
-| 旧插件中心命令     | 历史插件中心命令族继续按 `dead` 处理，不恢复为生产入口。                                                                                               |
-| 旧 Plugin 目录  | `client/plugins` 和本地 Plugin manifest 投影只允许作为 compat / migration 输入；插件中心 current 数据源是 `client/plugins/marketplace` 与本地插件安装态。 |
-| `@` 命令边界       | 平台 `@` 原子命令仍以 `SkillCatalog.entries.kind=command` 为事实源；插件只可贡献显式 activation command entry，并通过 `agentSession/turn/start` metadata 进入 current 主链。 |
+## 历史参考导航
 
-## 4. 与现有路线图关系
+### 产品与设计
 
-| 路线图                                                                 | 关系                                                                |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [`internal/roadmap/rightsurface/README.md`](../rightsurface/README.md) | 定义唯一右侧 dock、多 tab 和 pane 状态机；plugin 路线复用这层宿主。 |
-| [`internal/roadmap/workbench/v4/README.md`](../workbench/v4/README.md) | 定义插件工作区能力在插件体系里的位置，以及内容工厂的工作台形态。    |
-| [`internal/roadmap/workbench/v3/README.md`](../workbench/v3/README.md) | 作为历史参考，帮助理解从 Workbench Profile 过渡到插件分层的原因。   |
+- [旧版 PRD](./prd.md)
+- [旧版架构](./architecture.md)
+- [旧版接口合同](./interface-contracts.md)
+- [旧版技术基线](./technical-baseline.md)
+- [旧版交互原型说明](./prototype.md)与[静态原型](./prototype.html)
+- [历史工作区与恢复设计](./history-product-workspace.md)
+- [旧版用户操作指南](./user-operations-guide.md)
 
-## 5. 开发者阅读顺序
+### 历史跟踪与证据
 
-1. 先读 [`prd.md`](./prd.md)。
-2. 再读 [`architecture.md`](./architecture.md)。
-3. 然后读 [`technical-baseline.md`](./technical-baseline.md) 了解宿主边界。
-4. 对照 [`interface-contracts.md`](./interface-contracts.md) 固定 contract。
-5. 落包结构、skills、worker 或 workbench 时，回到 [`../../tech/plugin/README.md`](../../tech/plugin/README.md) 作为技术事实源。
-6. 按 [`implementation-plan.md`](./implementation-plan.md) 分阶段落地。
+- [旧版实施计划](./implementation-plan.md)
+- [旧版 E2E 证据](./e2e-evidence.md)
+- [历史 E2E 摘要](./evidence/plugin-productization-e2e-summary.json)
+- [旧发布中心 PRD](./deverlop/plugin-publish-center-prd.md)
+- [旧发布服务端计划](./deverlop/plugin-publish-limecore-server-plan.md)
+
+从历史文档复用的有效决策必须先写入 v2 对应合同并通过 current owner 审核，不能让实现直接同时依赖 v1 与 v2。

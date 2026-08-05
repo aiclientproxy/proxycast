@@ -102,6 +102,17 @@ fn production_storage_paths_keep_physical_table_owners_separate() {
 }
 
 #[test]
+fn canonical_store_connections_wait_for_transient_sqlite_locks() {
+    let (_temp, store) = store();
+    let conn = store.open_thread_store().expect("open canonical store");
+    let busy_timeout_ms = conn
+        .query_row("PRAGMA busy_timeout", [], |row| row.get::<_, u64>(0))
+        .expect("read SQLite busy timeout");
+
+    assert_eq!(busy_timeout_ms, 5_000);
+}
+
+#[test]
 fn queued_recovery_requires_a_current_canonical_thread_owner() {
     let temp = tempfile::tempdir().expect("tempdir");
     let roots = StorageRoots::initialize(temp.path(), temp.path().join("agent-root"))
@@ -1833,6 +1844,190 @@ fn production_event_batches_create_and_incrementally_update_canonical_history() 
         &thread.turns[0].items[0].payload,
         ThreadItemPayload::AgentMessage { text, .. } if text == "hello world"
     ));
+}
+
+#[test]
+fn reasoning_deltas_persist_linearly_in_canonical_history_and_rollout() {
+    let (_temp, agent_root, store) = store_with_rollout();
+    let stored = StoredSession {
+        session: AgentSession {
+            session_id: "session-reasoning-linear".to_string(),
+            thread_id: "thread-reasoning-linear".to_string(),
+            app_id: "agent-chat".to_string(),
+            workspace_id: None,
+            business_object_ref: None,
+            status: AgentSessionStatus::Running,
+            created_at: "2026-08-05T00:00:00Z".to_string(),
+            updated_at: "2026-08-05T00:00:01Z".to_string(),
+        },
+        turns: Vec::new(),
+        turn_inputs: HashMap::new(),
+        turn_runtime_options: HashMap::new(),
+        events: Vec::new(),
+        output_blobs: HashMap::new(),
+    };
+    let fragments = [
+        "The", " user", " said", " hello", ".", " Respond", " briefly", " now",
+    ];
+
+    for (index, fragment) in fragments.iter().enumerate() {
+        let sequence = (index + 1) as u64;
+        store
+            .apply_canonical_events(
+                &stored,
+                &[AgentEvent {
+                    event_id: format!("reasoning-event-{sequence}"),
+                    sequence,
+                    session_id: stored.session.session_id.clone(),
+                    thread_id: Some(stored.session.thread_id.clone()),
+                    turn_id: Some("turn-reasoning-linear".to_string()),
+                    event_type: "reasoning.delta".to_string(),
+                    timestamp: format!("2026-08-05T00:00:{sequence:02}Z"),
+                    payload: json!({
+                        "reasoningId": "reasoning-linear",
+                        "delta": fragment,
+                    }),
+                }],
+            )
+            .expect("persist reasoning delta");
+    }
+
+    let thread = block_on(store.read_thread(ReadThreadParams {
+        thread_id: ThreadId::new(&stored.session.thread_id),
+        include_archived: false,
+        turns_view: ThreadTurnsView::Full,
+    }))
+    .expect("read canonical reasoning thread")
+    .expect("canonical reasoning thread");
+    let reasoning_content = thread.turns[0]
+        .items
+        .iter()
+        .find_map(|item| match &item.payload {
+            ThreadItemPayload::Reasoning { content, .. } => Some(content.clone()),
+            _ => None,
+        })
+        .expect("canonical reasoning item");
+    assert_eq!(reasoning_content, fragments.map(str::to_string).to_vec());
+
+    let path = rollout_path(
+        &store,
+        &agent_root,
+        &ThreadId::new(&stored.session.thread_id),
+    );
+    let lines = rollout_lines(&path);
+    assert_eq!(lines.len(), fragments.len() + 1);
+    for (index, line) in lines.iter().skip(1).enumerate() {
+        let changes: ThreadHistoryChangeSet = serde_json::from_value(line["changes"].clone())
+            .expect("decode rollout history changes");
+        let content = changes
+            .changed_items
+            .iter()
+            .find_map(|item| match &item.payload {
+                ThreadItemPayload::Reasoning { content, .. } => Some(content),
+                _ => None,
+            })
+            .expect("rollout reasoning item");
+        assert_eq!(content.len(), index + 1);
+        assert_eq!(content.last().map(String::as_str), Some(fragments[index]));
+    }
+}
+
+#[test]
+fn empty_reasoning_completion_preserves_canonical_content_across_persistence() {
+    let (_temp, store) = store();
+    let stored = StoredSession {
+        session: AgentSession {
+            session_id: "session-reasoning-empty-completion".to_string(),
+            thread_id: "thread-reasoning-empty-completion".to_string(),
+            app_id: "agent-chat".to_string(),
+            workspace_id: None,
+            business_object_ref: None,
+            status: AgentSessionStatus::Running,
+            created_at: "2026-08-05T00:00:00Z".to_string(),
+            updated_at: "2026-08-05T00:00:01Z".to_string(),
+        },
+        turns: Vec::new(),
+        turn_inputs: HashMap::new(),
+        turn_runtime_options: HashMap::new(),
+        events: Vec::new(),
+        output_blobs: HashMap::new(),
+    };
+    let reasoning_item_id = "item_reasoning-turn-reasoning-empty-completion";
+    let event = |sequence, event_type: &str, payload| AgentEvent {
+        event_id: format!("reasoning-empty-event-{sequence}"),
+        sequence,
+        session_id: stored.session.session_id.clone(),
+        thread_id: Some(stored.session.thread_id.clone()),
+        turn_id: Some("turn-reasoning-empty-completion".to_string()),
+        event_type: event_type.to_string(),
+        timestamp: format!("2026-08-05T00:00:{sequence:02}Z"),
+        payload,
+    };
+
+    store
+        .apply_canonical_events(
+            &stored,
+            &[event(
+                1,
+                "reasoning.delta",
+                json!({
+                    "reasoningId": "reasoning-empty-completion",
+                    "text": "inspect inputs"
+                }),
+            )],
+        )
+        .expect("persist reasoning content");
+    store
+        .apply_canonical_events(
+            &stored,
+            &[event(
+                2,
+                "item.completed",
+                json!({
+                    "item": {
+                        "sessionId": stored.session.session_id.clone(),
+                        "threadId": stored.session.thread_id.clone(),
+                        "turnId": "turn-reasoning-empty-completion",
+                        "itemId": reasoning_item_id,
+                        "sequence": 2,
+                        "ordinal": 2,
+                        "createdAtMs": 2,
+                        "updatedAtMs": 2,
+                        "completedAtMs": 2,
+                        "kind": "reasoning",
+                        "status": "completed",
+                        "payload": {
+                            "type": "reasoning",
+                            "summary": [],
+                            "content": []
+                        },
+                        "metadata": {}
+                    }
+                }),
+            )],
+        )
+        .expect("persist empty reasoning completion");
+
+    let thread = block_on(store.read_thread(ReadThreadParams {
+        thread_id: ThreadId::new(&stored.session.thread_id),
+        include_archived: false,
+        turns_view: ThreadTurnsView::Full,
+    }))
+    .expect("read persisted reasoning thread")
+    .expect("persisted reasoning thread");
+    let reasoning = thread.turns[0]
+        .items
+        .iter()
+        .find(|item| matches!(item.payload, ThreadItemPayload::Reasoning { .. }))
+        .expect("persisted reasoning item");
+    assert_eq!(reasoning.status, ItemStatus::Completed);
+    assert_eq!(
+        reasoning.payload,
+        ThreadItemPayload::Reasoning {
+            summary: Vec::new(),
+            content: vec!["inspect inputs".to_string()],
+        }
+    );
 }
 
 #[test]

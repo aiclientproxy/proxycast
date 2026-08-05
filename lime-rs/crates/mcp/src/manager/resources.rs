@@ -289,23 +289,25 @@ impl McpClientManager {
                     uri: content_uri,
                     mime_type,
                     text,
-                    ..
+                    meta,
                 } => McpResourceContent {
                     uri: content_uri,
                     mime_type,
                     text: Some(text),
                     blob: None,
+                    meta: meta.map(|value| serde_json::Value::Object(value.0)),
                 },
                 rmcp::model::ResourceContents::BlobResourceContents {
                     uri: content_uri,
                     mime_type,
                     blob,
-                    ..
+                    meta,
                 } => McpResourceContent {
                     uri: content_uri,
                     mime_type,
                     text: None,
                     blob: Some(blob),
+                    meta: meta.map(|value| serde_json::Value::Object(value.0)),
                 },
             }
         } else {
@@ -315,6 +317,7 @@ impl McpClientManager {
                 mime_type: None,
                 text: None,
                 blob: None,
+                meta: None,
             }
         }
     }

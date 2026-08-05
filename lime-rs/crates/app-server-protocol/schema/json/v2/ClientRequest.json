@@ -351,6 +351,99 @@
         }
       ]
     },
+    "PluginCatalogEnabledSetParams": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "pluginId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled",
+        "pluginId"
+      ],
+      "type": "object"
+    },
+    "PluginCatalogInstallParams": {
+      "properties": {
+        "expectedDigest": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "marketplaceId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "source": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourcePath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sourcePath"
+      ],
+      "type": "object"
+    },
+    "PluginCatalogInstalledParams": {
+      "type": "object"
+    },
+    "PluginCatalogListParams": {
+      "properties": {
+        "marketplacePaths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "query": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "source": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "PluginCatalogReadParams": {
+      "properties": {
+        "pluginId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pluginId"
+      ],
+      "type": "object"
+    },
+    "PluginCatalogUninstallParams": {
+      "properties": {
+        "pluginId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pluginId"
+      ],
+      "type": "object"
+    },
     "RequestId": {
       "anyOf": [
         {
@@ -2510,6 +2603,126 @@
         },
         "params": {
           "$ref": "#/$defs/ModelListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "plugin/list",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PluginCatalogListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "plugin/read",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PluginCatalogReadParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "plugin/install",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PluginCatalogInstallParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "plugin/uninstall",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PluginCatalogUninstallParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "plugin/installed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PluginCatalogInstalledParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "plugin/enabled/set",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PluginCatalogEnabledSetParams"
         }
       },
       "required": [

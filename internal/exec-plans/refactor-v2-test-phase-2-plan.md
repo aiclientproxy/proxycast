@@ -447,3 +447,23 @@ Electron Desktop Host
 - current adapter 改用仓库已锁定的 Node `smol-toml` 结构化解析器，移除 Python subprocess 和版本假设；未引入 ad-hoc 行解析，也未改变 DeepSWE task schema、workspace 隔离、live authorization 或 verifier ownership。
 - 修复后验证：`npx vitest run scripts/harness/deepswe-adapter.test.mjs scripts/harness/deepswe-coding-slice.test.mjs` 为 `26/26`；`npm run harness:deepswe:preflight` 为 Release 20 `61/61`；adapter ESLint、`npm run governance:scripts`、`npm run test:contracts` 全部通过。
 - 分类：Node TOML metadata parser 和 adapter fail-closed/verifier evidence 为 `current / closed`；Python `tomllib` 运行时假设为 `dead / deleted / forbidden-to-restore`。完整 DeepSWE 仍是 `diagnostic_true_runs_blocked`：Agnes 选题固定预算内无 non-empty candidate，Pier editable package 已失效且本机无 Docker/Podman/nerdctl/Colima，不能生成 `reward.json`、`ctrf.json` 或 score；第二期整体完成度保持 `80%`。
+
+## 41. 2026-08-04 Benchmark 新一轮 Gate B 验收
+
+- 目标与写集：复跑 `internal/roadmap/benchmark` 的 current fixture、恢复、cancel/continue、approval/resume、unknown Item、AgentControl cold-restart、`home-hotpath` 和 `SOAK-01`，只新增 `.gstack/benchmark-reports/2026-08-04-benchmark.{md,json}` 与本轮失败证据；未修改业务源码。
+- 真实 Electron 性能观测：通过 `http://127.0.0.1:9223` 确认 Lime/Electron 42.3.3、`window.__LIME_ELECTRON__=true` 和 `electronAPI.invoke`；reload 的 TTFB/FCP/DOM Interactive/Full Load 为 `49/412/316/1424ms`，250 个请求，transfer `505873` bytes，reload console/page error 均为 0。
+- Gate B 通过：history/cache `31/31`、streaming completion `32/32`、fixture guard `99/99`；session `thread/start/read/list/resume`、cancel/continue、approval/resume、unknown Item 均为 current Electron/App Server/read model/GUI 闭环；AgentControl cold-restart 39 条 assertion 全绿，证据分别见 `.lime/qc/gui-evidence/benchmark-20260804/` 和对应 current fixture 目录。
+- `home-hotpath` 保持失败：250ms budget 下 `homeInputToSendDispatchMs` 两次为 `287ms`、`274ms`，7 月成功基线为 `100ms`、`114ms`；provider wait `90ms`、renderer 首次 delta apply `2ms`，turn/read model/GUI/Electron IPC 成功，invoke/page/console error 为 0。归因仍是 Renderer 首发 dispatch 性能回归，不是 provider、IPC、Runtime 或 terminal failure。
+- `SOAK-01` 未通过：10 轮 / 2 次 cold restart 在首轮失败，唯一失败断言为 `waitAgentReturnedTerminalResult`；其他工具、turn terminal 和 `thread/read` 完成。单轮 AgentControl cold-restart 后续通过，不能替代完整 soak receipt。
+- 最后一次 cold-restart recheck 在 `launch-electron` 失败：`canvasImageInsertHistory-BQ3-T3zp.js` 不提供导出 `c`，bridge 未就绪；该证据归类为构建产物/启动环境不一致，需清理并一致构建后复测，当前不直接归因 runtime owner。
+- Gate B 结论：`partial evidence / failed acceptance`。核心链路已证明，但 `home-hotpath`、`SOAK-01` 和 cold-restart recheck 仍是 release evidence blocker；下一刀为 dispatch 性能定位、构建产物一致性复测和 SOAK-01 10x2 完整重跑。
+
+## 42. 2026-08-04 Benchmark Gate B 修复后复验
+
+- 目标与写集：在第 41 节失败现场上继续复验 `home-hotpath`、AgentControl cold-restart 和 `SOAK-01`；写集为 SOAK 观察器、观察器单测、已有 Renderer dispatch/构建一致性修复及 `.gstack/benchmark-reports/2026-08-04-benchmark.{md,json}`，未修改 Rust RuntimeCore 生产逻辑，未放宽投影 repair 的 fail-closed 断言。
+- SOAK 观察器根因：v2 `thread/list` 的 `Thread` 主键字段是 `id`，不是 `threadId`；旧观察器因此把真实 canonical thread 误判为未列出。请求同时从旧 `includeArchived` 对齐到 v2 `archived: false`，断言现在要求 `id + sessionId` 精确匹配，并由 `tool-execution-soak-evidence.test.mjs` 的 10 条单测覆盖。
+- `home-hotpath` 修复后真实 Electron Gate B 通过：`homeInputToSendDispatchMs=37ms`（预算 250ms），pending preview paint `63ms`，first text paint `543ms`，provider wait `90ms`，renderer 首次 delta apply `1ms`，first delta 到 paint `23ms`；Electron/preload/IPC/App Server/read model/GUI 闭环成功，console/page error 为 0。证据：`.lime/qc/gui-evidence/benchmark-20260804/benchmark-gateb-home-hotpath-after-observer-fix-20260804-summary.json`。
+- 一致 renderer 重建后 AgentControl cold-restart 独立复验通过，旧 `canvasImageInsertHistory` export mismatch 未复现；证据：`.lime/qc/gui-evidence/benchmark-20260804/benchmark-gateb-agent-control-cold-restart-after-renderer-rebuild-20260804.json`。
+- `SOAK-01` 10 轮 / 2 次 cold restart 通过：`allRoundsPassed`、`roundSessionsIsolated`、`readModelsStableAcrossColdRestarts`、`everyPreviousProcessTreeExited`、`finalProcessTreeExited` 全为 `true`；总 RSS `561,312 -> 442,768 KiB`（delta `-118,544 KiB`），App Server RSS delta `+8,976 KiB`，10 轮 duration `2,820-5,371ms`。证据：`.lime/qc/soak-01/agent-control-soak-final.json`。
+- 验证：SOAK evidence 单测 `10/10`、单轮 cold-restart、10x2 SOAK、home-hotpath 及一致构建后的 cold-restart 全部通过；未执行 commit/push/reset/分支操作。
+- 分类与结论：v2 `thread/list` 字段归一化和 SOAK 观察器为 `current / closed`；旧 `threadId` 观察字段与 `includeArchived` 请求为 `dead / deleted / forbidden-to-restore`；历史失败 JSON/截图保留为诊断 evidence。当前本轮 Gate B 为 `passed`，但本地 controlled fixture 不能替代 live provider、Windows RC 或正式签名/notarization 证据。

@@ -1019,6 +1019,8 @@ mod tests {
             server_name: "docs".to_string(),
             tool_name: "search".to_string(),
             runtime_tool_name: "mcp__docs__search".to_string(),
+            mcp_app_resource_uri: None,
+            plugin_id: None,
         };
 
         let result = await_mcp_call(&event_sender, "mcp-call-1", &route, call)

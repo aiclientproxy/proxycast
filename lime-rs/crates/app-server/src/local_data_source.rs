@@ -33,6 +33,7 @@ mod mcp;
 mod media_tasks;
 mod model_projection;
 mod model_providers;
+pub(super) mod plugin_catalog;
 mod plugins;
 mod project_materials;
 mod right_surface;

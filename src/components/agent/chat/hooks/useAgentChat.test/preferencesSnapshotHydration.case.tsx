@@ -12,6 +12,96 @@ import {
 } from "../useAgentChat.testUtils";
 
 describe("useAgentChat 偏好持久化 - snapshot hydration", () => {
+  it("冷恢复已有消息缓存时仍应合并新增 canonical MCP item", async () => {
+    const workspaceId = "ws-cold-restore-mcp-item";
+    const sessionId = "session-cold-restore-mcp-item";
+    const threadId = "thread-cold-restore-mcp-item";
+    const turnId = "turn-cold-restore-mcp-item";
+    const topicsDeferred = createDeferred<never>();
+
+    seedSession(workspaceId, sessionId);
+    mockListAgentRuntimeSessions.mockReturnValue(topicsDeferred.promise);
+    mockGetAgentRuntimeSession.mockResolvedValue({
+      id: sessionId,
+      thread_id: threadId,
+      workspace_id: workspaceId,
+      messages: [],
+      turns: [
+        {
+          id: turnId,
+          thread_id: threadId,
+          status: "completed",
+          prompt_text: "运行插件检查",
+          started_at: "2026-08-04T00:00:00.000Z",
+          completed_at: "2026-08-04T00:00:02.000Z",
+          created_at: "2026-08-04T00:00:00.000Z",
+          updated_at: "2026-08-04T00:00:02.000Z",
+        },
+      ],
+      items: [
+        {
+          id: "item-mcp-app-cold-restore",
+          thread_id: threadId,
+          turn_id: turnId,
+          sequence: 1,
+          type: "tool_call",
+          tool_name: "mcp__plugin__demo__release_check",
+          status: "completed",
+          success: true,
+          started_at: "2026-08-04T00:00:01.000Z",
+          completed_at: "2026-08-04T00:00:02.000Z",
+          updated_at: "2026-08-04T00:00:02.000Z",
+          metadata: {
+            canonical_type: "mcpToolCall",
+            plugin_id: "demo-plugin",
+            server: "mcp__plugin__demo",
+            mcp_app_resource_uri: "ui://demo/release-check.html",
+          },
+        },
+      ],
+      thread_read: {
+        thread_id: threadId,
+        status: "idle",
+      },
+      execution_strategy: "react",
+    });
+
+    const harness = mountHook(workspaceId);
+
+    try {
+      await flushEffects();
+      expect(harness.getValue().sessionId).toBe(sessionId);
+      expect(harness.getValue().messages).toHaveLength(1);
+
+      await act(async () => {
+        await harness.getValue().switchTopic(sessionId);
+      });
+      await flushEffects();
+
+      expect(mockGetAgentRuntimeSession).toHaveBeenCalledWith(
+        sessionId,
+        expect.objectContaining({ historyLimit: 40 }),
+      );
+      expect(harness.getValue().threadItems).toContainEqual(
+        expect.objectContaining({
+          id: "item-mcp-app-cold-restore",
+          metadata: expect.objectContaining({
+            canonical_type: "mcpToolCall",
+            mcp_app_resource_uri: "ui://demo/release-check.html",
+          }),
+        }),
+      );
+
+      mockGetAgentRuntimeSession.mockClear();
+      await act(async () => {
+        await harness.getValue().switchTopic(sessionId);
+      });
+      expect(mockGetAgentRuntimeSession).not.toHaveBeenCalled();
+    } finally {
+      harness.unmount();
+    }
+  });
+
   it("直接会话水合失败时应向导航层返回错误结果", async () => {
     const workspaceId = "ws-topic-hydration-error";
     const hydrationError = new Error(

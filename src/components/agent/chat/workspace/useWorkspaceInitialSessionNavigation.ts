@@ -397,6 +397,7 @@ export function useWorkspaceInitialSessionNavigation({
     logAgentDebug("AgentChatPage", "initialSessionNavigation.start", {
       currentSessionId: normalizedCurrentSessionId,
       forceRefresh:
+        hasExplicitNavigationRequest ||
         shouldHydrateMatchedSession ||
         resolvedSwitchOptions?.forceRefresh === true,
       initialSessionId: normalizedInitialSessionId,
@@ -408,7 +409,8 @@ export function useWorkspaceInitialSessionNavigation({
     });
 
     const switchOptions: InitialSessionSwitchOptions = {
-      ...(shouldHydrateMatchedSession ||
+      ...(hasExplicitNavigationRequest ||
+      shouldHydrateMatchedSession ||
       resolvedSwitchOptions?.forceRefresh === true
         ? { forceRefresh: true }
         : {}),

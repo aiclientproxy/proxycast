@@ -88,8 +88,8 @@ vi.mock("@/features/plugin/ui/PluginRuntimePage", () => ({
   },
 }));
 
-vi.mock("@/features/plugin/ui/PluginsPage", () => ({
-  PluginsPage: (props: Record<string, unknown>) => {
+vi.mock("@/features/plugin/ui/PluginCatalogPage", () => ({
+  PluginCatalogPage: (props: Record<string, unknown>) => {
     latestPluginsProps.value = props;
     useEffect(() => {
       pluginsLifecycle.mounts += 1;
@@ -313,9 +313,7 @@ describe("AppPageContent", () => {
     expect(typeof onSessionChange).toBe("function");
 
     await act(async () => {
-      (onSessionChange as (sessionId: string | null) => void)(
-        " session-live ",
-      );
+      (onSessionChange as (sessionId: string | null) => void)(" session-live ");
       await Promise.resolve();
     });
 
@@ -1067,9 +1065,7 @@ describe("AppPageContent", () => {
         selectedPluginId: "content-factory-app",
       },
     });
-    expect(latestPluginsProps.value?.onNavigate).toEqual(
-      expect.any(Function),
-    );
+    expect(latestPluginsProps.value?.onNavigate).toEqual(expect.any(Function));
   });
 
   it("plugin 页面应渲染已安装 App 的独立使用入口", async () => {

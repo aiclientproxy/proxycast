@@ -71,6 +71,7 @@ interface UseWorkspaceRightSurfaceActionRuntimeParams {
   setActivePluginSurfaces: Dispatch<
     SetStateAction<WorkspacePluginSurfaceDescriptor[]>
   >;
+  setDismissedPluginSurfaceContainerIds: Dispatch<SetStateAction<string[]>>;
   setExpertInfoPanelCollapsed: SetBoolean;
   setHarnessPanelVisible: SetBoolean;
   setLayoutMode: Dispatch<SetStateAction<LayoutMode>>;
@@ -87,7 +88,9 @@ interface WorkspaceRightSurfaceActionRuntime {
     url: string,
     title?: string | null,
   ) => void;
-  handleSelectPluginSurface: (surface: WorkspacePluginSurfaceDescriptor) => void;
+  handleSelectPluginSurface: (
+    surface: WorkspacePluginSurfaceDescriptor,
+  ) => void;
   handleSelectRightSurfaceTab: (kind: WorkspaceRightSurfaceKind) => void;
   handleToggleExpertInfoPanel: () => void;
   handleToggleCanvasFromRightSurface: () => void;
@@ -131,6 +134,7 @@ export function useWorkspaceRightSurfaceActionRuntime({
   setActiveObjectCanvasRightSurfaceCandidate,
   setActivePluginSurfaceContainerId,
   setActivePluginSurfaces,
+  setDismissedPluginSurfaceContainerIds,
   setExpertInfoPanelCollapsed,
   setHarnessPanelVisible,
   setLayoutMode,
@@ -153,6 +157,15 @@ export function useWorkspaceRightSurfaceActionRuntime({
 
   useEffect(() => {
     if (pendingPluginSurfaces.length === 0) {
+      return;
+    }
+    const hasNewPluginSurface = pendingPluginSurfaces.some(
+      (incoming) =>
+        !activePluginSurfaces.some(
+          (current) => current.containerId === incoming.containerId,
+        ),
+    );
+    if (!hasNewPluginSurface) {
       return;
     }
 
@@ -609,6 +622,11 @@ export function useWorkspaceRightSurfaceActionRuntime({
         surfaces: pluginSurfaceRightSurfaces,
       });
       setActivePluginSurfaces(result.surfaces);
+      setDismissedPluginSurfaceContainerIds((current) =>
+        current.includes(surface.containerId)
+          ? current
+          : [...current, surface.containerId],
+      );
       setActivePluginSurfaceContainerId(result.activeContainerId);
       if (result.surfaces.length === 0 && manualRightSurface === "appSurface") {
         setManualRightSurface(null);
@@ -625,6 +643,7 @@ export function useWorkspaceRightSurfaceActionRuntime({
       pluginSurfaceRightSurfaces,
       setActivePluginSurfaceContainerId,
       setActivePluginSurfaces,
+      setDismissedPluginSurfaceContainerIds,
       setManualRightSurface,
     ],
   );

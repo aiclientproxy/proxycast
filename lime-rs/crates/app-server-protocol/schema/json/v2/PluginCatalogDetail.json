@@ -1,0 +1,202 @@
+{
+  "$defs": {
+    "PluginCatalogCapability": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "requiresAuth": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "description",
+        "id",
+        "name",
+        "requiresAuth"
+      ],
+      "type": "object"
+    },
+    "PluginCatalogHook": {
+      "properties": {
+        "event": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "event",
+        "id"
+      ],
+      "type": "object"
+    },
+    "PluginCatalogSummary": {
+      "properties": {
+        "appsCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "authPolicy": {
+          "type": "string"
+        },
+        "availability": {
+          "type": "string"
+        },
+        "contentDigest": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "disabledReason": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "hooksCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "installPolicy": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "localVersion": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "marketplaceId": {
+          "type": "string"
+        },
+        "mcpServersCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "skillsCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sourceUri": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "appsCount",
+        "authPolicy",
+        "availability",
+        "contentDigest",
+        "description",
+        "enabled",
+        "hooksCount",
+        "id",
+        "installPolicy",
+        "installed",
+        "marketplaceId",
+        "mcpServersCount",
+        "name",
+        "skillsCount",
+        "source",
+        "sourceUri",
+        "version"
+      ],
+      "type": "object"
+    },
+    "PluginCatalogUiResource": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "resourceUri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "resourceUri"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "apps": {
+      "items": {
+        "$ref": "#/$defs/PluginCatalogCapability"
+      },
+      "type": "array"
+    },
+    "hooks": {
+      "items": {
+        "$ref": "#/$defs/PluginCatalogHook"
+      },
+      "type": "array"
+    },
+    "mcpServers": {
+      "items": {
+        "$ref": "#/$defs/PluginCatalogCapability"
+      },
+      "type": "array"
+    },
+    "skills": {
+      "items": {
+        "$ref": "#/$defs/PluginCatalogCapability"
+      },
+      "type": "array"
+    },
+    "summary": {
+      "$ref": "#/$defs/PluginCatalogSummary"
+    },
+    "uiResources": {
+      "items": {
+        "$ref": "#/$defs/PluginCatalogUiResource"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "apps",
+    "hooks",
+    "mcpServers",
+    "skills",
+    "summary",
+    "uiResources"
+  ],
+  "title": "PluginCatalogDetail",
+  "type": "object"
+}

@@ -3,6 +3,7 @@ import type { AutoContinueRequestPayload } from "@/lib/api/agentRuntime/sessionT
 import type { ModeKind } from "@limecloud/app-server-client";
 import type {
   AssistantDraftState,
+  AgentInputMention,
   SendMessageObserver,
   SendMessageOptions,
   SessionModelPreference,
@@ -80,6 +81,7 @@ export interface PreparedAgentStreamUserInputSend {
   userMsg: Message | null;
   assistantMsg: Message;
   submittedDraft?: InterruptedInputDraftSnapshot | null;
+  inputMentions?: AgentInputMention[];
 }
 
 function shouldProjectModelInputCapabilityGate(
@@ -365,6 +367,9 @@ export function prepareAgentStreamUserInputSend(
     submittedDraft,
   );
   const skillRequest = sendOptions?.skillRequest;
+  const inputMentions = (sendOptions?.inputMentions ?? []).map((mention) => ({
+    ...mention,
+  }));
   const { assistantMsg, userMsg } = prepareAgentStreamSubmitDraft({
     content,
     displayContent,
@@ -413,5 +418,6 @@ export function prepareAgentStreamUserInputSend(
     userMsg,
     assistantMsg,
     submittedDraft,
+    inputMentions,
   };
 }

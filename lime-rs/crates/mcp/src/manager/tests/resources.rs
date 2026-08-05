@@ -309,6 +309,43 @@ fn test_convert_read_resource_result_text() {
     assert_eq!(mcp_content.mime_type, Some("text".to_string()));
     assert_eq!(mcp_content.text, Some("Hello, World!".to_string()));
     assert!(mcp_content.blob.is_none());
+    assert!(mcp_content.meta.is_none());
+}
+
+#[test]
+fn test_convert_read_resource_result_preserves_meta() {
+    let mut meta = rmcp::model::Meta::new();
+    meta.0.insert(
+        "ui".to_string(),
+        serde_json::json!({
+            "csp": {
+                "connectDomains": ["https://api.example.com"],
+                "resourceDomains": ["https://cdn.example.com"]
+            }
+        }),
+    );
+    let result = rmcp::model::ReadResourceResult {
+        contents: vec![rmcp::model::ResourceContents::TextResourceContents {
+            uri: "ui://plugin/report.html".to_string(),
+            mime_type: Some("text/html".to_string()),
+            text: "<main>report</main>".to_string(),
+            meta: Some(meta),
+        }],
+    };
+
+    let content = McpClientManager::convert_read_resource_result("ui://plugin/report.html", result);
+
+    assert_eq!(
+        content.meta,
+        Some(serde_json::json!({
+            "ui": {
+                "csp": {
+                    "connectDomains": ["https://api.example.com"],
+                    "resourceDomains": ["https://cdn.example.com"]
+                }
+            }
+        }))
+    );
 }
 
 #[test]
@@ -334,6 +371,7 @@ fn test_convert_read_resource_result_blob() {
     );
     assert!(mcp_content.text.is_none());
     assert_eq!(mcp_content.blob, Some("base64encodeddata".to_string()));
+    assert!(mcp_content.meta.is_none());
 }
 
 #[test]
@@ -349,4 +387,5 @@ fn test_convert_read_resource_result_empty() {
     assert!(mcp_content.mime_type.is_none());
     assert!(mcp_content.text.is_none());
     assert!(mcp_content.blob.is_none());
+    assert!(mcp_content.meta.is_none());
 }

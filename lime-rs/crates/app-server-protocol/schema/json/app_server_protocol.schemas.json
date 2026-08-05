@@ -11544,6 +11544,99 @@
             }
           ]
         },
+        "PluginCatalogEnabledSetParams": {
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "pluginId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "enabled",
+            "pluginId"
+          ],
+          "type": "object"
+        },
+        "PluginCatalogInstallParams": {
+          "properties": {
+            "expectedDigest": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "marketplaceId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "sourcePath": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sourcePath"
+          ],
+          "type": "object"
+        },
+        "PluginCatalogInstalledParams": {
+          "type": "object"
+        },
+        "PluginCatalogListParams": {
+          "properties": {
+            "marketplacePaths": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "query": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "PluginCatalogReadParams": {
+          "properties": {
+            "pluginId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pluginId"
+          ],
+          "type": "object"
+        },
+        "PluginCatalogUninstallParams": {
+          "properties": {
+            "pluginId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pluginId"
+          ],
+          "type": "object"
+        },
         "RequestId": {
           "anyOf": [
             {
@@ -13703,6 +13796,126 @@
             },
             "params": {
               "$ref": "#/$defs/ModelListParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "plugin/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginCatalogListParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "plugin/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginCatalogReadParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "plugin/install",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginCatalogInstallParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "plugin/uninstall",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginCatalogUninstallParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "plugin/installed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginCatalogInstalledParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "plugin/enabled/set",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginCatalogEnabledSetParams"
             }
           },
           "required": [
@@ -29308,6 +29521,20 @@
           "minLength": 1,
           "type": "string"
         },
+        "sessionId": {
+          "minLength": 1,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "threadId": {
+          "minLength": 1,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "uri": {
           "minLength": 1,
           "type": "string"
@@ -29329,6 +29556,7 @@
             "string"
           ]
         },
+        "meta": true,
         "mime_type": {
           "type": [
             "null",
@@ -32658,6 +32886,12 @@
         "artifact/write",
         "media/read",
         "model/list",
+        "plugin/enabled/set",
+        "plugin/install",
+        "plugin/installed",
+        "plugin/list",
+        "plugin/read",
+        "plugin/uninstall",
         "thread/approveGuardianDeniedAction",
         "thread/archive",
         "thread/backgroundTerminals/clean",
@@ -38137,6 +38371,1040 @@
         "title"
       ],
       "title": "PluginArticleWorkspaceObject",
+      "type": "object"
+    },
+    "PluginCatalogCapability": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "requiresAuth": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "description",
+        "id",
+        "name",
+        "requiresAuth"
+      ],
+      "title": "PluginCatalogCapability",
+      "type": "object"
+    },
+    "PluginCatalogDetail": {
+      "$defs": {
+        "PluginCatalogCapability": {
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "requiresAuth": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "description",
+            "id",
+            "name",
+            "requiresAuth"
+          ],
+          "type": "object"
+        },
+        "PluginCatalogHook": {
+          "properties": {
+            "event": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "event",
+            "id"
+          ],
+          "type": "object"
+        },
+        "PluginCatalogSummary": {
+          "properties": {
+            "appsCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "authPolicy": {
+              "type": "string"
+            },
+            "availability": {
+              "type": "string"
+            },
+            "contentDigest": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "disabledReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "hooksCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "id": {
+              "type": "string"
+            },
+            "installPolicy": {
+              "type": "string"
+            },
+            "installed": {
+              "type": "boolean"
+            },
+            "localVersion": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "marketplaceId": {
+              "type": "string"
+            },
+            "mcpServersCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "skillsCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "source": {
+              "type": "string"
+            },
+            "sourceUri": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appsCount",
+            "authPolicy",
+            "availability",
+            "contentDigest",
+            "description",
+            "enabled",
+            "hooksCount",
+            "id",
+            "installPolicy",
+            "installed",
+            "marketplaceId",
+            "mcpServersCount",
+            "name",
+            "skillsCount",
+            "source",
+            "sourceUri",
+            "version"
+          ],
+          "type": "object"
+        },
+        "PluginCatalogUiResource": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "resourceUri": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "resourceUri"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "apps": {
+          "items": {
+            "$ref": "#/$defs/PluginCatalogCapability"
+          },
+          "type": "array"
+        },
+        "hooks": {
+          "items": {
+            "$ref": "#/$defs/PluginCatalogHook"
+          },
+          "type": "array"
+        },
+        "mcpServers": {
+          "items": {
+            "$ref": "#/$defs/PluginCatalogCapability"
+          },
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/PluginCatalogCapability"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "$ref": "#/$defs/PluginCatalogSummary"
+        },
+        "uiResources": {
+          "items": {
+            "$ref": "#/$defs/PluginCatalogUiResource"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "apps",
+        "hooks",
+        "mcpServers",
+        "skills",
+        "summary",
+        "uiResources"
+      ],
+      "title": "PluginCatalogDetail",
+      "type": "object"
+    },
+    "PluginCatalogEnabledSetParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "pluginId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled",
+        "pluginId"
+      ],
+      "title": "PluginCatalogEnabledSetParams",
+      "type": "object"
+    },
+    "PluginCatalogEnabledSetResponse": {
+      "$defs": {
+        "PluginCatalogSummary": {
+          "properties": {
+            "appsCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "authPolicy": {
+              "type": "string"
+            },
+            "availability": {
+              "type": "string"
+            },
+            "contentDigest": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "disabledReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "hooksCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "id": {
+              "type": "string"
+            },
+            "installPolicy": {
+              "type": "string"
+            },
+            "installed": {
+              "type": "boolean"
+            },
+            "localVersion": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "marketplaceId": {
+              "type": "string"
+            },
+            "mcpServersCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "skillsCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "source": {
+              "type": "string"
+            },
+            "sourceUri": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appsCount",
+            "authPolicy",
+            "availability",
+            "contentDigest",
+            "description",
+            "enabled",
+            "hooksCount",
+            "id",
+            "installPolicy",
+            "installed",
+            "marketplaceId",
+            "mcpServersCount",
+            "name",
+            "skillsCount",
+            "source",
+            "sourceUri",
+            "version"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "plugin": {
+          "$ref": "#/$defs/PluginCatalogSummary"
+        }
+      },
+      "required": [
+        "plugin"
+      ],
+      "title": "PluginCatalogEnabledSetResponse",
+      "type": "object"
+    },
+    "PluginCatalogHook": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "event": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "event",
+        "id"
+      ],
+      "title": "PluginCatalogHook",
+      "type": "object"
+    },
+    "PluginCatalogInstallParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "expectedDigest": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "marketplaceId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "source": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourcePath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sourcePath"
+      ],
+      "title": "PluginCatalogInstallParams",
+      "type": "object"
+    },
+    "PluginCatalogInstallResponse": {
+      "$defs": {
+        "PluginCatalogSummary": {
+          "properties": {
+            "appsCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "authPolicy": {
+              "type": "string"
+            },
+            "availability": {
+              "type": "string"
+            },
+            "contentDigest": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "disabledReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "hooksCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "id": {
+              "type": "string"
+            },
+            "installPolicy": {
+              "type": "string"
+            },
+            "installed": {
+              "type": "boolean"
+            },
+            "localVersion": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "marketplaceId": {
+              "type": "string"
+            },
+            "mcpServersCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "skillsCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "source": {
+              "type": "string"
+            },
+            "sourceUri": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appsCount",
+            "authPolicy",
+            "availability",
+            "contentDigest",
+            "description",
+            "enabled",
+            "hooksCount",
+            "id",
+            "installPolicy",
+            "installed",
+            "marketplaceId",
+            "mcpServersCount",
+            "name",
+            "skillsCount",
+            "source",
+            "sourceUri",
+            "version"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "plugin": {
+          "$ref": "#/$defs/PluginCatalogSummary"
+        }
+      },
+      "required": [
+        "plugin"
+      ],
+      "title": "PluginCatalogInstallResponse",
+      "type": "object"
+    },
+    "PluginCatalogInstalledParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "PluginCatalogInstalledParams",
+      "type": "object"
+    },
+    "PluginCatalogListParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "marketplacePaths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "query": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "source": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "title": "PluginCatalogListParams",
+      "type": "object"
+    },
+    "PluginCatalogListResponse": {
+      "$defs": {
+        "PluginCatalogSummary": {
+          "properties": {
+            "appsCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "authPolicy": {
+              "type": "string"
+            },
+            "availability": {
+              "type": "string"
+            },
+            "contentDigest": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "disabledReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "hooksCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "id": {
+              "type": "string"
+            },
+            "installPolicy": {
+              "type": "string"
+            },
+            "installed": {
+              "type": "boolean"
+            },
+            "localVersion": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "marketplaceId": {
+              "type": "string"
+            },
+            "mcpServersCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "skillsCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "source": {
+              "type": "string"
+            },
+            "sourceUri": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appsCount",
+            "authPolicy",
+            "availability",
+            "contentDigest",
+            "description",
+            "enabled",
+            "hooksCount",
+            "id",
+            "installPolicy",
+            "installed",
+            "marketplaceId",
+            "mcpServersCount",
+            "name",
+            "skillsCount",
+            "source",
+            "sourceUri",
+            "version"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "generatedAt": {
+          "type": "string"
+        },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/PluginCatalogSummary"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "generatedAt",
+        "plugins"
+      ],
+      "title": "PluginCatalogListResponse",
+      "type": "object"
+    },
+    "PluginCatalogReadParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "pluginId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pluginId"
+      ],
+      "title": "PluginCatalogReadParams",
+      "type": "object"
+    },
+    "PluginCatalogReadResponse": {
+      "$defs": {
+        "PluginCatalogCapability": {
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "requiresAuth": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "description",
+            "id",
+            "name",
+            "requiresAuth"
+          ],
+          "type": "object"
+        },
+        "PluginCatalogDetail": {
+          "properties": {
+            "apps": {
+              "items": {
+                "$ref": "#/$defs/PluginCatalogCapability"
+              },
+              "type": "array"
+            },
+            "hooks": {
+              "items": {
+                "$ref": "#/$defs/PluginCatalogHook"
+              },
+              "type": "array"
+            },
+            "mcpServers": {
+              "items": {
+                "$ref": "#/$defs/PluginCatalogCapability"
+              },
+              "type": "array"
+            },
+            "skills": {
+              "items": {
+                "$ref": "#/$defs/PluginCatalogCapability"
+              },
+              "type": "array"
+            },
+            "summary": {
+              "$ref": "#/$defs/PluginCatalogSummary"
+            },
+            "uiResources": {
+              "items": {
+                "$ref": "#/$defs/PluginCatalogUiResource"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "apps",
+            "hooks",
+            "mcpServers",
+            "skills",
+            "summary",
+            "uiResources"
+          ],
+          "type": "object"
+        },
+        "PluginCatalogHook": {
+          "properties": {
+            "event": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "event",
+            "id"
+          ],
+          "type": "object"
+        },
+        "PluginCatalogSummary": {
+          "properties": {
+            "appsCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "authPolicy": {
+              "type": "string"
+            },
+            "availability": {
+              "type": "string"
+            },
+            "contentDigest": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "disabledReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "hooksCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "id": {
+              "type": "string"
+            },
+            "installPolicy": {
+              "type": "string"
+            },
+            "installed": {
+              "type": "boolean"
+            },
+            "localVersion": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "marketplaceId": {
+              "type": "string"
+            },
+            "mcpServersCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "skillsCount": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "source": {
+              "type": "string"
+            },
+            "sourceUri": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appsCount",
+            "authPolicy",
+            "availability",
+            "contentDigest",
+            "description",
+            "enabled",
+            "hooksCount",
+            "id",
+            "installPolicy",
+            "installed",
+            "marketplaceId",
+            "mcpServersCount",
+            "name",
+            "skillsCount",
+            "source",
+            "sourceUri",
+            "version"
+          ],
+          "type": "object"
+        },
+        "PluginCatalogUiResource": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "resourceUri": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "resourceUri"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "plugin": {
+          "$ref": "#/$defs/PluginCatalogDetail"
+        }
+      },
+      "required": [
+        "plugin"
+      ],
+      "title": "PluginCatalogReadResponse",
+      "type": "object"
+    },
+    "PluginCatalogSummary": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "appsCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "authPolicy": {
+          "type": "string"
+        },
+        "availability": {
+          "type": "string"
+        },
+        "contentDigest": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "disabledReason": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "hooksCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "installPolicy": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "localVersion": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "marketplaceId": {
+          "type": "string"
+        },
+        "mcpServersCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "skillsCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sourceUri": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "appsCount",
+        "authPolicy",
+        "availability",
+        "contentDigest",
+        "description",
+        "enabled",
+        "hooksCount",
+        "id",
+        "installPolicy",
+        "installed",
+        "marketplaceId",
+        "mcpServersCount",
+        "name",
+        "skillsCount",
+        "source",
+        "sourceUri",
+        "version"
+      ],
+      "title": "PluginCatalogSummary",
+      "type": "object"
+    },
+    "PluginCatalogUiResource": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "resourceUri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "resourceUri"
+      ],
+      "title": "PluginCatalogUiResource",
+      "type": "object"
+    },
+    "PluginCatalogUninstallParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "pluginId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pluginId"
+      ],
+      "title": "PluginCatalogUninstallParams",
+      "type": "object"
+    },
+    "PluginCatalogUninstallResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "pluginId": {
+          "type": "string"
+        },
+        "uninstalled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pluginId",
+        "uninstalled"
+      ],
+      "title": "PluginCatalogUninstallResponse",
       "type": "object"
     },
     "PluginCloudReleaseDescriptor": {
@@ -100464,6 +101732,12 @@
               "modelProviderUiState/read",
               "modelProviderUiState/write",
               "modelSyncState/read",
+              "plugin/enabled/set",
+              "plugin/install",
+              "plugin/installed",
+              "plugin/list",
+              "plugin/read",
+              "plugin/uninstall",
               "pluginHostLifecycle/list",
               "pluginInstalled/disabled/set",
               "pluginInstalled/list",

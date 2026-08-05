@@ -685,6 +685,7 @@ pub struct McpResourceContent {
     pub mime_type: Option<String>,
     pub text: Option<String>,
     pub blob: Option<String>,
+    pub meta: Option<serde_json::Value>,
 }
 
 // ============================================================================

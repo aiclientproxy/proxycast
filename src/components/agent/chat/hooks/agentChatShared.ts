@@ -3,7 +3,11 @@ import type {
   AgentSessionInfo,
   AutoContinueRequestPayload,
 } from "@/lib/api/agentRuntime/sessionTypes";
-import type { ModeKind, RuntimeSearchMode } from "@limecloud/app-server-client";
+import type {
+  ModeKind,
+  RuntimeSearchMode,
+  UserInput,
+} from "@limecloud/app-server-client";
 import type {
   AgentRuntimeStatus,
   Message,
@@ -112,6 +116,8 @@ export interface ThreadGoalInput {
   tokenBudget?: number | null;
 }
 
+export type AgentInputMention = Extract<UserInput, { type: "mention" }>;
+
 export interface SendMessageOptions {
   purpose?: Message["purpose"];
   observer?: SendMessageObserver;
@@ -120,6 +126,7 @@ export interface SendMessageOptions {
   threadGoal?: ThreadGoalInput;
   assistantDraft?: AssistantDraftState;
   inputRestoreDraft?: InterruptedInputDraftSnapshot;
+  inputMentions?: readonly AgentInputMention[];
   displayContent?: string;
   capabilityRoute?: InputCapabilitySendRoute;
   skillRequest?: SlashSkillRequest;

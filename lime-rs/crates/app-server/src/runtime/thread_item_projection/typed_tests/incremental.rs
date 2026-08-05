@@ -107,6 +107,97 @@ fn reasoning_deltas_preserve_repeated_fragments_and_final_snapshot() {
 }
 
 #[test]
+fn empty_reasoning_completion_preserves_materialized_content() {
+    let delta = materialize_events(
+        &[
+            event(
+                "reasoning-started",
+                1,
+                "reasoning.started",
+                "turn-1",
+                json!({"reasoningId": "reasoning-1"}),
+            ),
+            event(
+                "reasoning-delta",
+                2,
+                "reasoning.delta",
+                "turn-1",
+                json!({"reasoningId": "reasoning-1", "text": "inspect inputs"}),
+            ),
+        ],
+        "session-1",
+        "thread-1",
+    )
+    .expect("materialize reasoning delta");
+    let mut completed_item = delta
+        .changed_items
+        .into_iter()
+        .find(|item| {
+            matches!(
+                item.payload,
+                agent_protocol::ThreadItemPayload::Reasoning { .. }
+            )
+        })
+        .expect("reasoning delta item");
+    completed_item.status = agent_protocol::ItemStatus::Completed;
+    completed_item.completed_at_ms = Some(3);
+    completed_item.sequence = 3;
+    completed_item.updated_at_ms = 3;
+    completed_item.metadata = json!({"source_event_type": "item.completed"});
+    completed_item.payload = agent_protocol::ThreadItemPayload::Reasoning {
+        summary: Vec::new(),
+        content: Vec::new(),
+    };
+
+    let changes = materialize_events(
+        &[
+            event(
+                "reasoning-started",
+                1,
+                "reasoning.started",
+                "turn-1",
+                json!({"reasoningId": "reasoning-1"}),
+            ),
+            event(
+                "reasoning-delta",
+                2,
+                "reasoning.delta",
+                "turn-1",
+                json!({"reasoningId": "reasoning-1", "text": "inspect inputs"}),
+            ),
+            event(
+                "reasoning-completed",
+                3,
+                "item.completed",
+                "turn-1",
+                json!({"item": serde_json::to_value(completed_item).expect("serialize item")}),
+            ),
+        ],
+        "session-1",
+        "thread-1",
+    )
+    .expect("materialize empty reasoning completion");
+    let reasoning = changes
+        .changed_items
+        .iter()
+        .find(|item| {
+            matches!(
+                item.payload,
+                agent_protocol::ThreadItemPayload::Reasoning { .. }
+            )
+        })
+        .expect("completed reasoning item");
+    assert_eq!(reasoning.status, agent_protocol::ItemStatus::Completed);
+    assert_eq!(
+        reasoning.payload,
+        agent_protocol::ThreadItemPayload::Reasoning {
+            summary: Vec::new(),
+            content: vec!["inspect inputs".to_string()],
+        }
+    );
+}
+
+#[test]
 fn incremental_materializer_does_not_revive_removed_item_identity() {
     let started = event(
         "event-started",

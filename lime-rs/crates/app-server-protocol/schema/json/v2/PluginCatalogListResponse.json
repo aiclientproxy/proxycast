@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "PluginCatalogSummary": {
+      "properties": {
+        "appsCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "authPolicy": {
+          "type": "string"
+        },
+        "availability": {
+          "type": "string"
+        },
+        "contentDigest": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "disabledReason": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "hooksCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "installPolicy": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "localVersion": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "marketplaceId": {
+          "type": "string"
+        },
+        "mcpServersCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "skillsCount": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sourceUri": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "appsCount",
+        "authPolicy",
+        "availability",
+        "contentDigest",
+        "description",
+        "enabled",
+        "hooksCount",
+        "id",
+        "installPolicy",
+        "installed",
+        "marketplaceId",
+        "mcpServersCount",
+        "name",
+        "skillsCount",
+        "source",
+        "sourceUri",
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "generatedAt": {
+      "type": "string"
+    },
+    "plugins": {
+      "items": {
+        "$ref": "#/$defs/PluginCatalogSummary"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "generatedAt",
+    "plugins"
+  ],
+  "title": "PluginCatalogListResponse",
+  "type": "object"
+}

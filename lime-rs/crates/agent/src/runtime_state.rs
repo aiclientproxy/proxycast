@@ -504,6 +504,19 @@ impl AgentRuntimeState {
         runtime.shutdown().await;
     }
 
+    pub async fn read_mcp_resource(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server_name: &str,
+        uri: &str,
+    ) -> Result<lime_mcp::McpResourceContent, String> {
+        self.mcp_runtime(session_id, thread_id)
+            .await?
+            .read_resource(server_name, uri)
+            .await
+    }
+
     #[cfg(test)]
     pub(crate) async fn mcp_runtime_count(&self) -> usize {
         self.mcp_runtimes.read().await.len()

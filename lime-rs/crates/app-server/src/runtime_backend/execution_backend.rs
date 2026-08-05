@@ -1,7 +1,7 @@
 use super::{
     action_response, current_agent_runtime_config_metadata, initialize_runtime_database,
-    plugin_worker_generation, request_context::effective_runtime_options_for_turn, tool_inventory,
-    workspace_patch_host_execution, RuntimeBackend,
+    mcp_bridges, plugin_worker_generation, request_context::effective_runtime_options_for_turn,
+    tool_inventory, workspace_patch_host_execution, RuntimeBackend,
 };
 use crate::runtime::ToolInventoryReadRequest;
 use crate::{
@@ -344,6 +344,43 @@ impl ExecutionBackend for RuntimeBackend {
             app_data_source,
         )
         .await
+    }
+
+    async fn read_mcp_runtime_resource(
+        &self,
+        params: app_server_protocol::McpResourceReadParams,
+    ) -> Result<app_server_protocol::McpResourceReadResponse, RuntimeCoreError> {
+        let session_id = params.session_id.as_deref().ok_or_else(|| {
+            RuntimeCoreError::InvalidRequest(
+                "mcpResource/read runtime owner requires sessionId".to_string(),
+            )
+        })?;
+        let thread_id = params.thread_id.as_deref().ok_or_else(|| {
+            RuntimeCoreError::InvalidRequest(
+                "mcpResource/read runtime owner requires threadId".to_string(),
+            )
+        })?;
+        let db = initialize_runtime_database(self.db.as_ref())?;
+        self.ensure_agent_initialized(&db).await?;
+        mcp_bridges::ensure_thread_mcp_runtime_if_available(
+            &self.agent_state,
+            &self.app_data_source,
+            session_id,
+            thread_id,
+        )
+        .await?;
+        let content = self
+            .agent_state
+            .read_mcp_resource(session_id, thread_id, &params.server, &params.uri)
+            .await
+            .map_err(RuntimeCoreError::Backend)?;
+        Ok(app_server_protocol::McpResourceReadResponse {
+            uri: content.uri,
+            mime_type: content.mime_type,
+            text: content.text,
+            blob: content.blob,
+            meta: content.meta,
+        })
     }
 
     async fn prepare_runtime_worker_artifact_events(

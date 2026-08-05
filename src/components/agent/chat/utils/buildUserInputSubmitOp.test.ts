@@ -14,6 +14,7 @@ interface ExpectedCurrentTurnStartWire {
   threadId: string;
   text: string;
   imageUrls?: string[];
+  mentions?: Array<{ name: string; path: string }>;
   model?: string;
   effort?: string;
   collaborationMode?: CollaborationMode;
@@ -72,6 +73,10 @@ function createExpectedTurn(
     threadId: expected.threadId,
     input: [
       { type: "text" as const, text: expected.text },
+      ...(expected.mentions ?? []).map((mention) => ({
+        type: "mention" as const,
+        ...mention,
+      })),
       ...(expected.imageUrls ?? []).map((url) => ({
         type: "image" as const,
         url,
@@ -177,6 +182,13 @@ describe("buildUserInputSubmitOp", () => {
           mediaType: "image/png",
         },
       ],
+      inputMentions: [
+        {
+          type: "mention",
+          name: "Browser",
+          path: "plugin://browser",
+        },
+      ],
       threadId: "thread-social-1",
       eventName: "agent_stream_x",
       requestMetadata: {
@@ -226,6 +238,7 @@ describe("buildUserInputSubmitOp", () => {
     expectCurrentUserInputOp(op, {
       threadId: "thread-social-1",
       text: "继续生成社媒初稿",
+      mentions: [{ name: "Browser", path: "plugin://browser" }],
       imageUrls: ["data:image/png;base64,base64-image"],
       approvalPolicy: "on-request",
       sandboxPolicy: "workspace-write",
@@ -236,6 +249,7 @@ describe("buildUserInputSubmitOp", () => {
     expectCurrentTurnStartWire(request, {
       threadId: "thread-social-1",
       text: "继续生成社媒初稿",
+      mentions: [{ name: "Browser", path: "plugin://browser" }],
       imageUrls: ["data:image/png;base64,base64-image"],
       approvalPolicy: "on-request",
       sandboxPolicy: "workspace-write",

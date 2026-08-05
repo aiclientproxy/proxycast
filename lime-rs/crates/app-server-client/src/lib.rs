@@ -3128,6 +3128,8 @@ mod tests {
             .read_mcp_resource(McpResourceReadParams {
                 server: "filesystem".to_string(),
                 uri: "file:///workspace/README.md".to_string(),
+                session_id: None,
+                thread_id: None,
             })
             .expect("resource");
         let resource_subscription = client
@@ -3256,6 +3258,8 @@ mod tests {
         let read = client.read_mcp_resource(McpResourceReadParams {
             server: " ".to_string(),
             uri: "docs://readme".to_string(),
+            session_id: None,
+            thread_id: None,
         });
         let subscribe = client.subscribe_mcp_resource(McpResourceSubscribeParams {
             server: "docs".to_string(),

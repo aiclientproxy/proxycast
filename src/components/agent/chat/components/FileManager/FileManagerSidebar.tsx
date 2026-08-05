@@ -12,6 +12,8 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Eye,
+  EyeOff,
   FileText,
   Folder,
   Home,
@@ -204,6 +206,7 @@ export const FileManagerSidebar: React.FC<FileManagerSidebarProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [showHiddenDirectories, setShowHiddenDirectories] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const iconDataUrlCacheRef = useRef<Map<string, string>>(new Map());
   const entriesRef = useRef<FileEntry[]>([]);
@@ -440,12 +443,22 @@ export const FileManagerSidebar: React.FC<FileManagerSidebarProps> = ({
     );
   }, [activePath, allLocations, t]);
 
+  const visibleEntries = useMemo(
+    () =>
+      showHiddenDirectories
+        ? entries
+        : entries.filter(
+            (entry) => !entry.isDir || !entry.name.startsWith("."),
+          ),
+    [entries, showHiddenDirectories],
+  );
+
   const sortedEntries = useMemo(
     () =>
-      entries
+      visibleEntries
         .slice()
         .sort((left, right) => compareFileManagerEntries(left, right, locale)),
-    [entries, locale],
+    [locale, visibleEntries],
   );
 
   const handleSelectLocation = useCallback((location: FileManagerLocation) => {
@@ -877,6 +890,32 @@ export const FileManagerSidebar: React.FC<FileManagerSidebarProps> = ({
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </button>
           </div>
+          <button
+            type="button"
+            data-testid="file-manager-toggle-hidden-directories"
+            className={cn(
+              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-slate-500 transition hover:bg-white hover:text-slate-900",
+              showHiddenDirectories && "bg-white text-sky-700",
+            )}
+            aria-label={t(
+              showHiddenDirectories
+                ? "agentChat.fileManager.hideHiddenDirectories"
+                : "agentChat.fileManager.showHiddenDirectories",
+            )}
+            aria-pressed={showHiddenDirectories}
+            title={t(
+              showHiddenDirectories
+                ? "agentChat.fileManager.hideHiddenDirectories"
+                : "agentChat.fileManager.showHiddenDirectories",
+            )}
+            onClick={() => setShowHiddenDirectories((current) => !current)}
+          >
+            {showHiddenDirectories ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
           <div
             className="flex min-w-0 flex-1 items-center gap-2 rounded-[7px] border border-slate-200 bg-white px-2.5 py-1.5"
             title={activePath ? t("agentChat.fileManager.currentFolder") : ""}
@@ -940,7 +979,7 @@ export const FileManagerSidebar: React.FC<FileManagerSidebarProps> = ({
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-white">
-          {!loading && entries.length === 0 ? (
+          {!loading && sortedEntries.length === 0 ? (
             <div className="m-3 flex h-full min-h-[220px] flex-col items-center justify-center rounded-[10px] border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-sm text-slate-500">
               <Folder className="mb-2 h-8 w-8 text-slate-300" />
               {t("agentChat.fileManager.emptyDirectory")}

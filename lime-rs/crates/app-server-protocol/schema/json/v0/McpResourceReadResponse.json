@@ -7,6 +7,7 @@
         "string"
       ]
     },
+    "meta": true,
     "mime_type": {
       "type": [
         "null",

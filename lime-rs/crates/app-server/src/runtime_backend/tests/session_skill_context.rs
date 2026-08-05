@@ -63,6 +63,95 @@ Use concise language.
 }
 
 #[test]
+fn session_config_loads_enabled_plugin_v2_skills_and_freezes_identity() {
+    let workspace = TempDir::new().expect("workspace");
+    let plugin_root = workspace.path().join("plugins/browser");
+    let skill_dir = plugin_root.join("skills/control-browser");
+    std::fs::create_dir_all(&skill_dir).expect("plugin skill dir");
+    std::fs::write(
+        skill_dir.join("SKILL.md"),
+        r#"---
+name: Control Browser
+description: Inspect pages through the managed browser.
+---
+
+# Control Browser
+
+Use the managed browser session.
+"#,
+    )
+    .expect("plugin skill file");
+    let mut request = request_for_test("检查当前页面", None, None);
+    let options = request.runtime_options.as_mut().expect("runtime options");
+    options.runtime_request_mut().provider_preference = Some("openai".to_string());
+    options.runtime_request_mut().model_preference = Some("gpt-4.1".to_string());
+    let host_request = runtime_request_from_request(&request);
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("selection");
+    let policy = request_tool_policy_from_request(host_request.as_ref());
+    let activations = vec![json!({
+        "schemaVersion": "plugin-activation/v2",
+        "pluginId": "browser",
+        "version": "1.0.0",
+        "contentDigest": "sha256:fixture",
+        "marketplaceId": "openai-bundled",
+        "packageSourceUri": plugin_root.to_string_lossy(),
+        "runtimeCapabilities": {
+            "schemaVersion": "plugin-runtime-capabilities/v2",
+            "pluginId": "browser",
+            "version": "1.0.0",
+            "packageSourceUri": plugin_root.to_string_lossy(),
+            "skills": [{
+                "id": "control-browser",
+                "title": "Control Browser",
+                "path": "./skills/",
+                "activation": "available",
+                "required": false,
+                "promptInjectionPolicy": {
+                    "mode": "available",
+                    "source": "plugin-v2-installed"
+                }
+            }],
+            "mcpBindings": []
+        }
+    })];
+
+    let config = session_config_from_request_with_plugin_activations(
+        &request,
+        host_request.as_ref(),
+        &scope,
+        &selection,
+        &policy,
+        None,
+        &activations,
+    );
+
+    let prompt = config.system_prompt.expect("system prompt");
+    assert!(prompt.contains("<plugin_runtime_capabilities>"));
+    assert!(prompt.contains("plugin_id: browser"));
+    let turn_context = config.turn_context.expect("turn context");
+    assert_eq!(
+        turn_context.metadata["plugin_activation"]["pluginId"],
+        "browser"
+    );
+    assert_eq!(
+        turn_context.metadata["plugin_activations"],
+        Value::Array(activations)
+    );
+    let snapshot = turn_context
+        .metadata
+        .get(lime_skills::SKILL_SNAPSHOT_TURN_METADATA_KEY)
+        .and_then(|value| {
+            serde_json::from_value::<lime_skills::AgentSkillSnapshot>(value.clone()).ok()
+        })
+        .expect("skill snapshot");
+    assert!(snapshot
+        .skills
+        .iter()
+        .any(|skill| skill.name.eq_ignore_ascii_case("control-browser")));
+}
+
+#[test]
 fn session_config_appends_plugin_activation_metadata_to_system_prompt() {
     let mut request = request_for_test(
         "@创作工作台 写一篇公众号文章",

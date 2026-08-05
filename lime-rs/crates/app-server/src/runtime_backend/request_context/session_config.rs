@@ -19,6 +19,7 @@ const DEFAULT_SESSION_SYSTEM_PROMPT: &str = "你是 Lime 桌面端中的 AI 助�
 const HARNESS_MAX_PROVIDER_STEPS_POINTER: &str = "/harness/provider_budget/max_provider_steps";
 const HARNESS_PROVIDER_TOKEN_BUDGET_POINTER: &str = "/harness/provider_budget/token_budget";
 
+#[cfg(test)]
 pub(in crate::runtime_backend) fn session_config_from_request(
     request: &ExecutionRequest,
     host_request: Option<&RuntimeRequest>,
@@ -27,8 +28,33 @@ pub(in crate::runtime_backend) fn session_config_from_request(
     request_tool_policy: &RequestToolPolicy,
     config_metadata: Option<Value>,
 ) -> AgentSessionConfig {
+    session_config_from_request_with_plugin_activations(
+        request,
+        host_request,
+        scope,
+        selection,
+        request_tool_policy,
+        config_metadata,
+        &[],
+    )
+}
+
+pub(in crate::runtime_backend) fn session_config_from_request_with_plugin_activations(
+    request: &ExecutionRequest,
+    host_request: Option<&RuntimeRequest>,
+    scope: &RuntimeSessionScope,
+    selection: &RuntimeModelSelection,
+    request_tool_policy: &RequestToolPolicy,
+    config_metadata: Option<Value>,
+    plugin_activations: &[Value],
+) -> AgentSessionConfig {
     let workspace_scope = request_workspace_scope(request, host_request);
-    let metadata_values = super::super::skill_runtime_enable::request_metadata_values(request);
+    let mut metadata_values = super::super::skill_runtime_enable::request_metadata_values(request);
+    let plugin_activation_metadata = plugin_activations
+        .iter()
+        .map(|activation| serde_json::json!({ "plugin_activation": activation }))
+        .collect::<Vec<_>>();
+    metadata_values.extend(plugin_activation_metadata.iter());
     let turn_tool_surface = super::turn_tool_surface_for_request(request);
     let runtime_metadata = request.runtime_metadata();
     let (system_prompt, skill_snapshot) = if turn_tool_surface.uses_light_session_prompt() {
@@ -92,6 +118,19 @@ pub(in crate::runtime_backend) fn session_config_from_request(
             lime_skills::SKILL_SNAPSHOT_TURN_METADATA_KEY.to_string(),
             serde_json::to_value(skill_snapshot).expect("skill snapshot must serialize"),
         );
+    }
+    if !plugin_activations.is_empty() {
+        let turn_context = turn_context.get_or_insert_with(Default::default);
+        turn_context.metadata.insert(
+            "plugin_activations".to_string(),
+            Value::Array(plugin_activations.to_vec()),
+        );
+        if plugin_activations.len() == 1 {
+            turn_context.metadata.insert(
+                "plugin_activation".to_string(),
+                plugin_activations[0].clone(),
+            );
+        }
     }
     if turn_tool_surface.is_harness_direct_answer() {
         let turn_context = turn_context.get_or_insert_with(Default::default);

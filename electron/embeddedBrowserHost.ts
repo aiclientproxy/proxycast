@@ -7,6 +7,10 @@ import {
 import { installEmbeddedBrowserContextMenu } from "./embeddedBrowserContextMenu";
 import { installEmbeddedBrowserDownloadHandling } from "./embeddedBrowserDownloads";
 import { installEmbeddedBrowserPermissionHandling } from "./embeddedBrowserPermissions";
+import {
+  buildEmbeddedBrowserHtmlDataUrl,
+  readEmbeddedBrowserHtmlPayload,
+} from "./embeddedBrowserHtml";
 import type {
   Session as ElectronSession,
   WebContents as ElectronWebContents,
@@ -14,11 +18,17 @@ import type {
 
 type HostArgs = Record<string, unknown> | null | undefined;
 type HostEventEmitter = (event: string, payload?: unknown) => void;
+type EmbeddedBrowserDestroyReason =
+  | "renderer-cleanup"
+  | "renderer-navigation"
+  | "window-closed"
+  | "host-dispose";
 
 export const EMBEDDED_BROWSER_COMMANDS = [
   "embedded_browser_view_mount",
   "embedded_browser_view_set_bounds",
   "embedded_browser_view_navigate",
+  "embedded_browser_view_load_html",
   "embedded_browser_view_reload",
   "embedded_browser_view_stop",
   "embedded_browser_view_find_in_page",
@@ -63,8 +73,15 @@ interface EmbeddedBrowserEntry {
   view: WebContentsView;
   window: BrowserWindow;
   closeListener: () => void;
-  rendererLoadListener: () => void;
+  rendererNavigationListener: (
+    event: unknown,
+    url: string,
+    isInPlace: boolean,
+    isMainFrame: boolean,
+  ) => void;
+  leaseIds: Set<string>;
   pendingUrl?: string;
+  sourceUri?: string;
   navigationToken: number;
   faviconUrl: string | null;
   loadProgress: number;
@@ -96,7 +113,7 @@ export class ElectronEmbeddedBrowserHost {
     args?: HostArgs,
   ): Promise<unknown> {
     if (command === "embedded_browser_view_destroy") {
-      return this.#destroy(args);
+      return this.#destroy(args, "renderer-cleanup");
     }
 
     if (!window || window.isDestroyed()) {
@@ -110,6 +127,8 @@ export class ElectronEmbeddedBrowserHost {
         return this.#setBounds(window, args);
       case "embedded_browser_view_navigate":
         return await this.#navigate(window, args);
+      case "embedded_browser_view_load_html":
+        return await this.#loadHtml(window, args);
       case "embedded_browser_view_reload":
         return this.#reload(window, args);
       case "embedded_browser_view_stop":
@@ -131,7 +150,7 @@ export class ElectronEmbeddedBrowserHost {
 
   dispose(): void {
     for (const viewId of [...this.#entries.keys()]) {
-      this.#destroy({ viewId });
+      this.#destroy({ viewId }, "host-dispose");
     }
   }
 
@@ -144,6 +163,10 @@ export class ElectronEmbeddedBrowserHost {
     const bounds = readOptionalBounds(args);
     const visible = readOptionalBoolean(args, "visible") ?? true;
     const entry = this.#ensureEntry(window, viewId);
+    const leaseId = readString(args, "leaseId");
+    if (leaseId) {
+      entry.leaseIds.add(leaseId);
+    }
 
     if (bounds) {
       applyBounds(entry.view, bounds, visible);
@@ -172,6 +195,21 @@ export class ElectronEmbeddedBrowserHost {
   ): Promise<EmbeddedBrowserViewState> {
     const entry = this.#ensureEntry(window, readViewId(args));
     this.#startNavigation(entry, readUrl(args));
+    return this.#emitState(entry);
+  }
+
+  async #loadHtml(
+    window: BrowserWindow,
+    args?: HostArgs,
+  ): Promise<EmbeddedBrowserViewState> {
+    const entry = this.#ensureEntry(window, readViewId(args));
+    const payload = readEmbeddedBrowserHtmlPayload(args);
+    entry.sourceUri = payload.sourceUri;
+    this.#startNavigation(
+      entry,
+      payload.sourceUri,
+      buildEmbeddedBrowserHtmlDataUrl(payload),
+    );
     return this.#emitState(entry);
   }
 
@@ -249,17 +287,31 @@ export class ElectronEmbeddedBrowserHost {
     return this.#emitState(entry);
   }
 
-  #destroy(args?: HostArgs): Record<string, never> {
+  #destroy(
+    args: HostArgs,
+    reason: EmbeddedBrowserDestroyReason,
+  ): Record<string, never> {
     const viewId = readViewId(args);
     const entry = this.#entries.get(viewId);
     if (!entry) {
       return {};
     }
+    const leaseId = readString(args, "leaseId");
+    if (leaseId) {
+      if (!entry.leaseIds.delete(leaseId) || entry.leaseIds.size > 0) {
+        return {};
+      }
+    }
 
     this.#entries.delete(viewId);
     detachEntryFromWindow(entry);
     closeEntryView(entry);
-    this.#emit("embedded-browser-view-destroyed", { viewId });
+    this.#emit("embedded-browser-view-destroyed", {
+      viewId,
+      reason,
+      requestedLeaseId: leaseId,
+      remainingLeaseCount: entry.leaseIds.size,
+    });
     return {};
   }
 
@@ -269,8 +321,10 @@ export class ElectronEmbeddedBrowserHost {
       if (existing.window !== window) {
         detachEntryFromWindow(existing);
         existing.window = window;
-        existing.closeListener = () => this.#destroy({ viewId });
-        existing.rendererLoadListener = () => this.#destroy({ viewId });
+        existing.closeListener = () =>
+          this.#destroy({ viewId }, "window-closed");
+        existing.rendererNavigationListener =
+          this.#createRendererNavigationListener(viewId);
         attachEntryToWindow(existing, window);
         return existing;
       }
@@ -297,8 +351,10 @@ export class ElectronEmbeddedBrowserHost {
       viewId,
       view,
       window,
-      closeListener: () => this.#destroy({ viewId }),
-      rendererLoadListener: () => this.#destroy({ viewId }),
+      closeListener: () => this.#destroy({ viewId }, "window-closed"),
+      rendererNavigationListener:
+        this.#createRendererNavigationListener(viewId),
+      leaseIds: new Set<string>(),
       navigationToken: 0,
       faviconUrl: null,
       loadProgress: 1,
@@ -306,12 +362,20 @@ export class ElectronEmbeddedBrowserHost {
       findRequestId: null,
     };
     view.webContents.setWindowOpenHandler(({ url }) => {
+      if (entry.sourceUri) {
+        return { action: "deny" };
+      }
       const normalizedUrl = normalizeHttpUrl(url);
       if (normalizedUrl) {
         this.#startNavigation(entry, normalizedUrl);
         this.#emitState(entry);
       }
       return { action: "deny" };
+    });
+    view.webContents.on("will-navigate", (event, url) => {
+      if (entry.sourceUri && normalizeHttpUrl(url)) {
+        event.preventDefault();
+      }
     });
     installEmbeddedBrowserContextMenu({
       view,
@@ -383,6 +447,16 @@ export class ElectronEmbeddedBrowserHost {
     return entry;
   }
 
+  #createRendererNavigationListener(
+    viewId: string,
+  ): EmbeddedBrowserEntry["rendererNavigationListener"] {
+    return (_event, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame && !isInPlace) {
+        this.#destroy({ viewId }, "renderer-navigation");
+      }
+    };
+  }
+
   #installSessionHandlers(embeddedSession: ElectronSession): void {
     if (this.#sessionHandlersInstalled) {
       return;
@@ -416,7 +490,14 @@ export class ElectronEmbeddedBrowserHost {
     return null;
   }
 
-  #startNavigation(entry: EmbeddedBrowserEntry, url: string): void {
+  #startNavigation(
+    entry: EmbeddedBrowserEntry,
+    url: string,
+    loadUrl = url,
+  ): void {
+    if (loadUrl === url) {
+      entry.sourceUri = undefined;
+    }
     entry.pendingUrl = url;
     entry.loadProgress = 0.1;
     const navigationToken = entry.navigationToken + 1;
@@ -424,7 +505,7 @@ export class ElectronEmbeddedBrowserHost {
 
     let loadPromise: Promise<void>;
     try {
-      loadPromise = entry.view.webContents.loadURL(url);
+      loadPromise = entry.view.webContents.loadURL(loadUrl);
     } catch (error) {
       this.#clearPendingNavigation(entry);
       this.#emitLoadFailed(
@@ -535,7 +616,7 @@ function readState(entry: EmbeddedBrowserEntry): EmbeddedBrowserViewState {
   const webContents = entry.view.webContents;
   return {
     viewId: entry.viewId,
-    url: entry.pendingUrl || webContents.getURL(),
+    url: entry.pendingUrl || entry.sourceUri || webContents.getURL(),
     title: webContents.getTitle(),
     faviconUrl: entry.faviconUrl,
     canGoBack: webContents.navigationHistory.canGoBack(),
@@ -658,7 +739,10 @@ function attachEntryToWindow(
   window: BrowserWindow,
 ): void {
   window.on("closed", entry.closeListener);
-  window.webContents.on("did-start-loading", entry.rendererLoadListener);
+  window.webContents.on(
+    "did-start-navigation",
+    entry.rendererNavigationListener,
+  );
   window.contentView.addChildView(entry.view);
 }
 
@@ -667,8 +751,8 @@ function detachEntryFromWindow(entry: EmbeddedBrowserEntry): void {
     if (!entry.window.isDestroyed()) {
       entry.window.off("closed", entry.closeListener);
       entry.window.webContents.off(
-        "did-start-loading",
-        entry.rendererLoadListener,
+        "did-start-navigation",
+        entry.rendererNavigationListener,
       );
       entry.window.contentView.removeChildView(entry.view);
     }

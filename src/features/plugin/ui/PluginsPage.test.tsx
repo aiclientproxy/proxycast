@@ -31,7 +31,11 @@ describe("PluginsPage", () => {
     await flush();
 
     expect(container.textContent).toContain("plugin.apps.center.title");
-    expect(container.textContent).toContain("plugin.apps.center.description");
+    expect(
+      container
+        .querySelector('[data-testid="plugins-search"]')
+        ?.closest("header")?.textContent,
+    ).not.toContain("plugin.apps.center.description");
     expect(
       container
         .querySelector('[data-testid="plugins-search"]')
@@ -144,6 +148,51 @@ describe("PluginsPage", () => {
     ).toContain("min-h-[188px]");
   });
 
+  it("应用中心顶部操作区应避免压缩标题和拆分按钮文案", async () => {
+    const container = await renderPage();
+    await flush();
+
+    const header = container
+      .querySelector('[data-testid="plugins-search"]')
+      ?.closest("header");
+    expect(header?.className).toContain("xl:flex-row");
+    expect(header?.className).not.toContain("lg:flex-row");
+
+    const actionGroup = container.querySelector(
+      '[data-testid="plugins-install-local"]',
+    )?.parentElement;
+    expect(actionGroup?.className).toContain("flex-wrap");
+
+    for (const testId of ["plugins-install-local", "plugins-more-actions"]) {
+      const button = container.querySelector(`[data-testid="${testId}"]`);
+      expect(button?.className).toContain("shrink-0");
+      expect(button?.className).toContain("whitespace-nowrap");
+    }
+
+    await act(async () => {
+      (
+        container.querySelector(
+          '[data-testid="plugins-more-actions"]',
+        ) as HTMLButtonElement
+      )?.click();
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(
+      container.querySelector('[data-testid="plugins-more-actions-menu"]'),
+    ).not.toBeNull();
+    for (const testId of [
+      "plugins-open-publish",
+      "plugins-open-release-review",
+      "plugins-refresh",
+    ]) {
+      expect(
+        container.querySelector(`[data-testid="${testId}"]`),
+      ).not.toBeNull();
+    }
+  });
+
   it("应从应用中心打开内置发布工作台", async () => {
     const container = await renderPage();
     await flush();
@@ -152,6 +201,15 @@ describe("PluginsPage", () => {
       container.querySelector('[data-testid="plugin-publish-workbench"]'),
     ).toBeNull();
 
+    await act(async () => {
+      (
+        container.querySelector(
+          '[data-testid="plugins-more-actions"]',
+        ) as HTMLButtonElement
+      )?.click();
+      await Promise.resolve();
+    });
+    await flush();
     await act(async () => {
       (
         container.querySelector(
@@ -175,6 +233,15 @@ describe("PluginsPage", () => {
       container.querySelector('[data-testid="plugin-review-workbench"]'),
     ).toBeNull();
 
+    await act(async () => {
+      (
+        container.querySelector(
+          '[data-testid="plugins-more-actions"]',
+        ) as HTMLButtonElement
+      )?.click();
+      await Promise.resolve();
+    });
+    await flush();
     await act(async () => {
       (
         container.querySelector(

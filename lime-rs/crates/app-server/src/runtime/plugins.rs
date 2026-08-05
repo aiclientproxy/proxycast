@@ -6,6 +6,17 @@ use super::plugin_task_runtime::{
 use super::timestamp;
 use super::RuntimeCore;
 use super::RuntimeCoreError;
+use app_server_protocol::protocol::v2::PluginCatalogEnabledSetParams;
+use app_server_protocol::protocol::v2::PluginCatalogEnabledSetResponse;
+use app_server_protocol::protocol::v2::PluginCatalogInstallParams;
+use app_server_protocol::protocol::v2::PluginCatalogInstallResponse;
+use app_server_protocol::protocol::v2::PluginCatalogInstalledParams;
+use app_server_protocol::protocol::v2::PluginCatalogListParams;
+use app_server_protocol::protocol::v2::PluginCatalogListResponse;
+use app_server_protocol::protocol::v2::PluginCatalogReadParams;
+use app_server_protocol::protocol::v2::PluginCatalogReadResponse;
+use app_server_protocol::protocol::v2::PluginCatalogUninstallParams;
+use app_server_protocol::protocol::v2::PluginCatalogUninstallResponse;
 use app_server_protocol::PluginFetchCloudPackageParams;
 use app_server_protocol::PluginInstalledDisabledSetParams;
 use app_server_protocol::PluginInstalledListResponse;
@@ -70,6 +81,52 @@ struct PluginShellDescriptorFields {
 }
 
 impl RuntimeCore {
+    pub async fn list_plugin_catalog(
+        &self,
+        params: PluginCatalogListParams,
+    ) -> Result<PluginCatalogListResponse, RuntimeCoreError> {
+        self.app_data_source.list_plugin_catalog(params).await
+    }
+
+    pub async fn read_plugin_catalog(
+        &self,
+        params: PluginCatalogReadParams,
+    ) -> Result<PluginCatalogReadResponse, RuntimeCoreError> {
+        self.app_data_source.read_plugin_catalog(params).await
+    }
+
+    pub async fn install_plugin_catalog(
+        &self,
+        params: PluginCatalogInstallParams,
+    ) -> Result<PluginCatalogInstallResponse, RuntimeCoreError> {
+        self.app_data_source.install_plugin_catalog(params).await
+    }
+
+    pub async fn uninstall_plugin_catalog(
+        &self,
+        params: PluginCatalogUninstallParams,
+    ) -> Result<PluginCatalogUninstallResponse, RuntimeCoreError> {
+        self.app_data_source.uninstall_plugin_catalog(params).await
+    }
+
+    pub async fn list_plugin_catalog_installed(
+        &self,
+        params: PluginCatalogInstalledParams,
+    ) -> Result<PluginCatalogListResponse, RuntimeCoreError> {
+        self.app_data_source
+            .list_plugin_catalog_installed(params)
+            .await
+    }
+
+    pub async fn set_plugin_catalog_enabled(
+        &self,
+        params: PluginCatalogEnabledSetParams,
+    ) -> Result<PluginCatalogEnabledSetResponse, RuntimeCoreError> {
+        self.app_data_source
+            .set_plugin_catalog_enabled(params)
+            .await
+    }
+
     pub(super) fn installed_plugin_runtime_dir(
         &self,
         state: &serde_json::Value,

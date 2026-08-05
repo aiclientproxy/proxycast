@@ -244,6 +244,11 @@ pub(super) fn typed_payload(
             .unwrap_or_else(|| "unknown".to_string()),
             tool_name: map_string(payload, &["toolName", "tool_name", "name"])
                 .unwrap_or_else(|| "tool".to_string()),
+            mcp_app_resource_uri: map_string(
+                payload,
+                &["mcpAppResourceUri", "mcp_app_resource_uri"],
+            ),
+            plugin_id: map_string(payload, &["pluginId", "plugin_id"]),
             arguments: tool_arguments(payload),
             output: tool_output(payload),
         },

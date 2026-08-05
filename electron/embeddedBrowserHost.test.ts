@@ -166,6 +166,10 @@ vi.mock("./electronRuntime", () => ({
 
 function createWindow() {
   let destroyed = false;
+  const windowEventHandlers = new Map<
+    string,
+    Array<(...args: unknown[]) => void>
+  >();
   const windowWebContentsEventHandlers = new Map<
     string,
     Array<(...args: unknown[]) => void>
@@ -184,9 +188,24 @@ function createWindow() {
         handler(...args);
       }
     },
+    emitWindowEventForTest: (eventName: string, ...args: unknown[]) => {
+      for (const handler of windowEventHandlers.get(eventName) || []) {
+        handler(...args);
+      }
+    },
     isDestroyed: () => destroyed,
-    off: vi.fn(),
-    on: vi.fn(),
+    off: vi.fn((eventName: string, handler: (...args: unknown[]) => void) => {
+      const handlers = windowEventHandlers.get(eventName) || [];
+      windowEventHandlers.set(
+        eventName,
+        handlers.filter((item) => item !== handler),
+      );
+    }),
+    on: vi.fn((eventName: string, handler: (...args: unknown[]) => void) => {
+      const handlers = windowEventHandlers.get(eventName) || [];
+      handlers.push(handler);
+      windowEventHandlers.set(eventName, handlers);
+    }),
     webContents: {
       off: vi.fn((eventName: string, handler: (...args: unknown[]) => void) => {
         const handlers = windowWebContentsEventHandlers.get(eventName) || [];
@@ -329,7 +348,88 @@ describe("ElectronEmbeddedBrowserHost", () => {
     ).toBe(true);
   });
 
-  it("窗口关闭后销毁内嵌浏览器不访问已销毁 BrowserWindow", async () => {
+  it("通过受控命令加载 MCP App HTML，并保持 ui source URI", async () => {
+    resetMocks();
+    const host = new ElectronEmbeddedBrowserHost();
+    const window = createWindow();
+
+    await host.invoke(window as never, "embedded_browser_view_mount", {
+      viewId: "mcp-app-1",
+      bounds: { x: 0, y: 0, width: 480, height: 640 },
+    });
+    await expect(
+      host.invoke(window as never, "embedded_browser_view_load_html", {
+        viewId: "mcp-app-1",
+        html: "<!doctype html><title>Plugin report</title>",
+        source: "mcpApp",
+        sourceUri: "ui://plugin/report.html",
+      }),
+    ).resolves.toMatchObject({
+      viewId: "mcp-app-1",
+      url: "ui://plugin/report.html",
+    });
+
+    expect(loadUrlMock).toHaveBeenLastCalledWith(
+      expect.stringMatching(/^data:text\/html;charset=utf-8;base64,/),
+    );
+  });
+
+  it("受控 HTML 命令拒绝普通网页来源，普通导航仍拒绝 ui/data", async () => {
+    resetMocks();
+    const host = new ElectronEmbeddedBrowserHost();
+    const window = createWindow();
+
+    await expect(
+      host.invoke(window as never, "embedded_browser_view_load_html", {
+        viewId: "mcp-app-1",
+        html: "<p>bad</p>",
+        source: "browser",
+        sourceUri: "ui://plugin/report.html",
+      }),
+    ).rejects.toThrow("source 必须是 mcpApp");
+    await expect(
+      host.invoke(window as never, "embedded_browser_view_navigate", {
+        viewId: "mcp-app-1",
+        url: "ui://plugin/report.html",
+      }),
+    ).rejects.toThrow("只支持 http/https");
+    await expect(
+      host.invoke(window as never, "embedded_browser_view_navigate", {
+        viewId: "mcp-app-1",
+        url: "data:text/html,unsafe",
+      }),
+    ).rejects.toThrow("只支持 http/https");
+  });
+
+  it("MCP App 加载后拒绝页面内 http 导航和新窗口", async () => {
+    resetMocks();
+    const host = new ElectronEmbeddedBrowserHost();
+    const window = createWindow();
+    await host.invoke(window as never, "embedded_browser_view_mount", {
+      viewId: "mcp-app-1",
+    });
+    await host.invoke(window as never, "embedded_browser_view_load_html", {
+      viewId: "mcp-app-1",
+      html: '<a href="https://example.com">blocked</a>',
+      source: "mcpApp",
+      sourceUri: "ui://plugin/report.html",
+    });
+
+    const preventDefault = vi.fn();
+    emitWebContentsEvent(
+      "will-navigate",
+      { preventDefault },
+      "https://example.com/",
+    );
+    expect(preventDefault).toHaveBeenCalledOnce();
+    const openHandler = setWindowOpenHandlerMock.mock.calls.at(-1)?.[0];
+    expect(openHandler?.({ url: "https://example.com/" })).toEqual({
+      action: "deny",
+    });
+    expect(loadUrlMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("host dispose 不访问已销毁 BrowserWindow", async () => {
     resetMocks();
     const emitted: Array<{ event: string; payload?: unknown }> = [];
     const host = new ElectronEmbeddedBrowserHost((event, payload) => {
@@ -350,11 +450,80 @@ describe("ElectronEmbeddedBrowserHost", () => {
     expect(closeMock).toHaveBeenCalled();
     expect(emitted).toContainEqual({
       event: "embedded-browser-view-destroyed",
-      payload: { viewId: "browser-1" },
+      payload: {
+        viewId: "browser-1",
+        reason: "host-dispose",
+        requestedLeaseId: null,
+        remainingLeaseCount: 0,
+      },
     });
   });
 
-  it("主窗口 renderer 刷新时销毁内嵌浏览器原生视图", async () => {
+  it("窗口 closed 事件应记录 window-closed 销毁原因", async () => {
+    resetMocks();
+    const emitted: Array<{ event: string; payload?: unknown }> = [];
+    const host = new ElectronEmbeddedBrowserHost((event, payload) => {
+      emitted.push({ event, payload });
+    });
+    const window = createWindow();
+
+    await host.invoke(window as never, "embedded_browser_view_mount", {
+      viewId: "browser-1",
+      leaseId: "lease-1",
+    });
+    window.destroyForTest();
+    window.emitWindowEventForTest("closed");
+
+    expect(closeMock).toHaveBeenCalledOnce();
+    expect(emitted).toContainEqual({
+      event: "embedded-browser-view-destroyed",
+      payload: {
+        viewId: "browser-1",
+        reason: "window-closed",
+        requestedLeaseId: null,
+        remainingLeaseCount: 1,
+      },
+    });
+    expect(() => host.dispose()).not.toThrow();
+    expect(closeMock).toHaveBeenCalledOnce();
+  });
+
+  it("陈旧租约释放不得销毁同 viewId 的当前原生视图", async () => {
+    resetMocks();
+    const host = new ElectronEmbeddedBrowserHost();
+    const window = createWindow();
+
+    await host.invoke(window as never, "embedded_browser_view_mount", {
+      viewId: "plugin-surface-1",
+      leaseId: "lease-old",
+      bounds: { x: 10, y: 20, width: 300, height: 200 },
+    });
+    await host.invoke(window as never, "embedded_browser_view_mount", {
+      viewId: "plugin-surface-1",
+      leaseId: "lease-current",
+      bounds: { x: 10, y: 20, width: 300, height: 200 },
+    });
+
+    removeChildViewMock.mockClear();
+    closeMock.mockClear();
+    await host.invoke(window as never, "embedded_browser_view_destroy", {
+      viewId: "plugin-surface-1",
+      leaseId: "lease-old",
+    });
+
+    expect(removeChildViewMock).not.toHaveBeenCalled();
+    expect(closeMock).not.toHaveBeenCalled();
+
+    await host.invoke(window as never, "embedded_browser_view_destroy", {
+      viewId: "plugin-surface-1",
+      leaseId: "lease-current",
+    });
+
+    expect(removeChildViewMock).toHaveBeenCalledTimes(1);
+    expect(closeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("只在主窗口开始完整导航时销毁内嵌浏览器原生视图", async () => {
     resetMocks();
     const emitted: Array<{ event: string; payload?: unknown }> = [];
     const host = new ElectronEmbeddedBrowserHost((event, payload) => {
@@ -371,12 +540,42 @@ describe("ElectronEmbeddedBrowserHost", () => {
     removeChildViewMock.mockClear();
     closeMock.mockClear();
     window.emitWebContentsEventForTest("did-start-loading");
+    window.emitWebContentsEventForTest(
+      "did-start-navigation",
+      {},
+      "http://127.0.0.1:1420/#settings",
+      true,
+      true,
+    );
+    window.emitWebContentsEventForTest(
+      "did-start-navigation",
+      {},
+      "https://example.com/frame",
+      false,
+      false,
+    );
+
+    expect(removeChildViewMock).not.toHaveBeenCalled();
+    expect(closeMock).not.toHaveBeenCalled();
+
+    window.emitWebContentsEventForTest(
+      "did-start-navigation",
+      {},
+      "http://127.0.0.1:1420/",
+      false,
+      true,
+    );
 
     expect(removeChildViewMock).toHaveBeenCalled();
     expect(closeMock).toHaveBeenCalled();
     expect(emitted).toContainEqual({
       event: "embedded-browser-view-destroyed",
-      payload: { viewId: "browser-1" },
+      payload: {
+        viewId: "browser-1",
+        reason: "renderer-navigation",
+        requestedLeaseId: null,
+        remainingLeaseCount: 0,
+      },
     });
   });
 

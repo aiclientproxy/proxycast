@@ -171,6 +171,30 @@ async fn main_turn_initializes_agent_before_live_execution_hook() {
 }
 
 #[tokio::test]
+async fn mcp_resource_read_rehydrates_session_runtime_without_starting_turn() {
+    let backend = RuntimeBackend::with_db(test_db());
+    ExecutionBackend::set_app_data_source(&backend, Arc::new(crate::NoopAppDataSource))
+        .expect("set app data source");
+
+    assert!(!backend.agent_state.is_initialized().await);
+
+    let error = ExecutionBackend::read_mcp_runtime_resource(
+        &backend,
+        app_server_protocol::McpResourceReadParams {
+            server: "missing-server".to_string(),
+            uri: "ui://missing-server/app.html".to_string(),
+            session_id: Some("session-history".to_string()),
+            thread_id: Some("thread-history".to_string()),
+        },
+    )
+    .await
+    .expect_err("empty fixture runtime has no MCP server");
+
+    assert!(backend.agent_state.is_initialized().await);
+    assert!(!error.to_string().contains("MCP runtime is not initialized"));
+}
+
+#[tokio::test]
 async fn unexecutable_route_returns_typed_rejection_before_provider_call() {
     let backend = RuntimeBackend::with_db(test_db());
     let request = crate::runtime_backend::tests::request_for_test(

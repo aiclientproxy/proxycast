@@ -435,7 +435,9 @@ describe("useWorkspaceInitialSessionNavigation", () => {
     });
     await flushEffects();
 
-    expect(switchTopic).toHaveBeenCalledWith("session-current", undefined);
+    expect(switchTopic).toHaveBeenCalledWith("session-current", {
+      forceRefresh: true,
+    });
   });
 
   it("任务中心首发已切到新会话后不应恢复旧 initialSessionId", async () => {

@@ -32,14 +32,39 @@ export interface InputbarPluginSelectionOptions {
   preserveInputOverride?: boolean;
 }
 
+export interface InputbarPluginMention {
+  type: "mention";
+  name: string;
+  path: string;
+}
+
 export function resolveInputbarPluginDisplayName(
   plugin: Pick<InputbarPluginCapability, "displayName" | "pluginId">,
 ): string {
   return plugin.displayName.trim() || plugin.pluginId.trim();
 }
 
+export function buildInputbarPluginMention(
+  plugin: Pick<InputbarPluginCapability, "displayName" | "pluginId">,
+): InputbarPluginMention {
+  const pluginId = plugin.pluginId.trim();
+  if (!pluginId) {
+    throw new Error(
+      "pluginId is required to build a structured Plugin mention",
+    );
+  }
+  return {
+    type: "mention",
+    name: resolveInputbarPluginDisplayName(plugin),
+    path: `plugin://${pluginId}`,
+  };
+}
+
 export function normalizeInputbarPluginTrigger(
-  plugin: Pick<InputbarPluginCapability, "displayName" | "pluginId" | "trigger">,
+  plugin: Pick<
+    InputbarPluginCapability,
+    "displayName" | "pluginId" | "trigger"
+  >,
   skill?: Pick<InputbarPluginSkillCapability, "skillId" | "title" | "trigger">,
 ): string {
   const explicitSkillTrigger = skill?.trigger?.trim();
@@ -50,7 +75,9 @@ export function normalizeInputbarPluginTrigger(
   }
   const explicitTrigger = plugin.trigger?.trim();
   if (explicitTrigger && !skill) {
-    return explicitTrigger.startsWith("@") ? explicitTrigger : `@${explicitTrigger}`;
+    return explicitTrigger.startsWith("@")
+      ? explicitTrigger
+      : `@${explicitTrigger}`;
   }
   const displayName = resolveInputbarPluginDisplayName(plugin);
   const pluginTrigger = displayName ? `@${displayName}` : "@";

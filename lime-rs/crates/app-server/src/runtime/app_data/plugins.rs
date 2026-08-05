@@ -1,14 +1,67 @@
 use super::unavailable;
 use super::NoopAppDataSource;
 use super::RuntimeCoreError;
+use app_server_protocol::protocol::v2::{
+    PluginCatalogEnabledSetParams, PluginCatalogEnabledSetResponse, PluginCatalogInstallParams,
+    PluginCatalogInstallResponse, PluginCatalogInstalledParams, PluginCatalogListParams,
+    PluginCatalogListResponse, PluginCatalogReadParams, PluginCatalogReadResponse,
+    PluginCatalogUninstallParams, PluginCatalogUninstallResponse,
+};
 use app_server_protocol::*;
 use async_trait::async_trait;
+use serde_json::Value;
 use std::path::PathBuf;
 
 #[async_trait]
 pub trait PluginDataSource: Send + Sync {
     fn plugin_data_root(&self) -> Result<PathBuf, RuntimeCoreError> {
         Err(unavailable("pluginData/root"))
+    }
+
+    async fn list_plugin_catalog(
+        &self,
+        _params: PluginCatalogListParams,
+    ) -> Result<PluginCatalogListResponse, RuntimeCoreError> {
+        Err(unavailable("plugin/list"))
+    }
+
+    async fn read_plugin_catalog(
+        &self,
+        _params: PluginCatalogReadParams,
+    ) -> Result<PluginCatalogReadResponse, RuntimeCoreError> {
+        Err(unavailable("plugin/read"))
+    }
+
+    async fn install_plugin_catalog(
+        &self,
+        _params: PluginCatalogInstallParams,
+    ) -> Result<PluginCatalogInstallResponse, RuntimeCoreError> {
+        Err(unavailable("plugin/install"))
+    }
+
+    async fn uninstall_plugin_catalog(
+        &self,
+        _params: PluginCatalogUninstallParams,
+    ) -> Result<PluginCatalogUninstallResponse, RuntimeCoreError> {
+        Err(unavailable("plugin/uninstall"))
+    }
+
+    async fn list_plugin_catalog_installed(
+        &self,
+        _params: PluginCatalogInstalledParams,
+    ) -> Result<PluginCatalogListResponse, RuntimeCoreError> {
+        Err(unavailable("plugin/installed"))
+    }
+
+    async fn list_plugin_catalog_activations(&self) -> Result<Vec<Value>, RuntimeCoreError> {
+        Ok(Vec::new())
+    }
+
+    async fn set_plugin_catalog_enabled(
+        &self,
+        _params: PluginCatalogEnabledSetParams,
+    ) -> Result<PluginCatalogEnabledSetResponse, RuntimeCoreError> {
+        Err(unavailable("plugin/enabled/set"))
     }
 
     async fn list_plugin_installed(&self) -> Result<PluginInstalledListResponse, RuntimeCoreError> {

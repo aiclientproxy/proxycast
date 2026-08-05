@@ -61,6 +61,36 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerArtifactWriteResponse>
     >;
+    listPluginCatalog(
+      params?: appServer.AppServerPluginCatalogListParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerPluginCatalogListResponse>
+    >;
+    setPluginCatalogEnabled(
+      params: appServer.AppServerPluginCatalogEnabledSetParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerPluginCatalogEnabledSetResponse>
+    >;
+    readPluginCatalog(
+      params: appServer.AppServerPluginCatalogReadParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerPluginCatalogReadResponse>
+    >;
+    installPluginCatalog(
+      params: appServer.AppServerPluginCatalogInstallParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerPluginCatalogInstallResponse>
+    >;
+    uninstallPluginCatalog(
+      params: appServer.AppServerPluginCatalogUninstallParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerPluginCatalogUninstallResponse>
+    >;
+    listInstalledPluginCatalog(
+      params?: appServer.AppServerPluginCatalogInstalledParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerPluginCatalogListResponse>
+    >;
     listDirectory(
       params: appServer.AppServerFileSystemListDirectoryParams,
     ): Promise<

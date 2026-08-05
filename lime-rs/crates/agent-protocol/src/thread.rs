@@ -359,6 +359,10 @@ pub enum ThreadItemPayload {
         call_id: String,
         server_name: String,
         tool_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mcp_app_resource_uri: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plugin_id: Option<String>,
         #[serde(default)]
         arguments: Vec<ToolArgument>,
         #[serde(default, skip_serializing_if = "Option::is_none")]

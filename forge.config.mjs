@@ -240,6 +240,7 @@ export default {
         : "lime-rs/icons/icon.icns",
     extraResource: [
       "dist-electron/desktop-assets",
+      "dist-electron/plugins",
       "dist-electron/app-server.release.json",
       "dist-electron/app-server",
     ],

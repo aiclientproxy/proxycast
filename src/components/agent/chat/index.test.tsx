@@ -447,6 +447,8 @@ describe("AgentChatPage 任务中心顶部工具区", () => {
     const { container } = mounted;
     await flushEffects();
 
+    expect(switchTopic).not.toHaveBeenCalled();
+
     expect(
       requestTaskCenterDraftTask({
         source: "sidebar",

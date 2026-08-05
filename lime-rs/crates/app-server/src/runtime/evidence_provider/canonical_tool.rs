@@ -97,6 +97,7 @@ pub(super) fn canonical_tool(event: &AgentEvent) -> Option<CanonicalTool> {
             tool_name,
             arguments,
             output,
+            ..
         } => (
             call_id,
             tool_name,

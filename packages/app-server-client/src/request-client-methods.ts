@@ -524,6 +524,42 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "required",
     },
     {
+      name: "setPluginCatalogEnabled",
+      method: protocol.METHOD_PLUGIN_ENABLED_SET,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "listPluginCatalog",
+      method: protocol.METHOD_PLUGIN_LIST,
+      kind: "request",
+      params: "optional-empty",
+    },
+    {
+      name: "readPluginCatalog",
+      method: protocol.METHOD_PLUGIN_READ,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "installPluginCatalog",
+      method: protocol.METHOD_PLUGIN_INSTALL,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "uninstallPluginCatalog",
+      method: protocol.METHOD_PLUGIN_UNINSTALL,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "listInstalledPluginCatalog",
+      method: protocol.METHOD_PLUGIN_INSTALLED,
+      kind: "request",
+      params: "optional-empty",
+    },
+    {
       name: "inspectPluginLocalPackage",
       method: protocol.METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT,
       kind: "request",

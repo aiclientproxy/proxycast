@@ -233,6 +233,36 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
+    name: "setPluginCatalogEnabled",
+    method: constants.APP_SERVER_METHOD_PLUGIN_ENABLED_SET,
+    params: "required",
+  },
+  {
+    name: "listPluginCatalog",
+    method: constants.APP_SERVER_METHOD_PLUGIN_LIST,
+    params: "optional-empty",
+  },
+  {
+    name: "readPluginCatalog",
+    method: constants.APP_SERVER_METHOD_PLUGIN_READ,
+    params: "required",
+  },
+  {
+    name: "installPluginCatalog",
+    method: constants.APP_SERVER_METHOD_PLUGIN_INSTALL,
+    params: "required",
+  },
+  {
+    name: "uninstallPluginCatalog",
+    method: constants.APP_SERVER_METHOD_PLUGIN_UNINSTALL,
+    params: "required",
+  },
+  {
+    name: "listInstalledPluginCatalog",
+    method: constants.APP_SERVER_METHOD_PLUGIN_INSTALLED,
+    params: "optional-empty",
+  },
+  {
     name: "readAgentSessionToolInventory",
     method: constants.APP_SERVER_METHOD_AGENT_SESSION_TOOL_INVENTORY_READ,
     params: "optional-empty",

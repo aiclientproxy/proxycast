@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildSoakSummary,
   childArgsForRound,
+  containsCanonicalThread,
   parsePosixProcessRows,
   parseWindowsProcessRows,
+  resolveSoakRoundThreadIdentity,
   resolveSoakConfig,
   roundEvidencePath,
   summarizeProcessTree,
@@ -63,6 +65,40 @@ describe("tool execution SOAK evidence", () => {
     expect(roundEvidencePath("/tmp/soak.json", 2, 3)).toBe(
       "/tmp/soak.json",
     );
+  });
+
+  it("reads SOAK threads by the canonical thread id", () => {
+    expect(
+      resolveSoakRoundThreadIdentity({
+        runtime: {
+          sessionId: "session-1",
+          threadId: "thread-1",
+        },
+      }),
+    ).toEqual({ sessionId: "session-1", threadId: "thread-1" });
+    expect(() =>
+      resolveSoakRoundThreadIdentity({
+        runtime: { sessionId: "session-1" },
+      }),
+    ).toThrow(/canonical sessionId\/threadId/);
+  });
+
+  it("matches v2 thread/list entries by id and sessionId", () => {
+    expect(
+      containsCanonicalThread(
+        [
+          { id: "thread-1", sessionId: "session-1" },
+          { id: "thread-2", sessionId: "session-2" },
+        ],
+        { sessionId: "session-1", threadId: "thread-1" },
+      ),
+    ).toBe(true);
+    expect(
+      containsCanonicalThread(
+        [{ id: "thread-1", sessionId: "session-other" }],
+        { sessionId: "session-1", threadId: "thread-1" },
+      ),
+    ).toBe(false);
   });
 
   it("parses POSIX and Windows process inventories", () => {

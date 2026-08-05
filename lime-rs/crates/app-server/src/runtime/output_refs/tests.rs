@@ -38,6 +38,8 @@ fn canonical_tool_payload(
                 call_id: "call-mcp-large".to_string(),
                 server_name: "files".to_string(),
                 tool_name: "read_resource".to_string(),
+                mcp_app_resource_uri: None,
+                plugin_id: None,
                 arguments: Vec::new(),
                 output,
             },

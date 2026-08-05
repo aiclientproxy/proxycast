@@ -100,6 +100,21 @@ function createListing(path: string): DirectoryListing {
     parentPath: path === "/Users/demo" ? null : "/Users/demo",
     entries: [
       {
+        name: ".config",
+        path: "/Users/demo/.config",
+        isDir: true,
+        size: 0,
+        modifiedAt: Date.now(),
+      },
+      {
+        name: ".env",
+        path: "/Users/demo/.env",
+        isDir: false,
+        size: 64,
+        modifiedAt: Date.now(),
+        mimeType: "text/plain",
+      },
+      {
         name: "Downloads",
         path: "/Users/demo/Downloads",
         isDir: true,
@@ -241,6 +256,37 @@ afterEach(() => {
 });
 
 describe("FileManagerSidebar", () => {
+  it("默认隐藏点开头目录，并可通过眼睛按钮切换显示", async () => {
+    const { container } = await renderFileManagerSidebar();
+    const toggle = container.querySelector(
+      '[data-testid="file-manager-toggle-hidden-directories"]',
+    ) as HTMLButtonElement | null;
+
+    expect(toggle?.getAttribute("aria-label")).toBe("显示隐藏目录");
+    expect(toggle?.getAttribute("aria-pressed")).toBe("false");
+    expect(container.textContent).not.toContain(".config");
+    expect(container.textContent).toContain(".env");
+    expect(container.textContent).toContain("Downloads");
+    expect(container.textContent).toContain("brief.txt");
+
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(toggle?.getAttribute("aria-label")).toBe("隐藏隐藏目录");
+    expect(toggle?.getAttribute("aria-pressed")).toBe("true");
+    expect(container.textContent).toContain(".config");
+
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(toggle?.getAttribute("aria-pressed")).toBe("false");
+    expect(container.textContent).not.toContain(".config");
+  });
+
   it("图标读取很慢时也应先完成目录加载", async () => {
     vi.mocked(getFileIconDataUrl).mockImplementation(
       () => new Promise<string | null>(() => undefined),

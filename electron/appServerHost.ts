@@ -708,6 +708,10 @@ async function resolveAppServerSidecarEnv(
     // AppDataRoot 由 Host 显式解析后下发；App Server 的叶子 writer 不再自行猜平台根。
     APP_SERVER_APP_DATA_DIR: resolveAppServerAppDataRoot(),
   };
+  const bundledMarketplacePath = resolveBundledPluginMarketplacePath();
+  if (bundledMarketplacePath) {
+    env.LIME_BUNDLED_PLUGIN_MARKETPLACE = bundledMarketplacePath;
+  }
   const currentNoProxy = APP_SERVER_NO_PROXY_ENV_KEYS.map(
     (key) => process.env[key],
   ).find((value) => Boolean(value?.trim()));
@@ -729,6 +733,31 @@ async function resolveAppServerSidecarEnv(
   }
 
   return Object.keys(env).length > 0 ? env : undefined;
+}
+
+function resolveBundledPluginMarketplacePath(): string | undefined {
+  const resourceRoots = [
+    process.resourcesPath,
+    path.resolve(app.getAppPath(), "dist-electron"),
+  ];
+  for (const resourceRoot of resourceRoots) {
+    const marketplacePath = path.join(
+      resourceRoot,
+      "plugins",
+      "openai-bundled",
+      ".agents",
+      "plugins",
+      "marketplace.json",
+    );
+    try {
+      if (readFileSync(marketplacePath, "utf8")) {
+        return marketplacePath;
+      }
+    } catch {
+      // 开发态或旧包可能没有 bundled marketplace，App Server 继续发现其他来源。
+    }
+  }
+  return undefined;
 }
 
 function resolveAppServerRuntimeLibraryEnv(

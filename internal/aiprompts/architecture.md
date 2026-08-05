@@ -891,6 +891,47 @@ Architecture impact: major; this changes the Renderer live/read/resume Item stat
 
 Plugin UI/worker 只通过 typed client 和 App Server method 进入 runtime；不得复制 turn start、cancel、tool dispatch 或 evidence 链。Skill 是产品与领域工作流单元，MCP 是标准化 tool/resource/prompt 接入；二者均由 App Server 和各自 runtime owner 注入当前 turn，而不是由 Renderer 直接执行。
 
+Plugin v2 的 catalog、installed state、enabled state、package identity 和安装事务由 App Server current domain 唯一持有。Renderer App Center 只能通过 `src/lib/api/pluginCatalog.ts` 调用 typed `plugin/list`、`plugin/read`、`plugin/install`、`plugin/uninstall`、`plugin/installed` 与 `plugin/enabled/set`；Electron 只转发 `app_server_handle_json_lines` 和提供原生目录选择，不扫描 `.codex-plugin/plugin.json`、不合并 marketplace，也不保存第二份 installed state。
+
+```text
+PluginCatalogPage
+  -> Renderer pluginCatalog gateway
+  -> typed AppServerClient
+  -> Electron preload / app_server_handle_json_lines
+  -> App Server Plugin processor
+  -> RuntimeCore PluginDataSource
+  -> plugin_catalog
+       catalog discovery
+       package validation + sha256 identity
+       staging + atomic installed record
+  -> <AgentRoot>/plugins/v2/{packages,installed,staging,marketplaces}
+```
+
+包合同只接受 Codex-compatible `.codex-plugin/plugin.json`；旧 `schemaVersion`、`contributions.runtime/workbench`、绝对或父级资源路径、symlink、超预算 package 必须 fail closed。安装 identity 至少包含 `pluginId + marketplaceId + version + contentDigest`。同 identity 同 digest 的重复安装幂等；同 identity 不同 digest 拒绝；更新必须先提交新版本和 installed record，失败时保留上一可用版本。`sourceUri` 只用于受控本地 catalog/install 响应，不进入 Thread 历史、日志或跨设备 metadata。
+
+installed+enabled Plugin 由同一 App Server store 生成 `plugin-activation/v2` 与 `plugin-runtime-capabilities/v2`。activation snapshot 冻结 `pluginId + version + contentDigest + marketplaceId + packageSourceUri`，其 Skills 进入现有 skill snapshot；Renderer 不得构造或注入 activation。Claw 的已安装候选只从 typed `plugin/installed` 投影，选择后把显示文本 `@DisplayName` 与结构化 `{ type: "mention", name, path: "plugin://<pluginId>" }` 同时送入 current turn contract。App Server 使用同一回合 activation snapshot 校验 mention：无显式 mention 时保留全部 enabled Plugin 供描述发现；有 `plugin://` 时只把解析成功的 Plugin activation 装配到该回合，未知、禁用或 identity 漂移必须 fail closed，不能查询旧 renderer registry 或旧 installed state 兜底。
+
+```text
+App Server plugin v2 installed store
+  -> enabled activation snapshot
+  -> RuntimeCore session config / Skill snapshot
+
+Claw @ picker
+  -> Renderer pluginCatalog gateway -> plugin/installed
+  -> stable plugin://<pluginId> UserInput::Mention
+  -> Electron IPC / app_server_handle_json_lines
+  -> App Server mention selection
+  -> selected activation -> Turn metadata / runtime context
+```
+
+Plugin MCP 声明由唯一 package manifest `.codex-plugin/plugin.json` 选择：可以使用 manifest 内联 object、package-relative 配置路径，或包根默认 `.mcp.json`；`.mcp.json` 只是 MCP server 配置，不是第二份 Plugin manifest。installed+enabled Plugin 生成带稳定 `plugin__<plugin-id>__<server-id>` runtime identity 的 server spec，并进入既有 `McpThreadRuntime -> McpClientManager -> tool-runtime` lifecycle；disabled Plugin 不装配，非法 sibling 与越界 `cwd` fail closed。MCP App UI 从 canonical tool item 的 `resourceUri` 经 `mcpResource/read` 进入现有 Right Surface/WebContentsView，并以 canonical identity 在 Renderer reload 后恢复，不启动 Plugin worker 或私有 UI runtime。
+
+当前仍未完成独立 Plugin Apps（非 MCP App）与 Hooks activation、Plugin identity 到完整 Item/tool trace 的全量历史投影、跨进程 cold restore，以及 Browser/file/structured-result 的 Plugin 专项 Gate B；这些缺口不得通过旧 renderer registry、plugin worker 或独立 UI runtime fallback 填补。
+
+2026-08-05 的 macOS controlled fixture 已证明 `plugin/install -> enabled activation -> runtime MCP tool -> elicitation -> provider final -> canonical item -> MCP App Right Surface -> Renderer reload restore`，且 preload/IPC 与 `app_server_handle_json_lines` 可见、legacy MCP command / production mock fallback / Plugin worker hit 均为 0。证据位于 `.lime/qc/gui-evidence/plugin-v2-current-electron-fixture/`；该证据不扩张为 App Center 安装点击、Claw `@` picker 点击、卸载历史或 Windows release gate 已通过。
+
+Architecture impact: major; this adds the Plugin v2 App Server domain, moves the production App Center and Claw mention source to typed JSON-RPC catalog/activation state, and preserves Electron as transport host. Architecture diagram updated: this section. Responsible developer confirmation: pending.
+
 MCP server 的执行环境身份只来自 `McpServerConfig.environment_id`，由 `lime-mcp::McpEnvironmentRegistry`
 在 transport 启动前解析。当前 registry 只注册 `local`；未知显式身份必须 fail closed，禁止把
 `remote` 或其它配置值降级成本机 stdio/HTTP 执行，也禁止从 `cwd` 猜测环境。远程 executor/backend

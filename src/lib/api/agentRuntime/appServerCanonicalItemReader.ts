@@ -498,6 +498,7 @@ function readCanonicalToolMetadata(
       canonical_type: type,
       server,
       app_context: appContext,
+      mcp_app_resource_uri: readString(item, "mcpAppResourceUri"),
       plugin_id: readString(item, "pluginId"),
       result_content: result?.content,
       result_meta: result?._meta,

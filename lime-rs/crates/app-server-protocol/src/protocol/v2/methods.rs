@@ -35,6 +35,12 @@ pub const METHOD_THREAD_GOAL_CLEAR: &str = "thread/goal/clear";
 pub const METHOD_ARTIFACT_WRITE: &str = "artifact/write";
 pub const METHOD_MEDIA_READ: &str = "media/read";
 pub const METHOD_MODEL_LIST: &str = "model/list";
+pub const METHOD_PLUGIN_LIST: &str = "plugin/list";
+pub const METHOD_PLUGIN_READ: &str = "plugin/read";
+pub const METHOD_PLUGIN_INSTALL: &str = "plugin/install";
+pub const METHOD_PLUGIN_UNINSTALL: &str = "plugin/uninstall";
+pub const METHOD_PLUGIN_INSTALLED: &str = "plugin/installed";
+pub const METHOD_PLUGIN_ENABLED_SET: &str = "plugin/enabled/set";
 pub const METHOD_MODEL_LIST_UPDATED: &str = "model/list/updated";
 pub const METHOD_TURN_START: &str = "turn/start";
 pub const METHOD_TURN_STEER: &str = "turn/steer";
@@ -153,6 +159,18 @@ pub enum Method {
     MediaRead,
     #[serde(rename = "model/list")]
     ModelList,
+    #[serde(rename = "plugin/list")]
+    PluginList,
+    #[serde(rename = "plugin/read")]
+    PluginRead,
+    #[serde(rename = "plugin/install")]
+    PluginInstall,
+    #[serde(rename = "plugin/uninstall")]
+    PluginUninstall,
+    #[serde(rename = "plugin/installed")]
+    PluginInstalled,
+    #[serde(rename = "plugin/enabled/set")]
+    PluginEnabledSet,
     #[serde(rename = "turn/start")]
     TurnStart,
     #[serde(rename = "turn/steer")]
@@ -199,6 +217,12 @@ impl Method {
             Self::ArtifactWrite => METHOD_ARTIFACT_WRITE,
             Self::MediaRead => METHOD_MEDIA_READ,
             Self::ModelList => METHOD_MODEL_LIST,
+            Self::PluginList => METHOD_PLUGIN_LIST,
+            Self::PluginRead => METHOD_PLUGIN_READ,
+            Self::PluginInstall => METHOD_PLUGIN_INSTALL,
+            Self::PluginUninstall => METHOD_PLUGIN_UNINSTALL,
+            Self::PluginInstalled => METHOD_PLUGIN_INSTALLED,
+            Self::PluginEnabledSet => METHOD_PLUGIN_ENABLED_SET,
             Self::TurnStart => METHOD_TURN_START,
             Self::TurnSteer => METHOD_TURN_STEER,
             Self::TurnInterrupt => METHOD_TURN_INTERRUPT,
@@ -244,6 +268,12 @@ impl Method {
             METHOD_ARTIFACT_WRITE => Some(Self::ArtifactWrite),
             METHOD_MEDIA_READ => Some(Self::MediaRead),
             METHOD_MODEL_LIST => Some(Self::ModelList),
+            METHOD_PLUGIN_LIST => Some(Self::PluginList),
+            METHOD_PLUGIN_READ => Some(Self::PluginRead),
+            METHOD_PLUGIN_INSTALL => Some(Self::PluginInstall),
+            METHOD_PLUGIN_UNINSTALL => Some(Self::PluginUninstall),
+            METHOD_PLUGIN_INSTALLED => Some(Self::PluginInstalled),
+            METHOD_PLUGIN_ENABLED_SET => Some(Self::PluginEnabledSet),
             METHOD_TURN_START => Some(Self::TurnStart),
             METHOD_TURN_STEER => Some(Self::TurnSteer),
             METHOD_TURN_INTERRUPT => Some(Self::TurnInterrupt),
@@ -286,6 +316,12 @@ pub const METHODS: &[&str] = &[
     METHOD_ARTIFACT_WRITE,
     METHOD_MEDIA_READ,
     METHOD_MODEL_LIST,
+    METHOD_PLUGIN_LIST,
+    METHOD_PLUGIN_READ,
+    METHOD_PLUGIN_INSTALL,
+    METHOD_PLUGIN_UNINSTALL,
+    METHOD_PLUGIN_INSTALLED,
+    METHOD_PLUGIN_ENABLED_SET,
     METHOD_TURN_START,
     METHOD_TURN_STEER,
     METHOD_TURN_INTERRUPT,

@@ -568,7 +568,7 @@ describe("AgentChatWorkspace expert skill panel runtime boundary", () => {
       "useWorkspaceExpertAgentLaunchSyncRuntime({",
       "resolveWorkspaceRequestMetadataWithExpertSkills({",
       "useWorkspacePluginRuntimeContext({",
-      "buildWorkspacePluginInputSuggestions(",
+      "useWorkspacePluginCatalogSuggestions({",
     ]) {
       expect(workspaceSource).not.toContain(retiredExpertSkillPanelOwner);
       expect(ownerSource).toContain(retiredExpertSkillPanelOwner);

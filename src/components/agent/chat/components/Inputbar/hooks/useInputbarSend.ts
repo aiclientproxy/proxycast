@@ -3,6 +3,7 @@ import type { MessageImage, MessagePathReference } from "../../../types";
 import type { InputbarKnowledgePackSelection } from "../types";
 import type { InputbarSendHandler } from "../inputbarSendPayload";
 import {
+  buildInputbarPluginMention,
   resolveInputbarPluginSubmissionText,
   type InputbarPluginSelection,
 } from "../pluginInputCapability";
@@ -75,6 +76,9 @@ export function useInputbarSend({
         input,
         selection: activePluginSelection,
       });
+      const inputMentions = activePluginSelection
+        ? [buildInputbarPluginMention(activePluginSelection.plugin)]
+        : [];
       if (
         !submittedInput.trim() &&
         pendingImages.length === 0 &&
@@ -186,12 +190,14 @@ export function useInputbarSend({
         requestMetadata ||
         threadGoal ||
         toolPreferencesOverride ||
-        collaborationMode
+        collaborationMode ||
+        inputMentions.length > 0
           ? {
               ...(capabilityDispatch.capabilityRoute
                 ? { capabilityRoute: capabilityDispatch.capabilityRoute }
                 : {}),
               inputRestoreDraft,
+              ...(inputMentions.length > 0 ? { inputMentions } : {}),
               ...(capabilityDispatch.displayContent || submittedInput.trim()
                 ? {
                     displayContent:

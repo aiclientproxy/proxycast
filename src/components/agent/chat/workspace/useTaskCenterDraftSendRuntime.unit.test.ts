@@ -1244,6 +1244,25 @@ describe("useTaskCenterEmptyStateSendRuntime", () => {
     expect(runtime.setHomePendingPreviewRequest).toHaveBeenCalledTimes(1);
   });
 
+  it("首页 direct dispatch 在同步 preview 提交后的 microtask 中启动，不等待下一帧", async () => {
+    const runtime = mountEmptyStateSendRuntime({
+      activeDraftTabId: null,
+      hasDisplayMessages: false,
+      sessionId: null,
+    });
+
+    act(() => {
+      runtime.send({ textOverride: "立即派发" });
+    });
+
+    expect(runtime.handleSend).not.toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(runtime.handleSend).toHaveBeenCalledTimes(1);
+  });
+
   it("Task Center 首页首发成功后拿到真实 session 时应立即接管前台会话", async () => {
     const onNonMaterializedSessionReady = vi.fn();
     const runtime = mountEmptyStateSendRuntime({

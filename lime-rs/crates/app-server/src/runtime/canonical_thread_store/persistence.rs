@@ -173,7 +173,7 @@ pub(super) fn apply_change_set(
         upsert_turn(tx, turn, params.changes.sequence)?;
     }
     for item in &params.changes.changed_items {
-        upsert_item(tx, item)?;
+        upsert_item_snapshot(tx, item)?;
     }
     Ok(())
 }
@@ -221,7 +221,7 @@ fn upsert_turn(tx: &Transaction<'_>, turn: &Turn, sequence: u64) -> ThreadStoreR
     Ok(())
 }
 
-fn upsert_item(tx: &Transaction<'_>, item: &ThreadItem) -> ThreadStoreResult<()> {
+fn upsert_item_snapshot(tx: &Transaction<'_>, item: &ThreadItem) -> ThreadStoreResult<()> {
     if item.kind != item.payload_kind() {
         return Err(error(format!(
             "item {} kind does not match payload",
@@ -230,24 +230,20 @@ fn upsert_item(tx: &Transaction<'_>, item: &ThreadItem) -> ThreadStoreResult<()>
     }
     let existing = tx
         .query_row(
-            "SELECT turn_id, item_json FROM canonical_items WHERE thread_id = ?1 AND item_id = ?2",
+            "SELECT turn_id FROM canonical_items WHERE thread_id = ?1 AND item_id = ?2",
             params![item.thread_id.as_str(), item.item_id.as_str()],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            |row| row.get::<_, String>(0),
         )
         .optional()
         .map_err(store_error)?;
-    let snapshot = if let Some((existing_turn_id, json)) = existing {
+    if let Some(existing_turn_id) = existing {
         if existing_turn_id != item.turn_id.as_str() {
             return Err(error(format!(
                 "item {} changed turn identity",
                 item.item_id
             )));
         }
-        let previous = decode_json(&json)?;
-        super::super::thread_item_projection::merge_item_snapshot(previous, item.clone())
-    } else {
-        item.clone()
-    };
+    }
     tx.execute(
         "INSERT INTO canonical_items (
             thread_id, turn_id, item_id, ordinal, sequence, item_json
@@ -257,12 +253,12 @@ fn upsert_item(tx: &Transaction<'_>, item: &ThreadItem) -> ThreadStoreResult<()>
              sequence = excluded.sequence,
              item_json = excluded.item_json",
         params![
-            snapshot.thread_id.as_str(),
-            snapshot.turn_id.as_str(),
-            snapshot.item_id.as_str(),
-            to_i64(snapshot.ordinal, "item ordinal")?,
-            to_i64(snapshot.sequence, "item sequence")?,
-            encode_json(&snapshot)?,
+            item.thread_id.as_str(),
+            item.turn_id.as_str(),
+            item.item_id.as_str(),
+            to_i64(item.ordinal, "item ordinal")?,
+            to_i64(item.sequence, "item sequence")?,
+            encode_json(item)?,
         ],
     )
     .map_err(|source| error(format!("cannot persist canonical item: {source}")))?;

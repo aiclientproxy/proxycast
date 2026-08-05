@@ -59,6 +59,17 @@ impl McpThreadRuntime {
         self.server_specs.clone()
     }
 
+    pub(crate) async fn read_resource(
+        &self,
+        server_name: &str,
+        uri: &str,
+    ) -> Result<lime_mcp::McpResourceContent, String> {
+        self.manager
+            .read_resource(server_name, uri)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     pub(crate) async fn start(&self) -> Result<(), String> {
         let mut unavailable_servers = Vec::new();
         let mut required_failures = Vec::new();
@@ -95,11 +106,18 @@ impl McpThreadRuntime {
                 required_failures.join("; ")
             ));
         }
-        let snapshots = self
+        let mut snapshots = self
             .manager
             .bridge_snapshots()
             .await
             .map_err(|error| error.to_string())?;
+        for snapshot in &mut snapshots {
+            snapshot.plugin_id = self
+                .server_specs
+                .iter()
+                .find(|spec| spec.name == snapshot.server_name)
+                .and_then(|spec| spec.plugin_id.clone());
+        }
         let bridge_count = self
             .bridge_registry
             .sync(&self.connections, snapshots)

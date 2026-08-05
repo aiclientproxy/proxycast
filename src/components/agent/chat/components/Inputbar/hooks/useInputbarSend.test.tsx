@@ -232,11 +232,18 @@ describe("useInputbarSend", () => {
 
     await send();
 
-    expect(onSend).toHaveBeenCalledWith({
-      images: undefined,
-      textOverride: "@写文章 帮我整理项目资料",
-      sendOptions: undefined,
-    });
+    const payload = onSend.mock.calls[0]?.[0];
+    expect(payload?.textOverride).toBe("@写文章 帮我整理项目资料");
+    expect(payload?.sendOptions?.inputMentions).toEqual([
+      {
+        type: "mention",
+        name: "写文章",
+        path: "plugin://content-factory-app",
+      },
+    ]);
+    expect(payload?.sendOptions?.inputRestoreDraft?.textElements).toEqual([
+      { type: "text", text: "@写文章 帮我整理项目资料" },
+    ]);
   });
 
   it("只有路径引用时仍应发送路径占位文本并保留 metadata", async () => {

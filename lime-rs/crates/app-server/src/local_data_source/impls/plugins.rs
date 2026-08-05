@@ -1,10 +1,71 @@
 use super::super::*;
+use app_server_protocol::protocol::v2::{
+    PluginCatalogEnabledSetParams, PluginCatalogEnabledSetResponse, PluginCatalogInstallParams,
+    PluginCatalogInstallResponse, PluginCatalogInstalledParams, PluginCatalogListParams,
+    PluginCatalogListResponse, PluginCatalogReadParams, PluginCatalogReadResponse,
+    PluginCatalogUninstallParams, PluginCatalogUninstallResponse,
+};
 use async_trait::async_trait;
 
 #[async_trait]
 impl PluginDataSource for LocalAppDataSource {
     fn plugin_data_root(&self) -> Result<std::path::PathBuf, RuntimeCoreError> {
         Ok(self.plugin_data_root.clone())
+    }
+
+    async fn list_plugin_catalog(
+        &self,
+        params: PluginCatalogListParams,
+    ) -> Result<PluginCatalogListResponse, RuntimeCoreError> {
+        crate::local_data_source::plugin_catalog::list(&self.plugin_data_root, params)
+            .map_err(data_error)
+    }
+
+    async fn read_plugin_catalog(
+        &self,
+        params: PluginCatalogReadParams,
+    ) -> Result<PluginCatalogReadResponse, RuntimeCoreError> {
+        crate::local_data_source::plugin_catalog::read(&self.plugin_data_root, params)
+            .map_err(data_error)
+    }
+
+    async fn install_plugin_catalog(
+        &self,
+        params: PluginCatalogInstallParams,
+    ) -> Result<PluginCatalogInstallResponse, RuntimeCoreError> {
+        crate::local_data_source::plugin_catalog::install(&self.plugin_data_root, params)
+            .map_err(data_error)
+    }
+
+    async fn uninstall_plugin_catalog(
+        &self,
+        params: PluginCatalogUninstallParams,
+    ) -> Result<PluginCatalogUninstallResponse, RuntimeCoreError> {
+        crate::local_data_source::plugin_catalog::uninstall(&self.plugin_data_root, params)
+            .map_err(data_error)
+    }
+
+    async fn list_plugin_catalog_installed(
+        &self,
+        params: PluginCatalogInstalledParams,
+    ) -> Result<PluginCatalogListResponse, RuntimeCoreError> {
+        crate::local_data_source::plugin_catalog::installed(&self.plugin_data_root, params)
+            .map_err(data_error)
+    }
+
+    async fn list_plugin_catalog_activations(&self) -> Result<Vec<Value>, RuntimeCoreError> {
+        crate::local_data_source::plugin_catalog::enabled_activation_descriptors(
+            &self.plugin_data_root,
+        )
+        .map_err(data_error)
+    }
+
+    async fn set_plugin_catalog_enabled(
+        &self,
+        params: PluginCatalogEnabledSetParams,
+    ) -> Result<PluginCatalogEnabledSetResponse, RuntimeCoreError> {
+        crate::local_data_source::plugin_catalog::set_enabled(&self.plugin_data_root, params)
+            .map_err(data_error)
     }
 
     async fn list_plugin_installed(&self) -> Result<PluginInstalledListResponse, RuntimeCoreError> {

@@ -135,6 +135,7 @@ describe("electron/ipcChannels", () => {
       true,
     );
     expect(isElectronHostCommand("embedded_browser_view_navigate")).toBe(true);
+    expect(isElectronHostCommand("embedded_browser_view_load_html")).toBe(true);
     expect(isElectronHostCommand("embedded_browser_view_reload")).toBe(true);
     expect(isElectronHostCommand("embedded_browser_view_stop")).toBe(true);
     expect(isElectronHostCommand("embedded_browser_view_find_in_page")).toBe(

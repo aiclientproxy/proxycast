@@ -252,6 +252,8 @@ fn canonical_payload_to_agent_detail(
             call_id,
             server_name,
             tool_name,
+            mcp_app_resource_uri,
+            plugin_id,
             arguments,
             output,
         } => {
@@ -259,6 +261,12 @@ fn canonical_payload_to_agent_detail(
             detail.insert("mcp_server".to_string(), json!(server_name));
             detail.insert("tool_name".to_string(), json!(tool_name));
             detail.insert("arguments".to_string(), json!(arguments));
+            if let Some(resource_uri) = mcp_app_resource_uri {
+                detail.insert("mcp_app_resource_uri".to_string(), json!(resource_uri));
+            }
+            if let Some(plugin_id) = plugin_id {
+                detail.insert("plugin_id".to_string(), json!(plugin_id));
+            }
             if let Some(output) = output {
                 insert_tool_output(&mut detail, output);
             }

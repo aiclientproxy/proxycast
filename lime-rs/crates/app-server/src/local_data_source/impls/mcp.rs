@@ -87,7 +87,7 @@ impl McpAppDataSource for LocalAppDataSource {
     async fn list_mcp_runtime_server_specs(
         &self,
     ) -> Result<Vec<lime_mcp::McpRuntimeServerSpec>, RuntimeCoreError> {
-        mcp::list_mcp_runtime_server_specs(&self.db)
+        mcp::list_mcp_runtime_server_specs(&self.db, &self.plugin_data_root)
     }
 
     async fn list_mcp_tools_for_context(

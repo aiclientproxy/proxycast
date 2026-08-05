@@ -57,8 +57,8 @@ const loadPluginLabPage = () =>
     default: module.PluginLabPage,
   }));
 const loadPluginsPage = () =>
-  import("@/features/plugin/ui/PluginsPage").then((module) => ({
-    default: module.PluginsPage,
+  import("@/features/plugin/ui/PluginCatalogPage").then((module) => ({
+    default: module.PluginCatalogPage,
   }));
 
 const loadPluginRuntimePage = () =>
@@ -284,9 +284,7 @@ export function AppPageContent({
   if (activePage === "plugin") {
     return (
       <div style={columnPageStyle}>
-        <PluginRuntimePage
-          pageParams={activePageParams as PluginPageParams}
-        />
+        <PluginRuntimePage pageParams={activePageParams as PluginPageParams} />
       </div>
     );
   }

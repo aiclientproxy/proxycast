@@ -115,6 +115,23 @@ describe("mcp", () => {
     expect(appServerRequestMock).not.toHaveBeenCalled();
   });
 
+  it("runtime resource owner 应要求完整 canonical identity", async () => {
+    await expect(
+      mcpApi.readResource("docs", "ui://demo/report.html", {
+        sessionId: " ",
+        threadId: "thread-1",
+      }),
+    ).rejects.toThrow("sessionId cannot be empty");
+    await expect(
+      mcpApi.readResource("docs", "ui://demo/report.html", {
+        sessionId: "session-1",
+        threadId: " ",
+      }),
+    ).rejects.toThrow("threadId cannot be empty");
+
+    expect(appServerRequestMock).not.toHaveBeenCalled();
+  });
+
   it("提示词操作应拒绝空白 target 且不发送请求", async () => {
     await expect(mcpApi.getPrompt(" ", "summarize", {})).rejects.toThrow(
       "server cannot be empty",
@@ -375,6 +392,30 @@ describe("mcp", () => {
     expect(appServerRequestMock).toHaveBeenLastCalledWith("mcpResource/read", {
       server: "docs",
       uri: "docs://readme",
+    });
+
+    mockAppServerResult({
+      uri: "ui://demo/report.html",
+      mime_type: "text/html;profile=mcp-app",
+      text: "<main>Plugin report</main>",
+      meta: { ui: { csp: { connectDomains: ["https://api.example.com"] } } },
+    });
+    await expect(
+      mcpApi.readResource("plugin__demo__server", "ui://demo/report.html", {
+        sessionId: "session-1",
+        threadId: "thread-1",
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        uri: "ui://demo/report.html",
+        meta: expect.objectContaining({ ui: expect.any(Object) }),
+      }),
+    );
+    expect(appServerRequestMock).toHaveBeenLastCalledWith("mcpResource/read", {
+      server: "plugin__demo__server",
+      uri: "ui://demo/report.html",
+      sessionId: "session-1",
+      threadId: "thread-1",
     });
 
     mockAppServerResult({});

@@ -18,6 +18,7 @@ export const ELECTRON_HOST_COMMANDS = [
   "embedded_browser_view_mount",
   "embedded_browser_view_set_bounds",
   "embedded_browser_view_navigate",
+  "embedded_browser_view_load_html",
   "embedded_browser_view_reload",
   "embedded_browser_view_stop",
   "embedded_browser_view_find_in_page",

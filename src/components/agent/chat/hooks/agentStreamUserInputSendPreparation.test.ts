@@ -138,6 +138,13 @@ describe("agentStreamUserInputSendPreparation", () => {
       options: {
         requestMetadata: { source: "test" },
         threadGoal: { objective: "完成 Codex 主链", tokenBudget: 50_000 },
+        inputMentions: [
+          {
+            type: "mention",
+            name: "Browser",
+            path: "plugin://browser",
+          },
+        ],
       },
       env,
     });
@@ -154,6 +161,13 @@ describe("agentStreamUserInputSendPreparation", () => {
       objective: "完成 Codex 主链",
       tokenBudget: 50_000,
     });
+    expect(result.inputMentions).toEqual([
+      {
+        type: "mention",
+        name: "Browser",
+        path: "plugin://browser",
+      },
+    ]);
     expect(result.assistantMsgId).toBe("00000000-0000-0000-0000-000000000001");
     expect(result.userMsgId).toBe("00000000-0000-0000-0000-000000000002");
     expect(messages).toHaveLength(2);

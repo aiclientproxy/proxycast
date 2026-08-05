@@ -5,13 +5,18 @@ use agent_protocol::{
 use std::collections::HashMap;
 
 pub(super) fn merge_item_snapshot(previous: ThreadItem, mut next: ThreadItem) -> ThreadItem {
+    let source_event_type = next
+        .metadata
+        .get("source_event_type")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned);
     next.created_at_ms = previous.created_at_ms;
     next.ordinal = previous.ordinal;
     next.completed_at_ms = next.completed_at_ms.or(previous.completed_at_ms);
     if previous.status.is_terminal() && !next.status.is_terminal() {
         next.status = previous.status;
     }
-    next.payload = merge_payload(previous.payload, next.payload);
+    next.payload = merge_payload(previous.payload, next.payload, source_event_type.as_deref());
     next
 }
 
@@ -36,7 +41,11 @@ pub(super) fn merge_turn_snapshot(previous: Turn, mut next: Turn) -> Turn {
     next
 }
 
-fn merge_payload(previous: ThreadItemPayload, next: ThreadItemPayload) -> ThreadItemPayload {
+fn merge_payload(
+    previous: ThreadItemPayload,
+    next: ThreadItemPayload,
+    source_event_type: Option<&str>,
+) -> ThreadItemPayload {
     use ThreadItemPayload::*;
 
     match (previous, next) {
@@ -102,11 +111,25 @@ fn merge_payload(previous: ThreadItemPayload, next: ThreadItemPayload) -> Thread
                 summary: next_summary,
                 content: next_content,
             },
-        ) => {
-            extend_distinct(&mut summary, next_summary);
-            extend_distinct(&mut content, next_content);
-            Reasoning { summary, content }
-        }
+        ) => match source_event_type {
+            Some("reasoning.final" | "item.completed" | "item.updated") => Reasoning {
+                summary: if next_summary.is_empty() {
+                    summary
+                } else {
+                    next_summary
+                },
+                content: if next_content.is_empty() {
+                    content
+                } else {
+                    next_content
+                },
+            },
+            _ => {
+                summary.extend(next_summary);
+                content.extend(next_content);
+                Reasoning { summary, content }
+            }
+        },
         (
             Tool {
                 call_id: old_call,
@@ -135,6 +158,8 @@ fn merge_payload(previous: ThreadItemPayload, next: ThreadItemPayload) -> Thread
                 call_id: old_call,
                 server_name: old_server,
                 tool_name: old_tool,
+                mcp_app_resource_uri: old_mcp_app_resource_uri,
+                plugin_id: old_plugin_id,
                 arguments: old_args,
                 output: old_output,
             },
@@ -142,6 +167,8 @@ fn merge_payload(previous: ThreadItemPayload, next: ThreadItemPayload) -> Thread
                 call_id,
                 server_name,
                 tool_name,
+                mcp_app_resource_uri,
+                plugin_id,
                 arguments,
                 output,
             },
@@ -149,6 +176,8 @@ fn merge_payload(previous: ThreadItemPayload, next: ThreadItemPayload) -> Thread
             call_id: prefer_string(old_call, call_id, ""),
             server_name: prefer_string(old_server, server_name, "unknown"),
             tool_name: prefer_string(old_tool, tool_name, "tool"),
+            mcp_app_resource_uri: mcp_app_resource_uri.or(old_mcp_app_resource_uri),
+            plugin_id: plugin_id.or(old_plugin_id),
             arguments: if arguments.is_empty() {
                 old_args
             } else {
@@ -337,14 +366,6 @@ fn merge_stream_text(previous: String, next: String) -> String {
         next
     } else {
         format!("{previous}{next}")
-    }
-}
-
-fn extend_distinct(values: &mut Vec<String>, next: Vec<String>) {
-    for value in next {
-        if !values.contains(&value) {
-            values.push(value);
-        }
     }
 }
 

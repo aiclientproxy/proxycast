@@ -129,7 +129,17 @@ impl RuntimeCore {
         &self,
         params: McpResourceReadParams,
     ) -> Result<McpResourceReadResponse, RuntimeCoreError> {
-        self.app_data_source.read_mcp_resource(params).await
+        match (&params.session_id, &params.thread_id) {
+            (None, None) => self.app_data_source.read_mcp_resource(params).await,
+            (Some(session_id), Some(thread_id))
+                if !session_id.trim().is_empty() && !thread_id.trim().is_empty() =>
+            {
+                self.backend.read_mcp_runtime_resource(params).await
+            }
+            _ => Err(RuntimeCoreError::InvalidRequest(
+                "mcpResource/read sessionId and threadId must be provided together".to_string(),
+            )),
+        }
     }
 
     pub async fn subscribe_mcp_resource(

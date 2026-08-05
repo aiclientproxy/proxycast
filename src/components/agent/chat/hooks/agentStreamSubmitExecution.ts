@@ -24,6 +24,7 @@ import {
 import { MODEL_SELECTION_REQUIRED_ERROR_MESSAGE } from "../utils/agentRuntimeErrorPresentation";
 import type {
   AssistantDraftState,
+  AgentInputMention,
   SendMessageObserver,
   SessionModelPreference,
   ThreadGoalInput,
@@ -72,6 +73,7 @@ interface ExecuteAgentStreamSubmitOptions {
   effectiveAccessMode: AgentAccessMode;
   content: string;
   images: MessageImage[];
+  inputMentions?: readonly AgentInputMention[];
   skipUserMessage: boolean;
   effectiveProviderType: string;
   effectiveModel: string;
@@ -213,6 +215,7 @@ export async function executeAgentStreamSubmit(
     effectiveAccessMode,
     content,
     images,
+    inputMentions,
     skipUserMessage,
     effectiveProviderType,
     effectiveModel,
@@ -312,7 +315,12 @@ export async function executeAgentStreamSubmit(
     const params: TurnSteerParams = {
       threadId: resolvedThreadId,
       expectedTurnId,
-      input: buildTurnInput({ content, images, modelCapabilitySummary }),
+      input: buildTurnInput({
+        content,
+        images,
+        inputMentions,
+        modelCapabilitySummary,
+      }),
       ...(clientUserMessageId?.trim()
         ? { clientUserMessageId: clientUserMessageId.trim() }
         : {}),
@@ -464,6 +472,7 @@ export async function executeAgentStreamSubmit(
       const submitOp = buildAgentStreamSubmitOp({
         content,
         images,
+        inputMentions,
         activeThreadId: resolvedThreadId,
         clientUserMessageId,
         eventName,

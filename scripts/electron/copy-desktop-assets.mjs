@@ -1,7 +1,11 @@
-import { copyFile, mkdir } from "node:fs/promises";
+import { copyFile, cp, mkdir } from "node:fs/promises";
 import path from "node:path";
 
 const outputDir = path.resolve("dist-electron/desktop-assets");
+const bundledPluginSource = path.resolve("assets/plugins/openai-bundled");
+const bundledPluginOutput = path.resolve(
+  "dist-electron/plugins/openai-bundled",
+);
 
 const assets = [
   ["lime-rs/icons/icon.png", "icon.png"],
@@ -19,4 +23,10 @@ for (const [source, filename] of assets) {
   await copyFile(path.resolve(source), path.join(outputDir, filename));
 }
 
+await cp(bundledPluginSource, bundledPluginOutput, {
+  recursive: true,
+  force: true,
+});
+
 console.log(`[electron-assets] copied ${assets.length} assets to ${outputDir}`);
+console.log(`[electron-assets] copied bundled plugins to ${bundledPluginOutput}`);
