@@ -61,6 +61,11 @@ describe("Electron Forge config", () => {
       macSignOptions({ env, platform: "darwin" }).optionsForFile(
         "release-electron/Lime-darwin-arm64/Lime.app/Contents/MacOS/Lime",
       ),
+    ).toEqual({});
+    expect(
+      macSignOptions({ env, platform: "darwin" }).optionsForFile(
+        "release-electron/Lime-darwin-arm64/Lime.app/Contents/Resources/fa_FEMININE.lproj/locale.pak",
+      ),
     ).toEqual({ timestamp: "none" });
     expect(macNotarizeOptions({ env, platform: "darwin" })).toEqual({
       appleId: "release@example.com",

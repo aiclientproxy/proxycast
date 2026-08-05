@@ -51,7 +51,7 @@
 - `cargo fmt --manifest-path "lime-rs/Cargo.toml" --all -- --check`：通过。
 - `git diff --check`：通过。
 - GUI 构建只输出已知非阻断告警：`oem-runtime-config.js` 非 module script、Browserslist 数据过期与 Electron `console-message` API 废弃提示；本次未更新核心依赖。
-- 发布后 CI `30997182812` 首轮失败于 macOS `codesign --timestamp` 处理 `locale.pak`，错误为 `The timestamp service is not available.`；已修复嵌套资源 timestamp 策略，并将该错误纳入 Forge package 重试分类。
+- 发布后 CI `30997182812` 首轮失败于 macOS `codesign --timestamp` 处理 `locale.pak`，错误为 `The timestamp service is not available.`；已修复非代码资源 timestamp 策略，并将该错误纳入 Forge package 重试分类。重跑 `31000622796` 暴露此前对全部嵌套文件关闭 timestamp 会导致 notarization 拒绝嵌套 Mach-O；现已仅对 `.pak`、`.bin`、`.dat`、`.asar` 资源关闭 timestamp，嵌套代码恢复安全 timestamp。
 - 发布后补充 Agent chat terminal session-detail refresh 迁移及 contract guard；Forge 配置、发布工作流、相关守卫与 Agent chat 定向测试均通过。
 
 ## 架构确认

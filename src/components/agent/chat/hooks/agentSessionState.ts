@@ -271,13 +271,16 @@ function collectLocalInterruptedMarkerTurnIds(options: {
     }
   }
 
-  pushTurnId(options.fallbackTurnId);
-  for (
-    let index = (options.incomingItems?.length ?? 0) - 1;
-    index >= 0;
-    index -= 1
-  ) {
-    pushTurnId(readTimelineItemTurnId(options.incomingItems?.[index]));
+  // 没有具体运行回合归属时，才从当前/入站时间线推断停止回合。
+  if (interruptedTurnIds.size === 0) {
+    pushTurnId(options.fallbackTurnId);
+    for (
+      let index = (options.incomingItems?.length ?? 0) - 1;
+      index >= 0;
+      index -= 1
+    ) {
+      pushTurnId(readTimelineItemTurnId(options.incomingItems?.[index]));
+    }
   }
 
   return interruptedTurnIds;

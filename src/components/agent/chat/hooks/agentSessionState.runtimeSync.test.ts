@@ -487,6 +487,137 @@ describe("agentSessionState runtimeSync detail refresh", () => {
     expect(result.snapshot.threadRead?.status).toBe("completed");
   });
 
+  it("历史回合的已停止标记不能污染后续已完成回合", () => {
+    const canceledTurnId = "turn-runtime-sync-canceled-history";
+    const completedTurnId = "turn-runtime-sync-continued-completed";
+    const continuedText = "继续输出已恢复：正文已经正常收口";
+    const detail = {
+      id: "topic-runtime-sync-cancel-then-continue",
+      created_at: 1782800000,
+      updated_at: 1782800004,
+      messages: [
+        {
+          role: "user",
+          timestamp: 1782800000,
+          content: [{ type: "text", text: "整理今天的国际新闻" }],
+        },
+        {
+          role: "assistant",
+          timestamp: 1782800001,
+          content: [{ type: "text", text: "(已停止)" }],
+        },
+        {
+          role: "user",
+          timestamp: 1782800002,
+          content: [{ type: "text", text: "继续输出" }],
+        },
+        {
+          role: "assistant",
+          timestamp: 1782800003,
+          content: [{ type: "text", text: continuedText }],
+        },
+      ],
+      turns: [
+        {
+          id: canceledTurnId,
+          thread_id: "topic-runtime-sync-cancel-then-continue-thread",
+          prompt_text: "整理今天的国际新闻",
+          status: "canceled",
+          started_at: "2026-07-10T00:00:00.000Z",
+          completed_at: "2026-07-10T00:00:01.000Z",
+          created_at: "2026-07-10T00:00:00.000Z",
+          updated_at: "2026-07-10T00:00:01.000Z",
+        },
+        {
+          id: completedTurnId,
+          thread_id: "topic-runtime-sync-cancel-then-continue-thread",
+          prompt_text: "继续输出",
+          status: "completed",
+          started_at: "2026-07-10T00:00:02.000Z",
+          completed_at: "2026-07-10T00:00:04.000Z",
+          created_at: "2026-07-10T00:00:02.000Z",
+          updated_at: "2026-07-10T00:00:04.000Z",
+        },
+      ],
+      items: [
+        createAgentMessageItem({
+          id: "item-runtime-sync-canceled-history",
+          thread_id: "topic-runtime-sync-cancel-then-continue-thread",
+          turn_id: canceledTurnId,
+          text: "(已停止)",
+          sequence: 1,
+        }),
+        createAgentMessageItem({
+          id: "item-runtime-sync-continued-completed",
+          thread_id: "topic-runtime-sync-cancel-then-continue-thread",
+          turn_id: completedTurnId,
+          text: continuedText,
+          sequence: 2,
+        }),
+      ],
+      thread_read: {
+        thread_id: "topic-runtime-sync-cancel-then-continue-thread",
+        status: "completed",
+        active_turn_id: completedTurnId,
+        turns: [
+          { turn_id: canceledTurnId, status: "canceled" },
+          { turn_id: completedTurnId, status: "completed" },
+        ],
+      },
+    } satisfies AgentSessionDetail;
+
+    const result = buildHydratedAgentSessionSnapshot({
+      topicId: "topic-runtime-sync-cancel-then-continue",
+      detail,
+      currentSessionId: "topic-runtime-sync-cancel-then-continue",
+      currentMessages: [
+        createMessage({
+          id: "local-canceled-user",
+          role: "user",
+          content: "整理今天的国际新闻",
+          runtimeTurnId: canceledTurnId,
+        }),
+        createMessage({
+          id: "local-canceled-assistant",
+          role: "assistant",
+          content: "(已停止)",
+          contentParts: [{ type: "text", text: "(已停止)" }],
+          isThinking: false,
+          runtimeTurnId: canceledTurnId,
+        }),
+        createMessage({
+          id: "local-continued-user",
+          role: "user",
+          content: "继续输出",
+          runtimeTurnId: completedTurnId,
+        }),
+        createMessage({
+          id: "local-continued-assistant",
+          role: "assistant",
+          content: continuedText,
+          isThinking: false,
+          runtimeTurnId: completedTurnId,
+        }),
+      ],
+      currentThreadTurns: [],
+      currentThreadItems: [],
+      currentExecutionRuntime: null,
+      currentExecutionStrategy: "react",
+      topics: [],
+      detailMergeMode: "terminal_reconcile",
+    });
+
+    const continuedAssistant = result.snapshot.messages.find(
+      (message) => message.runtimeTurnId === completedTurnId,
+    );
+    expect(continuedAssistant).toMatchObject({
+      role: "assistant",
+      content: continuedText,
+      isThinking: false,
+    });
+    expect(continuedAssistant?.content).not.toContain("(已停止)");
+  });
+
   it("terminalReconcile detached canceled detail 应迁移 pending-turn 已停止终态", () => {
     const realTurnId = "turn-runtime-sync-detached-canceled-real";
     const promptText = "整理今天的国际新闻";

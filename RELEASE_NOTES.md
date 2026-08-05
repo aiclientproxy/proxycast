@@ -24,7 +24,7 @@
 - 新增 Plugin v2 App Center、typed gateway、mention/activation、MCP resource、Right Surface、历史恢复与卸载语义的 Rust、Vitest、contract 和真实 Electron Gate B 覆盖。
 - 补充 Electron 打包资产、内嵌 Browser HTML、GUI smoke、Skills watcher 和 tool lifecycle 的回归守卫。
 - 新增 canonical reasoning 线性持久化与 1,200 条命令历史导入性能回归，覆盖重复 delta、final 快照替换和后台进度完成。
-- 增加 macOS 正式签名嵌套资源的 timestamp 关闭策略与时间戳服务不可用重试守卫。
+- 增加 macOS 正式签名非代码资源的 timestamp 关闭策略与时间戳服务不可用重试守卫，同时确保嵌套 Mach-O 保留安全时间戳并可通过 notarization。
 
 ### 文档
 

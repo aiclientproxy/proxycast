@@ -61,6 +61,19 @@ function isTopLevelAppBundle(filePath) {
   return normalized.endsWith(".app") && !normalized.includes(".app/");
 }
 
+const MACOS_NON_CODE_RESOURCE_EXTENSIONS = new Set([
+  ".asar",
+  ".bin",
+  ".dat",
+  ".pak",
+]);
+
+function isMacOSNonCodeResource(filePath) {
+  const normalized = String(filePath || "").replace(/\\/g, "/");
+  const extension = path.extname(normalized).toLowerCase();
+  return MACOS_NON_CODE_RESOURCE_EXTENSIONS.has(extension);
+}
+
 function macSignOptions({
   env = process.env,
   platform = process.platform,
@@ -79,8 +92,11 @@ function macSignOptions({
     preEmbedProvisioningProfile: false,
     optionsForFile: (filePath) => {
       if (!isTopLevelAppBundle(filePath)) {
+        if (releaseSigning && isMacOSNonCodeResource(filePath)) {
+          return { timestamp: "none" };
+        }
         return releaseSigning
-          ? { timestamp: "none" }
+          ? {}
           : { hardenedRuntime: false, timestamp: "none" };
       }
       return {

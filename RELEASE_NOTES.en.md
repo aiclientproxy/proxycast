@@ -26,7 +26,7 @@ Simplified Chinese release notes are the primary version.
 - Added Rust, Vitest, contract, and real Electron Gate B coverage for Plugin v2 App Center, typed gateway, mention/activation, MCP resources, Right Surface, history restoration, and uninstall semantics.
 - Added regression guards for Electron packaged assets, embedded Browser HTML, GUI smoke, Skills watcher behavior, and the tool lifecycle.
 - Added canonical reasoning linear-persistence and 1,200-command history-import performance regressions covering repeated deltas, final snapshot replacement, and background progress completion.
-- Added a macOS release-signing policy that disables timestamps for nested resources and retries when Apple's timestamp service is unavailable.
+- Added a macOS release-signing policy that disables timestamps only for non-code resources, retries when Apple's timestamp service is unavailable, and preserves secure timestamps for nested Mach-O binaries required by notarization.
 
 ### Documentation
 
