@@ -107,7 +107,7 @@ describe("AppSidebar search", () => {
         workspace_id: "project-1",
         messages_count: 1,
       };
-    });
+    }).reverse();
     mockListAgentRuntimeSessions.mockResolvedValue(sessions);
 
     const container = mountSidebarContainer({

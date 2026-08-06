@@ -17,6 +17,8 @@ use app_server_protocol::protocol::v2::PluginCatalogReadParams;
 use app_server_protocol::protocol::v2::PluginCatalogReadResponse;
 use app_server_protocol::protocol::v2::PluginCatalogUninstallParams;
 use app_server_protocol::protocol::v2::PluginCatalogUninstallResponse;
+use app_server_protocol::protocol::v2::PluginSearchParams;
+use app_server_protocol::protocol::v2::PluginSearchResponse;
 use app_server_protocol::PluginFetchCloudPackageParams;
 use app_server_protocol::PluginInstalledDisabledSetParams;
 use app_server_protocol::PluginInstalledListResponse;
@@ -86,6 +88,13 @@ impl RuntimeCore {
         params: PluginCatalogListParams,
     ) -> Result<PluginCatalogListResponse, RuntimeCoreError> {
         self.app_data_source.list_plugin_catalog(params).await
+    }
+
+    pub async fn search_plugins(
+        &self,
+        params: PluginSearchParams,
+    ) -> Result<PluginSearchResponse, RuntimeCoreError> {
+        self.app_data_source.search_plugins(params).await
     }
 
     pub async fn read_plugin_catalog(

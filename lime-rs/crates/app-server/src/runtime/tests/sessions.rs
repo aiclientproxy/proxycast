@@ -114,6 +114,8 @@ fn start_session_creates_empty_canonical_thread_before_returning() {
 
     let threads = block_on(store.list_threads(ListThreadsParams {
         include_archived: false,
+        section: None,
+        sort_by_section_position: false,
         page: canonical_page(),
     }))
     .expect("list canonical threads");

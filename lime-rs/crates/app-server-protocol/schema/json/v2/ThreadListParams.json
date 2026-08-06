@@ -24,6 +24,7 @@
       "enum": [
         "created_at",
         "recency_at",
+        "section_position",
         "updated_at"
       ],
       "type": "string"
@@ -74,12 +75,6 @@
         }
       ]
     },
-    "isPinned": {
-      "type": [
-        "boolean",
-        "null"
-      ]
-    },
     "limit": {
       "format": "uint32",
       "minimum": 0,
@@ -104,6 +99,12 @@
       ]
     },
     "searchTerm": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "sectionId": {
       "type": [
         "null",
         "string"

@@ -5,7 +5,8 @@ use app_server_protocol::protocol::v2::{
     PluginCatalogEnabledSetParams, PluginCatalogEnabledSetResponse, PluginCatalogInstallParams,
     PluginCatalogInstallResponse, PluginCatalogInstalledParams, PluginCatalogListParams,
     PluginCatalogListResponse, PluginCatalogReadParams, PluginCatalogReadResponse,
-    PluginCatalogUninstallParams, PluginCatalogUninstallResponse,
+    PluginCatalogUninstallParams, PluginCatalogUninstallResponse, PluginSearchParams,
+    PluginSearchResponse,
 };
 use app_server_protocol::*;
 use async_trait::async_trait;
@@ -23,6 +24,13 @@ pub trait PluginDataSource: Send + Sync {
         _params: PluginCatalogListParams,
     ) -> Result<PluginCatalogListResponse, RuntimeCoreError> {
         Err(unavailable("plugin/list"))
+    }
+
+    async fn search_plugins(
+        &self,
+        _params: PluginSearchParams,
+    ) -> Result<PluginSearchResponse, RuntimeCoreError> {
+        Err(unavailable("plugin/search"))
     }
 
     async fn read_plugin_catalog(

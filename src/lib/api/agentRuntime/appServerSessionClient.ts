@@ -2,6 +2,7 @@ import {
   AppServerClient,
   type AppServerThreadListParams,
   type AppServerThreadListResponse,
+  type AppServerThreadSectionListResponse,
   type AppServerThreadReadParams,
 } from "@/lib/api/appServer";
 import { METHOD_THREAD_LIST } from "../../../../packages/app-server-client/src/protocol";
@@ -29,6 +30,7 @@ const THREAD_LIST_PAGE_LIMIT = 100;
 export type AppServerSessionRpcClient = Pick<
   AppServerClient,
   | "startSession"
+  | "listThreadSections"
   | "readThread"
   | "updateThreadSettings"
   | "archiveThread"
@@ -56,6 +58,8 @@ export type AppServerAgentSessionOverview = {
   latestTurnStatus?: string;
   activeTurnId?: string;
   queuedTurnCount?: number;
+  section?: { id: string; name: string };
+  sectionEnteredAt?: number;
 };
 
 export interface AppServerSessionClientDeps {
@@ -353,44 +357,65 @@ async function listCanonicalSessionOverviews(
   const sessions: AppServerAgentSessionOverview[] = [];
   const pageLimit = requestedLimit ?? THREAD_LIST_PAGE_LIMIT;
 
+  const sectionIds = await listCanonicalSectionIds(client);
+  const sectionScopes: Array<string | null> = [...sectionIds, null];
+
   for (const archived of archivedFilters(options)) {
-    const seenCursors = new Set<string>();
-    let cursor: string | undefined;
-    do {
-      const response = await client.request<AppServerThreadListResponse>(
-        METHOD_THREAD_LIST,
-        appServerThreadListParams({ archived, cursor, cwd, limit: pageLimit }),
-      );
-      const page = readCanonicalThreadListResponse(response.result, {
-        archived,
-      });
-      if (!page) {
-        return null;
-      }
-      sessions.push(
-        ...page.filter(
-          (session) =>
-            matchesWorkspace(session, workspaceId) && matchesCwd(session, cwd),
-        ),
-      );
+    for (const sectionId of sectionScopes) {
+      const seenCursors = new Set<string>();
+      let cursor: string | undefined;
+      do {
+        const response = await client.request<AppServerThreadListResponse>(
+          METHOD_THREAD_LIST,
+          appServerThreadListParams({
+            archived,
+            cursor,
+            cwd,
+            limit: pageLimit,
+            sectionId,
+          }),
+        );
+        const page = readCanonicalThreadListResponse(response.result, {
+          archived,
+        });
+        if (!page) {
+          return null;
+        }
+        sessions.push(
+          ...page.filter(
+            (session) =>
+              matchesWorkspace(session, workspaceId) &&
+              matchesCwd(session, cwd),
+          ),
+        );
+
+        const collapsed = collapseCanonicalSessionOverviews(sessions);
+        if (
+          requestedLimit !== undefined &&
+          collapsed.length >= requestedLimit
+        ) {
+          break;
+        }
+        const nextCursor = response.result.nextCursor?.trim() || undefined;
+        if (!nextCursor || seenCursors.has(nextCursor)) {
+          break;
+        }
+        seenCursors.add(nextCursor);
+        cursor = nextCursor;
+      } while (cursor);
 
       const collapsed = collapseCanonicalSessionOverviews(sessions);
       if (requestedLimit !== undefined && collapsed.length >= requestedLimit) {
         break;
       }
-      const nextCursor = response.result.nextCursor?.trim() || undefined;
-      if (!nextCursor || seenCursors.has(nextCursor)) {
-        break;
-      }
-      seenCursors.add(nextCursor);
-      cursor = nextCursor;
-    } while (cursor);
+    }
+    const collapsed = collapseCanonicalSessionOverviews(sessions);
+    if (requestedLimit !== undefined && collapsed.length >= requestedLimit) {
+      break;
+    }
   }
 
-  const collapsed = collapseCanonicalSessionOverviews(sessions).sort(
-    (left, right) =>
-      timestampMillis(right.updatedAt) - timestampMillis(left.updatedAt),
-  );
+  const collapsed = collapseCanonicalSessionOverviews(sessions);
   return requestedLimit === undefined
     ? collapsed
     : collapsed.slice(0, requestedLimit);
@@ -470,13 +495,55 @@ function appServerThreadListParams({
   cursor,
   cwd,
   limit,
+  sectionId,
 }: {
   archived: boolean;
   cursor?: string;
   cwd?: string | string[];
   limit: number;
+  sectionId?: string | null;
 }): AppServerThreadListParams {
-  return omitUndefined({ archived, cursor, cwd, limit });
+  return omitUndefined({
+    archived,
+    cursor,
+    cwd,
+    limit,
+    sectionId,
+    sortKey:
+      typeof sectionId === "string" && sectionId.trim()
+        ? ("section_position" as const)
+        : undefined,
+  });
+}
+
+async function listCanonicalSectionIds(
+  client: AppServerSessionRpcClient,
+): Promise<string[]> {
+  const sectionIds: string[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const response = await client.listThreadSections({
+      ...(cursor ? { cursor } : {}),
+      limit: THREAD_LIST_PAGE_LIMIT,
+    });
+    const page = response.result as AppServerThreadSectionListResponse;
+    if (!page || !Array.isArray(page.data)) {
+      throw new Error("threadSection/list did not return section list");
+    }
+    for (const section of page.data) {
+      if (section.id.trim()) {
+        sectionIds.push(section.id);
+      }
+    }
+    const nextCursor = page.nextCursor?.trim() || undefined;
+    if (!nextCursor || seenCursors.has(nextCursor)) {
+      break;
+    }
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  } while (cursor);
+  return sectionIds;
 }
 
 function archivedFilters(
@@ -615,6 +682,11 @@ function appServerSessionOverviewToRuntimeInfo(
     latest_turn_status: session.latestTurnStatus,
     active_turn_id: session.activeTurnId,
     queued_turn_count: session.queuedTurnCount,
+    section: session.section,
+    section_entered_at:
+      session.sectionEnteredAt === undefined
+        ? undefined
+        : session.sectionEnteredAt,
   });
 }
 

@@ -14,7 +14,6 @@ function topic(overrides?: Partial<Topic>): Topic {
     status: "running",
     statusReason: "default",
     lastPreview: "继续整理界面",
-    isPinned: false,
     hasUnread: false,
     sourceSessionId: "thread-1",
     ...overrides,

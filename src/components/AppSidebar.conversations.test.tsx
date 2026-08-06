@@ -27,6 +27,11 @@ import {
   mockSelectPluginDirectory,
   mockToastSuccess,
   mockSetAgentRuntimeThreadName,
+  mockListThreadSections,
+  mockCreateThreadSection,
+  mockUpdateThreadSection,
+  mockDeleteThreadSection,
+  mockMoveThreadToSection,
   mockUpdateProject,
   mockWaitForConversationImportJob,
   mountSidebar,
@@ -2285,7 +2290,7 @@ describe("AppSidebar conversations", () => {
     const menu = await openConversationMenu("最近会话");
     expect(menu).not.toBeNull();
     expect(menu?.textContent).toContain("重命名");
-    expect(menu?.textContent).toContain("收藏");
+    expect(menu?.textContent).toContain("置顶");
     expect(menu?.textContent).toContain("归档");
     expect(menu?.textContent).not.toContain("多选");
     expect(menu?.textContent).toContain("删除");
@@ -2738,16 +2743,29 @@ describe("AppSidebar conversations", () => {
     expect(mockToastSuccess).toHaveBeenCalledWith("已删除对话");
   });
 
-  it("会话菜单收藏应提供即时反馈", async () => {
-    mockListAgentRuntimeSessions.mockResolvedValue([
+  it("会话菜单置顶应写入 canonical Pinned section 并进入置顶分组", async () => {
+    let pinned = false;
+    mockMoveThreadToSection.mockImplementation(async () => {
+      pinned = true;
+    });
+    mockListAgentRuntimeSessions.mockImplementation(async () => [
       {
         id: "session-recent",
+        thread_id: "thread-recent",
         name: "最近会话",
         created_at: 1714000000,
         updated_at: 1714000600,
         archived_at: null,
         workspace_id: "project-1",
         working_dir: "/repo/project-1",
+        ...(pinned
+          ? {
+              section: {
+                id: "01984de2-8f74-7c91-a3b2-5c5e937cf318",
+                name: "Pinned",
+              },
+            }
+          : {}),
       },
     ]);
 
@@ -2761,20 +2779,207 @@ describe("AppSidebar conversations", () => {
     await flushEffects(2);
 
     await openConversationMenu("最近会话");
-    await clickConversationMenuItem("app-sidebar-conversation-menu-favorite");
+    await clickConversationMenuItem("app-sidebar-conversation-menu-pin");
+    await flushEffects(2);
 
+    expect(mockMoveThreadToSection).toHaveBeenCalledWith({
+      threadId: "thread-recent",
+      sectionId: "01984de2-8f74-7c91-a3b2-5c5e937cf318",
+    });
     expect(
       container.querySelector(
-        '[data-testid="app-sidebar-conversation-favorite-badge"]',
+        '[data-testid="app-sidebar-thread-section"][data-section-id="01984de2-8f74-7c91-a3b2-5c5e937cf318"]',
       ),
     ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="app-sidebar-thread-section"]')
+        ?.textContent,
+    ).toContain("置顶");
 
-    const favoriteMenu = await openConversationMenu("最近会话");
-    expect(favoriteMenu?.textContent).toContain("取消收藏");
+    const pinnedMenu = await openConversationMenu("最近会话");
+    expect(pinnedMenu?.textContent).toContain("取消置顶");
     expect(
       container.querySelector(
         '[data-testid="app-sidebar-conversation-multiselect-toolbar"]',
       ),
     ).toBeNull();
+  });
+
+  it("侧栏应支持新建、重命名和删除空 custom section", async () => {
+    mockListThreadSections.mockResolvedValue([
+      {
+        id: "01984de2-8f74-7c91-a3b2-5c5e937cf318",
+        name: "Pinned",
+      },
+      { id: "section-active", name: "进行中" },
+    ]);
+    mockCreateThreadSection.mockResolvedValue({
+      id: "section-created",
+      name: "待处理",
+    });
+    const prompt = vi
+      .spyOn(window, "prompt")
+      .mockReturnValueOnce("待处理")
+      .mockReturnValueOnce("已确认");
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const container = mountSidebarContainer({
+      currentPage: "agent",
+      currentPageParams: {
+        agentEntry: "claw",
+        projectId: "project-1",
+      } as AgentPageParams,
+    });
+    await flushEffects(2);
+
+    expect(
+      container.querySelector(
+        '[data-testid="app-sidebar-thread-section"][data-section-id="section-active"]',
+      )?.textContent,
+    ).toContain("进行中");
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="app-sidebar-new-thread-section-button"]',
+        )
+        ?.click();
+      await Promise.resolve();
+    });
+    await flushEffects(2);
+
+    expect(prompt).toHaveBeenNthCalledWith(1, "新建分组");
+    expect(mockCreateThreadSection).toHaveBeenCalledWith({ name: "待处理" });
+    const createdSection = container.querySelector<HTMLElement>(
+      '[data-testid="app-sidebar-thread-section"][data-section-id="section-created"]',
+    );
+    expect(createdSection?.textContent).toContain("待处理");
+
+    await act(async () => {
+      createdSection
+        ?.querySelector<HTMLButtonElement>(
+          '[data-testid="app-sidebar-thread-section-rename"]',
+        )
+        ?.click();
+      await Promise.resolve();
+    });
+    await flushEffects(2);
+
+    expect(prompt).toHaveBeenNthCalledWith(2, "重命名分组", "待处理");
+    expect(mockUpdateThreadSection).toHaveBeenCalledWith({
+      sectionId: "section-created",
+      name: "已确认",
+    });
+    expect(
+      container.querySelector(
+        '[data-testid="app-sidebar-thread-section"][data-section-id="section-created"]',
+      )?.textContent,
+    ).toContain("已确认");
+
+    await act(async () => {
+      container
+        .querySelector<HTMLElement>(
+          '[data-testid="app-sidebar-thread-section"][data-section-id="section-created"]',
+        )
+        ?.querySelector<HTMLButtonElement>(
+          '[data-testid="app-sidebar-thread-section-delete"]',
+        )
+        ?.click();
+      await Promise.resolve();
+    });
+    await flushEffects(2);
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      "确定要删除分组“已确认”吗？其中的对话会回到未分组列表。",
+    );
+    expect(mockDeleteThreadSection).toHaveBeenCalledWith({
+      sectionId: "section-created",
+    });
+    expect(
+      container.querySelector(
+        '[data-testid="app-sidebar-thread-section"][data-section-id="section-created"]',
+      ),
+    ).toBeNull();
+  });
+
+  it("会话菜单应在 custom section 与未分组之间移动", async () => {
+    let sectionId: string | null = null;
+    mockListThreadSections.mockResolvedValue([
+      {
+        id: "01984de2-8f74-7c91-a3b2-5c5e937cf318",
+        name: "Pinned",
+      },
+      { id: "section-active", name: "进行中" },
+    ]);
+    mockMoveThreadToSection.mockImplementation(async (params) => {
+      sectionId = params.sectionId;
+    });
+    mockListAgentRuntimeSessions.mockImplementation(async () => [
+      {
+        id: "session-recent",
+        thread_id: "thread-recent",
+        name: "最近会话",
+        created_at: 1714000000,
+        updated_at: 1714000600,
+        archived_at: null,
+        ...(sectionId ? { section: { id: sectionId, name: "进行中" } } : {}),
+      },
+    ]);
+
+    const container = mountSidebarContainer({
+      currentPage: "agent",
+      currentPageParams: {
+        agentEntry: "claw",
+        projectId: "project-1",
+      } as AgentPageParams,
+    });
+    await flushEffects(2);
+
+    await openConversationMenu("最近会话");
+    await clickConversationMenuItem(
+      "app-sidebar-conversation-menu-move-section",
+    );
+    await act(async () => {
+      document.body
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="app-sidebar-conversation-menu-section-option"][data-section-id="section-active"]',
+        )
+        ?.click();
+      await Promise.resolve();
+    });
+    await flushEffects(2);
+
+    expect(mockMoveThreadToSection).toHaveBeenNthCalledWith(1, {
+      threadId: "thread-recent",
+      sectionId: "section-active",
+    });
+    expect(
+      container.querySelector(
+        '[data-testid="app-sidebar-thread-section"][data-section-id="section-active"]',
+      )?.textContent,
+    ).toContain("最近会话");
+
+    await openConversationMenu("最近会话");
+    await clickConversationMenuItem(
+      "app-sidebar-conversation-menu-move-section",
+    );
+    await act(async () => {
+      document.body
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="app-sidebar-conversation-menu-section-option"][data-section-id="unsectioned"]',
+        )
+        ?.click();
+      await Promise.resolve();
+    });
+    await flushEffects(2);
+
+    expect(mockMoveThreadToSection).toHaveBeenNthCalledWith(2, {
+      threadId: "thread-recent",
+      sectionId: null,
+    });
+    expect(
+      container.querySelector(
+        '[data-testid="app-sidebar-recent-conversations"]',
+      )?.textContent,
+    ).toContain("最近会话");
   });
 });

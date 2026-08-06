@@ -14,6 +14,7 @@ mod notification;
 mod plugin;
 mod request_permissions;
 mod schema_types;
+mod serde_helpers;
 mod thread;
 mod thread_control;
 mod turn;

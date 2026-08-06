@@ -3,7 +3,8 @@ use app_server_protocol::protocol::v2::{
     PluginCatalogEnabledSetParams, PluginCatalogEnabledSetResponse, PluginCatalogInstallParams,
     PluginCatalogInstallResponse, PluginCatalogInstalledParams, PluginCatalogListParams,
     PluginCatalogListResponse, PluginCatalogReadParams, PluginCatalogReadResponse,
-    PluginCatalogUninstallParams, PluginCatalogUninstallResponse,
+    PluginCatalogUninstallParams, PluginCatalogUninstallResponse, PluginSearchParams,
+    PluginSearchResponse,
 };
 use async_trait::async_trait;
 
@@ -18,6 +19,14 @@ impl PluginDataSource for LocalAppDataSource {
         params: PluginCatalogListParams,
     ) -> Result<PluginCatalogListResponse, RuntimeCoreError> {
         crate::local_data_source::plugin_catalog::list(&self.plugin_data_root, params)
+            .map_err(data_error)
+    }
+
+    async fn search_plugins(
+        &self,
+        params: PluginSearchParams,
+    ) -> Result<PluginSearchResponse, RuntimeCoreError> {
+        crate::local_data_source::plugin_catalog::search(&self.plugin_data_root, params)
             .map_err(data_error)
     }
 

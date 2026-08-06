@@ -56,6 +56,9 @@ function appServerClientMock(): AppServerSessionRpcClient {
     startSession: vi
       .fn()
       .mockResolvedValue(rpcResult(canonicalThreadStartResponse())),
+    listThreadSections: vi
+      .fn()
+      .mockResolvedValue(rpcResult({ data: [], nextCursor: null })),
     request: vi.fn().mockResolvedValue(rpcResult({ data: [] })),
     readThread: vi
       .fn()
@@ -197,9 +200,120 @@ describe("appServerSessionClient", () => {
       }),
     ]);
 
+    expect(appServerClient.listThreadSections).toHaveBeenCalledWith({
+      limit: 100,
+    });
     expect(appServerClient.request).toHaveBeenCalledWith("thread/list", {
       archived: false,
       limit: 12,
+      sectionId: null,
+    });
+  });
+
+  it("list 应保持 section catalog 与 section_position 的服务端顺序", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.listThreadSections).mockResolvedValueOnce(
+      rpcResult({
+        data: [
+          {
+            id: "01984de2-8f74-7c91-a3b2-5c5e937cf318",
+            name: "Pinned",
+          },
+          { id: "section-active", name: "Active" },
+        ],
+        nextCursor: null,
+      }),
+    );
+    vi.mocked(appServerClient.request)
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            canonicalThread({
+              id: "thread-pinned-first",
+              sessionId: "session-pinned-first",
+              updatedAt: 10,
+              section: {
+                id: "01984de2-8f74-7c91-a3b2-5c5e937cf318",
+                name: "Pinned",
+              },
+              sectionEnteredAt: 8,
+            }),
+            canonicalThread({
+              id: "thread-pinned-second",
+              sessionId: "session-pinned-second",
+              updatedAt: 30,
+              section: {
+                id: "01984de2-8f74-7c91-a3b2-5c5e937cf318",
+                name: "Pinned",
+              },
+              sectionEnteredAt: 9,
+            }),
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            canonicalThread({
+              id: "thread-active",
+              sessionId: "session-active",
+              updatedAt: 40,
+              section: { id: "section-active", name: "Active" },
+              sectionEnteredAt: 7,
+            }),
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        rpcResult({
+          data: [
+            canonicalThread({
+              id: "thread-unsectioned",
+              sessionId: "session-unsectioned",
+              updatedAt: 50,
+            }),
+          ],
+          nextCursor: null,
+          backwardsCursor: null,
+        }),
+      );
+    const client = createAppServerSessionClient({ appServerClient });
+
+    const sessions = await client.listAgentRuntimeSessions();
+
+    expect(sessions.map((session) => session.id)).toEqual([
+      "session-pinned-first",
+      "session-pinned-second",
+      "session-active",
+      "session-unsectioned",
+    ]);
+    expect(sessions[0]).toMatchObject({
+      section: {
+        id: "01984de2-8f74-7c91-a3b2-5c5e937cf318",
+        name: "Pinned",
+      },
+      section_entered_at: 8_000,
+    });
+    expect(appServerClient.request).toHaveBeenNthCalledWith(1, "thread/list", {
+      archived: false,
+      limit: 100,
+      sectionId: "01984de2-8f74-7c91-a3b2-5c5e937cf318",
+      sortKey: "section_position",
+    });
+    expect(appServerClient.request).toHaveBeenNthCalledWith(2, "thread/list", {
+      archived: false,
+      limit: 100,
+      sectionId: "section-active",
+      sortKey: "section_position",
+    });
+    expect(appServerClient.request).toHaveBeenNthCalledWith(3, "thread/list", {
+      archived: false,
+      limit: 100,
+      sectionId: null,
     });
   });
 
@@ -443,9 +557,7 @@ describe("appServerSessionClient", () => {
     expect(detail).toMatchObject({
       id: "session-paginated",
       thread_id: "thread-paginated",
-      turns: [
-        { id: "turn-page-2", thread_id: "thread-paginated" },
-      ],
+      turns: [{ id: "turn-page-2", thread_id: "thread-paginated" }],
       items: [
         {
           id: "item-page-2",
@@ -903,9 +1015,7 @@ describe("appServerSessionClient", () => {
     await expect(
       client.getAgentRuntimeSession("session-failed-page-2"),
     ).resolves.toMatchObject({
-      turns: [
-        { id: "turn-selected-page-1", status: "completed" },
-      ],
+      turns: [{ id: "turn-selected-page-1", status: "completed" }],
       items: [{ id: "message-selected-page-1" }],
       history_cursor: {
         item_cursor: null,

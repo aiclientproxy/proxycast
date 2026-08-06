@@ -730,7 +730,7 @@ async fn resume_barrier_orders_raw_jsonl_response_replay_before_deferred_live_ev
                         .to_string(),
                     thread_id: Some(thread_id.clone()),
                     turn_id: Some("turn-deferred-live".to_string()),
-                    event_type: "provider.step".to_string(),
+                    event_type: "provider.request.started".to_string(),
                     timestamp: "2026-07-20T00:00:00Z".to_string(),
                     payload: json!({ "phase": "streaming" }),
                 },
@@ -801,7 +801,7 @@ async fn resume_barrier_orders_raw_jsonl_response_replay_before_deferred_live_ev
             .params
             .as_ref()
             .and_then(|params| params.pointer("/event/type")),
-        Some(&json!("provider.step"))
+        Some(&json!("provider.request.started"))
     );
 
     write_message(
@@ -940,7 +940,7 @@ async fn reconnect_claims_thread_request_and_orders_resume_replay_before_live_ev
                     session_id,
                     thread_id: Some(thread_id.clone()),
                     turn_id: Some("turn-reconnect-live".to_string()),
-                    event_type: "provider.step".to_string(),
+                    event_type: "provider.request.started".to_string(),
                     timestamp: "2026-07-20T00:00:00Z".to_string(),
                     payload: json!({ "phase": "streaming" }),
                 },
@@ -1027,7 +1027,7 @@ async fn reconnect_claims_thread_request_and_orders_resume_replay_before_live_ev
             .params
             .as_ref()
             .and_then(|params| params.pointer("/event/type")),
-        Some(&json!("provider.step"))
+        Some(&json!("provider.request.started"))
     );
 
     send_transport_message(
@@ -1284,7 +1284,7 @@ async fn reconnect_over_real_stdio_jsonl_reclaims_pending_request_and_preserves_
                     session_id,
                     thread_id: Some(thread_id.clone()),
                     turn_id: Some("turn-raw-reconnect-live".to_string()),
-                    event_type: "provider.step".to_string(),
+                    event_type: "provider.request.started".to_string(),
                     timestamp: "2026-07-20T00:00:00Z".to_string(),
                     payload: json!({ "phase": "streaming" }),
                 },
@@ -1378,7 +1378,7 @@ async fn reconnect_over_real_stdio_jsonl_reclaims_pending_request_and_preserves_
             .params
             .as_ref()
             .and_then(|params| params.pointer("/event/type")),
-        Some(&json!("provider.step"))
+        Some(&json!("provider.request.started"))
     );
 
     write_message(

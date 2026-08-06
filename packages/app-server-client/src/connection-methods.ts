@@ -46,6 +46,26 @@ declare module "./connection.js" {
       params?: protocol.ThreadListParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ThreadListResponse>>;
+    moveThreadToSection(
+      params: protocol.ThreadSectionMoveParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadSectionMoveResponse>>;
+    listThreadSections(
+      params?: protocol.ThreadSectionListParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadSectionListResponse>>;
+    createThreadSection(
+      params: protocol.ThreadSectionCreateParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadSectionCreateResponse>>;
+    updateThreadSection(
+      params: protocol.ThreadSectionUpdateParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadSectionUpdateResponse>>;
+    deleteThreadSection(
+      params: protocol.ThreadSectionDeleteParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadSectionDeleteResponse>>;
     listLoadedThreads(
       params?: protocol.ThreadLoadedListParams,
       options?: AppServerRequestOptions,
@@ -372,6 +392,10 @@ declare module "./connection.js" {
     ): Promise<
       AppServerRequestResult<protocol.WorkspaceRegisteredSkillsListResponse>
     >;
+    searchPlugins(
+      params: protocol.PluginSearchParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.PluginSearchResponse>>;
     inspectPluginLocalPackage(
       params: protocol.PluginLocalPackageInspectParams,
       options?: AppServerRequestOptions,

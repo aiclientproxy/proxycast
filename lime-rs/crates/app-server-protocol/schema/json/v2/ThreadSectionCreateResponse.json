@@ -1,0 +1,30 @@
+{
+  "$defs": {
+    "ThreadSection": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "section": {
+      "$ref": "#/$defs/ThreadSection"
+    }
+  },
+  "required": [
+    "section"
+  ],
+  "title": "ThreadSectionCreateResponse",
+  "type": "object"
+}

@@ -2445,16 +2445,36 @@ describe("claw chat current Electron fixture smoke guard", () => {
 
   it("covers reasoning-first visibility in a dedicated real Electron fixture", () => {
     const content = readSmokeScript();
+    const backendContent = fs.readFileSync(
+      "scripts/agent-runtime/claw-chat-current-fixture-backend-script.mjs",
+      "utf8",
+    );
+    const reasoningBranchStart = backendContent.indexOf(
+      "if (isReasoningFirstVisiblePrompt)",
+    );
+    const reasoningBranchEnd = backendContent.indexOf(
+      "if (isLiveTailCommitPrompt)",
+      reasoningBranchStart,
+    );
+    const reasoningBranch = backendContent.slice(
+      reasoningBranchStart,
+      reasoningBranchEnd,
+    );
 
     expect(content).toContain("reasoning-first-visible");
     expect(content).toContain("REASONING_FIRST_VISIBLE_PROMPT");
     expect(content).toContain("REASONING_FIRST_VISIBLE_TEXT");
+    expect(content).toContain("REASONING_FIRST_VISIBLE_CONTENT_TEXT");
     expect(content).toContain("REASONING_FIRST_VISIBLE_FINAL_TEXT");
     expect(content).toContain("REASONING_FIRST_VISIBLE_DONE_TEXT");
     expect(content).toContain("waitForGuiReasoningFirstVisibleBeforeAnswer");
     expect(content).toContain("waitForGuiReasoningFirstVisibleCompleted");
     expect(content).toContain("guiReasoningFirstVisibleBeforeAnswer");
     expect(content).toContain("guiReasoningFirstVisibleCompleted");
+    expect(content).toContain("historicalReasoningPreviewExpanded");
+    expect(content).toContain("reasoningDetailsAvailable");
+    expect(content).toContain("reasoningOpenedByClick");
+    expect(content).toContain("reasoningContentExpandedAfterCompletion");
     expect(content).toContain("readModelReasoningFirstVisibleCompleted");
     expect(content).toContain("readModelReasoningFirstVisibleItemObserved");
     expect(content).toContain("REASONING_FIRST_VISIBLE_ASSERTION_KEYS");
@@ -2462,6 +2482,25 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain('status: "in_progress"');
     expect(content).toContain('type: "message.delta"');
     expect(content).not.toContain("agent_runtime_");
+    expect(reasoningBranchStart).toBeGreaterThan(-1);
+    expect(reasoningBranchEnd).toBeGreaterThan(reasoningBranchStart);
+    expect(
+      reasoningBranch.indexOf('type: "reasoning.started"'),
+    ).toBeGreaterThan(-1);
+    expect(reasoningBranch.indexOf('type: "reasoning.final"')).toBeGreaterThan(
+      reasoningBranch.indexOf('type: "reasoning.started"'),
+    );
+    expect(reasoningBranch.indexOf('type: "reasoning.ended"')).toBeGreaterThan(
+      reasoningBranch.indexOf('type: "reasoning.final"'),
+    );
+    expect(reasoningBranch).toContain('type: "item.updated"');
+    expect(reasoningBranch).toContain(
+      'content: ["${REASONING_FIRST_VISIBLE_CONTENT_TEXT}"]',
+    );
+    expect(reasoningBranch).toContain(
+      'canonicalLifecycle: "runtime_message_reasoning.v1"',
+    );
+    expect(reasoningBranch).not.toContain('type: "item.completed"');
   });
 
   it("covers live-tail commit in a dedicated real Electron fixture", () => {

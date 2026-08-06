@@ -27,6 +27,31 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "optional-empty",
   },
   {
+    name: "moveThreadToSection",
+    method: constants.APP_SERVER_METHOD_THREAD_SECTION_MOVE,
+    params: "required",
+  },
+  {
+    name: "listThreadSections",
+    method: constants.APP_SERVER_METHOD_THREAD_SECTION_LIST,
+    params: "optional-empty",
+  },
+  {
+    name: "createThreadSection",
+    method: constants.APP_SERVER_METHOD_THREAD_SECTION_CREATE,
+    params: "required",
+  },
+  {
+    name: "updateThreadSection",
+    method: constants.APP_SERVER_METHOD_THREAD_SECTION_UPDATE,
+    params: "required",
+  },
+  {
+    name: "deleteThreadSection",
+    method: constants.APP_SERVER_METHOD_THREAD_SECTION_DELETE,
+    params: "required",
+  },
+  {
     name: "listCapabilities",
     method: constants.APP_SERVER_METHOD_CAPABILITY_LIST,
     params: "optional-empty",
@@ -241,6 +266,11 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     name: "listPluginCatalog",
     method: constants.APP_SERVER_METHOD_PLUGIN_LIST,
     params: "optional-empty",
+  },
+  {
+    name: "searchPlugins",
+    method: constants.APP_SERVER_METHOD_PLUGIN_SEARCH,
+    params: "required",
   },
   {
     name: "readPluginCatalog",

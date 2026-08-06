@@ -30,6 +30,7 @@ import {
   PLAN_DONE_TEXT,
   PLAN_PROMPT,
   PLAN_STEPS,
+  REASONING_FIRST_VISIBLE_CONTENT_TEXT,
   REASONING_FIRST_VISIBLE_DONE_TEXT,
   REASONING_FIRST_VISIBLE_FINAL_TEXT,
   REASONING_FIRST_VISIBLE_PROMPT,
@@ -228,12 +229,20 @@ function summarizeReasoningFirstVisibleReadModel(readModel) {
     JSON.stringify(item || {}).includes(REASONING_FIRST_VISIBLE_TEXT),
   );
   const reasoningSequence =
-    typeof reasoningItem?.sequence === "number" ? reasoningItem.sequence : null;
+    typeof reasoningItem?.sequence === "number"
+      ? reasoningItem.sequence
+      : reasoningItem
+        ? items.indexOf(reasoningItem)
+        : null;
   const finalItem = items.find((item) =>
     JSON.stringify(item || {}).includes(REASONING_FIRST_VISIBLE_FINAL_TEXT),
   );
   const finalSequence =
-    typeof finalItem?.sequence === "number" ? finalItem.sequence : null;
+    typeof finalItem?.sequence === "number"
+      ? finalItem.sequence
+      : finalItem
+        ? items.indexOf(finalItem)
+        : null;
 
   return {
     detailItemCount: Array.isArray(readModel?.detail?.items)
@@ -244,17 +253,16 @@ function summarizeReasoningFirstVisibleReadModel(readModel) {
     )
       ? readModel.detail.thread_read.thread_items.length
       : null,
-    latestTurnStatus:
-      readModel?.detail?.thread_read?.runtime_summary?.latestTurnStatus ??
-      readModel?.detail?.thread_read?.status ??
-      readModel?.detail?.status ??
-      null,
+    latestTurnStatus: readModelLatestTurnStatus(readModel),
     includesPrompt: serialized.includes(REASONING_FIRST_VISIBLE_PROMPT),
     includesAssistantDone: serialized.includes(
       REASONING_FIRST_VISIBLE_DONE_TEXT,
     ),
     includesFinalText: serialized.includes(REASONING_FIRST_VISIBLE_FINAL_TEXT),
     includesReasoningText: serialized.includes(REASONING_FIRST_VISIBLE_TEXT),
+    includesReasoningContentText: serialized.includes(
+      REASONING_FIRST_VISIBLE_CONTENT_TEXT,
+    ),
     includesReasoningItem: Boolean(reasoningItem),
     reasoningItemCount: reasoningItems.length,
     reasoningItemStatus: reasoningItem?.status ?? null,

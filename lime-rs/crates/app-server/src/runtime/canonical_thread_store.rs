@@ -15,10 +15,13 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thread_store::{
     AppendThreadItemsParams, ApplyThreadHistoryParams, ApplyThreadHistoryResult,
-    ArchiveThreadParams, CreateThreadParams, DeleteThreadParams, ItemPage, ListItemsParams,
-    ListThreadsParams, ListTurnsParams, ReadThreadParams, SearchThreadsParams, StoreCursor,
-    ThreadMetadataPatch, ThreadPage, ThreadSearchPage, ThreadSpawnEdgeStatus, ThreadStore,
-    ThreadStoreError, ThreadStoreFuture, ThreadStoreResult, TurnPage, UpdateThreadMetadataParams,
+    ArchiveThreadParams, CreateThreadParams, CreateThreadSectionParams, DeleteThreadParams,
+    DeleteThreadSectionParams, ItemPage, ListItemsParams, ListThreadSectionsParams,
+    ListThreadsParams, ListTurnsParams, MoveThreadToSectionParams, ReadThreadParams,
+    RenameThreadSectionParams, SearchThreadsParams, StoreCursor, StoredThreadSection,
+    ThreadMetadataPatch, ThreadPage, ThreadSearchPage, ThreadSectionPage, ThreadSpawnEdgeStatus,
+    ThreadStore, ThreadStoreError, ThreadStoreFuture, ThreadStoreResult, TurnPage,
+    UpdateThreadMetadataParams, PINNED_THREAD_SECTION_ID, PINNED_THREAD_SECTION_NAME,
 };
 
 use super::projection_rebuild::{projected_tables_are_empty, rebuild_projected_thread_snapshot};
@@ -37,6 +40,7 @@ mod history_builder;
 mod persistence;
 mod queries;
 mod search;
+mod sections;
 
 use history_builder::{normalize_persisted_change_set, normalize_replayed_change_set};
 
@@ -55,6 +59,7 @@ const THREAD_STORE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 #[serde(rename_all = "snake_case")]
 enum CursorKind {
     Threads,
+    Sections,
     Turns,
     Items,
 }
@@ -442,6 +447,7 @@ impl ProjectionStore {
         }
         hydrate_thread(&conn, &mut thread, params.turns_view)?;
         self.enrich_thread_agent_context(&conn, &mut thread)?;
+        sections::hydrate_thread_section(&conn, &mut thread)?;
         Ok(Some(thread))
     }
 
@@ -450,13 +456,36 @@ impl ProjectionStore {
         let limit = page_limit(params.page.limit)?;
         let cursor = decode_cursor(params.page.cursor.as_ref(), CursorKind::Threads)?;
         let direction = params.page.sort_direction;
-        let mut rows = query_thread_page(
-            &conn,
-            params.include_archived,
-            direction,
-            cursor.as_ref(),
-            limit + 1,
-        )?;
+        if params.sort_by_section_position && !matches!(params.section.as_ref(), Some(Some(_))) {
+            return Err(ThreadStoreError::invalid_request(
+                "section_position sort requires a non-null section filter",
+            ));
+        }
+        let mut rows = match params.section.as_ref() {
+            Some(Some(section_id)) => sections::query_section_thread_page(
+                &conn,
+                params.include_archived,
+                section_id,
+                params.sort_by_section_position,
+                direction,
+                cursor.as_ref(),
+                limit + 1,
+            )?,
+            Some(None) => sections::query_unsectioned_thread_page(
+                &conn,
+                params.include_archived,
+                direction,
+                cursor.as_ref(),
+                limit + 1,
+            )?,
+            None => query_thread_page(
+                &conn,
+                params.include_archived,
+                direction,
+                cursor.as_ref(),
+                limit + 1,
+            )?,
+        };
         let has_more = rows.len() > limit as usize;
         rows.truncate(limit as usize);
         let next_cursor = has_more
@@ -473,6 +502,7 @@ impl ProjectionStore {
             .transpose()?;
         for (thread, _, _) in &mut rows {
             self.enrich_thread_agent_context(&conn, thread)?;
+            sections::hydrate_thread_section(&conn, thread)?;
         }
         Ok(ThreadPage {
             data: rows.into_iter().map(|(thread, _, _)| thread).collect(),
@@ -1033,6 +1063,46 @@ impl ThreadStore for ProjectionStore {
     fn list_threads(&self, params: ListThreadsParams) -> ThreadStoreFuture<'_, ThreadPage> {
         let store = self.clone();
         Box::pin(async move { store.list_threads_sync(params) })
+    }
+
+    fn list_thread_sections(
+        &self,
+        params: ListThreadSectionsParams,
+    ) -> ThreadStoreFuture<'_, ThreadSectionPage> {
+        let store = self.clone();
+        Box::pin(async move { sections::list_thread_sections(&store, params) })
+    }
+
+    fn create_thread_section(
+        &self,
+        params: CreateThreadSectionParams,
+    ) -> ThreadStoreFuture<'_, StoredThreadSection> {
+        let store = self.clone();
+        Box::pin(async move { sections::create_thread_section(&store, params) })
+    }
+
+    fn rename_thread_section(
+        &self,
+        params: RenameThreadSectionParams,
+    ) -> ThreadStoreFuture<'_, Option<StoredThreadSection>> {
+        let store = self.clone();
+        Box::pin(async move { sections::rename_thread_section(&store, params) })
+    }
+
+    fn delete_thread_section(
+        &self,
+        params: DeleteThreadSectionParams,
+    ) -> ThreadStoreFuture<'_, bool> {
+        let store = self.clone();
+        Box::pin(async move { sections::delete_thread_section(&store, params) })
+    }
+
+    fn move_thread_to_section(
+        &self,
+        params: MoveThreadToSectionParams,
+    ) -> ThreadStoreFuture<'_, ()> {
+        let store = self.clone();
+        Box::pin(async move { sections::move_thread_to_section(&store, params) })
     }
 
     fn search_threads(

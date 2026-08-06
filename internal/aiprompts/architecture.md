@@ -1776,3 +1776,38 @@ Architecture impact: major because this adds a public notification producer and 
 the product direction unchanged: Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore/domain owner -> GUI.
 Architecture diagram updated: this section and the Skill catalog path above. Responsible developer confirmation: root,
 2026-07-31.
+
+## 29. Durable Ordered Thread Section Owner
+
+Thread organization uses the same durable App Server read model as Codex, with Desktop-specific grouping:
+
+```text
+threadSection/list
+  -> ordered section catalog
+  -> thread/list { sectionId, sortKey: "section_position" }
+  -> App Server canonical Thread projection
+  -> Renderer session gateway
+  -> Pinned/custom section shelf, then unsectioned project/conversation groups
+
+thread/section/move { threadId, sectionId: string | null }
+  -> ThreadStore section membership and position
+  -> canonical Thread section + sectionEnteredAt
+  -> Desktop sidebar refresh
+```
+
+`threadSection/list/create/update/delete` and `thread/section/move` are the sole current protocol and storage
+boundary for section catalog, membership and ordering. The built-in Pinned section has one stable UUID, cannot be
+renamed or deleted, and uses `sectionId: null` to remove a thread from the section. Renderer session projection keeps
+the returned section order and never re-sorts by `updatedAt`; sectioned sessions are excluded from project and
+standalone groups so one thread has one visible navigation owner.
+
+The v2 protocol/schema/generated client, App Server section store and JSON-RPC tests, Renderer typed gateway/session
+projection, and Desktop Pinned/custom shelf are `current`. The former Thread `isPinned` metadata, localStorage
+favorite-session list, favorite boolean projection and second timestamp sort are `dead / deleted / forbidden-to-restore`;
+no compatibility owner was added. Custom section CRUD remains available through the current typed gateway; a separate
+TUI-style section manager is not introduced into the Desktop shell.
+
+Architecture impact: major because durable thread membership and navigation now share one ordered read model across the
+App Server and Desktop GUI. The product direction remains Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore
+-> Thread/Turn/Item projection -> GUI. Architecture diagram updated: this section and the Thread/Turn/Item projection
+path above. Responsible developer confirmation: root, 2026-08-06.

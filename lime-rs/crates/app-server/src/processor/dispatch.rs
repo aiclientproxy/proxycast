@@ -6,6 +6,7 @@ use super::thread_resume_context::request_id_for_thread_resume;
 use super::{ConnectionRequestId, JsonRpcError, RequestProcessor};
 use crate::AppServerError;
 use app_server_protocol::error_codes;
+use app_server_protocol::protocol::v2;
 use app_server_protocol::JsonRpcErrorResponse;
 use app_server_protocol::JsonRpcMessage;
 use app_server_protocol::JsonRpcRequest;
@@ -187,14 +188,15 @@ impl RequestProcessor {
             METHOD_SESSION_FILE_DELETE => self.handle_session_file_delete_impl(params).boxed(),
             METHOD_SESSION_FILE_LIST => self.handle_session_file_list_impl(params).boxed(),
             METHOD_THREAD_START => self.handle_thread_start_v2(params).boxed(),
-            app_server_protocol::protocol::v2::METHOD_THREAD_FORK => {
-                self.handle_thread_fork_v2(params).boxed()
-            }
+            v2::METHOD_THREAD_FORK => self.handle_thread_fork_v2(params).boxed(),
             METHOD_THREAD_READ => self.handle_thread_read_impl(params).boxed(),
             METHOD_THREAD_LIST => self.handle_thread_list_impl(params).boxed(),
-            app_server_protocol::protocol::v2::METHOD_THREAD_LOADED_LIST => {
-                self.handle_thread_loaded_list_v2(params).boxed()
-            }
+            v2::METHOD_THREAD_SECTION_MOVE => self.handle_section_move(params).boxed(),
+            v2::METHOD_THREAD_SECTION_LIST => self.handle_section_list(params).boxed(),
+            v2::METHOD_THREAD_SECTION_CREATE => self.handle_section_create(params).boxed(),
+            v2::METHOD_THREAD_SECTION_UPDATE => self.handle_section_update(params).boxed(),
+            v2::METHOD_THREAD_SECTION_DELETE => self.handle_section_delete(params).boxed(),
+            v2::METHOD_THREAD_LOADED_LIST => self.handle_thread_loaded_list_v2(params).boxed(),
             app_server_protocol::protocol::v2::METHOD_THREAD_UNSUBSCRIBE => self
                 .handle_thread_unsubscribe_v2(params, connection_request_id)
                 .boxed(),
@@ -504,6 +506,9 @@ impl RequestProcessor {
                 .boxed(),
             app_server_protocol::protocol::v2::METHOD_PLUGIN_LIST => {
                 self.handle_plugin_catalog_list_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_PLUGIN_SEARCH => {
+                self.handle_plugin_search_v2_impl(params).boxed()
             }
             app_server_protocol::protocol::v2::METHOD_PLUGIN_READ => {
                 self.handle_plugin_catalog_read_v2_impl(params).boxed()

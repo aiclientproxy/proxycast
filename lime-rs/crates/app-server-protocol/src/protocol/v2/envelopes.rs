@@ -11,7 +11,8 @@ use super::{
     ModelSafetyBufferingUpdatedNotification, ModelVerificationNotification,
     PermissionsRequestApprovalParams, PlanDeltaNotification, PluginCatalogEnabledSetParams,
     PluginCatalogInstallParams, PluginCatalogInstalledParams, PluginCatalogListParams,
-    PluginCatalogReadParams, PluginCatalogUninstallParams, ReasoningSummaryPartAddedNotification,
+    PluginCatalogReadParams, PluginCatalogUninstallParams, PluginSearchParams,
+    PluginSearchResponse, ReasoningSummaryPartAddedNotification,
     ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification,
     ServerRequestResolvedNotification, SkillsChangedNotification,
     ThreadApproveGuardianDeniedActionParams, ThreadApproveGuardianDeniedActionResponse,
@@ -31,18 +32,22 @@ use super::{
     ThreadMemoryModeSetResponse, ThreadMetadataUpdateParams, ThreadMetadataUpdateResponse,
     ThreadNameUpdatedNotification, ThreadReadParams, ThreadReadResponse, ThreadResumeParams,
     ThreadResumeResponse, ThreadSearchOccurrencesParams, ThreadSearchOccurrencesResponse,
-    ThreadSearchParams, ThreadSearchResponse, ThreadSetNameParams, ThreadSetNameResponse,
-    ThreadSettingsUpdateParams, ThreadSettingsUpdateResponse, ThreadSettingsUpdatedNotification,
-    ThreadShellCommandParams, ThreadShellCommandResponse, ThreadStartParams, ThreadStartResponse,
-    ThreadStartedNotification, ThreadStatusChangedNotification,
-    ThreadTokenUsageUpdatedNotification, ThreadTurnsListParams, ThreadTurnsListResponse,
-    ThreadUnarchiveParams, ThreadUnarchiveResponse, ThreadUnarchivedNotification,
-    ThreadUnsubscribeParams, ThreadUnsubscribeResponse, ToolRequestUserInputParams,
-    TurnCompletedNotification, TurnInterruptParams, TurnInterruptResponse,
-    TurnPlanUpdatedNotification, TurnStartParams, TurnStartResponse, TurnStartedNotification,
-    TurnSteerParams, TurnSteerResponse, WarningNotification, METHOD_COMMAND_EXECUTION_OUTPUT_DELTA,
-    METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION, METHOD_CONFIG_WARNING, METHOD_CURRENT_TIME_READ,
-    METHOD_ERROR, METHOD_FILE_CHANGE_PATCH_UPDATED, METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
+    ThreadSearchParams, ThreadSearchResponse, ThreadSectionCreateParams,
+    ThreadSectionCreateResponse, ThreadSectionDeleteParams, ThreadSectionDeleteResponse,
+    ThreadSectionListParams, ThreadSectionListResponse, ThreadSectionMoveParams,
+    ThreadSectionMoveResponse, ThreadSectionUpdateParams, ThreadSectionUpdateResponse,
+    ThreadSetNameParams, ThreadSetNameResponse, ThreadSettingsUpdateParams,
+    ThreadSettingsUpdateResponse, ThreadSettingsUpdatedNotification, ThreadShellCommandParams,
+    ThreadShellCommandResponse, ThreadStartParams, ThreadStartResponse, ThreadStartedNotification,
+    ThreadStatusChangedNotification, ThreadTokenUsageUpdatedNotification, ThreadTurnsListParams,
+    ThreadTurnsListResponse, ThreadUnarchiveParams, ThreadUnarchiveResponse,
+    ThreadUnarchivedNotification, ThreadUnsubscribeParams, ThreadUnsubscribeResponse,
+    ToolRequestUserInputParams, TurnCompletedNotification, TurnInterruptParams,
+    TurnInterruptResponse, TurnPlanUpdatedNotification, TurnStartParams, TurnStartResponse,
+    TurnStartedNotification, TurnSteerParams, TurnSteerResponse, WarningNotification,
+    METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION,
+    METHOD_CONFIG_WARNING, METHOD_CURRENT_TIME_READ, METHOD_ERROR,
+    METHOD_FILE_CHANGE_PATCH_UPDATED, METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
     METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL, METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
     METHOD_ITEM_TOOL_CALL, METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
     METHOD_MCP_SERVER_ELICITATION_REQUEST, METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
@@ -97,6 +102,31 @@ pub enum ClientRequest {
     ThreadList {
         id: RequestId,
         params: ThreadListParams,
+    },
+    #[serde(rename = "thread/section/move")]
+    ThreadSectionMove {
+        id: RequestId,
+        params: ThreadSectionMoveParams,
+    },
+    #[serde(rename = "threadSection/list")]
+    ThreadSectionList {
+        id: RequestId,
+        params: ThreadSectionListParams,
+    },
+    #[serde(rename = "threadSection/create")]
+    ThreadSectionCreate {
+        id: RequestId,
+        params: ThreadSectionCreateParams,
+    },
+    #[serde(rename = "threadSection/update")]
+    ThreadSectionUpdate {
+        id: RequestId,
+        params: ThreadSectionUpdateParams,
+    },
+    #[serde(rename = "threadSection/delete")]
+    ThreadSectionDelete {
+        id: RequestId,
+        params: ThreadSectionDeleteParams,
     },
     #[serde(rename = "thread/loaded/list")]
     ThreadLoadedList {
@@ -243,6 +273,11 @@ pub enum ClientRequest {
         id: RequestId,
         params: PluginCatalogListParams,
     },
+    #[serde(rename = "plugin/search")]
+    PluginSearch {
+        id: RequestId,
+        params: PluginSearchParams,
+    },
     #[serde(rename = "plugin/read")]
     PluginRead {
         id: RequestId,
@@ -293,6 +328,11 @@ impl ClientRequest {
             | Self::ThreadResume { id, .. }
             | Self::ThreadRead { id, .. }
             | Self::ThreadList { id, .. }
+            | Self::ThreadSectionMove { id, .. }
+            | Self::ThreadSectionList { id, .. }
+            | Self::ThreadSectionCreate { id, .. }
+            | Self::ThreadSectionUpdate { id, .. }
+            | Self::ThreadSectionDelete { id, .. }
             | Self::ThreadLoadedList { id, .. }
             | Self::ThreadUnsubscribe { id, .. }
             | Self::ThreadIncrementElicitation { id, .. }
@@ -322,6 +362,7 @@ impl ClientRequest {
             | Self::MediaRead { id, .. }
             | Self::ModelList { id, .. }
             | Self::PluginList { id, .. }
+            | Self::PluginSearch { id, .. }
             | Self::PluginRead { id, .. }
             | Self::PluginInstall { id, .. }
             | Self::PluginUninstall { id, .. }
@@ -340,6 +381,11 @@ impl ClientRequest {
             Self::ThreadResume { .. } => Method::ThreadResume,
             Self::ThreadRead { .. } => Method::ThreadRead,
             Self::ThreadList { .. } => Method::ThreadList,
+            Self::ThreadSectionMove { .. } => Method::ThreadSectionMove,
+            Self::ThreadSectionList { .. } => Method::ThreadSectionList,
+            Self::ThreadSectionCreate { .. } => Method::ThreadSectionCreate,
+            Self::ThreadSectionUpdate { .. } => Method::ThreadSectionUpdate,
+            Self::ThreadSectionDelete { .. } => Method::ThreadSectionDelete,
             Self::ThreadLoadedList { .. } => Method::ThreadLoadedList,
             Self::ThreadUnsubscribe { .. } => Method::ThreadUnsubscribe,
             Self::ThreadIncrementElicitation { .. } => Method::ThreadIncrementElicitation,
@@ -373,6 +419,7 @@ impl ClientRequest {
             Self::MediaRead { .. } => Method::MediaRead,
             Self::ModelList { .. } => Method::ModelList,
             Self::PluginList { .. } => Method::PluginList,
+            Self::PluginSearch { .. } => Method::PluginSearch,
             Self::PluginRead { .. } => Method::PluginRead,
             Self::PluginInstall { .. } => Method::PluginInstall,
             Self::PluginUninstall { .. } => Method::PluginUninstall,
@@ -403,6 +450,11 @@ pub enum ClientResponsePayload {
     ThreadResume(ThreadResumeResponse),
     ThreadRead(ThreadReadResponse),
     ThreadList(ThreadListResponse),
+    ThreadSectionMove(ThreadSectionMoveResponse),
+    ThreadSectionList(ThreadSectionListResponse),
+    ThreadSectionCreate(ThreadSectionCreateResponse),
+    ThreadSectionUpdate(ThreadSectionUpdateResponse),
+    ThreadSectionDelete(ThreadSectionDeleteResponse),
     ThreadLoadedList(ThreadLoadedListResponse),
     ThreadUnsubscribe(ThreadUnsubscribeResponse),
     ThreadIncrementElicitation(ThreadIncrementElicitationResponse),
@@ -430,6 +482,7 @@ pub enum ClientResponsePayload {
     ThreadGoalClear(ThreadGoalClearResponse),
     ArtifactWrite(ArtifactWriteResponse),
     MediaRead(MediaReadResponse),
+    PluginSearch(PluginSearchResponse),
     TurnStart(TurnStartResponse),
     TurnSteer(TurnSteerResponse),
     TurnInterrupt(TurnInterruptResponse),
@@ -443,6 +496,11 @@ impl ClientResponsePayload {
             Self::ThreadResume(_) => Method::ThreadResume,
             Self::ThreadRead(_) => Method::ThreadRead,
             Self::ThreadList(_) => Method::ThreadList,
+            Self::ThreadSectionMove(_) => Method::ThreadSectionMove,
+            Self::ThreadSectionList(_) => Method::ThreadSectionList,
+            Self::ThreadSectionCreate(_) => Method::ThreadSectionCreate,
+            Self::ThreadSectionUpdate(_) => Method::ThreadSectionUpdate,
+            Self::ThreadSectionDelete(_) => Method::ThreadSectionDelete,
             Self::ThreadLoadedList(_) => Method::ThreadLoadedList,
             Self::ThreadUnsubscribe(_) => Method::ThreadUnsubscribe,
             Self::ThreadIncrementElicitation(_) => Method::ThreadIncrementElicitation,
@@ -472,6 +530,7 @@ impl ClientResponsePayload {
             Self::ThreadGoalClear(_) => Method::ThreadGoalClear,
             Self::ArtifactWrite(_) => Method::ArtifactWrite,
             Self::MediaRead(_) => Method::MediaRead,
+            Self::PluginSearch(_) => Method::PluginSearch,
             Self::TurnStart(_) => Method::TurnStart,
             Self::TurnSteer(_) => Method::TurnSteer,
             Self::TurnInterrupt(_) => Method::TurnInterrupt,
@@ -485,6 +544,11 @@ impl ClientResponsePayload {
             Self::ThreadResume(response) => serde_json::to_value(response)?,
             Self::ThreadRead(response) => serde_json::to_value(response)?,
             Self::ThreadList(response) => serde_json::to_value(response)?,
+            Self::ThreadSectionMove(response) => serde_json::to_value(response)?,
+            Self::ThreadSectionList(response) => serde_json::to_value(response)?,
+            Self::ThreadSectionCreate(response) => serde_json::to_value(response)?,
+            Self::ThreadSectionUpdate(response) => serde_json::to_value(response)?,
+            Self::ThreadSectionDelete(response) => serde_json::to_value(response)?,
             Self::ThreadLoadedList(response) => serde_json::to_value(response)?,
             Self::ThreadUnsubscribe(response) => serde_json::to_value(response)?,
             Self::ThreadIncrementElicitation(response) => serde_json::to_value(response)?,
@@ -512,6 +576,7 @@ impl ClientResponsePayload {
             Self::ThreadGoalClear(response) => serde_json::to_value(response)?,
             Self::ArtifactWrite(response) => serde_json::to_value(response)?,
             Self::MediaRead(response) => serde_json::to_value(response)?,
+            Self::PluginSearch(response) => serde_json::to_value(response)?,
             Self::TurnStart(response) => serde_json::to_value(response)?,
             Self::TurnSteer(response) => serde_json::to_value(response)?,
             Self::TurnInterrupt(response) => serde_json::to_value(response)?,

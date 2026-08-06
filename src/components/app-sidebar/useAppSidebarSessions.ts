@@ -27,7 +27,7 @@ import {
   hasCachedSidebarSessionEntry,
   matchesSidebarSessionTitle,
   normalizeSidebarSearchText,
-  sortSidebarSessions,
+  filterSidebarSessions,
   splitSidebarSessionResult,
 } from "./sidebarSessions";
 import type { ConversationImportThreadCommitResponse } from "@/lib/api/conversationImport";
@@ -61,7 +61,7 @@ function mergeSidebarSessions(
   sessionGroups.flat().forEach((session) => {
     sessionsById.set(session.id, session);
   });
-  return sortSidebarSessions([...sessionsById.values()]);
+  return filterSidebarSessions([...sessionsById.values()]);
 }
 
 function normalizeSessionProjectValue(value?: string | null): string | null {
@@ -413,12 +413,12 @@ export function useAppSidebarSessions({
       );
       const listDurationMs = Date.now() - startedAt;
       const sortStartedAt = Date.now();
-      const sortedSessions = mergeSidebarSessions(sessionGroups);
-      for (const session of sortedSessions) {
+      const orderedSessions = mergeSidebarSessions(sessionGroups);
+      for (const session of orderedSessions) {
         optimisticSidebarSessionsRef.current.delete(session.id);
       }
-      const nextSessions = sortSidebarSessions([
-        ...sortedSessions,
+      const nextSessions = filterSidebarSessions([
+        ...orderedSessions,
         ...optimisticSidebarSessionsRef.current.values(),
       ]);
       const sortDurationMs = Date.now() - sortStartedAt;
@@ -602,7 +602,7 @@ export function useAppSidebarSessions({
           optimisticSession,
         );
         setSidebarSessions((current) =>
-          sortSidebarSessions([
+          filterSidebarSessions([
             optimisticSession,
             ...current.filter((session) => session.id !== createdSessionId),
           ]),
@@ -777,7 +777,7 @@ export function useAppSidebarSessions({
         optimisticSidebarSessionsRef.current.set(nextSession.id, nextSession);
       }
       setSidebarSessions((current) =>
-        sortSidebarSessions(
+        filterSidebarSessions(
           current.map((item) =>
             item.id === nextSession.id ? nextSession : item,
           ),
@@ -793,10 +793,26 @@ export function useAppSidebarSessions({
         optimisticSidebarSessionsRef.current.set(nextSession.id, nextSession);
       }
       setSidebarSessions((current) =>
-        sortSidebarSessions(
+        filterSidebarSessions(
           current
             .map((item) => (item.id === nextSession.id ? nextSession : item))
             .filter((item) => !item.archived_at),
+        ),
+      );
+    },
+    [],
+  );
+
+  const moveSidebarSessionSectionOptimistically = useCallback(
+    (nextSession: AgentSessionInfo) => {
+      if (optimisticSidebarSessionsRef.current.has(nextSession.id)) {
+        optimisticSidebarSessionsRef.current.set(nextSession.id, nextSession);
+      }
+      setSidebarSessions((current) =>
+        filterSidebarSessions(
+          current.map((item) =>
+            item.id === nextSession.id ? nextSession : item,
+          ),
         ),
       );
     },
@@ -821,7 +837,7 @@ export function useAppSidebarSessions({
         importedSession,
       );
       setSidebarSessions((current) =>
-        sortSidebarSessions([
+        filterSidebarSessions([
           importedSession,
           ...current.filter((item) => item.id !== importedSession.id),
         ]),
@@ -838,6 +854,7 @@ export function useAppSidebarSessions({
     fallbackSessionId,
     hasMoreRecentSidebarSessions,
     moveSidebarSessionArchiveStateOptimistically,
+    moveSidebarSessionSectionOptimistically,
     recentSessionsLoading: sidebarSessionsLoading,
     refreshSidebarSessions,
     removeSidebarSessionOptimistically,

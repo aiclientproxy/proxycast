@@ -1,6 +1,11 @@
 import type { MouseEvent } from "react";
 import styled from "styled-components";
-import { CircleAlert, Clock3, LoaderCircle, MoreHorizontal, Pin } from "lucide-react";
+import {
+  CircleAlert,
+  Clock3,
+  LoaderCircle,
+  MoreHorizontal,
+} from "lucide-react";
 import type { AgentSessionInfo } from "@/lib/api/agentRuntime/sessionTypes";
 import { recordAgentUiPerformanceMetric } from "@/lib/agentUiPerformanceMetrics";
 
@@ -13,9 +18,7 @@ interface AppSidebarConversationRowProps {
   active: boolean;
   runtimeStatus?: ConversationRuntimeStatus | null;
   runtimeStatusLabel?: string | null;
-  favorite: boolean;
   actionDisabled: boolean;
-  favoriteBadgeLabel: string;
   moreActionsLabel: string;
   openActionMenuLabel: string;
   onNavigate: (session: AgentSessionInfo) => void;
@@ -123,21 +126,6 @@ const ConversationItemLabel = styled.span`
   font-weight: 500;
 `;
 
-const ConversationFavoriteBadge = styled.span`
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--sidebar-muted);
-
-  svg {
-    width: 13px;
-    height: 13px;
-  }
-`;
-
 const ConversationItemMeta = styled.span`
   flex-shrink: 0;
   font-size: 11px;
@@ -192,9 +180,7 @@ export function AppSidebarConversationRow({
   active,
   runtimeStatus,
   runtimeStatusLabel,
-  favorite,
   actionDisabled,
-  favoriteBadgeLabel,
   moreActionsLabel,
   openActionMenuLabel,
   onNavigate,
@@ -241,14 +227,6 @@ export function AppSidebarConversationRow({
           <ConversationItemDot $active={active} />
         )}
         <ConversationItemLabel>{title}</ConversationItemLabel>
-        {favorite ? (
-          <ConversationFavoriteBadge
-            title={favoriteBadgeLabel}
-            data-testid="app-sidebar-conversation-favorite-badge"
-          >
-            <Pin />
-          </ConversationFavoriteBadge>
-        ) : null}
         <ConversationItemMeta>{meta}</ConversationItemMeta>
       </ConversationItemButton>
       <ConversationItemActionButton

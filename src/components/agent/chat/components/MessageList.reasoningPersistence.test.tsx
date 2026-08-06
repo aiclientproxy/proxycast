@@ -471,6 +471,7 @@ describe("MessageList reasoning persistence", () => {
           updated_at: "2026-03-28T12:00:01Z",
           type: "reasoning",
           text: "先分析意图。",
+          summary: ["先分析意图。"],
         },
       ],
     });
@@ -481,6 +482,11 @@ describe("MessageList reasoning persistence", () => {
       ),
     ).not.toBeNull();
     expect(mockAgentThreadTimeline).not.toHaveBeenCalled();
+    expect(
+      container.querySelector(
+        '[data-testid="historical-reasoning-summary:leading"]',
+      )?.textContent,
+    ).toContain("先分析意图。");
     expect(mockStreamingRenderer).toHaveBeenCalledWith(
       expect.objectContaining({
         thinkingContent: undefined,
@@ -532,6 +538,7 @@ describe("MessageList reasoning persistence", () => {
           updated_at: "2026-05-30T09:10:01.000Z",
           type: "reasoning",
           text: "Inspecting folder for details",
+          summary: ["Inspecting folder for details"],
         },
         {
           id: "agent-timeline-interleaved-1",
@@ -571,6 +578,7 @@ describe("MessageList reasoning persistence", () => {
           updated_at: "2026-05-30T09:10:03.000Z",
           type: "reasoning",
           text: "Analyzing file sizes",
+          summary: ["Analyzing file sizes"],
         },
         {
           id: "agent-timeline-interleaved-2",
@@ -612,6 +620,13 @@ describe("MessageList reasoning persistence", () => {
         (part) => part.type === "tool_use" || part.type === "thinking",
       ),
     ).toBe(false);
+    const reasoningSummary = container.querySelector(
+      '[data-testid="historical-reasoning-summary:leading"]',
+    );
+    expect(reasoningSummary?.textContent).toContain(
+      "Inspecting folder for details",
+    );
+    expect(reasoningSummary?.textContent).toContain("Analyzing file sizes");
   });
 
   it("已完成短答也应把持久化 reasoning 收拢到 compact 执行摘要", () => {

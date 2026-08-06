@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentSessionInfo } from "@/lib/api/agentRuntime/sessionTypes";
 import {
   buildImportedSidebarSession,
-  sortSidebarSessions,
+  filterSidebarSessions,
 } from "./sidebarSessions";
 
 function session(
@@ -20,14 +20,14 @@ function session(
 }
 
 describe("sidebarSessions", () => {
-  it("按更新时间倒序排列，并容忍旧 read model 缺少 id 或时间字段", () => {
+  it("保持 App Server 顺序，并容忍缺少 id 或时间字段的记录", () => {
     const staleShape = {
       name: "旧形状会话",
       archived_at: null,
     } as unknown as AgentSessionInfo;
 
     expect(() =>
-      sortSidebarSessions([
+      filterSidebarSessions([
         session("older", { updated_at: 10, created_at: 10 }),
         staleShape,
         session("newer", { updated_at: 20, created_at: 20 }),
@@ -35,12 +35,12 @@ describe("sidebarSessions", () => {
     ).not.toThrow();
 
     expect(
-      sortSidebarSessions([
+      filterSidebarSessions([
         session("older", { updated_at: 10, created_at: 10 }),
         staleShape,
         session("newer", { updated_at: 20, created_at: 20 }),
       ]).map((item) => item.id || item.name),
-    ).toEqual(["newer", "older", "旧形状会话"]);
+    ).toEqual(["older", "旧形状会话", "newer"]);
   });
 
   it("把导入结果投影为侧栏会话项", () => {

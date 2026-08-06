@@ -46,4 +46,28 @@ describe("resolveReasoningDisplayText", () => {
     expect(text).toContain("Finding latest news.");
     expect(text).toContain("I'm thinking about available tools.");
   });
+
+  it("canonical reasoning content 应作为展开正文，summary 镜像不应遮掉 raw content", () => {
+    const text = resolveThinkingDisplayText(
+      reasoningItem({
+        summary: ["先确认用户意图。"],
+        content: ["完整推理第一段。", "完整推理第二段。"],
+        text: "先确认用户意图。",
+      }),
+    );
+
+    expect(text).toBe(
+      "先确认用户意图。\n\n完整推理第一段。\n\n完整推理第二段。",
+    );
+  });
+
+  it("没有 summary 的 canonical reasoning 也应能在展开后显示 content", () => {
+    expect(
+      resolveThinkingDisplayText(
+        reasoningItem({
+          content: ["模型返回的完整思考。"],
+        }),
+      ),
+    ).toBe("模型返回的完整思考。");
+  });
 });

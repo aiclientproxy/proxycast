@@ -6,6 +6,11 @@ pub const METHOD_THREAD_FORK: &str = "thread/fork";
 pub const METHOD_THREAD_RESUME: &str = "thread/resume";
 pub const METHOD_THREAD_READ: &str = "thread/read";
 pub const METHOD_THREAD_LIST: &str = "thread/list";
+pub const METHOD_THREAD_SECTION_MOVE: &str = "thread/section/move";
+pub const METHOD_THREAD_SECTION_LIST: &str = "threadSection/list";
+pub const METHOD_THREAD_SECTION_CREATE: &str = "threadSection/create";
+pub const METHOD_THREAD_SECTION_UPDATE: &str = "threadSection/update";
+pub const METHOD_THREAD_SECTION_DELETE: &str = "threadSection/delete";
 pub const METHOD_THREAD_LOADED_LIST: &str = "thread/loaded/list";
 pub const METHOD_THREAD_UNSUBSCRIBE: &str = "thread/unsubscribe";
 pub const METHOD_THREAD_INCREMENT_ELICITATION: &str = "thread/increment_elicitation";
@@ -36,6 +41,7 @@ pub const METHOD_ARTIFACT_WRITE: &str = "artifact/write";
 pub const METHOD_MEDIA_READ: &str = "media/read";
 pub const METHOD_MODEL_LIST: &str = "model/list";
 pub const METHOD_PLUGIN_LIST: &str = "plugin/list";
+pub const METHOD_PLUGIN_SEARCH: &str = "plugin/search";
 pub const METHOD_PLUGIN_READ: &str = "plugin/read";
 pub const METHOD_PLUGIN_INSTALL: &str = "plugin/install";
 pub const METHOD_PLUGIN_UNINSTALL: &str = "plugin/uninstall";
@@ -103,6 +109,16 @@ pub enum Method {
     ThreadRead,
     #[serde(rename = "thread/list")]
     ThreadList,
+    #[serde(rename = "thread/section/move")]
+    ThreadSectionMove,
+    #[serde(rename = "threadSection/list")]
+    ThreadSectionList,
+    #[serde(rename = "threadSection/create")]
+    ThreadSectionCreate,
+    #[serde(rename = "threadSection/update")]
+    ThreadSectionUpdate,
+    #[serde(rename = "threadSection/delete")]
+    ThreadSectionDelete,
     #[serde(rename = "thread/loaded/list")]
     ThreadLoadedList,
     #[serde(rename = "thread/unsubscribe")]
@@ -161,6 +177,8 @@ pub enum Method {
     ModelList,
     #[serde(rename = "plugin/list")]
     PluginList,
+    #[serde(rename = "plugin/search")]
+    PluginSearch,
     #[serde(rename = "plugin/read")]
     PluginRead,
     #[serde(rename = "plugin/install")]
@@ -187,6 +205,11 @@ impl Method {
             Self::ThreadResume => METHOD_THREAD_RESUME,
             Self::ThreadRead => METHOD_THREAD_READ,
             Self::ThreadList => METHOD_THREAD_LIST,
+            Self::ThreadSectionMove => METHOD_THREAD_SECTION_MOVE,
+            Self::ThreadSectionList => METHOD_THREAD_SECTION_LIST,
+            Self::ThreadSectionCreate => METHOD_THREAD_SECTION_CREATE,
+            Self::ThreadSectionUpdate => METHOD_THREAD_SECTION_UPDATE,
+            Self::ThreadSectionDelete => METHOD_THREAD_SECTION_DELETE,
             Self::ThreadLoadedList => METHOD_THREAD_LOADED_LIST,
             Self::ThreadUnsubscribe => METHOD_THREAD_UNSUBSCRIBE,
             Self::ThreadIncrementElicitation => METHOD_THREAD_INCREMENT_ELICITATION,
@@ -218,6 +241,7 @@ impl Method {
             Self::MediaRead => METHOD_MEDIA_READ,
             Self::ModelList => METHOD_MODEL_LIST,
             Self::PluginList => METHOD_PLUGIN_LIST,
+            Self::PluginSearch => METHOD_PLUGIN_SEARCH,
             Self::PluginRead => METHOD_PLUGIN_READ,
             Self::PluginInstall => METHOD_PLUGIN_INSTALL,
             Self::PluginUninstall => METHOD_PLUGIN_UNINSTALL,
@@ -236,6 +260,11 @@ impl Method {
             METHOD_THREAD_RESUME => Some(Self::ThreadResume),
             METHOD_THREAD_READ => Some(Self::ThreadRead),
             METHOD_THREAD_LIST => Some(Self::ThreadList),
+            METHOD_THREAD_SECTION_MOVE => Some(Self::ThreadSectionMove),
+            METHOD_THREAD_SECTION_LIST => Some(Self::ThreadSectionList),
+            METHOD_THREAD_SECTION_CREATE => Some(Self::ThreadSectionCreate),
+            METHOD_THREAD_SECTION_UPDATE => Some(Self::ThreadSectionUpdate),
+            METHOD_THREAD_SECTION_DELETE => Some(Self::ThreadSectionDelete),
             METHOD_THREAD_LOADED_LIST => Some(Self::ThreadLoadedList),
             METHOD_THREAD_UNSUBSCRIBE => Some(Self::ThreadUnsubscribe),
             METHOD_THREAD_INCREMENT_ELICITATION => Some(Self::ThreadIncrementElicitation),
@@ -269,6 +298,7 @@ impl Method {
             METHOD_MEDIA_READ => Some(Self::MediaRead),
             METHOD_MODEL_LIST => Some(Self::ModelList),
             METHOD_PLUGIN_LIST => Some(Self::PluginList),
+            METHOD_PLUGIN_SEARCH => Some(Self::PluginSearch),
             METHOD_PLUGIN_READ => Some(Self::PluginRead),
             METHOD_PLUGIN_INSTALL => Some(Self::PluginInstall),
             METHOD_PLUGIN_UNINSTALL => Some(Self::PluginUninstall),
@@ -288,6 +318,11 @@ pub const METHODS: &[&str] = &[
     METHOD_THREAD_RESUME,
     METHOD_THREAD_READ,
     METHOD_THREAD_LIST,
+    METHOD_THREAD_SECTION_MOVE,
+    METHOD_THREAD_SECTION_LIST,
+    METHOD_THREAD_SECTION_CREATE,
+    METHOD_THREAD_SECTION_UPDATE,
+    METHOD_THREAD_SECTION_DELETE,
     METHOD_THREAD_LOADED_LIST,
     METHOD_THREAD_UNSUBSCRIBE,
     METHOD_THREAD_INCREMENT_ELICITATION,
@@ -317,6 +352,7 @@ pub const METHODS: &[&str] = &[
     METHOD_MEDIA_READ,
     METHOD_MODEL_LIST,
     METHOD_PLUGIN_LIST,
+    METHOD_PLUGIN_SEARCH,
     METHOD_PLUGIN_READ,
     METHOD_PLUGIN_INSTALL,
     METHOD_PLUGIN_UNINSTALL,

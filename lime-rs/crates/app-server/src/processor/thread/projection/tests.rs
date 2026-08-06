@@ -615,6 +615,20 @@ fn v2_archived_list_filter_is_exact_even_when_store_page_contains_both() {
 }
 
 #[test]
+fn section_position_list_defaults_to_ascending_order() {
+    let params = v2::ThreadListParams {
+        sort_key: Some(v2::ThreadSortKey::SectionPosition),
+        section_id: Some(Some("section-1".to_string())),
+        ..Default::default()
+    };
+
+    let lowered = lower_thread_list_params(&params).expect("lower thread/list params");
+
+    assert_eq!(lowered.page.sort_direction, canonical::SortDirection::Asc);
+    assert!(lowered.sort_by_section_position);
+}
+
+#[test]
 fn unsupported_canonical_item_fails_closed() {
     let mut thread = canonical_thread(false);
     thread.turns[0].items[0].payload = canonical::ThreadItemPayload::Extension {

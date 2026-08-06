@@ -1650,6 +1650,21 @@
       },
       "type": "object"
     },
+    "ThreadSection": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    },
     "ThreadStatus": {
       "description": "Canonical v2 thread status.",
       "oneOf": [
@@ -2018,10 +2033,6 @@
     "id": {
       "type": "string"
     },
-    "isPinned": {
-      "default": false,
-      "type": "boolean"
-    },
     "modelProvider": {
       "type": "string"
     },
@@ -2047,6 +2058,23 @@
       "type": "string"
     },
     "recencyAt": {
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "section": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ThreadSection"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sectionEnteredAt": {
       "format": "int64",
       "type": [
         "integer",

@@ -66,6 +66,11 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerPluginCatalogListResponse>
     >;
+    searchPlugins(
+      params: appServer.AppServerPluginSearchParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerPluginSearchResponse>
+    >;
     setPluginCatalogEnabled(
       params: appServer.AppServerPluginCatalogEnabledSetParams,
     ): Promise<
@@ -220,6 +225,31 @@ declare module "./appServerClient" {
       params?: appServer.AppServerThreadListParams,
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerThreadListResponse>
+    >;
+    moveThreadToSection(
+      params: appServer.AppServerThreadSectionMoveParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadSectionMoveResponse>
+    >;
+    listThreadSections(
+      params?: appServer.AppServerThreadSectionListParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadSectionListResponse>
+    >;
+    createThreadSection(
+      params: appServer.AppServerThreadSectionCreateParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadSectionCreateResponse>
+    >;
+    updateThreadSection(
+      params: appServer.AppServerThreadSectionUpdateParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadSectionUpdateResponse>
+    >;
+    deleteThreadSection(
+      params: appServer.AppServerThreadSectionDeleteParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadSectionDeleteResponse>
     >;
     readThread(
       params: appServer.AppServerThreadReadParams,

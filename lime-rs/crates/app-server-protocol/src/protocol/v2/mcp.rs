@@ -32,7 +32,7 @@ pub struct McpToolCallProgressNotification {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct McpServerOauthLoginCompletedNotification {
     pub name: String,
-    #[schemars(schema_with = "nullable_string_schema")]
+    #[schemars(schema_with = "super::serde_helpers::nullable_string_schema")]
     pub thread_id: Option<String>,
     pub success: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -57,21 +57,17 @@ pub enum McpServerStartupState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct McpServerStatusUpdatedNotification {
-    #[schemars(required, schema_with = "nullable_string_schema")]
+    #[schemars(required, schema_with = "super::serde_helpers::nullable_string_schema")]
     #[serde(deserialize_with = "deserialize_required_nullable_string")]
     pub thread_id: Option<String>,
     pub name: String,
     pub status: McpServerStartupState,
-    #[schemars(required, schema_with = "nullable_string_schema")]
+    #[schemars(required, schema_with = "super::serde_helpers::nullable_string_schema")]
     #[serde(deserialize_with = "deserialize_required_nullable_string")]
     pub error: Option<String>,
     #[schemars(required, schema_with = "nullable_failure_reason_schema")]
     #[serde(deserialize_with = "deserialize_required_nullable_failure_reason")]
     pub failure_reason: Option<McpServerStartupFailureReason>,
-}
-
-fn nullable_string_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-    generator.subschema_for::<Option<String>>()
 }
 
 fn nullable_failure_reason_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {

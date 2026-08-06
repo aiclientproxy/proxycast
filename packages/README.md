@@ -47,7 +47,7 @@ Task automation
    yes -> 用 @limecloud/agent-runtime-client/sessionGateway。
    no  -> 继续看 3。
 
-3. 你是否已经拿到了 agentSession/read、agentSession/event 或 executionEvents？
+3. 你是否已经拿到了 agentSession/read、direct v2 lifecycle notifications 或 executionEvents？
    yes -> 用 @limecloud/agent-runtime-projection。
    还要 React 标准组件 -> 再加 @limecloud/agent-runtime-ui。
 
@@ -82,7 +82,8 @@ Product App business context
   -> AgentRuntimeClient / host bridge
   -> App Server agentSession/*
   -> RuntimeCore / provider store / tools
-  -> agentSession/event + agentSession/read + evidence/export
+  -> direct v2 Thread/Turn/Item + agentSession/read + evidence/export
+  -> (optional) allowlisted agentSession/event raw side-channel
   -> projection
   -> UI
 ```
@@ -206,7 +207,7 @@ await hostBridge.invoke("lime.agent", payload);
 
 ### 4. 把 App Server facts 投影成标准 React UI
 
-适合已有 `agentSession/read`、`agentSession/event`、`evidence/export` 的 App。先 replay / projection，再渲染 UI primitives。
+适合已有 `agentSession/read`、direct v2 lifecycle、`evidence/export` 的 App；如果还存在 provider/media 等显式 raw side-channel，再把它作为补充 facts 输入。先 replay / projection，再渲染 UI primitives。
 
 ```tsx
 import {
@@ -295,7 +296,8 @@ Content Studio agents
   -> app-server --backend runtime --data-dir
   -> provider store
   -> LLM / tools
-  -> agentSession/event + artifact.snapshot
+  -> direct v2 Thread/Turn/Item + artifact.snapshot
+  -> (optional) allowlisted agentSession/event raw side-channel
   -> projection / UI
 ```
 

@@ -95,6 +95,7 @@ pub enum ThreadSortKey {
     CreatedAt,
     UpdatedAt,
     RecencyAt,
+    SectionPosition,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -197,8 +198,10 @@ pub struct Thread {
     pub parent_thread_id: Option<String>,
     pub preview: String,
     pub ephemeral: bool,
-    #[serde(default)]
-    pub is_pinned: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section: Option<ThreadSection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section_entered_at: Option<i64>,
     #[serde(default)]
     pub history_mode: ThreadHistoryMode,
     pub model_provider: String,
@@ -230,6 +233,13 @@ pub struct Thread {
     pub name: Option<String>,
     #[serde(default)]
     pub turns: Vec<Turn>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSection {
+    pub id: String,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

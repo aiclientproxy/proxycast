@@ -70,7 +70,7 @@ describe("MessageList reasoning flow", () => {
           completed_at: "2026-05-09T07:11:58.000Z",
           updated_at: "2026-05-09T07:11:58.000Z",
           type: "reasoning",
-          text: "我们被要求解释首字等待为什么影响体验，需要先拆解心理反馈与系统状态。",
+          text: "我们被要求解释首字等待为什么影响体验，需要先拆解心理反馈与系统状态。内部正文不应在 compact 中显示。",
           summary: [
             "我们被要求解释首字等待为什么影响体验，需要先拆解心理反馈与系统状态。",
           ],
@@ -96,7 +96,12 @@ describe("MessageList reasoning flow", () => {
       ),
     ).not.toBeNull();
     expect(mockAgentThreadTimeline).not.toHaveBeenCalled();
-    expect(container.textContent).not.toContain("我们被要求解释首字等待");
+    expect(container.textContent).toContain(
+      "我们被要求解释首字等待为什么影响体验，需要先拆解心理反馈与系统状态。",
+    );
+    expect(container.textContent).not.toContain(
+      "内部正文不应在 compact 中显示。",
+    );
     expect(mockStreamingRenderer).toHaveBeenCalledWith(
       expect.objectContaining({
         thinkingContent: undefined,

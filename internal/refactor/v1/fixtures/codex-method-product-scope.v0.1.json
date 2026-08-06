@@ -3,7 +3,7 @@
   "kind": "codex-app-server-method-product-scope",
   "upstream": {
     "repository": "/Users/coso/Documents/dev/rust/codex",
-    "revision": "4c43465133428898aa84f0bfc02c306ed65fb66a",
+    "revision": "c4f42d161ae44a8d696ee9fb595709661979d187",
     "source": "codex-rs/app-server-protocol/src/protocol/common.rs"
   },
   "lime": {
@@ -12,15 +12,15 @@
   },
   "allowedStatuses": ["implemented", "product-scope-excluded", "planned"],
   "inventory": {
-    "total": 214,
+    "total": 220,
     "byDirection": {
-      "clientRequest": 130,
+      "clientRequest": 136,
       "serverRequest": 11,
       "serverNotification": 72,
       "clientNotification": 1
     },
     "byStatus": {
-      "implemented": 70,
+      "implemented": 76,
       "product-scope-excluded": 35,
       "planned": 109
     }
@@ -115,6 +115,30 @@
         "thread/turns/list",
         "thread/unarchive",
         "thread/unsubscribe"
+      ]
+    },
+    {
+      "id": "thread-sections-current",
+      "direction": "clientRequest",
+      "productArea": "thread",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "thread-store + app-server thread processor + Desktop conversation navigation",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/thread.rs",
+        "lime-rs/crates/app-server/src/processor/thread_sections.rs",
+        "lime-rs/crates/app-server/tests/thread_sections_jsonrpc.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/agentRuntime/appServerSessionClient.ts",
+        "src/components/app-sidebar/AppSidebarConversationShelf.tsx"
+      ],
+      "methods": [
+        "thread/section/move",
+        "threadSection/create",
+        "threadSection/delete",
+        "threadSection/list",
+        "threadSection/update"
       ]
     },
     {
@@ -521,6 +545,24 @@
         "internal/refactor/v1/08-third-audit-gap-register.md"
       ],
       "methods": ["permissionProfile/list"]
+    },
+    {
+      "id": "plugin-search-current",
+      "direction": "clientRequest",
+      "productArea": "plugins",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "app-server-protocol/v2 + App Server RuntimeCore + local plugin catalog",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/plugin.rs",
+        "lime-rs/crates/app-server/src/processor/plugin.rs",
+        "lime-rs/crates/app-server/src/local_data_source/plugin_catalog.rs",
+        "lime-rs/crates/app-server/tests/plugin_search_jsonrpc.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/pluginCatalog.ts"
+      ],
+      "methods": ["plugin/search"]
     },
     {
       "id": "plugins-planned",

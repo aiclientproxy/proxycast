@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "type": {
+          "const": "local",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "path": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "refName": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sha": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "type": {
+          "const": "git",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "url"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "package": {
+          "type": "string"
+        },
+        "registry": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "type": {
+          "const": "npm",
+          "type": "string"
+        },
+        "version": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "package",
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "remote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "PluginSource"
+}

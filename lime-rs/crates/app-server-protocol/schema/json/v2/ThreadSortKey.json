@@ -3,6 +3,7 @@
   "enum": [
     "created_at",
     "recency_at",
+    "section_position",
     "updated_at"
   ],
   "title": "ThreadSortKey",

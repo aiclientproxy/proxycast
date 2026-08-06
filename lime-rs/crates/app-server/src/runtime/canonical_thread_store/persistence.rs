@@ -23,6 +23,19 @@ pub(super) fn create_thread_store_schema(
             status TEXT NOT NULL,
             pending_session_id TEXT
         );
+        CREATE TABLE IF NOT EXISTS thread_sections (
+            section_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            ordinal INTEGER NOT NULL UNIQUE
+        );
+        CREATE TABLE IF NOT EXISTS thread_section_members (
+            thread_id TEXT PRIMARY KEY NOT NULL
+                REFERENCES canonical_threads(thread_id) ON DELETE CASCADE,
+            section_id TEXT NOT NULL
+                REFERENCES thread_sections(section_id) ON DELETE CASCADE,
+            position INTEGER NOT NULL,
+            section_entered_at_ms INTEGER NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS thread_goals (
             thread_id TEXT PRIMARY KEY NOT NULL
                 REFERENCES canonical_threads(thread_id) ON DELETE CASCADE,
@@ -52,7 +65,14 @@ pub(super) fn create_thread_store_schema(
             ON canonical_threads(session_id);
         CREATE INDEX IF NOT EXISTS idx_canonical_thread_spawn_edges_parent_status
             ON canonical_thread_spawn_edges(parent_thread_id, status);
+        CREATE INDEX IF NOT EXISTS idx_thread_section_members_order
+            ON thread_section_members(section_id, position, thread_id);
         "#,
+    )
+    .map_err(store_error)?;
+    conn.execute(
+        "INSERT OR IGNORE INTO thread_sections (section_id, name, ordinal) VALUES (?1, ?2, 0)",
+        params![PINNED_THREAD_SECTION_ID, PINNED_THREAD_SECTION_NAME],
     )
     .map_err(store_error)?;
     conn.execute_batch(super::goal_accounting::GOAL_ACCOUNTING_SCHEMA_SQL)

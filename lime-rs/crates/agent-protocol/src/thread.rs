@@ -606,6 +606,10 @@ pub struct ThreadListParams {
     pub include_archived: bool,
     #[serde(default)]
     pub turns_view: ThreadTurnsView,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section: Option<Option<String>>,
+    #[serde(default)]
+    pub sort_by_section_position: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -1091,6 +1095,8 @@ mod tests {
             page: PageCursor::default(),
             include_archived: true,
             turns_view: ThreadTurnsView::Summary,
+            section: None,
+            sort_by_section_position: false,
         };
         let read = ThreadReadParams {
             thread_id: ThreadId::new("thread-1"),
@@ -1102,7 +1108,8 @@ mod tests {
             serde_json::json!({
                 "sortDirection": "desc",
                 "includeArchived": true,
-                "turnsView": "summary"
+                "turnsView": "summary",
+                "sortBySectionPosition": false
             })
         );
         assert_eq!(

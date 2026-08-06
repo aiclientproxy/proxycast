@@ -83,7 +83,6 @@ function createTopic(overrides: Partial<Topic> = {}): Topic {
     executionStrategy: overrides.executionStrategy ?? "react",
     status: overrides.status ?? "done",
     lastPreview: overrides.lastPreview ?? "preview",
-    isPinned: overrides.isPinned ?? false,
     hasUnread: overrides.hasUnread ?? false,
     tag: overrides.tag ?? null,
     sourceSessionId: overrides.sourceSessionId ?? "topic-1",

@@ -2,7 +2,7 @@
 
 状态：implementation in progress / exhaustive baseline
 
-上游集合：Codex 4c43465133428898aa84f0bfc02c306ed65fb66a，18 类顶层 ThreadItem
+上游集合：Codex c4f42d161ae44a8d696ee9fb595709661979d187，18 类顶层 ThreadItem
 
 Lime 协议基线：lime-rs/crates/app-server-protocol/src/protocol/v2/item.rs
 
@@ -111,6 +111,7 @@ changes[] 以完整快照显示新增、修改、删除和重命名摘要，文�
 - structuredContent 进入 schema-aware viewer，不与正文重复；
 - \_meta 默认不显示，只读取 allowlisted UI metadata；
 - result/error 只按 typed、脱敏 display shape 进入 renderer；畸形 required field fail closed；
+- `readOnlyHint` 是 App Server 提供的调用属性，只能用于低干扰只读标记；Lime 尚未贯穿该字段时不得由 tool 名称猜测；
 - 媒体和资源只能经 host capability 读取。
 
 MCP elicitation 不是 MCP result。它是独立 pending interaction；若有 thread/turn/item 关联，只在 Item 旁提供 anchor，表单仍在 Composer 上方完成。

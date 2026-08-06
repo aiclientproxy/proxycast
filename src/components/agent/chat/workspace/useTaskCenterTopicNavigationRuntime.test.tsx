@@ -40,7 +40,6 @@ function mountRuntime(overrides: {
         executionStrategy: "react",
         status: "done",
         lastPreview: "历史会话",
-        isPinned: false,
         hasUnread: false,
         tag: null,
         sourceSessionId: "topic-next",

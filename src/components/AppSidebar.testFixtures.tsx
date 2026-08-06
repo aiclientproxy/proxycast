@@ -52,6 +52,11 @@ const {
   mockArchiveAgentRuntimeSession,
   mockUnarchiveAgentRuntimeSession,
   mockSetAgentRuntimeThreadName,
+  mockListThreadSections,
+  mockCreateThreadSection,
+  mockUpdateThreadSection,
+  mockDeleteThreadSection,
+  mockMoveThreadToSection,
   mockDeleteAgentRuntimeSession,
   mockScanConversationImportSource,
   mockPreviewConversationImportThread,
@@ -97,6 +102,11 @@ const {
   mockArchiveAgentRuntimeSession: vi.fn(),
   mockUnarchiveAgentRuntimeSession: vi.fn(),
   mockSetAgentRuntimeThreadName: vi.fn(),
+  mockListThreadSections: vi.fn(),
+  mockCreateThreadSection: vi.fn(),
+  mockUpdateThreadSection: vi.fn(),
+  mockDeleteThreadSection: vi.fn(),
+  mockMoveThreadToSection: vi.fn(),
   mockDeleteAgentRuntimeSession: vi.fn(),
   mockScanConversationImportSource: vi.fn(),
   mockPreviewConversationImportThread: vi.fn(),
@@ -185,6 +195,11 @@ export {
   mockArchiveAgentRuntimeSession,
   mockUnarchiveAgentRuntimeSession,
   mockSetAgentRuntimeThreadName,
+  mockListThreadSections,
+  mockCreateThreadSection,
+  mockUpdateThreadSection,
+  mockDeleteThreadSection,
+  mockMoveThreadToSection,
 };
 
 vi.mock("@/lib/api/appConfig", () => ({
@@ -211,6 +226,23 @@ vi.mock("@/lib/api/agentRuntime/sessionClient", () => ({
 vi.mock("@/lib/api/agentRuntime/threadClient", () => ({
   setAgentRuntimeThreadName: mockSetAgentRuntimeThreadName,
 }));
+
+vi.mock("@/lib/api/threadSections", () => {
+  const pinnedSection = {
+    id: "01984de2-8f74-7c91-a3b2-5c5e937cf318",
+    name: "Pinned",
+  };
+  return {
+    PINNED_THREAD_SECTION: pinnedSection,
+    isPinnedThreadSession: (session: { section?: { id?: string } }) =>
+      session.section?.id === pinnedSection.id,
+    listThreadSections: mockListThreadSections,
+    createThreadSection: mockCreateThreadSection,
+    updateThreadSection: mockUpdateThreadSection,
+    deleteThreadSection: mockDeleteThreadSection,
+    moveThreadToSection: mockMoveThreadToSection,
+  };
+});
 
 vi.mock("@/lib/api/conversationImport", () => ({
   scanConversationImportSource: mockScanConversationImportSource,
@@ -708,6 +740,24 @@ export async function resetAppSidebarTest() {
   mockArchiveAgentRuntimeSession.mockResolvedValue(undefined);
   mockUnarchiveAgentRuntimeSession.mockResolvedValue(undefined);
   mockSetAgentRuntimeThreadName.mockResolvedValue(undefined);
+  mockListThreadSections.mockResolvedValue([
+    {
+      id: "01984de2-8f74-7c91-a3b2-5c5e937cf318",
+      name: "Pinned",
+    },
+  ]);
+  mockCreateThreadSection.mockResolvedValue({
+    id: "section-created",
+    name: "新分组",
+  });
+  mockUpdateThreadSection.mockImplementation(
+    async ({ sectionId, name }: { sectionId: string; name: string }) => ({
+      id: sectionId,
+      name,
+    }),
+  );
+  mockDeleteThreadSection.mockResolvedValue(undefined);
+  mockMoveThreadToSection.mockResolvedValue(undefined);
   mockDeleteAgentRuntimeSession.mockResolvedValue(undefined);
   mockScanConversationImportSource.mockResolvedValue({
     source: {

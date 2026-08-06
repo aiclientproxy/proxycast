@@ -126,6 +126,10 @@ export type AppServerPluginCatalogListParams = protocol.PluginCatalogListParams;
 export type AppServerPluginCatalogListResponse =
   protocol.PluginCatalogListResponse;
 export type AppServerPluginCatalogSummary = protocol.PluginCatalogSummary;
+export type AppServerPluginSearchParams = protocol.PluginSearchParams;
+export type AppServerPluginSearchResponse = protocol.PluginSearchResponse;
+export type AppServerPluginSearchResult = protocol.PluginSearchResult;
+export type AppServerPluginSummary = protocol.PluginSummary;
 export type AppServerPluginCatalogDetail = protocol.PluginCatalogDetail;
 export type AppServerPluginCatalogCapability = protocol.PluginCatalogCapability;
 export type AppServerPluginCatalogHook = protocol.PluginCatalogHook;
@@ -173,6 +177,25 @@ export type AppServerAgentSessionReadResponse =
 export type AppServerThread = protocol.Thread;
 export type AppServerThreadListParams = protocol.ThreadListParams;
 export type AppServerThreadListResponse = protocol.ThreadListResponse;
+export type AppServerThreadSection = protocol.ThreadSection;
+export type AppServerThreadSectionListParams = protocol.ThreadSectionListParams;
+export type AppServerThreadSectionListResponse =
+  protocol.ThreadSectionListResponse;
+export type AppServerThreadSectionCreateParams =
+  protocol.ThreadSectionCreateParams;
+export type AppServerThreadSectionCreateResponse =
+  protocol.ThreadSectionCreateResponse;
+export type AppServerThreadSectionUpdateParams =
+  protocol.ThreadSectionUpdateParams;
+export type AppServerThreadSectionUpdateResponse =
+  protocol.ThreadSectionUpdateResponse;
+export type AppServerThreadSectionDeleteParams =
+  protocol.ThreadSectionDeleteParams;
+export type AppServerThreadSectionDeleteResponse =
+  protocol.ThreadSectionDeleteResponse;
+export type AppServerThreadSectionMoveParams = protocol.ThreadSectionMoveParams;
+export type AppServerThreadSectionMoveResponse =
+  protocol.ThreadSectionMoveResponse;
 export type AppServerThreadReadParams = protocol.ThreadReadParams;
 export type AppServerThreadReadResponse = protocol.ThreadReadResponse;
 export type AppServerThreadSetNameParams = protocol.ThreadSetNameParams;

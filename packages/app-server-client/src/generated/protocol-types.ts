@@ -248,6 +248,7 @@ export const METHOD_PLUGIN_INSTALL = "plugin/install";
 export const METHOD_PLUGIN_INSTALLED = "plugin/installed";
 export const METHOD_PLUGIN_LIST = "plugin/list";
 export const METHOD_PLUGIN_READ = "plugin/read";
+export const METHOD_PLUGIN_SEARCH = "plugin/search";
 export const METHOD_PLUGIN_UNINSTALL = "plugin/uninstall";
 export const METHOD_PLUGIN_HOST_LIFECYCLE_LIST = "pluginHostLifecycle/list";
 export const METHOD_PLUGIN_INSTALLED_DISABLED_SET =
@@ -361,6 +362,7 @@ export const METHOD_THREAD_READ = "thread/read";
 export const METHOD_THREAD_RESUME = "thread/resume";
 export const METHOD_THREAD_SEARCH = "thread/search";
 export const METHOD_THREAD_SEARCH_OCCURRENCES = "thread/searchOccurrences";
+export const METHOD_THREAD_SECTION_MOVE = "thread/section/move";
 export const METHOD_THREAD_SETTINGS_UPDATE = "thread/settings/update";
 export const METHOD_THREAD_SETTINGS_UPDATED = "thread/settings/updated";
 export const METHOD_THREAD_SHELL_COMMAND = "thread/shellCommand";
@@ -372,6 +374,10 @@ export const METHOD_THREAD_TURNS_LIST = "thread/turns/list";
 export const METHOD_THREAD_UNARCHIVE = "thread/unarchive";
 export const METHOD_THREAD_UNARCHIVED = "thread/unarchived";
 export const METHOD_THREAD_UNSUBSCRIBE = "thread/unsubscribe";
+export const METHOD_THREAD_SECTION_CREATE = "threadSection/create";
+export const METHOD_THREAD_SECTION_DELETE = "threadSection/delete";
+export const METHOD_THREAD_SECTION_LIST = "threadSection/list";
+export const METHOD_THREAD_SECTION_UPDATE = "threadSection/update";
 export const METHOD_TURN_COMPLETED = "turn/completed";
 export const METHOD_TURN_INTERRUPT = "turn/interrupt";
 export const METHOD_TURN_PLAN_UPDATED = "turn/plan/updated";
@@ -1204,6 +1210,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
+    method: "plugin/search",
+  },
+  {
+    kind: "request",
     method: "plugin/uninstall",
   },
   {
@@ -1604,6 +1614,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
+    method: "thread/section/move",
+  },
+  {
+    kind: "request",
     method: "thread/settings/update",
   },
   {
@@ -1645,6 +1659,22 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "thread/unsubscribe",
+  },
+  {
+    kind: "request",
+    method: "threadSection/create",
+  },
+  {
+    kind: "request",
+    method: "threadSection/delete",
+  },
+  {
+    kind: "request",
+    method: "threadSection/list",
+  },
+  {
+    kind: "request",
+    method: "threadSection/update",
   },
   {
     kind: "notification",
@@ -4496,6 +4526,31 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "thread/section/move";
+      params: ThreadSectionMoveParams;
+    }
+  | {
+      id: number | string;
+      method: "threadSection/list";
+      params: ThreadSectionListParams;
+    }
+  | {
+      id: number | string;
+      method: "threadSection/create";
+      params: ThreadSectionCreateParams;
+    }
+  | {
+      id: number | string;
+      method: "threadSection/update";
+      params: ThreadSectionUpdateParams;
+    }
+  | {
+      id: number | string;
+      method: "threadSection/delete";
+      params: ThreadSectionDeleteParams;
+    }
+  | {
+      id: number | string;
       method: "thread/loaded/list";
       params: ThreadLoadedListParams;
     }
@@ -4638,6 +4693,11 @@ export type ClientRequest =
       id: number | string;
       method: "plugin/list";
       params: PluginCatalogListParams;
+    }
+  | {
+      id: number | string;
+      method: "plugin/search";
+      params: PluginSearchParams;
     }
   | {
       id: number | string;
@@ -6631,6 +6691,7 @@ export type Method =
   | "plugin/installed"
   | "plugin/list"
   | "plugin/read"
+  | "plugin/search"
   | "plugin/uninstall"
   | "thread/approveGuardianDeniedAction"
   | "thread/archive"
@@ -6656,12 +6717,17 @@ export type Method =
   | "thread/resume"
   | "thread/search"
   | "thread/searchOccurrences"
+  | "thread/section/move"
   | "thread/settings/update"
   | "thread/shellCommand"
   | "thread/start"
   | "thread/turns/list"
   | "thread/unarchive"
   | "thread/unsubscribe"
+  | "threadSection/create"
+  | "threadSection/delete"
+  | "threadSection/list"
+  | "threadSection/update"
   | "turn/interrupt"
   | "turn/start"
   | "turn/steer";
@@ -7143,6 +7209,10 @@ export interface PluginArticleWorkspaceObject {
   title: string;
 }
 
+export type PluginAuthPolicy = "ON_INSTALL" | "ON_USE";
+
+export type PluginAvailability = "AVAILABLE" | "DISABLED_BY_ADMIN";
+
 export interface PluginCatalogCapability {
   description: string;
   id: string;
@@ -7289,6 +7359,12 @@ export interface PluginDeleteDataTargetEvidence {
   value: string;
 }
 
+export type PluginDisabledReason =
+  | "disabled_by_admin"
+  | "plan_not_eligible"
+  | "required_app_unavailable"
+  | "unknown";
+
 export interface PluginFetchCloudPackageParams {
   descriptor: PluginCloudReleaseDescriptor;
 }
@@ -7332,6 +7408,15 @@ export interface PluginHostLifecycleSnapshot {
   taskRuntime: PluginTaskRuntimeContract;
 }
 
+export type PluginInstallPolicy =
+  | "AVAILABLE"
+  | "INSTALLED_BY_DEFAULT"
+  | "NOT_AVAILABLE";
+
+export type PluginInstallPolicySource =
+  | "IMPLICIT_CANONICAL_APP"
+  | "WORKSPACE_SETTING";
+
 export interface PluginInstalledDisabledSetParams {
   appId: string;
   disabled: boolean;
@@ -7345,6 +7430,28 @@ export interface PluginInstalledListResponse {
 
 export interface PluginInstalledSaveParams {
   state: unknown;
+}
+
+export interface PluginInterface {
+  brandColor?: null | string;
+  capabilities?: string[];
+  category?: null | string;
+  composerIcon?: null | string;
+  composerIconUrl?: null | string;
+  defaultPrompt?: string[] | null;
+  developerName?: null | string;
+  displayName?: null | string;
+  logo?: null | string;
+  logoDark?: null | string;
+  logoUrl?: null | string;
+  logoUrlDark?: null | string;
+  longDescription?: null | string;
+  privacyPolicyUrl?: null | string;
+  screenshotUrls?: string[];
+  screenshots?: string[];
+  shortDescription?: null | string;
+  termsOfServiceUrl?: null | string;
+  websiteUrl?: null | string;
 }
 
 export interface PluginLocalPackageExportParams {
@@ -7417,6 +7524,51 @@ export interface PluginRightSurfaceContract {
   supportedTabs?: string[];
 }
 
+export interface PluginSearchParams {
+  cursor?: null | string;
+  cwds?: string[] | null;
+  limit?: number | null;
+  scope?: PluginSearchScope | null;
+  searchTerm: string;
+}
+
+export interface PluginSearchResponse {
+  data: PluginSearchResult[];
+  nextCursor?: null | string;
+}
+
+export interface PluginSearchResult {
+  marketplaceName: string;
+  marketplacePath?: null | string;
+  plugin: PluginSummary;
+}
+
+export type PluginSearchScope = "global" | "personal" | "workspace";
+
+export interface PluginShareContext {
+  canPublishToWorkspace?: boolean | null;
+  creatorAccountUserId?: null | string;
+  creatorName?: null | string;
+  discoverability?: PluginShareDiscoverability | null;
+  remotePluginId: string;
+  remoteVersion?: null | string;
+  sharePrincipals?: PluginSharePrincipal[] | null;
+  shareUrl?: null | string;
+}
+
+export type PluginShareDiscoverability = "LISTED" | "PRIVATE" | "UNLISTED";
+
+export interface PluginSharePrincipal {
+  name: string;
+  principalId: string;
+  principalType: PluginSharePrincipalType;
+  role: PluginSharePrincipalRole;
+}
+
+export type PluginSharePrincipalRole = "editor" | "owner" | "reader";
+
+export type PluginSharePrincipalType = "group" | "user" | "workspace";
+
 export interface PluginShellPackageMount {
   kind: string;
   manifestHash: string;
@@ -7442,6 +7594,50 @@ export interface PluginShellPrepareResponse {
   shellKind?: null | string;
   status: string;
   windowTitle?: null | string;
+}
+
+export type PluginSource =
+  | {
+      path: string;
+      type: "local";
+    }
+  | {
+      path?: null | string;
+      refName?: null | string;
+      sha?: null | string;
+      type: "git";
+      url: string;
+    }
+  | {
+      package: string;
+      registry?: null | string;
+      type: "npm";
+      version?: null | string;
+    }
+  | {
+      type: "remote";
+    };
+
+export interface PluginSummary {
+  authPolicy: PluginAuthPolicy;
+  availability?: PluginAvailability;
+  disabledReason?: PluginDisabledReason | null;
+  eligiblePlanTypes?: string[] | null;
+  enabled: boolean;
+  id: string;
+  installPolicy: PluginInstallPolicy;
+  installPolicySource?: PluginInstallPolicySource | null;
+  installed: boolean;
+  installedAt?: number | null;
+  interface?: PluginInterface | null;
+  keywords?: string[];
+  localVersion?: null | string;
+  mustShowInstallationInterstitial?: boolean | null;
+  name: string;
+  remotePluginId?: null | string;
+  shareContext?: PluginShareContext | null;
+  source: PluginSource;
+  version?: null | string;
 }
 
 export interface PluginTaskRuntimeContract {
@@ -8625,13 +8821,14 @@ export interface Thread {
   gitInfo?: GitInfo | null;
   historyMode?: ThreadHistoryMode;
   id: string;
-  isPinned?: boolean;
   modelProvider: string;
   name?: null | string;
   parentThreadId?: null | string;
   path?: null | string;
   preview: string;
   recencyAt?: number | null;
+  section?: ThreadSection | null;
+  sectionEnteredAt?: number | null;
   sessionId: string;
   source: string;
   status?: ThreadStatus | null;
@@ -9008,11 +9205,11 @@ export interface ThreadListParams {
   archived?: boolean | null;
   cursor?: null | string;
   cwd?: ThreadListCwdFilter | null;
-  isPinned?: boolean | null;
   limit?: number | null;
   modelProviders?: string[] | null;
   parentThreadId?: null | string;
   searchTerm?: null | string;
+  sectionId?: null | string;
   sortDirection?: SortDirection | null;
   sortKey?: ThreadSortKey | null;
   sourceKinds?: ThreadSourceKind[] | null;
@@ -9052,7 +9249,6 @@ export interface ThreadMetadataGitInfoUpdateParams {
 
 export interface ThreadMetadataUpdateParams {
   gitInfo?: ThreadMetadataGitInfoUpdateParams | null;
-  isPinned?: boolean | null;
   threadId: string;
 }
 
@@ -9166,6 +9362,52 @@ export interface ThreadSearchTextRange {
   start: number;
 }
 
+export interface ThreadSection {
+  id: string;
+  name: string;
+}
+
+export interface ThreadSectionCreateParams {
+  name: string;
+}
+
+export interface ThreadSectionCreateResponse {
+  section: ThreadSection;
+}
+
+export interface ThreadSectionDeleteParams {
+  sectionId: string;
+}
+
+export type ThreadSectionDeleteResponse = Record<string, unknown>;
+
+export interface ThreadSectionListParams {
+  cursor?: null | string;
+  limit?: number | null;
+}
+
+export interface ThreadSectionListResponse {
+  data: ThreadSection[];
+  nextCursor?: null | string;
+}
+
+export interface ThreadSectionMoveParams {
+  beforeThreadId?: null | string;
+  sectionId: null | string;
+  threadId: string;
+}
+
+export type ThreadSectionMoveResponse = Record<string, unknown>;
+
+export interface ThreadSectionUpdateParams {
+  name: string;
+  sectionId: string;
+}
+
+export interface ThreadSectionUpdateResponse {
+  section: ThreadSection;
+}
+
 export interface ThreadSetNameParams {
   name: string;
   threadId: string;
@@ -9220,7 +9462,11 @@ export interface ThreadShellCommandParams {
 
 export type ThreadShellCommandResponse = Record<string, unknown>;
 
-export type ThreadSortKey = "created_at" | "recency_at" | "updated_at";
+export type ThreadSortKey =
+  | "created_at"
+  | "recency_at"
+  | "section_position"
+  | "updated_at";
 
 export type ThreadSourceKind =
   | "appServer"

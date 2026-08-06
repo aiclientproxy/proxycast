@@ -11637,6 +11637,62 @@
           ],
           "type": "object"
         },
+        "PluginSearchParams": {
+          "properties": {
+            "cursor": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "cwds": {
+              "default": null,
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "limit": {
+              "default": null,
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "scope": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginSearchScope"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "searchTerm": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "searchTerm"
+          ],
+          "type": "object"
+        },
+        "PluginSearchScope": {
+          "enum": [
+            "global",
+            "personal",
+            "workspace"
+          ],
+          "type": "string"
+        },
         "RequestId": {
           "anyOf": [
             {
@@ -12075,12 +12131,6 @@
                 }
               ]
             },
-            "isPinned": {
-              "type": [
-                "boolean",
-                "null"
-              ]
-            },
             "limit": {
               "format": "uint32",
               "minimum": 0,
@@ -12105,6 +12155,12 @@
               ]
             },
             "searchTerm": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "sectionId": {
               "type": [
                 "null",
                 "string"
@@ -12219,12 +12275,6 @@
                 {
                   "type": "null"
                 }
-              ]
-            },
-            "isPinned": {
-              "type": [
-                "boolean",
-                "null"
               ]
             },
             "threadId": {
@@ -12471,6 +12521,86 @@
           ],
           "type": "object"
         },
+        "ThreadSectionCreateParams": {
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "ThreadSectionDeleteParams": {
+          "properties": {
+            "sectionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sectionId"
+          ],
+          "type": "object"
+        },
+        "ThreadSectionListParams": {
+          "properties": {
+            "cursor": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "limit": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "ThreadSectionMoveParams": {
+          "properties": {
+            "beforeThreadId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "sectionId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "threadId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sectionId",
+            "threadId"
+          ],
+          "type": "object"
+        },
+        "ThreadSectionUpdateParams": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "sectionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "sectionId"
+          ],
+          "type": "object"
+        },
         "ThreadSetNameParams": {
           "properties": {
             "name": {
@@ -12568,6 +12698,7 @@
           "enum": [
             "created_at",
             "recency_at",
+            "section_position",
             "updated_at"
           ],
           "type": "string"
@@ -13251,6 +13382,106 @@
               "$ref": "#/$defs/RequestId"
             },
             "method": {
+              "const": "thread/section/move",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadSectionMoveParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "threadSection/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadSectionListParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "threadSection/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadSectionCreateParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "threadSection/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadSectionUpdateParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "threadSection/delete",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadSectionDeleteParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
               "const": "thread/loaded/list",
               "type": "string"
             },
@@ -13816,6 +14047,26 @@
             },
             "params": {
               "$ref": "#/$defs/PluginCatalogListParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "plugin/search",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PluginSearchParams"
             }
           },
           "required": [
@@ -32891,6 +33142,7 @@
         "plugin/installed",
         "plugin/list",
         "plugin/read",
+        "plugin/search",
         "plugin/uninstall",
         "thread/approveGuardianDeniedAction",
         "thread/archive",
@@ -32916,12 +33168,17 @@
         "thread/resume",
         "thread/search",
         "thread/searchOccurrences",
+        "thread/section/move",
         "thread/settings/update",
         "thread/shellCommand",
         "thread/start",
         "thread/turns/list",
         "thread/unarchive",
         "thread/unsubscribe",
+        "threadSection/create",
+        "threadSection/delete",
+        "threadSection/list",
+        "threadSection/update",
         "turn/interrupt",
         "turn/start",
         "turn/steer"
@@ -38373,6 +38630,24 @@
       "title": "PluginArticleWorkspaceObject",
       "type": "object"
     },
+    "PluginAuthPolicy": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "ON_INSTALL",
+        "ON_USE"
+      ],
+      "title": "PluginAuthPolicy",
+      "type": "string"
+    },
+    "PluginAvailability": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "AVAILABLE",
+        "DISABLED_BY_ADMIN"
+      ],
+      "title": "PluginAvailability",
+      "type": "string"
+    },
     "PluginCatalogCapability": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -39760,6 +40035,17 @@
       "title": "PluginDeleteDataTargetEvidence",
       "type": "object"
     },
+    "PluginDisabledReason": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "disabled_by_admin",
+        "plan_not_eligible",
+        "required_app_unavailable",
+        "unknown"
+      ],
+      "title": "PluginDisabledReason",
+      "type": "string"
+    },
     "PluginFetchCloudPackageParams": {
       "$defs": {
         "PluginCloudReleaseDescriptor": {
@@ -40619,6 +40905,25 @@
       "title": "PluginHostLifecycleSnapshot",
       "type": "object"
     },
+    "PluginInstallPolicy": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "AVAILABLE",
+        "INSTALLED_BY_DEFAULT",
+        "NOT_AVAILABLE"
+      ],
+      "title": "PluginInstallPolicy",
+      "type": "string"
+    },
+    "PluginInstallPolicySource": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "IMPLICIT_CANONICAL_APP",
+        "WORKSPACE_SETTING"
+      ],
+      "title": "PluginInstallPolicySource",
+      "type": "string"
+    },
     "PluginInstalledDisabledSetParams": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -40668,6 +40973,149 @@
         "state"
       ],
       "title": "PluginInstalledSaveParams",
+      "type": "object"
+    },
+    "PluginInterface": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "brandColor": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "capabilities": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "category": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "composerIcon": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "composerIconUrl": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "defaultPrompt": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "developerName": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "displayName": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "logo": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "logoDark": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "logoUrl": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "logoUrlDark": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "longDescription": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "privacyPolicyUrl": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "screenshotUrls": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "screenshots": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "shortDescription": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "termsOfServiceUrl": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "websiteUrl": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "title": "PluginInterface",
       "type": "object"
     },
     "PluginLocalPackageExportParams": {
@@ -41105,6 +41553,1396 @@
       "title": "PluginRightSurfaceContract",
       "type": "object"
     },
+    "PluginSearchParams": {
+      "$defs": {
+        "PluginSearchScope": {
+          "enum": [
+            "global",
+            "personal",
+            "workspace"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "cursor": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "cwds": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "limit": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PluginSearchScope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "searchTerm": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "searchTerm"
+      ],
+      "title": "PluginSearchParams",
+      "type": "object"
+    },
+    "PluginSearchResponse": {
+      "$defs": {
+        "PluginAuthPolicy": {
+          "enum": [
+            "ON_INSTALL",
+            "ON_USE"
+          ],
+          "type": "string"
+        },
+        "PluginAvailability": {
+          "enum": [
+            "AVAILABLE",
+            "DISABLED_BY_ADMIN"
+          ],
+          "type": "string"
+        },
+        "PluginDisabledReason": {
+          "enum": [
+            "disabled_by_admin",
+            "plan_not_eligible",
+            "required_app_unavailable",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "PluginInstallPolicy": {
+          "enum": [
+            "AVAILABLE",
+            "INSTALLED_BY_DEFAULT",
+            "NOT_AVAILABLE"
+          ],
+          "type": "string"
+        },
+        "PluginInstallPolicySource": {
+          "enum": [
+            "IMPLICIT_CANONICAL_APP",
+            "WORKSPACE_SETTING"
+          ],
+          "type": "string"
+        },
+        "PluginInterface": {
+          "properties": {
+            "brandColor": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "capabilities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "category": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "composerIcon": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "composerIconUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "defaultPrompt": {
+              "default": null,
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "developerName": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "displayName": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logo": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logoDark": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logoUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logoUrlDark": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "longDescription": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "privacyPolicyUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "screenshotUrls": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "screenshots": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "shortDescription": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "termsOfServiceUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "websiteUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "PluginSearchResult": {
+          "properties": {
+            "marketplaceName": {
+              "type": "string"
+            },
+            "marketplacePath": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "plugin": {
+              "$ref": "#/$defs/PluginSummary"
+            }
+          },
+          "required": [
+            "marketplaceName",
+            "plugin"
+          ],
+          "type": "object"
+        },
+        "PluginShareContext": {
+          "properties": {
+            "canPublishToWorkspace": {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "creatorAccountUserId": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "creatorName": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "discoverability": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginShareDiscoverability"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "remotePluginId": {
+              "type": "string"
+            },
+            "remoteVersion": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "sharePrincipals": {
+              "default": null,
+              "items": {
+                "$ref": "#/$defs/PluginSharePrincipal"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "shareUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "remotePluginId"
+          ],
+          "type": "object"
+        },
+        "PluginShareDiscoverability": {
+          "enum": [
+            "LISTED",
+            "PRIVATE",
+            "UNLISTED"
+          ],
+          "type": "string"
+        },
+        "PluginSharePrincipal": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "principalId": {
+              "type": "string"
+            },
+            "principalType": {
+              "$ref": "#/$defs/PluginSharePrincipalType"
+            },
+            "role": {
+              "$ref": "#/$defs/PluginSharePrincipalRole"
+            }
+          },
+          "required": [
+            "name",
+            "principalId",
+            "principalType",
+            "role"
+          ],
+          "type": "object"
+        },
+        "PluginSharePrincipalRole": {
+          "enum": [
+            "editor",
+            "owner",
+            "reader"
+          ],
+          "type": "string"
+        },
+        "PluginSharePrincipalType": {
+          "enum": [
+            "group",
+            "user",
+            "workspace"
+          ],
+          "type": "string"
+        },
+        "PluginSource": {
+          "oneOf": [
+            {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "local",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "path": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "refName": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "sha": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "git",
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "url"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "package": {
+                  "type": "string"
+                },
+                "registry": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "npm",
+                  "type": "string"
+                },
+                "version": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "package",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "remote",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "PluginSummary": {
+          "properties": {
+            "authPolicy": {
+              "$ref": "#/$defs/PluginAuthPolicy"
+            },
+            "availability": {
+              "$ref": "#/$defs/PluginAvailability",
+              "default": "AVAILABLE"
+            },
+            "disabledReason": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginDisabledReason"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "eligiblePlanTypes": {
+              "default": null,
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "string"
+            },
+            "installPolicy": {
+              "$ref": "#/$defs/PluginInstallPolicy"
+            },
+            "installPolicySource": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginInstallPolicySource"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "installed": {
+              "type": "boolean"
+            },
+            "installedAt": {
+              "default": null,
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "interface": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginInterface"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "keywords": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "localVersion": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "mustShowInstallationInterstitial": {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "remotePluginId": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "shareContext": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginShareContext"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "source": {
+              "$ref": "#/$defs/PluginSource"
+            },
+            "version": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "authPolicy",
+            "enabled",
+            "id",
+            "installPolicy",
+            "installed",
+            "name",
+            "source"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "data": {
+          "items": {
+            "$ref": "#/$defs/PluginSearchResult"
+          },
+          "type": "array"
+        },
+        "nextCursor": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "title": "PluginSearchResponse",
+      "type": "object"
+    },
+    "PluginSearchResult": {
+      "$defs": {
+        "PluginAuthPolicy": {
+          "enum": [
+            "ON_INSTALL",
+            "ON_USE"
+          ],
+          "type": "string"
+        },
+        "PluginAvailability": {
+          "enum": [
+            "AVAILABLE",
+            "DISABLED_BY_ADMIN"
+          ],
+          "type": "string"
+        },
+        "PluginDisabledReason": {
+          "enum": [
+            "disabled_by_admin",
+            "plan_not_eligible",
+            "required_app_unavailable",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "PluginInstallPolicy": {
+          "enum": [
+            "AVAILABLE",
+            "INSTALLED_BY_DEFAULT",
+            "NOT_AVAILABLE"
+          ],
+          "type": "string"
+        },
+        "PluginInstallPolicySource": {
+          "enum": [
+            "IMPLICIT_CANONICAL_APP",
+            "WORKSPACE_SETTING"
+          ],
+          "type": "string"
+        },
+        "PluginInterface": {
+          "properties": {
+            "brandColor": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "capabilities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "category": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "composerIcon": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "composerIconUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "defaultPrompt": {
+              "default": null,
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "developerName": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "displayName": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logo": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logoDark": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logoUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logoUrlDark": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "longDescription": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "privacyPolicyUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "screenshotUrls": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "screenshots": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "shortDescription": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "termsOfServiceUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "websiteUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "PluginShareContext": {
+          "properties": {
+            "canPublishToWorkspace": {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "creatorAccountUserId": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "creatorName": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "discoverability": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginShareDiscoverability"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "remotePluginId": {
+              "type": "string"
+            },
+            "remoteVersion": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "sharePrincipals": {
+              "default": null,
+              "items": {
+                "$ref": "#/$defs/PluginSharePrincipal"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "shareUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "remotePluginId"
+          ],
+          "type": "object"
+        },
+        "PluginShareDiscoverability": {
+          "enum": [
+            "LISTED",
+            "PRIVATE",
+            "UNLISTED"
+          ],
+          "type": "string"
+        },
+        "PluginSharePrincipal": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "principalId": {
+              "type": "string"
+            },
+            "principalType": {
+              "$ref": "#/$defs/PluginSharePrincipalType"
+            },
+            "role": {
+              "$ref": "#/$defs/PluginSharePrincipalRole"
+            }
+          },
+          "required": [
+            "name",
+            "principalId",
+            "principalType",
+            "role"
+          ],
+          "type": "object"
+        },
+        "PluginSharePrincipalRole": {
+          "enum": [
+            "editor",
+            "owner",
+            "reader"
+          ],
+          "type": "string"
+        },
+        "PluginSharePrincipalType": {
+          "enum": [
+            "group",
+            "user",
+            "workspace"
+          ],
+          "type": "string"
+        },
+        "PluginSource": {
+          "oneOf": [
+            {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "local",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "path": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "refName": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "sha": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "git",
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "url"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "package": {
+                  "type": "string"
+                },
+                "registry": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "npm",
+                  "type": "string"
+                },
+                "version": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "package",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "remote",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "PluginSummary": {
+          "properties": {
+            "authPolicy": {
+              "$ref": "#/$defs/PluginAuthPolicy"
+            },
+            "availability": {
+              "$ref": "#/$defs/PluginAvailability",
+              "default": "AVAILABLE"
+            },
+            "disabledReason": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginDisabledReason"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "eligiblePlanTypes": {
+              "default": null,
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "string"
+            },
+            "installPolicy": {
+              "$ref": "#/$defs/PluginInstallPolicy"
+            },
+            "installPolicySource": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginInstallPolicySource"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "installed": {
+              "type": "boolean"
+            },
+            "installedAt": {
+              "default": null,
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "interface": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginInterface"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "keywords": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "localVersion": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "mustShowInstallationInterstitial": {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "remotePluginId": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "shareContext": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginShareContext"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "source": {
+              "$ref": "#/$defs/PluginSource"
+            },
+            "version": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "authPolicy",
+            "enabled",
+            "id",
+            "installPolicy",
+            "installed",
+            "name",
+            "source"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "marketplaceName": {
+          "type": "string"
+        },
+        "marketplacePath": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "plugin": {
+          "$ref": "#/$defs/PluginSummary"
+        }
+      },
+      "required": [
+        "marketplaceName",
+        "plugin"
+      ],
+      "title": "PluginSearchResult",
+      "type": "object"
+    },
+    "PluginSearchScope": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "global",
+        "personal",
+        "workspace"
+      ],
+      "title": "PluginSearchScope",
+      "type": "string"
+    },
+    "PluginShareContext": {
+      "$defs": {
+        "PluginShareDiscoverability": {
+          "enum": [
+            "LISTED",
+            "PRIVATE",
+            "UNLISTED"
+          ],
+          "type": "string"
+        },
+        "PluginSharePrincipal": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "principalId": {
+              "type": "string"
+            },
+            "principalType": {
+              "$ref": "#/$defs/PluginSharePrincipalType"
+            },
+            "role": {
+              "$ref": "#/$defs/PluginSharePrincipalRole"
+            }
+          },
+          "required": [
+            "name",
+            "principalId",
+            "principalType",
+            "role"
+          ],
+          "type": "object"
+        },
+        "PluginSharePrincipalRole": {
+          "enum": [
+            "editor",
+            "owner",
+            "reader"
+          ],
+          "type": "string"
+        },
+        "PluginSharePrincipalType": {
+          "enum": [
+            "group",
+            "user",
+            "workspace"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "canPublishToWorkspace": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "creatorAccountUserId": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "creatorName": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "discoverability": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PluginShareDiscoverability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "remotePluginId": {
+          "type": "string"
+        },
+        "remoteVersion": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sharePrincipals": {
+          "default": null,
+          "items": {
+            "$ref": "#/$defs/PluginSharePrincipal"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "shareUrl": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "remotePluginId"
+      ],
+      "title": "PluginShareContext",
+      "type": "object"
+    },
+    "PluginShareDiscoverability": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "LISTED",
+        "PRIVATE",
+        "UNLISTED"
+      ],
+      "title": "PluginShareDiscoverability",
+      "type": "string"
+    },
+    "PluginSharePrincipal": {
+      "$defs": {
+        "PluginSharePrincipalRole": {
+          "enum": [
+            "editor",
+            "owner",
+            "reader"
+          ],
+          "type": "string"
+        },
+        "PluginSharePrincipalType": {
+          "enum": [
+            "group",
+            "user",
+            "workspace"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "principalType": {
+          "$ref": "#/$defs/PluginSharePrincipalType"
+        },
+        "role": {
+          "$ref": "#/$defs/PluginSharePrincipalRole"
+        }
+      },
+      "required": [
+        "name",
+        "principalId",
+        "principalType",
+        "role"
+      ],
+      "title": "PluginSharePrincipal",
+      "type": "object"
+    },
+    "PluginSharePrincipalRole": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "editor",
+        "owner",
+        "reader"
+      ],
+      "title": "PluginSharePrincipalRole",
+      "type": "string"
+    },
+    "PluginSharePrincipalType": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "group",
+        "user",
+        "workspace"
+      ],
+      "title": "PluginSharePrincipalType",
+      "type": "string"
+    },
     "PluginShellPackageMount": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -41254,6 +43092,639 @@
         "status"
       ],
       "title": "PluginShellPrepareResponse",
+      "type": "object"
+    },
+    "PluginSource": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "const": "local",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "path": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "refName": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "sha": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "type": {
+              "const": "git",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "package": {
+              "type": "string"
+            },
+            "registry": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "type": {
+              "const": "npm",
+              "type": "string"
+            },
+            "version": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "package",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "remote",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "PluginSource"
+    },
+    "PluginSummary": {
+      "$defs": {
+        "PluginAuthPolicy": {
+          "enum": [
+            "ON_INSTALL",
+            "ON_USE"
+          ],
+          "type": "string"
+        },
+        "PluginAvailability": {
+          "enum": [
+            "AVAILABLE",
+            "DISABLED_BY_ADMIN"
+          ],
+          "type": "string"
+        },
+        "PluginDisabledReason": {
+          "enum": [
+            "disabled_by_admin",
+            "plan_not_eligible",
+            "required_app_unavailable",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "PluginInstallPolicy": {
+          "enum": [
+            "AVAILABLE",
+            "INSTALLED_BY_DEFAULT",
+            "NOT_AVAILABLE"
+          ],
+          "type": "string"
+        },
+        "PluginInstallPolicySource": {
+          "enum": [
+            "IMPLICIT_CANONICAL_APP",
+            "WORKSPACE_SETTING"
+          ],
+          "type": "string"
+        },
+        "PluginInterface": {
+          "properties": {
+            "brandColor": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "capabilities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "category": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "composerIcon": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "composerIconUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "defaultPrompt": {
+              "default": null,
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "developerName": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "displayName": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logo": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logoDark": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logoUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "logoUrlDark": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "longDescription": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "privacyPolicyUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "screenshotUrls": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "screenshots": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "shortDescription": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "termsOfServiceUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "websiteUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "PluginShareContext": {
+          "properties": {
+            "canPublishToWorkspace": {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "creatorAccountUserId": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "creatorName": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "discoverability": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PluginShareDiscoverability"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "remotePluginId": {
+              "type": "string"
+            },
+            "remoteVersion": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "sharePrincipals": {
+              "default": null,
+              "items": {
+                "$ref": "#/$defs/PluginSharePrincipal"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "shareUrl": {
+              "default": null,
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "remotePluginId"
+          ],
+          "type": "object"
+        },
+        "PluginShareDiscoverability": {
+          "enum": [
+            "LISTED",
+            "PRIVATE",
+            "UNLISTED"
+          ],
+          "type": "string"
+        },
+        "PluginSharePrincipal": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "principalId": {
+              "type": "string"
+            },
+            "principalType": {
+              "$ref": "#/$defs/PluginSharePrincipalType"
+            },
+            "role": {
+              "$ref": "#/$defs/PluginSharePrincipalRole"
+            }
+          },
+          "required": [
+            "name",
+            "principalId",
+            "principalType",
+            "role"
+          ],
+          "type": "object"
+        },
+        "PluginSharePrincipalRole": {
+          "enum": [
+            "editor",
+            "owner",
+            "reader"
+          ],
+          "type": "string"
+        },
+        "PluginSharePrincipalType": {
+          "enum": [
+            "group",
+            "user",
+            "workspace"
+          ],
+          "type": "string"
+        },
+        "PluginSource": {
+          "oneOf": [
+            {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "local",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "path": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "refName": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "sha": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "git",
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "url"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "package": {
+                  "type": "string"
+                },
+                "registry": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "npm",
+                  "type": "string"
+                },
+                "version": {
+                  "default": null,
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "package",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "remote",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "authPolicy": {
+          "$ref": "#/$defs/PluginAuthPolicy"
+        },
+        "availability": {
+          "$ref": "#/$defs/PluginAvailability",
+          "default": "AVAILABLE"
+        },
+        "disabledReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PluginDisabledReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "eligiblePlanTypes": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "installPolicy": {
+          "$ref": "#/$defs/PluginInstallPolicy"
+        },
+        "installPolicySource": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PluginInstallPolicySource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "installedAt": {
+          "default": null,
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "interface": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PluginInterface"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "keywords": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "localVersion": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "mustShowInstallationInterstitial": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "remotePluginId": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "shareContext": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PluginShareContext"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "$ref": "#/$defs/PluginSource"
+        },
+        "version": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "authPolicy",
+        "enabled",
+        "id",
+        "installPolicy",
+        "installed",
+        "name",
+        "source"
+      ],
+      "title": "PluginSummary",
       "type": "object"
     },
     "PluginTaskRuntimeContract": {
@@ -47330,10 +49801,6 @@
             "id": {
               "type": "string"
             },
-            "isPinned": {
-              "default": false,
-              "type": "boolean"
-            },
             "modelProvider": {
               "type": "string"
             },
@@ -47359,6 +49826,23 @@
               "type": "string"
             },
             "recencyAt": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "section": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadSection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sectionEnteredAt": {
               "format": "int64",
               "type": [
                 "integer",
@@ -48484,6 +50968,21 @@
           },
           "required": [
             "threadId"
+          ],
+          "type": "object"
+        },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
           ],
           "type": "object"
         },
@@ -54964,6 +57463,21 @@
           },
           "type": "object"
         },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": "object"
+        },
         "ThreadStatus": {
           "description": "Canonical v2 thread status.",
           "oneOf": [
@@ -55332,10 +57846,6 @@
         "id": {
           "type": "string"
         },
-        "isPinned": {
-          "default": false,
-          "type": "boolean"
-        },
         "modelProvider": {
           "type": "string"
         },
@@ -55361,6 +57871,23 @@
           "type": "string"
         },
         "recencyAt": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "section": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadSection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sectionEnteredAt": {
           "format": "int64",
           "type": [
             "integer",
@@ -56670,10 +59197,6 @@
             "id": {
               "type": "string"
             },
-            "isPinned": {
-              "default": false,
-              "type": "boolean"
-            },
             "modelProvider": {
               "type": "string"
             },
@@ -56699,6 +59222,23 @@
               "type": "string"
             },
             "recencyAt": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "section": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadSection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sectionEnteredAt": {
               "format": "int64",
               "type": [
                 "integer",
@@ -57686,6 +60226,21 @@
               ]
             }
           },
+          "type": "object"
+        },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
           "type": "object"
         },
         "ThreadStatus": {
@@ -63551,6 +66106,7 @@
           "enum": [
             "created_at",
             "recency_at",
+            "section_position",
             "updated_at"
           ],
           "type": "string"
@@ -63601,12 +66157,6 @@
             }
           ]
         },
-        "isPinned": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
         "limit": {
           "format": "uint32",
           "minimum": 0,
@@ -63631,6 +66181,12 @@
           ]
         },
         "searchTerm": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sectionId": {
           "type": [
             "null",
             "string"
@@ -64447,10 +67003,6 @@
             "id": {
               "type": "string"
             },
-            "isPinned": {
-              "default": false,
-              "type": "boolean"
-            },
             "modelProvider": {
               "type": "string"
             },
@@ -64476,6 +67028,23 @@
               "type": "string"
             },
             "recencyAt": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "section": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadSection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sectionEnteredAt": {
               "format": "int64",
               "type": [
                 "integer",
@@ -65465,6 +68034,21 @@
           },
           "type": "object"
         },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": "object"
+        },
         "ThreadStatus": {
           "description": "Canonical v2 thread status.",
           "oneOf": [
@@ -65946,12 +68530,6 @@
             {
               "type": "null"
             }
-          ]
-        },
-        "isPinned": {
-          "type": [
-            "boolean",
-            "null"
           ]
         },
         "threadId": {
@@ -66739,10 +69317,6 @@
             "id": {
               "type": "string"
             },
-            "isPinned": {
-              "default": false,
-              "type": "boolean"
-            },
             "modelProvider": {
               "type": "string"
             },
@@ -66768,6 +69342,23 @@
               "type": "string"
             },
             "recencyAt": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "section": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadSection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sectionEnteredAt": {
               "format": "int64",
               "type": [
                 "integer",
@@ -67755,6 +70346,21 @@
               ]
             }
           },
+          "type": "object"
+        },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
           "type": "object"
         },
         "ThreadStatus": {
@@ -68889,10 +71495,6 @@
             "id": {
               "type": "string"
             },
-            "isPinned": {
-              "default": false,
-              "type": "boolean"
-            },
             "modelProvider": {
               "type": "string"
             },
@@ -68918,6 +71520,23 @@
               "type": "string"
             },
             "recencyAt": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "section": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadSection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sectionEnteredAt": {
               "format": "int64",
               "type": [
                 "integer",
@@ -69905,6 +72524,21 @@
               ]
             }
           },
+          "type": "object"
+        },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
           "type": "object"
         },
         "ThreadStatus": {
@@ -71231,10 +73865,6 @@
             "id": {
               "type": "string"
             },
-            "isPinned": {
-              "default": false,
-              "type": "boolean"
-            },
             "modelProvider": {
               "type": "string"
             },
@@ -71260,6 +73890,23 @@
               "type": "string"
             },
             "recencyAt": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "section": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadSection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sectionEnteredAt": {
               "format": "int64",
               "type": [
                 "integer",
@@ -72249,6 +74896,21 @@
           },
           "type": "object"
         },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": "object"
+        },
         "ThreadStatus": {
           "description": "Canonical v2 thread status.",
           "oneOf": [
@@ -72832,6 +75494,7 @@
           "enum": [
             "created_at",
             "recency_at",
+            "section_position",
             "updated_at"
           ],
           "type": "string"
@@ -73688,10 +76351,6 @@
             "id": {
               "type": "string"
             },
-            "isPinned": {
-              "default": false,
-              "type": "boolean"
-            },
             "modelProvider": {
               "type": "string"
             },
@@ -73717,6 +76376,23 @@
               "type": "string"
             },
             "recencyAt": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "section": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadSection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sectionEnteredAt": {
               "format": "int64",
               "type": [
                 "integer",
@@ -74718,6 +77394,21 @@
           "required": [
             "snippet",
             "thread"
+          ],
+          "type": "object"
+        },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
           ],
           "type": "object"
         },
@@ -75833,10 +78524,6 @@
             "id": {
               "type": "string"
             },
-            "isPinned": {
-              "default": false,
-              "type": "boolean"
-            },
             "modelProvider": {
               "type": "string"
             },
@@ -75862,6 +78549,23 @@
               "type": "string"
             },
             "recencyAt": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "section": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadSection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sectionEnteredAt": {
               "format": "int64",
               "type": [
                 "integer",
@@ -76851,6 +79555,21 @@
           },
           "type": "object"
         },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": "object"
+        },
         "ThreadStatus": {
           "description": "Canonical v2 thread status.",
           "oneOf": [
@@ -77196,6 +79915,222 @@
         "start"
       ],
       "title": "ThreadSearchTextRange",
+      "type": "object"
+    },
+    "ThreadSection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "ThreadSection",
+      "type": "object"
+    },
+    "ThreadSectionCreateParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ThreadSectionCreateParams",
+      "type": "object"
+    },
+    "ThreadSectionCreateResponse": {
+      "$defs": {
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "section": {
+          "$ref": "#/$defs/ThreadSection"
+        }
+      },
+      "required": [
+        "section"
+      ],
+      "title": "ThreadSectionCreateResponse",
+      "type": "object"
+    },
+    "ThreadSectionDeleteParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "sectionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sectionId"
+      ],
+      "title": "ThreadSectionDeleteParams",
+      "type": "object"
+    },
+    "ThreadSectionDeleteResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "ThreadSectionDeleteResponse",
+      "type": "object"
+    },
+    "ThreadSectionListParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "title": "ThreadSectionListParams",
+      "type": "object"
+    },
+    "ThreadSectionListResponse": {
+      "$defs": {
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "data": {
+          "items": {
+            "$ref": "#/$defs/ThreadSection"
+          },
+          "type": "array"
+        },
+        "nextCursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "title": "ThreadSectionListResponse",
+      "type": "object"
+    },
+    "ThreadSectionMoveParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "beforeThreadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sectionId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sectionId",
+        "threadId"
+      ],
+      "title": "ThreadSectionMoveParams",
+      "type": "object"
+    },
+    "ThreadSectionMoveResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "ThreadSectionMoveResponse",
+      "type": "object"
+    },
+    "ThreadSectionUpdateParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "sectionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "sectionId"
+      ],
+      "title": "ThreadSectionUpdateParams",
+      "type": "object"
+    },
+    "ThreadSectionUpdateResponse": {
+      "$defs": {
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "section": {
+          "$ref": "#/$defs/ThreadSection"
+        }
+      },
+      "required": [
+        "section"
+      ],
+      "title": "ThreadSectionUpdateResponse",
       "type": "object"
     },
     "ThreadSetNameParams": {
@@ -77576,6 +80511,7 @@
       "enum": [
         "created_at",
         "recency_at",
+        "section_position",
         "updated_at"
       ],
       "title": "ThreadSortKey",
@@ -78699,10 +81635,6 @@
             "id": {
               "type": "string"
             },
-            "isPinned": {
-              "default": false,
-              "type": "boolean"
-            },
             "modelProvider": {
               "type": "string"
             },
@@ -78728,6 +81660,23 @@
               "type": "string"
             },
             "recencyAt": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "section": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadSection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sectionEnteredAt": {
               "format": "int64",
               "type": [
                 "integer",
@@ -79715,6 +82664,21 @@
               ]
             }
           },
+          "type": "object"
+        },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
           "type": "object"
         },
         "ThreadStatus": {
@@ -80872,10 +83836,6 @@
             "id": {
               "type": "string"
             },
-            "isPinned": {
-              "default": false,
-              "type": "boolean"
-            },
             "modelProvider": {
               "type": "string"
             },
@@ -80901,6 +83861,23 @@
               "type": "string"
             },
             "recencyAt": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "section": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadSection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sectionEnteredAt": {
               "format": "int64",
               "type": [
                 "integer",
@@ -81888,6 +84865,21 @@
               ]
             }
           },
+          "type": "object"
+        },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
           "type": "object"
         },
         "ThreadStatus": {
@@ -85258,10 +88250,6 @@
             "id": {
               "type": "string"
             },
-            "isPinned": {
-              "default": false,
-              "type": "boolean"
-            },
             "modelProvider": {
               "type": "string"
             },
@@ -85287,6 +88275,23 @@
               "type": "string"
             },
             "recencyAt": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "section": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadSection"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sectionEnteredAt": {
               "format": "int64",
               "type": [
                 "integer",
@@ -86274,6 +89279,21 @@
               ]
             }
           },
+          "type": "object"
+        },
+        "ThreadSection": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
           "type": "object"
         },
         "ThreadStatus": {
@@ -101737,6 +104757,7 @@
               "plugin/installed",
               "plugin/list",
               "plugin/read",
+              "plugin/search",
               "plugin/uninstall",
               "pluginHostLifecycle/list",
               "pluginInstalled/disabled/set",
@@ -101829,12 +104850,17 @@
               "thread/resume",
               "thread/search",
               "thread/searchOccurrences",
+              "thread/section/move",
               "thread/settings/update",
               "thread/shellCommand",
               "thread/start",
               "thread/turns/list",
               "thread/unarchive",
               "thread/unsubscribe",
+              "threadSection/create",
+              "threadSection/delete",
+              "threadSection/list",
+              "threadSection/update",
               "turn/interrupt",
               "turn/start",
               "turn/steer",

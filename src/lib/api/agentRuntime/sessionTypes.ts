@@ -88,6 +88,13 @@ export interface AgentSessionInfo {
   latest_turn_status?: string;
   active_turn_id?: string;
   queued_turn_count?: number;
+  section?: AgentSessionSection;
+  section_entered_at?: number;
+}
+
+export interface AgentSessionSection {
+  id: string;
+  name: string;
 }
 
 export interface AgentRuntimeListSessionsOptions {
@@ -560,4 +567,6 @@ export interface AgentSessionDetail {
   items?: AgentThreadItem[];
   thread_read?: AgentRuntimeThreadReadModel | null;
   todo_items?: AgentTodoItem[];
+  section?: AgentSessionSection;
+  section_entered_at?: number;
 }

@@ -227,7 +227,6 @@ function createTopic(id: string, title: string): Topic {
     executionStrategy: "react",
     status: "draft",
     lastPreview: "",
-    isPinned: false,
     hasUnread: false,
     tag: null,
     sourceSessionId: id,

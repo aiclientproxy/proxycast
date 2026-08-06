@@ -444,6 +444,62 @@
       ],
       "type": "object"
     },
+    "PluginSearchParams": {
+      "properties": {
+        "cursor": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "cwds": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "limit": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PluginSearchScope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "searchTerm": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "searchTerm"
+      ],
+      "type": "object"
+    },
+    "PluginSearchScope": {
+      "enum": [
+        "global",
+        "personal",
+        "workspace"
+      ],
+      "type": "string"
+    },
     "RequestId": {
       "anyOf": [
         {
@@ -882,12 +938,6 @@
             }
           ]
         },
-        "isPinned": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
         "limit": {
           "format": "uint32",
           "minimum": 0,
@@ -912,6 +962,12 @@
           ]
         },
         "searchTerm": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sectionId": {
           "type": [
             "null",
             "string"
@@ -1026,12 +1082,6 @@
             {
               "type": "null"
             }
-          ]
-        },
-        "isPinned": {
-          "type": [
-            "boolean",
-            "null"
           ]
         },
         "threadId": {
@@ -1278,6 +1328,86 @@
       ],
       "type": "object"
     },
+    "ThreadSectionCreateParams": {
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "ThreadSectionDeleteParams": {
+      "properties": {
+        "sectionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sectionId"
+      ],
+      "type": "object"
+    },
+    "ThreadSectionListParams": {
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ThreadSectionMoveParams": {
+      "properties": {
+        "beforeThreadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sectionId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sectionId",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadSectionUpdateParams": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "sectionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "sectionId"
+      ],
+      "type": "object"
+    },
     "ThreadSetNameParams": {
       "properties": {
         "name": {
@@ -1375,6 +1505,7 @@
       "enum": [
         "created_at",
         "recency_at",
+        "section_position",
         "updated_at"
       ],
       "type": "string"
@@ -2058,6 +2189,106 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
+          "const": "thread/section/move",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadSectionMoveParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "threadSection/list",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadSectionListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "threadSection/create",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadSectionCreateParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "threadSection/update",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadSectionUpdateParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "threadSection/delete",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadSectionDeleteParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
           "const": "thread/loaded/list",
           "type": "string"
         },
@@ -2623,6 +2854,26 @@
         },
         "params": {
           "$ref": "#/$defs/PluginCatalogListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "plugin/search",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PluginSearchParams"
         }
       },
       "required": [

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "enum": [
+    "AVAILABLE",
+    "INSTALLED_BY_DEFAULT",
+    "NOT_AVAILABLE"
+  ],
+  "title": "PluginInstallPolicy",
+  "type": "string"
+}

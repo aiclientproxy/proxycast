@@ -3,16 +3,16 @@
   "kind": "codex-render-projection-coverage",
   "upstream": {
     "repository": "/Users/coso/Documents/dev/rust/codex",
-    "revision": "4c43465133428898aa84f0bfc02c306ed65fb66a",
+    "revision": "c4f42d161ae44a8d696ee9fb595709661979d187",
     "itemSource": "codex-rs/app-server-protocol/src/protocol/v2/item.rs",
     "itemSchemaSource": "codex-rs/app-server-protocol/schema/json/codex_app_server_protocol.v2.schemas.json",
-    "itemSchemaSha256": "380e97f5778c40c7fead146c6af5da97e478164b194c0ce1b15edac80d8c8527",
+    "itemSchemaSha256": "e586a601162c6c5fdb35580579baebbe86014d9796c0005cbe10011b8428f880",
     "methodSource": "codex-rs/app-server-protocol/src/protocol/common.rs",
     "notificationSchemaSource": "codex-rs/app-server-protocol/schema/json/ServerNotification.json",
-    "notificationSchemaSha256": "61341f7cc0730e6b0c4f59be97d18acec190fa87aa7551ae03d1abfef0536311",
+    "notificationSchemaSha256": "7055203a763db4f8a9247e822f1e71d6d6b6ff76034694e288b8e9407f6a8209",
     "requestSchemaSource": "codex-rs/app-server-protocol/schema/json/ServerRequest.json",
-    "requestSchemaSha256": "27ce8a1fc4b9326911f7c42379ff9fa661eee70060a7a2af942813247625d887",
-    "schemaSnapshotSha256": "3e4d26e4e12bd13b1d72a3edc9e3ce81a77273c72603e1182f032a4b8ee14503"
+    "requestSchemaSha256": "e5ae9078cddac333262ae392fe25558d6054b77e4beb00784b77cf606849d063",
+    "schemaSnapshotSha256": "4025b3d4b83531714f03893db69ffc80a50470497178c21cac4993bf6870af9a"
   },
   "factSources": {
     "itemInventory": "internal/refactor/v1/fixtures/item-inventory.v0.1.json",

@@ -6,7 +6,15 @@ import {
   unarchiveAgentRuntimeSession,
 } from "@/lib/api/agentRuntime/sessionClient";
 import { setAgentRuntimeThreadName } from "@/lib/api/agentRuntime/threadClient";
-import type { AgentSessionInfo } from "@/lib/api/agentRuntime/sessionTypes";
+import {
+  isPinnedThreadSession,
+  moveThreadToSection,
+  PINNED_THREAD_SECTION,
+} from "@/lib/api/threadSections";
+import type {
+  AgentSessionInfo,
+  AgentSessionSection,
+} from "@/lib/api/agentRuntime/sessionTypes";
 import { recordAgentUiPerformanceMetric } from "@/lib/agentUiPerformanceMetrics";
 import {
   buildClawAgentParams,
@@ -39,6 +47,7 @@ interface UseAppSidebarConversationActionsParams {
   moveSidebarSessionArchiveStateOptimistically: (
     session: AgentSessionInfo,
   ) => void;
+  moveSidebarSessionSectionOptimistically: (session: AgentSessionInfo) => void;
   removeSidebarSessionOptimistically: (sessionId: string) => void;
   resolveLocalizedSessionTitle: (session: AgentSessionInfo) => string;
   renameConversationPromptLabel: string;
@@ -114,6 +123,7 @@ export function useAppSidebarConversationActions({
   refreshSidebarSessions,
   renameSidebarSessionOptimistically,
   moveSidebarSessionArchiveStateOptimistically,
+  moveSidebarSessionSectionOptimistically,
   removeSidebarSessionOptimistically,
   resolveLocalizedSessionTitle,
   renameConversationPromptLabel,
@@ -407,6 +417,58 @@ export function useAppSidebarConversationActions({
     ],
   );
 
+  const moveSessionToSection = useCallback(
+    async (session: AgentSessionInfo, section: AgentSessionSection | null) => {
+      const threadId = session.thread_id?.trim();
+      if (!threadId) {
+        console.error(
+          `移动会话分组失败: canonical thread identity is missing for session ${session.id}`,
+        );
+        return;
+      }
+      const currentSectionId = session.section?.id.trim() || null;
+      const targetSectionId = section?.id.trim() || null;
+      if (currentSectionId === targetSectionId) {
+        return;
+      }
+      const nextSession = {
+        ...session,
+        section: section ? { ...section } : undefined,
+        section_entered_at: section ? Date.now() : undefined,
+      } satisfies AgentSessionInfo;
+      beginSidebarSessionAction(session.id);
+      moveSidebarSessionSectionOptimistically(nextSession);
+
+      try {
+        await moveThreadToSection({
+          threadId,
+          sectionId: targetSectionId,
+        });
+        await refreshSidebarSessions();
+      } catch (error) {
+        console.error("移动会话分组失败:", error);
+        await refreshSidebarSessions();
+      } finally {
+        clearSidebarSessionAction(session.id);
+      }
+    },
+    [
+      beginSidebarSessionAction,
+      clearSidebarSessionAction,
+      moveSidebarSessionSectionOptimistically,
+      refreshSidebarSessions,
+    ],
+  );
+
+  const toggleSessionPinned = useCallback(
+    (session: AgentSessionInfo) =>
+      moveSessionToSection(
+        session,
+        isPinnedThreadSession(session) ? null : PINNED_THREAD_SECTION,
+      ),
+    [moveSessionToSection],
+  );
+
   const deleteConversation = useCallback(
     async (session: AgentSessionInfo) => {
       const title = resolveLocalizedSessionTitle(session);
@@ -460,7 +522,9 @@ export function useAppSidebarConversationActions({
     navigateToSkills,
     navigateToStandaloneConversation,
     navigateToWorkbench,
+    moveSessionToSection,
     toggleSessionArchive,
+    toggleSessionPinned,
     tryOpenTaskCenterDraftFromSidebar,
     renameConversation,
   };

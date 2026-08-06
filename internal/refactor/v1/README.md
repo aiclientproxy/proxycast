@@ -45,7 +45,7 @@ Codex 对齐的是上图从协议到恢复的语义；grok-build 对齐的是 `m
 
 | 参考仓库                                    | commit                                     | 允许借鉴                                                                                                    |
 | ------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `/Users/coso/Documents/dev/rust/codex`      | `4c43465133428898aa84f0bfc02c306ed65fb66a` | runtime、App Server、Thread/Turn/Item、工具、MCP、Skills、Plugins、Multi-Agent、恢复和测试语义              |
+| `/Users/coso/Documents/dev/rust/codex`      | `c4f42d161ae44a8d696ee9fb595709661979d187` | runtime、App Server、Thread/Turn/Item、工具、MCP、Skills、Plugins、Multi-Agent、恢复和测试语义              |
 | `/Users/coso/Documents/dev/rust/grok-build` | `6e386420825bd44ae648c63e7c8cba12fcec9401` | model control plane：catalog、model selection/switch、capability、tool subset、retry/circuit breaker        |
 | `/Users/coso/Documents/dev/js/opencode`     | `fab213312927ea64cf968832c527206e8c944f9e` | provider wire plane：endpoint union、canonical content/lowering、媒体、协议 stream reducer、provider policy |
 
@@ -55,11 +55,11 @@ Codex 对齐的是上图从协议到恢复的语义；grok-build 对齐的是 `m
 
 同一主线只能有一个 reference lock；下游 fixture 和切片记录允许暂时落后，但必须显式登记：
 
-| 位置                                                                     | 当前 revision | 口径                                                                      |
-| ------------------------------------------------------------------------ | ------------- | ------------------------------------------------------------------------- |
-| 本表、`internal/test/snapshots/**`、`fixtures/codex-method-product-scope.v0.1.json` | `4c43465…`    | 已对齐 lock                                                               |
-| `fixtures/item-inventory.v0.1.json`、[09](09-tool-turn-snapshot-progress.md) | `9fc715c0…`   | 落后 lock；升级必须重新执行 Item/tool 审计，禁止只改 hash 让守卫通过      |
-| [04](04-execution-plan.md) 各切片记录、`internal/exec-plans/**` 历史证据 | 按当轮记录    | 历史 evidence，保留写入时的 revision，不回改                              |
+| 位置                                                                                | 当前 revision | 口径                                                                 |
+| ----------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------- |
+| 本表、`internal/test/snapshots/**`、`fixtures/codex-method-product-scope.v0.1.json` | `4c43465…`    | 已对齐 lock                                                          |
+| `fixtures/item-inventory.v0.1.json`、[09](09-tool-turn-snapshot-progress.md)        | `9fc715c0…`   | 落后 lock；升级必须重新执行 Item/tool 审计，禁止只改 hash 让守卫通过 |
+| [04](04-execution-plan.md) 各切片记录、`internal/exec-plans/**` 历史证据            | 按当轮记录    | 历史 evidence，保留写入时的 revision，不回改                         |
 
 `internal/research/refactor/v2/**` 与 `internal/exec-plans/project-gate-a-b-acceptance-plan.md`
 是各自独立的基线，不受本 lock 约束。

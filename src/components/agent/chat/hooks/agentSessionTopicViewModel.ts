@@ -140,6 +140,8 @@ export function mapSessionDetailToTopic(
     execution_strategy: detail.execution_strategy,
     workspace_id: detail.workspace_id ?? fallbackWorkspaceId ?? undefined,
     working_dir: detail.working_dir,
+    section: detail.section,
+    section_entered_at: detail.section_entered_at,
   });
   const runtimeStatus = resolveRuntimeThreadStatusFromSessionDetail(detail);
   if (!runtimeStatus) {
@@ -153,45 +155,9 @@ export function mapSessionDetailToTopic(
   };
 }
 
-export function sortTopicsByRecentActivity(
-  topics: Topic[],
-  options: { workspaceId?: string | null } = {},
-): Topic[] {
-  const currentWorkspaceId = normalizeProjectId(options.workspaceId);
-  return topics
-    .map((topic, index) => ({ index, topic }))
-    .sort((left, right) => {
-      if (currentWorkspaceId) {
-        const leftWorkspaceId = normalizeProjectId(left.topic.workspaceId);
-        const rightWorkspaceId = normalizeProjectId(right.topic.workspaceId);
-        const leftRank = leftWorkspaceId === currentWorkspaceId ? 0 : 1;
-        const rightRank = rightWorkspaceId === currentWorkspaceId ? 0 : 1;
-        if (leftRank !== rightRank) {
-          return leftRank - rightRank;
-        }
-      }
-
-      const updatedDiff =
-        right.topic.updatedAt.getTime() - left.topic.updatedAt.getTime();
-      if (updatedDiff !== 0) {
-        return updatedDiff;
-      }
-
-      const createdDiff =
-        right.topic.createdAt.getTime() - left.topic.createdAt.getTime();
-      if (createdDiff !== 0) {
-        return createdDiff;
-      }
-
-      return left.index - right.index;
-    })
-    .map((entry) => entry.topic);
-}
-
 export function upsertTopicFromSessionDetail(
   topics: Topic[],
   detailTopic: Topic,
-  options: { workspaceId?: string | null } = {},
 ): Topic[] {
   const existingTopic = topics.find((topic) => topic.id === detailTopic.id);
   const mergedTopic = existingTopic
@@ -204,7 +170,9 @@ export function upsertTopicFromSessionDetail(
         workingDir: detailTopic.workingDir ?? existingTopic.workingDir,
         queuedTurnCount:
           detailTopic.queuedTurnCount ?? existingTopic.queuedTurnCount,
-        isPinned: existingTopic.isPinned,
+        section: detailTopic.section ?? existingTopic.section,
+        sectionEnteredAt:
+          detailTopic.sectionEnteredAt ?? existingTopic.sectionEnteredAt,
         hasUnread: existingTopic.hasUnread,
         tag: existingTopic.tag,
       }
@@ -213,7 +181,7 @@ export function upsertTopicFromSessionDetail(
     ? topics.map((topic) => (topic.id === detailTopic.id ? mergedTopic : topic))
     : [mergedTopic, ...topics];
 
-  return sortTopicsByRecentActivity(nextTopics, options);
+  return nextTopics;
 }
 
 function shouldPreserveExistingTopicTitle(
@@ -257,7 +225,6 @@ export function upsertFreshSessionDraftTopic(
     executionStrategy: params.executionStrategy,
     status: "draft",
     lastPreview: "等待你补充任务需求后开始执行。",
-    isPinned: false,
     hasUnread: false,
     tag: null,
     sourceSessionId: params.sessionId,
@@ -270,29 +237,27 @@ export function prependVerifiedSessionTopicFromDetail(
   topics: Topic[],
   sessionId: string,
   detail: AgentSessionDetail,
-  options: { workspaceId?: string | null } = {},
 ): Topic[] {
   if (topics.some((topic) => topic.id === sessionId)) {
     return topics;
   }
 
-  return sortTopicsByRecentActivity(
-    [
-      mapSessionToTopic({
-        id: sessionId,
-        name: detail.name,
-        created_at: detail.created_at,
-        updated_at: detail.updated_at,
-        model: detail.model,
-        messages_count: detail.messages.length,
-        execution_strategy: detail.execution_strategy,
-        workspace_id: detail.workspace_id,
-        working_dir: detail.working_dir,
-      }),
-      ...topics,
-    ],
-    options,
-  );
+  return [
+    mapSessionToTopic({
+      id: sessionId,
+      name: detail.name,
+      created_at: detail.created_at,
+      updated_at: detail.updated_at,
+      model: detail.model,
+      messages_count: detail.messages.length,
+      execution_strategy: detail.execution_strategy,
+      workspace_id: detail.workspace_id,
+      working_dir: detail.working_dir,
+      section: detail.section,
+      section_entered_at: detail.section_entered_at,
+    }),
+    ...topics,
+  ];
 }
 
 export function applyTopicExecutionStrategyToTopics(
@@ -355,7 +320,7 @@ export function applyTopicSnapshotToTopics(
     return nextTopic;
   });
 
-  return changed ? sortTopicsByRecentActivity(nextTopics) : topics;
+  return changed ? nextTopics : topics;
 }
 
 function takeTail<T>(items: T[], limit: number): T[] {

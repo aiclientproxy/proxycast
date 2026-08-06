@@ -16,7 +16,14 @@ export function resolveReasoningDisplayText(
       .filter(Boolean)
       .join("\n\n"),
   );
-  const bodyText = normalizeProcessDisplayText(item.text.trim());
+  const canonicalContentText = normalizeProcessDisplayText(
+    (item.content || [])
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join("\n\n"),
+  );
+  const bodyText =
+    canonicalContentText || normalizeProcessDisplayText(item.text.trim());
 
   if (!summaryText) {
     return {

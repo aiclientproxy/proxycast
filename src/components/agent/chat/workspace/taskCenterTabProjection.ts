@@ -80,7 +80,6 @@ export function buildTaskCenterTabItems({
     updatedAt: draft.updatedAt,
     isActive: draft.id === activeDraftTabId,
     hasUnread: false,
-    isPinned: false,
     renamable: false,
   }));
   const topicItems = visibleTabIds
@@ -100,7 +99,6 @@ export function buildTaskCenterTabItems({
         isActive:
           !isDraftTabActive && topic.id === (previewTopicId ?? sessionId),
         hasUnread: Boolean(topic.hasUnread),
-        isPinned: Boolean(topic.isPinned),
         renamable: true,
       };
     });
@@ -136,7 +134,6 @@ export function buildBrowserWorkspaceHomeTabItem({
     updatedAt: new Date(updatedAtMs),
     isActive: true,
     hasUnread: false,
-    isPinned: false,
     renamable: false,
     closable: false,
   };

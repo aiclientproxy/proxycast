@@ -14,6 +14,11 @@ pub use app_server_protocol::protocol::v2::METHOD_THREAD_INJECT_ITEMS;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_LOADED_LIST;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH_OCCURRENCES;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_SECTION_CREATE;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_SECTION_DELETE;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_SECTION_LIST;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_SECTION_MOVE;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_SECTION_UPDATE;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_SHELL_COMMAND;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNARCHIVE;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNSUBSCRIBE;
@@ -30,10 +35,13 @@ pub use app_server_protocol::protocol::v2::{
     ThreadIncrementElicitationResponse, ThreadInjectItemsParams, ThreadInjectItemsResponse,
     ThreadLoadedListParams, ThreadLoadedListResponse, ThreadSearchOccurrence,
     ThreadSearchOccurrencesParams, ThreadSearchOccurrencesResponse, ThreadSearchParams,
-    ThreadSearchResponse, ThreadSearchResult, ThreadSearchTextRange, ThreadShellCommandParams,
-    ThreadShellCommandResponse, ThreadSortKey, ThreadSourceKind, ThreadUnarchiveParams,
-    ThreadUnarchiveResponse, ThreadUnsubscribeParams, ThreadUnsubscribeResponse,
-    ThreadUnsubscribeStatus,
+    ThreadSearchResponse, ThreadSearchResult, ThreadSearchTextRange, ThreadSectionCreateParams,
+    ThreadSectionCreateResponse, ThreadSectionDeleteParams, ThreadSectionDeleteResponse,
+    ThreadSectionListParams, ThreadSectionListResponse, ThreadSectionMoveParams,
+    ThreadSectionMoveResponse, ThreadSectionUpdateParams, ThreadSectionUpdateResponse,
+    ThreadShellCommandParams, ThreadShellCommandResponse, ThreadSortKey, ThreadSourceKind,
+    ThreadUnarchiveParams, ThreadUnarchiveResponse, ThreadUnsubscribeParams,
+    ThreadUnsubscribeResponse, ThreadUnsubscribeStatus,
 };
 pub use app_server_protocol::AgentSessionAnalysisHandoffExportParams;
 pub use app_server_protocol::AgentSessionAnalysisHandoffExportResponse;
@@ -583,12 +591,20 @@ fn read_agent_session_event_type(notification: &JsonRpcNotification) -> Option<&
 }
 
 fn is_agent_session_side_channel(event_type: &str) -> bool {
-    event_type.starts_with("action.")
-        || event_type.starts_with("approval.")
-        || event_type.starts_with("provider.")
-        || event_type.starts_with("image_task.")
-        || event_type.starts_with("image_task_")
-        || event_type.starts_with("runtime.")
+    matches!(
+        event_type,
+        "message.created"
+            | "provider.request.started"
+            | "provider.first_event.received"
+            | "provider.first_text_delta.received"
+            | "provider.failed"
+            | "provider.canceled"
+            | "image_task.created"
+            | "image_task.parameters.required"
+            | "image_task_parameters_required"
+            | "image_task.presentation.generated"
+            | "runtime.status"
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -642,6 +658,41 @@ impl AppServerClient {
         params: ThreadListParams,
     ) -> Result<JsonRpcRequest, ClientError> {
         self.typed_request(typed::list_threads(params))
+    }
+
+    pub fn move_thread_to_section(
+        &mut self,
+        params: ThreadSectionMoveParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::move_thread_to_section(params))
+    }
+
+    pub fn list_thread_sections(
+        &mut self,
+        params: ThreadSectionListParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::list_thread_sections(params))
+    }
+
+    pub fn create_thread_section(
+        &mut self,
+        params: ThreadSectionCreateParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::create_thread_section(params))
+    }
+
+    pub fn update_thread_section(
+        &mut self,
+        params: ThreadSectionUpdateParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::update_thread_section(params))
+    }
+
+    pub fn delete_thread_section(
+        &mut self,
+        params: ThreadSectionDeleteParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::delete_thread_section(params))
     }
 
     pub fn list_loaded_threads(
@@ -1768,6 +1819,36 @@ pub mod typed {
         TypedRequest::new(METHOD_THREAD_LIST, params)
     }
 
+    pub fn move_thread_to_section(
+        params: ThreadSectionMoveParams,
+    ) -> TypedRequest<ThreadSectionMoveParams> {
+        TypedRequest::new(METHOD_THREAD_SECTION_MOVE, params)
+    }
+
+    pub fn list_thread_sections(
+        params: ThreadSectionListParams,
+    ) -> TypedRequest<ThreadSectionListParams> {
+        TypedRequest::new(METHOD_THREAD_SECTION_LIST, params)
+    }
+
+    pub fn create_thread_section(
+        params: ThreadSectionCreateParams,
+    ) -> TypedRequest<ThreadSectionCreateParams> {
+        TypedRequest::new(METHOD_THREAD_SECTION_CREATE, params)
+    }
+
+    pub fn update_thread_section(
+        params: ThreadSectionUpdateParams,
+    ) -> TypedRequest<ThreadSectionUpdateParams> {
+        TypedRequest::new(METHOD_THREAD_SECTION_UPDATE, params)
+    }
+
+    pub fn delete_thread_section(
+        params: ThreadSectionDeleteParams,
+    ) -> TypedRequest<ThreadSectionDeleteParams> {
+        TypedRequest::new(METHOD_THREAD_SECTION_DELETE, params)
+    }
+
     pub fn list_loaded_threads(
         params: ThreadLoadedListParams,
     ) -> TypedRequest<ThreadLoadedListParams> {
@@ -2817,6 +2898,71 @@ mod tests {
                 METHOD_THREAD_TURNS_LIST,
                 METHOD_THREAD_ITEMS_LIST,
             ]
+        );
+    }
+
+    #[test]
+    fn thread_section_helpers_use_exact_v2_methods() {
+        let mut client = AppServerClient::new();
+        let section_id = "01984de2-8f74-7c91-a3b2-5c5e937cf318".to_string();
+
+        let list = client
+            .list_thread_sections(ThreadSectionListParams {
+                cursor: Some("sections:1".to_string()),
+                limit: Some(25),
+            })
+            .expect("threadSection/list request");
+        assert_eq!(list.method, METHOD_THREAD_SECTION_LIST);
+        assert_eq!(
+            list.params.expect("params"),
+            json!({"cursor": "sections:1", "limit": 25})
+        );
+
+        let create = client
+            .create_thread_section(ThreadSectionCreateParams {
+                name: "Active".to_string(),
+            })
+            .expect("threadSection/create request");
+        assert_eq!(create.method, METHOD_THREAD_SECTION_CREATE);
+        assert_eq!(create.params.expect("params"), json!({"name": "Active"}));
+
+        let update = client
+            .update_thread_section(ThreadSectionUpdateParams {
+                section_id: section_id.clone(),
+                name: "Current".to_string(),
+            })
+            .expect("threadSection/update request");
+        assert_eq!(update.method, METHOD_THREAD_SECTION_UPDATE);
+        assert_eq!(
+            update.params.expect("params"),
+            json!({"sectionId": section_id, "name": "Current"})
+        );
+
+        let move_request = client
+            .move_thread_to_section(ThreadSectionMoveParams {
+                thread_id: "019bf4f0-5080-7000-8000-000000000001".to_string(),
+                section_id: None,
+                before_thread_id: None,
+            })
+            .expect("thread/section/move request");
+        assert_eq!(move_request.method, METHOD_THREAD_SECTION_MOVE);
+        assert_eq!(
+            move_request.params.expect("params"),
+            json!({
+                "threadId": "019bf4f0-5080-7000-8000-000000000001",
+                "sectionId": null
+            })
+        );
+
+        let delete = client
+            .delete_thread_section(ThreadSectionDeleteParams {
+                section_id: "01984de2-8f74-7c91-a3b2-5c5e937cf318".to_string(),
+            })
+            .expect("threadSection/delete request");
+        assert_eq!(delete.method, METHOD_THREAD_SECTION_DELETE);
+        assert_eq!(
+            delete.params.expect("params"),
+            json!({"sectionId": "01984de2-8f74-7c91-a3b2-5c5e937cf318"})
         );
     }
 
@@ -4686,10 +4832,16 @@ mod tests {
     #[test]
     fn event_classifies_allowed_agent_session_raw_side_channel() {
         for event_type in [
-            "action.required",
-            "approval.required",
+            "message.created",
+            "provider.request.started",
             "provider.first_event.received",
+            "provider.first_text_delta.received",
+            "provider.failed",
+            "provider.canceled",
             "image_task.created",
+            "image_task.parameters.required",
+            "image_task_parameters_required",
+            "image_task.presentation.generated",
             "runtime.status",
         ] {
             let notification = JsonRpcNotification::new(
@@ -4720,33 +4872,42 @@ mod tests {
 
     #[test]
     fn event_rejects_unowned_agent_session_raw_event() {
-        let notification = JsonRpcNotification::new(
-            METHOD_AGENT_SESSION_EVENT,
-            Some(
-                serde_json::to_value(AgentSessionEventParams {
-                    event: AgentEvent {
-                        event_id: "evt_1".to_string(),
-                        sequence: 1,
-                        session_id: "sess_1".to_string(),
-                        thread_id: Some("thread_1".to_string()),
-                        turn_id: Some("turn_1".to_string()),
-                        event_type: "workflow.step.started".to_string(),
-                        timestamp: "2026-06-04T00:00:00Z".to_string(),
-                        payload: json!({}),
-                    },
-                })
-                .expect("params"),
-            ),
-        );
+        for event_type in [
+            "action.unknown",
+            "approval.unknown",
+            "provider.unknown",
+            "image_task.unknown",
+            "runtime.unknown",
+            "workflow.step.started",
+        ] {
+            let notification = JsonRpcNotification::new(
+                METHOD_AGENT_SESSION_EVENT,
+                Some(
+                    serde_json::to_value(AgentSessionEventParams {
+                        event: AgentEvent {
+                            event_id: "evt_1".to_string(),
+                            sequence: 1,
+                            session_id: "sess_1".to_string(),
+                            thread_id: Some("thread_1".to_string()),
+                            turn_id: Some("turn_1".to_string()),
+                            event_type: event_type.to_string(),
+                            timestamp: "2026-06-04T00:00:00Z".to_string(),
+                            payload: json!({}),
+                        },
+                    })
+                    .expect("params"),
+                ),
+            );
 
-        let error = AppServerClient::event(JsonRpcMessage::Notification(notification))
-            .expect_err("unowned raw event must fail closed");
+            let error = AppServerClient::event(JsonRpcMessage::Notification(notification))
+                .expect_err("unowned raw event must fail closed");
 
-        assert!(matches!(
-            error,
-            ClientError::InvalidNotification(message)
-                if message.contains("workflow.step.started")
-        ));
+            assert!(matches!(
+                error,
+                ClientError::InvalidNotification(message)
+                    if message.contains(event_type)
+            ));
+        }
     }
 
     #[test]

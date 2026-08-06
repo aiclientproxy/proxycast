@@ -772,6 +772,10 @@
     },
     {
       "kind": "request",
+      "method": "plugin/search"
+    },
+    {
+      "kind": "request",
       "method": "plugin/uninstall"
     },
     {
@@ -1172,6 +1176,10 @@
     },
     {
       "kind": "request",
+      "method": "thread/section/move"
+    },
+    {
+      "kind": "request",
       "method": "thread/settings/update"
     },
     {
@@ -1213,6 +1221,22 @@
     {
       "kind": "request",
       "method": "thread/unsubscribe"
+    },
+    {
+      "kind": "request",
+      "method": "threadSection/create"
+    },
+    {
+      "kind": "request",
+      "method": "threadSection/delete"
+    },
+    {
+      "kind": "request",
+      "method": "threadSection/list"
+    },
+    {
+      "kind": "request",
+      "method": "threadSection/update"
     },
     {
       "kind": "notification",
@@ -2309,6 +2333,8 @@
       "PermissionsRequestApprovalParams",
       "PermissionsRequestApprovalResponse",
       "PlanDeltaNotification",
+      "PluginAuthPolicy",
+      "PluginAvailability",
       "PluginCatalogCapability",
       "PluginCatalogDetail",
       "PluginCatalogEnabledSetParams",
@@ -2325,6 +2351,21 @@
       "PluginCatalogUiResource",
       "PluginCatalogUninstallParams",
       "PluginCatalogUninstallResponse",
+      "PluginDisabledReason",
+      "PluginInstallPolicy",
+      "PluginInstallPolicySource",
+      "PluginInterface",
+      "PluginSearchParams",
+      "PluginSearchResponse",
+      "PluginSearchResult",
+      "PluginSearchScope",
+      "PluginShareContext",
+      "PluginShareDiscoverability",
+      "PluginSharePrincipal",
+      "PluginSharePrincipalRole",
+      "PluginSharePrincipalType",
+      "PluginSource",
+      "PluginSummary",
       "ReasoningEffortOption",
       "ReasoningSummaryPartAddedNotification",
       "ReasoningSummaryTextDeltaNotification",
@@ -2406,6 +2447,17 @@
       "ThreadSearchResponse",
       "ThreadSearchResult",
       "ThreadSearchTextRange",
+      "ThreadSection",
+      "ThreadSectionCreateParams",
+      "ThreadSectionCreateResponse",
+      "ThreadSectionDeleteParams",
+      "ThreadSectionDeleteResponse",
+      "ThreadSectionListParams",
+      "ThreadSectionListResponse",
+      "ThreadSectionMoveParams",
+      "ThreadSectionMoveResponse",
+      "ThreadSectionUpdateParams",
+      "ThreadSectionUpdateResponse",
       "ThreadSetNameParams",
       "ThreadSetNameResponse",
       "ThreadSettings",

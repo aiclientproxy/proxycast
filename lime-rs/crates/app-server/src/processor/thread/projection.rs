@@ -47,12 +47,21 @@ pub(super) fn lower_thread_list_params(
         page: canonical::PageCursor {
             cursor: params.cursor.clone(),
             limit: params.limit,
-            sort_direction: lower_sort_direction(params.sort_direction),
+            sort_direction: match (params.sort_direction, params.sort_key) {
+                (Some(direction), _) => lower_sort_direction(Some(direction)),
+                (None, Some(v2::ThreadSortKey::SectionPosition)) => canonical::SortDirection::Asc,
+                (None, _) => canonical::SortDirection::Desc,
+            },
         },
         // The current store's flag means "include archived". The projection
         // below applies the v2 exact archived filter to the returned page.
         include_archived: params.archived.unwrap_or(false),
         turns_view: canonical::ThreadTurnsView::NotLoaded,
+        section: params.section_id.clone(),
+        sort_by_section_position: matches!(
+            params.sort_key,
+            Some(v2::ThreadSortKey::SectionPosition)
+        ),
     })
 }
 
@@ -83,6 +92,11 @@ pub(super) fn lower_thread_search_params(
             v2::ThreadSortKey::CreatedAt => thread_store::ThreadSearchSortKey::CreatedAt,
             v2::ThreadSortKey::UpdatedAt => thread_store::ThreadSearchSortKey::UpdatedAt,
             v2::ThreadSortKey::RecencyAt => thread_store::ThreadSearchSortKey::RecencyAt,
+            v2::ThreadSortKey::SectionPosition => {
+                return Err(invalid_params(
+                    "thread/search does not support section_position sorting",
+                ));
+            }
         },
         sort_direction: lower_sort_direction(params.sort_direction),
         source_kinds,
@@ -257,7 +271,9 @@ fn project_thread(thread: canonical::Thread) -> Result<v2::Thread, JsonRpcError>
             .map(|value| value.as_str().to_string()),
         preview: thread.preview,
         ephemeral: metadata_bool(&thread.metadata, &["ephemeral"]).unwrap_or(false),
-        is_pinned: metadata_bool(&thread.metadata, &["isPinned"]).unwrap_or(false),
+        section: project_thread_section(&thread.metadata),
+        section_entered_at: metadata_i64(&thread.metadata, &["sectionEnteredAt"])
+            .map(millis_to_seconds),
         history_mode,
         model_provider: thread.model_provider,
         created_at: millis_to_seconds(thread.created_at_ms),
@@ -615,10 +631,11 @@ fn thread_matches_list_filters(thread: &canonical::Thread, params: &v2::ThreadLi
     if thread.archived != params.archived.unwrap_or(false) {
         return false;
     }
-    if params.is_pinned.is_some_and(|is_pinned| {
-        metadata_bool(&thread.metadata, &["isPinned"]).unwrap_or(false) != is_pinned
-    }) {
-        return false;
+    if let Some(section_id) = params.section_id.as_ref() {
+        let actual = project_thread_section(&thread.metadata).map(|section| section.id);
+        if actual.as_deref() != section_id.as_deref() {
+            return false;
+        }
     }
     if params.model_providers.as_ref().is_some_and(|providers| {
         !providers
@@ -667,6 +684,14 @@ fn thread_matches_list_filters(thread: &canonical::Thread, params: &v2::ThreadLi
         return false;
     }
     true
+}
+
+fn project_thread_section(metadata: &Value) -> Option<v2::ThreadSection> {
+    let section = metadata.get("section")?.as_object()?;
+    Some(v2::ThreadSection {
+        id: section.get("id")?.as_str()?.to_string(),
+        name: section.get("name")?.as_str()?.to_string(),
+    })
 }
 
 fn cwd_matches(filter: &v2::ThreadListCwdFilter, cwd: &str) -> bool {
@@ -1208,6 +1233,16 @@ fn metadata_string(value: &Value, keys: &[&str]) -> Option<String> {
 fn metadata_bool(value: &Value, keys: &[&str]) -> Option<bool> {
     keys.iter()
         .find_map(|key| value.get(key).and_then(Value::as_bool))
+}
+
+fn metadata_i64(value: &Value, keys: &[&str]) -> Option<i64> {
+    keys.iter().find_map(|key| {
+        value.get(key).and_then(|value| {
+            value
+                .as_i64()
+                .or_else(|| value.as_str()?.parse::<i64>().ok())
+        })
+    })
 }
 
 fn metadata_u64(value: &Value, keys: &[&str]) -> Option<u64> {

@@ -15,7 +15,6 @@ import {
   selectActiveSessionTransientItems,
   selectActiveSessionTransientMessages,
   selectActiveSessionTransientTurns,
-  sortTopicsByRecentActivity,
   upsertFreshSessionDraftTopic,
   upsertTopicFromSessionDetail,
 } from "./agentSessionTopicViewModel";
@@ -47,7 +46,6 @@ function createTopic(overrides: Partial<Topic> = {}): Topic {
     status: "done",
     statusReason: "default",
     lastPreview: "preview",
-    isPinned: false,
     hasUnread: false,
     tag: null,
     sourceSessionId: "topic-1",
@@ -256,11 +254,10 @@ describe("agentSessionTopicViewModel", () => {
     });
   });
 
-  it("upsert topic 时应保留本地 pin/unread/tag 并按时间排序", () => {
+  it("upsert topic 时应保留本地 unread/tag 和服务端列表位置", () => {
     const existing = createTopic({
       id: "topic-1",
       updatedAt: new Date(2_000),
-      isPinned: true,
       hasUnread: true,
       tag: "重点",
     });
@@ -273,7 +270,6 @@ describe("agentSessionTopicViewModel", () => {
       title: "远端新标题",
       updatedAt: new Date(5_000),
       workingDir: "/repo/runtime",
-      isPinned: false,
       hasUnread: false,
       tag: null,
     });
@@ -283,7 +279,6 @@ describe("agentSessionTopicViewModel", () => {
     ).toEqual([
       {
         ...detailTopic,
-        isPinned: true,
         hasUnread: true,
         tag: "重点",
         workingDir: "/repo/runtime",
@@ -313,7 +308,7 @@ describe("agentSessionTopicViewModel", () => {
     });
   });
 
-  it("同时间话题排序应优先保留明确属于当前 workspace 的会话", () => {
+  it("详情刷新不应改写 App Server 返回的话题顺序", () => {
     const legacy = createTopic({
       id: "topic-legacy",
       createdAt: new Date(1_000),
@@ -328,22 +323,14 @@ describe("agentSessionTopicViewModel", () => {
     });
 
     expect(
-      sortTopicsByRecentActivity([legacy, current], {
-        workspaceId: "workspace-1",
-      }).map((topic) => topic.id),
-    ).toEqual(["topic-current", "topic-legacy"]);
-    expect(
       upsertTopicFromSessionDetail(
         [legacy, current],
         {
           ...legacy,
           title: "历史详情已刷新",
         },
-        {
-          workspaceId: "workspace-1",
-        },
       ).map((topic) => topic.id),
-    ).toEqual(["topic-current", "topic-legacy"]);
+    ).toEqual(["topic-legacy", "topic-current"]);
   });
 
   it("session detail 缺少 workspace 时不应抹掉列表已确认的 workspace 归属", () => {
@@ -358,9 +345,7 @@ describe("agentSessionTopicViewModel", () => {
     });
 
     expect(
-      upsertTopicFromSessionDetail([existing], detailTopic, {
-        workspaceId: "workspace-1",
-      })[0],
+      upsertTopicFromSessionDetail([existing], detailTopic)[0],
     ).toMatchObject({
       id: "topic-current",
       title: "详情标题",
@@ -368,7 +353,7 @@ describe("agentSessionTopicViewModel", () => {
     });
   });
 
-  it("补入已验证会话时应复用最近话题排序，避免 legacy 会话插到当前 workspace 前面", () => {
+  it("补入不在当前页的已验证会话时应放在列表首位", () => {
     const current = createTopic({
       id: "topic-current",
       createdAt: new Date(1_000),
@@ -387,9 +372,8 @@ describe("agentSessionTopicViewModel", () => {
           messages_count: 1,
           messages: [],
         }),
-        { workspaceId: "workspace-1" },
       ).map((topic) => topic.id),
-    ).toEqual(["topic-current", "topic-legacy"]);
+    ).toEqual(["topic-legacy", "topic-current"]);
   });
 
   it("应把新建 session 草稿插入到 topic 顶部并去重", () => {
@@ -421,7 +405,6 @@ describe("agentSessionTopicViewModel", () => {
         executionStrategy: "react",
         status: "draft",
         lastPreview: "等待你补充任务需求后开始执行。",
-        isPinned: false,
         hasUnread: false,
         tag: null,
         sourceSessionId: "session-new",
@@ -522,7 +505,7 @@ describe("agentSessionTopicViewModel", () => {
     ]);
   });
 
-  it("live snapshot 更新最近活动时间后应重排到顶部", () => {
+  it("live snapshot 更新最近活动时间后不应改写服务端列表顺序", () => {
     const stale = createTopic({
       id: "topic-stale",
       updatedAt: new Date(1_000),
@@ -533,10 +516,10 @@ describe("agentSessionTopicViewModel", () => {
     });
 
     expect(
-      applyTopicSnapshotToTopics([stale, recent], "topic-stale", {
+      applyTopicSnapshotToTopics([recent, stale], "topic-stale", {
         updatedAt: new Date(8_000),
       }).map((topic) => topic.id),
-    ).toEqual(["topic-stale", "topic-recent"]);
+    ).toEqual(["topic-recent", "topic-stale"]);
   });
 
   it("live snapshot 未改变或目标不存在时应复用原 topic 数组", () => {

@@ -3139,15 +3139,22 @@ export function agentSessionEventNotification(
 }
 
 function isAgentSessionRawSideChannelType(type: string): boolean {
-  return (
-    type.startsWith("action.") ||
-    type.startsWith("approval.") ||
-    type.startsWith("provider.") ||
-    type.startsWith("image_task.") ||
-    type.startsWith("image_task_") ||
-    type.startsWith("runtime.")
-  );
+  return AGENT_SESSION_RAW_SIDE_CHANNEL_TYPES.has(type);
 }
+
+const AGENT_SESSION_RAW_SIDE_CHANNEL_TYPES = new Set([
+  "message.created",
+  "provider.request.started",
+  "provider.first_event.received",
+  "provider.first_text_delta.received",
+  "provider.failed",
+  "provider.canceled",
+  "image_task.created",
+  "image_task.parameters.required",
+  "image_task_parameters_required",
+  "image_task.presentation.generated",
+  "runtime.status",
+]);
 
 export function isWorkspaceRightSurfacePendingChangedNotification(
   message: JsonRpcMessage,

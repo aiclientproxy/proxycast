@@ -442,6 +442,10 @@ describe("Agent API 治理护栏", () => {
 
   it("listAgentRuntimeSessions 应返回现役 runtime 会话列表", async () => {
     mockAppServerResponse({
+      data: [],
+      nextCursor: null,
+    });
+    mockAppServerResponse({
       data: [
         canonicalThread({
           id: "thread-runtime-1",
@@ -496,13 +500,21 @@ describe("Agent API 治理护栏", () => {
         queued_turn_count: 0,
       },
     ]);
-    expectAppServerRequest(1, "thread/list", {
+    expectAppServerRequest(1, "threadSection/list", {
+      limit: 100,
+    });
+    expectAppServerRequest(2, "thread/list", {
       archived: false,
       limit: 100,
+      sectionId: null,
     });
   });
 
   it("listAgentRuntimeSessions 应支持请求包含归档会话", async () => {
+    mockAppServerResponse({
+      data: [],
+      nextCursor: null,
+    });
     mockAppServerResponse({
       data: [],
       nextCursor: null,
@@ -541,17 +553,26 @@ describe("Agent API 治理护栏", () => {
       },
     ]);
 
-    expectAppServerRequest(1, "thread/list", {
-      archived: false,
+    expectAppServerRequest(1, "threadSection/list", {
       limit: 100,
     });
     expectAppServerRequest(2, "thread/list", {
+      archived: false,
+      limit: 100,
+      sectionId: null,
+    });
+    expectAppServerRequest(3, "thread/list", {
       archived: true,
       limit: 100,
+      sectionId: null,
     });
   });
 
   it("listAgentRuntimeSessions 应支持工作区限流与仅归档过滤", async () => {
+    mockAppServerResponse({
+      data: [],
+      nextCursor: null,
+    });
     mockAppServerResponse({
       data: [
         canonicalThread({
@@ -594,9 +615,13 @@ describe("Agent API 治理护栏", () => {
       },
     ]);
 
-    expectAppServerRequest(1, "thread/list", {
+    expectAppServerRequest(1, "threadSection/list", {
+      limit: 100,
+    });
+    expectAppServerRequest(2, "thread/list", {
       archived: true,
       limit: 12,
+      sectionId: null,
     });
   });
 

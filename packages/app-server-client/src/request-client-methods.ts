@@ -50,6 +50,36 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "optional-empty",
     },
     {
+      name: "moveThreadToSection",
+      method: protocol.METHOD_THREAD_SECTION_MOVE,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "listThreadSections",
+      method: protocol.METHOD_THREAD_SECTION_LIST,
+      kind: "request",
+      params: "optional-empty",
+    },
+    {
+      name: "createThreadSection",
+      method: protocol.METHOD_THREAD_SECTION_CREATE,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "updateThreadSection",
+      method: protocol.METHOD_THREAD_SECTION_UPDATE,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "deleteThreadSection",
+      method: protocol.METHOD_THREAD_SECTION_DELETE,
+      kind: "request",
+      params: "required",
+    },
+    {
       name: "listLoadedThreads",
       method: protocol.METHOD_THREAD_LOADED_LIST,
       kind: "request",
@@ -534,6 +564,12 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       method: protocol.METHOD_PLUGIN_LIST,
       kind: "request",
       params: "optional-empty",
+    },
+    {
+      name: "searchPlugins",
+      method: protocol.METHOD_PLUGIN_SEARCH,
+      kind: "request",
+      params: "required",
     },
     {
       name: "readPluginCatalog",

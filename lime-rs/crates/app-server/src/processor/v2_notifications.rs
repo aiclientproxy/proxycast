@@ -81,6 +81,9 @@ impl V2NotificationProjector {
                         .collect(),
                 )
             }
+            "approval.session_cache.hit" | "provider.step" => {
+                return EventProjection::Direct(Vec::new());
+            }
             "thread.goal.continuation" => return EventProjection::Direct(Vec::new()),
             "thread.settings.updated" => return self.project_thread_settings_updated(event),
             "provider.usage" => return self.project_token_usage(event),
@@ -144,12 +147,16 @@ impl V2NotificationProjector {
             "reasoning.summary" => self.project_reasoning_summary_text_delta(event),
             "reasoning.summary_part_added" => self.project_reasoning_summary_part_added(event),
             "reasoning.delta" => self.project_reasoning_text_delta(event),
+            "reasoning.final" => self.project_reasoning_final(event),
             "model.server_reported" => return EventProjection::Direct(Vec::new()),
             "model.rerouted" => return self.project_model_rerouted(event),
             "model.verification" => return self.project_model_verification(event),
             "provider_safety_buffering" => self.project_model_safety_buffering(event),
             "runtime.warning" => return warning::project(event),
-            _ => return EventProjection::SideChannel,
+            _ if is_allowed_raw_side_channel_type(&event.event_type) => {
+                return EventProjection::SideChannel;
+            }
+            _ => return EventProjection::Reject(projection_error(event)),
         };
         match notification {
             Some(notification) => EventProjection::Direct(vec![notification.into()]),
@@ -544,6 +551,21 @@ impl V2NotificationProjector {
             },
         ))
     }
+
+    fn project_reasoning_final(&self, event: &AgentEvent) -> Option<ServerNotification> {
+        let (thread_id, turn_id, item_id) = reasoning_identity(event)?;
+        let delta = text_from_payload(&event.payload)?;
+        let summary_index = payload_i64(&event.payload, "summaryIndex").unwrap_or_default();
+        Some(ServerNotification::ReasoningSummaryTextDelta(
+            v2::ReasoningSummaryTextDeltaNotification {
+                thread_id,
+                turn_id,
+                item_id,
+                delta,
+                summary_index,
+            },
+        ))
+    }
 }
 
 pub(super) fn project_events(
@@ -601,11 +623,31 @@ fn payload_string_array(payload: &Value, key: &str) -> Option<Vec<String>> {
         .collect()
 }
 
+fn is_allowed_raw_side_channel_type(event_type: &str) -> bool {
+    matches!(
+        event_type,
+        "message.created"
+            | "provider.request.started"
+            | "provider.first_event.received"
+            | "provider.first_text_delta.received"
+            | "provider.failed"
+            | "provider.canceled"
+            | "image_task.created"
+            | "image_task.parameters.required"
+            | "image_task_parameters_required"
+            | "image_task.presentation.generated"
+            | "runtime.status"
+    )
+}
+
 fn reasoning_identity(event: &AgentEvent) -> Option<(String, String, String)> {
     Some((
         required_event_id(event.thread_id.as_deref())?,
         required_event_id(event.turn_id.as_deref())?,
-        payload_string(&event.payload, &["itemId"])?,
+        payload_string(
+            &event.payload,
+            &["itemId", "item_id", "reasoningId", "reasoning_id"],
+        )?,
     ))
 }
 
@@ -1438,6 +1480,47 @@ mod tests {
     }
 
     #[test]
+    fn maps_reasoning_final_to_visible_summary_delta() {
+        let notifications = V2NotificationProjector::default()
+            .project(event(
+                "reasoning.final",
+                json!({
+                    "reasoningId": "reasoning-final-1",
+                    "text": "先核对事实",
+                    "summaryIndex": 2
+                }),
+            ))
+            .expect("reasoning final projection");
+
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0].method, "item/reasoning/summaryTextDelta");
+        assert_eq!(
+            notifications[0].params.as_ref().expect("summary params"),
+            &json!({
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "itemId": "reasoning-final-1",
+                "delta": "先核对事实",
+                "summaryIndex": 2
+            })
+        );
+    }
+
+    #[test]
+    fn reasoning_final_fails_closed_without_identity_or_text() {
+        for payload in [
+            json!({"text": "缺少 reasoning id"}),
+            json!({"reasoningId": "reasoning-final-1"}),
+        ] {
+            let error = V2NotificationProjector::default()
+                .project(event("reasoning.final", payload))
+                .expect_err("malformed reasoning final must fail closed");
+            assert_eq!(error.code, error_codes::RUNTIME_ERROR);
+            assert!(error.message.contains("reasoning.final"));
+        }
+    }
+
+    #[test]
     fn malformed_reasoning_notification_is_rejected_without_wrapper_fallback() {
         let mut projector = V2NotificationProjector::default();
         let error = projector
@@ -1452,12 +1535,53 @@ mod tests {
     }
 
     #[test]
-    fn side_channel_keeps_the_deprecated_envelope() {
-        let mut projector = V2NotificationProjector::default();
-        let notifications = projector
-            .project(event("provider.request.started", json!({})))
-            .expect("side channel");
-        assert_eq!(notifications[0].method, "agentSession/event");
+    fn explicit_side_channels_keep_the_deprecated_envelope() {
+        for event_type in [
+            "message.created",
+            "provider.request.started",
+            "provider.first_event.received",
+            "provider.first_text_delta.received",
+            "provider.failed",
+            "provider.canceled",
+            "image_task.created",
+            "image_task.parameters.required",
+            "image_task_parameters_required",
+            "image_task.presentation.generated",
+            "runtime.status",
+        ] {
+            let notifications = V2NotificationProjector::default()
+                .project(event(event_type, json!({})))
+                .expect("side channel");
+            assert_eq!(notifications[0].method, "agentSession/event");
+        }
+    }
+
+    #[test]
+    fn unknown_prefixed_side_channels_fail_closed() {
+        for event_type in [
+            "action.unknown",
+            "approval.unknown",
+            "provider.unknown",
+            "image_task.unknown",
+            "image_task_unknown",
+            "runtime.unknown",
+        ] {
+            let error = V2NotificationProjector::default()
+                .project(event(event_type, json!({})))
+                .expect_err("unknown prefixed event must fail closed");
+            assert_eq!(error.code, error_codes::RUNTIME_ERROR);
+            assert!(error.message.contains(event_type));
+        }
+    }
+
+    #[test]
+    fn audit_only_events_are_not_sent_to_clients() {
+        for event_type in ["approval.session_cache.hit", "provider.step"] {
+            let notifications = V2NotificationProjector::default()
+                .project(event(event_type, json!({})))
+                .expect("audit-only event");
+            assert!(notifications.is_empty(), "{event_type}");
+        }
     }
 
     #[test]

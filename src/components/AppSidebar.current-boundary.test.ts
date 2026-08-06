@@ -62,7 +62,7 @@ describe("AppSidebar current App Server session boundary", () => {
     const archiveHandler = sourceBetween(
       source,
       "const toggleSessionArchive = useCallback(",
-      "const deleteConversation = useCallback(",
+      "const toggleSessionPinned = useCallback(",
     );
 
     expect(archiveHandler).toContain(
@@ -79,6 +79,38 @@ describe("AppSidebar current App Server session boundary", () => {
     expect(archiveHandler).not.toContain("safeInvoke");
     expect(archiveHandler).not.toContain("invokeCommand");
     expect(archiveHandler).not.toContain("agent_runtime_");
+  });
+
+  it("侧栏分组移动只能消费 durable Thread Section，不得恢复本地收藏事实源", () => {
+    const actionSource = readSource(
+      "src/components/app-sidebar/useAppSidebarConversationActions.ts",
+    );
+    const moveHandler = sourceBetween(
+      actionSource,
+      "const moveSessionToSection = useCallback(",
+      "const toggleSessionPinned = useCallback(",
+    );
+    const pinnedHandler = sourceBetween(
+      actionSource,
+      "const toggleSessionPinned = useCallback(",
+      "const deleteConversation = useCallback(",
+    );
+    const shelfSource = readSource(
+      "src/components/app-sidebar/AppSidebarConversationShelf.tsx",
+    );
+
+    expect(moveHandler).toContain("await moveThreadToSection({");
+    expect(moveHandler).toContain("sectionId: targetSectionId");
+    expect(moveHandler).toContain(
+      "moveSidebarSessionSectionOptimistically(nextSession)",
+    );
+    expect(pinnedHandler).toContain("moveSessionToSection(");
+    expect(pinnedHandler).toContain("PINNED_THREAD_SECTION");
+    expect(shelfSource).toContain("activeConversationGroups.threadSections");
+    expect(shelfSource).not.toContain("favorite-session-ids");
+    expect(shelfSource).not.toContain("favoriteSessionIds");
+    expect(actionSource).not.toContain(".isPinned");
+    expect(actionSource).not.toContain("is_pinned");
   });
 
   it("agentRuntime session gateway 不应把 delete 回流到 legacy command", () => {

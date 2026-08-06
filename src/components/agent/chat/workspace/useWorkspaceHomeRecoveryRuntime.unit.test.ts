@@ -12,7 +12,6 @@ function topic(overrides: Partial<Topic> = {}): Topic {
     executionStrategy: "react",
     status: "running",
     lastPreview: "  正在整理资料  ",
-    isPinned: false,
     hasUnread: false,
     sourceSessionId: "session-1",
     ...overrides,

@@ -915,8 +915,7 @@ fn thread_metadata_update_round_trips_exact_codex_shape() {
                 "sha": "abc123",
                 "branch": null,
                 "originUrl": "https://example.test/repo.git"
-            },
-            "isPinned": true
+            }
         }
     });
     let request: ClientRequest =
@@ -2080,7 +2079,6 @@ fn lifecycle_notifications_round_trip_only_the_v2_shapes() {
         "sessionId": "session_1",
         "preview": "",
         "ephemeral": false,
-        "isPinned": false,
         "historyMode": "legacy",
         "modelProvider": "openai",
         "createdAt": 10,
@@ -2232,6 +2230,63 @@ fn lifecycle_notifications_round_trip_only_the_v2_shapes() {
             "retired agentSession lifecycle payload must fail closed"
         );
     }
+}
+
+#[test]
+fn plugin_search_matches_codex_request_and_response_wire() {
+    let request = json!({
+        "method": "plugin/search",
+        "id": 41,
+        "params": {
+            "searchTerm": "browser",
+            "scope": "workspace",
+            "cwds": ["/workspace"],
+            "cursor": null,
+            "limit": 16
+        }
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(request.clone()).expect("decode plugin/search request");
+    assert_eq!(decoded.method(), Method::PluginSearch);
+    assert_eq!(
+        serde_json::to_value(decoded).expect("encode plugin/search request"),
+        request
+    );
+
+    let response = json!({
+        "data": [{
+            "plugin": {
+                "id": "browser",
+                "remotePluginId": null,
+                "version": "1.0.0",
+                "localVersion": null,
+                "name": "Browser",
+                "shareContext": null,
+                "source": {"type": "local", "path": "/plugins/browser"},
+                "installed": false,
+                "installedAt": null,
+                "enabled": false,
+                "installPolicy": "AVAILABLE",
+                "installPolicySource": null,
+                "mustShowInstallationInterstitial": null,
+                "authPolicy": "ON_USE",
+                "availability": "AVAILABLE",
+                "disabledReason": null,
+                "eligiblePlanTypes": null,
+                "interface": null,
+                "keywords": []
+            },
+            "marketplaceName": "openai-bundled",
+            "marketplacePath": null
+        }],
+        "nextCursor": null
+    });
+    let decoded: PluginSearchResponse =
+        serde_json::from_value(response.clone()).expect("decode plugin/search response");
+    assert_eq!(
+        serde_json::to_value(decoded).expect("encode plugin/search response"),
+        response
+    );
 }
 
 #[test]

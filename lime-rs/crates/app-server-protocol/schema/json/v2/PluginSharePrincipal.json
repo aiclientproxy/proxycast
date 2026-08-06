@@ -1,0 +1,43 @@
+{
+  "$defs": {
+    "PluginSharePrincipalRole": {
+      "enum": [
+        "editor",
+        "owner",
+        "reader"
+      ],
+      "type": "string"
+    },
+    "PluginSharePrincipalType": {
+      "enum": [
+        "group",
+        "user",
+        "workspace"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "principalId": {
+      "type": "string"
+    },
+    "principalType": {
+      "$ref": "#/$defs/PluginSharePrincipalType"
+    },
+    "role": {
+      "$ref": "#/$defs/PluginSharePrincipalRole"
+    }
+  },
+  "required": [
+    "name",
+    "principalId",
+    "principalType",
+    "role"
+  ],
+  "title": "PluginSharePrincipal",
+  "type": "object"
+}

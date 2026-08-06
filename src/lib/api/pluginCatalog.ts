@@ -12,11 +12,14 @@ import type {
   AppServerPluginCatalogReadResponse,
   AppServerPluginCatalogUninstallParams,
   AppServerPluginCatalogUninstallResponse,
+  AppServerPluginSearchParams,
+  AppServerPluginSearchResponse,
 } from "@/lib/api/appServerTypes";
 
 export type PluginCatalogClient = Pick<
   AppServerClient,
   | "listPluginCatalog"
+  | "searchPlugins"
   | "setPluginCatalogEnabled"
   | "readPluginCatalog"
   | "installPluginCatalog"
@@ -52,6 +55,13 @@ export async function listPluginCatalog(
   client: PluginCatalogClient = new AppServerClient(),
 ): Promise<AppServerPluginCatalogListResponse> {
   return (await client.listPluginCatalog(params)).result;
+}
+
+export async function searchPluginCatalog(
+  params: AppServerPluginSearchParams,
+  client: PluginCatalogClient = new AppServerClient(),
+): Promise<AppServerPluginSearchResponse> {
+  return (await client.searchPlugins(params)).result;
 }
 
 export async function setPluginCatalogEnabled(

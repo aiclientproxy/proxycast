@@ -9,10 +9,12 @@ use agent_protocol::{Thread, ThreadId};
 
 use crate::{
     AppendThreadItemsParams, ApplyThreadHistoryParams, ApplyThreadHistoryResult,
-    ArchiveThreadParams, CreateThreadParams, DeleteThreadParams, ItemPage, ListItemsParams,
-    ListThreadsParams, ListTurnsParams, ReadThreadParams, SearchThreadOccurrencesParams,
-    SearchThreadsParams, ThreadOccurrenceSearchPage, ThreadPage, ThreadSearchPage,
-    ThreadStoreResult, TurnPage, UpdateThreadMetadataParams,
+    ArchiveThreadParams, CreateThreadParams, CreateThreadSectionParams, DeleteThreadParams,
+    DeleteThreadSectionParams, ItemPage, ListItemsParams, ListThreadSectionsParams,
+    ListThreadsParams, ListTurnsParams, MoveThreadToSectionParams, ReadThreadParams,
+    RenameThreadSectionParams, SearchThreadOccurrencesParams, SearchThreadsParams,
+    StoredThreadSection, ThreadOccurrenceSearchPage, ThreadPage, ThreadSearchPage,
+    ThreadSectionPage, ThreadStoreResult, TurnPage, UpdateThreadMetadataParams,
 };
 
 /// Future returned by [`ThreadStore`] operations.
@@ -35,6 +37,31 @@ pub trait ThreadStore: Any + Send + Sync {
 
     /// Lists canonical threads using a store-owned opaque cursor.
     fn list_threads(&self, params: ListThreadsParams) -> ThreadStoreFuture<'_, ThreadPage>;
+
+    fn list_thread_sections(
+        &self,
+        params: ListThreadSectionsParams,
+    ) -> ThreadStoreFuture<'_, ThreadSectionPage>;
+
+    fn create_thread_section(
+        &self,
+        params: CreateThreadSectionParams,
+    ) -> ThreadStoreFuture<'_, StoredThreadSection>;
+
+    fn rename_thread_section(
+        &self,
+        params: RenameThreadSectionParams,
+    ) -> ThreadStoreFuture<'_, Option<StoredThreadSection>>;
+
+    fn delete_thread_section(
+        &self,
+        params: DeleteThreadSectionParams,
+    ) -> ThreadStoreFuture<'_, bool>;
+
+    fn move_thread_to_section(
+        &self,
+        params: MoveThreadToSectionParams,
+    ) -> ThreadStoreFuture<'_, ()>;
 
     /// Searches visible user and assistant conversation text across canonical threads.
     fn search_threads(

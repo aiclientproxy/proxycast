@@ -3544,7 +3544,7 @@ mod tests {
                         session_id: "session-ordered".to_string(),
                         thread_id: Some(thread_id.as_str().to_string()),
                         turn_id: Some("turn-1".to_string()),
-                        event_type: "provider.step".to_string(),
+                        event_type: "provider.request.started".to_string(),
                         timestamp: "2026-07-19T00:00:00Z".to_string(),
                         payload: json!({ "phase": "streaming" }),
                     },

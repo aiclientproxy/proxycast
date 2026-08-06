@@ -2,7 +2,7 @@
 
 状态：implementation in progress / coverage baseline
 
-上游事实源是 Codex 4c43465133428898aa84f0bfc02c306ed65fb66a。表中的 72 个 notification 和 11 个 reverse request 是审计全集，不代表 Lime 会无条件复制所有 Codex 产品功能。xuanlan 原稿记录的 10 类 request 未包含当前 revision 的 currentTime/read，本文件以 Codex/v1 机器清单为准。
+上游事实源是 Codex c4f42d161ae44a8d696ee9fb595709661979d187。表中的 72 个 notification 和 11 个 reverse request 是审计全集，不代表 Lime 会无条件复制所有 Codex 产品功能。xuanlan 原稿记录的 10 类 request 未包含当前 revision 的 currentTime/read，本文件以 Codex/v1 机器清单为准。
 
 每项必须有且只有一种裁决：
 
@@ -17,51 +17,51 @@
 
 ## 1. Thread、Turn 与 Hook
 
-|   # | Method                          | 目标出口 | 当前裁决 | v2 投影                                               |
-| --: | ------------------------------- | -------- | -------- | ----------------------------------------------------- |
-|   1 | error                           | TP/HS    | current  | typed live/durable；true 重试，false 等权威 Turn      |
-|   2 | thread/started                  | HS       | current  | 建立 Thread metadata，不把空 turns 当完整 history     |
-|   3 | thread/status/changed           | HS/PI    | current  | notLoaded、idle、systemError、active 与 waiting flags |
-|   4 | thread/archived                 | GN/HS    | current  | 侧栏归档，当前页只读                                  |
-|   5 | thread/deleted                  | GN       | current  | 当前页已删除态，不删除 Project                        |
-|   6 | thread/unarchived               | GN/HS    | current  | 恢复可见/可操作状态                                   |
-|   7 | thread/closed                   | HS       | current  | 清除 live spinner 和 pending interaction              |
-|   8 | skills/changed                  | GN       | current  | 瞬时失效并重新读取 Composer current Skill catalog     |
-|   9 | thread/name/updated             | HS       | current  | Header 与侧栏名称                                     |
-|  10 | thread/goal/updated             | HS       | current  | goal/阶段入口，不映射 Rust ProductionPlan             |
-|  11 | thread/goal/cleared             | HS       | current  | 清除当前 goal indicator                               |
-|  12 | thread/environment/connected    | HS       | planned  | 受控环境状态，无本地 fallback                         |
-|  13 | thread/environment/disconnected | HS       | planned  | 断开与受影响能力                                      |
-|  14 | thread/settings/updated         | HS       | current  | 下一 Turn model、reasoning、permission 摘要           |
-|  15 | thread/tokenUsage/updated       | TP/HS    | current  | 本 Turn/总用量，节流更新                              |
-|  16 | turn/started                    | TL/TP    | current  | 建立 Turn 与原始 Item 顺序                            |
-|  17 | hook/started                    | TL/HS    | planned  | Hook activity，run id 保留                            |
-|  18 | turn/completed                  | TL/TP    | current  | 权威 Turn 终态并清理 pending                          |
-|  19 | hook/completed                  | TL       | planned  | Hook status、duration、entries 与阻断结果             |
+|   # | Method                          | 目标出口 | 当前裁决               | v2 投影                                                           |
+| --: | ------------------------------- | -------- | ---------------------- | ----------------------------------------------------------------- |
+|   1 | error                           | TP/HS    | current                | typed live/durable；true 重试，false 等权威 Turn                  |
+|   2 | thread/started                  | HS       | current                | 建立 Thread metadata，不把空 turns 当完整 history                 |
+|   3 | thread/status/changed           | HS/PI    | current                | notLoaded、idle、systemError、active 与 waiting flags             |
+|   4 | thread/archived                 | GN/HS    | current                | 侧栏归档，当前页只读                                              |
+|   5 | thread/deleted                  | GN       | current                | 当前页已删除态，不删除 Project                                    |
+|   6 | thread/unarchived               | GN/HS    | current                | 恢复可见/可操作状态                                               |
+|   7 | thread/closed                   | HS       | current                | 清除 live spinner 和 pending interaction                          |
+|   8 | skills/changed                  | GN       | current                | 瞬时失效并重新读取 Composer current Skill catalog                 |
+|   9 | thread/name/updated             | HS       | current                | Header 与侧栏名称                                                 |
+|  10 | thread/goal/updated             | HS       | current                | goal/阶段入口，不映射 Rust ProductionPlan                         |
+|  11 | thread/goal/cleared             | HS       | current                | 清除当前 goal indicator                                           |
+|  12 | thread/environment/connected    | HS       | planned                | 受控环境状态，无本地 fallback                                     |
+|  13 | thread/environment/disconnected | HS       | planned                | 断开与受影响能力                                                  |
+|  14 | thread/settings/updated         | HS       | current                | 下一 Turn model、reasoning、permission 摘要                       |
+|  15 | thread/tokenUsage/updated       | TP/HS    | current                | 本 Turn/总用量，节流更新                                          |
+|  16 | turn/started                    | TL/TP    | current                | 建立 Turn 与原始 Item 顺序                                        |
+|  17 | hook/started                    | TL/HS    | planned                | Hook activity，run id 保留                                        |
+|  18 | turn/completed                  | TL/TP    | current                | 权威 Turn 终态并清理 pending                                      |
+|  19 | hook/completed                  | TL       | planned                | Hook status、duration、entries 与阻断结果                         |
 |  20 | turn/diff/updated               | DX       | product-scope-excluded | Codex raw unified diff；Lime 以 canonical FileChange 为唯一事实源 |
-|  21 | turn/plan/updated               | TP       | current  | canonical update_plan checklist，实时/冷恢复一致      |
+|  21 | turn/plan/updated               | TP       | current                | canonical update_plan checklist，实时/冷恢复一致                  |
 
 ## 2. Item 生命周期、流与进程
 
-|   # | Method                                    | 目标出口 | 当前裁决               | v2 投影                                     |
-| --: | ----------------------------------------- | -------- | ---------------------- | ------------------------------------------- |
-|  22 | item/started                              | TL       | current                | 按 typed 联合建立 Item；未知安全 fail visible |
-|  23 | item/autoApprovalReview/started           | PI/TL    | planned                | 目标 Item 的 Guardian review 进行中         |
-|  24 | item/autoApprovalReview/completed         | PI/TL    | planned                | approved/denied/timedOut/aborted 与风险摘要 |
-|  25 | item/completed                            | TL       | current                | Item 权威终态覆盖流式草稿                   |
-|  26 | rawResponseItem/completed                 | DX       | product-scope-excluded | 不参与正式 Item 或终态合成                  |
-|  27 | rawResponse/completed                     | DX       | product-scope-excluded | 不进入普通时间线                            |
-|  28 | item/agentMessage/delta                   | TL       | current                | 合批 Markdown stream                        |
-|  29 | item/plan/delta                           | TL       | current                | 临时计划草稿，completed 整体替换            |
-|  30 | command/exec/outputDelta                  | DX/GN    | product-scope-excluded | 独立 command API，不能混入 Agent command    |
+|   # | Method                                    | 目标出口 | 当前裁决               | v2 投影                                                     |
+| --: | ----------------------------------------- | -------- | ---------------------- | ----------------------------------------------------------- |
+|  22 | item/started                              | TL       | current                | 按 typed 联合建立 Item；未知安全 fail visible               |
+|  23 | item/autoApprovalReview/started           | PI/TL    | planned                | 目标 Item 的 Guardian review 进行中                         |
+|  24 | item/autoApprovalReview/completed         | PI/TL    | planned                | approved/denied/timedOut/aborted 与风险摘要                 |
+|  25 | item/completed                            | TL       | current                | Item 权威终态覆盖流式草稿                                   |
+|  26 | rawResponseItem/completed                 | DX       | product-scope-excluded | 不参与正式 Item 或终态合成                                  |
+|  27 | rawResponse/completed                     | DX       | product-scope-excluded | 不进入普通时间线                                            |
+|  28 | item/agentMessage/delta                   | TL       | current                | 合批 Markdown stream                                        |
+|  29 | item/plan/delta                           | TL       | current                | 临时计划草稿，completed 整体替换                            |
+|  30 | command/exec/outputDelta                  | DX/GN    | product-scope-excluded | 独立 command API，不能混入 Agent command                    |
 |  31 | process/outputDelta                       | DX       | product-scope-excluded | standalone unsandboxed process/spawn 流；不进入 Lime 产品链 |
-|  32 | process/exited                            | DX       | product-scope-excluded | standalone process 终态；不进入 Lime 产品链 |
-|  33 | item/commandExecution/outputDelta         | TL       | current                | 有界 stdout/stderr buffer                   |
-|  34 | item/commandExecution/terminalInteraction | TL/DX    | current                | 复用原 Command Item；typed/cold read 仅保留脱敏摘要 |
-|  35 | item/fileChange/outputDelta               | DX       | deprecated             | 只记录兼容诊断，不覆盖 patch                |
-|  36 | item/fileChange/patchUpdated              | TL/TP    | current                | replace changes snapshot                    |
-|  37 | serverRequest/resolved                    | PI       | current                | 按 interaction identity 终结表单            |
-|  38 | item/mcpToolCall/progress                 | TL       | current                | 有界 MCP 进度列表                           |
+|  32 | process/exited                            | DX       | product-scope-excluded | standalone process 终态；不进入 Lime 产品链                 |
+|  33 | item/commandExecution/outputDelta         | TL       | current                | 有界 stdout/stderr buffer                                   |
+|  34 | item/commandExecution/terminalInteraction | TL/DX    | current                | 复用原 Command Item；typed/cold read 仅保留脱敏摘要         |
+|  35 | item/fileChange/outputDelta               | DX       | deprecated             | 只记录兼容诊断，不覆盖 patch                                |
+|  36 | item/fileChange/patchUpdated              | TL/TP    | current                | replace changes snapshot                                    |
+|  37 | serverRequest/resolved                    | PI       | current                | 按 interaction identity 终结表单                            |
+|  38 | item/mcpToolCall/progress                 | TL       | current                | 有界 MCP 进度列表                                           |
 
 ## 3. MCP、账号、应用与系统资源
 

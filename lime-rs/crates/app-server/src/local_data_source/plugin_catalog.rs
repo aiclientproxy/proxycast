@@ -1,9 +1,11 @@
 use app_server_protocol::protocol::v2::{
-    PluginCatalogCapability, PluginCatalogDetail, PluginCatalogHook, PluginCatalogInstallParams,
-    PluginCatalogInstallResponse, PluginCatalogInstalledParams, PluginCatalogListParams,
-    PluginCatalogListResponse, PluginCatalogReadParams, PluginCatalogReadResponse,
-    PluginCatalogSummary, PluginCatalogUiResource, PluginCatalogUninstallParams,
-    PluginCatalogUninstallResponse,
+    PluginAuthPolicy, PluginAvailability, PluginCatalogCapability, PluginCatalogDetail,
+    PluginCatalogHook, PluginCatalogInstallParams, PluginCatalogInstallResponse,
+    PluginCatalogInstalledParams, PluginCatalogListParams, PluginCatalogListResponse,
+    PluginCatalogReadParams, PluginCatalogReadResponse, PluginCatalogSummary,
+    PluginCatalogUiResource, PluginCatalogUninstallParams, PluginCatalogUninstallResponse,
+    PluginInstallPolicy, PluginInterface, PluginSearchParams, PluginSearchResponse,
+    PluginSearchResult, PluginSearchScope, PluginSource, PluginSummary,
 };
 use chrono::Utc;
 use lime_mcp::{McpRuntimeServerSpec, McpServerConfig, McpServerTransport};
@@ -118,6 +120,121 @@ pub(crate) fn installed(
         plugins: summaries,
         generated_at: now_iso(),
     })
+}
+
+pub(crate) fn search(
+    plugin_data_root: &Path,
+    params: PluginSearchParams,
+) -> Result<PluginSearchResponse, String> {
+    const DEFAULT_LIMIT: u32 = 16;
+    const MAX_LIMIT: u32 = 1_000;
+
+    let search_term = params.search_term.trim();
+    if search_term.is_empty() {
+        return Ok(PluginSearchResponse {
+            data: Vec::new(),
+            next_cursor: None,
+        });
+    }
+
+    let source = match params.scope {
+        Some(PluginSearchScope::Global) => Some("bundled".to_string()),
+        Some(PluginSearchScope::Workspace) => Some("repo".to_string()),
+        Some(PluginSearchScope::Personal) => Some("personal".to_string()),
+        None => None,
+    };
+    let marketplace_paths = params
+        .cwds
+        .unwrap_or_default()
+        .into_iter()
+        .map(PathBuf::from)
+        .map(|cwd| cwd.join(".agents/plugins/marketplace.json"))
+        .filter(|path| path.is_file())
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect();
+    let catalog = list(
+        plugin_data_root,
+        PluginCatalogListParams {
+            query: Some(search_term.to_string()),
+            source,
+            marketplace_paths,
+        },
+    )?;
+
+    let offset = params
+        .cursor
+        .as_deref()
+        .unwrap_or("0")
+        .parse::<usize>()
+        .map_err(|_| "plugin/search cursor 必须是非负整数。".to_string())?;
+    let limit = params.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT) as usize;
+    let end = offset.saturating_add(limit).min(catalog.plugins.len());
+    let data = catalog.plugins[offset.min(catalog.plugins.len())..end]
+        .iter()
+        .cloned()
+        .map(plugin_search_result)
+        .collect::<Vec<_>>();
+    let next_cursor = (end < catalog.plugins.len()).then(|| end.to_string());
+
+    Ok(PluginSearchResponse { data, next_cursor })
+}
+
+fn plugin_search_result(summary: PluginCatalogSummary) -> PluginSearchResult {
+    let marketplace_name = summary.marketplace_id.clone();
+    PluginSearchResult {
+        marketplace_name,
+        marketplace_path: None,
+        plugin: PluginSummary {
+            id: summary.id,
+            remote_plugin_id: None,
+            version: Some(summary.version.clone()),
+            local_version: summary.local_version,
+            name: summary.name.clone(),
+            share_context: None,
+            source: PluginSource::Local {
+                path: summary.source_uri,
+            },
+            installed: summary.installed,
+            installed_at: None,
+            enabled: summary.enabled,
+            install_policy: match summary.install_policy.as_str() {
+                "NOT_AVAILABLE" => PluginInstallPolicy::NotAvailable,
+                "INSTALLED_BY_DEFAULT" => PluginInstallPolicy::InstalledByDefault,
+                _ => PluginInstallPolicy::Available,
+            },
+            install_policy_source: None,
+            must_show_installation_interstitial: None,
+            auth_policy: match summary.auth_policy.as_str() {
+                "ON_INSTALL" => PluginAuthPolicy::OnInstall,
+                _ => PluginAuthPolicy::OnUse,
+            },
+            availability: PluginAvailability::Available,
+            disabled_reason: None,
+            eligible_plan_types: None,
+            interface: Some(PluginInterface {
+                display_name: Some(summary.name),
+                short_description: Some(summary.description),
+                long_description: None,
+                developer_name: None,
+                category: None,
+                capabilities: Vec::new(),
+                website_url: None,
+                privacy_policy_url: None,
+                terms_of_service_url: None,
+                default_prompt: None,
+                brand_color: None,
+                composer_icon: None,
+                composer_icon_url: None,
+                logo: None,
+                logo_dark: None,
+                logo_url: None,
+                logo_url_dark: None,
+                screenshots: Vec::new(),
+                screenshot_urls: Vec::new(),
+            }),
+            keywords: Vec::new(),
+        },
+    }
 }
 
 pub(crate) fn enabled_activation_descriptors(

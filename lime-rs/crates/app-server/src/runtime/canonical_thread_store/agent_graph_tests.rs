@@ -158,6 +158,8 @@ fn pending_spawn_is_hidden_until_atomic_commit() {
         store
             .list_threads_sync(ListThreadsParams {
                 include_archived: true,
+                section: None,
+                sort_by_section_position: false,
                 page: PageRequest {
                     cursor: None,
                     limit: 10,
@@ -356,6 +358,8 @@ fn canonical_thread_reads_join_durable_parent_and_agent_identity() {
     let page = store
         .list_threads_sync(ListThreadsParams {
             include_archived: false,
+            section: None,
+            sort_by_section_position: false,
             page: PageRequest {
                 cursor: None,
                 limit: 10,

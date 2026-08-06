@@ -65,7 +65,7 @@ function manifestKind(direction: Direction) {
 }
 
 describe("Codex method product scope boundary", () => {
-  it("214 个上游方法必须且只能落入一个三态分类", () => {
+  it("220 个上游方法必须且只能落入一个三态分类", () => {
     const matrix = readJson<Matrix>(MATRIX_PATH);
     const entries = flatten(matrix);
     const identities = entries.map(
@@ -99,7 +99,7 @@ describe("Codex method product scope boundary", () => {
       createHash("sha256")
         .update(identities.toSorted().join("\n"))
         .digest("hex"),
-    ).toBe("7598ae1d9ae02d68cb082fb3e313cadc02b3625ff96602dc4a1cf6e6ad65ebac");
+    ).toBe("44c63050d2b736b40c2060ffba2783e64c5f81f17b5926cbe99da60a667c8dc9");
   });
 
   it("每组必须声明 owner、证据、优先级以及 planned/excluded 原因", () => {

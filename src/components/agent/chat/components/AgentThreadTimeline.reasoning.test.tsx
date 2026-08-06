@@ -304,8 +304,9 @@ describe("AgentThreadTimeline", () => {
       {
         ...createBaseItem("reasoning-clawstream-hydrate", 1),
         type: "reasoning",
-        text: rawReasoningText,
+        text: summaryText,
         summary: [summaryText],
+        content: [rawReasoningText],
       },
     ];
 
@@ -335,6 +336,38 @@ describe("AgentThreadTimeline", () => {
     expect(
       (container.textContent?.split(rawReasoningText).length ?? 1) - 1,
     ).toBe(1);
+  });
+  it("canonical reasoning 只有 raw content 时展开后不应只剩图标", () => {
+    const rawReasoningText = "完整思考：先理解问候，再直接给出简短回应。";
+    const items: AgentThreadItem[] = [
+      {
+        ...createBaseItem("reasoning-content-only", 1),
+        type: "reasoning",
+        text: "",
+        summary: [],
+        content: [rawReasoningText],
+      },
+    ];
+
+    const container = renderTimeline(items, {
+      turn: {
+        status: "completed",
+      },
+    });
+
+    const block = container.querySelector<HTMLDetailsElement>(
+      '[data-testid="agent-thread-block:1:process"]',
+    );
+    const summary = block?.querySelector("summary");
+    expect(block?.open).toBe(false);
+    expect(container.textContent).not.toContain(rawReasoningText);
+
+    act(() => {
+      summary?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(block?.open).toBe(true);
+    expect(container.textContent).toContain(rawReasoningText);
   });
   it("reasoning 的 summary 与正文相同时不应重复渲染", () => {
     const repeatedText = "先判断任务类型\n\n再决定是否联网";

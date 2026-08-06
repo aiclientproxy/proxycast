@@ -39,6 +39,18 @@ export function buildReasoningFirstVisibleScenarioAssertions({
     guiReasoningFirstVisibleCompleted:
       summary.guiReasoningFirstVisibleCompleted?.hasPrompt === true &&
       summary.guiReasoningFirstVisibleCompleted?.hasReasoningText === true &&
+      summary.guiReasoningFirstVisibleCompleted?.hasReasoningContentText ===
+        true &&
+      summary.guiReasoningFirstVisibleCompleted?.reasoningProcessOpen ===
+        true &&
+      summary.guiReasoningFirstVisibleCompleted
+        ?.historicalReasoningPreviewExpanded === true &&
+      summary.guiReasoningFirstVisibleCompleted?.reasoningDetailsAvailable ===
+        true &&
+      summary.guiReasoningFirstVisibleCompleted?.reasoningOpenedByClick ===
+        true &&
+      summary.guiReasoningFirstVisibleCompleted
+        ?.reasoningContentExpandedAfterCompletion === true &&
       summary.guiReasoningFirstVisibleCompleted?.hasFinalText === true &&
       summary.guiReasoningFirstVisibleCompleted
         ?.hasReasoningBeforeFinalAnswer === true &&
@@ -53,7 +65,9 @@ export function buildReasoningFirstVisibleScenarioAssertions({
       summary.readModelReasoningFirstVisibleCompleted?.includesFinalText ===
         true &&
       summary.readModelReasoningFirstVisibleCompleted?.includesReasoningText ===
-        true,
+        true &&
+      summary.readModelReasoningFirstVisibleCompleted
+        ?.includesReasoningContentText === true,
     readModelReasoningFirstVisibleItemObserved:
       summary.readModelReasoningFirstVisibleCompleted?.includesReasoningItem ===
         true &&

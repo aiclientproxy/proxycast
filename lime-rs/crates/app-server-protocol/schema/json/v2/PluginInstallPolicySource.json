@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "enum": [
+    "IMPLICIT_CANONICAL_APP",
+    "WORKSPACE_SETTING"
+  ],
+  "title": "PluginInstallPolicySource",
+  "type": "string"
+}

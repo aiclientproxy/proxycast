@@ -41,6 +41,21 @@ pub(super) fn into_parts(
         ClientRequest::ThreadResume { id, params } => parts(id, Method::ThreadResume, params),
         ClientRequest::ThreadRead { id, params } => parts(id, Method::ThreadRead, params),
         ClientRequest::ThreadList { id, params } => parts(id, Method::ThreadList, params),
+        ClientRequest::ThreadSectionMove { id, params } => {
+            parts(id, Method::ThreadSectionMove, params)
+        }
+        ClientRequest::ThreadSectionList { id, params } => {
+            parts(id, Method::ThreadSectionList, params)
+        }
+        ClientRequest::ThreadSectionCreate { id, params } => {
+            parts(id, Method::ThreadSectionCreate, params)
+        }
+        ClientRequest::ThreadSectionUpdate { id, params } => {
+            parts(id, Method::ThreadSectionUpdate, params)
+        }
+        ClientRequest::ThreadSectionDelete { id, params } => {
+            parts(id, Method::ThreadSectionDelete, params)
+        }
         ClientRequest::ThreadLoadedList { id, params } => {
             parts(id, Method::ThreadLoadedList, params)
         }
@@ -79,6 +94,7 @@ pub(super) fn into_parts(
         ClientRequest::MediaRead { id, params } => parts(id, Method::MediaRead, params),
         ClientRequest::ModelList { id, params } => parts(id, Method::ModelList, params),
         ClientRequest::PluginList { id, params } => parts(id, Method::PluginList, params),
+        ClientRequest::PluginSearch { id, params } => parts(id, Method::PluginSearch, params),
         ClientRequest::PluginRead { id, params } => parts(id, Method::PluginRead, params),
         ClientRequest::PluginInstall { id, params } => parts(id, Method::PluginInstall, params),
         ClientRequest::PluginUninstall { id, params } => parts(id, Method::PluginUninstall, params),

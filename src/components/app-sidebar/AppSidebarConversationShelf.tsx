@@ -5,10 +5,18 @@ import {
   useState,
   type MouseEvent,
 } from "react";
-import styled from "styled-components";
 import { useTranslation } from "react-i18next";
-import { FileInput, MessageSquarePlus } from "lucide-react";
-import type { AgentSessionInfo } from "@/lib/api/agentRuntime/sessionTypes";
+import {
+  FileInput,
+  FolderPlus,
+  MessageSquarePlus,
+  Pencil,
+  Trash2,
+} from "lucide-react";
+import type {
+  AgentSessionInfo,
+  AgentSessionSection,
+} from "@/lib/api/agentRuntime/sessionTypes";
 import type { AgentBackgroundSessionRuntimeSnapshot } from "@/components/agent/chat";
 import {
   resolveUnfinishedSessionProjection,
@@ -34,6 +42,18 @@ import {
   type SidebarOpenedProjectSummary,
 } from "@/components/app-sidebar/sidebarConversationGroups";
 import { resolveSidebarFloatingMenuPosition } from "@/components/app-sidebar/sidebarFloatingMenuPosition";
+import { PINNED_THREAD_SECTION } from "@/lib/api/threadSections";
+import { useAppSidebarThreadSections } from "@/components/app-sidebar/useAppSidebarThreadSections";
+import {
+  ConversationActionButton,
+  ConversationList,
+  ConversationListMoreButton,
+  ConversationSection,
+  ConversationSectionActions,
+  ConversationSectionHeader,
+  ConversationSectionTitle,
+  ConversationShelf,
+} from "@/components/app-sidebar/AppSidebarConversationShelf.styles";
 
 interface AppSidebarConversationShelfProps {
   openedProjects?: SidebarOpenedProjectSummary[];
@@ -50,43 +70,18 @@ interface AppSidebarConversationShelfProps {
   onRenameConversation?: (session: AgentSessionInfo) => void;
   onDeleteConversation?: (session: AgentSessionInfo) => void;
   onToggleArchive: (session: AgentSessionInfo, archived: boolean) => void;
+  onTogglePinned: (session: AgentSessionInfo) => void;
+  onMoveToSection: (
+    session: AgentSessionInfo,
+    section: AgentSessionSection | null,
+  ) => void;
   onToggleProjectPin?: (project: SidebarOpenedProjectSummary) => void;
   onRevealProject?: (project: SidebarOpenedProjectSummary) => void;
   onCreateProjectWorktree?: (project: SidebarOpenedProjectSummary) => void;
   onRenameProject?: (project: SidebarOpenedProjectSummary) => void;
   onRemoveProject?: (project: SidebarOpenedProjectSummary) => void;
+  onRefreshConversations?: () => Promise<void>;
   onShowMoreRecent: () => void;
-}
-
-const FAVORITE_SESSION_IDS_STORAGE_KEY =
-  "lime.app-sidebar.favorite-session-ids";
-
-function loadFavoriteSessionIds(): string[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(FAVORITE_SESSION_IDS_STORAGE_KEY) ?? "[]",
-    );
-    return Array.isArray(parsed)
-      ? parsed.filter((value): value is string => typeof value === "string")
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function persistFavoriteSessionIds(sessionIds: string[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(
-    FAVORITE_SESSION_IDS_STORAGE_KEY,
-    JSON.stringify(sessionIds),
-  );
 }
 
 const TERMINAL_SIDEBAR_SESSION_STATUSES = new Set([
@@ -143,151 +138,6 @@ function resolveBackgroundSidebarRuntimeStatus(
   }
 }
 
-function compareSessionTimeDesc(left?: number, right?: number): number {
-  const leftValue =
-    typeof left === "number" && Number.isFinite(left) ? left : 0;
-  const rightValue =
-    typeof right === "number" && Number.isFinite(right) ? right : 0;
-  return rightValue - leftValue;
-}
-
-function sortSessionsForShelf(sessions: AgentSessionInfo[]) {
-  return [...sessions].sort((left, right) => {
-    const updatedAtComparison = compareSessionTimeDesc(
-      left.updated_at,
-      right.updated_at,
-    );
-    if (updatedAtComparison !== 0) {
-      return updatedAtComparison;
-    }
-
-    return String(left.id || "").localeCompare(String(right.id || ""));
-  });
-}
-
-const ConversationShelf = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 2px 0 12px;
-`;
-
-const ConversationSection = styled.section`
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-height: 116px;
-  max-height: 248px;
-  padding: 8px;
-  border-radius: 14px;
-  border: 1px solid var(--sidebar-card-border, var(--sidebar-border));
-  background: color-mix(
-    in srgb,
-    var(--sidebar-search-bg, #ffffff) 88%,
-    transparent
-  );
-  box-shadow: inset 0 1px 0 var(--sidebar-card-highlight);
-  overflow: hidden;
-`;
-
-const ConversationSectionHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 3px;
-  color: var(--sidebar-muted);
-`;
-
-const ConversationSectionActions = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-`;
-
-const ConversationSectionTitle = styled.h2`
-  display: inline-flex;
-  align-items: center;
-  padding: 0;
-  margin: 0;
-  color: inherit;
-  font-size: 12px;
-  font-weight: 760;
-`;
-
-const ConversationActionButton = styled.button`
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 9px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  color: var(--sidebar-muted);
-  cursor: pointer;
-  transition:
-    background-color 0.18s ease,
-    color 0.18s ease;
-
-  &:hover {
-    background: var(--sidebar-hover);
-    color: var(--sidebar-foreground);
-  }
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-`;
-
-const ConversationList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 2px;
-
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--sidebar-border);
-    border-radius: 9999px;
-  }
-`;
-
-const ConversationListMoreButton = styled.button`
-  width: 100%;
-  min-height: 32px;
-  border: 1px solid var(--sidebar-card-border, var(--sidebar-border));
-  border-radius: 11px;
-  background: var(--sidebar-search-bg);
-  color: var(--sidebar-muted);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease;
-
-  &:hover {
-    background: var(--sidebar-hover);
-    border-color: var(--sidebar-search-border-hover);
-    color: var(--sidebar-foreground);
-  }
-`;
-
 export function AppSidebarConversationShelf({
   openedProjects = [],
   recentSessions,
@@ -303,14 +153,26 @@ export function AppSidebarConversationShelf({
   onRenameConversation,
   onDeleteConversation,
   onToggleArchive,
+  onTogglePinned,
+  onMoveToSection,
   onToggleProjectPin,
   onRevealProject,
   onCreateProjectWorktree,
   onRenameProject,
   onRemoveProject,
+  onRefreshConversations,
   onShowMoreRecent,
 }: AppSidebarConversationShelfProps) {
   const { t, i18n } = useTranslation("navigation");
+  const {
+    createSection,
+    pendingSectionId,
+    removeSection,
+    renameSection,
+    sections: threadSectionCatalog,
+  } = useAppSidebarThreadSections({
+    onSectionsChanged: onRefreshConversations,
+  });
   const conversationUntitledLabel = t(
     "navigation.sidebar.conversations.untitled",
     "未命名对话",
@@ -332,15 +194,13 @@ export function AppSidebarConversationShelf({
       buildSidebarConversationGroups({
         sessions: recentSessions,
         openedProjects,
+        threadSections: threadSectionCatalog,
       }),
-    [openedProjects, recentSessions],
+    [openedProjects, recentSessions, threadSectionCatalog],
   );
   const [menuState, setMenuState] = useState<ConversationMenuState>(null);
   const [projectMenuState, setProjectMenuState] =
     useState<ProjectMenuState>(null);
-  const [favoriteSessionIds, setFavoriteSessionIds] = useState<string[]>(
-    loadFavoriteSessionIds,
-  );
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -420,17 +280,6 @@ export function AppSidebarConversationShelf({
     [],
   );
 
-  const toggleFavoriteSession = useCallback((session: AgentSessionInfo) => {
-    setFavoriteSessionIds((current) => {
-      const exists = current.includes(session.id);
-      const next = exists
-        ? current.filter((sessionId) => sessionId !== session.id)
-        : [session.id, ...current];
-      persistFavoriteSessionIds(next);
-      return next;
-    });
-  }, []);
-
   const toggleProjectCollapsed = useCallback((projectId: string) => {
     setCollapsedProjectIds((current) => {
       const next = new Set(current);
@@ -448,20 +297,6 @@ export function AppSidebarConversationShelf({
     setProjectMenuState(null);
   }, []);
 
-  const sortedConversationGroups = useMemo(() => {
-    return {
-      projectSections: activeConversationGroups.projectSections.map(
-        (section) => ({
-          ...section,
-          sessions: sortSessionsForShelf(section.sessions),
-        }),
-      ),
-      standaloneSessions: sortSessionsForShelf(
-        activeConversationGroups.standaloneSessions,
-      ),
-    };
-  }, [activeConversationGroups]);
-
   const projectsTitleLabel = t(
     "navigation.sidebar.conversations.projectsTitle",
     "项目",
@@ -469,6 +304,10 @@ export function AppSidebarConversationShelf({
   const standaloneTitleLabel = t(
     "navigation.sidebar.conversations.standaloneTitle",
     "对话",
+  );
+  const pinnedTitleLabel = t(
+    "navigation.sidebar.conversations.pinnedTitle",
+    "置顶",
   );
   const newConversationLabel = t(
     "navigation.sidebar.conversations.newConversation",
@@ -498,10 +337,6 @@ export function AppSidebarConversationShelf({
     "navigation.sidebar.conversations.moreRecent",
     "查看更多对话",
   );
-  const favoriteBadgeLabel = t(
-    "navigation.sidebar.conversations.favoriteBadge",
-    "已收藏",
-  );
   const moreActionsLabel = t(
     "navigation.sidebar.conversations.moreActions",
     "更多操作",
@@ -510,17 +345,30 @@ export function AppSidebarConversationShelf({
     "navigation.sidebar.conversations.menu.rename",
     "重命名",
   );
-  const favoriteActionLabel = t(
-    "navigation.sidebar.conversations.menu.favorite",
-    "收藏",
-  );
-  const unfavoriteActionLabel = t(
-    "navigation.sidebar.conversations.menu.unfavorite",
-    "取消收藏",
+  const pinActionLabel = t("navigation.sidebar.conversations.menu.pin", "置顶");
+  const unpinActionLabel = t(
+    "navigation.sidebar.conversations.menu.unpin",
+    "取消置顶",
   );
   const archiveActionLabel = t(
     "navigation.sidebar.conversations.menu.archive",
     "归档",
+  );
+  const moveToSectionActionLabel = t(
+    "navigation.sidebar.conversations.menu.moveToSection",
+    "移动到分组",
+  );
+  const moveToSectionBackLabel = t(
+    "navigation.sidebar.conversations.menu.moveToSectionBack",
+    "选择分组",
+  );
+  const unsectionedLabel = t(
+    "navigation.sidebar.conversations.menu.unsectioned",
+    "不分组",
+  );
+  const createSectionLabel = t(
+    "navigation.sidebar.conversations.section.create.action",
+    "新建分组",
   );
   const deleteActionLabel = t(
     "navigation.sidebar.conversations.menu.delete",
@@ -591,9 +439,7 @@ export function AppSidebarConversationShelf({
         runtimeStatusLabel={
           runtimeStatus ? runtimeStatusLabels[runtimeStatus] : null
         }
-        favorite={favoriteSessionIds.includes(session.id)}
         actionDisabled={actionSessionId === session.id}
-        favoriteBadgeLabel={favoriteBadgeLabel}
         moreActionsLabel={moreActionsLabel}
         openActionMenuLabel={t(
           "navigation.sidebar.conversations.openActionMenu",
@@ -608,6 +454,79 @@ export function AppSidebarConversationShelf({
     );
   };
 
+  const threadSections = activeConversationGroups.threadSections
+    .filter(
+      ({ section, sessions }) =>
+        section.id !== PINNED_THREAD_SECTION.id || sessions.length > 0,
+    )
+    .map(({ section, sessions }) => (
+      <ConversationSection
+        key={section.id}
+        $compact
+        data-testid="app-sidebar-thread-section"
+        data-section-id={section.id}
+      >
+        <ConversationSectionHeader>
+          <ConversationSectionTitle>
+            {section.id === PINNED_THREAD_SECTION.id
+              ? pinnedTitleLabel
+              : section.name}
+          </ConversationSectionTitle>
+          {section.id !== PINNED_THREAD_SECTION.id ? (
+            <ConversationSectionActions>
+              <ConversationActionButton
+                type="button"
+                disabled={pendingSectionId !== null}
+                onClick={() => void renameSection(section)}
+                aria-label={t(
+                  "navigation.sidebar.conversations.section.rename.action",
+                  {
+                    name: section.name,
+                    defaultValue: "重命名分组 {{name}}",
+                  },
+                )}
+                title={t(
+                  "navigation.sidebar.conversations.section.rename.action",
+                  {
+                    name: section.name,
+                    defaultValue: "重命名分组 {{name}}",
+                  },
+                )}
+                data-testid="app-sidebar-thread-section-rename"
+              >
+                <Pencil />
+              </ConversationActionButton>
+              <ConversationActionButton
+                type="button"
+                disabled={pendingSectionId !== null}
+                onClick={() => void removeSection(section)}
+                aria-label={t(
+                  "navigation.sidebar.conversations.section.delete.action",
+                  {
+                    name: section.name,
+                    defaultValue: "删除分组 {{name}}",
+                  },
+                )}
+                title={t(
+                  "navigation.sidebar.conversations.section.delete.action",
+                  {
+                    name: section.name,
+                    defaultValue: "删除分组 {{name}}",
+                  },
+                )}
+                data-testid="app-sidebar-thread-section-delete"
+              >
+                <Trash2 />
+              </ConversationActionButton>
+            </ConversationSectionActions>
+          ) : null}
+        </ConversationSectionHeader>
+        <ConversationList>
+          {sessions.map((session) => renderConversationRow(session))}
+        </ConversationList>
+      </ConversationSection>
+    ));
+
   const projectsSection = (
     <ConversationSection>
       <ConversationSectionHeader>
@@ -620,7 +539,7 @@ export function AppSidebarConversationShelf({
           <AppSidebarConversationEmptyState text={loadingRecentLabel} />
         ) : (
           <AppSidebarProjectConversationGroups
-            projectSections={sortedConversationGroups.projectSections}
+            projectSections={activeConversationGroups.projectSections}
             collapsedProjectIds={collapsedProjectIds}
             newProjectConversationLabel={newProjectConversationLabel}
             projectMoreActionsLabel={projectMoreActionsLabel}
@@ -653,6 +572,16 @@ export function AppSidebarConversationShelf({
           {standaloneTitleLabel}
         </ConversationSectionTitle>
         <ConversationSectionActions>
+          <ConversationActionButton
+            type="button"
+            disabled={pendingSectionId !== null}
+            onClick={() => void createSection()}
+            aria-label={createSectionLabel}
+            title={createSectionLabel}
+            data-testid="app-sidebar-new-thread-section-button"
+          >
+            <FolderPlus />
+          </ConversationActionButton>
           {onImportConversation ? (
             <ConversationActionButton
               type="button"
@@ -678,8 +607,8 @@ export function AppSidebarConversationShelf({
       <ConversationList data-testid="app-sidebar-recent-conversations">
         {recentLoading ? (
           <AppSidebarConversationEmptyState text={loadingRecentLabel} />
-        ) : sortedConversationGroups.standaloneSessions.length > 0 ? (
-          sortedConversationGroups.standaloneSessions.map((session) =>
+        ) : activeConversationGroups.standaloneSessions.length > 0 ? (
+          activeConversationGroups.standaloneSessions.map((session) =>
             renderConversationRow(session),
           )
         ) : (
@@ -696,16 +625,17 @@ export function AppSidebarConversationShelf({
 
   return (
     <ConversationShelf data-testid="app-sidebar-conversation-shelf">
+      {threadSections}
       {projectsSection}
       {conversationsSection}
 
       <AppSidebarConversationMenus
         conversationMenuState={menuState}
         projectMenuState={projectMenuState}
-        favoriteSessionIds={favoriteSessionIds}
         resolveSessionTitle={resolveLocalizedSessionTitle}
         onCloseMenus={closeMenus}
-        onToggleFavoriteSession={toggleFavoriteSession}
+        onTogglePinned={onTogglePinned}
+        onMoveToSection={onMoveToSection}
         onRenameConversation={onRenameConversation}
         onDeleteConversation={onDeleteConversation}
         onToggleArchive={onToggleArchive}
@@ -715,6 +645,9 @@ export function AppSidebarConversationShelf({
         onRenameProject={onRenameProject}
         onRemoveProject={onRemoveProject}
         onImportConversation={onImportConversation}
+        threadSections={activeConversationGroups.threadSections.map(
+          ({ section }) => section,
+        )}
         conversationLabels={{
           ariaLabel: (title) =>
             t("navigation.sidebar.conversations.menu.ariaLabel", {
@@ -722,9 +655,12 @@ export function AppSidebarConversationShelf({
               defaultValue: "{{title}} 操作菜单",
             }),
           rename: renameActionLabel,
-          favorite: favoriteActionLabel,
-          unfavorite: unfavoriteActionLabel,
+          pin: pinActionLabel,
+          unpin: unpinActionLabel,
           archive: archiveActionLabel,
+          moveToSection: moveToSectionActionLabel,
+          moveToSectionBack: moveToSectionBackLabel,
+          unsectioned: unsectionedLabel,
           delete: deleteActionLabel,
         }}
         projectLabels={{

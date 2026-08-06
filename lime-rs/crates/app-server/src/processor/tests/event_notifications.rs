@@ -144,8 +144,8 @@ fn malformed_runtime_warning_rejects_without_retired_side_channel() {
 }
 
 #[test]
-fn warning_alias_does_not_activate_typed_notification() {
-    let message = single_event_notification(AgentEvent {
+fn warning_alias_is_rejected_without_retired_side_channel() {
+    let error = event_notifications_jsonrpc(AgentEvent {
         event_id: "evt_warning_alias".to_string(),
         sequence: 4,
         session_id: "sess_1".to_string(),
@@ -158,12 +158,10 @@ fn warning_alias_does_not_activate_typed_notification() {
             "message": "技能不可用，已继续执行。"
         }),
     })
-    .expect("retired side channel");
+    .expect_err("retired warning alias must reject");
 
-    let JsonRpcMessage::Notification(notification) = message else {
-        panic!("expected notification");
-    };
-    assert_eq!(notification.method, "agentSession/event");
+    assert_eq!(error.code, app_server_protocol::error_codes::RUNTIME_ERROR);
+    assert!(error.message.contains("warning"));
 }
 
 fn failed_turn_event(event_id: &str, message: &str) -> AgentEvent {
@@ -480,7 +478,7 @@ fn current_turn_canceled_projects_interrupted_and_retired_name_is_not_accepted()
     assert_eq!(params["turn"]["id"], "turn_1");
     assert_eq!(params["turn"]["status"], "interrupted");
 
-    let retired = single_event_notification(AgentEvent {
+    let error = event_notifications_jsonrpc(AgentEvent {
         event_id: "evt_interrupted".to_string(),
         sequence: 5,
         session_id: "sess_1".to_string(),
@@ -490,15 +488,9 @@ fn current_turn_canceled_projects_interrupted_and_retired_name_is_not_accepted()
         timestamp: "2026-07-05T00:00:04Z".to_string(),
         payload: json!({ "turn": turn }),
     })
-    .expect("notification");
-    let JsonRpcMessage::Notification(retired) = retired else {
-        panic!("expected notification");
-    };
-    assert_eq!(retired.method, "agentSession/event");
-    let params = retired.params.expect("params");
-    assert_eq!(params["event"]["type"], "turn.interrupted");
-    assert!(params.get("typedEvent").is_none());
-    assert!(params.get("canonicalEvent").is_none());
+    .expect_err("retired turn.interrupted alias must reject");
+    assert_eq!(error.code, app_server_protocol::error_codes::RUNTIME_ERROR);
+    assert!(error.message.contains("turn.interrupted"));
 }
 
 #[test]

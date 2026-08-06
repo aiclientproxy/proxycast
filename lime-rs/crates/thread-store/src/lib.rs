@@ -9,6 +9,12 @@ pub mod store;
 pub mod task_board;
 pub mod types;
 
+/// Stable UUIDv7 identifying the built-in pinned thread section.
+pub const PINNED_THREAD_SECTION_ID: &str = "01984de2-8f74-7c91-a3b2-5c5e937cf318";
+
+/// User-facing name of the built-in pinned thread section.
+pub const PINNED_THREAD_SECTION_NAME: &str = "Pinned";
+
 use std::error::Error;
 use std::fmt;
 
@@ -29,12 +35,14 @@ pub use history::{
 pub use store::{ThreadStore, ThreadStoreFuture};
 pub use types::{
     AppendThreadItemsParams, ApplyThreadHistoryParams, ApplyThreadHistoryResult,
-    ArchiveThreadParams, ClearableField, CreateThreadParams, DeleteThreadParams, ItemPage,
-    ListItemsParams, ListThreadsParams, ListTurnsParams, PageRequest, ReadThreadParams,
-    SearchTextRange, SearchThreadOccurrencesParams, SearchThreadsParams, StoreCursor,
-    StoredThreadOccurrence, StoredThreadSearchResult, ThreadMetadataPatch,
-    ThreadOccurrenceSearchPage, ThreadPage, ThreadSearchPage, ThreadSearchSortKey,
-    ThreadSearchSourceKind, TurnPage, UpdateThreadMetadataParams,
+    ArchiveThreadParams, ClearableField, CreateThreadParams, CreateThreadSectionParams,
+    DeleteThreadParams, DeleteThreadSectionParams, ItemPage, ListItemsParams,
+    ListThreadSectionsParams, ListThreadsParams, ListTurnsParams, MoveThreadToSectionParams,
+    PageRequest, ReadThreadParams, RenameThreadSectionParams, SearchTextRange,
+    SearchThreadOccurrencesParams, SearchThreadsParams, StoreCursor, StoredThreadOccurrence,
+    StoredThreadSearchResult, StoredThreadSection, ThreadMetadataPatch, ThreadOccurrenceSearchPage,
+    ThreadPage, ThreadSearchPage, ThreadSearchSortKey, ThreadSearchSourceKind, ThreadSectionPage,
+    TurnPage, UpdateThreadMetadataParams,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

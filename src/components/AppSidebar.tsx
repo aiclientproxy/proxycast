@@ -799,6 +799,7 @@ export function AppSidebar({
     fallbackSessionId,
     hasMoreRecentSidebarSessions,
     moveSidebarSessionArchiveStateOptimistically,
+    moveSidebarSessionSectionOptimistically,
     recentSessionsLoading,
     refreshSidebarSessions,
     removeSidebarSessionOptimistically,
@@ -851,6 +852,7 @@ export function AppSidebar({
     refreshSidebarSessions,
     renameSidebarSessionOptimistically,
     moveSidebarSessionArchiveStateOptimistically,
+    moveSidebarSessionSectionOptimistically,
     removeSidebarSessionOptimistically,
     resolveLocalizedSessionTitle,
     renameConversationPromptLabel,
@@ -1483,6 +1485,12 @@ export function AppSidebar({
                   archived,
                 );
               }}
+              onTogglePinned={(session) => {
+                void conversationActions.toggleSessionPinned(session);
+              }}
+              onMoveToSection={(session, section) => {
+                void conversationActions.moveSessionToSection(session, section);
+              }}
               onToggleProjectPin={(project) => {
                 void projectActions.handleToggleProjectPin(project);
               }}
@@ -1498,6 +1506,7 @@ export function AppSidebar({
               onRemoveProject={(project) => {
                 void projectActions.handleRemoveProject(project);
               }}
+              onRefreshConversations={refreshSidebarSessions}
               onShowMoreRecent={showMoreRecentSessions}
             />
           ) : null}

@@ -153,7 +153,6 @@ import {
   selectActiveSessionTransientItems,
   selectActiveSessionTransientMessages,
   selectActiveSessionTransientTurns,
-  sortTopicsByRecentActivity,
   type TopicSnapshotPatch,
   upsertFreshSessionDraftTopic,
   upsertTopicFromSessionDetail,
@@ -667,10 +666,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     );
     const auxiliaryFilterDurationMs = Date.now() - auxiliaryFilterStartedAt;
     const topicMapStartedAt = Date.now();
-    const topicList = sortTopicsByRecentActivity(
-      visibleSessions.map(mapSessionToTopic),
-      { workspaceId: resolvedWorkspaceId || null },
-    );
+    const topicList = visibleSessions.map(mapSessionToTopic);
     const topicMapDurationMs = Date.now() - topicMapStartedAt;
     const metricContext = {
       auxiliaryFilterDurationMs,
@@ -1517,7 +1513,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
               detail,
               resolvedWorkspaceId,
             ),
-            { workspaceId },
           ),
         );
       }
@@ -1944,7 +1939,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
             detail,
             postFinalizePersistencePlan.topicWorkspaceId,
           ),
-          { workspaceId },
         ),
       );
 
@@ -2626,7 +2620,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
             normalizeProjectId(detail.workspace_id) ||
               normalizeProjectId(workspaceId),
           ),
-          { workspaceId },
         ),
       );
       logAgentDebug("useAgentSession", "loadFullHistory.success", {
@@ -2868,7 +2861,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
               normalizeProjectId(detail.workspace_id) ||
                 normalizeProjectId(workspaceId),
             ),
-            { workspaceId },
           ),
         );
       } catch (error) {
@@ -3224,9 +3216,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
 
           appServerConfirmedSessionIdsRef.current.add(sessionId);
           setTopics((prev) =>
-            prependVerifiedSessionTopicFromDetail(prev, sessionId, detail, {
-              workspaceId,
-            }),
+            prependVerifiedSessionTopicFromDetail(prev, sessionId, detail),
           );
         })
         .catch((error) => {

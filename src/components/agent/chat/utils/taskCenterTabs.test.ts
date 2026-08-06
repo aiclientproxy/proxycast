@@ -40,7 +40,6 @@ function createTopic(id: string, overrides?: Partial<Topic>): Topic {
     status: "done",
     statusReason: "default",
     lastPreview: `${id} preview`,
-    isPinned: false,
     hasUnread: false,
     sourceSessionId: id,
     ...overrides,

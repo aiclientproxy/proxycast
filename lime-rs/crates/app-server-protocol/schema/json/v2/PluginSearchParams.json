@@ -1,0 +1,60 @@
+{
+  "$defs": {
+    "PluginSearchScope": {
+      "enum": [
+        "global",
+        "personal",
+        "workspace"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "cursor": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "cwds": {
+      "default": null,
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "limit": {
+      "default": null,
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "scope": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PluginSearchScope"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "searchTerm": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "searchTerm"
+  ],
+  "title": "PluginSearchParams",
+  "type": "object"
+}

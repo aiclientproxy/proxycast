@@ -3,7 +3,7 @@
 > status: `inventory-current / implementation-open`
 > owner: `app-server-protocol` + 对应 current domain owner
 > fixture: `internal/refactor/v1/fixtures/codex-method-product-scope.v0.1.json`
-> upstream: `/Users/coso/Documents/dev/rust/codex@4c43465133428898aa84f0bfc02c306ed65fb66a`
+> upstream: `/Users/coso/Documents/dev/rust/codex@c4f42d161ae44a8d696ee9fb595709661979d187`
 
 ## 目标
 
@@ -17,12 +17,12 @@ legacy 同义命令冒充协议对齐。矩阵覆盖 `clientRequest`、`serverRe
 
 ## 当前盘点
 
-| 状态                     | 数量 | 裁决                                                                                                                                                                                                                                                           |
-| ------------------------ | ---: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `implemented`            |   70 | 连接握手、核心 Thread/Turn/Item、thread subscription/lifecycle/content search/raw item injection/background terminals/elicitation/Guardian continuation、typed approval/MCP server request 与 model control plane（含 `model/verification`、`model/rerouted`） |
-| `planned`                |  109 | process/fs、config、Hooks、Skills/Plugins/Apps、review 与 Windows sandbox                                                                                                                                                                                      |
-| `product-scope-excluded` |   35 | Codex account/commerce、attestation、remote control、test-only、internal raw response、deprecated surface，以及只表达单一全局 Provider 的 capability read                                                                                                      |
-| 合计                     |  214 | `130` client request、`11` server request、`72` server notification、`1` client notification                                                                                                                                                                   |
+| 状态                     | 数量 | 裁决                                                                                                                                                                                                                                                             |
+| ------------------------ | ---: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `implemented`            |   76 | 连接握手、核心 Thread/Turn/Item、durable ordered Thread Section、thread subscription/lifecycle/content search/raw item injection/background terminals/elicitation/Guardian continuation、Plugin Search、typed approval/MCP server request 与 model control plane |
+| `planned`                |  109 | 其余 Plugins、process/fs、config、Hooks、Skills/Apps、review 与 Windows sandbox                                                                                                                                                                                  |
+| `product-scope-excluded` |   35 | Codex account/commerce、attestation、remote control、test-only、internal raw response、deprecated surface，以及只表达单一全局 Provider 的 capability read                                                                                                        |
+| 合计                     |  220 | `136` client request、`11` server request、`72` server notification、`1` client notification                                                                                                                                                                     |
 
 `implemented` 只说明 method boundary 已存在并接入 current owner，不代表字段、恢复、GUI 或 Gate B 已全面 parity。
 字段和 lifecycle 缺口继续由 Item inventory、gap register 与对应执行切片管理。
@@ -35,12 +35,14 @@ legacy 同义命令冒充协议对齐。矩阵覆盖 `clientRequest`、`serverRe
 4. `executionProcess/*`、`fileSystem/*`、旧 skill/plugin method 即使功能相似，也不能算 Codex method parity。
 5. Realtime、review、process、Windows sandbox 属于产品范围，当前标 `planned`，后续只能在既有 owner 补齐。
 6. `modelProvider/capabilities/read` 读取 Codex 单一全局 Provider；Lime 的 provider/model 选择绑定 Thread route。该空参数方法没有产品消费者，不能把静态全局值冒充当前 route truth，归入 excluded；能力继续由 executable model catalog、resolved route 与 provider lowering 承接。
+7. Codex HEAD 的 durable ordered Thread Section 已进入 Lime current 主链：section/store/order、五个 exact method、typed client、冷启动恢复与 Desktop 分组/置顶均消费同一事实源。旧 `isPinned` metadata、Renderer 时间重排与 localStorage 收藏为 `dead / deleted / forbidden-to-restore`。
+8. `plugin/search` 已使用 exact Codex method、params/result wire、typed client 与公共 JSON-RPC 证据接入本地 Plugin catalog owner；Codex remote catalog、share、watcher 和 readiness 仍由其余 planned method 承接，不由该 method 冒充完成。
 
 ## 守卫
 
 `src/lib/governance/codexMethodProductScopeBoundary.test.ts` 固定以下事实：
 
-- 214 个方向化 identity 无遗漏、无重复，状态和方向计数稳定。
+- 220 个方向化 identity 无遗漏、无重复，状态和方向计数稳定。
 - planned 必须写 gap，excluded 必须写 rationale，所有组必须写 owner/evidence/priority。
 - `implemented` 必须能在 Lime generated manifest 找到同方向、同名 contract。
 
@@ -59,8 +61,9 @@ fallback 继续只产生 `routing.fallback.applied`。下一刀处理 provider a
 Skills/Plugins/Apps watcher/readiness 与 Hook lifecycle。每完成一个
 method，必须同步 exact protocol、handler、typed client、fixture/evidence，再将其移入 `implemented`。
 Codex 已明确将 `thread/rollback` 标记为即将删除，Lime 不新增该公开方法。当前产品范围完成度为
-`70 / 179 = 39.1%`。分母较上一 revision增加的 `1` 来自 Codex HEAD 新增的
-`externalAgentConfig/import/recordHistory`；该 P4 config-import method 已进入 `planned`，没有冒充 Lime
-现有配置导入能力或恢复 compat。Gemini GenerateContent transport 虽已完成 request/stream/tool/history
-闭环，但没有新增 exact Codex App Server method，因此不改变本矩阵计数；不得把 `39.1%` 解释成多模型或
+`76 / 185 = 41.1%`。相对上一基线新增的 `6` 个 client request 已全部进入 `implemented`：五个 durable
+Thread Section 管理/移动 method 与 exact `plugin/search`。现有自定义 Plugin list/read/install 仍不能冒充其余
+Codex Plugin method parity。
+Gemini GenerateContent transport 虽已完成 request/stream/tool/history
+闭环，但没有新增 exact Codex App Server method，因此不改变本矩阵计数；不得把 `37.8%` 解释成多模型或
 整个 Codex 对齐工程的完成度。

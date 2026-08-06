@@ -20,7 +20,6 @@ function createTopic(id: string, overrides?: Partial<Topic>): Topic {
     status: "done",
     statusReason: "default",
     lastPreview: `${id} preview`,
-    isPinned: false,
     hasUnread: false,
     sourceSessionId: id,
     ...overrides,
@@ -49,7 +48,6 @@ describe("taskCenterTabProjection", () => {
         createTopic("topic-b", {
           title: "任务 B",
           status: "running",
-          isPinned: true,
           updatedAt: "2026-04-20T03:00:00.000Z" as unknown as Date,
         }),
       ],
@@ -78,7 +76,6 @@ describe("taskCenterTabProjection", () => {
     });
     expect(items[1]).toMatchObject({
       title: "任务 B",
-      isPinned: true,
       renamable: true,
       isActive: false,
       status: "running",

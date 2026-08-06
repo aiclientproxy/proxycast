@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "brandColor": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "capabilities": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "category": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "composerIcon": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "composerIconUrl": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "defaultPrompt": {
+      "default": null,
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "developerName": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "displayName": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "logo": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "logoDark": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "logoUrl": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "logoUrlDark": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "longDescription": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "privacyPolicyUrl": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "screenshotUrls": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "screenshots": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "shortDescription": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "termsOfServiceUrl": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "websiteUrl": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "title": "PluginInterface",
+  "type": "object"
+}

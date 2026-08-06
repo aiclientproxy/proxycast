@@ -80,6 +80,8 @@ fn production_storage_paths_keep_physical_table_owners_separate() {
             "thread_goal_turn_accounting".to_string(),
             "thread_goal_update_outbox".to_string(),
             "thread_goals".to_string(),
+            "thread_section_members".to_string(),
+            "thread_sections".to_string(),
         ]
     );
     assert_eq!(
@@ -1221,6 +1223,8 @@ fn projection_store_is_the_canonical_thread_store_owner() {
     .expect("archive");
     let archived = block_on(store.list_threads(ListThreadsParams {
         include_archived: true,
+        section: None,
+        sort_by_section_position: false,
         page: page(SortDirection::Asc, 10),
     }))
     .expect("list archived threads");
@@ -1726,6 +1730,8 @@ fn opaque_cursors_page_threads_turns_and_items_stably() {
     }
     let first = block_on(store.list_threads(ListThreadsParams {
         include_archived: false,
+        section: None,
+        sort_by_section_position: false,
         page: page(SortDirection::Asc, 2),
     }))
     .expect("first thread page");
@@ -1733,6 +1739,8 @@ fn opaque_cursors_page_threads_turns_and_items_stably() {
     assert!(first.next_cursor.is_some());
     let second = block_on(store.list_threads(ListThreadsParams {
         include_archived: false,
+        section: None,
+        sort_by_section_position: false,
         page: PageRequest {
             cursor: first.next_cursor,
             limit: 2,

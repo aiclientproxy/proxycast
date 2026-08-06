@@ -203,6 +203,8 @@ export const REASONING_FIRST_VISIBLE_SCENARIO = "reasoning-first-visible";
 export const REASONING_FIRST_VISIBLE_PROMPT = "验证 reasoning 先于最终回答可见";
 export const REASONING_FIRST_VISIBLE_TEXT =
   "先确认用户要验证的是展示时序，再给出最终回答。";
+export const REASONING_FIRST_VISIBLE_CONTENT_TEXT =
+  "完整思考：先确认当前回合要验证 reasoning 展示时序，再检查完成态折叠区展开后仍能读取 canonical content。";
 export const REASONING_FIRST_VISIBLE_FINAL_TEXT =
   "最终回答：reasoning 已经先于正文出现在当前回合。";
 export const REASONING_FIRST_VISIBLE_DONE_TEXT = "REASONING_FIRST_VISIBLE_DONE";

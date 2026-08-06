@@ -102,6 +102,49 @@ pub struct ReadThreadParams {
 pub struct ListThreadsParams {
     pub include_archived: bool,
     pub page: PageRequest,
+    pub section: Option<Option<String>>,
+    pub sort_by_section_position: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListThreadSectionsParams {
+    pub cursor: Option<StoreCursor>,
+    pub limit: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateThreadSectionParams {
+    pub name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenameThreadSectionParams {
+    pub section_id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeleteThreadSectionParams {
+    pub section_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MoveThreadToSectionParams {
+    pub thread_id: ThreadId,
+    pub section: Option<String>,
+    pub before_thread_id: Option<ThreadId>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredThreadSection {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreadSectionPage {
+    pub data: Vec<StoredThreadSection>,
+    pub next_cursor: Option<StoreCursor>,
 }
 
 /// Parameters for listing turns in one thread.

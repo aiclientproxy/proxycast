@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "sectionId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "sectionId"
+  ],
+  "title": "ThreadSectionUpdateParams",
+  "type": "object"
+}

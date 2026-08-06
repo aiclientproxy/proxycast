@@ -1,17 +1,29 @@
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import styled from "styled-components";
 import {
   Archive,
+  ArrowLeft,
+  Check,
+  ChevronRight,
   FileInput,
+  FolderInput,
   FolderOpen,
   FolderPlus,
   Pencil,
   Pin,
   Trash2,
 } from "lucide-react";
-import type { AgentSessionInfo } from "@/lib/api/agentRuntime/sessionTypes";
+import type {
+  AgentSessionInfo,
+  AgentSessionSection,
+} from "@/lib/api/agentRuntime/sessionTypes";
 import type { SidebarOpenedProjectSummary } from "@/components/app-sidebar/sidebarConversationGroups";
 import { resolveProjectDisplayName } from "@/components/app-sidebar/sidebarProjectDisplayName";
+import {
+  isPinnedThreadSession,
+  PINNED_THREAD_SECTION,
+} from "@/lib/api/threadSections";
 
 export const CONVERSATION_MENU_WIDTH = 188;
 export const CONVERSATION_MENU_APPROX_HEIGHT = 252;
@@ -32,9 +44,12 @@ export type ProjectMenuState = {
 interface ConversationMenuLabels {
   ariaLabel: (title: string) => string;
   rename: string;
-  favorite: string;
-  unfavorite: string;
+  pin: string;
+  unpin: string;
   archive: string;
+  moveToSection: string;
+  moveToSectionBack: string;
+  unsectioned: string;
   delete: string;
 }
 
@@ -53,10 +68,13 @@ interface ProjectMenuLabels {
 interface AppSidebarConversationMenusProps {
   conversationMenuState: ConversationMenuState;
   projectMenuState: ProjectMenuState;
-  favoriteSessionIds: readonly string[];
   resolveSessionTitle: (session: AgentSessionInfo) => string;
   onCloseMenus: () => void;
-  onToggleFavoriteSession: (session: AgentSessionInfo) => void;
+  onTogglePinned: (session: AgentSessionInfo) => void;
+  onMoveToSection: (
+    session: AgentSessionInfo,
+    section: AgentSessionSection | null,
+  ) => void;
   onRenameConversation?: (session: AgentSessionInfo) => void;
   onDeleteConversation?: (session: AgentSessionInfo) => void;
   onToggleArchive: (session: AgentSessionInfo, archived: boolean) => void;
@@ -66,6 +84,7 @@ interface AppSidebarConversationMenusProps {
   onRenameProject?: (project: SidebarOpenedProjectSummary) => void;
   onRemoveProject?: (project: SidebarOpenedProjectSummary) => void;
   onImportConversation?: (project?: SidebarOpenedProjectSummary) => void;
+  threadSections: AgentSessionSection[];
   conversationLabels: ConversationMenuLabels;
   projectLabels: ProjectMenuLabels;
 }
@@ -79,9 +98,18 @@ const ConversationMenuSurface = styled.div`
   border: 1px solid var(--lime-card-subtle-border, rgba(226, 240, 226, 0.9));
   background: var(--lime-surface, #ffffff);
   color: var(--lime-text-strong, #0f172a);
+  max-height: ${CONVERSATION_MENU_APPROX_HEIGHT}px;
+  overflow-y: auto;
   box-shadow:
     0 22px 64px rgba(15, 23, 42, 0.18),
     0 1px 0 rgba(255, 255, 255, 0.76) inset;
+`;
+
+const ConversationMenuItemTrailing = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
 `;
 
 const ConversationMenuItem = styled.button<{ $danger?: boolean }>`
@@ -135,10 +163,10 @@ const ConversationMenuItem = styled.button<{ $danger?: boolean }>`
 export function AppSidebarConversationMenus({
   conversationMenuState,
   projectMenuState,
-  favoriteSessionIds,
   resolveSessionTitle,
   onCloseMenus,
-  onToggleFavoriteSession,
+  onTogglePinned,
+  onMoveToSection,
   onRenameConversation,
   onDeleteConversation,
   onToggleArchive,
@@ -148,9 +176,17 @@ export function AppSidebarConversationMenus({
   onRenameProject,
   onRemoveProject,
   onImportConversation,
+  threadSections,
   conversationLabels,
   projectLabels,
 }: AppSidebarConversationMenusProps) {
+  const [sectionPickerOpen, setSectionPickerOpen] = useState(false);
+  const conversationSessionId = conversationMenuState?.session.id ?? null;
+
+  useEffect(() => {
+    setSectionPickerOpen(false);
+  }, [conversationSessionId]);
+
   if (typeof document === "undefined") {
     return null;
   }
@@ -159,6 +195,52 @@ export function AppSidebarConversationMenus({
     onCloseMenus();
     action();
   };
+
+  const customThreadSections = threadSections.filter(
+    (section) => section.id !== PINNED_THREAD_SECTION.id,
+  );
+
+  const sectionPicker = conversationMenuState ? (
+    <>
+      <ConversationMenuItem
+        type="button"
+        role="menuitem"
+        data-testid="app-sidebar-conversation-menu-section-back"
+        onClick={() => setSectionPickerOpen(false)}
+      >
+        <ArrowLeft />
+        {conversationLabels.moveToSectionBack}
+      </ConversationMenuItem>
+      {[null, ...customThreadSections].map((section) => {
+        const sectionId = section?.id ?? null;
+        const selected =
+          (conversationMenuState.session.section?.id ?? null) === sectionId;
+        return (
+          <ConversationMenuItem
+            key={sectionId ?? "unsectioned"}
+            type="button"
+            role="menuitemradio"
+            aria-checked={selected}
+            data-testid="app-sidebar-conversation-menu-section-option"
+            data-section-id={sectionId ?? "unsectioned"}
+            onClick={() =>
+              runMenuAction(() =>
+                onMoveToSection(conversationMenuState.session, section),
+              )
+            }
+          >
+            <FolderInput />
+            {section?.name ?? conversationLabels.unsectioned}
+            {selected ? (
+              <ConversationMenuItemTrailing>
+                <Check />
+              </ConversationMenuItemTrailing>
+            ) : null}
+          </ConversationMenuItem>
+        );
+      })}
+    </>
+  ) : null;
 
   const conversationMenu = conversationMenuState
     ? createPortal(
@@ -174,7 +256,8 @@ export function AppSidebarConversationMenus({
           data-testid="app-sidebar-conversation-menu"
           onClick={(event) => event.stopPropagation()}
         >
-          {onRenameConversation ? (
+          {sectionPickerOpen ? sectionPicker : null}
+          {!sectionPickerOpen && onRenameConversation ? (
             <ConversationMenuItem
               type="button"
               role="menuitem"
@@ -189,38 +272,56 @@ export function AppSidebarConversationMenus({
               {conversationLabels.rename}
             </ConversationMenuItem>
           ) : null}
-          <ConversationMenuItem
-            type="button"
-            role="menuitem"
-            aria-pressed={favoriteSessionIds.includes(
-              conversationMenuState.session.id,
-            )}
-            data-testid="app-sidebar-conversation-menu-favorite"
-            onClick={() =>
-              runMenuAction(() =>
-                onToggleFavoriteSession(conversationMenuState.session),
-              )
-            }
-          >
-            <Pin />
-            {favoriteSessionIds.includes(conversationMenuState.session.id)
-              ? conversationLabels.unfavorite
-              : conversationLabels.favorite}
-          </ConversationMenuItem>
-          <ConversationMenuItem
-            type="button"
-            role="menuitem"
-            data-testid="app-sidebar-conversation-menu-archive"
-            onClick={() =>
-              runMenuAction(() =>
-                onToggleArchive(conversationMenuState.session, true),
-              )
-            }
-          >
-            <Archive />
-            {conversationLabels.archive}
-          </ConversationMenuItem>
-          {onDeleteConversation ? (
+          {!sectionPickerOpen ? (
+            <ConversationMenuItem
+              type="button"
+              role="menuitem"
+              aria-pressed={isPinnedThreadSession(
+                conversationMenuState.session,
+              )}
+              data-testid="app-sidebar-conversation-menu-pin"
+              onClick={() =>
+                runMenuAction(() =>
+                  onTogglePinned(conversationMenuState.session),
+                )
+              }
+            >
+              <Pin />
+              {isPinnedThreadSession(conversationMenuState.session)
+                ? conversationLabels.unpin
+                : conversationLabels.pin}
+            </ConversationMenuItem>
+          ) : null}
+          {!sectionPickerOpen && customThreadSections.length > 0 ? (
+            <ConversationMenuItem
+              type="button"
+              role="menuitem"
+              data-testid="app-sidebar-conversation-menu-move-section"
+              onClick={() => setSectionPickerOpen(true)}
+            >
+              <FolderInput />
+              {conversationLabels.moveToSection}
+              <ConversationMenuItemTrailing>
+                <ChevronRight />
+              </ConversationMenuItemTrailing>
+            </ConversationMenuItem>
+          ) : null}
+          {!sectionPickerOpen ? (
+            <ConversationMenuItem
+              type="button"
+              role="menuitem"
+              data-testid="app-sidebar-conversation-menu-archive"
+              onClick={() =>
+                runMenuAction(() =>
+                  onToggleArchive(conversationMenuState.session, true),
+                )
+              }
+            >
+              <Archive />
+              {conversationLabels.archive}
+            </ConversationMenuItem>
+          ) : null}
+          {!sectionPickerOpen && onDeleteConversation ? (
             <ConversationMenuItem
               type="button"
               role="menuitem"

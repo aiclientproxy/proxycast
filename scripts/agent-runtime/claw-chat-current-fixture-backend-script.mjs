@@ -49,6 +49,7 @@ import {
   PLAN_PROMPT,
   PLAN_STEPS,
   PROPOSED_PLAN_BLOCK,
+  REASONING_FIRST_VISIBLE_CONTENT_TEXT,
   REASONING_FIRST_VISIBLE_DONE_TEXT,
   REASONING_FIRST_VISIBLE_FINAL_TEXT,
   REASONING_FIRST_VISIBLE_PROMPT,
@@ -1022,6 +1023,16 @@ ${renderUnknownItemBackendEventsExpression()}
     const reasoningItemId = \`\${currentTurnId() || "turn"}:reasoning:first-visible\`;
     emitEvents([
       {
+        type: "reasoning.started",
+        payload: {
+          reasoningId: reasoningItemId,
+          reasoning_id: reasoningItemId,
+          status: "in_progress",
+          started_at: reasoningStartedAt,
+          startedAt: reasoningStartedAt
+        }
+      },
+      {
         type: "reasoning.final",
         payload: {
           reasoningId: reasoningItemId,
@@ -1040,6 +1051,10 @@ ${renderUnknownItemBackendEventsExpression()}
       {
         type: "item.updated",
         payload: {
+          itemType: "reasoning",
+          itemId: reasoningItemId,
+          status: "in_progress",
+          canonicalLifecycle: "runtime_message_reasoning.v1",
           item: {
             id: reasoningItemId,
             thread_id: currentThreadId(),
@@ -1068,8 +1083,12 @@ ${renderUnknownItemBackendEventsExpression()}
     await sleep(5000);
     emitEvents([
       {
-        type: "item.completed",
+        type: "item.updated",
         payload: {
+          itemType: "reasoning",
+          itemId: reasoningItemId,
+          status: "in_progress",
+          canonicalLifecycle: "runtime_message_reasoning.v1",
           item: {
             id: reasoningItemId,
             thread_id: currentThreadId(),
@@ -1079,12 +1098,11 @@ ${renderUnknownItemBackendEventsExpression()}
             type: "reasoning",
             text: "${REASONING_FIRST_VISIBLE_TEXT}",
             summary: ["${REASONING_FIRST_VISIBLE_TEXT}"],
+            content: ["${REASONING_FIRST_VISIBLE_CONTENT_TEXT}"],
             sequence: 1,
-            status: "completed",
+            status: "in_progress",
             started_at: reasoningStartedAt,
             startedAt: reasoningStartedAt,
-            completed_at: new Date().toISOString(),
-            completedAt: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             metadata: {
@@ -1094,6 +1112,14 @@ ${renderUnknownItemBackendEventsExpression()}
               }
             }
           }
+        }
+      },
+      {
+        type: "reasoning.ended",
+        payload: {
+          reasoningId: reasoningItemId,
+          reasoning_id: reasoningItemId,
+          status: "completed"
         }
       },
       {

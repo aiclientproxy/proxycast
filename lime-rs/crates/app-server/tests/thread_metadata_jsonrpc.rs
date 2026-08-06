@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use tempfile::TempDir;
 
 #[tokio::test]
-async fn thread_metadata_update_persists_exact_patch_and_supports_archived_threads() {
+async fn thread_metadata_update_persists_git_patch_and_supports_archived_threads() {
     let temp = TempDir::new().expect("thread metadata temp dir");
     let projection_path = temp.path().join("projection.sqlite");
     let initial = server(&projection_path);
@@ -27,8 +27,6 @@ async fn thread_metadata_update_persists_exact_patch_and_supports_archived_threa
         .as_str()
         .expect("thread id")
         .to_string();
-    assert_eq!(started["result"]["thread"]["isPinned"], false);
-
     let updated = request(
         &initial,
         3,
@@ -39,12 +37,10 @@ async fn thread_metadata_update_persists_exact_patch_and_supports_archived_threa
                 "sha": "  abc123  ",
                 "branch": " main ",
                 "originUrl": " https://example.test/repo.git "
-            },
-            "isPinned": true
+            }
         }),
     )
     .await;
-    assert_eq!(updated["result"]["thread"]["isPinned"], true);
     assert_eq!(
         updated["result"]["thread"]["gitInfo"],
         json!({
@@ -53,9 +49,6 @@ async fn thread_metadata_update_persists_exact_patch_and_supports_archived_threa
             "originUrl": "https://example.test/repo.git"
         })
     );
-
-    let pinned = request(&initial, 4, METHOD_THREAD_LIST, json!({"isPinned": true})).await;
-    assert_eq!(pinned["result"]["data"].as_array().map(Vec::len), Some(1));
 
     request(
         &initial,
@@ -70,12 +63,10 @@ async fn thread_metadata_update_persists_exact_patch_and_supports_archived_threa
         METHOD_THREAD_METADATA_UPDATE,
         json!({
             "threadId": thread_id,
-            "gitInfo": {"branch": null},
-            "isPinned": false
+            "gitInfo": {"branch": null}
         }),
     )
     .await;
-    assert_eq!(archived_update["result"]["thread"]["isPinned"], false);
     assert_eq!(
         archived_update["result"]["thread"]["gitInfo"],
         json!({
@@ -94,7 +85,6 @@ async fn thread_metadata_update_persists_exact_patch_and_supports_archived_threa
         json!({"threadId": thread_id}),
     )
     .await;
-    assert_eq!(cold["result"]["thread"]["isPinned"], false);
     assert_eq!(
         cold["result"]["thread"]["gitInfo"],
         json!({
@@ -102,17 +92,8 @@ async fn thread_metadata_update_persists_exact_patch_and_supports_archived_threa
             "originUrl": "https://example.test/repo.git"
         })
     );
-    let archived_unpinned = request(
-        &restarted,
-        8,
-        METHOD_THREAD_LIST,
-        json!({"archived": true, "isPinned": false}),
-    )
-    .await;
-    assert_eq!(
-        archived_unpinned["result"]["data"][0]["id"],
-        json!(thread_id)
-    );
+    let archived = request(&restarted, 8, METHOD_THREAD_LIST, json!({"archived": true})).await;
+    assert_eq!(archived["result"]["data"][0]["id"], json!(thread_id));
 }
 
 #[tokio::test]

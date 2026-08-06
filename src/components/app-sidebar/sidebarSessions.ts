@@ -39,42 +39,10 @@ export function hasCachedSidebarSessionEntry(
   return sessions.some((session) => session.id === normalizedSessionId);
 }
 
-function compareSidebarSessionTimeDesc(left?: number, right?: number): number {
-  const leftValue =
-    typeof left === "number" && Number.isFinite(left) ? left : 0;
-  const rightValue =
-    typeof right === "number" && Number.isFinite(right) ? right : 0;
-  return rightValue - leftValue;
-}
-
-function compareSidebarSessionIdAsc(left?: string, right?: string): number {
-  return String(left || "").localeCompare(String(right || ""));
-}
-
-export function sortSidebarSessions(
+export function filterSidebarSessions(
   sessions: AgentSessionInfo[],
 ): AgentSessionInfo[] {
-  return sessions
-    .filter((session) => !isAuxiliaryAgentSessionId(session.id))
-    .sort((left, right) => {
-      const updatedAtComparison = compareSidebarSessionTimeDesc(
-        left.updated_at,
-        right.updated_at,
-      );
-      if (updatedAtComparison !== 0) {
-        return updatedAtComparison;
-      }
-
-      const createdAtComparison = compareSidebarSessionTimeDesc(
-        left.created_at,
-        right.created_at,
-      );
-      if (createdAtComparison !== 0) {
-        return createdAtComparison;
-      }
-
-      return compareSidebarSessionIdAsc(left.id, right.id);
-    });
+  return sessions.filter((session) => !isAuxiliaryAgentSessionId(session.id));
 }
 
 export function buildVisibleSidebarSessions(params: {

@@ -224,6 +224,7 @@ export const HistoricalTimelinePreview: React.FC<{
       ) : null}
     </>
   );
+  const thinkingPreview = summary.thinkingPreviews.length > 0;
 
   return (
     <div className="space-y-1.5">
@@ -246,6 +247,18 @@ export const HistoricalTimelinePreview: React.FC<{
           {summaryRow}
         </div>
       )}
+      {thinkingPreview ? (
+        <div
+          data-testid={`historical-reasoning-summary:${placement}`}
+          className="space-y-0.5 border-l-2 border-slate-200 pl-3 text-xs leading-5 text-slate-500"
+        >
+          {summary.thinkingPreviews.map((preview) => (
+            <div key={preview} className="break-words">
+              {preview}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {evidencePaths.length > 0 ? (
         <div
           data-testid="historical-file-artifact-summary"

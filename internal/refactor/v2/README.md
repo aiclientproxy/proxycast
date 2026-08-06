@@ -22,7 +22,7 @@ v2 把 Lime 的对话界面重构为 Codex App Server v2 的完整语义投影�
 
 | 领域                                                      | 主参考                                         | Lime current owner                                           | v2 裁决                                                                       |
 | --------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| Thread、Turn、Item、通知、reverse request、恢复           | Codex 4c43465133428898aa84f0bfc02c306ed65fb66a | app-server-protocol、app-server、thread-store、agent-runtime | 按 Codex 重构并删除重复投影                                                   |
+| Thread、Turn、Item、通知、reverse request、恢复           | Codex c4f42d161ae44a8d696ee9fb595709661979d187 | app-server-protocol、app-server、thread-store、agent-runtime | 按 Codex 重构并删除重复投影                                                   |
 | Item 历史形态、流式渲染和活动单元                         | Codex tui/history_cell 与 tui/streaming        | React 对话时间线                                             | 复制语义，不复制 TUI 外观                                                     |
 | 多模型 catalog、route、capability、switch、retry/breaker  | grok-build                                     | model-provider                                               | 保持 v1 的 Grok 控制面裁决，不迁移为 Codex 单模型假设                         |
 | provider wire、canonical content、media 和多协议 lowering | OpenCode                                       | model-provider                                               | 保持 v1 的 OpenCode wire 裁决，不把 provider raw 类型带入 runtime 或 Renderer |

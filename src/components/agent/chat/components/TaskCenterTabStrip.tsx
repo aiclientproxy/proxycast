@@ -2,7 +2,6 @@ import {
   MessageSquareText,
   PanelRightClose,
   PanelRightOpen,
-  Pin,
   Pencil,
   Plus,
   Loader2,
@@ -58,7 +57,6 @@ export interface TaskCenterTabItem {
   updatedAt: Date;
   isActive: boolean;
   hasUnread: boolean;
-  isPinned: boolean;
   renamable?: boolean;
   closable?: boolean;
 }
@@ -217,12 +215,6 @@ export function TaskCenterTabStrip({
                       <span
                         className="h-2 w-2 shrink-0 rounded-full bg-[color:var(--lime-brand)]"
                         data-testid={`task-center-tab-unread-${item.id}`}
-                        aria-hidden="true"
-                      />
-                    ) : null}
-                    {item.isPinned ? (
-                      <Pin
-                        className="h-2.5 w-2.5 shrink-0 text-[color:var(--lime-text-muted)]"
                         aria-hidden="true"
                       />
                     ) : null}

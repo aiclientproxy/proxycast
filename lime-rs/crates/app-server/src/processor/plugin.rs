@@ -4,6 +4,7 @@ use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, R
 use app_server_protocol::protocol::v2::{
     PluginCatalogEnabledSetParams, PluginCatalogInstallParams, PluginCatalogInstalledParams,
     PluginCatalogListParams, PluginCatalogReadParams, PluginCatalogUninstallParams,
+    PluginSearchParams,
 };
 use app_server_protocol::{
     JsonRpcError, PluginFetchCloudPackageParams, PluginInstalledDisabledSetParams,
@@ -22,6 +23,20 @@ impl RequestProcessor {
         let response = self
             .runtime
             .list_plugin_catalog(params)
+            .await
+            .map_err(to_jsonrpc_error)?;
+        dispatch_result(response)
+    }
+
+    pub(super) async fn handle_plugin_search_v2_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: PluginSearchParams = parse_params(params)?;
+        let response = self
+            .runtime
+            .search_plugins(params)
             .await
             .map_err(to_jsonrpc_error)?;
         dispatch_result(response)

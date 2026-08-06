@@ -3129,6 +3129,205 @@ types、`284` client checks 及 modality/scripts/Electron release/docs guards；
 与 legacy governance 通过，治理摘要为零引用候选 `0`、边界违规 `0`、既有 deprecated 分类漂移 `1`。
 架构影响：重大；更新架构第 23 节与多模型执行计划，责任开发者确认：root，2026-07-28。
 
+### 2026-08-06 raw side-channel allowlist 与未支持能力复核
+
+目标与范围：继续按 Codex Desktop/App Server runtime contract 复核 Lime 的通知边界；TUI UI 不作为实现目标，
+多模型、多模态控制面仍以 `grok-build` 为主参考。写集限定为 v2 notification projector、事件回归、package/Hook
+事实源文档与本计划；不新增协议 method、Electron 后端或第二套 runtime。
+
+完成结果与分类：Rust `V2NotificationProjector` 不再把所有未知 `AgentEvent` 自动包装为
+`agentSession/event`。raw envelope 只允许 `message.created` durable input、五个 provider trace、
+`image_task.created/parameters.required/presentation.generated`（含既有 underscore alias）与 `runtime.status`；
+`approval.session_cache.hit`、`provider.step` 是显式 audit-only，不发送客户端。未知前缀事件、lifecycle alias
+（例如 `warning`、`turn.interrupted`）和其他未知事件在 App Server 边界直接返回 `RUNTIME_ERROR`。Rust/TypeScript
+client 使用相同 exact allowlist，Renderer 继续只消费 provider/media/runtime side-channel，`message.created` 由
+canonical read model 恢复而不伪造第二套 Item lifecycle。direct v2 Thread/Turn/Item 主链不变；raw side-channel
+仍为 `compat/deprecated` 迁出面，不得新增 lifecycle 依赖。thread resume/reconnect 的 raw 顺序回归已改用
+allowlist 内的 `provider.request.started`；`provider.step` 不再作为客户端正向 fixture。
+
+权限 profile 复核结论：`ThreadSettings.activePermissionProfile`、`ThreadSettingsUpdateParams.permissions`、
+`GrantedPermissionProfile` 和工具审批权限对象属于不同语义。当前 Lime 只有 approval/sandbox/web-search
+world-state 与 per-request granted permissions；`thread/settings/update.permissions` 没有 named profile
+resolver、`permissionProfile/list` producer 或 GUI producer，继续在 RuntimeCore fail closed，不把 Codex 配置表
+强行复制到 App Server。若未来进入产品范围，resolver 必须归 `tool-runtime`/permission policy owner，设置持久化
+仍归 App Server，不能由 provider 或 Electron 承接。
+
+辅助模型复核结论：Grok 的 `session_summary_model`、`image_description_model`、`prompt_suggest_model_pin`
+是实际 auxiliary sampler；Lime `topic`、`generation_topic`、`history_compress`、`agent_meta` 配置仍主要停留在
+设置/兼容 auxiliary 观测面，`AISummaryService` 仍是未接 current provider 的 stub，主链构造也不注入它。当前不
+伪造“已接入”证据，也不新增第二套调用链；后续若实现，应由 RuntimeCore/App Server auxiliary task owner 统一
+接入 `model-provider` catalog/readiness/retry，并补真实 Desktop Gate B。
+
+验证：App Server v2 notification 定向 `39/39`、Rust client event `6/6`、TypeScript client `104/104`、Codex
+method scope `4/4`、render projection coverage `5/5` 通过；`cargo test --quiet --manifest-path lime-rs/Cargo.toml
+-p app-server --lib` 全量 `1689/1689` 通过。`npm run test:contracts` 全通过（含 App Server client contract
+`292` checks），`npm run governance:legacy-report` 为 `0` 分类漂移、`0` 边界违规，`npm run
+harness:doc-freshness` 为 `0` issues；rustfmt、Prettier 与 `git diff --check` 通过。包/Hook/计划文档已同步 raw
+side-channel 语义。`npm run verify:local` smart 全量通过：前端 `113/113` 批次、Rust changed scope 的 App Server
+`1689/1689`、Rust client `33/33`、test client `10/10`，以及 generic Electron GUI smoke/App Server initialize 均
+通过；该 generic smoke 是当前工作树的补充证据，不冒充本刀专属 Gate B 场景。本刀未改 Electron、Renderer 主链或
+用户可见交互，因此未新增场景化 Gate B。架构影响：非重大，复用既有 explicit raw allowlist 和 current owner；
+责任开发者：root，2026-08-06。
+
+### 2026-08-06 Durable Ordered Thread Section current 收口
+
+目标与参考：按 Codex HEAD `c4f42d161ae44a8d696ee9fb595709661979d187` 对齐 durable ordered Thread Section；
+Desktop 只复用 Lime 紧凑侧栏分组，不复制 Codex TUI 布局。多模型、多模态控制面继续以 `grok-build` 为主参考，
+本刀不触碰 provider/model/media owner。
+
+完成结果：`threadSection/list/create/update/delete` 与 `thread/section/move` 已具备 current v2 protocol、
+JSON Schema、generated TypeScript、typed client、App Server handler、SQLite section/membership/order、内置
+Pinned section、冷启动恢复和公开 JSON-RPC 测试。`ThreadSectionMoveParams.sectionId` 修正为必填 nullable，
+公共 schema helper 收到 v2 owner。Renderer session gateway 先读 section catalog，再按 `section_position` 逐 section
+读取 `thread/list`，最后读取 `sectionId: null`；去掉最终 `updatedAt` 排序，session/topic/sidebar 均保持服务端顺序。
+
+Desktop 侧栏删除 `lime.app-sidebar.favorite-session-ids`、favorite state 和 `isPinned` UI 投影；conversation menu
+通过 current `thread/section/move` 进入或离开内置 Pinned section，Pinned/custom section 作为首组，未分组会话才进入
+已有项目/独立对话分组。项目置顶、FileManager pin、插件 pinned tabs 不属于本刀删除范围。
+
+验证与修复：Renderer/API/Sidebar/Topic 定向 Vitest `107/107`、Agent API `30/30`、client factory `10/10`、
+App Server runtime boundary `25/25` 与公开 Thread Section JSON-RPC `1/1` 通过；协议生成物已重建并显示
+`ThreadSectionMoveParams.sectionId: null | string`。首次真实 Electron Gate B 暴露未分组请求错误携带
+`sectionId: null + sortKey: section_position`；修复后只对非空 section ID 使用 `section_position`，未分组列表显式发送
+`sectionId: null` 且沿用默认顺序。`npm run smoke:agent-runtime-current-fixture` 随后完整通过，覆盖真实 Electron、
+preload/IPC、`app_server_handle_json_lines`、App Server、read model、会话恢复、代码工作台、图片命令、approval、Plan、
+Skills 与 typed error，production mock/legacy fallback 为 `0`。`npm run verify:local` 当前树完整通过：lint、typecheck、
+前端 `113/113` 批次、`test:contracts`、Rust changed scope 和 `verify:gui-smoke` 均退出码 `0`；Electron smoke 证据为
+`.lime/qc/project-gates/standalone-shell-01-20260806054730-23273/shell-01-electron-smoke/summary.json`，其中
+legacy command、mock fallback、console/page/invoke error 均为 `0`。`npm run governance:legacy-report`、workspace
+rustfmt 与 `git diff --check` 通过。为满足非生成文件 `800` 行治理护栏，Thread Section 分发改用短 v2 owner 引用并将
+私有 handler 收敛到 `thread_sections.rs`，`dispatch.rs` 当前为 `798` 行；没有新增兼容包装层。
+
+分类：Thread Section protocol/store/typed gateway/sidebar projection 为 `current`；旧 `isPinned`、localStorage
+favorite、侧栏时间二次排序为 `dead / deleted / forbidden-to-restore`；无 `compat/deprecated`。产品范围矩阵更新为
+`75 implemented / 110 planned / 35 product-scope-excluded`，完成度 `75 / 185 = 40.5%`。架构影响：重大；已更新
+`internal/aiprompts/architecture.md` 第 29 节，责任开发者确认：root，2026-08-06。下一刀回到 Codex planned
+method 或补 custom section 的 Desktop 管理入口，不恢复 TUI 或第二套导航事实源。
+
+### 2026-08-06 Desktop custom Thread Section 管理入口
+
+目标与阶段：完成上一节已经进入 current protocol/store 的 custom Thread Section Desktop 产品面。主对象是侧栏
+会话分组；本切片覆盖目录管理和会话归属变更。交互遵循 Lime 紧凑侧栏，不复制 Codex TUI，不触碰
+`grok-build` 所属 provider/model/media owner。
+
+窄写集：`src/lib/api/threadSections*`、`src/components/app-sidebar/AppSidebarConversationShelf*`、
+`AppSidebarConversationMenus*`、`sidebarConversationGroups*`、`useAppSidebarConversationActions*`、必要的
+`AppSidebar.tsx` 接线与测试 fixture、五份 `navigation.json`、本计划。退出条件：typed gateway 只有一个 owner；空 custom
+section 也按 catalog 顺序可见；Pinned 不可重命名/删除；会话可在 custom section 与未分组之间移动；无 localStorage、
+mock backend 或兼容包装；五语言覆盖、定向测试、typecheck/contracts、GUI smoke 和 current fixture 通过。架构影响：
+非重大，只补既有第 29 节 Desktop projection/command producer，不改变 owner 或依赖方向。
+
+完成结果：`threadSections.ts` 是唯一 typed gateway，侧栏从 durable catalog 读取并保留空 custom section；新增、重命名、
+删除 custom section 均写入 App Server JSON-RPC/SQLite，删除后成员回到未分组。会话移动统一走
+`thread/section/move`，Pinned 只是内置 section 快捷入口，不再存在 favorite/localStorage 双轨。菜单支持 custom
+section 选择和“不分组”，五种 locale 均有稳定文案与 tooltip。
+
+验证结果：Thread Section、分组投影与边界定向测试 `15/15`，`AppSidebar.conversations.test.tsx` `53/53`；
+`npm run typecheck`、`npm run i18n:check`（coverage `100%`，missing/extra `0`）、`npm run i18n:unused -- --check`
+（unused `0`）、`npm run test:contracts`（generated protocol types `873`、App Server client checks `292`）、scoped
+Prettier 与 `git diff --check` 通过。`npm run verify:gui-smoke` 通过真实 Electron/App Server 链路，证据为
+`.lime/qc/project-gates/standalone-shell-01-20260806095438-66588/shell-01-electron-smoke/summary.json`；
+`npm run smoke:agent-runtime-current-fixture` 完整通过，覆盖历史恢复、首页、会话、代码工作台、图片、approval、Plan、
+Skills、MCP、media 与 typed error，`liveProviderUsed=false`。最终 `npm run verify:local` 退出码 `0`，包含前端
+`113/113` 批次、changed Rust scope、contracts 与 GUI smoke；`npm run governance:legacy-report` 为零引用候选 `0`、
+分类漂移候选 `0`、边界违规 `0`，`cargo fmt --manifest-path "lime-rs/Cargo.toml" --all -- --check` 通过。
+Thread Section 分发继续使用短 v2 owner 引用，`lime-rs/crates/app-server/src/processor/dispatch.rs` 保持 `798` 行，
+未新增 compat、mock 或旧 runtime 回流入口。
+
+分类：section protocol/store/typed gateway/sidebar projection、custom CRUD 与 session move 为 `current`；旧
+favorite/localStorage、`isPinned` 投影和侧栏时间二次排序为 `dead / deleted / forbidden-to-restore`；无
+`compat`、`deprecated`。完成度 `100%`，无 blocker。架构影响：非重大；复用既有第 29 节 owner 和 Electron Desktop
+主链，责任开发者确认：root，2026-08-06。下一刀回到 Codex planned method 或下一项主链能力，不恢复 TUI 或第二套
+导航事实源。
+
+### 2026-08-06 Desktop canonical reasoning 展开正文修复
+
+目标与范围：修复桌面对话时间线中“已完成思考”展开后只剩图标、没有正文的问题。Lime 继续采用 Desktop
+紧凑过程时间线，不复制 Codex TUI 布局；本刀只修 Thread/Turn/Item 的 Renderer 投影与既有 Electron fixture，
+不触碰 `grok-build` 所属多模型、多模态控制面，也不修改 provider、协议或 App Server owner。
+
+根因与完成结果：App Server canonical reader 已同时保留 Reasoning Item 的 `summary[]` 与 `content[]`，其中
+`text` 仍是 summary 展示镜像；Renderer 的 `resolveReasoningDisplayText` 却只读取 `summary[] + text`，导致只有
+canonical `content[]` 的完成态展开区没有可渲染正文。当前实现统一以 `summary[]` 生成默认摘要，以 `content[]`
+生成展开正文；仅在 `content[]` 缺失时使用 Item `text`，相同摘要与正文继续去重，raw reasoning 不拼入最终回答。
+忽略 canonical `content[]` 的旧投影行为为 `dead / deleted / forbidden-to-restore`；本刀没有新增 `compat`、
+`deprecated`、开关或第二套时间线。
+
+测试与 Gate B：projection/component/fixture guard 定向 Vitest `101/101`，其中 resolver `4/4`、Reasoning
+timeline `15/15`、Electron fixture guard `82/82`；`npm run typecheck`、scoped ESLint、scoped Prettier 与
+`git diff --check` 通过。`npm run smoke:agent-runtime-current-fixture` 完整通过，覆盖 current Runtime、历史恢复、
+真实 Electron 主路径、approval、Plan、Skills、MCP 与 media，`liveProviderUsed=false`。强化后的
+`reasoning-first-visible` 专门场景继续使用真实 Electron/preload/IPC、`app_server_handle_json_lines`、App Server
+read model 与 external fixture backend：先点击“已处理”历史摘要，再点击“已完成思考”，断言 canonical Reasoning
+`content[]` 在展开后可见；输入框恢复、真实 terminal、identity 一致，console/page/invoke error、
+legacy command 与 production mock fallback 命中均为 `0`，`liveProviderNotUsed=true`。证据：
+`.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-summary.json` 与
+`.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-chat.png`。最终
+`npm run verify:gui-smoke` 通过，证据为
+`.lime/qc/project-gates/standalone-shell-01-20260806110718-43649/shell-01-electron-smoke/summary.json`。
+
+分类与完成度：canonical Reasoning summary/content 投影、桌面两级过程展开与对应回归为 `current`；忽略
+`content[]` 的旧 resolver 行为已删除；无新增兼容面、无 blocker，完成度 `100%`。验证强化过程中发现并修正的
+double-terminal 仅属于 test-only external backend fixture，没有放宽生产状态机。架构影响：非重大，沿用既有
+App Server read model -> Renderer timeline owner；责任开发者：root，2026-08-06。
+
+### 2026-08-06 exact `plugin/search` current 切片
+
+目标与窄写集：按 Codex HEAD `c4f42d161ae44a8d696ee9fb595709661979d187` 对齐 exact
+`plugin/search` method 与 wire，写集限定为 v2 Plugin protocol/schema、App Server Plugin processor/runtime/local
+catalog owner、typed package client、Renderer Plugin API、公开 JSON-RPC 测试与产品范围矩阵。Lime 保持
+Desktop GUI，不复制 Codex TUI；本切片不触碰由 `grok-build` 对齐的 provider/model/media 控制面。
+
+完成结果：新增 `PluginSearchParams` / `PluginSearchScope` / `PluginSearchResponse` 及 Codex Plugin summary
+wire，注册 exact `plugin/search`，并经 `App Server JSON-RPC -> RuntimeCore -> PluginDataSource ->
+LocalAppDataSource -> plugin_catalog` 唯一 owner 执行。当前支持 `searchTerm`、`global/workspace/personal`
+scope、`cwds`、`cursor` 与 `limit`；package client 暴露 `searchPlugins`，Renderer gateway 暴露
+`searchPluginCatalog`。未新增 Electron 业务后端、平行 Plugin catalog、production mock fallback 或兼容包装。
+
+验证：Codex wire round-trip `1/1`、公开 `plugin_search_jsonrpc` `1/1`、Renderer Plugin API `2/2`、
+product-scope boundary `4/4`、package App Server client `106/106` 通过；`npm run test:contracts` 全部通过，
+包含 generated types 无漂移与 App Server client contract `292` checks。`npm run test:rust:related -- <plugin
+slice paths>` 完整退出码为 `0`，其中 `agent-runtime 192/192`、`app-server 1690/1690`、
+`app-server-client 34/34`、`app-server-daemon 38/38`、`app-server-protocol 100/100`。`npm run typecheck`、
+`npm run governance:legacy-report`（分类漂移 `0`、边界违规 `0`）、workspace rustfmt 与 `git diff --check`
+通过。本切片没有新增 GUI 消费路径或 Electron 边界，因此未冒充场景化 Gate B 证据。
+
+分类与进度：本切片新增 protocol、handler、runtime owner、typed client 与 gateway 均为 `current`；无
+`compat`、`deprecated` 或新的 `dead` surface。方法产品范围矩阵为 `76 implemented / 109 planned /
+35 product-scope-excluded`，产品范围 method 完成度 `76 / 185 = 41.1%`。其余
+`plugin/list/read/install/uninstall/share/skill/read` 等 `11` 个 Plugin method 仍是 `planned`，不由本方法
+冒充 Plugins 整体对齐。架构影响：非重大，复用既有 App Server current 主链与 Plugin catalog owner；
+责任开发者：root，2026-08-06。下一刀优先补 Skills/Plugins/Apps watcher/readiness 或 Hook lifecycle。
+
+### 2026-08-06 Hook lifecycle active slice
+
+目标与阶段：继续按 Codex HEAD `c4f42d161ae44a8d696ee9fb595709661979d187` 对齐 exact
+`hooks/list`、`hook/started` 与 `hook/completed`，并把现有 `tool-runtime` Hook owner 接入真实 provider sampling、
+canonical Thread/Turn/Item 与 Desktop 时间线。Lime 继续使用紧凑 GUI，不复制 Codex TUI；本切片不触碰
+`grok-build` 所属 provider/model/media 控制面。完成前方法矩阵保持 `76 implemented / 109 planned / 35
+product-scope-excluded`，不得用 owner 单测或协议骨架提前移动完成度。
+
+窄写集：`lime-rs/crates/tool-runtime/src/hook_*` 与 `turn_snapshot.rs`、Agent protocol/runtime 的 Hook event 接线、
+App Server v2 Hook protocol/schema/dispatch/notification projection、Rust/TypeScript typed client、Renderer Hook
+gateway/notification/Item timeline、对应公共 JSON-RPC/owner/projection/GUI fixture 测试，以及本计划、架构、Hook
+事实源和产品范围矩阵。共享的 protocol registry、App Server dispatch、generated types 当前包含 Thread Section 与
+Plugin Search 脏改动；只追加 Hook 注册点并保留现有改动。侧栏、Thread Section、Plugin Search、Reasoning 与五语言
+navigation 写集只读避让。
+
+唯一事实源与替换规则：Hook discovery 同时服务 `hooks/list` 与 sampling runtime；用户配置只读取
+`CODEX_HOME/config.toml`、项目配置只读取 `<cwd>/.codex/config.toml`，Plugin Hook 只来自本轮已激活 package root。
+旧 `{hooks:{pre_tool_use:[{command:...}]}}` 解析、默认信任、`FixedHookReporter::new(None)` 空执行和 Renderer
+`known_unprojected` 均为 `dead / deleted / forbidden-to-restore`，不保留兼容包装。unmanaged Hook 默认
+`untrusted`，仅 trusted hash 匹配或 managed 定义可执行；`modified`/`untrusted` 只能列出并 fail closed。
+
+退出条件：public `hooks/list` 返回 exact metadata；真实 command Hook 在 tool handler 前后执行并发出同一
+`hookRunId` 的 `hook/started`、`hook/completed`；App Server 将 notification 投影为 canonical Hook Item，历史/read
+model 与 Renderer timeline 可恢复；production mock/legacy fallback 命中为 `0`。验证至少包含 Hook owner 与 Agent
+runtime integration、public JSON-RPC、protocol round-trip、typed clients、notification -> Item -> timeline、
+`npm run test:contracts`、Rust related、`npm run smoke:agent-runtime-current-fixture`、`npm run verify:gui-smoke`、
+专用真实 Electron Hook Gate B、`npm run governance:legacy-report`、typecheck、rustfmt、Prettier 与
+`git diff --check`。架构影响：重大；完成时同步 `internal/aiprompts/architecture.md` 并由责任开发者确认。
+
 ## 8. 完成定义
 
 本计划完成不等于“所有 Codex 产品面都复制”。完成定义是：

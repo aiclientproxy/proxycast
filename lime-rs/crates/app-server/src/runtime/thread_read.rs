@@ -5,17 +5,24 @@ use agent_protocol::PageCursor;
 use app_server_protocol::protocol::v2::{
     ThreadLoadedListParams, ThreadLoadedListResponse, ThreadMetadataGitInfoUpdateParams,
     ThreadMetadataUpdateParams, ThreadSearchOccurrence, ThreadSearchOccurrencesParams,
-    ThreadSearchOccurrencesResponse, ThreadSearchTextRange, ThreadSetNameParams,
-    ThreadSetNameResponse,
+    ThreadSearchOccurrencesResponse, ThreadSearchTextRange, ThreadSection,
+    ThreadSectionCreateParams, ThreadSectionCreateResponse, ThreadSectionDeleteParams,
+    ThreadSectionDeleteResponse, ThreadSectionListParams, ThreadSectionListResponse,
+    ThreadSectionMoveParams, ThreadSectionMoveResponse, ThreadSectionUpdateParams,
+    ThreadSectionUpdateResponse, ThreadSetNameParams, ThreadSetNameResponse,
 };
 use app_server_protocol::{
     ThreadItemsListParams, ThreadItemsListResponse, ThreadListParams, ThreadListResponse,
     ThreadReadParams, ThreadReadResponse, ThreadTurnsListParams, ThreadTurnsListResponse,
 };
 use thread_store::{
-    ArchiveThreadParams, ListItemsParams, ListThreadsParams, ListTurnsParams, PageRequest,
-    ReadThreadParams, SearchThreadOccurrencesParams as StoreSearchThreadOccurrencesParams,
-    StoreCursor, ThreadMetadataPatch, ThreadStore, ThreadStoreErrorKind,
+    ArchiveThreadParams, CreateThreadSectionParams as StoreCreateThreadSectionParams,
+    DeleteThreadSectionParams as StoreDeleteThreadSectionParams, ListItemsParams,
+    ListThreadSectionsParams as StoreListThreadSectionsParams, ListThreadsParams, ListTurnsParams,
+    MoveThreadToSectionParams as StoreMoveThreadToSectionParams, PageRequest, ReadThreadParams,
+    RenameThreadSectionParams as StoreRenameThreadSectionParams,
+    SearchThreadOccurrencesParams as StoreSearchThreadOccurrencesParams, StoreCursor,
+    StoredThreadSection, ThreadMetadataPatch, ThreadStore, ThreadStoreErrorKind,
     UpdateThreadMetadataParams,
 };
 
@@ -242,10 +249,6 @@ impl RuntimeCore {
         if let Some(git_info) = params.git_info {
             apply_git_info_patch(metadata, git_info);
         }
-        if let Some(is_pinned) = params.is_pinned {
-            metadata.remove("is_pinned");
-            metadata.insert("isPinned".to_string(), serde_json::Value::Bool(is_pinned));
-        }
         store
             .update_thread_metadata(UpdateThreadMetadataParams {
                 thread_id,
@@ -436,6 +439,8 @@ impl RuntimeCore {
             .list_threads(ListThreadsParams {
                 include_archived: params.include_archived,
                 page: store_page(params.page)?,
+                section: params.section,
+                sort_by_section_position: params.sort_by_section_position,
             })
             .await
             .map_err(store_error)?;
@@ -464,6 +469,102 @@ impl RuntimeCore {
             next_cursor: page.next_cursor.map(StoreCursor::into_string),
             backwards_cursor: page.backwards_cursor.map(StoreCursor::into_string),
         })
+    }
+
+    pub async fn list_thread_sections(
+        &self,
+        params: ThreadSectionListParams,
+    ) -> Result<ThreadSectionListResponse, RuntimeCoreError> {
+        let cursor = params
+            .cursor
+            .map(StoreCursor::new)
+            .transpose()
+            .map_err(|error| RuntimeCoreError::InvalidRequest(error.to_string()))?;
+        let page = self
+            .canonical_thread_store()?
+            .list_thread_sections(StoreListThreadSectionsParams {
+                cursor,
+                limit: params.limit.unwrap_or(100).clamp(1, 500),
+            })
+            .await
+            .map_err(store_error)?;
+        Ok(ThreadSectionListResponse {
+            data: page.data.into_iter().map(project_section).collect(),
+            next_cursor: page.next_cursor.map(StoreCursor::into_string),
+        })
+    }
+
+    pub async fn create_thread_section(
+        &self,
+        params: ThreadSectionCreateParams,
+    ) -> Result<ThreadSectionCreateResponse, RuntimeCoreError> {
+        let section = self
+            .canonical_thread_store()?
+            .create_thread_section(StoreCreateThreadSectionParams { name: params.name })
+            .await
+            .map_err(store_error)?;
+        Ok(ThreadSectionCreateResponse {
+            section: project_section(section),
+        })
+    }
+
+    pub async fn update_thread_section(
+        &self,
+        params: ThreadSectionUpdateParams,
+    ) -> Result<ThreadSectionUpdateResponse, RuntimeCoreError> {
+        let section_id = params.section_id.clone();
+        let section = self
+            .canonical_thread_store()?
+            .rename_thread_section(StoreRenameThreadSectionParams {
+                section_id,
+                name: params.name,
+            })
+            .await
+            .map_err(store_error)?
+            .ok_or_else(|| {
+                RuntimeCoreError::InvalidRequest(format!(
+                    "thread section not found: {}",
+                    params.section_id
+                ))
+            })?;
+        Ok(ThreadSectionUpdateResponse {
+            section: project_section(section),
+        })
+    }
+
+    pub async fn delete_thread_section(
+        &self,
+        params: ThreadSectionDeleteParams,
+    ) -> Result<ThreadSectionDeleteResponse, RuntimeCoreError> {
+        let deleted = self
+            .canonical_thread_store()?
+            .delete_thread_section(StoreDeleteThreadSectionParams {
+                section_id: params.section_id.clone(),
+            })
+            .await
+            .map_err(store_error)?;
+        if !deleted {
+            return Err(RuntimeCoreError::InvalidRequest(format!(
+                "thread section not found: {}",
+                params.section_id
+            )));
+        }
+        Ok(ThreadSectionDeleteResponse {})
+    }
+
+    pub async fn move_thread_to_section(
+        &self,
+        params: ThreadSectionMoveParams,
+    ) -> Result<ThreadSectionMoveResponse, RuntimeCoreError> {
+        self.canonical_thread_store()?
+            .move_thread_to_section(StoreMoveThreadToSectionParams {
+                thread_id: agent_protocol::ThreadId::new(params.thread_id),
+                section: params.section_id,
+                before_thread_id: params.before_thread_id.map(agent_protocol::ThreadId::new),
+            })
+            .await
+            .map_err(store_error)?;
+        Ok(ThreadSectionMoveResponse {})
     }
 
     pub async fn list_thread_turns(
@@ -637,7 +738,20 @@ fn store_page(page: PageCursor) -> Result<PageRequest, RuntimeCoreError> {
 }
 
 fn store_error(error: thread_store::ThreadStoreError) -> RuntimeCoreError {
-    RuntimeCoreError::Backend(error.to_string())
+    match error.kind() {
+        ThreadStoreErrorKind::InvalidRequest | ThreadStoreErrorKind::ThreadNotFound => {
+            RuntimeCoreError::InvalidRequest(error.to_string())
+        }
+        ThreadStoreErrorKind::Unsupported => RuntimeCoreError::MethodNotFound(error.to_string()),
+        ThreadStoreErrorKind::Internal => RuntimeCoreError::Backend(error.to_string()),
+    }
+}
+
+fn project_section(section: StoredThreadSection) -> ThreadSection {
+    ThreadSection {
+        id: section.id,
+        name: section.name,
+    }
 }
 
 fn search_store_error(error: thread_store::ThreadStoreError) -> RuntimeCoreError {
@@ -858,6 +972,8 @@ mod tests {
                 page: page(),
                 include_archived: false,
                 turns_view: ThreadTurnsView::NotLoaded,
+                section: None,
+                sort_by_section_position: false,
             })
             .await
             .expect("list visible");
@@ -869,6 +985,8 @@ mod tests {
                 page: page(),
                 include_archived: true,
                 turns_view: ThreadTurnsView::Full,
+                section: None,
+                sort_by_section_position: false,
             })
             .await
             .expect("list all");

@@ -185,6 +185,7 @@ function WorkspacePluginSurfaceFrame({
     );
   const runtimeOwnerSessionId = runtimeOwner?.sessionId;
   const runtimeOwnerThreadId = runtimeOwner?.threadId;
+  const hasMcpApp = Boolean(surface.mcpApp);
   const mcpAppPluginUninstalled = mcpAppPluginAvailability === "uninstalled";
   const embeddedHostReady =
     hostAvailable &&
@@ -192,7 +193,7 @@ function WorkspacePluginSurfaceFrame({
     !mcpAppPluginUninstalled;
 
   useEffect(() => {
-    if (!surface.mcpApp) {
+    if (!hasMcpApp) {
       setMcpAppPluginAvailability("not-applicable");
       return;
     }
@@ -217,7 +218,12 @@ function WorkspacePluginSurfaceFrame({
     return () => {
       cancelled = true;
     };
-  }, [surface.appId, surface.mcpApp?.resourceUri, surface.mcpApp?.serverName]);
+  }, [
+    hasMcpApp,
+    surface.appId,
+    surface.mcpApp?.resourceUri,
+    surface.mcpApp?.serverName,
+  ]);
 
   const syncBounds = useCallback(
     async (force = false) => {

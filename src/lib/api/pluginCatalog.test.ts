@@ -5,6 +5,7 @@ import {
   listInstalledPluginCatalog,
   listPluginCatalog,
   readPluginCatalog,
+  searchPluginCatalog,
   setPluginCatalogEnabled,
   uninstallPluginCatalog,
   type PluginCatalogClient,
@@ -15,6 +16,9 @@ function client(): PluginCatalogClient {
     listPluginCatalog: vi
       .fn()
       .mockResolvedValue({ result: { plugins: [], generatedAt: "now" } }),
+    searchPlugins: vi
+      .fn()
+      .mockResolvedValue({ result: { data: [], nextCursor: null } }),
     setPluginCatalogEnabled: vi
       .fn()
       .mockResolvedValue({ result: { plugin: {} } }),
@@ -34,6 +38,7 @@ describe("Plugin v2 catalog API", () => {
     const appServerClient = client();
 
     await listPluginCatalog({ query: "demo" }, appServerClient);
+    await searchPluginCatalog({ searchTerm: "demo" }, appServerClient);
     await readPluginCatalog({ pluginId: "demo" }, appServerClient);
     await setPluginCatalogEnabled(
       { pluginId: "demo", enabled: true },
@@ -48,6 +53,9 @@ describe("Plugin v2 catalog API", () => {
 
     expect(appServerClient.listPluginCatalog).toHaveBeenCalledWith({
       query: "demo",
+    });
+    expect(appServerClient.searchPlugins).toHaveBeenCalledWith({
+      searchTerm: "demo",
     });
     expect(appServerClient.setPluginCatalogEnabled).toHaveBeenCalledWith({
       pluginId: "demo",

@@ -286,8 +286,12 @@ pub struct ThreadListParams {
     pub source_kinds: Option<Vec<ThreadSourceKind>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub is_pinned: Option<bool>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_double_option_string",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub section_id: Option<Option<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cwd: Option<ThreadListCwdFilter>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -307,6 +311,72 @@ pub struct ThreadListResponse {
     pub next_cursor: Option<String>,
     pub backwards_cursor: Option<String>,
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSectionListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSectionListResponse {
+    pub data: Vec<super::ThreadSection>,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSectionCreateParams {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSectionCreateResponse {
+    pub section: super::ThreadSection,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSectionUpdateParams {
+    pub section_id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSectionUpdateResponse {
+    pub section: super::ThreadSection,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSectionDeleteParams {
+    pub section_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSectionDeleteResponse {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSectionMoveParams {
+    pub thread_id: String,
+    #[serde(deserialize_with = "deserialize_nullable_string")]
+    #[schemars(required, schema_with = "super::serde_helpers::nullable_string_schema")]
+    pub section_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before_thread_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSectionMoveResponse {}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -426,8 +496,6 @@ pub struct ThreadMetadataUpdateParams {
     pub thread_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub git_info: Option<ThreadMetadataGitInfoUpdateParams>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub is_pinned: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -784,4 +852,11 @@ where
     D: Deserializer<'de>,
 {
     Option::<String>::deserialize(deserializer).map(Some)
+}
+
+fn deserialize_nullable_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer)
 }

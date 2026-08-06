@@ -31,6 +31,16 @@ function appServerClientMock(): AgentRuntimeAppServerClient {
       messages: [],
       notifications: [],
     }),
+    listThreadSections: vi.fn().mockResolvedValue({
+      id: 1,
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+      response: { id: 1, result: {} },
+      messages: [],
+      notifications: [],
+    }),
     readSession: vi.fn().mockResolvedValue({
       id: 1,
       result: {
@@ -682,9 +692,13 @@ describe("agentRuntime clientFactory", () => {
       serviceName: "新会话",
       threadSource: "appServer",
     });
+    expect(appServerClient.listThreadSections).toHaveBeenCalledWith({
+      limit: 100,
+    });
     expect(appServerClient.request).toHaveBeenCalledWith("thread/list", {
       archived: false,
       limit: 100,
+      sectionId: null,
     });
     expect(appServerClient.readThread).toHaveBeenCalledWith({
       threadId: "thread-1",

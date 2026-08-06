@@ -114,7 +114,6 @@ describe("agentSessionState runtimeSync detail refresh", () => {
           executionStrategy: "react",
           status: "done",
           lastPreview: "收到-CDP正常对话",
-          isPinned: false,
           hasUnread: false,
           tag: null,
           sourceSessionId: "topic-app-server-detail",

@@ -31,7 +31,7 @@ src/hooks/
 现役 Agent / Codex 工作台事实源：
 
 - `useAgentChatUnified -> useAgentChat -> useAgentContext / useAgentSession / useAgentTools / useAgentStream`
-- 命令主链：`agentSession/turn/start -> agentSession/event -> runtime items(plan / runtime_status / artifact / tool / action) -> action_required -> agentSession/action/respond`
+- 命令主链：`agentSession/turn/start -> direct v2 Thread/Turn/Item notifications -> runtime items(plan / runtime_status / artifact / tool / action) -> typed action request -> agentSession/action/respond`；`agentSession/event` 只允许显式 allowlist 内的 `message.created` durable input 及 provider/media/runtime raw side-channel，不是生命周期主链
 - 适用场景：Agent 工作台、任务执行、工具审批、timeline 渲染
 
 **相关文件**：

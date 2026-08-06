@@ -48,7 +48,6 @@ function renderTabStrip(
       updatedAt: new Date("2026-04-24T10:00:00.000Z"),
       isActive: true,
       hasUnread: true,
-      isPinned: false,
     },
     {
       id: "topic-b",
@@ -57,7 +56,6 @@ function renderTabStrip(
       updatedAt: new Date("2026-04-24T09:00:00.000Z"),
       isActive: false,
       hasUnread: false,
-      isPinned: true,
     },
   ];
 
@@ -160,7 +158,6 @@ describe("TaskCenterTabStrip", () => {
           updatedAt: new Date("2026-04-24T10:00:00.000Z"),
           isActive: true,
           hasUnread: false,
-          isPinned: false,
         },
       ],
     });
@@ -223,7 +220,6 @@ describe("TaskCenterTabStrip", () => {
           updatedAt: new Date("2026-04-24T10:00:00.000Z"),
           isActive: true,
           hasUnread: false,
-          isPinned: false,
           renamable: false,
           closable: false,
         },
@@ -272,7 +268,6 @@ describe("TaskCenterTabStrip", () => {
           updatedAt: new Date("2026-04-24T10:00:00.000Z"),
           isActive: true,
           hasUnread: false,
-          isPinned: false,
         },
       ],
     });

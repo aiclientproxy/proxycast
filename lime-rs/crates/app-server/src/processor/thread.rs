@@ -170,7 +170,7 @@ impl RequestProcessor {
         params.thread_id = required_thread_value(&params.thread_id, "thread/metadata/update")?;
         Uuid::parse_str(&params.thread_id)
             .map_err(|error| invalid_request(format!("invalid thread id: {error}")))?;
-        if params.git_info.is_none() && params.is_pinned.is_none() {
+        if params.git_info.is_none() {
             return Err(invalid_request(
                 "thread metadata update must include at least one field",
             ));
@@ -879,7 +879,8 @@ mod tests {
             parent_thread_id: None,
             preview: String::new(),
             ephemeral: false,
-            is_pinned: false,
+            section: None,
+            section_entered_at: None,
             history_mode: ThreadHistoryMode::Legacy,
             model_provider: "provider".to_string(),
             created_at: 1,

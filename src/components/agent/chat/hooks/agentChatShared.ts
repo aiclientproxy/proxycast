@@ -61,7 +61,8 @@ export interface Topic {
   statusReason?: TaskStatusReason;
   queuedTurnCount?: number;
   lastPreview: string;
-  isPinned: boolean;
+  section?: { id: string; name: string };
+  sectionEnteredAt?: number;
   hasUnread: boolean;
   tag?: string | null;
   sourceSessionId: string;
@@ -673,7 +674,8 @@ export const mapSessionToTopic = (session: AgentSessionInfo): Topic => {
     statusReason,
     queuedTurnCount: session.queued_turn_count,
     lastPreview,
-    isPinned: false,
+    section: session.section,
+    sectionEnteredAt: session.section_entered_at,
     hasUnread: false,
     tag: null,
     sourceSessionId: session.id,

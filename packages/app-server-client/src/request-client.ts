@@ -30,6 +30,21 @@ export interface AppServerClient {
   ): protocol.JsonRpcRequest;
   readThread(params: protocol.ThreadReadParams): protocol.JsonRpcRequest;
   listThreads(params?: protocol.ThreadListParams): protocol.JsonRpcRequest;
+  moveThreadToSection(
+    params: protocol.ThreadSectionMoveParams,
+  ): protocol.JsonRpcRequest;
+  listThreadSections(
+    params?: protocol.ThreadSectionListParams,
+  ): protocol.JsonRpcRequest;
+  createThreadSection(
+    params: protocol.ThreadSectionCreateParams,
+  ): protocol.JsonRpcRequest;
+  updateThreadSection(
+    params: protocol.ThreadSectionUpdateParams,
+  ): protocol.JsonRpcRequest;
+  deleteThreadSection(
+    params: protocol.ThreadSectionDeleteParams,
+  ): protocol.JsonRpcRequest;
   listLoadedThreads(
     params?: protocol.ThreadLoadedListParams,
   ): protocol.JsonRpcRequest;
@@ -178,6 +193,7 @@ export interface AppServerClient {
   listPluginCatalog(
     params?: protocol.PluginCatalogListParams,
   ): protocol.JsonRpcRequest;
+  searchPlugins(params: protocol.PluginSearchParams): protocol.JsonRpcRequest;
   setPluginCatalogEnabled(
     params: protocol.PluginCatalogEnabledSetParams,
   ): protocol.JsonRpcRequest;

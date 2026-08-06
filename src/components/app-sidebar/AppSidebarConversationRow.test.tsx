@@ -25,9 +25,7 @@ function renderRow(
         title="运行中会话"
         meta="刚刚"
         active={false}
-        favorite={false}
         actionDisabled={false}
-        favoriteBadgeLabel="已收藏"
         moreActionsLabel="更多操作"
         openActionMenuLabel="打开操作菜单"
         onNavigate={vi.fn()}

@@ -4,6 +4,7 @@ import {
   PLAN_DONE_TEXT,
   PLAN_PROMPT,
   PLAN_STEPS,
+  REASONING_FIRST_VISIBLE_CONTENT_TEXT,
   REASONING_FIRST_VISIBLE_DONE_TEXT,
   REASONING_FIRST_VISIBLE_FINAL_TEXT,
   REASONING_FIRST_VISIBLE_PROMPT,
@@ -46,18 +47,13 @@ export function isGuiCanceledSnapshotReady(
 
 export function isGuiChatCompletedSnapshotReady(
   snapshot,
-  {
-    requiredAssistantVisibleTexts = [],
-    expectedIdentity = null,
-  } = {},
+  { requiredAssistantVisibleTexts = [], expectedIdentity = null } = {},
 ) {
   const hasRequiredAssistantVisibleTexts = (
     snapshot?.requiredVisibleTextHits || []
   ).every((hit) => hit.occurrences > 0);
   const scopedDedupeGuardHits =
-    snapshot?.assistantScopeDedupeGuardHits ||
-    snapshot?.dedupeGuardHits ||
-    [];
+    snapshot?.assistantScopeDedupeGuardHits || snapshot?.dedupeGuardHits || [];
   const scopedDisallowedVisibleTextHits =
     snapshot?.disallowedVisibleTextHits || [];
   const hasExpectedAssistantContent =
@@ -151,7 +147,9 @@ export async function waitForGuiChatCompleted(
               (bubble) =>
                 bubble.getAttribute("data-message-id") ===
                 lastAssistantMessageId,
-            ) ?? assistantBubbles[assistantBubbles.length - 1] ?? group;
+            ) ??
+            assistantBubbles[assistantBubbles.length - 1] ??
+            group;
           const assistantScopeText = assistantScope?.innerText || groupText;
           const assistantTurnText = assistantBubbles
             .map((bubble) => bubble.innerText || "")
@@ -470,6 +468,7 @@ export async function waitForGuiSkillsRuntimeCompleted(
 
 function reasoningFirstVisibleSnapshotFromDom({
   prompt,
+  reasoningContentText,
   reasoningText,
   finalText,
   doneText,
@@ -495,6 +494,7 @@ function reasoningFirstVisibleSnapshotFromDom({
   ).map((node) => ({
     testId: node.getAttribute("data-testid") || "",
     text: node.textContent || "",
+    open: node instanceof HTMLDetailsElement ? node.open : null,
   }));
   const textarea = document.querySelector(
     'textarea[name="agent-chat-message"]',
@@ -527,6 +527,7 @@ function reasoningFirstVisibleSnapshotFromDom({
     );
   });
   const reasoningIndex = scopedText.indexOf(reasoningText);
+  const reasoningContentIndex = scopedText.indexOf(reasoningContentText);
   const finalAnswerIndex = scopedText.indexOf(finalText);
   const hasThinkingLabel =
     scopedText.includes("思考中") || scopedText.includes("已完成思考");
@@ -545,6 +546,11 @@ function reasoningFirstVisibleSnapshotFromDom({
     url: window.location.href,
     hasPrompt: scopedText.includes(prompt),
     hasReasoningText: reasoningIndex >= 0,
+    hasReasoningContentText: reasoningContentIndex >= 0,
+    reasoningContentIndex,
+    reasoningProcessOpen: processBlocks.some(
+      (block) => block.open === true && block.text.includes(reasoningText),
+    ),
     hasReasoningProcess,
     hasThinkingLabel,
     hasFinalText: finalAnswerIndex >= 0,
@@ -578,6 +584,7 @@ async function evaluateReasoningFirstVisibleSnapshot(page) {
     reasoningFirstVisibleSnapshotFromDom,
     {
       prompt: REASONING_FIRST_VISIBLE_PROMPT,
+      reasoningContentText: REASONING_FIRST_VISIBLE_CONTENT_TEXT,
       reasoningText: REASONING_FIRST_VISIBLE_TEXT,
       finalText: REASONING_FIRST_VISIBLE_FINAL_TEXT,
       doneText: REASONING_FIRST_VISIBLE_DONE_TEXT,
@@ -636,12 +643,83 @@ export async function waitForGuiReasoningFirstVisibleCompleted(page, options) {
       snapshot.hasReasoningText &&
       snapshot.hasFinalText &&
       snapshot.hasReasoningBeforeFinalAnswer &&
+      snapshot.hasReasoningContentText === false &&
       snapshot.startupNoteVisible === false &&
       snapshot.textareaVisible &&
       snapshot.textareaDisabled === false &&
       snapshot.stopButtonVisible === false
     ) {
-      return sanitizeJson(snapshot);
+      const promptTurnGroup = page
+        .locator('[data-testid="message-turn-group"]')
+        .filter({ hasText: REASONING_FIRST_VISIBLE_PROMPT })
+        .last();
+      const historicalPreview = promptTurnGroup
+        .locator('[data-testid^="message-list-historical-timeline-preview:"]')
+        .last();
+      const historicalPreviewCount = await historicalPreview.count();
+      if (historicalPreviewCount > 0) {
+        await historicalPreview.click();
+      }
+
+      const reasoningBlock = promptTurnGroup
+        .locator(
+          'details[data-testid*="agent-thread-block:"][data-testid$=":process"]',
+        )
+        .last();
+      await reasoningBlock.waitFor({
+        state: "visible",
+        timeout: Math.min(options.timeoutMs, 30_000),
+      });
+      assert(
+        (await reasoningBlock.count()) === 1,
+        "Claw GUI 完成态缺少可展开的 reasoning 过程块",
+      );
+      const detailsAvailable =
+        (await reasoningBlock.getAttribute("data-details-available")) ===
+        "true";
+      assert(detailsAvailable, "Claw GUI 完成态 reasoning 过程块不可展开");
+      const reasoningSummary = reasoningBlock.locator(":scope > summary");
+      let reasoningOpenedByClick = false;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await reasoningSummary.click();
+        reasoningOpenedByClick = await reasoningBlock.evaluate(
+          (node) => node instanceof HTMLDetailsElement && node.open,
+        );
+        if (reasoningOpenedByClick) {
+          break;
+        }
+      }
+      assert(
+        reasoningOpenedByClick,
+        "Claw GUI 完成态 reasoning 过程块点击后未展开",
+      );
+
+      const expandedStartedAt = Date.now();
+      let expandedSnapshot = null;
+      while (
+        Date.now() - expandedStartedAt <
+        Math.min(options.timeoutMs, 20_000)
+      ) {
+        expandedSnapshot = await evaluateReasoningFirstVisibleSnapshot(page);
+        if (
+          expandedSnapshot?.hasReasoningContentText === true &&
+          expandedSnapshot?.reasoningProcessOpen === true
+        ) {
+          return sanitizeJson({
+            ...expandedSnapshot,
+            historicalReasoningPreviewExpanded: historicalPreviewCount > 0,
+            reasoningDetailsAvailable: detailsAvailable,
+            reasoningOpenedByClick,
+            reasoningContentExpandedAfterCompletion: true,
+          });
+        }
+        await sleep(options.intervalMs);
+      }
+      throw new Error(
+        `Claw GUI 完成态 reasoning 展开后未显示 canonical content: ${JSON.stringify(
+          sanitizeJson(expandedSnapshot),
+        )}`,
+      );
     }
     await sleep(options.intervalMs);
   }

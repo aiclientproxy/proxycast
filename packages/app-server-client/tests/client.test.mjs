@@ -60,6 +60,7 @@ const {
   METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT,
   METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT,
   METHOD_PLUGIN_PACKAGE_FETCH_CLOUD,
+  METHOD_PLUGIN_SEARCH,
   METHOD_PLUGIN_SHELL_PREPARE,
   METHOD_PLUGIN_UI_RUNTIME_START,
   METHOD_PLUGIN_UI_RUNTIME_STATUS,
@@ -101,6 +102,11 @@ const {
   METHOD_THREAD_READ,
   METHOD_THREAD_SEARCH,
   METHOD_THREAD_SEARCH_OCCURRENCES,
+  METHOD_THREAD_SECTION_CREATE,
+  METHOD_THREAD_SECTION_DELETE,
+  METHOD_THREAD_SECTION_LIST,
+  METHOD_THREAD_SECTION_MOVE,
+  METHOD_THREAD_SECTION_UPDATE,
   METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN,
   METHOD_THREAD_BACKGROUND_TERMINALS_LIST,
   METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE,
@@ -855,6 +861,26 @@ test("builds canonical thread search requests", () => {
   });
 });
 
+test("builds canonical plugin search requests", () => {
+  const client = new AppServerClient();
+  const request = client.searchPlugins({
+    searchTerm: "browser",
+    scope: "workspace",
+    cwds: ["/workspace"],
+    cursor: null,
+    limit: 16,
+  });
+
+  assert.equal(request.method, METHOD_PLUGIN_SEARCH);
+  assert.deepEqual(request.params, {
+    searchTerm: "browser",
+    scope: "workspace",
+    cwds: ["/workspace"],
+    cursor: null,
+    limit: 16,
+  });
+});
+
 test("builds canonical thread background terminal requests", () => {
   const client = new AppServerClient();
   const threadId = "019f9b19-17a2-78b2-84d7-ce881fcf0617";
@@ -955,7 +981,6 @@ test("builds canonical thread metadata update requests", () => {
       sha: "abc123",
       branch: null,
     },
-    isPinned: true,
   });
 
   assert.equal(request.method, METHOD_THREAD_METADATA_UPDATE);
@@ -965,8 +990,37 @@ test("builds canonical thread metadata update requests", () => {
       sha: "abc123",
       branch: null,
     },
-    isPinned: true,
   });
+});
+
+test("builds canonical thread section requests", () => {
+  const client = new AppServerClient();
+  const sectionId = "01984de2-8f74-7c91-a3b2-5c5e937cf318";
+  const threadId = "019bf4f0-5080-7000-8000-000000000001";
+
+  const list = client.listThreadSections({ limit: 25 });
+  const create = client.createThreadSection({ name: "Active" });
+  const update = client.updateThreadSection({ sectionId, name: "Current" });
+  const move = client.moveThreadToSection({
+    threadId,
+    sectionId,
+    beforeThreadId: null,
+  });
+  const remove = client.moveThreadToSection({ threadId, sectionId: null });
+  const deleted = client.deleteThreadSection({ sectionId });
+
+  assert.equal(list.method, METHOD_THREAD_SECTION_LIST);
+  assert.deepEqual(list.params, { limit: 25 });
+  assert.equal(create.method, METHOD_THREAD_SECTION_CREATE);
+  assert.deepEqual(create.params, { name: "Active" });
+  assert.equal(update.method, METHOD_THREAD_SECTION_UPDATE);
+  assert.deepEqual(update.params, { sectionId, name: "Current" });
+  assert.equal(move.method, METHOD_THREAD_SECTION_MOVE);
+  assert.deepEqual(move.params, { threadId, sectionId, beforeThreadId: null });
+  assert.equal(remove.method, METHOD_THREAD_SECTION_MOVE);
+  assert.deepEqual(remove.params, { threadId, sectionId: null });
+  assert.equal(deleted.method, METHOD_THREAD_SECTION_DELETE);
+  assert.deepEqual(deleted.params, { sectionId });
 });
 
 test("builds session archive and unarchive requests with current App Server methods", () => {
@@ -3578,6 +3632,47 @@ test("agentSession event helper keeps side-channels and rejects wrapper lifecycl
 
   assert.equal(agentSessionEventNotification(sideChannel), sideChannel);
   assert.equal(isAgentSessionEventNotification(sideChannel), true);
+  const messageCreatedSideChannel = {
+    ...sideChannel,
+    params: {
+      ...sideChannel.params,
+      event: {
+        ...sideChannel.params.event,
+        type: "message.created",
+      },
+    },
+  };
+  assert.equal(
+    agentSessionEventNotification(messageCreatedSideChannel),
+    messageCreatedSideChannel,
+  );
+  assert.equal(
+    isAgentSessionEventNotification(messageCreatedSideChannel),
+    true,
+  );
+  for (const type of [
+    "action.unknown",
+    "approval.unknown",
+    "provider.unknown",
+    "image_task.unknown",
+    "runtime.unknown",
+  ]) {
+    const unknownPrefixedSideChannel = {
+      ...sideChannel,
+      params: {
+        ...sideChannel.params,
+        event: { ...sideChannel.params.event, type },
+      },
+    };
+    assert.equal(
+      agentSessionEventNotification(unknownPrefixedSideChannel),
+      undefined,
+    );
+    assert.equal(
+      isAgentSessionEventNotification(unknownPrefixedSideChannel),
+      false,
+    );
+  }
   assert.equal(agentSessionEventNotification(wrapperLifecycle), undefined);
   assert.equal(isAgentSessionEventNotification(wrapperLifecycle), false);
 });

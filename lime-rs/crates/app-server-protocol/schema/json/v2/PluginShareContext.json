@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "PluginShareDiscoverability": {
+      "enum": [
+        "LISTED",
+        "PRIVATE",
+        "UNLISTED"
+      ],
+      "type": "string"
+    },
+    "PluginSharePrincipal": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "principalType": {
+          "$ref": "#/$defs/PluginSharePrincipalType"
+        },
+        "role": {
+          "$ref": "#/$defs/PluginSharePrincipalRole"
+        }
+      },
+      "required": [
+        "name",
+        "principalId",
+        "principalType",
+        "role"
+      ],
+      "type": "object"
+    },
+    "PluginSharePrincipalRole": {
+      "enum": [
+        "editor",
+        "owner",
+        "reader"
+      ],
+      "type": "string"
+    },
+    "PluginSharePrincipalType": {
+      "enum": [
+        "group",
+        "user",
+        "workspace"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "canPublishToWorkspace": {
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "creatorAccountUserId": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "creatorName": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "discoverability": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PluginShareDiscoverability"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "remotePluginId": {
+      "type": "string"
+    },
+    "remoteVersion": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "sharePrincipals": {
+      "default": null,
+      "items": {
+        "$ref": "#/$defs/PluginSharePrincipal"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "shareUrl": {
+      "default": null,
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "remotePluginId"
+  ],
+  "title": "PluginShareContext",
+  "type": "object"
+}

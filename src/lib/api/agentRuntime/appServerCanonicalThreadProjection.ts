@@ -75,6 +75,12 @@ function readCanonicalThreadOverview(
     readOptionalStringField(thread, "name") ||
     readOptionalStringField(thread, "preview") ||
     undefined;
+  const section = readSection(thread);
+  const sectionEnteredAt = readOptionalNumberField(
+    thread,
+    "sectionEnteredAt",
+    "section_entered_at",
+  );
   const latestTurn = turns.filter((turn) => !isQueuedTurn(turn)).at(-1);
   const activeTurn = turns.find((turn) => {
     if (!isRecord(turn)) {
@@ -124,6 +130,9 @@ function readCanonicalThreadOverview(
       ? canonicalTurnId(activeTurn)
       : undefined,
     queuedTurnCount,
+    section,
+    sectionEnteredAt:
+      sectionEnteredAt === undefined ? undefined : sectionEnteredAt * 1_000,
   }) as AppServerAgentSessionOverview;
 }
 
@@ -173,6 +182,12 @@ export function readCanonicalThreadDetail(
   }
 
   const metadata = canonicalThreadMetadata(thread);
+  const section = readSection(thread);
+  const sectionEnteredAt = readOptionalNumberField(
+    thread,
+    "sectionEnteredAt",
+    "section_entered_at",
+  );
   const rawTurns = Array.isArray(thread.turns) ? thread.turns : [];
   const turns: AgentThreadTurn[] = [];
   for (const turn of rawTurns) {
@@ -246,6 +261,9 @@ export function readCanonicalThreadDetail(
       artifacts,
     },
     todo_items: todoItems,
+    section,
+    section_entered_at:
+      sectionEnteredAt === undefined ? undefined : sectionEnteredAt * 1_000,
   };
 }
 
@@ -775,6 +793,29 @@ function readOptionalStringField(
 ): string | undefined {
   const value = readField(record, camelKey, snakeKey);
   return typeof value === "string" ? value : undefined;
+}
+
+function readOptionalNumberField(
+  record: Record<string, unknown>,
+  camelKey: string,
+  snakeKey?: string,
+): number | undefined {
+  const value = readField(record, camelKey, snakeKey);
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function readSection(
+  thread: Record<string, unknown>,
+): { id: string; name: string } | undefined {
+  const value = readField(thread, "section");
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const id = readStringField(value, "id").trim();
+  const name = readStringField(value, "name").trim();
+  return id && name ? { id, name } : undefined;
 }
 
 function readNumberField(
