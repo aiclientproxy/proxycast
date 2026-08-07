@@ -1,0 +1,57 @@
+{
+  "$defs": {
+    "SkillToolDependency": {
+      "properties": {
+        "command": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "transport": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "type": {
+          "type": "string"
+        },
+        "url": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/SkillToolDependency"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "tools"
+  ],
+  "title": "SkillDependencies",
+  "type": "object"
+}

@@ -517,6 +517,20 @@ impl AgentRuntimeState {
             .await
     }
 
+    pub async fn call_mcp_tool(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server_name: &str,
+        tool_name: &str,
+        arguments: serde_json::Value,
+    ) -> Result<lime_mcp::McpToolResult, String> {
+        self.mcp_runtime(session_id, thread_id)
+            .await?
+            .call_tool(server_name, tool_name, arguments)
+            .await
+    }
+
     #[cfg(test)]
     pub(crate) async fn mcp_runtime_count(&self) -> usize {
         self.mcp_runtimes.read().await.len()

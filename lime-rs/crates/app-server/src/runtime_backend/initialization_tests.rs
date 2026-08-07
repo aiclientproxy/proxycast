@@ -180,12 +180,10 @@ async fn mcp_resource_read_rehydrates_session_runtime_without_starting_turn() {
 
     let error = ExecutionBackend::read_mcp_runtime_resource(
         &backend,
-        app_server_protocol::McpResourceReadParams {
-            server: "missing-server".to_string(),
-            uri: "ui://missing-server/app.html".to_string(),
-            session_id: Some("session-history".to_string()),
-            thread_id: Some("thread-history".to_string()),
-        },
+        "session-history",
+        "thread-history",
+        "missing-server",
+        "ui://missing-server/app.html",
     )
     .await
     .expect_err("empty fixture runtime has no MCP server");

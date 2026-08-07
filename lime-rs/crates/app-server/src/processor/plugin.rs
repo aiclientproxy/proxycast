@@ -67,6 +67,7 @@ impl RequestProcessor {
             .install_plugin_catalog(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        self.publish_app_list_updated().await;
         dispatch_result(response)
     }
 
@@ -81,6 +82,7 @@ impl RequestProcessor {
             .uninstall_plugin_catalog(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        self.publish_app_list_updated().await;
         dispatch_result(response)
     }
 
@@ -109,6 +111,7 @@ impl RequestProcessor {
             .set_plugin_catalog_enabled(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        self.publish_app_list_updated().await;
         dispatch_result(response)
     }
 

@@ -48,7 +48,7 @@ Lime 的卡顿来源通常不是单点：
 - `chat_send_message`
 - `send_message_with_agent`
 - `launch_browser_session_global`
-- `mcpTool/call`
+- `mcpServer/tool/call`
 - `mcpServer/start`
 - `mcpTool/list`
 
@@ -79,7 +79,7 @@ LIME_PROFILE=trace LIME_ELECTRON_OPEN_DEVTOOLS=1 APP_SERVER_BIN=/abs/path/to/app
 - `chat_send_message`
 - `send_message_with_agent`
 - `launch_browser_session_global`
-- `mcpTool/call`
+- `mcpServer/tool/call`
 
 ## B. 看 Tokio 异步任务阻塞
 

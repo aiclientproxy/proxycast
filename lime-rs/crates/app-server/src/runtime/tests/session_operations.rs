@@ -30,6 +30,7 @@ struct LiveActionBackend {
 #[derive(Default)]
 struct ModelSelectionCaptureBackend {
     selection: Mutex<Option<(String, String)>>,
+    catalog_data_source: Option<Arc<TestSessionDataSource>>,
 }
 
 #[async_trait]
@@ -184,6 +185,27 @@ impl ExecutionBackend for ReplaceBlockingBackend {
 impl ExecutionBackend for ModelSelectionCaptureBackend {
     fn requires_provider_selection(&self) -> bool {
         true
+    }
+
+    async fn preflight_thread_settings(
+        &self,
+        session: &AgentSession,
+        settings: &app_server_protocol::protocol::v2::ThreadSettings,
+    ) -> Result<(), RuntimeCoreError> {
+        if self
+            .catalog_data_source
+            .as_ref()
+            .is_some_and(|data_source| data_source.model_fetch_requests().is_empty())
+        {
+            return Err(RuntimeCoreError::RouteRejected {
+                session_id: session.session_id.clone(),
+                provider: Some(settings.model_provider.clone()),
+                model: Some(settings.model.clone()),
+                category: RouteFailureCategory::CapabilityGap,
+                reason_code: "capability_snapshot_missing".to_string(),
+            });
+        }
+        Ok(())
     }
 
     async fn start_turn(
@@ -865,6 +887,54 @@ async fn catalog_refresh_preserves_durable_direct_provider_route() {
 }
 
 #[tokio::test]
+async fn catalog_refresh_preserves_durable_agent_control_catalog_route() {
+    let (_temp, core) = model_selection_core_with_metadata(
+        vec![model_catalog(
+            "provider-fallback",
+            vec![chat_model("provider-fallback", "model-fallback")],
+        )],
+        json!({
+            "providerSelector": "provider-pinned",
+            "providerName": "provider-pinned",
+            "modelName": "model-pinned",
+            "collaborationMode": {
+                "mode": "default",
+                "settings": { "model": "model-pinned" }
+            },
+            "agentControlRoute": {
+                "schemaVersion": 2,
+                "routeSource": "catalog",
+                "providerPreference": "provider-pinned",
+                "modelPreference": "model-pinned",
+                "providerConfig": {
+                    "providerId": "provider-pinned",
+                    "providerName": "provider-pinned",
+                    "modelName": "model-pinned"
+                },
+                "routeProtocol": "openai_responses",
+                "authKind": "api_key_ref",
+                "credentialRef": "credential-pinned",
+                "effectiveGeneration": 1
+            }
+        }),
+    );
+
+    let changed = core
+        .reconcile_thread_model_selection("thread-model-refresh")
+        .await
+        .expect("preserve pinned AgentControl catalog route");
+
+    assert!(changed.is_none());
+    let (_, settings, pinned) = core
+        .loaded_thread_settings("thread-model-refresh")
+        .expect("read pinned settings")
+        .expect("persisted pinned settings");
+    assert!(pinned);
+    assert_eq!(settings.model_provider, "provider-pinned");
+    assert_eq!(settings.model, "model-pinned");
+}
+
+#[tokio::test]
 async fn runtime_turn_entry_uses_reconciled_model_selection() {
     let backend = Arc::new(ModelSelectionCaptureBackend::default());
     let (_temp, core) = model_selection_core_with_metadata_and_backend(
@@ -900,6 +970,82 @@ async fn runtime_turn_entry_uses_reconciled_model_selection() {
             .expect("selection mutex poisoned")
             .clone(),
         Some(("provider-a".to_string(), "model-b".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn existing_thread_refreshes_missing_capability_catalog_before_turn() {
+    let data_source = Arc::new(
+        TestSessionDataSource::new()
+            .with_model_catalogs(vec![model_catalog(
+                "provider-a",
+                vec![chat_model("provider-a", "model-a")],
+            )])
+            .with_model_fetch_response(Ok(ModelProviderFetchModelsResponse {
+                source: "Api".to_string(),
+                ..ModelProviderFetchModelsResponse::default()
+            })),
+    );
+    let backend = Arc::new(ModelSelectionCaptureBackend {
+        selection: Mutex::new(None),
+        catalog_data_source: Some(data_source.clone()),
+    });
+    let temp = tempfile::tempdir().expect("model selection temp dir");
+    let projection_store = Arc::new(
+        ProjectionStore::initialize(temp.path().join("projection.sqlite"))
+            .expect("model selection projection store"),
+    );
+    let core = RuntimeCore::with_backend(backend.clone())
+        .with_projection_store(projection_store)
+        .with_app_data_source(data_source.clone());
+    core.start_session(AgentSessionStartParams {
+        session_id: Some("session-model-refresh".to_string()),
+        thread_id: Some("thread-model-refresh".to_string()),
+        app_id: "agent-chat".to_string(),
+        workspace_id: None,
+        business_object_ref: Some(BusinessObjectRef {
+            kind: "agent.thread".to_string(),
+            id: "thread-model-refresh".to_string(),
+            title: None,
+            uri: None,
+            metadata: Some(default_model_selection_metadata()),
+        }),
+        locale: None,
+    })
+    .expect("start existing model selection session");
+
+    core.start_turn(
+        AgentSessionTurnStartParams {
+            session_id: "session-model-refresh".to_string(),
+            turn_id: None,
+            input: AgentInput {
+                text: "continue after catalog refresh".to_string(),
+                attachments: Vec::new(),
+            },
+            runtime_options: None,
+            queue_if_busy: false,
+            skip_pre_submit_resume: false,
+        },
+        RuntimeHostContext::default(),
+    )
+    .await
+    .expect("existing thread should refresh the catalog before turn admission");
+
+    assert_eq!(
+        backend
+            .selection
+            .lock()
+            .expect("selection mutex poisoned")
+            .clone(),
+        Some(("provider-a".to_string(), "model-a".to_string()))
+    );
+    assert_eq!(
+        data_source
+            .model_fetch_requests()
+            .into_iter()
+            .map(|request| request.provider_id)
+            .collect::<Vec<_>>(),
+        vec!["provider-a"]
     );
 }
 

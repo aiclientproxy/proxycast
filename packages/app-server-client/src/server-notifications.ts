@@ -1,6 +1,7 @@
 import {
   isJsonRpcNotification,
   type JsonRpcMessage,
+  type AppInfo,
   type ServerNotification,
 } from "./protocol.js";
 
@@ -36,6 +37,11 @@ export type ModelListUpdatedServerNotification = Extract<
 export type SkillsChangedServerNotification = Extract<
   ServerNotification,
   { method: "skills/changed" }
+>;
+
+export type AppListUpdatedServerNotification = Extract<
+  ServerNotification,
+  { method: "app/list/updated" }
 >;
 
 export type McpServerOauthLoginCompletedServerNotification = Extract<
@@ -193,6 +199,33 @@ export function isSkillsChangedNotification(
   message: JsonRpcMessage,
 ): message is SkillsChangedServerNotification {
   return skillsChangedServerNotification(message) !== undefined;
+}
+
+export function appListUpdatedServerNotification(
+  message: JsonRpcMessage,
+): AppListUpdatedServerNotification | undefined {
+  if (
+    !isJsonRpcNotification(message) ||
+    message.method !== "app/list/updated"
+  ) {
+    return undefined;
+  }
+  const params = record(message.params);
+  if (
+    !params ||
+    !hasOnlyKeys(params, ["data"]) ||
+    !Array.isArray(params.data) ||
+    !params.data.every(isAppInfo)
+  ) {
+    return undefined;
+  }
+  return message as AppListUpdatedServerNotification;
+}
+
+export function isAppListUpdatedNotification(
+  message: JsonRpcMessage,
+): message is AppListUpdatedServerNotification {
+  return appListUpdatedServerNotification(message) !== undefined;
 }
 
 export function mcpServerOauthLoginCompletedServerNotification(
@@ -619,6 +652,19 @@ function hasThreadSettings(value: unknown): boolean {
     hasString(settings, "model") &&
     hasString(settings, "modelProvider") &&
     typeof settings?.cwd === "string"
+  );
+}
+
+function isAppInfo(value: unknown): value is AppInfo {
+  const app = record(value);
+  return Boolean(
+    app &&
+    hasString(app, "id") &&
+    hasString(app, "name") &&
+    typeof app.isAccessible === "boolean" &&
+    typeof app.isEnabled === "boolean" &&
+    Array.isArray(app.pluginDisplayNames) &&
+    app.pluginDisplayNames.every((name) => typeof name === "string"),
   );
 }
 

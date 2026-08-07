@@ -1,7 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "enum": [
+    "app/installed",
+    "app/list",
+    "app/read",
     "artifact/write",
+    "hooks/list",
+    "mcpServer/resource/read",
+    "mcpServer/tool/call",
     "media/read",
     "model/list",
     "plugin/enabled/set",
@@ -11,6 +17,9 @@
     "plugin/read",
     "plugin/search",
     "plugin/uninstall",
+    "skills/config/write",
+    "skills/extraRoots/set",
+    "skills/list",
     "thread/approveGuardianDeniedAction",
     "thread/archive",
     "thread/backgroundTerminals/clean",

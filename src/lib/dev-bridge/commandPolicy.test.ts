@@ -669,10 +669,12 @@ describe("commandPolicy", () => {
         request: {
           lines: [
             JSON.stringify({
-              id: "mcp-tool-call",
-              method: "mcpTool/call",
+              id: "mcp-server-tool-call",
+              method: "mcpServer/tool/call",
               params: {
-                toolName: "mcp__context7__query-docs",
+                threadId: "thread-1",
+                server: "context7",
+                tool: "query-docs",
                 arguments: { libraryId: "/openai/openai-agents-python" },
               },
             }),

@@ -58,7 +58,8 @@ const REQUIRED_METHODS = [
   "mcpTool/list",
   "mcpTool/listForContext",
   "mcpTool/search",
-  "mcpTool/call",
+  "thread/start",
+  "mcpServer/tool/call",
 ];
 
 function logStage(stage) {
@@ -463,8 +464,21 @@ async function run() {
     });
 
     logStage("call-context7-resolve-library");
-    const resolveCall = await call("mcpTool/call", {
-      toolName: toolEvidence.resolveTool.name,
+    const threadResult = await call("thread/start", {
+      model: "gpt-5.4",
+      modelProvider: "openai",
+    });
+    const threadId = threadResult.result?.thread?.id;
+    if (typeof threadId !== "string" || threadId.length === 0) {
+      throw new Error("thread/start did not return a thread id");
+    }
+    const resolveCall = await call("mcpServer/tool/call", {
+      threadId,
+      server: CONTEXT7_SERVER_NAME,
+      tool: toolEvidence.resolveTool.name.replace(
+        `mcp__${CONTEXT7_SERVER_NAME}__`,
+        "",
+      ),
       arguments: {
         libraryName: "openai agents python",
         query: "openai agents python",
@@ -473,15 +487,20 @@ async function run() {
     summary.resolveLibraryCall = {
       toolName: toolEvidence.resolveTool.name,
       ...assertToolResult(
-        "mcpTool/call resolve-library-id",
+        "mcpServer/tool/call resolve-library-id",
         resolveCall.result,
       ),
     };
     rawEvidence.resolveLibraryCall = sanitizeJson(resolveCall);
 
     logStage("call-context7-query-docs");
-    const queryDocsCall = await call("mcpTool/call", {
-      toolName: toolEvidence.queryDocsTool.name,
+    const queryDocsCall = await call("mcpServer/tool/call", {
+      threadId,
+      server: CONTEXT7_SERVER_NAME,
+      tool: toolEvidence.queryDocsTool.name.replace(
+        `mcp__${CONTEXT7_SERVER_NAME}__`,
+        "",
+      ),
       arguments: {
         libraryId: CONTEXT7_LIBRARY_ID,
         query: "AI Agent 是什么",
@@ -490,7 +509,7 @@ async function run() {
     summary.queryDocsCall = {
       toolName: toolEvidence.queryDocsTool.name,
       libraryId: CONTEXT7_LIBRARY_ID,
-      ...assertToolResult("mcpTool/call query-docs", queryDocsCall.result),
+      ...assertToolResult("mcpServer/tool/call query-docs", queryDocsCall.result),
     };
     rawEvidence.queryDocsCall = sanitizeJson(queryDocsCall);
 

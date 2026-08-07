@@ -22,7 +22,7 @@ const DEFAULTS = {
 
 const APP_SERVER_HANDLE_JSON_LINES_COMMAND = "app_server_handle_json_lines";
 const REQUIRED_APP_SERVER_METHODS = [
-  "skill/list",
+  "skills/list",
   "skill/read",
   "skillManagement/list",
   "skillRepository/list",
@@ -81,10 +81,10 @@ Skills Current Smoke
 
 用途:
   直接通过 DevBridge /invoke 调用 app_server_handle_json_lines，验证
-  skill/list、Skill 管理读链和 Skill package / marketplace current
+  skills/list、Skill 管理读链和 Skill package / marketplace current
   探针走 App Server JSON-RPC current 主链，而不是 legacy
   list_executable_skills / get_skill_detail / Skill 管理 / package 命令或 mock。
-  普通 slash skill 当前已回到 Agent Runtime turn，不再作为 skill/list
+  普通 slash skill 当前已回到 Agent Runtime turn，不再作为 skills/list
   preflight 的成功证据。
 
 用法:
@@ -385,14 +385,18 @@ function summarizeInvokeEntries(entries) {
     params: request.params,
   });
   const skillListRequests = appServerRequests.filter(
-    (request) => request.method === "skill/list",
+    (request) => request.method === "skills/list",
   );
   const skillListResponses = skillListRequests.map((request) => ({
     id: request.id,
     hasError: Boolean(request.response?.error),
-    skillsIsArray: Array.isArray(request.response?.result?.skills),
-    skillCount: Array.isArray(request.response?.result?.skills)
-      ? request.response.result.skills.length
+    dataIsArray: Array.isArray(request.response?.result?.data),
+    skillCount: Array.isArray(request.response?.result?.data)
+      ? request.response.result.data.reduce(
+          (count, entry) =>
+            count + (Array.isArray(entry?.skills) ? entry.skills.length : 0),
+          0,
+        )
       : null,
   }));
   const skillReadRequests = appServerRequests.filter(
@@ -503,7 +507,7 @@ function summarizeInvokeEntries(entries) {
     skillListResponsesValid:
       skillListResponses.length > 0 &&
       skillListResponses.every(
-        (response) => !response.hasError && response.skillsIsArray,
+        (response) => !response.hasError && response.dataIsArray,
       ),
   };
 }
@@ -730,7 +734,7 @@ async function run() {
     invokeUrl: options.invokeUrl,
     smokeMode: "direct-devbridge-app-server-json-rpc",
     retiredSlashPreflight:
-      "ordinary slash skill now enters Agent Runtime turn and is not skill/list preflight evidence",
+      "ordinary slash skill now enters Agent Runtime turn and is not skills/list preflight evidence",
     health: null,
     appServerHandleJsonLinesSeen: false,
     appServerMethodsSeen: [],
@@ -775,19 +779,31 @@ async function run() {
     logStage("invoke-skill-list");
     const skillList = await invokeAppServerMethod(
       options,
-      "skill/list",
+      "skills/list",
       {},
       invokeEntries,
     );
-    const readableSkillId = skillList?.skills?.find(
-      (skill) =>
-        skill?.enabled === true &&
-        typeof skill?.skillId === "string" &&
-        skill.skillId.trim().length > 0,
-    )?.skillId;
+    const readableSkill = skillList?.data
+      ?.flatMap((entry) => (Array.isArray(entry?.skills) ? entry.skills : []))
+      .find(
+        (skill) =>
+          skill?.enabled === true &&
+          typeof skill?.name === "string" &&
+          ["repo", "user", "system", "admin"].includes(skill?.scope),
+      );
+    const stableScope = {
+      repo: "project",
+      user: "user",
+      system: "app",
+      admin: "other",
+    }[readableSkill?.scope];
+    const readableSkillId =
+      stableScope && readableSkill?.name
+        ? `${stableScope}:${readableSkill.name.trim().toLowerCase()}`
+        : null;
     assert(
       typeof readableSkillId === "string",
-      "skill/list 未返回可用于 stable-id read probe 的 enabled skillId",
+      "skills/list 未返回可用于 stable-id read probe 的 enabled skill",
     );
 
     logStage("invoke-skill-read");
@@ -854,11 +870,11 @@ async function run() {
     );
     assert(
       summary.skillListRequestCount >= 1,
-      `skill/list 请求不足，实际 ${summary.skillListRequestCount}`,
+      `skills/list 请求不足，实际 ${summary.skillListRequestCount}`,
     );
     assert(
       summary.skillListResponsesValid,
-      "skill/list response 缺少 result.skills 数组或返回错误",
+      "skills/list response 缺少 result.data 数组或返回错误",
     );
     assert(
       summary.skillReadRequestCount >= 1,

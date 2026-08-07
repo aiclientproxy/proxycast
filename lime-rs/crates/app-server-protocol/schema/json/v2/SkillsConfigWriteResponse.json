@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "effectiveEnabled": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "effectiveEnabled"
+  ],
+  "title": "SkillsConfigWriteResponse",
+  "type": "object"
+}

@@ -33,6 +33,7 @@ interface UseWorkspaceHarnessInventoryRuntimeParams {
   themeWorkbenchBackendRunState: BackendGeneralWorkbenchRunState | null;
   themeWorkbenchActiveQueueItem: GeneralWorkbenchRunTodoItem | null | undefined;
   harnessPendingCount: number;
+  threadId?: string | null;
 }
 
 interface PluginMcpPrepareTarget {
@@ -185,6 +186,7 @@ export function useWorkspaceHarnessInventoryRuntime({
   themeWorkbenchBackendRunState,
   themeWorkbenchActiveQueueItem,
   harnessPendingCount,
+  threadId,
 }: UseWorkspaceHarnessInventoryRuntimeParams) {
   const [toolInventory, setToolInventory] =
     useState<AgentRuntimeToolInventory | null>(null);
@@ -319,7 +321,14 @@ export function useWorkspaceHarnessInventoryRuntime({
         );
       }
       if (mcpCallProofCandidateRequests.length > 0) {
-        await mcpApi.executeCallProofRequests(mcpCallProofCandidateRequests);
+        const ownerThreadId = threadId?.trim();
+        if (!ownerThreadId) {
+          throw new Error("MCP call proof requires the active Thread");
+        }
+        await mcpApi.executeCallProofRequests(
+          mcpCallProofCandidateRequests,
+          ownerThreadId,
+        );
       }
       if (mcpPrepareRequestIdRef.current !== requestId) {
         return;
@@ -344,6 +353,7 @@ export function useWorkspaceHarnessInventoryRuntime({
     mcpPrepareCandidateRequests,
     mcpPrepareTargets,
     refreshToolInventory,
+    threadId,
   ]);
 
   useEffect(() => {

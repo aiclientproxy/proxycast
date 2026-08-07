@@ -258,6 +258,36 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
+    name: "listApps",
+    method: constants.APP_SERVER_METHOD_APP_LIST,
+    params: "optional-empty",
+  },
+  {
+    name: "readApps",
+    method: constants.APP_SERVER_METHOD_APP_READ,
+    params: "required",
+  },
+  {
+    name: "listInstalledApps",
+    method: constants.APP_SERVER_METHOD_APP_INSTALLED,
+    params: "optional-empty",
+  },
+  {
+    name: "listSkills",
+    method: constants.APP_SERVER_METHOD_SKILLS_LIST,
+    params: "optional-empty",
+  },
+  {
+    name: "setSkillsExtraRoots",
+    method: constants.APP_SERVER_METHOD_SKILLS_EXTRA_ROOTS_SET,
+    params: "required",
+  },
+  {
+    name: "writeSkillsConfig",
+    method: constants.APP_SERVER_METHOD_SKILLS_CONFIG_WRITE,
+    params: "required",
+  },
+  {
     name: "setPluginCatalogEnabled",
     method: constants.APP_SERVER_METHOD_PLUGIN_ENABLED_SET,
     params: "required",

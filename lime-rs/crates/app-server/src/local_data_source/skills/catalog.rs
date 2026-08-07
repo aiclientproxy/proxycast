@@ -1,29 +1,12 @@
 use app_server_protocol::{
-    SkillAuthority, SkillDependencies, SkillDetail, SkillInterface, SkillListResponse,
-    SkillLocator, SkillPolicy, SkillReadParams, SkillReadResponse, SkillScope, SkillSource,
-    SkillSummary, SkillToolDependency, SkillWorkflowStep,
+    SkillAuthority, SkillDetail, SkillDetailDependencies, SkillDetailInterface, SkillDetailScope,
+    SkillDetailToolDependency, SkillLocator, SkillPolicy, SkillReadParams, SkillReadResponse,
+    SkillSource, SkillSummary, SkillWorkflowStep,
 };
 use lime_skills::{
     build_agent_skill_snapshot, load_skill_from_file, AgentSkillAuthority, AgentSkillMetadata,
     AgentSkillScope, AgentSkillSnapshot, AgentSkillSource, LoadedSkillDefinition,
 };
-use std::collections::HashSet;
-
-pub(crate) fn list_skills() -> SkillListResponse {
-    list_skills_from_snapshot(&build_agent_skill_snapshot())
-}
-
-fn list_skills_from_snapshot(snapshot: &AgentSkillSnapshot) -> SkillListResponse {
-    let mut skills = Vec::new();
-    let mut seen = HashSet::new();
-    for skill in &snapshot.skills {
-        if skill.enabled && seen.insert(skill.skill_id.clone()) {
-            skills.push(agent_skill_to_summary(skill));
-        }
-    }
-    SkillListResponse { skills }
-}
-
 pub(crate) fn read_skill(params: SkillReadParams) -> Result<SkillReadResponse, String> {
     let snapshot = build_agent_skill_snapshot();
     read_skill_from_snapshot(&snapshot, params)
@@ -70,19 +53,19 @@ fn agent_skill_to_summary(skill: &AgentSkillMetadata) -> SkillSummary {
         source: skill_source(skill.source),
         authority: skill_authority(skill.authority),
         enabled: skill.enabled,
-        interface: SkillInterface {
+        interface: SkillDetailInterface {
             display_name: skill.interface.display_name.clone(),
             execution_mode: skill.interface.execution_mode.clone(),
             provider: skill.interface.provider.clone(),
             model: skill.interface.model.clone(),
             argument_hint: skill.interface.argument_hint.clone(),
         },
-        dependencies: SkillDependencies {
+        dependencies: SkillDetailDependencies {
             tools: skill
                 .dependencies
                 .tools
                 .iter()
-                .map(|dependency| SkillToolDependency {
+                .map(|dependency| SkillDetailToolDependency {
                     dependency_type: dependency.dependency_type.clone(),
                     value: dependency.value.clone(),
                     required: dependency.required,
@@ -117,12 +100,12 @@ fn skill_to_detail(metadata: &AgentSkillMetadata, skill: LoadedSkillDefinition) 
     }
 }
 
-fn skill_scope(scope: AgentSkillScope) -> SkillScope {
+fn skill_scope(scope: AgentSkillScope) -> SkillDetailScope {
     match scope {
-        AgentSkillScope::Project => SkillScope::Project,
-        AgentSkillScope::User => SkillScope::User,
-        AgentSkillScope::App => SkillScope::App,
-        AgentSkillScope::Other => SkillScope::Other,
+        AgentSkillScope::Project => SkillDetailScope::Project,
+        AgentSkillScope::User => SkillDetailScope::User,
+        AgentSkillScope::App => SkillDetailScope::App,
+        AgentSkillScope::Other => SkillDetailScope::Other,
     }
 }
 
@@ -203,7 +186,7 @@ mod tests {
     }
 
     #[test]
-    fn list_and_read_share_first_provider_precedence_for_same_stable_id() {
+    fn read_uses_first_provider_precedence_for_same_stable_id() {
         let temp = TempDir::new().expect("temp dir");
         let first_root = temp.path().join("first-project-provider");
         let second_root = temp.path().join("second-project-provider");
@@ -220,7 +203,6 @@ mod tests {
             },
         ]);
 
-        let list = list_skills_from_snapshot(&snapshot);
         let read = read_skill_from_snapshot(
             &snapshot,
             SkillReadParams {
@@ -229,12 +211,12 @@ mod tests {
         )
         .expect("read winning provider");
 
-        assert_eq!(list.skills.len(), 1);
-        assert_eq!(list.skills[0].skill_id, "project:writer");
-        assert_eq!(
-            list.skills[0].locator.skill_file_path,
-            read.skill.metadata.locator.skill_file_path
-        );
+        assert!(read
+            .skill
+            .metadata
+            .locator
+            .skill_file_path
+            .contains("first-project-provider"));
         assert!(read.skill.markdown_content.contains("First provider body"));
         assert!(!read.skill.markdown_content.contains("Second provider body"));
     }

@@ -201,6 +201,51 @@ fn thread_elicitation_requests_round_trip_exact_codex_shape() {
 }
 
 #[test]
+fn skills_configuration_requests_round_trip_exact_codex_shape() {
+    let requests = [
+        json!({
+            "id": 51,
+            "method": "skills/extraRoots/set",
+            "params": {"extraRoots": ["/workspace/skills", "/shared/skills"]}
+        }),
+        json!({
+            "id": 52,
+            "method": "skills/config/write",
+            "params": {"path": null, "name": "writer", "enabled": false}
+        }),
+    ];
+
+    for expected in requests {
+        let request: ClientRequest =
+            serde_json::from_value(expected.clone()).expect("decode skills request");
+        assert_eq!(
+            serde_json::to_value(request).expect("encode skills request"),
+            expected
+        );
+    }
+
+    assert_eq!(
+        Method::parse(METHOD_SKILLS_EXTRA_ROOTS_SET),
+        Some(Method::SkillsExtraRootsSet)
+    );
+    assert_eq!(
+        Method::parse(METHOD_SKILLS_CONFIG_WRITE),
+        Some(Method::SkillsConfigWrite)
+    );
+    assert_eq!(
+        serde_json::to_value(SkillsExtraRootsSetResponse {}).expect("extra roots response"),
+        json!({})
+    );
+    assert_eq!(
+        serde_json::to_value(SkillsConfigWriteResponse {
+            effective_enabled: false,
+        })
+        .expect("config response"),
+        json!({"effectiveEnabled": false})
+    );
+}
+
+#[test]
 fn thread_guardian_approval_round_trips_opaque_event_shape() {
     let expected = json!({
         "id": 43,
@@ -328,6 +373,66 @@ fn media_read_round_trips_thread_scoped_shape() {
     );
     assert_eq!(Method::parse(METHOD_MEDIA_READ), Some(Method::MediaRead));
     assert!(METHODS.contains(&METHOD_MEDIA_READ));
+}
+
+#[test]
+fn mcp_server_exact_methods_round_trip_codex_wire() {
+    let resource_request = json!({
+        "id": 6,
+        "method": "mcpServer/resource/read",
+        "params": {
+            "threadId": "thread_1",
+            "server": "docs",
+            "uri": "docs://readme"
+        }
+    });
+    let decoded: ClientRequest = serde_json::from_value(resource_request.clone())
+        .expect("decode mcpServer/resource/read request");
+    assert_eq!(decoded.method(), Method::McpServerResourceRead);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), resource_request);
+
+    let tool_request = json!({
+        "id": 7,
+        "method": "mcpServer/tool/call",
+        "params": {
+            "threadId": "thread_1",
+            "server": "docs",
+            "tool": "search",
+            "arguments": {"query": "MCP"},
+            "_meta": {"requestId": "desktop-1"}
+        }
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(tool_request.clone()).expect("decode mcpServer/tool/call request");
+    assert_eq!(decoded.method(), Method::McpServerToolCall);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), tool_request);
+
+    assert_eq!(
+        serde_json::to_value(McpServerResourceReadResponse {
+            contents: vec![McpServerResourceContent::Text {
+                uri: "docs://readme".to_string(),
+                mime_type: Some("text/markdown".to_string()),
+                text: "# README".to_string(),
+                meta: None,
+            }],
+        })
+        .unwrap(),
+        json!({
+            "contents": [{
+                "uri": "docs://readme",
+                "mimeType": "text/markdown",
+                "text": "# README"
+            }]
+        })
+    );
+    assert_eq!(
+        Method::parse(METHOD_MCP_SERVER_RESOURCE_READ),
+        Some(Method::McpServerResourceRead)
+    );
+    assert_eq!(
+        Method::parse(METHOD_MCP_SERVER_TOOL_CALL),
+        Some(Method::McpServerToolCall)
+    );
 }
 
 #[test]
@@ -2340,6 +2445,9 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "skills/changed",
             "mcpServer/oauthLogin/completed",
             "mcpServer/startupStatus/updated",
+            "app/list/updated",
+            "hook/started",
+            "hook/completed",
             "thread/started",
             "thread/archived",
             "thread/deleted",

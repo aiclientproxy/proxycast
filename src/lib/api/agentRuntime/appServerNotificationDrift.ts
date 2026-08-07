@@ -94,6 +94,10 @@ const DIAGNOSTIC_ONLY_NOTIFICATION_METHODS = new Set([
   "turn/diff/updated",
   "turn/moderationMetadata",
 ]);
+const PROJECTED_NOTIFICATION_METHODS = new Set([
+  "hook/started",
+  "hook/completed",
+]);
 
 const MAX_DIAGNOSTIC_FIELDS = 32;
 
@@ -105,6 +109,7 @@ export function listCodexV2NotificationMethods(): string[] {
 
 export type AppServerNotificationDriftDisposition =
   | "known_diagnostic_only"
+  | "known_projected"
   | "known_unprojected"
   | "unknown";
 
@@ -129,11 +134,13 @@ export function readAppServerNotificationDrift(
   const route = readAppServerNotificationDriftRoute(notification);
   const known = CODEX_V2_NOTIFICATION_METHODS.has(notification.method);
   return {
-    disposition: DIAGNOSTIC_ONLY_NOTIFICATION_METHODS.has(notification.method)
-      ? "known_diagnostic_only"
-      : known
-        ? "known_unprojected"
-        : "unknown",
+    disposition: PROJECTED_NOTIFICATION_METHODS.has(notification.method)
+      ? "known_projected"
+      : DIAGNOSTIC_ONLY_NOTIFICATION_METHODS.has(notification.method)
+        ? "known_diagnostic_only"
+        : known
+          ? "known_unprojected"
+          : "unknown",
     field_names: Object.keys(params ?? {})
       .sort((left, right) => left.localeCompare(right))
       .slice(0, MAX_DIAGNOSTIC_FIELDS),
@@ -189,7 +196,10 @@ export function projectAppServerNotificationDriftPayload(
   notification: AppServerJsonRpcNotification,
 ): Record<string, unknown> | null {
   const diagnostic = recordAppServerNotificationDrift(notification);
-  if (diagnostic.disposition === "known_diagnostic_only") {
+  if (
+    diagnostic.disposition === "known_diagnostic_only" ||
+    diagnostic.disposition === "known_projected"
+  ) {
     return null;
   }
   const unknown = diagnostic.disposition === "unknown";

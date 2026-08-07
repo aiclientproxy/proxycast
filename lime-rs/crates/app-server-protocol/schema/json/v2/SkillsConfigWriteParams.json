@@ -1,32 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
-    "blob": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "name": {
+      "default": null,
       "type": [
         "null",
         "string"
       ]
     },
-    "meta": true,
-    "mime_type": {
+    "path": {
+      "default": null,
       "type": [
         "null",
         "string"
       ]
-    },
-    "text": {
-      "type": [
-        "null",
-        "string"
-      ]
-    },
-    "uri": {
-      "type": "string"
     }
   },
   "required": [
-    "uri"
+    "enabled"
   ],
-  "title": "McpResourceReadResponse",
+  "title": "SkillsConfigWriteParams",
   "type": "object"
 }

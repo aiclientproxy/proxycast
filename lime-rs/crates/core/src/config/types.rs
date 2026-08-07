@@ -7,6 +7,7 @@ use super::tool_execution::ToolExecutionPolicyConfig;
 use crate::models::injection_types::{InjectionMode, InjectionRule};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 // ============ 已退役的旧凭证池配置类型 ============
 
@@ -432,6 +433,9 @@ pub struct Config {
     /// Native Agent 配置
     #[serde(default)]
     pub agent: NativeAgentConfig,
+    /// Agent Skills 用户级启停配置
+    #[serde(default, skip_serializing_if = "SkillsConfig::is_default")]
+    pub skills: SkillsConfig,
     /// 实验室功能配置
     #[serde(default)]
     pub experimental: ExperimentalFeatures,
@@ -492,6 +496,27 @@ pub struct Config {
 }
 
 // ============ Native Agent 配置类型 ============
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct SkillsConfig {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub config: Vec<SkillConfig>,
+}
+
+impl SkillsConfig {
+    pub fn is_default(value: &Self) -> bool {
+        value == &Self::default()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SkillConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub enabled: bool,
+}
 
 /// Native Agent 配置
 ///
@@ -2057,6 +2082,7 @@ impl Default for Config {
             language: default_language(),
             models: ModelsConfig::default(),
             agent: NativeAgentConfig::default(),
+            skills: SkillsConfig::default(),
             experimental: ExperimentalFeatures::default(),
             tool_calling: ToolCallingConfig::default(),
             workspace_preferences: WorkspacePreferencesConfig::default(),

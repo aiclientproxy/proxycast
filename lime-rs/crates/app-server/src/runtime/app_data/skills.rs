@@ -7,10 +7,6 @@ use serde_json::json;
 
 #[async_trait]
 pub trait SkillAppDataSource: Send + Sync {
-    async fn list_skills(&self) -> Result<SkillListResponse, RuntimeCoreError> {
-        Ok(SkillListResponse::default())
-    }
-
     async fn read_skill(
         &self,
         _params: SkillReadParams,

@@ -1,4 +1,5 @@
 use super::{RuntimeCore, RuntimeCoreError};
+use app_server_protocol::protocol::v2;
 use app_server_protocol::*;
 
 impl RuntimeCore {
@@ -96,18 +97,57 @@ impl RuntimeCore {
         self.app_data_source.search_mcp_tools(params).await
     }
 
-    pub async fn call_mcp_tool(
+    pub async fn call_mcp_server_tool(
         &self,
-        params: McpToolCallParams,
-    ) -> Result<McpToolCallResponse, RuntimeCoreError> {
-        self.app_data_source.call_mcp_tool(params).await
-    }
+        params: v2::McpServerToolCallParams,
+    ) -> Result<v2::McpServerToolCallResponse, RuntimeCoreError> {
+        let thread_id = params.thread_id.trim();
+        let server = params.server.trim();
+        let tool = params.tool.trim();
+        if thread_id.is_empty() {
+            return Err(RuntimeCoreError::InvalidRequest(
+                "mcpServer/tool/call requires threadId".to_string(),
+            ));
+        }
+        if server.is_empty() || tool.is_empty() {
+            return Err(RuntimeCoreError::InvalidRequest(
+                "mcpServer/tool/call requires server and tool".to_string(),
+            ));
+        }
 
-    pub async fn call_mcp_tool_with_caller(
-        &self,
-        params: McpToolCallWithCallerParams,
-    ) -> Result<McpToolCallResponse, RuntimeCoreError> {
-        self.app_data_source.call_mcp_tool_with_caller(params).await
+        // Exact Codex calls are thread-scoped. Resolve the canonical thread
+        // first, then execute through its Session-owned MCP runtime.
+        let thread = self
+            .read_thread(agent_protocol::thread::ThreadReadParams {
+                thread_id: agent_protocol::ThreadId::from(thread_id.to_string()),
+                turns_view: agent_protocol::ThreadTurnsView::NotLoaded,
+            })
+            .await?;
+        let response = self
+            .backend
+            .call_mcp_runtime_tool(
+                &thread.thread.session_id.to_string(),
+                thread_id,
+                server,
+                tool,
+                params
+                    .arguments
+                    .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new())),
+            )
+            .await?;
+
+        Ok(v2::McpServerToolCallResponse {
+            content: response
+                .content
+                .into_iter()
+                .map(lower_mcp_content)
+                .collect(),
+            structured_content: response.structured_content,
+            is_error: Some(response.is_error),
+            // Request metadata is not provider result metadata. The current
+            // manager response does not preserve result `_meta`.
+            meta: None,
+        })
     }
 
     pub async fn list_mcp_prompts(&self) -> Result<McpPromptListResponse, RuntimeCoreError> {
@@ -125,20 +165,50 @@ impl RuntimeCore {
         self.app_data_source.list_mcp_resources().await
     }
 
-    pub async fn read_mcp_resource(
+    pub async fn read_mcp_server_resource(
         &self,
-        params: McpResourceReadParams,
-    ) -> Result<McpResourceReadResponse, RuntimeCoreError> {
-        match (&params.session_id, &params.thread_id) {
-            (None, None) => self.app_data_source.read_mcp_resource(params).await,
-            (Some(session_id), Some(thread_id))
-                if !session_id.trim().is_empty() && !thread_id.trim().is_empty() =>
-            {
-                self.backend.read_mcp_runtime_resource(params).await
+        params: v2::McpServerResourceReadParams,
+    ) -> Result<v2::McpServerResourceReadResponse, RuntimeCoreError> {
+        let server = params.server.trim();
+        let uri = params.uri.trim();
+        if server.is_empty() || uri.is_empty() {
+            return Err(RuntimeCoreError::InvalidRequest(
+                "mcpServer/resource/read requires server and uri".to_string(),
+            ));
+        }
+
+        let thread_id = match params.thread_id.as_deref() {
+            Some(value) if value.trim().is_empty() => {
+                return Err(RuntimeCoreError::InvalidRequest(
+                    "mcpServer/resource/read threadId cannot be empty".to_string(),
+                ));
             }
-            _ => Err(RuntimeCoreError::InvalidRequest(
-                "mcpResource/read sessionId and threadId must be provided together".to_string(),
-            )),
+            Some(value) => Some(value.trim()),
+            None => None,
+        };
+        if let Some(thread_id) = thread_id {
+            let thread = self
+                .read_thread(agent_protocol::thread::ThreadReadParams {
+                    thread_id: agent_protocol::ThreadId::from(thread_id.to_string()),
+                    turns_view: agent_protocol::ThreadTurnsView::NotLoaded,
+                })
+                .await?;
+            self.backend
+                .read_mcp_runtime_resource(
+                    &thread.thread.session_id.to_string(),
+                    thread_id,
+                    server,
+                    uri,
+                )
+                .await
+        } else {
+            self.app_data_source
+                .read_mcp_server_resource(v2::McpServerResourceReadParams {
+                    thread_id: None,
+                    server: server.to_string(),
+                    uri: uri.to_string(),
+                })
+                .await
         }
     }
 
@@ -154,5 +224,35 @@ impl RuntimeCore {
         params: McpResourceUnsubscribeParams,
     ) -> Result<McpResourceSubscriptionResponse, RuntimeCoreError> {
         self.app_data_source.unsubscribe_mcp_resource(params).await
+    }
+}
+
+fn lower_mcp_content(content: lime_mcp::McpContent) -> serde_json::Value {
+    match content {
+        lime_mcp::McpContent::Text { text } => serde_json::json!({
+            "type": "text",
+            "text": text,
+        }),
+        lime_mcp::McpContent::Image { data, mime_type } => serde_json::json!({
+            "type": "image",
+            "data": data,
+            "mimeType": mime_type,
+        }),
+        lime_mcp::McpContent::Resource { uri, text, blob } => {
+            let mut value = serde_json::Map::from_iter([
+                (
+                    "type".to_string(),
+                    serde_json::Value::String("resource".to_string()),
+                ),
+                ("uri".to_string(), serde_json::Value::String(uri)),
+            ]);
+            if let Some(text) = text {
+                value.insert("text".to_string(), serde_json::Value::String(text));
+            }
+            if let Some(blob) = blob {
+                value.insert("blob".to_string(), serde_json::Value::String(blob));
+            }
+            serde_json::Value::Object(value)
+        }
     }
 }

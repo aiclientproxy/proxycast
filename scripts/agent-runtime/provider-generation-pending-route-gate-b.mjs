@@ -29,6 +29,23 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 const DEFAULT_INTERVAL_MS = 250;
 const PROVIDER_NAME = "Pending Route Gate B";
 const MODEL_NAME = "pending-route-fixture-model";
+const MODEL_CONFIG = {
+  id: MODEL_NAME,
+  capability: {
+    taskFamilies: ["chat"],
+    inputModalities: ["text"],
+    outputModalities: ["text"],
+    runtimeFeatures: ["streaming", "tool_calling"],
+    capabilities: {
+      vision: false,
+      tools: true,
+      streaming: true,
+      jsonMode: true,
+      functionCalling: true,
+      reasoning: false,
+    },
+  },
+};
 const PARENT_MARKER = "P0_05_PROVIDER_GENERATION_PARENT";
 const CHILD_MARKER = "P0_05_PROVIDER_GENERATION_CHILD";
 const PARENT_DONE = "P0_05_PROVIDER_GENERATION_PARENT_DONE";
@@ -124,21 +141,30 @@ function stableAgentDigest(parts) {
   return sha256(parts.join("\u001f"));
 }
 
-export function deriveDurableIdentity({ parentThreadId, parentTurnId }) {
-  const childSessionId = `agent-${stableAgentDigest([
-    parentThreadId,
-    parentThreadId,
-    parentTurnId,
-    SPAWN_CALL_ID,
-    "session",
-  ])}`;
-  const childThreadId = `thread-${stableAgentDigest([
-    parentThreadId,
-    parentThreadId,
-    parentTurnId,
-    SPAWN_CALL_ID,
-    "thread",
-  ])}`;
+export function deriveDurableIdentity({
+  parentThreadId,
+  parentTurnId,
+  childSessionId: observedChildSessionId,
+  childThreadId: observedChildThreadId,
+}) {
+  const childSessionId =
+    observedChildSessionId ||
+    `agent-${stableAgentDigest([
+      parentThreadId,
+      parentThreadId,
+      parentTurnId,
+      SPAWN_CALL_ID,
+      "session",
+    ])}`;
+  const childThreadId =
+    observedChildThreadId ||
+    `thread-${stableAgentDigest([
+      parentThreadId,
+      parentThreadId,
+      parentTurnId,
+      SPAWN_CALL_ID,
+      "thread",
+    ])}`;
   const messageId = `agent-control-message-${stableAgentDigest([
     parentThreadId,
     parentThreadId,
@@ -155,6 +181,18 @@ export function deriveDurableIdentity({ parentThreadId, parentTurnId }) {
     mailboxTurnId: `mailbox-turn-${mailboxDigest}`,
     mailboxItemId: `item_mailbox-item-${mailboxDigest}`,
   };
+}
+
+function childThreadFromList(payload, parentThreadId) {
+  const threads = Array.isArray(payload?.data) ? payload.data : [];
+  return (
+    threads.find(
+      (thread) =>
+        thread?.parentThreadId === parentThreadId &&
+        typeof thread?.id === "string" &&
+        typeof thread?.sessionId === "string",
+    ) || null
+  );
 }
 
 export function electronCallsFromRequestLog(requestLog) {
@@ -407,7 +445,7 @@ async function updateRepositoryProvider(page, providerId, requestLog) {
       providerId,
       enabled: true,
       sortOrder: 1,
-      models: [{ id: MODEL_NAME }],
+      models: [MODEL_CONFIG],
     },
     requestLog,
   );
@@ -616,10 +654,6 @@ export async function runGateB(options) {
       requestLog,
       workspaceRoot: workspace.rootPath,
     });
-    const durable = deriveDurableIdentity({
-      parentThreadId: parent.threadId,
-      parentTurnId,
-    });
 
     console.log(`${LOG_PREFIX} stage=wait-parent-provider-pause`);
     const pausedParent = await waitFor(
@@ -670,9 +704,8 @@ export async function runGateB(options) {
       "parent completion and pending child",
       options,
       async () => {
-        const [parentRead, childRead, childList] = await Promise.all([
+        const [parentRead, childList] = await Promise.all([
           readThread(page, parent.threadId, requestLog),
-          readThread(page, durable.childThreadId, requestLog),
           invokeAppServerFromPage(
             page,
             "thread/list",
@@ -681,24 +714,39 @@ export async function runGateB(options) {
           ).then((response) => response.result),
         ]);
         const parentTerminal = JSON.stringify(parentRead).includes(PARENT_DONE);
-        const childListed = JSON.stringify(childList).includes(
-          durable.childThreadId,
-        );
+        const child = childThreadFromList(childList, parent.threadId);
         const childRequestCount = providerRequestCount(
           fixture.requests,
           CHILD_MARKER,
         );
         return {
-          ready: parentTerminal && childListed && childRequestCount === 0,
+          ready: parentTerminal && Boolean(child) && childRequestCount === 0,
           parentTerminal,
-          childListed,
+          childListed: Boolean(child),
+          childThreadId: child?.id || null,
+          childSessionId: child?.sessionId || null,
           childRequestCount,
-          pendingChildTurnAbsent:
-            canonicalRecordsWithId(childRead, durable.mailboxTurnId).length ===
-            0,
         };
       },
     );
+    assert(
+      beforeRestart.childThreadId && beforeRestart.childSessionId,
+      "thread/list did not return a canonical child Thread",
+    );
+    const durable = deriveDurableIdentity({
+      parentThreadId: parent.threadId,
+      parentTurnId,
+      childThreadId: beforeRestart.childThreadId,
+      childSessionId: beforeRestart.childSessionId,
+    });
+    const childBeforeRestart = await readThread(
+      page,
+      durable.childThreadId,
+      requestLog,
+    );
+    beforeRestart.pendingChildTurnAbsent =
+      canonicalRecordsWithId(childBeforeRestart, durable.mailboxTurnId)
+        .length === 0;
     const preRestartDiagnostics = await readInvokeDiagnostics(page);
 
     console.log(`${LOG_PREFIX} stage=cold-restart-electron`);

@@ -1038,79 +1038,6 @@ export type WorkspaceEnsureReadyResponse = {
   result: unknown;
 };
 
-export type SkillReadParams = {
-  skillId: string;
-};
-
-export type SkillScope = "project" | "user" | "app" | "other";
-
-export type SkillSource = "project" | "user" | "app" | "other";
-
-export type SkillAuthority = "workspace" | "user" | "application" | "external";
-
-export type SkillInterface = {
-  displayName: string;
-  executionMode: string;
-  provider?: string;
-  model?: string;
-  argumentHint?: string;
-};
-
-export type SkillToolDependency = {
-  type: string;
-  value: string;
-  required: boolean;
-};
-
-export type SkillDependencies = {
-  tools: SkillToolDependency[];
-};
-
-export type SkillPolicy = {
-  allowImplicitInvocation: boolean;
-  whenToUse?: string;
-};
-
-export type SkillLocator = {
-  directory: string;
-  skillFilePath: string;
-};
-
-export type SkillSummary = {
-  skillId: string;
-  name: string;
-  description: string;
-  scope: SkillScope;
-  source: SkillSource;
-  authority: SkillAuthority;
-  enabled: boolean;
-  interface: SkillInterface;
-  dependencies: SkillDependencies;
-  policy: SkillPolicy;
-  capabilities: string[];
-  locator: SkillLocator;
-};
-
-export type SkillWorkflowStep = {
-  id: string;
-  name: string;
-  dependencies: string[];
-};
-
-export type SkillDetail = {
-  metadata: SkillSummary;
-  markdownContent: string;
-  workflowSteps: SkillWorkflowStep[];
-};
-
-export type SkillListResponse = {
-  skills: SkillSummary[];
-};
-
-export type SkillReadResponse = {
-  skill: SkillDetail;
-};
-
 export type SkillManagementListResponse = {
   skills: unknown[];
 };
@@ -2564,25 +2491,10 @@ export type McpToolSearchParams = {
   limit?: number;
 };
 
-export type McpToolCallParams = {
-  toolName: string;
-  arguments: unknown;
-};
-
-export type McpToolCallWithCallerParams = McpToolCallParams & {
-  caller?: string;
-};
-
 export type McpContent =
   | { type: "text"; text: string }
   | { type: "image"; data: string; mime_type: string }
   | { type: "resource"; uri: string; text?: string; blob?: string };
-
-export type McpToolCallResponse = {
-  content: McpContent[];
-  structuredContent?: unknown;
-  is_error: boolean;
-};
 
 export type McpPromptListResponse = {
   prompts: unknown[];
@@ -2609,11 +2521,6 @@ export type McpResourceListResponse = {
   resourceTemplates?: unknown[];
 };
 
-export type McpResourceReadParams = {
-  server: string;
-  uri: string;
-};
-
 export type McpResourceSubscribeParams = {
   server: string;
   uri: string;
@@ -2625,13 +2532,6 @@ export type McpResourceUnsubscribeParams = {
 };
 
 export type McpResourceSubscriptionResponse = Record<string, never>;
-
-export type McpResourceReadResponse = {
-  uri: string;
-  mime_type?: string;
-  text?: string;
-  blob?: string;
-};
 
 export type ProjectMemoryReadParams = {
   projectId: string;

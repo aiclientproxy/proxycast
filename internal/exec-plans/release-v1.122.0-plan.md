@@ -1,6 +1,6 @@
 # Lime v1.122.0 发布执行计划
 
-状态：publishing
+状态：completed
 日期：2026-08-06
 目标版本：`1.122.0`
 目标 tag：`v1.122.0`
@@ -11,8 +11,8 @@
 
 ## 当前阶段与下一刀
 
-- 当前阶段：候选盘点、发版 metadata、发布门禁与危险操作确认已完成，正在执行 Git 发布收口。
-- 下一刀：复核 staged candidate 后连续完成 release commit、`v1.122.0` tag、`main`/tag 推送和远端复核。
+- 当前阶段：候选盘点、发版 metadata、发布门禁、Git 发布收口与远端 Release workflow 均已完成。
+- 下一刀：无；后续由 `v1.122.0` 发布后的线上观察与下一版本执行计划承接。
 
 ## Release Candidate
 
@@ -49,13 +49,15 @@
 - `deprecated`：未新增。
 - `dead / deleted / forbidden-to-restore`：旧 pinned 双轨入口不回流；`.gitignore` 中 `.gstack/` 为本地环境排除项，不进入发布提交。
 
-## Git 发布确认
+## Git 发布结果
 
-- 待确认操作：将除 `.gitignore` 外的全部 189 个 candidate 路径暂存，创建 `Release v1.122.0` commit，创建本地 `v1.122.0` tag，推送 `main` 与 tag 到 `origin`，并复核远端 tag。
-- tag 当前不存在，不覆盖既有 tag。
+- 已执行操作：除 `.gitignore` 与候选冻结后 8 个并发路径外，全部 189 个 candidate 路径已提交；release commit=`3060a969d588400139df7448331a1936fd0fd942`。
+- 本地与远端 `v1.122.0` tag 均指向 release commit；tag 为新建，不覆盖既有引用。`origin/main` 已包含 release commit。
 - 架构确认：本候选继续使用唯一产品链 `Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI`；Thread sections 归 App Server/thread-store current owner，无新增 compat/deprecated owner。release owner 已在危险操作确认中确认。
 - 暂存复核：189 个 candidate 路径已暂存；`.gitignore` 与上述 8 个候选冻结后并发改动保持未暂存。
+- GitHub Release：`https://github.com/limecloud/lime/releases/tag/v1.122.0` 已发布，非 draft、非 prerelease。
+- Release workflow：`31106261598` 全部成功；macOS arm64/x64、Windows x64 Electron 构建，Windows Squirrel installed-candidate smoke，GitHub Release 资产，Cloudflare R2 updater，以及 Windows/Linux/macOS arm64/x64 CLI 资产均完成。
 
 ## 完成度
 
-- 当前发版完成度：`90%`；候选范围、metadata、验证和 GUI Gate B 已完成，剩余 Git stage、commit、tag、push 与远端复核。
+- 当前发版完成度：`100%`；候选范围、metadata、验证、GUI Gate B、release commit、tag、`main`/tag 推送、GitHub Release 与全平台远端资产发布均已完成。

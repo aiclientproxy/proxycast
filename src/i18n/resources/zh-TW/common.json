@@ -255,6 +255,7 @@
   "common.modelSelector.model.empty": "暫無可用模型",
   "common.modelSelector.model.selectedUnavailable": "目前已選模型暫不可用",
   "common.modelSelector.reasoning.title": "推理強度",
+  "common.modelSelector.reasoning.trigger": "思考 {{level}}",
   "common.modelSelector.reasoning.source.api": "接口宣告",
   "common.modelSelector.reasoning.aria": "選擇推理強度 {{level}}",
   "common.modelSelector.reasoning.level.none": "關閉",

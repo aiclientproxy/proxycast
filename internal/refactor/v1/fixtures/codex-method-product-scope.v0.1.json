@@ -20,9 +20,9 @@
       "clientNotification": 1
     },
     "byStatus": {
-      "implemented": 76,
+      "implemented": 87,
       "product-scope-excluded": 35,
-      "planned": 109
+      "planned": 98
     }
   },
   "groups": [
@@ -323,15 +323,20 @@
       "methods": ["configWarning"]
     },
     {
-      "id": "apps-planned",
+      "id": "apps-current",
       "direction": "clientRequest",
       "productArea": "apps",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
-      "owner": "app-server Apps registry",
-      "counterpartRule": "none",
-      "gap": "Codex Apps read/list/installed wire contract and readiness are not present on the current v2 boundary.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "owner": "app-server Plugin catalog Apps projection",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/apps.rs",
+        "lime-rs/crates/app-server/src/processor/app.rs",
+        "lime-rs/crates/app-server/src/local_data_source/plugin_catalog.rs",
+        "lime-rs/crates/app-server/tests/apps_jsonrpc.rs",
+        "src/lib/api/apps.ts"
+      ],
       "methods": ["app/installed", "app/list", "app/read"]
     },
     {
@@ -465,15 +470,19 @@
       ]
     },
     {
-      "id": "hooks-planned",
+      "id": "hooks-current",
       "direction": "clientRequest",
       "productArea": "hooks",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "tool-runtime hook lifecycle",
-      "counterpartRule": "none",
-      "gap": "Hook execution exists internally, but list/readiness is not a current App Server contract.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/hook.rs",
+        "lime-rs/crates/app-server/src/processor/hook.rs",
+        "lime-rs/crates/app-server/tests/hooks_jsonrpc.rs",
+        "packages/app-server-client/src/request-client-methods.ts"
+      ],
       "methods": ["hooks/list"]
     },
     {
@@ -493,15 +502,19 @@
       ]
     },
     {
-      "id": "mcp-request-planned",
+      "id": "mcp-request-implemented",
       "direction": "clientRequest",
       "productArea": "mcp",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "app-server MCP processor + mcp manager",
-      "counterpartRule": "none",
-      "gap": "Lime uses mcpResource/read and mcpTool/call; exact Codex method names and payloads are not aligned.",
-      "evidence": ["internal/aiprompts/commands.md"],
+      "counterpartRule": "same-name",
+      "gap": "Exact Codex resource read and thread-scoped tool call are implemented through the App Server MCP owner.",
+      "evidence": [
+        "internal/aiprompts/commands.md",
+        "lime-rs/crates/app-server/tests/mcp_exact_jsonrpc.rs",
+        "src/lib/api/mcp.test.ts"
+      ],
       "methods": ["mcpServer/resource/read", "mcpServer/tool/call"]
     },
     {
@@ -620,15 +633,20 @@
       "methods": ["review/start"]
     },
     {
-      "id": "skills-planned",
+      "id": "skills-current",
       "direction": "clientRequest",
       "productArea": "skills",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
-      "owner": "skills registry + app-server",
-      "counterpartRule": "none",
-      "gap": "Legacy skill APIs do not satisfy Codex list/config/roots watcher and readiness semantics.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "owner": "app-server-protocol/v2 + RuntimeCore + lime-skills AgentSkillSnapshot",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/skill.rs",
+        "lime-rs/crates/app-server/src/runtime/skills.rs",
+        "lime-rs/crates/app-server/tests/skills_jsonrpc.rs",
+        "src/lib/api/skill-execution.ts",
+        "packages/app-server-client/src/request-client-methods.ts"
+      ],
       "methods": ["skills/config/write", "skills/extraRoots/set", "skills/list"]
     },
     {
@@ -687,15 +705,20 @@
       "methods": ["item/permissions/requestApproval", "item/tool/call"]
     },
     {
-      "id": "apps-notification-planned",
+      "id": "apps-notification-current",
       "direction": "serverNotification",
       "productArea": "apps",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
-      "owner": "app-server Apps registry",
-      "counterpartRule": "none",
-      "gap": "Apps watcher/readiness notification is not on the current boundary.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "owner": "app-server Plugin catalog Apps projection",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/app.rs",
+        "lime-rs/crates/app-server/src/processor/plugin.rs",
+        "packages/app-server-client/src/server-notifications.ts",
+        "src/lib/api/apps.ts",
+        "lime-rs/crates/app-server/tests/apps_jsonrpc.rs"
+      ],
       "methods": ["app/list/updated"]
     },
     {
@@ -869,15 +892,19 @@
       "methods": ["process/exited", "process/outputDelta"]
     },
     {
-      "id": "skills-notification-planned",
+      "id": "skills-notification-current",
       "direction": "serverNotification",
       "productArea": "skills",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
-      "owner": "skills registry + app-server",
-      "counterpartRule": "none",
-      "gap": "Skills watcher does not emit the Codex skills/changed contract.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "owner": "app-server skills watcher + typed notification bus",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server/src/skills_watcher.rs",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/notification.rs",
+        "src/components/agent/chat/hooks/useLimeSkills.ts",
+        "scripts/agent-runtime/claw-chat-current-fixture-skills-workspace.mjs"
+      ],
       "methods": ["skills/changed"]
     },
     {

@@ -384,11 +384,24 @@ export async function runMcpLiveProviderSmoke({
         liveSearchedTools.some((tool) => tool?.name === targetToolName),
         `mcpTool/search did not return requested live tool ${targetToolName}`,
       );
+      const thread = await invokeAppServerMethod(
+        options,
+        "thread/start",
+        { ephemeral: true },
+        entries,
+      );
+      const threadId = thread?.thread?.id;
+      assert(
+        typeof threadId === "string" && threadId.length > 0,
+        "thread/start did not return a thread id for live MCP call",
+      );
       const toolResult = await invokeAppServerMethod(
         options,
-        "mcpTool/call",
+        "mcpServer/tool/call",
         {
-          toolName: targetToolName,
+          threadId,
+          server: serverName,
+          tool: targetToolName.slice(`mcp__${serverName}__`.length),
           arguments: live.expected.toolArguments,
         },
         entries,
@@ -429,16 +442,19 @@ export async function runMcpLiveProviderSmoke({
       );
       const readResult = await invokeAppServerMethod(
         options,
-        "mcpResource/read",
+        "mcpServer/resource/read",
         { server: serverName, uri: live.expected.resourceUri },
         entries,
       );
+      const content = Array.isArray(readResult?.contents)
+        ? readResult.contents[0]
+        : null;
       readResource = {
-        uriMatchesExpected: readResult?.uri === live.expected.resourceUri,
-        uriSummary: summarizeUri(readResult?.uri),
-        mimeType: readResult?.mime_type ?? readResult?.mimeType ?? null,
-        hasText: typeof readResult?.text === "string",
-        hasBlob: typeof readResult?.blob === "string",
+        uriMatchesExpected: content?.uri === live.expected.resourceUri,
+        uriSummary: summarizeUri(content?.uri),
+        mimeType: content?.mime_type ?? content?.mimeType ?? null,
+        hasText: typeof content?.text === "string",
+        hasBlob: typeof content?.blob === "string",
       };
     }
 

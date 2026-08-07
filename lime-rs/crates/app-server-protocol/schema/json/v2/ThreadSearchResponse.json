@@ -430,6 +430,62 @@
       },
       "type": "object"
     },
+    "HookEventName": {
+      "enum": [
+        "permissionRequest",
+        "postCompact",
+        "postToolUse",
+        "preCompact",
+        "preToolUse",
+        "sessionEnd",
+        "sessionStart",
+        "stop",
+        "subagentStart",
+        "subagentStop",
+        "userPromptSubmit"
+      ],
+      "type": "string"
+    },
+    "HookExecutionMode": {
+      "enum": [
+        "async",
+        "sync"
+      ],
+      "type": "string"
+    },
+    "HookHandlerType": {
+      "enum": [
+        "agent",
+        "command",
+        "prompt"
+      ],
+      "type": "string"
+    },
+    "HookOutputEntry": {
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/HookOutputEntryKind"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "type": "object"
+    },
+    "HookOutputEntryKind": {
+      "enum": [
+        "context",
+        "error",
+        "feedback",
+        "stop",
+        "warning"
+      ],
+      "type": "string"
+    },
     "HookPromptFragment": {
       "properties": {
         "hookRunId": {
@@ -444,6 +500,115 @@
         "text"
       ],
       "type": "object"
+    },
+    "HookRunStatus": {
+      "enum": [
+        "blocked",
+        "completed",
+        "failed",
+        "running",
+        "stopped"
+      ],
+      "type": "string"
+    },
+    "HookRunSummary": {
+      "properties": {
+        "completedAt": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "displayOrder": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "durationMs": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/HookOutputEntry"
+          },
+          "type": "array"
+        },
+        "eventName": {
+          "$ref": "#/$defs/HookEventName"
+        },
+        "executionMode": {
+          "$ref": "#/$defs/HookExecutionMode"
+        },
+        "handlerType": {
+          "$ref": "#/$defs/HookHandlerType"
+        },
+        "id": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/HookScope"
+        },
+        "source": {
+          "$ref": "#/$defs/HookSource"
+        },
+        "sourcePath": {
+          "type": "string"
+        },
+        "startedAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/HookRunStatus"
+        },
+        "statusMessage": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "displayOrder",
+        "entries",
+        "eventName",
+        "executionMode",
+        "handlerType",
+        "id",
+        "scope",
+        "source",
+        "sourcePath",
+        "startedAt",
+        "status"
+      ],
+      "type": "object"
+    },
+    "HookScope": {
+      "enum": [
+        "thread",
+        "turn"
+      ],
+      "type": "string"
+    },
+    "HookSource": {
+      "enum": [
+        "cloudManagedConfig",
+        "cloudRequirements",
+        "legacyManagedConfigFile",
+        "legacyManagedConfigMdm",
+        "mdm",
+        "plugin",
+        "project",
+        "sessionFlags",
+        "system",
+        "unknown",
+        "user"
+      ],
+      "type": "string"
     },
     "ImageDetail": {
       "enum": [
@@ -953,6 +1118,36 @@
           "required": [
             "fragments",
             "id",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "run": {
+              "$ref": "#/$defs/HookRunSummary"
+            },
+            "type": {
+              "const": "hook",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "run",
             "type"
           ],
           "type": "object"

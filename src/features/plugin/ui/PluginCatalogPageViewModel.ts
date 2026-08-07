@@ -1,4 +1,7 @@
 import type {
+  AppServerAppInfo,
+  AppServerInstalledApp,
+  AppServerPluginCatalogCapability,
   AppServerPluginCatalogDetail,
   AppServerPluginCatalogSummary,
 } from "@/lib/api/appServerTypes";
@@ -9,6 +12,16 @@ export interface PluginCatalogFilterState {
   query: string;
   source: string;
   view: PluginCatalogView;
+}
+
+export type PluginCatalogAppReadinessStatus = "disabled" | "pending" | "ready";
+
+export interface PluginCatalogAppReadinessItem {
+  callable: boolean;
+  enabled: boolean;
+  id: string;
+  name: string;
+  status: PluginCatalogAppReadinessStatus;
 }
 
 export function filterPluginCatalog(
@@ -59,4 +72,33 @@ export function detailCapabilityCount(
     detail.apps.length +
     detail.hooks.length
   );
+}
+
+export function projectPluginCatalogApps(
+  capabilities: AppServerPluginCatalogCapability[],
+  catalog: AppServerAppInfo[],
+  installed: AppServerInstalledApp[],
+): PluginCatalogAppReadinessItem[] {
+  const catalogById = new Map(catalog.map((app) => [app.id, app]));
+  const installedById = new Map(installed.map((app) => [app.id, app]));
+
+  return capabilities.map((capability) => {
+    const app = catalogById.get(capability.id);
+    const runtime = installedById.get(capability.id);
+    const enabled = runtime?.enabled ?? app?.isEnabled ?? false;
+    const callable = runtime?.callable === true;
+    return {
+      callable,
+      enabled,
+      id: capability.id,
+      name: app?.name ?? capability.name,
+      status: !runtime
+        ? "pending"
+        : !enabled
+          ? "disabled"
+          : callable
+            ? "ready"
+            : "pending",
+    };
+  });
 }

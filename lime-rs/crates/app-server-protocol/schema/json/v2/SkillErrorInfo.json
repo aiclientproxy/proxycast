@@ -1,15 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
-    "arguments": true,
-    "toolName": {
+    "message": {
+      "type": "string"
+    },
+    "path": {
       "type": "string"
     }
   },
   "required": [
-    "arguments",
-    "toolName"
+    "message",
+    "path"
   ],
-  "title": "McpToolCallParams",
+  "title": "SkillErrorInfo",
   "type": "object"
 }

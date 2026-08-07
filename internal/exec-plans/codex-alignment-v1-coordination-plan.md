@@ -3299,7 +3299,7 @@ slice paths>` 完整退出码为 `0`，其中 `agent-runtime 192/192`、`app-ser
 冒充 Plugins 整体对齐。架构影响：非重大，复用既有 App Server current 主链与 Plugin catalog owner；
 责任开发者：root，2026-08-06。下一刀优先补 Skills/Plugins/Apps watcher/readiness 或 Hook lifecycle。
 
-### 2026-08-06 Hook lifecycle active slice
+### 2026-08-06 Hook lifecycle completed slice
 
 目标与阶段：继续按 Codex HEAD `c4f42d161ae44a8d696ee9fb595709661979d187` 对齐 exact
 `hooks/list`、`hook/started` 与 `hook/completed`，并把现有 `tool-runtime` Hook owner 接入真实 provider sampling、
@@ -3327,6 +3327,256 @@ runtime integration、public JSON-RPC、protocol round-trip、typed clients、no
 `npm run test:contracts`、Rust related、`npm run smoke:agent-runtime-current-fixture`、`npm run verify:gui-smoke`、
 专用真实 Electron Hook Gate B、`npm run governance:legacy-report`、typecheck、rustfmt、Prettier 与
 `git diff --check`。架构影响：重大；完成时同步 `internal/aiprompts/architecture.md` 并由责任开发者确认。
+
+完成证据（root，2026-08-07）：Rust/TS typed client 已接入 `hooks/list`，协议 schema registry 与生成物
+已同步；v2 `hook/started` / `hook/completed` 已直投影为同一 `item_<hookRunId>` 的 canonical Item；Renderer
+已接入 Hook timeline row 与五语言文案。`hooks_jsonrpc` 公共 JSON-RPC exact metadata 与
+`thread/start -> turn/start -> event_appender -> thread/read + thread/items/list` 历史恢复测试为 `2/2`；Hook
+owner/runtime、materializer、notification/canonical reader/drift/timeline 前端定向测试为 `117/117`。
+`npm run test:contracts` 完整通过，其中 App Server client contract 为 `292` checks；
+`npm run smoke:agent-runtime-current-fixture` 与 `npm run verify:gui-smoke` 完整通过；typecheck、scoped rustfmt、
+Prettier、`git diff --check` 与 `npm run governance:legacy-report`（`0` 分类漂移、`0` 边界违规）通过。
+`npm run governance:scripts` 也通过，脚本根目录与一级领域目录均无漂移。首页热路径继续保持
+`InputbarModelExtra.backgroundPreload="disabled"`，没有为了 fixture 提前触发 model read/list。
+
+专用 `npm run smoke:hook-lifecycle-gate-b` 以真实 Electron Desktop Host 启动，命中 preload/IPC、
+`app_server_handle_json_lines`、`hooks/list`、`thread/start`、`turn/start`、`thread/read` 与 RuntimeCore provider/tool
+sampling；受信 `PreToolUse(update_plan)` command 子进程只执行一次，同一 run id 的 started/completed notification
+配对，public read model 恢复 `type=hook`、`id=item_<hookRunId>`、`run.status=completed`，Desktop 展开的紧凑过程
+行可见“自动钩子已完成”和 `Gate B command hook completed`，console/page error 均为 `0`。证据：
+`.lime/qc/gui-evidence/hook-lifecycle-gate-b/hook-lifecycle-gate-b-summary.json`（`ok=true`，八项 Hook assertion
+全通过）与 `hook-lifecycle-gate-b-chat.png`。该场景使用 localhost OpenAI-compatible provider fixture，不调用
+live Provider，不能冒充 live 模型能力证据。
+
+分类与进度：Hook discovery/trust、sampling gate、lifecycle event、public method、canonical Item、read model 与
+Desktop timeline 均为 `current`；无 `compat` 或 `deprecated`；旧 raw Hook shape、默认信任、空 reporter、Renderer
+`known_unprojected` 和 production mock/fallback 为 `dead / deleted / forbidden-to-restore`。方法矩阵更新为
+`77 implemented / 108 planned / 35 product-scope-excluded`，产品范围 method 完成度 `77 / 185 = 41.6%`。
+架构影响：重大；`internal/aiprompts/architecture.md` 已同步 owner/data-flow 图，责任开发者 root 已确认目录归属、
+数据流、依赖方向、协议边界和验证门禁。本切片完成；下一刀转向 Skills/Plugins/Apps watcher/readiness，或按风险
+优先补仍缺真实 Gate B 的 Multi-Agent/host lifecycle，不再扩展 Hook 双轨。
+
+### 2026-08-07 Skills list/watcher completed slice
+
+目标与阶段：按 Codex HEAD `c4f42d161ae44a8d696ee9fb595709661979d187` 对齐 exact `skills/list` 的
+`cwds + forceReload -> data[{cwd,skills,errors}]` contract，并校正已经存在的 exact `skills/changed` watcher
+事实。Lime Desktop 只消费 typed catalog，不复制 Codex TUI Skills 弹层；本切片不触碰 grok-build 所属
+provider/model/media 控制面。
+
+窄写集：`skills` crate snapshot 复用点、App Server v2 Skill protocol/schema/dispatch/runtime、Rust/TypeScript
+typed client、Renderer runtime Skill catalog、Electron 本地 Skill 目录壳、相关 public JSON-RPC/watcher/GUI fixture
+tests、method 产品矩阵、本计划与必要架构说明。共享 protocol registry/dispatch/generated types 只追加或迁移
+Skill 条目，保留现有 Hook、Plugin Search、Thread Section 和并行脏改动。
+
+唯一事实源与替换规则：`lime_skills::AgentSkillSnapshot` 继续是 discovery owner；`skills/list` 按请求 cwd
+构建 workspace roots，`forceReload=true` 只失效同一 snapshot cache，不引入第二 catalog。Renderer 与 Electron
+迁到 plural method 后物理删除 singular `skill/list` protocol/handler/client/fixture 正向路径，不保留 alias 或
+compat。`skill/read` 继续只承担稳定 Skill id 的正文/工作流详情读取，是独立产品能力，不冒充 Codex list。
+既有 `skills/changed` typed watcher、mutation invalidation 与 GUI refresh 为 `current`；畸形 payload 继续 fail
+closed。`skills/config/write` 与 `skills/extraRoots/set` 本切片保持 `planned`，不得用 management API 冒充。
+
+退出条件：public `skills/list` 保持请求 cwd 顺序，返回 exact scope/path/interface/dependencies/enabled 与逐 cwd
+errors；force reload 可观察；Renderer/Host 无 `skill/list` 正向引用；真实 Electron Skills fixture 命中
+`skills/list + skills/changed` 且无 production mock/legacy fallback。验证至少包含 protocol round-trip、public
+JSON-RPC、watcher、typed clients、Renderer projection、`npm run test:contracts`、Rust related、
+`npm run smoke:agent-runtime-current-fixture`、Skills 专项 Electron smoke、`npm run verify:gui-smoke`、治理扫描、
+typecheck、rustfmt、Prettier 与 `git diff --check`。完成前方法矩阵不移动 `skills/list`；`skills/changed` 仅在 exact
+notification owner 回归通过后从 planned 改为 implemented。
+
+实施结果（root，2026-08-07）：App Server v2 已接入 exact `skills/list`，按请求顺序返回
+`data[{cwd,skills,errors}]`，保留 scope/path/interface/dependencies/enabled 并支持 `forceReload` 同时失效 snapshot
+与 summary cache。Rust/TypeScript typed client、Renderer Composer catalog 与稳定 `skill/read` 详情投影已迁到
+plural method；禁用项在 Renderer catalog 边界过滤。singular `skill/list`、v0 `SkillListResponse`、AppDataSource
+旧 list 路径与零消费者 `get_local_skills_for_app` Electron facade 已物理删除，命令契约将其固定为 retired-only，
+没有 alias、compat wrapper 或 production mock fallback。
+
+验证：`app-server-protocol` 为 `102 + 1` tests，`app-server --test skills_jsonrpc` 为 `2/2`，`lime-skills`
+错误路径回归为 `1/1`，Rust client 为 `34/34`；TypeScript client 为 `106/106`，Renderer catalog/read 定向测试为
+`23/23`。`npm run test:contracts` 完整通过，其中生成协议为 `915` types、App Server client contract 为 `292`
+checks；`npm run typecheck`、`npm run governance:scripts`、`npm run governance:legacy-report`、定向 rustfmt、Prettier
+与 `git diff --check` 通过，legacy report 为 `0` 分类漂移、`0` 边界违规。`npm run
+smoke:agent-runtime-current-fixture` 完整通过；`skills-runtime` 专项 Gate B 证据位于
+`.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-skills-runtime-regression-summary.json`，
+证明真实 Electron renderer/preload/IPC、`app_server_handle_json_lines`、首次 `skills/list`、typed
+`skills/changed {}` 与第二次自动 `skills/list` 全部命中，GUI 未点击手动刷新即显示新增 Skill，legacy/mock hit、
+console error、page error 均为 `0`。该 Gate B 使用受控 fixture backend，不调用 live Provider，也不作为 live
+模型能力证据。`npm run verify:gui-smoke` 以 `21/21` assertions 通过，证据为
+`.lime/qc/project-gates/standalone-shell-01-20260807050709-91472/shell-01-electron-smoke/summary.json`。
+
+分类与进度：plural list/watcher、`skill/read` detail projection、cache invalidation 与 Desktop GUI catalog refresh
+均为 `current`；`compat` 无；`deprecated` 无；singular `skill/list`、`SkillListResponse`、旧 AppDataSource list 与
+`get_local_skills_for_app` 为 `dead / deleted / forbidden-to-restore`。方法矩阵为
+`79 implemented / 106 planned / 35 product-scope-excluded`，产品范围完成度 `79 / 185 = 42.7%`。架构影响：
+重大；`internal/aiprompts/architecture.md` 第 28 节已同步，责任开发者 root 已确认目录归属、数据流、依赖方向、
+协议边界和验证门禁。本切片完成；下一刀继续 `skills/config/write`、`skills/extraRoots/set`，或转向
+Plugins/Apps watcher/readiness，不复制 Codex TUI。
+
+### 2026-08-07 Skills config/extra roots completed slice
+
+目标与阶段：继续按 Codex HEAD `c4f42d161ae44a8d696ee9fb595709661979d187` 对齐 exact
+`skills/config/write` 与 `skills/extraRoots/set`。Desktop 不复制 Codex TUI：用户级启停配置进入 Lime 既有 YAML
+事实源，extra roots 只在 App Server 进程生命周期内生效；本切片不触碰 grok-build 所属多模型/多模态控制面。
+
+窄写集：App Server v2 Skill protocol/schema/dispatch/runtime、`lime-skills` snapshot roots/config projection、
+RuntimeCore turn metadata、Rust/TypeScript typed client、Renderer App Server gateway、公共 JSON-RPC 测试、method
+产品矩阵、本计划与架构/命令事实源。没有新增 Skills 管理 UI、Electron IPC、compat wrapper 或 production mock。
+
+实施结果：`skills/config/write` 强制 exactly-one `path/name` selector，拒绝相对 path，写入
+`Config.skills.config`，返回 `effectiveEnabled` 并清理 snapshot/summary cache；`skills/list` 与 Agent turn snapshot
+应用同一启停规则。`skills/extraRoots/set` 原子替换进程级 root 列表，拒绝相对路径，去重绝对路径，允许缺失目录
+静默为空，清理同一 cache 并发送 exact `skills/changed {}`。协议 schema、generated TypeScript、request client、
+connection client 与 Renderer typed gateway 已同步。
+
+验证：App Server 全量 lib `1695/1695`、`skills_jsonrpc 4/4`、`app-server-protocol 103/103` 与 `lime-skills
+65/65` 通过；公共 JSON-RPC 覆盖 selector 校验、持久化后有效状态、root 替换/清空/缺失目录、相对路径
+`INVALID_PARAMS` 和 notification。修正 serde 默认产生的 `path: null` fixture 后，协议 round-trip 组合测试全通过。
+`npm run check:protocol-types` 报告生成 `919` types 且 `0` drift；`npm run test:contracts`、
+`npm run governance:legacy-report`（`0` 分类漂移、`0` 边界违规）、`npm run governance:scripts`、
+`npm run typecheck`、相关 Rust/TypeScript 格式检查与 `git diff --check` 均通过；真实 Electron
+`npm run smoke:agent-runtime-current-fixture` 与 `npm run verify:gui-smoke` 也已在本切片完成并保持
+`liveProviderUsed=false`。
+
+分类与进度：两个 exact method、配置投影、进程 roots、typed clients 和 gateway 均为 `current`；`compat` 无；
+`deprecated` 无；未新增 `dead` surface。方法矩阵更新为 `81 implemented / 104 planned /
+35 product-scope-excluded`，产品范围完成度 `81 / 185 = 43.8%`。架构影响：重大；
+`internal/aiprompts/architecture.md` 第 28 节已同步，责任开发者 root 已确认目录归属、数据流、依赖方向、协议边界
+和验证门禁。下一刀回到 Plugins/Apps watcher/readiness 或 provider adapter/hosted tool 闭环。
+
+### 2026-08-07 exact MCP resource/tool completed slice
+
+目标与阶段：继续按 Codex exact MCP contract 收敛 `mcpServer/resource/read` 与
+`mcpServer/tool/call`。Desktop 不复制 TUI：Settings 只浏览工具；Workspace/Agent 只从真实 Thread 发起工具调用。
+本切片不修改 grok-build 所属多模型/多模态控制面。
+
+窄写集：App Server v2 MCP protocol/schema/dispatch/runtime、Session-owned `McpThreadRuntime`、Rust/TypeScript
+typed client、Renderer MCP gateway/Workspace harness、MCP smoke/contract guard、method 产品矩阵与本计划/架构事实源。
+并行工作树中的 Hooks、Skills、Thread projection 和模型路由改动未夹写。
+
+实施结果：`mcpServer/tool/call` 强制 canonical `threadId`，由 Thread 解析 Session 后经
+`ExecutionBackend -> AgentRuntimeState -> McpThreadRuntime -> Session-owned McpClientManager` 执行；缺 Thread 或
+未恢复 runtime 时 fail closed。`mcpServer/resource/read` 使用 exact `contents[]`，`threadId` 可选；携带时读取同一
+Session-owned runtime，不携带时走 management manager，wire 不接受 `sessionId`。Renderer Settings 的无 Thread
+工具执行入口已删除，Workspace call proof 在发送时注入真实 active Thread。旧 `mcpTool/call`、
+`mcpTool/callWithCaller` 与 `mcpResource/read` 已从 v0 catalog/DTO/schema、App Server handler/AppDataSource、Rust/TS
+typed client、Renderer API、timeout policy、smoke 和正向测试物理删除；contract guard 禁止三者回流 current 边界。
+
+分类与进度：两个 exact method、typed clients、Renderer gateway、Thread runtime 与 smoke 为 `current`；
+`compat` 无；`deprecated` 无；三个旧 method 为 `dead / deleted / forbidden-to-restore`。Settings 无 Thread 调用入口
+同属 `dead / deleted`。方法矩阵为 `83 implemented / 102 planned / 35 product-scope-excluded`，产品范围完成度
+`83 / 185 = 44.9%`。架构影响：重大；`internal/aiprompts/architecture.md` 已同步 owner/data flow，责任开发者
+root 已确认目录归属、依赖方向、协议边界和验证门禁。
+
+最终验证（root，2026-08-07）：`npm run smoke:mcp-current -- --allow-write-fixture
+--allow-plugin-runtime-fixture` 通过，证据
+`.lime/qc/gui-evidence/mcp-current/mcp-current-summary.json` 为 `ok=true`，实际命中 `thread/start`、
+`mcpServer/tool/call`、`mcpServer/resource/read` 与 `agentSession/toolInventory/read`，fixture 与 plugin runtime 的
+missing method 均为空，`legacyMcpCommandsSeen=[]`，失败 MCP server 也未污染健康 server 的 tool/resource read。
+fixture 的 Thread 改用 `{ephemeral:true}` 让 current model catalog 自动选择可执行 route，不再硬编码
+`openai/gpt-5.4`；真实 readiness/preflight 仍保持 fail closed，未引入 test-only production fallback。
+
+真实 Electron `npm run smoke:mcp-workspace-plugin-runtime-electron-fixture` 通过，证据
+`.lime/qc/gui-evidence/mcp-workspace-plugin-runtime-fixture/mcp-workspace-plugin-runtime-fixture-summary.json`
+为 `ok=true`、`backendMode=runtime`，真实命中 preload/IPC、`app_server_handle_json_lines`、`thread/start`、
+inventory、server start、caller-scoped list 与 exact tool call；缺失 required method、legacy command 与 console error
+均为 `0`。`npm run smoke:agent-runtime-current-fixture` 完整通过，包含 MCP structuredContent 到 Agent Chat GUI
+可见的真实 Electron 回归；`npm run verify:gui-smoke` 通过，证据为
+`.lime/qc/project-gates/standalone-shell-01-20260807115648-65695/shell-01-electron-smoke/summary.json`。
+
+组合门禁：`app-server` lib `1694/1694`、`app-server-protocol` lib `104/104` 通过；扩大测试发现的唯一
+schema registry/type-name 顺序漂移已把五个 exact MCP v2 类型移回 MCP owner 段并补跑专项回归。既有
+`npm run test:contracts`、App Server client contract `292` checks、`npm run typecheck` 与 generated protocol
+`919` types / `0` drift 保持通过；本轮追加 `npm run governance:legacy-report`（扫描 `2383` 个文件，分类漂移
+`0`、边界违规 `0`）、`npm run governance:scripts`、scoped rustfmt、Prettier 与 `git diff --check` 均通过。
+current profiling 文档也已迁到 `mcpServer/tool/call`，旧 wire 只剩负向守卫或历史 evidence。下一刀回到
+Plugins/Apps watcher/readiness 或 provider adapter/hosted tool 闭环，不恢复旧 MCP wire。
+
+### 2026-08-07 Apps exact catalog/readiness boundary completed slice
+
+目标与窄写集：继续按 Codex `app-server-protocol/src/protocol/v2/apps.rs` 与 App Server Apps processor 对齐
+exact `app/list`、`app/read`、`app/installed` 和 `app/list/updated`。Lime 是 Desktop GUI，不复制 Codex TUI；
+多模型、多模态控制面仍由 `/Users/coso/Documents/dev/rust/grok-build` 对齐，本切片不改 provider/model/media owner。
+
+唯一 owner 与数据流：已安装 Plugin manifest 的 `apps` capability 由既有 `PluginDataSource -> local
+plugin_catalog` 投影为 Apps catalog；没有新增第二 catalog。`app/list` 支持 cursor/limit，首页读取发布
+`app/list/updated`；`app/read` 最多 100 个 id、去重保序并返回 partial `missingAppIds`；`app/installed` 报告
+enabled/runtime 状态。可选 `threadId` 只接受已加载 canonical Thread，未知 Thread 返回 `SESSION_NOT_FOUND`。
+本地 registry 不伪造 hosted refresh；local Plugin app 没有 model-visible hosted tool snapshot 时，`callable=false`
+并使 Desktop readiness 保持 fail closed。
+
+窄写集：`lime-rs/crates/app-server-protocol/src/protocol/v2/apps.rs`、Apps protocol catalogs/envelopes/schema
+registry、App Server Apps processor/runtime/Plugin catalog、public `apps_jsonrpc` 与 protocol round-trip tests、
+`packages/app-server-client` generated/request/notification client、`src/lib/api/appServer{Constants,Types,
+ClientMethodSpecs,ClientMethods}.ts`、新增 `src/lib/api/apps.ts` gateway 与对应 tests，以及本计划、架构、命令和
+product-scope fixture/matrix。共享 Skills/Hooks/MCP/Provider 脏区只读避让。
+
+验证结果（root，2026-08-07）：`cargo check -p app-server-protocol` 与 `cargo check -p app-server` 通过；
+`cargo test -p app-server-protocol --lib` `107/107`、`cargo test -p app-server --test apps_jsonrpc` `1/1`；
+Apps Renderer gateway `4/4`；`@limecloud/app-server-client` package client `108/108`；协议 schema fixture 与
+generated client 已由 `write_schema_fixtures`、`npm run generate:protocol-types` 同步；root `npm run typecheck`
+通过。Apps parser 对畸形 notification/response fail closed，未使用 `window` 自定义事件。
+
+收尾门禁（root，2026-08-07）：格式化后 Apps Renderer gateway `4/4` 与 root `npm run typecheck` 复跑通过；
+`npm run governance:legacy-report` 扫描 `2384` 个文件，分类漂移与边界违规均为 `0`；
+`npm run governance:scripts`、`git diff --check` 通过。`npm run smoke:agent-runtime-current-fixture` 完整退出 `0`，
+覆盖 current RuntimeCore/read model/真实 Electron GUI 共享主链且 `liveProviderUsed=false`；`npm run verify:gui-smoke`
+以 Gate B-F `21/21` 通过，`app_server_handle_json_lines` IPC 命中 `44` 次，console/invoke/legacy/mock fallback
+均为 `0`。证据为 `.lime/qc/project-gates/standalone-shell-01-20260807145349-71233/shell-01-electron-smoke/summary.json`；
+其 claim boundary 是 Desktop 壳、preload/IPC、App Server 与 Workbench/Settings readiness，不包含 Apps 专项页面闭环。
+
+分类与进度：四个 Apps exact direction、protocol/schema、App Server owner、typed clients、Renderer gateway 和
+public JSON-RPC evidence 为 `current`；无 `compat`、无 `deprecated`。旧 Apps planned 分类已删除并移入
+`implemented`，产品矩阵更新为 `87 implemented / 98 planned / 35 product-scope-excluded`，完成度 `87 / 185 = 47.0%`。
+真实 Electron Apps-specific Gate B、hosted connector model-visible tool snapshot 与真实 `callable=true` provider
+路径仍是 open refs，不能由已通过的共享 GUI smoke 冒充完成。
+
+### 2026-08-07 Apps Desktop GUI consumer completed slice
+
+目标与窄写集：补齐上一 Apps exact contract 切片缺失的 Desktop 产品消费与专项 Gate B。现役唯一 App Center
+owner 保持 `src/components/AppPageContent.tsx -> src/features/plugin/ui/PluginCatalogPage.tsx`；不恢复旧
+`PluginsPage.tsx`，不新增 Apps 页面、第二 catalog、`window` 自定义事件或 production mock fallback。写集限定为
+Plugin catalog 页面/详情/ViewModel、Apps readiness section、独立 `scripts/electron/apps-catalog-gate-b*`、事件投影表、
+本计划与架构第 31 节，避让并行 Plugin/MCP Gate、五语言资源和 `package.json` 脏热区。
+
+实施结果：Plugin 详情侧栏通过 `src/lib/api/apps.ts` 读取 `app/list + app/installed`，将 manifest Apps capability
+投影为 `ready / disabled / pending`。本地 Plugin 没有 hosted connector tool snapshot 时保持
+`enabled=true / callable=false / pending`，不把安装或启用冒充模型 readiness。组件订阅 typed
+`app/list/updated`；notification 到达后重新读取同一 Apps snapshot。Apps 只作为 Plugin 详情内 capability/readiness
+状态呈现，安装、启停和卸载仍由 Plugin catalog owner 控制。详情组件从 `PluginCatalogPage.tsx` 拆出后，主页面从
+`916` 行降到 `771` 行，没有继续向接近千行的组件堆业务逻辑。
+
+定向验证：`PluginCatalogPageViewModel.unit.test.ts + PluginCatalogPage.test.tsx` 为 `6/6`，覆盖 fail-closed
+projection、初始 `callable=false` 和 typed notification 后的 disabled refresh；Gate 脚本结构守卫 `1/1`；root
+`npm run typecheck`、scoped Prettier、Node syntax check 与 `git diff --check` 通过。五语言未新增 key，复用既有
+`plugin.catalog.v2.status.disabled`、`plugin.apps.center.host.status.ready` 与
+`plugin.apps.center.host.status.planned`，避免夹写并行 i18n 文件。
+
+跨层收尾门禁：`npm run test:contracts` 完整通过，协议生成 `934` types 且无漂移，App Server client contract
+为 `292` checks；`npm run governance:legacy-report` 扫描 `2386` 个文件，分类漂移和边界违规均为 `0`；
+`npm run governance:scripts` 无 root/一级领域目录漂移。`npm run smoke:agent-runtime-current-fixture` 完整通过并
+保持 `liveProviderUsed=false`。`npm run verify:gui-smoke` 以 Gate B-F `21/21` 通过，真实 Electron
+`app_server_handle_json_lines` IPC 命中 `43` 次，console/page/invoke/trace/legacy/mock fallback 均为 `0`；证据为
+`.lime/qc/project-gates/standalone-shell-01-20260807154019-68375/shell-01-electron-smoke/summary.json`。该共享 smoke
+只证明 Desktop 壳与通用 bridge readiness，Apps 页面闭环仍由下述专项 Gate B 单独证明。全仓
+`git diff --check` 通过。
+
+专项 `node scripts/electron/apps-catalog-gate-b.mjs` 以真实 Electron Desktop Host 和隔离 app data 通过。证据
+`.lime/qc/project-gates/standalone-apps-catalog-20260807T152703394Z-702520/apps-catalog-gate-b/apps-catalog-gate-b-summary.json`
+为 `result=pass / proofLevel=Gate B`：真实 Electron renderer/preload/IPC 命中
+`app_server_handle_json_lines`；`plugin/list -> plugin/install` 发布 typed `app/list/updated`；exact `app/list`、
+`app/read`、`app/installed` 返回同一 App；App Center 可见行初始为
+`enabled=true / callable=false / pending`。从 GUI 点击停用后命中 `plugin/enabled/set`，trace 中
+`app/list + app/installed` 均由 `2` 次增长到 `7` 次，同一可见行切换为 `enabled=false / disabled`。console、
+page、invoke、trace、legacy command 与 production mock fallback 均为 `0`；两张截图无文本溢出、遮挡或错误 ready
+呈现。该场景使用 `APP_SERVER_BACKEND_MODE=unavailable`，不调用 live Provider，也不证明 hosted connector
+`callable=true`。
+
+分类与进度：App Center Apps readiness consumer、typed watcher、fresh read 和专项 Gate B 为 `current`；
+`compat` 无；`deprecated` 无；旧平行 Apps 页面/状态源继续为 `dead / deleted / forbidden-to-restore`。方法矩阵仍为
+`87 implemented / 98 planned / 35 product-scope-excluded`，产品范围完成度 `87 / 185 = 47.0%`，因为本切片为已计入
+implemented 的 Apps directions 补齐产品消费与证据，不重复计数。架构影响：重大；第 31 节已同步，责任开发者
+root 已确认唯一 Plugin catalog owner、Desktop GUI 投影、typed notification 数据流和 Gate B claim boundary。
+下一刀应进入 hosted connector model-visible tool snapshot / 真实 `callable=true` provider readiness，或回到方法矩阵
+中尚未实现的更高优先级 current owner；不得用本地 Plugin enabled 状态替代 hosted readiness。
 
 ## 8. 完成定义
 

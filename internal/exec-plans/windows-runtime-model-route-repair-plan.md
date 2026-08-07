@@ -215,3 +215,113 @@ Windows packaged Gate B 仍是唯一未完成交付门槛，不能由 macOS Elec
 当前完成度为 95%：本地实现、协议同步、macOS live directory/ready catalog、真实 UI 模型往返、
 Agnes 2.5 clean turn/read model 与 Skill 目录打开均已完成；Windows packaged Gate B 的模型首回合与
 Explorer 安装目录跳转仍待补，不能由 macOS 证据替代。
+
+## 2026-08-07 已有会话目录恢复切片
+
+### 目标与根因
+
+截图中的“当前模型通道暂时不可用”会合并 Provider `404/503` 与 RuntimeCore route rejection，不能据此把
+Windows 系统代理判定为根因。已撤回此前未经原始错误支持的 Electron proxy 改动。
+
+真实生产缺口位于已有会话的 `turn/start`：新会话 `thread/start` 在 model registry metadata 缺失时已有
+`modelProvider/fetchModels -> preflight retry`，但 `reconcile_thread_model_selection_for_turn` 只读取本地
+catalog。Windows 升级后 taxonomy 淘汰旧 last-success cache 时，已有会话的历史选择会直接返回
+`capability_snapshot_missing`，没有先刷新该 Provider 的权威目录。
+
+### 本轮写集与退出条件
+
+- 写集：`lime-rs/crates/app-server/src/runtime/model_providers/selection.rs`、
+  `lime-rs/crates/app-server/src/runtime/tests/session_operations.rs`、本计划。
+- 避让：Agent Runtime、App Server protocol/client、i18n、Model Selector 与 release 计划现有脏写集。
+- 仅当当前 route 返回 `model_registry_metadata_missing` / `capability_snapshot_missing` 且不存在有效
+  last-success catalog 时刷新；同一 turn 每个 Provider 最多一次。
+- 只有 `source=Api` 的刷新结果才重新进入 catalog selection 与 RuntimeCore preflight；刷新失败或刷新后仍缺
+  capability 继续 fail-closed，不放宽 `inferred_hint`，不增加 mock fallback。
+- 必跑 App Server 定向/related 测试、contracts、Agent current fixture 与 GUI smoke；当前 macOS 工作区不能
+  替代 Windows packaged live provider 复测。
+
+### 验证记录
+
+- 修复前运行
+  `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server existing_thread_refreshes_missing_capability_catalog_before_turn -- --nocapture`：
+  稳定失败，返回 `RouteRejected { reason_code: "capability_snapshot_missing" }`，catalog fetch 为零。
+- 修改 production `selection.rs` 后重跑同一命令：通过，1/1；catalog fetch 精确命中当前 Provider 一次，
+  刷新后 preflight 通过并进入 backend turn。
+- `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server --lib "runtime::tests::session_operations::" -- --nocapture`：
+  通过，14/14；现有 catalog 重选、direct route、特殊媒体模型与设置更新行为无回归。
+- `npm run test:rust:related -- <本切片两个 Rust 路径>`：通过，App Server 1,695/1,695。
+- `npm run test:contracts`：通过；protocol types 915、App Server client 292 checks 及 command/harness/modality/
+  scripts/release/docs boundary 全绿。
+- `npm run smoke:agent-runtime-current-fixture`：通过；真实 Electron/preload/IPC/App Server current fixture
+  覆盖普通回合、历史恢复、typed error、停止后继续、approval、Skills/MCP/media 等聚合场景，
+  `liveProviderUsed=false`。
+- `npm run verify:gui-smoke`：通过；真实 Electron Desktop Host、preload/IPC、App Server sidecar 初始化、
+  Claw shell reload 与 memory settings 均通过；evidence summary：
+  `.lime/qc/project-gates/standalone-shell-01-20260807050541-88169/shell-01-electron-smoke/summary.json`。
+- scoped `rustfmt --check` 与 `git diff --check`：通过。
+- 未执行 Windows packaged live provider：当前宿主为 macOS；该项仍是平台实机剩余风险，不能由 macOS
+  Electron Gate B 或 external fixture 替代。
+
+### 分类与完成度
+
+- `current`：App Server `turn/start -> catalog refresh -> RuntimeCore preflight -> provider`。
+- `dead / deleted / forbidden-to-restore`：基于统一 toast 推断系统代理根因的补丁。
+- `compat / deprecated`：无新增。
+- 本切片完成度：`95%`；production owner、失败转绿回归、Rust related、contracts、current fixture 与当前宿主
+  Gate B 已完成，仅余 Windows packaged live provider 实机复测。
+
+## 2026-08-07 Gate B 完整复测
+
+### Claim boundary
+
+本轮要求证明已有会话和 Provider generation 变化后，链路实际经过真实 Electron Desktop Host、
+preload/contextBridge、Electron IPC、`app_server_handle_json_lines`、App Server JSON-RPC、RuntimeCore/provider、
+canonical read model 与 GUI 终态。deterministic fixture 不冒充 live Provider，也不冒充 Windows packaged build。
+
+### 标准门禁结果
+
+- `npm run bridge:health -- --timeout-ms 120000`：通过。
+- `npm run test:contracts`：通过；App Server client 292 checks，command/harness/modality/scripts/release/docs
+  boundary 全绿。首次运行 current fixture / GUI smoke 时遇到并行 Skills 协议生成物尚未同步的 TypeScript build
+  阻塞；协议写集收口后重新执行，阻塞消失。
+- `npm run smoke:agent-runtime-current-fixture`：重新执行通过；history/cache 31/31、streaming terminal 32 passed、
+  Electron/App Server fixture guards 99/99，并继续通过真实 Electron fixture 的历史恢复、停止后继续、approval、
+  Skills/MCP/media、coding workbench 与 terminal read model 场景，`liveProviderUsed=false`。
+- `npm run verify:gui-smoke`：重新执行通过；真实 Electron Host、preload/IPC、App Server sidecar、Claw shell reload
+  与 memory settings 均通过。evidence summary：
+  `.lime/qc/project-gates/standalone-shell-01-20260807070445-45076/shell-01-electron-smoke/summary.json`。
+- production 回归
+  `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server existing_thread_refreshes_missing_capability_catalog_before_turn -- --nocapture`：
+  通过，目标用例 1/1，cargo 进程 exit 0。
+- Provider generation Gate B harness：Vitest 8/8、Node syntax 与 Prettier check 通过。
+
+### 专项 Gate B 阻塞
+
+执行
+`node scripts/agent-runtime/provider-generation-pending-route-gate-b.mjs --timeout-ms 180000` 后，真实 Electron
+已完成 parent Provider 请求暂停、`modelProviderKey/delete`、cold restart、幂等 `modelProvider/update` 与
+`modelProviderKey/create`。恢复凭证后 child 没有恢复执行，最终 timeout：
+
+- child Thread 被持久化为 `providerName=lime-hub`、`modelName=gpt-5.2-pro`、`modelProvider=""`，没有继承 parent
+  的自定义 Provider route。
+- `childRequestCount=0`，本地 Provider fixture 没有收到 child 请求。
+- canonical mailbox Turn 已存在但保持 `inProgress`，`mailboxTurnTerminalCount=0`；GUI 因而没有可验证终态。
+- harness 在写入最终 evidence 前 fail closed，`.lime/qc/provider-generation-pending-route-gate-b.json` 不能作为本轮
+  pass evidence 使用。
+
+该问题属于 AgentControl child route inheritance / cold-restart 恢复的 `current` 产品阻塞，不是
+`selection.rs` 已有会话 catalog refresh 回归失败。`lime-rs/crates/app-server/src/runtime/agent_control.rs` 及相关
+protocol/runtime 文件处于并行脏热区，本轮只读定位，没有夹写或覆盖对方改动。
+
+### 结论与剩余门槛
+
+- 当前用户闭环：**未完成**。标准 Electron Gate B smoke 通过，但 Provider generation + child PendingRoute 冷重启
+  专项没有达到同一 route identity 和 GUI terminal。
+- `current`：已有会话 `turn/start -> catalog refresh -> preflight` production 修复及其回归继续通过。
+- `test-only`：本地 OpenAI-compatible Provider fixture，只用于确定性验证 route/credential generation，不是 live
+  Provider。
+- `compat / deprecated`：无新增。
+- Windows packaged/live Provider：未执行；当前宿主为 macOS。即使修复 child route inheritance，仍必须在
+  Windows 安装包中验证历史 id-only 会话首回合与 Explorer Skill 目录跳转，macOS fixture 不能替代该平台证据。
+- Gate B 完整状态：**blocked / not passed**；下一刀由 AgentControl 当前 owner 修复 child route snapshot 继承与
+  cold-restart 恢复后，重跑该专项 harness，再补 Windows packaged live Provider 实机证据。

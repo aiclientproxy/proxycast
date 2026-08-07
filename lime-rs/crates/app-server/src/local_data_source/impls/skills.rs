@@ -3,10 +3,6 @@ use async_trait::async_trait;
 
 #[async_trait]
 impl SkillAppDataSource for LocalAppDataSource {
-    async fn list_skills(&self) -> Result<SkillListResponse, RuntimeCoreError> {
-        Ok(skills::catalog::list_skills())
-    }
-
     async fn read_skill(
         &self,
         params: SkillReadParams,

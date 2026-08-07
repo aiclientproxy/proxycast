@@ -9,7 +9,7 @@ pub struct SkillReadParams {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum SkillScope {
+pub enum SkillDetailScope {
     Project,
     User,
     App,
@@ -36,7 +36,7 @@ pub enum SkillAuthority {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SkillInterface {
+pub struct SkillDetailInterface {
     pub display_name: String,
     pub execution_mode: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -49,7 +49,7 @@ pub struct SkillInterface {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SkillToolDependency {
+pub struct SkillDetailToolDependency {
     #[serde(rename = "type")]
     pub dependency_type: String,
     pub value: String,
@@ -58,8 +58,8 @@ pub struct SkillToolDependency {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SkillDependencies {
-    pub tools: Vec<SkillToolDependency>,
+pub struct SkillDetailDependencies {
+    pub tools: Vec<SkillDetailToolDependency>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -83,12 +83,12 @@ pub struct SkillSummary {
     pub skill_id: String,
     pub name: String,
     pub description: String,
-    pub scope: SkillScope,
+    pub scope: SkillDetailScope,
     pub source: SkillSource,
     pub authority: SkillAuthority,
     pub enabled: bool,
-    pub interface: SkillInterface,
-    pub dependencies: SkillDependencies,
+    pub interface: SkillDetailInterface,
+    pub dependencies: SkillDetailDependencies,
     pub policy: SkillPolicy,
     pub capabilities: Vec<String>,
     pub locator: SkillLocator,
@@ -108,12 +108,6 @@ pub struct SkillDetail {
     pub metadata: SkillSummary,
     pub markdown_content: String,
     pub workflow_steps: Vec<SkillWorkflowStep>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SkillListResponse {
-    pub skills: Vec<SkillSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -393,19 +387,19 @@ mod tests {
             skill_id: "project:writer".to_string(),
             name: "writer".to_string(),
             description: "Write clearly.".to_string(),
-            scope: SkillScope::Project,
+            scope: SkillDetailScope::Project,
             source: SkillSource::Project,
             authority: SkillAuthority::Workspace,
             enabled: true,
-            interface: SkillInterface {
+            interface: SkillDetailInterface {
                 display_name: "Writer".to_string(),
                 execution_mode: "prompt".to_string(),
                 provider: None,
                 model: None,
                 argument_hint: None,
             },
-            dependencies: SkillDependencies {
-                tools: vec![SkillToolDependency {
+            dependencies: SkillDetailDependencies {
+                tools: vec![SkillDetailToolDependency {
                     dependency_type: "runtime_tool".to_string(),
                     value: "Read".to_string(),
                     required: true,
@@ -424,20 +418,17 @@ mod tests {
     }
 
     #[test]
-    fn executable_skill_response_serializes_typed_identity_and_locator() {
-        let value = serde_json::to_value(SkillListResponse {
-            skills: vec![summary()],
-        })
-        .expect("serialize skill list");
+    fn skill_detail_metadata_serializes_typed_identity_and_locator() {
+        let value = serde_json::to_value(summary()).expect("serialize skill metadata");
 
-        assert_eq!(value["skills"][0]["skillId"], json!("project:writer"));
-        assert_eq!(value["skills"][0]["authority"], json!("workspace"));
+        assert_eq!(value["skillId"], json!("project:writer"));
+        assert_eq!(value["authority"], json!("workspace"));
         assert_eq!(
-            value["skills"][0]["dependencies"]["tools"][0]["type"],
+            value["dependencies"]["tools"][0]["type"],
             json!("runtime_tool")
         );
         assert_eq!(
-            value["skills"][0]["locator"]["skillFilePath"],
+            value["locator"]["skillFilePath"],
             json!("/workspace/.agents/skills/writer/SKILL.md")
         );
     }
@@ -463,10 +454,8 @@ mod tests {
     }
 
     #[test]
-    fn executable_and_management_responses_keep_distinct_item_contracts() {
-        let executable = SkillListResponse {
-            skills: vec![summary()],
-        };
+    fn detail_and_management_responses_keep_distinct_item_contracts() {
+        let detail = summary();
         let management = SkillManagementListResponse {
             skills: vec![json!({
                 "directory": "writer",
@@ -475,7 +464,7 @@ mod tests {
             })],
         };
 
-        assert_eq!(executable.skills[0].skill_id, "project:writer");
+        assert_eq!(detail.skill_id, "project:writer");
         assert_eq!(management.skills[0]["installed"], json!(true));
     }
 }

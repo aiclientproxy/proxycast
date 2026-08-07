@@ -348,18 +348,12 @@ impl ExecutionBackend for RuntimeBackend {
 
     async fn read_mcp_runtime_resource(
         &self,
-        params: app_server_protocol::McpResourceReadParams,
-    ) -> Result<app_server_protocol::McpResourceReadResponse, RuntimeCoreError> {
-        let session_id = params.session_id.as_deref().ok_or_else(|| {
-            RuntimeCoreError::InvalidRequest(
-                "mcpResource/read runtime owner requires sessionId".to_string(),
-            )
-        })?;
-        let thread_id = params.thread_id.as_deref().ok_or_else(|| {
-            RuntimeCoreError::InvalidRequest(
-                "mcpResource/read runtime owner requires threadId".to_string(),
-            )
-        })?;
+        session_id: &str,
+        thread_id: &str,
+        server: &str,
+        uri: &str,
+    ) -> Result<app_server_protocol::protocol::v2::McpServerResourceReadResponse, RuntimeCoreError>
+    {
         let db = initialize_runtime_database(self.db.as_ref())?;
         self.ensure_agent_initialized(&db).await?;
         mcp_bridges::ensure_thread_mcp_runtime_if_available(
@@ -371,16 +365,61 @@ impl ExecutionBackend for RuntimeBackend {
         .await?;
         let content = self
             .agent_state
-            .read_mcp_resource(session_id, thread_id, &params.server, &params.uri)
+            .read_mcp_resource(session_id, thread_id, server, uri)
             .await
             .map_err(RuntimeCoreError::Backend)?;
-        Ok(app_server_protocol::McpResourceReadResponse {
-            uri: content.uri,
-            mime_type: content.mime_type,
-            text: content.text,
-            blob: content.blob,
-            meta: content.meta,
-        })
+        let content = match (content.text, content.blob) {
+            (Some(text), None) => Some(
+                app_server_protocol::protocol::v2::McpServerResourceContent::Text {
+                    uri: content.uri,
+                    mime_type: content.mime_type,
+                    text,
+                    meta: content.meta,
+                },
+            ),
+            (None, Some(blob)) => Some(
+                app_server_protocol::protocol::v2::McpServerResourceContent::Blob {
+                    uri: content.uri,
+                    mime_type: content.mime_type,
+                    blob,
+                    meta: content.meta,
+                },
+            ),
+            (None, None) => None,
+            (Some(_), Some(_)) => {
+                return Err(RuntimeCoreError::Backend(
+                    "MCP resource response contained both text and blob".to_string(),
+                ));
+            }
+        };
+        Ok(
+            app_server_protocol::protocol::v2::McpServerResourceReadResponse {
+                contents: content.into_iter().collect(),
+            },
+        )
+    }
+
+    async fn call_mcp_runtime_tool(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server: &str,
+        tool: &str,
+        arguments: Value,
+    ) -> Result<lime_mcp::McpToolResult, RuntimeCoreError> {
+        let db = initialize_runtime_database(self.db.as_ref())?;
+        self.ensure_agent_initialized(&db).await?;
+        mcp_bridges::ensure_thread_mcp_runtime_if_available(
+            &self.agent_state,
+            &self.app_data_source,
+            session_id,
+            thread_id,
+        )
+        .await?;
+        self.agent_state
+            .call_mcp_tool(session_id, thread_id, server, tool, arguments)
+            .await
+            .map_err(RuntimeCoreError::Backend)
     }
 
     async fn prepare_runtime_worker_artifact_events(

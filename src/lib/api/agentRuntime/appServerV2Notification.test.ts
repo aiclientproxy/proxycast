@@ -181,6 +181,76 @@ describe("App Server v2 direct notifications", () => {
     });
   });
 
+  it("projects paired hook notifications into one canonical item identity", () => {
+    const hook = {
+      completedAt: 1_783_814_401_500,
+      displayOrder: 0,
+      entries: [{ kind: "feedback", text: "检查完成" }],
+      eventName: "preToolUse",
+      executionMode: "sync",
+      handlerType: "command",
+      id: "hook-run-v2",
+      scope: "turn",
+      source: "project",
+      sourcePath: "/workspace/.codex/hooks/check.sh",
+      startedAt: 1_783_814_400_900,
+      status: "completed",
+      statusMessage: "检查完成",
+    };
+    const started = {
+      ...hook,
+      completedAt: null,
+      status: "running",
+    };
+    const startedNotification = directNotification("hook/started", {
+      run: started,
+      threadId,
+      turnId,
+    });
+    const completedNotification = directNotification("hook/completed", {
+      run: hook,
+      threadId,
+      turnId,
+    });
+
+    expect(readAppServerV2NotificationRoute(startedNotification)).toEqual({
+      itemId: "item_hook-run-v2",
+      terminal: false,
+      threadId,
+      turnId,
+    });
+    expect(
+      projectAppServerV2NotificationPayload(startedNotification),
+    ).toMatchObject({
+      item_id: "item_hook-run-v2",
+      item: {
+        id: "item_hook-run-v2",
+        run_id: "hook-run-v2",
+        status: "in_progress",
+        type: "hook",
+      },
+      type: "item_started",
+    });
+    expect(readAppServerV2NotificationRoute(completedNotification)).toEqual({
+      itemId: "item_hook-run-v2",
+      terminal: true,
+      threadId,
+      turnId,
+    });
+    expect(
+      projectAppServerV2NotificationPayload(completedNotification),
+    ).toMatchObject({
+      item_id: "item_hook-run-v2",
+      item: {
+        id: "item_hook-run-v2",
+        run_id: "hook-run-v2",
+        status: "completed",
+        type: "hook",
+      },
+      type: "item_completed",
+    });
+  });
+
   it("projects typed warning and preserves the localization code", () => {
     const notification = directNotification("warning", {
       code: "skill_not_available",

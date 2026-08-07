@@ -32,11 +32,23 @@ pub struct LoadedSkillSummary {
     pub standard_compliance: SkillStandardCompliance,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillSummaryLoadError {
+    pub path: PathBuf,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SkillSummaryLoadReport {
+    pub summaries: Vec<LoadedSkillSummary>,
+    pub errors: Vec<SkillSummaryLoadError>,
+}
+
 #[derive(Debug, Clone)]
 struct SkillSummaryCacheEntry {
     signature: String,
     loaded_at: Instant,
-    summaries: Vec<LoadedSkillSummary>,
+    report: SkillSummaryLoadReport,
 }
 
 const SKILL_SUMMARY_CACHE_TTL: Duration = Duration::from_secs(5);
@@ -144,59 +156,84 @@ fn read_skill_frontmatter_for_summary(file_path: &Path) -> Result<String, String
 }
 
 pub fn load_skill_summaries_from_directory(dir_path: &Path) -> Vec<LoadedSkillSummary> {
+    load_skill_summary_report_from_directory(dir_path).summaries
+}
+
+pub fn load_skill_summary_report_from_directory(dir_path: &Path) -> SkillSummaryLoadReport {
     let normalized_dir = dir_path
         .canonicalize()
         .unwrap_or_else(|_| dir_path.to_path_buf());
     let signature = skill_summary_root_signature(&normalized_dir);
-    if let Some(cached) = read_cached_skill_summaries(&normalized_dir, &signature) {
+    if let Some(cached) = read_cached_skill_summary_report(&normalized_dir, &signature) {
         return cached;
     }
 
-    let summaries = load_skill_summaries_from_directory_uncached(&normalized_dir);
-    store_cached_skill_summaries(normalized_dir, signature, &summaries);
-    summaries
+    let report = load_skill_summary_report_from_directory_uncached(&normalized_dir);
+    store_cached_skill_summary_report(normalized_dir, signature, &report);
+    report
 }
 
-fn load_skill_summaries_from_directory_uncached(dir_path: &Path) -> Vec<LoadedSkillSummary> {
-    let mut results = Vec::new();
+fn load_skill_summary_report_from_directory_uncached(dir_path: &Path) -> SkillSummaryLoadReport {
+    let mut report = SkillSummaryLoadReport::default();
 
     if !dir_path.exists() {
-        return results;
+        return report;
     }
 
-    if let Ok(entries) = std::fs::read_dir(dir_path) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_dir() {
+    let entries = match std::fs::read_dir(dir_path) {
+        Ok(entries) => entries,
+        Err(error) => {
+            report.errors.push(SkillSummaryLoadError {
+                path: dir_path.to_path_buf(),
+                message: format!("读取 Skill 目录失败: {error}"),
+            });
+            return report;
+        }
+    };
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                report.errors.push(SkillSummaryLoadError {
+                    path: dir_path.to_path_buf(),
+                    message: format!("读取 Skill 目录项失败: {error}"),
+                });
                 continue;
             }
+        };
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
 
-            let skill_file = path.join("SKILL.md");
-            if !skill_file.is_file() {
-                continue;
+        let skill_file = path.join("SKILL.md");
+        if !skill_file.is_file() {
+            continue;
+        }
+
+        let skill_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        match load_skill_summary_from_file(&skill_name, &skill_file) {
+            Ok(skill) if skill.standard_compliance.validation_errors.is_empty() => {
+                report.summaries.push(skill);
             }
-
-            let skill_name = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("unknown")
-                .to_string();
-
-            if let Ok(skill) = load_skill_summary_from_file(&skill_name, &skill_file) {
-                if skill.standard_compliance.validation_errors.is_empty() {
-                    results.push(skill);
-                } else {
-                    tracing::warn!(
-                        "[load_skill_summaries_from_directory] 跳过无效 Skill: name={}, errors={}",
-                        skill.skill_name,
-                        skill.standard_compliance.validation_errors.join("; ")
-                    );
-                }
-            }
+            Ok(skill) => report.errors.push(SkillSummaryLoadError {
+                path: skill_file,
+                message: skill.standard_compliance.validation_errors.join("; "),
+            }),
+            Err(message) => report.errors.push(SkillSummaryLoadError {
+                path: skill_file,
+                message,
+            }),
         }
     }
 
-    results
+    report
 }
 
 fn validate_workflow_ref_for_summary(base_dir: &Path, frontmatter: &mut SkillFrontmatter) {
@@ -314,22 +351,22 @@ fn skill_summary_cache() -> &'static Mutex<HashMap<PathBuf, SkillSummaryCacheEnt
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn read_cached_skill_summaries(
+fn read_cached_skill_summary_report(
     dir_path: &Path,
     signature: &str,
-) -> Option<Vec<LoadedSkillSummary>> {
+) -> Option<SkillSummaryLoadReport> {
     let guard = skill_summary_cache()
         .lock()
         .unwrap_or_else(|error| error.into_inner());
     let entry = guard.get(dir_path)?;
     (entry.signature == signature && entry.loaded_at.elapsed() < SKILL_SUMMARY_CACHE_TTL)
-        .then(|| entry.summaries.clone())
+        .then(|| entry.report.clone())
 }
 
-fn store_cached_skill_summaries(
+fn store_cached_skill_summary_report(
     dir_path: PathBuf,
     signature: String,
-    summaries: &[LoadedSkillSummary],
+    report: &SkillSummaryLoadReport,
 ) {
     let mut guard = skill_summary_cache()
         .lock()
@@ -339,9 +376,16 @@ fn store_cached_skill_summaries(
         SkillSummaryCacheEntry {
             signature,
             loaded_at: Instant::now(),
-            summaries: summaries.to_vec(),
+            report: report.clone(),
         },
     );
+}
+
+pub(crate) fn invalidate_skill_summary_cache() {
+    let mut guard = skill_summary_cache()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    guard.clear();
 }
 
 fn skill_summary_root_signature(root: &Path) -> String {
@@ -382,7 +426,7 @@ fn path_mtime(path: &Path) -> Option<u128> {
 
 #[cfg(test)]
 mod tests {
-    use super::load_skill_summaries_from_directory;
+    use super::{load_skill_summaries_from_directory, load_skill_summary_report_from_directory};
     use tempfile::TempDir;
 
     #[test]
@@ -452,5 +496,24 @@ metadata:
         let summaries = load_skill_summaries_from_directory(temp_dir.path());
 
         assert!(summaries.is_empty());
+    }
+
+    #[test]
+    fn report_preserves_invalid_skill_path_and_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_dir = temp_dir.path().join("broken");
+        std::fs::create_dir(&skill_dir).unwrap();
+        let skill_file = skill_dir.join("SKILL.md");
+        std::fs::write(&skill_file, "# Broken\n").unwrap();
+
+        let report = load_skill_summary_report_from_directory(temp_dir.path());
+
+        assert!(report.summaries.is_empty());
+        assert_eq!(report.errors.len(), 1);
+        assert_eq!(
+            report.errors[0].path,
+            skill_file.canonicalize().expect("canonical skill path")
+        );
+        assert!(report.errors[0].message.contains("frontmatter"));
     }
 }

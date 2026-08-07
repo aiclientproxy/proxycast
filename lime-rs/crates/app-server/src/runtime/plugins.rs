@@ -6,6 +6,12 @@ use super::plugin_task_runtime::{
 use super::timestamp;
 use super::RuntimeCore;
 use super::RuntimeCoreError;
+use app_server_protocol::protocol::v2::AppsInstalledParams;
+use app_server_protocol::protocol::v2::AppsInstalledResponse;
+use app_server_protocol::protocol::v2::AppsListParams;
+use app_server_protocol::protocol::v2::AppsListResponse;
+use app_server_protocol::protocol::v2::AppsReadParams;
+use app_server_protocol::protocol::v2::AppsReadResponse;
 use app_server_protocol::protocol::v2::PluginCatalogEnabledSetParams;
 use app_server_protocol::protocol::v2::PluginCatalogEnabledSetResponse;
 use app_server_protocol::protocol::v2::PluginCatalogInstallParams;
@@ -83,6 +89,43 @@ struct PluginShellDescriptorFields {
 }
 
 impl RuntimeCore {
+    pub async fn list_apps(
+        &self,
+        params: AppsListParams,
+    ) -> Result<AppsListResponse, RuntimeCoreError> {
+        self.ensure_optional_apps_thread_loaded(params.thread_id.as_deref())?;
+        self.app_data_source.list_apps(params).await
+    }
+
+    pub async fn read_apps(
+        &self,
+        params: AppsReadParams,
+    ) -> Result<AppsReadResponse, RuntimeCoreError> {
+        self.app_data_source.read_apps(params).await
+    }
+
+    pub async fn list_installed_apps(
+        &self,
+        params: AppsInstalledParams,
+    ) -> Result<AppsInstalledResponse, RuntimeCoreError> {
+        self.ensure_optional_apps_thread_loaded(params.thread_id.as_deref())?;
+        self.app_data_source.list_installed_apps(params).await
+    }
+
+    fn ensure_optional_apps_thread_loaded(
+        &self,
+        thread_id: Option<&str>,
+    ) -> Result<(), RuntimeCoreError> {
+        let Some(thread_id) = thread_id else {
+            return Ok(());
+        };
+        let thread_id = thread_id.trim();
+        if thread_id.is_empty() || self.loaded_session_id_for_thread(thread_id).is_none() {
+            return Err(RuntimeCoreError::SessionNotFound(thread_id.to_string()));
+        }
+        Ok(())
+    }
+
     pub async fn list_plugin_catalog(
         &self,
         params: PluginCatalogListParams,

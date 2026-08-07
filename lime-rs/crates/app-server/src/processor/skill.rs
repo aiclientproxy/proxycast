@@ -2,7 +2,8 @@
 
 use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, RpcDispatch};
 use app_server_protocol::protocol::v2::{
-    ServerNotification as V2ServerNotification, SkillsChangedNotification,
+    ServerNotification as V2ServerNotification, SkillsChangedNotification, SkillsConfigWriteParams,
+    SkillsExtraRootsSetParams, SkillsListParams,
 };
 use app_server_protocol::{
     JsonRpcError, SkillDownloadInstallParams, SkillLocalDetailInspectParams,
@@ -16,9 +17,17 @@ use app_server_protocol::{
 use serde::Serialize;
 
 impl RequestProcessor {
-    pub(super) async fn handle_skill_list_impl(&self) -> Result<RpcDispatch, JsonRpcError> {
+    pub(super) async fn handle_skills_list_v2_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
-        let response = self.runtime.list_skills().await.map_err(to_jsonrpc_error)?;
+        let params: SkillsListParams = parse_params(params)?;
+        let response = self
+            .runtime
+            .list_skills(params)
+            .await
+            .map_err(to_jsonrpc_error)?;
         dispatch_result(response)
     }
 
@@ -33,6 +42,46 @@ impl RequestProcessor {
             .read_skill(params)
             .await
             .map_err(to_jsonrpc_error)?;
+        dispatch_result(response)
+    }
+
+    pub(super) async fn handle_skills_extra_roots_set_v2_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: SkillsExtraRootsSetParams = parse_params(params)?;
+        let response =
+            self.runtime
+                .set_extra_skill_roots(params)
+                .await
+                .map_err(|error| match error {
+                    crate::RuntimeCoreError::InvalidRequest(message) => {
+                        JsonRpcError::new(app_server_protocol::error_codes::INVALID_PARAMS, message)
+                    }
+                    other => to_jsonrpc_error(other),
+                })?;
+        let notification: app_server_protocol::JsonRpcNotification =
+            V2ServerNotification::SkillsChanged(SkillsChangedNotification {}).into();
+        dispatch_result(response).map(|dispatch| dispatch.with_notification(notification))
+    }
+
+    pub(super) async fn handle_skills_config_write_v2_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: SkillsConfigWriteParams = parse_params(params)?;
+        let response =
+            self.runtime
+                .write_skill_config(params)
+                .await
+                .map_err(|error| match error {
+                    crate::RuntimeCoreError::InvalidRequest(message) => {
+                        JsonRpcError::new(app_server_protocol::error_codes::INVALID_PARAMS, message)
+                    }
+                    other => to_jsonrpc_error(other),
+                })?;
         dispatch_result(response)
     }
 

@@ -12,9 +12,9 @@
 
 import { AppServerClient } from "@/lib/api/appServer";
 import {
-  METHOD_SKILL_LIST,
+  METHOD_SKILLS_LIST,
   METHOD_SKILL_READ,
-  type SkillListResponse as AppServerSkillListResponse,
+  type SkillsListResponse as AppServerSkillsListResponse,
   type SkillReadResponse as AppServerSkillReadResponse,
 } from "../../../packages/app-server-client/src/protocol";
 
@@ -119,19 +119,132 @@ export interface SkillDetailInfo extends ExecutableSkillInfo {
 }
 
 function normalizeSkillListResponse(
-  response: AppServerSkillListResponse | null | undefined,
+  response: AppServerSkillsListResponse | null | undefined,
 ): ExecutableSkillInfo[] {
   if (!response || typeof response !== "object") {
-    throw new Error("App Server skill/list did not return skills");
+    throw new Error("App Server skills/list did not return data");
   }
 
-  if (!Array.isArray(response.skills)) {
-    throw new Error("App Server skill/list did not return skills");
+  if (!Array.isArray(response.data)) {
+    throw new Error("App Server skills/list did not return data");
   }
 
-  return response.skills.map((skill: unknown, index: number) =>
-    normalizeSkillSummary(skill, `skill/list skills[${index}]`),
+  const seen = new Set<string>();
+  const skills: ExecutableSkillInfo[] = [];
+  response.data.forEach((entry, entryIndex) => {
+    const item = requireRecord(entry, `skills/list data[${entryIndex}]`);
+    requireString(item.cwd, `skills/list data[${entryIndex}].cwd`);
+    requireArray(item.errors, `skills/list data[${entryIndex}].errors`).forEach(
+      (error, errorIndex) => {
+        const errorInfo = requireRecord(
+          error,
+          `skills/list data[${entryIndex}].errors[${errorIndex}]`,
+        );
+        requireString(
+          errorInfo.path,
+          `skills/list data[${entryIndex}].errors[${errorIndex}].path`,
+        );
+        requireString(
+          errorInfo.message,
+          `skills/list data[${entryIndex}].errors[${errorIndex}].message`,
+        );
+      },
+    );
+    requireArray(item.skills, `skills/list data[${entryIndex}].skills`).forEach(
+      (skill, skillIndex) => {
+        const normalized = normalizeListedSkill(
+          skill,
+          `skills/list data[${entryIndex}].skills[${skillIndex}]`,
+        );
+        if (normalized.enabled && !seen.has(normalized.skill_id)) {
+          seen.add(normalized.skill_id);
+          skills.push(normalized);
+        }
+      },
+    );
+  });
+  return skills;
+}
+
+function normalizeListedSkill(
+  value: unknown,
+  label: string,
+): ExecutableSkillInfo {
+  const skill = requireRecord(value, label);
+  const name = requireString(skill.name, `${label}.name`);
+  const path = requireString(skill.path, `${label}.path`);
+  const scope = requireOneOf(
+    skill.scope,
+    ["repo", "user", "system", "admin"] as const,
+    `${label}.scope`,
   );
+  const projection = listedScopeProjection(scope);
+  const skillInterface =
+    skill.interface === undefined
+      ? {}
+      : requireRecord(skill.interface, `${label}.interface`);
+  const dependencies =
+    skill.dependencies === undefined
+      ? []
+      : requireArray(
+          requireRecord(skill.dependencies, `${label}.dependencies`).tools,
+          `${label}.dependencies.tools`,
+        ).map((dependency, index) => {
+          const item = requireRecord(
+            dependency,
+            `${label}.dependencies.tools[${index}]`,
+          );
+          return {
+            type: requireString(
+              item.type,
+              `${label}.dependencies.tools[${index}].type`,
+            ),
+            value: requireString(
+              item.value,
+              `${label}.dependencies.tools[${index}].value`,
+            ),
+            required: true,
+          };
+        });
+
+  return {
+    skill_id: `${projection.scope}:${name.trim().toLowerCase()}`,
+    name,
+    display_name:
+      optionalString(
+        skillInterface.displayName,
+        `${label}.interface.displayName`,
+      ) ?? name,
+    description: requireString(skill.description, `${label}.description`),
+    execution_mode: "prompt",
+    has_workflow: false,
+    source: projection.source,
+    authority: projection.authority,
+    scope: projection.scope,
+    enabled: requireBoolean(skill.enabled, `${label}.enabled`),
+    capabilities: dependencies.map((dependency) => dependency.value),
+    dependencies,
+    locator: {
+      directory: path.replace(/[\\/]SKILL\.md$/i, ""),
+      skill_file_path: path,
+    },
+    allow_implicit_invocation: true,
+  };
+}
+
+function listedScopeProjection(
+  scope: "repo" | "user" | "system" | "admin",
+): Pick<ExecutableSkillInfo, "scope" | "source" | "authority"> {
+  switch (scope) {
+    case "repo":
+      return { scope: "project", source: "project", authority: "workspace" };
+    case "user":
+      return { scope: "user", source: "user", authority: "user" };
+    case "system":
+      return { scope: "app", source: "app", authority: "application" };
+    case "admin":
+      return { scope: "other", source: "other", authority: "external" };
+  }
 }
 
 export function resolveExecutableSkillId(
@@ -417,8 +530,8 @@ export const skillExecutionApi = {
    */
   async listExecutableSkills(): Promise<ExecutableSkillInfo[]> {
     const response =
-      await requestSkillExecutionAppServer<AppServerSkillListResponse>(
-        METHOD_SKILL_LIST,
+      await requestSkillExecutionAppServer<AppServerSkillsListResponse>(
+        METHOD_SKILLS_LIST,
         {},
       );
     return normalizeSkillListResponse(response);

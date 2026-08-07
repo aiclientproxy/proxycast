@@ -13,6 +13,9 @@ use crate::turn_snapshot::{
     RuntimeHookEventName, RuntimeHookExecutionMode, RuntimeHookHandlerType, RuntimeHookSnapshot,
     RuntimeHookTrustStatus, RuntimeTurnSnapshot,
 };
+use std::future::Future;
+use std::path::PathBuf;
+use std::pin::Pin;
 
 /// 单个 Hook 在一次事件上的裁决结果。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,13 +55,20 @@ pub enum RuntimeHookFailure {
     InvalidTimeout,
     /// handler 报告了终态之外的结果。
     MissingDecision,
+    /// handler 进程或输出无法形成安全裁决。
+    HandlerFailed { reason: String },
 }
 
 /// 一次事件的输入事实。
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeHookEventContext {
+    pub session_id: Option<String>,
+    pub turn_id: Option<String>,
+    pub tool_call_id: Option<String>,
+    pub working_directory: PathBuf,
     pub tool_name: Option<String>,
     pub tool_arguments: Option<String>,
+    pub tool_output: Option<String>,
     pub content: Option<String>,
 }
 
@@ -69,6 +79,19 @@ pub enum RuntimeHookHandlerReport {
     Block { reason: String },
     Rewrite { arguments: String },
     Abort { reason: String },
+    Failed { reason: String },
+}
+
+pub type RuntimeHookReportFuture<'a> =
+    Pin<Box<dyn Future<Output = Option<RuntimeHookHandlerReport>> + Send + 'a>>;
+
+pub trait RuntimeHookReporter: Send + Sync {
+    fn report<'a>(
+        &'a self,
+        hook: &'a RuntimeHookSnapshot,
+        event_name: RuntimeHookEventName,
+        context: &'a RuntimeHookEventContext,
+    ) -> RuntimeHookReportFuture<'a>;
 }
 
 /// 单个 Hook 的裁决记录，保留稳定 identity 便于投影和 evidence。
@@ -212,6 +235,15 @@ fn matcher_matches(
         .as_deref()
         .or(context.content.as_deref())
         .unwrap_or_default();
+    if matcher.is_empty() || matcher == "*" {
+        return Ok(true);
+    }
+    if matcher
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '|')
+    {
+        return Ok(matcher.split('|').any(|candidate| candidate == target));
+    }
     let pattern = regex::Regex::new(matcher).map_err(|_| RuntimeHookOutcome::Failed {
         reason: RuntimeHookFailure::InvalidMatcher {
             matcher: matcher.to_string(),
@@ -235,23 +267,7 @@ where
     for hook in snapshot.hooks_for(event_name) {
         let outcome = match admit(hook, context) {
             Err(outcome) => outcome,
-            Ok(()) => match report(hook) {
-                Some(RuntimeHookHandlerReport::Allow { additional_context }) => {
-                    RuntimeHookOutcome::Allow { additional_context }
-                }
-                Some(RuntimeHookHandlerReport::Block { reason }) => {
-                    RuntimeHookOutcome::Block { reason }
-                }
-                Some(RuntimeHookHandlerReport::Rewrite { arguments }) => {
-                    RuntimeHookOutcome::Rewrite { arguments }
-                }
-                Some(RuntimeHookHandlerReport::Abort { reason }) => {
-                    RuntimeHookOutcome::Abort { reason }
-                }
-                None => RuntimeHookOutcome::Failed {
-                    reason: RuntimeHookFailure::MissingDecision,
-                },
-            },
+            Ok(()) => outcome_from_report(report(hook)),
         };
         decisions.push(RuntimeHookDecision {
             key: hook.key.clone(),
@@ -261,6 +277,47 @@ where
         });
     }
     RuntimeHookEvaluation { decisions }
+}
+
+pub async fn evaluate_hook_event_async(
+    snapshot: &RuntimeTurnSnapshot,
+    event_name: RuntimeHookEventName,
+    context: &RuntimeHookEventContext,
+    reporter: &dyn RuntimeHookReporter,
+) -> RuntimeHookEvaluation {
+    let mut decisions = Vec::new();
+    for hook in snapshot.hooks_for(event_name) {
+        let outcome = match admit(hook, context) {
+            Err(outcome) => outcome,
+            Ok(()) => outcome_from_report(reporter.report(hook, event_name, context).await),
+        };
+        decisions.push(RuntimeHookDecision {
+            key: hook.key.clone(),
+            run_id: hook.run_id(),
+            event_name,
+            outcome,
+        });
+    }
+    RuntimeHookEvaluation { decisions }
+}
+
+fn outcome_from_report(report: Option<RuntimeHookHandlerReport>) -> RuntimeHookOutcome {
+    match report {
+        Some(RuntimeHookHandlerReport::Allow { additional_context }) => {
+            RuntimeHookOutcome::Allow { additional_context }
+        }
+        Some(RuntimeHookHandlerReport::Block { reason }) => RuntimeHookOutcome::Block { reason },
+        Some(RuntimeHookHandlerReport::Rewrite { arguments }) => {
+            RuntimeHookOutcome::Rewrite { arguments }
+        }
+        Some(RuntimeHookHandlerReport::Abort { reason }) => RuntimeHookOutcome::Abort { reason },
+        Some(RuntimeHookHandlerReport::Failed { reason }) => RuntimeHookOutcome::Failed {
+            reason: RuntimeHookFailure::HandlerFailed { reason },
+        },
+        None => RuntimeHookOutcome::Failed {
+            reason: RuntimeHookFailure::MissingDecision,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -281,12 +338,17 @@ mod tests {
             handler_type: RuntimeHookHandlerType::Command,
             execution_mode: RuntimeHookExecutionMode::Sync,
             matcher: None,
+            command: Some("true".to_string()),
             timeout_sec: 10,
             status_message: None,
+            additional_context_limit: None,
             source_path: PathBuf::from("/etc/lime/hooks.json"),
             source: RuntimeHookSource::Project,
+            plugin_id: None,
             display_order,
             enabled: true,
+            is_managed: false,
+            current_hash: "sha256:test".to_string(),
             trust_status: RuntimeHookTrustStatus::Trusted,
         }
     }
@@ -307,6 +369,7 @@ mod tests {
             tool_name: Some(tool_name.to_string()),
             tool_arguments: Some("{}".to_string()),
             content: None,
+            ..RuntimeHookEventContext::default()
         }
     }
 

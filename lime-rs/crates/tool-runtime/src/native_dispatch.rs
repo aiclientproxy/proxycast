@@ -313,11 +313,11 @@ mod tests {
     use crate::web_fetch::WEB_FETCH_TOOL_NAME;
     use crate::web_search::WEB_SEARCH_TOOL_NAME;
     use app_server_protocol::{
-        McpResourceListResponse, McpResourceReadParams, McpResourceReadResponse,
-        McpToolListResponse, McpToolSearchParams, MediaTaskArtifactImageCreateParams,
-        MediaTaskArtifactResponse, MemoryStoreAddNoteParams, MemoryStoreAddNoteResponse,
-        MemoryStoreCitation, MemoryStoreListParams, MemoryStoreListResponse, MemoryStoreReadParams,
-        MemoryStoreReadResponse, MemoryStoreSearchParams, MemoryStoreSearchResponse,
+        McpResourceListResponse, McpToolListResponse, McpToolSearchParams,
+        MediaTaskArtifactImageCreateParams, MediaTaskArtifactResponse, MemoryStoreAddNoteParams,
+        MemoryStoreAddNoteResponse, MemoryStoreCitation, MemoryStoreListParams,
+        MemoryStoreListResponse, MemoryStoreReadParams, MemoryStoreReadResponse,
+        MemoryStoreSearchParams, MemoryStoreSearchResponse,
     };
     use async_trait::async_trait;
     use serde_json::json;
@@ -447,15 +447,14 @@ mod tests {
 
         async fn read_mcp_resource(
             &self,
-            params: McpResourceReadParams,
-        ) -> Result<McpResourceReadResponse, String> {
-            Ok(McpResourceReadResponse {
-                uri: params.uri,
-                mime_type: None,
-                text: Some("resource".to_string()),
-                blob: None,
-                meta: None,
-            })
+            _params: app_server_protocol::protocol::v2::McpServerResourceReadParams,
+        ) -> Result<app_server_protocol::protocol::v2::McpServerResourceReadResponse, String>
+        {
+            Ok(
+                app_server_protocol::protocol::v2::McpServerResourceReadResponse {
+                    contents: Vec::new(),
+                },
+            )
         }
     }
 

@@ -449,7 +449,7 @@ describe("timeline item converters", () => {
     ).toBeNull();
   });
 
-  it("hook item 应转成独立过程 toolCall，保留 runId、entries 和 target item owner", () => {
+  it("hook item 不应再降级为旧 toolCall，保持 canonical timeline item owner", () => {
     const item: AgentThreadItem = {
       id: "pre-tool-use:0:/tmp/hooks.json",
       thread_id: "thread-hook",
@@ -478,24 +478,7 @@ describe("timeline item converters", () => {
       updated_at: "2026-06-21T13:10:01.000Z",
     };
 
-    expect(toToolCallState(item)).toMatchObject({
-      id: "pre-tool-use:0:/tmp/hooks.json",
-      name: "hook",
-      status: "failed",
-      result: {
-        success: false,
-        output: "feedback: command blocked by policy",
-        metadata: {
-          sequence: 9,
-        },
-      },
-      metadata: {
-        sequence: 9,
-      },
-    });
-    expect(toToolCallState(item)?.arguments).toContain(
-      '"target_item_id": "tool-call-1"',
-    );
+    expect(toToolCallState(item)).toBeNull();
   });
 
   it("request_user_input 应保留 thread/turn scope 供 action_resolved 继续原 turn", () => {

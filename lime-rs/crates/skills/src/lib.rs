@@ -45,12 +45,12 @@ pub use agent_selection::{
     AgentSkillSelectionTrigger,
 };
 pub use agent_snapshot::{
-    agent_skill_roots_for_workspace, build_agent_skill_snapshot,
+    agent_skill_roots_for_workspace, apply_agent_skill_config, build_agent_skill_snapshot,
     build_agent_skill_snapshot_from_roots, build_agent_skill_snapshot_from_workspace,
-    default_agent_skill_roots, invalidate_agent_skill_snapshot_cache, AgentSkillAuthority,
-    AgentSkillDependencies, AgentSkillInterface, AgentSkillMetadata, AgentSkillPolicy,
-    AgentSkillRoot, AgentSkillScope, AgentSkillSnapshot, AgentSkillSnapshotOptions,
-    AgentSkillSource, AgentSkillToolDependency,
+    default_agent_skill_roots, invalidate_agent_skill_snapshot_cache,
+    set_runtime_extra_skill_roots, AgentSkillAuthority, AgentSkillDependencies,
+    AgentSkillInterface, AgentSkillMetadata, AgentSkillPolicy, AgentSkillRoot, AgentSkillScope,
+    AgentSkillSnapshot, AgentSkillSnapshotOptions, AgentSkillSource, AgentSkillToolDependency,
 };
 pub use execution_callback::{
     events, ExecutionCallback, ExecutionCompletePayload, StepCompletePayload, StepErrorPayload,
@@ -70,7 +70,9 @@ pub use skill_loader::{
 };
 pub use skill_matcher::{SkillMatch, SkillMatcher};
 pub use skill_summary::{
-    load_skill_summaries_from_directory, load_skill_summary_from_file, LoadedSkillSummary,
+    load_skill_summaries_from_directory, load_skill_summary_from_file,
+    load_skill_summary_report_from_directory, LoadedSkillSummary, SkillSummaryLoadError,
+    SkillSummaryLoadReport,
 };
 
 pub const SKILL_SNAPSHOT_TURN_METADATA_KEY: &str = "skill_snapshot";

@@ -36,7 +36,9 @@ describe("MCP Workspace plugin runtime Electron fixture smoke guard", () => {
     expect(content).toContain('"agentSession/toolInventory/read"');
     expect(content).toContain('"mcpServer/start"');
     expect(content).toContain('"mcpTool/listForContext"');
-    expect(content).toContain('"mcpTool/callWithCaller"');
+    expect(content).toContain('"mcpServer/tool/call"');
+    expect(content).toContain("ephemeral: true");
+    expect(content).not.toContain('modelProvider: "openai"');
     expect(content).toContain("defaultProofDidNotCallTool");
     expect(content).toContain("LEGACY_MCP_COMMANDS");
   });

@@ -39,7 +39,7 @@ describe("electron/ipcChannels", () => {
     ).toBe(false);
     expect(isElectronHostCommand("fetch_provider_models_auto")).toBe(false);
     expect(isElectronHostCommand("get_provider_ui_state")).toBe(false);
-    expect(isElectronHostCommand("get_local_skills_for_app")).toBe(true);
+    expect(isElectronHostCommand("get_local_skills_for_app")).toBe(false);
     expect(isElectronHostCommand("get_automation_jobs")).toBe(false);
     expect(isElectronHostCommand("get_automation_scheduler_config")).toBe(
       false,
@@ -207,7 +207,6 @@ describe("electron/ipcChannels", () => {
   it("App Server truth bridge 命令由 Desktop Host 投影，不走原始 JSONL 通道", () => {
     expect([...ELECTRON_APP_SERVER_TRUTH_BRIDGE_COMMANDS].sort()).toEqual([
       "get_default_provider",
-      "get_local_skills_for_app",
       "get_runtime_provider_selection",
       "plugin_get_ui_runtime_status",
       "plugin_runtime_cancel_task",

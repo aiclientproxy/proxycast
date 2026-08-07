@@ -224,7 +224,6 @@ const retiredVoiceModelTestTranscribeFacadeCommands = new Set([
   "voice_models_test_transcribe_file",
 ]);
 const currentSkillDesktopHostShellCommands = new Set([
-  "get_local_skills_for_app",
   "take_pending_skill_package_open_requests",
 ]);
 const currentLayeredDesignDesktopHostShellCommands = new Set([
@@ -319,6 +318,7 @@ const retiredCapabilityDraftAuthoringCommands = new Set([
   "capability_draft_execute_controlled_get",
 ]);
 const retiredSkillManagementFacadeCommands = new Set([
+  "get_local_skills_for_app",
   "get_skills",
   "get_skills_for_app",
   "install_skill",
@@ -3590,22 +3590,22 @@ function collectRetiredSkillRevealFacadeSourceFailures() {
     {
       path: "src/lib/dev-bridge/commandPolicy.ts",
       message:
-        "本地 Skill reveal 已迁到 App Server skill/list localDirectoryPath projection + Electron reveal_in_finder，不能继续作为 DevBridge truth command",
+        "本地 Skill reveal 已迁到 App Server skills/list localDirectoryPath projection + Electron reveal_in_finder，不能继续作为 DevBridge truth command",
     },
     {
       path: "src/lib/dev-bridge/mockPriorityCommands.ts",
       message:
-        "本地 Skill reveal 已迁到 App Server skill/list localDirectoryPath projection + Electron reveal_in_finder，不能继续作为 mock priority command",
+        "本地 Skill reveal 已迁到 App Server skills/list localDirectoryPath projection + Electron reveal_in_finder，不能继续作为 mock priority command",
     },
     {
       path: "src/lib/governance/agentCommandCatalog.json",
       message:
-        "本地 Skill reveal 已迁到 App Server skill/list + Electron reveal_in_finder，不能继续作为 runtime gateway command",
+        "本地 Skill reveal 已迁到 App Server skills/list + Electron reveal_in_finder，不能继续作为 runtime gateway command",
     },
     {
       path: "src/lib/api/skills.ts",
       message:
-        "skillsApi.revealLocalSkill 必须通过 get_local_skills_for_app 读取 localDirectoryPath 后调用 reveal_in_finder，不能回到旧 Tauri facade",
+        "skillsApi.revealLocalSkill 必须通过 current App Server catalog 读取 localDirectoryPath 后调用 reveal_in_finder，不能回到旧 Desktop facade",
     },
   ];
 
@@ -5650,7 +5650,7 @@ function main() {
   if (retiredSkillRevealFacadeLeaks.size > 0) {
     hasError = true;
     printCommandGroup(
-      "已迁到 App Server skill/list + Electron reveal_in_finder 的旧 Skill reveal facade 不能回到前端调用、Electron Host、DevBridge truth、mock priority、runtime catalog 或 deferred 白名单",
+      "已迁到 App Server skills/list + Electron reveal_in_finder 的旧 Skill reveal facade 不能回到前端调用、Electron Host、DevBridge truth、mock priority、runtime catalog 或 deferred 白名单",
       retiredSkillRevealFacadeLeaks,
     );
   }
@@ -5789,7 +5789,7 @@ function main() {
   if (retiredSkillRevealFacadeSourceFailures.length > 0) {
     hasError = true;
     printGuardFailures(
-      "已迁到 App Server skill/list + Electron reveal_in_finder 的旧 Skill reveal facade 不能回到旧客户端源码",
+      "已迁到 App Server skills/list + Electron reveal_in_finder 的旧 Skill reveal facade 不能回到旧客户端源码",
       retiredSkillRevealFacadeSourceFailures,
     );
   }

@@ -1,14 +1,15 @@
 use super::data_error;
 use super::values_from_serializable_vec;
 use crate::RuntimeCoreError;
+use app_server_protocol::protocol::v2::{
+    McpServerResourceContent, McpServerResourceReadParams, McpServerResourceReadResponse,
+};
 use app_server_protocol::McpContent;
 use app_server_protocol::McpPromptGetParams;
 use app_server_protocol::McpPromptGetResponse;
 use app_server_protocol::McpPromptListResponse;
 use app_server_protocol::McpPromptMessage;
 use app_server_protocol::McpResourceListResponse;
-use app_server_protocol::McpResourceReadParams;
-use app_server_protocol::McpResourceReadResponse;
 use app_server_protocol::McpResourceSubscribeParams;
 use app_server_protocol::McpResourceSubscriptionResponse;
 use app_server_protocol::McpResourceUnsubscribeParams;
@@ -24,9 +25,6 @@ use app_server_protocol::McpServerStartParams;
 use app_server_protocol::McpServerStatusListResponse;
 use app_server_protocol::McpServerStopParams;
 use app_server_protocol::McpServerUpdateParams;
-use app_server_protocol::McpToolCallParams;
-use app_server_protocol::McpToolCallResponse;
-use app_server_protocol::McpToolCallWithCallerParams;
 use app_server_protocol::McpToolListForContextParams;
 use app_server_protocol::McpToolListResponse;
 use app_server_protocol::McpToolSearchParams;
@@ -268,34 +266,6 @@ pub(crate) async fn search_mcp_tools(
     })
 }
 
-pub(crate) async fn call_mcp_tool(
-    manager: &McpManagerState,
-    params: McpToolCallParams,
-) -> Result<McpToolCallResponse, RuntimeCoreError> {
-    let manager = manager.lock().await;
-    let result = manager
-        .call_tool(&params.tool_name, params.arguments)
-        .await
-        .map_err(mcp_error)?;
-    Ok(to_mcp_tool_call_response(result))
-}
-
-pub(crate) async fn call_mcp_tool_with_caller(
-    manager: &McpManagerState,
-    params: McpToolCallWithCallerParams,
-) -> Result<McpToolCallResponse, RuntimeCoreError> {
-    let manager = manager.lock().await;
-    let result = manager
-        .call_tool_with_caller(
-            &params.tool_name,
-            params.arguments,
-            params.caller.as_deref(),
-        )
-        .await
-        .map_err(mcp_error)?;
-    Ok(to_mcp_tool_call_response(result))
-}
-
 pub(crate) async fn list_mcp_prompts(
     manager: &McpManagerState,
 ) -> Result<McpPromptListResponse, RuntimeCoreError> {
@@ -331,21 +301,37 @@ pub(crate) async fn list_mcp_resources(
     })
 }
 
-pub(crate) async fn read_mcp_resource(
+pub(crate) async fn read_mcp_server_resource(
     manager: &McpManagerState,
-    params: McpResourceReadParams,
-) -> Result<McpResourceReadResponse, RuntimeCoreError> {
+    params: McpServerResourceReadParams,
+) -> Result<McpServerResourceReadResponse, RuntimeCoreError> {
     let manager = manager.lock().await;
     let result = manager
         .read_resource(&params.server, &params.uri)
         .await
         .map_err(mcp_error)?;
-    Ok(McpResourceReadResponse {
-        uri: result.uri,
-        mime_type: result.mime_type,
-        text: result.text,
-        blob: result.blob,
-        meta: result.meta,
+    let content = match (result.text, result.blob) {
+        (Some(text), None) => Some(McpServerResourceContent::Text {
+            uri: result.uri,
+            mime_type: result.mime_type,
+            text,
+            meta: result.meta,
+        }),
+        (None, Some(blob)) => Some(McpServerResourceContent::Blob {
+            uri: result.uri,
+            mime_type: result.mime_type,
+            blob,
+            meta: result.meta,
+        }),
+        (None, None) => None,
+        (Some(_), Some(_)) => {
+            return Err(RuntimeCoreError::Backend(
+                "MCP resource response contained both text and blob".to_string(),
+            ));
+        }
+    };
+    Ok(McpServerResourceReadResponse {
+        contents: content.into_iter().collect(),
     })
 }
 
@@ -385,14 +371,6 @@ fn mcp_error(error: McpError) -> RuntimeCoreError {
     RuntimeCoreError::Backend(format!("MCP current runtime error: {error}"))
 }
 
-fn to_mcp_tool_call_response(result: lime_mcp::McpToolResult) -> McpToolCallResponse {
-    McpToolCallResponse {
-        content: result.content.into_iter().map(to_mcp_content).collect(),
-        structured_content: result.structured_content,
-        is_error: result.is_error,
-    }
-}
-
 fn to_mcp_prompt_get_response(result: lime_mcp::McpPromptResult) -> McpPromptGetResponse {
     McpPromptGetResponse {
         description: result.description,
@@ -414,41 +392,5 @@ fn to_mcp_content(content: lime_mcp::McpContent) -> McpContent {
         lime_mcp::McpContent::Resource { uri, text, blob } => {
             McpContent::Resource { uri, text, blob }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn to_mcp_tool_call_response_preserves_structured_content() {
-        let response = to_mcp_tool_call_response(lime_mcp::McpToolResult {
-            content: vec![lime_mcp::McpContent::Text {
-                text: "ok".to_string(),
-            }],
-            structured_content: Some(json!({
-                "results": [
-                    { "title": "MCP current" }
-                ]
-            })),
-            is_error: false,
-        });
-
-        assert_eq!(
-            response.structured_content,
-            Some(json!({
-                "results": [
-                    { "title": "MCP current" }
-                ]
-            }))
-        );
-        assert_eq!(
-            response.content,
-            vec![McpContent::Text {
-                text: "ok".to_string(),
-            }]
-        );
-        assert!(!response.is_error);
     }
 }

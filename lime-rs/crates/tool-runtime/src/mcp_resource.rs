@@ -5,7 +5,8 @@ use crate::tool_executor::{
     RuntimeToolPolicyErrorKind,
 };
 use app_server_protocol::{
-    McpResourceListResponse, McpResourceReadParams, McpResourceReadResponse,
+    protocol::v2::{McpServerResourceReadParams, McpServerResourceReadResponse},
+    McpResourceListResponse,
 };
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -41,8 +42,8 @@ pub trait McpResourceGateway: Send + Sync {
 
     async fn read_mcp_resource(
         &self,
-        params: McpResourceReadParams,
-    ) -> Result<McpResourceReadResponse, String>;
+        params: McpServerResourceReadParams,
+    ) -> Result<McpServerResourceReadResponse, String>;
 }
 
 pub struct RuntimeMcpResourceExecutor {
@@ -108,11 +109,10 @@ impl RuntimeToolExecutor for RuntimeMcpResourceExecutor {
                     }
                     let response = self
                         .gateway
-                        .read_mcp_resource(McpResourceReadParams {
+                        .read_mcp_resource(McpServerResourceReadParams {
+                            thread_id: None,
                             server: server.to_string(),
                             uri: uri.to_string(),
-                            session_id: None,
-                            thread_id: None,
                         })
                         .await
                         .map_err(|error| {
@@ -248,12 +248,27 @@ fn list_mcp_resources_result(
 
 fn read_mcp_resource_result(
     server: &str,
-    response: McpResourceReadResponse,
+    response: McpServerResourceReadResponse,
 ) -> RuntimeToolExecutionResult {
-    let uri = response.uri.clone();
-    let has_text = response.text.is_some();
-    let has_blob = response.blob.is_some();
-    let output = serde_json::to_value(response).unwrap_or_else(|_| json!({ "uri": uri }));
+    let uri = response.contents.first().map(|content| match content {
+        app_server_protocol::protocol::v2::McpServerResourceContent::Text { uri, .. }
+        | app_server_protocol::protocol::v2::McpServerResourceContent::Blob { uri, .. } => {
+            uri.clone()
+        }
+    });
+    let has_text = response.contents.iter().any(|content| {
+        matches!(
+            content,
+            app_server_protocol::protocol::v2::McpServerResourceContent::Text { .. }
+        )
+    });
+    let has_blob = response.contents.iter().any(|content| {
+        matches!(
+            content,
+            app_server_protocol::protocol::v2::McpServerResourceContent::Blob { .. }
+        )
+    });
+    let output = serde_json::to_value(response).unwrap_or_else(|_| json!({}));
     let mut metadata = HashMap::new();
     metadata.insert("tool_family".to_string(), json!("mcp_resource"));
     metadata.insert("operation".to_string(), json!("read"));
@@ -306,14 +321,17 @@ mod tests {
 
         async fn read_mcp_resource(
             &self,
-            params: McpResourceReadParams,
-        ) -> Result<McpResourceReadResponse, String> {
-            Ok(McpResourceReadResponse {
-                uri: params.uri,
-                mime_type: Some("text/markdown".to_string()),
-                text: Some("hello".to_string()),
-                blob: None,
-                meta: None,
+            params: McpServerResourceReadParams,
+        ) -> Result<McpServerResourceReadResponse, String> {
+            Ok(McpServerResourceReadResponse {
+                contents: vec![
+                    app_server_protocol::protocol::v2::McpServerResourceContent::Text {
+                        uri: params.uri,
+                        mime_type: Some("text/markdown".to_string()),
+                        text: "hello".to_string(),
+                        meta: None,
+                    },
+                ],
             })
         }
     }

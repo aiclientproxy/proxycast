@@ -1,4 +1,10 @@
 use crate::tool_definition::{RuntimeToolDefinition, RuntimeToolExposure};
+pub use agent_protocol::hook::{
+    HookEventName as RuntimeHookEventName, HookExecutionMode as RuntimeHookExecutionMode,
+    HookHandlerType as RuntimeHookHandlerType, HookScope as RuntimeHookScope,
+    HookSnapshot as RuntimeHookSnapshot, HookSource as RuntimeHookSource,
+    HookTrustStatus as RuntimeHookTrustStatus,
+};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -52,130 +58,6 @@ impl RuntimeToolSnapshot {
             exposure,
             supports_parallel,
             model_visible,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeHookEventName {
-    PreToolUse,
-    PermissionRequest,
-    PostToolUse,
-    PreCompact,
-    PostCompact,
-    SessionStart,
-    SessionEnd,
-    UserPromptSubmit,
-    SubagentStart,
-    SubagentStop,
-    Stop,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeHookHandlerType {
-    Command,
-    Prompt,
-    Agent,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeHookExecutionMode {
-    Sync,
-    Async,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeHookScope {
-    Thread,
-    Turn,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeHookSource {
-    System,
-    User,
-    Project,
-    Mdm,
-    SessionFlags,
-    Plugin,
-    CloudRequirements,
-    CloudManagedConfig,
-    LegacyManagedConfigFile,
-    LegacyManagedConfigMdm,
-    #[default]
-    Unknown,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeHookTrustStatus {
-    Managed,
-    Untrusted,
-    Trusted,
-    Modified,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RuntimeHookSnapshot {
-    /// Stable configuration identity: source:event:group-index:handler-index.
-    pub key: String,
-    pub event_name: RuntimeHookEventName,
-    pub handler_type: RuntimeHookHandlerType,
-    pub execution_mode: RuntimeHookExecutionMode,
-    pub matcher: Option<String>,
-    pub timeout_sec: u64,
-    pub status_message: Option<String>,
-    pub source_path: PathBuf,
-    pub source: RuntimeHookSource,
-    pub display_order: i64,
-    pub enabled: bool,
-    pub trust_status: RuntimeHookTrustStatus,
-}
-
-impl RuntimeHookSnapshot {
-    pub fn scope(&self) -> RuntimeHookScope {
-        match self.event_name {
-            RuntimeHookEventName::SessionStart
-            | RuntimeHookEventName::SessionEnd
-            | RuntimeHookEventName::SubagentStart => RuntimeHookScope::Thread,
-            RuntimeHookEventName::PreToolUse
-            | RuntimeHookEventName::PermissionRequest
-            | RuntimeHookEventName::PostToolUse
-            | RuntimeHookEventName::PreCompact
-            | RuntimeHookEventName::PostCompact
-            | RuntimeHookEventName::UserPromptSubmit
-            | RuntimeHookEventName::SubagentStop
-            | RuntimeHookEventName::Stop => RuntimeHookScope::Turn,
-        }
-    }
-
-    pub fn run_id(&self) -> String {
-        format!(
-            "{}:{}:{}",
-            self.event_label(),
-            self.display_order,
-            self.source_path.display()
-        )
-    }
-
-    fn event_label(&self) -> &'static str {
-        match self.event_name {
-            RuntimeHookEventName::PreToolUse => "pre-tool-use",
-            RuntimeHookEventName::PermissionRequest => "permission-request",
-            RuntimeHookEventName::PostToolUse => "post-tool-use",
-            RuntimeHookEventName::PreCompact => "pre-compact",
-            RuntimeHookEventName::PostCompact => "post-compact",
-            RuntimeHookEventName::SessionStart => "session-start",
-            RuntimeHookEventName::SessionEnd => "session-end",
-            RuntimeHookEventName::UserPromptSubmit => "user-prompt-submit",
-            RuntimeHookEventName::SubagentStart => "subagent-start",
-            RuntimeHookEventName::SubagentStop => "subagent-stop",
-            RuntimeHookEventName::Stop => "stop",
         }
     }
 }
@@ -372,12 +254,17 @@ mod tests {
             handler_type: RuntimeHookHandlerType::Command,
             execution_mode: RuntimeHookExecutionMode::Sync,
             matcher: Some("*".to_string()),
+            command: Some("true".to_string()),
             timeout_sec: 30,
             status_message: None,
+            additional_context_limit: None,
             source_path: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".codex/hooks.json"),
             source: RuntimeHookSource::Project,
+            plugin_id: None,
             display_order,
             enabled: true,
+            is_managed: false,
+            current_hash: "sha256:test".to_string(),
             trust_status: RuntimeHookTrustStatus::Trusted,
         }
     }

@@ -563,6 +563,11 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                 metadata: projected_metadata,
             })
         }
+        canonical::ThreadItemPayload::Hook { run } => Ok(v2::ThreadItem::Hook {
+            id,
+            metadata: projected_metadata,
+            run: v2::HookRunSummary::from(&run),
+        }),
         canonical::ThreadItemPayload::Unknown {
             upstream_type,
             field_names,

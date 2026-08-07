@@ -604,6 +604,24 @@ current provider 的工具面按 model sampling step 冻结，不按整个用户
 
 MCP resource、resource template、prompt 与 server status 属于 App Server 管理控制面，不是 model sampling-step inventory。GUI `mcpPrompt/*`、`mcpResource/*`、`mcpServerStatus/list` 每次通过 `LocalAppDataSource` 的全局 `lime-mcp::McpClientManager` 对当前 live connection 执行 typed read；它们不得进入 `McpStepSnapshot`、不得通过 caller-unaware registry dispatch 执行，也不得回写或替换 in-flight Tool snapshot。连接初始化返回的 server capabilities 只用于 manager status、tool filtering 与 bridge 装配事实；model bridge 只携带 tool discovery/call/notification 所需能力。MCP client initialize 只能广告已有 typed handler 的 client capability；Lime 没有 `sampling/createMessage` owner，必须与 Codex 一样保持 sampling absent，禁止先广告再由 rmcp 默认返回 method not found。Agent runtime 的唯一 owner 是 `AgentRuntimeState[sessionId] -> McpThreadRuntime`：创建时固定 canonical `threadId`，独立持有 runtime `McpClientManager`、真实 RMCP connection、bridge registry 与 immutable generation；runtime 只从管理面提供的 typed enabled server spec 创建连接，绝不复用管理面 `RunningService`。每个 enabled server 并发启动：`required=false` 的失败只使该 server 在候选 generation 中 absent，健康 server 的 bridge 仍可发布；任一 `required=true` 失败则关闭未发布候选的连接并拒绝替换，已发布 generation 与其 pending elicitation 不受影响。配置变化时只在候选 generation 完成启动策略和 snapshot 后原子发布，旧 sampling step 继续通过 `Arc` 持有原 connection handle；删除 session 才按精确 `(sessionId, threadId)` 关闭已发布 runtime，取消 turn 不关闭它。server-originated elicitation 独占 `mcpServer/elicitation/request` reverse JSON-RPC method，不得复用 `agentSession/action/respond`、Approval 或 `request_user_input`。它是 thread-scoped、turn-correlated 的瞬时 reverse request：App Server 只保留 exact in-memory waiter，`thread/read`、Thread/Turn/Item projection 和 durable store 不得写入 pending 或 terminal elicitation。公开 request contract 只有必填非空 `threadId`、可空 `turnId`、必填非空 `serverName` 与 typed `mode: "form"`；`sessionId`、`parentToolCallId`、raw MCP request id 和私有 token 均禁止进入 wire。per-call `McpCallScope` 只保留可空 `turnId` correlation；connection 已在 runtime 创建期绑定 session/thread owner，因此每次工具调用不得重传、推断或覆盖 owner。管理面 nested elicitation 因没有 runtime owner 必须在 MCP service 边界 fail closed；不得使用 singleton、最近 active turn、`sessionId` fallback、`parentToolCallId`、progress token 或 server metadata 猜测 owner。router 以 session owner 精确取消：未转发 waiter 直接 Cancel，已转发 waiter 只触发 closed，必须等待 App Server adapter 先发送 `serverRequest/resolved` 再释放 RMCP waiter；同一 server 的不同 session/thread 不串线。MCP 内部 opaque token 只捕获在 adapter task，App Server outer request id 只出现在 JSON-RPC，二者是双层精确 identity；`turnId` 只作 correlation，不参与路由，也不能伪造成 sampling-step capability。MCP operation timeout 由真实 connection handler 的 counted pause state 计算 active time；等待一个或多个用户 elicitation 不扣 tool timeout，turn cancellation 仍立即生效。elicitation capability 继续 absent：Lime 不广告没有独立协议 capability 的行为。
 
+Codex exact App Server MCP 请求固定为以下两条链，Desktop 不复制 TUI 交互，也不建立第二个 manager：
+
+```text
+mcpServer/resource/read { threadId?, server, uri }
+  -> RuntimeCore
+  -> no threadId: LocalAppDataSource management McpClientManager
+  -> threadId: canonical Thread -> sessionId -> ExecutionBackend -> McpThreadRuntime
+  -> contents[]
+
+mcpServer/tool/call { threadId, server, tool, arguments?, _meta? }
+  -> canonical Thread -> sessionId
+  -> ExecutionBackend -> AgentRuntimeState -> McpThreadRuntime
+  -> Session-owned McpClientManager -> RMCP tools/call
+  -> { content, structuredContent?, isError?, _meta? }
+```
+
+`mcpServer/tool/call` 不允许落到全局 management manager；request `_meta` 也不得冒充 provider result `_meta`。Renderer Settings 没有 canonical Thread，只展示 tools，不提供调用按钮。Workspace MCP App 只传真实 `threadId`，不把 `sessionId` 放进 exact wire；Thread 未恢复时必须 fail closed。旧 `mcpTool/call`、`mcpTool/callWithCaller` 与 `mcpResource/read` 已从协议、App Server、typed clients、Renderer 和 smoke 物理删除，不建 compat wrapper，分类为 `dead / deleted / forbidden-to-restore`。Architecture impact: major; owner/data flow and public method boundary changed. Architecture diagram updated: this paragraph. Responsible developer confirmation: root, 2026-08-07.
+
 MCP form elicitation 的产品表现是主窗口全局 GUI 模态表单，不是 Codex TUI prompt 的移植。Renderer 只消费 typed `requestedSchema`：string、number/integer、boolean、enum 分别映射输入框、数字输入、复选/开关和选择器；无法渲染或校验的 schema 必须 fail closed 为 decline/cancel。主对象是发起请求的 MCP 连接，阶段是待确认，单一主操作是提交，拒绝和关闭分别表达 decline/cancel；远端 `serverRequest/resolved` 必须通过 handler `AbortSignal` 静默撤销弹窗。该 handler 在主窗口根部只注册一次，不依赖具体页面挂载，不读取 raw MCP id，不使用生产 mock fallback。
 
 Multi-Agent parent/child topology、agent identity 与 inter-agent mailbox 是三个 owner。`thread-store::AgentGraphStore` 定义 storage-neutral Open/Closed directional edge，App Server `ProjectionStore` 在 canonical SQLite 中持久化 child-unique parent、状态与稳定 descendants traversal；生产 AgentControl 必须通过该 owner 写 spawn/status/recover，禁止继续扫描 `agent_sessions.extension_data_json` 重建树。`thread-store::{AgentIdentityStore,AgentMailboxStore}` 是同一 root-thread tree 的 durable identity/mailbox owner：identity 以 `thread_id` 与 `(root_thread_id, agent_path)` 双重唯一，`task_name` 只能由 canonical path 末段派生；mailbox 用稳定 `message_id` 幂等 append、冲突 fail-closed、`QueueOnly`/`TriggerTurn` 分流、按 `(created_at_ms,message_id)` FIFO、按 root/recipient 隔离，并只将状态更新为 delivered 保留 audit record。mailbox 不能复用 `RuntimeQueuedTurn` 用户输入队列。S4u 定义 durable storage；S4w 在 `RuntimeCore` 建立唯一内部 consumer：`message_id` 派生 canonical Item ID，`TriggerTurn` 使用确定性 turn ID，`QueueOnly` 仅在下一真实 turn 前注入。canonical Item 必须在 mailbox delivered ack 之前可读；canonical EventLog 仍是事件顺序事实源，因此 EventLog-first 后的 canonical projection 失败保留 mailbox pending，严格校验同一 session 的连续 durable tail 后才重放 canonical Item 并 ack，identity/sequence 不一致一律 fail-closed。不得以临时 map、legacy session metadata 或第二套队列绕过这些 owner。S4v 已在 `RuntimeCore` 建立第一段 current control boundary：仅已加载的 parent session 可创建 child session/thread，成功后才持久化 Open edge；edge 写入失败时必须删除刚创建的 child session/canonical Thread，补偿失败仍显式 fail closed。Closed edge 与 descendants traversal 继续由 `AgentGraphStore` contract 拥有；没有 current consumer 的 RuntimeCore close/read 包装已删除，禁止为测试或未来猜测恢复。S4x 以 `RuntimeCore(session,thread,turn) -> AgentControlGatewayHandle -> ExecutionRequest -> RuntimeBackend -> current provider` 接入六个 current 工具；handle 只在该 turn 有效，provider 仅在 handle 存在时广告并执行 `spawn_agent`、`send_message`、`followup_task`、`wait_agent`、`interrupt_agent`、`list_agents`。S4aa 将 canonical child terminal activity 补入同一 durable owner：completed/failed child Turn 先完成 canonical Turn/Item 持久化，再按 durable direct-parent edge 写一条稳定 ID 的 `Result + QueueOnly` mailbox；interrupted/canceled 不生成 FINAL_ANSWER。canonical apply 前失败与 canonical 成功/mailbox append 前失败均由 parent 的 wait/下一真实 turn 沿 direct-child EventLog 有效前缀恢复，只应用 canonical 缺失 tail，再幂等补 result；恢复不得把 child 插入 RuntimeCore、递归扫描 grandchild 或把 delivered record 降回 pending。`wait_agent` 对调用前已存在和等待中新增的 queued steer 都优先返回 `Wait interrupted by new input`，无 steer 时才消费 mailbox activity，active wait 以有界退避重查 durable terminal recovery；并发 wait 只能有一个消费同一 activity。S4z 已证明新 RuntimeCore hydrate root 时不递归加载 descendants，`send_message` QueueOnly 不加载 child，`followup_task`/`interrupt_agent` 只 hydrate exact target，Closed edge 不可寻址且不 reopen。`RuntimeBackend` 只能 opaque pass-through，不得持有或回调 `RuntimeCore`；全局 agent registry、legacy metadata、第二队列、JSON-RPC/GUI 扩张和 Team/旧 alias 均不得作为该链路 fallback。S4y 已物理删除 `tool-runtime::collab_agent`、旧 Team catalog/prompt/discovery/registry surface，并将工具执行 smoke 迁到六个 V2 名称；这些路径属于 `dead / deleted / forbidden-to-restore`。canonical `CollabAgentToolCall` / SubAgent 历史与展示 payload 仍是独立的 read/projection 边界，不等于可执行旧工具，也不得在本删除切片中混删。S4ae/S4ah 已完成 ThreadStore-backed Renderer 与真实 Electron canonical SubAgent 产品闭环；旧 synthetic Team fixture 不再计产品证据。
@@ -924,7 +942,7 @@ Claw @ picker
   -> selected activation -> Turn metadata / runtime context
 ```
 
-Plugin MCP 声明由唯一 package manifest `.codex-plugin/plugin.json` 选择：可以使用 manifest 内联 object、package-relative 配置路径，或包根默认 `.mcp.json`；`.mcp.json` 只是 MCP server 配置，不是第二份 Plugin manifest。installed+enabled Plugin 生成带稳定 `plugin__<plugin-id>__<server-id>` runtime identity 的 server spec，并进入既有 `McpThreadRuntime -> McpClientManager -> tool-runtime` lifecycle；disabled Plugin 不装配，非法 sibling 与越界 `cwd` fail closed。MCP App UI 从 canonical tool item 的 `resourceUri` 经 `mcpResource/read` 进入现有 Right Surface/WebContentsView，并以 canonical identity 在 Renderer reload 后恢复，不启动 Plugin worker 或私有 UI runtime。
+Plugin MCP 声明由唯一 package manifest `.codex-plugin/plugin.json` 选择：可以使用 manifest 内联 object、package-relative 配置路径，或包根默认 `.mcp.json`；`.mcp.json` 只是 MCP server 配置，不是第二份 Plugin manifest。installed+enabled Plugin 生成带稳定 `plugin__<plugin-id>__<server-id>` runtime identity 的 server spec，并进入既有 `McpThreadRuntime -> McpClientManager -> tool-runtime` lifecycle；disabled Plugin 不装配，非法 sibling 与越界 `cwd` fail closed。MCP App UI 从 canonical tool item 的 `resourceUri` 经 `mcpServer/resource/read { threadId, server, uri }` 进入现有 Right Surface/WebContentsView，并以 canonical identity 在 Renderer reload 后恢复，不启动 Plugin worker 或私有 UI runtime。
 
 当前仍未完成独立 Plugin Apps（非 MCP App）与 Hooks activation、Plugin identity 到完整 Item/tool trace 的全量历史投影、跨进程 cold restore，以及 Browser/file/structured-result 的 Plugin 专项 Gate B；这些缺口不得通过旧 renderer registry、plugin worker 或独立 UI runtime fallback 填补。
 
@@ -1743,39 +1761,61 @@ Server notification boundary above. Responsible developer confirmation: root, 20
 
 ## 28. Skills Changed Catalog Invalidation Owner
 
-Skill catalog invalidation uses one current catalog owner and one typed transient notification path:
+Skill catalog discovery and invalidation use one current owner and one typed transient notification path:
 
 ```text
 default Skill roots create / modify / remove
   or successful Lime Skill catalog mutation
-  -> invalidate lime-skills executable snapshot cache
+  -> invalidate lime-skills snapshot + summary caches
   -> App Server v2 skills/changed {}
   -> app_server_handle_json_lines notification drain
   -> Renderer typed notification bus
-  -> current skill/list
+  -> current skills/list { cwds, forceReload }
+  -> RuntimeCore -> workspace-scoped AgentSkillSnapshot
+  -> data[{ cwd, skills, errors }]
   -> Composer Skill catalog projection and GUI refresh
+
+skills/extraRoots/set { extraRoots }
+  -> replace process-scoped extra roots
+  -> invalidate the same caches
+  -> skills/changed {}
+
+skills/config/write { exactly one of path/name, enabled }
+  -> Lime YAML skills.config
+  -> invalidate the same caches
+  -> skills/list and Agent turn snapshots apply the same enablement policy
 ```
 
 The App Server watches only default Skill roots. Existing roots are recursive watches; roots created after startup are
-reconciled and watched. Filesystem create, modify and remove events invalidate the executable snapshot and broadcast at
-most once per ten-second throttle window. Successful Lime catalog mutations invalidate the same cache and attach the
+reconciled and watched. Filesystem create, modify and remove events invalidate both discovery caches and broadcast at
+most once per ten-second throttle window. Successful Lime catalog mutations invalidate the same caches and attach the
 same typed notification at the processor boundary; failed mutations and mutations for other apps do not notify.
 
-`skill/list` is the sole executable catalog read for Composer. The Renderer API reuses the existing typed executable
-Skill decoder and applies a pure GUI projection. `skillManagement/list` retains its management-center semantics and does
-not become a second Composer catalog owner. Reconnect or remount performs a fresh list independently of notification
-delivery. `skills/changed` carries the strict empty object only and is a process-level transient invalidation; it does not
-create a Thread/Turn/Item, durable event, persistence record or replay requirement.
+`skills/list` is the sole executable catalog read for Composer. It matches the Codex v2 request and response shape:
+empty `cwds` resolves to the App Server process cwd, explicit cwd order is preserved, `forceReload=true` clears both
+snapshot and summary caches, and discovery errors remain attached to their cwd without discarding valid skills. Scope
+lowering is `project -> repo`, `user -> user`, `app -> system`, `other -> admin`; `path` is the absolute `SKILL.md`
+locator. The Renderer applies the Desktop-only projection, derives the stable detail-read id, filters `enabled=false`
+entries and never adds a TUI surface. `skill/read` remains the independent body/workflow detail read.
+
+`skillManagement/list` retains its management-center semantics and does not become a second Composer catalog owner.
+Reconnect or remount performs a fresh list independently of notification delivery. `skills/changed` carries the strict
+empty object only and is a process-level transient invalidation; it does not create a Thread/Turn/Item, durable event,
+persistence record or replay requirement.
 
 The v2 protocol/schema/generated client, App Server watcher and successful mutation producer, `lime-skills` cache
-invalidation, Renderer typed event bus and current `skill/list` refresh are `current`. No `compat` path exists.
-`skills/extraRoots/set`, a second catalog/read model, durable notification replay and production mock fallback were not
-added and are `dead / forbidden-to-restore` as alternate implementations.
+invalidation, Renderer typed event bus and current `skills/list` refresh are `current`. Singular `skill/list` and the
+zero-consumer `get_local_skills_for_app` Desktop facade are `dead / deleted / forbidden-to-restore`; no `compat` path
+exists. `skills/config/write` is the current user-level enablement writer: Lime Desktop persists it in the existing YAML
+configuration owner rather than copying Codex's TUI-oriented TOML path. `skills/extraRoots/set` is current process state,
+replaces the full root set, accepts absent directories as empty discovery inputs and never persists them. A second
+catalog/read model, durable notification replay and production mock fallback are `dead / forbidden-to-restore` as
+alternate implementations.
 
-Architecture impact: major because this adds a public notification producer and GUI invalidation boundary while keeping
-the product direction unchanged: Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore/domain owner -> GUI.
-Architecture diagram updated: this section and the Skill catalog path above. Responsible developer confirmation: root,
-2026-07-31.
+Architecture impact: major because the catalog read moved to Codex v2 while keeping the product direction unchanged:
+Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore/domain owner -> GUI. Architecture diagram updated: this
+section and the Skill catalog path above. Responsible developer confirmation: root, 2026-08-07. Directory ownership,
+data flow, dependency direction, protocol boundary and required public JSON-RPC / Electron evidence gates are confirmed.
 
 ## 29. Durable Ordered Thread Section Owner
 
@@ -1811,3 +1851,87 @@ Architecture impact: major because durable thread membership and navigation now 
 App Server and Desktop GUI. The product direction remains Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore
 -> Thread/Turn/Item projection -> GUI. Architecture diagram updated: this section and the Thread/Turn/Item projection
 path above. Responsible developer confirmation: root, 2026-08-06.
+
+## 30. Codex Hook Lifecycle Owner
+
+Hook discovery and execution now use one current owner across the runtime and Desktop projection chain:
+
+```text
+CODEX_HOME/config.toml + <cwd>/.codex/config.toml + active Plugin catalog
+  -> tool-runtime Hook discovery/trust snapshot
+  -> Agent sampling step / command gate
+  -> AgentEvent hook.started / hook.completed
+  -> App Server v2 hook notifications
+  -> canonical ThreadItemPayload::Hook (item_<hookRunId>)
+  -> Thread/read + thread/items/list + Renderer timeline
+```
+
+`hooks/list` is the sole public discovery contract. `tool-runtime` owns source loading, stable key/hash, trust and
+execution; Agent runtime owns lifecycle events; App Server owns JSON-RPC dispatch, notification projection, durable
+materialization and read-model lowering; the Renderer only validates and displays the canonical Hook Item. Started and
+completed notifications must carry the same run id and the same `item_<hookRunId>` identity. Terminal status is mapped
+to completed, failed or interrupted without creating a second generic item lifecycle.
+
+The v2 protocol/schema/generated Rust and TypeScript clients, public JSON-RPC `hooks/list`, Hook event projector,
+canonical history materializer and five-locale timeline row are `current`. The former raw hook config shape,
+`known_unprojected` Hook drift path, bare run-id item identity and production mock/fallback execution are
+`dead / deleted / forbidden-to-restore`; no compatibility owner was added. Lime remains a compact Electron Desktop
+GUI and does not copy Codex TUI surfaces. Provider/model/media behavior remains owned by the Grok-aligned
+`model-provider` control plane.
+
+Architecture impact: major because this adds a cross-layer protocol, lifecycle event, durable Item and recovery path.
+Architecture diagram updated: this section and the App Server notification -> Thread/Turn/Item projection path above.
+Responsible developer confirmation: root, 2026-08-07. Confirmation content: 已核对目录归属、数据流、依赖方向、协议边界和验证门禁。
+
+## 31. Apps Catalog And Readiness Owner
+
+Apps/connectors 只有一个 catalog owner，并保持 Desktop 与 Codex TUI 的产品边界分离：
+
+```text
+installed Plugin manifests with apps capability
+  -> App Server PluginDataSource / local plugin_catalog
+  -> RuntimeCore app/list | app/read | app/installed
+  -> App Server JSON-RPC
+  -> Renderer typed Apps gateway
+  -> Desktop Apps catalog/readiness projection
+
+successful plugin/install | plugin/uninstall | plugin/enabled/set
+  -> same Plugin catalog mutation owner
+  -> app/list/updated { data: AppInfo[] }
+  -> App Server notification event bus
+  -> Renderer typed watcher -> fresh Apps read
+```
+
+`app/list` uses the installed Plugin manifest `apps` capability and keeps pagination in the same catalog. `app/read`
+deduplicates ids while preserving first-request order and returns `missingAppIds`; the processor rejects more than 100 ids
+with `INVALID_PARAMS`. Optional `threadId` on list/installed is validated against the loaded canonical Thread and fails
+closed with `SESSION_NOT_FOUND`. The local registry is read fresh on every request, so `forceRefetch` and `forceRefresh`
+never fabricate a hosted cache refresh.
+
+`callable` is a readiness boundary, not an install flag. Until a local Plugin app has a committed hosted connector
+model-visible tool snapshot, enabled local apps report `callable=false` and Desktop readiness remains false. No UI or
+provider route may infer model-callability from `isEnabled`, manifest declaration or Plugin installation alone.
+
+The v2 Apps DTOs, method/notification catalogs, generated schema/client, App Server Plugin catalog projection, public
+JSON-RPC tests, Renderer typed gateway, typed notification parser and App Center readiness consumer are `current`.
+`src/components/AppPageContent.tsx -> src/features/plugin/ui/PluginCatalogPage.tsx` remains the only App Center route
+owner; Apps are projected inside the selected Plugin detail sidebar instead of creating a second Apps page or state
+source. The consumer reads `app/list + app/installed`, renders `ready / disabled / pending`, and reruns the same fresh
+read after typed `app/list/updated` arrives through the App Server event bus.
+
+The Apps-specific Electron Gate B uses isolated app data and a local Plugin manifest with an `apps` capability. It
+proved real Electron renderer/preload/IPC, `app_server_handle_json_lines`, `plugin/list -> plugin/install`, exact
+`app/list` / `app/read` / `app/installed`, GUI `plugin/enabled/set`, the subsequent fresh Apps read and the same visible
+row changing from `enabled=true / callable=false / pending` to `disabled`. Console, page, invoke, trace, legacy command
+and production mock fallback counts were all zero. Evidence:
+`.lime/qc/project-gates/standalone-apps-catalog-20260807T152703394Z-702520/apps-catalog-gate-b/apps-catalog-gate-b-summary.json`.
+
+There is no second Apps catalog, `window` custom-event fact source, TUI-style Apps surface, compatibility wrapper or
+production mock fallback. Hosted connector model-visible tool snapshot and a real `callable=true` provider path remain
+open capability work; the local Gate B does not claim either one.
+
+Architecture impact: major because this adds a cross-layer catalog/readiness contract and live invalidation path while
+reusing the existing Plugin catalog owner. The product direction remains Electron Desktop Host -> App Server JSON-RPC
+-> RuntimeCore -> Thread/Turn/Item projection -> GUI; provider/model/media behavior remains owned by the Grok-aligned
+`model-provider` control plane. Responsible developer confirmation: root, 2026-08-07. Confirmation content: 已核对唯一
+Plugin catalog owner、`callable=false` fail-closed 边界、notification 数据流和 Desktop/TUI 分界。

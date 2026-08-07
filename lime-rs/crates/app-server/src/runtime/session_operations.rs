@@ -178,7 +178,7 @@ impl RuntimeCore {
         Ok(Some((
             stored.session.session_id.clone(),
             settings,
-            super::agent_control::session_metadata_has_direct_provider_route(metadata),
+            super::agent_control::session_metadata_has_agent_control_route(metadata),
         )))
     }
 

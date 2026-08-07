@@ -159,10 +159,10 @@ describe("HarnessStatusPanel tools", () => {
               includeDeferred: true,
             },
             callProofRequest: {
-              method: "mcpTool/callWithCaller",
+              method: "mcpServer/tool/call",
               params: {
-                toolName: "mcp__context7__resolve-library-id",
-                caller: "plugin:docs-plugin",
+                server: "context7",
+                tool: "resolve-library-id",
                 arguments: { libraryName: "react" },
               },
               reason: "tool_call_proof",

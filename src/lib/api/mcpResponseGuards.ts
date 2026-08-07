@@ -97,19 +97,69 @@ function isMcpContent(value: unknown): value is McpContent {
   return false;
 }
 
-export function assertMcpToolResult(
+function lowerCodexMcpContent(value: unknown): McpContent | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  if (record.type === "text" && typeof record.text === "string") {
+    return { type: "text", text: record.text };
+  }
+  if (
+    record.type === "image" &&
+    typeof record.data === "string" &&
+    (typeof record.mimeType === "string" ||
+      typeof record.mime_type === "string")
+  ) {
+    return {
+      type: "image",
+      data: record.data,
+      mime_type: (record.mimeType ?? record.mime_type) as string,
+    };
+  }
+  if (record.type === "resource" && typeof record.uri === "string") {
+    const text = record.text;
+    const blob = record.blob;
+    if (
+      (text !== undefined && typeof text !== "string") ||
+      (blob !== undefined && typeof blob !== "string")
+    ) {
+      return null;
+    }
+    return {
+      type: "resource",
+      uri: record.uri,
+      ...(text === undefined ? {} : { text }),
+      ...(blob === undefined ? {} : { blob }),
+    };
+  }
+  return null;
+}
+
+export function assertMcpServerToolResult(
   method: string,
   response: unknown,
 ): McpToolResult {
   const record = assertRecord(method, response, "tool result");
-  if (
-    !Array.isArray(record.content) ||
-    typeof record.is_error !== "boolean" ||
-    !record.content.every(isMcpContent)
-  ) {
+  if (!Array.isArray(record.content)) {
     throw new Error(`${method} did not return tool result`);
   }
-  return response as McpToolResult;
+  const content = record.content.map(lowerCodexMcpContent);
+  if (content.some((item): item is null => item === null)) {
+    throw new Error(`${method} did not return canonical MCP content`);
+  }
+  if (
+    record.isError !== undefined &&
+    record.isError !== null &&
+    typeof record.isError !== "boolean"
+  ) {
+    throw new Error(`${method} did not return isError`);
+  }
+  return {
+    content: content as McpContent[],
+    structuredContent: record.structuredContent,
+    is_error: record.isError === true,
+  };
 }
 
 export function assertMcpPromptResult(
@@ -157,6 +207,59 @@ export function assertMcpResourceContent(
   return response as McpResourceContent;
 }
 
+export function assertMcpServerResourceContent(
+  method: string,
+  response: unknown,
+): McpResourceContent {
+  const record = assertRecord(method, response, "resource contents");
+  if (!Array.isArray(record.contents) || record.contents.length === 0) {
+    throw new Error(`${method} did not return resource contents`);
+  }
+  if (record.contents.length !== 1) {
+    throw new Error(`${method} returned multiple resource contents`);
+  }
+  const content = record.contents[0];
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    throw new Error(`${method} did not return resource content`);
+  }
+  const contentRecord = content as Record<string, unknown>;
+  if (typeof contentRecord.uri !== "string") {
+    throw new Error(`${method} did not return resource URI`);
+  }
+  const hasText = typeof contentRecord.text === "string";
+  const hasBlob = typeof contentRecord.blob === "string";
+  if (hasText === hasBlob) {
+    throw new Error(`${method} did not return text or blob content`);
+  }
+  const mimeType = contentRecord.mimeType ?? contentRecord.mime_type;
+  if (
+    mimeType !== undefined &&
+    mimeType !== null &&
+    typeof mimeType !== "string"
+  ) {
+    throw new Error(`${method} did not return resource MIME type`);
+  }
+  const meta = contentRecord._meta ?? contentRecord.meta;
+  if (
+    meta !== undefined &&
+    meta !== null &&
+    (typeof meta !== "object" || Array.isArray(meta))
+  ) {
+    throw new Error(`${method} did not return resource metadata`);
+  }
+  return {
+    uri: contentRecord.uri,
+    ...(mimeType === undefined || mimeType === null
+      ? {}
+      : { mime_type: mimeType as string }),
+    ...(hasText ? { text: contentRecord.text as string } : {}),
+    ...(hasBlob ? { blob: contentRecord.blob as string } : {}),
+    ...(meta === undefined || meta === null
+      ? {}
+      : { meta: meta as Record<string, unknown> }),
+  };
+}
+
 export function assertMcpResourceListResponse(
   method: string,
   response: unknown,
@@ -173,6 +276,7 @@ export function assertMcpResourceListResponse(
   }
   return {
     resources,
-    resourceTemplates: (resourceTemplates ?? []) as McpResourceTemplateDefinition[],
+    resourceTemplates: (resourceTemplates ??
+      []) as McpResourceTemplateDefinition[],
   };
 }

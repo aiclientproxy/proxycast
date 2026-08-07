@@ -5,7 +5,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "1.122.0",
+  "version": "1.123.0",
   "description": "AI content workspace for Chinese creators: desktop writing, research, prompt management, knowledge base, and multi-model workflows.",
   "keywords": [
     "ai",
@@ -246,6 +246,7 @@
     "smoke:plugin-runtime-electron-fixture": "node scripts/plugin/runtime-electron-fixture-smoke.mjs",
     "smoke:plugin-runtime-task-electron-fixture": "node scripts/plugin/runtime-electron-task-fixture-smoke.mjs",
     "smoke:claw-chat-current-fixture": "node scripts/agent-runtime/claw-chat-current-fixture-smoke.mjs",
+    "smoke:hook-lifecycle-gate-b": "node scripts/agent-runtime/claw-chat-current-fixture-smoke.mjs --scenario turn-plan-update --hook-fixture --evidence-dir .lime/qc/gui-evidence/hook-lifecycle-gate-b --prefix hook-lifecycle-gate-b",
     "smoke:unknown-item-recovery-electron-fixture": "node scripts/agent-runtime/claw-chat-current-fixture-smoke.mjs --scenario unknown-item --prefix claw-chat-current-fixture-unknown-item-regression --timeout-ms 240000",
     "smoke:claw-image-live": "node scripts/agent-runtime/claw-image-live-smoke.mjs",
     "smoke:claw-chat-ready-streaming": "node scripts/claw-chat-ready-streaming-smoke.mjs",

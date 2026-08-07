@@ -28,7 +28,7 @@ function runtimeSkill(
 }
 
 describe("projectRuntimeSkillCatalog", () => {
-  it("应把 current skill/list 投影为 Composer 本地 Skill", () => {
+  it("应把 current skills/list 投影为 Composer 本地 Skill", () => {
     expect(projectRuntimeSkillCatalog([runtimeSkill()])).toEqual([
       {
         key: "user:article-writer",

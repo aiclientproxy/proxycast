@@ -167,7 +167,7 @@ export function registerSkillsRuntimeSmokeGuards({
       "inputbar-plus-panel-skills",
       "skill-selector-inline",
       "skill-selector-refresh",
-      '"skill/list"',
+      '"skills/list"',
       '"skills/changed"',
       '"skillsChanged.received"',
       "initialCurrentSkillListObserved",

@@ -60,6 +60,22 @@
     },
     {
       "kind": "request",
+      "method": "app/installed"
+    },
+    {
+      "kind": "request",
+      "method": "app/list"
+    },
+    {
+      "kind": "notification",
+      "method": "app/list/updated"
+    },
+    {
+      "kind": "request",
+      "method": "app/read"
+    },
+    {
+      "kind": "request",
       "method": "artifact/read"
     },
     {
@@ -359,6 +375,18 @@
       "method": "gatewayTunnel/syncWebhookUrl"
     },
     {
+      "kind": "notification",
+      "method": "hook/completed"
+    },
+    {
+      "kind": "notification",
+      "method": "hook/started"
+    },
+    {
+      "kind": "request",
+      "method": "hooks/list"
+    },
+    {
       "kind": "request",
       "method": "initialize"
     },
@@ -488,10 +516,6 @@
     },
     {
       "kind": "request",
-      "method": "mcpResource/read"
-    },
-    {
-      "kind": "request",
       "method": "mcpResource/subscribe"
     },
     {
@@ -532,6 +556,10 @@
     },
     {
       "kind": "request",
+      "method": "mcpServer/resource/read"
+    },
+    {
+      "kind": "request",
       "method": "mcpServer/start"
     },
     {
@@ -544,19 +572,15 @@
     },
     {
       "kind": "request",
+      "method": "mcpServer/tool/call"
+    },
+    {
+      "kind": "request",
       "method": "mcpServer/update"
     },
     {
       "kind": "request",
       "method": "mcpServerStatus/list"
-    },
-    {
-      "kind": "request",
-      "method": "mcpTool/call"
-    },
-    {
-      "kind": "request",
-      "method": "mcpTool/callWithCaller"
     },
     {
       "kind": "request",
@@ -944,10 +968,6 @@
     },
     {
       "kind": "request",
-      "method": "skill/list"
-    },
-    {
-      "kind": "request",
       "method": "skill/read"
     },
     {
@@ -1033,6 +1053,18 @@
     {
       "kind": "notification",
       "method": "skills/changed"
+    },
+    {
+      "kind": "request",
+      "method": "skills/config/write"
+    },
+    {
+      "kind": "request",
+      "method": "skills/extraRoots/set"
+    },
+    {
+      "kind": "request",
+      "method": "skills/list"
     },
     {
       "kind": "request",
@@ -1880,8 +1912,6 @@
       "McpPromptListResponse",
       "McpPromptMessage",
       "McpResourceListResponse",
-      "McpResourceReadParams",
-      "McpResourceReadResponse",
       "McpResourceSubscribeParams",
       "McpResourceSubscriptionResponse",
       "McpResourceUnsubscribeParams",
@@ -1898,9 +1928,6 @@
       "McpServerStatusListResponse",
       "McpServerStopParams",
       "McpServerUpdateParams",
-      "McpToolCallParams",
-      "McpToolCallResponse",
-      "McpToolCallWithCallerParams",
       "McpToolListForContextParams",
       "McpToolListResponse",
       "McpToolSearchParams",
@@ -2093,13 +2120,14 @@
       "SessionFileSaveParams",
       "SessionFileUpdateMetaParams",
       "SkillAuthority",
-      "SkillDependencies",
       "SkillDetail",
+      "SkillDetailDependencies",
+      "SkillDetailInterface",
+      "SkillDetailScope",
+      "SkillDetailToolDependency",
       "SkillDownloadInstallParams",
       "SkillDownloadInstallResponse",
       "SkillInstalledDirectoriesListResponse",
-      "SkillInterface",
-      "SkillListResponse",
       "SkillLocalDetailInspectParams",
       "SkillLocalDetailInspectResponse",
       "SkillLocalImportParams",
@@ -2136,10 +2164,8 @@
       "SkillRepositorySaveParams",
       "SkillScaffoldCreateParams",
       "SkillScaffoldCreateResponse",
-      "SkillScope",
       "SkillSource",
       "SkillSummary",
-      "SkillToolDependency",
       "SkillWorkflowStep",
       "SoulStylePackInstallParams",
       "SoulStylePackInstallResponse",
@@ -2248,6 +2274,19 @@
       "AdditionalFileSystemPermissions",
       "AdditionalNetworkPermissions",
       "AgentMessageDeltaNotification",
+      "AppBranding",
+      "AppInfo",
+      "AppListUpdatedNotification",
+      "AppMetadata",
+      "AppReview",
+      "AppScreenshot",
+      "AppToolSummary",
+      "AppsInstalledParams",
+      "AppsInstalledResponse",
+      "AppsListParams",
+      "AppsListResponse",
+      "AppsReadParams",
+      "AppsReadResponse",
       "ArtifactSnapshot",
       "ArtifactWriteParams",
       "ArtifactWriteResponse",
@@ -2269,6 +2308,7 @@
       "CommandExecutionTerminalInteraction",
       "CommandExecutionTerminalInteractionNotification",
       "ConfigWarningNotification",
+      "ConnectorMetadata",
       "CurrentTimeReadParams",
       "CurrentTimeReadResponse",
       "DynamicToolCallOutputContentItem",
@@ -2291,19 +2331,33 @@
       "FileUpdateChange",
       "GitInfo",
       "GrantedPermissionProfile",
+      "HookErrorInfo",
+      "HookMetadata",
+      "HookOutputEntry",
+      "HookOutputEntryKind",
       "HookPromptFragment",
+      "HookRunSummary",
+      "HooksListEntry",
+      "HooksListParams",
+      "HooksListResponse",
       "ImageGenerationItem",
       "InitializeCapabilities",
       "InputModality",
+      "InstalledApp",
       "ItemCompletedNotification",
       "ItemStartedNotification",
       "McpServerElicitationAction",
       "McpServerElicitationRequestParams",
       "McpServerElicitationRequestResponse",
       "McpServerOauthLoginCompletedNotification",
+      "McpServerResourceContent",
+      "McpServerResourceReadParams",
+      "McpServerResourceReadResponse",
       "McpServerStartupFailureReason",
       "McpServerStartupState",
       "McpServerStatusUpdatedNotification",
+      "McpServerToolCallParams",
+      "McpServerToolCallResponse",
       "McpToolCallAppContext",
       "McpToolCallError",
       "McpToolCallProgressNotification",
@@ -2374,7 +2428,20 @@
       "ServerNotification",
       "ServerRequest",
       "ServerRequestResolvedNotification",
+      "SkillDependencies",
+      "SkillErrorInfo",
+      "SkillInterface",
+      "SkillMetadata",
+      "SkillScope",
+      "SkillToolDependency",
       "SkillsChangedNotification",
+      "SkillsConfigWriteParams",
+      "SkillsConfigWriteResponse",
+      "SkillsExtraRootsSetParams",
+      "SkillsExtraRootsSetResponse",
+      "SkillsListEntry",
+      "SkillsListParams",
+      "SkillsListResponse",
       "SleepItem",
       "SortDirection",
       "SubAgentActivityKind",

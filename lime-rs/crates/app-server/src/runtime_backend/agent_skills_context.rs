@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use lime_core::config::SkillConfig;
 use lime_skills::{
     agent_skill_roots_for_workspace, build_agent_skill_snapshot_from_roots,
     contains_agent_skills_prompt, evaluate_agent_skill_selection_bodies,
@@ -84,7 +85,16 @@ pub(super) fn build_agent_skill_snapshot_for_turn(
 ) -> AgentSkillSnapshot {
     let mut roots = agent_skill_roots_for_workspace(working_dir, project_root);
     roots.extend(super::plugin_runtime_context::plugin_runtime_agent_skill_roots(metadata_values));
-    build_agent_skill_snapshot_from_roots(roots)
+    let mut snapshot = build_agent_skill_snapshot_from_roots(roots);
+    let config = metadata_values
+        .iter()
+        .filter_map(|metadata| metadata.get("skills"))
+        .filter_map(|skills| skills.get("config"))
+        .filter_map(|config| serde_json::from_value::<Vec<SkillConfig>>(config.clone()).ok())
+        .flatten()
+        .collect::<Vec<_>>();
+    lime_skills::apply_agent_skill_config(&mut snapshot, &config);
+    snapshot
 }
 
 pub(super) fn selected_agent_skill_body_evaluations(

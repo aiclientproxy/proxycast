@@ -1,21 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
-    "arguments": true,
-    "caller": {
+    "server": {
+      "type": "string"
+    },
+    "threadId": {
       "type": [
         "null",
         "string"
       ]
     },
-    "toolName": {
+    "uri": {
       "type": "string"
     }
   },
   "required": [
-    "arguments",
-    "toolName"
+    "server",
+    "uri"
   ],
-  "title": "McpToolCallWithCallerParams",
+  "title": "McpServerResourceReadParams",
   "type": "object"
 }

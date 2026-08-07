@@ -1,6 +1,9 @@
 use super::requires_current;
 use super::NoopAppDataSource;
 use super::RuntimeCoreError;
+use app_server_protocol::protocol::v2::{
+    McpServerResourceReadParams, McpServerResourceReadResponse,
+};
 use app_server_protocol::*;
 use async_trait::async_trait;
 use lime_mcp::{McpOAuthLoginHandle, McpRuntimeServerSpec};
@@ -107,20 +110,6 @@ pub trait McpAppDataSource: Send + Sync {
         Ok(McpToolListResponse::default())
     }
 
-    async fn call_mcp_tool(
-        &self,
-        _params: McpToolCallParams,
-    ) -> Result<McpToolCallResponse, RuntimeCoreError> {
-        Err(requires_current("mcpTool/call"))
-    }
-
-    async fn call_mcp_tool_with_caller(
-        &self,
-        _params: McpToolCallWithCallerParams,
-    ) -> Result<McpToolCallResponse, RuntimeCoreError> {
-        Err(requires_current("mcpTool/callWithCaller"))
-    }
-
     async fn list_mcp_prompts(&self) -> Result<McpPromptListResponse, RuntimeCoreError> {
         Ok(McpPromptListResponse::default())
     }
@@ -136,11 +125,11 @@ pub trait McpAppDataSource: Send + Sync {
         Ok(McpResourceListResponse::default())
     }
 
-    async fn read_mcp_resource(
+    async fn read_mcp_server_resource(
         &self,
-        _params: McpResourceReadParams,
-    ) -> Result<McpResourceReadResponse, RuntimeCoreError> {
-        Err(requires_current("mcpResource/read"))
+        _params: McpServerResourceReadParams,
+    ) -> Result<McpServerResourceReadResponse, RuntimeCoreError> {
+        Err(requires_current("mcpServer/resource/read"))
     }
 
     async fn subscribe_mcp_resource(

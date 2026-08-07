@@ -168,8 +168,6 @@ pub enum AppServerRequestMethod {
     WorkspaceProjectPathResolve,
     #[serde(rename = "workspace/ensureReady")]
     WorkspaceEnsureReady,
-    #[serde(rename = "skill/list")]
-    SkillList,
     #[serde(rename = "skill/read")]
     SkillRead,
     #[serde(rename = "skillManagement/list")]
@@ -456,18 +454,12 @@ pub enum AppServerRequestMethod {
     McpToolListForContext,
     #[serde(rename = "mcpTool/search")]
     McpToolSearch,
-    #[serde(rename = "mcpTool/call")]
-    McpToolCall,
-    #[serde(rename = "mcpTool/callWithCaller")]
-    McpToolCallWithCaller,
     #[serde(rename = "mcpPrompt/list")]
     McpPromptList,
     #[serde(rename = "mcpPrompt/get")]
     McpPromptGet,
     #[serde(rename = "mcpResource/list")]
     McpResourceList,
-    #[serde(rename = "mcpResource/read")]
-    McpResourceRead,
     #[serde(rename = "mcpResource/subscribe")]
     McpResourceSubscribe,
     #[serde(rename = "mcpResource/unsubscribe")]
@@ -652,7 +644,6 @@ impl AppServerRequestMethod {
             Self::WorkspaceProjectsRootRead => METHOD_WORKSPACE_PROJECTS_ROOT_READ,
             Self::WorkspaceProjectPathResolve => METHOD_WORKSPACE_PROJECT_PATH_RESOLVE,
             Self::WorkspaceEnsureReady => METHOD_WORKSPACE_ENSURE_READY,
-            Self::SkillList => METHOD_SKILL_LIST,
             Self::SkillRead => METHOD_SKILL_READ,
             Self::SkillManagementList => METHOD_SKILL_MANAGEMENT_LIST,
             Self::SkillManagementInstall => METHOD_SKILL_MANAGEMENT_INSTALL,
@@ -804,12 +795,9 @@ impl AppServerRequestMethod {
             Self::McpToolList => METHOD_MCP_TOOL_LIST,
             Self::McpToolListForContext => METHOD_MCP_TOOL_LIST_FOR_CONTEXT,
             Self::McpToolSearch => METHOD_MCP_TOOL_SEARCH,
-            Self::McpToolCall => METHOD_MCP_TOOL_CALL,
-            Self::McpToolCallWithCaller => METHOD_MCP_TOOL_CALL_WITH_CALLER,
             Self::McpPromptList => METHOD_MCP_PROMPT_LIST,
             Self::McpPromptGet => METHOD_MCP_PROMPT_GET,
             Self::McpResourceList => METHOD_MCP_RESOURCE_LIST,
-            Self::McpResourceRead => METHOD_MCP_RESOURCE_READ,
             Self::McpResourceSubscribe => METHOD_MCP_RESOURCE_SUBSCRIBE,
             Self::McpResourceUnsubscribe => METHOD_MCP_RESOURCE_UNSUBSCRIBE,
             Self::ProjectMemoryRead => METHOD_PROJECT_MEMORY_READ,
@@ -939,7 +927,6 @@ impl AppServerRequestMethod {
             METHOD_WORKSPACE_PROJECTS_ROOT_READ => Some(Self::WorkspaceProjectsRootRead),
             METHOD_WORKSPACE_PROJECT_PATH_RESOLVE => Some(Self::WorkspaceProjectPathResolve),
             METHOD_WORKSPACE_ENSURE_READY => Some(Self::WorkspaceEnsureReady),
-            METHOD_SKILL_LIST => Some(Self::SkillList),
             METHOD_SKILL_READ => Some(Self::SkillRead),
             METHOD_SKILL_MANAGEMENT_LIST => Some(Self::SkillManagementList),
             METHOD_SKILL_MANAGEMENT_INSTALL => Some(Self::SkillManagementInstall),
@@ -1101,12 +1088,9 @@ impl AppServerRequestMethod {
             METHOD_MCP_TOOL_LIST => Some(Self::McpToolList),
             METHOD_MCP_TOOL_LIST_FOR_CONTEXT => Some(Self::McpToolListForContext),
             METHOD_MCP_TOOL_SEARCH => Some(Self::McpToolSearch),
-            METHOD_MCP_TOOL_CALL => Some(Self::McpToolCall),
-            METHOD_MCP_TOOL_CALL_WITH_CALLER => Some(Self::McpToolCallWithCaller),
             METHOD_MCP_PROMPT_LIST => Some(Self::McpPromptList),
             METHOD_MCP_PROMPT_GET => Some(Self::McpPromptGet),
             METHOD_MCP_RESOURCE_LIST => Some(Self::McpResourceList),
-            METHOD_MCP_RESOURCE_READ => Some(Self::McpResourceRead),
             METHOD_MCP_RESOURCE_SUBSCRIBE => Some(Self::McpResourceSubscribe),
             METHOD_MCP_RESOURCE_UNSUBSCRIBE => Some(Self::McpResourceUnsubscribe),
             METHOD_PROJECT_MEMORY_READ => Some(Self::ProjectMemoryRead),
@@ -1431,10 +1415,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_WORKSPACE_ENSURE_READY,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_SKILL_LIST,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
@@ -2014,14 +1994,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
-        method: METHOD_MCP_TOOL_CALL,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_MCP_TOOL_CALL_WITH_CALLER,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
         method: METHOD_MCP_PROMPT_LIST,
         kind: AppServerMethodKind::Request,
     },
@@ -2031,10 +2003,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_MCP_RESOURCE_LIST,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_MCP_RESOURCE_READ,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {

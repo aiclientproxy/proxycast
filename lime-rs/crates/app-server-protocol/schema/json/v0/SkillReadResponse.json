@@ -9,20 +9,6 @@
       ],
       "type": "string"
     },
-    "SkillDependencies": {
-      "properties": {
-        "tools": {
-          "items": {
-            "$ref": "#/$defs/SkillToolDependency"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "tools"
-      ],
-      "type": "object"
-    },
     "SkillDetail": {
       "properties": {
         "markdownContent": {
@@ -45,7 +31,21 @@
       ],
       "type": "object"
     },
-    "SkillInterface": {
+    "SkillDetailDependencies": {
+      "properties": {
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/SkillDetailToolDependency"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "tools"
+      ],
+      "type": "object"
+    },
+    "SkillDetailInterface": {
       "properties": {
         "argumentHint": {
           "type": [
@@ -75,6 +75,34 @@
       "required": [
         "displayName",
         "executionMode"
+      ],
+      "type": "object"
+    },
+    "SkillDetailScope": {
+      "enum": [
+        "app",
+        "other",
+        "project",
+        "user"
+      ],
+      "type": "string"
+    },
+    "SkillDetailToolDependency": {
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "required",
+        "type",
+        "value"
       ],
       "type": "object"
     },
@@ -110,15 +138,6 @@
       ],
       "type": "object"
     },
-    "SkillScope": {
-      "enum": [
-        "app",
-        "other",
-        "project",
-        "user"
-      ],
-      "type": "string"
-    },
     "SkillSource": {
       "enum": [
         "app",
@@ -140,7 +159,7 @@
           "type": "array"
         },
         "dependencies": {
-          "$ref": "#/$defs/SkillDependencies"
+          "$ref": "#/$defs/SkillDetailDependencies"
         },
         "description": {
           "type": "string"
@@ -149,7 +168,7 @@
           "type": "boolean"
         },
         "interface": {
-          "$ref": "#/$defs/SkillInterface"
+          "$ref": "#/$defs/SkillDetailInterface"
         },
         "locator": {
           "$ref": "#/$defs/SkillLocator"
@@ -161,7 +180,7 @@
           "$ref": "#/$defs/SkillPolicy"
         },
         "scope": {
-          "$ref": "#/$defs/SkillScope"
+          "$ref": "#/$defs/SkillDetailScope"
         },
         "skillId": {
           "type": "string"
@@ -183,25 +202,6 @@
         "scope",
         "skillId",
         "source"
-      ],
-      "type": "object"
-    },
-    "SkillToolDependency": {
-      "properties": {
-        "required": {
-          "type": "boolean"
-        },
-        "type": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "required",
-        "type",
-        "value"
       ],
       "type": "object"
     },

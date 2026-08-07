@@ -17,12 +17,12 @@ legacy 同义命令冒充协议对齐。矩阵覆盖 `clientRequest`、`serverRe
 
 ## 当前盘点
 
-| 状态                     | 数量 | 裁决                                                                                                                                                                                                                                                             |
-| ------------------------ | ---: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `implemented`            |   76 | 连接握手、核心 Thread/Turn/Item、durable ordered Thread Section、thread subscription/lifecycle/content search/raw item injection/background terminals/elicitation/Guardian continuation、Plugin Search、typed approval/MCP server request 与 model control plane |
-| `planned`                |  109 | 其余 Plugins、process/fs、config、Hooks、Skills/Apps、review 与 Windows sandbox                                                                                                                                                                                  |
-| `product-scope-excluded` |   35 | Codex account/commerce、attestation、remote control、test-only、internal raw response、deprecated surface，以及只表达单一全局 Provider 的 capability read                                                                                                        |
-| 合计                     |  220 | `136` client request、`11` server request、`72` server notification、`1` client notification                                                                                                                                                                     |
+| 状态                     | 数量 | 裁决                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | ---: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `implemented`            |   87 | 连接握手、核心 Thread/Turn/Item、durable ordered Thread Section、thread subscription/lifecycle/content search/raw item injection/background terminals/elicitation/Guardian continuation、Plugin Search、Hook discovery、Skills list/config/extra roots/watcher、Apps exact catalog/read/installed 与 typed `app/list/updated` watcher、exact MCP resource/tool request、typed approval/MCP server request 与 model control plane |
+| `planned`                |   98 | 其余 Plugins、process/fs、config、review 与 Windows sandbox                                                                                                                                                                                                                                                                                                                                                                      |
+| `product-scope-excluded` |   35 | Codex account/commerce、attestation、remote control、test-only、internal raw response、deprecated surface，以及只表达单一全局 Provider 的 capability read                                                                                                                                                                                                                                                                        |
+| 合计                     |  220 | `136` client request、`11` server request、`72` server notification、`1` client notification                                                                                                                                                                                                                                                                                                                                     |
 
 `implemented` 只说明 method boundary 已存在并接入 current owner，不代表字段、恢复、GUI 或 Gate B 已全面 parity。
 字段和 lifecycle 缺口继续由 Item inventory、gap register 与对应执行切片管理。
@@ -37,6 +37,10 @@ legacy 同义命令冒充协议对齐。矩阵覆盖 `clientRequest`、`serverRe
 6. `modelProvider/capabilities/read` 读取 Codex 单一全局 Provider；Lime 的 provider/model 选择绑定 Thread route。该空参数方法没有产品消费者，不能把静态全局值冒充当前 route truth，归入 excluded；能力继续由 executable model catalog、resolved route 与 provider lowering 承接。
 7. Codex HEAD 的 durable ordered Thread Section 已进入 Lime current 主链：section/store/order、五个 exact method、typed client、冷启动恢复与 Desktop 分组/置顶均消费同一事实源。旧 `isPinned` metadata、Renderer 时间重排与 localStorage 收藏为 `dead / deleted / forbidden-to-restore`。
 8. `plugin/search` 已使用 exact Codex method、params/result wire、typed client 与公共 JSON-RPC 证据接入本地 Plugin catalog owner；Codex remote catalog、share、watcher 和 readiness 仍由其余 planned method 承接，不由该 method 冒充完成。
+9. `hooks/list` 已接入 `tool-runtime` 唯一 discovery/trust owner、exact v2 contract、公共 JSON-RPC、command Hook sampling lifecycle、canonical Hook Item 恢复与真实 Electron Gate B；旧 raw config、默认信任、空 reporter 和 Renderer drift fallback 为 `dead / deleted / forbidden-to-restore`。
+10. `skills/list` 已接入 `lime-skills::AgentSkillSnapshot` 唯一 discovery owner、exact `cwds + forceReload -> data[{cwd,skills,errors}]` contract、公共 JSON-RPC、typed clients 与 Renderer catalog projection；`skills/changed {}` 通过真实 Electron Gate B 驱动 GUI 自动刷新。singular `skill/list`、`SkillListResponse` 与 `get_local_skills_for_app` 为 `dead / deleted / forbidden-to-restore`。
+11. `skills/config/write` 与 `skills/extraRoots/set` 已接入 exact v2 contract、公共 JSON-RPC、typed clients 与同一 `lime-skills::AgentSkillSnapshot` owner。Desktop 将用户级启停配置持久化到 Lime YAML `skills.config`，extra roots 只做进程级原子替换；成功设置 roots 发送 `skills/changed {}`。两者不引入 Codex TUI 或第二套管理 catalog。
+12. `app/list`、`app/read`、`app/installed` 与 `app/list/updated` 已接入 exact v2 contract、公共 JSON-RPC、typed package client 和 Desktop Apps gateway。Apps catalog 唯一复用 Plugin catalog；本地 Plugin 没有 hosted connector 的 model-visible tool snapshot 时，`callable` 必须为 `false`，不能冒充 readiness 或模型可调用能力。
 
 ## 守卫
 
@@ -58,12 +62,17 @@ blocker，但不影响这两个 method boundary 的 implemented 分类。多模�
 notification、schema 与 generated client。reroute 只接受 first-party requested/server mismatch，使用
 `highRiskCyberActivity`，并通过 transient sink 实时投影而不进入 EventLog/resume item replay；普通 provider
 fallback 继续只产生 `routing.fallback.applied`。下一刀处理 provider adapter/hosted tool 闭环、
-Skills/Plugins/Apps watcher/readiness 与 Hook lifecycle。每完成一个
+Plugins/Apps watcher/readiness。每完成一个
 method，必须同步 exact protocol、handler、typed client、fixture/evidence，再将其移入 `implemented`。
 Codex 已明确将 `thread/rollback` 标记为即将删除，Lime 不新增该公开方法。当前产品范围完成度为
-`76 / 185 = 41.1%`。相对上一基线新增的 `6` 个 client request 已全部进入 `implemented`：五个 durable
-Thread Section 管理/移动 method 与 exact `plugin/search`。现有自定义 Plugin list/read/install 仍不能冒充其余
-Codex Plugin method parity。
+`87 / 185 = 47.0%`。相对上一切片新增 Apps 的三个 client request 与一个 server notification，以及
+`mcpServer/resource/read` 与 `mcpServer/tool/call` 两个 client request，
+均有 exact contract、公共 JSON-RPC 和 typed client evidence。resource read 的 `threadId` 可选；存在时只读取
+对应 Session-owned MCP runtime。tool call 强制真实 `threadId`，经 `ExecutionBackend -> AgentRuntimeState ->
+McpThreadRuntime` 执行，不经过全局 management manager。Settings 只浏览工具，不伪造 Thread owner。
+此前相对注册表基线新增的 `13` 个方向已全部进入 `implemented`：五个 durable Thread Section
+管理/移动 method、exact `plugin/search`、`hooks/list`、三个 Apps client request、Apps notification 与这两个 MCP method。现有自定义 Plugin
+list/read/install 仍不能冒充其余 Codex Plugin method parity。
 Gemini GenerateContent transport 虽已完成 request/stream/tool/history
 闭环，但没有新增 exact Codex App Server method，因此不改变本矩阵计数；不得把 `37.8%` 解释成多模型或
 整个 Codex 对齐工程的完成度。

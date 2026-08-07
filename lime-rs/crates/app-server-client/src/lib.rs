@@ -2,6 +2,8 @@ pub use app_server_protocol::app_server_method_catalog;
 pub use app_server_protocol::is_app_server_notification_method;
 pub use app_server_protocol::is_app_server_request_method;
 pub use app_server_protocol::protocol::v2::ServerNotification;
+pub use app_server_protocol::protocol::v2::METHOD_HOOKS_LIST;
+pub use app_server_protocol::protocol::v2::METHOD_SKILLS_LIST;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_ARCHIVE;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN;
@@ -24,7 +26,10 @@ pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNARCHIVE;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNSUBSCRIBE;
 use app_server_protocol::protocol::v2::NOTIFICATION_METHODS;
 pub use app_server_protocol::protocol::v2::{
-    SortDirection, ThreadApproveGuardianDeniedActionParams,
+    HookErrorInfo, HookMetadata, HookOutputEntry, HookOutputEntryKind, HookRunSummary,
+    HooksListEntry, HooksListParams, HooksListResponse, SkillDependencies, SkillErrorInfo,
+    SkillInterface, SkillMetadata, SkillScope, SkillToolDependency, SkillsListEntry,
+    SkillsListParams, SkillsListResponse, SortDirection, ThreadApproveGuardianDeniedActionParams,
     ThreadApproveGuardianDeniedActionResponse, ThreadArchiveParams, ThreadArchiveResponse,
     ThreadBackgroundTerminal, ThreadBackgroundTerminalsCleanParams,
     ThreadBackgroundTerminalsCleanResponse, ThreadBackgroundTerminalsListParams,
@@ -161,8 +166,6 @@ pub use app_server_protocol::McpPromptGetParams;
 pub use app_server_protocol::McpPromptGetResponse;
 pub use app_server_protocol::McpPromptListResponse;
 pub use app_server_protocol::McpResourceListResponse;
-pub use app_server_protocol::McpResourceReadParams;
-pub use app_server_protocol::McpResourceReadResponse;
 pub use app_server_protocol::McpResourceSubscribeParams;
 pub use app_server_protocol::McpResourceSubscriptionResponse;
 pub use app_server_protocol::McpResourceUnsubscribeParams;
@@ -177,9 +180,6 @@ pub use app_server_protocol::McpServerStartParams;
 pub use app_server_protocol::McpServerStatusListResponse;
 pub use app_server_protocol::McpServerStopParams;
 pub use app_server_protocol::McpServerUpdateParams;
-pub use app_server_protocol::McpToolCallParams;
-pub use app_server_protocol::McpToolCallResponse;
-pub use app_server_protocol::McpToolCallWithCallerParams;
 pub use app_server_protocol::McpToolListForContextParams;
 pub use app_server_protocol::McpToolListResponse;
 pub use app_server_protocol::McpToolSearchParams;
@@ -234,7 +234,6 @@ use app_server_protocol::RequestId;
 pub use app_server_protocol::ServerDiagnosticsResponse;
 pub use app_server_protocol::SkillDownloadInstallParams;
 pub use app_server_protocol::SkillDownloadInstallResponse;
-pub use app_server_protocol::SkillListResponse;
 pub use app_server_protocol::SkillLocalDetailInspectParams;
 pub use app_server_protocol::SkillLocalDetailInspectResponse;
 pub use app_server_protocol::SkillLocalRenameParams;
@@ -372,7 +371,6 @@ pub use app_server_protocol::METHOD_LOG_PERSISTED_TAIL;
 pub use app_server_protocol::METHOD_MCP_PROMPT_GET;
 pub use app_server_protocol::METHOD_MCP_PROMPT_LIST;
 pub use app_server_protocol::METHOD_MCP_RESOURCE_LIST;
-pub use app_server_protocol::METHOD_MCP_RESOURCE_READ;
 pub use app_server_protocol::METHOD_MCP_RESOURCE_SUBSCRIBE;
 pub use app_server_protocol::METHOD_MCP_RESOURCE_UNSUBSCRIBE;
 pub use app_server_protocol::METHOD_MCP_SERVER_CREATE;
@@ -385,8 +383,6 @@ pub use app_server_protocol::METHOD_MCP_SERVER_STATUS_LIST;
 pub use app_server_protocol::METHOD_MCP_SERVER_STOP;
 pub use app_server_protocol::METHOD_MCP_SERVER_SYNC_ALL_TO_LIVE;
 pub use app_server_protocol::METHOD_MCP_SERVER_UPDATE;
-pub use app_server_protocol::METHOD_MCP_TOOL_CALL;
-pub use app_server_protocol::METHOD_MCP_TOOL_CALL_WITH_CALLER;
 pub use app_server_protocol::METHOD_MCP_TOOL_LIST;
 pub use app_server_protocol::METHOD_MCP_TOOL_LIST_FOR_CONTEXT;
 pub use app_server_protocol::METHOD_MCP_TOOL_SEARCH;
@@ -426,7 +422,6 @@ pub use app_server_protocol::METHOD_PLUGIN_UI_RUNTIME_START;
 pub use app_server_protocol::METHOD_PLUGIN_UI_RUNTIME_STATUS;
 pub use app_server_protocol::METHOD_PLUGIN_UI_RUNTIME_STOP;
 pub use app_server_protocol::METHOD_PROJECT_MEMORY_READ;
-pub use app_server_protocol::METHOD_SKILL_LIST;
 pub use app_server_protocol::METHOD_SKILL_LOCAL_DETAIL_INSPECT;
 pub use app_server_protocol::METHOD_SKILL_LOCAL_RENAME;
 pub use app_server_protocol::METHOD_SKILL_MARKETPLACE_INSTALL;
@@ -970,8 +965,12 @@ impl AppServerClient {
         self.typed_request(typed::execute_browser_session_action(params))
     }
 
-    pub fn list_skills(&mut self) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::list_skills())
+    pub fn list_skills(&mut self, params: SkillsListParams) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::list_skills(params))
+    }
+
+    pub fn list_hooks(&mut self, params: HooksListParams) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::list_hooks(params))
     }
 
     pub fn read_skill(&mut self, params: SkillReadParams) -> Result<JsonRpcRequest, ClientError> {
@@ -1453,20 +1452,6 @@ impl AppServerClient {
         self.typed_request(typed::search_mcp_tools(params))
     }
 
-    pub fn call_mcp_tool(
-        &mut self,
-        params: McpToolCallParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::call_mcp_tool(params))
-    }
-
-    pub fn call_mcp_tool_with_caller(
-        &mut self,
-        params: McpToolCallWithCallerParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::call_mcp_tool_with_caller(params))
-    }
-
     pub fn list_mcp_prompts(&mut self) -> Result<JsonRpcRequest, ClientError> {
         self.typed_request(typed::list_mcp_prompts())
     }
@@ -1480,13 +1465,6 @@ impl AppServerClient {
 
     pub fn list_mcp_resources(&mut self) -> Result<JsonRpcRequest, ClientError> {
         self.typed_request(typed::list_mcp_resources())
-    }
-
-    pub fn read_mcp_resource(
-        &mut self,
-        params: McpResourceReadParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::read_mcp_resource(params)?)
     }
 
     pub fn subscribe_mcp_resource(
@@ -2063,8 +2041,12 @@ pub mod typed {
         TypedRequest::new(METHOD_BROWSER_SESSION_ACTION_EXECUTE, params)
     }
 
-    pub fn list_skills() -> TypedRequest<serde_json::Value> {
-        TypedRequest::new(METHOD_SKILL_LIST, serde_json::json!({}))
+    pub fn list_skills(params: SkillsListParams) -> TypedRequest<SkillsListParams> {
+        TypedRequest::new(METHOD_SKILLS_LIST, params)
+    }
+
+    pub fn list_hooks(params: HooksListParams) -> TypedRequest<HooksListParams> {
+        TypedRequest::new(METHOD_HOOKS_LIST, params)
     }
 
     pub fn read_skill(params: SkillReadParams) -> TypedRequest<SkillReadParams> {
@@ -2465,16 +2447,6 @@ pub mod typed {
         TypedRequest::new(METHOD_MCP_TOOL_SEARCH, params)
     }
 
-    pub fn call_mcp_tool(params: McpToolCallParams) -> TypedRequest<McpToolCallParams> {
-        TypedRequest::new(METHOD_MCP_TOOL_CALL, params)
-    }
-
-    pub fn call_mcp_tool_with_caller(
-        params: McpToolCallWithCallerParams,
-    ) -> TypedRequest<McpToolCallWithCallerParams> {
-        TypedRequest::new(METHOD_MCP_TOOL_CALL_WITH_CALLER, params)
-    }
-
     pub fn list_mcp_prompts() -> TypedRequest<serde_json::Value> {
         TypedRequest::new(METHOD_MCP_PROMPT_LIST, serde_json::json!({}))
     }
@@ -2488,13 +2460,6 @@ pub mod typed {
 
     pub fn list_mcp_resources() -> TypedRequest<serde_json::Value> {
         TypedRequest::new(METHOD_MCP_RESOURCE_LIST, serde_json::json!({}))
-    }
-
-    pub fn read_mcp_resource(
-        params: McpResourceReadParams,
-    ) -> Result<TypedRequest<McpResourceReadParams>, ClientError> {
-        validate_mcp_resource_target(&params.server, &params.uri)?;
-        Ok(TypedRequest::new(METHOD_MCP_RESOURCE_READ, params))
     }
 
     pub fn subscribe_mcp_resource(
@@ -3245,19 +3210,6 @@ mod tests {
                 limit: 5,
             })
             .expect("searched tools");
-        let tool_call = client
-            .call_mcp_tool(McpToolCallParams {
-                tool_name: "filesystem.read".to_string(),
-                arguments: json!({ "path": "/workspace/README.md" }),
-            })
-            .expect("tool call");
-        let caller_tool_call = client
-            .call_mcp_tool_with_caller(McpToolCallWithCallerParams {
-                tool_name: "filesystem.read".to_string(),
-                arguments: json!({ "path": "/workspace/README.md" }),
-                caller: Some("agent-chat".to_string()),
-            })
-            .expect("caller tool call");
         let prompts = client.list_mcp_prompts().expect("prompts");
         let prompt = client
             .get_mcp_prompt(McpPromptGetParams {
@@ -3270,14 +3222,6 @@ mod tests {
             })
             .expect("prompt");
         let resources = client.list_mcp_resources().expect("resources");
-        let resource = client
-            .read_mcp_resource(McpResourceReadParams {
-                server: "filesystem".to_string(),
-                uri: "file:///workspace/README.md".to_string(),
-                session_id: None,
-                thread_id: None,
-            })
-            .expect("resource");
         let resource_subscription = client
             .subscribe_mcp_resource(McpResourceSubscribeParams {
                 server: "filesystem".to_string(),
@@ -3338,23 +3282,6 @@ mod tests {
             searched_tools.params.expect("params"),
             json!({ "query": "file", "caller": "agent-chat", "limit": 5 })
         );
-        assert_eq!(tool_call.method, METHOD_MCP_TOOL_CALL);
-        assert_eq!(
-            tool_call.params.expect("params"),
-            json!({
-                "toolName": "filesystem.read",
-                "arguments": { "path": "/workspace/README.md" },
-            })
-        );
-        assert_eq!(caller_tool_call.method, METHOD_MCP_TOOL_CALL_WITH_CALLER);
-        assert_eq!(
-            caller_tool_call.params.expect("params"),
-            json!({
-                "toolName": "filesystem.read",
-                "arguments": { "path": "/workspace/README.md" },
-                "caller": "agent-chat",
-            })
-        );
         assert_eq!(prompts.method, METHOD_MCP_PROMPT_LIST);
         assert_eq!(prompts.params.expect("params"), json!({}));
         assert_eq!(prompt.method, METHOD_MCP_PROMPT_GET);
@@ -3368,14 +3295,6 @@ mod tests {
         );
         assert_eq!(resources.method, METHOD_MCP_RESOURCE_LIST);
         assert_eq!(resources.params.expect("params"), json!({}));
-        assert_eq!(resource.method, METHOD_MCP_RESOURCE_READ);
-        assert_eq!(
-            resource.params.expect("params"),
-            json!({
-                "server": "filesystem",
-                "uri": "file:///workspace/README.md"
-            })
-        );
         assert_eq!(resource_subscription.method, METHOD_MCP_RESOURCE_SUBSCRIBE);
         assert_eq!(
             resource_subscription.params.expect("params"),
@@ -3398,15 +3317,8 @@ mod tests {
     }
 
     #[test]
-    fn mcp_resource_helpers_reject_empty_exact_target() {
+    fn mcp_resource_subscription_helpers_reject_empty_target() {
         let mut client = AppServerClient::new();
-
-        let read = client.read_mcp_resource(McpResourceReadParams {
-            server: " ".to_string(),
-            uri: "docs://readme".to_string(),
-            session_id: None,
-            thread_id: None,
-        });
         let subscribe = client.subscribe_mcp_resource(McpResourceSubscribeParams {
             server: "docs".to_string(),
             uri: " ".to_string(),
@@ -3416,7 +3328,6 @@ mod tests {
             uri: " ".to_string(),
         });
 
-        assert!(matches!(read, Err(ClientError::InvalidParams(_))));
         assert!(matches!(subscribe, Err(ClientError::InvalidParams(_))));
         assert!(matches!(unsubscribe, Err(ClientError::InvalidParams(_))));
     }
@@ -3792,7 +3703,12 @@ mod tests {
     fn skill_helpers_use_current_methods() {
         let mut client = AppServerClient::new();
 
-        let skills = client.list_skills().expect("skills");
+        let skills = client
+            .list_skills(SkillsListParams {
+                cwds: vec![std::path::PathBuf::from("/workspace/project")],
+                force_reload: true,
+            })
+            .expect("skills");
         let skill = client
             .read_skill(SkillReadParams {
                 skill_id: "project:article-writer".to_string(),
@@ -3871,8 +3787,11 @@ mod tests {
             })
             .expect("bindings");
 
-        assert_eq!(skills.method, METHOD_SKILL_LIST);
-        assert_eq!(skills.params.expect("params"), json!({}));
+        assert_eq!(skills.method, METHOD_SKILLS_LIST);
+        assert_eq!(
+            skills.params.expect("params"),
+            json!({"cwds":["/workspace/project"],"forceReload":true})
+        );
         assert_eq!(skill.method, METHOD_SKILL_READ);
         assert_eq!(
             skill.params.expect("params"),
@@ -5110,7 +5029,7 @@ mod tests {
         assert!(methods.contains(&METHOD_BROWSER_SESSION_CLOSE));
         assert!(methods.contains(&METHOD_BROWSER_SESSION_EVENT_LIST));
         assert!(methods.contains(&METHOD_BROWSER_SESSION_ACTION_EXECUTE));
-        assert!(methods.contains(&METHOD_SKILL_LIST));
+        assert!(methods.contains(&METHOD_SKILLS_LIST));
         assert!(methods.contains(&METHOD_SKILL_READ));
         assert!(methods.contains(&METHOD_SKILL_PACKAGE_LOCAL_INSPECT));
         assert!(methods.contains(&METHOD_SKILL_PACKAGE_LOCAL_INSTALL));
@@ -5177,7 +5096,7 @@ mod tests {
         assert!(is_app_server_request_method(
             METHOD_BROWSER_SESSION_ACTION_EXECUTE
         ));
-        assert!(is_app_server_request_method(METHOD_SKILL_LIST));
+        assert!(is_app_server_request_method(METHOD_SKILLS_LIST));
         assert!(is_app_server_request_method(METHOD_PLUGIN_INSTALLED_LIST));
         assert!(is_app_server_request_method(METHOD_KNOWLEDGE_PACK_LIST));
         assert!(is_app_server_request_method(METHOD_KNOWLEDGE_PACK_READ));

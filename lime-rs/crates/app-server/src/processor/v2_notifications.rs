@@ -8,6 +8,7 @@ use std::collections::HashSet;
 mod command;
 pub(crate) mod error;
 mod file_change;
+mod hook;
 mod mcp;
 mod plan;
 mod thread_status;
@@ -33,6 +34,8 @@ pub(crate) struct V2NotificationProjector {
     completed_file_change_item_ids: HashSet<String>,
     started_mcp_item_ids: HashSet<String>,
     completed_mcp_item_ids: HashSet<String>,
+    started_hook_run_ids: HashSet<String>,
+    completed_hook_run_ids: HashSet<String>,
     terminal_error_turn_ids: HashSet<String>,
     thread_status: thread_status::ThreadStatusProjector,
 }
@@ -87,6 +90,14 @@ impl V2NotificationProjector {
             "thread.goal.continuation" => return EventProjection::Direct(Vec::new()),
             "thread.settings.updated" => return self.project_thread_settings_updated(event),
             "provider.usage" => return self.project_token_usage(event),
+            "hook.started" => return hook::project_started(&mut self.started_hook_run_ids, event),
+            "hook.completed" => {
+                return hook::project_completed(
+                    &self.started_hook_run_ids,
+                    &mut self.completed_hook_run_ids,
+                    event,
+                )
+            }
             "item.started" | "command.started" => self.project_item(event, false),
             "item.completed" | "command.exited" => self.project_item(event, true),
             "context.compaction.started" => self.project_item(event, false),

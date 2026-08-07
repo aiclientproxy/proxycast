@@ -392,13 +392,13 @@ async fn runtime_backend_tool_inventory_projects_plugin_mcp_targets() {
     assert_eq!(
         targets[0]["callProofRequest"],
         json!({
-            "method": "mcpTool/callWithCaller",
+            "method": "mcpServer/tool/call",
             "params": {
-                "toolName": "mcp__context7__resolve-library-id",
+                "server": "context7",
+                "tool": "resolve-library-id",
                 "arguments": {
                     "libraryName": "react"
-                },
-                "caller": "plugin:docs-plugin"
+                }
             },
             "reason": "tool_call_proof",
             "status": "candidate"

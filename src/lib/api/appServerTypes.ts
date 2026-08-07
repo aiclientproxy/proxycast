@@ -122,6 +122,26 @@ export type AppServerAgentSessionListResponse =
 export type AppServerAgentSessionReadParams = protocol.AgentSessionReadParams;
 export type AppServerMediaReadParams = protocol.MediaReadParams;
 export type AppServerMediaReadResponse = protocol.MediaReadResponse;
+export type AppServerAppsListParams = protocol.AppsListParams;
+export type AppServerAppsListResponse = protocol.AppsListResponse;
+export type AppServerAppsInstalledParams = protocol.AppsInstalledParams;
+export type AppServerAppsInstalledResponse = protocol.AppsInstalledResponse;
+export type AppServerAppsReadParams = protocol.AppsReadParams;
+export type AppServerAppsReadResponse = protocol.AppsReadResponse;
+export type AppServerAppInfo = protocol.AppInfo;
+export type AppServerInstalledApp = protocol.InstalledApp;
+export type AppServerConnectorMetadata = protocol.ConnectorMetadata;
+export type AppServerAppListUpdatedNotification =
+  protocol.AppListUpdatedNotification;
+export type AppServerSkillsListParams = protocol.SkillsListParams;
+export type AppServerSkillsListResponse = protocol.SkillsListResponse;
+export type AppServerSkillsExtraRootsSetParams =
+  protocol.SkillsExtraRootsSetParams;
+export type AppServerSkillsExtraRootsSetResponse =
+  protocol.SkillsExtraRootsSetResponse;
+export type AppServerSkillsConfigWriteParams = protocol.SkillsConfigWriteParams;
+export type AppServerSkillsConfigWriteResponse =
+  protocol.SkillsConfigWriteResponse;
 export type AppServerPluginCatalogListParams = protocol.PluginCatalogListParams;
 export type AppServerPluginCatalogListResponse =
   protocol.PluginCatalogListResponse;

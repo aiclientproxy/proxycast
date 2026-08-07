@@ -3,7 +3,6 @@ import { app, shell } from "./electronRuntime";
 import {
   METHOD_MODEL_LIST,
   METHOD_MODEL_PROVIDER_LIST,
-  METHOD_SKILL_LIST,
   METHOD_WORKSPACE_BY_PATH_READ,
   METHOD_WORKSPACE_DEFAULT_ENSURE,
   METHOD_WORKSPACE_DEFAULT_READ,
@@ -18,7 +17,6 @@ import {
   type ModelListResponse,
   type ModelProviderListResponse,
   type WorkspaceEnsureProjectResponse,
-  type SkillListResponse,
   type WorkspaceEnsureReadyResponse,
   type WorkspaceListResponse,
   type WorkspaceProjectPathResolveResponse,
@@ -198,8 +196,6 @@ export class ElectronHostCommands {
         return await this.#ensureDefaultWorkspaceReady();
       case "workspace_ensure_ready":
         return await this.#ensureWorkspaceReady(args);
-      case "get_local_skills_for_app":
-        return await this.#listLocalSkillsForApp(args);
       case "voice_models_list_catalog":
         return this.#voiceModelHost.listCatalog();
       case "voice_models_get_install_state":
@@ -609,17 +605,6 @@ export class ElectronHostCommands {
     return response.result;
   }
 
-  async #listLocalSkillsForApp(args: HostArgs): Promise<unknown[]> {
-    const request = readRequest(args);
-    const appName = readString(request, "app") ?? "lime";
-    if (appName !== "lime") {
-      return [];
-    }
-    const response =
-      await this.#appServerRequest<SkillListResponse>(METHOD_SKILL_LIST);
-    return response.skills.map(skillToLocalSkill);
-  }
-
   async #readConfig(): Promise<Record<string, unknown>> {
     return await this.#appConfigHost.readConfig();
   }
@@ -774,46 +759,6 @@ function isConfiguredProvider(
   const enabled = record.enabled !== false;
   const apiKeyCount = record.api_key_count;
   return enabled && typeof apiKeyCount === "number" && apiKeyCount > 0;
-}
-
-function skillToLocalSkill(skill: unknown): Record<string, unknown> {
-  const record = toRecord(skill) ?? {};
-  const localDirectoryPath =
-    readString(record, "local_directory_path") ??
-    readString(record, "localDirectoryPath");
-  const directory =
-    readString(record, "directory") ??
-    readString(record, "name") ??
-    readString(record, "skill_name") ??
-    "app-server-skill";
-  const name =
-    readString(record, "display_name") ??
-    readString(record, "displayName") ??
-    readString(record, "name") ??
-    readString(record, "skill_name") ??
-    directory;
-  return {
-    key: directory,
-    name,
-    description: readString(record, "description") ?? "",
-    directory,
-    localDirectoryPath,
-    installed: true,
-    sourceKind: "builtin",
-    catalogSource: "project",
-    metadata: {},
-    allowedTools: [],
-    resourceSummary: {
-      hasScripts: false,
-      hasReferences: false,
-      hasAssets: false,
-    },
-    standardCompliance: {
-      isStandard: true,
-      validationErrors: [],
-      deprecatedFields: [],
-    },
-  };
 }
 
 function toRecord(value: unknown): Record<string, unknown> | null {

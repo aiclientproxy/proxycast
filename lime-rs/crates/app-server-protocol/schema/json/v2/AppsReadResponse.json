@@ -1,0 +1,121 @@
+{
+  "$defs": {
+    "AppToolSummary": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "disabledReason": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "isEnabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "isReadOnly": {
+          "default": false,
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "description",
+        "name"
+      ],
+      "type": "object"
+    },
+    "ConnectorMetadata": {
+      "properties": {
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "distributionChannel": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "iconUrl": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "iconUrlDark": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "installUrl": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "pluginDisplayNames": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "toolSummaries": {
+          "items": {
+            "$ref": "#/$defs/AppToolSummary"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "apps": {
+      "items": {
+        "$ref": "#/$defs/ConnectorMetadata"
+      },
+      "type": "array"
+    },
+    "missingAppIds": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "apps",
+    "missingAppIds"
+  ],
+  "title": "AppsReadResponse",
+  "type": "object"
+}

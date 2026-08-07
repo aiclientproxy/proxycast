@@ -2,11 +2,12 @@ use super::unavailable;
 use super::NoopAppDataSource;
 use super::RuntimeCoreError;
 use app_server_protocol::protocol::v2::{
-    PluginCatalogEnabledSetParams, PluginCatalogEnabledSetResponse, PluginCatalogInstallParams,
-    PluginCatalogInstallResponse, PluginCatalogInstalledParams, PluginCatalogListParams,
-    PluginCatalogListResponse, PluginCatalogReadParams, PluginCatalogReadResponse,
-    PluginCatalogUninstallParams, PluginCatalogUninstallResponse, PluginSearchParams,
-    PluginSearchResponse,
+    AppsInstalledParams, AppsInstalledResponse, AppsListParams, AppsListResponse, AppsReadParams,
+    AppsReadResponse, PluginCatalogEnabledSetParams, PluginCatalogEnabledSetResponse,
+    PluginCatalogInstallParams, PluginCatalogInstallResponse, PluginCatalogInstalledParams,
+    PluginCatalogListParams, PluginCatalogListResponse, PluginCatalogReadParams,
+    PluginCatalogReadResponse, PluginCatalogUninstallParams, PluginCatalogUninstallResponse,
+    PluginSearchParams, PluginSearchResponse,
 };
 use app_server_protocol::*;
 use async_trait::async_trait;
@@ -63,6 +64,27 @@ pub trait PluginDataSource: Send + Sync {
 
     async fn list_plugin_catalog_activations(&self) -> Result<Vec<Value>, RuntimeCoreError> {
         Ok(Vec::new())
+    }
+
+    async fn list_apps(
+        &self,
+        _params: AppsListParams,
+    ) -> Result<AppsListResponse, RuntimeCoreError> {
+        Err(unavailable("app/list"))
+    }
+
+    async fn read_apps(
+        &self,
+        _params: AppsReadParams,
+    ) -> Result<AppsReadResponse, RuntimeCoreError> {
+        Err(unavailable("app/read"))
+    }
+
+    async fn list_installed_apps(
+        &self,
+        _params: AppsInstalledParams,
+    ) -> Result<AppsInstalledResponse, RuntimeCoreError> {
+        Err(unavailable("app/installed"))
     }
 
     async fn set_plugin_catalog_enabled(

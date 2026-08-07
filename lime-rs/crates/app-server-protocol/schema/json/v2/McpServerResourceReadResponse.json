@@ -1,0 +1,67 @@
+{
+  "$defs": {
+    "McpServerResourceContent": {
+      "anyOf": [
+        {
+          "properties": {
+            "_meta": true,
+            "mimeType": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "text": {
+              "type": "string"
+            },
+            "uri": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "text",
+            "uri"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "_meta": true,
+            "blob": {
+              "type": "string"
+            },
+            "mimeType": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "uri": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "blob",
+            "uri"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "Resource content returned by the Codex MCP resource/read contract."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "contents": {
+      "items": {
+        "$ref": "#/$defs/McpServerResourceContent"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "contents"
+  ],
+  "title": "McpServerResourceReadResponse",
+  "type": "object"
+}

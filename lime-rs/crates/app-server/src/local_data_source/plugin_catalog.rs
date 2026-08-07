@@ -1,11 +1,13 @@
 use app_server_protocol::protocol::v2::{
-    PluginAuthPolicy, PluginAvailability, PluginCatalogCapability, PluginCatalogDetail,
-    PluginCatalogHook, PluginCatalogInstallParams, PluginCatalogInstallResponse,
-    PluginCatalogInstalledParams, PluginCatalogListParams, PluginCatalogListResponse,
-    PluginCatalogReadParams, PluginCatalogReadResponse, PluginCatalogSummary,
-    PluginCatalogUiResource, PluginCatalogUninstallParams, PluginCatalogUninstallResponse,
-    PluginInstallPolicy, PluginInterface, PluginSearchParams, PluginSearchResponse,
-    PluginSearchResult, PluginSearchScope, PluginSource, PluginSummary,
+    AppInfo, AppsInstalledParams, AppsInstalledResponse, AppsListParams, AppsListResponse,
+    AppsReadParams, AppsReadResponse, ConnectorMetadata, InstalledApp, PluginAuthPolicy,
+    PluginAvailability, PluginCatalogCapability, PluginCatalogDetail, PluginCatalogHook,
+    PluginCatalogInstallParams, PluginCatalogInstallResponse, PluginCatalogInstalledParams,
+    PluginCatalogListParams, PluginCatalogListResponse, PluginCatalogReadParams,
+    PluginCatalogReadResponse, PluginCatalogSummary, PluginCatalogUiResource,
+    PluginCatalogUninstallParams, PluginCatalogUninstallResponse, PluginInstallPolicy,
+    PluginInterface, PluginSearchParams, PluginSearchResponse, PluginSearchResult,
+    PluginSearchScope, PluginSource, PluginSummary,
 };
 use chrono::Utc;
 use lime_mcp::{McpRuntimeServerSpec, McpServerConfig, McpServerTransport};
@@ -120,6 +122,141 @@ pub(crate) fn installed(
         plugins: summaries,
         generated_at: now_iso(),
     })
+}
+
+pub(crate) fn list_apps(
+    plugin_data_root: &Path,
+    params: AppsListParams,
+) -> Result<AppsListResponse, String> {
+    const DEFAULT_LIMIT: u32 = 50;
+    const MAX_LIMIT: u32 = 100;
+
+    let apps = app_catalog(plugin_data_root)?;
+    let offset = params
+        .cursor
+        .as_deref()
+        .unwrap_or("0")
+        .parse::<usize>()
+        .map_err(|_| "app/list cursor 必须是非负整数。".to_string())?;
+    let limit = params.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT) as usize;
+    let start = offset.min(apps.len());
+    let end = start.saturating_add(limit).min(apps.len());
+
+    Ok(AppsListResponse {
+        data: apps[start..end].to_vec(),
+        next_cursor: (end < apps.len()).then(|| end.to_string()),
+    })
+}
+
+pub(crate) fn read_apps(
+    plugin_data_root: &Path,
+    params: AppsReadParams,
+) -> Result<AppsReadResponse, String> {
+    const MAX_APP_IDS: usize = 100;
+
+    if params.app_ids.len() > MAX_APP_IDS {
+        return Err(format!(
+            "app/read appIds 最多允许 {MAX_APP_IDS} 项，实际为 {}。",
+            params.app_ids.len()
+        ));
+    }
+
+    let catalog = app_catalog(plugin_data_root)?
+        .into_iter()
+        .map(|app| (app.id.clone(), app))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut apps = Vec::new();
+    let mut missing_app_ids = Vec::new();
+
+    for app_id in params.app_ids {
+        if !seen.insert(app_id.clone()) {
+            continue;
+        }
+        let Some(app) = catalog.get(&app_id) else {
+            missing_app_ids.push(app_id);
+            continue;
+        };
+        apps.push(ConnectorMetadata {
+            id: app.id.clone(),
+            name: app.name.clone(),
+            description: app.description.clone(),
+            icon_url: app.logo_url.clone(),
+            icon_url_dark: app.logo_url_dark.clone(),
+            distribution_channel: app.distribution_channel.clone(),
+            install_url: app.install_url.clone(),
+            plugin_display_names: app.plugin_display_names.clone(),
+            tool_summaries: params.include_tools.then(Vec::new),
+        });
+    }
+
+    Ok(AppsReadResponse {
+        apps,
+        missing_app_ids,
+    })
+}
+
+pub(crate) fn installed_apps(
+    plugin_data_root: &Path,
+    _params: AppsInstalledParams,
+) -> Result<AppsInstalledResponse, String> {
+    Ok(AppsInstalledResponse {
+        apps: app_catalog(plugin_data_root)?
+            .into_iter()
+            .map(|app| InstalledApp {
+                id: app.id,
+                runtime_name: Some(app.name),
+                enabled: app.is_enabled,
+                // Local Plugin apps currently have no hosted connector tool snapshot.
+                callable: false,
+            })
+            .collect(),
+    })
+}
+
+fn app_catalog(plugin_data_root: &Path) -> Result<Vec<AppInfo>, String> {
+    let installed = installed(plugin_data_root, PluginCatalogInstalledParams::default())?;
+    let mut apps = std::collections::BTreeMap::<String, AppInfo>::new();
+
+    for plugin in installed.plugins {
+        let detail = read(
+            plugin_data_root,
+            PluginCatalogReadParams {
+                plugin_id: plugin.id.clone(),
+            },
+        )?
+        .plugin;
+
+        for capability in detail.apps {
+            let app = apps
+                .entry(capability.id.clone())
+                .or_insert_with(|| AppInfo {
+                    id: capability.id.clone(),
+                    name: capability.name.clone(),
+                    description: (!capability.description.is_empty())
+                        .then_some(capability.description.clone()),
+                    logo_url: None,
+                    logo_url_dark: None,
+                    icon_assets: None,
+                    icon_dark_assets: None,
+                    distribution_channel: Some(plugin.source.clone()),
+                    branding: None,
+                    app_metadata: None,
+                    labels: None,
+                    install_url: None,
+                    is_accessible: plugin.enabled && !capability.requires_auth,
+                    is_enabled: plugin.enabled,
+                    plugin_display_names: Vec::new(),
+                });
+            app.is_enabled |= plugin.enabled;
+            app.is_accessible |= plugin.enabled && !capability.requires_auth;
+            if !app.plugin_display_names.contains(&plugin.name) {
+                app.plugin_display_names.push(plugin.name.clone());
+            }
+        }
+    }
+
+    Ok(apps.into_values().collect())
 }
 
 pub(crate) fn search(

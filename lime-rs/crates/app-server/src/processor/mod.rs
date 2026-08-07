@@ -1,4 +1,5 @@
 mod agent_session;
+mod app;
 mod artifact;
 mod automation;
 mod background_terminal;
@@ -12,6 +13,7 @@ mod execution_process;
 mod file;
 mod gallery;
 mod gateway;
+mod hook;
 mod knowledge;
 mod log;
 mod mcp;

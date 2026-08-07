@@ -631,6 +631,7 @@ export function useAgentChatWorkspaceSetupRuntime({
     themeWorkbenchBackendRunState,
     themeWorkbenchActiveQueueItem,
     harnessPendingCount,
+    threadId: threadRead?.thread_id ?? null,
   });
 
   return {

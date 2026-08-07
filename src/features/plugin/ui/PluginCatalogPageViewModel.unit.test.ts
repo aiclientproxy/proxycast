@@ -5,6 +5,7 @@ import {
   filterPluginCatalog,
   listPluginCatalogSources,
   mergePluginCatalogSummary,
+  projectPluginCatalogApps,
 } from "./PluginCatalogPageViewModel";
 
 function summary(
@@ -73,5 +74,79 @@ describe("PluginCatalogPageViewModel", () => {
         uiResources: [],
       }),
     ).toBe(3);
+  });
+
+  it("将 Apps catalog 与 installed snapshot 投影为 fail-closed readiness", () => {
+    const capabilities = [
+      { id: "writer", name: "Writer", description: "", requiresAuth: false },
+      {
+        id: "disabled",
+        name: "Disabled",
+        description: "",
+        requiresAuth: false,
+      },
+      {
+        id: "missing",
+        name: "Missing",
+        description: "",
+        requiresAuth: false,
+      },
+    ];
+    const catalog = capabilities.map((capability) => ({
+      id: capability.id,
+      name: capability.name,
+      description: null,
+      logoUrl: null,
+      logoUrlDark: null,
+      iconAssets: null,
+      iconDarkAssets: null,
+      distributionChannel: "local",
+      branding: null,
+      appMetadata: null,
+      labels: null,
+      installUrl: null,
+      isAccessible: true,
+      isEnabled: true,
+      pluginDisplayNames: ["Writer Plugin"],
+    }));
+
+    expect(
+      projectPluginCatalogApps(capabilities, catalog, [
+        {
+          id: "writer",
+          runtimeName: "Writer",
+          enabled: true,
+          callable: true,
+        },
+        {
+          id: "disabled",
+          runtimeName: "Disabled",
+          enabled: false,
+          callable: false,
+        },
+      ]),
+    ).toEqual([
+      {
+        callable: true,
+        enabled: true,
+        id: "writer",
+        name: "Writer",
+        status: "ready",
+      },
+      {
+        callable: false,
+        enabled: false,
+        id: "disabled",
+        name: "Disabled",
+        status: "disabled",
+      },
+      {
+        callable: false,
+        enabled: true,
+        id: "missing",
+        name: "Missing",
+        status: "pending",
+      },
+    ]);
   });
 });

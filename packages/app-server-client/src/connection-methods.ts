@@ -284,9 +284,34 @@ declare module "./connection.js" {
     ): Promise<
       AppServerRequestResult<protocol.WorkspaceRightSurfacePendingDismissResponse>
     >;
-    listSkills(
+    listApps(
+      params?: protocol.AppsListParams,
       options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.SkillListResponse>>;
+    ): Promise<AppServerRequestResult<protocol.AppsListResponse>>;
+    readApps(
+      params: protocol.AppsReadParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.AppsReadResponse>>;
+    listInstalledApps(
+      params?: protocol.AppsInstalledParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.AppsInstalledResponse>>;
+    listSkills(
+      params?: protocol.SkillsListParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.SkillsListResponse>>;
+    setSkillsExtraRoots(
+      params: protocol.SkillsExtraRootsSetParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.SkillsExtraRootsSetResponse>>;
+    writeSkillsConfig(
+      params: protocol.SkillsConfigWriteParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.SkillsConfigWriteResponse>>;
+    listHooks(
+      params?: protocol.HooksListParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.HooksListResponse>>;
     readSkill(
       params: protocol.SkillReadParams,
       options?: AppServerRequestOptions,
@@ -602,14 +627,10 @@ declare module "./connection.js" {
       params: protocol.McpToolSearchParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.McpToolListResponse>>;
-    callMcpTool(
-      params: protocol.McpToolCallParams,
+    callMcpServerTool(
+      params: protocol.McpServerToolCallParams,
       options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.McpToolCallResponse>>;
-    callMcpToolWithCaller(
-      params: protocol.McpToolCallWithCallerParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.McpToolCallResponse>>;
+    ): Promise<AppServerRequestResult<protocol.McpServerToolCallResponse>>;
     listMcpPrompts(
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.McpPromptListResponse>>;
@@ -620,10 +641,10 @@ declare module "./connection.js" {
     listMcpResources(
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.McpResourceListResponse>>;
-    readMcpResource(
-      params: protocol.McpResourceReadParams,
+    readMcpServerResource(
+      params: protocol.McpServerResourceReadParams,
       options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.McpResourceReadResponse>>;
+    ): Promise<AppServerRequestResult<protocol.McpServerResourceReadResponse>>;
     subscribeMcpResource(
       params: protocol.McpResourceSubscribeParams,
       options?: AppServerRequestOptions,

@@ -281,7 +281,7 @@ describe("WorkspacePluginSurface", () => {
     expect(mcpApiMocks.readResource).toHaveBeenCalledWith(
       "plugin__demo__server",
       "ui://demo/report.html",
-      { sessionId: "session-1", threadId: "thread-1" },
+      { threadId: "thread-1" },
     );
     expect(
       embeddedBrowserMocks.loadEmbeddedBrowserViewHtml,
@@ -409,7 +409,7 @@ describe("WorkspacePluginSurface", () => {
     expect(mcpApiMocks.readResource).toHaveBeenCalledWith(
       "plugin__demo__server",
       "ui://demo/report.html",
-      { sessionId: "session-1", threadId: "thread-1" },
+      { threadId: "thread-1" },
     );
     expect(
       embeddedBrowserMocks.loadEmbeddedBrowserViewHtml,

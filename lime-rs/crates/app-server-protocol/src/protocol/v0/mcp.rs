@@ -118,35 +118,6 @@ fn default_mcp_tool_search_limit() -> usize {
     10
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct McpToolCallParams {
-    pub tool_name: String,
-    pub arguments: serde_json::Value,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct McpToolCallWithCallerParams {
-    pub tool_name: String,
-    pub arguments: serde_json::Value,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub caller: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct McpToolCallResponse {
-    #[serde(default)]
-    pub content: Vec<McpContent>,
-    #[serde(
-        default,
-        rename = "structuredContent",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub structured_content: Option<serde_json::Value>,
-    pub is_error: bool,
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct McpPromptListResponse {
@@ -185,21 +156,6 @@ pub struct McpResourceListResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct McpResourceReadParams {
-    #[schemars(length(min = 1))]
-    pub server: String,
-    #[schemars(length(min = 1))]
-    pub uri: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schemars(length(min = 1))]
-    pub session_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schemars(length(min = 1))]
-    pub thread_id: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct McpResourceSubscribeParams {
     #[schemars(length(min = 1))]
     pub server: String,
@@ -219,19 +175,6 @@ pub struct McpResourceUnsubscribeParams {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct McpResourceSubscriptionResponse {}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct McpResourceReadResponse {
-    pub uri: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mime_type: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub text: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub blob: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub meta: Option<serde_json::Value>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type")]

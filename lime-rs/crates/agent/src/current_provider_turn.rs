@@ -35,6 +35,7 @@ use tool_runtime::tool_lifecycle::{ToolLifecycleEmitter, ToolLifecycleEvent, Too
 #[cfg(test)]
 mod agent_control_tests;
 mod dynamic_tool_bridge;
+mod hook_step_snapshot;
 #[cfg(test)]
 mod input_tests;
 mod mcp_step_snapshot;
@@ -108,11 +109,14 @@ where
     let (agent_event_sender, mut agent_event_receiver) = mpsc::unbounded_channel();
     let mcp_tool_routes = mcp_step_snapshot::McpToolRoutes::default();
     let dynamic_tool_routes = mcp_step_snapshot::DynamicToolRoutes::default();
+    let working_directory = working_directory
+        .map(Path::to_path_buf)
+        .unwrap_or_else(default_working_directory);
     let tool_step_snapshot_source = mcp_step_snapshot::current_tool_step_snapshot_source(
         state.clone(),
         policy.clone(),
         session_config.turn_context.clone(),
-        agent_event_sender,
+        agent_event_sender.clone(),
         session_id.clone(),
         ThreadId::new(thread_id.clone()),
         agent_control_gateway,
@@ -127,6 +131,11 @@ where
         mcp_tool_routes,
         dynamic_tool_routes,
     ));
+    let hook_snapshot_source = hook_step_snapshot::current_hook_step_snapshot_source(
+        session_config.turn_context.clone(),
+        working_directory.clone(),
+        agent_event_sender.clone(),
+    );
 
     let turn_future = run_current_provider_turn(
         CurrentProviderTurnInput {
@@ -135,12 +144,10 @@ where
             session_config,
             initial_messages,
             tool_step_snapshot_source,
-            hook_snapshot_source: None,
+            hook_snapshot_source,
             model_request_policy,
             tool_lifecycle_emitter: lifecycle_emitter,
-            working_directory: working_directory
-                .map(Path::to_path_buf)
-                .unwrap_or_else(default_working_directory),
+            working_directory,
             cancel_token,
             pending_input,
         },

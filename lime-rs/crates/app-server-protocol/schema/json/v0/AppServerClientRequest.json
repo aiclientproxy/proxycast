@@ -1065,25 +1065,6 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
-          "const": "skill/list",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
           "const": "skill/read",
           "type": "string"
         },
@@ -3801,44 +3782,6 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
-          "const": "mcpTool/call",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
-          "const": "mcpTool/callWithCaller",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
           "const": "mcpPrompt/list",
           "type": "string"
         },
@@ -3878,25 +3821,6 @@
         },
         "method": {
           "const": "mcpResource/list",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
-          "const": "mcpResource/read",
           "type": "string"
         },
         "params": {

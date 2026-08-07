@@ -1,3 +1,4 @@
+use agent_protocol::hook::HookRunSummary;
 use agent_protocol::provider_trace::{ProviderTraceEvent, ProviderTraceStage};
 use agent_protocol::turn_context::TurnOutputSchemaRuntime;
 use agent_protocol::{
@@ -374,6 +375,18 @@ pub enum AgentEvent {
         accumulated_arguments: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         provider: Option<String>,
+    },
+
+    #[serde(rename = "hook_started")]
+    HookStarted {
+        turn_id: Option<String>,
+        run: HookRunSummary,
+    },
+
+    #[serde(rename = "hook_completed")]
+    HookCompleted {
+        turn_id: Option<String>,
+        run: HookRunSummary,
     },
 
     #[serde(rename = "artifact_snapshot")]

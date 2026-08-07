@@ -255,6 +255,7 @@
   "common.modelSelector.model.empty": "No models available",
   "common.modelSelector.model.selectedUnavailable": "The selected model is unavailable",
   "common.modelSelector.reasoning.title": "Reasoning effort",
+  "common.modelSelector.reasoning.trigger": "Reasoning {{level}}",
   "common.modelSelector.reasoning.source.api": "API declared",
   "common.modelSelector.reasoning.aria": "Select reasoning effort {{level}}",
   "common.modelSelector.reasoning.level.none": "Off",

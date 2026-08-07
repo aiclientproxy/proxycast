@@ -4,19 +4,18 @@ use crate::MockBackend;
 use crate::RightSurfaceAppDataSource;
 use crate::RuntimeCore;
 use crate::WorkspaceObjectCanvasSnapshotListParams;
+use app_server_protocol::protocol::v2::METHOD_MCP_SERVER_RESOURCE_READ;
 use app_server_protocol::WorkspaceRightSurfacePendingListParams;
 use app_server_protocol::WorkspaceRightSurfaceRequestParams;
 use app_server_protocol::METHOD_INITIALIZE;
 use app_server_protocol::METHOD_INITIALIZED;
 use app_server_protocol::METHOD_MCP_RESOURCE_LIST;
-use app_server_protocol::METHOD_MCP_RESOURCE_READ;
 use app_server_protocol::METHOD_MCP_RESOURCE_SUBSCRIBE;
 use app_server_protocol::METHOD_MCP_RESOURCE_UNSUBSCRIBE;
 use app_server_protocol::METHOD_MCP_SERVER_CREATE;
 use app_server_protocol::METHOD_MCP_SERVER_START;
 use app_server_protocol::METHOD_MCP_SERVER_STATUS_LIST;
 use app_server_protocol::METHOD_MCP_SERVER_STOP;
-use app_server_protocol::METHOD_MCP_TOOL_CALL;
 use app_server_protocol::METHOD_MCP_TOOL_LIST;
 use app_server_protocol::METHOD_SKILL_CACHE_REFRESH;
 use app_server_protocol::SERVER_NAME;
@@ -254,7 +253,7 @@ async fn right_surface_object_canvas_snapshot_persists_in_local_sqlite_data_sour
 }
 
 #[tokio::test]
-async fn mcp_current_jsonrpc_starts_real_stdio_server_and_reads_tool_resource() {
+async fn mcp_current_jsonrpc_starts_real_stdio_server_and_reads_resource() {
     let temp_dir = TempDir::new().expect("create mcp fixture temp dir");
     let server_path = write_mcp_stdio_fixture(temp_dir.path());
     let server = AppServer::with_runtime(
@@ -341,24 +340,7 @@ async fn mcp_current_jsonrpc_starts_real_stdio_server_and_reads_tool_resource() 
         Some(&json!("mcp__fixture__echo"))
     );
 
-    let tool_result = app_server_request(
-        &server,
-        6,
-        METHOD_MCP_TOOL_CALL,
-        json!({
-            "toolName": "mcp__fixture__echo",
-            "arguments": {
-                "message": "hello current MCP"
-            }
-        }),
-    )
-    .await;
-    assert_eq!(
-        tool_result.pointer("/result/content/0/text"),
-        Some(&json!("echo: hello current MCP"))
-    );
-
-    let resources = app_server_request(&server, 7, METHOD_MCP_RESOURCE_LIST, json!({})).await;
+    let resources = app_server_request(&server, 6, METHOD_MCP_RESOURCE_LIST, json!({})).await;
     assert_eq!(
         resources.pointer("/result/resources/0/uri"),
         Some(&json!("fixture://status")),
@@ -381,8 +363,8 @@ async fn mcp_current_jsonrpc_starts_real_stdio_server_and_reads_tool_resource() 
 
     let resource = app_server_request(
         &server,
-        8,
-        METHOD_MCP_RESOURCE_READ,
+        7,
+        METHOD_MCP_SERVER_RESOURCE_READ,
         json!({
             "server": "fixture",
             "uri": "fixture://status"
@@ -390,11 +372,11 @@ async fn mcp_current_jsonrpc_starts_real_stdio_server_and_reads_tool_resource() 
     )
     .await;
     assert_eq!(
-        resource.pointer("/result/uri"),
+        resource.pointer("/result/contents/0/uri"),
         Some(&json!("fixture://status"))
     );
     assert_eq!(
-        resource.pointer("/result/text"),
+        resource.pointer("/result/contents/0/text"),
         Some(&json!("fixture resource ok"))
     );
 

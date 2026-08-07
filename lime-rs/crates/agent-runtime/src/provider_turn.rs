@@ -34,6 +34,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
+use tool_runtime::hook_lifecycle::RuntimeHookReporter;
 use tool_runtime::tool_call::{ToolCall, ToolEnvironment};
 use tool_runtime::tool_definition::{RuntimeToolDefinition, RuntimeToolExposure};
 use tool_runtime::tool_executor::{
@@ -141,8 +142,14 @@ impl RuntimeToolStepSnapshotSource for FixedRuntimeToolStepSnapshotSource {
     }
 }
 
+#[derive(Clone)]
+pub struct RuntimeHookStepSnapshot {
+    pub hooks: Vec<RuntimeHookSnapshot>,
+    pub reporter: Arc<dyn RuntimeHookReporter>,
+}
+
 pub type RuntimeHookSnapshotFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<Vec<RuntimeHookSnapshot>, String>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<RuntimeHookStepSnapshot, String>> + Send + 'a>>;
 
 pub trait RuntimeHookSnapshotSource: Send + Sync {
     fn capture(&self) -> RuntimeHookSnapshotFuture<'_>;
@@ -156,22 +163,22 @@ impl RuntimeHookSnapshotSourceHandle {
         Self(source)
     }
 
-    pub fn fixed(hooks: Vec<RuntimeHookSnapshot>) -> Self {
-        Self::new(Arc::new(FixedRuntimeHookSnapshotSource { hooks }))
+    pub fn fixed(snapshot: RuntimeHookStepSnapshot) -> Self {
+        Self::new(Arc::new(FixedRuntimeHookSnapshotSource { snapshot }))
     }
 
-    async fn capture(&self) -> Result<Vec<RuntimeHookSnapshot>, String> {
+    async fn capture(&self) -> Result<RuntimeHookStepSnapshot, String> {
         self.0.capture().await
     }
 }
 
 struct FixedRuntimeHookSnapshotSource {
-    hooks: Vec<RuntimeHookSnapshot>,
+    snapshot: RuntimeHookStepSnapshot,
 }
 
 impl RuntimeHookSnapshotSource for FixedRuntimeHookSnapshotSource {
     fn capture(&self) -> RuntimeHookSnapshotFuture<'_> {
-        Box::pin(async move { Ok(self.hooks.clone()) })
+        Box::pin(async move { Ok(self.snapshot.clone()) })
     }
 }
 
@@ -384,11 +391,11 @@ where
         // Hook 门控：捕获 Hook snapshot，构造 RuntimeTurnSnapshot，并包装 executor。
         if !is_empty_response_retry {
             if let Some(ref hook_source) = hook_snapshot_source {
-                let hook_snapshots = hook_source
+                let hook_step_snapshot = hook_source
                     .capture()
                     .await
                     .map_err(|message| RuntimeReplyAttemptError::new(message, emitted_any))?;
-                if !hook_snapshots.is_empty() {
+                if !hook_step_snapshot.hooks.is_empty() {
                     let tool_snapshots = tool_step_snapshot
                         .definitions
                         .iter()
@@ -405,21 +412,17 @@ where
                     if let Ok(turn_snapshot) =
                         tool_runtime::turn_snapshot::RuntimeTurnSnapshot::try_new(
                             tool_snapshots,
-                            hook_snapshots,
+                            hook_step_snapshot.hooks,
                         )
                     {
-                        use tool_runtime::hook_gated_executor::{
-                            hook_gated_executor, FixedHookReporter,
-                        };
+                        use tool_runtime::hook_gated_executor::hook_gated_executor;
                         use tool_runtime::tool_executor::RuntimeToolExecutorHandle;
-                        // TODO: 替换为真实的 HookReporter 实现，当前用占位 reporter。
-                        let reporter = Arc::new(FixedHookReporter::new(None));
                         // 克隆原 executor 的内部 Arc，用 hook 包装后重新构造 handle。
                         let original_executor = tool_step_snapshot.executor.clone();
                         let gated = hook_gated_executor(
                             original_executor.inner_executor(),
                             Arc::new(turn_snapshot),
-                            reporter,
+                            hook_step_snapshot.reporter,
                         );
                         tool_step_snapshot.executor = RuntimeToolExecutorHandle::new(gated);
                     }

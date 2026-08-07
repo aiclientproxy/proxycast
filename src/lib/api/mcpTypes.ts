@@ -192,7 +192,7 @@ export interface McpPrepareResult {
   tools?: McpToolDefinition[];
 }
 
-export type McpCallProofRequestMethod = "mcpTool/callWithCaller";
+export type McpCallProofRequestMethod = "mcpServer/tool/call";
 
 export interface McpCallProofRequest {
   method: McpCallProofRequestMethod | string;

@@ -38,12 +38,12 @@ pub(crate) struct AgentControlSpawnResponse {
 
 use route::{agent_control_route_snapshot, AGENT_CONTROL_ROUTE_KEY};
 
-pub(in crate::runtime) fn session_metadata_has_direct_provider_route(
+pub(in crate::runtime) fn session_metadata_has_agent_control_route(
     metadata: &serde_json::Map<String, serde_json::Value>,
 ) -> bool {
     metadata
         .get(AGENT_CONTROL_ROUTE_KEY)
-        .is_some_and(route::agent_control_route_snapshot_is_direct)
+        .is_some_and(route::agent_control_route_snapshot_is_complete)
 }
 
 impl RuntimeCore {
@@ -71,61 +71,82 @@ impl RuntimeCore {
                 .map(|(session, _)| session);
         };
 
-        let mut state = self
-            .state
-            .lock()
-            .expect("runtime core state mutex poisoned");
-        let stored = state
-            .sessions
-            .get_mut(session_id)
-            .ok_or_else(|| RuntimeCoreError::SessionNotFound(session_id.to_string()))?;
-        let session_id = stored.session.session_id.clone();
-        let reference =
-            stored
-                .session
-                .business_object_ref
-                .get_or_insert_with(|| BusinessObjectRef {
-                    kind: "agent.session".to_string(),
-                    id: session_id,
-                    title: None,
-                    uri: None,
-                    metadata: None,
-                });
-        let mut metadata = match reference.metadata.take() {
-            Some(serde_json::Value::Object(metadata)) => metadata,
-            Some(previous) => {
-                let mut metadata = serde_json::Map::new();
-                metadata.insert("previousMetadata".to_string(), previous);
-                metadata
+        let mut session = {
+            let mut state = self
+                .state
+                .lock()
+                .expect("runtime core state mutex poisoned");
+            let stored = state
+                .sessions
+                .get_mut(session_id)
+                .ok_or_else(|| RuntimeCoreError::SessionNotFound(session_id.to_string()))?;
+            let session_id = stored.session.session_id.clone();
+            let reference =
+                stored
+                    .session
+                    .business_object_ref
+                    .get_or_insert_with(|| BusinessObjectRef {
+                        kind: "agent.session".to_string(),
+                        id: session_id,
+                        title: None,
+                        uri: None,
+                        metadata: None,
+                    });
+            let mut metadata = match reference.metadata.take() {
+                Some(serde_json::Value::Object(metadata)) => metadata,
+                Some(previous) => {
+                    let mut metadata = serde_json::Map::new();
+                    metadata.insert("previousMetadata".to_string(), previous);
+                    metadata
+                }
+                None => serde_json::Map::new(),
+            };
+            if let Some((provider_selector, provider_name, model_name)) = defaults {
+                metadata.insert(
+                    "providerSelector".to_string(),
+                    serde_json::Value::String(provider_selector),
+                );
+                metadata.insert(
+                    "providerName".to_string(),
+                    serde_json::Value::String(provider_name),
+                );
+                metadata.insert(
+                    "modelName".to_string(),
+                    serde_json::Value::String(model_name),
+                );
             }
-            None => serde_json::Map::new(),
+            if let Some(route_snapshot) = route_snapshot {
+                metadata.insert(AGENT_CONTROL_ROUTE_KEY.to_string(), route_snapshot);
+            }
+            if let Some(service_tier) = service_tier {
+                metadata.insert(
+                    "serviceTier".to_string(),
+                    serde_json::Value::String(service_tier),
+                );
+            }
+            reference.metadata = Some(serde_json::Value::Object(metadata));
+            stored.session.updated_at = timestamp();
+            stored.session.clone()
         };
-        if let Some((provider_selector, provider_name, model_name)) = defaults {
-            metadata.insert(
-                "providerSelector".to_string(),
-                serde_json::Value::String(provider_selector),
-            );
-            metadata.insert(
-                "providerName".to_string(),
-                serde_json::Value::String(provider_name),
-            );
-            metadata.insert(
-                "modelName".to_string(),
-                serde_json::Value::String(model_name),
-            );
+        if let Some(projection_store) = self.projection_store.as_deref() {
+            projection_store
+                .persist_session_metadata(&mut session)
+                .map_err(|error| {
+                    RuntimeCoreError::Backend(format!(
+                        "failed to persist AgentControl child route metadata: {error}"
+                    ))
+                })?;
+            let mut state = self
+                .state
+                .lock()
+                .expect("runtime core state mutex poisoned");
+            let stored = state
+                .sessions
+                .get_mut(session_id)
+                .ok_or_else(|| RuntimeCoreError::SessionNotFound(session_id.to_string()))?;
+            stored.session = session.clone();
         }
-        if let Some(route_snapshot) = route_snapshot {
-            metadata.insert(AGENT_CONTROL_ROUTE_KEY.to_string(), route_snapshot);
-        }
-        if let Some(service_tier) = service_tier {
-            metadata.insert(
-                "serviceTier".to_string(),
-                serde_json::Value::String(service_tier),
-            );
-        }
-        reference.metadata = Some(serde_json::Value::Object(metadata));
-        stored.session.updated_at = timestamp();
-        Ok(stored.session.clone())
+        Ok(session)
     }
 
     pub(in crate::runtime) fn is_pending_agent_control_thread(
@@ -916,7 +937,8 @@ fn validate_agent_control_fork_items(turn: &agent_protocol::Turn) -> Result<(), 
             | ThreadItemPayload::Command { .. }
             | ThreadItemPayload::File { .. }
             | ThreadItemPayload::Media { .. }
-            | ThreadItemPayload::SubAgent { .. } => {}
+            | ThreadItemPayload::SubAgent { .. }
+            | ThreadItemPayload::Hook { .. } => {}
             ThreadItemPayload::AgentMessage {
                 phase,
                 content_parts,

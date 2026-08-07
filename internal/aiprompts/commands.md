@@ -59,7 +59,7 @@ MCP 管理、发现和调用只允许走：
 
 `src/lib/api/mcp.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server JSON-RPC -> lime-rs/crates/mcp`
 
-current method 为 `mcpServer/list`、`mcpServerStatus/list`、`mcpServer/create`、`mcpServer/update`、`mcpServer/delete`、`mcpServer/enabled/set`、`mcpServer/importFromApp`、`mcpServer/syncAllToLive`、`mcpServer/oauth/login`、`mcpServer/oauthLogin/completed`、`mcpServer/startupStatus/updated`、`mcpServer/start`、`mcpServer/stop`、`mcpTool/list`、`mcpTool/listForContext`、`mcpTool/search`、`mcpTool/call`、`mcpTool/callWithCaller`、`mcpPrompt/list`、`mcpPrompt/get`、`mcpResource/list`、`mcpResource/read`、`mcpResource/subscribe` 与 `mcpResource/unsubscribe`。OAuth 完成态只允许由 App Server v2 typed notification `mcpServer/oauthLogin/completed` 投影给 Renderer；MCP startup lifecycle 只允许由 `mcpServer/startupStatus/updated` 投影连接态并触发终态刷新。旧 `mcp:oauth_completed`、`mcp:server_started`、`mcp:server_stopped`、`mcp:server_error` 均为 `dead / deleted / forbidden-to-restore`。事件 `mcp:resources_updated` 和 `mcp:resource_updated` 必须经真实 MCP manager / Desktop Host event bridge 投影；浏览器模式不得静默退回 mock event fallback。
+current method 为 `mcpServer/list`、`mcpServerStatus/list`、`mcpServer/create`、`mcpServer/update`、`mcpServer/delete`、`mcpServer/enabled/set`、`mcpServer/importFromApp`、`mcpServer/syncAllToLive`、`mcpServer/oauth/login`、`mcpServer/oauthLogin/completed`、`mcpServer/startupStatus/updated`、`mcpServer/start`、`mcpServer/stop`、`mcpServer/resource/read`、`mcpServer/tool/call`、`mcpTool/list`、`mcpTool/listForContext`、`mcpTool/search`、`mcpPrompt/list`、`mcpPrompt/get`、`mcpResource/list`、`mcpResource/subscribe` 与 `mcpResource/unsubscribe`。`mcpServer/tool/call` 强制真实 `threadId` 并经 Session-owned `McpThreadRuntime` 执行；Settings 没有 Thread owner，只允许浏览工具。`mcpServer/resource/read` 可做 management read，也可携带真实 `threadId` 读取同一 runtime；`sessionId` 不进入 exact wire。旧 `mcpTool/call`、`mcpTool/callWithCaller` 与 `mcpResource/read` 已从 protocol catalog、schema、App Server、typed clients、Renderer、smoke 和正向测试物理删除，分类为 `dead / deleted / forbidden-to-restore`，只能出现在负向回流守卫或历史 evidence。OAuth 完成态只允许由 App Server v2 typed notification `mcpServer/oauthLogin/completed` 投影给 Renderer；MCP startup lifecycle 只允许由 `mcpServer/startupStatus/updated` 投影连接态并触发终态刷新。旧 `mcp:oauth_completed`、`mcp:server_started`、`mcp:server_stopped`、`mcp:server_error` 均为 `dead / deleted / forbidden-to-restore`。事件 `mcp:resources_updated` 和 `mcp:resource_updated` 必须经真实 MCP manager / Desktop Host event bridge 投影；浏览器模式不得静默回退 mock event fallback。
 
 live evidence 仅通过 `smoke:mcp-current -- --allow-live-provider` 显式开启，且需要 `LIME_MCP_LIVE_SERVER_URL`。该 URL 不得包含 username、password、query 或 hash；认证只能引用环境变量名，不允许 inline secret。`network-invoke.json` 仅可记录脱敏的 host、环境变量名、header 名、范围和工具/资源摘要。
 
@@ -68,6 +68,34 @@ MCP server-originated elicitation 使用独立 reverse JSON-RPC method `mcpServe
 MCP model Tool surface 与 GUI 管理读必须分层：`tool-runtime::McpStepSnapshot` 只冻结同一次 provider sampling 的 tool definitions、caller policy、exact route 和 connection handle；`mcpPrompt/*`、`mcpResource/*`、`mcpServerStatus/list` 继续由 App Server 直接向 `lime-mcp::McpClientManager` 做 live read。禁止让管理面经过 model bridge、让 GUI inventory 替换 in-flight snapshot，或用 caller-unaware live registry dispatch 绕过当前 step allowlist。
 
 旧 MCP Desktop facade 已统一归类为 `dead / retired guard-only`：`get_mcp_servers`、`mcp_list_servers_with_status`、`mcp_list_tools`、`mcp_list_prompts`、`mcp_list_resources`、`mcp_call_tool`、`mcp_start_server`、`sync_all_mcp_to_live` 只能出现在负向 guard 或历史 evidence，禁止回到前端网关、Desktop Host、mock 或 App Server current 主链。
+
+## Skills Catalog 主链
+
+Composer 可执行 Skill catalog 只允许走：
+
+`src/lib/api/skill-execution.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server skills/list -> RuntimeCore -> lime-skills AgentSkillSnapshot`
+
+current list method 为 `skills/list`，contract 是 `cwds + forceReload -> data[{cwd,skills,errors}]`；catalog 变更只通过 typed `skills/changed {}` 触发 Renderer 刷新。`skill/read` 独立承担稳定 id 的正文/工作流详情读取，`skillManagement/*` 只属于管理中心，不得冒充 Composer catalog。singular `skill/list` 与 `get_local_skills_for_app` Desktop facade 为 `dead / deleted / forbidden-to-restore`，只能出现在负向守卫或历史 evidence。
+
+Skill 运行时配置只允许走同一 App Server 主链：`skills/config/write` 使用 exactly-one `path/name` selector 写入 Lime 用户级 YAML `skills.config` 并返回 `effectiveEnabled`；`skills/extraRoots/set` 原子替换进程级 roots，不持久化，缺失目录按空目录处理，成功后发送 `skills/changed {}`。Renderer typed gateway 可以调用这些 current method，但不得用 `skillManagement/*`、Electron IPC 或 Codex TUI 配置路径建立第二套状态。
+
+## Apps Catalog 主链
+
+Apps/connectors 只允许走同一个 Plugin catalog owner：
+
+`src/lib/api/apps.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server app/* -> RuntimeCore -> PluginDataSource -> local plugin_catalog`
+
+current method 为 `app/list`、`app/read`、`app/installed` 与 `app/list/updated`。`app/list` 从已安装 Plugin manifest 的
+`apps` capability 构建分页 catalog；`app/read` 最多接收 100 个 id，去重并保持首次请求顺序，未知 id 放入
+`missingAppIds`；携带 `threadId` 时必须命中已加载 canonical Thread。`app/installed` 只报告有效 enabled/runtime
+state；本地 Plugin 没有 hosted connector model-visible tool snapshot 时，`callable` 强制为 `false`，Desktop 不得
+把安装或启用状态冒充模型 readiness。`forceRefetch` / `forceRefresh` 在本地 registry 上只是 fresh read，不伪造
+hosted refresh。
+
+成功的 `plugin/install`、`plugin/uninstall`、`plugin/enabled/set` 与首页 `app/list` 读取经过现有 server
+notification hook 发布 typed `app/list/updated { data: AppInfo[] }`，Renderer 通过 App Server typed event bus 消费并
+重新读取 Apps。禁止新增第二 Apps catalog、`window` 自定义事件事实源、TUI Apps UI、compat wrapper 或生产 mock
+fallback；Apps 专用真实 Electron Gate B 与 hosted connector tool snapshot 是独立未完成证据，不由协议和单测冒充。
 
 ## Browser Session 主链
 

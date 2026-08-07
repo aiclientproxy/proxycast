@@ -87,6 +87,20 @@ export async function runTurnPlanUpdateScenario({
   summary.turnPlanUpdateDrain = summarizeTurnPlanDrain(drained.messages);
   summary.turnPlanUpdateNotification = sanitizeJson(turnPlanUpdateNotification);
 
+  const turnPlanUpdateProviderRequests = summarizeProviderRequests(
+    readTextProviderRequests?.() ?? [],
+  );
+  if (options.hookFixture) {
+    return sanitizeJson({
+      turnPlanUpdateInputSend,
+      guiTurnPlanUpdateCompleted,
+      readModelTurnPlanUpdateCompleted,
+      turnPlanUpdateNotification,
+      turnPlanUpdateProviderRequests,
+      hookFocusedGateB: true,
+    });
+  }
+
   logStage("wait-live-turn-plan-checklist");
   const guiTurnPlanUpdateChecklist = await waitForTurnPlanChecklist(
     page,
@@ -129,9 +143,7 @@ export async function runTurnPlanUpdateScenario({
     guiTurnPlanUpdateChecklist,
     readModelTurnPlanUpdateCompleted,
     turnPlanUpdateNotification,
-    turnPlanUpdateProviderRequests: summarizeProviderRequests(
-      readTextProviderRequests?.() ?? [],
-    ),
+    turnPlanUpdateProviderRequests,
     turnPlanUpdateReload,
     turnPlanUpdateRendererReady,
     turnPlanUpdateSessionVisible,
@@ -298,11 +310,30 @@ function summarizeTurnPlanDrain(messages) {
   const methods = messages
     .map((message) => message?.method)
     .filter((method) => typeof method === "string");
+  const hookMessages = messages.filter(
+    (message) =>
+      message?.method === "hook/started" ||
+      message?.method === "hook/completed",
+  );
+  const hookRunIds = (method) =>
+    hookMessages
+      .filter((message) => message.method === method)
+      .map((message) => message?.params?.run?.id)
+      .filter((runId) => typeof runId === "string" && runId.length > 0);
+  const startedRunIds = hookRunIds("hook/started");
+  const completedRunIds = hookRunIds("hook/completed");
   return sanitizeJson({
     messageCount: messages.length,
     methods,
     planIndex: methods.lastIndexOf("turn/plan/updated"),
     terminalIndex: methods.lastIndexOf("turn/completed"),
+    hookLifecycle: {
+      startedRunIds,
+      completedRunIds,
+      pairedRunIds: startedRunIds.filter((runId) =>
+        completedRunIds.includes(runId),
+      ),
+    },
   });
 }
 

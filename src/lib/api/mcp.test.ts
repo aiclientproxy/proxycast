@@ -115,16 +115,9 @@ describe("mcp", () => {
     expect(appServerRequestMock).not.toHaveBeenCalled();
   });
 
-  it("runtime resource owner 应要求完整 canonical identity", async () => {
+  it("runtime resource owner 应要求真实 thread identity", async () => {
     await expect(
       mcpApi.readResource("docs", "ui://demo/report.html", {
-        sessionId: " ",
-        threadId: "thread-1",
-      }),
-    ).rejects.toThrow("sessionId cannot be empty");
-    await expect(
-      mcpApi.readResource("docs", "ui://demo/report.html", {
-        sessionId: "session-1",
         threadId: " ",
       }),
     ).rejects.toThrow("threadId cannot be empty");
@@ -291,27 +284,22 @@ describe("mcp", () => {
     mockAppServerResult({ tools: [tool] });
     mockAppServerResult({ tools: [tool] });
     mockAppServerResult({
-      content: [{ type: "text", text: "ok" }],
-      structuredContent: {
-        results: [{ title: "MCP current" }],
-      },
-      is_error: false,
-    });
-    mockAppServerResult({
-      content: [{ type: "text", text: "caller ok" }],
-      structuredContent: {
-        results: [{ title: "MCP caller current" }],
-      },
-      is_error: false,
+      content: [{ type: "image", data: "aW1hZ2U=", mimeType: "image/png" }],
+      structuredContent: { source: "exact" },
+      isError: false,
     });
     mockAppServerResult({
       description: "prompt",
       messages: [{ role: "user", content: { type: "text", text: "hello" } }],
     });
     mockAppServerResult({
-      uri: "docs://readme",
-      mime_type: "text/plain",
-      text: "README",
+      contents: [
+        {
+          uri: "docs://readme",
+          mimeType: "text/plain",
+          text: "README",
+        },
+      ],
     });
 
     await expect(
@@ -335,38 +323,26 @@ describe("mcp", () => {
     });
 
     await expect(
-      mcpApi.callTool("mcp__docs__search_docs", { q: "lime" }),
+      mcpApi.callServerTool({
+        threadId: "thread-1",
+        server: "docs",
+        tool: "search_docs",
+        arguments: { q: "lime" },
+        meta: { requestId: "desktop-1" },
+      }),
     ).resolves.toEqual({
-      content: [{ type: "text", text: "ok" }],
-      structuredContent: {
-        results: [{ title: "MCP current" }],
-      },
-      is_error: false,
-    });
-    expect(appServerRequestMock).toHaveBeenLastCalledWith("mcpTool/call", {
-      toolName: "mcp__docs__search_docs",
-      arguments: { q: "lime" },
-    });
-
-    await expect(
-      mcpApi.callToolWithCaller(
-        "mcp__docs__search_docs",
-        { q: "lime" },
-        "assistant",
-      ),
-    ).resolves.toEqual({
-      content: [{ type: "text", text: "caller ok" }],
-      structuredContent: {
-        results: [{ title: "MCP caller current" }],
-      },
+      content: [{ type: "image", data: "aW1hZ2U=", mime_type: "image/png" }],
+      structuredContent: { source: "exact" },
       is_error: false,
     });
     expect(appServerRequestMock).toHaveBeenLastCalledWith(
-      "mcpTool/callWithCaller",
+      "mcpServer/tool/call",
       {
-        toolName: "mcp__docs__search_docs",
+        threadId: "thread-1",
+        server: "docs",
+        tool: "search_docs",
         arguments: { q: "lime" },
-        caller: "assistant",
+        _meta: { requestId: "desktop-1" },
       },
     );
 
@@ -389,20 +365,28 @@ describe("mcp", () => {
         text: "README",
       },
     );
-    expect(appServerRequestMock).toHaveBeenLastCalledWith("mcpResource/read", {
-      server: "docs",
-      uri: "docs://readme",
-    });
+    expect(appServerRequestMock).toHaveBeenLastCalledWith(
+      "mcpServer/resource/read",
+      {
+        server: "docs",
+        uri: "docs://readme",
+      },
+    );
 
     mockAppServerResult({
-      uri: "ui://demo/report.html",
-      mime_type: "text/html;profile=mcp-app",
-      text: "<main>Plugin report</main>",
-      meta: { ui: { csp: { connectDomains: ["https://api.example.com"] } } },
+      contents: [
+        {
+          uri: "ui://demo/report.html",
+          mimeType: "text/html;profile=mcp-app",
+          text: "<main>Plugin report</main>",
+          _meta: {
+            ui: { csp: { connectDomains: ["https://api.example.com"] } },
+          },
+        },
+      ],
     });
     await expect(
       mcpApi.readResource("plugin__demo__server", "ui://demo/report.html", {
-        sessionId: "session-1",
         threadId: "thread-1",
       }),
     ).resolves.toEqual(
@@ -411,12 +395,14 @@ describe("mcp", () => {
         meta: expect.objectContaining({ ui: expect.any(Object) }),
       }),
     );
-    expect(appServerRequestMock).toHaveBeenLastCalledWith("mcpResource/read", {
-      server: "plugin__demo__server",
-      uri: "ui://demo/report.html",
-      sessionId: "session-1",
-      threadId: "thread-1",
-    });
+    expect(appServerRequestMock).toHaveBeenLastCalledWith(
+      "mcpServer/resource/read",
+      {
+        server: "plugin__demo__server",
+        uri: "ui://demo/report.html",
+        threadId: "thread-1",
+      },
+    );
 
     mockAppServerResult({});
     await expect(
@@ -609,7 +595,7 @@ describe("mcp", () => {
     expect(safeInvoke).not.toHaveBeenCalled();
   });
 
-  it("MCP call proof requests 应通过 caller-scoped current 方法执行", async () => {
+  it("MCP call proof requests 应通过 Thread-scoped exact 方法执行", async () => {
     mockAppServerResult({
       content: [{ type: "text", text: "ok" }],
       structuredContent: { libraryId: "/facebook/react" },
@@ -617,21 +603,24 @@ describe("mcp", () => {
     });
 
     await expect(
-      mcpApi.executeCallProofRequests([
-        {
-          method: "mcpTool/callWithCaller",
-          params: {
-            toolName: "mcp__context7__resolve-library-id",
-            caller: "plugin:docs-plugin",
-            arguments: { libraryName: "react" },
+      mcpApi.executeCallProofRequests(
+        [
+          {
+            method: "mcpServer/tool/call",
+            params: {
+              server: "context7",
+              tool: "resolve-library-id",
+              arguments: { libraryName: "react" },
+            },
+            reason: "tool_call_proof",
+            status: "candidate",
           },
-          reason: "tool_call_proof",
-          status: "candidate",
-        },
-      ]),
+        ],
+        "thread-1",
+      ),
     ).resolves.toEqual([
       {
-        method: "mcpTool/callWithCaller",
+        method: "mcpServer/tool/call",
         status: "completed",
         result: {
           content: [{ type: "text", text: "ok" }],
@@ -642,11 +631,12 @@ describe("mcp", () => {
     ]);
 
     expect(appServerRequestMock).toHaveBeenLastCalledWith(
-      "mcpTool/callWithCaller",
+      "mcpServer/tool/call",
       {
-        toolName: "mcp__context7__resolve-library-id",
+        threadId: "thread-1",
+        server: "context7",
+        tool: "resolve-library-id",
         arguments: { libraryName: "react" },
-        caller: "plugin:docs-plugin",
       },
     );
     expect(safeInvoke).not.toHaveBeenCalled();

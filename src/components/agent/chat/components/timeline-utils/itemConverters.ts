@@ -257,44 +257,6 @@ export function toToolCallState(item: AgentThreadItem): ToolCallState | null {
         endTime: item.completed_at ? new Date(item.completed_at) : undefined,
       };
     }
-    case "hook": {
-      const metadata = itemMetadataRecord(item);
-      const entriesText =
-        item.entries
-          ?.map((entry) => `${entry.kind}: ${entry.text}`)
-          .join("\n") ?? "";
-      return {
-        id: item.id,
-        name: "hook",
-        arguments: JSON.stringify(
-          {
-            run_id: item.run_id,
-            event_name: item.event_name,
-            source_path: item.source_path,
-            target_item_id: item.target_item_id,
-          },
-          null,
-          2,
-        ),
-        status: mapItemStatus(item.status),
-        result:
-          item.output !== undefined ||
-          item.status_message !== undefined ||
-          item.entries !== undefined ||
-          item.metadata !== undefined
-            ? {
-                success: item.status !== "failed",
-                output: item.output || entriesText || item.status_message || "",
-                error:
-                  item.status === "failed" ? item.status_message : undefined,
-                metadata,
-              }
-            : undefined,
-        metadata,
-        startTime: new Date(item.started_at),
-        endTime: item.completed_at ? new Date(item.completed_at) : undefined,
-      };
-    }
     default:
       return null;
   }

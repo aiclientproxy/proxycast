@@ -2,6 +2,7 @@ pub mod action_required;
 pub mod anthropic;
 pub mod collaboration_mode;
 pub mod context_trace;
+pub mod hook;
 pub mod input;
 pub mod message_content;
 pub mod model_context;

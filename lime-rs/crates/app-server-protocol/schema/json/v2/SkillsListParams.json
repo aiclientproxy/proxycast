@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "cwds": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "forceReload": {
+      "type": "boolean"
+    }
+  },
+  "title": "SkillsListParams",
+  "type": "object"
+}

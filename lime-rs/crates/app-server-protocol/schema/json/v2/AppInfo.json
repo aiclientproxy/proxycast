@@ -1,0 +1,270 @@
+{
+  "$defs": {
+    "AppBranding": {
+      "properties": {
+        "category": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "developer": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "isDiscoverableApp": {
+          "type": "boolean"
+        },
+        "privacyPolicy": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "termsOfService": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "website": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "isDiscoverableApp"
+      ],
+      "type": "object"
+    },
+    "AppMetadata": {
+      "properties": {
+        "categories": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "developer": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "firstPartyRequiresInstall": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AppReview"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "screenshots": {
+          "items": {
+            "$ref": "#/$defs/AppScreenshot"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "seoDescription": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "showInComposerWhenUnlinked": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "subCategories": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "versionId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "versionNotes": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "AppReview": {
+      "properties": {
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "AppScreenshot": {
+      "properties": {
+        "fileId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "url": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "userPrompt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "userPrompt"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "appMetadata": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AppMetadata"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "branding": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AppBranding"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "description": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "distributionChannel": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "iconAssets": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": [
+        "null",
+        "object"
+      ]
+    },
+    "iconDarkAssets": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": [
+        "null",
+        "object"
+      ]
+    },
+    "id": {
+      "type": "string"
+    },
+    "installUrl": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "isAccessible": {
+      "default": false,
+      "type": "boolean"
+    },
+    "isEnabled": {
+      "default": true,
+      "type": "boolean"
+    },
+    "labels": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": [
+        "null",
+        "object"
+      ]
+    },
+    "logoUrl": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "logoUrlDark": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "pluginDisplayNames": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "name"
+  ],
+  "title": "AppInfo",
+  "type": "object"
+}

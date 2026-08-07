@@ -139,6 +139,7 @@ fn canonical_notification_target(event: &AgentEvent) -> Option<CanonicalNotifica
         "subagent.",
         "sub_agent.",
         "context.compaction",
+        "hook.",
     ]
     .iter()
     .any(|prefix| event_type.starts_with(prefix));

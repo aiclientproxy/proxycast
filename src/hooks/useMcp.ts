@@ -3,7 +3,7 @@
  *
  * 提供 MCP 服务器的运行时状态管理，包括：
  * - 服务器启动/停止
- * - 工具列表和调用
+ * - 工具列表
  * - 提示词列表和获取
  * - 资源列表和读取
  * - Desktop Host 事件监听
@@ -19,7 +19,6 @@ import {
   McpToolDefinition,
   McpPromptDefinition,
   McpResourceDefinition,
-  McpToolResult,
   McpPromptResult,
   McpResourceContent,
   McpServerOAuthLoginOptions,
@@ -58,12 +57,8 @@ export interface UseMcpReturn {
   ) => Promise<McpServerOAuthLoginResponse>;
   refreshServers: () => Promise<void>;
 
-  // 工具操作
+  // 工具操作。Settings 只浏览工具；执行必须由真实 Agent Thread 发起。
   refreshTools: () => Promise<void>;
-  callTool: (
-    toolName: string,
-    args: Record<string, unknown>,
-  ) => Promise<McpToolResult>;
 
   // 提示词操作
   refreshPrompts: () => Promise<void>;
@@ -269,25 +264,6 @@ export function useMcp(): UseMcpReturn {
   );
 
   // --------------------------------------------------------------------------
-  // 工具操作
-  // --------------------------------------------------------------------------
-
-  const callTool = useCallback(
-    async (
-      toolName: string,
-      args: Record<string, unknown>,
-    ): Promise<McpToolResult> => {
-      try {
-        return await mcpApi.callTool(toolName, args);
-      } catch (e) {
-        console.error("[useMcp] 调用工具失败:", e);
-        throw e;
-      }
-    },
-    [],
-  );
-
-  // --------------------------------------------------------------------------
   // 提示词操作
   // --------------------------------------------------------------------------
 
@@ -417,7 +393,6 @@ export function useMcp(): UseMcpReturn {
     loginOAuthServer,
     refreshServers,
     refreshTools,
-    callTool,
     refreshPrompts,
     getPrompt,
     refreshResources,

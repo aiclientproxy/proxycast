@@ -255,6 +255,7 @@
   "common.modelSelector.model.empty": "利用可能なモデルはありません",
   "common.modelSelector.model.selectedUnavailable": "選択中のモデルは現在利用できません",
   "common.modelSelector.reasoning.title": "推論の強度",
+  "common.modelSelector.reasoning.trigger": "思考 {{level}}",
   "common.modelSelector.reasoning.source.api": "API 宣言",
   "common.modelSelector.reasoning.aria": "推論の強度 {{level}} を選択",
   "common.modelSelector.reasoning.level.none": "オフ",

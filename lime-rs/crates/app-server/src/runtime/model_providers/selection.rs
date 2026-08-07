@@ -81,15 +81,16 @@ impl RuntimeCore {
             return Ok(None);
         }
         let mut reconciled_settings = None;
+        let mut refreshed_providers = std::collections::HashSet::new();
 
         for _ in 0..MAX_GENERATION_ATTEMPTS {
             let generation = self.app_data_source.read_model_route_generation().await?;
-            let Some((session_id, current, has_direct_route)) =
+            let Some((session_id, current, has_agent_control_route)) =
                 self.loaded_thread_settings(thread_id)?
             else {
                 return Ok(None);
             };
-            if has_direct_route {
+            if has_agent_control_route {
                 return Ok(None);
             }
             let catalogs = self.model_catalog(None).await?;
@@ -102,19 +103,56 @@ impl RuntimeCore {
                 candidate.provider == current.model_provider
                     && candidate.matches_model(&current.model)
             });
+            let should_probe_missing_catalog = current_candidate.is_none()
+                && !refreshed_providers.contains(&current.model_provider)
+                && !self
+                    .has_model_provider_last_success(&current.model_provider)
+                    .await?;
             let mut last_route_error = None;
-            if current_candidate.is_some() {
+            if current_candidate.is_some() || should_probe_missing_catalog {
                 let session = self.session_snapshot(&session_id)?.0;
                 match self
                     .backend
                     .preflight_thread_settings(&session, &current)
                     .await
                 {
-                    Ok(()) => return Ok(reconciled_settings),
-                    Err(error @ RuntimeCoreError::RouteRejected { .. }) => {
+                    Ok(()) if current_candidate.is_some() => return Ok(reconciled_settings),
+                    Ok(()) => {}
+                    Err(
+                        error @ (RuntimeCoreError::RouteRejected { .. }
+                        | RuntimeCoreError::PendingRoute { .. }),
+                    ) => {
                         last_route_error = Some(error);
                     }
                     Err(error) => return Err(error),
+                }
+            }
+
+            if let Some(provider_id) = last_route_error
+                .as_ref()
+                .and_then(refreshable_model_catalog_provider)
+                .filter(|provider_id| *provider_id == current.model_provider)
+            {
+                let has_last_success = if should_probe_missing_catalog {
+                    false
+                } else {
+                    self.has_model_provider_last_success(provider_id).await?
+                };
+                if !has_last_success && refreshed_providers.insert(provider_id.to_string()) {
+                    match self.refresh_model_provider_catalog(provider_id).await {
+                        Ok(response) if response.source == "Api" => continue,
+                        Ok(response) => tracing::warn!(
+                            provider_id,
+                            source = response.source,
+                            error_kind = response.error_kind.as_deref().unwrap_or("unknown"),
+                            "turn start model catalog refresh did not produce API metadata"
+                        ),
+                        Err(error) => tracing::warn!(
+                            provider_id,
+                            error = %error,
+                            "turn start model catalog refresh failed"
+                        ),
+                    }
                 }
             }
 
@@ -165,6 +203,28 @@ impl RuntimeCore {
             "model route generation changed repeatedly during model selection reconciliation"
                 .to_string(),
         ))
+    }
+}
+
+fn refreshable_model_catalog_provider(error: &RuntimeCoreError) -> Option<&str> {
+    match error {
+        RuntimeCoreError::PendingRoute {
+            provider: Some(provider),
+            reason_code,
+            ..
+        }
+        | RuntimeCoreError::RouteRejected {
+            provider: Some(provider),
+            reason_code,
+            ..
+        } if matches!(
+            reason_code.as_str(),
+            "model_registry_metadata_missing" | "capability_snapshot_missing"
+        ) =>
+        {
+            non_empty(provider)
+        }
+        _ => None,
     }
 }
 

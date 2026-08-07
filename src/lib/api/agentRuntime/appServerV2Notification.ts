@@ -7,6 +7,7 @@ import {
   isTurnPlanUpdatedNotification,
 } from "@limecloud/app-server-client";
 import { readCanonicalThreadItem } from "./appServerCanonicalItemReader";
+import { readHookItemFromPayload } from "./appServerEventTimelineReaders";
 import { RENDER_PROJECTION_REFERENCE_REVISION } from "./conversationProjection";
 
 const DIRECT_V2_NOTIFICATION_METHODS = new Set([
@@ -18,6 +19,8 @@ const DIRECT_V2_NOTIFICATION_METHODS = new Set([
   "turn/completed",
   "item/started",
   "item/completed",
+  "hook/started",
+  "hook/completed",
   "item/agentMessage/delta",
   "item/commandExecution/outputDelta",
   "item/commandExecution/terminalInteraction",
@@ -136,6 +139,30 @@ export function readAppServerV2NotificationRoute(
       const timestampMs = readFiniteNumber(params, timestampKey);
       return threadId && turnId && itemId && timestampMs !== undefined
         ? { itemId, terminal: false, threadId, turnId }
+        : null;
+    }
+    case "hook/started":
+    case "hook/completed": {
+      const threadId = readString(params, "threadId");
+      const turnId = readString(params, "turnId");
+      const run = asRecord(params.run);
+      const runId = readString(run, "id");
+      const status = readString(run, "status");
+      const timestampMs = notificationTimestampMs(notification.method, params);
+      const validStatus =
+        notification.method === "hook/started"
+          ? status === "running"
+          : status === "completed" ||
+            status === "failed" ||
+            status === "blocked" ||
+            status === "stopped";
+      return threadId && runId && validStatus && timestampMs !== undefined
+        ? {
+            itemId: `item_${runId}`,
+            terminal: notification.method === "hook/completed",
+            threadId,
+            ...(turnId ? { turnId } : {}),
+          }
         : null;
     }
     case "item/agentMessage/delta":
@@ -331,6 +358,39 @@ export function projectAppServerV2NotificationPayload(
             ? "item_started"
             : "item_completed",
         item,
+      };
+    }
+    case "hook/started":
+    case "hook/completed": {
+      const run = asRecord(params.run);
+      if (!run) {
+        return null;
+      }
+      const sequence = directItemSequence(route, route.itemId);
+      const event: AppServerAgentEvent = {
+        eventId: `direct-v2-${route.itemId}`,
+        payload: params,
+        sequence,
+        sessionId: route.threadId,
+        threadId: route.threadId,
+        timestamp,
+        turnId: route.turnId,
+        type:
+          notification.method === "hook/started"
+            ? "hook.started"
+            : "hook.completed",
+      };
+      const item = readHookItemFromPayload(params, event);
+      return {
+        ...basePayload,
+        sequence,
+        sequence_provenance: "notification_order",
+        type:
+          notification.method === "hook/started"
+            ? "item_started"
+            : "item_completed",
+        item,
+        item_id: route.itemId,
       };
     }
     case "item/agentMessage/delta":
@@ -707,6 +767,13 @@ function notificationTimestampMs(
   }
   if (method === "item/completed") {
     return readFiniteNumber(params, "completedAtMs");
+  }
+  if (method === "hook/started" || method === "hook/completed") {
+    const run = asRecord(params.run);
+    return readFiniteNumber(
+      run,
+      method === "hook/started" ? "startedAt" : "completedAt",
+    );
   }
   return undefined;
 }

@@ -97,7 +97,7 @@ const PLUGIN_V2_REQUIRED_METHODS = [
   "plugin/installed",
   "plugin/enabled/set",
   "plugin/uninstall",
-  "mcpResource/read",
+  "mcpServer/resource/read",
   "thread/start",
   "thread/settings/update",
   "turn/start",

@@ -133,18 +133,20 @@ describe("mcp App Server current API fail-closed", () => {
         () => mcpApi.listToolsForContext("assistant", true),
       ],
       ["mcpTool/search", () => mcpApi.searchTools("docs", "tool_search", 5)],
-      ["mcpTool/call", () => mcpApi.callTool("mcp__docs__search", {})],
       [
-        "mcpTool/callWithCaller",
+        "mcpServer/tool/call",
         () =>
-          mcpApi.callToolWithCaller(
-            "mcp__docs__search",
-            { q: "lime" },
-            "assistant",
-          ),
+          mcpApi.callServerTool({
+            threadId: "thread-1",
+            server: "docs",
+            tool: "search",
+          }),
       ],
       ["mcpPrompt/get", () => mcpApi.getPrompt("docs", "summarize", {})],
-      ["mcpResource/read", () => mcpApi.readResource("docs", "docs://readme")],
+      [
+        "mcpServer/resource/read",
+        () => mcpApi.readResource("docs", "docs://readme"),
+      ],
       [
         "mcpResource/subscribe",
         () => mcpApi.subscribeResource("docs", "docs://readme"),
@@ -198,14 +200,14 @@ describe("mcp App Server current API fail-closed", () => {
   it("MCP runtime usage 收到 malformed current 响应时应 fail closed", async () => {
     const cases: Array<[unknown, () => Promise<unknown>, string]> = [
       [
-        {},
-        () => mcpApi.callTool("mcp__docs__search", {}),
-        "mcpTool/call did not return tool result",
-      ],
-      [
-        { content: [{ type: "text" }], is_error: false },
-        () => mcpApi.callToolWithCaller("mcp__docs__search", {}, "assistant"),
-        "mcpTool/callWithCaller did not return tool result",
+        { content: [{ type: "image", data: "aW1hZ2U=" }], isError: false },
+        () =>
+          mcpApi.callServerTool({
+            threadId: "thread-1",
+            server: "docs",
+            tool: "search",
+          }),
+        "mcpServer/tool/call did not return canonical MCP content",
       ],
       [
         { messages: [{ role: "user", content: { type: "text" } }] },
@@ -213,9 +215,9 @@ describe("mcp App Server current API fail-closed", () => {
         "mcpPrompt/get did not return prompt result",
       ],
       [
-        { mime_type: "text/plain", text: "README" },
+        { contents: [{ mimeType: "text/plain", text: "README" }] },
         () => mcpApi.readResource("docs", "docs://readme"),
-        "mcpResource/read did not return resource content",
+        "mcpServer/resource/read did not return resource URI",
       ],
       [
         { ok: true },
@@ -276,75 +278,88 @@ describe("mcp App Server current API fail-closed", () => {
 
   it("MCP call proof requests 应拒绝非 candidate、未知方法、malformed params 和工具错误", async () => {
     await expect(
-      mcpApi.executeCallProofRequests([
-        {
-          method: "mcpTool/callWithCaller",
-          params: {
-            toolName: "mcp__docs__search",
-            caller: "plugin:docs-plugin",
-            arguments: { q: "lime" },
+      mcpApi.executeCallProofRequests(
+        [
+          {
+            method: "mcpServer/tool/call",
+            params: {
+              server: "docs",
+              tool: "search",
+              arguments: { q: "lime" },
+            },
+            status: "completed",
           },
-          status: "completed",
-        },
-      ]),
+        ],
+        "thread-1",
+      ),
     ).rejects.toThrow("MCP call proof request must be candidate");
 
     await expect(
-      mcpApi.executeCallProofRequests([
-        {
-          method: "mcpTool/call",
-          params: {
-            toolName: "mcp__docs__search",
-            arguments: { q: "lime" },
+      mcpApi.executeCallProofRequests(
+        [
+          {
+            method: "mcpTool/call",
+            params: {
+              toolName: "mcp__docs__search",
+              arguments: { q: "lime" },
+            },
+            status: "candidate",
           },
-          status: "candidate",
-        },
-      ]),
+        ],
+        "thread-1",
+      ),
     ).rejects.toThrow(
       "Unsupported MCP call proof request method: mcpTool/call",
     );
 
     await expect(
-      mcpApi.executeCallProofRequests([
-        {
-          method: "mcpTool/callWithCaller",
-          params: {
-            toolName: "mcp__docs__search",
-            caller: "plugin:docs-plugin",
-            arguments: "lime",
+      mcpApi.executeCallProofRequests(
+        [
+          {
+            method: "mcpServer/tool/call",
+            params: {
+              server: "docs",
+              tool: "search",
+              arguments: "lime",
+            },
+            status: "candidate",
           },
-          status: "candidate",
-        },
-      ]),
+        ],
+        "thread-1",
+      ),
     ).rejects.toThrow(
-      "mcpTool/callWithCaller prepare params require arguments object",
+      "mcpServer/tool/call prepare params require arguments object",
     );
 
     mockAppServerResult({
       content: [{ type: "text", text: "failed" }],
-      is_error: true,
+      isError: true,
     });
     await expect(
-      mcpApi.executeCallProofRequests([
-        {
-          method: "mcpTool/callWithCaller",
-          params: {
-            toolName: "mcp__docs__search",
-            caller: "plugin:docs-plugin",
-            arguments: { q: "lime" },
+      mcpApi.executeCallProofRequests(
+        [
+          {
+            method: "mcpServer/tool/call",
+            params: {
+              server: "docs",
+              tool: "search",
+              arguments: { q: "lime" },
+            },
+            status: "candidate",
           },
-          status: "candidate",
-        },
-      ]),
+        ],
+        "thread-1",
+      ),
     ).rejects.toThrow("MCP call proof returned tool error");
 
     expect(appServerRequestMock).toHaveBeenCalledTimes(1);
     expect(appServerRequestMock).toHaveBeenLastCalledWith(
-      "mcpTool/callWithCaller",
+      "mcpServer/tool/call",
       {
-        toolName: "mcp__docs__search",
+        threadId: "thread-1",
+        server: "docs",
+        tool: "search",
         arguments: { q: "lime" },
-        caller: "plugin:docs-plugin",
       },
     );
     expect(safeInvoke).not.toHaveBeenCalled();

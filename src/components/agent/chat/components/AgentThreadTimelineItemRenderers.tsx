@@ -479,6 +479,32 @@ function renderGroupItemDetails(
     );
   }
 
+  if (item.type === "hook") {
+    const detail =
+      item.status_message?.trim() ||
+      item.output?.trim() ||
+      item.entries
+        ?.map((entry) => entry.text.trim())
+        .filter(Boolean)
+        .join("\n") ||
+      undefined;
+    const title =
+      item.status === "in_progress"
+        ? t("agentChat.threadTimeline.hook.running")
+        : item.status === "failed"
+          ? t("agentChat.threadTimeline.hook.failed")
+          : t("agentChat.threadTimeline.hook.completed");
+    return (
+      <CanonicalActivityRow
+        icon={item.status === "in_progress" ? Loader2 : ShieldAlert}
+        title={title}
+        detail={detail}
+        timestamp={timestamp}
+        testId="timeline-hook"
+      />
+    );
+  }
+
   if (item.type === "sleep") {
     const detail =
       item.duration_ms === undefined

@@ -242,6 +242,8 @@ describe("provider-generation PendingRoute Gate B fixture", () => {
       'backendMode: "runtime"',
       '"modelProvider/create"',
       '"modelProvider/update"',
+      'taskFamilies: ["chat"]',
+      'runtimeFeatures: ["streaming", "tool_calling"]',
       '"modelProviderKey/create"',
       '"modelProviderKey/delete"',
       '"thread/list"',

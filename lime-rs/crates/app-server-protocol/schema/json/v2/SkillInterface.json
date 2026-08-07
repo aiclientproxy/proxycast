@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "brandColor": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "defaultPrompt": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "displayName": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "iconLarge": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "iconLargeUrl": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "iconSmall": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "iconSmallUrl": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "shortDescription": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "title": "SkillInterface",
+  "type": "object"
+}

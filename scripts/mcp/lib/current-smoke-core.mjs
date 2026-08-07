@@ -26,13 +26,14 @@ export const REQUIRED_READ_METHODS = [
 ];
 
 export const FIXTURE_METHODS = [
+  "thread/start",
   "mcpServer/create",
   "mcpServer/start",
   "mcpServerStatus/list",
   "mcpTool/list",
-  "mcpTool/call",
+  "mcpServer/tool/call",
   "mcpResource/list",
-  "mcpResource/read",
+  "mcpServer/resource/read",
   "mcpServer/stop",
   "mcpServer/delete",
 ];
@@ -45,11 +46,12 @@ export const OAUTH_FIXTURE_METHODS = [
 ];
 
 export const PLUGIN_RUNTIME_FIXTURE_METHODS = [
+  "thread/start",
   "mcpServer/create",
   "mcpServer/start",
   "agentSession/toolInventory/read",
   "mcpTool/listForContext",
-  "mcpTool/callWithCaller",
+  "mcpServer/tool/call",
   "mcpServer/stop",
   "mcpServer/delete",
 ];
@@ -118,7 +120,10 @@ function assertToolResult(
     result && typeof result === "object" && Array.isArray(result.content),
     `${method} did not return content`,
   );
-  assert(result.is_error === false, `${method} returned is_error=true`);
+  assert(
+    (result.isError ?? result.is_error) === false,
+    `${method} returned isError=true`,
+  );
   assert(
     result.content.some(
       (item) => item?.type === "text" && item?.text === expectedText,
@@ -143,14 +148,30 @@ function assertToolResult(
 }
 
 function assertResourceResult(method, result, expectedText) {
+  const content = Array.isArray(result?.contents) ? result.contents[0] : null;
   assert(
-    result && typeof result === "object" && result.uri === "fixture://status",
+    content && content.uri === "fixture://status",
     `${method} did not return fixture resource uri`,
   );
   assert(
-    result.text === expectedText,
+    content.text === expectedText,
     `${method} did not return expected text`,
   );
+}
+
+async function startFixtureThread(options, entries) {
+  const result = await invokeAppServerMethod(
+    options,
+    "thread/start",
+    { ephemeral: true },
+    entries,
+  );
+  const threadId = result?.thread?.id;
+  assert(
+    typeof threadId === "string" && threadId.length > 0,
+    "thread/start did not return a thread id",
+  );
+  return threadId;
 }
 
 function assertResourceTemplate(method, templates, expectedUriTemplate) {
@@ -229,6 +250,7 @@ async function runFailureIsolationChecks({
   fixture,
   healthyServerName,
   healthyToolName,
+  threadId,
 }) {
   const failedServerId = `mcp-current-failed-${Date.now()}`;
   const failedServerName = failedServerId.replace(/[^a-zA-Z0-9_-]/g, "-");
@@ -312,12 +334,14 @@ async function runFailureIsolationChecks({
       "healthy MCP tool disappeared after another server failed",
     );
     const structuredContent = assertToolResult(
-      "mcpTool/call",
+      "mcpServer/tool/call",
       await invokeAppServerMethod(
         options,
-        "mcpTool/call",
+        "mcpServer/tool/call",
         {
-          toolName: healthyToolName,
+          threadId,
+          server: healthyServerName,
+          tool: healthyToolName.split("__").at(-1),
           arguments: { message: "after failed MCP server" },
         },
         entries,
@@ -329,10 +353,10 @@ async function runFailureIsolationChecks({
       },
     );
     assertResourceResult(
-      "mcpResource/read",
+      "mcpServer/resource/read",
       await invokeAppServerMethod(
         options,
-        "mcpResource/read",
+        "mcpServer/resource/read",
         { server: healthyServerName, uri: "fixture://status" },
         entries,
       ),
@@ -413,6 +437,7 @@ export async function runFixtureChecks(options, entries, fixture) {
         entries,
       ),
     );
+    const threadId = await startFixtureThread(options, entries);
 
     const statusServers = assertArrayField(
       "mcpServerStatus/list",
@@ -475,12 +500,14 @@ export async function runFixtureChecks(options, entries, fixture) {
     );
 
     const structuredContent = assertToolResult(
-      "mcpTool/call",
+      "mcpServer/tool/call",
       await invokeAppServerMethod(
         options,
-        "mcpTool/call",
+        "mcpServer/tool/call",
         {
-          toolName: fixtureToolName,
+          threadId,
+          server: serverName,
+          tool: "echo",
           arguments: { message: "hello current MCP" },
         },
         entries,
@@ -523,10 +550,10 @@ export async function runFixtureChecks(options, entries, fixture) {
     );
 
     assertResourceResult(
-      "mcpResource/read",
+      "mcpServer/resource/read",
       await invokeAppServerMethod(
         options,
-        "mcpResource/read",
+        "mcpServer/resource/read",
         { server: serverName, uri: "fixture://status" },
         entries,
       ),
@@ -538,6 +565,7 @@ export async function runFixtureChecks(options, entries, fixture) {
       fixture,
       healthyServerName: serverName,
       healthyToolName: fixtureToolName,
+      threadId,
     });
 
     return {
@@ -698,10 +726,10 @@ async function runPluginRuntimeListProof({
   return tools.length;
 }
 
-function countCallWithCaller(entries) {
+function countExactToolCalls(entries) {
   return entries
     .flatMap((entry) => entry.appServerRequests ?? [])
-    .filter((request) => request.method === "mcpTool/callWithCaller").length;
+    .filter((request) => request.method === "mcpServer/tool/call").length;
 }
 
 export async function runPluginRuntimeFixtureChecks(options, entries, fixture) {
@@ -748,6 +776,7 @@ export async function runPluginRuntimeFixtureChecks(options, entries, fixture) {
         entries,
       ),
     );
+    const threadId = await startFixtureThread(options, entries);
 
     const explicitInventory = await invokeAppServerMethod(
       options,
@@ -767,7 +796,7 @@ export async function runPluginRuntimeFixtureChecks(options, entries, fixture) {
       },
     );
     assert(
-      explicitTarget.callProofRequest?.method === "mcpTool/callWithCaller",
+      explicitTarget.callProofRequest?.method === "mcpServer/tool/call",
       "plugin_mcp_targets did not emit explicit callProofRequest",
     );
 
@@ -779,12 +808,12 @@ export async function runPluginRuntimeFixtureChecks(options, entries, fixture) {
     });
     const callProofResult = await invokeAppServerMethod(
       options,
-      "mcpTool/callWithCaller",
-      explicitTarget.callProofRequest.params,
+      "mcpServer/tool/call",
+      { threadId, ...explicitTarget.callProofRequest.params },
       entries,
     );
     const structuredContent = assertToolResult(
-      "mcpTool/callWithCaller",
+      "mcpServer/tool/call",
       callProofResult,
       "echo: hello plugin MCP",
       {
@@ -793,7 +822,7 @@ export async function runPluginRuntimeFixtureChecks(options, entries, fixture) {
       },
     );
 
-    const beforeDefaultProofCallCount = countCallWithCaller(entries);
+    const beforeDefaultProofCallCount = countExactToolCalls(entries);
     const defaultInventory = await invokeAppServerMethod(
       options,
       "agentSession/toolInventory/read",
@@ -822,7 +851,7 @@ export async function runPluginRuntimeFixtureChecks(options, entries, fixture) {
       target: defaultTarget,
       expectedToolName,
     });
-    const afterDefaultProofCallCount = countCallWithCaller(entries);
+    const afterDefaultProofCallCount = countExactToolCalls(entries);
     assert(
       afterDefaultProofCallCount === beforeDefaultProofCallCount,
       "default MCP list proof unexpectedly called a tool",

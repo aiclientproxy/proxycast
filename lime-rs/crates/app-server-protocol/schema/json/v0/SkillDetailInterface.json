@@ -30,6 +30,6 @@
     "displayName",
     "executionMode"
   ],
-  "title": "SkillInterface",
+  "title": "SkillDetailInterface",
   "type": "object"
 }

@@ -37,6 +37,8 @@ const APP_SERVER_DIRECT_EVENT_TYPES = new Map([
   ["item/started", "item.started"],
   ["item/completed", "item.completed"],
   ["item/agentMessage/delta", "message.delta"],
+  ["hook/started", "hook.started"],
+  ["hook/completed", "hook.completed"],
 ]);
 const APP_SERVER_DIRECT_EVENT_METHODS = [
   "thread/started",

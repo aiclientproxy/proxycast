@@ -217,6 +217,9 @@ const {
   METHOD_KNOWLEDGE_PACK_STATUS_UPDATE,
   METHOD_KNOWLEDGE_SOURCE_IMPORT,
   METHOD_MODEL_LIST,
+  METHOD_HOOKS_LIST,
+  METHOD_SKILLS_CONFIG_WRITE,
+  METHOD_SKILLS_EXTRA_ROOTS_SET,
   METHOD_MODEL_PREFERENCES_LIST,
   METHOD_MODEL_PROVIDER_ALIAS_LIST,
   METHOD_MODEL_PROVIDER_ALIAS_READ,
@@ -241,7 +244,6 @@ const {
   METHOD_MCP_PROMPT_GET,
   METHOD_MCP_PROMPT_LIST,
   METHOD_MCP_RESOURCE_LIST,
-  METHOD_MCP_RESOURCE_READ,
   METHOD_MCP_RESOURCE_SUBSCRIBE,
   METHOD_MCP_RESOURCE_UNSUBSCRIBE,
   METHOD_MCP_SERVER_CREATE,
@@ -251,13 +253,13 @@ const {
   METHOD_MCP_SERVER_LIST,
   METHOD_MCP_SERVER_OAUTH_LOGIN,
   METHOD_MCP_SERVER_ELICITATION_REQUEST,
+  METHOD_MCP_SERVER_RESOURCE_READ,
   METHOD_MCP_SERVER_SYNC_ALL_TO_LIVE,
   METHOD_MCP_SERVER_START,
   METHOD_MCP_SERVER_STATUS_LIST,
   METHOD_MCP_SERVER_STOP,
+  METHOD_MCP_SERVER_TOOL_CALL,
   METHOD_MCP_SERVER_UPDATE,
-  METHOD_MCP_TOOL_CALL,
-  METHOD_MCP_TOOL_CALL_WITH_CALLER,
   METHOD_MCP_TOOL_LIST,
   METHOD_MCP_TOOL_LIST_FOR_CONTEXT,
   METHOD_MCP_TOOL_SEARCH,
@@ -303,7 +305,7 @@ const {
   METHOD_SKILL_MANAGEMENT_LIST,
   METHOD_SKILL_MANAGEMENT_UNINSTALL,
   METHOD_SKILL_MARKETPLACE_INSTALL,
-  METHOD_SKILL_LIST,
+  METHOD_SKILLS_LIST,
   METHOD_SKILL_PACKAGE_DOWNLOAD_INSTALL,
   METHOD_SKILL_PACKAGE_EXPORT,
   METHOD_SKILL_PACKAGE_LOCAL_INSPECT,
@@ -634,7 +636,18 @@ test("builds workspace and skill read requests with current methods", () => {
     action: "get_page_info",
     args: { includeMarkdown: true },
   });
-  const skills = client.listSkills();
+  const skills = client.listSkills({
+    cwds: ["/workspace/project"],
+    forceReload: true,
+  });
+  const skillsExtraRoots = client.setSkillsExtraRoots({
+    extraRoots: ["/workspace/shared-skills"],
+  });
+  const skillsConfig = client.writeSkillsConfig({
+    name: "article-writer",
+    enabled: false,
+  });
+  const hooks = client.listHooks({ cwds: ["/workspace/project"] });
   const skill = client.readSkill({ skillId: "project:article-writer" });
   const bindings = client.listWorkspaceSkillBindings({
     workspaceRoot: "/workspace/project",
@@ -745,8 +758,22 @@ test("builds workspace and skill read requests with current methods", () => {
     action: "get_page_info",
     args: { includeMarkdown: true },
   });
-  assert.equal(skills.method, METHOD_SKILL_LIST);
-  assert.deepEqual(skills.params, {});
+  assert.equal(skills.method, METHOD_SKILLS_LIST);
+  assert.equal(hooks.method, METHOD_HOOKS_LIST);
+  assert.deepEqual(hooks.params, { cwds: ["/workspace/project"] });
+  assert.deepEqual(skills.params, {
+    cwds: ["/workspace/project"],
+    forceReload: true,
+  });
+  assert.equal(skillsExtraRoots.method, METHOD_SKILLS_EXTRA_ROOTS_SET);
+  assert.deepEqual(skillsExtraRoots.params, {
+    extraRoots: ["/workspace/shared-skills"],
+  });
+  assert.equal(skillsConfig.method, METHOD_SKILLS_CONFIG_WRITE);
+  assert.deepEqual(skillsConfig.params, {
+    name: "article-writer",
+    enabled: false,
+  });
   assert.equal(skill.method, METHOD_SKILL_READ);
   assert.deepEqual(skill.params, { skillId: "project:article-writer" });
   assert.equal(bindings.method, METHOD_WORKSPACE_SKILL_BINDINGS_LIST);
@@ -1375,14 +1402,12 @@ test("builds app data surface requests with current methods", () => {
     caller: "agent-chat",
     limit: 5,
   });
-  const mcpToolCall = client.callMcpTool({
-    toolName: "filesystem.read",
+  const mcpServerToolCall = client.callMcpServerTool({
+    threadId: "thread-1",
+    server: "filesystem",
+    tool: "read",
     arguments: { path: "/workspace/README.md" },
-  });
-  const mcpToolCallWithCaller = client.callMcpToolWithCaller({
-    toolName: "filesystem.read",
-    arguments: { path: "/workspace/README.md" },
-    caller: "agent-chat",
+    _meta: { request: "desktop" },
   });
   const mcpPrompts = client.listMcpPrompts();
   const mcpPrompt = client.getMcpPrompt({
@@ -1391,7 +1416,8 @@ test("builds app data surface requests with current methods", () => {
     arguments: { topic: "release notes" },
   });
   const mcpResources = client.listMcpResources();
-  const mcpResource = client.readMcpResource({
+  const mcpServerResource = client.readMcpServerResource({
+    threadId: "thread-1",
     server: "filesystem",
     uri: "file:///workspace/README.md",
   });
@@ -1817,16 +1843,13 @@ test("builds app data surface requests with current methods", () => {
     caller: "agent-chat",
     limit: 5,
   });
-  assert.equal(mcpToolCall.method, METHOD_MCP_TOOL_CALL);
-  assert.deepEqual(mcpToolCall.params, {
-    toolName: "filesystem.read",
+  assert.equal(mcpServerToolCall.method, METHOD_MCP_SERVER_TOOL_CALL);
+  assert.deepEqual(mcpServerToolCall.params, {
+    threadId: "thread-1",
+    server: "filesystem",
+    tool: "read",
     arguments: { path: "/workspace/README.md" },
-  });
-  assert.equal(mcpToolCallWithCaller.method, METHOD_MCP_TOOL_CALL_WITH_CALLER);
-  assert.deepEqual(mcpToolCallWithCaller.params, {
-    toolName: "filesystem.read",
-    arguments: { path: "/workspace/README.md" },
-    caller: "agent-chat",
+    _meta: { request: "desktop" },
   });
   assert.equal(mcpPrompts.method, METHOD_MCP_PROMPT_LIST);
   assert.deepEqual(mcpPrompts.params, {});
@@ -1838,8 +1861,9 @@ test("builds app data surface requests with current methods", () => {
   });
   assert.equal(mcpResources.method, METHOD_MCP_RESOURCE_LIST);
   assert.deepEqual(mcpResources.params, {});
-  assert.equal(mcpResource.method, METHOD_MCP_RESOURCE_READ);
-  assert.deepEqual(mcpResource.params, {
+  assert.equal(mcpServerResource.method, METHOD_MCP_SERVER_RESOURCE_READ);
+  assert.deepEqual(mcpServerResource.params, {
+    threadId: "thread-1",
     server: "filesystem",
     uri: "file:///workspace/README.md",
   });

@@ -10,7 +10,8 @@
 //! - Hook 决策失败（fail closed）与显式 block 走同一条阻断路径，不静默放行。
 
 use crate::hook_lifecycle::{
-    evaluate_hook_event, RuntimeHookEvaluation, RuntimeHookEventContext, RuntimeHookHandlerReport,
+    evaluate_hook_event_async, RuntimeHookEvaluation, RuntimeHookEventContext,
+    RuntimeHookHandlerReport, RuntimeHookReportFuture, RuntimeHookReporter,
 };
 use crate::tool_executor::{
     RuntimeToolExecutionError, RuntimeToolExecutionFuture, RuntimeToolExecutionRequest,
@@ -19,18 +20,6 @@ use crate::tool_executor::{
 use crate::turn_snapshot::{RuntimeHookEventName, RuntimeHookSnapshot, RuntimeTurnSnapshot};
 use serde_json::Value;
 use std::sync::Arc;
-
-/// 由执行 owner 提供的 handler 回报来源。
-///
-/// 返回 `None` 表示该 Hook 没有给出终态，`hook_lifecycle` 会按 fail closed 处理。
-pub trait RuntimeHookReporter: Send + Sync {
-    fn report(
-        &self,
-        hook: &RuntimeHookSnapshot,
-        event_name: RuntimeHookEventName,
-        context: &RuntimeHookEventContext,
-    ) -> Option<RuntimeHookHandlerReport>;
-}
 
 /// 固定回报，用于测试与确定性回归。
 pub struct FixedHookReporter {
@@ -44,13 +33,13 @@ impl FixedHookReporter {
 }
 
 impl RuntimeHookReporter for FixedHookReporter {
-    fn report(
-        &self,
-        _hook: &RuntimeHookSnapshot,
+    fn report<'a>(
+        &'a self,
+        _hook: &'a RuntimeHookSnapshot,
         _event_name: RuntimeHookEventName,
-        _context: &RuntimeHookEventContext,
-    ) -> Option<RuntimeHookHandlerReport> {
-        self.report.clone()
+        _context: &'a RuntimeHookEventContext,
+    ) -> RuntimeHookReportFuture<'a> {
+        Box::pin(async move { self.report.clone() })
     }
 }
 
@@ -76,20 +65,29 @@ impl HookGatedToolExecutor {
 
     fn event_context(request: &RuntimeToolExecutionRequest<'_>) -> RuntimeHookEventContext {
         RuntimeHookEventContext {
+            session_id: Some(request.context.session_id().to_string()),
+            turn_id: request
+                .context
+                .tool_identity()
+                .map(|identity| identity.turn_id().to_string()),
+            tool_call_id: request
+                .context
+                .tool_identity()
+                .map(|identity| identity.call_id().to_string()),
+            working_directory: request.context.working_directory().clone(),
             tool_name: Some(request.tool_name.to_string()),
             tool_arguments: Some(request.params.to_string()),
+            tool_output: None,
             content: None,
         }
     }
 
-    fn evaluate(
+    async fn evaluate(
         &self,
         event_name: RuntimeHookEventName,
         context: &RuntimeHookEventContext,
     ) -> RuntimeHookEvaluation {
-        evaluate_hook_event(&self.snapshot, event_name, context, |hook| {
-            self.reporter.report(hook, event_name, context)
-        })
+        evaluate_hook_event_async(&self.snapshot, event_name, context, self.reporter.as_ref()).await
     }
 }
 
@@ -118,7 +116,9 @@ impl RuntimeToolExecutor for HookGatedToolExecutor {
     ) -> RuntimeToolExecutionFuture<'a> {
         Box::pin(async move {
             let context = Self::event_context(&request);
-            let pre = self.evaluate(RuntimeHookEventName::PreToolUse, &context);
+            let pre = self
+                .evaluate(RuntimeHookEventName::PreToolUse, &context)
+                .await;
             if pre.is_blocked() {
                 // 未进入 handler：必须标记 before_handler，否则上层会误判已执行。
                 return Err(blocked_error(RuntimeHookEventName::PreToolUse, &pre).before_handler());
@@ -152,7 +152,21 @@ impl RuntimeToolExecutor for HookGatedToolExecutor {
             };
             let result = self.inner.execute(effective_request).await?;
 
-            let post = self.evaluate(RuntimeHookEventName::PostToolUse, &context);
+            let post_context = RuntimeHookEventContext {
+                tool_output: Some(
+                    serde_json::json!({
+                        "success": result.success,
+                        "output": result.output,
+                        "structuredContent": result.structured_content,
+                        "error": result.error,
+                    })
+                    .to_string(),
+                ),
+                ..context
+            };
+            let post = self
+                .evaluate(RuntimeHookEventName::PostToolUse, &post_context)
+                .await;
             if post.is_blocked() {
                 // handler 已经执行过，不能声明 before_handler。
                 return Err(blocked_error(RuntimeHookEventName::PostToolUse, &post));
@@ -172,17 +186,18 @@ pub fn hook_gated_executor(
 }
 
 /// 由 `PreToolUse` 的 allow 决策收集的模型可见注入上下文。
-pub fn pre_tool_use_injected_context(
+pub async fn pre_tool_use_injected_context(
     snapshot: &RuntimeTurnSnapshot,
     context: &RuntimeHookEventContext,
     reporter: &dyn RuntimeHookReporter,
 ) -> Vec<String> {
-    evaluate_hook_event(
+    evaluate_hook_event_async(
         snapshot,
         RuntimeHookEventName::PreToolUse,
         context,
-        |hook| reporter.report(hook, RuntimeHookEventName::PreToolUse, context),
+        reporter,
     )
+    .await
     .injected_context()
 }
 
@@ -243,12 +258,17 @@ mod tests {
             handler_type: RuntimeHookHandlerType::Command,
             execution_mode: RuntimeHookExecutionMode::Sync,
             matcher: None,
+            command: Some("true".to_string()),
             timeout_sec: 5,
             status_message: None,
+            additional_context_limit: None,
             source_path: PathBuf::from("/tmp/hooks.json"),
             source: RuntimeHookSource::Project,
+            plugin_id: None,
             display_order: 0,
             enabled: true,
+            is_managed: false,
+            current_hash: "sha256:test".to_string(),
             trust_status: RuntimeHookTrustStatus::Trusted,
         }
     }
@@ -399,8 +419,8 @@ mod tests {
         assert_eq!(inner.calls().len(), 1);
     }
 
-    #[test]
-    fn injected_context_is_collected_from_allow_decisions() {
+    #[tokio::test]
+    async fn injected_context_is_collected_from_allow_decisions() {
         let snapshot = snapshot(vec![hook(RuntimeHookEventName::PreToolUse)]);
         let reporter = FixedHookReporter::new(Some(RuntimeHookHandlerReport::Allow {
             additional_context: Some("review the diff".to_string()),
@@ -409,10 +429,11 @@ mod tests {
             tool_name: Some("shell".to_string()),
             tool_arguments: Some("{}".to_string()),
             content: None,
+            ..RuntimeHookEventContext::default()
         };
 
         assert_eq!(
-            pre_tool_use_injected_context(&snapshot, &context, &reporter),
+            pre_tool_use_injected_context(&snapshot, &context, &reporter).await,
             vec!["review the diff".to_string()]
         );
     }

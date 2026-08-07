@@ -1,0 +1,172 @@
+{
+  "$defs": {
+    "SkillDependencies": {
+      "properties": {
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/SkillToolDependency"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "tools"
+      ],
+      "type": "object"
+    },
+    "SkillInterface": {
+      "properties": {
+        "brandColor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "defaultPrompt": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "displayName": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "iconLarge": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "iconLargeUrl": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "iconSmall": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "iconSmallUrl": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "shortDescription": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "SkillScope": {
+      "enum": [
+        "admin",
+        "repo",
+        "system",
+        "user"
+      ],
+      "type": "string"
+    },
+    "SkillToolDependency": {
+      "properties": {
+        "command": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "transport": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "type": {
+          "type": "string"
+        },
+        "url": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "dependencies": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SkillDependencies"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "interface": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SkillInterface"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/SkillScope"
+    },
+    "shortDescription": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "description",
+    "enabled",
+    "name",
+    "path",
+    "scope"
+  ],
+  "title": "SkillMetadata",
+  "type": "object"
+}

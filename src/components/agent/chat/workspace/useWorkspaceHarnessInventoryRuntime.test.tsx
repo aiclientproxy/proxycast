@@ -42,6 +42,7 @@ interface HookProps {
     typeof useWorkspaceHarnessInventoryRuntime
   >[0]["themeWorkbenchActiveQueueItem"];
   harnessPendingCount: number;
+  threadId?: string | null;
 }
 
 interface HookHarness {
@@ -72,6 +73,7 @@ function mountHook(initialProps?: Partial<HookProps>): HookHarness {
     themeWorkbenchBackendRunState: null,
     themeWorkbenchActiveQueueItem: null,
     harnessPendingCount: 0,
+    threadId: "thread-1",
     ...initialProps,
   };
 
@@ -409,10 +411,10 @@ describe("useWorkspaceHarnessInventoryRuntime", () => {
       },
     ];
     const callProofRequest = {
-      method: "mcpTool/callWithCaller",
+      method: "mcpServer/tool/call",
       params: {
-        toolName: "mcp__context7__resolve-library-id",
-        caller: "plugin:docs-plugin",
+        server: "context7",
+        tool: "resolve-library-id",
         arguments: { libraryName: "react" },
       },
       reason: "tool_call_proof",
@@ -456,7 +458,7 @@ describe("useWorkspaceHarnessInventoryRuntime", () => {
     ]);
     mockExecuteCallProofRequests.mockResolvedValueOnce([
       {
-        method: "mcpTool/callWithCaller",
+        method: "mcpServer/tool/call",
         status: "completed",
         result: {
           content: [{ type: "text", text: "ok" }],
@@ -482,9 +484,10 @@ describe("useWorkspaceHarnessInventoryRuntime", () => {
       });
 
       expect(mockExecutePrepareRequests).toHaveBeenCalledWith(prepareRequests);
-      expect(mockExecuteCallProofRequests).toHaveBeenCalledWith([
-        callProofRequest,
-      ]);
+      expect(mockExecuteCallProofRequests).toHaveBeenCalledWith(
+        [callProofRequest],
+        "thread-1",
+      );
       expect(mockGetAgentRuntimeToolInventory).toHaveBeenCalledTimes(2);
       expect(harness.getValue().mcpPrepareError).toBeNull();
     } finally {
@@ -494,10 +497,10 @@ describe("useWorkspaceHarnessInventoryRuntime", () => {
 
   it("MCP call proof 失败时不刷新库存", async () => {
     const callProofRequest = {
-      method: "mcpTool/callWithCaller",
+      method: "mcpServer/tool/call",
       params: {
-        toolName: "mcp__context7__resolve-library-id",
-        caller: "plugin:docs-plugin",
+        server: "context7",
+        tool: "resolve-library-id",
         arguments: { libraryName: "react" },
       },
       reason: "tool_call_proof",
@@ -533,9 +536,10 @@ describe("useWorkspaceHarnessInventoryRuntime", () => {
       });
 
       expect(mockExecutePrepareRequests).not.toHaveBeenCalled();
-      expect(mockExecuteCallProofRequests).toHaveBeenCalledWith([
-        callProofRequest,
-      ]);
+      expect(mockExecuteCallProofRequests).toHaveBeenCalledWith(
+        [callProofRequest],
+        "thread-1",
+      );
       expect(mockGetAgentRuntimeToolInventory).toHaveBeenCalledTimes(1);
       expect(harness.getValue().mcpPrepareError).toBe("MCP 工具调用证明失败");
     } finally {

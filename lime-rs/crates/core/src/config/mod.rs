@@ -47,11 +47,12 @@ pub use types::{
     OpenAIAsrConfig, PairingSettings, ProviderConfig, ProviderModelsConfig, ProvidersConfig,
     QuotaExceededConfig, RateLimitSettings, RemoteManagementConfig, ResponseCacheSettings,
     RetrySettings, RoutingConfig, SearchEngine, SenseVoiceLocalConfig, ServerConfig,
-    ShellEnvironmentImportConfig, TaskSchedule, TelegramAccountConfig, TelegramBotConfig,
-    TelegramGroupConfig, TelegramTopicConfig, TlsConfig, ToolCallingConfig, UpdateCheckConfig,
-    UserProfile, VertexApiKeyEntry, VertexModelAlias, VoiceInputConfig, VoiceInstruction,
-    VoiceOutputConfig, VoiceOutputMode, VoiceProcessorConfig, WebSearchConfig, WebSearchProvider,
-    WechatAccountConfig, WechatBotConfig, WechatGroupConfig, WhisperLocalConfig, WhisperModelSize,
-    WorkspacePreferencesConfig, WorkspaceSandboxConfig, XunfeiConfig, DEFAULT_API_KEY,
+    ShellEnvironmentImportConfig, SkillConfig, SkillsConfig, TaskSchedule, TelegramAccountConfig,
+    TelegramBotConfig, TelegramGroupConfig, TelegramTopicConfig, TlsConfig, ToolCallingConfig,
+    UpdateCheckConfig, UserProfile, VertexApiKeyEntry, VertexModelAlias, VoiceInputConfig,
+    VoiceInstruction, VoiceOutputConfig, VoiceOutputMode, VoiceProcessorConfig, WebSearchConfig,
+    WebSearchProvider, WechatAccountConfig, WechatBotConfig, WechatGroupConfig, WhisperLocalConfig,
+    WhisperModelSize, WorkspacePreferencesConfig, WorkspaceSandboxConfig, XunfeiConfig,
+    DEFAULT_API_KEY,
 };
 pub use yaml::{load_config, save_config, ConfigError, ConfigManager, YamlService};

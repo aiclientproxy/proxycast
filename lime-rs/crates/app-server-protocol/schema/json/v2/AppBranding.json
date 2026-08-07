@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "category": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "developer": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "isDiscoverableApp": {
+      "type": "boolean"
+    },
+    "privacyPolicy": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "termsOfService": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "website": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "isDiscoverableApp"
+  ],
+  "title": "AppBranding",
+  "type": "object"
+}

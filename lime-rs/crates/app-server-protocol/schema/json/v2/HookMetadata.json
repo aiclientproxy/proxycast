@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "HookEventName": {
+      "enum": [
+        "permissionRequest",
+        "postCompact",
+        "postToolUse",
+        "preCompact",
+        "preToolUse",
+        "sessionEnd",
+        "sessionStart",
+        "stop",
+        "subagentStart",
+        "subagentStop",
+        "userPromptSubmit"
+      ],
+      "type": "string"
+    },
+    "HookHandlerType": {
+      "enum": [
+        "agent",
+        "command",
+        "prompt"
+      ],
+      "type": "string"
+    },
+    "HookSource": {
+      "enum": [
+        "cloudManagedConfig",
+        "cloudRequirements",
+        "legacyManagedConfigFile",
+        "legacyManagedConfigMdm",
+        "mdm",
+        "plugin",
+        "project",
+        "sessionFlags",
+        "system",
+        "unknown",
+        "user"
+      ],
+      "type": "string"
+    },
+    "HookTrustStatus": {
+      "enum": [
+        "managed",
+        "modified",
+        "trusted",
+        "untrusted"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "additionalContextLimit": {
+      "format": "uint",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "command": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "currentHash": {
+      "type": "string"
+    },
+    "displayOrder": {
+      "format": "int64",
+      "type": "integer"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "eventName": {
+      "$ref": "#/$defs/HookEventName"
+    },
+    "handlerType": {
+      "$ref": "#/$defs/HookHandlerType"
+    },
+    "isManaged": {
+      "type": "boolean"
+    },
+    "key": {
+      "type": "string"
+    },
+    "matcher": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "pluginId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "source": {
+      "$ref": "#/$defs/HookSource"
+    },
+    "sourcePath": {
+      "type": "string"
+    },
+    "statusMessage": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "timeoutSec": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "trustStatus": {
+      "$ref": "#/$defs/HookTrustStatus"
+    }
+  },
+  "required": [
+    "currentHash",
+    "displayOrder",
+    "enabled",
+    "eventName",
+    "handlerType",
+    "isManaged",
+    "key",
+    "source",
+    "sourcePath",
+    "timeoutSec",
+    "trustStatus"
+  ],
+  "title": "HookMetadata",
+  "type": "object"
+}

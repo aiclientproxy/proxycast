@@ -489,6 +489,25 @@ async fn restart_preserves_agent_control_provider_defaults() {
     assert_eq!(route_snapshot["routeProtocol"], "openai_responses");
     assert_eq!(route_snapshot["serviceTier"], "priority");
     assert_eq!(route_snapshot["effectiveGeneration"], 7);
+    let canonical_child = store
+        .read_thread(ReadThreadParams {
+            thread_id: ThreadId::new(child.thread_id.clone()),
+            include_archived: true,
+            turns_view: ThreadTurnsView::NotLoaded,
+        })
+        .await
+        .expect("read canonical child route")
+        .expect("canonical child route");
+    assert_eq!(canonical_child.metadata["providerName"], "fixture-provider");
+    assert_eq!(canonical_child.metadata["modelName"], "fixture-model");
+    assert_eq!(
+        canonical_child.metadata["agentControlRoute"]["providerPreference"],
+        "fixture-provider"
+    );
+    assert_eq!(
+        canonical_child.metadata["agentControlRoute"]["modelPreference"],
+        "fixture-model"
+    );
     store
         .append_agent_mailbox_message(thread_store::AppendAgentMailboxMessageParams {
             message: thread_store::AgentMailboxMessage {

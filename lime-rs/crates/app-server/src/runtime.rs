@@ -43,6 +43,7 @@ mod file_checkpoint_projection;
 mod file_system;
 mod gateway;
 mod gateway_runner;
+mod hooks;
 mod image_media;
 mod input_media;
 mod inter_agent_input;
@@ -461,10 +462,27 @@ pub trait ExecutionBackend: Send + Sync {
 
     async fn read_mcp_runtime_resource(
         &self,
-        _params: app_server_protocol::McpResourceReadParams,
-    ) -> Result<app_server_protocol::McpResourceReadResponse, RuntimeCoreError> {
+        _session_id: &str,
+        _thread_id: &str,
+        _server: &str,
+        _uri: &str,
+    ) -> Result<app_server_protocol::protocol::v2::McpServerResourceReadResponse, RuntimeCoreError>
+    {
         Err(RuntimeCoreError::Backend(
             "runtime backend does not expose MCP resources".to_string(),
+        ))
+    }
+
+    async fn call_mcp_runtime_tool(
+        &self,
+        _session_id: &str,
+        _thread_id: &str,
+        _server: &str,
+        _tool: &str,
+        _arguments: serde_json::Value,
+    ) -> Result<lime_mcp::McpToolResult, RuntimeCoreError> {
+        Err(RuntimeCoreError::Backend(
+            "runtime backend does not execute MCP tools".to_string(),
         ))
     }
 

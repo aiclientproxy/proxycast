@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "enum": [
-    "app",
-    "other",
-    "project",
+    "admin",
+    "repo",
+    "system",
     "user"
   ],
   "title": "SkillScope",

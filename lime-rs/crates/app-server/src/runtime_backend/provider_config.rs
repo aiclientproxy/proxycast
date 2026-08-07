@@ -36,14 +36,18 @@ pub(crate) fn current_agent_runtime_config_metadata() -> Option<Value> {
             json!(config.agent.tool_execution),
         );
     }
+    let skills_config = (!config.skills.config.is_empty()).then(|| json!(config.skills));
     let soul_context = memory_soul_prompt_context_from_config(config.memory.soul.as_ref());
-    if agent_config.is_empty() && soul_context.is_none() {
+    if agent_config.is_empty() && skills_config.is_none() && soul_context.is_none() {
         return None;
     }
 
     let mut metadata = serde_json::Map::new();
     if !agent_config.is_empty() {
         metadata.insert("agent".to_string(), Value::Object(agent_config));
+    }
+    if let Some(skills_config) = skills_config {
+        metadata.insert("skills".to_string(), skills_config);
     }
     if let Some(soul_context) = soul_context {
         metadata.insert(

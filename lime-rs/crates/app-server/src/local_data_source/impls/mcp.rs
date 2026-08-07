@@ -104,20 +104,6 @@ impl McpAppDataSource for LocalAppDataSource {
         mcp::search_mcp_tools(&self.mcp_manager, params).await
     }
 
-    async fn call_mcp_tool(
-        &self,
-        params: McpToolCallParams,
-    ) -> Result<McpToolCallResponse, RuntimeCoreError> {
-        mcp::call_mcp_tool(&self.mcp_manager, params).await
-    }
-
-    async fn call_mcp_tool_with_caller(
-        &self,
-        params: McpToolCallWithCallerParams,
-    ) -> Result<McpToolCallResponse, RuntimeCoreError> {
-        mcp::call_mcp_tool_with_caller(&self.mcp_manager, params).await
-    }
-
     async fn list_mcp_prompts(&self) -> Result<McpPromptListResponse, RuntimeCoreError> {
         mcp::list_mcp_prompts(&self.mcp_manager).await
     }
@@ -133,11 +119,11 @@ impl McpAppDataSource for LocalAppDataSource {
         mcp::list_mcp_resources(&self.mcp_manager).await
     }
 
-    async fn read_mcp_resource(
+    async fn read_mcp_server_resource(
         &self,
-        params: McpResourceReadParams,
-    ) -> Result<McpResourceReadResponse, RuntimeCoreError> {
-        mcp::read_mcp_resource(&self.mcp_manager, params).await
+        params: McpServerResourceReadParams,
+    ) -> Result<McpServerResourceReadResponse, RuntimeCoreError> {
+        mcp::read_mcp_server_resource(&self.mcp_manager, params).await
     }
 
     async fn subscribe_mcp_resource(

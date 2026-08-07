@@ -6,13 +6,24 @@ import type { AppServerPluginCatalogSummary } from "@/lib/api/appServerTypes";
 import { PluginCatalogPage } from "./PluginCatalogPage";
 
 const mocks = vi.hoisted(() => ({
+  appsSubscription: null as null | {
+    onUpdate: (apps: unknown[]) => void;
+  },
   installPluginCatalog: vi.fn(),
   listPluginCatalog: vi.fn(),
+  readAppsReadiness: vi.fn(),
   readPluginCatalog: vi.fn(),
   selectPluginCatalogSource: vi.fn(),
   setPluginCatalogEnabled: vi.fn(),
+  subscribeAppsListUpdates: vi.fn(),
   uninstallPluginCatalog: vi.fn(),
   toastSuccess: vi.fn(),
+}));
+
+vi.mock("@/lib/api/apps", () => ({
+  readAppsReadiness: (...args: unknown[]) => mocks.readAppsReadiness(...args),
+  subscribeAppsListUpdates: (...args: unknown[]) =>
+    mocks.subscribeAppsListUpdates(...args),
 }));
 
 vi.mock("sonner", () => ({
@@ -38,6 +49,7 @@ function summary(
   overrides: Partial<AppServerPluginCatalogSummary> = {},
 ): AppServerPluginCatalogSummary {
   return {
+    appsCount: 1,
     authPolicy: "ON_USE",
     availability: "installed",
     description: "Writing and research tools",
@@ -98,6 +110,7 @@ describe("PluginCatalogPage", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     await changeLimeLocale("zh-CN");
     vi.clearAllMocks();
+    mocks.appsSubscription = null;
     mocks.listPluginCatalog.mockResolvedValue({
       generatedAt: "2026-08-04T00:00:00Z",
       plugins: [summary()],
@@ -114,7 +127,14 @@ describe("PluginCatalogPage", () => {
           },
         ],
         mcpServers: [],
-        apps: [],
+        apps: [
+          {
+            id: "writer-app",
+            name: "Writer App",
+            description: "",
+            requiresAuth: false,
+          },
+        ],
         hooks: [],
         uiResources: [],
       },
@@ -122,6 +142,42 @@ describe("PluginCatalogPage", () => {
     mocks.setPluginCatalogEnabled.mockResolvedValue({
       plugin: summary({ enabled: false }),
     });
+    mocks.readAppsReadiness.mockResolvedValue({
+      apps: [
+        {
+          id: "writer-app",
+          name: "Writer App",
+          description: null,
+          logoUrl: null,
+          logoUrlDark: null,
+          iconAssets: null,
+          iconDarkAssets: null,
+          distributionChannel: "local",
+          branding: null,
+          appMetadata: null,
+          labels: null,
+          installUrl: null,
+          isAccessible: true,
+          isEnabled: true,
+          pluginDisplayNames: ["Writer Plugin"],
+        },
+      ],
+      installed: [
+        {
+          id: "writer-app",
+          runtimeName: "Writer App",
+          enabled: true,
+          callable: false,
+        },
+      ],
+      ready: false,
+    });
+    mocks.subscribeAppsListUpdates.mockImplementation(
+      (subscription: { onUpdate: (apps: unknown[]) => void }) => {
+        mocks.appsSubscription = subscription;
+        return vi.fn();
+      },
+    );
   });
 
   afterEach(async () => {
@@ -147,6 +203,12 @@ describe("PluginCatalogPage", () => {
       pluginId: "writer-plugin",
     });
     expect(container.textContent).toContain("Article Writing");
+    expect(
+      container
+        .querySelector('[data-testid="plugin-v2-app-readiness-writer-app"]')
+        ?.getAttribute("data-callable"),
+    ).toBe("false");
+    expect(container.textContent).toContain("宿主待接入");
 
     await click(
       container.querySelector(
@@ -160,6 +222,36 @@ describe("PluginCatalogPage", () => {
       pluginId: "writer-plugin",
       enabled: false,
     });
+  });
+
+  it("收到 typed app/list/updated 后刷新 Apps readiness", async () => {
+    const container = await renderPage();
+    mocks.readAppsReadiness.mockResolvedValueOnce({
+      apps: [],
+      installed: [
+        {
+          id: "writer-app",
+          runtimeName: "Writer App",
+          enabled: false,
+          callable: false,
+        },
+      ],
+      ready: true,
+    });
+
+    await act(async () => {
+      mocks.appsSubscription?.onUpdate([]);
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(mocks.readAppsReadiness).toHaveBeenCalledTimes(2);
+    const row = container.querySelector(
+      '[data-testid="plugin-v2-app-readiness-writer-app"]',
+    );
+    expect(row?.getAttribute("data-enabled")).toBe("false");
+    expect(row?.getAttribute("data-status")).toBe("disabled");
+    expect(row?.textContent).toContain("已停用");
   });
 
   it("通过原生目录选择和 App Server review 安装本地插件", async () => {

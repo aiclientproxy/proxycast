@@ -8,7 +8,7 @@ MCP 管理、发现、工具调用、提示词、资源和订阅控制面只允�
 
 Electron Desktop Host 只负责 renderer bridge、事件转发、系统浏览器打开和 sidecar 生命周期，不承接 MCP 业务事实；desktop-host 默认 mock 不再提供 MCP fallback。
 
-MCP 有两个不能混用的 current owner：GUI management read（server/status/resource/prompt）继续使用 `LocalAppDataSource` 的 management-only `McpClientManager`；Agent runtime MCP connection 必须按 Session/Thread 持有 immutable `threadId`。management manager 不拥有 Thread，也不允许 server-originated elicitation。缺少可信 Thread owner 的 `mcpTool/call` / `mcpTool/callWithCaller` nested elicitation 必须在 MCP service 边界 decline，禁止从最近活动 Turn、singleton、`sessionId`、`parentToolCallId`、progress token 或 server metadata 猜测归属。
+MCP 有两个不能混用的 current owner：GUI management read（server/status/resource/prompt）继续使用 `LocalAppDataSource` 的 management-only `McpClientManager`；Agent runtime MCP connection 必须按 Session/Thread 持有 immutable `threadId`。management manager 不拥有 Thread，也不允许 server-originated elicitation。`mcpServer/tool/call` 必须从 canonical Thread 解析 Session，并经 `ExecutionBackend -> AgentRuntimeState -> McpThreadRuntime` 执行；缺少可信 Thread owner 时直接拒绝，禁止从最近活动 Turn、singleton、`sessionId`、`parentToolCallId`、progress token 或 server metadata 猜测归属。
 
 ## 当前结构
 
@@ -58,17 +58,18 @@ Current MCP method 固定为：
 - `mcpServer/startupStatus/updated`
 - `mcpServer/start`
 - `mcpServer/stop`
+- `mcpServer/resource/read`
+- `mcpServer/tool/call`
 - `mcpTool/list`
 - `mcpTool/listForContext`
 - `mcpTool/search`
-- `mcpTool/call`
-- `mcpTool/callWithCaller`
 - `mcpPrompt/list`
 - `mcpPrompt/get`
 - `mcpResource/list`
-- `mcpResource/read`
 - `mcpResource/subscribe`
 - `mcpResource/unsubscribe`
+
+`mcpServer/resource/read` 的 `threadId` 可选；携带时只读取对应 Session-owned runtime，未携带时才走 management manager。`mcpServer/tool/call` 的 `threadId` 必填。Settings 管理面不提供工具执行按钮；Workspace/Agent 消费者只能传真实 Thread identity。旧 `mcpTool/call`、`mcpTool/callWithCaller` 与 `mcpResource/read` 为 `dead / deleted / forbidden-to-restore`；protocol catalog、schema、App Server、typed clients、Renderer 和 smoke 均不得再提供正向入口。
 
 旧 Desktop facade 已归类为 `dead / retired guard-only`，包括 `get_mcp_servers`、`mcp_list_*`、`mcp_call_tool*`、`mcp_get_prompt`、`mcp_read_resource`、`mcp_start_server`、`mcp_stop_server`、`add_mcp_server`、`update_mcp_server`、`delete_mcp_server`、`toggle_mcp_server`、`import_mcp_from_app`、`sync_all_mcp_to_live`。这些名字只能出现在负向测试、contract forbidden snippet、smoke legacy 黑名单或历史 evidence 中。
 
@@ -106,7 +107,7 @@ MCP runtime 工具命名唯一事实源：
 
 ## Resources / prompts / evidence
 
-- `mcpResource/list` 同时返回 `resources` 与 `resourceTemplates`。
+- `mcpResource/list` 同时返回 `resources` 与 `resourceTemplates`；读取使用 exact `mcpServer/resource/read -> contents[]`。
 - `mcpResource/subscribe` / `mcpResource/unsubscribe` 使用 MCP 标准 resource subscription。
 - 标准通知 `notifications/resources/list_changed` 与 `notifications/resources/updated` 通过 `mcp:resources_updated` / `mcp:resource_updated` 事件刷新 GUI。
 - GUI resource preview 必须截断大文本、只展示 image/blob 摘要，不能把完整 base64 或大正文压进 DOM。

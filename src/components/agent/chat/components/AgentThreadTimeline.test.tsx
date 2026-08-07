@@ -776,6 +776,23 @@ describe("AgentThreadTimeline", () => {
   });
 
   it("typed Hook、Sleep 与复核边界应渲染为低干扰运行记录", () => {
+    const hookRun = renderTimeline([
+      {
+        ...createBaseItem("hook-run-1", 1),
+        type: "hook",
+        run_id: "hook-run-1",
+        event_name: "preToolUse",
+        handler_type: "command",
+        status_message: "检查完成。",
+        hook_status: "completed",
+      },
+    ]);
+    expect(
+      hookRun.querySelector('[data-testid="timeline-hook"]'),
+    ).not.toBeNull();
+    expect(hookRun.textContent).toContain("自动钩子已完成");
+    expect(hookRun.textContent).toContain("检查完成");
+
     const hook = renderTimeline([
       {
         ...createBaseItem("hook-prompt-1", 1),

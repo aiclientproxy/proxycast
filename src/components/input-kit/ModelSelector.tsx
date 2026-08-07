@@ -52,7 +52,7 @@ import type {
 } from "@/lib/types/modelRegistry";
 
 const compactTriggerClassName =
-  "h-8 min-w-[104px] max-w-[168px] justify-start gap-1.5 rounded-full border-slate-200/80 bg-white/92 px-2.5 text-slate-600 shadow-none transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-800";
+  "h-8 min-w-[104px] max-w-[224px] justify-start gap-1.5 rounded-full border-slate-200/80 bg-white/92 px-2.5 text-slate-600 shadow-none transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-800";
 
 const defaultTriggerClassName =
   "h-9 w-full min-w-0 justify-start gap-2 rounded-full border-slate-200/80 bg-white/92 px-3 font-normal text-slate-700 shadow-none transition-colors hover:border-slate-300 hover:bg-white";
@@ -619,9 +619,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   );
   const selectedProviderUnavailable = Boolean(
     providerType.trim() &&
-      shouldLoadProviders &&
-      !providersLoading &&
-      !selectedProvider,
+    shouldLoadProviders &&
+    !providersLoading &&
+    !selectedProvider,
   );
   const compactProviderType =
     selectedProvider?.key || providerType || "lime-hub";
@@ -647,23 +647,22 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const selectedProviderLabel = selectedProviderUnavailable
     ? t("common.modelSelector.provider.selectedUnavailable")
     : showPlaceholderSelection
-    ? resolvedPlaceholderLabel
-    : selectedProvider?.label ||
-      (allowAutoProvider && !providerType.trim()
-        ? resolvedAutoProviderLabel
-        : fallbackProviderLabel);
+      ? resolvedPlaceholderLabel
+      : selectedProvider?.label ||
+        (allowAutoProvider && !providerType.trim()
+          ? resolvedAutoProviderLabel
+          : fallbackProviderLabel);
   const compactProviderLabel = selectedProviderUnavailable
     ? t("common.modelSelector.provider.selectedUnavailable")
     : showPlaceholderSelection
-    ? resolvedPlaceholderLabel
-    : selectedProvider?.label ||
-      (allowAutoProvider && !providerType.trim()
-        ? resolvedAutoProviderLabel
-        : fallbackProviderLabel);
-  const selectedModelLabel =
-    selectedProviderUnavailable
-      ? t("common.modelSelector.model.selectedUnavailable")
-      : !showPlaceholderSelection && selectedProviderBlocksModelLoad
+      ? resolvedPlaceholderLabel
+      : selectedProvider?.label ||
+        (allowAutoProvider && !providerType.trim()
+          ? resolvedAutoProviderLabel
+          : fallbackProviderLabel);
+  const selectedModelLabel = selectedProviderUnavailable
+    ? t("common.modelSelector.model.selectedUnavailable")
+    : !showPlaceholderSelection && selectedProviderBlocksModelLoad
       ? t("common.modelSelector.state.loginRequired")
       : showPlaceholderSelection
         ? resolvedPlaceholderLabel
@@ -673,7 +672,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             : t("common.modelSelector.placeholder"));
   const selectedModelWithReasoningLabel =
     selectedReasoningEffortLabel && !showPlaceholderSelection
-      ? `${selectedModelLabel} ${selectedReasoningEffortLabel}`
+      ? `${selectedModelLabel} · ${t("common.modelSelector.reasoning.trigger", {
+          level: selectedReasoningEffortLabel,
+        })}`
       : selectedModelLabel;
   const compactModelLabel = selectedModelWithReasoningLabel;
   const normalizedTheme = (activeTheme || "").toLowerCase();

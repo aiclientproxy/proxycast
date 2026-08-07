@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
+use crate::hook::HookRunSummary;
 use crate::response_item::MessagePhase;
 
 use crate::{AgentInput, ItemId, MessageContentPart, SessionId, ThreadId, TurnId};
@@ -139,6 +140,7 @@ pub enum ItemKind {
     Media,
     SubAgent,
     ContextCompaction,
+    Hook,
     Unknown,
     Extension,
 }
@@ -440,6 +442,9 @@ pub enum ThreadItemPayload {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tail_start_turn_id: Option<String>,
     },
+    Hook {
+        run: HookRunSummary,
+    },
     Unknown {
         upstream_type: String,
         #[serde(default)]
@@ -468,6 +473,7 @@ impl ThreadItemPayload {
             Self::Media { .. } => ItemKind::Media,
             Self::SubAgent { .. } => ItemKind::SubAgent,
             Self::ContextCompaction { .. } => ItemKind::ContextCompaction,
+            Self::Hook { .. } => ItemKind::Hook,
             Self::Unknown { .. } => ItemKind::Unknown,
             Self::Extension { .. } => ItemKind::Extension,
         }

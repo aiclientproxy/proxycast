@@ -2,15 +2,16 @@
 
 use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, RpcDispatch};
 use app_server_protocol::protocol::v2::{
-    McpServerOauthLoginCompletedNotification, McpServerStartupState,
-    McpServerStatusUpdatedNotification, ServerNotification,
+    McpServerOauthLoginCompletedNotification,
+    McpServerResourceReadParams as V2McpServerResourceReadParams, McpServerStartupState,
+    McpServerStatusUpdatedNotification, McpServerToolCallParams as V2McpServerToolCallParams,
+    ServerNotification,
 };
 use app_server_protocol::{
-    JsonRpcError, McpPromptGetParams, McpResourceReadParams, McpResourceSubscribeParams,
-    McpResourceUnsubscribeParams, McpServerCreateParams, McpServerDeleteParams,
-    McpServerEnabledSetParams, McpServerImportFromAppParams, McpServerOauthLoginParams,
-    McpServerOauthLoginResponse, McpServerStartParams, McpServerStopParams, McpServerUpdateParams,
-    McpToolCallParams, McpToolCallWithCallerParams, McpToolListForContextParams,
+    JsonRpcError, McpPromptGetParams, McpResourceSubscribeParams, McpResourceUnsubscribeParams,
+    McpServerCreateParams, McpServerDeleteParams, McpServerEnabledSetParams,
+    McpServerImportFromAppParams, McpServerOauthLoginParams, McpServerOauthLoginResponse,
+    McpServerStartParams, McpServerStopParams, McpServerUpdateParams, McpToolListForContextParams,
     McpToolSearchParams,
 };
 
@@ -256,29 +257,29 @@ impl RequestProcessor {
         dispatch_result(response)
     }
 
-    pub(super) async fn handle_mcp_tool_call_impl(
+    pub(super) async fn handle_mcp_server_resource_read_impl(
         &self,
         params: Option<serde_json::Value>,
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
-        let params: McpToolCallParams = parse_params(params)?;
+        let params: V2McpServerResourceReadParams = parse_params(params)?;
         let response = self
             .runtime
-            .call_mcp_tool(params)
+            .read_mcp_server_resource(params)
             .await
             .map_err(to_jsonrpc_error)?;
         dispatch_result(response)
     }
 
-    pub(super) async fn handle_mcp_tool_call_with_caller_impl(
+    pub(super) async fn handle_mcp_server_tool_call_impl(
         &self,
         params: Option<serde_json::Value>,
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
-        let params: McpToolCallWithCallerParams = parse_params(params)?;
+        let params: V2McpServerToolCallParams = parse_params(params)?;
         let response = self
             .runtime
-            .call_mcp_tool_with_caller(params)
+            .call_mcp_server_tool(params)
             .await
             .map_err(to_jsonrpc_error)?;
         dispatch_result(response)
@@ -313,20 +314,6 @@ impl RequestProcessor {
         let response = self
             .runtime
             .list_mcp_resources()
-            .await
-            .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
-    }
-
-    pub(super) async fn handle_mcp_resource_read_impl(
-        &self,
-        params: Option<serde_json::Value>,
-    ) -> Result<RpcDispatch, JsonRpcError> {
-        self.ensure_initialized()?;
-        let params: McpResourceReadParams = parse_params(params)?;
-        let response = self
-            .runtime
-            .read_mcp_resource(params)
             .await
             .map_err(to_jsonrpc_error)?;
         dispatch_result(response)

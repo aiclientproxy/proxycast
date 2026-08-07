@@ -592,7 +592,7 @@ export const skillsApi = {
     const localDirectoryPath = normalizeOptionalPath(skill?.localDirectoryPath);
     if (!localDirectoryPath) {
       throw new Error(
-        `skill/list did not return localDirectoryPath for ${normalizedDirectory}`,
+        `skills/list did not return localDirectoryPath for ${normalizedDirectory}`,
       );
     }
     await revealPathInFinder(localDirectoryPath);

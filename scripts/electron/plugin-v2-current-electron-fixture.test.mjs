@@ -49,7 +49,7 @@ describe("Plugin v2 current Electron fixture guard", () => {
     expect(gate).toContain("pluginV2ServerName()");
     expect(gate).toContain("managementConnectionAbsent");
     expect(gate).toContain("Plugin v2 MCP 不得通过管理面");
-    expect(gate).toContain('"mcpResource/read"');
+    expect(gate).toContain('"mcpServer/resource/read"');
     expect(gate).toContain('method === "resources/read"');
     expect(gate).toContain('mimeType: "text/html;profile=mcp-app"');
     expect(gate).toContain("waitForPluginV2McpAppSurface");
@@ -99,10 +99,10 @@ describe("Plugin v2 current Electron fixture guard", () => {
     expect(gate).toContain("summary.completedAt = new Date().toISOString()");
     expect(mcpAppGate).toContain("embedded_browser_view_load_html");
     expect(mcpAppGate).toContain(
-      "request?.params?.sessionId === runtime.sessionId",
+      "request?.params?.threadId === runtime.threadId",
     );
     expect(mcpAppGate).toContain(
-      "request?.params?.threadId === runtime.threadId",
+      "request?.params?.sessionId === undefined",
     );
     expect(mcpAppGate).toContain("args_preview?.request?.lines");
     expect(mcpAppGate).toMatch(/webContents\s*\.getAllWebContents\(\)/u);

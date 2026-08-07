@@ -14,7 +14,7 @@ vi.mock("@/lib/dev-bridge", () => ({
   safeInvoke: vi.fn(),
 }));
 
-function typedSkillMetadata(overrides: Record<string, unknown> = {}) {
+function skillDetailMetadata(overrides: Record<string, unknown> = {}) {
   return {
     skillId: "project:writer",
     name: "writer",
@@ -43,16 +43,49 @@ function typedSkillMetadata(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function listedSkillMetadata(overrides: Record<string, unknown> = {}) {
+  return {
+    name: "writer",
+    description: "生成文案",
+    path: "/tmp/skills/writer/SKILL.md",
+    scope: "repo",
+    enabled: true,
+    interface: {
+      displayName: "写作助手",
+      shortDescription: null,
+      iconSmall: null,
+      iconLarge: null,
+      iconSmallUrl: null,
+      iconLargeUrl: null,
+      brandColor: null,
+      defaultPrompt: null,
+    },
+    dependencies: {
+      tools: [{ type: "runtime_tool", value: "Read" }],
+    },
+    ...overrides,
+  };
+}
+
 describe("skillExecutionApi", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     appServerRequestMock.mockReset();
   });
 
-  it("可执行 Skill 列表应通过 App Server skill/list 读取", async () => {
+  it("可执行 Skill 列表应通过 App Server skills/list 读取并过滤禁用项", async () => {
     appServerRequestMock.mockResolvedValueOnce({
       result: {
-        skills: [typedSkillMetadata()],
+        data: [
+          {
+            cwd: "/tmp/project",
+            skills: [
+              listedSkillMetadata(),
+              listedSkillMetadata({ name: "disabled", enabled: false }),
+            ],
+            errors: [],
+          },
+        ],
       },
     });
 
@@ -66,7 +99,7 @@ describe("skillExecutionApi", () => {
       }),
     ]);
 
-    expect(appServerRequestMock).toHaveBeenCalledWith("skill/list", {});
+    expect(appServerRequestMock).toHaveBeenCalledWith("skills/list", {});
     expect(safeInvoke).not.toHaveBeenCalled();
   });
 
@@ -74,7 +107,7 @@ describe("skillExecutionApi", () => {
     appServerRequestMock.mockResolvedValueOnce({
       result: {
         skill: {
-          metadata: typedSkillMetadata(),
+          metadata: skillDetailMetadata(),
           markdownContent: "# Writer",
           workflowSteps: [],
         },
@@ -101,7 +134,7 @@ describe("skillExecutionApi", () => {
     appServerRequestMock.mockResolvedValueOnce({ result: {} });
 
     await expect(skillExecutionApi.listExecutableSkills()).rejects.toThrow(
-      "App Server skill/list did not return skills",
+      "App Server skills/list did not return data",
     );
 
     appServerRequestMock.mockReset();
@@ -134,7 +167,7 @@ describe("skillExecutionApi", () => {
     appServerRequestMock.mockResolvedValueOnce({
       result: {
         skill: {
-          metadata: typedSkillMetadata({ skillId: "user:writer" }),
+          metadata: skillDetailMetadata({ skillId: "user:writer" }),
           markdownContent: "# Writer",
           workflowSteps: [],
         },
@@ -148,15 +181,21 @@ describe("skillExecutionApi", () => {
     );
   });
 
-  it("App Server Skill typed metadata 缺少稳定 identity 时应 fail closed", async () => {
+  it("App Server Skills list metadata 缺少 name 时应 fail closed", async () => {
     appServerRequestMock.mockResolvedValueOnce({
       result: {
-        skills: [typedSkillMetadata({ skillId: "" })],
+        data: [
+          {
+            cwd: "/tmp/project",
+            skills: [listedSkillMetadata({ name: "" })],
+            errors: [],
+          },
+        ],
       },
     });
 
     await expect(skillExecutionApi.listExecutableSkills()).rejects.toThrow(
-      "skill/list skills[0].skillId is not a non-empty string",
+      "skills/list data[0].skills[0].name is not a non-empty string",
     );
     expect(safeInvoke).not.toHaveBeenCalled();
   });

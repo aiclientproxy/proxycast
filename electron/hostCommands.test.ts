@@ -926,38 +926,6 @@ describe("ElectronHostCommands local file shell facade", () => {
     expect(pluginShellHostStopUiRuntimeMock).toHaveBeenCalledWith(runtimeArgs);
   });
 
-  it("get_local_skills_for_app 应透传 App Server skill/list 的本地目录路径", async () => {
-    const userDataDir = await createTempUserDataDir();
-    const request = vi.fn(async (method: string, _params?: unknown) => {
-      if (method === "skill/list") {
-        return {
-          skills: [
-            {
-              name: "article-typesetting-master",
-              display_name: "写作排版",
-              description: "测试技能",
-              local_directory_path:
-                "/Users/demo/.agents/skills/article-typesetting-master",
-            },
-          ],
-        };
-      }
-      throw new Error(`unexpected App Server method: ${method}`);
-    });
-    const host = createHost(userDataDir, undefined, request);
-
-    await expect(
-      host.invoke("get_local_skills_for_app", { app: "lime" }),
-    ).resolves.toEqual([
-      expect.objectContaining({
-        directory: "article-typesetting-master",
-        localDirectoryPath:
-          "/Users/demo/.agents/skills/article-typesetting-master",
-      }),
-    ]);
-    expect(request).toHaveBeenCalledWith("skill/list", {});
-  });
-
   it("File Shell 命令应只分发到 FileShellHost", async () => {
     fileShellHostRevealInFinderMock.mockReturnValueOnce({});
     fileShellHostOpenWithDefaultAppMock.mockResolvedValueOnce({});

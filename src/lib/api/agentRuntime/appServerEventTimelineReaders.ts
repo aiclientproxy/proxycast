@@ -156,7 +156,8 @@ export function readHookItemFromPayload(
 
   return {
     ...readAgentThreadItemBase(run, event, status),
-    id: runId,
+    id: `item_${runId}`,
+    turn_id: event.turnId,
     type: "hook",
     status,
     completed_at:

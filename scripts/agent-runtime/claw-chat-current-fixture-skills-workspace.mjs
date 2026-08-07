@@ -14,7 +14,7 @@ import {
 } from "./claw-chat-current-fixture-utils.mjs";
 
 const SKILLS_CHANGED_FIXTURE_SKILL_NAME = "notification-refresh";
-const SKILL_LIST_METHOD = "skill/list";
+const SKILL_LIST_METHOD = "skills/list";
 const SKILLS_CHANGED_DEBUG_MARKER = "skillsChanged.received";
 
 async function readSkillListTrace(page) {
@@ -166,7 +166,7 @@ export async function verifySkillsChangedCatalogRefresh(
   assert(
     initialTrace.electronIpcSuccessCount >
       beforeOpenTrace.electronIpcSuccessCount,
-    `技能面板未触发初始 current skill/list: ${JSON.stringify(
+    `技能面板未触发初始 current skills/list: ${JSON.stringify(
       sanitizeJson({ beforeOpenTrace, initialTrace, initialGui }),
     )}`,
   );

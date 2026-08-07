@@ -899,6 +899,7 @@ fn requires_sequence_validation_context_class(event_class: &str) -> bool {
         event_class,
         "item.started" | "item.updated" | "item.completed"
     ) || event_class.starts_with("tool.")
+        || event_class.starts_with("hook.")
         || event_class.starts_with("action.")
         || event_class.starts_with("patch.")
         || event_class.starts_with("command.")

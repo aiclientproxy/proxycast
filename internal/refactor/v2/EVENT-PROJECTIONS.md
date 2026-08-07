@@ -71,7 +71,7 @@
 |  40 | mcpServer/startupStatus/updated      | HS/GN    | current                | typed starting/ready/failed，终态刷新 GUI |
 |  41 | account/updated                      | GN       | product-scope-excluded | 不写入对话 history                        |
 |  42 | account/rateLimits/updated           | HS/GN    | product-scope-excluded | 若未来纳入，独立产品范围变更              |
-|  43 | app/list/updated                     | GN       | planned                | 刷新 Apps/connectors/mention catalog      |
+|  43 | app/list/updated                     | GN       | current                | App Center Apps readiness fresh read      |
 |  44 | remoteControl/status/changed         | GN       | product-scope-excluded | 不进入 Thread                             |
 |  45 | externalAgentConfig/import/progress  | GN       | product-scope-excluded | 仅设置页导入任务                          |
 |  46 | externalAgentConfig/import/completed | GN       | product-scope-excluded | 同上                                      |

@@ -1,5 +1,12 @@
 use super::super::materializer::IncrementalMaterializer;
 use super::{event, materialize_events};
+use agent_protocol::hook::{
+    HookEventName, HookExecutionMode, HookHandlerType, HookOutputEntry, HookOutputEntryKind,
+    HookRunStatus, HookScope, HookSource,
+};
+use agent_protocol::{
+    ItemId, ItemStatus, SessionId, ThreadId, ThreadItem, ThreadItemPayload, TurnId,
+};
 use serde_json::json;
 
 #[test]
@@ -234,4 +241,72 @@ fn incremental_materializer_does_not_revive_removed_item_identity() {
 
     assert!(expected.changed_items.is_empty());
     assert!(entities.item.is_none());
+}
+
+#[test]
+fn hook_lifecycle_reuses_one_canonical_item_through_history_restore() {
+    fn hook_item(status: HookRunStatus, completed_at: Option<i64>) -> ThreadItem {
+        let mut item = ThreadItem::new(
+            SessionId::new("session-1"),
+            ThreadId::new("thread-1"),
+            TurnId::new("turn-1"),
+            0,
+            0,
+            ThreadItemPayload::Hook {
+                run: agent_protocol::hook::HookRunSummary {
+                    id: "hook-run-restore".to_string(),
+                    event_name: HookEventName::PreToolUse,
+                    handler_type: HookHandlerType::Command,
+                    execution_mode: HookExecutionMode::Sync,
+                    scope: HookScope::Turn,
+                    source_path: "/workspace/.codex/hooks/check.sh".into(),
+                    source: HookSource::Project,
+                    display_order: 0,
+                    status,
+                    status_message: Some("checking".to_string()),
+                    started_at: 1_783_814_400_900,
+                    completed_at,
+                    duration_ms: completed_at.map(|_| 600),
+                    entries: vec![HookOutputEntry {
+                        kind: HookOutputEntryKind::Feedback,
+                        text: "checking".to_string(),
+                    }],
+                },
+            },
+        );
+        item.item_id = ItemId::new("item_hook-run-restore");
+        item.status = if completed_at.is_some() {
+            ItemStatus::Completed
+        } else {
+            ItemStatus::InProgress
+        };
+        item
+    }
+
+    let started = event(
+        "hook-started",
+        1,
+        "hook.started",
+        "turn-1",
+        json!({"item": serde_json::to_value(hook_item(HookRunStatus::Running, None)).expect("hook started")}),
+    );
+    let completed_item = hook_item(HookRunStatus::Completed, Some(1_783_814_401_500));
+    let completed = event(
+        "hook-completed",
+        2,
+        "hook.completed",
+        "turn-1",
+        json!({"item": serde_json::to_value(completed_item).expect("hook completed")}),
+    );
+
+    let changes = materialize_events(&[started, completed], "session-1", "thread-1")
+        .expect("materialize hook lifecycle");
+    let item = changes
+        .changed_items
+        .iter()
+        .find(|item| matches!(item.payload, ThreadItemPayload::Hook { .. }))
+        .expect("restored hook item");
+    assert_eq!(item.item_id.as_str(), "item_hook-run-restore");
+    assert_eq!(item.status, ItemStatus::Completed);
+    assert_eq!(item.completed_at_ms, Some(1_783_814_402_000));
 }

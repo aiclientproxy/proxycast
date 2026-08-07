@@ -3,7 +3,6 @@ import {
   METHOD_MCP_PROMPT_GET,
   METHOD_MCP_PROMPT_LIST,
   METHOD_MCP_RESOURCE_LIST,
-  METHOD_MCP_RESOURCE_READ,
   METHOD_MCP_RESOURCE_SUBSCRIBE,
   METHOD_MCP_RESOURCE_UNSUBSCRIBE,
   METHOD_MCP_SERVER_CREATE,
@@ -17,22 +16,22 @@ import {
   METHOD_MCP_SERVER_STATUS_LIST,
   METHOD_MCP_SERVER_STOP,
   METHOD_MCP_SERVER_UPDATE,
-  METHOD_MCP_TOOL_CALL,
-  METHOD_MCP_TOOL_CALL_WITH_CALLER,
+  METHOD_MCP_SERVER_RESOURCE_READ,
+  METHOD_MCP_SERVER_TOOL_CALL,
   METHOD_MCP_TOOL_LIST,
   METHOD_MCP_TOOL_LIST_FOR_CONTEXT,
   METHOD_MCP_TOOL_SEARCH,
   type McpPromptGetResponse as AppServerMcpPromptGetResponse,
   type McpPromptListResponse as AppServerMcpPromptListResponse,
   type McpResourceListResponse as AppServerMcpResourceListResponse,
-  type McpResourceReadResponse as AppServerMcpResourceReadResponse,
+  type McpServerResourceReadResponse as AppServerMcpServerResourceReadResponse,
   type McpResourceSubscriptionResponse as AppServerMcpResourceSubscriptionResponse,
   type McpServerImportFromAppResponse as AppServerMcpServerImportFromAppResponse,
   type McpServerLifecycleResponse as AppServerMcpServerLifecycleResponse,
   type McpServerListResponse as AppServerMcpServerListResponse,
   type McpServerOauthLoginResponse as AppServerMcpServerOauthLoginResponse,
   type McpServerStatusListResponse as AppServerMcpServerStatusListResponse,
-  type McpToolCallResponse as AppServerMcpToolCallResponse,
+  type McpServerToolCallResponse as AppServerMcpServerToolCallResponse,
   type McpToolListResponse as AppServerMcpToolListResponse,
 } from "../../../packages/app-server-client/src/protocol";
 import type {
@@ -57,9 +56,9 @@ import {
   assertEmptyResponse,
   assertLifecycleResponse,
   assertMcpPromptResult,
-  assertMcpResourceContent,
+  assertMcpServerResourceContent,
+  assertMcpServerToolResult,
   assertMcpResourceListResponse,
-  assertMcpToolResult,
   assertOAuthLoginResponse,
   assertServerListResponse,
 } from "./mcpResponseGuards";
@@ -86,21 +85,6 @@ function requireMcpResourceTarget(server: string, uri: string) {
     throw new Error("MCP resource URI cannot be empty");
   }
   return { server: normalizedServer, uri: normalizedUri };
-}
-
-function requireMcpRuntimeOwner(owner: {
-  sessionId: string;
-  threadId: string;
-}) {
-  const sessionId = owner.sessionId.trim();
-  const threadId = owner.threadId.trim();
-  if (!sessionId) {
-    throw new Error("MCP runtime sessionId cannot be empty");
-  }
-  if (!threadId) {
-    throw new Error("MCP runtime threadId cannot be empty");
-  }
-  return { sessionId, threadId };
 }
 
 function requireMcpPromptTarget(server: string, name: string) {
@@ -304,32 +288,38 @@ export const mcpApi = {
       ),
     ),
 
-  /** 调用工具，`toolName` 当前格式为 `mcp__<server>__<tool>`。 */
-  callTool: (
-    toolName: string,
-    args: Record<string, unknown>,
-  ): Promise<McpToolResult> =>
-    requestMcpAppServer<AppServerMcpToolCallResponse>(METHOD_MCP_TOOL_CALL, {
-      toolName,
-      arguments: args,
-    }).then((response) => assertMcpToolResult(METHOD_MCP_TOOL_CALL, response)),
-
-  /** 带 caller 校验调用工具，`toolName` 当前格式为 `mcp__<server>__<tool>`。 */
-  callToolWithCaller: (
-    toolName: string,
-    args: Record<string, unknown>,
-    caller?: string,
-  ): Promise<McpToolResult> =>
-    requestMcpAppServer<AppServerMcpToolCallResponse>(
-      METHOD_MCP_TOOL_CALL_WITH_CALLER,
-      {
-        toolName,
-        arguments: args,
-        caller,
-      },
-    ).then((response) =>
-      assertMcpToolResult(METHOD_MCP_TOOL_CALL_WITH_CALLER, response),
-    ),
+  /** Codex exact MCP tool call，必须由真实 Thread owner 发起。 */
+  callServerTool: async (params: {
+    threadId: string;
+    server: string;
+    tool: string;
+    arguments?: Record<string, unknown>;
+    meta?: unknown;
+  }): Promise<McpToolResult> => {
+    const threadId = params.threadId.trim();
+    const server = params.server.trim();
+    const tool = params.tool.trim();
+    if (!threadId) {
+      throw new Error("MCP tool call requires a threadId");
+    }
+    if (!server || !tool) {
+      throw new Error("MCP tool call requires a server and tool");
+    }
+    const response =
+      await requestMcpAppServer<AppServerMcpServerToolCallResponse>(
+        METHOD_MCP_SERVER_TOOL_CALL,
+        {
+          threadId,
+          server,
+          tool,
+          ...(params.arguments === undefined
+            ? {}
+            : { arguments: params.arguments }),
+          ...(params.meta === undefined ? {} : { _meta: params.meta }),
+        },
+      );
+    return assertMcpServerToolResult(METHOD_MCP_SERVER_TOOL_CALL, response);
+  },
 
   // --------------------------------------------------------------------------
   // 提示词管理 API
@@ -390,16 +380,25 @@ export const mcpApi = {
   readResource: async (
     server: string,
     uri: string,
-    runtimeOwner?: { sessionId: string; threadId: string },
+    runtimeOwner?: { sessionId?: string; threadId: string },
   ): Promise<McpResourceContent> => {
     const target = requireMcpResourceTarget(server, uri);
-    const owner = runtimeOwner ? requireMcpRuntimeOwner(runtimeOwner) : {};
+    const threadId = runtimeOwner?.threadId?.trim();
+    if (runtimeOwner && !threadId) {
+      throw new Error("MCP runtime threadId cannot be empty");
+    }
     const response =
-      await requestMcpAppServer<AppServerMcpResourceReadResponse>(
-        METHOD_MCP_RESOURCE_READ,
-        { ...target, ...owner },
+      await requestMcpAppServer<AppServerMcpServerResourceReadResponse>(
+        METHOD_MCP_SERVER_RESOURCE_READ,
+        {
+          ...target,
+          ...(threadId ? { threadId } : {}),
+        },
       );
-    return assertMcpResourceContent(METHOD_MCP_RESOURCE_READ, response);
+    return assertMcpServerResourceContent(
+      METHOD_MCP_SERVER_RESOURCE_READ,
+      response,
+    );
   },
 
   /** 订阅资源更新 */
@@ -436,10 +435,11 @@ export const mcpApi = {
 
   executeCallProofRequests: async (
     requests: McpCallProofRequest[],
+    threadId: string,
   ): Promise<McpCallProofResult[]> => {
     const results: McpCallProofResult[] = [];
     for (const request of requests) {
-      results.push(await executeMcpCallProofRequest(request));
+      results.push(await executeMcpCallProofRequest(request, threadId));
     }
     return results;
   },
@@ -571,24 +571,30 @@ function assertCallProofCandidate(request: McpCallProofRequest): void {
 
 async function executeMcpCallProofRequest(
   request: McpCallProofRequest,
+  threadId: string,
 ): Promise<McpCallProofResult> {
   assertCallProofCandidate(request);
-  if (request.method !== METHOD_MCP_TOOL_CALL_WITH_CALLER) {
+  if (request.method !== METHOD_MCP_SERVER_TOOL_CALL) {
     throw new Error(
       `Unsupported MCP call proof request method: ${String(request.method)}`,
     );
   }
 
   const params = getPrepareParams(request.method, request.params);
-  const toolName = readStringPrepareParam(request.method, params, "toolName");
-  const caller = readStringPrepareParam(request.method, params, "caller");
+  const server = readStringPrepareParam(request.method, params, "server");
+  const tool = readStringPrepareParam(request.method, params, "tool");
   const args = readRecordPrepareParam(request.method, params, "arguments");
-  const result = await mcpApi.callToolWithCaller(toolName, args, caller);
+  const result = await mcpApi.callServerTool({
+    threadId,
+    server,
+    tool,
+    arguments: args,
+  });
   if (result.is_error) {
     throw new Error("MCP call proof returned tool error");
   }
   return {
-    method: METHOD_MCP_TOOL_CALL_WITH_CALLER,
+    method: METHOD_MCP_SERVER_TOOL_CALL,
     status: "completed",
     result,
   };

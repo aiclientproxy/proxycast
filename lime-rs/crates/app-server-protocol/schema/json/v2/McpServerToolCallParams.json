@@ -1,21 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
-    "required": {
-      "type": "boolean"
-    },
-    "type": {
+    "_meta": true,
+    "arguments": true,
+    "server": {
       "type": "string"
     },
-    "value": {
+    "threadId": {
+      "type": "string"
+    },
+    "tool": {
       "type": "string"
     }
   },
   "required": [
-    "required",
-    "type",
-    "value"
+    "server",
+    "threadId",
+    "tool"
   ],
-  "title": "SkillToolDependency",
+  "title": "McpServerToolCallParams",
   "type": "object"
 }

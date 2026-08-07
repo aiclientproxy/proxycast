@@ -318,17 +318,25 @@ fn plugin_mcp_call_proof_request(
 ) -> Value {
     match target.call_proof_arguments.as_ref() {
         Some(arguments) => json!({
-            "method": "mcpTool/callWithCaller",
+            "method": "mcpServer/tool/call",
             "params": {
-                "toolName": target.expected_tool_name,
+                "server": target.server_id,
+                "tool": plugin_mcp_inner_tool_name(&target.tool_key),
                 "arguments": arguments,
-                "caller": target.caller,
             },
             "reason": "tool_call_proof",
             "status": "candidate",
         }),
         None => Value::Null,
     }
+}
+
+fn plugin_mcp_inner_tool_name(tool_key: &str) -> &str {
+    tool_key
+        .split_once('/')
+        .map(|(_, inner)| inner)
+        .unwrap_or(tool_key)
+        .trim()
 }
 
 fn plugin_mcp_import_app_type(provider: &str) -> Option<String> {

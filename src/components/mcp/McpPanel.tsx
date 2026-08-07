@@ -10,7 +10,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { useMcp } from "@/hooks/useMcp";
 import { openExternalUrlWithSystemBrowser } from "@/lib/api/externalUrl";
 import { McpPage } from "./McpPage";
@@ -18,7 +17,6 @@ import { McpPanelHeader } from "./McpPanelHeader";
 import { McpPanelTabs } from "./McpPanelTabs";
 import { McpServerList } from "./McpServerList";
 import { McpToolsBrowser } from "./McpToolsBrowser";
-import { McpToolCaller } from "./McpToolCaller";
 import { McpPromptsBrowser } from "./McpPromptsBrowser";
 import { McpResourcesBrowser } from "./McpResourcesBrowser";
 import {
@@ -30,10 +28,7 @@ import {
   type McpTab,
   type McpPanelTabCounts,
 } from "./mcpPanelModel";
-import type {
-  McpServerOAuthLoginOptions,
-  McpToolDefinition,
-} from "@/lib/api/mcp";
+import type { McpServerOAuthLoginOptions } from "@/lib/api/mcp";
 
 interface McpPanelProps {
   hideHeader?: boolean;
@@ -42,10 +37,6 @@ interface McpPanelProps {
 export function McpPanel({ hideHeader = false }: McpPanelProps) {
   const { t } = useTranslation("settings");
   const [activeTab, setActiveTab] = useState<McpTab>("runtime");
-  const [callingTool, setCallingTool] = useState<McpToolDefinition | null>(
-    null,
-  );
-
   const {
     servers,
     tools,
@@ -61,7 +52,6 @@ export function McpPanel({ hideHeader = false }: McpPanelProps) {
     loginOAuthServer,
     refreshServers,
     refreshTools,
-    callTool,
     refreshPrompts,
     getPrompt,
     refreshResources,
@@ -98,25 +88,6 @@ export function McpPanel({ hideHeader = false }: McpPanelProps) {
       }),
     );
   }, [oauthCompletion, t]);
-
-  // 工具调用处理
-  const handleCallTool = async (
-    toolName: string,
-    args: Record<string, unknown>,
-  ) => {
-    return await callTool(toolName, args);
-  };
-
-  // 打开工具调用面板
-  const handleOpenToolCaller = async (
-    toolName: string,
-    _args: Record<string, unknown>,
-  ): Promise<void> => {
-    const tool = tools.find((t) => t.name === toolName);
-    if (tool) {
-      setCallingTool(tool);
-    }
-  };
 
   const handleLoginOAuthServer = async (
     serverName: string,
@@ -186,13 +157,8 @@ export function McpPanel({ hideHeader = false }: McpPanelProps) {
 
           {/* 工具 Tab */}
           {activeTab === "tools" && (
-            <div className="flex min-h-[464px] flex-col gap-4 p-4 xl:flex-row">
-              <div
-                className={cn(
-                  "min-h-[420px] overflow-hidden rounded-[22px] border border-slate-200/80 bg-white",
-                  callingTool ? "xl:w-1/2" : "w-full",
-                )}
-              >
+            <div className="min-h-[464px] p-4">
+              <div className="min-h-[420px] overflow-hidden rounded-[22px] border border-slate-200/80 bg-white">
                 <McpToolsBrowser
                   tools={tools}
                   loading={loading}
@@ -201,18 +167,8 @@ export function McpPanel({ hideHeader = false }: McpPanelProps) {
                   runningServerCount={runningServerCount}
                   onOpenRuntimeTab={() => setActiveTab("runtime")}
                   onOpenConfigTab={() => setActiveTab("config")}
-                  onCallTool={handleOpenToolCaller}
                 />
               </div>
-              {callingTool && (
-                <div className="min-h-[420px] overflow-auto rounded-[22px] border border-slate-200/80 bg-white xl:w-1/2">
-                  <McpToolCaller
-                    tool={callingTool}
-                    onCallTool={handleCallTool}
-                    onClose={() => setCallingTool(null)}
-                  />
-                </div>
-              )}
             </div>
           )}
 

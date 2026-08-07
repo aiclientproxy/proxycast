@@ -1,0 +1,37 @@
+{
+  "$defs": {
+    "SkillDetailToolDependency": {
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "required",
+        "type",
+        "value"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/SkillDetailToolDependency"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "tools"
+  ],
+  "title": "SkillDetailDependencies",
+  "type": "object"
+}

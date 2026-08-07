@@ -1,30 +1,35 @@
 use super::{
-    AgentMessageDeltaNotification, ArtifactWriteParams, ArtifactWriteResponse,
-    CommandExecutionOutputDeltaNotification, CommandExecutionRequestApprovalParams,
-    CommandExecutionTerminalInteractionNotification, ConfigWarningNotification,
-    CurrentTimeReadParams, DynamicToolCallParams, ErrorNotification,
-    FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, ItemCompletedNotification,
+    AgentMessageDeltaNotification, AppListUpdatedNotification, AppsInstalledParams,
+    AppsInstalledResponse, AppsListParams, AppsListResponse, AppsReadParams, AppsReadResponse,
+    ArtifactWriteParams, ArtifactWriteResponse, CommandExecutionOutputDeltaNotification,
+    CommandExecutionRequestApprovalParams, CommandExecutionTerminalInteractionNotification,
+    ConfigWarningNotification, CurrentTimeReadParams, DynamicToolCallParams, ErrorNotification,
+    FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, HookCompletedNotification,
+    HookStartedNotification, HooksListParams, HooksListResponse, ItemCompletedNotification,
     ItemStartedNotification, McpServerElicitationRequestParams,
-    McpServerOauthLoginCompletedNotification, McpServerStatusUpdatedNotification,
-    McpToolCallProgressNotification, MediaReadParams, MediaReadResponse, Method, ModelListParams,
-    ModelListUpdatedNotification, ModelReroutedNotification,
+    McpServerOauthLoginCompletedNotification, McpServerResourceReadParams,
+    McpServerResourceReadResponse, McpServerStatusUpdatedNotification, McpServerToolCallParams,
+    McpServerToolCallResponse, McpToolCallProgressNotification, MediaReadParams, MediaReadResponse,
+    Method, ModelListParams, ModelListUpdatedNotification, ModelReroutedNotification,
     ModelSafetyBufferingUpdatedNotification, ModelVerificationNotification,
     PermissionsRequestApprovalParams, PlanDeltaNotification, PluginCatalogEnabledSetParams,
     PluginCatalogInstallParams, PluginCatalogInstalledParams, PluginCatalogListParams,
     PluginCatalogReadParams, PluginCatalogUninstallParams, PluginSearchParams,
     PluginSearchResponse, ReasoningSummaryPartAddedNotification,
     ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification,
-    ServerRequestResolvedNotification, SkillsChangedNotification,
-    ThreadApproveGuardianDeniedActionParams, ThreadApproveGuardianDeniedActionResponse,
-    ThreadArchiveParams, ThreadArchiveResponse, ThreadArchivedNotification,
-    ThreadBackgroundTerminalsCleanParams, ThreadBackgroundTerminalsCleanResponse,
-    ThreadBackgroundTerminalsListParams, ThreadBackgroundTerminalsListResponse,
-    ThreadBackgroundTerminalsTerminateParams, ThreadBackgroundTerminalsTerminateResponse,
-    ThreadClosedNotification, ThreadCompactStartParams, ThreadCompactStartResponse,
-    ThreadDecrementElicitationParams, ThreadDecrementElicitationResponse, ThreadDeleteParams,
-    ThreadDeleteResponse, ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse,
-    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalClearedNotification,
-    ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
+    ServerRequestResolvedNotification, SkillsChangedNotification, SkillsConfigWriteParams,
+    SkillsConfigWriteResponse, SkillsExtraRootsSetParams, SkillsExtraRootsSetResponse,
+    SkillsListParams, SkillsListResponse, ThreadApproveGuardianDeniedActionParams,
+    ThreadApproveGuardianDeniedActionResponse, ThreadArchiveParams, ThreadArchiveResponse,
+    ThreadArchivedNotification, ThreadBackgroundTerminalsCleanParams,
+    ThreadBackgroundTerminalsCleanResponse, ThreadBackgroundTerminalsListParams,
+    ThreadBackgroundTerminalsListResponse, ThreadBackgroundTerminalsTerminateParams,
+    ThreadBackgroundTerminalsTerminateResponse, ThreadClosedNotification, ThreadCompactStartParams,
+    ThreadCompactStartResponse, ThreadDecrementElicitationParams,
+    ThreadDecrementElicitationResponse, ThreadDeleteParams, ThreadDeleteResponse,
+    ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse, ThreadGoalClearParams,
+    ThreadGoalClearResponse, ThreadGoalClearedNotification, ThreadGoalGetParams,
+    ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
     ThreadGoalUpdatedNotification, ThreadIncrementElicitationParams,
     ThreadIncrementElicitationResponse, ThreadInjectItemsParams, ThreadInjectItemsResponse,
     ThreadItemsListParams, ThreadItemsListResponse, ThreadListParams, ThreadListResponse,
@@ -45,20 +50,20 @@ use super::{
     ToolRequestUserInputParams, TurnCompletedNotification, TurnInterruptParams,
     TurnInterruptResponse, TurnPlanUpdatedNotification, TurnStartParams, TurnStartResponse,
     TurnStartedNotification, TurnSteerParams, TurnSteerResponse, WarningNotification,
-    METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION,
-    METHOD_CONFIG_WARNING, METHOD_CURRENT_TIME_READ, METHOD_ERROR,
-    METHOD_FILE_CHANGE_PATCH_UPDATED, METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
-    METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL, METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
-    METHOD_ITEM_TOOL_CALL, METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
-    METHOD_MCP_SERVER_ELICITATION_REQUEST, METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
-    METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED, METHOD_MCP_TOOL_CALL_PROGRESS,
-    METHOD_MODEL_LIST_UPDATED, METHOD_MODEL_REROUTED, METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
-    METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA, METHOD_REASONING_SUMMARY_PART_ADDED,
-    METHOD_REASONING_SUMMARY_TEXT_DELTA, METHOD_REASONING_TEXT_DELTA,
-    METHOD_SERVER_REQUEST_RESOLVED, METHOD_SKILLS_CHANGED, METHOD_THREAD_CLOSED,
-    METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED,
-    METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED, METHOD_TURN_PLAN_UPDATED,
-    METHOD_WARNING,
+    METHOD_APP_LIST_UPDATED, METHOD_COMMAND_EXECUTION_OUTPUT_DELTA,
+    METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION, METHOD_CONFIG_WARNING, METHOD_CURRENT_TIME_READ,
+    METHOD_ERROR, METHOD_FILE_CHANGE_PATCH_UPDATED, METHOD_HOOK_COMPLETED, METHOD_HOOK_STARTED,
+    METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL, METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
+    METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL, METHOD_ITEM_TOOL_CALL,
+    METHOD_ITEM_TOOL_REQUEST_USER_INPUT, METHOD_MCP_SERVER_ELICITATION_REQUEST,
+    METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED, METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED,
+    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_LIST_UPDATED, METHOD_MODEL_REROUTED,
+    METHOD_MODEL_SAFETY_BUFFERING_UPDATED, METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA,
+    METHOD_REASONING_SUMMARY_PART_ADDED, METHOD_REASONING_SUMMARY_TEXT_DELTA,
+    METHOD_REASONING_TEXT_DELTA, METHOD_SERVER_REQUEST_RESOLVED, METHOD_SKILLS_CHANGED,
+    METHOD_THREAD_CLOSED, METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED,
+    METHOD_THREAD_NAME_UPDATED, METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED,
+    METHOD_TURN_PLAN_UPDATED, METHOD_WARNING,
 };
 use crate::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use schemars::JsonSchema;
@@ -263,10 +268,55 @@ pub enum ClientRequest {
         id: RequestId,
         params: MediaReadParams,
     },
+    #[serde(rename = "mcpServer/resource/read")]
+    McpServerResourceRead {
+        id: RequestId,
+        params: McpServerResourceReadParams,
+    },
+    #[serde(rename = "mcpServer/tool/call")]
+    McpServerToolCall {
+        id: RequestId,
+        params: McpServerToolCallParams,
+    },
     #[serde(rename = "model/list")]
     ModelList {
         id: RequestId,
         params: ModelListParams,
+    },
+    #[serde(rename = "app/read")]
+    AppRead {
+        id: RequestId,
+        params: AppsReadParams,
+    },
+    #[serde(rename = "app/list")]
+    AppList {
+        id: RequestId,
+        params: AppsListParams,
+    },
+    #[serde(rename = "app/installed")]
+    AppInstalled {
+        id: RequestId,
+        params: AppsInstalledParams,
+    },
+    #[serde(rename = "hooks/list")]
+    HooksList {
+        id: RequestId,
+        params: HooksListParams,
+    },
+    #[serde(rename = "skills/list")]
+    SkillsList {
+        id: RequestId,
+        params: SkillsListParams,
+    },
+    #[serde(rename = "skills/extraRoots/set")]
+    SkillsExtraRootsSet {
+        id: RequestId,
+        params: SkillsExtraRootsSetParams,
+    },
+    #[serde(rename = "skills/config/write")]
+    SkillsConfigWrite {
+        id: RequestId,
+        params: SkillsConfigWriteParams,
     },
     #[serde(rename = "plugin/list")]
     PluginList {
@@ -360,7 +410,16 @@ impl ClientRequest {
             | Self::ThreadGoalClear { id, .. }
             | Self::ArtifactWrite { id, .. }
             | Self::MediaRead { id, .. }
+            | Self::McpServerResourceRead { id, .. }
+            | Self::McpServerToolCall { id, .. }
             | Self::ModelList { id, .. }
+            | Self::AppRead { id, .. }
+            | Self::AppList { id, .. }
+            | Self::AppInstalled { id, .. }
+            | Self::HooksList { id, .. }
+            | Self::SkillsList { id, .. }
+            | Self::SkillsExtraRootsSet { id, .. }
+            | Self::SkillsConfigWrite { id, .. }
             | Self::PluginList { id, .. }
             | Self::PluginSearch { id, .. }
             | Self::PluginRead { id, .. }
@@ -417,7 +476,16 @@ impl ClientRequest {
             Self::ThreadGoalClear { .. } => Method::ThreadGoalClear,
             Self::ArtifactWrite { .. } => Method::ArtifactWrite,
             Self::MediaRead { .. } => Method::MediaRead,
+            Self::McpServerResourceRead { .. } => Method::McpServerResourceRead,
+            Self::McpServerToolCall { .. } => Method::McpServerToolCall,
             Self::ModelList { .. } => Method::ModelList,
+            Self::AppRead { .. } => Method::AppRead,
+            Self::AppList { .. } => Method::AppList,
+            Self::AppInstalled { .. } => Method::AppInstalled,
+            Self::HooksList { .. } => Method::HooksList,
+            Self::SkillsList { .. } => Method::SkillsList,
+            Self::SkillsExtraRootsSet { .. } => Method::SkillsExtraRootsSet,
+            Self::SkillsConfigWrite { .. } => Method::SkillsConfigWrite,
             Self::PluginList { .. } => Method::PluginList,
             Self::PluginSearch { .. } => Method::PluginSearch,
             Self::PluginRead { .. } => Method::PluginRead,
@@ -482,6 +550,15 @@ pub enum ClientResponsePayload {
     ThreadGoalClear(ThreadGoalClearResponse),
     ArtifactWrite(ArtifactWriteResponse),
     MediaRead(MediaReadResponse),
+    McpServerResourceRead(McpServerResourceReadResponse),
+    McpServerToolCall(McpServerToolCallResponse),
+    AppRead(AppsReadResponse),
+    AppList(AppsListResponse),
+    AppInstalled(AppsInstalledResponse),
+    HooksList(HooksListResponse),
+    SkillsList(SkillsListResponse),
+    SkillsExtraRootsSet(SkillsExtraRootsSetResponse),
+    SkillsConfigWrite(SkillsConfigWriteResponse),
     PluginSearch(PluginSearchResponse),
     TurnStart(TurnStartResponse),
     TurnSteer(TurnSteerResponse),
@@ -530,6 +607,15 @@ impl ClientResponsePayload {
             Self::ThreadGoalClear(_) => Method::ThreadGoalClear,
             Self::ArtifactWrite(_) => Method::ArtifactWrite,
             Self::MediaRead(_) => Method::MediaRead,
+            Self::McpServerResourceRead(_) => Method::McpServerResourceRead,
+            Self::McpServerToolCall(_) => Method::McpServerToolCall,
+            Self::AppRead(_) => Method::AppRead,
+            Self::AppList(_) => Method::AppList,
+            Self::AppInstalled(_) => Method::AppInstalled,
+            Self::HooksList(_) => Method::HooksList,
+            Self::SkillsList(_) => Method::SkillsList,
+            Self::SkillsExtraRootsSet(_) => Method::SkillsExtraRootsSet,
+            Self::SkillsConfigWrite(_) => Method::SkillsConfigWrite,
             Self::PluginSearch(_) => Method::PluginSearch,
             Self::TurnStart(_) => Method::TurnStart,
             Self::TurnSteer(_) => Method::TurnSteer,
@@ -576,6 +662,15 @@ impl ClientResponsePayload {
             Self::ThreadGoalClear(response) => serde_json::to_value(response)?,
             Self::ArtifactWrite(response) => serde_json::to_value(response)?,
             Self::MediaRead(response) => serde_json::to_value(response)?,
+            Self::McpServerResourceRead(response) => serde_json::to_value(response)?,
+            Self::McpServerToolCall(response) => serde_json::to_value(response)?,
+            Self::AppRead(response) => serde_json::to_value(response)?,
+            Self::AppList(response) => serde_json::to_value(response)?,
+            Self::AppInstalled(response) => serde_json::to_value(response)?,
+            Self::HooksList(response) => serde_json::to_value(response)?,
+            Self::SkillsList(response) => serde_json::to_value(response)?,
+            Self::SkillsExtraRootsSet(response) => serde_json::to_value(response)?,
+            Self::SkillsConfigWrite(response) => serde_json::to_value(response)?,
             Self::PluginSearch(response) => serde_json::to_value(response)?,
             Self::TurnStart(response) => serde_json::to_value(response)?,
             Self::TurnSteer(response) => serde_json::to_value(response)?,
@@ -768,6 +863,12 @@ pub enum ServerNotification {
     McpServerOauthLoginCompleted(McpServerOauthLoginCompletedNotification),
     #[serde(rename = "mcpServer/startupStatus/updated")]
     McpServerStatusUpdated(McpServerStatusUpdatedNotification),
+    #[serde(rename = "app/list/updated")]
+    AppListUpdated(AppListUpdatedNotification),
+    #[serde(rename = "hook/started")]
+    HookStarted(HookStartedNotification),
+    #[serde(rename = "hook/completed")]
+    HookCompleted(HookCompletedNotification),
     #[serde(rename = "thread/started")]
     ThreadStarted(ThreadStartedNotification),
     #[serde(rename = "thread/archived")]
@@ -839,6 +940,9 @@ impl ServerNotification {
             Self::SkillsChanged(_) => METHOD_SKILLS_CHANGED,
             Self::McpServerOauthLoginCompleted(_) => METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
             Self::McpServerStatusUpdated(_) => METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED,
+            Self::AppListUpdated(_) => METHOD_APP_LIST_UPDATED,
+            Self::HookStarted(_) => METHOD_HOOK_STARTED,
+            Self::HookCompleted(_) => METHOD_HOOK_COMPLETED,
             Self::ThreadStarted(_) => "thread/started",
             Self::ThreadArchived(_) => "thread/archived",
             Self::ThreadDeleted(_) => "thread/deleted",
@@ -898,6 +1002,15 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED => serde_json::from_value(params)
                 .map(Self::McpServerStatusUpdated)
+                .map_err(|error| error.to_string()),
+            METHOD_APP_LIST_UPDATED => serde_json::from_value(params)
+                .map(Self::AppListUpdated)
+                .map_err(|error| error.to_string()),
+            METHOD_HOOK_STARTED => serde_json::from_value(params)
+                .map(Self::HookStarted)
+                .map_err(|error| error.to_string()),
+            METHOD_HOOK_COMPLETED => serde_json::from_value(params)
+                .map(Self::HookCompleted)
                 .map_err(|error| error.to_string()),
             "thread/started" => serde_json::from_value(params)
                 .map(Self::ThreadStarted)
@@ -1010,6 +1123,15 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::McpServerStatusUpdated(params) => {
                 jsonrpc_notification(METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED, params)
+            }
+            ServerNotification::AppListUpdated(params) => {
+                jsonrpc_notification(METHOD_APP_LIST_UPDATED, params)
+            }
+            ServerNotification::HookStarted(params) => {
+                jsonrpc_notification(METHOD_HOOK_STARTED, params)
+            }
+            ServerNotification::HookCompleted(params) => {
+                jsonrpc_notification(METHOD_HOOK_COMPLETED, params)
             }
             ServerNotification::ThreadStarted(params) => {
                 jsonrpc_notification("thread/started", params)

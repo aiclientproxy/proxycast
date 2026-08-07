@@ -110,29 +110,24 @@ describe("skillsApi", () => {
     );
   });
 
-  it("Composer runtime catalog 应读取 current skill/list", async () => {
+  it("Composer runtime catalog 应读取 current skills/list", async () => {
     appServerRequestMock.mockResolvedValueOnce({
       result: {
-        skills: [
+        data: [
           {
-            skillId: "user:article-writer",
-            name: "article-writer",
-            description: "Write structured articles.",
-            scope: "user",
-            source: "user",
-            authority: "user",
-            enabled: true,
-            interface: {
-              displayName: "Article Writer",
-              executionMode: "prompt",
-            },
-            dependencies: { tools: [] },
-            policy: { allowImplicitInvocation: true },
-            capabilities: [],
-            locator: {
-              directory: "/tmp/.agents/skills/article-writer",
-              skillFilePath: "/tmp/.agents/skills/article-writer/SKILL.md",
-            },
+            cwd: "/tmp/project",
+            errors: [],
+            skills: [
+              {
+                name: "article-writer",
+                description: "Write structured articles.",
+                scope: "user",
+                enabled: true,
+                interface: { displayName: "Article Writer" },
+                dependencies: { tools: [] },
+                path: "/tmp/.agents/skills/article-writer/SKILL.md",
+              },
+            ],
           },
         ],
       },
@@ -147,7 +142,7 @@ describe("skillsApi", () => {
         catalogSource: "user",
       }),
     ]);
-    expect(appServerRequestMock).toHaveBeenCalledWith("skill/list", {});
+    expect(appServerRequestMock).toHaveBeenCalledWith("skills/list", {});
   });
 
   it("本地技能列表缺少 App Server result 时应 fail closed", async () => {
@@ -699,7 +694,7 @@ describe("skillsApi", () => {
     );
   });
 
-  it("打开本地 Skill 目录应走 skill/list 路径投影和 Electron 文件壳", async () => {
+  it("打开本地 Skill 目录应走 current catalog 路径投影和 Electron 文件壳", async () => {
     appServerRequestMock.mockResolvedValueOnce({
       result: {
         skills: [
@@ -762,7 +757,7 @@ describe("skillsApi", () => {
     await expect(
       skillsApi.revealLocalSkill("article-typesetting-master"),
     ).rejects.toThrow(
-      "skill/list did not return localDirectoryPath for article-typesetting-master",
+      "skills/list did not return localDirectoryPath for article-typesetting-master",
     );
 
     expect(appServerRequestMock).toHaveBeenCalledWith("skillManagement/list", {

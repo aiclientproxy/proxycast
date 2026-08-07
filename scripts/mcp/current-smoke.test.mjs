@@ -47,8 +47,8 @@ describe("mcp current smoke guard", () => {
     expect(content).toContain("APP_SERVER_HANDLE_JSON_LINES_COMMAND");
     expect(content).toContain('"app_server_handle_json_lines"');
     expect(content).toContain('"mcpServer/oauth/login"');
-    expect(content).toContain('"mcpTool/call"');
-    expect(content).toContain('"mcpResource/read"');
+    expect(content).toContain('"mcpServer/tool/call"');
+    expect(content).toContain('"mcpServer/resource/read"');
     expect(content).toContain('"resources/templates/list"');
     expect(content).toContain("resourceTemplatesSeen");
     expect(content).toContain("resourceTemplateUriTemplate");
@@ -60,6 +60,10 @@ describe("mcp current smoke guard", () => {
     expect(content).toContain("missing-mcp-server.mjs");
     expect(content).toContain("healthyToolCallAfterFailure");
     expect(content).toContain("healthyResourceReadAfterFailure");
+    expect(content).toContain("ephemeral: true");
+    expect(content).not.toContain(
+      '{ model: "gpt-5.4", modelProvider: "openai" }',
+    );
     expect(content).toContain("LEGACY_MCP_COMMANDS");
     expect(content).toContain("summary.legacyMcpCommandsSeen.length === 0");
   });
@@ -91,7 +95,7 @@ describe("mcp current smoke guard", () => {
     expect(content).toContain("plugin_runtime_capabilities");
     expect(content).toContain("plugin_mcp_targets");
     expect(content).toContain('"mcpTool/listForContext"');
-    expect(content).toContain('"mcpTool/callWithCaller"');
+    expect(content).toContain('"mcpServer/tool/call"');
     expect(content).toContain("defaultProofDidNotCallTool");
     expect(content).toContain("allowed_callers");
     expect(content).not.toContain("defaultMocks");
@@ -119,8 +123,10 @@ describe("mcp current smoke guard", () => {
     expect(liveProvider).toContain('"mcpTool/listForContext"');
     expect(liveProvider).toContain('"mcpTool/search"');
     expect(liveProvider).toContain('"mcpResource/list"');
-    expect(liveProvider).toContain('"mcpTool/call"');
-    expect(liveProvider).toContain('"mcpResource/read"');
+    expect(liveProvider).toContain('"mcpServer/tool/call"');
+    expect(liveProvider).toContain('"mcpServer/resource/read"');
+    expect(liveProvider).toContain("ephemeral: true");
+    expect(liveProvider).not.toContain('modelProvider: "openai"');
     expect(liveProvider).not.toContain("defaultMocks");
     expect(liveProvider).not.toContain("mockPriorityCommands");
   });
@@ -276,10 +282,13 @@ describe("mcp current smoke guard", () => {
           tools: [{ name: `mcp__${createdServerName}__echo` }],
         };
       }
-      if (method === "mcpTool/call") {
+      if (method === "thread/start") {
+        return { thread: { id: "thread-live" } };
+      }
+      if (method === "mcpServer/tool/call") {
         return {
           content: [{ type: "text", text: "bad arguments" }],
-          is_error: true,
+          isError: true,
         };
       }
       if (method === "mcpServer/stop" || method === "mcpServer/delete") {

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "command": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "description": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "transport": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "type": {
+      "type": "string"
+    },
+    "url": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "value": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "value"
+  ],
+  "title": "SkillToolDependency",
+  "type": "object"
+}

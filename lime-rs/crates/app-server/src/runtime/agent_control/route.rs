@@ -165,13 +165,8 @@ pub(super) fn has_complete_agent_control_route_snapshot(
         })
 }
 
-pub(super) fn agent_control_route_snapshot_is_direct(route_snapshot: &serde_json::Value) -> bool {
-    normalize_route_snapshot(route_snapshot).is_some_and(|snapshot| {
-        snapshot
-            .get("routeSource")
-            .and_then(serde_json::Value::as_str)
-            == Some("direct_provider_config")
-    })
+pub(super) fn agent_control_route_snapshot_is_complete(route_snapshot: &serde_json::Value) -> bool {
+    normalize_route_snapshot(route_snapshot).is_some()
 }
 
 pub(super) fn agent_control_route_snapshot_from_session(

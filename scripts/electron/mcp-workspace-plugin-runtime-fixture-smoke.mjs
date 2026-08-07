@@ -44,11 +44,12 @@ const LOG_PREFIX = "[smoke:mcp-workspace-plugin-runtime-fixture]";
 // 复用 shared MCP fixture 的 allowed_callers，避免点击 smoke 与 fixture caller 漂移。
 const PLUGIN_ID = "mcp-current-plugin";
 const REQUIRED_METHODS = [
+  "thread/start",
   "mcpServer/create",
   "agentSession/toolInventory/read",
   "mcpServer/start",
   "mcpTool/listForContext",
-  "mcpTool/callWithCaller",
+  "mcpServer/tool/call",
 ];
 
 function printHelp() {
@@ -59,7 +60,7 @@ MCP Workspace Plugin Runtime Electron Fixture Smoke
   启动真实 Electron Desktop Host，创建临时 stdio MCP server，然后在页面内注入
   最小 Workspace Harness 点击面板，点击“准备 MCP”后经 preload
   app_server_handle_json_lines 调用 agentSession/toolInventory/read、
-  mcpTool/listForContext 与 mcpTool/callWithCaller。
+  mcpTool/listForContext 与带真实 Thread 的 mcpServer/tool/call。
 
 边界:
   这是 Workspace 点击验收骨架：真实 Electron / preload / App Server / MCP
@@ -243,10 +244,7 @@ async function injectWorkspaceHarnessClickSkeleton(page, { serverName }) {
       title.style.marginBottom = "8px";
 
       const status = document.createElement("div");
-      status.setAttribute(
-        "data-testid",
-        "mcp-workspace-plugin-runtime-status",
-      );
+      status.setAttribute("data-testid", "mcp-workspace-plugin-runtime-status");
       status.textContent = "等待点击准备 MCP";
       status.style.fontSize = "12px";
       status.style.marginTop = "8px";
@@ -340,6 +338,13 @@ async function injectWorkspaceHarnessClickSkeleton(page, { serverName }) {
         };
 
         try {
+          const threadResponse = await callJsonRpc("thread/start", {
+            ephemeral: true,
+          });
+          const threadId = threadResponse?.thread?.id;
+          if (typeof threadId !== "string" || threadId.length === 0) {
+            throw new Error("thread/start 未返回真实 threadId");
+          }
           const inventoryResponse = await callJsonRpc(
             "agentSession/toolInventory/read",
             {
@@ -399,20 +404,20 @@ async function injectWorkspaceHarnessClickSkeleton(page, { serverName }) {
           }
 
           const callProofRequest = target.callProofRequest;
-          if (callProofRequest?.method !== "mcpTool/callWithCaller") {
+          if (callProofRequest?.method !== "mcpServer/tool/call") {
             throw new Error("tool inventory 未给出显式 call proof request");
           }
-          const callProofResult = await callJsonRpc(
-            "mcpTool/callWithCaller",
-            callProofRequest.params,
-          );
-          if (callProofResult?.is_error === true) {
-            throw new Error("mcpTool/callWithCaller 返回 is_error=true");
+          const callProofResult = await callJsonRpc("mcpServer/tool/call", {
+            threadId,
+            ...callProofRequest.params,
+          });
+          if (callProofResult?.isError === true) {
+            throw new Error("mcpServer/tool/call 返回 isError=true");
           }
 
           const callCountBeforeDefaultProof = (
             window.__LIME_MCP_WORKSPACE_FIXTURE_REQUEST_METHODS__ || []
-          ).filter((method) => method === "mcpTool/callWithCaller").length;
+          ).filter((method) => method === "mcpServer/tool/call").length;
           const defaultInventoryResponse = await callJsonRpc(
             "agentSession/toolInventory/read",
             {
@@ -458,7 +463,7 @@ async function injectWorkspaceHarnessClickSkeleton(page, { serverName }) {
           }
           const callCountAfterDefaultProof = (
             window.__LIME_MCP_WORKSPACE_FIXTURE_REQUEST_METHODS__ || []
-          ).filter((method) => method === "mcpTool/callWithCaller").length;
+          ).filter((method) => method === "mcpServer/tool/call").length;
 
           const defaultProofDidNotCallTool =
             callCountAfterDefaultProof === callCountBeforeDefaultProof;
@@ -591,7 +596,9 @@ function summarizeElectronEvidence({ traceRaw, createResult, clickResult }) {
 
 async function readGuiSnapshot(page) {
   return await page.evaluate(() => {
-    const panel = document.querySelector('[data-testid="harness-status-panel"]');
+    const panel = document.querySelector(
+      '[data-testid="harness-status-panel"]',
+    );
     const button = document.querySelector(
       '[data-testid="mcp-workspace-plugin-runtime-prepare"]',
     );

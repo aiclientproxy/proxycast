@@ -20,7 +20,7 @@ describe("MCP Context7 live Electron fixture smoke guard", () => {
     expect(content).toContain('"mcpServer/start"');
     expect(content).toContain('"mcpServerStatus/list"');
     expect(content).toContain('"mcpTool/search"');
-    expect(content).toContain('"mcpTool/call"');
+    expect(content).toContain('"mcpServer/tool/call"');
   });
 
   it("calls Context7 tools without recording secrets or using mock fallback", () => {

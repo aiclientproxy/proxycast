@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -41,6 +42,7 @@ import {
   TERMINAL_CANCELED_AFTER_ANSWER_SCENARIO,
   TERMINAL_FAILED_AFTER_ANSWER_SCENARIO,
   TERMINAL_STALE_GUARD_SCENARIO,
+  APP_SERVER_METHOD_SESSION_READ,
   TYPED_ERROR_RETRY_FAILURE_PROMPT,
   TYPED_ERROR_RETRY_FAILURE_SCENARIO,
   TYPED_ERROR_RETRY_SUCCESS_PROMPT,
@@ -108,6 +110,7 @@ import {
   waitForGuiSessionVisible,
 } from "./claw-chat-current-fixture-session.mjs";
 import {
+  assert,
   cleanupTempRoot,
   isIgnorableConsoleError,
   logStage,
@@ -116,6 +119,9 @@ import {
   sanitizeText,
   writeJsonFile,
 } from "./claw-chat-current-fixture-utils.mjs";
+
+const HOOK_FIXTURE_STATUS_MESSAGE = "Gate B command hook completed";
+const HOOK_FIXTURE_MATCHER = "update_plan";
 
 function printHelp() {
   console.log(`
@@ -141,6 +147,7 @@ Claw Chat Current Electron Fixture Smoke
   --prefix <name>        证据文件前缀
   --run-id <id>          Gate 项目 run-id；也可通过 LIME_GATE_RUN_ID 注入
   --scenario <name>      complete | unknown-item | home-hotpath | home-hotpath-greeting | cancel | cancel-then-continue | inputbar-rich-restore | inputbar-active-steer | plan | turn-plan-update | goal | soul-style | image-command | plain-image-intent | media-reference | reasoning-first-visible | live-tail-commit | electron-resize-reflow | approval-request-resume | approval-request-decline | approval-request-cancel | approval-request-host-interrupt | approval-request-full-access | terminal-failed-after-answer | terminal-canceled-after-answer | terminal-stale-guard | typed-error-retry-success | typed-error-retry-failure | web-tools-rendering | mcp-structured-content | skills-runtime | expert-plaza-skills-runtime | expert-panel-skills-runtime | right-surface-visual-matrix | content-factory-article-workspace | content-factory-inline-image-article-workspace，默认 complete
+  --hook-fixture         仅用于 turn-plan-update：启用受信 command Hook Gate B
   --prompt <text>        仅 home-hotpath 场景可用，覆盖默认新闻输入
   --soul-style-profile <id>   soul-style 场景使用的 profile，默认 ${DEFAULT_SOUL_STYLE_FIXTURE_PROFILE_ID}
   --cdp-port <port>      可选 Electron remote debugging port；传入后通过 CDP renderer 执行 GUI 动作
@@ -159,6 +166,7 @@ function parseArgs(argv) {
     promptOverride: null,
     runId: process.env.LIME_GATE_RUN_ID?.trim() || null,
     soulStyleProfileId: DEFAULT_SOUL_STYLE_FIXTURE_PROFILE_ID,
+    hookFixture: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -219,6 +227,10 @@ function parseArgs(argv) {
     }
     if (arg === "--keep-temp") {
       options.keepTemp = true;
+      continue;
+    }
+    if (arg === "--hook-fixture") {
+      options.hookFixture = true;
       continue;
     }
     throw new Error(`未知参数: ${arg}`);
@@ -294,10 +306,176 @@ function parseArgs(argv) {
   if (options.promptOverride && options.scenario !== HOME_HOTPATH_SCENARIO) {
     throw new Error("--prompt 仅支持 --scenario home-hotpath");
   }
+  if (options.hookFixture && options.scenario !== TURN_PLAN_UPDATE_SCENARIO) {
+    throw new Error("--hook-fixture 仅支持 --scenario turn-plan-update");
+  }
   createSoulStyleFixtureSelection({
     profileId: options.soulStyleProfileId,
   });
   return options;
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) {
+    return value.map(canonicalJson);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, canonicalJson(value[key])]),
+    );
+  }
+  return value;
+}
+
+function createHookFixture(runtimeEnv) {
+  const codexHome = path.join(runtimeEnv.tempRoot, "codex-home");
+  const configPath = path.join(codexHome, "config.toml");
+  const hookScriptPath = path.join(runtimeEnv.tempRoot, "hook-gate-b.mjs");
+  const markerPath = path.join(runtimeEnv.tempRoot, "hook-gate-b.jsonl");
+  fs.mkdirSync(codexHome, { recursive: true });
+  fs.writeFileSync(markerPath, "");
+  fs.writeFileSync(
+    hookScriptPath,
+    [
+      'import fs from "node:fs";',
+      'let input = "";',
+      'process.stdin.setEncoding("utf8");',
+      'process.stdin.on("data", (chunk) => { input += chunk; });',
+      'process.stdin.on("end", () => {',
+      '  const payload = JSON.parse(input || "{}");',
+      `  fs.appendFileSync(${JSON.stringify(markerPath)}, JSON.stringify({`,
+      "    hookEventName: payload.hook_event_name ?? null,",
+      "    sessionId: payload.session_id ?? null,",
+      "    turnId: payload.turn_id ?? null,",
+      "    toolName: payload.tool_name ?? null,",
+      "    toolUseId: payload.tool_use_id ?? null,",
+      "    toolInput: payload.tool_input ?? null,",
+      '  }) + "\\n");',
+      `  process.stdout.write(JSON.stringify({ continue: true, additionalContext: ${JSON.stringify(HOOK_FIXTURE_STATUS_MESSAGE)} }));`,
+      "});",
+      "",
+    ].join("\n"),
+  );
+
+  const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(hookScriptPath)}`;
+  const handler = {
+    type: "command",
+    command,
+    timeout: 30,
+    statusMessage: HOOK_FIXTURE_STATUS_MESSAGE,
+  };
+  const currentHash = `sha256:${createHash("sha256")
+    .update(
+      JSON.stringify(
+        canonicalJson({
+          event_name: "pre_tool_use",
+          matcher: HOOK_FIXTURE_MATCHER,
+          hooks: [handler],
+        }),
+      ),
+    )
+    .digest("hex")}`;
+  const canonicalConfigPath = path.join(
+    fs.realpathSync(codexHome),
+    "config.toml",
+  );
+  const key = `${canonicalConfigPath}:pre_tool_use:0:0`;
+  fs.writeFileSync(
+    configPath,
+    [
+      "[hooks]",
+      "",
+      "[[hooks.PreToolUse]]",
+      `matcher = ${JSON.stringify(HOOK_FIXTURE_MATCHER)}`,
+      "",
+      "[[hooks.PreToolUse.hooks]]",
+      'type = "command"',
+      `command = ${JSON.stringify(command)}`,
+      "timeout = 30",
+      `statusMessage = ${JSON.stringify(HOOK_FIXTURE_STATUS_MESSAGE)}`,
+      "",
+      `[hooks.state.${JSON.stringify(key)}]`,
+      "enabled = true",
+      `trusted_hash = ${JSON.stringify(currentHash)}`,
+      "",
+    ].join("\n"),
+  );
+  runtimeEnv.env.CODEX_HOME = codexHome;
+  return {
+    codexHome,
+    configPath,
+    hookScriptPath,
+    markerPath,
+    key,
+    currentHash,
+    command,
+  };
+}
+
+function hookItemsFromThreadRead(result) {
+  const turns = Array.isArray(result?.thread?.turns) ? result.thread.turns : [];
+  return turns.flatMap((turn) =>
+    (Array.isArray(turn?.items) ? turn.items : [])
+      .filter((item) => item?.type === "hook")
+      .map((item) => ({ turnId: turn?.id ?? null, item })),
+  );
+}
+
+async function waitForHookTimeline(page, options) {
+  const startedAt = Date.now();
+  let lastSnapshot = null;
+  while (Date.now() - startedAt < options.timeoutMs) {
+    lastSnapshot = await page.evaluate((statusMessage) => {
+      const visible = (node) => {
+        if (!(node instanceof HTMLElement)) return false;
+        const rect = node.getBoundingClientRect();
+        const style = window.getComputedStyle(node);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== "none" &&
+          style.visibility !== "hidden"
+        );
+      };
+      const rows = Array.from(
+        document.querySelectorAll('[data-testid="timeline-hook"]'),
+      )
+        .filter(visible)
+        .map((row) => row.textContent || "");
+      return {
+        visibleCount: rows.length,
+        rows,
+        hasStatusMessage: rows.some((text) => text.includes(statusMessage)),
+        historicalPreviewCount: Array.from(
+          document.querySelectorAll(
+            'button[data-testid^="message-list-historical-timeline-preview:"]',
+          ),
+        ).filter(visible).length,
+      };
+    }, HOOK_FIXTURE_STATUS_MESSAGE);
+    if (lastSnapshot.visibleCount > 0 && lastSnapshot.hasStatusMessage) {
+      return lastSnapshot;
+    }
+    await page.evaluate(() => {
+      const previews = Array.from(
+        document.querySelectorAll(
+          'button[data-testid^="message-list-historical-timeline-preview:"]',
+        ),
+      );
+      previews.at(-1)?.click();
+      for (const summary of document.querySelectorAll(
+        'details[data-testid*="process"][data-details-available="true"]:not([open]) > summary',
+      )) {
+        if (summary instanceof HTMLElement) summary.click();
+      }
+    });
+    await new Promise((resolve) => setTimeout(resolve, options.intervalMs));
+  }
+  throw new Error(
+    `Hook timeline 未显示 canonical Hook Item: ${JSON.stringify(lastSnapshot)}`,
+  );
 }
 
 function traceEvidenceHasProviderAndClient(evidence) {
@@ -523,6 +701,9 @@ async function run() {
   );
 
   const runtimeEnv = createTempRuntimeEnv();
+  const hookFixture = options.hookFixture
+    ? createHookFixture(runtimeEnv)
+    : null;
   const appServerBinary = resolveDevAppServerBinary({
     env: runtimeEnv.env,
     repoRoot: process.cwd(),
@@ -577,6 +758,19 @@ async function run() {
     provider: FIXTURE_PROVIDER,
     model: FIXTURE_MODEL,
     backendMode: scenarioBackendEnv.APP_SERVER_BACKEND_MODE,
+    hookFixture: hookFixture
+      ? {
+          enabled: true,
+          matcher: HOOK_FIXTURE_MATCHER,
+          statusMessage: HOOK_FIXTURE_STATUS_MESSAGE,
+          configPath: hookFixture.configPath,
+          markerPath: hookFixture.markerPath,
+          currentHash: hookFixture.currentHash,
+        }
+      : null,
+    hookDiscovery: null,
+    hookLifecycleGateB: null,
+    hookFixtureAssertions: null,
     appUrl: options.appUrl || null,
     proofLevel: options.cdpPort
       ? "Gate B CDP controlled fixture"
@@ -936,6 +1130,43 @@ async function run() {
     const workspace = await ensureDefaultWorkspace(page, appServerRequests);
     summary.workspaceId = workspace.workspaceId;
     summary.workspace = sanitizeJson(workspace);
+    if (hookFixture) {
+      logStage("verify-hook-discovery");
+      const hooksList = await invokeAppServerFromPage(
+        page,
+        "hooks/list",
+        { cwds: [workspace.rootPath] },
+        appServerRequests,
+      );
+      const entries = Array.isArray(hooksList.result?.data)
+        ? hooksList.result.data
+        : [];
+      const hooks = entries.flatMap((entry) =>
+        (Array.isArray(entry?.hooks) ? entry.hooks : []).map((hook) => ({
+          cwd: entry?.cwd ?? null,
+          ...hook,
+        })),
+      );
+      const discovered = hooks.find(
+        (hook) =>
+          hook?.eventName === "preToolUse" &&
+          hook?.matcher === HOOK_FIXTURE_MATCHER,
+      );
+      summary.hookDiscovery = sanitizeJson({
+        entryCount: entries.length,
+        hookCount: hooks.length,
+        discovered: discovered ?? null,
+      });
+      assert(discovered, "hooks/list 未发现 Gate B PreToolUse Hook");
+      assert(
+        discovered.trustStatus === "trusted" && discovered.enabled === true,
+        `Gate B Hook 未处于 trusted/enabled: ${JSON.stringify(discovered)}`,
+      );
+      assert(
+        discovered.currentHash === hookFixture.currentHash,
+        "hooks/list currentHash 与临时受信配置不一致",
+      );
+    }
 
     if (options.scenario === SOUL_STYLE_SCENARIO) {
       logStage("enable-soul-style-config");
@@ -1102,6 +1333,68 @@ async function run() {
         ? () => textProviderFixtureServer.requests()
         : null,
     });
+    if (hookFixture) {
+      logStage("verify-hook-lifecycle-gate-b");
+      const markerEvents = readJsonl(hookFixture.markerPath);
+      const threadRead = await invokeAppServerFromPage(
+        page,
+        APP_SERVER_METHOD_SESSION_READ,
+        { threadId: summary.threadId, includeTurns: true },
+        appServerRequests,
+      );
+      const hookItems = hookItemsFromThreadRead(threadRead.result);
+      const completedHook = hookItems.find(
+        ({ item }) =>
+          item?.run?.status === "completed" &&
+          item?.run?.statusMessage === HOOK_FIXTURE_STATUS_MESSAGE,
+      );
+      const notificationLifecycle =
+        summary.turnPlanUpdateDrain?.hookLifecycle ?? {};
+      summary.hookLifecycleGateB = sanitizeJson({
+        markerEvents,
+        notificationLifecycle,
+        hookItems,
+        timeline: null,
+      });
+      const timeline = await waitForHookTimeline(page, options);
+      summary.hookLifecycleGateB.timeline = sanitizeJson(timeline);
+      summary.hookFixtureAssertions = {
+        hookDiscoveryTrusted:
+          summary.hookDiscovery?.discovered?.trustStatus === "trusted" &&
+          summary.hookDiscovery?.discovered?.currentHash ===
+            hookFixture.currentHash,
+        hookUsesCurrentElectronMethods:
+          appServerRequests.some(({ method }) => method === "hooks/list") &&
+          appServerRequests.some(({ method }) => method === "thread/start") &&
+          appServerRequests.some(({ method }) => method === "turn/start") &&
+          appServerRequests.some(({ method }) => method === "thread/read"),
+        hookProviderToolCallCompleted:
+          summary.turnPlanUpdateProviderRequests?.initialRequest
+            ?.hasUpdatePlanTool === true &&
+          summary.turnPlanUpdateProviderRequests?.followupRequest
+            ?.hasPlanUpdatedToolResult === true &&
+          summary.readModelTurnPlanUpdateCompleted?.latestTurnStatus ===
+            "completed",
+        hookCommandExecutedOnce:
+          markerEvents.length === 1 &&
+          markerEvents[0]?.hookEventName === "PreToolUse" &&
+          markerEvents[0]?.toolName === HOOK_FIXTURE_MATCHER,
+        hookNotificationsPaired:
+          notificationLifecycle.startedRunIds?.length === 1 &&
+          notificationLifecycle.completedRunIds?.length === 1 &&
+          notificationLifecycle.pairedRunIds?.length === 1,
+        hookCanonicalItemRecovered:
+          Boolean(completedHook) &&
+          completedHook.item?.id ===
+            `item_${notificationLifecycle.pairedRunIds?.[0]}` &&
+          completedHook.item?.run?.id ===
+            notificationLifecycle.pairedRunIds?.[0],
+        hookTimelineVisible:
+          timeline.visibleCount >= 1 && timeline.hasStatusMessage === true,
+        hookNoRendererErrors:
+          actionableConsoleErrors.length === 0 && pageErrors.length === 0,
+      };
+    }
     collectedInvokeTraceMessages = await invokeTraceCollector.stop();
     invokeTraceCollector = null;
 
@@ -1218,7 +1511,25 @@ async function run() {
     summary.appServerRequestMethods = assertionReport.appServerRequestMethods;
     summary.backend = sanitizeJson(assertionReport.backendSummary);
     summary.gateBContract = sanitizeJson(assertionReport.gateBContract);
-    summary.assertions = assertionReport.assertions;
+    if (summary.hookFixtureAssertions) {
+      summary.hookFixtureAssertions.hookUsesCurrentElectronMethods = [
+        "hooks/list",
+        "thread/start",
+        "turn/start",
+        "thread/read",
+      ].every((method) =>
+        assertionReport.appServerRequestMethods.includes(method),
+      );
+      for (const [key, passed] of Object.entries(
+        summary.hookFixtureAssertions,
+      )) {
+        assert(passed, `Hook Gate B 断言失败: ${key}`);
+      }
+    }
+    summary.assertions = {
+      ...assertionReport.assertions,
+      ...(summary.hookFixtureAssertions ?? {}),
+    };
     summary.commonAssertions = assertionReport.commonAssertions;
     summary.scenarioAssertions = assertionReport.scenarioAssertions;
     summary.notApplicableAssertions = assertionReport.notApplicableAssertions;

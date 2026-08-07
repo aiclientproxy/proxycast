@@ -192,6 +192,18 @@ lines.on("line", (line) => {
         }],
       },
     });
+    return;
+  }
+  if (message.method === "tools/call") {
+    send({
+      jsonrpc: "2.0",
+      id: message.id,
+      result: {
+        content: [{ type: "text", text: message.params?.arguments?.message ?? "ok" }],
+        structuredContent: { source: "session-runtime" },
+        isError: false,
+      },
+    });
   }
 });
 "#,
@@ -230,6 +242,25 @@ lines.on("line", (line) => {
             .await
             .expect("published runtime generation"),
     ));
+    let result = state
+        .call_mcp_tool(
+            "session-a",
+            "thread-a",
+            "healthy",
+            "healthy_tool",
+            serde_json::json!({"message": "thread-owned"}),
+        )
+        .await
+        .expect("call tool through session-owned MCP runtime");
+    assert!(matches!(
+        result.content.as_slice(),
+        [lime_mcp::McpContent::Text { text }] if text == "thread-owned"
+    ));
+    assert_eq!(
+        result.structured_content,
+        Some(serde_json::json!({"source": "session-runtime"}))
+    );
+    assert!(!result.is_error);
     state.clear_mcp_runtimes().await;
 }
 

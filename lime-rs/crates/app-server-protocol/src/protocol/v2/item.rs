@@ -26,6 +26,12 @@ pub enum ThreadItem {
         metadata: Option<ThreadItemMetadata>,
         fragments: Vec<HookPromptFragment>,
     },
+    Hook {
+        id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        metadata: Option<ThreadItemMetadata>,
+        run: super::HookRunSummary,
+    },
     AgentMessage {
         id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]

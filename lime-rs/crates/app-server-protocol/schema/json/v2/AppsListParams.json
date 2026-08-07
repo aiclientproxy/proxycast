@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "cursor": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "forceRefetch": {
+      "type": "boolean"
+    },
+    "limit": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "threadId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "title": "AppsListParams",
+  "type": "object"
+}

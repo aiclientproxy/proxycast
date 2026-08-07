@@ -190,6 +190,11 @@ export interface AppServerClient {
   executeBrowserSessionAction(
     params: protocol.BrowserSessionActionExecuteParams,
   ): protocol.JsonRpcRequest;
+  listApps(params?: protocol.AppsListParams): protocol.JsonRpcRequest;
+  readApps(params: protocol.AppsReadParams): protocol.JsonRpcRequest;
+  listInstalledApps(
+    params?: protocol.AppsInstalledParams,
+  ): protocol.JsonRpcRequest;
   listPluginCatalog(
     params?: protocol.PluginCatalogListParams,
   ): protocol.JsonRpcRequest;
@@ -209,7 +214,14 @@ export interface AppServerClient {
   listInstalledPluginCatalog(
     params?: protocol.PluginCatalogInstalledParams,
   ): protocol.JsonRpcRequest;
-  listSkills(): protocol.JsonRpcRequest;
+  listSkills(params?: protocol.SkillsListParams): protocol.JsonRpcRequest;
+  setSkillsExtraRoots(
+    params: protocol.SkillsExtraRootsSetParams,
+  ): protocol.JsonRpcRequest;
+  writeSkillsConfig(
+    params: protocol.SkillsConfigWriteParams,
+  ): protocol.JsonRpcRequest;
+  listHooks(params?: protocol.HooksListParams): protocol.JsonRpcRequest;
   readSkill(params: protocol.SkillReadParams): protocol.JsonRpcRequest;
   listManagementSkills(
     params: protocol.SkillManagementListParams,
@@ -392,15 +404,14 @@ export interface AppServerClient {
     params: protocol.McpToolListForContextParams,
   ): protocol.JsonRpcRequest;
   searchMcpTools(params: protocol.McpToolSearchParams): protocol.JsonRpcRequest;
-  callMcpTool(params: protocol.McpToolCallParams): protocol.JsonRpcRequest;
-  callMcpToolWithCaller(
-    params: protocol.McpToolCallWithCallerParams,
+  callMcpServerTool(
+    params: protocol.McpServerToolCallParams,
   ): protocol.JsonRpcRequest;
   listMcpPrompts(): protocol.JsonRpcRequest;
   getMcpPrompt(params: protocol.McpPromptGetParams): protocol.JsonRpcRequest;
   listMcpResources(): protocol.JsonRpcRequest;
-  readMcpResource(
-    params: protocol.McpResourceReadParams,
+  readMcpServerResource(
+    params: protocol.McpServerResourceReadParams,
   ): protocol.JsonRpcRequest;
   subscribeMcpResource(
     params: protocol.McpResourceSubscribeParams,

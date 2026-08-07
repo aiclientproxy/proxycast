@@ -1,37 +1,43 @@
 {
   "$defs": {
-    "SkillToolDependency": {
+    "InstalledApp": {
       "properties": {
-        "required": {
+        "callable": {
           "type": "boolean"
         },
-        "type": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
           "type": "string"
         },
-        "value": {
-          "type": "string"
+        "runtimeName": {
+          "type": [
+            "null",
+            "string"
+          ]
         }
       },
       "required": [
-        "required",
-        "type",
-        "value"
+        "callable",
+        "enabled",
+        "id"
       ],
       "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
-    "tools": {
+    "apps": {
       "items": {
-        "$ref": "#/$defs/SkillToolDependency"
+        "$ref": "#/$defs/InstalledApp"
       },
       "type": "array"
     }
   },
   "required": [
-    "tools"
+    "apps"
   ],
-  "title": "SkillDependencies",
+  "title": "AppsInstalledResponse",
   "type": "object"
 }

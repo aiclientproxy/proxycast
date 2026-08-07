@@ -6,7 +6,9 @@ use crate::RuntimeEvent;
 use agent_protocol::provider_trace::runtime_event_type_for_provider_trace_stage;
 #[cfg(test)]
 use agent_protocol::provider_trace::{ProviderTraceEvent, ProviderTraceStage};
-use agent_protocol::{ThreadItem, ThreadItemPayload, ToolOutput};
+use agent_protocol::{
+    ItemId, ItemStatus, SessionId, ThreadId, ThreadItem, ThreadItemPayload, ToolOutput, TurnId,
+};
 use lime_agent::AgentEvent as RuntimeAgentEvent;
 use model_provider::safety::SAFETY_BUFFERING_RUNTIME_EVENT_KIND;
 use serde_json::{json, Value};
@@ -22,6 +24,9 @@ pub(super) fn runtime_events_from_agent_event_with_soul_style(
     event: &RuntimeAgentEvent,
     soul_style: Option<&SoulStyleMetadata>,
 ) -> Result<Vec<RuntimeEvent>, RuntimeCoreError> {
+    if let Some(events) = hook_runtime_events(event) {
+        return Ok(events);
+    }
     if let RuntimeAgentEvent::ProviderStreamEvent {
         runtime_event_kind,
         payload,
@@ -72,6 +77,46 @@ pub(super) fn runtime_events_from_agent_event_with_soul_style(
     Ok(events)
 }
 
+fn hook_runtime_events(event: &RuntimeAgentEvent) -> Option<Vec<RuntimeEvent>> {
+    let (event_type, status, run) = match event {
+        RuntimeAgentEvent::HookStarted { run, .. } => ("hook.started", ItemStatus::InProgress, run),
+        RuntimeAgentEvent::HookCompleted { run, .. } => {
+            let status = match run.status {
+                agent_protocol::hook::HookRunStatus::Failed
+                | agent_protocol::hook::HookRunStatus::Blocked => ItemStatus::Failed,
+                agent_protocol::hook::HookRunStatus::Stopped => ItemStatus::Interrupted,
+                _ => ItemStatus::Completed,
+            };
+            ("hook.completed", status, run)
+        }
+        _ => return None,
+    };
+    let mut item = ThreadItem::new(
+        SessionId::new("hook-session"),
+        ThreadId::new("hook-thread"),
+        TurnId::new("hook-turn"),
+        0,
+        0,
+        ThreadItemPayload::Hook { run: run.clone() },
+    );
+    item.item_id = ItemId::new(format!("item_{}", run.id));
+    item.status = status;
+    item.created_at_ms = run.started_at;
+    item.updated_at_ms = run.completed_at.unwrap_or(run.started_at);
+    item.completed_at_ms = status.is_terminal().then_some(item.updated_at_ms);
+    item.metadata = serde_json::json!({
+        "hookRunId": run.id,
+        "source": "codex_hook_runtime",
+    });
+    Some(vec![RuntimeEvent::new(
+        event_type,
+        serde_json::json!({
+            "run": run,
+            "item": item,
+        }),
+    )])
+}
+
 pub(super) fn runtime_event_type_from_raw(raw_type: &str) -> &'static str {
     match raw_type {
         "thread_started" => "thread.started",
@@ -81,6 +126,8 @@ pub(super) fn runtime_event_type_from_raw(raw_type: &str) -> &'static str {
         "item_started" => "item.started",
         "item_updated" => "item.updated",
         "item_completed" => "item.completed",
+        "hook_started" => "hook.started",
+        "hook_completed" => "hook.completed",
         "text_delta" => "message.delta",
         "text_delta_batch" => "message.delta_batch",
         "reasoning_summary_delta" => "reasoning.summary",

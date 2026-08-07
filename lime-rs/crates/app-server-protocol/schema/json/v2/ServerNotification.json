@@ -23,6 +23,286 @@
       ],
       "type": "object"
     },
+    "AppBranding": {
+      "properties": {
+        "category": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "developer": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "isDiscoverableApp": {
+          "type": "boolean"
+        },
+        "privacyPolicy": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "termsOfService": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "website": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "isDiscoverableApp"
+      ],
+      "type": "object"
+    },
+    "AppInfo": {
+      "properties": {
+        "appMetadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AppMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "branding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AppBranding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "distributionChannel": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "iconAssets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "iconDarkAssets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "installUrl": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "isAccessible": {
+          "default": false,
+          "type": "boolean"
+        },
+        "isEnabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "logoUrl": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "logoUrlDark": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "pluginDisplayNames": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "AppListUpdatedNotification": {
+      "properties": {
+        "data": {
+          "items": {
+            "$ref": "#/$defs/AppInfo"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "type": "object"
+    },
+    "AppMetadata": {
+      "properties": {
+        "categories": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "developer": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "firstPartyRequiresInstall": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AppReview"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "screenshots": {
+          "items": {
+            "$ref": "#/$defs/AppScreenshot"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "seoDescription": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "showInComposerWhenUnlinked": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "subCategories": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "versionId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "versionNotes": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "AppReview": {
+      "properties": {
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "AppScreenshot": {
+      "properties": {
+        "fileId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "url": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "userPrompt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "userPrompt"
+      ],
+      "type": "object"
+    },
     "ByteRange": {
       "properties": {
         "end": {
@@ -632,6 +912,83 @@
       },
       "type": "object"
     },
+    "HookCompletedNotification": {
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/HookRunSummary"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "run",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "HookEventName": {
+      "enum": [
+        "permissionRequest",
+        "postCompact",
+        "postToolUse",
+        "preCompact",
+        "preToolUse",
+        "sessionEnd",
+        "sessionStart",
+        "stop",
+        "subagentStart",
+        "subagentStop",
+        "userPromptSubmit"
+      ],
+      "type": "string"
+    },
+    "HookExecutionMode": {
+      "enum": [
+        "async",
+        "sync"
+      ],
+      "type": "string"
+    },
+    "HookHandlerType": {
+      "enum": [
+        "agent",
+        "command",
+        "prompt"
+      ],
+      "type": "string"
+    },
+    "HookOutputEntry": {
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/HookOutputEntryKind"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "type": "object"
+    },
+    "HookOutputEntryKind": {
+      "enum": [
+        "context",
+        "error",
+        "feedback",
+        "stop",
+        "warning"
+      ],
+      "type": "string"
+    },
     "HookPromptFragment": {
       "properties": {
         "hookRunId": {
@@ -644,6 +1001,136 @@
       "required": [
         "hookRunId",
         "text"
+      ],
+      "type": "object"
+    },
+    "HookRunStatus": {
+      "enum": [
+        "blocked",
+        "completed",
+        "failed",
+        "running",
+        "stopped"
+      ],
+      "type": "string"
+    },
+    "HookRunSummary": {
+      "properties": {
+        "completedAt": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "displayOrder": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "durationMs": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/HookOutputEntry"
+          },
+          "type": "array"
+        },
+        "eventName": {
+          "$ref": "#/$defs/HookEventName"
+        },
+        "executionMode": {
+          "$ref": "#/$defs/HookExecutionMode"
+        },
+        "handlerType": {
+          "$ref": "#/$defs/HookHandlerType"
+        },
+        "id": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/HookScope"
+        },
+        "source": {
+          "$ref": "#/$defs/HookSource"
+        },
+        "sourcePath": {
+          "type": "string"
+        },
+        "startedAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/HookRunStatus"
+        },
+        "statusMessage": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "displayOrder",
+        "entries",
+        "eventName",
+        "executionMode",
+        "handlerType",
+        "id",
+        "scope",
+        "source",
+        "sourcePath",
+        "startedAt",
+        "status"
+      ],
+      "type": "object"
+    },
+    "HookScope": {
+      "enum": [
+        "thread",
+        "turn"
+      ],
+      "type": "string"
+    },
+    "HookSource": {
+      "enum": [
+        "cloudManagedConfig",
+        "cloudRequirements",
+        "legacyManagedConfigFile",
+        "legacyManagedConfigMdm",
+        "mdm",
+        "plugin",
+        "project",
+        "sessionFlags",
+        "system",
+        "unknown",
+        "user"
+      ],
+      "type": "string"
+    },
+    "HookStartedNotification": {
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/HookRunSummary"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "run",
+        "threadId"
       ],
       "type": "object"
     },
@@ -1736,6 +2223,36 @@
           "required": [
             "fragments",
             "id",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ThreadItemMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "run": {
+              "$ref": "#/$defs/HookRunSummary"
+            },
+            "type": {
+              "const": "hook",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "run",
             "type"
           ],
           "type": "object"
@@ -3308,6 +3825,54 @@
         },
         "params": {
           "$ref": "#/$defs/McpServerStatusUpdatedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "app/list/updated",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/AppListUpdatedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "hook/started",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/HookStartedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "hook/completed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/HookCompletedNotification"
         }
       },
       "required": [

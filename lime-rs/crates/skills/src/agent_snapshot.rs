@@ -9,8 +9,11 @@ use std::time::UNIX_EPOCH;
 
 use serde::{Deserialize, Serialize};
 
-use crate::skill_summary::{load_skill_summaries_from_directory, LoadedSkillSummary};
+use crate::skill_summary::{
+    invalidate_skill_summary_cache, load_skill_summaries_from_directory, LoadedSkillSummary,
+};
 use lime_core::app_paths;
+use lime_core::config::SkillConfig;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentSkillMetadata {
@@ -215,6 +218,65 @@ pub fn invalidate_agent_skill_snapshot_cache() {
         .lock()
         .unwrap_or_else(|error| error.into_inner());
     *guard = None;
+    drop(guard);
+    invalidate_skill_summary_cache();
+}
+
+fn runtime_extra_roots() -> &'static Mutex<Vec<PathBuf>> {
+    static ROOTS: OnceLock<Mutex<Vec<PathBuf>>> = OnceLock::new();
+    ROOTS.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+pub fn set_runtime_extra_skill_roots(
+    roots: impl IntoIterator<Item = PathBuf>,
+) -> Result<(), String> {
+    let mut normalized = Vec::new();
+    for root in roots {
+        if !root.is_absolute() {
+            return Err(format!(
+                "skills/extraRoots/set requires absolute paths: {}",
+                root.display()
+            ));
+        }
+        let root = normalize_path(&root);
+        if !normalized.contains(&root) {
+            normalized.push(root);
+        }
+    }
+    let mut guard = runtime_extra_roots()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    *guard = normalized;
+    drop(guard);
+    invalidate_agent_skill_snapshot_cache();
+    Ok(())
+}
+
+pub fn apply_agent_skill_config(snapshot: &mut AgentSkillSnapshot, config: &[SkillConfig]) {
+    for skill in &mut snapshot.skills {
+        let effective_enabled = config
+            .iter()
+            .filter(|entry| skill_config_matches(entry, skill))
+            .map(|entry| entry.enabled)
+            .next_back();
+        if effective_enabled == Some(false) {
+            skill.enabled = false;
+            skill.policy.allow_implicit_invocation = false;
+        }
+    }
+}
+
+fn skill_config_matches(entry: &SkillConfig, skill: &AgentSkillMetadata) -> bool {
+    match (entry.path.as_ref(), entry.name.as_deref()) {
+        (Some(path), None) => normalize_path(path) == normalize_path(&skill.skill_file_path),
+        (None, Some(name)) => {
+            let name = name.trim();
+            !name.is_empty()
+                && (skill.name.eq_ignore_ascii_case(name)
+                    || skill.stable_id().eq_ignore_ascii_case(name))
+        }
+        _ => false,
+    }
 }
 
 fn cached_snapshot(key: &str) -> Option<AgentSkillSnapshot> {
@@ -310,6 +372,14 @@ pub fn agent_skill_roots_for_workspace(
             continue;
         }
         push_unique_root(&mut roots, root.path, root.scope);
+    }
+    for path in runtime_extra_roots()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .iter()
+        .cloned()
+    {
+        push_unique_root(&mut roots, path, AgentSkillScope::Other);
     }
 
     roots

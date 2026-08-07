@@ -92,7 +92,24 @@ pub(super) fn into_parts(
         ClientRequest::ThreadGoalClear { id, params } => parts(id, Method::ThreadGoalClear, params),
         ClientRequest::ArtifactWrite { id, params } => parts(id, Method::ArtifactWrite, params),
         ClientRequest::MediaRead { id, params } => parts(id, Method::MediaRead, params),
+        ClientRequest::McpServerResourceRead { id, params } => {
+            parts(id, Method::McpServerResourceRead, params)
+        }
+        ClientRequest::McpServerToolCall { id, params } => {
+            parts(id, Method::McpServerToolCall, params)
+        }
         ClientRequest::ModelList { id, params } => parts(id, Method::ModelList, params),
+        ClientRequest::AppRead { id, params } => parts(id, Method::AppRead, params),
+        ClientRequest::AppList { id, params } => parts(id, Method::AppList, params),
+        ClientRequest::AppInstalled { id, params } => parts(id, Method::AppInstalled, params),
+        ClientRequest::HooksList { id, params } => parts(id, Method::HooksList, params),
+        ClientRequest::SkillsList { id, params } => parts(id, Method::SkillsList, params),
+        ClientRequest::SkillsExtraRootsSet { id, params } => {
+            parts(id, Method::SkillsExtraRootsSet, params)
+        }
+        ClientRequest::SkillsConfigWrite { id, params } => {
+            parts(id, Method::SkillsConfigWrite, params)
+        }
         ClientRequest::PluginList { id, params } => parts(id, Method::PluginList, params),
         ClientRequest::PluginSearch { id, params } => parts(id, Method::PluginSearch, params),
         ClientRequest::PluginRead { id, params } => parts(id, Method::PluginRead, params),
@@ -149,7 +166,7 @@ mod tests {
     use app_server_protocol::protocol::v2::{
         METHOD_MEDIA_READ, METHOD_PLUGIN_ENABLED_SET, METHOD_PLUGIN_INSTALL,
         METHOD_PLUGIN_INSTALLED, METHOD_PLUGIN_LIST, METHOD_PLUGIN_READ, METHOD_PLUGIN_UNINSTALL,
-        METHOD_THREAD_READ, METHOD_THREAD_RESUME, METHOD_TURN_INTERRUPT,
+        METHOD_SKILLS_LIST, METHOD_THREAD_READ, METHOD_THREAD_RESUME, METHOD_TURN_INTERRUPT,
     };
     use app_server_protocol::RequestId;
     use serde_json::json;
@@ -261,5 +278,22 @@ mod tests {
             let (_, lowered_method, _) = into_parts(request).expect("lower plugin request");
             assert_eq!(lowered_method, method);
         }
+    }
+
+    #[test]
+    fn skills_list_lowers_through_typed_ingress() {
+        let request = decode(&request(
+            METHOD_SKILLS_LIST,
+            json!({"cwds":["/workspace/project"],"forceReload":true}),
+        ))
+        .expect("decode skills request")
+        .expect("skills/list is v2");
+        let (_, method, params) = into_parts(request).expect("lower skills request");
+
+        assert_eq!(method, METHOD_SKILLS_LIST);
+        assert_eq!(
+            params.expect("params"),
+            json!({"cwds":["/workspace/project"],"forceReload":true})
+        );
     }
 }

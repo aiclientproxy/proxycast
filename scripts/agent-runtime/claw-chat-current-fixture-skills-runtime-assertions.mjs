@@ -27,7 +27,7 @@ export function buildSkillsRuntimeScenarioAssertions({
   return {
     initialCurrentSkillListObserved:
       summary.skillsChangedCatalogRefresh?.initialCatalog?.afterPanelOpen
-        ?.method === "skill/list" &&
+        ?.method === "skills/list" &&
       summary.skillsChangedCatalogRefresh?.initialCatalog?.afterPanelOpen
         ?.electronIpcSuccessCount >
         summary.skillsChangedCatalogRefresh?.initialCatalog?.beforeOpen
@@ -40,7 +40,7 @@ export function buildSkillsRuntimeScenarioAssertions({
       summary.skillsChangedCatalogRefresh?.notification?.markerCount > 0,
     automaticSkillListRefreshObserved:
       summary.skillsChangedCatalogRefresh?.automaticRefresh?.method ===
-        "skill/list" &&
+        "skills/list" &&
       summary.skillsChangedCatalogRefresh?.automaticRefresh?.transport ===
         "electron-ipc" &&
       summary.skillsChangedCatalogRefresh?.automaticRefresh?.increment > 0,

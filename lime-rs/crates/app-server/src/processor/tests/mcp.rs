@@ -2,15 +2,15 @@
 
 use super::super::*;
 use super::tests_support::initialize_processor;
+use app_server_protocol::protocol::v2::METHOD_MCP_SERVER_TOOL_CALL;
 use app_server_protocol::{
     ClientCapabilities, JsonRpcMessage, RequestId, METHOD_INITIALIZE, METHOD_INITIALIZED,
     METHOD_MCP_PROMPT_GET, METHOD_MCP_PROMPT_LIST, METHOD_MCP_RESOURCE_LIST,
-    METHOD_MCP_RESOURCE_READ, METHOD_MCP_RESOURCE_SUBSCRIBE, METHOD_MCP_RESOURCE_UNSUBSCRIBE,
-    METHOD_MCP_SERVER_CREATE, METHOD_MCP_SERVER_DELETE, METHOD_MCP_SERVER_ENABLED_SET,
-    METHOD_MCP_SERVER_IMPORT_FROM_APP, METHOD_MCP_SERVER_LIST, METHOD_MCP_SERVER_OAUTH_LOGIN,
-    METHOD_MCP_SERVER_START, METHOD_MCP_SERVER_STATUS_LIST, METHOD_MCP_SERVER_STOP,
-    METHOD_MCP_SERVER_SYNC_ALL_TO_LIVE, METHOD_MCP_SERVER_UPDATE, METHOD_MCP_TOOL_CALL,
-    METHOD_MCP_TOOL_CALL_WITH_CALLER, METHOD_MCP_TOOL_LIST,
+    METHOD_MCP_RESOURCE_SUBSCRIBE, METHOD_MCP_RESOURCE_UNSUBSCRIBE, METHOD_MCP_SERVER_CREATE,
+    METHOD_MCP_SERVER_DELETE, METHOD_MCP_SERVER_ENABLED_SET, METHOD_MCP_SERVER_IMPORT_FROM_APP,
+    METHOD_MCP_SERVER_LIST, METHOD_MCP_SERVER_OAUTH_LOGIN, METHOD_MCP_SERVER_START,
+    METHOD_MCP_SERVER_STATUS_LIST, METHOD_MCP_SERVER_STOP, METHOD_MCP_SERVER_SYNC_ALL_TO_LIVE,
+    METHOD_MCP_SERVER_UPDATE, METHOD_MCP_TOOL_LIST,
 };
 use async_trait::async_trait;
 use serde_json::json;
@@ -204,10 +204,11 @@ async fn mcp_runtime_methods_require_initialized_and_fail_closed_without_manager
     let blocked = processor
         .handle_request(JsonRpcRequest::new(
             RequestId::Integer(1),
-            METHOD_MCP_TOOL_CALL,
+            METHOD_MCP_SERVER_TOOL_CALL,
             Some(json!({
-                "toolName": "mcp__docs__search",
-                "arguments": {},
+                "threadId": "thread-missing",
+                "server": "docs",
+                "tool": "search",
             })),
         ))
         .await
@@ -302,28 +303,9 @@ async fn mcp_runtime_methods_require_initialized_and_fail_closed_without_manager
             json!({ "name": "docs" }),
         ),
         (
-            RequestId::Integer(11),
-            METHOD_MCP_TOOL_CALL,
-            json!({ "toolName": "mcp__docs__search", "arguments": {} }),
-        ),
-        (
-            RequestId::Integer(12),
-            METHOD_MCP_TOOL_CALL_WITH_CALLER,
-            json!({
-                "toolName": "mcp__docs__search",
-                "arguments": {},
-                "caller": "assistant",
-            }),
-        ),
-        (
             RequestId::Integer(13),
             METHOD_MCP_PROMPT_GET,
             json!({ "server": "docs", "name": "docs_prompt", "arguments": {} }),
-        ),
-        (
-            RequestId::Integer(14),
-            METHOD_MCP_RESOURCE_READ,
-            json!({ "server": "docs", "uri": "docs://readme" }),
         ),
         (
             RequestId::Integer(15),

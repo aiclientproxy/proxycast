@@ -25,6 +25,10 @@ export const METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT =
   "agentSession/reviewDecisionTemplate/export";
 export const METHOD_AGENT_SESSION_TOOL_INVENTORY_READ =
   "agentSession/toolInventory/read";
+export const METHOD_APP_INSTALLED = "app/installed";
+export const METHOD_APP_LIST = "app/list";
+export const METHOD_APP_LIST_UPDATED = "app/list/updated";
+export const METHOD_APP_READ = "app/read";
 export const METHOD_ARTIFACT_READ = "artifact/read";
 export const METHOD_ARTIFACT_WRITE = "artifact/write";
 export const METHOD_AUTOMATION_JOB_CREATE = "automationJob/create";
@@ -125,6 +129,9 @@ export const METHOD_GATEWAY_TUNNEL_STATUS = "gatewayTunnel/status";
 export const METHOD_GATEWAY_TUNNEL_STOP = "gatewayTunnel/stop";
 export const METHOD_GATEWAY_TUNNEL_SYNC_WEBHOOK_URL =
   "gatewayTunnel/syncWebhookUrl";
+export const METHOD_HOOK_COMPLETED = "hook/completed";
+export const METHOD_HOOK_STARTED = "hook/started";
+export const METHOD_HOOKS_LIST = "hooks/list";
 export const METHOD_INITIALIZE = "initialize";
 export const METHOD_INITIALIZED = "initialized";
 export const METHOD_AGENT_MESSAGE_DELTA = "item/agentMessage/delta";
@@ -166,7 +173,6 @@ export const METHOD_LOG_PERSISTED_TAIL = "log/persistedTail";
 export const METHOD_MCP_PROMPT_GET = "mcpPrompt/get";
 export const METHOD_MCP_PROMPT_LIST = "mcpPrompt/list";
 export const METHOD_MCP_RESOURCE_LIST = "mcpResource/list";
-export const METHOD_MCP_RESOURCE_READ = "mcpResource/read";
 export const METHOD_MCP_RESOURCE_SUBSCRIBE = "mcpResource/subscribe";
 export const METHOD_MCP_RESOURCE_UNSUBSCRIBE = "mcpResource/unsubscribe";
 export const METHOD_MCP_SERVER_CREATE = "mcpServer/create";
@@ -179,13 +185,13 @@ export const METHOD_MCP_SERVER_LIST = "mcpServer/list";
 export const METHOD_MCP_SERVER_OAUTH_LOGIN = "mcpServer/oauth/login";
 export const METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED =
   "mcpServer/oauthLogin/completed";
+export const METHOD_MCP_SERVER_RESOURCE_READ = "mcpServer/resource/read";
 export const METHOD_MCP_SERVER_START = "mcpServer/start";
 export const METHOD_MCP_SERVER_STOP = "mcpServer/stop";
 export const METHOD_MCP_SERVER_SYNC_ALL_TO_LIVE = "mcpServer/syncAllToLive";
+export const METHOD_MCP_SERVER_TOOL_CALL = "mcpServer/tool/call";
 export const METHOD_MCP_SERVER_UPDATE = "mcpServer/update";
 export const METHOD_MCP_SERVER_STATUS_LIST = "mcpServerStatus/list";
-export const METHOD_MCP_TOOL_CALL = "mcpTool/call";
-export const METHOD_MCP_TOOL_CALL_WITH_CALLER = "mcpTool/callWithCaller";
 export const METHOD_MCP_TOOL_LIST = "mcpTool/list";
 export const METHOD_MCP_TOOL_LIST_FOR_CONTEXT = "mcpTool/listForContext";
 export const METHOD_MCP_TOOL_SEARCH = "mcpTool/search";
@@ -296,7 +302,6 @@ export const METHOD_SESSION_FILE_READ = "sessionFile/read";
 export const METHOD_SESSION_FILE_RESOLVE_PATH = "sessionFile/resolvePath";
 export const METHOD_SESSION_FILE_SAVE = "sessionFile/save";
 export const METHOD_SESSION_FILE_UPDATE_META = "sessionFile/updateMeta";
-export const METHOD_SKILL_LIST = "skill/list";
 export const METHOD_SKILL_READ = "skill/read";
 export const METHOD_SKILL_CACHE_REFRESH = "skillCache/refresh";
 export const METHOD_SKILL_INSTALLED_DIRECTORIES_LIST =
@@ -321,6 +326,9 @@ export const METHOD_SKILL_REPOSITORY_DELETE = "skillRepository/delete";
 export const METHOD_SKILL_REPOSITORY_LIST = "skillRepository/list";
 export const METHOD_SKILL_REPOSITORY_SAVE = "skillRepository/save";
 export const METHOD_SKILLS_CHANGED = "skills/changed";
+export const METHOD_SKILLS_CONFIG_WRITE = "skills/config/write";
+export const METHOD_SKILLS_EXTRA_ROOTS_SET = "skills/extraRoots/set";
+export const METHOD_SKILLS_LIST = "skills/list";
 export const METHOD_SOUL_STYLE_PACK_INSTALL = "soulStylePack/install";
 export const METHOD_SOUL_STYLE_PACK_LIST = "soulStylePack/list";
 export const METHOD_SOUL_STYLE_PACK_STATUS_SET = "soulStylePack/status/set";
@@ -495,6 +503,22 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "agentSession/toolInventory/read",
+  },
+  {
+    kind: "request",
+    method: "app/installed",
+  },
+  {
+    kind: "request",
+    method: "app/list",
+  },
+  {
+    kind: "notification",
+    method: "app/list/updated",
+  },
+  {
+    kind: "request",
+    method: "app/read",
   },
   {
     kind: "request",
@@ -797,6 +821,18 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "gatewayTunnel/syncWebhookUrl",
   },
   {
+    kind: "notification",
+    method: "hook/completed",
+  },
+  {
+    kind: "notification",
+    method: "hook/started",
+  },
+  {
+    kind: "request",
+    method: "hooks/list",
+  },
+  {
     kind: "request",
     method: "initialize",
   },
@@ -926,10 +962,6 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
-    method: "mcpResource/read",
-  },
-  {
-    kind: "request",
     method: "mcpResource/subscribe",
   },
   {
@@ -970,6 +1002,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
+    method: "mcpServer/resource/read",
+  },
+  {
+    kind: "request",
     method: "mcpServer/start",
   },
   {
@@ -982,19 +1018,15 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
+    method: "mcpServer/tool/call",
+  },
+  {
+    kind: "request",
     method: "mcpServer/update",
   },
   {
     kind: "request",
     method: "mcpServerStatus/list",
-  },
-  {
-    kind: "request",
-    method: "mcpTool/call",
-  },
-  {
-    kind: "request",
-    method: "mcpTool/callWithCaller",
   },
   {
     kind: "request",
@@ -1382,10 +1414,6 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
-    method: "skill/list",
-  },
-  {
-    kind: "request",
     method: "skill/read",
   },
   {
@@ -1471,6 +1499,18 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "notification",
     method: "skills/changed",
+  },
+  {
+    kind: "request",
+    method: "skills/config/write",
+  },
+  {
+    kind: "request",
+    method: "skills/extraRoots/set",
+  },
+  {
+    kind: "request",
+    method: "skills/list",
   },
   {
     kind: "request",
@@ -2527,6 +2567,61 @@ export type AgentTurnStatus =
   | "running"
   | "waitingAction";
 
+export interface AppBranding {
+  category?: null | string;
+  developer?: null | string;
+  isDiscoverableApp: boolean;
+  privacyPolicy?: null | string;
+  termsOfService?: null | string;
+  website?: null | string;
+}
+
+export interface AppInfo {
+  appMetadata?: AppMetadata | null;
+  branding?: AppBranding | null;
+  description?: null | string;
+  distributionChannel?: null | string;
+  iconAssets?: null | Record<string, unknown>;
+  iconDarkAssets?: null | Record<string, unknown>;
+  id: string;
+  installUrl?: null | string;
+  isAccessible?: boolean;
+  isEnabled?: boolean;
+  labels?: null | Record<string, unknown>;
+  logoUrl?: null | string;
+  logoUrlDark?: null | string;
+  name: string;
+  pluginDisplayNames?: string[];
+}
+
+export interface AppListUpdatedNotification {
+  data: AppInfo[];
+}
+
+export interface AppMetadata {
+  categories?: string[] | null;
+  developer?: null | string;
+  firstPartyRequiresInstall?: boolean | null;
+  review?: AppReview | null;
+  screenshots?: AppScreenshot[] | null;
+  seoDescription?: null | string;
+  showInComposerWhenUnlinked?: boolean | null;
+  subCategories?: string[] | null;
+  version?: null | string;
+  versionId?: null | string;
+  versionNotes?: null | string;
+}
+
+export interface AppReview {
+  status: string;
+}
+
+export interface AppScreenshot {
+  fileId?: null | string;
+  url?: null | string;
+  userPrompt: string;
+}
+
 export type AppServerClientRequest =
   | {
       id: number | string;
@@ -2801,11 +2896,6 @@ export type AppServerClientRequest =
   | {
       id: number | string;
       method: "workspace/ensureReady";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "skill/list";
       params?: unknown;
     }
   | {
@@ -3525,16 +3615,6 @@ export type AppServerClientRequest =
     }
   | {
       id: number | string;
-      method: "mcpTool/call";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "mcpTool/callWithCaller";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
       method: "mcpPrompt/list";
       params?: unknown;
     }
@@ -3546,11 +3626,6 @@ export type AppServerClientRequest =
   | {
       id: number | string;
       method: "mcpResource/list";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "mcpResource/read";
       params?: unknown;
     }
   | {
@@ -3977,7 +4052,6 @@ export type AppServerRequestMethod =
   | "mcpPrompt/get"
   | "mcpPrompt/list"
   | "mcpResource/list"
-  | "mcpResource/read"
   | "mcpResource/subscribe"
   | "mcpResource/unsubscribe"
   | "mcpServer/create"
@@ -3991,8 +4065,6 @@ export type AppServerRequestMethod =
   | "mcpServer/syncAllToLive"
   | "mcpServer/update"
   | "mcpServerStatus/list"
-  | "mcpTool/call"
-  | "mcpTool/callWithCaller"
   | "mcpTool/list"
   | "mcpTool/listForContext"
   | "mcpTool/search"
@@ -4075,7 +4147,6 @@ export type AppServerRequestMethod =
   | "sessionFile/resolvePath"
   | "sessionFile/save"
   | "sessionFile/updateMeta"
-  | "skill/list"
   | "skill/read"
   | "skillCache/refresh"
   | "skillInstalledDirectories/list"
@@ -4158,6 +4229,46 @@ export type AppServerRequestSerializationScope =
 export interface AppServerRequestSerializationScopeSpec {
   method: string;
   scope: AppServerRequestSerializationScope;
+}
+
+export interface AppToolSummary {
+  description: string;
+  disabledReason?: null | string;
+  isEnabled?: boolean;
+  isReadOnly?: boolean;
+  name: string;
+  title?: null | string;
+}
+
+export interface AppsInstalledParams {
+  forceRefresh?: boolean;
+  threadId?: null | string;
+}
+
+export interface AppsInstalledResponse {
+  apps: InstalledApp[];
+}
+
+export interface AppsListParams {
+  cursor?: null | string;
+  forceRefetch?: boolean;
+  limit?: number | null;
+  threadId?: null | string;
+}
+
+export interface AppsListResponse {
+  data: AppInfo[];
+  nextCursor?: null | string;
+}
+
+export interface AppsReadParams {
+  appIds: string[];
+  includeTools?: boolean;
+}
+
+export interface AppsReadResponse {
+  apps: ConnectorMetadata[];
+  missingAppIds: string[];
 }
 
 export type ArtifactContentStatus =
@@ -4686,8 +4797,53 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "mcpServer/resource/read";
+      params: McpServerResourceReadParams;
+    }
+  | {
+      id: number | string;
+      method: "mcpServer/tool/call";
+      params: McpServerToolCallParams;
+    }
+  | {
+      id: number | string;
       method: "model/list";
       params: ModelListParams;
+    }
+  | {
+      id: number | string;
+      method: "app/read";
+      params: AppsReadParams;
+    }
+  | {
+      id: number | string;
+      method: "app/list";
+      params: AppsListParams;
+    }
+  | {
+      id: number | string;
+      method: "app/installed";
+      params: AppsInstalledParams;
+    }
+  | {
+      id: number | string;
+      method: "hooks/list";
+      params: HooksListParams;
+    }
+  | {
+      id: number | string;
+      method: "skills/list";
+      params: SkillsListParams;
+    }
+  | {
+      id: number | string;
+      method: "skills/extraRoots/set";
+      params: SkillsExtraRootsSetParams;
+    }
+  | {
+      id: number | string;
+      method: "skills/config/write";
+      params: SkillsConfigWriteParams;
     }
   | {
       id: number | string;
@@ -4941,6 +5097,18 @@ export interface ConnectRelayApiKeySaveResponse {
   keyId: string;
   providerId: string;
   providerName: string;
+}
+
+export interface ConnectorMetadata {
+  description?: null | string;
+  distributionChannel?: null | string;
+  iconUrl?: null | string;
+  iconUrlDark?: null | string;
+  id: string;
+  installUrl?: null | string;
+  name: string;
+  pluginDisplayNames?: string[];
+  toolSummaries?: AppToolSummary[] | null;
 }
 
 export interface ConversationImportFidelitySummary {
@@ -5807,9 +5975,77 @@ export interface GrantedPermissionProfile {
   network?: AdditionalNetworkPermissions | null;
 }
 
+export interface HookErrorInfo {
+  message: string;
+  path: string;
+}
+
+export interface HookMetadata {
+  additionalContextLimit?: number | null;
+  command?: null | string;
+  currentHash: string;
+  displayOrder: number;
+  enabled: boolean;
+  eventName: HookEventName;
+  handlerType: HookHandlerType;
+  isManaged: boolean;
+  key: string;
+  matcher?: null | string;
+  pluginId?: null | string;
+  source: HookSource;
+  sourcePath: string;
+  statusMessage?: null | string;
+  timeoutSec: number;
+  trustStatus: HookTrustStatus;
+}
+
+export interface HookOutputEntry {
+  kind: HookOutputEntryKind;
+  text: string;
+}
+
+export type HookOutputEntryKind =
+  | "context"
+  | "error"
+  | "feedback"
+  | "stop"
+  | "warning";
+
 export interface HookPromptFragment {
   hookRunId: string;
   text: string;
+}
+
+export interface HookRunSummary {
+  completedAt?: number | null;
+  displayOrder: number;
+  durationMs?: number | null;
+  entries: HookOutputEntry[];
+  eventName: HookEventName;
+  executionMode: HookExecutionMode;
+  handlerType: HookHandlerType;
+  id: string;
+  scope: HookScope;
+  source: HookSource;
+  sourcePath: string;
+  startedAt: number;
+  status: HookRunStatus;
+  statusMessage?: null | string;
+}
+
+export interface HooksListEntry {
+  cwd: string;
+  errors: HookErrorInfo[];
+  hooks: HookMetadata[];
+  warnings: string[];
+}
+
+export interface HooksListParams {
+  cwds?: string[];
+}
+
+export interface HooksListResponse {
+  data: HooksListEntry[];
 }
 
 export interface ImageGenerationItem {
@@ -5863,6 +6099,13 @@ export interface InitializeResponse {
 }
 
 export type InputModality = "image" | "text";
+
+export interface InstalledApp {
+  callable: boolean;
+  enabled: boolean;
+  id: string;
+  runtimeName?: null | string;
+}
 
 export interface ItemCompletedNotification {
   completedAtMs: number;
@@ -6076,21 +6319,6 @@ export interface McpResourceListResponse {
   resources?: unknown[];
 }
 
-export interface McpResourceReadParams {
-  server: string;
-  sessionId?: null | string;
-  threadId?: null | string;
-  uri: string;
-}
-
-export interface McpResourceReadResponse {
-  blob?: null | string;
-  meta?: unknown;
-  mime_type?: null | string;
-  text?: null | string;
-  uri: string;
-}
-
 export interface McpResourceSubscribeParams {
   server: string;
   uri: string;
@@ -6169,6 +6397,30 @@ export interface McpServerOauthLoginResponse {
   state: string;
 }
 
+export type McpServerResourceContent =
+  | {
+      _meta?: unknown;
+      mimeType?: null | string;
+      text: string;
+      uri: string;
+    }
+  | {
+      _meta?: unknown;
+      blob: string;
+      mimeType?: null | string;
+      uri: string;
+    };
+
+export interface McpServerResourceReadParams {
+  server: string;
+  threadId?: null | string;
+  uri: string;
+}
+
+export interface McpServerResourceReadResponse {
+  contents: McpServerResourceContent[];
+}
+
 export interface McpServerStartParams {
   name: string;
 }
@@ -6197,6 +6449,21 @@ export interface McpServerStopParams {
   name: string;
 }
 
+export interface McpServerToolCallParams {
+  _meta?: unknown;
+  arguments?: unknown;
+  server: string;
+  threadId: string;
+  tool: string;
+}
+
+export interface McpServerToolCallResponse {
+  _meta?: unknown;
+  content: unknown[];
+  isError?: boolean | null;
+  structuredContent?: unknown;
+}
+
 export interface McpServerUpdateParams {
   server: unknown;
 }
@@ -6214,22 +6481,11 @@ export interface McpToolCallError {
   message: string;
 }
 
-export interface McpToolCallParams {
-  arguments: unknown;
-  toolName: string;
-}
-
 export interface McpToolCallProgressNotification {
   itemId: string;
   message: string;
   threadId: string;
   turnId: string;
-}
-
-export interface McpToolCallResponse {
-  content?: McpContent[];
-  is_error: boolean;
-  structuredContent?: unknown;
 }
 
 export interface McpToolCallResult {
@@ -6239,12 +6495,6 @@ export interface McpToolCallResult {
 }
 
 export type McpToolCallStatus = "completed" | "failed" | "inProgress";
-
-export interface McpToolCallWithCallerParams {
-  arguments: unknown;
-  caller?: null | string;
-  toolName: string;
-}
 
 export interface McpToolListForContextParams {
   caller?: null | string;
@@ -6683,7 +6933,13 @@ export interface MemoryStoreSearchResponse {
 }
 
 export type Method =
+  | "app/installed"
+  | "app/list"
+  | "app/read"
   | "artifact/write"
+  | "hooks/list"
+  | "mcpServer/resource/read"
+  | "mcpServer/tool/call"
   | "media/read"
   | "model/list"
   | "plugin/enabled/set"
@@ -6693,6 +6949,9 @@ export type Method =
   | "plugin/read"
   | "plugin/search"
   | "plugin/uninstall"
+  | "skills/config/write"
+  | "skills/extraRoots/set"
+  | "skills/list"
   | "thread/approveGuardianDeniedAction"
   | "thread/archive"
   | "thread/backgroundTerminals/clean"
@@ -8210,6 +8469,18 @@ export type ServerNotification =
       params: McpServerStatusUpdatedNotification;
     }
   | {
+      method: "app/list/updated";
+      params: AppListUpdatedNotification;
+    }
+  | {
+      method: "hook/started";
+      params: HookStartedNotification;
+    }
+  | {
+      method: "hook/completed";
+      params: HookCompletedNotification;
+    }
+  | {
       method: "thread/started";
       params: ThreadStartedNotification;
     }
@@ -8449,6 +8720,26 @@ export interface SkillDetail {
   workflowSteps: SkillWorkflowStep[];
 }
 
+export interface SkillDetailDependencies {
+  tools: SkillDetailToolDependency[];
+}
+
+export interface SkillDetailInterface {
+  argumentHint?: null | string;
+  displayName: string;
+  executionMode: string;
+  model?: null | string;
+  provider?: null | string;
+}
+
+export type SkillDetailScope = "app" | "other" | "project" | "user";
+
+export interface SkillDetailToolDependency {
+  required: boolean;
+  type: string;
+  value: string;
+}
+
 export interface SkillDownloadInstallParams {
   app: string;
   downloadUrl: string;
@@ -8460,20 +8751,24 @@ export interface SkillDownloadInstallResponse {
   inspection: unknown;
 }
 
+export interface SkillErrorInfo {
+  message: string;
+  path: string;
+}
+
 export interface SkillInstalledDirectoriesListResponse {
   directories?: string[];
 }
 
 export interface SkillInterface {
-  argumentHint?: null | string;
-  displayName: string;
-  executionMode: string;
-  model?: null | string;
-  provider?: null | string;
-}
-
-export interface SkillListResponse {
-  skills: SkillSummary[];
+  brandColor?: null | string;
+  defaultPrompt?: null | string;
+  displayName?: null | string;
+  iconLarge?: null | string;
+  iconLargeUrl?: null | string;
+  iconSmall?: null | string;
+  iconSmallUrl?: null | string;
+  shortDescription?: null | string;
 }
 
 export interface SkillLocalDetailInspectParams {
@@ -8565,6 +8860,17 @@ export interface SkillMarketplaceInstallParams {
 export interface SkillMarketplaceInstallResponse {
   directory: string;
   inspection: unknown;
+}
+
+export interface SkillMetadata {
+  dependencies?: SkillDependencies | null;
+  description: string;
+  enabled: boolean;
+  interface?: SkillInterface | null;
+  name: string;
+  path: string;
+  scope: SkillScope;
+  shortDescription?: null | string;
 }
 
 export interface SkillPackageExportParams {
@@ -8666,28 +8972,31 @@ export interface SkillScaffoldCreateResponse {
   inspection: unknown;
 }
 
-export type SkillScope = "app" | "other" | "project" | "user";
+export type SkillScope = "admin" | "repo" | "system" | "user";
 
 export type SkillSource = "app" | "other" | "project" | "user";
 
 export interface SkillSummary {
   authority: SkillAuthority;
   capabilities: string[];
-  dependencies: SkillDependencies;
+  dependencies: SkillDetailDependencies;
   description: string;
   enabled: boolean;
-  interface: SkillInterface;
+  interface: SkillDetailInterface;
   locator: SkillLocator;
   name: string;
   policy: SkillPolicy;
-  scope: SkillScope;
+  scope: SkillDetailScope;
   skillId: string;
   source: SkillSource;
 }
 
 export interface SkillToolDependency {
-  required: boolean;
+  command?: null | string;
+  description?: null | string;
+  transport?: null | string;
   type: string;
+  url?: null | string;
   value: string;
 }
 
@@ -8698,6 +9007,37 @@ export interface SkillWorkflowStep {
 }
 
 export type SkillsChangedNotification = Record<string, never>;
+
+export interface SkillsConfigWriteParams {
+  enabled: boolean;
+  name?: null | string;
+  path?: null | string;
+}
+
+export interface SkillsConfigWriteResponse {
+  effectiveEnabled: boolean;
+}
+
+export interface SkillsExtraRootsSetParams {
+  extraRoots: string[];
+}
+
+export type SkillsExtraRootsSetResponse = Record<string, unknown>;
+
+export interface SkillsListEntry {
+  cwd: string;
+  errors: SkillErrorInfo[];
+  skills: SkillMetadata[];
+}
+
+export interface SkillsListParams {
+  cwds?: string[];
+  forceReload?: boolean;
+}
+
+export interface SkillsListResponse {
+  data: SkillsListEntry[];
+}
 
 export interface SleepItem {
   durationMs?: number | null;
@@ -9047,6 +9387,12 @@ export type ThreadItem =
       id: string;
       metadata?: ThreadItemMetadata | null;
       type: "hookPrompt";
+    }
+  | {
+      id: string;
+      metadata?: ThreadItemMetadata | null;
+      run: HookRunSummary;
+      type: "hook";
     }
   | {
       id: string;
@@ -10377,6 +10723,47 @@ export interface TextElement {
   placeholder?: null | string;
 }
 
+export type HookEventName =
+  | "permissionRequest"
+  | "postCompact"
+  | "postToolUse"
+  | "preCompact"
+  | "preToolUse"
+  | "sessionEnd"
+  | "sessionStart"
+  | "stop"
+  | "subagentStart"
+  | "subagentStop"
+  | "userPromptSubmit";
+
+export type HookHandlerType = "agent" | "command" | "prompt";
+
+export type HookSource =
+  | "cloudManagedConfig"
+  | "cloudRequirements"
+  | "legacyManagedConfigFile"
+  | "legacyManagedConfigMdm"
+  | "mdm"
+  | "plugin"
+  | "project"
+  | "sessionFlags"
+  | "system"
+  | "unknown"
+  | "user";
+
+export type HookTrustStatus = "managed" | "modified" | "trusted" | "untrusted";
+
+export type HookExecutionMode = "async" | "sync";
+
+export type HookRunStatus =
+  | "blocked"
+  | "completed"
+  | "failed"
+  | "running"
+  | "stopped";
+
+export type HookScope = "thread" | "turn";
+
 export interface ThreadItemMetadata {
   imported?: boolean | null;
   importedIncomplete?: boolean | null;
@@ -10423,4 +10810,16 @@ export interface PluginReadinessIssueCategorySummary {
   category: string;
   codes?: string[];
   count: number;
+}
+
+export interface HookCompletedNotification {
+  run: HookRunSummary;
+  threadId: string;
+  turnId?: null | string;
+}
+
+export interface HookStartedNotification {
+  run: HookRunSummary;
+  threadId: string;
+  turnId?: null | string;
 }

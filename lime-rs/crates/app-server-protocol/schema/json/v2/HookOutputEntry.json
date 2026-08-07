@@ -1,0 +1,29 @@
+{
+  "$defs": {
+    "HookOutputEntryKind": {
+      "enum": [
+        "context",
+        "error",
+        "feedback",
+        "stop",
+        "warning"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "kind": {
+      "$ref": "#/$defs/HookOutputEntryKind"
+    },
+    "text": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "text"
+  ],
+  "title": "HookOutputEntry",
+  "type": "object"
+}

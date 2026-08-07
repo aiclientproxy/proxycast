@@ -1,33 +1,25 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
-    "server": {
-      "minLength": 1,
-      "type": "string"
-    },
-    "sessionId": {
-      "minLength": 1,
+    "fileId": {
       "type": [
         "null",
         "string"
       ]
     },
-    "threadId": {
-      "minLength": 1,
+    "url": {
       "type": [
         "null",
         "string"
       ]
     },
-    "uri": {
-      "minLength": 1,
+    "userPrompt": {
       "type": "string"
     }
   },
   "required": [
-    "server",
-    "uri"
+    "userPrompt"
   ],
-  "title": "McpResourceReadParams",
+  "title": "AppScreenshot",
   "type": "object"
 }

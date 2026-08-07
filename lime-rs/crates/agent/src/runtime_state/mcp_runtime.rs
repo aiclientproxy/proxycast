@@ -70,6 +70,18 @@ impl McpThreadRuntime {
             .map_err(|error| error.to_string())
     }
 
+    pub(crate) async fn call_tool(
+        &self,
+        server_name: &str,
+        tool_name: &str,
+        arguments: serde_json::Value,
+    ) -> Result<lime_mcp::McpToolResult, String> {
+        self.manager
+            .call_tool(&format!("mcp__{server_name}__{tool_name}"), arguments)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     pub(crate) async fn start(&self) -> Result<(), String> {
         let mut unavailable_servers = Vec::new();
         let mut required_failures = Vec::new();

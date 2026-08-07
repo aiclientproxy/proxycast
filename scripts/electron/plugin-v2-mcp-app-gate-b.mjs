@@ -49,9 +49,9 @@ export function pluginV2McpAppTraceEvidence(traceRaw, runtime) {
     }
     const request = parseJsonRpcLine(entry?.args_preview?.request?.lines);
     if (
-      request?.method === "mcpResource/read" &&
-      request?.params?.sessionId === runtime.sessionId &&
+      request?.method === "mcpServer/resource/read" &&
       request?.params?.threadId === runtime.threadId &&
+      request?.params?.sessionId === undefined &&
       request?.params?.uri === PLUGIN_V2_MCP_APP_RESOURCE_URI
     ) {
       return [

@@ -292,6 +292,39 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerMediaReadResponse>
     >;
+    listApps(
+      params?: appServer.AppServerAppsListParams,
+      options?: appServer.AppServerRequestOptions,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerAppsListResponse>
+    >;
+    readApps(
+      params: appServer.AppServerAppsReadParams,
+      options?: appServer.AppServerRequestOptions,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerAppsReadResponse>
+    >;
+    listInstalledApps(
+      params?: appServer.AppServerAppsInstalledParams,
+      options?: appServer.AppServerRequestOptions,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerAppsInstalledResponse>
+    >;
+    listSkills(
+      params?: appServer.AppServerSkillsListParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerSkillsListResponse>
+    >;
+    setSkillsExtraRoots(
+      params: appServer.AppServerSkillsExtraRootsSetParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerSkillsExtraRootsSetResponse>
+    >;
+    writeSkillsConfig(
+      params: appServer.AppServerSkillsConfigWriteParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerSkillsConfigWriteResponse>
+    >;
     readAgentSessionToolInventory(
       params?: appServer.AppServerAgentSessionToolInventoryReadParams,
     ): Promise<

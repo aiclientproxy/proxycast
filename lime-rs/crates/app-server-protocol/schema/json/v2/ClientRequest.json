@@ -22,6 +22,65 @@
       ],
       "type": "string"
     },
+    "AppsInstalledParams": {
+      "properties": {
+        "forceRefresh": {
+          "type": "boolean"
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "AppsListParams": {
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "forceRefetch": {
+          "type": "boolean"
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "AppsReadParams": {
+      "properties": {
+        "appIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "includeTools": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "appIds"
+      ],
+      "type": "object"
+    },
     "ArtifactSnapshot": {
       "properties": {
         "artifactDocumentId": {
@@ -237,6 +296,17 @@
         }
       ]
     },
+    "HooksListParams": {
+      "properties": {
+        "cwds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "ImageDetail": {
       "enum": [
         "auto",
@@ -245,6 +315,48 @@
         "original"
       ],
       "type": "string"
+    },
+    "McpServerResourceReadParams": {
+      "properties": {
+        "server": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "server",
+        "uri"
+      ],
+      "type": "object"
+    },
+    "McpServerToolCallParams": {
+      "properties": {
+        "_meta": true,
+        "arguments": true,
+        "server": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "server",
+        "threadId",
+        "tool"
+      ],
+      "type": "object"
     },
     "MediaReadParams": {
       "properties": {
@@ -510,6 +622,59 @@
           "type": "string"
         }
       ]
+    },
+    "SkillsConfigWriteParams": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "path": {
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
+    },
+    "SkillsExtraRootsSetParams": {
+      "properties": {
+        "extraRoots": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "extraRoots"
+      ],
+      "type": "object"
+    },
+    "SkillsListParams": {
+      "properties": {
+        "cwds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "forceReload": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
     },
     "SortDirection": {
       "enum": [
@@ -2829,11 +2994,191 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
+          "const": "mcpServer/resource/read",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/McpServerResourceReadParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "mcpServer/tool/call",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/McpServerToolCallParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
           "const": "model/list",
           "type": "string"
         },
         "params": {
           "$ref": "#/$defs/ModelListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "app/read",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/AppsReadParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "app/list",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/AppsListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "app/installed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/AppsInstalledParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "hooks/list",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/HooksListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "skills/list",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/SkillsListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "skills/extraRoots/set",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/SkillsExtraRootsSetParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "skills/config/write",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/SkillsConfigWriteParams"
         }
       },
       "required": [

@@ -346,7 +346,6 @@ function WorkspacePluginSurfaceFrame({
       return;
     }
     const resourceIdentity = [
-      runtimeOwnerSessionId ?? "",
       runtimeOwnerThreadId ?? "",
       serverName,
       resourceUri,
@@ -355,13 +354,9 @@ function WorkspacePluginSurfaceFrame({
       return;
     }
     let cancelled = false;
-    const resourceOwner =
-      runtimeOwnerSessionId && runtimeOwnerThreadId
-        ? {
-            sessionId: runtimeOwnerSessionId,
-            threadId: runtimeOwnerThreadId,
-          }
-        : undefined;
+    const resourceOwner = runtimeOwnerThreadId
+      ? { threadId: runtimeOwnerThreadId }
+      : undefined;
     void mcpApi
       .readResource(serverName, resourceUri, resourceOwner)
       .then((content) => {
@@ -397,7 +392,6 @@ function WorkspacePluginSurfaceFrame({
     mounted,
     surface.mcpApp?.resourceUri,
     surface.mcpApp?.serverName,
-    runtimeOwnerSessionId,
     runtimeOwnerThreadId,
     viewId,
   ]);

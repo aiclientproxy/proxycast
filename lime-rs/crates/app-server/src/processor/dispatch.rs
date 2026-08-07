@@ -288,7 +288,6 @@ impl RequestProcessor {
             METHOD_WORKSPACE_ENSURE_READY => {
                 self.handle_workspace_ensure_ready_impl(params).boxed()
             }
-            METHOD_SKILL_LIST => self.handle_skill_list_impl().boxed(),
             METHOD_SKILL_READ => self.handle_skill_read_impl(params).boxed(),
             METHOD_SKILL_MANAGEMENT_LIST => self.handle_skill_management_list_impl(params).boxed(),
             METHOD_SKILL_MANAGEMENT_INSTALL => {
@@ -507,6 +506,27 @@ impl RequestProcessor {
             app_server_protocol::protocol::v2::METHOD_PLUGIN_LIST => {
                 self.handle_plugin_catalog_list_v2_impl(params).boxed()
             }
+            app_server_protocol::protocol::v2::METHOD_APP_LIST => {
+                self.handle_app_list_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_APP_READ => {
+                self.handle_app_read_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_APP_INSTALLED => {
+                self.handle_app_installed_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_HOOKS_LIST => {
+                self.handle_hooks_list_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_SKILLS_LIST => {
+                self.handle_skills_list_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_SKILLS_EXTRA_ROOTS_SET => {
+                self.handle_skills_extra_roots_set_v2_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_SKILLS_CONFIG_WRITE => {
+                self.handle_skills_config_write_v2_impl(params).boxed()
+            }
             app_server_protocol::protocol::v2::METHOD_PLUGIN_SEARCH => {
                 self.handle_plugin_search_v2_impl(params).boxed()
             }
@@ -639,14 +659,15 @@ impl RequestProcessor {
                 self.handle_mcp_tool_list_for_context_impl(params).boxed()
             }
             METHOD_MCP_TOOL_SEARCH => self.handle_mcp_tool_search_impl(params).boxed(),
-            METHOD_MCP_TOOL_CALL => self.handle_mcp_tool_call_impl(params).boxed(),
-            METHOD_MCP_TOOL_CALL_WITH_CALLER => {
-                self.handle_mcp_tool_call_with_caller_impl(params).boxed()
+            v2::METHOD_MCP_SERVER_RESOURCE_READ => {
+                self.handle_mcp_server_resource_read_impl(params).boxed()
+            }
+            v2::METHOD_MCP_SERVER_TOOL_CALL => {
+                self.handle_mcp_server_tool_call_impl(params).boxed()
             }
             METHOD_MCP_PROMPT_LIST => self.handle_mcp_prompt_list_impl().boxed(),
             METHOD_MCP_PROMPT_GET => self.handle_mcp_prompt_get_impl(params).boxed(),
             METHOD_MCP_RESOURCE_LIST => self.handle_mcp_resource_list_impl().boxed(),
-            METHOD_MCP_RESOURCE_READ => self.handle_mcp_resource_read_impl(params).boxed(),
             METHOD_MCP_RESOURCE_SUBSCRIBE => {
                 self.handle_mcp_resource_subscribe_impl(params).boxed()
             }

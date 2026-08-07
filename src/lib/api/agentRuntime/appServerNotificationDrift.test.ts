@@ -23,26 +23,23 @@ describe("App Server notification drift", () => {
     });
 
     expect(readAppServerNotificationDrift(source)).toEqual({
-      disposition: "known_unprojected",
+      disposition: "known_projected",
       field_names: ["secret", "threadId", "turnId"],
       method: "hook/started",
       protocol_revision: expect.any(String),
       thread_id: "thread-1",
       turn_id: "turn-1",
     });
-    expect(JSON.stringify(readAppServerNotificationDrift(source))).not.toContain(
-      "must-not-leak",
-    );
-    expect(projectAppServerNotificationDriftPayload(source)).toMatchObject({
-      code: "unprojected_app_server_notification:hook/started",
-      protocol_method: "hook/started",
-      thread_id: "thread-1",
-      turn_id: "turn-1",
-      type: "warning",
-    });
     expect(
-      projectAgentRuntimeSequenceGateNotifications("notification-drift", source),
-    ).toEqual([source]);
+      JSON.stringify(readAppServerNotificationDrift(source)),
+    ).not.toContain("must-not-leak");
+    expect(projectAppServerNotificationDriftPayload(source)).toBeNull();
+    expect(
+      projectAgentRuntimeSequenceGateNotifications(
+        "notification-drift",
+        source,
+      ),
+    ).toEqual([]);
   });
 
   it("keeps excluded and deprecated notifications diagnostic-only", () => {

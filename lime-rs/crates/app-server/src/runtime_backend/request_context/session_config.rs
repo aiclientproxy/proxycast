@@ -50,6 +50,9 @@ pub(in crate::runtime_backend) fn session_config_from_request_with_plugin_activa
 ) -> AgentSessionConfig {
     let workspace_scope = request_workspace_scope(request, host_request);
     let mut metadata_values = super::super::skill_runtime_enable::request_metadata_values(request);
+    if let Some(config_metadata) = config_metadata.as_ref() {
+        metadata_values.push(config_metadata);
+    }
     let plugin_activation_metadata = plugin_activations
         .iter()
         .map(|activation| serde_json::json!({ "plugin_activation": activation }))

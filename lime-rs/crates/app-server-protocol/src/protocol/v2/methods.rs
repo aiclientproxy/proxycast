@@ -39,7 +39,16 @@ pub const METHOD_THREAD_GOAL_GET: &str = "thread/goal/get";
 pub const METHOD_THREAD_GOAL_CLEAR: &str = "thread/goal/clear";
 pub const METHOD_ARTIFACT_WRITE: &str = "artifact/write";
 pub const METHOD_MEDIA_READ: &str = "media/read";
+pub const METHOD_MCP_SERVER_RESOURCE_READ: &str = "mcpServer/resource/read";
+pub const METHOD_MCP_SERVER_TOOL_CALL: &str = "mcpServer/tool/call";
 pub const METHOD_MODEL_LIST: &str = "model/list";
+pub const METHOD_APP_READ: &str = "app/read";
+pub const METHOD_APP_LIST: &str = "app/list";
+pub const METHOD_APP_INSTALLED: &str = "app/installed";
+pub const METHOD_HOOKS_LIST: &str = "hooks/list";
+pub const METHOD_SKILLS_LIST: &str = "skills/list";
+pub const METHOD_SKILLS_EXTRA_ROOTS_SET: &str = "skills/extraRoots/set";
+pub const METHOD_SKILLS_CONFIG_WRITE: &str = "skills/config/write";
 pub const METHOD_PLUGIN_LIST: &str = "plugin/list";
 pub const METHOD_PLUGIN_SEARCH: &str = "plugin/search";
 pub const METHOD_PLUGIN_READ: &str = "plugin/read";
@@ -48,6 +57,9 @@ pub const METHOD_PLUGIN_UNINSTALL: &str = "plugin/uninstall";
 pub const METHOD_PLUGIN_INSTALLED: &str = "plugin/installed";
 pub const METHOD_PLUGIN_ENABLED_SET: &str = "plugin/enabled/set";
 pub const METHOD_MODEL_LIST_UPDATED: &str = "model/list/updated";
+pub const METHOD_APP_LIST_UPDATED: &str = "app/list/updated";
+pub const METHOD_HOOK_STARTED: &str = "hook/started";
+pub const METHOD_HOOK_COMPLETED: &str = "hook/completed";
 pub const METHOD_TURN_START: &str = "turn/start";
 pub const METHOD_TURN_STEER: &str = "turn/steer";
 pub const METHOD_TURN_INTERRUPT: &str = "turn/interrupt";
@@ -173,8 +185,26 @@ pub enum Method {
     ArtifactWrite,
     #[serde(rename = "media/read")]
     MediaRead,
+    #[serde(rename = "mcpServer/resource/read")]
+    McpServerResourceRead,
+    #[serde(rename = "mcpServer/tool/call")]
+    McpServerToolCall,
     #[serde(rename = "model/list")]
     ModelList,
+    #[serde(rename = "app/read")]
+    AppRead,
+    #[serde(rename = "app/list")]
+    AppList,
+    #[serde(rename = "app/installed")]
+    AppInstalled,
+    #[serde(rename = "hooks/list")]
+    HooksList,
+    #[serde(rename = "skills/list")]
+    SkillsList,
+    #[serde(rename = "skills/extraRoots/set")]
+    SkillsExtraRootsSet,
+    #[serde(rename = "skills/config/write")]
+    SkillsConfigWrite,
     #[serde(rename = "plugin/list")]
     PluginList,
     #[serde(rename = "plugin/search")]
@@ -239,7 +269,16 @@ impl Method {
             Self::ThreadGoalClear => METHOD_THREAD_GOAL_CLEAR,
             Self::ArtifactWrite => METHOD_ARTIFACT_WRITE,
             Self::MediaRead => METHOD_MEDIA_READ,
+            Self::McpServerResourceRead => METHOD_MCP_SERVER_RESOURCE_READ,
+            Self::McpServerToolCall => METHOD_MCP_SERVER_TOOL_CALL,
             Self::ModelList => METHOD_MODEL_LIST,
+            Self::AppRead => METHOD_APP_READ,
+            Self::AppList => METHOD_APP_LIST,
+            Self::AppInstalled => METHOD_APP_INSTALLED,
+            Self::HooksList => METHOD_HOOKS_LIST,
+            Self::SkillsList => METHOD_SKILLS_LIST,
+            Self::SkillsExtraRootsSet => METHOD_SKILLS_EXTRA_ROOTS_SET,
+            Self::SkillsConfigWrite => METHOD_SKILLS_CONFIG_WRITE,
             Self::PluginList => METHOD_PLUGIN_LIST,
             Self::PluginSearch => METHOD_PLUGIN_SEARCH,
             Self::PluginRead => METHOD_PLUGIN_READ,
@@ -296,7 +335,16 @@ impl Method {
             METHOD_THREAD_GOAL_CLEAR => Some(Self::ThreadGoalClear),
             METHOD_ARTIFACT_WRITE => Some(Self::ArtifactWrite),
             METHOD_MEDIA_READ => Some(Self::MediaRead),
+            METHOD_MCP_SERVER_RESOURCE_READ => Some(Self::McpServerResourceRead),
+            METHOD_MCP_SERVER_TOOL_CALL => Some(Self::McpServerToolCall),
             METHOD_MODEL_LIST => Some(Self::ModelList),
+            METHOD_APP_READ => Some(Self::AppRead),
+            METHOD_APP_LIST => Some(Self::AppList),
+            METHOD_APP_INSTALLED => Some(Self::AppInstalled),
+            METHOD_HOOKS_LIST => Some(Self::HooksList),
+            METHOD_SKILLS_LIST => Some(Self::SkillsList),
+            METHOD_SKILLS_EXTRA_ROOTS_SET => Some(Self::SkillsExtraRootsSet),
+            METHOD_SKILLS_CONFIG_WRITE => Some(Self::SkillsConfigWrite),
             METHOD_PLUGIN_LIST => Some(Self::PluginList),
             METHOD_PLUGIN_SEARCH => Some(Self::PluginSearch),
             METHOD_PLUGIN_READ => Some(Self::PluginRead),
@@ -350,7 +398,16 @@ pub const METHODS: &[&str] = &[
     METHOD_THREAD_GOAL_CLEAR,
     METHOD_ARTIFACT_WRITE,
     METHOD_MEDIA_READ,
+    METHOD_MCP_SERVER_RESOURCE_READ,
+    METHOD_MCP_SERVER_TOOL_CALL,
     METHOD_MODEL_LIST,
+    METHOD_APP_READ,
+    METHOD_APP_LIST,
+    METHOD_APP_INSTALLED,
+    METHOD_HOOKS_LIST,
+    METHOD_SKILLS_LIST,
+    METHOD_SKILLS_EXTRA_ROOTS_SET,
+    METHOD_SKILLS_CONFIG_WRITE,
     METHOD_PLUGIN_LIST,
     METHOD_PLUGIN_SEARCH,
     METHOD_PLUGIN_READ,
@@ -369,6 +426,8 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_ERROR,
     METHOD_SKILLS_CHANGED,
     METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
+    METHOD_HOOK_STARTED,
+    METHOD_HOOK_COMPLETED,
     METHOD_THREAD_STARTED,
     METHOD_THREAD_ARCHIVED,
     METHOD_THREAD_DELETED,
@@ -391,6 +450,7 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_REASONING_TEXT_DELTA,
     METHOD_MODEL_REROUTED,
     METHOD_MODEL_LIST_UPDATED,
+    METHOD_APP_LIST_UPDATED,
     METHOD_MODEL_VERIFICATION,
     METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
     METHOD_THREAD_SETTINGS_UPDATED,

@@ -1,6 +1,7 @@
 use crate::AppDataSource;
 use app_server_protocol::{
-    McpResourceListResponse, McpResourceReadParams, McpResourceReadResponse,
+    protocol::v2::{McpServerResourceReadParams, McpServerResourceReadResponse},
+    McpResourceListResponse,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -27,10 +28,10 @@ impl McpResourceGateway for AppServerMcpResourceGateway {
 
     async fn read_mcp_resource(
         &self,
-        params: McpResourceReadParams,
-    ) -> Result<McpResourceReadResponse, String> {
+        params: McpServerResourceReadParams,
+    ) -> Result<McpServerResourceReadResponse, String> {
         self.app_data_source
-            .read_mcp_resource(params)
+            .read_mcp_server_resource(params)
             .await
             .map_err(|error| error.to_string())
     }

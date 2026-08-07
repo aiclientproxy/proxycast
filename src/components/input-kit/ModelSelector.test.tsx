@@ -779,6 +779,10 @@ describe("ModelSelector", () => {
       setReasoningEffort,
     });
 
+    expect(
+      container.querySelector('[data-testid="model-selector"]')?.textContent,
+    ).toContain("思考 中");
+
     clickModelSelectorTrigger(container);
 
     const panel = document.body.querySelector(
