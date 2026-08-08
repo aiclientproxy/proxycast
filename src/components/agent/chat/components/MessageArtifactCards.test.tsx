@@ -101,7 +101,7 @@ describe("MessageArtifactCards", () => {
         articleWorkspace: {
           objectKind: "articleDraft",
         },
-        contentFactoryWorkspacePatch: {
+        workspacePatch: {
           workerEvidence: [
             {
               subagents: [
@@ -268,7 +268,7 @@ describe("MessageArtifactCards", () => {
       }),
       meta: {
         filePath: ".lime/artifacts/content-factory/workspace-patch.json",
-        kind: "content_factory.workspace_patch",
+        kind: "workspace_patch",
       },
     });
     const articlePreview = createArtifact({
@@ -300,7 +300,7 @@ describe("MessageArtifactCards", () => {
     expect(container.textContent).not.toContain('"appId"');
   });
 
-  it("内容工厂 workspace patch 旧路径和 kind 不应被误渲染成第二个文章框", async () => {
+  it("workspace patch 不应被误渲染成第二个文章框", async () => {
     const rawWorkspacePatch = createArtifact({
       id: "artifact-workspace-patch-legacy-path",
       title: "内容工厂工作区补丁",
@@ -322,9 +322,9 @@ describe("MessageArtifactCards", () => {
         ],
       }),
       meta: {
-        filePath: ".lime/artifacts/content-factory-workspace-patch.json",
-        kind: "content_factory.workspace_patch",
-        contentFactoryWorkspacePatch: {
+        filePath: ".lime/artifacts/workspace-patch.json",
+        kind: "workspace_patch",
+        workspacePatch: {
           appId: "content-factory-app",
           objects: [],
         },

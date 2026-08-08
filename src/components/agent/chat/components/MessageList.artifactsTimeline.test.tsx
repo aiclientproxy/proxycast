@@ -131,7 +131,7 @@ describe("MessageList artifacts timeline", () => {
               articleWorkspace: {
                 objectKind: "articleDraft",
               },
-              contentFactoryWorkspacePatch: {
+              workspacePatch: {
                 workerEvidence: [
                   {
                     subagents: ["content-researcher", "article-writer"],

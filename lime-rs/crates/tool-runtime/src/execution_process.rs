@@ -76,6 +76,8 @@ pub struct ExecutionOutputDelta {
     pub bytes: u64,
     pub omitted_bytes: u64,
     pub truncated: bool,
+    #[serde(skip)]
+    pub raw_bytes: Vec<u8>,
 }
 
 impl ExecutionOutputDelta {
@@ -236,6 +238,7 @@ impl ExecutionProcess {
             bytes: snapshot.bytes,
             omitted_bytes: snapshot.omitted_bytes,
             truncated: snapshot.truncated,
+            raw_bytes: bytes.to_vec(),
         }
     }
 
@@ -366,6 +369,9 @@ pub struct LocalExecutionRequest {
     pub cwd: Option<PathBuf>,
     pub env: HashMap<String, String>,
     pub tty: bool,
+    pub stdin: bool,
+    pub env_clear: bool,
+    pub pty_size: Option<(u16, u16)>,
 }
 
 impl LocalExecutionRequest {
@@ -383,6 +389,9 @@ impl LocalExecutionRequest {
             cwd: None,
             env: HashMap::new(),
             tty: false,
+            stdin: true,
+            env_clear: false,
+            pty_size: None,
         }
     }
 }
@@ -416,6 +425,12 @@ pub struct LocalExecutionProcessControlHandle {
     state_rx: watch::Receiver<ExecutionProcessSnapshot>,
 }
 
+#[derive(Debug)]
+pub enum LocalExecutionProcessEvent {
+    Output(ExecutionOutputDelta),
+    Exited(ExecutionProcessSnapshot),
+}
+
 impl LocalExecutionProcessHandle {
     pub fn process_id(&self) -> &str {
         &self.process_id
@@ -437,6 +452,39 @@ impl LocalExecutionProcessHandle {
         self.output_rx.recv().await
     }
 
+    pub async fn next_event(&mut self) -> Option<LocalExecutionProcessEvent> {
+        loop {
+            if let Ok(delta) = self.output_rx.try_recv() {
+                return Some(LocalExecutionProcessEvent::Output(delta));
+            }
+            if self.final_snapshot.is_some() {
+                return None;
+            }
+            let mut final_rx = self.final_rx.take()?;
+            tokio::select! {
+                biased;
+                delta = self.output_rx.recv() => {
+                    match delta {
+                        Some(delta) => {
+                            self.final_rx = Some(final_rx);
+                            return Some(LocalExecutionProcessEvent::Output(delta));
+                        }
+                        None => {
+                            let snapshot = final_rx.await.ok()?;
+                            self.final_snapshot = Some(snapshot.clone());
+                            return Some(LocalExecutionProcessEvent::Exited(snapshot));
+                        }
+                    }
+                }
+                result = &mut final_rx => {
+                    let snapshot = result.ok()?;
+                    self.final_snapshot = Some(snapshot.clone());
+                    return Some(LocalExecutionProcessEvent::Exited(snapshot));
+                }
+            }
+        }
+    }
+
     pub fn write_stdin(&self, bytes: impl Into<Vec<u8>>) -> Result<(), LocalExecutionError> {
         self.control_tx
             .send(LocalExecutionControl::WriteStdin(bytes.into()))
@@ -448,6 +496,15 @@ impl LocalExecutionProcessHandle {
 
     pub fn terminate(&self) -> Result<(), LocalExecutionError> {
         self.control_tx.send(LocalExecutionControl::Terminate)
+    }
+
+    pub fn close_stdin(&self) -> Result<(), LocalExecutionError> {
+        self.control_tx.send(LocalExecutionControl::CloseStdin)
+    }
+
+    pub fn resize(&self, rows: u16, cols: u16) -> Result<(), LocalExecutionError> {
+        self.control_tx
+            .send(LocalExecutionControl::Resize { rows, cols })
     }
 
     pub async fn wait(&mut self) -> Result<ExecutionProcessSnapshot, LocalExecutionError> {
@@ -487,6 +544,15 @@ impl LocalExecutionProcessControlHandle {
     pub fn terminate(&self) -> Result<(), LocalExecutionError> {
         self.control_tx.send(LocalExecutionControl::Terminate)
     }
+
+    pub fn close_stdin(&self) -> Result<(), LocalExecutionError> {
+        self.control_tx.send(LocalExecutionControl::CloseStdin)
+    }
+
+    pub fn resize(&self, rows: u16, cols: u16) -> Result<(), LocalExecutionError> {
+        self.control_tx
+            .send(LocalExecutionControl::Resize { rows, cols })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -495,8 +561,21 @@ pub enum LocalExecutionError {
     SupervisorClosed,
 }
 
+impl std::fmt::Display for LocalExecutionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::ControlClosed => "process control channel closed",
+            Self::SupervisorClosed => "process supervisor closed",
+        })
+    }
+}
+
+impl std::error::Error for LocalExecutionError {}
+
 enum LocalExecutionControl {
     WriteStdin(Vec<u8>),
+    CloseStdin,
+    Resize { rows: u16, cols: u16 },
     Interrupt,
     Terminate,
 }
@@ -536,11 +615,18 @@ pub fn start_local_execution_process(
     let mut command = Command::new(program);
     command
         .args(request.command.iter().skip(1))
-        .stdin(std::process::Stdio::piped())
+        .stdin(if request.stdin {
+            std::process::Stdio::piped()
+        } else {
+            std::process::Stdio::null()
+        })
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     if let Some(cwd) = &request.cwd {
         command.current_dir(cwd);
+    }
+    if request.env_clear {
+        command.env_clear();
     }
     if !request.env.is_empty() {
         command.envs(&request.env);
@@ -595,6 +681,7 @@ async fn supervise_local_process(
     final_tx: oneshot::Sender<ExecutionProcessSnapshot>,
     mut control_rx: mpsc::UnboundedReceiver<LocalExecutionControl>,
 ) {
+    let mut control_open = true;
     let stdout_task = stdout.map(|reader| {
         tokio::spawn(read_process_stream(
             reader,
@@ -617,8 +704,11 @@ async fn supervise_local_process(
     let wait_result = loop {
         tokio::select! {
             result = child.wait() => break result,
-            control = control_rx.recv() => {
+            control = control_rx.recv(), if control_open => {
                 let Some(control) = control else {
+                    control_open = false;
+                    update_process_status(&process, &state_tx, ExecutionProcessStatus::Terminated).await;
+                    let _ = child.start_kill();
                     continue;
                 };
                 match control {
@@ -628,6 +718,10 @@ async fn supervise_local_process(
                             let _ = stdin.flush().await;
                         }
                     }
+                    LocalExecutionControl::CloseStdin => {
+                        stdin.take();
+                    }
+                    LocalExecutionControl::Resize { .. } => {}
                     LocalExecutionControl::Interrupt => {
                         update_process_status(&process, &state_tx, ExecutionProcessStatus::Interrupted).await;
                         let _ = child.start_kill();

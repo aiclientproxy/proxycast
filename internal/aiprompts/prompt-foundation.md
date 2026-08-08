@@ -131,9 +131,8 @@ FastChat 固定顺序：
 - `lime-rs/crates/agent/src/prompt/runtime_agents.rs`
 - `lime-rs/crates/agent/src/turn_input_envelope.rs`
 - `lime-rs/crates/app-server/src/runtime_backend/request_context/session_config.rs`
-- `lime-rs/crates/app-server/src/runtime_backend/{agent_skills_context,plugin_activation_context,plugin_runtime_context}.rs`
-- `lime-rs/crates/agent/src/{current_provider_turn,turn_input_envelope}.rs`
-- `lime-rs/crates/agent/src/prompt/runtime_agents.rs`
+- `lime-rs/crates/app-server/src/runtime_backend/agent_skills_context.rs`
+- `lime-rs/crates/agent/src/current_provider_turn.rs`
 - `lime-rs/crates/agent-runtime/src/{session_config,provider_turn}.rs`
 - `lime-rs/crates/model-provider/src/current_client/{lowering,stream,transport}.rs`
 

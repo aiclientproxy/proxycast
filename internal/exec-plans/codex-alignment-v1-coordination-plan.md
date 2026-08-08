@@ -3578,6 +3578,151 @@ root 已确认唯一 Plugin catalog owner、Desktop GUI 投影、typed notificat
 下一刀应进入 hosted connector model-visible tool snapshot / 真实 `callable=true` provider readiness，或回到方法矩阵
 中尚未实现的更高优先级 current owner；不得用本地 Plugin enabled 状态替代 hosted readiness。
 
+### 2026-08-08 Hook/MCP lifecycle notification catalog convergence slice
+
+盘点发现四个 exact Codex notification 已有完整 current 运行链，但产品矩阵和中央 catalog 漏记其中一条：
+`hook/started`、`hook/completed` 由 `tool-runtime` hook run event 经 App Server v2 projector 投影；
+`mcpServer/oauthLogin/completed` 与 `mcpServer/startupStatus/updated` 由 MCP manager/App Server processor 发布，
+Renderer typed event bus 和 Settings MCP 页面消费。该切片没有新增 parallel owner、TUI UI、compat wrapper 或 mock fallback。
+
+实施结果：将 `mcpServer/startupStatus/updated` 加入 `v2::NOTIFICATION_METHODS` 中央 catalog；新增 catalog 回流测试，
+确保 OAuth 与 startup 两个 MCP lifecycle method 都以 `Notification` kind 出现；重新生成全部 protocol schema fixtures 与
+TypeScript generated client。方法矩阵中 `hooks-notification-planned` 与 `mcp-notification-planned` 改为 current，
+统一更新 evidence、gap 与计数。
+
+验证：`cargo test -p app-server-protocol --lib` `109/109`、`cargo test -p app-server-protocol --test schema_fixtures`
+`1/1`、`cargo test -p app-server processor::tests::mcp:: --lib` `6/6`、MCP/Renderer notification Vitest `47/47`；
+`npm run test:contracts`（933 generated types 无漂移、292 client checks、command/harness/modality/docs/electron release
+守卫全通过）、`npm run typecheck`、`npm run governance:legacy-report`（2386 文件、0 分类漂移、0 边界违规）、
+`git diff --check` 均通过。
+
+分类与进度：四个 lifecycle notification、producer、typed client、Renderer consumer 和 Electron evidence 为 `current`；
+`compat`、`deprecated` 无新增；没有删除 surface。方法矩阵更新为 `92 implemented / 93 planned / 35 product-scope-excluded`，
+产品范围完成度 `92 / 185 = 49.7%`。架构影响：重大；中央 protocol catalog、schema/generated client 和产品范围事实源均已同步。
+下一刀继续从剩余 P1 current owner 选择，优先 `process/*` 或 `fs/*`，仍不得用旧 `executionProcess/*` / `fileSystem/*` 同义
+契约冒充 Codex parity。
+
+### 2026-08-08 exact memory/reset completed slice
+
+目标与范围：继续按 Codex v2 的无参数全局动作收敛 memory reset。Lime 是 Desktop GUI，不复制 Codex TUI；
+多模型、多模态控制面仍按 grok-build 的 model/provider/readiness 语义，本切片不改 `model-provider` owner。
+
+唯一主链：Renderer Settings `memoryStore.ts` -> App Server JSON-RPC `memory/reset` -> `RuntimeCore::reset_memory`
+-> `MemoryAppDataSource::reset_memory` -> `LocalMemoryBackend::reset`。请求只接受 omitted、`null` 或空对象
+params，非空对象 fail closed，响应恒为 `{}`；reset 只清理全局 memory root 并重建受管目录，不删除 Thread/Turn/Item、
+event log、projection store 或 soul 配置。
+
+直接替换结果：旧 `memoryStore/reset`、`MemoryStoreResetParams/Response`、v0 catalog/typed client、Renderer 设置页
+调用、旧计数文案和相关正向 fixture 已物理删除；没有新增 compat wrapper。`memory/reset` 协议、schema、Rust/TypeScript
+generated client、Settings gateway、公共 JSON-RPC 和持久化隔离回归已接入唯一 current owner。
+
+验证证据：`memory_store::tests::reset_clears_store_contents_preserves_layout_and_soul_boundary` 通过；
+`session_archive_jsonrpc::memory_reset_does_not_delete_persisted_session_history` 通过；`cargo check -p app-server`
+通过。此前已通过 App Server protocol `108/108`、Apps/Memory Settings/API 定向 Vitest `34/34`、generated protocol
+`933` types、client contract `292` checks、`npm run typecheck`、`npm run test:contracts`、
+`npm run governance:legacy-report`（扫描 `2386` 文件，分类漂移 `0`、边界违规 `0`）、scoped rustfmt、Prettier
+和 `git diff --check`。
+
+分类与进度：`memory/reset`、reset backend、Settings 消费和 durable isolation evidence 为 `current`；
+`memoryStore/reset`、旧 DTO、旧 catalog/fixture、旧计数展示为 `dead / deleted / forbidden-to-restore`；
+`compat` 与 `deprecated` 均无新增。方法矩阵保持 `88 implemented / 97 planned / 35 product-scope-excluded`，
+产品范围完成度 `88 / 185 = 47.6%`。架构影响：重大；`internal/aiprompts/architecture.md` 第 32 节和
+`internal/aiprompts/commands.md` 已同步唯一 owner、边界和验证门禁。下一刀从剩余 P1 current owner 中选择，优先
+`permission profile` 或 process/fs，不恢复旧 memory wire，也不以 Apps 本地 enabled 冒充 hosted readiness。
+
+### 2026-08-08 exact process lifecycle and retired executionProcess cleanup
+
+目标与写集：继续按 Codex v2 收敛 `process/{spawn,writeStdin,resizePty,kill}` 与
+`process/{outputDelta,exited}`，Desktop 不复制 TUI。公开 handle owner 固定为
+`(ConnectionId, processHandle)`；Workspace command Item 仍属于 Thread/Turn/Item projection，只通过
+`thread/backgroundTerminals/*` 暴露 Thread-owned 终止能力。本切片修改 process protocol/App Server/
+`tool-runtime`、typed clients、Workspace gateway/view、schema、契约守卫和事实源，避让并行 Plugin/Workflow 删除热区。
+
+完成结果：exact `process/*` 支持 connection isolation、response-before-notification、output-before-exited、raw bytes、
+omitted/null/value 三态、PTY resize、stdin close、output cap、timeout，以及 disconnect/response/notification 失败终止。
+Workspace 删除旧 status refresh、drain、signal-only interrupt 和 stdin 控件，改为
+`thread/backgroundTerminals/list -> command itemId -> terminate`。公开 `executionProcess/*` method/catalog/dispatcher、
+v0 DTO/schema、Rust/TypeScript typed helpers、Renderer gateway 与正向测试已物理删除；内部
+`ExecutionProcessServer` 继续服务 unified exec、Thread shell、background terminal 和 live registry。
+
+内部 owner 同轮收口：`tool-runtime::execution_process::live` 只保留领域级 `LiveExecutionRequest`、output query/batch
+和 gateway，不再反向借用旧 v0 Params/Response；snapshot/status/output 直接复用 `tool-runtime` current 类型，删除
+App Server 的重复 DTO 映射与空 response wrapper。契约 guard 禁止旧 method、helper、schema、protocol module 和 Renderer
+gateway 回流，但不禁止内部 current `ExecutionProcessServer`。
+
+已完成验证：`cargo check -p app-server-protocol -p tool-runtime -p app-server` 通过；`tool-runtime` unified exec
+`10/10`、execution process `9/9`；package typecheck 与 tests `109/109`；protocol generated type `898` 个且 check
+无漂移；Renderer background terminal/API/Workbench 定向回归 `50/50`；产品范围矩阵 `4/4`，声明与 method 实算均为
+`98 implemented / 87 planned / 35 product-scope-excluded`。App Server `--lib` 定向测试当前被并行删除的
+`runtime/tests/evidence_exports/plugin_task.rs` 和 `runtime_backend/tests/turn_flows.rs` 编译错误阻塞；完整 client contract
+script 同样先被并行删除的 `src/lib/api/plugins.ts` `ENOENT` 阻塞。本切片未恢复这些 dead Plugin 文件，也未越界修复。
+`governance:legacy-report` 完整通过（扫描 `2111` 文件，零引用候选 `0`、分类漂移 `0`、边界违规 `0`）。
+`thread_background_terminals_jsonrpc` 真实进程集成 `1/1` 通过。`smoke:agent-runtime-current-fixture` 中前置
+unit/script guard、Claw 多场景和 Coding Workbench 专项 Electron Gate B 均通过，最终只在 Content Factory 场景读取
+并行删除的 `src/features/plugin/testing/fixtures/content-factory-app.json` 时阻塞。`verify:gui-smoke` 完整通过，真实
+Electron renderer/preload/IPC、`app_server_handle_json_lines`、App Server sidecar 和 Workspace shell 均 ready；证据为
+`.lime/qc/project-gates/standalone-shell-01-20260808052845-10838/shell-01-electron-smoke/summary.json`。
+
+分类与进度：exact `process/*`、connection cleanup、local supervisor、typed clients、Thread-scoped Desktop terminal
+projection 和内部 process supervisor 为 `current`；`compat` 与 `deprecated` 均为空；公开 `executionProcess/*`、旧 DTO/
+schema/client/Renderer/UI surface 为 `dead / deleted / forbidden-to-restore`。产品范围完成度为
+`98 / 185 = 53.0%`。架构影响：重大；`internal/aiprompts/architecture.md` 第 33 节、commands 与矩阵已同步，
+责任开发者 root 已确认 connection/Thread owner 分界、目录归属、数据流、依赖方向、协议顺序和删除边界。
+下一刀回到剩余 P1 current owner，优先 `fs/*`、command exec/review lifecycle 或 hosted connector readiness；不得恢复
+旧 `executionProcess/*`，也不得把 connection handle 与 Thread item/process id 混用。
+
+### 2026-08-08 exact filesystem protocol and retired fileSystem cleanup
+
+目标与写集：继续按 Codex v2 收敛 `fs/readFile`、`fs/writeFile`、`fs/createDirectory`、`fs/getMetadata`、
+`fs/readDirectory`、`fs/remove`、`fs/copy`、`fs/watch`、`fs/unwatch` 与 `fs/changed`。Desktop 只保留文件浏览、
+预览、导入和工作台投影，不复制 TUI；多模型、多模态仍以 grok-build 的 catalog、capability、readiness 与
+sampling 为事实源，本切片不改 provider owner。写集限定为 fs protocol/App Server/typed clients、Renderer
+`fileBrowser` 与文档导入消费者、Electron 导入 fixture 的 method 追踪、schema、契约守卫、架构/命令事实源和
+产品范围矩阵；并行 Plugin/Workflow/OEM 热区只读避让。
+
+唯一主链：`src/lib/api/fileBrowser.ts -> typed App Server client -> fs/* -> App Server FsServer -> fs/changed`。
+路径必须为绝对路径，raw bytes 统一 base64；`readFile` 当前上限为 512 MiB。watch owner 是
+`(ConnectionId, watchId)`，notification 只回到 owner connection，断连只清理本连接 watcher。Desktop rename
+不新增 Codex 不存在的 method，而是组合 `getMetadata -> copy -> remove`，明确为非原子操作。exact metadata
+没有 size，Renderer 目录 DTO 当前投影 `size=0`。Office/PDF 文本抽取不属于 raw-byte fs；需要时必须在独立
+current 文档能力 owner 重建，不能恢复旧 preview wire。
+
+直接替换结果：旧 `fileSystem/*`、v0 DTO/schema、App Server `processor/file.rs`、RuntimeCore file projection、
+services `file_browser_service`、旧 renderer aliases 和正向 fixture 已物理删除；没有 compat wrapper。Electron
+系统壳能力 `get_file_manager_locations` 与 `get_file_icon_data_url` 继续由 Desktop Host 承接，不属于 fs fallback。
+契约守卫同时要求 exact fs 正向面存在，并禁止旧 method、DTO/schema、processor/runtime/service owner 与六个
+renderer alias 回流。
+
+定向与协议验证：package App Server client `109/109`；fs gateway、文档导入与产品范围矩阵 Vitest `22/22`；
+Rust FsServer `4/4`；public JSON-RPC fs integration `2/2`；`cargo fmt --all --check` 通过。完整
+`npm run test:contracts` 通过，generated protocol 无漂移，App Server contract 为 `301 checks`，command、
+modality、scripts governance、Electron release 和 docs boundary 均通过。扩大后的 `npm run test:rust:related`
+执行到 App Server `1598 passed / 1 failed`，唯一失败是并行 read-model 测试
+`read_session_current_projection_summary_preserves_process_items` 仍期望 `artifact.snapshot`、实际为 `None`，
+不经过 fs owner，本切片未越界修改。
+
+GUI 与治理证据：`npm run verify:gui-smoke` 通过，真实 Electron renderer/preload/IPC、
+`app_server_handle_json_lines`、App Server sidecar 和 Workspace shell ready；证据为
+`.lime/qc/project-gates/standalone-shell-01-20260808111024-394/shell-01-electron-smoke/summary.json`。
+`npm run smoke:codex-import-click-through-electron-fixture` 通过，真实 Electron 从侧栏 scan/preview/commit，导入
+`200` 个 Item，打开历史、附件与文件 artifact 后在同一 session 继续发送；证据为
+`.lime/qc/gui-evidence/codex-import-click-through-fixture/codex-import-click-through-fixture-summary.json`，trace 命中
+exact `fs/readDirectory`、`fs/getMetadata`，无 console error。导入后的 Markdown/HTML/Office/PDF 预览读取
+canonical `artifact/read`，因此该场景不命中 `fs/readFile`；`fs/readFile` 的 claim 由 public JSON-RPC integration
+和 Renderer gateway tests 承担，不把 artifact preview 冒充 fs read Gate B。`npm run governance:legacy-report`
+扫描 `2111` 个 current 文件与 `1375` 个测试文件，零引用候选、分类漂移、边界违规均为 `0`。
+
+聚合 `npm run smoke:agent-runtime-current-fixture` 的 fs 无关前置与多项 Electron 场景通过，最终被并行
+Content Factory Article fixture 阻断：GUI 只有 `artifact-delivery-checklist`，fixture 目标
+`artifact-article-1` 不存在。该失败不经过 fs protocol/Renderer consumer，保留为并行产品热区阻断，不恢复已删除
+Plugin/Workflow 实现。分类与进度：exact `fs/*`、FsServer、connection-scoped watcher、typed clients、Renderer
+文件浏览/导入消费和回流守卫为 `current`；`compat` 与 `deprecated` 均为空；旧 `fileSystem/*`、旧 DTO/schema 和
+旧 owner 为 `dead / deleted / forbidden-to-restore`。产品范围矩阵为
+`108 implemented / 77 planned / 35 product-scope-excluded`，产品范围完成度 `108 / 185 = 58.4%`。架构影响：
+重大；`internal/aiprompts/architecture.md` 第 34 节与 `internal/aiprompts/commands.md` 已同步，责任开发者 root
+确认唯一 owner、连接生命周期、Desktop 投影、非原子 rename 和文档抽取边界。下一刀回到剩余 P1 current owner，
+优先 exact `command/*` 或 review lifecycle；不得恢复旧 file wire，也不得把 artifact/document owner 并入 raw fs。
+
 ## 8. 完成定义
 
 本计划完成不等于“所有 Codex 产品面都复制”。完成定义是：

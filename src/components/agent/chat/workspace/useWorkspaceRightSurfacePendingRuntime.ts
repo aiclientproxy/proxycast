@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isAppServerBridgeAvailable } from "@/lib/api/appServerBridgeAvailability";
-import type {
-  PluginActivationContext,
-  PluginContract,
-} from "@/features/plugin";
-import { buildContentFactoryWorkspacePatchArticleWorkspaceFromPendingRequests } from "@/features/plugin-content-factory";
 import {
   consumeWorkspaceRightSurfacePending,
   dismissWorkspaceRightSurfacePending,
@@ -35,7 +30,6 @@ import {
   buildWorkspaceArticleWorkspaceFromPendingRequests,
   type WorkspaceArticleWorkspace,
 } from "./workspaceArticleWorkspaceModel";
-import { enrichWorkspaceArticleWorkspaceRendererOutput } from "./workspacePluginRendererOutputProjection";
 import {
   buildWorkspaceRightSurfacePendingBrowserIntent,
   type WorkspaceRightSurfaceBrowserIntent,
@@ -45,7 +39,6 @@ const DEFAULT_RIGHT_SURFACE_PENDING_POLL_MS = 5_000;
 const DEFAULT_RIGHT_SURFACE_PENDING_EVENT_DRAIN_MS = 250;
 const DEFAULT_RIGHT_SURFACE_PENDING_EVENT_LIMIT = 20;
 const DEFAULT_RIGHT_SURFACE_PENDING_LIMIT = 50;
-const EMPTY_PLUGIN_CONTRACTS: readonly PluginContract[] = [];
 
 export interface UseWorkspaceRightSurfacePendingRuntimeOptions {
   enabled: boolean;
@@ -57,9 +50,6 @@ export interface UseWorkspaceRightSurfacePendingRuntimeOptions {
   eventDrainIntervalMs?: number;
   eventDrainLimit?: number;
   limit?: number;
-  pluginActivationContext?: PluginActivationContext | null;
-  pluginContracts?: readonly PluginContract[];
-  pluginRightSurfaceIntentTtlMs?: number;
   isBridgeAvailable?: () => boolean;
   listPending?: (
     params: WorkspaceRightSurfacePendingListParams,
@@ -142,9 +132,6 @@ export function useWorkspaceRightSurfacePendingRuntime({
   eventDrainIntervalMs = DEFAULT_RIGHT_SURFACE_PENDING_EVENT_DRAIN_MS,
   eventDrainLimit = DEFAULT_RIGHT_SURFACE_PENDING_EVENT_LIMIT,
   limit = DEFAULT_RIGHT_SURFACE_PENDING_LIMIT,
-  pluginActivationContext: _pluginActivationContext = null,
-  pluginContracts = EMPTY_PLUGIN_CONTRACTS,
-  pluginRightSurfaceIntentTtlMs: _pluginRightSurfaceIntentTtlMs,
   isBridgeAvailable = isAppServerBridgeAvailable,
   listPending = listWorkspaceRightSurfacePending,
   consumePending = consumeWorkspaceRightSurfacePending,
@@ -401,17 +388,8 @@ export function useWorkspaceRightSurfacePendingRuntime({
     [pendingRequests],
   );
   const pendingArticleWorkspace = useMemo(
-    () =>
-      enrichWorkspaceArticleWorkspaceRendererOutput({
-        contracts: pluginContracts,
-        pendingRequests,
-        articleWorkspace:
-          buildWorkspaceArticleWorkspaceFromPendingRequests(pendingRequests) ??
-          buildContentFactoryWorkspacePatchArticleWorkspaceFromPendingRequests(
-            pendingRequests,
-          ),
-      }),
-    [pendingRequests, pluginContracts],
+    () => buildWorkspaceArticleWorkspaceFromPendingRequests(pendingRequests),
+    [pendingRequests],
   );
   const pendingBrowserIntent = useMemo(
     () => buildWorkspaceRightSurfacePendingBrowserIntent(pendingRequests),

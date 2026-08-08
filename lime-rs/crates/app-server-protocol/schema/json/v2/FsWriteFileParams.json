@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "dataBase64": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "dataBase64",
+    "path"
+  ],
+  "title": "FsWriteFileParams",
+  "type": "object"
+}

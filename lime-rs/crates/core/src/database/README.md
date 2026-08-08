@@ -33,7 +33,6 @@
 - `prompts` - 提示词模板
 - `skills` - 技能配置
 - `skill_repos` - 技能仓库
-- `installed_plugins` - 已安装插件
 
 ## DAO 模块
 

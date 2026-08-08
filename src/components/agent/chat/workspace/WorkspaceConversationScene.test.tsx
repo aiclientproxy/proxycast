@@ -349,8 +349,6 @@ function renderScene(props?: RenderSceneProps) {
         : (propsRecord.creationReplaySurface as never),
     sceneAppExecutionSummaryCard:
       propsRecord.sceneAppExecutionSummaryCard as React.ReactNode,
-    pluginHistoryRestoreLandingCard:
-      propsRecord.pluginHistoryRestoreLandingCard as React.ReactNode,
     serviceSkillExecutionCard:
       propsRecord.serviceSkillExecutionCard as React.ReactNode,
     emptyStateProps: {} as never,
@@ -576,20 +574,6 @@ describe("WorkspaceConversationScene", () => {
     expect(container.textContent).not.toContain("imported_read_only");
     expect(container.textContent).not.toContain("thread-imported");
     expect(container.textContent).not.toContain("npm test");
-  });
-
-  it("插件历史恢复落页应作为消息列表前置内容渲染", () => {
-    const container = renderScene({
-      pluginHistoryRestoreLandingCard: (
-        <div data-testid="plugin-history-landing-probe">已恢复应用工作区</div>
-      ),
-    });
-
-    expect(
-      container.querySelector('[data-testid="plugin-history-landing-probe"]')
-        ?.textContent,
-    ).toBe("已恢复应用工作区");
-    expect(mockMessageList.mock.calls.at(-1)?.[0]?.leadingContent).toBeTruthy();
   });
 
   it("生成应显示当前带入的灵感横条", () => {

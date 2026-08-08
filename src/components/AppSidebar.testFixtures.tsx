@@ -41,8 +41,7 @@ const {
   mockSaveConfig,
   mockSubscribeAppConfigChanged,
   mockListAgentRuntimeSessions,
-  mockListInstalledPlugins,
-  mockSelectPluginDirectory,
+  mockOpenDesktopDialog,
   mockGetProject,
   mockUpdateProject,
   mockDeleteProject,
@@ -91,8 +90,7 @@ const {
   mockSaveConfig: vi.fn(),
   mockSubscribeAppConfigChanged: vi.fn(),
   mockListAgentRuntimeSessions: vi.fn(),
-  mockListInstalledPlugins: vi.fn(),
-  mockSelectPluginDirectory: vi.fn(),
+  mockOpenDesktopDialog: vi.fn(),
   mockGetProject: vi.fn(),
   mockUpdateProject: vi.fn(),
   mockDeleteProject: vi.fn(),
@@ -163,8 +161,7 @@ export {
   mockGetConfiguredOemCloudTarget,
   mockListenUpdateInstallSession,
   mockListAgentRuntimeSessions,
-  mockListInstalledPlugins,
-  mockSelectPluginDirectory,
+  mockOpenDesktopDialog,
   mockGetProject,
   mockUpdateProject,
   mockDeleteProject,
@@ -252,10 +249,8 @@ vi.mock("@/lib/api/conversationImport", () => ({
   waitForConversationImportJob: mockWaitForConversationImportJob,
 }));
 
-vi.mock("@/lib/api/plugins", () => ({
-  PLUGINS_CHANGED_EVENT: "lime:plugins-changed",
-  listInstalledPlugins: mockListInstalledPlugins,
-  selectPluginDirectory: mockSelectPluginDirectory,
+vi.mock("@/lib/desktop-host/dialog", () => ({
+  open: mockOpenDesktopDialog,
 }));
 
 vi.mock("@/lib/api/project", () => ({
@@ -712,11 +707,7 @@ export async function resetAppSidebarTest() {
   mockGetConfig.mockResolvedValue({});
   mockSaveConfig.mockResolvedValue(undefined);
   mockListAgentRuntimeSessions.mockResolvedValue([]);
-  mockListInstalledPlugins.mockResolvedValue({ states: [], issues: [] });
-  mockSelectPluginDirectory.mockResolvedValue({
-    path: null,
-    cancelled: true,
-  });
+  mockOpenDesktopDialog.mockResolvedValue(null);
   mockGetProject.mockResolvedValue(null);
   mockUpdateProject.mockResolvedValue({});
   mockDeleteProject.mockResolvedValue(true);

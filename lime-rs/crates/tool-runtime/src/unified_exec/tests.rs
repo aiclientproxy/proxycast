@@ -1,22 +1,21 @@
 use super::*;
-use app_server_protocol::{
-    ExecutionProcessDrainOutputResponse, ExecutionProcessEmptyResponse,
-    ExecutionProcessOutputDelta, ExecutionProcessOutputKind, ExecutionProcessSnapshot,
-    ExecutionProcessStartResponse, ExecutionProcessStatusResponse,
+use crate::execution_process::{
+    live::{LiveExecutionOutputBatch, LiveExecutionOutputQuery, LiveExecutionRequest},
+    ExecutionOutputDelta, ExecutionOutputKind, ExecutionProcessSnapshot,
 };
 use async_trait::async_trait;
 
 #[derive(Clone, Default)]
 struct FixtureGateway {
     state: Arc<Mutex<HashMap<String, FixtureProcess>>>,
-    starts: Arc<Mutex<Vec<ExecutionProcessStartParams>>>,
+    starts: Arc<Mutex<Vec<LiveExecutionRequest>>>,
     grants: Arc<Mutex<Vec<Option<app_server_protocol::protocol::v2::GrantedPermissionProfile>>>>,
 }
 
 #[derive(Clone)]
 struct FixtureProcess {
     snapshot: ExecutionProcessSnapshot,
-    deltas: Vec<ExecutionProcessOutputDelta>,
+    deltas: Vec<ExecutionOutputDelta>,
 }
 
 #[async_trait]
@@ -25,16 +24,16 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
         &self,
         _thread_id: &str,
         _display_command: &str,
-        params: ExecutionProcessStartParams,
+        request: LiveExecutionRequest,
         granted_permissions: Option<app_server_protocol::protocol::v2::GrantedPermissionProfile>,
-    ) -> Result<ExecutionProcessStartResponse, String> {
-        self.starts.lock().unwrap().push(params.clone());
+    ) -> Result<ExecutionProcessSnapshot, String> {
+        self.starts.lock().unwrap().push(request.clone());
         self.grants.lock().unwrap().push(granted_permissions);
-        let command = params.command.last().cloned().unwrap_or_default();
+        let command = request.command.last().cloned().unwrap_or_default();
         let running = command == "long-running";
-        let initial = snapshot(&params, ExecutionProcessStatus::Running, None, "");
+        let initial = snapshot(&request, ExecutionProcessStatus::Running, None, "");
         let stored = snapshot(
-            &params,
+            &request,
             if running {
                 ExecutionProcessStatus::Running
             } else {
@@ -44,29 +43,26 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
             if running { "started\n" } else { "completed\n" },
         );
         self.state.lock().unwrap().insert(
-            params.process_id.clone(),
+            request.process_id.clone(),
             FixtureProcess {
                 snapshot: stored,
                 deltas: vec![delta(
-                    &params,
+                    &request,
                     1,
                     if running { "started\n" } else { "completed\n" },
                 )],
             },
         );
-        Ok(ExecutionProcessStartResponse { snapshot: initial })
+        Ok(initial)
     }
 
-    fn write_stdin(
-        &self,
-        params: ExecutionProcessWriteStdinParams,
-    ) -> Result<ExecutionProcessEmptyResponse, String> {
+    fn write_stdin(&self, process_id: &str, data: &[u8]) -> Result<(), String> {
         let mut state = self.state.lock().unwrap();
         let process = state
-            .get_mut(&params.process_id)
+            .get_mut(process_id)
             .ok_or_else(|| "missing fixture process".to_string())?;
-        if params.data.is_empty() {
-            return Ok(ExecutionProcessEmptyResponse {});
+        if data.is_empty() {
+            return Ok(());
         }
         process.snapshot.status = ExecutionProcessStatus::Exited;
         process.snapshot.exit_code = Some(0);
@@ -76,51 +72,42 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
             .last()
             .map(|delta| delta.sequence.saturating_add(1))
             .unwrap_or(1);
-        process.deltas.push(ExecutionProcessOutputDelta {
-            process_id: params.process_id,
+        process.deltas.push(ExecutionOutputDelta {
+            process_id: process_id.to_string(),
             tool_id: process.snapshot.tool_id.clone(),
             sequence,
-            kind: ExecutionProcessOutputKind::Stdout,
+            kind: ExecutionOutputKind::Stdout,
             delta: "finished\n".to_string(),
             bytes: 17,
             omitted_bytes: 0,
             truncated: false,
+            raw_bytes: b"finished\n".to_vec(),
         });
-        Ok(ExecutionProcessEmptyResponse {})
+        Ok(())
     }
 
-    fn terminate(
-        &self,
-        params: ExecutionProcessIdParams,
-    ) -> Result<ExecutionProcessStatusResponse, String> {
+    fn terminate(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String> {
         let mut state = self.state.lock().unwrap();
         let process = state
-            .get_mut(&params.process_id)
+            .get_mut(process_id)
             .ok_or_else(|| "missing fixture process".to_string())?;
         process.snapshot.status = ExecutionProcessStatus::Terminated;
-        Ok(ExecutionProcessStatusResponse {
-            snapshot: process.snapshot.clone(),
-        })
+        Ok(process.snapshot.clone())
     }
 
-    fn status(
-        &self,
-        params: ExecutionProcessIdParams,
-    ) -> Result<ExecutionProcessStatusResponse, String> {
+    fn status(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String> {
         let state = self.state.lock().unwrap();
         let process = state
-            .get(&params.process_id)
+            .get(process_id)
             .ok_or_else(|| "missing fixture process".to_string())?;
-        Ok(ExecutionProcessStatusResponse {
-            snapshot: process.snapshot.clone(),
-        })
+        Ok(process.snapshot.clone())
     }
 
     fn drain_output(
         &self,
-        params: ExecutionProcessDrainOutputParams,
-    ) -> Result<ExecutionProcessDrainOutputResponse, String> {
-        let process_id = params
+        query: LiveExecutionOutputQuery,
+    ) -> Result<LiveExecutionOutputBatch, String> {
+        let process_id = query
             .process_id
             .ok_or_else(|| "fixture process id is required".to_string())?;
         let state = self.state.lock().unwrap();
@@ -131,7 +118,7 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
             .deltas
             .iter()
             .filter(|delta| {
-                params
+                query
                     .after_sequence
                     .is_none_or(|after| delta.sequence > after)
             })
@@ -140,8 +127,8 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
         let next_sequence = deltas
             .last()
             .map(|delta| delta.sequence)
-            .or(params.after_sequence);
-        Ok(ExecutionProcessDrainOutputResponse {
+            .or(query.after_sequence);
+        Ok(LiveExecutionOutputBatch {
             deltas,
             next_sequence,
         })
@@ -162,21 +149,22 @@ impl FixtureGateway {
             .unwrap_or(1);
         process.snapshot.retained_output.push_str(output);
         process.snapshot.output_bytes = process.snapshot.retained_output.len() as u64;
-        process.deltas.push(ExecutionProcessOutputDelta {
+        process.deltas.push(ExecutionOutputDelta {
             process_id: process.snapshot.process_id.clone(),
             tool_id: process.snapshot.tool_id.clone(),
             sequence,
-            kind: ExecutionProcessOutputKind::Stdout,
+            kind: ExecutionOutputKind::Stdout,
             delta: output.to_string(),
             bytes: process.snapshot.output_bytes,
             omitted_bytes: 0,
             truncated: false,
+            raw_bytes: output.as_bytes().to_vec(),
         });
     }
 }
 
 fn snapshot(
-    params: &ExecutionProcessStartParams,
+    params: &LiveExecutionRequest,
     status: ExecutionProcessStatus,
     exit_code: Option<i32>,
     output: &str,
@@ -196,20 +184,17 @@ fn snapshot(
     }
 }
 
-fn delta(
-    params: &ExecutionProcessStartParams,
-    sequence: u64,
-    output: &str,
-) -> ExecutionProcessOutputDelta {
-    ExecutionProcessOutputDelta {
+fn delta(params: &LiveExecutionRequest, sequence: u64, output: &str) -> ExecutionOutputDelta {
+    ExecutionOutputDelta {
         process_id: params.process_id.clone(),
         tool_id: params.tool_id.clone(),
         sequence,
-        kind: ExecutionProcessOutputKind::Stdout,
+        kind: ExecutionOutputKind::Stdout,
         delta: output.to_string(),
         bytes: output.len() as u64,
         omitted_bytes: 0,
         truncated: false,
+        raw_bytes: output.as_bytes().to_vec(),
     }
 }
 

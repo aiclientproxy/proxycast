@@ -1,6 +1,7 @@
 use crate::runtime::memory_prompt::{
     append_memory_context_to_system_prompt, append_soul_context_to_system_prompt,
 };
+use crate::runtime::PluginTurnSnapshot;
 use crate::ExecutionRequest;
 use agent_runtime::reply_loop::DEFAULT_MAX_REPLY_TURNS;
 use lime_agent::{
@@ -28,7 +29,7 @@ pub(in crate::runtime_backend) fn session_config_from_request(
     request_tool_policy: &RequestToolPolicy,
     config_metadata: Option<Value>,
 ) -> AgentSessionConfig {
-    session_config_from_request_with_plugin_activations(
+    session_config_from_request_with_plugins(
         request,
         host_request,
         scope,
@@ -39,25 +40,20 @@ pub(in crate::runtime_backend) fn session_config_from_request(
     )
 }
 
-pub(in crate::runtime_backend) fn session_config_from_request_with_plugin_activations(
+pub(in crate::runtime_backend) fn session_config_from_request_with_plugins(
     request: &ExecutionRequest,
     host_request: Option<&RuntimeRequest>,
     scope: &RuntimeSessionScope,
     selection: &RuntimeModelSelection,
     request_tool_policy: &RequestToolPolicy,
     config_metadata: Option<Value>,
-    plugin_activations: &[Value],
+    plugin_snapshots: &[PluginTurnSnapshot],
 ) -> AgentSessionConfig {
     let workspace_scope = request_workspace_scope(request, host_request);
     let mut metadata_values = super::super::skill_runtime_enable::request_metadata_values(request);
     if let Some(config_metadata) = config_metadata.as_ref() {
         metadata_values.push(config_metadata);
     }
-    let plugin_activation_metadata = plugin_activations
-        .iter()
-        .map(|activation| serde_json::json!({ "plugin_activation": activation }))
-        .collect::<Vec<_>>();
-    metadata_values.extend(plugin_activation_metadata.iter());
     let turn_tool_surface = super::turn_tool_surface_for_request(request);
     let runtime_metadata = request.runtime_metadata();
     let (system_prompt, skill_snapshot) = if turn_tool_surface.uses_light_session_prompt() {
@@ -75,24 +71,17 @@ pub(in crate::runtime_backend) fn session_config_from_request_with_plugin_activa
             workspace_scope.working_dir.as_deref(),
             workspace_scope.project_root.as_deref(),
         );
-        let skills_context = super::super::agent_skills_context::agent_skills_context_for_turn(
-            system_prompt,
-            &request.input.concat_text(),
-            &metadata_values,
-            workspace_scope.working_dir.as_deref(),
-            workspace_scope.project_root.as_deref(),
-        );
-        let system_prompt =
-            super::super::plugin_activation_context::append_plugin_activation_context_to_system_prompt(
-                skills_context.system_prompt,
-                &metadata_values,
-            );
-        let system_prompt =
-            super::super::plugin_runtime_context::append_plugin_runtime_context_to_system_prompt(
+        let skills_context =
+            super::super::agent_skills_context::agent_skills_context_for_turn_with_plugins(
                 system_prompt,
+                &request.input.concat_text(),
                 &metadata_values,
+                workspace_scope.working_dir.as_deref(),
+                workspace_scope.project_root.as_deref(),
+                plugin_snapshots,
             );
-        let system_prompt = append_memory_context_to_system_prompt(system_prompt, runtime_metadata);
+        let system_prompt =
+            append_memory_context_to_system_prompt(skills_context.system_prompt, runtime_metadata);
         let system_prompt = append_soul_context_to_system_prompt(
             system_prompt,
             config_metadata.as_ref(),
@@ -121,19 +110,6 @@ pub(in crate::runtime_backend) fn session_config_from_request_with_plugin_activa
             lime_skills::SKILL_SNAPSHOT_TURN_METADATA_KEY.to_string(),
             serde_json::to_value(skill_snapshot).expect("skill snapshot must serialize"),
         );
-    }
-    if !plugin_activations.is_empty() {
-        let turn_context = turn_context.get_or_insert_with(Default::default);
-        turn_context.metadata.insert(
-            "plugin_activations".to_string(),
-            Value::Array(plugin_activations.to_vec()),
-        );
-        if plugin_activations.len() == 1 {
-            turn_context.metadata.insert(
-                "plugin_activation".to_string(),
-                plugin_activations[0].clone(),
-            );
-        }
     }
     if turn_tool_surface.is_harness_direct_answer() {
         let turn_context = turn_context.get_or_insert_with(Default::default);

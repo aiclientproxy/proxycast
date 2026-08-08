@@ -76,19 +76,20 @@ const FORBIDDEN_SKILL_FIRST_RUNTIME_PATTERNS = [
   "skill_session_id",
 ] as const;
 
-const PLUGIN_THREAD_FIRST_SURFACE_FILES = [
-  "src/features/plugin/runtime/agentRuntimeCapabilityHost.ts",
-  "src/features/plugin/runtime/agentRuntimeAppServerClient.ts",
-  "src/features/plugin/runtime/capabilityDispatcher.ts",
-  "src/features/plugin/ui/PluginRuntimePage.tsx",
-  "src/features/plugin/ui/PluginsPage.tsx",
-  "src/components/agent/chat/workspace/workspacePluginActivation.ts",
-  "src/components/agent/chat/workspace/workspacePluginRuntimeContext.ts",
+const PLUGIN_CURRENT_SURFACE_FILES = [
+  "src/lib/api/pluginCatalog.ts",
+  "src/components/agent/chat/workspace/useWorkspacePluginCatalogSuggestions.ts",
+  "src/components/agent/chat/workspace/useWorkspaceSendActions.ts",
+  "src/components/agent/chat/workspace/useWorkspaceRightSurfacePendingRuntime.ts",
+  "src/components/agent/chat/workspace/WorkspacePluginSurface.tsx",
 ];
 
-const FORBIDDEN_PLUGIN_FIRST_RUNTIME_PATTERNS = [
-  "getOrCreateDefaultProject",
-  "defaultProject",
+const FORBIDDEN_RENDERER_PLUGIN_RUNTIME_PATTERNS = [
+  "@/features/plugin",
+  "@/lib/api/plugins",
+  "plugin_activation",
+  "plugin_activation_intent",
+  "runtime_authorization",
 ] as const;
 
 const AUTOMATION_THREAD_FIRST_SURFACE_FILES = [
@@ -265,17 +266,17 @@ describe("Project / Thread-first boundary", () => {
     ).toEqual([]);
   });
 
-  it("插件 Agent task 入口不得恢复默认项目孤岛", () => {
-    const hits = PLUGIN_THREAD_FIRST_SURFACE_FILES.flatMap((file) => {
+  it("Agent Plugin current 入口不得恢复 Renderer 私有 runtime", () => {
+    const hits = PLUGIN_CURRENT_SURFACE_FILES.flatMap((file) => {
       const source = readFileSync(repoPath(file), "utf8");
-      return FORBIDDEN_PLUGIN_FIRST_RUNTIME_PATTERNS.flatMap((pattern) =>
+      return FORBIDDEN_RENDERER_PLUGIN_RUNTIME_PATTERNS.flatMap((pattern) =>
         source.includes(pattern) ? [`${file}: ${pattern}`] : [],
       );
     });
 
     expect(
       hits,
-      "插件可以有管理 / 预览 surface，但 lime.agent task 必须携带 current Project / Thread workspace；不得自动创建默认项目或恢复 Plugin-first project fallback",
+      "Agent Plugin 只允许使用 typed catalog、App Server runtime 与 Thread/pending projection；不得恢复 Renderer installed-state、activation metadata 或 manifest authorization",
     ).toEqual([]);
   });
 

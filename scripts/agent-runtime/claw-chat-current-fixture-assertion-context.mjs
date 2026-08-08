@@ -133,22 +133,6 @@ function resolveScenarioTurnStart(summary, options) {
   if (options?.scenario === "expert-plaza-skills-runtime") {
     return summary?.expertSkillsRuntimeTurnStart ?? null;
   }
-  if (
-    options?.scenario === CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO ||
-    options?.scenario ===
-      CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO
-  ) {
-    const turnStart = summary?.contentFactoryArticleWorkspaceWorkerTurnStart;
-    const identity =
-      summary?.contentFactoryArticleWorkspaceSessionCreation?.identity;
-    if (typeof turnStart?.turnId === "string" && turnStart.turnId.trim()) {
-      return {
-        sessionId: identity?.sessionId ?? null,
-        turnId: turnStart.turnId,
-        requireBackendTurn: false,
-      };
-    }
-  }
   return null;
 }
 

@@ -1,29 +1,37 @@
 use super::*;
+use std::path::PathBuf;
+use tool_runtime::execution_process::{
+    live::{LiveExecutionOutputBatch, LiveExecutionOutputQuery, LiveExecutionRequest},
+    ExecutionProcessStatus,
+};
 
 #[tokio::test]
 async fn execution_process_server_streams_output_and_status() {
     let server = ExecutionProcessServer::default();
     let response = server
-        .start_process(ExecutionProcessStartParams {
-            process_id: "process-test".to_string(),
-            tool_id: "tool-test".to_string(),
-            tool_name: "exec_command".to_string(),
-            command: vec![
-                "sh".to_string(),
-                "-c".to_string(),
-                "printf hello".to_string(),
-            ],
-            working_directory: current_directory(),
-            tty: false,
-            approval_policy: Some("never".to_string()),
-            sandbox_policy: Some("danger-full-access".to_string()),
-            runtime_metadata: None,
-            cwd: None,
-            env: HashMap::new(),
-        })
+        .start_thread_process(
+            "test-thread",
+            "test command",
+            LiveExecutionRequest {
+                process_id: "process-test".to_string(),
+                tool_id: "tool-test".to_string(),
+                tool_name: "exec_command".to_string(),
+                command: vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "printf hello".to_string(),
+                ],
+                working_directory: current_directory(),
+                tty: false,
+                approval_policy: Some("never".to_string()),
+                sandbox_policy: Some("danger-full-access".to_string()),
+                runtime_metadata: None,
+                env: HashMap::new(),
+            },
+        )
         .await
         .expect("process should start");
-    assert_eq!(response.snapshot.status, ExecutionProcessStatus::Running);
+    assert_eq!(response.status, ExecutionProcessStatus::Running);
 
     let output = wait_for_output(&server, "process-test", "hello").await;
     assert!(output
@@ -38,30 +46,33 @@ async fn execution_process_server_streams_output_and_status() {
 async fn execution_process_output_replays_until_cursor_advances() {
     let server = ExecutionProcessServer::default();
     server
-        .start_process(ExecutionProcessStartParams {
-            process_id: "process-replay".to_string(),
-            tool_id: "tool-replay".to_string(),
-            tool_name: "exec_command".to_string(),
-            command: vec![
-                "sh".to_string(),
-                "-c".to_string(),
-                "printf replay".to_string(),
-            ],
-            working_directory: current_directory(),
-            tty: false,
-            approval_policy: Some("never".to_string()),
-            sandbox_policy: Some("danger-full-access".to_string()),
-            runtime_metadata: None,
-            cwd: None,
-            env: HashMap::new(),
-        })
+        .start_thread_process(
+            "test-thread",
+            "test command",
+            LiveExecutionRequest {
+                process_id: "process-replay".to_string(),
+                tool_id: "tool-replay".to_string(),
+                tool_name: "exec_command".to_string(),
+                command: vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "printf replay".to_string(),
+                ],
+                working_directory: current_directory(),
+                tty: false,
+                approval_policy: Some("never".to_string()),
+                sandbox_policy: Some("danger-full-access".to_string()),
+                runtime_metadata: None,
+                env: HashMap::new(),
+            },
+        )
         .await
         .expect("process should start");
 
     let first = wait_for_output(&server, "process-replay", "replay").await;
     let cursor = first.next_sequence.expect("cursor should advance");
     let repeated = server
-        .drain_output(ExecutionProcessDrainOutputParams {
+        .drain_output(LiveExecutionOutputQuery {
             process_id: Some("process-replay".to_string()),
             after_sequence: None,
             limit: None,
@@ -71,7 +82,7 @@ async fn execution_process_output_replays_until_cursor_advances() {
     assert_eq!(repeated.deltas, first.deltas);
 
     let after_cursor = server
-        .drain_output(ExecutionProcessDrainOutputParams {
+        .drain_output(LiveExecutionOutputQuery {
             process_id: Some("process-replay".to_string()),
             after_sequence: Some(cursor),
             limit: None,
@@ -93,6 +104,9 @@ async fn execution_process_server_tracks_registered_live_process() {
         cwd: Some(std::env::current_dir().unwrap_or_default()),
         env: HashMap::new(),
         tty: false,
+        stdin: true,
+        env_clear: false,
+        pty_size: None,
     })
     .expect("local process should start");
 
@@ -101,11 +115,8 @@ async fn execution_process_server_tracks_registered_live_process() {
         .expect("registered process should attach");
     assert_eq!(
         server
-            .status(ExecutionProcessIdParams {
-                process_id: "process-registered".to_string(),
-            })
+            .status("process-registered")
             .expect("registered status should read")
-            .snapshot
             .status,
         ExecutionProcessStatus::Running
     );
@@ -124,7 +135,7 @@ async fn execution_process_server_tracks_registered_live_process() {
         .finish_live_process(final_snapshot)
         .expect("registered process should finish");
     let output = server
-        .drain_output(ExecutionProcessDrainOutputParams {
+        .drain_output(LiveExecutionOutputQuery {
             process_id: Some("process-registered".to_string()),
             after_sequence: None,
             limit: None,
@@ -136,30 +147,31 @@ async fn execution_process_server_tracks_registered_live_process() {
         .iter()
         .any(|delta| delta.delta.contains("registered-output")));
     let status = server
-        .status(ExecutionProcessIdParams {
-            process_id: "process-registered".to_string(),
-        })
+        .status("process-registered")
         .expect("final registered status should read");
-    assert_eq!(status.snapshot.status, ExecutionProcessStatus::Exited);
-    assert_eq!(status.snapshot.exit_code, Some(0));
+    assert_eq!(status.status, ExecutionProcessStatus::Exited);
+    assert_eq!(status.exit_code, Some(0));
 }
 
 #[tokio::test]
 async fn execution_process_server_rejects_dangerous_shell_command() {
     let error = ExecutionProcessServer::default()
-        .start_process(ExecutionProcessStartParams {
-            process_id: "process-danger".to_string(),
-            tool_id: "tool-danger".to_string(),
-            tool_name: "exec_command".to_string(),
-            command: vec!["sh".to_string(), "-c".to_string(), "rm -rf /".to_string()],
-            working_directory: current_directory(),
-            tty: false,
-            approval_policy: Some("never".to_string()),
-            sandbox_policy: Some("danger-full-access".to_string()),
-            runtime_metadata: None,
-            cwd: None,
-            env: HashMap::new(),
-        })
+        .start_thread_process(
+            "test-thread",
+            "test command",
+            LiveExecutionRequest {
+                process_id: "process-danger".to_string(),
+                tool_id: "tool-danger".to_string(),
+                tool_name: "exec_command".to_string(),
+                command: vec!["sh".to_string(), "-c".to_string(), "rm -rf /".to_string()],
+                working_directory: current_directory(),
+                tty: false,
+                approval_policy: Some("never".to_string()),
+                sandbox_policy: Some("danger-full-access".to_string()),
+                runtime_metadata: None,
+                env: HashMap::new(),
+            },
+        )
         .await
         .expect_err("dangerous command should be rejected");
 
@@ -169,27 +181,30 @@ async fn execution_process_server_rejects_dangerous_shell_command() {
 #[tokio::test]
 async fn execution_process_server_uses_current_unsandboxed_fallback_when_backend_is_disabled() {
     let response = ExecutionProcessServer::default()
-        .start_process(ExecutionProcessStartParams {
-            process_id: "process-sandbox".to_string(),
-            tool_id: "tool-sandbox".to_string(),
-            tool_name: "exec_command".to_string(),
-            command: vec![
-                "sh".to_string(),
-                "-c".to_string(),
-                "printf allowed".to_string(),
-            ],
-            working_directory: current_directory(),
-            tty: false,
-            approval_policy: Some("never".to_string()),
-            sandbox_policy: Some("workspace-write".to_string()),
-            runtime_metadata: None,
-            cwd: None,
-            env: HashMap::new(),
-        })
+        .start_thread_process(
+            "test-thread",
+            "test command",
+            LiveExecutionRequest {
+                process_id: "process-sandbox".to_string(),
+                tool_id: "tool-sandbox".to_string(),
+                tool_name: "exec_command".to_string(),
+                command: vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "printf allowed".to_string(),
+                ],
+                working_directory: current_directory(),
+                tty: false,
+                approval_policy: Some("never".to_string()),
+                sandbox_policy: Some("workspace-write".to_string()),
+                runtime_metadata: None,
+                env: HashMap::new(),
+            },
+        )
         .await
         .expect("disabled workspace sandbox backend should preserve configured fallback policy");
 
-    assert_eq!(response.snapshot.tool_name, "exec_command");
+    assert_eq!(response.tool_name, "exec_command");
 }
 
 #[cfg(target_os = "macos")]
@@ -201,39 +216,42 @@ async fn execution_process_server_enforces_seatbelt_workspace_boundaries() {
     let outside_path = root.path().join("outside.txt");
     let server = ExecutionProcessServer::default();
     server
-        .start_process(ExecutionProcessStartParams {
-            process_id: "process-seatbelt".to_string(),
-            tool_id: "tool-seatbelt".to_string(),
-            tool_name: "exec_command".to_string(),
-            command: vec![
-                "sh".to_string(),
-                "-c".to_string(),
-                concat!(
-                    "printf allowed > inside.txt; ",
-                    "printf denied > \"$OUTSIDE_PATH\" 2>/dev/null || true"
-                )
-                .to_string(),
-            ],
-            working_directory: workspace.to_string_lossy().to_string(),
-            tty: false,
-            approval_policy: Some("never".to_string()),
-            sandbox_policy: Some("workspace-write".to_string()),
-            runtime_metadata: Some(json!({
-                "workspaceSandbox": { "enabled": true, "strict": true },
-                "metadata": {
-                    "grantedPermissions": {
-                        "fileSystem": {
-                            "write": [outside_path.to_string_lossy().to_string()]
+        .start_thread_process(
+            "test-thread",
+            "test command",
+            LiveExecutionRequest {
+                process_id: "process-seatbelt".to_string(),
+                tool_id: "tool-seatbelt".to_string(),
+                tool_name: "exec_command".to_string(),
+                command: vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    concat!(
+                        "printf allowed > inside.txt; ",
+                        "printf denied > \"$OUTSIDE_PATH\" 2>/dev/null || true"
+                    )
+                    .to_string(),
+                ],
+                working_directory: workspace.clone(),
+                tty: false,
+                approval_policy: Some("never".to_string()),
+                sandbox_policy: Some("workspace-write".to_string()),
+                runtime_metadata: Some(json!({
+                    "workspaceSandbox": { "enabled": true, "strict": true },
+                    "metadata": {
+                        "grantedPermissions": {
+                            "fileSystem": {
+                                "write": [outside_path.to_string_lossy().to_string()]
+                            }
                         }
                     }
-                }
-            })),
-            cwd: None,
-            env: HashMap::from([(
-                "OUTSIDE_PATH".to_string(),
-                outside_path.to_string_lossy().to_string(),
-            )]),
-        })
+                })),
+                env: HashMap::from([(
+                    "OUTSIDE_PATH".to_string(),
+                    outside_path.to_string_lossy().to_string(),
+                )]),
+            },
+        )
         .await
         .expect("seatbelt process should start");
 
@@ -251,10 +269,10 @@ async fn wait_for_output(
     server: &ExecutionProcessServer,
     process_id: &str,
     marker: &str,
-) -> ExecutionProcessDrainOutputResponse {
+) -> LiveExecutionOutputBatch {
     for _ in 0..80 {
         let output = server
-            .drain_output(ExecutionProcessDrainOutputParams {
+            .drain_output(LiveExecutionOutputQuery {
                 process_id: Some(process_id.to_string()),
                 after_sequence: None,
                 limit: None,
@@ -278,12 +296,7 @@ async fn wait_for_terminal_snapshot(
     process_id: &str,
 ) -> ExecutionProcessSnapshot {
     for _ in 0..80 {
-        let snapshot = server
-            .status(ExecutionProcessIdParams {
-                process_id: process_id.to_string(),
-            })
-            .expect("execution process status")
-            .snapshot;
+        let snapshot = server.status(process_id).expect("execution process status");
         if matches!(
             snapshot.status,
             ExecutionProcessStatus::Exited
@@ -298,11 +311,8 @@ async fn wait_for_terminal_snapshot(
     panic!("execution process did not reach terminal status: {process_id}");
 }
 
-fn current_directory() -> String {
-    std::env::current_dir()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .to_string()
+fn current_directory() -> PathBuf {
+    std::env::current_dir().unwrap_or_default()
 }
 
 fn shell_output_command(output: &str) -> Vec<String> {

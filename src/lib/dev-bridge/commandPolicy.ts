@@ -11,12 +11,6 @@ export type DevBridgeCommandTimeoutProfile =
   | "app-server-long-running"
   | "app-server-provider-network"
   | "app-server-read"
-  | "agent-runtime"
-  | "plugin-installed-write"
-  | "plugin-package-inspect"
-  | "plugin-ui-runtime-start"
-  | "plugin-package"
-  | "desktop-user-interaction"
   | "knowledge-compile"
   | "voice-model-download"
   | "layered-design-project"
@@ -39,24 +33,13 @@ const bridgeTruthCommands = new Set<string>([
   "workspace_get",
   "workspace_ensure",
   "workspace_ensure_ready",
-  "plugin_start_ui_runtime",
-  "plugin_get_ui_runtime_status",
-  "plugin_stop_ui_runtime",
   "get_default_provider",
   "app_server_handle_json_lines",
   "app_server_drain_events",
   "get_file_name",
 ]);
 
-const noMockFallbackCompatCommands = new Set<string>([
-  "plugin_runtime_start_task",
-  "plugin_runtime_cancel_task",
-  "plugin_runtime_get_task",
-  "plugin_runtime_submit_host_response",
-]);
-
 const electronHostNoMockFallbackCommands = new Set([
-  "plugin_select_directory",
   "open_file_preview_window",
   "open_resource_manager_window",
   "open_system_settings_url",
@@ -70,22 +53,9 @@ const electronHostNoMockFallbackCommands = new Set([
 
 const optionalLegacyUxCommands = new Set<string>(["get_hint_routes"]);
 
-const devBridgePluginUiRuntimeStartCommands = new Set([
-  "plugin_start_ui_runtime",
-]);
-
-const devBridgePluginPackageCommands = new Set([
-  "pluginLocalPackage/inspect",
-  "pluginLocalPackage/export",
-]);
-
 const electronHostLayeredDesignProjectCommands = new Set([
   "save_layered_design_project_export",
   "read_layered_design_project_export",
-]);
-
-const electronHostUserInteractionCommands = new Set([
-  "plugin_select_directory",
 ]);
 
 const devBridgeCooldownBypassCommands = new Set([
@@ -122,12 +92,8 @@ const APP_SERVER_CONVERSATION_IMPORT_METHODS = new Set([
   "conversationImport/thread/preview",
   "conversationImport/thread/commit",
 ]);
-const APP_SERVER_PLUGIN_UI_RUNTIME_START_METHOD = "pluginUiRuntime/start";
 const APP_SERVER_KNOWLEDGE_COMPILE_METHOD = "knowledgePack/compile";
 const APP_SERVER_LONG_RUNNING_METHODS = new Set(["automationJob/runNow"]);
-const APP_SERVER_PLUGIN_INSTALLED_WRITE_METHODS = new Set([
-  "pluginInstalled/save",
-]);
 const APP_SERVER_PROVIDER_NETWORK_METHODS = new Set([
   "modelProvider/testConnection",
   "modelProvider/testChat",
@@ -155,12 +121,15 @@ const APP_SERVER_MODEL_CONTROL_METHODS = new Set([
 const APP_SERVER_CURRENT_METHODS = new Set([
   "capability/list",
   "artifact/read",
-  "fileSystem/listDirectory",
-  "fileSystem/readFilePreview",
-  "fileSystem/createFile",
-  "fileSystem/createDirectory",
-  "fileSystem/renameFile",
-  "fileSystem/deleteFile",
+  "fs/readFile",
+  "fs/writeFile",
+  "fs/createDirectory",
+  "fs/getMetadata",
+  "fs/readDirectory",
+  "fs/remove",
+  "fs/copy",
+  "fs/watch",
+  "fs/unwatch",
   "thread/start",
   "thread/read",
   "workflow/read",
@@ -186,16 +155,13 @@ const APP_SERVER_CURRENT_METHODS = new Set([
   "skillRemote/inspect",
   "workspaceSkillBindings/list",
   "workspaceRegisteredSkills/list",
-  "pluginLocalPackage/inspect",
-  "pluginLocalPackage/export",
-  "pluginPackage/fetchCloud",
-  "pluginInstalled/save",
-  "pluginInstalled/list",
-  "pluginInstalled/disabled/set",
-  "pluginInstalled/uninstall/rehearsal",
-  "pluginInstalled/uninstall",
-  "pluginShell/prepare",
-  "pluginUiRuntime/status",
+  "plugin/list",
+  "plugin/search",
+  "plugin/read",
+  "plugin/install",
+  "plugin/uninstall",
+  "plugin/installed",
+  "plugin/enabled/set",
   "knowledgePack/list",
   "knowledgePack/read",
   "knowledgePack/source/import",
@@ -317,7 +283,6 @@ export function isBridgeTruthCommand(command: string): boolean {
 export function shouldDisallowMockFallbackCommand(command: string): boolean {
   return (
     isBridgeTruthCommand(command) ||
-    noMockFallbackCompatCommands.has(command) ||
     electronHostNoMockFallbackCommands.has(command)
   );
 }
@@ -370,9 +335,6 @@ export function resolveDevBridgeCommandTimeoutProfile(
   if (isAppServerConversationImportCommand(command, args)) {
     return "app-server-import";
   }
-  if (isAppServerPluginUiRuntimeStartCommand(command, args)) {
-    return "plugin-ui-runtime-start";
-  }
   if (isAppServerLongRunningCommand(command, args)) {
     return "app-server-long-running";
   }
@@ -385,12 +347,6 @@ export function resolveDevBridgeCommandTimeoutProfile(
   if (isAppServerKnowledgeCompileCommand(command, args)) {
     return "knowledge-compile";
   }
-  if (isAppServerPluginPackageInspectCommand(command, args)) {
-    return "plugin-package-inspect";
-  }
-  if (isAppServerPluginInstalledWriteCommand(command, args)) {
-    return "plugin-installed-write";
-  }
   if (isAppServerProviderNetworkCommand(command, args)) {
     return "app-server-provider-network";
   }
@@ -399,18 +355,6 @@ export function resolveDevBridgeCommandTimeoutProfile(
   }
   if (command === APP_SERVER_DRAIN_EVENTS_COMMAND) {
     return "app-server-read";
-  }
-  if (command.startsWith("plugin_runtime_")) {
-    return "agent-runtime";
-  }
-  if (devBridgePluginUiRuntimeStartCommands.has(command)) {
-    return "plugin-ui-runtime-start";
-  }
-  if (devBridgePluginPackageCommands.has(command)) {
-    return "plugin-package";
-  }
-  if (electronHostUserInteractionCommands.has(command)) {
-    return "desktop-user-interaction";
   }
   if (command === "voice_models_download") {
     return "voice-model-download";
@@ -451,18 +395,6 @@ function isAppServerConversationImportCommand(
   }
   return extractAppServerJsonLines(args).some((line) =>
     jsonRpcLineHasAnyMethod(line, APP_SERVER_CONVERSATION_IMPORT_METHODS),
-  );
-}
-
-function isAppServerPluginUiRuntimeStartCommand(
-  command: string,
-  args: unknown,
-): boolean {
-  if (command !== APP_SERVER_HANDLE_JSON_LINES_COMMAND) {
-    return false;
-  }
-  return extractAppServerJsonLines(args).some((line) =>
-    jsonRpcLineHasMethod(line, APP_SERVER_PLUGIN_UI_RUNTIME_START_METHOD),
   );
 }
 
@@ -511,32 +443,6 @@ function isAppServerCurrentMethodCommand(
   }
   return extractAppServerJsonLines(args).some((line) =>
     jsonRpcLineHasAnyMethod(line, APP_SERVER_CURRENT_METHODS),
-  );
-}
-
-function isAppServerPluginPackageInspectCommand(
-  command: string,
-  args: unknown,
-): boolean {
-  if (command !== APP_SERVER_HANDLE_JSON_LINES_COMMAND) {
-    return false;
-  }
-  return extractAppServerJsonLines(args).some(
-    (line) =>
-      jsonRpcLineHasMethod(line, "pluginLocalPackage/inspect") ||
-      jsonRpcLineHasMethod(line, "pluginLocalPackage/export"),
-  );
-}
-
-function isAppServerPluginInstalledWriteCommand(
-  command: string,
-  args: unknown,
-): boolean {
-  if (command !== APP_SERVER_HANDLE_JSON_LINES_COMMAND) {
-    return false;
-  }
-  return extractAppServerJsonLines(args).some((line) =>
-    jsonRpcLineHasAnyMethod(line, APP_SERVER_PLUGIN_INSTALLED_WRITE_METHODS),
   );
 }
 

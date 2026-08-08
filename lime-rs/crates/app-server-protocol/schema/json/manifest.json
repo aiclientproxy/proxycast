@@ -244,55 +244,47 @@
     },
     {
       "kind": "request",
-      "method": "executionProcess/drainOutput"
-    },
-    {
-      "kind": "request",
-      "method": "executionProcess/interrupt"
-    },
-    {
-      "kind": "request",
-      "method": "executionProcess/start"
-    },
-    {
-      "kind": "request",
-      "method": "executionProcess/status"
-    },
-    {
-      "kind": "request",
-      "method": "executionProcess/terminate"
-    },
-    {
-      "kind": "request",
-      "method": "executionProcess/writeStdin"
-    },
-    {
-      "kind": "request",
       "method": "feishuChannel/probe"
     },
     {
-      "kind": "request",
-      "method": "fileSystem/createDirectory"
+      "kind": "notification",
+      "method": "fs/changed"
     },
     {
       "kind": "request",
-      "method": "fileSystem/createFile"
+      "method": "fs/copy"
     },
     {
       "kind": "request",
-      "method": "fileSystem/deleteFile"
+      "method": "fs/createDirectory"
     },
     {
       "kind": "request",
-      "method": "fileSystem/listDirectory"
+      "method": "fs/getMetadata"
     },
     {
       "kind": "request",
-      "method": "fileSystem/readFilePreview"
+      "method": "fs/readDirectory"
     },
     {
       "kind": "request",
-      "method": "fileSystem/renameFile"
+      "method": "fs/readFile"
+    },
+    {
+      "kind": "request",
+      "method": "fs/remove"
+    },
+    {
+      "kind": "request",
+      "method": "fs/unwatch"
+    },
+    {
+      "kind": "request",
+      "method": "fs/watch"
+    },
+    {
+      "kind": "request",
+      "method": "fs/writeFile"
     },
     {
       "kind": "request",
@@ -563,6 +555,10 @@
       "method": "mcpServer/start"
     },
     {
+      "kind": "notification",
+      "method": "mcpServer/startupStatus/updated"
+    },
+    {
       "kind": "request",
       "method": "mcpServer/stop"
     },
@@ -632,6 +628,10 @@
     },
     {
       "kind": "request",
+      "method": "memory/reset"
+    },
+    {
+      "kind": "request",
       "method": "memoryStore/addNote"
     },
     {
@@ -653,10 +653,6 @@
     {
       "kind": "request",
       "method": "memoryStore/read"
-    },
-    {
-      "kind": "request",
-      "method": "memoryStore/reset"
     },
     {
       "kind": "request",
@@ -803,56 +799,28 @@
       "method": "plugin/uninstall"
     },
     {
-      "kind": "request",
-      "method": "pluginHostLifecycle/list"
+      "kind": "notification",
+      "method": "process/exited"
     },
     {
       "kind": "request",
-      "method": "pluginInstalled/disabled/set"
+      "method": "process/kill"
+    },
+    {
+      "kind": "notification",
+      "method": "process/outputDelta"
     },
     {
       "kind": "request",
-      "method": "pluginInstalled/list"
+      "method": "process/resizePty"
     },
     {
       "kind": "request",
-      "method": "pluginInstalled/save"
+      "method": "process/spawn"
     },
     {
       "kind": "request",
-      "method": "pluginInstalled/uninstall"
-    },
-    {
-      "kind": "request",
-      "method": "pluginInstalled/uninstall/rehearsal"
-    },
-    {
-      "kind": "request",
-      "method": "pluginLocalPackage/export"
-    },
-    {
-      "kind": "request",
-      "method": "pluginLocalPackage/inspect"
-    },
-    {
-      "kind": "request",
-      "method": "pluginPackage/fetchCloud"
-    },
-    {
-      "kind": "request",
-      "method": "pluginShell/prepare"
-    },
-    {
-      "kind": "request",
-      "method": "pluginUiRuntime/start"
-    },
-    {
-      "kind": "request",
-      "method": "pluginUiRuntime/status"
-    },
-    {
-      "kind": "request",
-      "method": "pluginUiRuntime/stop"
+      "method": "process/writeStdin"
     },
     {
       "kind": "request",
@@ -1498,38 +1466,6 @@
       "scope": "browserSession"
     },
     {
-      "method": "executionProcess/interrupt",
-      "scope": "executionProcess"
-    },
-    {
-      "method": "executionProcess/start",
-      "scope": "executionProcess"
-    },
-    {
-      "method": "executionProcess/terminate",
-      "scope": "executionProcess"
-    },
-    {
-      "method": "executionProcess/writeStdin",
-      "scope": "executionProcess"
-    },
-    {
-      "method": "fileSystem/createDirectory",
-      "scope": "fileSystemMutation"
-    },
-    {
-      "method": "fileSystem/createFile",
-      "scope": "fileSystemMutation"
-    },
-    {
-      "method": "fileSystem/deleteFile",
-      "scope": "fileSystemMutation"
-    },
-    {
-      "method": "fileSystem/renameFile",
-      "scope": "fileSystemMutation"
-    },
-    {
       "method": "mcpResource/subscribe",
       "scope": "mcpResourceSubscription"
     },
@@ -1831,28 +1767,6 @@
       "EvidenceExportResponse",
       "EvidencePackArtifact",
       "EvidencePackSummary",
-      "ExecutionProcessDrainOutputParams",
-      "ExecutionProcessDrainOutputResponse",
-      "ExecutionProcessEmptyResponse",
-      "ExecutionProcessIdParams",
-      "ExecutionProcessOutputDelta",
-      "ExecutionProcessOutputKind",
-      "ExecutionProcessSnapshot",
-      "ExecutionProcessStartParams",
-      "ExecutionProcessStartResponse",
-      "ExecutionProcessStatus",
-      "ExecutionProcessStatusResponse",
-      "ExecutionProcessWriteStdinParams",
-      "FileSystemCreateDirectoryParams",
-      "FileSystemCreateFileParams",
-      "FileSystemDeleteFileParams",
-      "FileSystemDirectoryListing",
-      "FileSystemFileEntry",
-      "FileSystemFilePreview",
-      "FileSystemListDirectoryParams",
-      "FileSystemMutationResponse",
-      "FileSystemReadFilePreviewParams",
-      "FileSystemRenameFileParams",
       "FramingKind",
       "GalleryMaterial",
       "GalleryMaterialDeleteResponse",
@@ -1954,8 +1868,6 @@
       "MemoryStoreListResponse",
       "MemoryStoreReadParams",
       "MemoryStoreReadResponse",
-      "MemoryStoreResetParams",
-      "MemoryStoreResetResponse",
       "MemoryStoreReviewListParams",
       "MemoryStoreReviewListResponse",
       "MemoryStoreReviewNote",
@@ -2015,40 +1927,6 @@
       "ModelTaskSource",
       "OpenDeepLinkPayload",
       "PlatformInfo",
-      "PluginArticleWorkspaceContract",
-      "PluginArticleWorkspaceObject",
-      "PluginCloudReleaseDescriptor",
-      "PluginDeleteDataExecutionEvidence",
-      "PluginDeleteDataPostDeleteResidualAudit",
-      "PluginDeleteDataTargetEvidence",
-      "PluginFetchCloudPackageParams",
-      "PluginHistoryRestoreContract",
-      "PluginHostFunctionState",
-      "PluginHostLifecycleListResponse",
-      "PluginHostLifecycleSnapshot",
-      "PluginInstalledDisabledSetParams",
-      "PluginInstalledListResponse",
-      "PluginInstalledSaveParams",
-      "PluginLocalPackageExportParams",
-      "PluginLocalPackageExportResponse",
-      "PluginLocalPackageInspectParams",
-      "PluginLocalPackageInspectResponse",
-      "PluginPackageCacheEntry",
-      "PluginPackageIdentity",
-      "PluginRightSurfaceContract",
-      "PluginShellPackageMount",
-      "PluginShellPrepareParams",
-      "PluginShellPrepareResponse",
-      "PluginTaskRuntimeContract",
-      "PluginUiRuntimeStartParams",
-      "PluginUiRuntimeStatusParams",
-      "PluginUiRuntimeStatusResponse",
-      "PluginUiRuntimeStopParams",
-      "PluginUninstallParams",
-      "PluginUninstallRehearsalParams",
-      "PluginUninstallRehearsalResponse",
-      "PluginUninstallRehearsalTarget",
-      "PluginUninstallResponse",
       "ProjectGitBranchCheckoutParams",
       "ProjectGitBranchCreateParams",
       "ProjectGitCommit",
@@ -2329,6 +2207,26 @@
       "FileSystemSandboxEntry",
       "FileSystemSpecialPath",
       "FileUpdateChange",
+      "FsChangedNotification",
+      "FsCopyParams",
+      "FsCopyResponse",
+      "FsCreateDirectoryParams",
+      "FsCreateDirectoryResponse",
+      "FsGetMetadataParams",
+      "FsGetMetadataResponse",
+      "FsReadDirectoryEntry",
+      "FsReadDirectoryParams",
+      "FsReadDirectoryResponse",
+      "FsReadFileParams",
+      "FsReadFileResponse",
+      "FsRemoveParams",
+      "FsRemoveResponse",
+      "FsUnwatchParams",
+      "FsUnwatchResponse",
+      "FsWatchParams",
+      "FsWatchResponse",
+      "FsWriteFileParams",
+      "FsWriteFileResponse",
       "GitInfo",
       "GrantedPermissionProfile",
       "HookErrorInfo",
@@ -2367,6 +2265,7 @@
       "MediaReadResponse",
       "MemoryCitation",
       "MemoryCitationEntry",
+      "MemoryResetResponse",
       "Method",
       "Model",
       "ModelAvailabilityNux",
@@ -2420,6 +2319,18 @@
       "PluginSharePrincipalType",
       "PluginSource",
       "PluginSummary",
+      "ProcessExitedNotification",
+      "ProcessKillParams",
+      "ProcessKillResponse",
+      "ProcessOutputDeltaNotification",
+      "ProcessOutputStream",
+      "ProcessResizePtyParams",
+      "ProcessResizePtyResponse",
+      "ProcessSpawnParams",
+      "ProcessSpawnResponse",
+      "ProcessTerminalSize",
+      "ProcessWriteStdinParams",
+      "ProcessWriteStdinResponse",
       "ReasoningEffortOption",
       "ReasoningSummaryPartAddedNotification",
       "ReasoningSummaryTextDeltaNotification",

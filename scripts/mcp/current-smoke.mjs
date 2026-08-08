@@ -8,13 +8,11 @@ import process from "node:process";
 import {
   FIXTURE_METHODS,
   OAUTH_FIXTURE_METHODS,
-  PLUGIN_RUNTIME_FIXTURE_METHODS,
   REQUIRED_READ_METHODS,
   assert,
   invokeAppServerMethod,
   invokeBridgeCommand,
   runFixtureChecks,
-  runPluginRuntimeFixtureChecks,
   runReadChecks,
   sanitizeJson,
   summarizeInvokeEntries,
@@ -44,7 +42,6 @@ const DEFAULTS = {
   prefix: "mcp-current",
   allowWriteFixture: false,
   allowOAuthFixture: false,
-  allowPluginRuntimeFixture: false,
   allowLiveProvider: false,
   cleanupFixture: true,
 };
@@ -60,7 +57,6 @@ MCP Current Smoke
 用法:
   npm run smoke:mcp-current
   npm run smoke:mcp-current -- --allow-write-fixture
-  npm run smoke:mcp-current -- --allow-plugin-runtime-fixture
   npm run smoke:mcp-current -- --allow-oauth-fixture
   npm run smoke:mcp-current -- --allow-live-provider
 
@@ -72,8 +68,6 @@ MCP Current Smoke
   --evidence-dir <path>    证据目录，默认 .lime/qc/gui-evidence/mcp-current
   --prefix <name>          证据文件前缀，默认 mcp-current
   --allow-write-fixture    创建临时 stdio MCP server，覆盖 start / tool call / resource read
-  --allow-plugin-runtime-fixture
-                          创建临时 stdio MCP server，覆盖插件 runtime MCP inventory / proof 链
   --allow-oauth-fixture    创建本地 OAuth provider，覆盖 mcpServer/oauth/login 与系统浏览器网关
   --allow-live-provider    使用环境变量指定的真实 streamable HTTP MCP provider 做 live-gated E2E
   --keep-fixture           保留本脚本创建的临时 fixture 目录
@@ -124,10 +118,6 @@ function parseArgs(argv) {
     }
     if (arg === "--allow-oauth-fixture") {
       options.allowOAuthFixture = true;
-      continue;
-    }
-    if (arg === "--allow-plugin-runtime-fixture") {
-      options.allowPluginRuntimeFixture = true;
       continue;
     }
     if (arg === "--allow-live-provider") {
@@ -202,7 +192,6 @@ async function run() {
     smokeMode: [
       "direct-devbridge-app-server-json-rpc",
       options.allowWriteFixture ? "stdio-fixture" : null,
-      options.allowPluginRuntimeFixture ? "plugin-runtime-fixture" : null,
       options.allowOAuthFixture ? "oauth-fixture" : null,
       options.allowLiveProvider ? "live-provider" : null,
     ]
@@ -212,12 +201,10 @@ async function run() {
       "MCP current path must use app_server_handle_json_lines -> App Server JSON-RPC; legacy mcp_* Tauri facade is guard-only.",
     allowWriteFixture: options.allowWriteFixture,
     allowOAuthFixture: options.allowOAuthFixture,
-    allowPluginRuntimeFixture: options.allowPluginRuntimeFixture,
     allowLiveProvider: options.allowLiveProvider,
     cleanupFixture: options.cleanupFixture,
     health: null,
     fixture: null,
-    pluginRuntimeFixture: null,
     oauthFixture: null,
     liveProvider: null,
     appServerHandleJsonLinesSeen: false,
@@ -230,9 +217,6 @@ async function run() {
       : [],
     missingOAuthFixtureMethods: options.allowOAuthFixture
       ? [...OAUTH_FIXTURE_METHODS]
-      : [],
-    missingPluginRuntimeFixtureMethods: options.allowPluginRuntimeFixture
-      ? [...PLUGIN_RUNTIME_FIXTURE_METHODS]
       : [],
     missingLiveProviderMethods: options.allowLiveProvider
       ? [...LIVE_PROVIDER_METHODS]
@@ -269,20 +253,6 @@ async function run() {
       );
     }
 
-    if (options.allowPluginRuntimeFixture) {
-      if (!fixture) {
-        fixture = await writeMcpFixture();
-      }
-      summary.pluginRuntimeFixture = sanitizeJson({
-        root: fixture.root,
-        serverPath: fixture.serverPath,
-      });
-      Object.assign(
-        summary.pluginRuntimeFixture,
-        await runPluginRuntimeFixtureChecks(options, invokeEntries, fixture),
-      );
-    }
-
     if (options.allowOAuthFixture) {
       summary.oauthFixture = await runMcpOAuthFixtureSmoke({
         options,
@@ -307,13 +277,6 @@ async function run() {
           (method) => !summary.appServerMethodsSeen.includes(method),
         )
       : [];
-    summary.missingPluginRuntimeFixtureMethods =
-      options.allowPluginRuntimeFixture
-        ? PLUGIN_RUNTIME_FIXTURE_METHODS.filter(
-            (method) => !summary.appServerMethodsSeen.includes(method),
-          )
-        : [];
-
     writeJsonFile(networkPath, {
       entries: invokeEntries,
       summary: observed,
@@ -377,25 +340,6 @@ async function run() {
         "MCP OAuth fixture 未记录已授权状态",
       );
     }
-    if (options.allowPluginRuntimeFixture) {
-      assert(
-        summary.missingPluginRuntimeFixtureMethods.length === 0,
-        `缺少 MCP plugin runtime fixture current methods: ${summary.missingPluginRuntimeFixtureMethods.join(", ")}`,
-      );
-      assert(
-        summary.pluginRuntimeFixture?.runtimeStatus === "available" &&
-          summary.pluginRuntimeFixture?.prepareStatus === "ready",
-        "MCP plugin runtime fixture 未记录 available/ready target",
-      );
-      assert(
-        summary.pluginRuntimeFixture?.explicitCallProofSeen === true,
-        "MCP plugin runtime fixture 未记录显式 call proof",
-      );
-      assert(
-        summary.pluginRuntimeFixture?.defaultProofDidNotCallTool === true,
-        "MCP plugin runtime fixture 默认 list proof 不应调用工具",
-      );
-    }
     if (options.allowLiveProvider) {
       assert(
         summary.missingLiveProviderMethods.length === 0,
@@ -435,12 +379,6 @@ async function run() {
           (method) => !summary.appServerMethodsSeen.includes(method),
         )
       : [];
-    summary.missingPluginRuntimeFixtureMethods =
-      options.allowPluginRuntimeFixture
-        ? PLUGIN_RUNTIME_FIXTURE_METHODS.filter(
-            (method) => !summary.appServerMethodsSeen.includes(method),
-          )
-        : [];
     writeJsonFile(networkPath, {
       entries: invokeEntries,
       summary: observed,

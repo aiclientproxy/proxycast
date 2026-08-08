@@ -586,38 +586,9 @@ describe("agentChatHistory timeline fallback", () => {
           },
         },
         {
-          artifactRef: "artifact-workspace-patch-1",
-          eventId: "event-article-workspace-patch-1",
-          sequence: 2,
-          artifactId: "artifact-workspace-patch-1",
-          path: ".lime/artifacts/content-factory-workspace-patch.json",
-          title: "内容工厂工作区补丁",
-          kind: "content_factory.workspace_patch",
-          status: "complete",
-          contentStatus: "available",
-          metadata: {
-            contentFactoryWorkspacePatch: {
-              appId: "content-factory-app",
-              sessionId: "session-article-workspace-artifacts",
-              objects: [
-                {
-                  ref: {
-                    appId: "content-factory-app",
-                    kind: "articleDraft",
-                    id: "article-1",
-                    sessionId: "session-article-workspace-artifacts",
-                  },
-                  title: "公众号文章草稿",
-                  status: "ready",
-                },
-              ],
-            },
-          },
-        },
-        {
           artifactRef: "artifact-workspace-patch-current",
           eventId: "event-article-workspace-patch-current",
-          sequence: 3,
+          sequence: 2,
           artifactId: "artifact-workspace-patch-current",
           path: ".lime/artifacts/article-workspace/workspace-patch.json",
           title: "Article Workspace Patch",

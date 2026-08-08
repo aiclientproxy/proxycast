@@ -4,18 +4,25 @@ use super::{
     ArtifactWriteParams, ArtifactWriteResponse, CommandExecutionOutputDeltaNotification,
     CommandExecutionRequestApprovalParams, CommandExecutionTerminalInteractionNotification,
     ConfigWarningNotification, CurrentTimeReadParams, DynamicToolCallParams, ErrorNotification,
-    FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, HookCompletedNotification,
-    HookStartedNotification, HooksListParams, HooksListResponse, ItemCompletedNotification,
-    ItemStartedNotification, McpServerElicitationRequestParams,
+    FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, FsChangedNotification,
+    FsCopyParams, FsCopyResponse, FsCreateDirectoryParams, FsCreateDirectoryResponse,
+    FsGetMetadataParams, FsGetMetadataResponse, FsReadDirectoryParams, FsReadDirectoryResponse,
+    FsReadFileParams, FsReadFileResponse, FsRemoveParams, FsRemoveResponse, FsUnwatchParams,
+    FsUnwatchResponse, FsWatchParams, FsWatchResponse, FsWriteFileParams, FsWriteFileResponse,
+    HookCompletedNotification, HookStartedNotification, HooksListParams, HooksListResponse,
+    ItemCompletedNotification, ItemStartedNotification, McpServerElicitationRequestParams,
     McpServerOauthLoginCompletedNotification, McpServerResourceReadParams,
     McpServerResourceReadResponse, McpServerStatusUpdatedNotification, McpServerToolCallParams,
     McpServerToolCallResponse, McpToolCallProgressNotification, MediaReadParams, MediaReadResponse,
-    Method, ModelListParams, ModelListUpdatedNotification, ModelReroutedNotification,
-    ModelSafetyBufferingUpdatedNotification, ModelVerificationNotification,
-    PermissionsRequestApprovalParams, PlanDeltaNotification, PluginCatalogEnabledSetParams,
-    PluginCatalogInstallParams, PluginCatalogInstalledParams, PluginCatalogListParams,
-    PluginCatalogReadParams, PluginCatalogUninstallParams, PluginSearchParams,
-    PluginSearchResponse, ReasoningSummaryPartAddedNotification,
+    MemoryResetResponse, Method, ModelListParams, ModelListUpdatedNotification,
+    ModelReroutedNotification, ModelSafetyBufferingUpdatedNotification,
+    ModelVerificationNotification, PermissionsRequestApprovalParams, PlanDeltaNotification,
+    PluginCatalogEnabledSetParams, PluginCatalogInstallParams, PluginCatalogInstalledParams,
+    PluginCatalogListParams, PluginCatalogReadParams, PluginCatalogUninstallParams,
+    PluginSearchParams, PluginSearchResponse, ProcessExitedNotification, ProcessKillParams,
+    ProcessKillResponse, ProcessOutputDeltaNotification, ProcessResizePtyParams,
+    ProcessResizePtyResponse, ProcessSpawnParams, ProcessSpawnResponse, ProcessWriteStdinParams,
+    ProcessWriteStdinResponse, ReasoningSummaryPartAddedNotification,
     ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification,
     ServerRequestResolvedNotification, SkillsChangedNotification, SkillsConfigWriteParams,
     SkillsConfigWriteResponse, SkillsExtraRootsSetParams, SkillsExtraRootsSetResponse,
@@ -52,18 +59,20 @@ use super::{
     TurnStartedNotification, TurnSteerParams, TurnSteerResponse, WarningNotification,
     METHOD_APP_LIST_UPDATED, METHOD_COMMAND_EXECUTION_OUTPUT_DELTA,
     METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION, METHOD_CONFIG_WARNING, METHOD_CURRENT_TIME_READ,
-    METHOD_ERROR, METHOD_FILE_CHANGE_PATCH_UPDATED, METHOD_HOOK_COMPLETED, METHOD_HOOK_STARTED,
-    METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL, METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
-    METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL, METHOD_ITEM_TOOL_CALL,
-    METHOD_ITEM_TOOL_REQUEST_USER_INPUT, METHOD_MCP_SERVER_ELICITATION_REQUEST,
-    METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED, METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED,
-    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_LIST_UPDATED, METHOD_MODEL_REROUTED,
-    METHOD_MODEL_SAFETY_BUFFERING_UPDATED, METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA,
-    METHOD_REASONING_SUMMARY_PART_ADDED, METHOD_REASONING_SUMMARY_TEXT_DELTA,
-    METHOD_REASONING_TEXT_DELTA, METHOD_SERVER_REQUEST_RESOLVED, METHOD_SKILLS_CHANGED,
-    METHOD_THREAD_CLOSED, METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED,
-    METHOD_THREAD_NAME_UPDATED, METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED,
-    METHOD_TURN_PLAN_UPDATED, METHOD_WARNING,
+    METHOD_ERROR, METHOD_FILE_CHANGE_PATCH_UPDATED, METHOD_FS_CHANGED, METHOD_HOOK_COMPLETED,
+    METHOD_HOOK_STARTED, METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
+    METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL, METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
+    METHOD_ITEM_TOOL_CALL, METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
+    METHOD_MCP_SERVER_ELICITATION_REQUEST, METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
+    METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED, METHOD_MCP_TOOL_CALL_PROGRESS,
+    METHOD_MODEL_LIST_UPDATED, METHOD_MODEL_REROUTED, METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
+    METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA, METHOD_PROCESS_EXITED,
+    METHOD_PROCESS_OUTPUT_DELTA, METHOD_REASONING_SUMMARY_PART_ADDED,
+    METHOD_REASONING_SUMMARY_TEXT_DELTA, METHOD_REASONING_TEXT_DELTA,
+    METHOD_SERVER_REQUEST_RESOLVED, METHOD_SKILLS_CHANGED, METHOD_THREAD_CLOSED,
+    METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED,
+    METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED, METHOD_TURN_PLAN_UPDATED,
+    METHOD_WARNING,
 };
 use crate::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use schemars::JsonSchema;
@@ -218,6 +227,8 @@ pub enum ClientRequest {
         id: RequestId,
         params: ThreadMemoryModeSetParams,
     },
+    #[serde(rename = "memory/reset")]
+    MemoryReset { id: RequestId },
     #[serde(rename = "thread/shellCommand")]
     ThreadShellCommand {
         id: RequestId,
@@ -368,6 +379,68 @@ pub enum ClientRequest {
         id: RequestId,
         params: TurnInterruptParams,
     },
+    #[serde(rename = "fs/readFile")]
+    FsReadFile {
+        id: RequestId,
+        params: FsReadFileParams,
+    },
+    #[serde(rename = "fs/writeFile")]
+    FsWriteFile {
+        id: RequestId,
+        params: FsWriteFileParams,
+    },
+    #[serde(rename = "fs/createDirectory")]
+    FsCreateDirectory {
+        id: RequestId,
+        params: FsCreateDirectoryParams,
+    },
+    #[serde(rename = "fs/getMetadata")]
+    FsGetMetadata {
+        id: RequestId,
+        params: FsGetMetadataParams,
+    },
+    #[serde(rename = "fs/readDirectory")]
+    FsReadDirectory {
+        id: RequestId,
+        params: FsReadDirectoryParams,
+    },
+    #[serde(rename = "fs/remove")]
+    FsRemove {
+        id: RequestId,
+        params: FsRemoveParams,
+    },
+    #[serde(rename = "fs/copy")]
+    FsCopy { id: RequestId, params: FsCopyParams },
+    #[serde(rename = "fs/watch")]
+    FsWatch {
+        id: RequestId,
+        params: FsWatchParams,
+    },
+    #[serde(rename = "fs/unwatch")]
+    FsUnwatch {
+        id: RequestId,
+        params: FsUnwatchParams,
+    },
+    #[serde(rename = "process/spawn")]
+    ProcessSpawn {
+        id: RequestId,
+        params: ProcessSpawnParams,
+    },
+    #[serde(rename = "process/writeStdin")]
+    ProcessWriteStdin {
+        id: RequestId,
+        params: ProcessWriteStdinParams,
+    },
+    #[serde(rename = "process/resizePty")]
+    ProcessResizePty {
+        id: RequestId,
+        params: ProcessResizePtyParams,
+    },
+    #[serde(rename = "process/kill")]
+    ProcessKill {
+        id: RequestId,
+        params: ProcessKillParams,
+    },
 }
 
 impl ClientRequest {
@@ -400,6 +473,7 @@ impl ClientRequest {
             | Self::ThreadSearchOccurrences { id, .. }
             | Self::ThreadSettingsUpdate { id, .. }
             | Self::ThreadMemoryModeSet { id, .. }
+            | Self::MemoryReset { id }
             | Self::ThreadShellCommand { id, .. }
             | Self::ThreadApproveGuardianDeniedAction { id, .. }
             | Self::ThreadBackgroundTerminalsClean { id, .. }
@@ -429,7 +503,20 @@ impl ClientRequest {
             | Self::PluginEnabledSet { id, .. }
             | Self::TurnStart { id, .. }
             | Self::TurnSteer { id, .. }
-            | Self::TurnInterrupt { id, .. } => id,
+            | Self::TurnInterrupt { id, .. }
+            | Self::FsReadFile { id, .. }
+            | Self::FsWriteFile { id, .. }
+            | Self::FsCreateDirectory { id, .. }
+            | Self::FsGetMetadata { id, .. }
+            | Self::FsReadDirectory { id, .. }
+            | Self::FsRemove { id, .. }
+            | Self::FsCopy { id, .. }
+            | Self::FsWatch { id, .. }
+            | Self::FsUnwatch { id, .. }
+            | Self::ProcessSpawn { id, .. }
+            | Self::ProcessWriteStdin { id, .. }
+            | Self::ProcessResizePty { id, .. }
+            | Self::ProcessKill { id, .. } => id,
         }
     }
 
@@ -462,6 +549,7 @@ impl ClientRequest {
             Self::ThreadSearchOccurrences { .. } => Method::ThreadSearchOccurrences,
             Self::ThreadSettingsUpdate { .. } => Method::ThreadSettingsUpdate,
             Self::ThreadMemoryModeSet { .. } => Method::ThreadMemoryModeSet,
+            Self::MemoryReset { .. } => Method::MemoryReset,
             Self::ThreadShellCommand { .. } => Method::ThreadShellCommand,
             Self::ThreadApproveGuardianDeniedAction { .. } => {
                 Method::ThreadApproveGuardianDeniedAction
@@ -496,6 +584,19 @@ impl ClientRequest {
             Self::TurnStart { .. } => Method::TurnStart,
             Self::TurnSteer { .. } => Method::TurnSteer,
             Self::TurnInterrupt { .. } => Method::TurnInterrupt,
+            Self::FsReadFile { .. } => Method::FsReadFile,
+            Self::FsWriteFile { .. } => Method::FsWriteFile,
+            Self::FsCreateDirectory { .. } => Method::FsCreateDirectory,
+            Self::FsGetMetadata { .. } => Method::FsGetMetadata,
+            Self::FsReadDirectory { .. } => Method::FsReadDirectory,
+            Self::FsRemove { .. } => Method::FsRemove,
+            Self::FsCopy { .. } => Method::FsCopy,
+            Self::FsWatch { .. } => Method::FsWatch,
+            Self::FsUnwatch { .. } => Method::FsUnwatch,
+            Self::ProcessSpawn { .. } => Method::ProcessSpawn,
+            Self::ProcessWriteStdin { .. } => Method::ProcessWriteStdin,
+            Self::ProcessResizePty { .. } => Method::ProcessResizePty,
+            Self::ProcessKill { .. } => Method::ProcessKill,
         }
     }
 }
@@ -540,6 +641,7 @@ pub enum ClientResponsePayload {
     ThreadSearchOccurrences(ThreadSearchOccurrencesResponse),
     ThreadSettingsUpdate(ThreadSettingsUpdateResponse),
     ThreadMemoryModeSet(ThreadMemoryModeSetResponse),
+    MemoryReset(MemoryResetResponse),
     ThreadShellCommand(ThreadShellCommandResponse),
     ThreadApproveGuardianDeniedAction(ThreadApproveGuardianDeniedActionResponse),
     ThreadBackgroundTerminalsClean(ThreadBackgroundTerminalsCleanResponse),
@@ -563,6 +665,19 @@ pub enum ClientResponsePayload {
     TurnStart(TurnStartResponse),
     TurnSteer(TurnSteerResponse),
     TurnInterrupt(TurnInterruptResponse),
+    FsReadFile(FsReadFileResponse),
+    FsWriteFile(FsWriteFileResponse),
+    FsCreateDirectory(FsCreateDirectoryResponse),
+    FsGetMetadata(FsGetMetadataResponse),
+    FsReadDirectory(FsReadDirectoryResponse),
+    FsRemove(FsRemoveResponse),
+    FsCopy(FsCopyResponse),
+    FsWatch(FsWatchResponse),
+    FsUnwatch(FsUnwatchResponse),
+    ProcessSpawn(ProcessSpawnResponse),
+    ProcessWriteStdin(ProcessWriteStdinResponse),
+    ProcessResizePty(ProcessResizePtyResponse),
+    ProcessKill(ProcessKillResponse),
 }
 
 impl ClientResponsePayload {
@@ -595,6 +710,7 @@ impl ClientResponsePayload {
             Self::ThreadSearchOccurrences(_) => Method::ThreadSearchOccurrences,
             Self::ThreadSettingsUpdate(_) => Method::ThreadSettingsUpdate,
             Self::ThreadMemoryModeSet(_) => Method::ThreadMemoryModeSet,
+            Self::MemoryReset(_) => Method::MemoryReset,
             Self::ThreadShellCommand(_) => Method::ThreadShellCommand,
             Self::ThreadApproveGuardianDeniedAction(_) => Method::ThreadApproveGuardianDeniedAction,
             Self::ThreadBackgroundTerminalsClean(_) => Method::ThreadBackgroundTerminalsClean,
@@ -620,6 +736,19 @@ impl ClientResponsePayload {
             Self::TurnStart(_) => Method::TurnStart,
             Self::TurnSteer(_) => Method::TurnSteer,
             Self::TurnInterrupt(_) => Method::TurnInterrupt,
+            Self::FsReadFile(_) => Method::FsReadFile,
+            Self::FsWriteFile(_) => Method::FsWriteFile,
+            Self::FsCreateDirectory(_) => Method::FsCreateDirectory,
+            Self::FsGetMetadata(_) => Method::FsGetMetadata,
+            Self::FsReadDirectory(_) => Method::FsReadDirectory,
+            Self::FsRemove(_) => Method::FsRemove,
+            Self::FsCopy(_) => Method::FsCopy,
+            Self::FsWatch(_) => Method::FsWatch,
+            Self::FsUnwatch(_) => Method::FsUnwatch,
+            Self::ProcessSpawn(_) => Method::ProcessSpawn,
+            Self::ProcessWriteStdin(_) => Method::ProcessWriteStdin,
+            Self::ProcessResizePty(_) => Method::ProcessResizePty,
+            Self::ProcessKill(_) => Method::ProcessKill,
         }
     }
 
@@ -652,6 +781,7 @@ impl ClientResponsePayload {
             Self::ThreadSearchOccurrences(response) => serde_json::to_value(response)?,
             Self::ThreadSettingsUpdate(response) => serde_json::to_value(response)?,
             Self::ThreadMemoryModeSet(response) => serde_json::to_value(response)?,
+            Self::MemoryReset(response) => serde_json::to_value(response)?,
             Self::ThreadShellCommand(response) => serde_json::to_value(response)?,
             Self::ThreadApproveGuardianDeniedAction(response) => serde_json::to_value(response)?,
             Self::ThreadBackgroundTerminalsClean(response) => serde_json::to_value(response)?,
@@ -675,6 +805,19 @@ impl ClientResponsePayload {
             Self::TurnStart(response) => serde_json::to_value(response)?,
             Self::TurnSteer(response) => serde_json::to_value(response)?,
             Self::TurnInterrupt(response) => serde_json::to_value(response)?,
+            Self::FsReadFile(response) => serde_json::to_value(response)?,
+            Self::FsWriteFile(response) => serde_json::to_value(response)?,
+            Self::FsCreateDirectory(response) => serde_json::to_value(response)?,
+            Self::FsGetMetadata(response) => serde_json::to_value(response)?,
+            Self::FsReadDirectory(response) => serde_json::to_value(response)?,
+            Self::FsRemove(response) => serde_json::to_value(response)?,
+            Self::FsCopy(response) => serde_json::to_value(response)?,
+            Self::FsWatch(response) => serde_json::to_value(response)?,
+            Self::FsUnwatch(response) => serde_json::to_value(response)?,
+            Self::ProcessSpawn(response) => serde_json::to_value(response)?,
+            Self::ProcessWriteStdin(response) => serde_json::to_value(response)?,
+            Self::ProcessResizePty(response) => serde_json::to_value(response)?,
+            Self::ProcessKill(response) => serde_json::to_value(response)?,
         };
         Ok(ClientResponse { id, result })
     }
@@ -919,6 +1062,12 @@ pub enum ServerNotification {
     ModelVerification(ModelVerificationNotification),
     #[serde(rename = "model/safetyBuffering/updated")]
     ModelSafetyBufferingUpdated(ModelSafetyBufferingUpdatedNotification),
+    #[serde(rename = "fs/changed")]
+    FsChanged(FsChangedNotification),
+    #[serde(rename = "process/outputDelta")]
+    ProcessOutputDelta(ProcessOutputDeltaNotification),
+    #[serde(rename = "process/exited")]
+    ProcessExited(ProcessExitedNotification),
     #[serde(rename = "thread/settings/updated")]
     ThreadSettingsUpdated(ThreadSettingsUpdatedNotification),
     #[serde(rename = "thread/tokenUsage/updated")]
@@ -970,6 +1119,9 @@ impl ServerNotification {
             Self::ModelListUpdated(_) => METHOD_MODEL_LIST_UPDATED,
             Self::ModelVerification(_) => METHOD_MODEL_VERIFICATION,
             Self::ModelSafetyBufferingUpdated(_) => METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
+            Self::FsChanged(_) => METHOD_FS_CHANGED,
+            Self::ProcessOutputDelta(_) => METHOD_PROCESS_OUTPUT_DELTA,
+            Self::ProcessExited(_) => METHOD_PROCESS_EXITED,
             Self::ThreadSettingsUpdated(_) => "thread/settings/updated",
             Self::ThreadTokenUsageUpdated(_) => METHOD_THREAD_TOKEN_USAGE_UPDATED,
             Self::ThreadGoalUpdated(_) => METHOD_THREAD_GOAL_UPDATED,
@@ -1087,6 +1239,15 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
             METHOD_MODEL_SAFETY_BUFFERING_UPDATED => serde_json::from_value(params)
                 .map(Self::ModelSafetyBufferingUpdated)
                 .map_err(|error| error.to_string()),
+            METHOD_FS_CHANGED => serde_json::from_value(params)
+                .map(Self::FsChanged)
+                .map_err(|error| error.to_string()),
+            METHOD_PROCESS_OUTPUT_DELTA => serde_json::from_value(params)
+                .map(Self::ProcessOutputDelta)
+                .map_err(|error| error.to_string()),
+            METHOD_PROCESS_EXITED => serde_json::from_value(params)
+                .map(Self::ProcessExited)
+                .map_err(|error| error.to_string()),
             "thread/settings/updated" => serde_json::from_value(params)
                 .map(Self::ThreadSettingsUpdated)
                 .map_err(|error| error.to_string()),
@@ -1203,6 +1364,15 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::ModelSafetyBufferingUpdated(params) => {
                 jsonrpc_notification(METHOD_MODEL_SAFETY_BUFFERING_UPDATED, params)
+            }
+            ServerNotification::FsChanged(params) => {
+                jsonrpc_notification(METHOD_FS_CHANGED, params)
+            }
+            ServerNotification::ProcessOutputDelta(params) => {
+                jsonrpc_notification(METHOD_PROCESS_OUTPUT_DELTA, params)
+            }
+            ServerNotification::ProcessExited(params) => {
+                jsonrpc_notification(METHOD_PROCESS_EXITED, params)
             }
             ServerNotification::ThreadSettingsUpdated(params) => {
                 jsonrpc_notification("thread/settings/updated", params)

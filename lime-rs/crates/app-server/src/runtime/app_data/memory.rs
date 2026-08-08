@@ -77,11 +77,8 @@ pub trait MemoryAppDataSource: Send + Sync {
         Err(unavailable("memoryStore/health"))
     }
 
-    async fn reset_memory_store(
-        &self,
-        _params: MemoryStoreResetParams,
-    ) -> Result<MemoryStoreResetResponse, RuntimeCoreError> {
-        Err(unavailable("memoryStore/reset"))
+    async fn reset_memory(&self) -> Result<(), RuntimeCoreError> {
+        Err(unavailable("memory/reset"))
     }
 
     async fn rebuild_memory_store_index(

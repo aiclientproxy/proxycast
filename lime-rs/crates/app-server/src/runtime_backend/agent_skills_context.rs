@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::runtime::PluginTurnSnapshot;
 use lime_core::config::SkillConfig;
 use lime_skills::{
     agent_skill_roots_for_workspace, build_agent_skill_snapshot_from_roots,
@@ -24,6 +25,24 @@ pub(super) fn agent_skills_context_for_turn(
     working_dir: Option<&Path>,
     project_root: Option<&Path>,
 ) -> AgentSkillsTurnContext {
+    agent_skills_context_for_turn_with_plugins(
+        system_prompt,
+        user_input,
+        metadata_values,
+        working_dir,
+        project_root,
+        &[],
+    )
+}
+
+pub(super) fn agent_skills_context_for_turn_with_plugins(
+    system_prompt: Option<String>,
+    user_input: &str,
+    metadata_values: &[&Value],
+    working_dir: Option<&Path>,
+    project_root: Option<&Path>,
+    plugin_snapshots: &[PluginTurnSnapshot],
+) -> AgentSkillsTurnContext {
     if should_suppress_agent_skills_for_metadata(metadata_values) {
         return AgentSkillsTurnContext {
             system_prompt,
@@ -31,7 +50,12 @@ pub(super) fn agent_skills_context_for_turn(
         };
     }
 
-    let snapshot = build_agent_skill_snapshot_for_turn(working_dir, project_root, metadata_values);
+    let snapshot = build_agent_skill_snapshot_for_turn_with_plugins(
+        working_dir,
+        project_root,
+        metadata_values,
+        plugin_snapshots,
+    );
     let system_prompt = append_expert_skill_hints(system_prompt, metadata_values, &snapshot);
 
     if system_prompt
@@ -67,15 +91,41 @@ pub(super) fn selected_agent_skill_names_for_turn(
     working_dir: Option<&Path>,
     project_root: Option<&Path>,
 ) -> Vec<String> {
+    selected_agent_skill_names_for_turn_with_plugins(
+        user_input,
+        metadata_values,
+        working_dir,
+        project_root,
+        &[],
+    )
+}
+
+pub(super) fn selected_agent_skill_names_for_turn_with_plugins(
+    user_input: &str,
+    metadata_values: &[&Value],
+    working_dir: Option<&Path>,
+    project_root: Option<&Path>,
+    plugin_snapshots: &[PluginTurnSnapshot],
+) -> Vec<String> {
     if should_suppress_agent_skills_for_metadata(metadata_values) {
         return Vec::new();
     }
 
-    let snapshot = build_agent_skill_snapshot_for_turn(working_dir, project_root, metadata_values);
-    selected_agent_skill_selections(user_input, metadata_values, &snapshot)
-        .into_iter()
-        .map(|selection| selection.locator.name)
-        .collect()
+    let snapshot = build_agent_skill_snapshot_for_turn_with_plugins(
+        working_dir,
+        project_root,
+        metadata_values,
+        plugin_snapshots,
+    );
+    selected_agent_skill_selections_with_plugins(
+        user_input,
+        metadata_values,
+        &snapshot,
+        plugin_snapshots,
+    )
+    .into_iter()
+    .map(|selection| selection.locator.name)
+    .collect()
 }
 
 pub(super) fn build_agent_skill_snapshot_for_turn(
@@ -83,8 +133,29 @@ pub(super) fn build_agent_skill_snapshot_for_turn(
     project_root: Option<&Path>,
     metadata_values: &[&Value],
 ) -> AgentSkillSnapshot {
+    build_agent_skill_snapshot_for_turn_with_plugins(
+        working_dir,
+        project_root,
+        metadata_values,
+        &[],
+    )
+}
+
+pub(super) fn build_agent_skill_snapshot_for_turn_with_plugins(
+    working_dir: Option<&Path>,
+    project_root: Option<&Path>,
+    metadata_values: &[&Value],
+    plugin_snapshots: &[PluginTurnSnapshot],
+) -> AgentSkillSnapshot {
     let mut roots = agent_skill_roots_for_workspace(working_dir, project_root);
-    roots.extend(super::plugin_runtime_context::plugin_runtime_agent_skill_roots(metadata_values));
+    roots.extend(
+        plugin_snapshots
+            .iter()
+            .map(|snapshot| lime_skills::AgentSkillRoot {
+                path: snapshot.package_root.join("skills"),
+                scope: lime_skills::AgentSkillScope::App,
+            }),
+    );
     let mut snapshot = build_agent_skill_snapshot_from_roots(roots);
     let config = metadata_values
         .iter()
@@ -108,10 +179,11 @@ pub(super) fn selected_agent_skill_body_evaluations(
     )
 }
 
-pub(super) fn selected_agent_skill_selections(
+pub(super) fn selected_agent_skill_selections_with_plugins(
     user_input: &str,
     metadata_values: &[&Value],
     snapshot: &AgentSkillSnapshot,
+    _plugin_snapshots: &[PluginTurnSnapshot],
 ) -> Vec<AgentSkillSelection> {
     if should_suppress_agent_skills_for_metadata(metadata_values) {
         return Vec::new();
@@ -119,10 +191,6 @@ pub(super) fn selected_agent_skill_selections(
 
     let mut selections = select_catalog_bound_agent_skills(metadata_values, snapshot);
     selections.extend(select_expert_bound_agent_skills(metadata_values, snapshot));
-    selections.extend(select_plugin_runtime_agent_skills(
-        metadata_values,
-        snapshot,
-    ));
     selections.extend(select_explicit_agent_skills(user_input, snapshot));
     let selections = dedupe_agent_skill_selections(selections);
     if !selections.is_empty() {
@@ -136,23 +204,31 @@ pub(super) fn selected_agent_skill_body_selections_for_prompt(
     metadata_values: &[&Value],
     snapshot: &AgentSkillSnapshot,
 ) -> Vec<AgentSkillSelection> {
+    selected_agent_skill_body_selections_for_prompt_with_plugins(
+        user_input,
+        metadata_values,
+        snapshot,
+        &[],
+    )
+}
+
+pub(super) fn selected_agent_skill_body_selections_for_prompt_with_plugins(
+    user_input: &str,
+    metadata_values: &[&Value],
+    snapshot: &AgentSkillSnapshot,
+    _plugin_snapshots: &[PluginTurnSnapshot],
+) -> Vec<AgentSkillSelection> {
     if should_suppress_agent_skills_for_metadata(metadata_values) {
         return Vec::new();
     }
 
     let mut selections = select_catalog_bound_agent_skills(metadata_values, snapshot);
-    selections.extend(select_plugin_runtime_agent_skills(
-        metadata_values,
-        snapshot,
-    ));
     selections.extend(select_explicit_agent_skills(user_input, snapshot));
     let selections = dedupe_agent_skill_selections(selections);
     if !selections.is_empty() {
         return selections;
     }
-    if has_expert_skill_refs(metadata_values)
-        || has_workspace_skill_runtime_enable(metadata_values)
-        || super::plugin_runtime_context::has_plugin_runtime_skill_policy(metadata_values)
+    if has_expert_skill_refs(metadata_values) || has_workspace_skill_runtime_enable(metadata_values)
     {
         return Vec::new();
     }
@@ -178,17 +254,6 @@ fn select_expert_bound_agent_skills(
         expert_bound_skill_candidates(metadata_values),
         snapshot,
         AgentSkillSelectionTrigger::ExpertBinding,
-    )
-}
-
-fn select_plugin_runtime_agent_skills(
-    metadata_values: &[&Value],
-    snapshot: &AgentSkillSnapshot,
-) -> Vec<AgentSkillSelection> {
-    select_agent_skills_by_name_candidates(
-        super::plugin_runtime_context::plugin_runtime_skill_candidates(metadata_values),
-        snapshot,
-        AgentSkillSelectionTrigger::CatalogBinding,
     )
 }
 
@@ -824,59 +889,6 @@ Call lime_create_image_generation_task directly.
     }
 
     #[test]
-    fn plugin_runtime_skill_stays_in_catalog_without_system_body() {
-        let workspace = TempDir::new().expect("workspace");
-        write_skill(
-            &workspace,
-            "article-writing",
-            "Article Writing",
-            "Draft article copy.",
-        );
-        let metadata = serde_json::json!({
-            "harness": {
-                "plugin_activation": {
-                    "plugin_id": "content-factory-app",
-                    "workflow_key": "content-article",
-                    "runtime_capabilities": {
-                        "pluginId": "content-factory-app",
-                        "skills": [
-                            {
-                                "id": "article-writing",
-                                "title": "Article Writing",
-                                "required": true,
-                                "promptInjectionPolicy": {
-                                    "mode": "workflow_scoped",
-                                    "source": "runtimeCapabilities.skills"
-                                }
-                            }
-                        ],
-                        "mcpBindings": [],
-                        "workflowBindings": [
-                            {
-                                "workflowKey": "content-article",
-                                "skillIds": ["article-writing"]
-                            }
-                        ]
-                    }
-                }
-            }
-        });
-
-        let prompt = append_agent_skills_context_to_system_prompt(
-            Some("base".to_string()),
-            "写一篇文章",
-            &[&metadata],
-            Some(workspace.path()),
-            Some(workspace.path()),
-        )
-        .expect("prompt");
-
-        assert!(prompt.contains("`article-writing`"));
-        assert!(!prompt.contains("<selected_skill_instructions>"));
-        assert!(!prompt.contains("# Body"));
-    }
-
-    #[test]
     fn plugin_package_skill_path_enters_snapshot_catalog_without_body() {
         let package = TempDir::new().expect("package");
         let skill_dir = package.path().join("skills").join("article-writing");
@@ -894,43 +906,22 @@ Use package workflow rules.
 "#,
         )
         .expect("skill file");
-        let metadata = serde_json::json!({
-            "harness": {
-                "plugin_activation": {
-                    "plugin_id": "content-factory-app",
-                    "package_source_uri": package.path().to_string_lossy(),
-                    "workflow_key": "content-article",
-                    "runtime_capabilities": {
-                        "pluginId": "content-factory-app",
-                        "skills": [
-                            {
-                                "id": "article-writing",
-                                "path": "./skills/article-writing/SKILL.md",
-                                "required": true,
-                                "promptInjectionPolicy": {
-                                    "mode": "workflow_scoped",
-                                    "source": "runtimeCapabilities.skills"
-                                }
-                            }
-                        ],
-                        "mcpBindings": [],
-                        "workflowBindings": [
-                            {
-                                "workflowKey": "content-article",
-                                "skillIds": ["article-writing"]
-                            }
-                        ]
-                    }
-                }
-            }
-        });
+        let plugin_snapshot = PluginTurnSnapshot {
+            id: "content-factory-app".to_string(),
+            config_name: "content-factory-app@test".to_string(),
+            display_name: "Content Factory".to_string(),
+            package_root: package.path().to_path_buf(),
+            skill_names: vec!["article-writing".to_string()],
+            mcp_server_names: Vec::new(),
+        };
 
-        let context = agent_skills_context_for_turn(
+        let context = agent_skills_context_for_turn_with_plugins(
             Some("base".to_string()),
             "写一篇文章",
-            &[&metadata],
+            &[],
             None,
             None,
+            &[plugin_snapshot],
         );
         let prompt = context.system_prompt.expect("prompt");
         let snapshot = context.snapshot.expect("snapshot");

@@ -1431,7 +1431,7 @@
   "settings.memory.store.message.consolidateFailed": "整理記憶筆記失敗",
   "settings.memory.store.message.indexRebuilt": "記憶索引已根據 {{files}} 個檔案重建",
   "settings.memory.store.message.indexRebuildFailed": "重建記憶索引失敗",
-  "settings.memory.store.message.resetDone": "記憶檔案已重置，移除 {{files}} 個檔案和 {{directories}} 個資料夾。",
+  "settings.memory.store.message.resetDone": "記憶檔案已重置。",
   "settings.memory.store.message.resetFailed": "重置記憶檔案失敗",
   "settings.memory.store.noteTitle": "新增記憶修正",
   "settings.memory.store.noteDescription": "把確認過的偏好、修正或長期約束寫成一則簡短筆記；它會進入檔案化記憶的修正筆記，不會立即改寫摘要。",

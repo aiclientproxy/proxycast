@@ -4,12 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { projectCodingWorkbenchViewFromEvents } from "@limecloud/agent-runtime-projection";
 import { buildWorkspaceConversationCodingViews } from "./workspaceConversationCodingViews";
 
-vi.mock("@/lib/api/executionProcess", () => ({
-  drainExecutionProcessOutput: vi.fn(async () => ({ deltas: [] })),
-  interruptExecutionProcess: vi.fn(async () => ({ snapshot: {} })),
-  readExecutionProcessStatus: vi.fn(async () => ({ snapshot: {} })),
-  terminateExecutionProcess: vi.fn(async () => ({ snapshot: {} })),
-  writeExecutionProcessStdin: vi.fn(async () => ({})),
+vi.mock("@/lib/api/backgroundTerminals", () => ({
+  terminateBackgroundTerminalForItem: vi.fn(async () => ({
+    terminated: true,
+  })),
 }));
 
 vi.mock("@limecloud/agent-runtime-projection", async (importOriginal) => {
@@ -109,7 +107,7 @@ describe("buildWorkspaceConversationCodingViews", () => {
     expect(views.changeView).toBeNull();
   });
 
-  it("进程控制成功后应刷新 session read model", async () => {
+  it("终止后台终端成功后应刷新 session read model", async () => {
     vi.mocked(projectCodingWorkbenchViewFromEvents).mockClear();
     const onRefreshSessionReadModel = vi.fn(async () => true);
     const views = buildWorkspaceConversationCodingViews({
@@ -158,97 +156,21 @@ describe("buildWorkspaceConversationCodingViews", () => {
       root.render(panel);
     });
 
-    const refresh = container.querySelector(
-      'button[aria-label="刷新进程 process-1 状态"]',
+    const terminate = container.querySelector(
+      'button[aria-label="终止进程 process-1"]',
     ) as HTMLButtonElement | null;
-    expect(refresh).not.toBeNull();
+    expect(terminate).not.toBeNull();
 
     await act(async () => {
-      refresh?.click();
+      terminate?.click();
     });
 
-    const { readExecutionProcessStatus } =
-      await import("@/lib/api/executionProcess");
+    const { terminateBackgroundTerminalForItem } =
+      await import("@/lib/api/backgroundTerminals");
     expect(projectCodingWorkbenchViewFromEvents).toHaveBeenCalled();
-    expect(readExecutionProcessStatus).toHaveBeenCalledWith("process-1");
-    expect(onRefreshSessionReadModel).toHaveBeenCalledTimes(1);
-  });
-
-  it("stdin 写入成功后应刷新 session read model", async () => {
-    const onRefreshSessionReadModel = vi.fn(async () => true);
-    const views = buildWorkspaceConversationCodingViews({
-      t: t as never,
-      locale: "zh-CN",
-      turns: [
-        {
-          id: "turn-1",
-          thread_id: "thread-1",
-          prompt_text: "打开 shell",
-          status: "running",
-          started_at: "2026-06-24T10:00:00.000Z",
-          created_at: "2026-06-24T10:00:00.000Z",
-          updated_at: "2026-06-24T10:00:00.000Z",
-        },
-      ],
-      currentTurnId: "turn-1",
-      threadRead: {
-        thread_id: "thread-1",
-        active_turn_id: "turn-1",
-        commands: [
-          {
-            command_id: "command-1",
-            status: "running",
-            command: "python manage.py shell",
-            process_id: "process-1",
-            execution_process_status: "running",
-            execution_process_control_status: "registered",
-            stdin_writable: true,
-          },
-        ],
-      },
-      pendingActions: [],
-      submittedActionsInFlight: [],
-      onRefreshSessionReadModel,
-    });
-    const panel = views.outputView?.renderPanel();
-    if (!panel) throw new Error("output view should render");
-
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    mountedRoots.push({ container, root });
-
-    await act(async () => {
-      root.render(panel);
-    });
-
-    const input = container.querySelector(
-      'input[aria-label="向进程 process-1 写入 stdin"]',
-    ) as HTMLInputElement | null;
-    const submit = container.querySelector(
-      'button[aria-label="发送 stdin 到进程 process-1"]',
-    ) as HTMLButtonElement | null;
-    expect(input).not.toBeNull();
-    expect(submit).not.toBeNull();
-
-    await act(async () => {
-      const valueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        "value",
-      )?.set;
-      valueSetter?.call(input, "exit()");
-      input?.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-
-    await act(async () => {
-      submit?.click();
-    });
-
-    const { writeExecutionProcessStdin } =
-      await import("@/lib/api/executionProcess");
-    expect(writeExecutionProcessStdin).toHaveBeenCalledWith({
-      processId: "process-1",
-      data: "exit()\n",
+    expect(terminateBackgroundTerminalForItem).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      itemId: "command-1",
     });
     expect(onRefreshSessionReadModel).toHaveBeenCalledTimes(1);
   });

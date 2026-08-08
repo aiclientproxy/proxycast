@@ -1,10 +1,4 @@
-import { parseCloudBootstrapPayload } from "../../features/plugin/install/cloudBootstrap";
-import type { CloudBootstrapPayload } from "../../features/plugin/types";
-import {
-  parseBootstrap,
-  parseClientPluginInstallStateReport,
-  parsePluginMarketplaceListResponse,
-} from "./oemCloudControlPlaneBootstrapParsers";
+import { parseBootstrap } from "./oemCloudControlPlaneBootstrapParsers";
 import {
   parseAccessToken,
   parseActiveAccessTokenResponse,
@@ -42,11 +36,6 @@ import {
   parseReferralClaimResponse,
   parseReferralDashboard,
 } from "./oemCloudControlPlaneReferralParsers";
-import type {
-  ClientPluginInstallStateReport,
-  PluginMarketplaceListResponse,
-  ReportClientPluginInstallStatePayload,
-} from "./pluginMarketplaceTypes";
 import type {
   ClaimClientReferralPayload,
   ClientPasswordLoginPayload,
@@ -190,115 +179,6 @@ export async function getClientBootstrap(
       `/v1/public/tenants/${encodeURIComponent(tenantId)}/client/bootstrap`,
       {
         auth: true,
-      },
-    ),
-  );
-}
-
-export async function getClientPlugins(
-  tenantId: string,
-): Promise<CloudBootstrapPayload> {
-  return parseCloudBootstrapPayload(
-    await requestControlPlane<unknown>(
-      `/v1/public/tenants/${encodeURIComponent(tenantId)}/client/plugins`,
-      {
-        auth: true,
-      },
-    ),
-  );
-}
-
-export async function getClientPluginMarketplace(
-  tenantId: string,
-  params: { query?: string; category?: string; sort?: string } = {},
-): Promise<PluginMarketplaceListResponse> {
-  const search = new URLSearchParams();
-  if (params.query) {
-    search.set("query", params.query);
-  }
-  if (params.category) {
-    search.set("category", params.category);
-  }
-  if (params.sort) {
-    search.set("sort", params.sort);
-  }
-  const query = search.toString();
-  return parsePluginMarketplaceListResponse(
-    await requestControlPlane<unknown>(
-      `/v1/public/tenants/${encodeURIComponent(tenantId)}/client/plugins/marketplace${
-        query ? `?${query}` : ""
-      }`,
-      {
-        auth: true,
-      },
-    ),
-  );
-}
-
-export async function submitClientPluginRegistrationCode(
-  tenantId: string,
-  appId: string,
-  payload: { code: string },
-): Promise<CloudBootstrapPayload> {
-  return parseCloudBootstrapPayload(
-    await requestControlPlane<unknown>(
-      `/v1/public/tenants/${encodeURIComponent(tenantId)}/client/plugins/${encodeURIComponent(appId)}/registration`,
-      {
-        method: "POST",
-        auth: true,
-        payload,
-      },
-    ),
-  );
-}
-
-export async function submitClientPluginMarketplaceRegistrationCode(
-  tenantId: string,
-  pluginName: string,
-  payload: { code: string },
-  marketplaceName?: string,
-): Promise<PluginMarketplaceListResponse> {
-  const search = new URLSearchParams();
-  const normalizedMarketplaceName = marketplaceName?.trim();
-  if (normalizedMarketplaceName) {
-    search.set("marketplaceName", normalizedMarketplaceName);
-  }
-  const query = search.toString();
-  return parsePluginMarketplaceListResponse(
-    await requestControlPlane<unknown>(
-      `/v1/public/tenants/${encodeURIComponent(tenantId)}/client/plugins/${encodeURIComponent(pluginName)}/registration${
-        query ? `?${query}` : ""
-      }`,
-      {
-        method: "POST",
-        auth: true,
-        payload,
-      },
-    ),
-  );
-}
-
-export async function reportClientPluginInstallState(
-  tenantId: string,
-  pluginName: string,
-  payload: ReportClientPluginInstallStatePayload,
-  marketplaceName?: string,
-): Promise<ClientPluginInstallStateReport> {
-  const search = new URLSearchParams();
-  const normalizedMarketplaceName = marketplaceName?.trim();
-  if (normalizedMarketplaceName) {
-    search.set("marketplaceName", normalizedMarketplaceName);
-  }
-  const query = search.toString();
-  return parseClientPluginInstallStateReport(
-    await requestControlPlane<unknown>(
-      `/v1/public/tenants/${encodeURIComponent(tenantId)}/client/plugins/${encodeURIComponent(pluginName)}/install-state${
-        query ? `?${query}` : ""
-      }`,
-      {
-        method: "POST",
-        auth: true,
-        payload,
       },
     ),
   );

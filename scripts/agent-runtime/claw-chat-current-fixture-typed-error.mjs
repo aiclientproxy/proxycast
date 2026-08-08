@@ -190,7 +190,7 @@ export function buildTypedErrorScenarioAssertions({
       typeof typedErrorTurnStart?.turnId === "string",
     typedErrorRetryBackendEventOrder:
       retryTypes.length === (isTypedErrorRetryFailureScenario ? 2 : 1) &&
-      retryTypes.every((eventType) => eventType === "plugin_worker.retry") &&
+      retryTypes.every((eventType) => eventType === "runtime.error") &&
       retryBackend.expectedWillRetry === true,
     typedErrorRetryGuiRetryingStatusVisible:
       retryGui.hasPrompt === true && retryGui.hasExpectedPhase === true,

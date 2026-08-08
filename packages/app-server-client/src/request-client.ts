@@ -283,40 +283,6 @@ export interface AppServerClient {
   listWorkspaceRegisteredSkills(
     params: protocol.WorkspaceRegisteredSkillsListParams,
   ): protocol.JsonRpcRequest;
-  inspectPluginLocalPackage(
-    params: protocol.PluginLocalPackageInspectParams,
-  ): protocol.JsonRpcRequest;
-  exportPluginLocalPackage(
-    params: protocol.PluginLocalPackageExportParams,
-  ): protocol.JsonRpcRequest;
-  fetchPluginCloudPackage(
-    params: protocol.PluginFetchCloudPackageParams,
-  ): protocol.JsonRpcRequest;
-  savePluginInstalled(
-    params: protocol.PluginInstalledSaveParams,
-  ): protocol.JsonRpcRequest;
-  listPluginInstalled(): protocol.JsonRpcRequest;
-  setPluginInstalledDisabled(
-    params: protocol.PluginInstalledDisabledSetParams,
-  ): protocol.JsonRpcRequest;
-  previewPluginUninstall(
-    params: protocol.PluginUninstallRehearsalParams,
-  ): protocol.JsonRpcRequest;
-  uninstallPlugin(
-    params: protocol.PluginUninstallParams,
-  ): protocol.JsonRpcRequest;
-  preparePluginShell(
-    params: protocol.PluginShellPrepareParams,
-  ): protocol.JsonRpcRequest;
-  startPluginUiRuntime(
-    params: protocol.PluginUiRuntimeStartParams,
-  ): protocol.JsonRpcRequest;
-  getPluginUiRuntimeStatus(
-    params: protocol.PluginUiRuntimeStatusParams,
-  ): protocol.JsonRpcRequest;
-  stopPluginUiRuntime(
-    params: protocol.PluginUiRuntimeStopParams,
-  ): protocol.JsonRpcRequest;
   listKnowledgePacks(
     params: protocol.KnowledgeListPacksParams,
   ): protocol.JsonRpcRequest;
@@ -446,9 +412,7 @@ export interface AppServerClient {
   healthMemoryStore(
     params: protocol.MemoryStoreRootParams,
   ): protocol.JsonRpcRequest;
-  resetMemoryStore(
-    params: protocol.MemoryStoreResetParams,
-  ): protocol.JsonRpcRequest;
+  resetMemory(): protocol.JsonRpcRequest;
   rebuildMemoryStoreIndex(
     params: protocol.MemoryStoreRootParams,
   ): protocol.JsonRpcRequest;
@@ -640,24 +604,19 @@ export interface AppServerClient {
   ): protocol.JsonRpcRequest;
   readArtifacts(params: protocol.ArtifactReadParams): protocol.JsonRpcRequest;
   writeArtifact(params: protocol.ArtifactWriteParams): protocol.JsonRpcRequest;
-  listDirectory(
-    params: protocol.FileSystemListDirectoryParams,
-  ): protocol.JsonRpcRequest;
-  readFilePreview(
-    params: protocol.FileSystemReadFilePreviewParams,
-  ): protocol.JsonRpcRequest;
-  createFile(
-    params: protocol.FileSystemCreateFileParams,
-  ): protocol.JsonRpcRequest;
+  readFile(params: protocol.FsReadFileParams): protocol.JsonRpcRequest;
+  writeFile(params: protocol.FsWriteFileParams): protocol.JsonRpcRequest;
   createDirectory(
-    params: protocol.FileSystemCreateDirectoryParams,
+    params: protocol.FsCreateDirectoryParams,
   ): protocol.JsonRpcRequest;
-  renameFile(
-    params: protocol.FileSystemRenameFileParams,
+  getMetadata(params: protocol.FsGetMetadataParams): protocol.JsonRpcRequest;
+  readDirectory(
+    params: protocol.FsReadDirectoryParams,
   ): protocol.JsonRpcRequest;
-  deleteFile(
-    params: protocol.FileSystemDeleteFileParams,
-  ): protocol.JsonRpcRequest;
+  remove(params: protocol.FsRemoveParams): protocol.JsonRpcRequest;
+  copy(params: protocol.FsCopyParams): protocol.JsonRpcRequest;
+  watch(params: protocol.FsWatchParams): protocol.JsonRpcRequest;
+  unwatch(params: protocol.FsUnwatchParams): protocol.JsonRpcRequest;
   readProjectGitStatus(
     params: protocol.ProjectGitStatusParams,
   ): protocol.JsonRpcRequest;
@@ -690,24 +649,6 @@ export interface AppServerClient {
   ): protocol.JsonRpcRequest;
   drainProjectShellSessionEvents(
     params?: protocol.ProjectShellSessionDrainEventsParams,
-  ): protocol.JsonRpcRequest;
-  startExecutionProcess(
-    params: protocol.ExecutionProcessStartParams,
-  ): protocol.JsonRpcRequest;
-  writeExecutionProcessStdin(
-    params: protocol.ExecutionProcessWriteStdinParams,
-  ): protocol.JsonRpcRequest;
-  interruptExecutionProcess(
-    params: protocol.ExecutionProcessIdParams,
-  ): protocol.JsonRpcRequest;
-  terminateExecutionProcess(
-    params: protocol.ExecutionProcessIdParams,
-  ): protocol.JsonRpcRequest;
-  readExecutionProcessStatus(
-    params: protocol.ExecutionProcessIdParams,
-  ): protocol.JsonRpcRequest;
-  drainExecutionProcessOutput(
-    params?: protocol.ExecutionProcessDrainOutputParams,
   ): protocol.JsonRpcRequest;
   exportEvidence(
     params: protocol.EvidenceExportParams,
@@ -820,6 +761,14 @@ export interface AppServerClient {
   readConversationImportJob(
     params: protocol.ConversationImportJobReadParams,
   ): protocol.JsonRpcRequest;
+  spawnProcess(params: protocol.ProcessSpawnParams): protocol.JsonRpcRequest;
+  writeProcessStdin(
+    params: protocol.ProcessWriteStdinParams,
+  ): protocol.JsonRpcRequest;
+  resizeProcessPty(
+    params: protocol.ProcessResizePtyParams,
+  ): protocol.JsonRpcRequest;
+  killProcess(params: protocol.ProcessKillParams): protocol.JsonRpcRequest;
   startTurn(params: protocol.TurnStartParams): protocol.JsonRpcRequest;
   steerTurn(params: protocol.TurnSteerParams): protocol.JsonRpcRequest;
   cancelTurn(params: protocol.TurnInterruptParams): protocol.JsonRpcRequest;

@@ -11,7 +11,8 @@ import {
   openPathWithDefaultApp,
   revealPathInFinder,
 } from "@/lib/api/fileSystem";
-import { AppServerClient, createAppServerClient } from "@/lib/api/appServer";
+import { createAppServerClient } from "@/lib/api/appServer";
+import { readFilePreview } from "@/lib/api/fileBrowser";
 
 // ============================================================================
 // 类型定义
@@ -56,11 +57,7 @@ export interface SessionFile {
 async function readDocumentTextFromAppServer(
   filePath: string,
 ): Promise<string> {
-  const response = await new AppServerClient().readFilePreview({
-    path: filePath,
-    maxSize: 2 * 1024 * 1024,
-  });
-  const preview = response.result;
+  const preview = await readFilePreview(filePath, 2 * 1024 * 1024);
   if (preview.error) {
     throw new Error(preview.error);
   }
@@ -68,7 +65,7 @@ async function readDocumentTextFromAppServer(
     throw new Error("当前文稿导入只支持文本文件");
   }
   if (typeof preview.content !== "string") {
-    throw new Error("fileSystem/readFilePreview did not return document text");
+    throw new Error("fs/readFile did not return document text");
   }
   return preview.content;
 }

@@ -27,7 +27,7 @@ export function PluginCatalogDetailPanel({
   return (
     <aside
       className="min-w-0 self-start rounded-lg border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] p-5 xl:sticky xl:top-0"
-      data-testid="plugin-v2-detail"
+      data-testid="plugin-catalog-detail"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

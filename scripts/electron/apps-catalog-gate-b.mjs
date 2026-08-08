@@ -219,7 +219,7 @@ async function readTraceSnapshot(page) {
 
 async function waitForReadinessRow(page, options, expected) {
   const locator = page.locator(
-    `[data-testid="plugin-v2-app-readiness-${APP_ID}"]`,
+    `[data-testid="plugin-catalog-app-readiness-${APP_ID}"]`,
   );
   const deadline = Date.now() + options.timeoutMs;
   let latest = null;
@@ -405,12 +405,12 @@ export async function run(argv = process.argv.slice(2)) {
     );
 
     await page.locator('[data-testid="app-sidebar-nav-plugins"]').click();
-    await page.locator('[data-testid="plugin-v2-loading"]').waitFor({
+    await page.locator('[data-testid="plugin-catalog-loading"]').waitFor({
       state: "hidden",
       timeout: options.timeoutMs,
     });
     await page
-      .locator(`[data-testid="plugin-v2-details-${PLUGIN_ID}"]`)
+      .locator(`[data-testid="plugin-catalog-details-${PLUGIN_ID}"]`)
       .click();
     summary.initialReadiness = await waitForReadinessRow(page, options, {
       callable: false,
@@ -450,9 +450,9 @@ export async function run(argv = process.argv.slice(2)) {
     const baselineTrace = await readTraceSnapshot(page);
 
     await page
-      .locator(`[data-testid="plugin-v2-actions-${PLUGIN_ID}"]`)
+      .locator(`[data-testid="plugin-catalog-actions-${PLUGIN_ID}"]`)
       .click();
-    await page.locator(`[data-testid="plugin-v2-toggle-${PLUGIN_ID}"]`).click();
+    await page.locator(`[data-testid="plugin-catalog-toggle-${PLUGIN_ID}"]`).click();
     const refreshed = await waitForNotificationRefresh(
       page,
       options,

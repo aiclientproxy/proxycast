@@ -77,11 +77,8 @@ impl MemoryAppDataSource for LocalAppDataSource {
         self.memory_backend.health(params).await
     }
 
-    async fn reset_memory_store(
-        &self,
-        params: MemoryStoreResetParams,
-    ) -> Result<MemoryStoreResetResponse, RuntimeCoreError> {
-        self.memory_backend.reset(params).await
+    async fn reset_memory(&self) -> Result<(), RuntimeCoreError> {
+        self.memory_backend.reset().await
     }
 
     async fn rebuild_memory_store_index(

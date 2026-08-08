@@ -19,11 +19,10 @@ import {
   APP_SERVER_METHOD_ARTIFACT_READ,
   APP_SERVER_METHOD_CAPABILITY_LIST,
   APP_SERVER_METHOD_EVIDENCE_EXPORT,
-  APP_SERVER_METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT,
-  APP_SERVER_METHOD_EXECUTION_PROCESS_INTERRUPT,
-  APP_SERVER_METHOD_EXECUTION_PROCESS_START,
-  APP_SERVER_METHOD_FILE_SYSTEM_LIST_DIRECTORY,
-  APP_SERVER_METHOD_FILE_SYSTEM_READ_FILE_PREVIEW,
+  APP_SERVER_METHOD_THREAD_BACKGROUND_TERMINALS_LIST,
+  APP_SERVER_METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE,
+  APP_SERVER_METHOD_FS_READ_DIRECTORY,
+  APP_SERVER_METHOD_FS_READ_FILE,
   APP_SERVER_METHOD_PROJECT_GIT_DIFF,
   APP_SERVER_METHOD_GATEWAY_CHANNEL_START,
   APP_SERVER_METHOD_GATEWAY_TUNNEL_CLOUDFLARED_DETECT,
@@ -901,27 +900,20 @@ describe("App Server API", () => {
     await Promise.resolve();
   });
 
-  it("listDirectory/readFilePreview 应通过 App Server JSON-RPC 读取文件浏览数据", async () => {
+  it("readDirectory/readFile 应通过 exact fs JSON-RPC 读取文件数据", async () => {
     vi.mocked(safeInvoke)
       .mockResolvedValueOnce({
         lines: [
           line({
             id: 6,
             result: {
-              path: "/workspace",
-              parentPath: "/",
               entries: [
                 {
-                  name: "README.md",
-                  path: "/workspace/README.md",
-                  isDir: false,
-                  size: 12,
-                  modifiedAt: 1,
-                  isHidden: false,
-                  isSymlink: false,
+                  fileName: "README.md",
+                  isDirectory: false,
+                  isFile: true,
                 },
               ],
-              error: null,
             },
           }),
         ],
@@ -931,25 +923,18 @@ describe("App Server API", () => {
           line({
             id: 7,
             result: {
-              path: "/workspace/README.md",
-              content: "# Lime",
-              isBinary: false,
-              size: 6,
-              error: null,
+              dataBase64: "IyBMaW1l",
             },
           }),
         ],
       });
 
     const client = new AppServerClient({ initialRequestId: 6 });
-    const listing = await client.listDirectory({ path: "/workspace" });
-    const preview = await client.readFilePreview({
-      path: "/workspace/README.md",
-      maxSize: 1024,
-    });
+    const listing = await client.readDirectory({ path: "/workspace" });
+    const file = await client.readFile({ path: "/workspace/README.md" });
 
-    expect(listing.result.entries[0].name).toBe("README.md");
-    expect(preview.result.content).toBe("# Lime");
+    expect(listing.result.entries[0].fileName).toBe("README.md");
+    expect(file.result.dataBase64).toBe("IyBMaW1l");
     expect(safeInvoke).toHaveBeenNthCalledWith(
       1,
       "app_server_handle_json_lines",
@@ -958,7 +943,7 @@ describe("App Server API", () => {
           lines: [
             line({
               id: 6,
-              method: APP_SERVER_METHOD_FILE_SYSTEM_LIST_DIRECTORY,
+              method: APP_SERVER_METHOD_FS_READ_DIRECTORY,
               params: {
                 path: "/workspace",
               },
@@ -975,10 +960,9 @@ describe("App Server API", () => {
           lines: [
             line({
               id: 7,
-              method: APP_SERVER_METHOD_FILE_SYSTEM_READ_FILE_PREVIEW,
+              method: APP_SERVER_METHOD_FS_READ_FILE,
               params: {
                 path: "/workspace/README.md",
-                maxSize: 1024,
               },
             }),
           ],
@@ -1032,26 +1016,22 @@ describe("App Server API", () => {
     });
   });
 
-  it("execution process 控制面应通过 App Server JSON-RPC current methods", async () => {
+  it("后台终端控制面应通过 Thread-scoped App Server JSON-RPC current methods", async () => {
     vi.mocked(safeInvoke)
       .mockResolvedValueOnce({
         lines: [
           line({
             id: 10,
             result: {
-              snapshot: {
-                processId: "process-1",
-                toolId: "tool-1",
-                toolName: "Bash",
-                status: "running",
-                exitCode: null,
-                elapsedMs: 0,
-                outputBytes: 0,
-                outputOmittedBytes: 0,
-                outputTruncated: false,
-                retainedOutput: "",
-                failure: null,
-              },
+              data: [
+                {
+                  itemId: "item-1",
+                  processId: "7",
+                  command: "npm test",
+                  cwd: "/workspace",
+                },
+              ],
+              nextCursor: null,
             },
           }),
         ],
@@ -1060,42 +1040,7 @@ describe("App Server API", () => {
         lines: [
           line({
             id: 11,
-            result: {
-              snapshot: {
-                processId: "process-1",
-                toolId: "tool-1",
-                toolName: "Bash",
-                status: "interrupted",
-                exitCode: null,
-                elapsedMs: 12,
-                outputBytes: 0,
-                outputOmittedBytes: 0,
-                outputTruncated: false,
-                retainedOutput: "",
-                failure: null,
-              },
-            },
-          }),
-        ],
-      })
-      .mockResolvedValueOnce({
-        lines: [
-          line({
-            id: 12,
-            result: {
-              deltas: [
-                {
-                  processId: "process-1",
-                  toolId: "tool-1",
-                  sequence: 1,
-                  kind: "stdout",
-                  delta: "ok",
-                  bytes: 2,
-                  omittedBytes: 0,
-                  truncated: false,
-                },
-              ],
-            },
+            result: { terminated: true },
           }),
         ],
       });
@@ -1103,38 +1048,26 @@ describe("App Server API", () => {
     const client = new AppServerClient({ initialRequestId: 10 });
 
     await expect(
-      client.startExecutionProcess({
-        processId: "process-1",
-        toolId: "tool-1",
-        toolName: "Bash",
-        command: ["sh", "-c", "npm test"],
-        workingDirectory: "/workspace",
-        approvalPolicy: "never",
-        sandboxPolicy: "danger-full-access",
+      client.listThreadBackgroundTerminals({
+        threadId: "thread-1",
+        cursor: null,
+        limit: 100,
       }),
     ).resolves.toEqual(
       expect.objectContaining({
         result: expect.objectContaining({
-          snapshot: expect.objectContaining({ processId: "process-1" }),
+          data: [expect.objectContaining({ processId: "7" })],
         }),
       }),
     );
     await expect(
-      client.interruptExecutionProcess({ processId: "process-1" }),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        result: expect.objectContaining({
-          snapshot: expect.objectContaining({ status: "interrupted" }),
-        }),
+      client.terminateThreadBackgroundTerminal({
+        threadId: "thread-1",
+        processId: "7",
       }),
-    );
-    await expect(
-      client.drainExecutionProcessOutput({ processId: "process-1", limit: 16 }),
     ).resolves.toEqual(
       expect.objectContaining({
-        result: expect.objectContaining({
-          deltas: [expect.objectContaining({ delta: "ok" })],
-        }),
+        result: { terminated: true },
       }),
     );
 
@@ -1146,15 +1079,11 @@ describe("App Server API", () => {
           lines: [
             line({
               id: 10,
-              method: APP_SERVER_METHOD_EXECUTION_PROCESS_START,
+              method: APP_SERVER_METHOD_THREAD_BACKGROUND_TERMINALS_LIST,
               params: {
-                processId: "process-1",
-                toolId: "tool-1",
-                toolName: "Bash",
-                command: ["sh", "-c", "npm test"],
-                workingDirectory: "/workspace",
-                approvalPolicy: "never",
-                sandboxPolicy: "danger-full-access",
+                threadId: "thread-1",
+                cursor: null,
+                limit: 100,
               },
             }),
           ],
@@ -1169,23 +1098,8 @@ describe("App Server API", () => {
           lines: [
             line({
               id: 11,
-              method: APP_SERVER_METHOD_EXECUTION_PROCESS_INTERRUPT,
-              params: { processId: "process-1" },
-            }),
-          ],
-        },
-      },
-    );
-    expect(safeInvoke).toHaveBeenNthCalledWith(
-      3,
-      "app_server_handle_json_lines",
-      {
-        request: {
-          lines: [
-            line({
-              id: 12,
-              method: APP_SERVER_METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT,
-              params: { processId: "process-1", limit: 16 },
+              method: APP_SERVER_METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE,
+              params: { threadId: "thread-1", processId: "7" },
             }),
           ],
         },

@@ -11,7 +11,6 @@ import type { BrowserAssistSessionState } from "../types";
 import type { WorkspaceFilesSurfaceTarget } from "./WorkspaceFilesSurface";
 import type { WorkspaceArticleWorkspace } from "./workspaceArticleWorkspaceModel";
 import type { BrowserSessionRef } from "./workspaceBrowserSessionRef";
-import type { WorkspacePluginRuntimeContext } from "./workspacePluginRuntimeContext";
 import { useWorkspaceRightSurfaceActionRuntime } from "./useWorkspaceRightSurfaceActionRuntime";
 import type { WorkspaceRightSurfacePendingActions } from "./useWorkspaceRightSurfaceArtifactOpenRuntime";
 import { useWorkspaceRightSurfaceDerivedRuntime } from "./useWorkspaceRightSurfaceDerivedRuntime";
@@ -44,7 +43,6 @@ interface UseWorkspaceRightSurfaceCoordinatorRuntimeParams {
   harnessPendingCount: number;
   hasExpertInfoPanel: boolean;
   localState: WorkspaceRightSurfaceLocalStateRuntime;
-  pluginRuntimeContext: WorkspacePluginRuntimeContext;
   preferredServiceSkillResultFileTarget: WorkspaceFilesSurfaceTarget | null;
   runtimeWorkspaceId: string | null;
   sceneIsPreparingSend: boolean;
@@ -79,7 +77,6 @@ export function useWorkspaceRightSurfaceCoordinatorRuntime({
   harnessPendingCount,
   hasExpertInfoPanel,
   localState,
-  pluginRuntimeContext,
   preferredServiceSkillResultFileTarget,
   runtimeWorkspaceId,
   sceneIsPreparingSend,
@@ -134,7 +131,6 @@ export function useWorkspaceRightSurfaceCoordinatorRuntime({
     bindRightSurfacePendingActions,
     canvasWorkbenchRootPath,
     manualRightSurface: localState.manualRightSurface,
-    pluginRuntimeContext,
     runtimeWorkspaceId,
     sceneIsPreparingSend,
     sceneIsSending,

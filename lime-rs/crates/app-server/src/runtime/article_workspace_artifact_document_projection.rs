@@ -59,22 +59,18 @@ fn workspace_patches_from_event(event: &AgentEvent) -> Vec<Value> {
         payload.get("article_workspace"),
         payload.get("workspacePatch"),
         payload.get("workspace_patch"),
-        payload.get("contentFactoryWorkspacePatch"),
         metadata.and_then(|value| value.get("articleWorkspace")),
         metadata.and_then(|value| value.get("article_workspace")),
         metadata.and_then(|value| value.get("workspacePatch")),
         metadata.and_then(|value| value.get("workspace_patch")),
-        metadata.and_then(|value| value.get("contentFactoryWorkspacePatch")),
         artifact.and_then(|value| value.get("articleWorkspace")),
         artifact.and_then(|value| value.get("article_workspace")),
         artifact.and_then(|value| value.get("workspacePatch")),
         artifact.and_then(|value| value.get("workspace_patch")),
-        artifact.and_then(|value| value.get("contentFactoryWorkspacePatch")),
         artifact_metadata.and_then(|value| value.get("articleWorkspace")),
         artifact_metadata.and_then(|value| value.get("article_workspace")),
         artifact_metadata.and_then(|value| value.get("workspacePatch")),
         artifact_metadata.and_then(|value| value.get("workspace_patch")),
-        artifact_metadata.and_then(|value| value.get("contentFactoryWorkspacePatch")),
     ]
     .into_iter()
     .flatten()

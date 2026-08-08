@@ -30,8 +30,7 @@ import {
   setPluginCatalogEnabled,
   uninstallPluginCatalog,
 } from "@/lib/api/pluginCatalog";
-import type { Page, PageParams, PluginsPageParams } from "@/types/page";
-import type { PluginRightSurfaceLaunchTarget } from "./pluginRightSurfaceLaunch";
+import type { PluginsPageParams } from "@/types/page";
 import { PluginCatalogDetailPanel } from "./PluginCatalogDetailPanel";
 import {
   filterPluginCatalog,
@@ -59,10 +58,7 @@ function pathLeaf(path: string): string {
 export function PluginCatalogPage({
   pageParams,
 }: {
-  onNavigate?: (page: Page, params?: PageParams) => void;
   pageParams?: PluginsPageParams;
-  rightSurfaceTarget?: PluginRightSurfaceLaunchTarget | null;
-  rightSurfaceTargets?: PluginRightSurfaceLaunchTarget[] | null;
 }) {
   const { t } = useTranslation("agent");
   const [plugins, setPlugins] = useState<AppServerPluginCatalogSummary[]>([]);
@@ -284,7 +280,7 @@ export function PluginCatalogPage({
             className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full bg-[color:var(--lime-text-strong)] px-5 text-sm font-semibold text-[color:var(--lime-surface)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={() => void handleInstallFromPath()}
             disabled={Boolean(busyId)}
-            data-testid="plugin-v2-install-local"
+            data-testid="plugin-catalog-install-local"
           >
             <FolderOpen size={16} />
             {t("plugin.catalog.v2.installLocal")}
@@ -303,7 +299,7 @@ export function PluginCatalogPage({
                     : "text-[color:var(--lime-text-muted)] hover:bg-[color:var(--lime-surface-hover)] hover:text-[color:var(--lime-text-strong)]"
                 }`}
                 onClick={() => setView(nextView)}
-                data-testid={`plugin-v2-view-${nextView}`}
+                data-testid={`plugin-catalog-view-${nextView}`}
               >
                 {t(`plugin.catalog.v2.view.${nextView}`)}
                 <span className="text-xs opacity-70">
@@ -326,7 +322,7 @@ export function PluginCatalogPage({
                 className="h-9 w-full rounded-full border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] pl-10 pr-4 text-sm text-[color:var(--lime-text-strong)] outline-none placeholder:text-[color:var(--lime-text-muted)] focus:border-[color:var(--lime-surface-border-strong)]"
                 placeholder={t("plugin.catalog.v2.searchPlaceholder")}
                 aria-label={t("plugin.catalog.v2.searchLabel")}
-                data-testid="plugin-v2-search"
+                data-testid="plugin-catalog-search"
               />
             </label>
             <label className="relative flex min-w-[150px] items-center">
@@ -339,7 +335,7 @@ export function PluginCatalogPage({
                 onChange={(event) => setSource(event.currentTarget.value)}
                 className="h-9 w-full appearance-none rounded-full border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] pl-9 pr-8 text-sm font-medium text-[color:var(--lime-text-strong)] outline-none focus:border-[color:var(--lime-surface-border-strong)]"
                 aria-label={t("plugin.catalog.v2.sourceLabel")}
-                data-testid="plugin-v2-source-filter"
+                data-testid="plugin-catalog-source-filter"
               >
                 <option value="all">{t("plugin.catalog.v2.source.all")}</option>
                 {sources.map((item) => (
@@ -360,7 +356,7 @@ export function PluginCatalogPage({
               disabled={loading}
               title={t("plugin.catalog.v2.refresh")}
               aria-label={t("plugin.catalog.v2.refresh")}
-              data-testid="plugin-v2-refresh"
+              data-testid="plugin-catalog-refresh"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
@@ -371,7 +367,7 @@ export function PluginCatalogPage({
           <div
             className="flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
             role="alert"
-            data-testid="plugin-v2-error"
+            data-testid="plugin-catalog-error"
           >
             <div className="flex min-w-0 items-start gap-2">
               <CircleAlert size={17} className="mt-0.5 shrink-0" />
@@ -392,7 +388,7 @@ export function PluginCatalogPage({
         {loading ? (
           <div
             className="flex min-h-[280px] items-center justify-center text-sm text-[color:var(--lime-text-muted)]"
-            data-testid="plugin-v2-loading"
+            data-testid="plugin-catalog-loading"
           >
             <LoaderCircle size={18} className="mr-2 animate-spin" />
             {t("plugin.catalog.v2.loading")}
@@ -400,7 +396,7 @@ export function PluginCatalogPage({
         ) : filteredPlugins.length === 0 ? (
           <div
             className="flex min-h-[280px] flex-col items-center justify-center rounded-lg border border-dashed border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] px-6 text-center"
-            data-testid="plugin-v2-empty"
+            data-testid="plugin-catalog-empty"
           >
             <Sparkles
               size={24}
@@ -419,7 +415,7 @@ export function PluginCatalogPage({
           <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
             <section
               className="grid min-w-0 grid-cols-1 content-start gap-3 md:grid-cols-2"
-              data-testid="plugin-v2-list"
+              data-testid="plugin-catalog-list"
             >
               {filteredPlugins.map((plugin) => {
                 const isSelected = selectedId === plugin.id;
@@ -432,14 +428,14 @@ export function PluginCatalogPage({
                         ? "border-[color:var(--lime-surface-border-strong)] shadow-sm"
                         : "border-[color:var(--lime-surface-border)] hover:border-[color:var(--lime-surface-border-strong)]"
                     }`}
-                    data-testid={`plugin-v2-card-${plugin.id}`}
+                    data-testid={`plugin-catalog-card-${plugin.id}`}
                   >
                     <div className="flex min-w-0 items-start justify-between gap-3">
                       <button
                         type="button"
                         className="min-w-0 text-left"
                         onClick={() => setSelectedId(plugin.id)}
-                        data-testid={`plugin-v2-select-${plugin.id}`}
+                        data-testid={`plugin-catalog-select-${plugin.id}`}
                       >
                         <h2 className="truncate text-base font-semibold text-[color:var(--lime-text-strong)]">
                           {plugin.name}
@@ -464,7 +460,7 @@ export function PluginCatalogPage({
                             aria-haspopup="menu"
                             aria-expanded={actionMenuId === plugin.id}
                             aria-label={t("plugin.catalog.v2.moreActions")}
-                            data-testid={`plugin-v2-actions-${plugin.id}`}
+                            data-testid={`plugin-catalog-actions-${plugin.id}`}
                           >
                             <MoreHorizontal size={17} />
                           </button>
@@ -478,7 +474,7 @@ export function PluginCatalogPage({
                                 className="flex h-9 w-full items-center gap-2 px-3 text-left text-sm font-medium hover:bg-[color:var(--lime-surface-hover)]"
                                 onClick={() => void handleToggle(plugin)}
                                 role="menuitem"
-                                data-testid={`plugin-v2-toggle-${plugin.id}`}
+                                data-testid={`plugin-catalog-toggle-${plugin.id}`}
                               >
                                 {plugin.enabled ? (
                                   <Unplug size={15} />
@@ -497,7 +493,7 @@ export function PluginCatalogPage({
                                   setUninstallTarget(plugin);
                                 }}
                                 role="menuitem"
-                                data-testid={`plugin-v2-uninstall-${plugin.id}`}
+                                data-testid={`plugin-catalog-uninstall-${plugin.id}`}
                               >
                                 <X size={15} />
                                 {t("plugin.catalog.v2.uninstall")}
@@ -557,7 +553,7 @@ export function PluginCatalogPage({
                           type="button"
                           className="inline-flex h-8 items-center gap-1 rounded-full border border-[color:var(--lime-surface-border)] px-3 text-xs font-semibold text-[color:var(--lime-text-strong)] hover:bg-[color:var(--lime-surface-hover)]"
                           onClick={() => setSelectedId(plugin.id)}
-                          data-testid={`plugin-v2-details-${plugin.id}`}
+                          data-testid={`plugin-catalog-details-${plugin.id}`}
                         >
                           {t("plugin.catalog.v2.details")}
                           <ExternalLink size={13} />
@@ -572,7 +568,7 @@ export function PluginCatalogPage({
                             ]);
                             setSelectedInstallId(plugin.id);
                           }}
-                          data-testid={`plugin-v2-install-${plugin.id}`}
+                          data-testid={`plugin-catalog-install-${plugin.id}`}
                         >
                           {isBusy ? (
                             <LoaderCircle size={13} className="animate-spin" />
@@ -605,8 +601,8 @@ export function PluginCatalogPage({
             className="w-full max-w-[520px] rounded-xl border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] p-5 shadow-xl"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="plugin-v2-install-title"
-            data-testid="plugin-v2-install-review"
+            aria-labelledby="plugin-catalog-install-title"
+            data-testid="plugin-catalog-install-review"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -614,7 +610,7 @@ export function PluginCatalogPage({
                   {t("plugin.catalog.v2.review.eyebrow")}
                 </p>
                 <h2
-                  id="plugin-v2-install-title"
+                  id="plugin-catalog-install-title"
                   className="mt-1 text-lg font-semibold text-[color:var(--lime-text-strong)]"
                 >
                   {t("plugin.catalog.v2.review.title")}
@@ -638,7 +634,7 @@ export function PluginCatalogPage({
                     setSelectedInstallId(event.currentTarget.value)
                   }
                   className="mt-2 h-10 w-full rounded-lg border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] px-3 text-sm outline-none"
-                  data-testid="plugin-v2-install-package-select"
+                  data-testid="plugin-catalog-install-package-select"
                 >
                   {installCandidates.map((candidate) => (
                     <option
@@ -714,7 +710,7 @@ export function PluginCatalogPage({
                 className="inline-flex h-9 items-center gap-2 rounded-full bg-[color:var(--lime-text-strong)] px-5 text-sm font-semibold text-[color:var(--lime-surface)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => void handleInstall()}
                 disabled={!selectedInstallCandidate || Boolean(busyId)}
-                data-testid="plugin-v2-confirm-install"
+                data-testid="plugin-catalog-confirm-install"
               >
                 {busyId ? (
                   <LoaderCircle size={15} className="animate-spin" />
@@ -737,7 +733,7 @@ export function PluginCatalogPage({
             className="w-full max-w-[420px] rounded-xl border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] p-5 shadow-xl"
             role="dialog"
             aria-modal="true"
-            data-testid="plugin-v2-uninstall-confirm"
+            data-testid="plugin-catalog-uninstall-confirm"
           >
             <h2 className="text-lg font-semibold text-[color:var(--lime-text-strong)]">
               {t("plugin.catalog.v2.uninstallTitle", {

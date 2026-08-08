@@ -28,11 +28,11 @@ vi.mock("@/lib/api/session-files", () => ({
   openFileWithDefaultApp: mockOpenSessionFileWithDefaultApp,
 }));
 
-vi.mock("@/lib/desktop-host/plugin-dialog", () => ({
+vi.mock("@/lib/desktop-host/dialog", () => ({
   open: mockOpenDialog,
 }));
 
-vi.mock("@/lib/desktop-host/plugin-shell", () => ({
+vi.mock("@/lib/desktop-host/shell", () => ({
   open: vi.fn().mockResolvedValue(undefined),
 }));
 

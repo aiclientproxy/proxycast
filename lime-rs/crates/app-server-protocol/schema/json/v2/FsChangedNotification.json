@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "changedPaths": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "watchId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "changedPaths",
+    "watchId"
+  ],
+  "title": "FsChangedNotification",
+  "type": "object"
+}

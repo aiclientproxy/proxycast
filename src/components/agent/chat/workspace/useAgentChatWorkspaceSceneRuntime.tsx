@@ -68,7 +68,7 @@ export function useAgentChatWorkspaceSceneRuntime({
     clearMessages, deleteMessage, editMessage, handlePermissionResponse, submittedActionsInFlight, sessionHistoryWindow,
     isAutoRestoringSession, isSessionHydrating, sessionId, originalSwitchTopic, loadFullSessionHistory, refreshSessionReadModel, workspacePathMissing, workspaceHealthError,
     combinedSkillsLoading, expertPanelRequestMetadata, expertPanelRuntimeKey, expertSkillRefsOverride, expertWorkspaceSkillRuntimeEnableBindings, expertWorkspaceSkillRuntimeEnableRefs, handleEnableExpertWorkspaceSkillRuntime, handleExpertSkillRefsChange,
-    handlePluginSuggestionsNeeded, handleThreadExpertProfileSwitch, workspacePluginInputSuggestions, workspacePluginSuggestionsError, workspacePluginSuggestionsLoading, workspacePluginRuntimeContext, workspaceSkillBindings, topicById, effectiveChatToolPreferences, canonicalChildren,
+    handlePluginSuggestionsNeeded, handleThreadExpertProfileSwitch, workspacePluginInputSuggestions, workspacePluginSuggestionsError, workspacePluginSuggestionsLoading, workspaceSkillBindings, topicById, effectiveChatToolPreferences, canonicalChildren,
     currentSessionTitle, handleStopSending, handleOpenSubagentSession, currentImageWorkbenchState, imageWorkbenchSessionKey, updateCurrentImageWorkbenchState, artifacts, artifactDisplayState,
     artifactViewMode, browserAssistLaunching, browserAssistSessionRef, browserAssistSessionState, currentCanvasArtifact, currentBrowserAssistScopeKey, displayedCanvasArtifact, handleArtifactViewModeChange,
     handleOpenBrowserRuntimeForBrowserAssist, settledWorkbenchArtifacts, contextHarnessRuntime, effectiveThreadItems, harnessState, inputbarIsSending, rightSurfaceLocalState, contextWorkspace,
@@ -87,7 +87,7 @@ export function useAgentChatWorkspaceSceneRuntime({
     suppressHomeNavbarUtilityActions, taskCenterDraftMaterializedSessionIdsRef, taskCenterDraftWarmupSessionIdsRef, taskCenterHomeSurfaceState, taskCenterTabsNode, bindArticleEditorRightSurface, bindRightSurfacePendingActions, handleCodeBlockClick,
     handleHarnessLoadFilePreview, handleOpenArtifactFromTimeline, handleOpenMessagePreview, handleOpenSavedSiteContent, handleOpenServiceSkillResultFile, handleOpenUrlPreview, handleSaveArtifactDocument, handleWorkspaceArtifactClick,
     handleWorkspaceFileClick, openProjectFilePreviewInCanvas, openWorkspaceArtifactInWorkbench, preferredServiceSkillResultFileTarget, renderArtifactWorkbenchToolbarActions, shouldCollapseCodeBlockInChat, shouldCollapseCodeBlocks, handleWriteFile,
-    defaultCuratedTaskReferenceEntries, defaultCuratedTaskReferenceMemoryIds, handleJumpToTimelineItem, sceneAppExecutionSummaryCard, sceneAppReviewDecisionDialogNode, serviceSkillExecutionCard, workspacePluginHistoryRestoreLandingCard, generalWorkbenchActivityLogs,
+    defaultCuratedTaskReferenceEntries, defaultCuratedTaskReferenceMemoryIds, handleJumpToTimelineItem, sceneAppExecutionSummaryCard, sceneAppReviewDecisionDialogNode, serviceSkillExecutionCard, generalWorkbenchActivityLogs,
     generalWorkbenchWorkflowSteps, handleExpandGeneralWorkbenchSidebar, renderGeneralWorkbenchSidebarNode, planComposerPendingActions, planDecisionAccessory, handleSaveMessageAsSkill,
   } = commandRuntime;
   const inputbarScene = useWorkspaceInputbarSceneRuntime({
@@ -375,7 +375,6 @@ export function useAgentChatWorkspaceSceneRuntime({
         handleToggleCanvas,
         harnessPendingCount,
         localState: rightSurfaceLocalState,
-        pluginRuntimeContext: workspacePluginRuntimeContext.context,
         preferredServiceSkillResultFileTarget,
         runtimeWorkspaceId,
         sceneIsPreparingSend,
@@ -476,8 +475,6 @@ export function useAgentChatWorkspaceSceneRuntime({
           : undefined,
         openedProjects,
         pathReferences,
-        pluginHistoryRestoreLandingCard:
-          workspacePluginHistoryRestoreLandingCard,
         pluginSuggestions: workspacePluginInputSuggestions,
         pluginSuggestionsError:
           workspacePluginSuggestionsError?.message ?? null,

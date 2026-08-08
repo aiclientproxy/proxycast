@@ -4,7 +4,7 @@ description: 内容工厂专用复核 Skill，检查事实依据、平台适配�
 metadata:
   lime_argument_hint: 输入内容工厂生成草稿、项目资料、平台规则、数量目标和待确认问题。
   lime_when_to_use: 内容工厂 App 需要质量检查、复盘分析、交付风险判断或确认链同步时使用。
-  lime_version: 0.1.1
+  lime_version: 0.1.2
   lime_execution_mode: prompt
   lime_surface: plugin
   lime_category: content_factory
@@ -24,9 +24,9 @@ metadata:
 
 ## 输出要求
 
-最终必须输出 JSON，顶层包含 `contentFactoryWorkspacePatch` 或 `workspacePatch`。patch 中至少包含：
+最终必须输出 JSON，顶层只使用 `workspacePatch`。patch 中至少包含：
 
-- `kind`: 固定为 `content_factory.workspace_patch`
+- `kind`: 固定为 `workspace_patch`
 - `projectId`: 当前项目 ID
 - `quality_check` 或 `reviewReport`: 检查结论、风险、证据和待确认项
 - `assetPack.summary`: 可确认、待修改、阻塞的资产数量

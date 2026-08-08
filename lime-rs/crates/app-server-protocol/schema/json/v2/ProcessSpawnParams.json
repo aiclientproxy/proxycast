@@ -1,0 +1,93 @@
+{
+  "$defs": {
+    "ProcessTerminalSize": {
+      "properties": {
+        "cols": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cols",
+        "rows"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "command": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "cwd": {
+      "type": "string"
+    },
+    "env": {
+      "additionalProperties": {
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      "type": [
+        "null",
+        "object"
+      ]
+    },
+    "outputBytesCap": {
+      "format": "uint",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "processHandle": {
+      "type": "string"
+    },
+    "size": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProcessTerminalSize"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "streamStdin": {
+      "type": "boolean"
+    },
+    "streamStdoutStderr": {
+      "type": "boolean"
+    },
+    "timeoutMs": {
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "tty": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "command",
+    "cwd",
+    "processHandle"
+  ],
+  "title": "ProcessSpawnParams",
+  "type": "object"
+}

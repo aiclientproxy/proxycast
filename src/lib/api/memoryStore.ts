@@ -8,8 +8,9 @@ import {
   METHOD_MEMORY_STORE_READ,
   METHOD_MEMORY_STORE_REVIEW_LIST,
   METHOD_MEMORY_STORE_REVIEW_RESOLVE,
-  METHOD_MEMORY_STORE_RESET,
+  METHOD_MEMORY_RESET,
   METHOD_MEMORY_STORE_SEARCH,
+  type MemoryResetResponse,
   type MemoryStoreAddNoteParams,
   type MemoryStoreAddNoteResponse,
   type MemoryStoreConsolidateParams,
@@ -27,8 +28,6 @@ import {
   type MemoryStoreReviewNote,
   type MemoryStoreReviewResolveParams,
   type MemoryStoreReviewResolveResponse,
-  type MemoryStoreResetParams,
-  type MemoryStoreResetResponse,
   type MemoryStoreRootParams,
   type MemoryStoreScope,
   type MemoryStoreSearchHit,
@@ -55,8 +54,7 @@ export type {
   MemoryStoreReviewNote,
   MemoryStoreReviewResolveParams,
   MemoryStoreReviewResolveResponse,
-  MemoryStoreResetParams,
-  MemoryStoreResetResponse,
+  MemoryResetResponse,
   MemoryStoreRootParams,
   MemoryStoreScope,
   MemoryStoreSearchHit,
@@ -98,9 +96,7 @@ function isMemoryStoreEntry(value: unknown): value is MemoryStoreEntry {
   );
 }
 
-function isMemoryStoreSearchHit(
-  value: unknown,
-): value is MemoryStoreSearchHit {
+function isMemoryStoreSearchHit(value: unknown): value is MemoryStoreSearchHit {
   return (
     isRecord(value) &&
     typeof value.path === "string" &&
@@ -113,7 +109,9 @@ function isMemoryStoreSearchHit(
   );
 }
 
-function isMemoryStoreReviewAction(value: unknown): value is "accept" | "reject" {
+function isMemoryStoreReviewAction(
+  value: unknown,
+): value is "accept" | "reject" {
   return value === "accept" || value === "reject";
 }
 
@@ -285,22 +283,11 @@ function assertMemoryStoreHealthResponse(
   return value as unknown as MemoryStoreHealthResponse;
 }
 
-function assertMemoryStoreResetResponse(
-  value: unknown,
-): MemoryStoreResetResponse {
-  if (
-    !isRecord(value) ||
-    !isMemoryStoreScope(value.rootScope) ||
-    typeof value.rootPath !== "string" ||
-    typeof value.removedFiles !== "number" ||
-    typeof value.removedDirectories !== "number" ||
-    typeof value.preservedSoul !== "boolean"
-  ) {
-    throw new Error(
-      `${METHOD_MEMORY_STORE_RESET} returned an invalid memory store reset response`,
-    );
+function assertMemoryResetResponse(value: unknown): MemoryResetResponse {
+  if (!isRecord(value) || Object.keys(value).length !== 0) {
+    throw new Error(`${METHOD_MEMORY_RESET} returned an invalid response`);
   }
-  return value as unknown as MemoryStoreResetResponse;
+  return value;
 }
 
 function assertMemoryStoreIndexRebuildResponse(
@@ -385,11 +372,10 @@ export async function listMemoryStoreReviewNotes(
   params: MemoryStoreReviewListParams = {},
   appServerClient: MemoryStoreAppServerClient = new AppServerClient(),
 ): Promise<MemoryStoreReviewListResponse> {
-  const response =
-    await appServerClient.request<MemoryStoreReviewListResponse>(
-      METHOD_MEMORY_STORE_REVIEW_LIST,
-      params,
-    );
+  const response = await appServerClient.request<MemoryStoreReviewListResponse>(
+    METHOD_MEMORY_STORE_REVIEW_LIST,
+    params,
+  );
   return assertMemoryStoreReviewListResponse(response.result);
 }
 
@@ -416,15 +402,12 @@ export async function getMemoryStoreHealth(
   return assertMemoryStoreHealthResponse(response.result);
 }
 
-export async function resetMemoryStore(
-  params: MemoryStoreResetParams = {},
+export async function resetMemory(
   appServerClient: MemoryStoreAppServerClient = new AppServerClient(),
-): Promise<MemoryStoreResetResponse> {
-  const response = await appServerClient.request<MemoryStoreResetResponse>(
-    METHOD_MEMORY_STORE_RESET,
-    params,
-  );
-  return assertMemoryStoreResetResponse(response.result);
+): Promise<MemoryResetResponse> {
+  const response =
+    await appServerClient.request<MemoryResetResponse>(METHOD_MEMORY_RESET);
+  return assertMemoryResetResponse(response.result);
 }
 
 export async function rebuildMemoryStoreIndex(

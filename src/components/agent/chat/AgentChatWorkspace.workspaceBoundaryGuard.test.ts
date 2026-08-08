@@ -352,7 +352,13 @@ describe("AgentChatWorkspace general workbench harness surface boundary", () => 
     expect(ownerSource).toContain(
       "toolInventory: harnessInventoryRuntime.toolInventory",
     );
-    expect(ownerSource).toContain("onPrepareMcpTargets");
+    for (const retiredPluginMcpSurface of [
+      "plugin_mcp_targets",
+      "onPrepareMcpTargets",
+      "prepareMcpTargets",
+    ]) {
+      expect(ownerSource).not.toContain(retiredPluginMcpSurface);
+    }
     expect(ownerSource).toContain("onSubmitCodeFixPrompt");
     expect(ownerSource).toContain("onReplayPendingRequest");
     expect(ownerSource).toContain("threadGoal");
@@ -567,7 +573,6 @@ describe("AgentChatWorkspace expert skill panel runtime boundary", () => {
       "useExpertWorkspaceSkillRuntime({",
       "useWorkspaceExpertAgentLaunchSyncRuntime({",
       "resolveWorkspaceRequestMetadataWithExpertSkills({",
-      "useWorkspacePluginRuntimeContext({",
       "useWorkspacePluginCatalogSuggestions({",
     ]) {
       expect(workspaceSource).not.toContain(retiredExpertSkillPanelOwner);
@@ -644,72 +649,6 @@ describe("AgentChatWorkspace shell chrome boundary", () => {
     expect(ownerSource).toContain("return useMemo(");
     expect(ownerSource).toContain("queuedTurnCount");
     expect(ownerSource).toContain("topBarChrome");
-  });
-});
-
-describe("AgentChatWorkspace plugin history restore boundary", () => {
-  it("插件历史恢复投影、预览动作和 landing card 必须由专用 runtime 提供", () => {
-    const workspaceSource = [
-      "src/components/agent/chat/useAgentChatWorkspaceRuntime.tsx",
-      "src/components/agent/chat/workspace/useAgentChatWorkspaceEntryRuntime.ts",
-      "src/components/agent/chat/workspace/useAgentChatWorkspaceSetupRuntime.ts",
-      "src/components/agent/chat/workspace/useAgentChatWorkspaceCommandRuntime.ts",
-      "src/components/agent/chat/workspace/useAgentChatWorkspaceSceneRuntime.tsx",
-    ]
-      .map((ownerPath) => readFileSync(join(process.cwd(), ownerPath), "utf8"))
-      .join("\n");
-    const ownerSource = readFileSync(
-      join(
-        process.cwd(),
-        "src/components/agent/chat/workspace/useWorkspaceArtifactSurfaceRuntime.ts",
-      ),
-      "utf8",
-    );
-    const pluginOwnerSource = readFileSync(
-      join(
-        process.cwd(),
-        "src/components/agent/chat/workspace/useWorkspacePluginHistoryRestoreRuntime.tsx",
-      ),
-      "utf8",
-    );
-    const interactionOwnerSource = readFileSync(
-      join(
-        process.cwd(),
-        "src/components/agent/chat/workspace/useAgentChatWorkspaceArtifactInteractionRuntime.ts",
-      ),
-      "utf8",
-    );
-
-    expect(workspaceSource).toContain(
-      "useAgentChatWorkspaceArtifactInteractionRuntime({",
-    );
-    expect(workspaceSource).not.toContain(
-      "useWorkspaceArtifactSurfaceRuntime({",
-    );
-    expect(interactionOwnerSource).toContain(
-      "useWorkspaceArtifactSurfaceRuntime({",
-    );
-    expect(ownerSource).toContain("useWorkspacePluginHistoryRestoreRuntime(");
-    for (const retiredWorkspaceOwner of [
-      "hasWorkspacePluginHistoryRestoreMetadata(",
-      "buildWorkspacePluginHistoryRestoreProjection({",
-      "buildWorkspacePluginHistoryRestoreLandingModel({",
-      "buildWorkspacePluginHistoryRestoreArtifactPreviewItems({",
-      "buildWorkspacePluginHistoryRestoreArtifactPreviewArtifact({",
-      "<WorkspacePluginHistoryRestoreLandingCard",
-    ]) {
-      expect(workspaceSource).not.toContain(retiredWorkspaceOwner);
-      expect(interactionOwnerSource).not.toContain(retiredWorkspaceOwner);
-      expect(pluginOwnerSource).toContain(retiredWorkspaceOwner);
-    }
-    expect(workspaceSource).not.toContain(
-      "handleOpenWorkspacePluginHistoryArtifactPreview",
-    );
-    expect(pluginOwnerSource).toContain("const handleOpenArtifactPreview");
-    expect(pluginOwnerSource).toContain("upsertGeneralArtifact(artifact)");
-    expect(pluginOwnerSource).toContain(
-      "handleWorkspaceArtifactClick(artifact)",
-    );
   });
 });
 

@@ -15,7 +15,7 @@ const {
   mockReadMemoryStore,
   mockRebuildMemoryStoreIndex,
   mockResolveMemoryStoreReviewNote,
-  mockResetMemoryStore,
+  mockResetMemory,
 } = vi.hoisted(() => ({
   mockAddMemoryStoreNote: vi.fn(),
   mockConsolidateMemoryStore: vi.fn(),
@@ -25,7 +25,7 @@ const {
   mockReadMemoryStore: vi.fn(),
   mockRebuildMemoryStoreIndex: vi.fn(),
   mockResolveMemoryStoreReviewNote: vi.fn(),
-  mockResetMemoryStore: vi.fn(),
+  mockResetMemory: vi.fn(),
 }));
 
 vi.mock("@/lib/api/project", () => ({
@@ -41,7 +41,7 @@ vi.mock("@/lib/api/memoryStore", () => ({
   readMemoryStore: mockReadMemoryStore,
   rebuildMemoryStoreIndex: mockRebuildMemoryStoreIndex,
   resolveMemoryStoreReviewNote: mockResolveMemoryStoreReviewNote,
-  resetMemoryStore: mockResetMemoryStore,
+  resetMemory: mockResetMemory,
 }));
 
 import { MemoryStoreStatusPanel } from "./MemoryStoreStatusPanel";

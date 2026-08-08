@@ -147,9 +147,6 @@ export function useWorkspaceSceneAppExecutionSurfaceRuntime({
     sceneAppExecutionSummaryState,
     onNavigate,
   });
-  const handleOpenSceneAppWorkspace = useCallback(() => {
-    onNavigate?.("plugin-lab");
-  }, [onNavigate]);
   const handleOpenSceneAppExecutionContentPost = useCallback(
     (entry: SceneAppExecutionContentPostEntry) => {
       if (entry.source.kind === "task_file") {
@@ -225,8 +222,6 @@ export function useWorkspaceSceneAppExecutionSurfaceRuntime({
           onContinueReviewFeedback={handleContinueSceneAppReviewFeedback}
           onReviewCurrentProject={handleReviewCurrentSceneAppExecution}
           onSaveAsSkill={sceneAppReviewDecisionRuntime.handleSaveAsSkill}
-          onOpenSceneAppDetail={handleOpenSceneAppWorkspace}
-          onOpenSceneAppGovernance={handleOpenSceneAppWorkspace}
           humanReviewAvailable={
             sceneAppReviewDecisionRuntime.humanReviewAvailable
           }
@@ -246,7 +241,6 @@ export function useWorkspaceSceneAppExecutionSurfaceRuntime({
     [
       handleContinueSceneAppReviewFeedback,
       handleOpenSceneAppExecutionContentPost,
-      handleOpenSceneAppWorkspace,
       handleReviewCurrentSceneAppExecution,
       sceneAppExecutionContentPostEntries,
       sceneAppExecutionSummaryState,

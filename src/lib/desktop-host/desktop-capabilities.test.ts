@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getCurrent, getUrls, onOpenUrl } from "./plugin-deep-link";
+import { getCurrent, getUrls, onOpenUrl } from "./deep-link";
 import {
   isRegistered,
   register,
   triggerShortcut,
   unregister,
-} from "./plugin-global-shortcut";
-import { open as openShell } from "./plugin-shell";
+} from "./global-shortcut";
+import { open as openShell } from "./shell";
 
 function clearElectronBridge(): void {
   delete (window as any).electronAPI;

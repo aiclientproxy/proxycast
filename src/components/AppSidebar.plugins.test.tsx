@@ -3,7 +3,6 @@ import {
   act,
   cleanupAppSidebarTest,
   flushEffects,
-  mockListInstalledPlugins,
   mountSidebarContainer,
   openAccountMenu,
   resetAppSidebarTest,
@@ -33,8 +32,6 @@ describe("AppSidebar Plugins", () => {
     });
 
     expect(onNavigate).toHaveBeenCalledWith("plugins", undefined);
-    expect(mockListInstalledPlugins).not.toHaveBeenCalled();
-
     await openAccountMenu(container);
     const accountMenu = container.querySelector(
       '[data-testid="app-sidebar-account-menu"]',
@@ -43,51 +40,6 @@ describe("AppSidebar Plugins", () => {
   });
 
   it("已安装 Plugin 不应作为左侧独立导航项显示", async () => {
-    mockListInstalledPlugins.mockResolvedValue({
-      states: [
-        {
-          appId: "content-factory-app",
-          disabled: false,
-          manifest: {
-            displayName: "内容工厂",
-          },
-          projection: {
-            app: {
-              appId: "content-factory-app",
-              displayName: "内容工厂",
-            },
-            entries: [
-              {
-                key: "dashboard",
-                kind: "page",
-                title: "项目首页",
-              },
-            ],
-          },
-        },
-        {
-          appId: "lime-plugin-studio",
-          disabled: false,
-          manifest: {
-            displayName: "发布应用",
-          },
-          projection: {
-            app: {
-              appId: "lime-plugin-studio",
-              displayName: "发布应用",
-            },
-            entries: [
-              {
-                key: "dashboard",
-                kind: "page",
-                title: "发布入口",
-              },
-            ],
-          },
-        },
-      ],
-      issues: [],
-    });
     const container = mountSidebarContainer();
     await flushEffects(2);
 
@@ -104,7 +56,6 @@ describe("AppSidebar Plugins", () => {
         ),
       ).map((button) => button.getAttribute("aria-label")),
     ).toEqual(["新建任务", "专家", "Skills", "插件"]);
-    expect(mockListInstalledPlugins).not.toHaveBeenCalled();
   });
 
   it("Plugin 变更事件不应影响侧栏聚合入口", async () => {
@@ -117,7 +68,6 @@ describe("AppSidebar Plugins", () => {
     });
     await flushEffects(2);
 
-    expect(mockListInstalledPlugins).not.toHaveBeenCalled();
     expect(
       Array.from(
         container.querySelectorAll(
@@ -141,7 +91,6 @@ describe("AppSidebar Plugins", () => {
         ),
       ).not.toBeNull();
       expect(container.textContent).not.toContain("内容工厂");
-      expect(mockListInstalledPlugins).not.toHaveBeenCalled();
       expect(
         errorSpy.mock.calls.map(([message]) => String(message)),
       ).not.toEqual(

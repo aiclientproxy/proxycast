@@ -83,22 +83,17 @@ export const METHOD_DIAGNOSTICS_WINDOWS_STARTUP_READ =
 export const METHOD_DISCORD_CHANNEL_PROBE = "discordChannel/probe";
 export const METHOD_ERROR = "error";
 export const METHOD_EVIDENCE_EXPORT = "evidence/export";
-export const METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT =
-  "executionProcess/drainOutput";
-export const METHOD_EXECUTION_PROCESS_INTERRUPT = "executionProcess/interrupt";
-export const METHOD_EXECUTION_PROCESS_START = "executionProcess/start";
-export const METHOD_EXECUTION_PROCESS_STATUS = "executionProcess/status";
-export const METHOD_EXECUTION_PROCESS_TERMINATE = "executionProcess/terminate";
-export const METHOD_EXECUTION_PROCESS_WRITE_STDIN =
-  "executionProcess/writeStdin";
 export const METHOD_FEISHU_CHANNEL_PROBE = "feishuChannel/probe";
-export const METHOD_FILE_SYSTEM_CREATE_DIRECTORY = "fileSystem/createDirectory";
-export const METHOD_FILE_SYSTEM_CREATE_FILE = "fileSystem/createFile";
-export const METHOD_FILE_SYSTEM_DELETE_FILE = "fileSystem/deleteFile";
-export const METHOD_FILE_SYSTEM_LIST_DIRECTORY = "fileSystem/listDirectory";
-export const METHOD_FILE_SYSTEM_READ_FILE_PREVIEW =
-  "fileSystem/readFilePreview";
-export const METHOD_FILE_SYSTEM_RENAME_FILE = "fileSystem/renameFile";
+export const METHOD_FS_CHANGED = "fs/changed";
+export const METHOD_FS_COPY = "fs/copy";
+export const METHOD_FS_CREATE_DIRECTORY = "fs/createDirectory";
+export const METHOD_FS_GET_METADATA = "fs/getMetadata";
+export const METHOD_FS_READ_DIRECTORY = "fs/readDirectory";
+export const METHOD_FS_READ_FILE = "fs/readFile";
+export const METHOD_FS_REMOVE = "fs/remove";
+export const METHOD_FS_UNWATCH = "fs/unwatch";
+export const METHOD_FS_WATCH = "fs/watch";
+export const METHOD_FS_WRITE_FILE = "fs/writeFile";
 export const METHOD_GALLERY_MATERIAL_GET = "galleryMaterial/get";
 export const METHOD_GALLERY_MATERIAL_LIST_BY_IMAGE_CATEGORY =
   "galleryMaterial/listByImageCategory";
@@ -187,6 +182,8 @@ export const METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED =
   "mcpServer/oauthLogin/completed";
 export const METHOD_MCP_SERVER_RESOURCE_READ = "mcpServer/resource/read";
 export const METHOD_MCP_SERVER_START = "mcpServer/start";
+export const METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED =
+  "mcpServer/startupStatus/updated";
 export const METHOD_MCP_SERVER_STOP = "mcpServer/stop";
 export const METHOD_MCP_SERVER_SYNC_ALL_TO_LIVE = "mcpServer/syncAllToLive";
 export const METHOD_MCP_SERVER_TOOL_CALL = "mcpServer/tool/call";
@@ -209,13 +206,13 @@ export const METHOD_MEDIA_TASK_ARTIFACT_IMAGE_CREATE =
 export const METHOD_MEDIA_TASK_ARTIFACT_LIST = "mediaTaskArtifact/list";
 export const METHOD_MEDIA_TASK_ARTIFACT_VIDEO_CREATE =
   "mediaTaskArtifact/video/create";
+export const METHOD_MEMORY_RESET = "memory/reset";
 export const METHOD_MEMORY_STORE_ADD_NOTE = "memoryStore/addNote";
 export const METHOD_MEMORY_STORE_CONSOLIDATE = "memoryStore/consolidate";
 export const METHOD_MEMORY_STORE_HEALTH = "memoryStore/health";
 export const METHOD_MEMORY_STORE_INDEX_REBUILD = "memoryStore/index/rebuild";
 export const METHOD_MEMORY_STORE_LIST = "memoryStore/list";
 export const METHOD_MEMORY_STORE_READ = "memoryStore/read";
-export const METHOD_MEMORY_STORE_RESET = "memoryStore/reset";
 export const METHOD_MEMORY_STORE_REVIEW_LIST = "memoryStore/review/list";
 export const METHOD_MEMORY_STORE_REVIEW_RESOLVE = "memoryStore/review/resolve";
 export const METHOD_MEMORY_STORE_SEARCH = "memoryStore/search";
@@ -256,21 +253,12 @@ export const METHOD_PLUGIN_LIST = "plugin/list";
 export const METHOD_PLUGIN_READ = "plugin/read";
 export const METHOD_PLUGIN_SEARCH = "plugin/search";
 export const METHOD_PLUGIN_UNINSTALL = "plugin/uninstall";
-export const METHOD_PLUGIN_HOST_LIFECYCLE_LIST = "pluginHostLifecycle/list";
-export const METHOD_PLUGIN_INSTALLED_DISABLED_SET =
-  "pluginInstalled/disabled/set";
-export const METHOD_PLUGIN_INSTALLED_LIST = "pluginInstalled/list";
-export const METHOD_PLUGIN_INSTALLED_SAVE = "pluginInstalled/save";
-export const METHOD_PLUGIN_INSTALLED_UNINSTALL = "pluginInstalled/uninstall";
-export const METHOD_PLUGIN_INSTALLED_UNINSTALL_REHEARSAL =
-  "pluginInstalled/uninstall/rehearsal";
-export const METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT = "pluginLocalPackage/export";
-export const METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT = "pluginLocalPackage/inspect";
-export const METHOD_PLUGIN_PACKAGE_FETCH_CLOUD = "pluginPackage/fetchCloud";
-export const METHOD_PLUGIN_SHELL_PREPARE = "pluginShell/prepare";
-export const METHOD_PLUGIN_UI_RUNTIME_START = "pluginUiRuntime/start";
-export const METHOD_PLUGIN_UI_RUNTIME_STATUS = "pluginUiRuntime/status";
-export const METHOD_PLUGIN_UI_RUNTIME_STOP = "pluginUiRuntime/stop";
+export const METHOD_PROCESS_EXITED = "process/exited";
+export const METHOD_PROCESS_KILL = "process/kill";
+export const METHOD_PROCESS_OUTPUT_DELTA = "process/outputDelta";
+export const METHOD_PROCESS_RESIZE_PTY = "process/resizePty";
+export const METHOD_PROCESS_SPAWN = "process/spawn";
+export const METHOD_PROCESS_WRITE_STDIN = "process/writeStdin";
 export const METHOD_PROJECT_GIT_BRANCH_CHECKOUT = "projectGit/branch/checkout";
 export const METHOD_PROJECT_GIT_BRANCH_CREATE = "projectGit/branch/create";
 export const METHOD_PROJECT_GIT_COMMITS_LIST = "projectGit/commits/list";
@@ -690,55 +678,47 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
-    method: "executionProcess/drainOutput",
-  },
-  {
-    kind: "request",
-    method: "executionProcess/interrupt",
-  },
-  {
-    kind: "request",
-    method: "executionProcess/start",
-  },
-  {
-    kind: "request",
-    method: "executionProcess/status",
-  },
-  {
-    kind: "request",
-    method: "executionProcess/terminate",
-  },
-  {
-    kind: "request",
-    method: "executionProcess/writeStdin",
-  },
-  {
-    kind: "request",
     method: "feishuChannel/probe",
   },
   {
-    kind: "request",
-    method: "fileSystem/createDirectory",
+    kind: "notification",
+    method: "fs/changed",
   },
   {
     kind: "request",
-    method: "fileSystem/createFile",
+    method: "fs/copy",
   },
   {
     kind: "request",
-    method: "fileSystem/deleteFile",
+    method: "fs/createDirectory",
   },
   {
     kind: "request",
-    method: "fileSystem/listDirectory",
+    method: "fs/getMetadata",
   },
   {
     kind: "request",
-    method: "fileSystem/readFilePreview",
+    method: "fs/readDirectory",
   },
   {
     kind: "request",
-    method: "fileSystem/renameFile",
+    method: "fs/readFile",
+  },
+  {
+    kind: "request",
+    method: "fs/remove",
+  },
+  {
+    kind: "request",
+    method: "fs/unwatch",
+  },
+  {
+    kind: "request",
+    method: "fs/watch",
+  },
+  {
+    kind: "request",
+    method: "fs/writeFile",
   },
   {
     kind: "request",
@@ -1009,6 +989,10 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "mcpServer/start",
   },
   {
+    kind: "notification",
+    method: "mcpServer/startupStatus/updated",
+  },
+  {
     kind: "request",
     method: "mcpServer/stop",
   },
@@ -1078,6 +1062,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
+    method: "memory/reset",
+  },
+  {
+    kind: "request",
     method: "memoryStore/addNote",
   },
   {
@@ -1099,10 +1087,6 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "memoryStore/read",
-  },
-  {
-    kind: "request",
-    method: "memoryStore/reset",
   },
   {
     kind: "request",
@@ -1249,56 +1233,28 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "plugin/uninstall",
   },
   {
-    kind: "request",
-    method: "pluginHostLifecycle/list",
+    kind: "notification",
+    method: "process/exited",
   },
   {
     kind: "request",
-    method: "pluginInstalled/disabled/set",
+    method: "process/kill",
+  },
+  {
+    kind: "notification",
+    method: "process/outputDelta",
   },
   {
     kind: "request",
-    method: "pluginInstalled/list",
+    method: "process/resizePty",
   },
   {
     kind: "request",
-    method: "pluginInstalled/save",
+    method: "process/spawn",
   },
   {
     kind: "request",
-    method: "pluginInstalled/uninstall",
-  },
-  {
-    kind: "request",
-    method: "pluginInstalled/uninstall/rehearsal",
-  },
-  {
-    kind: "request",
-    method: "pluginLocalPackage/export",
-  },
-  {
-    kind: "request",
-    method: "pluginLocalPackage/inspect",
-  },
-  {
-    kind: "request",
-    method: "pluginPackage/fetchCloud",
-  },
-  {
-    kind: "request",
-    method: "pluginShell/prepare",
-  },
-  {
-    kind: "request",
-    method: "pluginUiRuntime/start",
-  },
-  {
-    kind: "request",
-    method: "pluginUiRuntime/status",
-  },
-  {
-    kind: "request",
-    method: "pluginUiRuntime/stop",
+    method: "process/writeStdin",
   },
   {
     kind: "request",
@@ -1947,38 +1903,6 @@ export const GENERATED_APP_SERVER_REQUEST_SERIALIZATION_SCOPES = [
   {
     method: "browserSession/read",
     scope: "browserSession",
-  },
-  {
-    method: "executionProcess/interrupt",
-    scope: "executionProcess",
-  },
-  {
-    method: "executionProcess/start",
-    scope: "executionProcess",
-  },
-  {
-    method: "executionProcess/terminate",
-    scope: "executionProcess",
-  },
-  {
-    method: "executionProcess/writeStdin",
-    scope: "executionProcess",
-  },
-  {
-    method: "fileSystem/createDirectory",
-    scope: "fileSystemMutation",
-  },
-  {
-    method: "fileSystem/createFile",
-    scope: "fileSystemMutation",
-  },
-  {
-    method: "fileSystem/deleteFile",
-    scope: "fileSystemMutation",
-  },
-  {
-    method: "fileSystem/renameFile",
-    scope: "fileSystemMutation",
   },
   {
     method: "mcpResource/subscribe",
@@ -2640,36 +2564,6 @@ export type AppServerClientRequest =
     }
   | {
       id: number | string;
-      method: "fileSystem/listDirectory";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "fileSystem/readFilePreview";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "fileSystem/createFile";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "fileSystem/createDirectory";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "fileSystem/renameFile";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "fileSystem/deleteFile";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
       method: "projectGit/status";
       params?: unknown;
     }
@@ -2721,36 +2615,6 @@ export type AppServerClientRequest =
   | {
       id: number | string;
       method: "projectShell/session/drainEvents";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "executionProcess/start";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "executionProcess/writeStdin";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "executionProcess/interrupt";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "executionProcess/terminate";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "executionProcess/status";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "executionProcess/drainOutput";
       params?: unknown;
     }
   | {
@@ -3355,71 +3219,6 @@ export type AppServerClientRequest =
     }
   | {
       id: number | string;
-      method: "pluginLocalPackage/inspect";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginLocalPackage/export";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginPackage/fetchCloud";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginInstalled/save";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginInstalled/list";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginInstalled/disabled/set";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginInstalled/uninstall/rehearsal";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginInstalled/uninstall";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginHostLifecycle/list";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginShell/prepare";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginUiRuntime/start";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginUiRuntime/status";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "pluginUiRuntime/stop";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
       method: "soulStylePack/install";
       params?: unknown;
     }
@@ -3681,11 +3480,6 @@ export type AppServerClientRequest =
   | {
       id: number | string;
       method: "memoryStore/health";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "memoryStore/reset";
       params?: unknown;
     }
   | {
@@ -4003,19 +3797,7 @@ export type AppServerRequestMethod =
   | "diagnostics/windowsStartup/read"
   | "discordChannel/probe"
   | "evidence/export"
-  | "executionProcess/drainOutput"
-  | "executionProcess/interrupt"
-  | "executionProcess/start"
-  | "executionProcess/status"
-  | "executionProcess/terminate"
-  | "executionProcess/writeStdin"
   | "feishuChannel/probe"
-  | "fileSystem/createDirectory"
-  | "fileSystem/createFile"
-  | "fileSystem/deleteFile"
-  | "fileSystem/listDirectory"
-  | "fileSystem/readFilePreview"
-  | "fileSystem/renameFile"
   | "galleryMaterial/get"
   | "galleryMaterial/listByImageCategory"
   | "galleryMaterial/listByLayoutCategory"
@@ -4082,7 +3864,6 @@ export type AppServerRequestMethod =
   | "memoryStore/index/rebuild"
   | "memoryStore/list"
   | "memoryStore/read"
-  | "memoryStore/reset"
   | "memoryStore/review/list"
   | "memoryStore/review/resolve"
   | "memoryStore/search"
@@ -4107,19 +3888,6 @@ export type AppServerRequestMethod =
   | "modelProviderUiState/read"
   | "modelProviderUiState/write"
   | "modelSyncState/read"
-  | "pluginHostLifecycle/list"
-  | "pluginInstalled/disabled/set"
-  | "pluginInstalled/list"
-  | "pluginInstalled/save"
-  | "pluginInstalled/uninstall"
-  | "pluginInstalled/uninstall/rehearsal"
-  | "pluginLocalPackage/export"
-  | "pluginLocalPackage/inspect"
-  | "pluginPackage/fetchCloud"
-  | "pluginShell/prepare"
-  | "pluginUiRuntime/start"
-  | "pluginUiRuntime/status"
-  | "pluginUiRuntime/stop"
   | "projectGit/branch/checkout"
   | "projectGit/branch/create"
   | "projectGit/commits/list"
@@ -4219,8 +3987,6 @@ export type AppServerRequestMethod =
 
 export type AppServerRequestSerializationScope =
   | "browserSession"
-  | "executionProcess"
-  | "fileSystemMutation"
   | "mcpOauth"
   | "mcpResourceSubscription"
   | "projectShellSession"
@@ -4747,6 +4513,10 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "memory/reset";
+    }
+  | {
+      id: number | string;
       method: "thread/shellCommand";
       params: ThreadShellCommandParams;
     }
@@ -4894,6 +4664,71 @@ export type ClientRequest =
       id: number | string;
       method: "turn/interrupt";
       params: TurnInterruptParams;
+    }
+  | {
+      id: number | string;
+      method: "fs/readFile";
+      params: FsReadFileParams;
+    }
+  | {
+      id: number | string;
+      method: "fs/writeFile";
+      params: FsWriteFileParams;
+    }
+  | {
+      id: number | string;
+      method: "fs/createDirectory";
+      params: FsCreateDirectoryParams;
+    }
+  | {
+      id: number | string;
+      method: "fs/getMetadata";
+      params: FsGetMetadataParams;
+    }
+  | {
+      id: number | string;
+      method: "fs/readDirectory";
+      params: FsReadDirectoryParams;
+    }
+  | {
+      id: number | string;
+      method: "fs/remove";
+      params: FsRemoveParams;
+    }
+  | {
+      id: number | string;
+      method: "fs/copy";
+      params: FsCopyParams;
+    }
+  | {
+      id: number | string;
+      method: "fs/watch";
+      params: FsWatchParams;
+    }
+  | {
+      id: number | string;
+      method: "fs/unwatch";
+      params: FsUnwatchParams;
+    }
+  | {
+      id: number | string;
+      method: "process/spawn";
+      params: ProcessSpawnParams;
+    }
+  | {
+      id: number | string;
+      method: "process/writeStdin";
+      params: ProcessWriteStdinParams;
+    }
+  | {
+      id: number | string;
+      method: "process/resizePty";
+      params: ProcessResizePtyParams;
+    }
+  | {
+      id: number | string;
+      method: "process/kill";
+      params: ProcessKillParams;
     };
 
 export interface ClientResponse {
@@ -5554,86 +5389,6 @@ export interface EvidencePackSummary {
   turnCount: number;
 }
 
-export interface ExecutionProcessDrainOutputParams {
-  afterSequence?: number | null;
-  limit?: number | null;
-  maxBytes?: number | null;
-  processId?: null | string;
-}
-
-export interface ExecutionProcessDrainOutputResponse {
-  deltas?: ExecutionProcessOutputDelta[];
-  nextSequence?: number | null;
-}
-
-export type ExecutionProcessEmptyResponse = Record<string, unknown>;
-
-export interface ExecutionProcessIdParams {
-  processId: string;
-}
-
-export interface ExecutionProcessOutputDelta {
-  bytes: number;
-  delta: string;
-  kind: ExecutionProcessOutputKind;
-  omittedBytes: number;
-  processId: string;
-  sequence: number;
-  toolId: string;
-  truncated: boolean;
-}
-
-export type ExecutionProcessOutputKind = "combined" | "stderr" | "stdout";
-
-export interface ExecutionProcessSnapshot {
-  elapsedMs: number;
-  exitCode?: number | null;
-  failure?: null | string;
-  outputBytes: number;
-  outputOmittedBytes: number;
-  outputTruncated: boolean;
-  processId: string;
-  retainedOutput: string;
-  status: ExecutionProcessStatus;
-  toolId: string;
-  toolName: string;
-}
-
-export interface ExecutionProcessStartParams {
-  approvalPolicy?: null | string;
-  command: string[];
-  cwd?: null | string;
-  env?: Record<string, unknown>;
-  processId: string;
-  runtimeMetadata?: unknown;
-  sandboxPolicy?: null | string;
-  toolId: string;
-  toolName: string;
-  tty?: boolean;
-  workingDirectory: string;
-}
-
-export interface ExecutionProcessStartResponse {
-  snapshot: ExecutionProcessSnapshot;
-}
-
-export type ExecutionProcessStatus =
-  | "exited"
-  | "failed"
-  | "interrupted"
-  | "running"
-  | "starting"
-  | "terminated";
-
-export interface ExecutionProcessStatusResponse {
-  snapshot: ExecutionProcessSnapshot;
-}
-
-export interface ExecutionProcessWriteStdinParams {
-  data: string;
-  processId: string;
-}
-
 export type FileChangeApprovalDecision =
   | "accept"
   | "acceptForSession"
@@ -5662,55 +5417,6 @@ export interface FileChangeRequestApprovalResponse {
 
 export type FileSystemAccessMode = "deny" | "read" | "write";
 
-export interface FileSystemCreateDirectoryParams {
-  path: string;
-}
-
-export interface FileSystemCreateFileParams {
-  path: string;
-}
-
-export interface FileSystemDeleteFileParams {
-  path: string;
-  recursive?: boolean | null;
-}
-
-export interface FileSystemDirectoryListing {
-  entries?: FileSystemFileEntry[];
-  error?: null | string;
-  parentPath?: null | string;
-  path: string;
-}
-
-export interface FileSystemFileEntry {
-  fileType?: null | string;
-  iconDataUrl?: null | string;
-  isDir: boolean;
-  isHidden?: boolean;
-  isSymlink?: boolean;
-  mimeType?: null | string;
-  mode?: number | null;
-  modeStr?: null | string;
-  modifiedAt: number;
-  name: string;
-  path: string;
-  size: number;
-}
-
-export interface FileSystemFilePreview {
-  content?: null | string;
-  error?: null | string;
-  isBinary: boolean;
-  path: string;
-  size: number;
-}
-
-export interface FileSystemListDirectoryParams {
-  path: string;
-}
-
-export type FileSystemMutationResponse = Record<string, unknown>;
-
 export type FileSystemPath =
   | {
       path: string;
@@ -5724,16 +5430,6 @@ export type FileSystemPath =
       type: "special";
       value: FileSystemSpecialPath;
     };
-
-export interface FileSystemReadFilePreviewParams {
-  maxSize?: number | null;
-  path: string;
-}
-
-export interface FileSystemRenameFileParams {
-  newPath: string;
-  oldPath: string;
-}
 
 export interface FileSystemSandboxEntry {
   access: FileSystemAccessMode;
@@ -5770,6 +5466,90 @@ export interface FileUpdateChange {
 }
 
 export type FramingKind = "json" | "ndjson" | "sse";
+
+export interface FsChangedNotification {
+  changedPaths: string[];
+  watchId: string;
+}
+
+export interface FsCopyParams {
+  destinationPath: string;
+  recursive?: boolean;
+  sourcePath: string;
+}
+
+export type FsCopyResponse = Record<string, unknown>;
+
+export interface FsCreateDirectoryParams {
+  path: string;
+  recursive?: boolean | null;
+}
+
+export type FsCreateDirectoryResponse = Record<string, unknown>;
+
+export interface FsGetMetadataParams {
+  path: string;
+}
+
+export interface FsGetMetadataResponse {
+  createdAtMs: number;
+  isDirectory: boolean;
+  isFile: boolean;
+  isSymlink: boolean;
+  modifiedAtMs: number;
+}
+
+export interface FsReadDirectoryEntry {
+  fileName: string;
+  isDirectory: boolean;
+  isFile: boolean;
+}
+
+export interface FsReadDirectoryParams {
+  path: string;
+}
+
+export interface FsReadDirectoryResponse {
+  entries: FsReadDirectoryEntry[];
+}
+
+export interface FsReadFileParams {
+  path: string;
+}
+
+export interface FsReadFileResponse {
+  dataBase64: string;
+}
+
+export interface FsRemoveParams {
+  force?: boolean | null;
+  path: string;
+  recursive?: boolean | null;
+}
+
+export type FsRemoveResponse = Record<string, unknown>;
+
+export interface FsUnwatchParams {
+  watchId: string;
+}
+
+export type FsUnwatchResponse = Record<string, unknown>;
+
+export interface FsWatchParams {
+  path: string;
+  watchId: string;
+}
+
+export interface FsWatchResponse {
+  path: string;
+}
+
+export interface FsWriteFileParams {
+  dataBase64: string;
+  path: string;
+}
+
+export type FsWriteFileResponse = Record<string, unknown>;
 
 export interface GalleryMaterial {
   content?: null | string;
@@ -6734,6 +6514,8 @@ export interface MemoryCitationEntry {
   path: string;
 }
 
+export type MemoryResetResponse = Record<string, unknown>;
+
 export interface MemoryStoreAddNoteParams {
   content: string;
   scope?: MemoryStoreScope;
@@ -6836,19 +6618,6 @@ export interface MemoryStoreReadResponse {
   truncated: boolean;
 }
 
-export interface MemoryStoreResetParams {
-  scope?: MemoryStoreScope;
-  workspaceRoot?: null | string;
-}
-
-export interface MemoryStoreResetResponse {
-  preservedSoul: boolean;
-  removedDirectories: number;
-  removedFiles: number;
-  rootPath: string;
-  rootScope: MemoryStoreScope;
-}
-
 export interface MemoryStoreReviewListParams {
   cursor?: null | string;
   maxResults?: number | null;
@@ -6937,10 +6706,20 @@ export type Method =
   | "app/list"
   | "app/read"
   | "artifact/write"
+  | "fs/copy"
+  | "fs/createDirectory"
+  | "fs/getMetadata"
+  | "fs/readDirectory"
+  | "fs/readFile"
+  | "fs/remove"
+  | "fs/unwatch"
+  | "fs/watch"
+  | "fs/writeFile"
   | "hooks/list"
   | "mcpServer/resource/read"
   | "mcpServer/tool/call"
   | "media/read"
+  | "memory/reset"
   | "model/list"
   | "plugin/enabled/set"
   | "plugin/install"
@@ -6949,6 +6728,10 @@ export type Method =
   | "plugin/read"
   | "plugin/search"
   | "plugin/uninstall"
+  | "process/kill"
+  | "process/resizePty"
+  | "process/spawn"
+  | "process/writeStdin"
   | "skills/config/write"
   | "skills/extraRoots/set"
   | "skills/list"
@@ -7453,21 +7236,6 @@ export interface PlatformInfo {
   os: string;
 }
 
-export interface PluginArticleWorkspaceContract {
-  enabled: boolean;
-  objects?: PluginArticleWorkspaceObject[];
-  panes?: string[];
-  rendererKinds?: string[];
-}
-
-export interface PluginArticleWorkspaceObject {
-  artifactKind?: null | string;
-  defaultPane: string;
-  kind: string;
-  primary: boolean;
-  title: string;
-}
-
 export type PluginAuthPolicy = "ON_INSTALL" | "ON_USE";
 
 export type PluginAvailability = "AVAILABLE" | "DISABLED_BY_ADMIN";
@@ -7571,101 +7339,11 @@ export interface PluginCatalogUninstallResponse {
   uninstalled: boolean;
 }
 
-export interface PluginCloudReleaseDescriptor {
-  appId: string;
-  channel?: null | string;
-  loadedAt: string;
-  manifestHash: string;
-  packageHash: string;
-  packageUrl: string;
-  releaseId?: null | string;
-  signatureRef?: null | string;
-  sourceUri: string;
-  tenantEnablementRef?: null | string;
-  tenantId?: null | string;
-  version: string;
-}
-
-export interface PluginDeleteDataExecutionEvidence {
-  blockedTargets?: PluginDeleteDataTargetEvidence[];
-  blockerCodes?: string[];
-  dataRoot: string;
-  failedTarget?: PluginDeleteDataTargetEvidence | null;
-  generatedAt: string;
-  missingTargets?: PluginDeleteDataTargetEvidence[];
-  postDeleteResidualAudit: PluginDeleteDataPostDeleteResidualAudit;
-  removedTargets?: PluginDeleteDataTargetEvidence[];
-  retainedTargets?: PluginDeleteDataTargetEvidence[];
-  status: string;
-}
-
-export interface PluginDeleteDataPostDeleteResidualAudit {
-  checkedAt: string;
-  checkedTargetCount: number;
-  failedTarget?: PluginDeleteDataTargetEvidence | null;
-  remainingTargetCount: number;
-  remainingTargets?: PluginDeleteDataTargetEvidence[];
-  status: string;
-}
-
-export interface PluginDeleteDataTargetEvidence {
-  action: string;
-  blockerCodes?: string[];
-  error?: null | string;
-  kind: string;
-  reason: string;
-  status: string;
-  value: string;
-}
-
 export type PluginDisabledReason =
   | "disabled_by_admin"
   | "plan_not_eligible"
   | "required_app_unavailable"
   | "unknown";
-
-export interface PluginFetchCloudPackageParams {
-  descriptor: PluginCloudReleaseDescriptor;
-}
-
-export interface PluginHistoryRestoreContract {
-  defaultPane?: null | string;
-  defaultTab?: null | string;
-  enabled: boolean;
-  fallback: string;
-  restoreLayout: boolean;
-  restoreSelection: boolean;
-}
-
-export interface PluginHostFunctionState {
-  blockers?: string[];
-  currentOwner: string;
-  followUps?: string[];
-  key: string;
-  status: string;
-}
-
-export interface PluginHostLifecycleListResponse {
-  issues?: unknown[];
-  snapshots?: PluginHostLifecycleSnapshot[];
-}
-
-export interface PluginHostLifecycleSnapshot {
-  appCenterStatus: string;
-  appId: string;
-  blockers?: string[];
-  displayName: string;
-  followUps?: string[];
-  functions?: PluginHostFunctionState[];
-  generatedAt: string;
-  issueCategories?: PluginReadinessIssueCategorySummary[];
-  primaryIssueCategory?: null | string;
-  profiles?: string[];
-  publishBlocked: boolean;
-  readinessStatus: string;
-  rightSurface: PluginRightSurfaceContract;
-  taskRuntime: PluginTaskRuntimeContract;
-}
 
 export type PluginInstallPolicy =
   | "AVAILABLE"
@@ -7675,21 +7353,6 @@ export type PluginInstallPolicy =
 export type PluginInstallPolicySource =
   | "IMPLICIT_CANONICAL_APP"
   | "WORKSPACE_SETTING";
-
-export interface PluginInstalledDisabledSetParams {
-  appId: string;
-  disabled: boolean;
-  updatedAt?: null | string;
-}
-
-export interface PluginInstalledListResponse {
-  issues?: unknown[];
-  states?: unknown[];
-}
-
-export interface PluginInstalledSaveParams {
-  state: unknown;
-}
 
 export interface PluginInterface {
   brandColor?: null | string;
@@ -7711,76 +7374,6 @@ export interface PluginInterface {
   shortDescription?: null | string;
   termsOfServiceUrl?: null | string;
   websiteUrl?: null | string;
-}
-
-export interface PluginLocalPackageExportParams {
-  appDir: string;
-}
-
-export interface PluginLocalPackageExportResponse {
-  appDir: string;
-  contentType: string;
-  exportedAt: string;
-  fileCount: number;
-  manifest: unknown;
-  manifestHash: string;
-  manifestSource: string;
-  packageBase64: string;
-  packageHash: string;
-  pluginManifest: unknown;
-  sizeBytes: number;
-  sourceKind: string;
-  sourceUri: string;
-}
-
-export interface PluginLocalPackageInspectParams {
-  appDir: string;
-}
-
-export interface PluginLocalPackageInspectResponse {
-  appDir: string;
-  inspectedAt: string;
-  manifest: unknown;
-  manifestHash: string;
-  manifestSource: string;
-  packageHash: string;
-  pluginManifest: unknown;
-  sourceKind: string;
-  sourceUri: string;
-}
-
-export interface PluginPackageCacheEntry {
-  appId: string;
-  cachePath: string;
-  cachedAt: string;
-  identity: PluginPackageIdentity;
-  manifestHash: string;
-  manifestSnapshot: unknown;
-  packageHash: string;
-}
-
-export interface PluginPackageIdentity {
-  appId: string;
-  appVersion: string;
-  channel?: null | string;
-  loadedAt: string;
-  manifestHash: string;
-  packageHash: string;
-  releaseId?: null | string;
-  signatureRef?: null | string;
-  sourceKind: string;
-  sourceUri: string;
-  tenantEnablementRef?: null | string;
-  tenantId?: null | string;
-}
-
-export interface PluginRightSurfaceContract {
-  articleWorkspace: PluginArticleWorkspaceContract;
-  defaultActiveTab?: null | string;
-  dock: string;
-  historyRestore: PluginHistoryRestoreContract;
-  physicalDockCount: number;
-  supportedTabs?: string[];
 }
 
 export interface PluginSearchParams {
@@ -7828,33 +7421,6 @@ export type PluginSharePrincipalRole = "editor" | "owner" | "reader";
 
 export type PluginSharePrincipalType = "group" | "user" | "workspace";
 
-export interface PluginShellPackageMount {
-  kind: string;
-  manifestHash: string;
-  packageHash: string;
-  path: string;
-  readOnly: boolean;
-}
-
-export interface PluginShellPrepareParams {
-  descriptor: unknown;
-}
-
-export interface PluginShellPrepareResponse {
-  appId?: null | string;
-  blockerCodes?: string[];
-  descriptorVersion?: number | null;
-  devShell: boolean;
-  entryKey?: null | string;
-  installMode?: null | string;
-  message?: null | string;
-  packageMount?: PluginShellPackageMount | null;
-  preparedAt: string;
-  shellKind?: null | string;
-  status: string;
-  windowTitle?: null | string;
-}
-
 export type PluginSource =
   | {
       path: string;
@@ -7899,85 +7465,64 @@ export interface PluginSummary {
   version?: null | string;
 }
 
-export interface PluginTaskRuntimeContract {
-  blockers?: string[];
-  contractPath?: null | string;
-  directFilesystemAccess: boolean;
-  directProviderAccess: boolean;
-  enabled: boolean;
-  followUps?: string[];
-  outputArtifactKind?: null | string;
-  packageRootPath?: null | string;
-  sampleRequestPath?: null | string;
-  taskKinds?: string[];
-  workerEntrypoint?: null | string;
+export interface ProcessExitedNotification {
+  exitCode: number;
+  processHandle: string;
+  stderr: string;
+  stderrCapReached: boolean;
+  stdout: string;
+  stdoutCapReached: boolean;
 }
 
-export interface PluginUiRuntimeStartParams {
-  appId: string;
-  entryKey?: null | string;
+export interface ProcessKillParams {
+  processHandle: string;
 }
 
-export interface PluginUiRuntimeStatusParams {
-  appId: string;
+export type ProcessKillResponse = Record<string, unknown>;
+
+export interface ProcessOutputDeltaNotification {
+  capReached: boolean;
+  deltaBase64: string;
+  processHandle: string;
+  stream: ProcessOutputStream;
 }
 
-export interface PluginUiRuntimeStatusResponse {
-  appId: string;
-  baseUrl?: null | string;
-  entryKey?: null | string;
-  entryUrl?: null | string;
-  message?: null | string;
-  pid?: number | null;
-  port?: number | null;
-  route?: null | string;
-  status: string;
-  taskRuntime?: PluginTaskRuntimeContract | null;
+export type ProcessOutputStream = "stderr" | "stdout";
+
+export interface ProcessResizePtyParams {
+  processHandle: string;
+  size: ProcessTerminalSize;
 }
 
-export interface PluginUiRuntimeStopParams {
-  appId: string;
+export type ProcessResizePtyResponse = Record<string, unknown>;
+
+export interface ProcessSpawnParams {
+  command: string[];
+  cwd: string;
+  env?: null | Record<string, unknown>;
+  outputBytesCap?: number | null;
+  processHandle: string;
+  size?: ProcessTerminalSize | null;
+  streamStdin?: boolean;
+  streamStdoutStderr?: boolean;
+  timeoutMs?: number | null;
+  tty?: boolean;
 }
 
-export interface PluginUninstallParams {
-  appId: string;
-  confirmationPhrase?: null | string;
-  mode: string;
+export type ProcessSpawnResponse = Record<string, unknown>;
+
+export interface ProcessTerminalSize {
+  cols: number;
+  rows: number;
 }
 
-export interface PluginUninstallRehearsalParams {
-  appId: string;
-  mode: string;
+export interface ProcessWriteStdinParams {
+  closeStdin?: boolean;
+  deltaBase64?: null | string;
+  processHandle: string;
 }
 
-export interface PluginUninstallRehearsalResponse {
-  appId: string;
-  deletedTargetCount: number;
-  generatedAt: string;
-  mode: string;
-  packageHash?: null | string;
-  retainedTargetCount: number;
-  targets?: PluginUninstallRehearsalTarget[];
-  warnings?: string[];
-}
-
-export interface PluginUninstallRehearsalTarget {
-  action: string;
-  kind: string;
-  reason: string;
-  safeToDelete: boolean;
-  value: string;
-}
-
-export interface PluginUninstallResponse {
-  blockerCodes?: string[];
-  deleteEvidence?: PluginDeleteDataExecutionEvidence | null;
-  list: PluginInstalledListResponse;
-  missingTargetCount: number;
-  rehearsal: PluginUninstallRehearsalResponse;
-  removedTargetCount: number;
-  status: string;
-}
+export type ProcessWriteStdinResponse = Record<string, unknown>;
 
 export interface ProjectGitBranchCheckoutParams {
   branch: string;
@@ -8579,6 +8124,18 @@ export type ServerNotification =
   | {
       method: "model/safetyBuffering/updated";
       params: ModelSafetyBufferingUpdatedNotification;
+    }
+  | {
+      method: "fs/changed";
+      params: FsChangedNotification;
+    }
+  | {
+      method: "process/outputDelta";
+      params: ProcessOutputDeltaNotification;
+    }
+  | {
+      method: "process/exited";
+      params: ProcessExitedNotification;
     }
   | {
       method: "thread/settings/updated";
@@ -10804,12 +10361,6 @@ export interface ProviderModelConfig {
   capability?: ProviderModelCapability | null;
   displayName?: null | string;
   id: string;
-}
-
-export interface PluginReadinessIssueCategorySummary {
-  category: string;
-  codes?: string[];
-  count: number;
 }
 
 export interface HookCompletedNotification {

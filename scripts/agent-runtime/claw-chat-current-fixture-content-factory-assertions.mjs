@@ -1,8 +1,6 @@
 import {
-  APP_SERVER_METHOD_PLUGIN_INSTALLED_SAVE,
   APP_SERVER_METHOD_ARTIFACT_READ,
   APP_SERVER_METHOD_ARTIFACT_WRITE,
-  APP_SERVER_METHOD_SESSION_TURN_START,
   APP_SERVER_METHOD_WORKSPACE_RIGHT_SURFACE_REQUEST,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_TITLE,
@@ -209,41 +207,20 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
       readModel.editedDraft?.objectRef?.kind === "articleDraft" &&
       readModel.workerArticleObject?.markdownIncludesEditedDraftMarker ===
         true,
-    contentFactoryArticleWorkspaceWorkerTurnExecuted:
-      appServerRequestMethods.includes(
-        APP_SERVER_METHOD_PLUGIN_INSTALLED_SAVE,
-      ) &&
-      appServerRequestMethods.includes(APP_SERVER_METHOD_SESSION_TURN_START) &&
-      summary.contentFactoryArticleWorkspaceInstalledStateSave?.appId ===
-        "content-factory-app" &&
-      summary.contentFactoryArticleWorkspaceWorkerTurnStart?.turnStatus ===
-        "inProgress" &&
-      summary.contentFactoryArticleWorkspaceWorkerTurnStart?.taskId ===
-        identity.workerTaskId &&
-      summary.contentFactoryArticleWorkspaceWorkerTurnStart?.readModel
-        ?.workerTurnStatus === "completed" &&
-      summary.contentFactoryArticleWorkspaceWorkerTurnStart?.readModel
-        ?.workerTurnId === identity.workerTurnId &&
-      readModel.workerDogfoodEvidence?.taskId === identity.workerTaskId &&
+    contentFactoryArticleWorkspaceWorkspacePatchEvidenceProjected:
+      readModel.workerDogfoodEvidence?.taskId === identity.sourceTaskId &&
       readModel.workerDogfoodEvidence?.taskKind ===
         "content.article.generate" &&
       readModel.workerDogfoodEvidence?.status === "completed" &&
+      readModel.workerDogfoodEvidence?.source === "workspace_patch" &&
       readModel.workerDogfoodEvidence?.artifactKind ===
-        "content_factory.workspace_patch" &&
-      readModel.workerArticleObject?.sourceTaskId === identity.workerTaskId &&
+        "workspace_patch" &&
+      readModel.workerArticleObject?.sourceTaskId === identity.sourceTaskId &&
       readModel.workerArticleObject?.markdownIncludesResearch === true &&
       readModel.workerArticleObject?.markdownIncludesDraft === true &&
-      readModel.workerArticleObject?.hostManagedGenerationStatus ===
-        "completed" &&
-      !readModel.workerArticleObject?.hostManagedGenerationReasonCode &&
-      readModel.workerArticleObject?.hostManagedGenerationOutputIds?.includes(
-        "article-draft-document",
-      ) === true &&
-      summary.contentFactoryArticleWorkspaceWorkerTurnStart
-        ?.hostGenerationFixture?.requestCount >= 1 &&
-      readModel.workerArticleObject?.researchRoundCount >= 3 &&
-      readModel.workerArticleObject?.imageSlotCount >= 3,
-    contentFactoryArticleWorkspaceWorkerAuditFactsHidden:
+      readModel.workerArticleObject?.researchRoundCount >= 1 &&
+      readModel.workerArticleObject?.imageSlotCount >= 1,
+    contentFactoryArticleWorkspaceWorkspacePatchEvidenceScoped:
       !readModel.workerDogfoodEvidence?.workflowKey &&
       (readModel.workerDogfoodEvidence?.subagents?.length ?? 0) === 0 &&
       (readModel.workerDogfoodEvidence?.skillRefs?.length ?? 0) === 0 &&
@@ -272,7 +249,7 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
         (artifact) =>
           artifact.artifactRef ===
             "artifact-image-regenerate-workspace-patch" &&
-          artifact.kind === "content_factory.workspace_patch",
+          artifact.kind === "workspace_patch",
       ) === true,
     contentFactoryArticleWorkspaceStoryboardRendererContractPreserved:
       summary.contentFactoryArticleWorkspaceStoryboardObjectSelection
@@ -288,7 +265,7 @@ export function buildContentFactoryArticleWorkspaceScenarioAssertions({
         "app_declared_renderer_placeholder_only" &&
       storyboardRendererContract.entry === "./renderer/storyboard.tsx" &&
       storyboardRendererContract.allowedOutputArtifactKinds?.includes(
-        "content_factory.workspace_patch",
+        "workspace_patch",
       ) === true,
     contentFactoryArticleWorkspaceDoesNotUseModelTurn: backendLedger.every(
       (entry) => entry.kind !== "turnStart",

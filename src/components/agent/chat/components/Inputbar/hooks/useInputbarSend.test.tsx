@@ -218,7 +218,7 @@ describe("useInputbarSend", () => {
     renderHarness({
       activePluginSelection: {
         plugin: {
-          pluginId: "content-factory-app",
+          pluginId: "content-factory-app@personal",
           displayName: "写文章",
           trigger: "@写文章",
         },
@@ -238,7 +238,7 @@ describe("useInputbarSend", () => {
       {
         type: "mention",
         name: "写文章",
-        path: "plugin://content-factory-app",
+        path: "plugin://content-factory-app@personal",
       },
     ]);
     expect(payload?.sendOptions?.inputRestoreDraft?.textElements).toEqual([

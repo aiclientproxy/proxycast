@@ -271,7 +271,6 @@ export function summarizeInvokeEntries(
     requiredReadMethods,
     fixtureMethods,
     oauthFixtureMethods,
-    pluginRuntimeFixtureMethods = [],
   },
 ) {
   const appServerRequests = entries.flatMap((entry) => entry.appServerRequests);
@@ -313,9 +312,6 @@ export function summarizeInvokeEntries(
       (method) => !appServerMethodsSeen.includes(method),
     ),
     missingOAuthFixtureMethods: oauthFixtureMethods.filter(
-      (method) => !appServerMethodsSeen.includes(method),
-    ),
-    missingPluginRuntimeFixtureMethods: pluginRuntimeFixtureMethods.filter(
       (method) => !appServerMethodsSeen.includes(method),
     ),
     mcpCounts: {

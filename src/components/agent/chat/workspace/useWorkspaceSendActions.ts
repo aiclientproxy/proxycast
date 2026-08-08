@@ -4,10 +4,8 @@ import { toast } from "sonner";
 import type { Dispatch, SetStateAction } from "react";
 import type { RuntimeSearchMode } from "@limecloud/app-server-client";
 import type { AutoContinueRequestPayload } from "@/lib/api/agentRuntime/sessionTypes";
-import type { InstalledPluginState } from "@/features/plugin/types";
 import { getOrCreateDefaultProject } from "@/lib/api/project";
 import type { AgentRuntimeWorkspaceSkillBinding } from "@/lib/api/agentRuntime/toolInventoryTypes";
-import { listInstalledPlugins } from "@/lib/api/plugins";
 import { normalizeExecutionStrategyToReact } from "@/lib/api/agentRuntime/executionStrategyCompat";
 import type { ServiceModelsConfig } from "@/lib/api/appConfigTypes";
 import { logAgentDebug } from "@/lib/agentDebug";
@@ -163,10 +161,6 @@ import {
 import { asRecord } from "./commands/skillSlotUtils";
 import { waitForNextPaint } from "./commands/sendHelpers";
 import {
-  mergePluginActivationSendOptions,
-  resolveWorkspacePluginActivation,
-} from "./workspacePluginActivation";
-import {
   isImageGenerationPlainInputIntent,
   isLikelyPlainImageGenerationRequest,
 } from "./commands/intentHelpers";
@@ -303,9 +297,6 @@ interface UseWorkspaceSendActionsParams {
     skipSessionStartHooks?: boolean;
   }) => Promise<string | null>;
   prepareImageWorkbenchSkillSend?: () => boolean | Promise<boolean>;
-  listInstalledPluginsForPluginActivation?: () => Promise<{
-    states: InstalledPluginState[];
-  }>;
   resolveImageWorkbenchCommandRequest: (input: {
     rawText: string;
     parsedCommand: ParsedImageWorkbenchCommand;
@@ -431,7 +422,6 @@ export function useWorkspaceSendActions({
   openRuntimeSceneGate,
   ensureSessionForCommandMetadata,
   prepareImageWorkbenchSkillSend,
-  listInstalledPluginsForPluginActivation = listInstalledPlugins,
   resolveImageWorkbenchCommandRequest,
 }: UseWorkspaceSendActionsParams) {
   const { t } = useTranslation("agent");
@@ -2687,44 +2677,6 @@ export function useWorkspaceSendActions({
         parsedGrowthWorkbenchCommand ||
         parsedBrowserWorkbenchCommand,
       );
-      const shouldResolvePluginActivation =
-        !sendOptions?.purpose &&
-        !hasBoundSkillLaunch &&
-        !hasMatchedWorkspaceMentionCommandWithoutAgentTurnRoute &&
-        !sendOptions?.inputMentions?.some((mention) =>
-          mention.path.startsWith("plugin://"),
-        ) &&
-        sourceText.trim().startsWith("@");
-      if (shouldResolvePluginActivation) {
-        const pluginSessionId = await ensureCommandSessionId();
-        const installedPlugins =
-          await listInstalledPluginsForPluginActivation();
-        const pluginActivationResolution = resolveWorkspacePluginActivation({
-          text: sourceText,
-          sessionId: pluginSessionId,
-          installedPlugins: installedPlugins.states,
-        });
-        if (pluginActivationResolution?.status === "blocked") {
-          clearSubmissionPreview();
-          toast.error(
-            translateAgentWorkspace(
-              "agentChat.workspace.pluginActivation.blocked",
-            ),
-          );
-          return { kind: "done", result: false };
-        }
-        if (pluginActivationResolution?.status === "matched") {
-          ensureSubmissionPreview();
-          sendOptions = mergePluginActivationSendOptions({
-            sendOptions,
-            resolution: pluginActivationResolution,
-          });
-          completedMentionCommandUsage = null;
-          completedMentionUsage = null;
-          hasBoundSkillLaunch = true;
-        }
-      }
-
       const trimmedSourceText = sourceText.trim();
       if (
         activeTheme === "general" &&
@@ -2907,7 +2859,6 @@ export function useWorkspaceSendActions({
       executionStrategy,
       handleAutoLaunchMatchedSiteSkill,
       isThemeWorkbench,
-      listInstalledPluginsForPluginActivation,
       resolveImageWorkbenchCommandRequest,
       input,
       messagesCount,

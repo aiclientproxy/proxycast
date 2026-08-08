@@ -3,7 +3,6 @@ import { UI_LOCALE_OPTIONS } from "@/i18n/locales";
 export const APP_SIDEBAR_COLLAPSED_STORAGE_KEY =
   "lime.app-sidebar.collapsed";
 export const APP_SIDEBAR_COLLAPSE_EVENT = "lime:app-sidebar-collapse";
-export const PLUGIN_RUNTIME_SIDEBAR_COLLAPSE_SOURCE = "plugin-runtime";
 
 export const SIDEBAR_RECENT_SESSION_PAGE_SIZE = 10;
 export const SIDEBAR_SEARCH_RESULT_LIMIT = 8;
@@ -14,7 +13,6 @@ export const SIDEBAR_CONVERSATION_NAVIGATION_DEFER_MS =
   SIDEBAR_SESSION_ENTRY_REFRESH_DEFER_MS;
 
 export const SIDEBAR_NAV_LABEL_KEYS: Record<string, string> = {
-  "plugin-lab": "navigation.sidebar.items.pluginLab",
   automation: "navigation.sidebar.items.automation",
   channels: "navigation.sidebar.items.channels",
   experts: "navigation.sidebar.items.experts",

@@ -16,12 +16,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
             METHOD_INITIALIZED,
             METHOD_CAPABILITY_LIST,
             METHOD_ARTIFACT_READ,
-            METHOD_FILE_SYSTEM_LIST_DIRECTORY,
-            METHOD_FILE_SYSTEM_READ_FILE_PREVIEW,
-            METHOD_FILE_SYSTEM_CREATE_FILE,
-            METHOD_FILE_SYSTEM_CREATE_DIRECTORY,
-            METHOD_FILE_SYSTEM_RENAME_FILE,
-            METHOD_FILE_SYSTEM_DELETE_FILE,
             METHOD_PROJECT_GIT_STATUS,
             METHOD_PROJECT_GIT_DIFF,
             METHOD_PROJECT_GIT_COMMITS_LIST,
@@ -33,12 +27,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
             METHOD_PROJECT_SHELL_SESSION_RESIZE,
             METHOD_PROJECT_SHELL_SESSION_KILL,
             METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS,
-            METHOD_EXECUTION_PROCESS_START,
-            METHOD_EXECUTION_PROCESS_WRITE_STDIN,
-            METHOD_EXECUTION_PROCESS_INTERRUPT,
-            METHOD_EXECUTION_PROCESS_TERMINATE,
-            METHOD_EXECUTION_PROCESS_STATUS,
-            METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT,
             METHOD_EVIDENCE_EXPORT,
             METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT,
             METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT,
@@ -160,19 +148,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
             METHOD_BROWSER_SESSION_CLOSE,
             METHOD_BROWSER_SESSION_EVENT_LIST,
             METHOD_BROWSER_SESSION_ACTION_EXECUTE,
-            METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT,
-            METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT,
-            METHOD_PLUGIN_PACKAGE_FETCH_CLOUD,
-            METHOD_PLUGIN_INSTALLED_SAVE,
-            METHOD_PLUGIN_INSTALLED_LIST,
-            METHOD_PLUGIN_INSTALLED_DISABLED_SET,
-            METHOD_PLUGIN_INSTALLED_UNINSTALL_REHEARSAL,
-            METHOD_PLUGIN_INSTALLED_UNINSTALL,
-            METHOD_PLUGIN_HOST_LIFECYCLE_LIST,
-            METHOD_PLUGIN_SHELL_PREPARE,
-            METHOD_PLUGIN_UI_RUNTIME_START,
-            METHOD_PLUGIN_UI_RUNTIME_STATUS,
-            METHOD_PLUGIN_UI_RUNTIME_STOP,
             METHOD_SOUL_STYLE_PACK_INSTALL,
             METHOD_SOUL_STYLE_PACK_LIST,
             METHOD_SOUL_STYLE_PACK_STATUS_SET,
@@ -226,7 +201,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
             METHOD_MEMORY_STORE_REVIEW_LIST,
             METHOD_MEMORY_STORE_REVIEW_RESOLVE,
             METHOD_MEMORY_STORE_HEALTH,
-            METHOD_MEMORY_STORE_RESET,
             METHOD_MEMORY_STORE_INDEX_REBUILD,
             METHOD_LOG_LIST,
             METHOD_LOG_PERSISTED_TAIL,
@@ -470,14 +444,6 @@ fn app_server_request_serialization_scope_covers_high_risk_methods() {
         AppServerRequestAccess::Exclusive
     );
     assert_eq!(
-        app_server_request_serialization_scope(METHOD_EXECUTION_PROCESS_START),
-        Some(AppServerRequestSerializationScope::ExecutionProcess)
-    );
-    assert_eq!(
-        app_server_request_serialization_scope(METHOD_EXECUTION_PROCESS_TERMINATE),
-        Some(AppServerRequestSerializationScope::ExecutionProcess)
-    );
-    assert_eq!(
         app_server_request_serialization_scope(METHOD_PROJECT_SHELL_SESSION_START),
         Some(AppServerRequestSerializationScope::ProjectShellSession)
     );
@@ -496,10 +462,6 @@ fn app_server_request_serialization_scope_covers_high_risk_methods() {
     assert_eq!(
         app_server_request_serialization_scope(METHOD_BROWSER_SESSION_ACTION_EXECUTE),
         Some(AppServerRequestSerializationScope::BrowserSession)
-    );
-    assert_eq!(
-        app_server_request_serialization_scope(METHOD_FILE_SYSTEM_DELETE_FILE),
-        Some(AppServerRequestSerializationScope::FileSystemMutation)
     );
     assert_eq!(
         app_server_request_serialization_scope(METHOD_CAPABILITY_LIST),

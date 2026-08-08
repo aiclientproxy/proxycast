@@ -1,5 +1,3 @@
-import { resolvePluginRuntimeAuthorization } from "@/features/plugin/manifest/pluginRuntimeAuthorization";
-
 export type WorkspacePluginPaneActionRisk = "read" | "write";
 
 export interface WorkspacePluginPaneActionIntent {
@@ -48,10 +46,6 @@ export function buildWorkspacePluginPaneActionRequestMetadata(
   const paneKind = normalizedString(intent.paneKind);
   const surfaceKind = normalizedString(intent.surfaceKind);
   const outputArtifactKind = normalizedString(intent.outputArtifactKind);
-  const runtimeAuthorization = resolvePluginRuntimeAuthorization({
-    pluginId: intent.appId,
-    outputArtifactKind,
-  });
 
   return {
     plugin: {
@@ -59,24 +53,6 @@ export function buildWorkspacePluginPaneActionRequestMetadata(
       app_id: intent.appId,
       session_id: intent.sessionId,
       workspace_id: intent.workspaceId ?? null,
-      runtime_authorization: {
-        status: runtimeAuthorization.status,
-        execution_mode: runtimeAuthorization.executionMode,
-        runtime_boundary: runtimeAuthorization.runtimeBoundary,
-        reason_code: runtimeAuthorization.reasonCode,
-        requested_output_artifact_kind:
-          runtimeAuthorization.requestedOutputArtifactKind,
-        allowed_output_artifact_kinds:
-          runtimeAuthorization.allowedOutputArtifactKinds,
-        remote_runtime_policy: {
-          status: runtimeAuthorization.remoteRuntimePolicy.status,
-          client_behavior:
-            runtimeAuthorization.remoteRuntimePolicy.clientBehavior,
-          service_boundary:
-            runtimeAuthorization.remoteRuntimePolicy.serviceBoundary,
-          reason_code: runtimeAuthorization.remoteRuntimePolicy.reasonCode,
-        },
-      },
       pane_action: {
         key: actionKey,
         intent: normalizedString(intent.action.intent),

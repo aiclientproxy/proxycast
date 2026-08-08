@@ -110,7 +110,7 @@ fn seed_projected_session(
 }
 
 #[tokio::test]
-async fn memory_store_reset_does_not_delete_persisted_session_history() {
+async fn memory_reset_does_not_delete_persisted_session_history() {
     let app = projection_app_server(&[(
         SESSION_ID,
         THREAD_ID,
@@ -151,16 +151,8 @@ async fn memory_store_reset_does_not_delete_persisted_session_history() {
         .expect("one event log record")
         .path;
 
-    let reset = request(
-        &app.server,
-        3,
-        METHOD_MEMORY_STORE_RESET,
-        json!({
-            "scope": "global"
-        }),
-    )
-    .await;
-    assert_eq!(reset.pointer("/result/preservedSoul"), Some(&json!(true)));
+    let reset = request(&app.server, 3, METHOD_MEMORY_RESET, json!({})).await;
+    assert_eq!(reset.pointer("/result"), Some(&json!({})));
     assert!(!memory_root.join(note_path).exists());
     assert_eq!(
         fs::read_to_string(memory_root.join("memory_summary.md")).expect("reset summary"),

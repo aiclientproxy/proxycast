@@ -1,9 +1,4 @@
 import type { OemCloudCurrentSessionLike } from "@/lib/oemCloudSession";
-import type { CloudBootstrapPayload } from "../../features/plugin/types";
-import type {
-  ClientPluginInstallStateReport,
-  PluginMarketplaceListResponse,
-} from "./pluginMarketplaceTypes";
 import type {
   ModelAliasSource,
   ModelDeploymentSource,
@@ -236,18 +231,11 @@ export interface OemCloudBootstrapResponse {
   skillCatalog?: unknown;
   serviceSkillCatalog?: unknown;
   siteAdapterCatalog?: unknown;
-  pluginCatalog?: CloudBootstrapPayload;
   sceneCatalog?: Array<{ id: string }>;
   features: OemCloudFeatureFlags;
   gateway?: OemCloudGatewayConfig;
   referral?: OemCloudReferralDashboard | null;
 }
-
-export type OemCloudPluginMarketplaceListResponse =
-  PluginMarketplaceListResponse;
-
-export type OemCloudClientPluginInstallStateReport =
-  ClientPluginInstallStateReport;
 
 export interface SendClientAuthEmailCodePayload {
   identifier: string;

@@ -421,59 +421,6 @@ declare module "./connection.js" {
       params: protocol.PluginSearchParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.PluginSearchResponse>>;
-    inspectPluginLocalPackage(
-      params: protocol.PluginLocalPackageInspectParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.PluginLocalPackageInspectResponse>
-    >;
-    exportPluginLocalPackage(
-      params: protocol.PluginLocalPackageExportParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.PluginLocalPackageExportResponse>
-    >;
-    fetchPluginCloudPackage(
-      params: protocol.PluginFetchCloudPackageParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.PluginPackageCacheEntry>>;
-    savePluginInstalled(
-      params: protocol.PluginInstalledSaveParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<unknown>>;
-    listPluginInstalled(
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.PluginInstalledListResponse>>;
-    setPluginInstalledDisabled(
-      params: protocol.PluginInstalledDisabledSetParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.PluginInstalledListResponse>>;
-    previewPluginUninstall(
-      params: protocol.PluginUninstallRehearsalParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.PluginUninstallRehearsalResponse>
-    >;
-    uninstallPlugin(
-      params: protocol.PluginUninstallParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.PluginUninstallResponse>>;
-    preparePluginShell(
-      params: protocol.PluginShellPrepareParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.PluginShellPrepareResponse>>;
-    startPluginUiRuntime(
-      params: protocol.PluginUiRuntimeStartParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.PluginUiRuntimeStatusResponse>>;
-    getPluginUiRuntimeStatus(
-      params: protocol.PluginUiRuntimeStatusParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.PluginUiRuntimeStatusResponse>>;
-    stopPluginUiRuntime(
-      params: protocol.PluginUiRuntimeStopParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.PluginUiRuntimeStatusResponse>>;
     listKnowledgePacks(
       params: protocol.KnowledgeListPacksParams,
       options?: AppServerRequestOptions,
@@ -695,10 +642,9 @@ declare module "./connection.js" {
       params: protocol.MemoryStoreRootParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.MemoryStoreHealthResponse>>;
-    resetMemoryStore(
-      params: protocol.MemoryStoreResetParams,
+    resetMemory(
       options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.MemoryStoreResetResponse>>;
+    ): Promise<AppServerRequestResult<protocol.MemoryResetResponse>>;
     rebuildMemoryStoreIndex(
       params: protocol.MemoryStoreRootParams,
       options?: AppServerRequestOptions,
@@ -1026,30 +972,42 @@ declare module "./connection.js" {
       params: protocol.ArtifactWriteParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ArtifactWriteResponse>>;
-    listDirectory(
-      params: protocol.FileSystemListDirectoryParams,
+    readFile(
+      params: protocol.FsReadFileParams,
       options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.FileSystemDirectoryListing>>;
-    readFilePreview(
-      params: protocol.FileSystemReadFilePreviewParams,
+    ): Promise<AppServerRequestResult<protocol.FsReadFileResponse>>;
+    writeFile(
+      params: protocol.FsWriteFileParams,
       options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.FileSystemFilePreview>>;
-    createFile(
-      params: protocol.FileSystemCreateFileParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.FileSystemMutationResponse>>;
+    ): Promise<AppServerRequestResult<protocol.FsWriteFileResponse>>;
     createDirectory(
-      params: protocol.FileSystemCreateDirectoryParams,
+      params: protocol.FsCreateDirectoryParams,
       options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.FileSystemMutationResponse>>;
-    renameFile(
-      params: protocol.FileSystemRenameFileParams,
+    ): Promise<AppServerRequestResult<protocol.FsCreateDirectoryResponse>>;
+    getMetadata(
+      params: protocol.FsGetMetadataParams,
       options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.FileSystemMutationResponse>>;
-    deleteFile(
-      params: protocol.FileSystemDeleteFileParams,
+    ): Promise<AppServerRequestResult<protocol.FsGetMetadataResponse>>;
+    readDirectory(
+      params: protocol.FsReadDirectoryParams,
       options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.FileSystemMutationResponse>>;
+    ): Promise<AppServerRequestResult<protocol.FsReadDirectoryResponse>>;
+    remove(
+      params: protocol.FsRemoveParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.FsRemoveResponse>>;
+    copy(
+      params: protocol.FsCopyParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.FsCopyResponse>>;
+    watch(
+      params: protocol.FsWatchParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.FsWatchResponse>>;
+    unwatch(
+      params: protocol.FsUnwatchParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.FsUnwatchResponse>>;
     readProjectGitStatus(
       params: protocol.ProjectGitStatusParams,
       options?: AppServerRequestOptions,
@@ -1101,32 +1059,6 @@ declare module "./connection.js" {
       options?: AppServerRequestOptions,
     ): Promise<
       AppServerRequestResult<protocol.ProjectShellSessionDrainEventsResponse>
-    >;
-    startExecutionProcess(
-      params: protocol.ExecutionProcessStartParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.ExecutionProcessStartResponse>>;
-    writeExecutionProcessStdin(
-      params: protocol.ExecutionProcessWriteStdinParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.ExecutionProcessEmptyResponse>>;
-    interruptExecutionProcess(
-      params: protocol.ExecutionProcessIdParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.ExecutionProcessStatusResponse>>;
-    terminateExecutionProcess(
-      params: protocol.ExecutionProcessIdParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.ExecutionProcessStatusResponse>>;
-    readExecutionProcessStatus(
-      params: protocol.ExecutionProcessIdParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.ExecutionProcessStatusResponse>>;
-    drainExecutionProcessOutput(
-      params?: protocol.ExecutionProcessDrainOutputParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.ExecutionProcessDrainOutputResponse>
     >;
     exportEvidence(
       params: protocol.EvidenceExportParams,
@@ -1243,6 +1175,22 @@ declare module "./connection.js" {
     ): Promise<
       AppServerRequestResult<protocol.ConversationImportJobReadResponse>
     >;
+    spawnProcess(
+      params: protocol.ProcessSpawnParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ProcessSpawnResponse>>;
+    writeProcessStdin(
+      params: protocol.ProcessWriteStdinParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ProcessWriteStdinResponse>>;
+    resizeProcessPty(
+      params: protocol.ProcessResizePtyParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ProcessResizePtyResponse>>;
+    killProcess(
+      params: protocol.ProcessKillParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ProcessKillResponse>>;
     startTurn(
       params: protocol.TurnStartParams,
       options?: AppServerRequestOptions,
@@ -1323,6 +1271,12 @@ function resolveArgs(
   mode: ConnectionParamsMode,
   args: IArguments,
 ): ResolvedArgs {
+  if (mode === "omitted") {
+    return {
+      clientArgs: [],
+      options: (args[0] as AppServerRequestOptions | undefined) ?? {},
+    };
+  }
   if (mode === "none") {
     return {
       clientArgs: [],

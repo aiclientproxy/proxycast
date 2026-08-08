@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "fileName": {
+      "type": "string"
+    },
+    "isDirectory": {
+      "type": "boolean"
+    },
+    "isFile": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "fileName",
+    "isDirectory",
+    "isFile"
+  ],
+  "title": "FsReadDirectoryEntry",
+  "type": "object"
+}

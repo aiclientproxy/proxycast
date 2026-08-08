@@ -51,20 +51,7 @@ const {
   getAppServerRequestSerializationScope,
   isAppServerServerRequestMethod,
   isAgentSessionEventNotification,
-  METHOD_PLUGIN_INSTALLED_DISABLED_SET,
-  METHOD_PLUGIN_INSTALLED_LIST,
-  METHOD_PLUGIN_INSTALLED_SAVE,
-  METHOD_PLUGIN_INSTALLED_UNINSTALL,
-  METHOD_PLUGIN_INSTALLED_UNINSTALL_REHEARSAL,
-  METHOD_PLUGIN_HOST_LIFECYCLE_LIST,
-  METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT,
-  METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT,
-  METHOD_PLUGIN_PACKAGE_FETCH_CLOUD,
   METHOD_PLUGIN_SEARCH,
-  METHOD_PLUGIN_SHELL_PREPARE,
-  METHOD_PLUGIN_UI_RUNTIME_START,
-  METHOD_PLUGIN_UI_RUNTIME_STATUS,
-  METHOD_PLUGIN_UI_RUNTIME_STOP,
   METHOD_AGENT_SESSION_ACTION_RESPOND,
   METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT,
   METHOD_AGENT_SESSION_EVENT,
@@ -145,18 +132,15 @@ const {
   METHOD_CONVERSATION_IMPORT_THREAD_COMMIT,
   METHOD_CONVERSATION_IMPORT_THREAD_PREVIEW,
   METHOD_EVIDENCE_EXPORT,
-  METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT,
-  METHOD_EXECUTION_PROCESS_INTERRUPT,
-  METHOD_EXECUTION_PROCESS_START,
-  METHOD_EXECUTION_PROCESS_STATUS,
-  METHOD_EXECUTION_PROCESS_TERMINATE,
-  METHOD_EXECUTION_PROCESS_WRITE_STDIN,
-  METHOD_FILE_SYSTEM_CREATE_DIRECTORY,
-  METHOD_FILE_SYSTEM_CREATE_FILE,
-  METHOD_FILE_SYSTEM_DELETE_FILE,
-  METHOD_FILE_SYSTEM_LIST_DIRECTORY,
-  METHOD_FILE_SYSTEM_READ_FILE_PREVIEW,
-  METHOD_FILE_SYSTEM_RENAME_FILE,
+  METHOD_FS_COPY,
+  METHOD_FS_CREATE_DIRECTORY,
+  METHOD_FS_GET_METADATA,
+  METHOD_FS_READ_DIRECTORY,
+  METHOD_FS_READ_FILE,
+  METHOD_FS_REMOVE,
+  METHOD_FS_UNWATCH,
+  METHOD_FS_WATCH,
+  METHOD_FS_WRITE_FILE,
   METHOD_PROJECT_GIT_BRANCH_CHECKOUT,
   METHOD_PROJECT_GIT_BRANCH_CREATE,
   METHOD_PROJECT_GIT_COMMITS_LIST,
@@ -271,8 +255,12 @@ const {
   METHOD_MEMORY_STORE_READ,
   METHOD_MEMORY_STORE_REVIEW_LIST,
   METHOD_MEMORY_STORE_REVIEW_RESOLVE,
-  METHOD_MEMORY_STORE_RESET,
+  METHOD_MEMORY_RESET,
   METHOD_MEMORY_STORE_SEARCH,
+  METHOD_PROCESS_KILL,
+  METHOD_PROCESS_RESIZE_PTY,
+  METHOD_PROCESS_SPAWN,
+  METHOD_PROCESS_WRITE_STDIN,
   METHOD_PROJECT_MEMORY_READ,
   METHOD_SESSION_FILE_DELETE,
   METHOD_SESSION_FILE_GET_OR_CREATE,
@@ -394,6 +382,41 @@ const {
 } = await import(
   /* @vite-ignore */ pathToFileURL(join(packageRoot, "dist/index.js")).href
 );
+
+test("process request helpers use exact v2 methods and payloads", () => {
+  const client = new AppServerClient();
+  const spawn = client.spawnProcess({
+    command: ["echo", "hello"],
+    processHandle: "process-1",
+    cwd: "/workspace",
+    streamStdoutStderr: true,
+    outputBytesCap: null,
+    timeoutMs: null,
+  });
+  const write = client.writeProcessStdin({
+    processHandle: "process-1",
+    deltaBase64: "aGVsbG8=",
+    closeStdin: true,
+  });
+  const resize = client.resizeProcessPty({
+    processHandle: "process-1",
+    size: { rows: 24, cols: 80 },
+  });
+  const kill = client.killProcess({ processHandle: "process-1" });
+
+  assert.equal(spawn.method, METHOD_PROCESS_SPAWN);
+  assert.deepEqual(spawn.params, {
+    command: ["echo", "hello"],
+    processHandle: "process-1",
+    cwd: "/workspace",
+    streamStdoutStderr: true,
+    outputBytesCap: null,
+    timeoutMs: null,
+  });
+  assert.equal(write.method, METHOD_PROCESS_WRITE_STDIN);
+  assert.equal(resize.method, METHOD_PROCESS_RESIZE_PTY);
+  assert.equal(kill.method, METHOD_PROCESS_KILL);
+});
 
 const repoRoot = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -1252,26 +1275,6 @@ test("builds session file requests with current App Server methods", () => {
 test("builds app data surface requests with current methods", () => {
   const client = new AppServerClient();
 
-  const installed = client.listPluginInstalled();
-  const hostLifecycle = client.listPluginHostLifecycle();
-  const exportedPluginPackage = client.exportPluginLocalPackage({
-    appDir: "/tmp/content-factory-app",
-  });
-  const runtimeStart = client.startPluginUiRuntime({
-    appId: "content-factory-app",
-    entryKey: "dashboard",
-  });
-  const runtimeStatus = client.getPluginUiRuntimeStatus({
-    appId: "content-factory-app",
-  });
-  const runtimeStop = client.stopPluginUiRuntime({
-    appId: "content-factory-app",
-  });
-  const shellPrepare = client.preparePluginShell({
-    descriptor: {
-      appId: "content-factory-app",
-    },
-  });
   const knowledge = client.listKnowledgePacks({
     workingDir: "/workspace/project",
     includeArchived: true,
@@ -1477,10 +1480,7 @@ test("builds app data surface requests with current methods", () => {
     scope: "workspace",
     workspaceRoot: "/workspace/project",
   });
-  const memoryStoreReset = client.resetMemoryStore({
-    scope: "workspace",
-    workspaceRoot: "/workspace/project",
-  });
+  const memoryReset = client.resetMemory();
   const memoryStoreIndexRebuild = client.rebuildMemoryStoreIndex({
     scope: "workspace",
     workspaceRoot: "/workspace/project",
@@ -1652,36 +1652,6 @@ test("builds app data surface requests with current methods", () => {
     credential_id: "cred-1",
   });
 
-  assert.equal(installed.method, METHOD_PLUGIN_INSTALLED_LIST);
-  assert.deepEqual(installed.params, {});
-  assert.equal(hostLifecycle.method, METHOD_PLUGIN_HOST_LIFECYCLE_LIST);
-  assert.deepEqual(hostLifecycle.params, {});
-  assert.equal(
-    exportedPluginPackage.method,
-    METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT,
-  );
-  assert.deepEqual(exportedPluginPackage.params, {
-    appDir: "/tmp/content-factory-app",
-  });
-  assert.equal(runtimeStart.method, METHOD_PLUGIN_UI_RUNTIME_START);
-  assert.deepEqual(runtimeStart.params, {
-    appId: "content-factory-app",
-    entryKey: "dashboard",
-  });
-  assert.equal(runtimeStatus.method, METHOD_PLUGIN_UI_RUNTIME_STATUS);
-  assert.deepEqual(runtimeStatus.params, {
-    appId: "content-factory-app",
-  });
-  assert.equal(runtimeStop.method, METHOD_PLUGIN_UI_RUNTIME_STOP);
-  assert.deepEqual(runtimeStop.params, {
-    appId: "content-factory-app",
-  });
-  assert.equal(shellPrepare.method, METHOD_PLUGIN_SHELL_PREPARE);
-  assert.deepEqual(shellPrepare.params, {
-    descriptor: {
-      appId: "content-factory-app",
-    },
-  });
   assert.equal(knowledge.method, METHOD_KNOWLEDGE_PACK_LIST);
   assert.deepEqual(knowledge.params, {
     workingDir: "/workspace/project",
@@ -1937,11 +1907,8 @@ test("builds app data surface requests with current methods", () => {
     scope: "workspace",
     workspaceRoot: "/workspace/project",
   });
-  assert.equal(memoryStoreReset.method, METHOD_MEMORY_STORE_RESET);
-  assert.deepEqual(memoryStoreReset.params, {
-    scope: "workspace",
-    workspaceRoot: "/workspace/project",
-  });
+  assert.equal(memoryReset.method, METHOD_MEMORY_RESET);
+  assert.equal(memoryReset.params, undefined);
   assert.equal(
     memoryStoreIndexRebuild.method,
     METHOD_MEMORY_STORE_INDEX_REBUILD,
@@ -2261,30 +2228,32 @@ test("builds artifact read requests with optional content lookup", () => {
   });
 });
 
-test("builds file system requests with current methods", () => {
+test("builds exact fs requests", () => {
   const client = new AppServerClient();
 
-  const listing = client.listDirectory({
-    path: "/workspace",
-  });
-  const preview = client.readFilePreview({
-    path: "/workspace/README.md",
-    maxSize: 1024,
-  });
-  const createFile = client.createFile({
+  const readFile = client.readFile({ path: "/workspace/README.md" });
+  const writeFile = client.writeFile({
     path: "/workspace/new.md",
+    dataBase64: "TGlNZQ==",
   });
   const createDirectory = client.createDirectory({
     path: "/workspace/new-dir",
+    recursive: true,
   });
-  const renameFile = client.renameFile({
-    oldPath: "/workspace/new.md",
-    newPath: "/workspace/renamed.md",
-  });
-  const deleteFile = client.deleteFile({
-    path: "/workspace/renamed.md",
+  const getMetadata = client.getMetadata({ path: "/workspace/new.md" });
+  const readDirectory = client.readDirectory({ path: "/workspace" });
+  const remove = client.remove({
+    path: "/workspace/new.md",
     recursive: false,
+    force: true,
   });
+  const copy = client.copy({
+    sourcePath: "/workspace/source",
+    destinationPath: "/workspace/destination",
+    recursive: true,
+  });
+  const watch = client.watch({ watchId: "workspace", path: "/workspace" });
+  const unwatch = client.unwatch({ watchId: "workspace" });
   const gitStatus = client.readProjectGitStatus({
     rootPath: "/workspace",
   });
@@ -2332,72 +2301,51 @@ test("builds file system requests with current methods", () => {
     sessionId: "project-shell-1",
     limit: 20,
   });
-  const executionStart = client.startExecutionProcess({
-    processId: "execution-process-1",
-    toolId: "tool-1",
-    toolName: "shell",
-    command: ["sh", "-c", "printf ok"],
-    workingDirectory: "/workspace",
-    approvalPolicy: "never",
-    sandboxPolicy: "danger-full-access",
-  });
-  const executionWrite = client.writeExecutionProcessStdin({
-    processId: "execution-process-1",
-    data: "input\n",
-  });
-  const executionInterrupt = client.interruptExecutionProcess({
-    processId: "execution-process-1",
-  });
-  const executionTerminate = client.terminateExecutionProcess({
-    processId: "execution-process-1",
-  });
-  const executionStatus = client.readExecutionProcessStatus({
-    processId: "execution-process-1",
-  });
-  const executionDrain = client.drainExecutionProcessOutput({
-    processId: "execution-process-1",
-    limit: 20,
-  });
 
-  assert.equal(listing.id, 1);
-  assert.equal(listing.method, METHOD_FILE_SYSTEM_LIST_DIRECTORY);
-  assert.deepEqual(listing.params, {
-    path: "/workspace",
-  });
-  assert.equal(preview.id, 2);
-  assert.equal(preview.method, METHOD_FILE_SYSTEM_READ_FILE_PREVIEW);
-  assert.deepEqual(preview.params, {
-    path: "/workspace/README.md",
-    maxSize: 1024,
-  });
-  assert.equal(createFile.id, 3);
-  assert.equal(createFile.method, METHOD_FILE_SYSTEM_CREATE_FILE);
-  assert.deepEqual(createFile.params, {
+  assert.equal(readFile.id, 1);
+  assert.equal(readFile.method, METHOD_FS_READ_FILE);
+  assert.deepEqual(readFile.params, { path: "/workspace/README.md" });
+  assert.equal(writeFile.id, 2);
+  assert.equal(writeFile.method, METHOD_FS_WRITE_FILE);
+  assert.deepEqual(writeFile.params, {
     path: "/workspace/new.md",
+    dataBase64: "TGlNZQ==",
   });
-  assert.equal(createDirectory.id, 4);
-  assert.equal(createDirectory.method, METHOD_FILE_SYSTEM_CREATE_DIRECTORY);
+  assert.equal(createDirectory.id, 3);
+  assert.equal(createDirectory.method, METHOD_FS_CREATE_DIRECTORY);
   assert.deepEqual(createDirectory.params, {
     path: "/workspace/new-dir",
+    recursive: true,
   });
-  assert.equal(renameFile.id, 5);
-  assert.equal(renameFile.method, METHOD_FILE_SYSTEM_RENAME_FILE);
-  assert.deepEqual(renameFile.params, {
-    oldPath: "/workspace/new.md",
-    newPath: "/workspace/renamed.md",
-  });
-  assert.equal(deleteFile.id, 6);
-  assert.equal(deleteFile.method, METHOD_FILE_SYSTEM_DELETE_FILE);
-  assert.deepEqual(deleteFile.params, {
-    path: "/workspace/renamed.md",
+  assert.equal(getMetadata.method, METHOD_FS_GET_METADATA);
+  assert.deepEqual(getMetadata.params, { path: "/workspace/new.md" });
+  assert.equal(readDirectory.method, METHOD_FS_READ_DIRECTORY);
+  assert.deepEqual(readDirectory.params, { path: "/workspace" });
+  assert.equal(remove.method, METHOD_FS_REMOVE);
+  assert.deepEqual(remove.params, {
+    path: "/workspace/new.md",
     recursive: false,
+    force: true,
   });
-  assert.equal(gitStatus.id, 7);
+  assert.equal(copy.method, METHOD_FS_COPY);
+  assert.deepEqual(copy.params, {
+    sourcePath: "/workspace/source",
+    destinationPath: "/workspace/destination",
+    recursive: true,
+  });
+  assert.equal(watch.method, METHOD_FS_WATCH);
+  assert.deepEqual(watch.params, {
+    watchId: "workspace",
+    path: "/workspace",
+  });
+  assert.equal(unwatch.method, METHOD_FS_UNWATCH);
+  assert.deepEqual(unwatch.params, { watchId: "workspace" });
+  assert.equal(gitStatus.id, 10);
   assert.equal(gitStatus.method, METHOD_PROJECT_GIT_STATUS);
   assert.deepEqual(gitStatus.params, {
     rootPath: "/workspace",
   });
-  assert.equal(gitDiff.id, 8);
+  assert.equal(gitDiff.id, 11);
   assert.equal(gitDiff.method, METHOD_PROJECT_GIT_DIFF);
   assert.deepEqual(gitDiff.params, {
     rootPath: "/workspace",
@@ -2405,98 +2353,60 @@ test("builds file system requests with current methods", () => {
     base: "staged",
     commitSha: "abc123",
   });
-  assert.equal(gitCommits.id, 9);
+  assert.equal(gitCommits.id, 12);
   assert.equal(gitCommits.method, METHOD_PROJECT_GIT_COMMITS_LIST);
   assert.deepEqual(gitCommits.params, {
     rootPath: "/workspace",
     limit: 12,
   });
-  assert.equal(gitCheckout.id, 10);
+  assert.equal(gitCheckout.id, 13);
   assert.equal(gitCheckout.method, METHOD_PROJECT_GIT_BRANCH_CHECKOUT);
   assert.deepEqual(gitCheckout.params, {
     rootPath: "/workspace",
     branch: "feature/demo",
   });
-  assert.equal(gitCreateBranch.id, 11);
+  assert.equal(gitCreateBranch.id, 14);
   assert.equal(gitCreateBranch.method, METHOD_PROJECT_GIT_BRANCH_CREATE);
   assert.deepEqual(gitCreateBranch.params, {
     rootPath: "/workspace",
     branch: "feature/new",
   });
-  assert.equal(gitCreateWorktree.id, 12);
+  assert.equal(gitCreateWorktree.id, 15);
   assert.equal(gitCreateWorktree.method, METHOD_PROJECT_GIT_WORKTREE_CREATE);
   assert.deepEqual(gitCreateWorktree.params, {
     rootPath: "/workspace",
     name: "agent-demo",
     baseBranch: "main",
   });
-  assert.equal(shellStart.id, 13);
+  assert.equal(shellStart.id, 16);
   assert.equal(shellStart.method, METHOD_PROJECT_SHELL_SESSION_START);
   assert.deepEqual(shellStart.params, {
     rootPath: "/workspace",
     cols: 120,
     rows: 16,
   });
-  assert.equal(shellWrite.id, 14);
+  assert.equal(shellWrite.id, 17);
   assert.equal(shellWrite.method, METHOD_PROJECT_SHELL_SESSION_WRITE);
   assert.deepEqual(shellWrite.params, {
     sessionId: "project-shell-1",
     data: "pwd\r",
   });
-  assert.equal(shellResize.id, 15);
+  assert.equal(shellResize.id, 18);
   assert.equal(shellResize.method, METHOD_PROJECT_SHELL_SESSION_RESIZE);
   assert.deepEqual(shellResize.params, {
     sessionId: "project-shell-1",
     cols: 100,
     rows: 24,
   });
-  assert.equal(shellKill.id, 16);
+  assert.equal(shellKill.id, 19);
   assert.equal(shellKill.method, METHOD_PROJECT_SHELL_SESSION_KILL);
   assert.deepEqual(shellKill.params, {
     sessionId: "project-shell-1",
   });
-  assert.equal(shellDrain.id, 17);
+  assert.equal(shellDrain.id, 20);
   assert.equal(shellDrain.method, METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS);
   assert.deepEqual(shellDrain.params, {
     sessionId: "project-shell-1",
-    limit: 20,
-  });
-  assert.equal(executionStart.id, 18);
-  assert.equal(executionStart.method, METHOD_EXECUTION_PROCESS_START);
-  assert.deepEqual(executionStart.params, {
-    processId: "execution-process-1",
-    toolId: "tool-1",
-    toolName: "shell",
-    command: ["sh", "-c", "printf ok"],
-    workingDirectory: "/workspace",
-    approvalPolicy: "never",
-    sandboxPolicy: "danger-full-access",
-  });
-  assert.equal(executionWrite.id, 19);
-  assert.equal(executionWrite.method, METHOD_EXECUTION_PROCESS_WRITE_STDIN);
-  assert.deepEqual(executionWrite.params, {
-    processId: "execution-process-1",
-    data: "input\n",
-  });
-  assert.equal(executionInterrupt.id, 20);
-  assert.equal(executionInterrupt.method, METHOD_EXECUTION_PROCESS_INTERRUPT);
-  assert.deepEqual(executionInterrupt.params, {
-    processId: "execution-process-1",
-  });
-  assert.equal(executionTerminate.id, 21);
-  assert.equal(executionTerminate.method, METHOD_EXECUTION_PROCESS_TERMINATE);
-  assert.deepEqual(executionTerminate.params, {
-    processId: "execution-process-1",
-  });
-  assert.equal(executionStatus.id, 22);
-  assert.equal(executionStatus.method, METHOD_EXECUTION_PROCESS_STATUS);
-  assert.deepEqual(executionStatus.params, {
-    processId: "execution-process-1",
-  });
-  assert.equal(executionDrain.id, 23);
-  assert.equal(executionDrain.method, METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT);
-  assert.deepEqual(executionDrain.params, {
-    processId: "execution-process-1",
     limit: 20,
   });
 });
@@ -2731,10 +2641,6 @@ test("exports app-server method catalog from checked-in Rust manifest", () => {
     "thread",
   );
   assert.equal(
-    getAppServerRequestSerializationScope(METHOD_EXECUTION_PROCESS_START),
-    "executionProcess",
-  );
-  assert.equal(
     getAppServerRequestSerializationScope(METHOD_PROJECT_SHELL_SESSION_START),
     "projectShellSession",
   );
@@ -2747,8 +2653,8 @@ test("exports app-server method catalog from checked-in Rust manifest", () => {
     "browserSession",
   );
   assert.equal(
-    getAppServerRequestSerializationScope(METHOD_FILE_SYSTEM_DELETE_FILE),
-    "fileSystemMutation",
+    getAppServerRequestSerializationScope(METHOD_FS_REMOVE),
+    undefined,
   );
   assert.equal(
     getAppServerRequestSerializationScope(METHOD_ARTIFACT_READ),
@@ -3964,130 +3870,41 @@ test("connection wraps artifact read response", async () => {
   assert.equal(result.result.nextCursor, "1");
 });
 
-test("connection wraps file system responses", async () => {
+test("connection wraps exact fs responses", async () => {
   const sent = [];
   const inbound = [
     {
       id: 1,
-      result: {
-        path: "/workspace",
-        parentPath: "/",
-        entries: [
-          {
-            name: "README.md",
-            path: "/workspace/README.md",
-            isDir: false,
-            size: 6,
-            modifiedAt: 1,
-            isHidden: false,
-            isSymlink: false,
-          },
-        ],
-        error: null,
-      },
+      result: { dataBase64: "IyBMaW1l" },
     },
-    {
-      id: 2,
-      result: {
-        path: "/workspace/README.md",
-        content: "# Lime",
-        isBinary: false,
-        size: 6,
-        error: null,
-      },
-    },
-    {
-      id: 3,
-      result: {},
-    },
+    { id: 2, result: {} },
+    { id: 3, result: {} },
     {
       id: 4,
-      result: {},
+      result: {
+        isDirectory: false,
+        isFile: true,
+        isSymlink: false,
+        createdAtMs: 1,
+        modifiedAtMs: 2,
+      },
     },
     {
       id: 5,
-      result: {},
-    },
-    {
-      id: 6,
-      result: {},
-    },
-    {
-      id: 7,
       result: {
-        rootPath: "/workspace",
-        repositoryRoot: "/workspace",
-        hasGitRepository: true,
-        currentBranch: "main",
-        branches: ["main"],
-        uncommittedFileCount: 0,
-      },
-    },
-    {
-      id: 8,
-      result: {
-        rootPath: "/workspace",
-        repositoryRoot: "/workspace",
-        hasGitRepository: true,
-        patch: "diff --git a/README.md b/README.md\n+hello",
-        uncommittedFileCount: 1,
-      },
-    },
-    {
-      id: 9,
-      result: {
-        rootPath: "/workspace",
-        repositoryRoot: "/workspace",
-        hasGitRepository: true,
-        commits: [
+        entries: [
           {
-            sha: "abc123456789",
-            shortSha: "abc1234",
-            subject: "demo commit",
-            authorName: "Test User",
-            authorEmail: "test@example.com",
-            committedAt: "2026-06-14T10:00:00Z",
+            fileName: "README.md",
+            isDirectory: false,
+            isFile: true,
           },
         ],
       },
     },
-    {
-      id: 10,
-      result: {
-        rootPath: "/workspace",
-        repositoryRoot: "/workspace",
-        hasGitRepository: true,
-        currentBranch: "feature/demo",
-        branches: ["feature/demo", "main"],
-        uncommittedFileCount: 0,
-      },
-    },
-    {
-      id: 11,
-      result: {
-        rootPath: "/workspace",
-        repositoryRoot: "/workspace",
-        hasGitRepository: true,
-        currentBranch: "feature/new",
-        branches: ["feature/new", "main"],
-        uncommittedFileCount: 0,
-      },
-    },
-    {
-      id: 12,
-      result: {
-        worktreePath: "/workspace-worktree",
-        branch: "main",
-        status: {
-          rootPath: "/workspace-worktree",
-          repositoryRoot: "/workspace",
-          hasGitRepository: true,
-          currentBranch: "abcdef0",
-          branches: ["main"],
-          uncommittedFileCount: 0,
-        },
-      },
-    },
+    { id: 6, result: {} },
+    { id: 7, result: {} },
+    { id: 8, result: { path: "/workspace" } },
+    { id: 9, result: {} },
   ];
   const connection = new AppServerConnection({
     send(message) {
@@ -4102,126 +3919,62 @@ test("connection wraps file system responses", async () => {
     },
   });
 
-  const result = await connection.listDirectory({
-    path: "/workspace",
-  });
-  const previewResult = await connection.readFilePreview({
+  const readFileResult = await connection.readFile({
     path: "/workspace/README.md",
-    maxSize: 1024,
   });
-  const createFileResult = await connection.createFile({
+  const writeFileResult = await connection.writeFile({
     path: "/workspace/new.md",
+    dataBase64: "TGlNZQ==",
   });
   const createDirectoryResult = await connection.createDirectory({
     path: "/workspace/new-dir",
+    recursive: true,
   });
-  const renameFileResult = await connection.renameFile({
-    oldPath: "/workspace/new.md",
-    newPath: "/workspace/renamed.md",
-  });
-  const deleteFileResult = await connection.deleteFile({
-    path: "/workspace/renamed.md",
-    recursive: false,
-  });
-  const gitStatusResult = await connection.readProjectGitStatus({
-    rootPath: "/workspace",
-  });
-  const gitDiffResult = await connection.readProjectGitDiff({
-    rootPath: "/workspace",
-    contextLines: 5,
-    base: "branch",
-  });
-  const gitCommitsResult = await connection.listProjectGitCommits({
-    rootPath: "/workspace",
-    limit: 20,
-  });
-  const gitCheckoutResult = await connection.checkoutProjectGitBranch({
-    rootPath: "/workspace",
-    branch: "feature/demo",
-  });
-  const gitCreateBranchResult = await connection.createProjectGitBranch({
-    rootPath: "/workspace",
-    branch: "feature/new",
-  });
-  const gitCreateWorktreeResult = await connection.createProjectGitWorktree({
-    rootPath: "/workspace",
-    name: "agent-demo",
-    baseBranch: "main",
-  });
-
-  assert.equal(sent[0].method, METHOD_FILE_SYSTEM_LIST_DIRECTORY);
-  assert.deepEqual(sent[0].params, {
-    path: "/workspace",
-  });
-  assert.equal(sent[1].method, METHOD_FILE_SYSTEM_READ_FILE_PREVIEW);
-  assert.deepEqual(sent[1].params, {
-    path: "/workspace/README.md",
-    maxSize: 1024,
-  });
-  assert.equal(sent[2].method, METHOD_FILE_SYSTEM_CREATE_FILE);
-  assert.deepEqual(sent[2].params, {
+  const metadataResult = await connection.getMetadata({
     path: "/workspace/new.md",
   });
-  assert.equal(sent[3].method, METHOD_FILE_SYSTEM_CREATE_DIRECTORY);
-  assert.deepEqual(sent[3].params, {
-    path: "/workspace/new-dir",
+  const directoryResult = await connection.readDirectory({
+    path: "/workspace",
   });
-  assert.equal(sent[4].method, METHOD_FILE_SYSTEM_RENAME_FILE);
-  assert.deepEqual(sent[4].params, {
-    oldPath: "/workspace/new.md",
-    newPath: "/workspace/renamed.md",
-  });
-  assert.equal(sent[5].method, METHOD_FILE_SYSTEM_DELETE_FILE);
-  assert.deepEqual(sent[5].params, {
-    path: "/workspace/renamed.md",
+  const removeResult = await connection.remove({
+    path: "/workspace/new.md",
     recursive: false,
+    force: true,
   });
-  assert.equal(sent[6].method, METHOD_PROJECT_GIT_STATUS);
-  assert.deepEqual(sent[6].params, {
-    rootPath: "/workspace",
+  const copyResult = await connection.copy({
+    sourcePath: "/workspace/source",
+    destinationPath: "/workspace/destination",
+    recursive: true,
   });
-  assert.equal(sent[7].method, METHOD_PROJECT_GIT_DIFF);
-  assert.deepEqual(sent[7].params, {
-    rootPath: "/workspace",
-    contextLines: 5,
-    base: "branch",
+  const watchResult = await connection.watch({
+    watchId: "workspace",
+    path: "/workspace",
   });
-  assert.equal(sent[8].method, METHOD_PROJECT_GIT_COMMITS_LIST);
-  assert.deepEqual(sent[8].params, {
-    rootPath: "/workspace",
-    limit: 20,
-  });
-  assert.equal(sent[9].method, METHOD_PROJECT_GIT_BRANCH_CHECKOUT);
-  assert.deepEqual(sent[9].params, {
-    rootPath: "/workspace",
-    branch: "feature/demo",
-  });
-  assert.equal(sent[10].method, METHOD_PROJECT_GIT_BRANCH_CREATE);
-  assert.deepEqual(sent[10].params, {
-    rootPath: "/workspace",
-    branch: "feature/new",
-  });
-  assert.equal(sent[11].method, METHOD_PROJECT_GIT_WORKTREE_CREATE);
-  assert.deepEqual(sent[11].params, {
-    rootPath: "/workspace",
-    name: "agent-demo",
-    baseBranch: "main",
-  });
-  assert.equal(result.result.entries[0].name, "README.md");
-  assert.equal(previewResult.result.content, "# Lime");
-  assert.deepEqual(createFileResult.result, {});
-  assert.deepEqual(createDirectoryResult.result, {});
-  assert.deepEqual(renameFileResult.result, {});
-  assert.deepEqual(deleteFileResult.result, {});
-  assert.equal(gitStatusResult.result.currentBranch, "main");
-  assert.equal(gitDiffResult.result.patch.includes("diff --git"), true);
-  assert.equal(gitCommitsResult.result.commits[0].shortSha, "abc1234");
-  assert.equal(gitCheckoutResult.result.currentBranch, "feature/demo");
-  assert.equal(gitCreateBranchResult.result.currentBranch, "feature/new");
-  assert.equal(
-    gitCreateWorktreeResult.result.worktreePath,
-    "/workspace-worktree",
+  const unwatchResult = await connection.unwatch({ watchId: "workspace" });
+
+  assert.deepEqual(
+    sent.map(({ method }) => method),
+    [
+      METHOD_FS_READ_FILE,
+      METHOD_FS_WRITE_FILE,
+      METHOD_FS_CREATE_DIRECTORY,
+      METHOD_FS_GET_METADATA,
+      METHOD_FS_READ_DIRECTORY,
+      METHOD_FS_REMOVE,
+      METHOD_FS_COPY,
+      METHOD_FS_WATCH,
+      METHOD_FS_UNWATCH,
+    ],
   );
+  assert.equal(readFileResult.result.dataBase64, "IyBMaW1l");
+  assert.deepEqual(writeFileResult.result, {});
+  assert.deepEqual(createDirectoryResult.result, {});
+  assert.equal(metadataResult.result.modifiedAtMs, 2);
+  assert.equal(directoryResult.result.entries[0].fileName, "README.md");
+  assert.deepEqual(removeResult.result, {});
+  assert.deepEqual(copyResult.result, {});
+  assert.equal(watchResult.result.path, "/workspace");
+  assert.deepEqual(unwatchResult.result, {});
 });
 
 test("connection wraps evidence export response", async () => {

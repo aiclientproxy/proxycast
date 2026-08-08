@@ -85,21 +85,14 @@ describe("mcp current smoke guard", () => {
     expect(oauthFixture).not.toContain("window.open");
   });
 
-  it("keeps plugin runtime MCP proof behind the current smoke entry", () => {
+  it("rejects the retired plugin-private MCP inventory fixture", () => {
     const content = readCurrentSmokeSurface();
 
-    expect(content).toContain("--allow-plugin-runtime-fixture");
-    expect(content).toContain("runPluginRuntimeFixtureChecks");
-    expect(content).toContain("summary.pluginRuntimeFixture");
-    expect(content).toContain('"agentSession/toolInventory/read"');
-    expect(content).toContain("plugin_runtime_capabilities");
-    expect(content).toContain("plugin_mcp_targets");
-    expect(content).toContain('"mcpTool/listForContext"');
-    expect(content).toContain('"mcpServer/tool/call"');
-    expect(content).toContain("defaultProofDidNotCallTool");
-    expect(content).toContain("allowed_callers");
-    expect(content).not.toContain("defaultMocks");
-    expect(content).not.toContain("mockPriorityCommands");
+    expect(content).not.toContain("--allow-plugin-runtime-fixture");
+    expect(content).not.toContain("runPluginRuntimeFixtureChecks");
+    expect(content).not.toContain("pluginRuntimeFixture");
+    expect(content).not.toContain("plugin_runtime_capabilities");
+    expect(content).not.toContain("plugin_mcp_targets");
   });
 
   it("keeps real provider evidence live-gated behind explicit environment", () => {

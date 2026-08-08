@@ -345,21 +345,18 @@ fn disabled_search_still_keeps_core_compact_tools_visible() {
 }
 
 #[test]
-fn plugin_activation_keeps_full_tool_surface_preparation() {
-    let mut request = request_for_test(
-        "@创作工作台 写一篇公众号文章",
-        None,
-        Some(json!({
-            "harness": {
-                "plugin_activation": {
-                    "source": "plugin_explicit_mention",
-                    "trigger": "@创作工作台",
-                    "session_id": "session-1",
-                    "plugin_id": "creator-workbench"
-                }
-            }
-        })),
-    );
+fn structured_plugin_mention_keeps_full_tool_surface_preparation() {
+    let mut request = request_for_test("写一篇公众号文章", None, None);
+    request.input = agent_runtime::reply_input::RuntimeReplyInput::from_parts(vec![
+        agent_runtime::reply_input::RuntimeReplyInputPart::Text {
+            text: "写一篇公众号文章".to_string(),
+            text_elements: Vec::new(),
+        },
+        agent_runtime::reply_input::RuntimeReplyInputPart::Mention {
+            name: "creator-workbench".to_string(),
+            path: "plugin://creator-workbench@test-marketplace".to_string(),
+        },
+    ]);
     apply_detached_agent_chat_first_turn_policy(&mut request);
 
     assert!(!should_use_compact_tool_surface(&request));
@@ -375,11 +372,11 @@ fn structured_mentions_enter_ordered_control_context_without_provider_prompt_tex
         },
         agent_runtime::reply_input::RuntimeReplyInputPart::Mention {
             name: "creator-workbench".to_string(),
-            path: "plugin://creator-workbench".to_string(),
+            path: "plugin://creator-workbench@test-marketplace".to_string(),
         },
         agent_runtime::reply_input::RuntimeReplyInputPart::Mention {
             name: "duplicate-name-is-ignored".to_string(),
-            path: "plugin://creator-workbench".to_string(),
+            path: "plugin://creator-workbench@test-marketplace".to_string(),
         },
         agent_runtime::reply_input::RuntimeReplyInputPart::Mention {
             name: "docs".to_string(),
@@ -392,7 +389,7 @@ fn structured_mentions_enter_ordered_control_context_without_provider_prompt_tex
     ]);
     apply_detached_agent_chat_first_turn_policy(&mut request);
 
-    assert!(should_use_compact_tool_surface(&request));
+    assert!(!should_use_compact_tool_surface(&request));
 
     let options = request.runtime_options.as_mut().expect("runtime options");
     options.runtime_request_mut().provider_preference = Some("openai".to_string());
@@ -417,7 +414,7 @@ fn structured_mentions_enter_ordered_control_context_without_provider_prompt_tex
             {
                 "kind": "plugin",
                 "name": "creator-workbench",
-                "path": "plugin://creator-workbench"
+                "path": "plugin://creator-workbench@test-marketplace"
             },
             {
                 "kind": "app",

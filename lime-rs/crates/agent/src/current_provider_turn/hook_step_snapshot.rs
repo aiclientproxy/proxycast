@@ -7,15 +7,13 @@ use agent_runtime::provider_turn::{
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tool_runtime::hook_discovery::{
-    discover_hooks, plugin_sources_from_activations, HookDiscoveryInput,
-};
+use tool_runtime::hook_discovery::{discover_hooks, HookDiscoveryInput};
 use tool_runtime::hook_runtime::{
     CommandHookReporter, HookLifecycleEmitter, HookLifecycleEvent, HookLifecyclePhase,
 };
 
 pub(super) fn current_hook_step_snapshot_source(
-    turn_context: Option<TurnContextOverride>,
+    _turn_context: Option<TurnContextOverride>,
     working_directory: PathBuf,
     event_sender: mpsc::UnboundedSender<AgentEvent>,
 ) -> Option<RuntimeHookSnapshotSourceHandle> {
@@ -25,9 +23,7 @@ pub(super) fn current_hook_step_snapshot_source(
             input: HookDiscoveryInput {
                 codex_home,
                 cwd: working_directory,
-                plugins: plugin_sources_from_activations(&plugin_activations(
-                    turn_context.as_ref(),
-                )),
+                plugins: Vec::new(),
             },
             emitter: Arc::new(AgentHookLifecycleEmitter { event_sender }),
         },
@@ -78,42 +74,5 @@ impl HookLifecycleEmitter for AgentHookLifecycleEmitter {
             },
         };
         let _ = self.event_sender.send(event);
-    }
-}
-
-fn plugin_activations(turn_context: Option<&TurnContextOverride>) -> Vec<serde_json::Value> {
-    turn_context
-        .and_then(|context| context.metadata.get("plugin_activations"))
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn plugin_hook_sources_only_use_absolute_activated_packages() {
-        let context = TurnContextOverride {
-            metadata: std::collections::HashMap::from([(
-                "plugin_activations".to_string(),
-                json!([
-                    {"pluginId":"docs", "packageSourceUri":"/tmp/docs"},
-                    {"pluginId":"relative", "packageSourceUri":"plugins/relative"},
-                    {"pluginId":"docs", "packageSourceUri":"/tmp/duplicate"}
-                ]),
-            )]),
-            ..TurnContextOverride::default()
-        };
-
-        assert_eq!(
-            plugin_sources_from_activations(&plugin_activations(Some(&context))),
-            vec![tool_runtime::hook_discovery::HookPluginSource {
-                plugin_id: "docs".to_string(),
-                package_root: PathBuf::from("/tmp/docs"),
-            }]
-        );
     }
 }

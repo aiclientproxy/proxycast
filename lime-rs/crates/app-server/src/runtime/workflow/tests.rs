@@ -82,7 +82,7 @@ fn maps_plugin_manifest_steps_to_current_definition() {
                     "key": "content_article_workflow",
                     "title": "内容生产",
                     "taskKind": "content.article.generate",
-                    "outputArtifactKind": "content_factory.workspace_patch",
+                    "outputArtifactKind": "workspace_patch",
                     "steps": [
                         {
                             "id": "research",
@@ -124,7 +124,7 @@ fn maps_plugin_manifest_steps_to_current_definition() {
     assert_eq!(definition.workflow_key, "content_article_workflow");
     assert_eq!(
         definition.output_artifact_kind.as_deref(),
-        Some("content_factory.workspace_patch")
+        Some("workspace_patch")
     );
     assert_eq!(definition.steps.len(), 2);
     assert_eq!(definition.steps[0].id, "research");
@@ -295,7 +295,7 @@ fn maps_content_factory_orchestration_as_definition_source() {
         title: Some("内容工厂文章工作流"),
         task_kind: Some("content.article.generate"),
         input_schema: None,
-        output_artifact_kind: Some("content_factory.workspace_patch"),
+        output_artifact_kind: Some("workspace_patch"),
         steps: Some(&orchestration),
         policies: Some(&json!({
             "hookPolicy": {

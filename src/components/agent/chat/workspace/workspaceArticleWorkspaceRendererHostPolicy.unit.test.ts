@@ -8,8 +8,8 @@ describe("workspaceArticleWorkspaceRendererHostPolicy", () => {
         status: "placeholder_only",
         executionMode: "host_placeholder",
         reasonCode: "app_declared_renderer_placeholder_only",
-        requestedOutputArtifactKind: "creator.workspace_patch",
-        allowedOutputArtifactKinds: ["content_factory.workspace_patch"],
+        requestedOutputArtifactKind: "workspace_patch",
+        allowedOutputArtifactKinds: ["workspace_patch"],
       }),
     ).toEqual({
       status: "placeholder",
@@ -18,8 +18,8 @@ describe("workspaceArticleWorkspaceRendererHostPolicy", () => {
       entryLoadPolicy: "not_loaded",
       canLoadEntry: false,
       reasonCode: "app_declared_renderer_placeholder_only",
-      requestedOutputArtifactKind: "creator.workspace_patch",
-      allowedOutputArtifactKinds: ["content_factory.workspace_patch"],
+      requestedOutputArtifactKind: "workspace_patch",
+      allowedOutputArtifactKinds: ["workspace_patch"],
     });
   });
 
@@ -28,9 +28,9 @@ describe("workspaceArticleWorkspaceRendererHostPolicy", () => {
       buildWorkspaceArticleWorkspaceRendererHostPolicy({
         status: "denied",
         execution_mode: "none",
-        reason_code: "remote_plugin_runtime_disabled",
+        reason_code: "renderer_execution_disabled",
         requested_output_artifact_kind: "other.workspace_patch",
-        allowed_output_artifact_kinds: ["content_factory.workspace_patch"],
+        allowed_output_artifact_kinds: ["workspace_patch"],
       }),
     ).toMatchObject({
       status: "blocked",
@@ -38,23 +38,23 @@ describe("workspaceArticleWorkspaceRendererHostPolicy", () => {
       rendererExecutionModel: "host_placeholder_only",
       entryLoadPolicy: "not_loaded",
       canLoadEntry: false,
-      reasonCode: "remote_plugin_runtime_disabled",
+      reasonCode: "renderer_execution_disabled",
       requestedOutputArtifactKind: "other.workspace_patch",
     });
   });
 
-  it("即使 action runtime 被允许，renderer entry 仍只停在宿主占位", () => {
+  it("即使 action 被允许，renderer entry 仍只停在宿主占位", () => {
     expect(
       buildWorkspaceArticleWorkspaceRendererHostPolicy({
         status: "allowed",
-        executionMode: "local_plugin_worker",
-        reasonCode: "local_worker_output_allowed",
-        requestedOutputArtifactKind: "content_factory.workspace_patch",
-        allowedOutputArtifactKinds: ["content_factory.workspace_patch"],
+        executionMode: "host_placeholder",
+        reasonCode: "renderer_entry_not_loaded",
+        requestedOutputArtifactKind: "workspace_patch",
+        allowedOutputArtifactKinds: ["workspace_patch"],
       }),
     ).toMatchObject({
       status: "placeholder",
-      executionMode: "local_plugin_worker",
+      executionMode: "host_placeholder",
       rendererExecutionModel: "host_placeholder_only",
       entryLoadPolicy: "not_loaded",
       canLoadEntry: false,

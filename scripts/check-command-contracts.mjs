@@ -35,6 +35,14 @@ const retiredFileBrowserFacadeCommands = new Set([
   "delete_file",
   "rename_file",
 ]);
+const retiredFileSystemMethods = new Set([
+  "fileSystem/listDirectory",
+  "fileSystem/readFilePreview",
+  "fileSystem/createFile",
+  "fileSystem/createDirectory",
+  "fileSystem/renameFile",
+  "fileSystem/deleteFile",
+]);
 const retiredAutomationFacadeCommands = new Set([
   "get_automation_scheduler_config",
   "update_automation_scheduler_config",
@@ -198,8 +206,14 @@ const retiredVoiceRealtimeFacadeCommands = new Set([
   "cancel_recording",
   "get_recording_status",
 ]);
-const currentPluginShellDesktopHostCommands = new Set(["plugin_launch_shell"]);
-const currentPluginRuntimeDesktopHostCommands = new Set([
+const retiredPluginShellCommands = new Set([
+  "plugin_launch_shell",
+  "plugin_select_directory",
+  "plugin_get_ui_runtime_status",
+  "plugin_start_ui_runtime",
+  "plugin_stop_ui_runtime",
+]);
+const retiredPluginRuntimeCommands = new Set([
   "plugin_runtime_start_task",
   "plugin_runtime_cancel_task",
   "plugin_runtime_get_task",
@@ -737,15 +751,6 @@ const currentElectronHostRequiredCommands = new Set([
   ...currentSkillDesktopHostShellCommands,
   ...currentLayeredDesignDesktopHostShellCommands,
   ...currentFileBrowserDesktopHostShellCommands,
-  "plugin_launch_shell",
-  "plugin_select_directory",
-  "plugin_get_ui_runtime_status",
-  "plugin_start_ui_runtime",
-  "plugin_stop_ui_runtime",
-  "plugin_runtime_start_task",
-  "plugin_runtime_cancel_task",
-  "plugin_runtime_get_task",
-  "plugin_runtime_submit_host_response",
   "get_default_provider",
   "get_environment_preview",
   "get_experimental_config",
@@ -1034,7 +1039,7 @@ function collectNoMockFallbackCompatCommands() {
     /const noMockFallbackCompatCommands = new Set<string>\(\[([\s\S]*?)\]\);/,
   );
   if (!match) {
-    throw new Error("未找到 noMockFallbackCompatCommands 定义");
+    return new Set();
   }
 
   const commands = new Set();
@@ -1687,112 +1692,6 @@ function collectProductionBridgeGuardFailures() {
     }
   }
 
-  const pluginFeatureFlagPath = "src/features/plugin/featureFlag.ts";
-  const pluginFeatureFlagSource = readSource(pluginFeatureFlagPath);
-  addRequiredSubstringFailures(
-    failures,
-    pluginFeatureFlagPath,
-    pluginFeatureFlagSource,
-    [
-      {
-        substring: "function isTestEnvironment()",
-        message: "Plugin mock SDK flag 必须只允许测试环境启用",
-      },
-      {
-        substring: "!import.meta.env?.PROD",
-        message: "Plugin mock SDK flag 必须在生产构建中硬关闭",
-      },
-      {
-        substring: 'import.meta.env?.MODE === "test"',
-        message: "Plugin mock SDK flag 只能接受测试 mode",
-      },
-      {
-        substring: "import.meta.env?.VITEST",
-        message: "Plugin mock SDK flag 只能接受 Vitest 测试夹具",
-      },
-      {
-        substring: "const mockSdkEnabled = isTestEnvironment()",
-        message: "Plugin mockSdkEnabled 不能由生产 env/localStorage 直接打开",
-      },
-    ],
-  );
-
-  const pluginMockEnvironmentPath =
-    "src/features/plugin/sdk/mockEnvironment.ts";
-  const pluginMockEnvironmentSource = readSource(pluginMockEnvironmentPath);
-  addRequiredSubstringFailures(
-    failures,
-    pluginMockEnvironmentPath,
-    pluginMockEnvironmentSource,
-    [
-      {
-        substring: "assertTestMockSdkEnvironment",
-        message: "Plugin mock SDK 必须有统一测试环境断言",
-      },
-      {
-        substring: "!import.meta.env?.PROD",
-        message: "Plugin mock SDK 断言必须在生产构建中硬关闭",
-      },
-      {
-        substring:
-          "生产路径必须进入 Electron Desktop Host IPC / App Server JSON-RPC",
-        message: "Plugin mock SDK 非测试环境必须说明真实生产主链",
-      },
-    ],
-  );
-
-  for (const [mockPath, snippet] of [
-    [
-      "src/features/plugin/sdk/mockCapabilityProfile.ts",
-      'assertTestMockSdkEnvironment("buildMockCapabilityProfile")',
-    ],
-    [
-      "src/features/plugin/sdk/MockCapabilityHost.ts",
-      'assertTestMockSdkEnvironment("MockCapabilityHost")',
-    ],
-    [
-      "src/features/plugin/sdk/__tests__/testFixtures.ts",
-      'assertTestMockSdkEnvironment("createMockLimeCapabilityTransport")',
-    ],
-  ]) {
-    const mockSource = readSource(mockPath);
-    addRequiredSubstringFailures(failures, mockPath, mockSource, [
-      {
-        substring: snippet,
-        message: "Plugin mock SDK 出口必须只允许测试环境使用",
-      },
-    ]);
-  }
-
-  const pluginSdkPublicPaths = [
-    "src/features/plugin/sdk/index.ts",
-    "src/features/plugin/index.ts",
-    "src/features/plugin/sdk/capabilityContract.ts",
-    "src/features/plugin/sdk/index.d.ts",
-    "src/features/plugin/sdk/capabilityContract.d.ts",
-  ];
-  for (const sdkPath of pluginSdkPublicPaths) {
-    const sdkSource = readSource(sdkPath);
-    addForbiddenSubstringFailures(failures, sdkPath, sdkSource, [
-      {
-        substring: "createMockLimeCapabilityTransport",
-        message: "Plugin public SDK / contract 不能导出 mock transport",
-      },
-      {
-        substring: "MockCapabilityHost",
-        message: "Plugin public SDK 不能导出 mock host",
-      },
-      {
-        substring: "buildMockCapabilityProfile",
-        message: "Plugin public SDK 不能导出 mock capability profile",
-      },
-      {
-        substring: "LimeCapabilityMock",
-        message: "Plugin public SDK / contract 不能导出 mock handler 类型",
-      },
-    ]);
-  }
-
   return failures;
 }
 
@@ -1802,28 +1701,27 @@ function collectRetiredFileBrowserFacadeSourceFailures() {
     {
       path: "src/lib/desktop-host/fileSystemMocks.ts",
       message:
-        "已迁到 App Server fileSystem/* 的旧文件浏览 facade 命令不能继续保留 desktop-host mock fixture",
+        "已迁到 App Server fs/* 的旧文件浏览 facade 命令不能继续保留 desktop-host mock fixture",
     },
     {
       path: "lime-rs/src/app/runner.rs",
       message:
-        "已迁到 App Server fileSystem/* 的旧文件浏览 facade 命令不能回到 legacy Tauri generate_handler",
+        "已迁到 App Server fs/* 的旧文件浏览 facade 命令不能回到 legacy Tauri generate_handler",
     },
     {
       path: "lime-rs/src/dev_bridge/dispatcher/files.rs",
       message:
-        "已迁到 App Server fileSystem/* 的旧文件浏览 facade 命令不能回到 Rust DevBridge dispatcher",
+        "已迁到 App Server fs/* 的旧文件浏览 facade 命令不能回到 Rust DevBridge dispatcher",
     },
     {
       path: "lime-rs/src/services/file_browser_service.rs",
       message:
-        "已迁到 App Server fileSystem/* 的旧文件浏览 facade 命令不能回到 Tauri command wrapper",
+        "已迁到 App Server fs/* 的旧文件浏览 facade 命令不能回到 Tauri command wrapper",
     },
     {
       path: "lime-rs/crates/services/src/file_browser_service.rs",
       message:
-        "已迁到 App Server fileSystem/* 的旧文件浏览 facade 命令不能回到 services compat wrapper",
-      commands: ["list_dir", "read_file_preview_cmd"],
+        "已迁到 App Server fs/* 的旧文件浏览 facade 命令不能回到 services compat wrapper",
     },
   ];
 
@@ -1836,6 +1734,36 @@ function collectRetiredFileBrowserFacadeSourceFailures() {
           file: source.path,
           message: source.message,
           token: command,
+        });
+      }
+    }
+  }
+
+  for (const sourcePath of [
+    "packages/app-server-client/src/protocol.ts",
+    "packages/app-server-client/src/request-client.ts",
+    "packages/app-server-client/src/request-client-methods.ts",
+    "packages/app-server-client/src/connection-methods.ts",
+    "src/lib/api/appServerConstants.ts",
+    "src/lib/api/appServerTypes.ts",
+    "src/lib/api/appServerClientMethods.ts",
+    "src/lib/api/appServerClientMethodSpecs.ts",
+    "src/lib/api/fileBrowser.ts",
+    "src/lib/api/session-files.ts",
+    "src/lib/dev-bridge/commandPolicy.ts",
+    "src/lib/dev-bridge/mockPriorityCommands.ts",
+    "src/lib/governance/agentCommandCatalog.json",
+    "electron/hostCommands.ts",
+    "electron/ipcChannels.ts",
+  ]) {
+    const sourceCode = readExistingProductionSourceForGuard(sourcePath);
+    for (const method of retiredFileSystemMethods) {
+      if (sourceCode.includes(method)) {
+        failures.push({
+          file: sourcePath,
+          message:
+            "旧 fileSystem/* method 不能回到 App Server client、Renderer、Electron 或 DevBridge current surface",
+          token: method,
         });
       }
     }
@@ -2412,38 +2340,38 @@ function collectRetiredGatewayTunnelFacadeSourceFailures() {
   return failures;
 }
 
-function collectCurrentPluginShellDesktopHostSourceFailures() {
+function collectRetiredPluginShellSourceFailures() {
   const failures = [];
   const restrictedSources = [
     {
       path: "src/lib/dev-bridge/commandPolicy.ts",
       message:
-        "plugin_launch_shell 已迁到 Electron Desktop Host + App Server pluginShell/prepare，不能继续作为 DevBridge truth command",
+        "plugin_launch_shell 与 pluginShell/prepare 已退役，不能继续作为 DevBridge truth command",
     },
     {
       path: "src/lib/dev-bridge/mockPriorityCommands.ts",
       message:
-        "plugin_launch_shell 已迁到 Electron Desktop Host + App Server pluginShell/prepare，不能继续作为 mock priority command",
+        "plugin_launch_shell 与 pluginShell/prepare 已退役，不能继续作为 mock priority command",
     },
     {
       path: "src/lib/desktop-host/pluginMocks.ts",
       message:
-        "plugin_launch_shell 已迁到 Electron Desktop Host + App Server pluginShell/prepare，不能继续保留 desktop-host mock fixture",
+        "plugin_launch_shell 与 pluginShell/prepare 已退役，不能继续保留 desktop-host mock fixture",
     },
     {
       path: "lime-rs/src/app/runner.rs",
       message:
-        "plugin_launch_shell 已迁到 Electron Desktop Host + App Server pluginShell/prepare，不能回到 legacy Tauri generate_handler",
+        "plugin_launch_shell 与 pluginShell/prepare 已退役，不能回到 legacy Tauri generate_handler",
     },
     {
       path: "lime-rs/src/dev_bridge/dispatcher/plugins.rs",
       message:
-        "plugin_launch_shell 已迁到 Electron Desktop Host + App Server pluginShell/prepare，不能回到 Rust DevBridge dispatcher",
+        "plugin_launch_shell 与 pluginShell/prepare 已退役，不能回到 Rust DevBridge dispatcher",
     },
     {
       path: "lime-rs/src/commands/mod.rs",
       message:
-        "Plugin shell / picker 已迁到 Electron Desktop Host，不能重新暴露 legacy Tauri Plugin command module；commands/** 只允许清理旧逻辑",
+        "Plugin shell / picker 已退役，不能重新暴露 legacy Tauri Plugin command module",
       commands: ["plugin_cmd"],
     },
   ];
@@ -2453,7 +2381,7 @@ function collectCurrentPluginShellDesktopHostSourceFailures() {
       continue;
     }
     const sourceCode = readProductionSourceForGuard(source.path);
-    for (const command of currentPluginShellDesktopHostCommands) {
+    for (const command of retiredPluginShellCommands) {
       if (hasStandaloneIdentifier(sourceCode, command)) {
         failures.push({
           file: source.path,
@@ -2467,13 +2395,28 @@ function collectCurrentPluginShellDesktopHostSourceFailures() {
   return failures;
 }
 
-function collectCurrentPluginRuntimeDesktopHostSourceFailures() {
+function collectRetiredPluginRuntimeSourceFailures() {
   const failures = [];
+  for (const relativePath of [
+    "src/features/plugin/featureFlag.ts",
+    "src/features/plugin/index.ts",
+    "src/features/plugin/sdk",
+  ]) {
+    if (fs.existsSync(path.join(repoRoot, relativePath))) {
+      failures.push({
+        file: relativePath,
+        message:
+          "已删除的 Plugin feature flag / public SDK 不得恢复；标准包只通过 App Server current owner 运行",
+        token: relativePath,
+      });
+    }
+  }
+
   const restrictedSources = [
     {
       path: "lime-rs/src/app/runner.rs",
       message:
-        "plugin_runtime_* 已迁到 Electron Desktop Host + App Server agentSession current，不能回到 legacy Tauri generate_handler",
+        "plugin_runtime_* 已由 Plugin v3 App Server 主链取代，不能回到 legacy Tauri generate_handler",
     },
     {
       path: "lime-rs/src/commands/mod.rs",
@@ -2485,7 +2428,7 @@ function collectCurrentPluginRuntimeDesktopHostSourceFailures() {
 
   for (const source of restrictedSources) {
     const sourceCode = readProductionSourceForGuard(source.path);
-    const commands = source.commands ?? currentPluginRuntimeDesktopHostCommands;
+    const commands = source.commands ?? retiredPluginRuntimeCommands;
     for (const command of commands) {
       if (hasStandaloneIdentifier(sourceCode, command)) {
         failures.push({
@@ -4628,10 +4571,10 @@ function main() {
     collectRetiredChannelSideEffectFacadeSourceFailures();
   const retiredGatewayTunnelFacadeSourceFailures =
     collectRetiredGatewayTunnelFacadeSourceFailures();
-  const currentPluginShellDesktopHostSourceFailures =
-    collectCurrentPluginShellDesktopHostSourceFailures();
-  const currentPluginRuntimeDesktopHostSourceFailures =
-    collectCurrentPluginRuntimeDesktopHostSourceFailures();
+  const retiredPluginShellSourceFailures =
+    collectRetiredPluginShellSourceFailures();
+  const retiredPluginRuntimeSourceFailures =
+    collectRetiredPluginRuntimeSourceFailures();
   const currentTrayDesktopHostShellSourceFailures =
     collectCurrentTrayDesktopHostShellSourceFailures();
   const currentHotkeyDesktopHostShellSourceFailures =
@@ -4722,18 +4665,18 @@ function main() {
       (command) => !bridgeTruthCommands.has(command),
     ),
   );
-  const pluginRuntimeDevBridgeTruthLeaks = new Set(
-    [...currentPluginRuntimeDesktopHostCommands].filter((command) =>
+  const retiredPluginRuntimeDevBridgeTruthLeaks = new Set(
+    [...retiredPluginRuntimeCommands].filter((command) =>
       bridgeTruthCommands.has(command),
     ),
   );
-  const missingPluginRuntimeNoMockCompatCommands = new Set(
-    [...currentPluginRuntimeDesktopHostCommands].filter(
-      (command) => !noMockFallbackCompatCommands.has(command),
+  const retiredPluginRuntimeNoMockCompatLeaks = new Set(
+    [...retiredPluginRuntimeCommands].filter((command) =>
+      noMockFallbackCompatCommands.has(command),
     ),
   );
-  const pluginRuntimeMockPriorityLeaks = new Set(
-    [...currentPluginRuntimeDesktopHostCommands].filter((command) =>
+  const retiredPluginRuntimeMockPriorityLeaks = new Set(
+    [...retiredPluginRuntimeCommands].filter((command) =>
       mockPriorityCommands.has(command),
     ),
   );
@@ -5302,27 +5245,27 @@ function main() {
     );
   }
 
-  if (pluginRuntimeDevBridgeTruthLeaks.size > 0) {
+  if (retiredPluginRuntimeDevBridgeTruthLeaks.size > 0) {
     hasError = true;
     printCommandGroup(
-      "Plugin runtime task compat 命令不能回到 DevBridge truth surface",
-      pluginRuntimeDevBridgeTruthLeaks,
+      "已退役 Plugin runtime task 命令不能回到 DevBridge truth surface",
+      retiredPluginRuntimeDevBridgeTruthLeaks,
     );
   }
 
-  if (missingPluginRuntimeNoMockCompatCommands.size > 0) {
+  if (retiredPluginRuntimeNoMockCompatLeaks.size > 0) {
     hasError = true;
     printCommandGroup(
-      "Plugin runtime task compat 命令必须保留 no-mock fail-closed 分类",
-      missingPluginRuntimeNoMockCompatCommands,
+      "已退役 Plugin runtime task 命令不能留在 no-mock compat surface",
+      retiredPluginRuntimeNoMockCompatLeaks,
     );
   }
 
-  if (pluginRuntimeMockPriorityLeaks.size > 0) {
+  if (retiredPluginRuntimeMockPriorityLeaks.size > 0) {
     hasError = true;
     printCommandGroup(
-      "Plugin runtime task compat 命令不能回到 mock priority surface",
-      pluginRuntimeMockPriorityLeaks,
+      "已退役 Plugin runtime task 命令不能回到 mock priority surface",
+      retiredPluginRuntimeMockPriorityLeaks,
     );
   }
 
@@ -5355,7 +5298,7 @@ function main() {
   if (retiredFileBrowserFacadeLeaks.size > 0) {
     hasError = true;
     printCommandGroup(
-      "已迁到 App Server fileSystem/* 的旧文件浏览命令不能回到 Electron Host 或 DevBridge truth surface",
+      "已迁到 App Server fs/* 的旧文件浏览命令不能回到 Electron Host 或 DevBridge truth surface",
       retiredFileBrowserFacadeLeaks,
     );
   }
@@ -5363,7 +5306,7 @@ function main() {
   if (retiredFileBrowserFacadeSourceFailures.length > 0) {
     hasError = true;
     printGuardFailures(
-      "已迁到 App Server fileSystem/* 的旧文件浏览命令不能回到旧客户端源码",
+      "已迁到 App Server fs/* 的旧文件浏览命令不能回到旧客户端源码",
       retiredFileBrowserFacadeSourceFailures,
     );
   }
@@ -5866,19 +5809,19 @@ function main() {
     );
   }
 
-  if (currentPluginShellDesktopHostSourceFailures.length > 0) {
+  if (retiredPluginShellSourceFailures.length > 0) {
     hasError = true;
     printGuardFailures(
-      "已迁到 Electron Desktop Host + App Server pluginShell/prepare 的 shell launch 命令不能回到旧客户端源码",
-      currentPluginShellDesktopHostSourceFailures,
+      "已退役 Plugin shell 命令不能回到旧客户端源码",
+      retiredPluginShellSourceFailures,
     );
   }
 
-  if (currentPluginRuntimeDesktopHostSourceFailures.length > 0) {
+  if (retiredPluginRuntimeSourceFailures.length > 0) {
     hasError = true;
     printGuardFailures(
-      "已迁到 Electron Desktop Host + App Server agentSession 的 Plugin runtime task 命令不能回到旧客户端源码",
-      currentPluginRuntimeDesktopHostSourceFailures,
+      "已退役 Plugin runtime task 命令不能回到旧客户端源码",
+      retiredPluginRuntimeSourceFailures,
     );
   }
 

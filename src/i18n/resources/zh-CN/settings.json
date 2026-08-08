@@ -1431,7 +1431,7 @@
   "settings.memory.store.message.consolidateFailed": "整理记忆笔记失败",
   "settings.memory.store.message.indexRebuilt": "记忆索引已根据 {{files}} 个文件重建",
   "settings.memory.store.message.indexRebuildFailed": "重建记忆索引失败",
-  "settings.memory.store.message.resetDone": "记忆文件已重置，移除 {{files}} 个文件和 {{directories}} 个文件夹。",
+  "settings.memory.store.message.resetDone": "记忆文件已重置。",
   "settings.memory.store.message.resetFailed": "重置记忆文件失败",
   "settings.memory.store.noteTitle": "添加记忆修正",
   "settings.memory.store.noteDescription": "把确认过的偏好、纠错或长期约束写成一条简短笔记；它会进入文件化记忆的修正笔记，不会立即改写摘要。",

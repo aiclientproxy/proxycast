@@ -33,13 +33,6 @@ pub enum ProcessError {
     #[error("流式响应空闲超时: {timeout_ms}ms")]
     StreamIdleTimeout { timeout_ms: u64 },
 
-    /// 插件错误
-    #[error("插件错误: {plugin_name} - {message}")]
-    PluginError {
-        plugin_name: String,
-        message: String,
-    },
-
     /// 参数注入错误
     #[error("参数注入错误: {0}")]
     InjectionError(String),
@@ -67,7 +60,6 @@ impl ProcessError {
             ProcessError::RetriesExhausted { .. } => 503,
             ProcessError::Timeout { .. } => 408,
             ProcessError::StreamIdleTimeout { .. } => 408,
-            ProcessError::PluginError { .. } => 500,
             ProcessError::InjectionError(_) => 400,
             ProcessError::ConfigError(_) => 500,
             ProcessError::InternalError(_) => 500,
@@ -113,7 +105,6 @@ impl ProcessError {
             ProcessError::RetriesExhausted { .. } => "retries_exhausted",
             ProcessError::Timeout { .. } => "timeout_error",
             ProcessError::StreamIdleTimeout { .. } => "stream_idle_timeout",
-            ProcessError::PluginError { .. } => "plugin_error",
             ProcessError::InjectionError(_) => "injection_error",
             ProcessError::ConfigError(_) => "config_error",
             ProcessError::InternalError(_) => "internal_error",

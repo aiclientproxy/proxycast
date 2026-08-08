@@ -6,7 +6,6 @@ pub(in crate::runtime::tests) struct TestSessionDataSource {
     memory_store_read_response: Mutex<Option<Result<MemoryStoreReadResponse, String>>>,
     memory_store_read_requests: Mutex<Vec<MemoryStoreReadParams>>,
     memory_backend: Option<crate::LocalMemoryBackend>,
-    plugin_installed_states: Mutex<Vec<serde_json::Value>>,
     knowledge_compile_requests: Mutex<Vec<lime_knowledge::KnowledgeCompilePackRequest>>,
     right_surface_pending: Mutex<Vec<WorkspaceRightSurfacePendingRequest>>,
     object_canvas_snapshots: Mutex<Vec<WorkspaceObjectCanvasSnapshot>>,
@@ -24,7 +23,6 @@ impl TestSessionDataSource {
             memory_store_read_response: Mutex::new(None),
             memory_store_read_requests: Mutex::new(Vec::new()),
             memory_backend: None,
-            plugin_installed_states: Mutex::new(Vec::new()),
             knowledge_compile_requests: Mutex::new(Vec::new()),
             right_surface_pending: Mutex::new(Vec::new()),
             object_canvas_snapshots: Mutex::new(Vec::new()),
@@ -61,17 +59,6 @@ impl TestSessionDataSource {
             .memory_store_read_response
             .lock()
             .expect("test memory response mutex poisoned") = Some(response);
-        self
-    }
-
-    pub(in crate::runtime::tests) fn with_plugin_installed_states(
-        self,
-        states: Vec<serde_json::Value>,
-    ) -> Self {
-        *self
-            .plugin_installed_states
-            .lock()
-            .expect("test plugin installed states mutex poisoned") = states;
         self
     }
 
@@ -248,19 +235,7 @@ impl MediaAppDataSource for TestSessionDataSource {
     }
 }
 impl VoiceAppDataSource for TestSessionDataSource {}
-#[async_trait]
-impl PluginDataSource for TestSessionDataSource {
-    async fn list_plugin_installed(&self) -> Result<PluginInstalledListResponse, RuntimeCoreError> {
-        Ok(PluginInstalledListResponse {
-            states: self
-                .plugin_installed_states
-                .lock()
-                .expect("test plugin installed states mutex poisoned")
-                .clone(),
-            issues: Vec::new(),
-        })
-    }
-}
+impl PluginDataSource for TestSessionDataSource {}
 impl AutomationOverviewAppDataSource for TestSessionDataSource {}
 impl McpAppDataSource for TestSessionDataSource {}
 impl AutomationManagementAppDataSource for TestSessionDataSource {}

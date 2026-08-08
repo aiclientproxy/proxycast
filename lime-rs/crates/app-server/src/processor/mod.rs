@@ -9,8 +9,7 @@ mod connect;
 mod conversation_import;
 mod diagnostics;
 mod dispatch;
-mod execution_process;
-mod file;
+mod fs;
 mod gallery;
 mod gateway;
 mod hook;
@@ -21,6 +20,7 @@ mod media;
 mod memory_store;
 mod model;
 mod plugin;
+mod process;
 mod project;
 mod project_git;
 mod project_shell;
@@ -42,7 +42,8 @@ mod wechat;
 mod workflow;
 mod workspace;
 
-use crate::execution_process::ExecutionProcessServer;
+use crate::fs::FsServer;
+use crate::process::ProcessServer;
 use crate::project_shell::ProjectShellManager;
 use crate::thread_state::ThreadStateManager;
 use crate::AppServerError;
@@ -93,6 +94,8 @@ use request_serialization::{resolve_request_serialization_scope, RequestSerializ
 
 pub(crate) type TurnInterruptHook =
     Arc<dyn Fn(String, String) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
+pub(crate) use crate::fs::FsNotificationHook;
+pub(crate) use crate::process::ProcessNotificationHook;
 pub(crate) type ServerNotificationHook = Arc<
     dyn Fn(
             app_server_protocol::protocol::v2::ServerNotification,
@@ -107,7 +110,8 @@ pub struct RequestProcessor {
     runtime: Arc<RuntimeCore>,
     thread_states: ThreadStateManager,
     project_shell: ProjectShellManager,
-    execution_process: ExecutionProcessServer,
+    process: ProcessServer,
+    fs: FsServer,
     config_warning_provider: ConfigWarningProvider,
     request_serialization_queues: RequestSerializationQueues,
     turn_interrupt_hook: Option<TurnInterruptHook>,
@@ -147,15 +151,13 @@ impl RequestProcessor {
         runtime: RuntimeCore,
         thread_states: ThreadStateManager,
     ) -> Self {
-        let execution_process = runtime
-            .execution_process_server()
-            .unwrap_or_else(ExecutionProcessServer::default);
         Self {
             state: Arc::new(Mutex::new(ProcessorState::default())),
             runtime: Arc::new(runtime),
             thread_states,
             project_shell: ProjectShellManager::default(),
-            execution_process,
+            process: ProcessServer::default(),
+            fs: FsServer::default(),
             config_warning_provider: config_warning::default_config_warning_provider(),
             request_serialization_queues: RequestSerializationQueues::default(),
             turn_interrupt_hook: None,
@@ -171,6 +173,28 @@ impl RequestProcessor {
     pub(crate) fn with_server_notification_hook(mut self, hook: ServerNotificationHook) -> Self {
         self.server_notification_hook = Some(hook);
         self
+    }
+
+    pub(crate) fn with_process_notification_hook(mut self, hook: ProcessNotificationHook) -> Self {
+        self.process = self.process.with_notification_hook(hook);
+        self
+    }
+
+    pub(crate) fn with_fs_notification_hook(mut self, hook: FsNotificationHook) -> Self {
+        self.fs = self.fs.with_notification_hook(hook);
+        self
+    }
+
+    pub(crate) async fn close_process_connection(&self, connection_id: ConnectionId) {
+        self.process.connection_closed(connection_id).await;
+    }
+
+    pub(crate) async fn close_fs_connection(&self, connection_id: ConnectionId) {
+        self.fs.connection_closed(connection_id).await;
+    }
+
+    pub(crate) async fn activate_process(&self, connection_id: ConnectionId, process_handle: &str) {
+        self.process.activate(connection_id, process_handle).await;
     }
 
     pub(super) async fn publish_server_notification(
@@ -425,7 +449,7 @@ impl RequestProcessor {
             .map_err(to_jsonrpc_error)?;
         dispatch_result(response)
     }
-    // file system handlers 已提取到 processor/file.rs
+    // Exact fs handlers live in processor/fs.rs.
 
     // project_git handlers 已提取到 processor/project_git.rs
 

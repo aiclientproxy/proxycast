@@ -86,7 +86,7 @@ describe("useWorkspacePluginCatalogSuggestions", () => {
     await flushEffects(6);
 
     expect(latest?.suggestions[0]).toMatchObject({
-      pluginId: "browser",
+      pluginId: "browser@openai-bundled",
       disabled: false,
     });
 
@@ -97,7 +97,7 @@ describe("useWorkspacePluginCatalogSuggestions", () => {
 
     expect(listInstalled).toHaveBeenCalledTimes(2);
     expect(latest?.suggestions[0]).toMatchObject({
-      pluginId: "browser",
+      pluginId: "browser@openai-bundled",
       disabled: true,
       blockerCodes: ["PLUGIN_DISABLED"],
     });

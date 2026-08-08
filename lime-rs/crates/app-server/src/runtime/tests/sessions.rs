@@ -1411,12 +1411,6 @@ async fn read_session_current_projection_summary_preserves_process_items() {
                     "title": "历史过程工作台",
                     "status": "completed",
                     "metadata": {
-                        "pluginWorker": {
-                            "appId": "content-factory",
-                            "taskId": "task-history-workspace",
-                            "taskKind": "content.article.generate",
-                            "outputArtifactKind": "article_workspace"
-                        },
                         "articleWorkspace": {
                             "objects": [
                                 {
@@ -1563,8 +1557,8 @@ async fn read_session_current_projection_summary_preserves_process_items() {
             && artifact["kind"].as_str() == Some("article_workspace")
     }));
     assert_eq!(
-        detail["article_workspace"]["workerEvidence"][0]["eventType"].as_str(),
-        Some("artifact.snapshot")
+        detail["article_workspace"]["sourceArtifacts"][0]["eventId"].as_str(),
+        Some("evt_projection_process_artifact")
     );
     let tool_calls = detail["thread_read"]["tool_calls"]
         .as_array()

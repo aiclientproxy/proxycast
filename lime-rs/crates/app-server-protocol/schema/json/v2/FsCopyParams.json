@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "destinationPath": {
+      "type": "string"
+    },
+    "recursive": {
+      "type": "boolean"
+    },
+    "sourcePath": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "destinationPath",
+    "sourcePath"
+  ],
+  "title": "FsCopyParams",
+  "type": "object"
+}

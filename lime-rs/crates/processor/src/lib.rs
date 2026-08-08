@@ -8,7 +8,7 @@
 #![allow(clippy::unnecessary_map_or)]
 #![allow(clippy::too_many_arguments)]
 //!
-//! - `steps` - 管道步骤（认证、注入、路由、插件、Provider、遥测）
+//! - `steps` - 管道步骤（认证、注入、路由、Provider、遥测）
 
 pub mod conversation_manager;
 pub mod conversation_summarizer;

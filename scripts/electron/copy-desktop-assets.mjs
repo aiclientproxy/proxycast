@@ -1,4 +1,4 @@
-import { copyFile, cp, mkdir } from "node:fs/promises";
+import { copyFile, cp, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 const outputDir = path.resolve("dist-electron/desktop-assets");
@@ -23,6 +23,7 @@ for (const [source, filename] of assets) {
   await copyFile(path.resolve(source), path.join(outputDir, filename));
 }
 
+await rm(bundledPluginOutput, { recursive: true, force: true });
 await cp(bundledPluginSource, bundledPluginOutput, {
   recursive: true,
   force: true,

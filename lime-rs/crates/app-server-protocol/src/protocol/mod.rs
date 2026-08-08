@@ -62,4 +62,22 @@ mod tests {
             Some(v0::AppServerMethodKind::ServerRequest)
         );
     }
+
+    #[test]
+    fn central_method_catalog_includes_all_mcp_lifecycle_notifications() {
+        let catalog = app_server_method_catalog();
+        for method in [
+            v2::METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
+            v2::METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED,
+        ] {
+            assert_eq!(
+                catalog
+                    .iter()
+                    .find(|spec| spec.method == method)
+                    .map(|spec| spec.kind),
+                Some(v0::AppServerMethodKind::Notification),
+                "missing MCP lifecycle notification {method}"
+            );
+        }
+    }
 }

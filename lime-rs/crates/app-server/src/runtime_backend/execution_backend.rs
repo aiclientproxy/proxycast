@@ -1,7 +1,7 @@
 use super::{
     action_response, current_agent_runtime_config_metadata, initialize_runtime_database,
-    mcp_bridges, plugin_worker_generation, request_context::effective_runtime_options_for_turn,
-    tool_inventory, workspace_patch_host_execution, RuntimeBackend,
+    mcp_bridges, request_context::effective_runtime_options_for_turn, tool_inventory,
+    RuntimeBackend,
 };
 use crate::runtime::ToolInventoryReadRequest;
 use crate::{
@@ -420,25 +420,6 @@ impl ExecutionBackend for RuntimeBackend {
             .call_mcp_tool(session_id, thread_id, server, tool, arguments)
             .await
             .map_err(RuntimeCoreError::Backend)
-    }
-
-    async fn prepare_runtime_worker_artifact_events(
-        &self,
-        request: &ExecutionRequest,
-        events: &mut Vec<RuntimeEvent>,
-    ) -> Result<(), RuntimeCoreError> {
-        workspace_patch_host_execution::prepare_runtime_worker_artifact_events(
-            self, request, events,
-        )
-        .await
-    }
-
-    async fn prepare_plugin_worker_request(
-        &self,
-        request: &ExecutionRequest,
-        worker_request: &mut Value,
-    ) -> Result<(), RuntimeCoreError> {
-        plugin_worker_generation::prepare_plugin_worker_request(self, request, worker_request).await
     }
 }
 

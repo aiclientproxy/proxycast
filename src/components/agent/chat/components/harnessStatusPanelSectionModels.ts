@@ -52,10 +52,6 @@ interface BuildHarnessStatusPanelSectionModelsInput {
   onOpenFileCheckpoints: HarnessStatusPanelProps["onOpenFileCheckpoints"];
   onOpenSubagentSession: HarnessStatusPanelProps["onOpenSubagentSession"];
   onRefreshToolInventory: HarnessStatusPanelProps["onRefreshToolInventory"];
-  mcpPrepareCandidateCount: number;
-  mcpPrepareLoading: boolean;
-  mcpPrepareError: string | null;
-  onPrepareMcpTargets: HarnessStatusPanelProps["onPrepareMcpTargets"];
   onReplayPendingRequest: HarnessStatusPanelProps["onReplayPendingRequest"];
   onRespondToAction: HarnessStatusPanelProps["onRespondToAction"];
   pendingActions: NonNullable<HarnessStatusPanelProps["pendingActions"]>;
@@ -105,10 +101,6 @@ export function buildHarnessStatusPanelSectionModels({
   onOpenFileCheckpoints,
   onOpenSubagentSession,
   onRefreshToolInventory,
-  mcpPrepareCandidateCount,
-  mcpPrepareLoading,
-  mcpPrepareError,
-  onPrepareMcpTargets,
   onReplayPendingRequest,
   onRespondToAction: _onRespondToAction,
   pendingActions,
@@ -171,7 +163,6 @@ export function buildHarnessStatusPanelSectionModels({
     toolInventoryExtensionTools,
     toolInventoryFilter,
     toolInventoryMcpTools,
-    toolInventoryPluginMcpTargets,
     toolInventoryNativeTools,
     toolInventoryRuntimeTools,
     toolInventorySourceStats,
@@ -346,10 +337,6 @@ export function buildHarnessStatusPanelSectionModels({
       runtimeToolTotal,
       registerSectionRef,
       onRefreshToolInventory,
-      mcpPrepareCandidateCount,
-      mcpPrepareLoading,
-      mcpPrepareError,
-      onPrepareMcpTargets,
       toolInventorySourceStats,
       toolInventoryWarnings,
       runtimeToolAvailability,
@@ -363,7 +350,6 @@ export function buildHarnessStatusPanelSectionModels({
       toolInventoryExtensionSurfaces,
       toolInventoryExtensionTools,
       toolInventoryMcpTools,
-      toolInventoryPluginMcpTargets,
     },
     activitySectionsProps: {
       harnessState,

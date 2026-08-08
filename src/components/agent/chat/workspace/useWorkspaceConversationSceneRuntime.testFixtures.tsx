@@ -90,8 +90,6 @@ export function createBaseParams(overrides: Record<string, unknown> = {}) {
           : (overrides.creationReplaySurface as never),
       sceneAppExecutionSummaryCard:
         overrides.sceneAppExecutionSummaryCard as React.ReactNode,
-      pluginHistoryRestoreLandingCard:
-        overrides.pluginHistoryRestoreLandingCard as React.ReactNode,
       serviceSkillExecutionCard:
         overrides.serviceSkillExecutionCard as React.ReactNode,
       emptyStateProps: {

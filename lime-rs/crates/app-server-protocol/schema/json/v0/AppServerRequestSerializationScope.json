@@ -2,8 +2,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "enum": [
     "browserSession",
-    "executionProcess",
-    "fileSystemMutation",
     "mcpOauth",
     "mcpResourceSubscription",
     "projectShellSession",

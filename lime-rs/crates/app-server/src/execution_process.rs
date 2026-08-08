@@ -1,14 +1,7 @@
 use app_server_protocol::protocol::v2::{GrantedPermissionProfile, ThreadBackgroundTerminal};
-use app_server_protocol::{
-    ExecutionProcessDrainOutputParams, ExecutionProcessDrainOutputResponse,
-    ExecutionProcessEmptyResponse, ExecutionProcessIdParams, ExecutionProcessOutputDelta,
-    ExecutionProcessOutputKind, ExecutionProcessSnapshot, ExecutionProcessStartParams,
-    ExecutionProcessStartResponse, ExecutionProcessStatus, ExecutionProcessStatusResponse,
-    ExecutionProcessWriteStdinParams,
-};
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tool_runtime::execution_decision::{
     decide_tool_execution, ToolExecutionDecisionInput, ToolExecutionDecisionKind,
@@ -20,11 +13,9 @@ use tool_runtime::execution_policy::{
 };
 use tool_runtime::execution_policy_service::ToolExecutionResolverInput;
 use tool_runtime::execution_process::{
-    start_local_execution_process, ExecutionOutputDelta as RuntimeExecutionOutputDelta,
-    ExecutionOutputKind as RuntimeExecutionOutputKind,
-    ExecutionProcessSnapshot as RuntimeExecutionProcessSnapshot,
-    ExecutionProcessStatus as RuntimeExecutionProcessStatus, LiveExecutionProcessRegistry,
-    LocalExecutionProcessControlHandle, LocalExecutionRequest,
+    live::{LiveExecutionOutputBatch, LiveExecutionOutputQuery, LiveExecutionRequest},
+    start_local_execution_process, ExecutionOutputDelta, ExecutionProcessSnapshot,
+    LiveExecutionProcessRegistry, LocalExecutionProcessControlHandle, LocalExecutionRequest,
 };
 use tool_runtime::sandbox::{prepare_sandbox_command, SandboxCommandRequest};
 use tool_runtime::shell::{is_shell_tool_name, shell_command_text_from_argv};
@@ -43,7 +34,7 @@ pub struct ExecutionProcessServer {
 #[derive(Debug)]
 struct ExecutionProcessState {
     processes: HashMap<String, ExecutionProcessEntry>,
-    output: VecDeque<ExecutionProcessOutputDelta>,
+    output: VecDeque<ExecutionOutputDelta>,
     output_bytes: usize,
     next_background_process_id: u64,
 }
@@ -104,7 +95,7 @@ impl ExecutionProcessServer {
     pub fn register_process_handle(
         &self,
         handle: LocalExecutionProcessControlHandle,
-        snapshot: RuntimeExecutionProcessSnapshot,
+        snapshot: ExecutionProcessSnapshot,
     ) -> Result<(), ExecutionProcessError> {
         if handle.process_id() != snapshot.process_id {
             return Err(ExecutionProcessError::Control(format!(
@@ -114,14 +105,7 @@ impl ExecutionProcessServer {
             )));
         }
         let process_id = snapshot.process_id.clone();
-        let snapshot = map_snapshot(snapshot);
-        let is_terminal = matches!(
-            snapshot.status,
-            ExecutionProcessStatus::Exited
-                | ExecutionProcessStatus::Interrupted
-                | ExecutionProcessStatus::Terminated
-                | ExecutionProcessStatus::Failed
-        );
+        let is_terminal = snapshot.status.is_terminal();
         let mut state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
         if state.processes.contains_key(&process_id) {
             return Err(ExecutionProcessError::ProcessExists(process_id));
@@ -139,22 +123,21 @@ impl ExecutionProcessServer {
 
     pub fn record_process_output(
         &self,
-        delta: RuntimeExecutionOutputDelta,
+        delta: ExecutionOutputDelta,
     ) -> Result<(), ExecutionProcessError> {
         let mut state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
         if !state.processes.contains_key(&delta.process_id) {
             return Err(ExecutionProcessError::ProcessNotFound(delta.process_id));
         }
-        push_output(&mut state, map_delta(delta));
+        push_output(&mut state, delta);
         Ok(())
     }
 
     pub fn finish_process(
         &self,
-        snapshot: RuntimeExecutionProcessSnapshot,
+        snapshot: ExecutionProcessSnapshot,
     ) -> Result<(), ExecutionProcessError> {
         let process_id = snapshot.process_id.clone();
-        let snapshot = map_snapshot(snapshot);
         let mut state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
         let entry = state
             .processes
@@ -165,26 +148,19 @@ impl ExecutionProcessServer {
         Ok(())
     }
 
-    pub async fn start_process(
-        &self,
-        params: ExecutionProcessStartParams,
-    ) -> Result<ExecutionProcessStartResponse, ExecutionProcessError> {
-        self.start_process_inner(None, params, None).await
-    }
-
     pub async fn start_thread_process(
         &self,
         thread_id: &str,
         display_command: &str,
-        params: ExecutionProcessStartParams,
-    ) -> Result<ExecutionProcessStartResponse, ExecutionProcessError> {
+        request: LiveExecutionRequest,
+    ) -> Result<ExecutionProcessSnapshot, ExecutionProcessError> {
         let thread_id = thread_id.trim();
         if thread_id.is_empty() {
             return Err(ExecutionProcessError::Control(
                 "background terminal thread id must not be empty".to_string(),
             ));
         }
-        self.start_process_inner(Some((thread_id, display_command)), params, None)
+        self.start_process_inner(Some((thread_id, display_command)), request, None)
             .await
     }
 
@@ -192,9 +168,9 @@ impl ExecutionProcessServer {
         &self,
         thread_id: &str,
         display_command: &str,
-        params: ExecutionProcessStartParams,
+        request: LiveExecutionRequest,
         granted_permissions: Option<GrantedPermissionProfile>,
-    ) -> Result<ExecutionProcessStartResponse, ExecutionProcessError> {
+    ) -> Result<ExecutionProcessSnapshot, ExecutionProcessError> {
         let thread_id = thread_id.trim();
         if thread_id.is_empty() {
             return Err(ExecutionProcessError::Control(
@@ -203,7 +179,7 @@ impl ExecutionProcessServer {
         }
         self.start_process_inner(
             Some((thread_id, display_command)),
-            params,
+            request,
             granted_permissions,
         )
         .await
@@ -212,13 +188,13 @@ impl ExecutionProcessServer {
     async fn start_process_inner(
         &self,
         thread_scope: Option<(&str, &str)>,
-        params: ExecutionProcessStartParams,
+        request: LiveExecutionRequest,
         granted_permissions: Option<GrantedPermissionProfile>,
-    ) -> Result<ExecutionProcessStartResponse, ExecutionProcessError> {
-        if params.command.is_empty() {
+    ) -> Result<ExecutionProcessSnapshot, ExecutionProcessError> {
+        if request.command.is_empty() {
             return Err(ExecutionProcessError::EmptyCommand);
         }
-        let requested_working_directory = PathBuf::from(&params.working_directory);
+        let requested_working_directory = request.working_directory;
         let working_directory =
             std::fs::canonicalize(&requested_working_directory).map_err(|error| {
                 ExecutionProcessError::WorkingDirectory(format!(
@@ -232,9 +208,9 @@ impl ExecutionProcessServer {
                 working_directory.display()
             )));
         }
-        let canonical_tool_name = canonical_shell_tool_name(&params.tool_name)
+        let canonical_tool_name = canonical_shell_tool_name(&request.tool_name)
             .ok_or(ExecutionProcessError::UnsupportedTool)?;
-        let command_text = shell_command_text_from_argv(&params.command);
+        let command_text = shell_command_text_from_argv(&request.command);
         let decision = decide_tool_execution(
             ToolExecutionDecisionInput {
                 tool_name: canonical_tool_name,
@@ -243,11 +219,11 @@ impl ExecutionProcessServer {
                 surface: "execution_process",
                 auto_mode: false,
                 bypass_restrictions: false,
-                approval_policy: params.approval_policy.as_deref(),
-                requested_sandbox_policy: params.sandbox_policy.as_deref(),
+                approval_policy: request.approval_policy.as_deref(),
+                requested_sandbox_policy: request.sandbox_policy.as_deref(),
                 resolver_input: ToolExecutionResolverInput {
                     persisted_policy: None,
-                    request_metadata: params.runtime_metadata.as_ref(),
+                    request_metadata: request.runtime_metadata.as_ref(),
                 },
             },
             app_server_tool_execution_policy_options(),
@@ -267,8 +243,8 @@ impl ExecutionProcessServer {
             canonical_tool_name,
             &command_text,
             &working_directory,
-            params.approval_policy.as_deref(),
-            params.sandbox_policy.as_deref(),
+            request.approval_policy.as_deref(),
+            request.sandbox_policy.as_deref(),
         )
         .map_err(ExecutionProcessError::Policy)?;
 
@@ -279,20 +255,20 @@ impl ExecutionProcessServer {
                         "execution decision did not identify a sandbox backend".to_string(),
                     )
                 })?,
-                requested_policy: params.sandbox_policy.as_deref(),
-                command: params.command,
+                requested_policy: request.sandbox_policy.as_deref(),
+                command: request.command,
                 working_directory: &working_directory,
                 granted_permissions: granted_permissions.as_ref(),
             })
             .map_err(|error| ExecutionProcessError::Sandbox(error.to_string()))?
         } else {
-            params.command
+            request.command
         };
-        let process_id = params.process_id.clone();
+        let process_id = request.process_id.clone();
         let background = thread_scope.map(|(thread_id, display_command)| BackgroundTerminalEntry {
             thread_id: thread_id.to_string(),
             public_process_id: 0,
-            item_id: params.tool_id.clone(),
+            item_id: request.tool_id.clone(),
             command: display_command.trim().to_string(),
             cwd: working_directory.to_string_lossy().to_string(),
             listed: true,
@@ -319,12 +295,15 @@ impl ExecutionProcessServer {
         }
         let request = LocalExecutionRequest {
             process_id: process_id.clone(),
-            tool_id: params.tool_id,
+            tool_id: request.tool_id,
             tool_name: canonical_tool_name.to_string(),
             command,
             cwd: Some(working_directory),
-            env: params.env,
-            tty: params.tty,
+            env: request.env,
+            tty: request.tty,
+            stdin: true,
+            env_clear: false,
+            pty_size: None,
         };
         let mut handle = match start_local_execution_process(request) {
             Ok(handle) => handle,
@@ -335,7 +314,7 @@ impl ExecutionProcessServer {
                 return Err(ExecutionProcessError::Start(error.to_string()));
             }
         };
-        let snapshot = map_snapshot(handle.status());
+        let snapshot = handle.status();
         let control_handle = handle.control_handle();
         let inner = Arc::clone(&self.inner);
 
@@ -351,10 +330,10 @@ impl ExecutionProcessServer {
         tokio::spawn(async move {
             while let Some(delta) = handle.recv_output().await {
                 if let Ok(mut state) = inner.lock() {
-                    push_output(&mut state, map_delta(delta));
+                    push_output(&mut state, delta);
                 }
             }
-            let final_snapshot = handle.wait().await.ok().map(map_snapshot);
+            let final_snapshot = handle.wait().await.ok();
             if let Ok(mut state) = inner.lock() {
                 if let Some(entry) = state.processes.get_mut(&process_id) {
                     entry.handle = None;
@@ -363,7 +342,7 @@ impl ExecutionProcessServer {
             }
         });
 
-        Ok(ExecutionProcessStartResponse { snapshot })
+        Ok(snapshot)
     }
 
     pub fn list_background_terminals(
@@ -379,7 +358,7 @@ impl ExecutionProcessServer {
                 let handle = entry.handle.as_ref()?;
                 if background.thread_id != thread_id
                     || !background.listed
-                    || runtime_status_is_terminal(handle.status().status)
+                    || handle.status().status.is_terminal()
                 {
                     return None;
                 }
@@ -427,7 +406,7 @@ impl ExecutionProcessServer {
             (
                 process_id.clone(),
                 entry.handle.as_ref().and_then(|handle| {
-                    (!runtime_status_is_terminal(handle.status().status)).then(|| handle.clone())
+                    (!handle.status().status.is_terminal()).then(|| handle.clone())
                 }),
             )
         };
@@ -453,8 +432,7 @@ impl ExecutionProcessServer {
                     Some((
                         process_id.clone(),
                         entry.handle.as_ref().and_then(|handle| {
-                            (!runtime_status_is_terminal(handle.status().status))
-                                .then(|| handle.clone())
+                            (!handle.status().status.is_terminal()).then(|| handle.clone())
                         }),
                     ))
                 })
@@ -469,118 +447,88 @@ impl ExecutionProcessServer {
         Ok(())
     }
 
-    pub fn write_stdin(
-        &self,
-        params: ExecutionProcessWriteStdinParams,
-    ) -> Result<ExecutionProcessEmptyResponse, ExecutionProcessError> {
+    pub fn write_stdin(&self, process_id: &str, data: &[u8]) -> Result<(), ExecutionProcessError> {
         let state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
         let entry = state
             .processes
-            .get(&params.process_id)
-            .ok_or_else(|| ExecutionProcessError::ProcessNotFound(params.process_id.clone()))?;
+            .get(process_id)
+            .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.to_string()))?;
         let Some(handle) = entry.handle.as_ref() else {
-            return Err(ExecutionProcessError::ProcessNotFound(params.process_id));
+            return Err(ExecutionProcessError::ProcessNotFound(
+                process_id.to_string(),
+            ));
         };
         handle
-            .write_stdin(params.data.into_bytes())
+            .write_stdin(data)
             .map_err(|error| ExecutionProcessError::Control(format!("{error:?}")))?;
-        Ok(ExecutionProcessEmptyResponse {})
-    }
-
-    pub fn interrupt(
-        &self,
-        params: ExecutionProcessIdParams,
-    ) -> Result<ExecutionProcessStatusResponse, ExecutionProcessError> {
-        let state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
-        let entry = state
-            .processes
-            .get(&params.process_id)
-            .ok_or_else(|| ExecutionProcessError::ProcessNotFound(params.process_id.clone()))?;
-        let Some(handle) = entry.handle.as_ref() else {
-            return Ok(ExecutionProcessStatusResponse {
-                snapshot: entry.final_snapshot.clone().ok_or_else(|| {
-                    ExecutionProcessError::ProcessNotFound(params.process_id.clone())
-                })?,
-            });
-        };
-        handle
-            .interrupt()
-            .map_err(|error| ExecutionProcessError::Control(format!("{error:?}")))?;
-        Ok(ExecutionProcessStatusResponse {
-            snapshot: map_snapshot(handle.status()),
-        })
+        Ok(())
     }
 
     pub fn terminate(
         &self,
-        params: ExecutionProcessIdParams,
-    ) -> Result<ExecutionProcessStatusResponse, ExecutionProcessError> {
+        process_id: &str,
+    ) -> Result<ExecutionProcessSnapshot, ExecutionProcessError> {
         let state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
         let entry = state
             .processes
-            .get(&params.process_id)
-            .ok_or_else(|| ExecutionProcessError::ProcessNotFound(params.process_id.clone()))?;
+            .get(process_id)
+            .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.to_string()))?;
         let Some(handle) = entry.handle.as_ref() else {
-            return Ok(ExecutionProcessStatusResponse {
-                snapshot: entry.final_snapshot.clone().ok_or_else(|| {
-                    ExecutionProcessError::ProcessNotFound(params.process_id.clone())
-                })?,
-            });
+            return entry
+                .final_snapshot
+                .clone()
+                .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.to_string()));
         };
         handle
             .terminate()
             .map_err(|error| ExecutionProcessError::Control(format!("{error:?}")))?;
-        Ok(ExecutionProcessStatusResponse {
-            snapshot: map_snapshot(handle.status()),
-        })
+        Ok(handle.status())
     }
 
     pub fn status(
         &self,
-        params: ExecutionProcessIdParams,
-    ) -> Result<ExecutionProcessStatusResponse, ExecutionProcessError> {
+        process_id: &str,
+    ) -> Result<ExecutionProcessSnapshot, ExecutionProcessError> {
         let state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
         let entry = state
             .processes
-            .get(&params.process_id)
-            .ok_or_else(|| ExecutionProcessError::ProcessNotFound(params.process_id.clone()))?;
+            .get(process_id)
+            .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.to_string()))?;
         if let Some(snapshot) = &entry.final_snapshot {
-            return Ok(ExecutionProcessStatusResponse {
-                snapshot: snapshot.clone(),
-            });
+            return Ok(snapshot.clone());
         }
         let Some(handle) = entry.handle.as_ref() else {
-            return Err(ExecutionProcessError::ProcessNotFound(params.process_id));
+            return Err(ExecutionProcessError::ProcessNotFound(
+                process_id.to_string(),
+            ));
         };
-        Ok(ExecutionProcessStatusResponse {
-            snapshot: map_snapshot(handle.status()),
-        })
+        Ok(handle.status())
     }
 
     pub fn drain_output(
         &self,
-        params: ExecutionProcessDrainOutputParams,
-    ) -> Result<ExecutionProcessDrainOutputResponse, ExecutionProcessError> {
-        let limit = params
+        query: LiveExecutionOutputQuery,
+    ) -> Result<LiveExecutionOutputBatch, ExecutionProcessError> {
+        let limit = query
             .limit
             .map(usize::from)
             .unwrap_or(DEFAULT_DRAIN_LIMIT)
             .min(MAX_DRAIN_LIMIT);
-        let max_bytes = params
+        let max_bytes = query
             .max_bytes
             .and_then(|value| usize::try_from(value).ok())
             .unwrap_or(usize::MAX);
-        let after_sequence = params.after_sequence.unwrap_or_default();
+        let after_sequence = query.after_sequence.unwrap_or_default();
         let state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
         let mut deltas = Vec::new();
         let mut bytes = 0usize;
-        let mut next_sequence = params.after_sequence;
+        let mut next_sequence = query.after_sequence;
 
         for delta in state.output.iter() {
             if deltas.len() >= limit {
                 break;
             }
-            if params
+            if query
                 .process_id
                 .as_ref()
                 .is_some_and(|process_id| process_id != &delta.process_id)
@@ -599,7 +547,7 @@ impl ExecutionProcessServer {
             deltas.push(delta.clone());
         }
 
-        Ok(ExecutionProcessDrainOutputResponse {
+        Ok(LiveExecutionOutputBatch {
             deltas,
             next_sequence,
         })
@@ -610,18 +558,18 @@ impl LiveExecutionProcessRegistry for ExecutionProcessServer {
     fn register_live_process(
         &self,
         handle: LocalExecutionProcessControlHandle,
-        snapshot: RuntimeExecutionProcessSnapshot,
+        snapshot: ExecutionProcessSnapshot,
     ) -> Result<(), String> {
         self.register_process_handle(handle, snapshot)
             .map_err(|error| error.to_string())
     }
 
-    fn record_live_process_output(&self, delta: RuntimeExecutionOutputDelta) -> Result<(), String> {
+    fn record_live_process_output(&self, delta: ExecutionOutputDelta) -> Result<(), String> {
         self.record_process_output(delta)
             .map_err(|error| error.to_string())
     }
 
-    fn finish_live_process(&self, snapshot: RuntimeExecutionProcessSnapshot) -> Result<(), String> {
+    fn finish_live_process(&self, snapshot: ExecutionProcessSnapshot) -> Result<(), String> {
         self.finish_process(snapshot)
             .map_err(|error| error.to_string())
     }
@@ -656,7 +604,7 @@ fn app_server_tool_names_match(left: &str, right: &str) -> bool {
 fn validate_shell_execution_process_command(
     tool_name: &str,
     command_text: &str,
-    working_directory: &PathBuf,
+    working_directory: &Path,
     approval_policy: Option<&str>,
     sandbox_policy: Option<&str>,
 ) -> Result<(), String> {
@@ -682,7 +630,8 @@ fn normalized_tool_name(tool_name: &str) -> String {
         .collect()
 }
 
-fn push_output(state: &mut ExecutionProcessState, delta: ExecutionProcessOutputDelta) {
+fn push_output(state: &mut ExecutionProcessState, mut delta: ExecutionOutputDelta) {
+    delta.raw_bytes.clear();
     state.output_bytes = state.output_bytes.saturating_add(delta.delta.len());
     state.output.push_back(delta);
     while state.output.len() > OUTPUT_EVENT_CAP || state.output_bytes > OUTPUT_BYTE_CAP {
@@ -691,64 +640,6 @@ fn push_output(state: &mut ExecutionProcessState, delta: ExecutionProcessOutputD
             break;
         };
         state.output_bytes = state.output_bytes.saturating_sub(evicted.delta.len());
-    }
-}
-
-fn map_snapshot(snapshot: RuntimeExecutionProcessSnapshot) -> ExecutionProcessSnapshot {
-    ExecutionProcessSnapshot {
-        process_id: snapshot.process_id,
-        tool_id: snapshot.tool_id,
-        tool_name: snapshot.tool_name,
-        status: map_status(snapshot.status),
-        exit_code: snapshot.exit_code,
-        elapsed_ms: snapshot.elapsed_ms,
-        output_bytes: snapshot.output_bytes,
-        output_omitted_bytes: snapshot.output_omitted_bytes,
-        output_truncated: snapshot.output_truncated,
-        retained_output: snapshot.retained_output,
-        failure: snapshot.failure,
-    }
-}
-
-fn map_delta(delta: RuntimeExecutionOutputDelta) -> ExecutionProcessOutputDelta {
-    ExecutionProcessOutputDelta {
-        process_id: delta.process_id,
-        tool_id: delta.tool_id,
-        sequence: delta.sequence,
-        kind: map_output_kind(delta.kind),
-        delta: delta.delta,
-        bytes: delta.bytes,
-        omitted_bytes: delta.omitted_bytes,
-        truncated: delta.truncated,
-    }
-}
-
-fn map_status(status: RuntimeExecutionProcessStatus) -> ExecutionProcessStatus {
-    match status {
-        RuntimeExecutionProcessStatus::Starting => ExecutionProcessStatus::Starting,
-        RuntimeExecutionProcessStatus::Running => ExecutionProcessStatus::Running,
-        RuntimeExecutionProcessStatus::Exited => ExecutionProcessStatus::Exited,
-        RuntimeExecutionProcessStatus::Interrupted => ExecutionProcessStatus::Interrupted,
-        RuntimeExecutionProcessStatus::Terminated => ExecutionProcessStatus::Terminated,
-        RuntimeExecutionProcessStatus::Failed => ExecutionProcessStatus::Failed,
-    }
-}
-
-fn runtime_status_is_terminal(status: RuntimeExecutionProcessStatus) -> bool {
-    matches!(
-        status,
-        RuntimeExecutionProcessStatus::Exited
-            | RuntimeExecutionProcessStatus::Interrupted
-            | RuntimeExecutionProcessStatus::Terminated
-            | RuntimeExecutionProcessStatus::Failed
-    )
-}
-
-fn map_output_kind(kind: RuntimeExecutionOutputKind) -> ExecutionProcessOutputKind {
-    match kind {
-        RuntimeExecutionOutputKind::Stdout => ExecutionProcessOutputKind::Stdout,
-        RuntimeExecutionOutputKind::Stderr => ExecutionProcessOutputKind::Stderr,
-        RuntimeExecutionOutputKind::Combined => ExecutionProcessOutputKind::Combined,
     }
 }
 

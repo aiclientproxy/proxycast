@@ -69,11 +69,8 @@ impl RuntimeCore {
         self.app_data_source.health_memory_store(params).await
     }
 
-    pub async fn reset_memory_store(
-        &self,
-        params: MemoryStoreResetParams,
-    ) -> Result<MemoryStoreResetResponse, RuntimeCoreError> {
-        self.app_data_source.reset_memory_store(params).await
+    pub async fn reset_memory(&self) -> Result<(), RuntimeCoreError> {
+        self.app_data_source.reset_memory().await
     }
 
     pub async fn rebuild_memory_store_index(

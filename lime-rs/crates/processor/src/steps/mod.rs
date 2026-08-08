@@ -4,7 +4,6 @@
 
 mod auth;
 mod injection;
-mod plugin;
 mod provider;
 pub mod registry;
 mod routing;
@@ -15,8 +14,6 @@ mod traits;
 pub use auth::AuthStep;
 #[allow(unused_imports)]
 pub use injection::InjectionStep;
-#[allow(unused_imports)]
-pub use plugin::{PluginPostStep, PluginPreStep};
 pub use provider::{ProviderCallError, ProviderCallResult, ProviderStep};
 #[allow(unused_imports)]
 pub use routing::RoutingStep;

@@ -20,8 +20,6 @@ import {
   KNOWN_OUT_OF_BOUND_AGENT_COUPLING_FILES,
   KNOWN_OUT_OF_BOUND_AGENT_EXECUTION_FILES,
   LOCAL_DATA_SOURCE_SKILLS_DIR,
-  PLUGIN_WORKER_TURN_MAIN,
-  PLUGIN_WORKER_TURN_SPLIT_MODULES,
   PROCESSOR_DISPATCH,
   PROCESSOR_MAIN,
   PROCESSOR_SPLIT_MODULES,
@@ -321,39 +319,6 @@ describe("app-server runtime boundary", () => {
     ).toEqual([]);
   });
 
-  it("plugin_worker_turn 主文件必须保持 worker turn 编排职责拆分", () => {
-    const mainSource = readFileSync(
-      join(REPO_ROOT, PLUGIN_WORKER_TURN_MAIN),
-      "utf8",
-    );
-    const lineCount = mainSource.split(/\r?\n/u).length;
-    const missingModules = PLUGIN_WORKER_TURN_SPLIT_MODULES.filter(
-      (path) => !existsSync(join(REPO_ROOT, path)),
-    );
-    const returnedResponsibilities = [
-      "fn resolve_plugin_activation_request(",
-      "fn resolve_pane_action_request(",
-      "fn validate_worker_cloud_release_signature(",
-      "fn classify_worker_failure(",
-      "fn worker_progress_events_for_sink(",
-      "fn assistant_message_events_from_worker_events(",
-      "fn json_string(",
-    ].filter((snippet) => mainSource.includes(snippet));
-
-    expect(
-      lineCount,
-      "plugin_worker_turn.rs 超过 800 行前必须继续拆子模块，不能把 worker request / failure / progress / launch gate 职责折回主文件",
-    ).toBeLessThanOrEqual(800);
-    expect(
-      missingModules,
-      "plugin_worker_turn.rs 的职责拆分模块不得被删除或折回主文件",
-    ).toEqual([]);
-    expect(
-      returnedResponsibilities,
-      "plugin worker request 解析、失败分类、progress 投影、launch gate 和 JSON helper 不得回流到 plugin_worker_turn.rs 主文件",
-    ).toEqual([]);
-  });
-
   it("runtime_backend tests 主文件必须保持测试职责拆分", () => {
     const mainSource = readFileSync(
       join(REPO_ROOT, RUNTIME_BACKEND_TESTS_MAIN),
@@ -438,13 +403,13 @@ describe("app-server runtime boundary", () => {
       "#[tokio::test]",
       "METHOD_PROJECT_GIT_STATUS =>",
       "METHOD_MCP_TOOL_CALL =>",
-      "METHOD_EXECUTION_PROCESS_START =>",
+      "METHOD_PROCESS_SPAWN =>",
     ].filter((snippet) => mainSource.includes(snippet));
     const returnedTestResponsibilities = [
       "async fn artifact_read_requires_initialized_and_returns_artifact_summaries(",
       "async fn mcp_runtime_methods_require_initialized_and_fail_closed_without_manager(",
       "async fn workspace_right_surface_methods_register_and_list_pending_requests(",
-      "async fn execution_process_methods_start_drain_and_report_status(",
+      "async fn process_spawn_rejects_duplicate_handle_for_same_connection(",
     ].filter((snippet) => testsSource.includes(snippet));
 
     expect(
@@ -790,79 +755,20 @@ describe("app-server runtime boundary", () => {
     ).toEqual([]);
   });
 
-  it("workspace patch host tool plan 和 evidence 语义应下沉到 lime-agent", () => {
-    const appServerAdapter = productionSource(
-      join(
-        REPO_ROOT,
-        "lime-rs/crates/app-server/src/runtime_backend/workspace_patch_host_tools.rs",
-      ),
-    );
-    const agentBoundary = readFileSync(
-      join(
-        REPO_ROOT,
-        "lime-rs/crates/agent/src/agent_tools/workspace_patch_host.rs",
-      ),
-      "utf8",
-    );
-
-    expect(agentBoundary).toContain("WorkspacePatchHostToolPlan");
-    expect(agentBoundary).toContain("hostToolRequests");
-    expect(agentBoundary).toContain("searchRequests");
-    expect(agentBoundary).toContain(
-      "update_workspace_patch_with_host_tool_evidence",
-    );
-    expect(agentBoundary).toContain("execute_workspace_patch_host_tool_plan");
-    expect(agentBoundary).toContain("execute_call(");
-    expect(agentBoundary).toContain("RuntimeToolExecutorHandle");
-    expect(agentBoundary).not.toContain("execute_planned_tool_batch");
-    expect(agentBoundary).not.toContain("ToolExecutionBatchInput");
-    expect(agentBoundary).not.toContain("agent.tool_registry().clone()");
-    expect(
-      existsSync(
-        join(
-          REPO_ROOT,
-          "lime-rs/crates/agent/src/agent_tools/workspace_patch_runtime_adapter.rs",
-        ),
-      ),
-      "已删除的 workspace_patch_runtime_adapter 不得恢复；RuntimeTool execute_call 留在 workspace_patch_host current owner",
-    ).toBe(false);
-    expect(appServerAdapter).toContain(
-      "WorkspacePatchHostToolPlan::from_patch",
-    );
-    expect(appServerAdapter).toContain(
-      "update_workspace_patch_with_host_tool_evidence",
-    );
-    expect(appServerAdapter).not.toContain("ToolExecutionOutcome");
-    expect(appServerAdapter).not.toContain("hostToolRequests");
-    expect(appServerAdapter).not.toContain("searchRequests");
-    expect(appServerAdapter).not.toContain("hostToolEvidence");
-
-    const executionAdapter = productionSource(
-      join(
-        REPO_ROOT,
-        "lime-rs/crates/app-server/src/runtime_backend/workspace_patch_host_execution.rs",
-      ),
-    );
-    expect(executionAdapter).toContain(
-      "execute_workspace_patch_host_tool_plan",
-    );
-    expect(executionAdapter).not.toContain("host_tool_plan.planned_tools()");
-    expect(executionAdapter).not.toContain("execute_planned_tool_batch");
-    expect(executionAdapter).not.toContain("tool_registry()");
-    expect(executionAdapter).not.toContain("PlannedToolExecution {");
+  it("Agent Plugins 不得恢复私有 worker、host generation 或 workspace patch 执行 adapter", () => {
+    for (const retiredPath of [
+      "lime-rs/crates/app-server/src/runtime_backend/plugin_worker_generation.rs",
+      "lime-rs/crates/app-server/src/runtime_backend/workspace_patch_host_execution.rs",
+      "lime-rs/crates/app-server/src/runtime_backend/workspace_patch_host_tools.rs",
+      "lime-rs/crates/agent/src/host_managed_generation.rs",
+      "lime-rs/crates/agent/src/agent_tools/workspace_patch_host.rs",
+      "lime-rs/crates/agent/src/agent_tools/workspace_patch_runtime_adapter.rs",
+    ]) {
+      expect(existsSync(join(REPO_ROOT, retiredPath)), retiredPath).toBe(false);
+    }
   });
 
-  it("App Server 受控文本生成 adapter 不应重新复制 Agent streaming loop", () => {
-    const pluginWorkerAdapter = {
-      path: "lime-rs/crates/app-server/src/runtime_backend/plugin_worker_generation.rs",
-      source: readFileSync(
-        join(
-          REPO_ROOT,
-          "lime-rs/crates/app-server/src/runtime_backend/plugin_worker_generation.rs",
-        ),
-        "utf8",
-      ),
-    };
+  it("App Server image presentation adapter 不应重新复制 Agent streaming loop", () => {
     const imagePresentationAdapter = {
       path: "lime-rs/crates/app-server/src/runtime_backend/image_command/presentation.rs",
       source: readFileSync(
@@ -873,19 +779,9 @@ describe("app-server runtime boundary", () => {
         "utf8",
       ),
     };
-    const agentHostManagedGeneration = readFileSync(
-      join(REPO_ROOT, "lime-rs/crates/agent/src/host_managed_generation.rs"),
-      "utf8",
-    );
     const agentDirectTextGeneration = readFileSync(
       join(REPO_ROOT, "lime-rs/crates/agent/src/direct_text_generation.rs"),
       "utf8",
-    );
-    const adapters = [pluginWorkerAdapter, imagePresentationAdapter].map(
-      ({ path, source }) => ({
-        path,
-        source,
-      }),
     );
     const forbiddenSnippets = [
       "stream_reply_with_policy",
@@ -895,37 +791,16 @@ describe("app-server runtime boundary", () => {
       "TextDeltaBatch",
       "configure_provider_for_route(",
     ];
-    const pluginWorkerForbiddenSnippets = [
-      "run_direct_text_generation",
-      "DirectTextGenerationRequest",
-      "fn generation_system_prompt",
-      "fn generation_user_prompt",
-      "MAX_GENERATION_REQUESTS",
-      "MAX_GENERATED_CHARS",
-    ].filter((snippet) => pluginWorkerAdapter.source.includes(snippet));
+    const offenders = forbiddenSnippets
+      .filter((snippet) => imagePresentationAdapter.source.includes(snippet))
+      .map((snippet) => ({ path: imagePresentationAdapter.path, snippet }));
 
-    const offenders = adapters.flatMap(({ path, source }) =>
-      forbiddenSnippets
-        .filter((snippet) => source.includes(snippet))
-        .map((snippet) => ({ path, snippet })),
-    );
-
-    expect(agentHostManagedGeneration).toContain("run_direct_text_generation");
-    expect(agentHostManagedGeneration).toContain("DirectTextGenerationRequest");
-    expect(agentHostManagedGeneration).toContain("HostManagedGenerationPlan");
-    expect(agentHostManagedGeneration).toContain("provider_configuration");
     expect(agentDirectTextGeneration).toContain(
       "ModelRouteProviderConfiguration",
     );
     expect(agentDirectTextGeneration).toContain(
       "configure_model_route_provider_for_session",
     );
-    expect(pluginWorkerAdapter.source).toContain("run_host_managed_generation");
-    expect(pluginWorkerAdapter.source).toContain("HostManagedGenerationPlan");
-    expect(pluginWorkerAdapter.source).toContain(
-      "provider_configuration_from_runtime",
-    );
-    expect(pluginWorkerForbiddenSnippets).toEqual([]);
     expect(imagePresentationAdapter.source).toContain(
       "run_direct_text_generation",
     );
@@ -937,7 +812,7 @@ describe("app-server runtime boundary", () => {
     );
     expect(
       offenders,
-      "plugin worker 只能调用 lime-agent host_managed_generation，image presentation 只能调用 lime-agent direct_text_generation；App Server adapter 不得重新承接禁用工具的模型 streaming loop",
+      "image presentation 只能调用 lime-agent direct_text_generation；App Server adapter 不得重新承接模型 streaming loop",
     ).toEqual([]);
   });
 

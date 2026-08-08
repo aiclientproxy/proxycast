@@ -9,17 +9,25 @@ use app_server_protocol::protocol::v2::{
     PluginCatalogReadResponse, PluginCatalogUninstallParams, PluginCatalogUninstallResponse,
     PluginSearchParams, PluginSearchResponse,
 };
-use app_server_protocol::*;
 use async_trait::async_trait;
-use serde_json::Value;
 use std::path::PathBuf;
 
+/// Snapshot of an enabled Agent Plugin used to build one current turn.
+///
+/// This is intentionally smaller than an activation payload: package discovery and
+/// component loading stay owned by App Server, while RuntimeCore receives only the
+/// stable inputs needed for Skills and MCP routing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginTurnSnapshot {
+    pub id: String,
+    pub config_name: String,
+    pub display_name: String,
+    pub package_root: PathBuf,
+    pub skill_names: Vec<String>,
+    pub mcp_server_names: Vec<String>,
+}
 #[async_trait]
 pub trait PluginDataSource: Send + Sync {
-    fn plugin_data_root(&self) -> Result<PathBuf, RuntimeCoreError> {
-        Err(unavailable("pluginData/root"))
-    }
-
     async fn list_plugin_catalog(
         &self,
         _params: PluginCatalogListParams,
@@ -62,7 +70,9 @@ pub trait PluginDataSource: Send + Sync {
         Err(unavailable("plugin/installed"))
     }
 
-    async fn list_plugin_catalog_activations(&self) -> Result<Vec<Value>, RuntimeCoreError> {
+    async fn list_enabled_plugin_turn_snapshots(
+        &self,
+    ) -> Result<Vec<PluginTurnSnapshot>, RuntimeCoreError> {
         Ok(Vec::new())
     }
 
@@ -92,59 +102,6 @@ pub trait PluginDataSource: Send + Sync {
         _params: PluginCatalogEnabledSetParams,
     ) -> Result<PluginCatalogEnabledSetResponse, RuntimeCoreError> {
         Err(unavailable("plugin/enabled/set"))
-    }
-
-    async fn list_plugin_installed(&self) -> Result<PluginInstalledListResponse, RuntimeCoreError> {
-        Ok(PluginInstalledListResponse::default())
-    }
-
-    async fn inspect_plugin_local_package(
-        &self,
-        _params: PluginLocalPackageInspectParams,
-    ) -> Result<PluginLocalPackageInspectResponse, RuntimeCoreError> {
-        Err(unavailable("pluginLocalPackage/inspect"))
-    }
-
-    async fn export_plugin_local_package(
-        &self,
-        _params: PluginLocalPackageExportParams,
-    ) -> Result<PluginLocalPackageExportResponse, RuntimeCoreError> {
-        Err(unavailable("pluginLocalPackage/export"))
-    }
-
-    async fn fetch_plugin_cloud_package(
-        &self,
-        _params: PluginFetchCloudPackageParams,
-    ) -> Result<PluginPackageCacheEntry, RuntimeCoreError> {
-        Err(unavailable("pluginPackage/fetchCloud"))
-    }
-
-    async fn save_plugin_installed(
-        &self,
-        _params: PluginInstalledSaveParams,
-    ) -> Result<serde_json::Value, RuntimeCoreError> {
-        Err(unavailable("pluginInstalled/save"))
-    }
-
-    async fn set_plugin_installed_disabled(
-        &self,
-        _params: PluginInstalledDisabledSetParams,
-    ) -> Result<PluginInstalledListResponse, RuntimeCoreError> {
-        Err(unavailable("pluginInstalled/disabled/set"))
-    }
-
-    async fn preview_plugin_uninstall(
-        &self,
-        _params: PluginUninstallRehearsalParams,
-    ) -> Result<PluginUninstallRehearsalResponse, RuntimeCoreError> {
-        Err(unavailable("pluginInstalled/uninstall/rehearsal"))
-    }
-
-    async fn uninstall_plugin(
-        &self,
-        _params: PluginUninstallParams,
-    ) -> Result<PluginUninstallResponse, RuntimeCoreError> {
-        Err(unavailable("pluginInstalled/uninstall"))
     }
 }
 

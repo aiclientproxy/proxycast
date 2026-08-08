@@ -975,14 +975,14 @@ async function waitForWorkbenchFilePreview(page, options, expected) {
       const filePreviewTraceEntries = readJsonArray(traceRaw)
         .filter(
           (entry) =>
-            JSON.stringify(entry).includes("fileSystem/readFilePreview") &&
+            JSON.stringify(entry).includes("fs/readFile") &&
             JSON.stringify(entry).includes(expectedFileName),
         )
         .slice(-4);
       const filePreviewInvokeErrors = readJsonArray(errorRaw)
         .filter(
           (entry) =>
-            JSON.stringify(entry).includes("fileSystem/readFilePreview") &&
+            JSON.stringify(entry).includes("fs/readFile") &&
             JSON.stringify(entry).includes(expectedFileName),
         )
         .slice(-4);
@@ -1015,9 +1015,7 @@ async function waitForWorkbenchFilePreview(page, options, expected) {
           htmlPreview instanceof HTMLIFrameElement ? htmlPreview.srcdoc : "",
         timelineToolRows,
         matchingTimelineToolRows,
-        traceHasFileSystemReadFilePreview: traceRaw.includes(
-          "fileSystem/readFilePreview",
-        ),
+        traceHasFsReadFile: traceRaw.includes("fs/readFile"),
         traceHasExpectedFile: traceRaw.includes(expectedFileName),
         filePreviewTraceEntries,
         filePreviewInvokeErrors,

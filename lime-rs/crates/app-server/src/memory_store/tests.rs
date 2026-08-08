@@ -565,18 +565,8 @@ async fn reset_clears_store_contents_preserves_layout_and_soul_boundary() {
     fs::write(root.join(SUMMARY_FILE), "summary content").expect("summary");
     fs::write(root.join(INDEX_DIR).join("scratch.json"), "{}").expect("index");
 
-    let response = backend
-        .reset(MemoryStoreResetParams {
-            root: global_root(),
-        })
-        .await
-        .expect("reset");
+    backend.reset().await.expect("reset");
 
-    assert_eq!(response.root_scope, MemoryStoreScope::Global);
-    assert_eq!(response.root_path, root.to_string_lossy());
-    assert!(response.removed_files >= 4);
-    assert!(response.removed_directories >= 4);
-    assert!(response.preserved_soul);
     assert!(outside_file.is_file());
     assert!(root.join(SUMMARY_FILE).is_file());
     assert!(root.join(MEMORY_FILE).is_file());

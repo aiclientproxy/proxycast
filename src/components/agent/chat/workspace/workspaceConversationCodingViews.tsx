@@ -4,13 +4,7 @@ import type {
   AgentRuntimeFileCheckpointThreadSummary,
   AgentRuntimeThreadReadModel,
 } from "@/lib/api/agentRuntime/sessionTypes";
-import {
-  drainExecutionProcessOutput,
-  interruptExecutionProcess,
-  readExecutionProcessStatus,
-  terminateExecutionProcess,
-  writeExecutionProcessStdin,
-} from "@/lib/api/executionProcess";
+import { terminateBackgroundTerminalForItem } from "@/lib/api/backgroundTerminals";
 import { projectCodingWorkbenchViewFromEvents } from "@limecloud/agent-runtime-projection";
 import { CanvasSessionOverviewPanel } from "../components/CanvasSessionOverviewPanel";
 import type {
@@ -210,29 +204,20 @@ export function buildWorkspaceConversationCodingViews({
               codingView={codingView}
               fileCheckpointSummary={fileCheckpointSummary}
               submittedActionsInFlight={submittedActionsInFlight}
-              processControls={{
-                onInterruptProcess: withReadModelRefresh(
-                  interruptExecutionProcess,
-                  onRefreshSessionReadModel,
-                ),
-                onTerminateProcess: withReadModelRefresh(
-                  terminateExecutionProcess,
-                  onRefreshSessionReadModel,
-                ),
-                onRefreshProcessStatus: withReadModelRefresh(
-                  readExecutionProcessStatus,
-                  onRefreshSessionReadModel,
-                ),
-                onDrainProcessOutput: withReadModelRefresh(
-                  (processId) => drainExecutionProcessOutput({ processId }),
-                  onRefreshSessionReadModel,
-                ),
-                onWriteProcessStdin: withReadModelRefresh(
-                  (processId, data) =>
-                    writeExecutionProcessStdin({ processId, data }),
-                  onRefreshSessionReadModel,
-                ),
-              }}
+              processControls={
+                threadRead
+                  ? {
+                      onTerminateBackgroundTerminal: withReadModelRefresh(
+                        (itemId) =>
+                          terminateBackgroundTerminalForItem({
+                            threadId: threadRead.thread_id,
+                            itemId,
+                          }),
+                        onRefreshSessionReadModel,
+                      ),
+                    }
+                  : undefined
+              }
               onRespondToAction={onRespondToAction}
               onSubmitRecoveryPrompt={onSubmitRecoveryPrompt}
             />

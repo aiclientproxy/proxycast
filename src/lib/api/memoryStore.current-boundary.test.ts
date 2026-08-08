@@ -12,7 +12,7 @@ const CURRENT_MEMORY_STORE_METHODS = [
   "memoryStore/review/list",
   "memoryStore/review/resolve",
   "memoryStore/health",
-  "memoryStore/reset",
+  "memory/reset",
   "memoryStore/index/rebuild",
 ];
 
@@ -25,7 +25,7 @@ const CURRENT_MEMORY_STORE_METHOD_CONSTANTS = [
   "METHOD_MEMORY_STORE_REVIEW_LIST",
   "METHOD_MEMORY_STORE_REVIEW_RESOLVE",
   "METHOD_MEMORY_STORE_HEALTH",
-  "METHOD_MEMORY_STORE_RESET",
+  "METHOD_MEMORY_RESET",
   "METHOD_MEMORY_STORE_INDEX_REBUILD",
 ];
 
@@ -38,7 +38,7 @@ const CURRENT_MEMORY_STORE_FRONTEND_EXPORTS = [
   "listMemoryStoreReviewNotes",
   "resolveMemoryStoreReviewNote",
   "getMemoryStoreHealth",
-  "resetMemoryStore",
+  "resetMemory",
   "rebuildMemoryStoreIndex",
 ];
 
@@ -53,6 +53,9 @@ const RETIRED_MEMORY_API_SNIPPETS = [
   "saveSceneAppExecutionAsInspiration",
   "messageInspirationDraft",
   "sceneAppExecutionInspirationDraft",
+  "memoryStore/reset",
+  "resetMemoryStore",
+  "METHOD_MEMORY_STORE_RESET",
 ];
 
 const RETIRED_MEMORY_FILES = [
@@ -147,7 +150,9 @@ describe("memoryStore current App Server boundary", () => {
 
   it("App Server protocol / client 只暴露 memoryStore current 方法", () => {
     const sources = [
-      readRepoFile("packages/app-server-client/src/generated/protocol-types.ts"),
+      readRepoFile(
+        "packages/app-server-client/src/generated/protocol-types.ts",
+      ),
       readRepoFile("packages/app-server-client/src/index.ts"),
       readRepoFile(
         "lime-rs/crates/app-server-protocol/src/protocol/v0/method_names.rs",
@@ -166,6 +171,9 @@ describe("memoryStore current App Server boundary", () => {
       "memoryRuntime/",
       "unified_memory_",
       "memory_runtime_",
+      "memoryStore/reset",
+      "METHOD_MEMORY_STORE_RESET",
+      "MemoryStoreReset",
     ]);
   });
 
@@ -176,7 +184,8 @@ describe("memoryStore current App Server boundary", () => {
   });
 
   it("旧记忆与旧灵感库目录保持 deleted / forbidden-to-restore", () => {
-    const restoredDirectories = RETIRED_MEMORY_DIRECTORIES.filter(repoPathExists);
+    const restoredDirectories =
+      RETIRED_MEMORY_DIRECTORIES.filter(repoPathExists);
 
     expect(restoredDirectories).toEqual([]);
   });
@@ -217,7 +226,9 @@ describe("memoryStore current App Server boundary", () => {
 
   it("开发守卫和续测指南不得把旧记忆网关或旧灵感库当 current 入口", () => {
     const eslintSource = readRepoFile("eslint.config.js");
-    const playwrightGuide = readRepoFile("internal/aiprompts/playwright-e2e.md");
+    const playwrightGuide = readRepoFile(
+      "internal/aiprompts/playwright-e2e.md",
+    );
     const memoryGuide = readRepoFile("internal/aiprompts/memory-compaction.md");
 
     expect(eslintSource).not.toContain(

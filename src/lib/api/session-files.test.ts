@@ -15,7 +15,7 @@ const {
   appServerDeleteSessionFileMock,
   appServerGetOrCreateSessionFileMock,
   appServerListSessionFilesMock,
-  appServerReadFilePreviewMock,
+  readFilePreviewMock,
   appServerReadSessionFileMock,
   appServerResolveSessionFilePathMock,
   appServerSaveSessionFileMock,
@@ -24,7 +24,7 @@ const {
   appServerDeleteSessionFileMock: vi.fn(),
   appServerGetOrCreateSessionFileMock: vi.fn(),
   appServerListSessionFilesMock: vi.fn(),
-  appServerReadFilePreviewMock: vi.fn(),
+  readFilePreviewMock: vi.fn(),
   appServerReadSessionFileMock: vi.fn(),
   appServerResolveSessionFilePathMock: vi.fn(),
   appServerSaveSessionFileMock: vi.fn(),
@@ -41,9 +41,10 @@ vi.mock("@/lib/api/appServer", () => ({
     saveSessionFile: appServerSaveSessionFileMock,
     updateSessionFileMeta: appServerUpdateSessionFileMetaMock,
   })),
-  AppServerClient: vi.fn(() => ({
-    readFilePreview: appServerReadFilePreviewMock,
-  })),
+}));
+
+vi.mock("@/lib/api/fileBrowser", () => ({
+  readFilePreview: readFilePreviewMock,
 }));
 
 vi.mock("@/lib/dev-bridge", () => ({
@@ -156,22 +157,20 @@ describe("session-files API", () => {
   });
 
   it("Document Import 走 App Server file preview，不再调用旧导入命令", async () => {
-    appServerReadFilePreviewMock.mockResolvedValueOnce({
-      result: {
-        path: "/tmp/doc.md",
-        content: "document text",
-        isBinary: false,
-        size: 13,
-        error: null,
-      },
+    readFilePreviewMock.mockResolvedValueOnce({
+      path: "/tmp/doc.md",
+      content: "document text",
+      isBinary: false,
+      size: 13,
+      error: null,
     });
 
     await expect(importDocument("/tmp/doc.md")).resolves.toBe("document text");
 
-    expect(appServerReadFilePreviewMock).toHaveBeenCalledWith({
-      path: "/tmp/doc.md",
-      maxSize: 2 * 1024 * 1024,
-    });
+    expect(readFilePreviewMock).toHaveBeenCalledWith(
+      "/tmp/doc.md",
+      2 * 1024 * 1024,
+    );
     expect(safeInvoke).not.toHaveBeenCalledWith(
       "import_document",
       expect.anything(),
@@ -183,40 +182,34 @@ describe("session-files API", () => {
   });
 
   it("Document Import 对 App Server file preview 非文本形态 fail closed", async () => {
-    appServerReadFilePreviewMock.mockResolvedValueOnce({
-      result: {
-        path: "/tmp/doc.md",
-        content: undefined,
-        isBinary: false,
-        size: 0,
-        error: null,
-      },
+    readFilePreviewMock.mockResolvedValueOnce({
+      path: "/tmp/doc.md",
+      content: undefined,
+      isBinary: false,
+      size: 0,
+      error: null,
     });
 
     await expect(importDocument("/tmp/doc.md")).rejects.toThrow(
-      "fileSystem/readFilePreview did not return document text",
+      "fs/readFile did not return document text",
     );
   });
 
   it("Document Import 对 App Server file preview 错误与二进制文件 fail closed", async () => {
-    appServerReadFilePreviewMock
+    readFilePreviewMock
       .mockResolvedValueOnce({
-        result: {
-          path: "/tmp/doc.md",
-          content: null,
-          isBinary: false,
-          size: 0,
-          error: "too large",
-        },
+        path: "/tmp/doc.md",
+        content: null,
+        isBinary: false,
+        size: 0,
+        error: "too large",
       })
       .mockResolvedValueOnce({
-        result: {
-          path: "/tmp/image.png",
-          content: null,
-          isBinary: true,
-          size: 8,
-          error: null,
-        },
+        path: "/tmp/image.png",
+        content: null,
+        isBinary: true,
+        size: 8,
+        error: null,
       });
 
     await expect(importDocument("/tmp/doc.md")).rejects.toThrow("too large");

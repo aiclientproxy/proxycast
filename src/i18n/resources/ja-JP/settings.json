@@ -1431,7 +1431,7 @@
   "settings.memory.store.message.consolidateFailed": "メモリノートの整理に失敗しました",
   "settings.memory.store.message.indexRebuilt": "{{files}} 個のファイルからメモリインデックスを再構築しました",
   "settings.memory.store.message.indexRebuildFailed": "メモリインデックスの再構築に失敗しました",
-  "settings.memory.store.message.resetDone": "メモリファイルをリセットしました。{{files}} 個のファイルと {{directories}} 個のフォルダーを削除しました。",
+  "settings.memory.store.message.resetDone": "メモリファイルをリセットしました。",
   "settings.memory.store.message.resetFailed": "メモリファイルのリセットに失敗しました",
   "settings.memory.store.noteTitle": "メモリ修正を追加",
   "settings.memory.store.noteDescription": "確認済みの好み、修正、長期的な制約を短いノートとして保存します。ファイル化メモリの修正ノートに入り、要約はすぐには書き換えません。",

@@ -2,11 +2,11 @@ use super::event_store::{
     append_runtime_events_to_state, append_runtime_events_to_state_with_message_lifecycle,
     append_workflow_audit_runtime_events, CanonicalMessageLifecycleState,
 };
-use super::plugin_worker_workflow_cancel::workflow_cancel_events_from_audit_records;
 use super::status::{agent_turn_blocks_queue_resume, agent_turn_is_active, agent_turn_is_terminal};
 use super::turn_start::{
     user_input_text, validate_user_input, TurnStartInputKind, TurnStartRequest,
 };
+use super::workflow::cancel::workflow_cancel_events_from_audit_records;
 use super::workflow::events::{WORKFLOW_RUN_RESUMING, WORKFLOW_STEP_RESUMING};
 use super::*;
 use agent_protocol::{ItemStatus, ThreadId, ThreadItem, ThreadItemPayload, ThreadTurnsView};
@@ -408,44 +408,6 @@ fn string_field(value: &Value, keys: &[&str]) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
-}
-
-struct TerminalDeferringRuntimeEventSink<'a> {
-    inner: &'a mut dyn RuntimeEventSink,
-    defer_turn_completed: bool,
-    deferred_turn_completed: &'a mut Vec<RuntimeEvent>,
-}
-
-impl<'a> TerminalDeferringRuntimeEventSink<'a> {
-    fn new(
-        inner: &'a mut dyn RuntimeEventSink,
-        defer_turn_completed: bool,
-        deferred_turn_completed: &'a mut Vec<RuntimeEvent>,
-    ) -> Self {
-        Self {
-            inner,
-            defer_turn_completed,
-            deferred_turn_completed,
-        }
-    }
-}
-
-impl RuntimeEventSink for TerminalDeferringRuntimeEventSink<'_> {
-    fn emit(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
-        if self.defer_turn_completed && event.event_type == "turn.completed" {
-            self.deferred_turn_completed.push(event);
-            return Ok(());
-        }
-        self.inner.emit(event)
-    }
-
-    fn emit_preappended(&mut self, event: AgentEvent) -> Result<(), RuntimeCoreError> {
-        self.inner.emit_preappended(event)
-    }
-
-    fn emit_transient(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
-        self.inner.emit_transient(event)
-    }
 }
 
 enum RuntimeEventTarget<'a> {
@@ -1130,18 +1092,10 @@ impl RuntimeCore {
             .backend
             .effective_turn_runtime_options(&request, first_sampling_turn);
         request.runtime_options = effective_runtime_options.clone();
-        let prepared_runtime_options = match self
-            .plugin_worker_turn_bypasses_backend_preflight(&request)
-            .await
-        {
-            Ok(true) => Ok(request.runtime_options.clone()),
-            Ok(false) => {
-                self.backend
-                    .prepare_turn_runtime_options(&request, first_sampling_turn)
-                    .await
-            }
-            Err(error) => Err(error),
-        };
+        let prepared_runtime_options = self
+            .backend
+            .prepare_turn_runtime_options(&request, first_sampling_turn)
+            .await;
         let prepared_runtime_options = match prepared_runtime_options {
             Ok(options) => options,
             Err(error) => {
@@ -1599,43 +1553,15 @@ impl RuntimeCore {
         cancellation_token: Option<CancellationToken>,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
-        let materialize_plugin_activation =
-            self.should_materialize_plugin_activation_turn(&request);
-        let mut deferred_turn_completed = Vec::new();
-        let backend_result = {
-            let mut backend_sink = TerminalDeferringRuntimeEventSink::new(
+        self.backend
+            .start_turn_with_provider_history_and_session_input(
+                request,
+                provider_history,
+                pending_input,
+                cancellation_token,
                 sink,
-                materialize_plugin_activation,
-                &mut deferred_turn_completed,
-            );
-            match self
-                .maybe_run_plugin_worker_turn(&request, &mut backend_sink)
-                .await
-            {
-                Ok(true) => Ok(()),
-                Ok(false) => {
-                    self.backend
-                        .start_turn_with_provider_history_and_session_input(
-                            request.clone(),
-                            provider_history,
-                            pending_input,
-                            cancellation_token,
-                            &mut backend_sink,
-                        )
-                        .await
-                }
-                Err(error) => Err(error),
-            }
-        };
-        backend_result?;
-        if materialize_plugin_activation {
-            self.maybe_materialize_plugin_activation_artifacts(&request, sink)
-                .await?;
-        }
-        for event in deferred_turn_completed {
-            sink.emit(event)?;
-        }
-        Ok(())
+            )
+            .await
     }
 
     fn wake_pending_session_work_if_turn_terminal(

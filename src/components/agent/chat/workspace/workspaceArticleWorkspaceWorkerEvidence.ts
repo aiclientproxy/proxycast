@@ -121,7 +121,7 @@ function readWorkerEvidenceItem(
     status,
     source:
       readString(record.source, record.eventType, record.event_type) ||
-      "plugin_task_worker",
+      "workspace_patch",
     eventType: readString(record.eventType, record.event_type) || null,
     appId: readString(record.appId, record.app_id) || null,
     taskId: readString(record.taskId, record.task_id) || null,

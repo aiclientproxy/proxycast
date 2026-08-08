@@ -10,19 +10,34 @@ use app_server_protocol::protocol::v2::{
     PluginSearchScope, PluginSource, PluginSummary,
 };
 use chrono::Utc;
-use lime_mcp::{McpRuntimeServerSpec, McpServerConfig, McpServerTransport};
-use semver::Version;
+use lime_mcp::agent_plugin_config::parse_agent_plugin_mcp_config;
+use lime_mcp::{McpRuntimeServerSpec, McpServerConfig};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
-const V2_STORE_DIR: &str = "v2";
+const STORE_DIR: &str = "v3";
 const PACKAGES_DIR: &str = "packages";
 const INSTALLED_DIR: &str = "installed";
 const STAGING_DIR: &str = "staging";
-const DEFAULT_MCP_CONFIG_PATH: &str = ".mcp.json";
+const STANDARD_MCP_CONFIG_PATH: &str = "mcp.json";
+const STANDARD_MANIFEST_SCHEMA: &str = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json";
+const CODEX_EXTENSION_NAMESPACE: &str = "com.openai";
+const CODEX_EXTENSION_MANIFEST_PATH: &str = ".codex-plugin/plugin.json";
+const STANDARD_MANIFEST_FIELDS: &[&str] = &[
+    "$schema",
+    "name",
+    "version",
+    "description",
+    "author",
+    "homepage",
+    "repository",
+    "license",
+    "keywords",
+    "extensions",
+];
 const INSTALLED_SCHEMA_VERSION: u64 = 1;
 const MAX_MANIFEST_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_PACKAGE_FILES: usize = 10_000;
@@ -374,10 +389,10 @@ fn plugin_search_result(summary: PluginCatalogSummary) -> PluginSearchResult {
     }
 }
 
-pub(crate) fn enabled_activation_descriptors(
+pub(crate) fn enabled_plugin_turn_snapshots(
     plugin_data_root: &Path,
-) -> Result<Vec<Value>, String> {
-    let mut activations = Vec::new();
+) -> Result<Vec<crate::runtime::PluginTurnSnapshot>, String> {
+    let mut snapshots = Vec::new();
     for record in read_installed_records(plugin_data_root)?.values() {
         if !record
             .get("enabled")
@@ -386,38 +401,42 @@ pub(crate) fn enabled_activation_descriptors(
         {
             continue;
         }
+
         let package_root = installed_package_root(plugin_data_root, record)?;
         let manifest = read_manifest(&package_root)?;
-        let plugin_id = manifest_name(&manifest)?;
-        let version = manifest_version(&manifest)?;
-        let runtime_capabilities = serde_json::json!({
-            "schemaVersion": "plugin-runtime-capabilities/v2",
-            "pluginId": plugin_id.clone(),
-            "version": version.clone(),
-            "packageSourceUri": package_root.to_string_lossy(),
-            "skills": runtime_skill_capabilities(&package_root, &manifest)?,
-            "mcpServers": plugin_mcp_server_descriptors(&package_root, &manifest, &plugin_id)?
-                .into_iter()
-                .map(|server| serde_json::json!({
-                    "id": server.id,
-                    "runtimeName": server.runtime_name,
-                    "source": "plugin-v2-installed"
-                }))
-                .collect::<Vec<_>>(),
-            "mcpBindings": [],
+        let id = manifest_name(&manifest)?;
+        let marketplace_id = record_string(record, "marketplaceId").unwrap_or_else(|| {
+            record_string(record, "sourceKind").unwrap_or_else(|| "local".to_string())
         });
-        activations.push(serde_json::json!({
-            "schemaVersion": "plugin-activation/v2",
-            "pluginId": plugin_id,
-            "version": version,
-            "contentDigest": record_string(record, "contentDigest"),
-            "marketplaceId": record_string(record, "marketplaceId"),
-            "packageSourceUri": package_root.to_string_lossy(),
-            "sourceUri": record_string(record, "sourceUri"),
-            "runtimeCapabilities": runtime_capabilities,
-        }));
+        let config_name = format!("{id}@{marketplace_id}");
+        let display_name = interface_string(&manifest, "displayName").unwrap_or_else(|| id.clone());
+        let skill_names = skill_capabilities(&package_root)?
+            .into_iter()
+            .map(|skill| skill.id)
+            .collect::<Vec<_>>();
+        let mcp_server_names = plugin_mcp_server_descriptors(plugin_data_root, &package_root, &id)
+            .unwrap_or_else(|error| {
+                tracing::warn!(
+                    plugin_id = %id,
+                    %error,
+                    "禁用包含非法 mcp.json 的 Agent Plugin MCP 组件"
+                );
+                Vec::new()
+            })
+            .into_iter()
+            .map(|server| server.runtime_name)
+            .collect::<Vec<_>>();
+        snapshots.push(crate::runtime::PluginTurnSnapshot {
+            id,
+            config_name,
+            display_name,
+            package_root,
+            skill_names,
+            mcp_server_names,
+        });
     }
-    Ok(activations)
+    snapshots.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(snapshots)
 }
 
 pub(crate) fn list_plugin_mcp_runtime_server_specs(
@@ -436,7 +455,19 @@ pub(crate) fn list_plugin_mcp_runtime_server_specs(
         let package_root = installed_package_root(plugin_data_root, record)?;
         let manifest = read_manifest(&package_root)?;
         let plugin_id = manifest_name(&manifest)?;
-        for server in plugin_mcp_server_descriptors(&package_root, &manifest, &plugin_id)? {
+        let servers =
+            match plugin_mcp_server_descriptors(plugin_data_root, &package_root, &plugin_id) {
+                Ok(servers) => servers,
+                Err(error) => {
+                    tracing::warn!(
+                        plugin_id,
+                        %error,
+                        "禁用包含非法 mcp.json 的 Agent Plugin MCP 组件"
+                    );
+                    continue;
+                }
+            };
+        for server in servers {
             specs.push(McpRuntimeServerSpec {
                 name: server.runtime_name,
                 plugin_id: Some(plugin_id.clone()),
@@ -455,62 +486,35 @@ struct PluginMcpServerDescriptor {
 }
 
 fn plugin_mcp_server_descriptors(
+    plugin_data_root: &Path,
     package_root: &Path,
-    manifest: &Value,
     plugin_id: &str,
 ) -> Result<Vec<PluginMcpServerDescriptor>, String> {
     let package_root = canonical_package_root(package_root)?;
-    let source = match manifest.get("mcpServers") {
-        Some(Value::String(path)) => resource_path(&package_root, path).and_then(read_json_file),
-        Some(Value::Object(object)) => Ok(Value::Object(object.clone())),
-        Some(_) => Err("manifest.mcpServers 必须是包内路径或 object。".to_string()),
-        None => {
-            let default_path = package_root.join(DEFAULT_MCP_CONFIG_PATH);
-            if default_path.is_file() {
-                read_json_file(default_path)
-            } else {
-                return Ok(Vec::new());
-            }
-        }
-    }?;
-    let server_values = source
-        .get("mcpServers")
-        .and_then(Value::as_object)
-        .or_else(|| source.as_object())
-        .ok_or_else(|| "Plugin MCP 配置必须是 server object。".to_string())?;
-
+    let path = package_root.join(STANDARD_MCP_CONFIG_PATH);
+    if !path.is_file() {
+        return Ok(Vec::new());
+    }
+    let data_root = plugin_data_root.join("data").join(plugin_id);
+    let content =
+        fs::read_to_string(&path).map_err(io_error("读取 Agent Plugins mcp.json 失败"))?;
+    let outcome = parse_agent_plugin_mcp_config(&package_root, &data_root, &content)?;
     let mut descriptors = Vec::new();
-    for (id, value) in server_values {
-        let runtime_name = plugin_mcp_runtime_name(plugin_id, id)?;
-        let mut config = match McpServerConfig::from_value(value.clone()) {
-            Ok(config) => config,
-            Err(error) => {
-                tracing::warn!(
-                    plugin_id,
-                    server_id = id,
-                    %error,
-                    "跳过非法 Plugin MCP server 配置"
-                );
-                continue;
-            }
-        };
-        if !config.enabled {
-            continue;
-        }
-        if let Err(error) = resolve_plugin_mcp_cwd(&package_root, &mut config) {
-            tracing::warn!(
-                plugin_id,
-                server_id = id,
-                %error,
-                "跳过 cwd 越界的 Plugin MCP server 配置"
-            );
-            continue;
-        }
+    for (id, config) in outcome.servers {
+        let runtime_name = plugin_mcp_runtime_name(plugin_id, &id)?;
         descriptors.push(PluginMcpServerDescriptor {
             id: id.clone(),
             runtime_name,
             config,
         });
+    }
+    for error in outcome.errors {
+        tracing::warn!(
+            plugin_id,
+            server_id = error.name,
+            message = error.message,
+            "跳过非法 Agent Plugins MCP server 配置"
+        );
     }
     descriptors.sort_by(|left, right| left.id.cmp(&right.id));
     Ok(descriptors)
@@ -522,44 +526,6 @@ fn plugin_mcp_runtime_name(plugin_id: &str, server_id: &str) -> Result<String, S
         return Err(format!("Plugin MCP server id 非法: {server_id}"));
     }
     Ok(format!("plugin__{plugin_id}__{server_id}"))
-}
-
-fn resolve_plugin_mcp_cwd(package_root: &Path, config: &mut McpServerConfig) -> Result<(), String> {
-    let McpServerTransport::Stdio { cwd, .. } = &mut config.transport else {
-        return Ok(());
-    };
-    let configured_cwd = cwd.clone();
-    let candidate = configured_cwd
-        .as_deref()
-        .map(|value| {
-            let value = value.split('\0').next().unwrap_or_default().trim();
-            if value.is_empty() {
-                package_root.to_path_buf()
-            } else if Path::new(value).is_absolute() {
-                PathBuf::from(value)
-            } else {
-                package_root.join(value)
-            }
-        })
-        .unwrap_or_else(|| package_root.to_path_buf());
-    let resolved = fs::canonicalize(&candidate).map_err(io_error("解析 Plugin MCP cwd 失败"))?;
-    if !resolved.starts_with(package_root) || !resolved.is_dir() {
-        return Err(format!(
-            "Plugin MCP cwd 必须位于 package root 内且为目录: {}",
-            candidate.display()
-        ));
-    }
-    *cwd = Some(resolved.to_string_lossy().into_owned());
-    Ok(())
-}
-
-fn read_json_file(path: PathBuf) -> Result<Value, String> {
-    let metadata = fs::metadata(&path).map_err(io_error("读取 Plugin MCP 配置元数据失败"))?;
-    if metadata.len() > MAX_MANIFEST_BYTES {
-        return Err("Plugin MCP 配置超过大小限制。".to_string());
-    }
-    let content = fs::read_to_string(path).map_err(io_error("读取 Plugin MCP 配置失败"))?;
-    serde_json::from_str(&content).map_err(|error| format!("解析 Plugin MCP 配置失败: {error}"))
 }
 
 pub(crate) fn set_enabled(
@@ -613,11 +579,11 @@ pub(crate) fn install(
     params: PluginCatalogInstallParams,
 ) -> Result<PluginCatalogInstallResponse, String> {
     let source_root = canonical_package_root(Path::new(&params.source_path))?;
-    let store_root = plugin_data_root.join(V2_STORE_DIR);
+    let store_root = plugin_data_root.join(STORE_DIR);
     let canonical_store =
         fs::canonicalize(plugin_data_root).unwrap_or_else(|_| plugin_data_root.to_path_buf());
     if source_root.starts_with(&canonical_store) {
-        return Err("Plugin source 不能位于 v2 installed store 内。".to_string());
+        return Err("Plugin source 不能位于 installed store 内。".to_string());
     }
     let manifest = read_manifest(&source_root)?;
     let plugin_id = manifest_name(&manifest)?;
@@ -850,115 +816,61 @@ struct CapabilityDetail {
 
 fn build_capability_detail(
     package_root: &Path,
-    manifest: &Value,
+    _manifest: &Value,
 ) -> Result<CapabilityDetail, String> {
-    let skills = skill_capabilities(package_root, manifest)?;
-    let mcp_servers = object_capabilities(package_root, manifest.get("mcpServers"), "MCP")?;
-    let apps = object_capabilities(package_root, manifest.get("apps"), "App")?;
-    let hooks = hook_capabilities(package_root, manifest.get("hooks"))?;
-    let ui_resources = interface_resources(package_root, manifest)?;
+    let skills = skill_capabilities(package_root)?;
+    let mcp_servers = mcp_capabilities(package_root)?;
     Ok(CapabilityDetail {
         skills,
         mcp_servers,
-        apps,
-        hooks,
-        ui_resources,
+        apps: Vec::new(),
+        hooks: Vec::new(),
+        ui_resources: Vec::new(),
     })
 }
 
-fn skill_capabilities(
-    package_root: &Path,
-    manifest: &Value,
-) -> Result<Vec<PluginCatalogCapability>, String> {
-    let value = manifest.get("skills");
-    let Some(value) = value else {
+fn skill_capabilities(package_root: &Path) -> Result<Vec<PluginCatalogCapability>, String> {
+    let root = package_root.join("skills");
+    if !root.is_dir() {
         return Ok(Vec::new());
-    };
-    let path = value
-        .as_str()
-        .ok_or_else(|| "manifest.skills 必须是包内相对路径。".to_string())?;
-    let root = resource_path(package_root, path)?;
+    }
     let mut capabilities = Vec::new();
-    if root.is_dir() {
-        for entry in fs::read_dir(&root).map_err(io_error("读取 Plugin skills 目录失败"))? {
-            let entry = entry.map_err(io_error("读取 Plugin skill 条目失败"))?;
-            let path = entry.path();
-            if path.is_dir() && path.join("SKILL.md").is_file() {
-                let id = entry.file_name().to_string_lossy().into_owned();
-                capabilities.push(PluginCatalogCapability {
-                    id: id.clone(),
-                    name: id,
-                    description: String::new(),
-                    requires_auth: false,
-                });
-            }
+    for entry in fs::read_dir(&root).map_err(io_error("读取 Agent Plugins skills 目录失败"))?
+    {
+        let entry = entry.map_err(io_error("读取 Agent Plugins skill 条目失败"))?;
+        let path = entry.path();
+        if path.is_dir() && path.join("SKILL.md").is_file() {
+            let id = entry.file_name().to_string_lossy().into_owned();
+            capabilities.push(PluginCatalogCapability {
+                id: id.clone(),
+                name: id,
+                description: String::new(),
+                requires_auth: false,
+            });
         }
     }
     capabilities.sort_by(|left, right| left.id.cmp(&right.id));
     Ok(capabilities)
 }
 
-fn runtime_skill_capabilities(package_root: &Path, manifest: &Value) -> Result<Vec<Value>, String> {
-    let Some(value) = manifest.get("skills") else {
-        return Ok(Vec::new());
-    };
-    let path = value
-        .as_str()
-        .ok_or_else(|| "manifest.skills 必须是包内相对路径。".to_string())?;
-    let root = resource_path(package_root, path)?;
-    if !root.is_dir() {
+fn mcp_capabilities(package_root: &Path) -> Result<Vec<PluginCatalogCapability>, String> {
+    let path = package_root.join(STANDARD_MCP_CONFIG_PATH);
+    if !path.is_file() {
         return Ok(Vec::new());
     }
-    let mut capabilities = Vec::new();
-    for entry in fs::read_dir(&root).map_err(io_error("读取 Plugin skills 目录失败"))? {
-        let entry = entry.map_err(io_error("读取 Plugin skill 条目失败"))?;
-        let skill_root = entry.path();
-        if !skill_root.is_dir() || !skill_root.join("SKILL.md").is_file() {
-            continue;
-        }
-        let id = entry.file_name().to_string_lossy().into_owned();
-        capabilities.push(serde_json::json!({
-            "id": id,
-            "title": id,
-            "path": path,
-            "activation": "available",
-            "required": false,
-            "promptInjectionPolicy": {
-                "mode": "available",
-                "source": "plugin-v2-installed"
-            }
-        }));
+    let content =
+        fs::read_to_string(&path).map_err(io_error("读取 Agent Plugins mcp.json 失败"))?;
+    let value: Value = serde_json::from_str(&content)
+        .map_err(|error| format!("解析 Agent Plugins mcp.json 失败: {error}"))?;
+    if value.get("$schema").and_then(Value::as_str)
+        != Some(lime_mcp::agent_plugin_config::AGENT_PLUGIN_MCP_SCHEMA_URI)
+    {
+        return Ok(Vec::new());
     }
-    capabilities.sort_by(|left, right| {
-        left.get("id")
-            .and_then(Value::as_str)
-            .cmp(&right.get("id").and_then(Value::as_str))
-    });
-    Ok(capabilities)
-}
-
-fn object_capabilities(
-    package_root: &Path,
-    value: Option<&Value>,
-    kind: &str,
-) -> Result<Vec<PluginCatalogCapability>, String> {
-    let Some(value) = value else {
+    let Some(servers) = value.get("mcpServers").and_then(Value::as_object) else {
         return Ok(Vec::new());
     };
-    let object = if let Some(path) = value.as_str() {
-        let path = resource_path(package_root, path)?;
-        let content =
-            fs::read_to_string(path).map_err(io_error("读取 Plugin capability 文件失败"))?;
-        serde_json::from_str::<Value>(&content)
-            .map_err(|error| format!("解析 Plugin {kind} 配置失败: {error}"))?
-    } else {
-        value.clone()
-    };
-    let object = object.get("mcpServers").unwrap_or(&object);
-    let Some(object) = object.as_object() else {
-        return Ok(Vec::new());
-    };
-    Ok(object
+    Ok(servers
         .keys()
         .map(|id| PluginCatalogCapability {
             id: id.clone(),
@@ -967,76 +879,6 @@ fn object_capabilities(
             requires_auth: false,
         })
         .collect())
-}
-
-fn hook_capabilities(
-    package_root: &Path,
-    value: Option<&Value>,
-) -> Result<Vec<PluginCatalogHook>, String> {
-    let Some(value) = value else {
-        return Ok(Vec::new());
-    };
-    let value = if let Some(path) = value.as_str() {
-        let path = resource_path(package_root, path)?;
-        let content = fs::read_to_string(path).map_err(io_error("读取 Plugin hooks 配置失败"))?;
-        serde_json::from_str::<Value>(&content)
-            .map_err(|error| format!("解析 Plugin hooks 配置失败: {error}"))?
-    } else {
-        value.clone()
-    };
-    let Some(object) = value.as_object() else {
-        return Ok(Vec::new());
-    };
-    Ok(object
-        .keys()
-        .map(|event| PluginCatalogHook {
-            id: event.clone(),
-            event: event.clone(),
-        })
-        .collect())
-}
-
-fn interface_resources(
-    package_root: &Path,
-    manifest: &Value,
-) -> Result<Vec<PluginCatalogUiResource>, String> {
-    let Some(interface) = manifest.get("interface").and_then(Value::as_object) else {
-        return Ok(Vec::new());
-    };
-    let mut resources = Vec::new();
-    for (key, kind) in [
-        ("composerIcon", "composerIcon"),
-        ("logo", "logo"),
-        ("logoDark", "logoDark"),
-    ] {
-        if let Some(path) = interface.get(key).and_then(Value::as_str) {
-            let resolved = resource_path(package_root, path)?;
-            resources.push(PluginCatalogUiResource {
-                id: key.to_string(),
-                resource_uri: resolved
-                    .strip_prefix(package_root)
-                    .unwrap_or(&resolved)
-                    .to_string_lossy()
-                    .into_owned(),
-                kind: kind.to_string(),
-            });
-        }
-    }
-    if let Some(screenshots) = interface.get("screenshots").and_then(Value::as_array) {
-        for (index, path) in screenshots.iter().filter_map(Value::as_str).enumerate() {
-            let resolved = resource_path(package_root, path)?;
-            resources.push(PluginCatalogUiResource {
-                id: format!("screenshot-{index}"),
-                resource_uri: resolved
-                    .strip_prefix(package_root)
-                    .unwrap_or(&resolved)
-                    .to_string_lossy()
-                    .into_owned(),
-                kind: "screenshot".to_string(),
-            });
-        }
-    }
-    Ok(resources)
 }
 
 fn discover_package_roots(path: &Path) -> Result<Vec<PathBuf>, String> {
@@ -1071,14 +913,17 @@ fn discover_package_roots(path: &Path) -> Result<Vec<PathBuf>, String> {
         }
         return Ok(roots);
     }
-    if path.join(".codex-plugin/plugin.json").is_file() {
+    if path.join("plugin.json").is_file() {
         return Ok(vec![path]);
     }
     let mut roots = Vec::new();
     for entry in fs::read_dir(&path).map_err(io_error("读取 Plugin catalog 目录失败"))? {
         let entry = entry.map_err(io_error("读取 Plugin catalog 条目失败"))?;
         let child = entry.path();
-        if child.is_dir() && child.join(".codex-plugin/plugin.json").is_file() {
+        if child.is_dir()
+            && !entry.file_name().to_string_lossy().starts_with('.')
+            && child.join("plugin.json").is_file()
+        {
             roots.push(child);
         }
     }
@@ -1118,7 +963,7 @@ fn implicit_marketplace_paths(plugin_data_root: &Path) -> Vec<PathBuf> {
     if let Ok(current_dir) = std::env::current_dir() {
         paths.push(current_dir.join(".agents/plugins/marketplace.json"));
     }
-    let configured_root = plugin_data_root.join(V2_STORE_DIR).join("marketplaces");
+    let configured_root = plugin_data_root.join(STORE_DIR).join("marketplaces");
     if let Ok(entries) = fs::read_dir(configured_root) {
         paths.extend(entries.flatten().map(|entry| entry.path()).filter(|path| {
             path.extension().and_then(|extension| extension.to_str()) == Some("json")
@@ -1168,29 +1013,152 @@ fn marketplace_id_for_path(path: &Path) -> Option<String> {
 
 fn read_manifest(package_root: &Path) -> Result<Value, String> {
     let root = canonical_package_root(package_root)?;
-    let path = resource_path(&root, ".codex-plugin/plugin.json")?;
-    let metadata = fs::metadata(&path).map_err(io_error("读取 Plugin manifest 元数据失败"))?;
+    let path = root.join("plugin.json");
+    let metadata =
+        fs::symlink_metadata(&path).map_err(io_error("读取 Plugin manifest 元数据失败"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("Agent Plugins 根 plugin.json 必须是普通文件。".to_string());
+    }
     if metadata.len() > MAX_MANIFEST_BYTES {
         return Err("Plugin manifest 超过大小限制。".to_string());
     }
-    let content = fs::read_to_string(path).map_err(io_error("读取 Plugin manifest 失败"))?;
+    let content = fs::read_to_string(&path).map_err(io_error("读取 Plugin manifest 失败"))?;
     let value: Value = serde_json::from_str(&content)
-        .map_err(|error| format!("解析 Codex Plugin manifest 失败: {error}"))?;
-    if value.get("schemaVersion").is_some()
-        || value
-            .get("contributions")
-            .and_then(Value::as_object)
-            .is_some_and(|contributions| {
-                contributions.contains_key("runtime") || contributions.contains_key("workbench")
-            })
-    {
-        return Err(
-            "拒绝旧 Lime Plugin manifest；v2 只接受 .codex-plugin/plugin.json。".to_string(),
-        );
+        .map_err(|error| format!("解析 Agent Plugins plugin.json 失败: {error}"))?;
+    let Value::Object(mut object) = value else {
+        return Err("Agent Plugins plugin.json 必须是 object。".to_string());
+    };
+    for field in object.keys() {
+        if !STANDARD_MANIFEST_FIELDS.contains(&field.as_str()) {
+            tracing::warn!(
+                path = %path.display(),
+                field,
+                "忽略未知 Agent Plugins manifest 字段"
+            );
+        }
     }
-    manifest_name(&value)?;
-    manifest_version(&value)?;
-    Ok(value)
+    object.retain(|field, _| STANDARD_MANIFEST_FIELDS.contains(&field.as_str()));
+    if object
+        .get("extensions")
+        .is_some_and(|extensions| !extensions.is_object())
+    {
+        tracing::warn!(
+            path = %path.display(),
+            "忽略非 object 的 Agent Plugins extensions 字段"
+        );
+        object.remove("extensions");
+    }
+    if object.get("$schema").and_then(Value::as_str) != Some(STANDARD_MANIFEST_SCHEMA) {
+        return Err(format!(
+            "plugin.json 必须声明标准 schema `{STANDARD_MANIFEST_SCHEMA}`。"
+        ));
+    }
+    validate_standard_manifest_fields(&object)?;
+
+    let mut manifest = Value::Object(object);
+    apply_codex_manifest_extension(&root, &path, &mut manifest)?;
+    manifest_name(&manifest)?;
+    manifest_version(&manifest)?;
+    Ok(manifest)
+}
+
+fn validate_standard_manifest_fields(
+    object: &serde_json::Map<String, Value>,
+) -> Result<(), String> {
+    let name = object
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Plugin manifest 缺少合法 name。".to_string())?;
+    validate_plugin_id(name)?;
+
+    for field in [
+        "version",
+        "description",
+        "homepage",
+        "repository",
+        "license",
+    ] {
+        if object.get(field).is_some_and(|value| !value.is_string()) {
+            return Err(format!("Agent Plugins `{field}` 必须是 string。"));
+        }
+    }
+
+    if let Some(author) = object.get("author") {
+        let author = author
+            .as_object()
+            .ok_or_else(|| "Agent Plugins `author` 必须是 object。".to_string())?;
+        for (field, value) in author {
+            if !["name", "email", "url"].contains(&field.as_str()) {
+                return Err(format!("Agent Plugins `author` 包含未知字段 `{field}`。"));
+            }
+            if !value.is_string() {
+                return Err(format!("Agent Plugins `author.{field}` 必须是 string。"));
+            }
+        }
+    }
+
+    if let Some(keywords) = object.get("keywords") {
+        let keywords = keywords
+            .as_array()
+            .ok_or_else(|| "Agent Plugins `keywords` 必须是 string array。".to_string())?;
+        if keywords.iter().any(|keyword| !keyword.is_string()) {
+            return Err("Agent Plugins `keywords` 必须是 string array。".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn apply_codex_manifest_extension(
+    package_root: &Path,
+    manifest_path: &Path,
+    manifest: &mut Value,
+) -> Result<(), String> {
+    let inline_extension = manifest
+        .get("extensions")
+        .and_then(Value::as_object)
+        .and_then(|extensions| extensions.get(CODEX_EXTENSION_NAMESPACE))
+        .and_then(|extension| {
+            if extension.is_object() {
+                Some(extension.clone())
+            } else {
+                tracing::warn!(
+                    path = %manifest_path.display(),
+                    namespace = CODEX_EXTENSION_NAMESPACE,
+                    "忽略非 object 的 Agent Plugins client extension"
+                );
+                None
+            }
+        });
+    let extension = match inline_extension {
+        Some(extension) => Some(extension),
+        None => {
+            let overlay_path = package_root.join(CODEX_EXTENSION_MANIFEST_PATH);
+            match fs::read_to_string(&overlay_path) {
+                Ok(contents) => Some(
+                    serde_json::from_str(&contents)
+                        .map_err(|error| format!("解析 Codex Plugin extension 失败: {error}"))?,
+                ),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => return Err(format!("读取 Codex Plugin extension 失败: {error}")),
+            }
+        }
+    };
+    let Some(extension) = extension else {
+        return Ok(());
+    };
+    let extension = extension
+        .as_object()
+        .ok_or_else(|| "Codex Plugin extension 必须是 object。".to_string())?;
+    if let Some(interface) = extension.get("interface") {
+        if !interface.is_object() {
+            return Err("Codex Plugin extension interface 必须是 object。".to_string());
+        }
+        manifest
+            .as_object_mut()
+            .expect("validated manifest object")
+            .insert("interface".to_string(), interface.clone());
+    }
+    Ok(())
 }
 
 fn manifest_name(manifest: &Value) -> Result<String, String> {
@@ -1201,9 +1169,16 @@ fn manifest_name(manifest: &Value) -> Result<String, String> {
 }
 
 fn manifest_version(manifest: &Value) -> Result<String, String> {
-    let version = manifest_string(manifest, "version")
-        .ok_or_else(|| "Plugin manifest 缺少 version。".to_string())?;
-    Version::parse(&version).map_err(|error| format!("Plugin version 不是有效 semver: {error}"))?;
+    let version = manifest_string(manifest, "version").unwrap_or_else(|| "0.0.0".to_string());
+    if version.len() > 128
+        || version == "."
+        || version == ".."
+        || version.contains('/')
+        || version.contains('\\')
+        || version.contains('\0')
+    {
+        return Err("Plugin version 不能作为安全的 package 路径。".to_string());
+    }
     Ok(version)
 }
 
@@ -1285,14 +1260,19 @@ fn interface_string(manifest: &Value, key: &str) -> Option<String> {
 
 fn validate_plugin_id(id: &str) -> Result<(), String> {
     if id.is_empty()
-        || id.len() > 96
+        || id.len() > 64
         || !id
             .chars()
-            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_')
-        || id.starts_with('-')
-        || id.ends_with('-')
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '.')
+        || !id.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+        || !id.as_bytes().last().is_some_and(u8::is_ascii_lowercase)
+            && !id.as_bytes().last().is_some_and(u8::is_ascii_digit)
+        || id.contains("--")
+        || id.contains("..")
     {
-        return Err(format!("Plugin name 不是合法 kebab-case identity: {id}"));
+        return Err(format!(
+            "Plugin name 不符合 Agent Plugins identity 规则: {id}"
+        ));
     }
     Ok(())
 }
@@ -1372,10 +1352,11 @@ fn copy_package_entry(
 fn read_installed_records(
     plugin_data_root: &Path,
 ) -> Result<std::collections::BTreeMap<String, Value>, String> {
-    let directory = plugin_data_root.join(V2_STORE_DIR).join(INSTALLED_DIR);
-    fs::create_dir_all(&directory).map_err(io_error("创建 Plugin v2 installed 目录失败"))?;
+    let directory = plugin_data_root.join(STORE_DIR).join(INSTALLED_DIR);
+    fs::create_dir_all(&directory).map_err(io_error("创建 Agent Plugins installed 目录失败"))?;
     let mut records = std::collections::BTreeMap::new();
-    for entry in fs::read_dir(directory).map_err(io_error("读取 Plugin v2 installed 目录失败"))?
+    for entry in
+        fs::read_dir(directory).map_err(io_error("读取 Agent Plugins installed 目录失败"))?
     {
         let entry = entry.map_err(io_error("读取 Plugin installed record 失败"))?;
         if entry.path().extension().and_then(|value| value.to_str()) != Some("json") {
@@ -1387,7 +1368,7 @@ fn read_installed_records(
             .map_err(|error| format!("解析 Plugin installed record 失败: {error}"))?;
         if record.get("schemaVersion").and_then(Value::as_u64) != Some(INSTALLED_SCHEMA_VERSION) {
             return Err(format!(
-                "不支持的 Plugin v2 installed schema: {}",
+                "不支持的 Agent Plugins installed schema: {}",
                 entry.path().display()
             ));
         }
@@ -1402,7 +1383,7 @@ fn read_installed_records(
 fn installed_record_path(plugin_data_root: &Path, plugin_id: &str) -> Result<PathBuf, String> {
     validate_plugin_id(plugin_id)?;
     Ok(plugin_data_root
-        .join(V2_STORE_DIR)
+        .join(STORE_DIR)
         .join(INSTALLED_DIR)
         .join(format!("{plugin_id}.json")))
 }
@@ -1410,8 +1391,8 @@ fn installed_record_path(plugin_data_root: &Path, plugin_id: &str) -> Result<Pat
 fn installed_package_root(plugin_data_root: &Path, record: &Value) -> Result<PathBuf, String> {
     let relative = record_string(record, "packageRoot")
         .ok_or_else(|| "Plugin installed record 缺少 packageRoot。".to_string())?;
-    let path = resource_path(&plugin_data_root.join(V2_STORE_DIR), &relative)?;
-    let packages_root = fs::canonicalize(plugin_data_root.join(V2_STORE_DIR).join(PACKAGES_DIR))
+    let path = resource_path(&plugin_data_root.join(STORE_DIR), &relative)?;
+    let packages_root = fs::canonicalize(plugin_data_root.join(STORE_DIR).join(PACKAGES_DIR))
         .map_err(io_error("解析 Plugin package store 失败"))?;
     if !path.starts_with(&packages_root) {
         return Err("Plugin installed record 的 packageRoot 越界。".to_string());
@@ -1424,7 +1405,7 @@ fn write_installed_record(plugin_data_root: &Path, record: &Value) -> Result<(),
         .ok_or_else(|| "Plugin installed record 缺少 pluginId。".to_string())?;
     let path = installed_record_path(plugin_data_root, &id)?;
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(io_error("创建 Plugin v2 installed 目录失败"))?;
+        fs::create_dir_all(parent).map_err(io_error("创建 Agent Plugins installed 目录失败"))?;
     }
     let temporary = path.with_extension("json.tmp");
     fs::write(

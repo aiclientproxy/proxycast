@@ -4,6 +4,7 @@
 //! 使用 DynEmitter 进行事件发射，与具体桌面宿主解耦。
 
 mod active_time;
+pub mod agent_plugin_config;
 pub mod auth_status;
 pub mod bridge_client;
 mod client;

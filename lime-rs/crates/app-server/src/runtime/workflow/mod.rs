@@ -1,3 +1,4 @@
+pub(in crate::runtime) mod cancel;
 mod control;
 pub(crate) mod definition;
 pub(crate) mod events;

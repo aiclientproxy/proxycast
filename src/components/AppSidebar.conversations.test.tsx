@@ -24,7 +24,7 @@ import {
   mockArchiveAgentRuntimeSession,
   mockScanConversationImportSource,
   mockScheduleMinimumDelayIdleTask,
-  mockSelectPluginDirectory,
+  mockOpenDesktopDialog,
   mockToastSuccess,
   mockSetAgentRuntimeThreadName,
   mockListThreadSections,
@@ -863,10 +863,9 @@ describe("AppSidebar conversations", () => {
   });
 
   it("导入弹窗支持通过系统目录选择器切换本地历史数据目录", async () => {
-    mockSelectPluginDirectory.mockResolvedValueOnce({
-      path: "/Users/example/Library/Application Support/local-history",
-      cancelled: false,
-    });
+    mockOpenDesktopDialog.mockResolvedValueOnce(
+      "/Users/example/Library/Application Support/local-history",
+    );
 
     const container = mountSidebarContainer({
       currentPage: "agent",
@@ -897,8 +896,10 @@ describe("AppSidebar conversations", () => {
     });
     await flushEffects(4);
 
-    expect(mockSelectPluginDirectory).toHaveBeenCalledWith({
+    expect(mockOpenDesktopDialog).toHaveBeenCalledWith({
       title: "选择本地历史数据目录",
+      directory: true,
+      multiple: false,
     });
     expect(mockScanConversationImportSource).toHaveBeenLastCalledWith({
       sourceClient: "codex",

@@ -4,7 +4,7 @@ description: 内容工厂专用知识整理 Skill，把项目资料、素材和�
 metadata:
   lime_argument_hint: 输入品牌产品资料、项目资料、素材、目标人群、运营目标和缺失信息。
   lime_when_to_use: 内容工厂 App 需要整理三层知识库、生成场景地图或补齐内容生产依据时使用。
-  lime_version: 0.1.1
+  lime_version: 0.1.2
   lime_execution_mode: prompt
   lime_surface: plugin
   lime_category: content_factory
@@ -24,9 +24,9 @@ metadata:
 
 ## 输出要求
 
-最终必须输出 JSON，顶层包含 `contentFactoryWorkspacePatch` 或 `workspacePatch`。patch 中至少包含：
+最终必须输出 JSON，顶层只使用 `workspacePatch`。patch 中至少包含：
 
-- `kind`: 固定为 `content_factory.workspace_patch`
+- `kind`: 固定为 `workspace_patch`
 - `projectId`: 当前项目 ID
 - `projectKnowledge`: 结构化事实、假设、缺失项
 - `sceneTable`: 如任务要求场景地图，包含场景行、维度、决策阶段和图片 brief

@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { listInstalledPlugins } from "@/lib/api/plugins";
 import * as harnessStateModule from "./utils/harnessState";
 import * as crashDiagnosticModule from "@/lib/crashDiagnosticAgentUiPerformance";
 import * as traceHistoryModule from "@/lib/agentUiPerformanceTraceHistory";
@@ -32,14 +31,6 @@ const {
   mockUseSessionFiles,
   mockUseTrayModelShortcuts,
 } = getIndexTestMocks();
-
-vi.mock("@/lib/api/plugins", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api/plugins")>();
-  return {
-    ...actual,
-    listInstalledPlugins: vi.fn(async () => ({ states: [] })),
-  };
-});
 
 vi.mock("./utils/harnessState", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./utils/harnessState")>();
@@ -161,7 +152,6 @@ describe("AgentChatPage 任务中心顶部工具区", () => {
   });
 
   it("默认 Claw 对话不应首帧读取已安装 Plugin 插件列表", async () => {
-    vi.mocked(listInstalledPlugins).mockClear();
     installMockAgentChatUnifiedState(
       createMockAgentChatUnifiedState({
         sessionId: "topic-current",
@@ -183,7 +173,6 @@ describe("AgentChatPage 任务中心顶部工具区", () => {
     });
     await flushEffects();
 
-    expect(listInstalledPlugins).not.toHaveBeenCalled();
   });
 
   it("默认 Claw 对话不应首帧读取本地 Skills 候选", async () => {

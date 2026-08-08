@@ -628,22 +628,24 @@ if (input.kind === "turnStart") {
       : "${TYPED_ERROR_RETRY_FAILURE_SCENARIO}";
     const retryEvents = [
       {
-        type: "plugin_worker.retry",
+        type: "runtime.error",
         payload: {
           message: "${TYPED_ERROR_RETRY_MESSAGE}",
           errorCode: "server_overloaded",
           retryable: true,
+          willRetry: true,
           retryAttempt: 1,
           retryMaxAttempts: isTypedErrorRetrySuccessPrompt ? 1 : 2
         }
       },
       ...(isTypedErrorRetryFailurePrompt
         ? [{
-            type: "plugin_worker.retry",
+            type: "runtime.error",
             payload: {
               message: "${TYPED_ERROR_RETRY_SECOND_MESSAGE}",
               errorCode: "server_overloaded",
               retryable: true,
+              willRetry: true,
               retryAttempt: 2,
               retryMaxAttempts: 2
             }

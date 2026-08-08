@@ -1,38 +1,37 @@
-## Lime v1.123.0
+## Lime v1.124.0
 
 ### 新功能
 
-- 新增 Codex 对齐的 Hook lifecycle：支持 `hooks/list`、受信 command Hook、`hook/started` / `hook/completed` 通知、canonical Hook Item 与桌面时间线展示。
-- 将可执行 Skill catalog 收口到 exact `skills/list`，补齐 `skills/changed` 自动刷新、`skills/config/write` 用户级启停和 `skills/extraRoots/set` 进程级目录控制。
-- 新增 exact `plugin/search`，支持按关键词、scope、workspace、cursor 与 limit 搜索 current Plugin catalog。
-- 新增 Apps catalog/readiness 的 `app/list`、`app/read`、`app/installed` 与 `app/list/updated`，复用 Plugin App capability 与真实运行时状态。
-- 将 MCP 资源读取与工具调用迁到 `mcpServer/resource/read` 和 Thread-scoped `mcpServer/tool/call`，保留结构化工具结果并统一 Session-owned runtime。
+- 将 Lime 的产品定位升级为全栈 AI Agent：统一覆盖代码、文件、终端、工具、MCP、Skills、多模态、Provider 和多 Agent 长任务。
+- 新增 current App Server v2 文件系统与进程能力，支持目录/文件读写、复制、删除、监听、终端进程启动、输出流、stdin、终止与状态恢复。
+- 将 Agent 工作区、Thread/Turn/Item 投影、artifact 和桌面 GUI 连接到同一条可追踪执行链，面向类似 Claude Code、WorkBuddy、Codex 的任务型 Agent 使用方式。
+- 补齐 current Plugin package、Browser 能力资产和 Gate B 打包/运行验证入口。
 
 ### 修复
 
-- 修复已有会话在模型能力目录缺失或失效时直接拒绝回合的问题：`turn/start` 会先刷新当前 Provider 的权威目录，再重新执行 fail-closed route admission。
-- 修复持久化 AgentControl 精确路由在凭证暂不可用时被 catalog reconciliation 自动回退的问题；通过 schema 校验的 route 现在保持原模型与 Provider，并在 child 会话可见前写入 canonical metadata。
-- 修复 App Server v2 notification、canonical Thread/Turn/Item、历史恢复与 Renderer timeline 之间的 Hook、Skill、MCP 项投影漂移。
-- 修复 Model Selector 展示不可执行推断模型的问题，继续只允许具有 canonical 或 provider-explicit capability 的模型进入 Agent 路由。
+- 修复文件、进程、后台终端和 Agent 任务状态在 App Server、Electron host、gateway 与 GUI 之间的投影不一致。
+- 修复 current runtime 在长任务、取消、输出流和历史恢复场景中的生命周期边界，保持失败关闭和权限审阅语义。
+- 修复协议 schema、生成客户端和模型/Provider 能力目录在 v2 迁移后的漂移，避免不可执行模型进入 Agent 路由。
 
 ### 优化与重构
 
-- 物理删除 singular `skill/list`、旧 MCP tool/resource wire、无 Thread 的 Settings 工具执行入口及对应 Electron facade，不保留 compat 包装或生产 mock fallback。
+- 物理删除已退役的 Plugin runtime、旧 worker、旧 v0 文件/进程/插件 wire 与脱离构建图的 Electron/Renderer facade，不保留生产 mock fallback 或兼容双轨。
 - 收敛 App Server v2 protocol、schema registry、Rust/TypeScript typed client、runtime owner 与 GUI gateway，保持 `Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI` 单一产品链。
-- 将 Hook discovery、信任校验、sampling gate、生命周期事件和恢复投影统一到 `tool-runtime`、Agent runtime 与 App Server current owner。
+- 将文件、进程、工具、Skills、MCP、Plugin 和多 Agent 能力归回各自 current owner，减少重复入口和跨层状态复制。
 
 ### 测试与质量
 
-- 新增 Hook lifecycle、Skills list/config/extra roots、exact MCP resource/tool、Plugin search、canonical notification 与历史恢复的 Rust、TypeScript 和 public JSON-RPC 回归。
-- 扩展 Agent current fixture、MCP current fixture、Workspace MCP fixture、Provider generation PendingRoute 与真实 Electron Hook Gate B 证据。
-- 同步 generated protocol schema/types、命令契约、legacy 回流守卫、脚本治理与五语言 GUI 回归。
+- 新增文件系统、进程、后台终端、Agent runtime、Plugin package 和协议 v2 的 Rust、TypeScript、JSON-RPC 与真实 Electron 回归。
+- 扩展 current Agent fixture、工具/Skills/MCP 场景、Gate B 打包验证、历史恢复和取消/重试路径证据。
+- 同步 generated protocol schema/types、命令契约、legacy 回流守卫、脚本治理、五语言 GUI 回归与 README 定位文档。
 
 ### 文档
 
-- 更新 App Server 命令边界、MCP/Skills/Hook current owner、重大架构图、Codex 对齐计划与 Windows 模型路由修复证据。
+- 重写中英文根 README，明确 Lime 是类似 Claude Code、WorkBuddy、Codex 的全栈桌面 AI Agent，并保留原有产品图片。
+- 更新 App Server 文件/进程边界、Agent runtime 主链、Plugin current owner、治理路线图和 v2 协议说明。
 
 ### 其他
 
-- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.123.0`。
+- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.124.0`。
 
-**完整变更**: `v1.122.0` -> `v1.123.0`
+**完整变更**: `v1.123.0` -> `v1.124.0`

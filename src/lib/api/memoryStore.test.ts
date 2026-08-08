@@ -8,7 +8,7 @@ import {
   METHOD_MEMORY_STORE_READ,
   METHOD_MEMORY_STORE_REVIEW_LIST,
   METHOD_MEMORY_STORE_REVIEW_RESOLVE,
-  METHOD_MEMORY_STORE_RESET,
+  METHOD_MEMORY_RESET,
   METHOD_MEMORY_STORE_SEARCH,
 } from "../../../packages/app-server-client/src/protocol";
 import {
@@ -20,7 +20,7 @@ import {
   rebuildMemoryStoreIndex,
   listMemoryStoreReviewNotes,
   resolveMemoryStoreReviewNote,
-  resetMemoryStore,
+  resetMemory,
   searchMemoryStore,
 } from "./memoryStore";
 
@@ -307,27 +307,13 @@ describe("memoryStore API", () => {
     );
   });
 
-  it("应通过 App Server current 主链代理 memoryStore/reset", async () => {
-    const result = {
-      rootScope: "workspace",
-      rootPath: "/repo/.lime/memories",
-      removedFiles: 3,
-      removedDirectories: 4,
-      preservedSoul: true,
-    };
+  it("应通过 App Server current 主链代理 memory/reset", async () => {
+    const result = {};
     const appServerClient = appServerClientMock(result);
 
-    await expect(
-      resetMemoryStore(
-        { scope: "workspace", workspaceRoot: "/repo" },
-        appServerClient,
-      ),
-    ).resolves.toEqual(result);
+    await expect(resetMemory(appServerClient)).resolves.toEqual(result);
 
-    expect(appServerClient.request).toHaveBeenCalledWith(
-      METHOD_MEMORY_STORE_RESET,
-      { scope: "workspace", workspaceRoot: "/repo" },
-    );
+    expect(appServerClient.request).toHaveBeenCalledWith(METHOD_MEMORY_RESET);
   });
 
   it("应通过 App Server current 主链代理 memoryStore/index/rebuild", async () => {
@@ -396,7 +382,10 @@ describe("memoryStore API", () => {
       `${METHOD_MEMORY_STORE_CONSOLIDATE} returned an invalid memory store consolidate response`,
     );
     await expect(
-      listMemoryStoreReviewNotes({}, appServerClientMock({ rootScope: "global" })),
+      listMemoryStoreReviewNotes(
+        {},
+        appServerClientMock({ rootScope: "global" }),
+      ),
     ).rejects.toThrow(
       `${METHOD_MEMORY_STORE_REVIEW_LIST} returned an invalid memory store review list response`,
     );
@@ -417,15 +406,10 @@ describe("memoryStore API", () => {
       `${METHOD_MEMORY_STORE_HEALTH} returned an invalid memory store health response`,
     );
     await expect(
-      resetMemoryStore({}, appServerClientMock({ rootScope: "global" })),
-    ).rejects.toThrow(
-      `${METHOD_MEMORY_STORE_RESET} returned an invalid memory store reset response`,
-    );
+      resetMemory(appServerClientMock({ rootScope: "global" })),
+    ).rejects.toThrow(`${METHOD_MEMORY_RESET} returned an invalid response`);
     await expect(
-      rebuildMemoryStoreIndex(
-        {},
-        appServerClientMock({ rootScope: "global" }),
-      ),
+      rebuildMemoryStoreIndex({}, appServerClientMock({ rootScope: "global" })),
     ).rejects.toThrow(
       `${METHOD_MEMORY_STORE_INDEX_REBUILD} returned an invalid memory store index rebuild response`,
     );

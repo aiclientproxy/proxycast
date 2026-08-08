@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDeepLink } from "./useDeepLink";
 import { changeLimeLocale } from "@/i18n/createI18n";
-import { getCurrent, onOpenUrl } from "@/lib/desktop-host/plugin-deep-link";
+import { getCurrent, onOpenUrl } from "@/lib/desktop-host/deep-link";
 import { hasDesktopHostInvokeCapability } from "@/lib/desktop-runtime";
 import {
   completeOemCloudDesktopOAuthLogin,
@@ -41,7 +41,7 @@ vi.mock("@/lib/api/connect", () => ({
   saveConnectRelayApiKey: mockSaveConnectRelayApiKey,
 }));
 
-vi.mock("@/lib/desktop-host/plugin-deep-link", () => ({
+vi.mock("@/lib/desktop-host/deep-link", () => ({
   getCurrent: vi.fn(),
   onOpenUrl: vi.fn(),
 }));

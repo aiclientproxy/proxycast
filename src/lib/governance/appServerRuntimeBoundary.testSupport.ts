@@ -18,17 +18,6 @@ export const RUNTIME_BACKEND_REQUEST_CONTEXT_SPLIT_MODULES = [
   "lime-rs/crates/app-server/src/runtime_backend/request_context/turn_context.rs",
   "lime-rs/crates/app-server/src/runtime_backend/request_context/workspace_scope.rs",
 ];
-export const PLUGIN_WORKER_TURN_MAIN =
-  "lime-rs/crates/app-server/src/runtime/plugin_worker_turn.rs";
-export const PLUGIN_WORKER_TURN_SPLIT_MODULES = [
-  "lime-rs/crates/app-server/src/runtime/plugin_worker_turn/failure.rs",
-  "lime-rs/crates/app-server/src/runtime/plugin_worker_turn/hooks.rs",
-  "lime-rs/crates/app-server/src/runtime/plugin_worker_turn/json_helpers.rs",
-  "lime-rs/crates/app-server/src/runtime/plugin_worker_turn/launch_gate.rs",
-  "lime-rs/crates/app-server/src/runtime/plugin_worker_turn/progress.rs",
-  "lime-rs/crates/app-server/src/runtime/plugin_worker_turn/request.rs",
-  "lime-rs/crates/app-server/src/runtime/plugin_worker_turn/tests.rs",
-];
 export const RUNTIME_BACKEND_TESTS_MAIN =
   "lime-rs/crates/app-server/src/runtime_backend/tests.rs";
 export const RUNTIME_BACKEND_TEST_SPLIT_MODULES = [
@@ -119,8 +108,6 @@ export const PROCESSOR_SPLIT_MODULES = [
   "lime-rs/crates/app-server/src/processor/tests/artifact.rs",
   "lime-rs/crates/app-server/src/processor/tests/capability.rs",
   "lime-rs/crates/app-server/src/processor/tests/evidence.rs",
-  "lime-rs/crates/app-server/src/processor/tests/execution_process.rs",
-  "lime-rs/crates/app-server/src/processor/tests/file.rs",
   "lime-rs/crates/app-server/src/processor/tests/mcp.rs",
   "lime-rs/crates/app-server/src/processor/tests/project_git.rs",
   "lime-rs/crates/app-server/src/processor/tests/right_surface.rs",

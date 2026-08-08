@@ -196,7 +196,7 @@ describe("PluginCatalogPage", () => {
 
     expect(container.textContent).toContain("插件中心");
     expect(
-      container.querySelector('[data-testid="plugin-v2-card-writer-plugin"]'),
+      container.querySelector('[data-testid="plugin-catalog-card-writer-plugin"]'),
     ).not.toBeNull();
     expect(mocks.listPluginCatalog).toHaveBeenCalledWith();
     expect(mocks.readPluginCatalog).toHaveBeenCalledWith({
@@ -205,18 +205,18 @@ describe("PluginCatalogPage", () => {
     expect(container.textContent).toContain("Article Writing");
     expect(
       container
-        .querySelector('[data-testid="plugin-v2-app-readiness-writer-app"]')
+        .querySelector('[data-testid="plugin-catalog-app-readiness-writer-app"]')
         ?.getAttribute("data-callable"),
     ).toBe("false");
     expect(container.textContent).toContain("宿主待接入");
 
     await click(
       container.querySelector(
-        '[data-testid="plugin-v2-actions-writer-plugin"]',
+        '[data-testid="plugin-catalog-actions-writer-plugin"]',
       ),
     );
     await click(
-      container.querySelector('[data-testid="plugin-v2-toggle-writer-plugin"]'),
+      container.querySelector('[data-testid="plugin-catalog-toggle-writer-plugin"]'),
     );
     expect(mocks.setPluginCatalogEnabled).toHaveBeenCalledWith({
       pluginId: "writer-plugin",
@@ -247,7 +247,7 @@ describe("PluginCatalogPage", () => {
 
     expect(mocks.readAppsReadiness).toHaveBeenCalledTimes(2);
     const row = container.querySelector(
-      '[data-testid="plugin-v2-app-readiness-writer-app"]',
+      '[data-testid="plugin-catalog-app-readiness-writer-app"]',
     );
     expect(row?.getAttribute("data-enabled")).toBe("false");
     expect(row?.getAttribute("data-status")).toBe("disabled");
@@ -269,18 +269,18 @@ describe("PluginCatalogPage", () => {
 
     const container = await renderPage();
     await click(
-      container.querySelector('[data-testid="plugin-v2-install-local"]'),
+      container.querySelector('[data-testid="plugin-catalog-install-local"]'),
     );
 
     expect(mocks.listPluginCatalog).toHaveBeenLastCalledWith({
       marketplacePaths: ["/tmp/marketplace"],
     });
     expect(
-      document.body.querySelector('[data-testid="plugin-v2-install-review"]'),
+      document.body.querySelector('[data-testid="plugin-catalog-install-review"]'),
     ).not.toBeNull();
 
     await click(
-      document.body.querySelector('[data-testid="plugin-v2-confirm-install"]'),
+      document.body.querySelector('[data-testid="plugin-catalog-confirm-install"]'),
     );
     expect(mocks.installPluginCatalog).toHaveBeenCalledWith({
       sourcePath: "/tmp/writer-plugin",

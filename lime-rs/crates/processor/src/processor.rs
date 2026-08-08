@@ -8,14 +8,11 @@
 //! 1. 认证 (AuthStep)
 //! 2. 参数注入 (InjectionStep)
 //! 3. 路由解析 (RoutingStep)
-//! 4. 插件前置钩子 (PluginPreStep)
-//! 5. Provider 调用 (ProviderStep) - 包含重试和故障转移
-//! 6. 插件后置钩子 (PluginPostStep)
-//! 7. 统计记录 (TelemetryStep)
+//! 4. Provider 调用 (ProviderStep) - 包含重试和故障转移
+//! 5. 统计记录 (TelemetryStep)
 
 pub use lime_core::processor::RequestContext;
 
-use lime_core::plugin::PluginManager;
 use lime_core::router::{ModelMapper, Router};
 use lime_core::ProviderType;
 use lime_infra::{Failover, Injector, Retrier, StatsAggregator, TimeoutController, TokenTracker};
@@ -39,8 +36,6 @@ pub struct RequestProcessor {
     pub failover: Arc<Failover>,
     /// 超时控制器
     pub timeout: Arc<TimeoutController>,
-    /// 插件管理器
-    pub plugins: Arc<PluginManager>,
     /// 统计聚合器（使用 parking_lot::RwLock 以支持与 TelemetryState 共享）
     pub stats: Arc<ParkingLotRwLock<StatsAggregator>>,
     /// Token 追踪器（使用 parking_lot::RwLock 以支持与 TelemetryState 共享）
@@ -62,7 +57,6 @@ impl RequestProcessor {
         retrier: Arc<Retrier>,
         failover: Arc<Failover>,
         timeout: Arc<TimeoutController>,
-        plugins: Arc<PluginManager>,
         stats: Arc<ParkingLotRwLock<StatsAggregator>>,
         tokens: Arc<ParkingLotRwLock<TokenTracker>>,
     ) -> Self {
@@ -73,7 +67,6 @@ impl RequestProcessor {
             retrier,
             failover,
             timeout,
-            plugins,
             stats,
             tokens,
             reload_lock: Arc::new(RwLock::new(())),
@@ -93,7 +86,6 @@ impl RequestProcessor {
             retrier: Arc::new(Retrier::with_defaults()),
             failover: Arc::new(Failover::with_defaults()),
             timeout: Arc::new(TimeoutController::with_defaults()),
-            plugins: Arc::new(PluginManager::with_defaults()),
             stats: Arc::new(ParkingLotRwLock::new(StatsAggregator::with_defaults())),
             tokens: Arc::new(ParkingLotRwLock::new(TokenTracker::with_defaults())),
             reload_lock: Arc::new(RwLock::new(())),
@@ -125,7 +117,6 @@ impl RequestProcessor {
             retrier: Arc::new(Retrier::with_defaults()),
             failover: Arc::new(Failover::with_defaults()),
             timeout: Arc::new(TimeoutController::with_defaults()),
-            plugins: Arc::new(PluginManager::with_defaults()),
             stats,
             tokens,
             reload_lock: Arc::new(RwLock::new(())),

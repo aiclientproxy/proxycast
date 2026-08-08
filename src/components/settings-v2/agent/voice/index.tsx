@@ -6,7 +6,7 @@ import {
   type ChangeEvent,
   type ReactNode,
 } from "react";
-import { open as openDialog } from "@/lib/desktop-host/plugin-dialog";
+import { open as openDialog } from "@/lib/desktop-host/dialog";
 import type { TFunction } from "i18next";
 import {
   AlertCircle,

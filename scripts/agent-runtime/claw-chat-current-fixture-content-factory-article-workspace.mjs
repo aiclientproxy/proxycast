@@ -1,7 +1,7 @@
-import { startContentFactoryHostGenerationFixture } from "../lib/content-factory-host-generation-fixture.mjs";
 import {
   DEFAULT_FIXTURE_API_KEY,
   DEFAULT_FIXTURE_MODEL,
+  startOpenAiCompatibleFixtureServer,
 } from "../lib/openai-compatible-fixture-server.mjs";
 import {
   APP_SERVER_METHOD_ARTIFACT_READ,
@@ -14,12 +14,8 @@ import {
   CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_TITLE,
 } from "./claw-chat-current-fixture-constants.mjs";
 import {
-  runWorkspacePatchWorkerDogfoodTurn,
-  saveWorkspacePatchWorkerInstalledState,
-} from "./claw-chat-current-fixture-content-factory-worker-dogfood.mjs";
-import {
   buildContentFactoryActionResultWorkspacePatch,
-  buildContentFactoryWorkspacePatch,
+  buildWorkspacePatch,
 } from "./claw-chat-current-fixture-content-factory-workspace-patches.mjs";
 import {
   ensureFixtureTextProvider,
@@ -70,7 +66,7 @@ const CONTENT_FACTORY_ARTICLE_WORKSPACE_EDITED_DRAFT_MARKDOWN = [
   "",
   "## 正文草稿",
   "",
-  "编辑后的正文必须覆盖 worker 首稿，并且刷新或重新打开会话后仍回到 Article Editor 画布。",
+  "编辑后的正文必须覆盖 artifact 首稿，并且刷新或重新打开会话后仍回到 Article Editor 画布。",
 ].join("\n");
 const CONTENT_FACTORY_ARTICLE_WORKSPACE_EDITED_DRAFT_UPDATED_AT =
   "2026-06-29T10:00:00.000Z";
@@ -81,14 +77,15 @@ export async function runContentFactoryArticleWorkspaceScenario({
   workspace,
   appServerRequests,
 }) {
-  const hostGenerationFixture =
-    await startContentFactoryHostGenerationFixture();
+  const providerFixture = await startOpenAiCompatibleFixtureServer({
+    content: "Article Workspace fixture provider ready.",
+  });
   try {
     const fixtureProvider = await ensureFixtureTextProvider(
       page,
       appServerRequests,
       {
-        apiHost: hostGenerationFixture.baseUrl,
+        apiHost: providerFixture.baseUrl,
         apiKey: DEFAULT_FIXTURE_API_KEY,
         modelId: DEFAULT_FIXTURE_MODEL,
       },
@@ -99,24 +96,10 @@ export async function runContentFactoryArticleWorkspaceScenario({
       appServerRequests,
       fixtureProvider,
     );
-    const installedStateSave = await saveWorkspacePatchWorkerInstalledState(
-      page,
-      appServerRequests,
-    );
-
-    const workerTurnStart = await runWorkspacePatchWorkerDogfoodTurn({
-      page,
-      options,
-      workspace,
-      requestLog: appServerRequests,
-      identity: sessionCreation.identity,
-      hostGenerationFixture,
-    });
     const identity = createContentFactoryScenarioIdentity(
       sessionCreation.identity,
-      workerTurnStart,
     );
-    const artifactWrite = await writeContentFactoryWorkspacePatchArtifact(
+    const artifactWrite = await writeWorkspacePatchArtifact(
       page,
       workspace,
       appServerRequests,
@@ -264,13 +247,12 @@ export async function runContentFactoryArticleWorkspaceScenario({
         ...sessionCreation,
         identity,
       },
-      contentFactoryArticleWorkspaceInstalledStateSave: installedStateSave,
       contentFactoryArticleWorkspaceArtifactWrite: summarizeArtifactWrite(
         artifactWrite.result,
       ),
-      contentFactoryArticleWorkspaceWorkerTurnStart: workerTurnStart,
-      contentFactoryArticleWorkspaceWorkerHostGenerationFixture:
-        hostGenerationFixture.summary(),
+      contentFactoryArticleWorkspaceProviderFixture: {
+        requestCount: providerFixture.requests.length,
+      },
       contentFactoryArticleWorkspaceActionResultArtifactWrite:
         summarizeArtifactWrite(actionResultArtifactWrite.result),
       contentFactoryArticleWorkspaceRightSurfaceRequest:
@@ -302,7 +284,7 @@ export async function runContentFactoryArticleWorkspaceScenario({
       contentFactoryArticleWorkspaceArtifactRead: artifactReadSummary,
     });
   } finally {
-    await hostGenerationFixture.close();
+    await providerFixture.close();
   }
 }
 
@@ -837,14 +819,11 @@ async function requestContentFactoryArticleWorkspaceSurface(
       origin: "runtime",
       priority: "foreground",
       candidateId: "content-factory-article-workspace",
-      reason: "plugin_article_workspace_ready",
+      reason: "article_workspace_ready",
       ttlMs: 120_000,
       metadata: {
         fixtureOrigin: "content-factory-article-workspace",
-        contentFactoryWorkspacePatch: buildContentFactoryWorkspacePatch(
-          workspace,
-          identity,
-        ),
+        workspacePatch: buildWorkspacePatch(workspace, identity),
       },
     },
     requestLog,
@@ -897,35 +876,25 @@ async function createContentFactoryArticleWorkspaceSession(
   });
 }
 
-function createContentFactoryScenarioIdentity(
-  sessionIdentity,
-  workerTurnStart,
-) {
+function createContentFactoryScenarioIdentity(sessionIdentity) {
   const sessionId = String(sessionIdentity?.sessionId ?? "").trim();
   const threadId = String(sessionIdentity?.threadId ?? "").trim();
-  const workerTurnId = String(workerTurnStart?.turnId ?? "").trim();
-  const workerTaskId = String(workerTurnStart?.taskId ?? "").trim();
   assert(sessionId && threadId, "内容工厂场景缺少 canonical thread identity");
-  assert(
-    workerTurnId && workerTaskId,
-    "内容工厂场景缺少 canonical worker turn identity",
-  );
 
   return {
     sessionId,
     threadId,
-    workerTurnId,
-    workerTaskId,
+    sourceTaskId: "workspace-patch-fixture",
   };
 }
 
-async function writeContentFactoryWorkspacePatchArtifact(
+async function writeWorkspacePatchArtifact(
   page,
   workspace,
   requestLog,
   identity,
 ) {
-  const workspacePatch = buildContentFactoryWorkspacePatch(workspace, identity);
+  const workspacePatch = buildWorkspacePatch(workspace, identity);
   return await invokeAppServerFromPage(
     page,
     APP_SERVER_METHOD_ARTIFACT_WRITE,
@@ -933,20 +902,12 @@ async function writeContentFactoryWorkspacePatchArtifact(
       threadId: identity.threadId,
       artifact: {
         artifactRef: "artifact-workspace-patch-1",
-        path: ".lime/artifacts/content-factory-workspace-patch.json",
+        path: ".lime/artifacts/workspace-patch.json",
         title: "内容工厂工作区补丁",
-        kind: "content_factory.workspace_patch",
+        kind: "workspace_patch",
         status: "ready",
         content: JSON.stringify(workspacePatch),
-        metadata: {
-          pluginWorker: {
-            appId: CONTENT_FACTORY_APP_ID,
-            taskId: identity.workerTaskId,
-            taskKind: "content.article.generate",
-            turnId: identity.workerTurnId,
-          },
-          contentFactoryWorkspacePatch: workspacePatch,
-        },
+        metadata: { workspacePatch },
       },
     },
     requestLog,
@@ -972,24 +933,10 @@ async function writeContentFactoryArticleWorkspaceActionResultArtifact(
         artifactRef: "artifact-image-regenerate-workspace-patch",
         path: ".lime/artifacts/article-workspace/image-regenerate-workspace-patch.json",
         title: "配图组重新生成结果",
-        kind: "content_factory.workspace_patch",
+        kind: "workspace_patch",
         status: "ready",
         content: JSON.stringify(workspacePatch),
-        metadata: {
-          pluginWorker: {
-            appId: CONTENT_FACTORY_APP_ID,
-            taskId: "image_regenerate_job_1",
-            taskKind: "content.image.generate",
-            turnId: identity.workerTurnId,
-            workerEntrypoint: "./runtime/content-factory-worker.mjs",
-            status: "completed",
-            inputSummary: "action=regenerate; object=image-set-1",
-            outputSummary: "1 object: 配图组重新生成结果",
-            outputObjectCount: 1,
-            outputArtifactKind: "content_factory.workspace_patch",
-          },
-          contentFactoryWorkspacePatch: workspacePatch,
-        },
+        metadata: { workspacePatch },
       },
     },
     requestLog,
@@ -1114,7 +1061,7 @@ async function waitForContentFactoryArticleWorkspaceGui(page, options) {
             "app_declared_renderer_placeholder_only",
           ),
           allowedOutputVisible: bodyText.includes(
-            "content_factory.workspace_patch",
+            "workspace_patch",
           ),
           entryVisible: bodyText.includes("./renderer/storyboard.tsx"),
           actionVisible: bodyText.includes("open_storyboard"),
@@ -1512,7 +1459,7 @@ function summarizeRightSurfaceRequest(result) {
 function selectContentFactoryWorkerDogfoodEvidence(workerEvidence, identity) {
   const taskEvidenceItems = workerEvidence.filter(
     (evidence) =>
-      readString(evidence?.taskId, evidence?.task_id) === identity.workerTaskId,
+      readString(evidence?.taskId, evidence?.task_id) === identity.sourceTaskId,
   );
   const completedTaskEvidence = taskEvidenceItems.find((evidence) =>
     isCompletedContentFactoryWorkerEvidence(evidence),
@@ -1555,7 +1502,7 @@ function isCompletedContentFactoryWorkerEvidence(evidence) {
   }
   return (
     readString(evidence?.artifactKind, evidence?.artifact_kind) ===
-      "content_factory.workspace_patch" ||
+      "workspace_patch" ||
     readNumber(evidence?.outputObjectCount, evidence?.output_object_count) > 0
   );
 }
@@ -1645,13 +1592,9 @@ function summarizeContentFactoryArticleWorkspaceReadModel(result, identity) {
       return false;
     }
     const source = asRecord(object?.source) ?? {};
-    return readString(source.taskId, source.task_id) === identity.workerTaskId;
+    return readString(source.taskId, source.task_id) === identity.sourceTaskId;
   });
   const workerArticleSource = asRecord(workerArticleObject?.source) ?? {};
-  const workerArticleHostManagedGeneration =
-    asRecord(workerArticleSource.hostManagedGeneration) ??
-    asRecord(workerArticleSource.host_managed_generation) ??
-    {};
   const workerArticleSourceText = [
     readString(workerArticleSource.markdown, workerArticleSource.markdown_text),
     readString(
@@ -1886,17 +1829,6 @@ function summarizeContentFactoryArticleWorkspaceReadModel(result, identity) {
             ).length > 300,
           markdownIncludesEditedDraftMarker: workerArticleSourceText.includes(
             CONTENT_FACTORY_ARTICLE_WORKSPACE_EDITED_DRAFT_MARKER,
-          ),
-          hostManagedGenerationStatus: readString(
-            workerArticleHostManagedGeneration.status,
-          ),
-          hostManagedGenerationReasonCode: readString(
-            workerArticleHostManagedGeneration.reasonCode,
-            workerArticleHostManagedGeneration.reason_code,
-          ),
-          hostManagedGenerationOutputIds: readStringArray(
-            workerArticleHostManagedGeneration.outputIds,
-            workerArticleHostManagedGeneration.output_ids,
           ),
           updatedAt: readString(
             workerArticleSource.updatedAt,

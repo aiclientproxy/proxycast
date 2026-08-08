@@ -9,8 +9,6 @@ mod config_warning;
 mod conversation_import;
 mod event_notifications;
 mod evidence;
-mod execution_process;
-mod file;
 mod mcp;
 mod project_git;
 mod request_cancel;

@@ -13,8 +13,8 @@ const CONTENT_FACTORY_ARTICLE_WORKSPACE_STORYBOARD_ARTIFACT_ID =
 const CONTENT_FACTORY_ARTICLE_WORKSPACE_CHECKLIST_ARTIFACT_ID =
   "artifact-delivery-checklist";
 
-export function buildContentFactoryWorkspacePatch(workspace, identity) {
-  const { sessionId, workerTurnId, workerTaskId } = identity;
+export function buildWorkspacePatch(workspace, identity) {
+  const { sessionId, sourceTaskId } = identity;
   return {
     schemaVersion: "article-workspace.v1",
     appId: CONTENT_FACTORY_APP_ID,
@@ -26,8 +26,7 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
       id: ARTICLE_OBJECT_ID,
       sessionId,
       artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID],
-      sourceTurnId: workerTurnId,
-      sourceTaskId: workerTaskId,
+      sourceTaskId,
     },
     selectedObjectRef: {
       appId: CONTENT_FACTORY_APP_ID,
@@ -35,8 +34,7 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
       id: ARTICLE_OBJECT_ID,
       sessionId,
       artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID],
-      sourceTurnId: workerTurnId,
-      sourceTaskId: workerTaskId,
+      sourceTaskId,
     },
     objects: [
       {
@@ -46,8 +44,7 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
           id: ARTICLE_OBJECT_ID,
           sessionId,
           artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID],
-          sourceTurnId: workerTurnId,
-          sourceTaskId: workerTaskId,
+          sourceTaskId,
         },
         title: "公众号文章草稿",
         status: "ready",
@@ -55,11 +52,19 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
         previewArtifactId: CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID,
         source: {
           taskKind: "content.article.generate",
-          taskId: workerTaskId,
-          turnId: workerTurnId,
+          taskId: sourceTaskId,
           artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID],
-          markdown:
-            "# 内容工厂首版文章\n\n这是由 Plugin worker 写回的公众号文章草稿。",
+          markdown: [
+            "# 内容工厂首版文章",
+            "",
+            "## 三轮资料检索",
+            "",
+            "本次 fixture 使用结构化 workspace patch 验证文章工作区投影，不调用独立 Plugin worker。资料卡保留主题、引用与编辑恢复所需的最小事实。",
+            "",
+            "## 正文草稿",
+            "",
+            "文章正文通过 artifact/write 进入 App Server，再由 Thread/Turn/Item read model 投影到右侧 Article Editor。这个路径只验证 current artifact owner，不声称执行了真实 Provider 写作任务。",
+          ].join("\n"),
           researchRounds: [
             {
               id: "research-1",
@@ -128,7 +133,6 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
           id: IMAGE_SET_OBJECT_ID,
           sessionId,
           artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_IMAGE_ARTIFACT_ID],
-          sourceTurnId: workerTurnId,
           sourceTaskId: "image_job_1",
         },
         title: "配图组",
@@ -138,7 +142,6 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
         source: {
           taskKind: "content.image.generate",
           taskId: "image_job_1",
-          turnId: workerTurnId,
           artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_IMAGE_ARTIFACT_ID],
           images: [
             {
@@ -158,7 +161,6 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
           id: STORYBOARD_OBJECT_ID,
           sessionId,
           artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_STORYBOARD_ARTIFACT_ID],
-          sourceTurnId: workerTurnId,
           sourceTaskId: "storyboard_job_1",
         },
         title: "视频分镜",
@@ -169,13 +171,12 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
         source: {
           taskKind: "content.video.storyboard.generate",
           taskId: "storyboard_job_1",
-          turnId: workerTurnId,
           artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_STORYBOARD_ARTIFACT_ID],
           rendererContract: {
             pluginId: CONTENT_FACTORY_APP_ID,
             rendererKind: "app_declared",
             artifactType: "videoStoryboard",
-            outputArtifactKind: "content_factory.workspace_patch",
+            outputArtifactKind: "workspace_patch",
             surfaceKind: "articleWorkspace",
             paneKind: "storyboard",
             entry: "./renderer/storyboard.tsx",
@@ -184,8 +185,8 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
               status: "placeholder_only",
               executionMode: "host_placeholder",
               reasonCode: "app_declared_renderer_placeholder_only",
-              requestedOutputArtifactKind: "content_factory.workspace_patch",
-              allowedOutputArtifactKinds: ["content_factory.workspace_patch"],
+              requestedOutputArtifactKind: "workspace_patch",
+              allowedOutputArtifactKinds: ["workspace_patch"],
             },
           },
           scenes: [
@@ -206,7 +207,6 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
           id: CHECKLIST_OBJECT_ID,
           sessionId,
           artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_CHECKLIST_ARTIFACT_ID],
-          sourceTurnId: workerTurnId,
           sourceTaskId: "delivery_checklist_job_1",
         },
         title: "交付检查清单",
@@ -217,7 +217,6 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
         source: {
           taskKind: "content.delivery.review",
           taskId: "delivery_checklist_job_1",
-          turnId: workerTurnId,
           artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_CHECKLIST_ARTIFACT_ID],
           items: [
             {
@@ -242,6 +241,21 @@ export function buildContentFactoryWorkspacePatch(workspace, identity) {
       splitMode: "chat-right-dock",
     },
     sourceArtifacts: [{ artifactRef: "artifact-workspace-patch-1" }],
+    workerEvidence: [
+      {
+        id: "artifact-workspace-patch-1:workerEvidence",
+        status: "completed",
+        source: "workspace_patch",
+        eventType: "artifact.snapshot",
+        appId: CONTENT_FACTORY_APP_ID,
+        taskId: sourceTaskId,
+        taskKind: "content.article.generate",
+        artifactRef: "artifact-workspace-patch-1",
+        artifactKind: "workspace_patch",
+        outputObjectCount: 4,
+        updatedAt: "2026-06-24T00:00:00.000Z",
+      },
+    ],
     updatedAt: "2026-06-24T00:00:00.000Z",
   };
 }
@@ -250,7 +264,7 @@ export function buildContentFactoryActionResultWorkspacePatch(
   workspace,
   identity,
 ) {
-  const { sessionId, workerTurnId } = identity;
+  const { sessionId } = identity;
   return {
     schemaVersion: "article-workspace.v1",
     appId: CONTENT_FACTORY_APP_ID,
@@ -270,7 +284,6 @@ export function buildContentFactoryActionResultWorkspacePatch(
           id: IMAGE_SET_OBJECT_ID,
           sessionId,
           artifactIds: ["artifact-image-regenerated"],
-          sourceTurnId: workerTurnId,
           sourceTaskId: "image_regenerate_job_1",
           version: "2",
         },
@@ -281,7 +294,6 @@ export function buildContentFactoryActionResultWorkspacePatch(
         source: {
           taskKind: "content.image.generate",
           taskId: "image_regenerate_job_1",
-          turnId: workerTurnId,
           artifactIds: ["artifact-image-regenerated"],
           images: [
             {
@@ -308,6 +320,21 @@ export function buildContentFactoryActionResultWorkspacePatch(
     },
     sourceArtifacts: [
       { artifactRef: "artifact-image-regenerate-workspace-patch" },
+    ],
+    workerEvidence: [
+      {
+        id: "artifact-image-regenerate-workspace-patch:workerEvidence",
+        status: "completed",
+        source: "workspace_patch",
+        eventType: "artifact.snapshot",
+        appId: CONTENT_FACTORY_APP_ID,
+        taskId: "image_regenerate_job_1",
+        taskKind: "content.image.generate",
+        artifactRef: "artifact-image-regenerate-workspace-patch",
+        artifactKind: "workspace_patch",
+        outputObjectCount: 1,
+        updatedAt: "2026-06-24T00:01:00.000Z",
+      },
     ],
     updatedAt: "2026-06-24T00:01:00.000Z",
   };

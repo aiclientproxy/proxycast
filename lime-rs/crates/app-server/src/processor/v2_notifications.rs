@@ -64,7 +64,6 @@ impl V2NotificationProjector {
             "turn.canceled" => {
                 return self.project_turn_completed_with_usage(event, v2::TurnStatus::Interrupted)
             }
-            "plugin_worker.retry" => return self.project_error(event, Some(true)),
             "runtime.error" => return self.project_error(event, None),
             "action.required" => {
                 return EventProjection::Direct(

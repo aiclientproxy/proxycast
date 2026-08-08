@@ -30,9 +30,7 @@ const latestExpertPlazaProps = vi.hoisted(() => ({
 const latestSettingsPageProps = vi.hoisted(() => ({
   value: null as Record<string, unknown> | null,
 }));
-const pluginLabLifecycle = vi.hoisted(() => ({ mounts: 0 }));
 const pluginsLifecycle = vi.hoisted(() => ({ mounts: 0 }));
-const pluginRuntimeLifecycle = vi.hoisted(() => ({ mounts: 0 }));
 vi.mock("./agent/chat", () => ({
   AgentChatPage: (props: Record<string, unknown>) => {
     latestAgentChatProps.value = props;
@@ -78,16 +76,6 @@ vi.mock("@/features/knowledge", () => ({
   },
 }));
 
-vi.mock("@/features/plugin/ui/PluginRuntimePage", () => ({
-  PluginRuntimePage: () => {
-    useEffect(() => {
-      pluginRuntimeLifecycle.mounts += 1;
-    }, []);
-
-    return <div data-testid="plugin-runtime-page" />;
-  },
-}));
-
 vi.mock("@/features/plugin/ui/PluginCatalogPage", () => ({
   PluginCatalogPage: (props: Record<string, unknown>) => {
     latestPluginsProps.value = props;
@@ -96,16 +84,6 @@ vi.mock("@/features/plugin/ui/PluginCatalogPage", () => ({
     }, []);
 
     return <div data-testid="plugins-page" />;
-  },
-}));
-
-vi.mock("@/features/plugin/ui/PluginLabPage", () => ({
-  PluginLabPage: () => {
-    useEffect(() => {
-      pluginLabLifecycle.mounts += 1;
-    }, []);
-
-    return <div data-testid="plugin-lab-page" />;
   },
 }));
 
@@ -204,7 +182,6 @@ describe("AppPageContent", () => {
     latestKnowledgePageProps.value = null;
     latestExpertPlazaProps.value = null;
     latestSettingsPageProps.value = null;
-    pluginLabLifecycle.mounts = 0;
     pluginsLifecycle.mounts = 0;
   });
 
@@ -1027,14 +1004,6 @@ describe("AppPageContent", () => {
     });
   });
 
-  it("plugin-lab 页面应渲染 P0 只读实验入口", async () => {
-    const { container } = renderContent("plugin-lab");
-    await flushEffects();
-
-    expectTestId(container, "plugin-lab-page");
-    expect(pluginLabLifecycle.mounts).toBe(1);
-  });
-
   it("plugins 页面带筛选参数时仍应渲染正式 Plugins 管理入口", async () => {
     const { container } = renderContent("plugins", {
       query: "research",
@@ -1065,17 +1034,6 @@ describe("AppPageContent", () => {
         selectedPluginId: "content-factory-app",
       },
     });
-    expect(latestPluginsProps.value?.onNavigate).toEqual(expect.any(Function));
   });
 
-  it("plugin 页面应渲染已安装 App 的独立使用入口", async () => {
-    const { container } = renderContent("plugin", {
-      appId: "content-factory-app",
-      entryKey: "dashboard",
-    });
-    await flushEffects();
-
-    expectTestId(container, "plugin-runtime-page");
-    expect(pluginRuntimeLifecycle.mounts).toBe(1);
-  });
 });

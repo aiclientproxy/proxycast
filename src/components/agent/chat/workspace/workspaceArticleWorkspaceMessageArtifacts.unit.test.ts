@@ -98,16 +98,7 @@ describe("workspaceArticleWorkspaceMessageArtifacts", () => {
     ).toBeNull();
   });
 
-  it("消息 artifact 新旧字段同时存在时应优先使用 workspacePatch", () => {
-    const legacyWorkspacePatch: WorkspaceArticleWorkspace = {
-      ...articleWorkspace,
-      objects: [
-        {
-          ...articleWorkspace.objects[0]!,
-          title: "旧字段草稿",
-        },
-      ],
-    };
+  it("消息 artifact 只使用 workspacePatch", () => {
     const messages = [
       createMessage({
         artifacts: [
@@ -119,7 +110,6 @@ describe("workspaceArticleWorkspaceMessageArtifacts", () => {
             status: "complete",
             meta: {
               workspacePatch: articleWorkspace,
-              contentFactoryWorkspacePatch: legacyWorkspacePatch,
             },
             position: { start: 0, end: 0 },
             createdAt: 100,
@@ -794,7 +784,7 @@ describe("workspaceArticleWorkspaceMessageArtifacts", () => {
             }),
             status: "complete",
             meta: {
-              kind: "content_factory.workspace_patch",
+              kind: "workspace_patch",
             },
             position: { start: 0, end: 0 },
             createdAt: 100,

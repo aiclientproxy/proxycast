@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { open } from "@/lib/desktop-host/plugin-dialog";
+import { open } from "@/lib/desktop-host/dialog";
 import { useTranslation } from "react-i18next";
 import {
   ArrowRight,

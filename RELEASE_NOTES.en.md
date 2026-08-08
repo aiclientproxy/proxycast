@@ -1,40 +1,39 @@
-## Lime v1.123.0
+## Lime v1.124.0
 
 Simplified Chinese release notes are the primary version.
 
 ### New Features
 
-- Added a Codex-aligned Hook lifecycle with `hooks/list`, trusted command Hooks, `hook/started` / `hook/completed` notifications, canonical Hook Items, and Desktop timeline rendering.
-- Consolidated the executable Skill catalog on exact `skills/list`, with `skills/changed` refresh, user-level enablement through `skills/config/write`, and process-level roots through `skills/extraRoots/set`.
-- Added exact `plugin/search` with keyword, scope, workspace, cursor, and limit filtering over the current Plugin catalog.
-- Added Apps catalog/readiness methods `app/list`, `app/read`, `app/installed`, and `app/list/updated`, backed by Plugin App capabilities and real runtime state.
-- Migrated MCP resource reads and tool calls to `mcpServer/resource/read` and Thread-scoped `mcpServer/tool/call`, preserving structured tool results through the Session-owned runtime.
+- Upgraded Lime's public positioning to a full-stack AI agent covering code, files, terminals, tools, MCP, Skills, multimodal work, Providers, and long-running multi-agent tasks.
+- Added current App Server v2 filesystem and process capabilities for directory/file operations, watching, terminal process startup, output streams, stdin, termination, and status restoration.
+- Connected the Agent workspace, Thread/Turn/Item projection, artifacts, and desktop GUI through one traceable execution chain for a task-oriented workflow similar to Claude Code, WorkBuddy, and Codex.
+- Added current Plugin package assets plus Gate B packaging and runtime verification entry points.
 
 ### Fixes
 
-- Fixed existing Threads rejecting turns when model capability metadata is missing or stale: `turn/start` now refreshes the authoritative Provider catalog before retrying fail-closed route admission.
-- Fixed persisted exact AgentControl routes being automatically reconciled to a fallback model when credentials are temporarily unavailable; schema-valid routes now preserve their model and Provider and reach canonical metadata before child Threads become visible.
-- Fixed Hook, Skill, and MCP projection drift across App Server v2 notifications, canonical Thread/Turn/Item state, history restoration, and the Renderer timeline.
-- Fixed the Model Selector exposing non-executable inferred models; Agent routes remain limited to canonical or provider-explicit capabilities.
+- Fixed projection drift for files, processes, background terminals, and Agent task state across App Server, Electron host, gateway, and GUI.
+- Fixed lifecycle boundaries for long-running work, cancellation, output streams, and history restoration while preserving fail-closed permissions and review semantics.
+- Fixed protocol schema, generated client, and model/Provider capability drift during the v2 migration so non-executable models cannot enter Agent routes.
 
 ### Improvements and Refactoring
 
-- Physically removed singular `skill/list`, legacy MCP tool/resource wires, Settings tool execution without a Thread owner, and their Electron facades, without compat wrappers or production mock fallbacks.
+- Physically removed retired Plugin runtimes, workers, legacy v0 filesystem/process/plugin wires, and detached Electron/Renderer facades without production mock fallbacks or compatibility dual paths.
 - Converged the App Server v2 protocol, schema registry, Rust/TypeScript typed clients, runtime owners, and GUI gateways around the single `Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI` product chain.
-- Unified Hook discovery, trust validation, sampling gates, lifecycle events, and restoration projections across `tool-runtime`, Agent runtime, and the current App Server owner.
+- Returned filesystem, process, tools, Skills, MCP, Plugin, and multi-agent capabilities to their current owners, reducing duplicate entry points and cross-layer state copies.
 
 ### Testing and Quality
 
-- Added Rust, TypeScript, and public JSON-RPC regression coverage for Hook lifecycle, Skills list/config/extra roots, exact MCP resource/tool methods, Plugin search, canonical notifications, and history restoration.
-- Expanded the Agent current fixture, MCP current fixture, Workspace MCP fixture, Provider-generation PendingRoute gate, and real Electron Hook Gate B evidence.
-- Synchronized generated protocol schemas/types, command contracts, legacy return guards, script governance, and five-locale GUI regressions.
+- Added Rust, TypeScript, public JSON-RPC, and real Electron regression coverage for filesystem, process, background terminal, Agent runtime, Plugin package, and protocol v2 flows.
+- Expanded current Agent fixtures, tool/Skills/MCP scenarios, Gate B packaging evidence, history restoration, and cancellation/retry paths.
+- Synchronized generated protocol schemas/types, command contracts, legacy return guards, script governance, five-locale GUI regressions, and README positioning docs.
 
 ### Documentation
 
-- Updated App Server command boundaries, MCP/Skills/Hook current ownership, major architecture diagrams, the Codex alignment plan, and Windows model-route repair evidence.
+- Rewrote the Chinese and English root READMEs to present Lime as a full-stack desktop AI agent similar to Claude Code, WorkBuddy, and Codex while retaining the existing product images.
+- Updated App Server filesystem/process boundaries, the Agent runtime chain, Plugin current ownership, governance roadmap, and v2 protocol documentation.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.123.0`.
+- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.124.0`.
 
-**Full changes**: `v1.122.0` -> `v1.123.0`
+**Full changes**: `v1.123.0` -> `v1.124.0`

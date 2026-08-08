@@ -28,7 +28,7 @@ function plugin(
 }
 
 describe("workspacePluginCatalogSuggestions", () => {
-  it("只从 v2 installed summary 投影稳定 Plugin 候选", () => {
+  it("只从 current installed summary 投影稳定 Plugin 候选", () => {
     expect(
       buildWorkspacePluginCatalogSuggestions([
         plugin(),
@@ -37,14 +37,14 @@ describe("workspacePluginCatalogSuggestions", () => {
       ]),
     ).toEqual([
       {
-        pluginId: "browser",
+        pluginId: "browser@openai-bundled",
         displayName: "Browser",
         description: "Control a browser",
         disabled: false,
         blockerCodes: [],
       },
       {
-        pluginId: "disabled",
+        pluginId: "disabled@openai-bundled",
         displayName: "Disabled",
         description: "Control a browser",
         disabled: true,

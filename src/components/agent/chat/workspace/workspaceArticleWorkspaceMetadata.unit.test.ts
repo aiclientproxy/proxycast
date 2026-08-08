@@ -14,17 +14,10 @@ import {
 const CURRENT_PATCH = {
   objects: [{ ref: { kind: "articleDraft", id: "current" } }],
 };
-const LEGACY_PATCH = {
-  objects: [{ ref: { kind: "articleDraft", id: "legacy" } }],
-};
-
 const PRODUCTION_SCAN_DIRS = [
   "src/components/agent/chat",
   "src/features/plugin-content-factory",
 ] as const;
-const LEGACY_FIELD_HELPER =
-  "src/components/agent/chat/workspace/workspaceArticleWorkspaceMetadata.ts";
-
 function collectProductionSourceFiles(dir: string): string[] {
   const entries = readdirSync(dir);
   const files: string[] = [];
@@ -56,17 +49,16 @@ describe("workspaceArticleWorkspaceMetadata", () => {
     expect(
       readWorkspaceArticlePatchRecordFromMetadata({
         workspacePatch: CURRENT_PATCH,
-        contentFactoryWorkspacePatch: LEGACY_PATCH,
       }),
     ).toBe(CURRENT_PATCH);
   });
 
-  it("仍兼容旧历史 metadata 字段", () => {
+  it("不得读取旧 contentFactoryWorkspacePatch 字段", () => {
     expect(
       readWorkspaceArticlePatchRecordFromMetadata({
-        contentFactoryWorkspacePatch: LEGACY_PATCH,
+        contentFactoryWorkspacePatch: CURRENT_PATCH,
       }),
-    ).toBe(LEGACY_PATCH);
+    ).toBeNull();
   });
 
   it("读取 article workspace metadata 时不混入 patch fallback", () => {
@@ -87,22 +79,21 @@ describe("workspaceArticleWorkspaceMetadata", () => {
       collectWorkspaceArticlePatchRecordsFromArtifactLike({
         meta: { workspace_patch: CURRENT_PATCH },
         artifact: {
-          metadata: { contentFactoryWorkspacePatch: LEGACY_PATCH },
           content: JSON.stringify(contentPatch),
         },
       }),
-    ).toEqual([CURRENT_PATCH, LEGACY_PATCH, contentPatch]);
+    ).toEqual([CURRENT_PATCH, contentPatch]);
   });
 
-  it("应识别 current 与旧历史 workspace patch kind", () => {
+  it("只识别 current workspace patch kind", () => {
     expect(isWorkspaceArticlePatchArtifactKind("workspace_patch")).toBe(true);
     expect(
       isWorkspaceArticlePatchArtifactKind("content_factory.workspace_patch"),
-    ).toBe(true);
+    ).toBe(false);
     expect(isWorkspaceArticlePatchArtifactKind("articleDraft")).toBe(false);
   });
 
-  it("应识别 current 与旧历史 workspace patch path", () => {
+  it("只识别 current workspace patch path", () => {
     expect(
       isWorkspaceArticlePatchArtifactPath(
         ".lime/artifacts/article-workspace/workspace-patch.json",
@@ -117,14 +108,15 @@ describe("workspaceArticleWorkspaceMetadata", () => {
       isWorkspaceArticlePatchArtifactPath(
         ".lime/artifacts/content-factory-workspace-patch.json",
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
-      isWorkspaceArticlePatchArtifactPath("exports/article/workspace-patch.json"),
+      isWorkspaceArticlePatchArtifactPath(
+        "exports/article/workspace-patch.json",
+      ),
     ).toBe(false);
   });
 
-  it("应把旧字段兼容读取限定在 metadata helper", () => {
-    const allowed = new Set([LEGACY_FIELD_HELPER]);
+  it("生产代码不得读取旧 workspace patch metadata 字段", () => {
     const offenders: string[] = [];
 
     for (const dir of PRODUCTION_SCAN_DIRS) {
@@ -132,9 +124,6 @@ describe("workspaceArticleWorkspaceMetadata", () => {
         join(process.cwd(), dir),
       )) {
         const relativePath = relative(process.cwd(), filePath);
-        if (allowed.has(relativePath)) {
-          continue;
-        }
         const source = readFileSync(filePath, "utf8");
         const hasLegacyFieldWriteOrRead =
           /\.\s*contentFactoryWorkspacePatch\b/.test(source) ||
@@ -149,13 +138,7 @@ describe("workspaceArticleWorkspaceMetadata", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("应把旧 workspace patch raw artifact 命名限定在 metadata helper 或内容工厂插件模块", () => {
-    const allowed = new Set([
-      LEGACY_FIELD_HELPER,
-      "src/features/plugin-content-factory/contentFactoryWorkspacePatch.ts",
-      "src/features/plugin-content-factory/contentFactoryWorkerContract.ts",
-      "src/features/plugin-content-factory/index.ts",
-    ]);
+  it("生产代码不得恢复旧 workspace patch raw artifact 命名", () => {
     const offenders: string[] = [];
 
     for (const dir of PRODUCTION_SCAN_DIRS) {
@@ -163,9 +146,6 @@ describe("workspaceArticleWorkspaceMetadata", () => {
         join(process.cwd(), dir),
       )) {
         const relativePath = relative(process.cwd(), filePath);
-        if (allowed.has(relativePath)) {
-          continue;
-        }
         const source = readFileSync(filePath, "utf8");
         const hasLegacyRawArtifactName =
           /content_factory\.workspace_patch/.test(source) ||
@@ -181,8 +161,9 @@ describe("workspaceArticleWorkspaceMetadata", () => {
   });
 
   it("应通过统一 helper 识别 articleWorkspace / workspacePatch metadata", () => {
-    expect(hasWorkspaceArticlePatchMetadata({ workspace_patch: CURRENT_PATCH }))
-      .toBe(true);
+    expect(
+      hasWorkspaceArticlePatchMetadata({ workspace_patch: CURRENT_PATCH }),
+    ).toBe(true);
     expect(hasWorkspaceArticlePatchMetadata({ articleWorkspace: {} })).toBe(
       true,
     );

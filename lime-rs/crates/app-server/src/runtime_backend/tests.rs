@@ -282,9 +282,9 @@ fn article_workspace_snapshot_event_without_search() -> RuntimeEvent {
         json!({
             "artifact": {
                 "artifactId": "artifact-article-workspace",
-                "kind": "content_factory.workspace_patch",
+                "kind": "workspace_patch",
                 "metadata": {
-                    "contentFactoryWorkspacePatch": {
+                    "workspacePatch": {
                         "schemaVersion": 1,
                         "appId": "content-factory-app",
                         "sessionId": "session-1",

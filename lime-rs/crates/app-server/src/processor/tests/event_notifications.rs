@@ -191,63 +191,6 @@ fn failed_turn_event(event_id: &str, message: &str) -> AgentEvent {
 }
 
 #[test]
-fn event_notifications_project_retry_and_terminal_errors_with_exact_semantics() {
-    let mut projector = V2NotificationProjector::default();
-    let retry = project_event_notifications_jsonrpc(
-        &mut projector,
-        AgentEvent {
-            event_id: "evt_retry".to_string(),
-            sequence: 7,
-            session_id: "sess_1".to_string(),
-            thread_id: Some("thread_1".to_string()),
-            turn_id: Some("turn_1".to_string()),
-            event_type: "plugin_worker.retry".to_string(),
-            timestamp: "2026-07-05T00:00:00Z".to_string(),
-            payload: json!({
-                "message": "provider stream reconnecting",
-                "errorCode": "PLUGIN_WORKER_RETRYABLE_FAILURE",
-                "retryable": false
-            }),
-        },
-    )
-    .expect("retry notification");
-    assert_eq!(retry.len(), 1);
-    let JsonRpcMessage::Notification(retry) = &retry[0] else {
-        panic!("expected retry notification");
-    };
-    assert_eq!(retry.method, "error");
-    assert_eq!(retry.params.as_ref().expect("params")["willRetry"], true);
-
-    let terminal = project_event_notifications_jsonrpc(
-        &mut projector,
-        failed_turn_event("evt_failed_after_retry", "retry budget exhausted"),
-    )
-    .expect("terminal notifications");
-    let terminal = terminal
-        .into_iter()
-        .map(|message| match message {
-            JsonRpcMessage::Notification(notification) => notification,
-            other => panic!("expected notification, got {other:?}"),
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(
-        terminal
-            .iter()
-            .map(|notification| notification.method.as_str())
-            .collect::<Vec<_>>(),
-        ["error", "turn/completed"]
-    );
-    assert_eq!(
-        terminal[0].params.as_ref().expect("error params")["willRetry"],
-        false
-    );
-    assert_eq!(
-        terminal[1].params.as_ref().expect("completion params")["turn"]["status"],
-        "failed"
-    );
-}
-
-#[test]
 fn runtime_error_is_terminal_even_when_legacy_retryable_is_true_and_is_not_duplicated() {
     let mut projector = V2NotificationProjector::default();
     let runtime_error = project_event_notifications_jsonrpc(

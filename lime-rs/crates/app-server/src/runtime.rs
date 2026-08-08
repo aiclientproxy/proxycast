@@ -40,7 +40,6 @@ mod execution_request;
 mod expert_role_switch;
 mod exports;
 mod file_checkpoint_projection;
-mod file_system;
 mod gateway;
 mod gateway_runner;
 mod hooks;
@@ -59,17 +58,6 @@ mod output_media;
 mod output_refs;
 pub(crate) mod pending_action_descriptor;
 mod permission_state_projection;
-mod plugin_host_lifecycle;
-mod plugin_task_runtime;
-mod plugin_worker_orchestration;
-mod plugin_worker_output_contract;
-mod plugin_worker_runtime;
-mod plugin_worker_streaming;
-mod plugin_worker_turn;
-mod plugin_worker_workflow;
-mod plugin_worker_workflow_cancel;
-mod plugin_worker_workflow_hooks;
-mod plugin_worker_workflow_retry;
 mod plugins;
 mod project_git;
 mod projection_item_events;
@@ -151,6 +139,7 @@ pub use app_data::MediaAppDataSource;
 pub use app_data::MemoryAppDataSource;
 pub use app_data::NoopAppDataSource;
 pub use app_data::PluginDataSource;
+pub use app_data::PluginTurnSnapshot;
 pub use app_data::RightSurfaceAppDataSource;
 pub use app_data::SessionAppDataSource;
 pub use app_data::SkillAppDataSource;
@@ -179,7 +168,6 @@ pub use output_refs::OutputSnapshotReadRequest;
 pub use output_refs::OutputSnapshotRecord;
 pub use output_refs::OutputSnapshotSaveRequest;
 pub use output_refs::OutputSnapshotStore;
-pub(crate) use plugin_worker_streaming::ensure_workspace_patch_artifact_paths;
 pub use projection_repair::ProjectionRepair;
 pub use projection_store::ProjectionStore;
 pub use right_surface::WorkspaceObjectCanvasReplayReadiness;
@@ -485,22 +473,6 @@ pub trait ExecutionBackend: Send + Sync {
             "runtime backend does not execute MCP tools".to_string(),
         ))
     }
-
-    async fn prepare_runtime_worker_artifact_events(
-        &self,
-        _request: &ExecutionRequest,
-        _events: &mut Vec<RuntimeEvent>,
-    ) -> Result<(), RuntimeCoreError> {
-        Ok(())
-    }
-
-    async fn prepare_plugin_worker_request(
-        &self,
-        _request: &ExecutionRequest,
-        _worker_request: &mut serde_json::Value,
-    ) -> Result<(), RuntimeCoreError> {
-        Ok(())
-    }
 }
 
 #[derive(Clone)]
@@ -551,7 +523,6 @@ pub(in crate::runtime) struct RuntimeCoreState {
     pub(in crate::runtime) right_surface_pending:
         Vec<app_server_protocol::WorkspaceRightSurfacePendingRequest>,
     pub(in crate::runtime) browser_profile_scopes: Vec<BrowserProfileScope>,
-    plugin_ui_runtimes: HashMap<String, plugins::PluginUiRuntimeProcess>,
 }
 
 #[derive(Debug, Clone)]

@@ -129,28 +129,19 @@ fn is_workspace_patch_artifact_summary(summary: &ArtifactSummary) -> bool {
 }
 
 fn is_workspace_patch_kind(kind: &str) -> bool {
-    matches!(
-        kind.trim().replace('-', "_").to_ascii_lowercase().as_str(),
-        "content_factory.workspace_patch" | "workspace_patch"
-    )
+    kind.trim().replace('-', "_").to_ascii_lowercase() == "workspace_patch"
 }
 
 fn is_workspace_patch_path(path: &str) -> bool {
     let normalized = path.trim().replace('\\', "/").to_ascii_lowercase();
     normalized.ends_with("/workspace-patch.json")
-        || normalized.ends_with("content-factory-workspace-patch.json")
-        || normalized.contains("/content-factory/workspace-patch.json")
 }
 
 fn metadata_contains_workspace_patch(metadata: &Value) -> bool {
     let Some(metadata) = metadata.as_object() else {
         return false;
     };
-    if metadata.contains_key("contentFactoryWorkspacePatch")
-        || metadata.contains_key("content_factory_workspace_patch")
-        || metadata.contains_key("workspacePatch")
-        || metadata.contains_key("workspace_patch")
-    {
+    if metadata.contains_key("workspacePatch") || metadata.contains_key("workspace_patch") {
         return true;
     }
     string_from_metadata(

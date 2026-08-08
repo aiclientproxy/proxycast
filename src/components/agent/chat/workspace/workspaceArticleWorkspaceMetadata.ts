@@ -1,7 +1,6 @@
 import { normalizeArtifactProtocolPath } from "@/lib/artifact-protocol";
 
-export const CONTENT_FACTORY_WORKSPACE_PATCH_KIND =
-  "content_factory.workspace_patch";
+export const WORKSPACE_PATCH_KIND = "workspace_patch";
 
 export function asWorkspaceArticleMetadataRecord(
   value: unknown,
@@ -65,9 +64,7 @@ export function readWorkspaceArticlePatchRecordFromMetadata(
   }
   return (
     asWorkspaceArticleMetadataRecord(record.workspacePatch) ??
-    asWorkspaceArticleMetadataRecord(record.workspace_patch) ??
-    asWorkspaceArticleMetadataRecord(record.contentFactoryWorkspacePatch) ??
-    asWorkspaceArticleMetadataRecord(record.content_factory_workspace_patch)
+    asWorkspaceArticleMetadataRecord(record.workspace_patch)
   );
 }
 
@@ -88,13 +85,7 @@ export function hasWorkspaceArticlePatchMetadata(
 
 export function isWorkspaceArticlePatchArtifactKind(value: unknown): boolean {
   const normalizedKind = readString(value)?.toLowerCase();
-  return Boolean(
-    normalizedKind &&
-      (normalizedKind === CONTENT_FACTORY_WORKSPACE_PATCH_KIND ||
-        normalizedKind === "content_factory_workspace_patch" ||
-        normalizedKind === "workspace_patch" ||
-        normalizedKind.endsWith(".workspace_patch")),
-  );
+  return Boolean(normalizedKind && normalizedKind === WORKSPACE_PATCH_KIND);
 }
 
 export function isWorkspaceArticlePatchArtifactPath(value: unknown): boolean {
@@ -112,13 +103,7 @@ export function isWorkspaceArticlePatchArtifactPath(value: unknown): boolean {
   if (!inArtifactStore) {
     return false;
   }
-  return (
-    normalizedPath.endsWith("/workspace-patch.json") ||
-    normalizedPath === ".lime/artifacts/content-factory-workspace-patch.json" ||
-    normalizedPath.endsWith(
-      "/.lime/artifacts/content-factory-workspace-patch.json",
-    )
-  );
+  return normalizedPath.endsWith("/workspace-patch.json");
 }
 
 export function collectWorkspaceArticlePatchLikeMetadataRecords(
@@ -132,8 +117,6 @@ export function collectWorkspaceArticlePatchLikeMetadataRecords(
   pushRecord(candidates, record.article_workspace);
   pushRecord(candidates, record.workspacePatch);
   pushRecord(candidates, record.workspace_patch);
-  pushRecord(candidates, record.contentFactoryWorkspacePatch);
-  pushRecord(candidates, record.content_factory_workspace_patch);
   return candidates;
 }
 

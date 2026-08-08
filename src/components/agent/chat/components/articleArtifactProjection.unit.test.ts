@@ -83,7 +83,7 @@ describe("articleArtifactProjection", () => {
     });
   });
 
-  it("应继续兼容旧 contentFactoryWorkspacePatch 历史字段", () => {
+  it("不得从旧 contentFactoryWorkspacePatch 字段恢复文章", () => {
     const legacyWorkspacePatch = {
       schemaVersion: "article-workspace.v1",
       appId: "content-factory-app",
@@ -120,54 +120,7 @@ describe("articleArtifactProjection", () => {
       }),
     );
 
-    expect(model).toMatchObject({
-      markdown: expect.stringContaining("来自旧字段"),
-      summary: "旧字段",
-    });
-  });
-
-  it("新旧字段同时存在时应优先使用 workspacePatch", () => {
-    const legacyWorkspacePatch = {
-      schemaVersion: "article-workspace.v1",
-      appId: "content-factory-app",
-      sessionId: "session-main",
-      selectedObjectRef: {
-        appId: "content-factory-app",
-        kind: "articleDraft",
-        id: "legacy-article",
-        sessionId: "session-main",
-      },
-      objects: [
-        {
-          ref: {
-            appId: "content-factory-app",
-            kind: "articleDraft",
-            id: "legacy-article",
-            sessionId: "session-main",
-          },
-          title: "旧稿",
-          status: "ready",
-          summary: "旧字段",
-          source: {
-            documentText: "# 旧稿\n\n不应展示。",
-          },
-        },
-      ],
-    };
-
-    const model = resolveArticleArtifactFrameModel(
-      createWorkspacePatchArtifact({
-        meta: {
-          contentFactoryWorkspacePatch: legacyWorkspacePatch,
-        },
-      }),
-    );
-
-    expect(model).toMatchObject({
-      markdown: expect.stringContaining("第二版文章内容"),
-      summary: "第二版",
-    });
-    expect(model?.markdown).not.toContain("不应展示");
+    expect(model).toBeNull();
   });
 
   it("仅有过程稿时不应把 processMarkdown 当成正式文章展示", () => {

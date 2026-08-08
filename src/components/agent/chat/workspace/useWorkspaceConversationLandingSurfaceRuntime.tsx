@@ -28,7 +28,6 @@ export interface WorkspaceConversationLandingSurfaceRuntime {
   onDismissEntryBanner: () => void;
   creationReplaySurface?: CreationReplaySurfaceModel | null;
   sceneAppExecutionSummaryCard?: ReactNode;
-  pluginHistoryRestoreLandingCard?: ReactNode;
   serviceSkillExecutionCard?: ReactNode;
   emptyStateProps: ComponentProps<typeof EmptyState>;
 }
@@ -146,7 +145,6 @@ interface UseWorkspaceConversationLandingSurfaceRuntimeParams {
   >["onToggleFileManager"];
   openedProjects?: ComponentProps<typeof EmptyState>["openedProjects"];
   pathReferences?: ComponentProps<typeof EmptyState>["pathReferences"];
-  pluginHistoryRestoreLandingCard?: ReactNode;
   pluginSuggestions?: ComponentProps<typeof EmptyState>["pluginSuggestions"];
   pluginSuggestionsError?: ComponentProps<
     typeof EmptyState
@@ -317,7 +315,6 @@ export function useWorkspaceConversationLandingSurfaceRuntime({
   onToggleFileManager,
   openedProjects,
   pathReferences,
-  pluginHistoryRestoreLandingCard,
   pluginSuggestions,
   pluginSuggestionsError,
   pluginSuggestionsLoading,
@@ -557,7 +554,6 @@ export function useWorkspaceConversationLandingSurfaceRuntime({
       onDismissEntryBanner,
       creationReplaySurface,
       sceneAppExecutionSummaryCard,
-      pluginHistoryRestoreLandingCard,
       serviceSkillExecutionCard,
       emptyStateProps,
     }),
@@ -567,7 +563,6 @@ export function useWorkspaceConversationLandingSurfaceRuntime({
       entryBannerMessage,
       entryBannerVisible,
       onDismissEntryBanner,
-      pluginHistoryRestoreLandingCard,
       sceneAppExecutionSummaryCard,
       serviceSkillExecutionCard,
     ],

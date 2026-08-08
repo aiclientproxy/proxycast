@@ -15,12 +15,10 @@ const MISSING_SCOPE_KEY: &str = "<missing>";
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(super) enum RequestSerializationQueueKey {
     Thread(String),
-    ExecutionProcess(String),
     ProjectShellSession(String),
     McpOauth(String),
     McpResourceSubscription(String),
     BrowserSession(String),
-    FileSystemMutation,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -56,12 +54,6 @@ pub(super) async fn request_serialization_scope(
             };
             RequestSerializationQueueKey::Thread(key)
         }
-        AppServerRequestSerializationScope::ExecutionProcess => {
-            let Some(key) = scope_param(params, &["processId", "process_id"])? else {
-                return Ok(None);
-            };
-            RequestSerializationQueueKey::ExecutionProcess(key)
-        }
         AppServerRequestSerializationScope::ProjectShellSession => {
             let Some(key) = scope_param(
                 params,
@@ -93,9 +85,6 @@ pub(super) async fn request_serialization_scope(
                 return Ok(None);
             };
             RequestSerializationQueueKey::BrowserSession(key)
-        }
-        AppServerRequestSerializationScope::FileSystemMutation => {
-            RequestSerializationQueueKey::FileSystemMutation
         }
     };
     let access = match app_server_request_access(&request.method) {

@@ -55,7 +55,7 @@ const hoisted = vi.hoisted(() => ({
 
 export const mocks = hoisted.mocks;
 
-vi.mock("@/lib/desktop-host/plugin-dialog", () => ({
+vi.mock("@/lib/desktop-host/dialog", () => ({
   open: (...args: unknown[]) => mocks.openDialog(...args),
   save: (...args: unknown[]) => mocks.saveDialog(...args),
 }));

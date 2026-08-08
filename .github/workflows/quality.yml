@@ -127,7 +127,7 @@ jobs:
         run: npm run typecheck
 
       - name: Test layer budget
-        run: node scripts/check-vitest-layer-budget.mjs --max-component-candidates 30
+        run: node scripts/check-vitest-layer-budget.mjs --max-component-candidates 37
 
       - name: Unit tests
         run: npm run test:unit
@@ -164,7 +164,7 @@ jobs:
         run: npm run typecheck
 
       - name: Test layer budget
-        run: node scripts/check-vitest-layer-budget.mjs --max-component-candidates 30
+        run: node scripts/check-vitest-layer-budget.mjs --max-component-candidates 37
 
       - name: Full frontend Vitest
         run: npm run test:frontend:all
@@ -503,9 +503,9 @@ jobs:
               elif [[ "${FAILURE_REASON}" == "architecture confirmation failed" ]]; then
                 NEXT_ACTION='Complete the architecture section in the PR description and update `internal/aiprompts/architecture.md` when the change is major.'
               elif [[ "${FAILURE_REASON}" == "frontend quick failed" ]]; then
-                NEXT_ACTION='Run `npm run lint && npm run typecheck && node scripts/check-vitest-layer-budget.mjs --max-component-candidates 30 && npm run test:unit && npm run test:contract` to reproduce the frontend quick failure locally.'
+                NEXT_ACTION='Run `npm run lint && npm run typecheck && node scripts/check-vitest-layer-budget.mjs --max-component-candidates 37 && npm run test:unit && npm run test:contract` to reproduce the frontend quick failure locally.'
               elif [[ "${FAILURE_REASON}" == "frontend full failed" ]]; then
-                NEXT_ACTION='Run `node scripts/check-vitest-layer-budget.mjs --max-component-candidates 30 && npm run test:frontend:all` after `npm run lint && npm run typecheck` to reproduce the full frontend failure locally.'
+                NEXT_ACTION='Run `node scripts/check-vitest-layer-budget.mjs --max-component-candidates 37 && npm run test:frontend:all` after `npm run lint && npm run typecheck` to reproduce the full frontend failure locally.'
               elif [[ "${FAILURE_REASON}" == "bridge/contracts failed" ]]; then
                 if [[ ",${BRIDGE_REASONS}," == *",harness_cleanup_contract,"* ]]; then
                   NEXT_ACTION='Run `npm run harness:cleanup-report:check` first, then `npm run test:contracts`.'

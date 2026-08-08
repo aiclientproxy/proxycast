@@ -558,7 +558,7 @@ describe("http-client", () => {
     expect(settled).toBe(true);
   });
 
-  it("Plugin UI runtime 启动命令应覆盖后端冷启动等待窗口", async () => {
+  it("Plugin v3 App Server 请求使用 current 读取窗口", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(electronHostHealthResponse())
@@ -566,10 +566,15 @@ describe("http-client", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     let settled = false;
-    const invokePromise = invokeViaHttp("plugin_start_ui_runtime", {
+    const invokePromise = invokeViaHttp("app_server_handle_json_lines", {
       request: {
-        appId: "content-factory-app",
-        entryKey: "dashboard",
+        lines: [
+          JSON.stringify({
+            id: "plugin-install",
+            method: "plugin/install",
+            params: { sourcePath: "/tmp/plugin" },
+          }),
+        ],
       },
     }).then(
       () => ({ ok: true as const }),
@@ -579,14 +584,14 @@ describe("http-client", () => {
       settled = true;
     });
 
-    await vi.advanceTimersByTimeAsync(5000);
+    await vi.advanceTimersByTimeAsync(1800);
     expect(settled).toBe(false);
 
-    await vi.advanceTimersByTimeAsync(145000);
+    await vi.advanceTimersByTimeAsync(28200);
     await expect(invokePromise).resolves.toMatchObject({
       ok: false,
       error: expect.objectContaining({
-        message: expect.stringContaining("timeout after 150000ms"),
+        message: expect.stringContaining("timeout after 30000ms"),
       }),
     });
   });
@@ -674,51 +679,25 @@ describe("http-client", () => {
         }),
       ).toBe(60000);
     }
-    expect(
-      resolveBridgeRequestTimeoutMs("app_server_handle_json_lines", {
-        request: {
-          lines: [
-            JSON.stringify({
-              id: "local-package-inspect",
-              method: "pluginLocalPackage/inspect",
-              params: {
-                appDir:
-                  "/Users/coso/Documents/dev/ai/limecloud/content-factory-app",
-              },
-            }),
-          ],
-        },
-      }),
-    ).toBe(240000);
-    expect(
-      resolveBridgeRequestTimeoutMs("app_server_handle_json_lines", {
-        request: {
-          lines: [
-            JSON.stringify({
-              id: "local-package-export",
-              method: "pluginLocalPackage/export",
-              params: {
-                appDir:
-                  "/Users/coso/Documents/dev/ai/limecloud/content-factory-app",
-              },
-            }),
-          ],
-        },
-      }),
-    ).toBe(240000);
-    expect(
-      resolveBridgeRequestTimeoutMs("app_server_handle_json_lines", {
-        request: {
-          lines: [
-            JSON.stringify({
-              id: "installed-save",
-              method: "pluginInstalled/save",
-              params: { state: { appId: "content-factory-app" } },
-            }),
-          ],
-        },
-      }),
-    ).toBe(240000);
+    for (const method of [
+      "plugin/list",
+      "plugin/search",
+      "plugin/read",
+      "plugin/install",
+      "plugin/uninstall",
+      "plugin/installed",
+      "plugin/enabled/set",
+    ]) {
+      expect(
+        resolveBridgeRequestTimeoutMs("app_server_handle_json_lines", {
+          request: {
+            lines: [
+              JSON.stringify({ id: `plugin-${method}`, method, params: {} }),
+            ],
+          },
+        }),
+      ).toBe(30000);
+    }
     expect(
       resolveBridgeRequestTimeoutMs("app_server_handle_json_lines", {
         request: {
@@ -787,23 +766,17 @@ describe("http-client", () => {
         },
       }),
     ).toBe(120000);
-    expect(resolveBridgeRequestTimeoutMs("plugin_start_ui_runtime")).toBe(
-      150000,
-    );
-    expect(resolveBridgeRequestTimeoutMs("plugin_runtime_get_task")).toBe(
-      60000,
-    );
+    expect(resolveBridgeRequestTimeoutMs("plugin_start_ui_runtime")).toBe(1800);
+    expect(resolveBridgeRequestTimeoutMs("plugin_runtime_get_task")).toBe(1800);
     expect(resolveBridgeRequestTimeoutMs("plugin_runtime_start_task")).toBe(
-      60000,
+      1800,
     );
     expect(resolveBridgeRequestTimeoutMs("plugin_inspect_local_package")).toBe(
       1800,
     );
-    expect(resolveBridgeRequestTimeoutMs("plugin_select_directory")).toBe(
-      600000,
-    );
+    expect(resolveBridgeRequestTimeoutMs("plugin_select_directory")).toBe(1800);
     expect(resolveBridgeRequestTimeoutMs("plugin_get_ui_runtime_status")).toBe(
-      5000,
+      1800,
     );
     expect(resolveBridgeRequestTimeoutMs("open_external_url")).toBe(5000);
     expect(resolveBridgeRequestTimeoutMs("execute_skill")).toBe(1800);
@@ -840,15 +813,12 @@ describe("http-client", () => {
             JSON.stringify({
               id: "ui-runtime-start",
               method: "pluginUiRuntime/start",
-              params: {
-                appId: "content-factory-sdk-fixture-app",
-                entryKey: "dashboard",
-              },
+              params: {},
             }),
           ],
         },
       }),
-    ).toBe(150000);
+    ).toBe(5000);
     expect(
       resolveBridgeRequestTimeoutMs("app_server_handle_json_lines", {
         request: {

@@ -17,11 +17,6 @@ pub enum StepError {
     Injection(String),
     #[error("Provider 错误: {0}")]
     Provider(String),
-    #[error("插件错误: {plugin_name} - {message}")]
-    Plugin {
-        plugin_name: String,
-        message: String,
-    },
     #[error("遥测错误: {0}")]
     Telemetry(String),
     #[error("超时: {timeout_ms}ms")]
@@ -38,7 +33,6 @@ impl StepError {
             StepError::Routing(_) => 404,
             StepError::Injection(_) => 400,
             StepError::Provider(_) => 502,
-            StepError::Plugin { .. } => 500,
             StepError::Telemetry(_) => 500,
             StepError::Timeout { .. } => 408,
             StepError::Internal(_) => 500,

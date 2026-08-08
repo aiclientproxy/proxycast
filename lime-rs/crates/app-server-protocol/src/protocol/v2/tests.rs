@@ -2395,6 +2395,115 @@ fn plugin_search_matches_codex_request_and_response_wire() {
 }
 
 #[test]
+fn memory_reset_contract_accepts_unit_params_and_returns_empty_object() {
+    for request in [
+        json!({"id": 1, "method": "memory/reset"}),
+        json!({"id": 2, "method": "memory/reset", "params": null}),
+        json!({"id": 3, "method": "memory/reset", "params": {}}),
+    ] {
+        let decoded: ClientRequest =
+            serde_json::from_value(request).expect("decode memory/reset request");
+        assert_eq!(decoded.method(), Method::MemoryReset);
+    }
+    assert_eq!(
+        serde_json::to_value(MemoryResetResponse {}).expect("encode memory/reset response"),
+        json!({})
+    );
+}
+
+#[test]
+fn process_requests_and_notifications_round_trip_exact_codex_shape() {
+    let requests = [
+        json!({
+            "id": 61,
+            "method": "process/spawn",
+            "params": {
+                "command": ["echo", "hello"],
+                "processHandle": "process-1",
+                "cwd": "/workspace",
+                "streamStdin": true,
+                "streamStdoutStderr": true,
+                "outputBytesCap": null,
+                "timeoutMs": 1234,
+                "env": {"KEEP": "1", "REMOVE": null}
+            }
+        }),
+        json!({
+            "id": 62,
+            "method": "process/writeStdin",
+            "params": {
+                "processHandle": "process-1",
+                "deltaBase64": "aGVsbG8=",
+                "closeStdin": true
+            }
+        }),
+        json!({
+            "id": 63,
+            "method": "process/resizePty",
+            "params": {
+                "processHandle": "process-1",
+                "size": {"rows": 24, "cols": 80}
+            }
+        }),
+        json!({
+            "id": 64,
+            "method": "process/kill",
+            "params": {"processHandle": "process-1"}
+        }),
+    ];
+    for expected in requests {
+        let request: ClientRequest =
+            serde_json::from_value(expected.clone()).expect("decode process request");
+        assert_eq!(
+            serde_json::to_value(request).expect("encode process request"),
+            expected
+        );
+    }
+
+    let omitted: ProcessSpawnParams = serde_json::from_value(json!({
+        "command": ["echo"],
+        "processHandle": "omitted",
+        "cwd": "/workspace"
+    }))
+    .expect("omitted defaults");
+    let cleared: ProcessSpawnParams = serde_json::from_value(json!({
+        "command": ["echo"],
+        "processHandle": "cleared",
+        "cwd": "/workspace",
+        "outputBytesCap": null,
+        "timeoutMs": null
+    }))
+    .expect("null overrides");
+    assert_eq!(omitted.output_bytes_cap, None);
+    assert_eq!(omitted.timeout_ms, None);
+    assert_eq!(cleared.output_bytes_cap, Some(None));
+    assert_eq!(cleared.timeout_ms, Some(None));
+
+    let notifications = [
+        ServerNotification::ProcessOutputDelta(ProcessOutputDeltaNotification {
+            process_handle: "process-1".to_string(),
+            stream: ProcessOutputStream::Stdout,
+            delta_base64: "aGVsbG8=".to_string(),
+            cap_reached: false,
+        }),
+        ServerNotification::ProcessExited(ProcessExitedNotification {
+            process_handle: "process-1".to_string(),
+            exit_code: 0,
+            stdout: String::new(),
+            stdout_cap_reached: false,
+            stderr: String::new(),
+            stderr_cap_reached: false,
+        }),
+    ];
+    let methods = notifications
+        .into_iter()
+        .map(JsonRpcNotification::from)
+        .map(|notification| notification.method)
+        .collect::<Vec<_>>();
+    assert_eq!(methods, ["process/outputDelta", "process/exited"]);
+}
+
+#[test]
 fn typed_v2_envelope_schema_names_are_stable() {
     let schemas = [
         (
@@ -2473,6 +2582,9 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "model/list/updated",
             "model/verification",
             "model/safetyBuffering/updated",
+            "fs/changed",
+            "process/outputDelta",
+            "process/exited",
             "thread/settings/updated",
             "thread/tokenUsage/updated",
             "thread/goal/updated",

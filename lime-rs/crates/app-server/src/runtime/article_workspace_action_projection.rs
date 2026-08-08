@@ -184,29 +184,6 @@ fn event_belongs_to_action_turn(event: &AgentEvent, turn_id: &str) -> bool {
             .and_then(|artifact| string_field(artifact, &["turnId", "turn_id"]))
             .as_deref()
             == Some(turn_id)
-        || event
-            .payload
-            .get("metadata")
-            .and_then(|metadata| {
-                metadata
-                    .get("pluginWorker")
-                    .or_else(|| metadata.get("plugin_worker"))
-            })
-            .and_then(|plugin_worker| string_field(plugin_worker, &["turnId", "turn_id"]))
-            .as_deref()
-            == Some(turn_id)
-        || event
-            .payload
-            .get("artifact")
-            .and_then(|artifact| artifact.get("metadata"))
-            .and_then(|metadata| {
-                metadata
-                    .get("pluginWorker")
-                    .or_else(|| metadata.get("plugin_worker"))
-            })
-            .and_then(|plugin_worker| string_field(plugin_worker, &["turnId", "turn_id"]))
-            .as_deref()
-            == Some(turn_id)
 }
 
 fn article_workspace_action_error(stored: &StoredSession, turn_id: &str) -> Option<Value> {

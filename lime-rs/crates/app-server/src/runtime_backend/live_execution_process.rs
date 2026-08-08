@@ -1,12 +1,13 @@
 use crate::execution_process::ExecutionProcessServer;
-use app_server_protocol::{
-    protocol::v2::GrantedPermissionProfile, ExecutionProcessDrainOutputParams,
-    ExecutionProcessDrainOutputResponse, ExecutionProcessEmptyResponse, ExecutionProcessIdParams,
-    ExecutionProcessStartParams, ExecutionProcessStartResponse, ExecutionProcessStatusResponse,
-    ExecutionProcessWriteStdinParams,
-};
+use app_server_protocol::protocol::v2::GrantedPermissionProfile;
 use async_trait::async_trait;
-use tool_runtime::execution_process::live::RuntimeLiveExecutionGateway;
+use tool_runtime::execution_process::{
+    live::{
+        LiveExecutionOutputBatch, LiveExecutionOutputQuery, LiveExecutionRequest,
+        RuntimeLiveExecutionGateway,
+    },
+    ExecutionProcessSnapshot,
+};
 
 #[async_trait]
 impl RuntimeLiveExecutionGateway for ExecutionProcessServer {
@@ -14,44 +15,37 @@ impl RuntimeLiveExecutionGateway for ExecutionProcessServer {
         &self,
         thread_id: &str,
         display_command: &str,
-        params: ExecutionProcessStartParams,
+        request: LiveExecutionRequest,
         granted_permissions: Option<GrantedPermissionProfile>,
-    ) -> Result<ExecutionProcessStartResponse, String> {
+    ) -> Result<ExecutionProcessSnapshot, String> {
         self.start_thread_process_with_permissions(
             thread_id,
             display_command,
-            params,
+            request,
             granted_permissions,
         )
         .await
         .map_err(|error| error.to_string())
     }
 
-    fn write_stdin(
-        &self,
-        params: ExecutionProcessWriteStdinParams,
-    ) -> Result<ExecutionProcessEmptyResponse, String> {
-        self.write_stdin(params).map_err(|error| error.to_string())
+    fn write_stdin(&self, process_id: &str, data: &[u8]) -> Result<(), String> {
+        self.write_stdin(process_id, data)
+            .map_err(|error| error.to_string())
     }
 
-    fn terminate(
-        &self,
-        params: ExecutionProcessIdParams,
-    ) -> Result<ExecutionProcessStatusResponse, String> {
-        self.terminate(params).map_err(|error| error.to_string())
+    fn terminate(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String> {
+        self.terminate(process_id)
+            .map_err(|error| error.to_string())
     }
 
-    fn status(
-        &self,
-        params: ExecutionProcessIdParams,
-    ) -> Result<ExecutionProcessStatusResponse, String> {
-        self.status(params).map_err(|error| error.to_string())
+    fn status(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String> {
+        self.status(process_id).map_err(|error| error.to_string())
     }
 
     fn drain_output(
         &self,
-        params: ExecutionProcessDrainOutputParams,
-    ) -> Result<ExecutionProcessDrainOutputResponse, String> {
-        self.drain_output(params).map_err(|error| error.to_string())
+        query: LiveExecutionOutputQuery,
+    ) -> Result<LiveExecutionOutputBatch, String> {
+        self.drain_output(query).map_err(|error| error.to_string())
     }
 }

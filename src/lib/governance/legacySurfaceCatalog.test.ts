@@ -4365,19 +4365,13 @@ describe("legacySurfaceCatalog", () => {
 
   it("应记录 Plugin 应用中心 current App Server 方法目录", () => {
     expect(agentCommandCatalog.appServerPluginMethods).toEqual([
-      "pluginLocalPackage/inspect",
-      "pluginLocalPackage/export",
-      "pluginPackage/fetchCloud",
-      "pluginInstalled/save",
-      "pluginInstalled/list",
-      "pluginInstalled/disabled/set",
-      "pluginInstalled/uninstall/rehearsal",
-      "pluginInstalled/uninstall",
-      "pluginHostLifecycle/list",
-      "pluginShell/prepare",
-      "pluginUiRuntime/start",
-      "pluginUiRuntime/status",
-      "pluginUiRuntime/stop",
+      "plugin/list",
+      "plugin/search",
+      "plugin/read",
+      "plugin/install",
+      "plugin/uninstall",
+      "plugin/installed",
+      "plugin/enabled/set",
     ]);
   });
 
@@ -4392,7 +4386,7 @@ describe("legacySurfaceCatalog", () => {
     ]);
   });
 
-  it("旧 Plugin lifecycle Tauri 命令不应继续作为 runtime gateway current surface", () => {
+  it("旧 Plugin lifecycle 命令不应继续作为 current 或 deprecated catalog surface", () => {
     expect(agentCommandCatalog.runtimeGatewayCommands).not.toEqual(
       expect.arrayContaining([
         "plugin_inspect_local_package",
@@ -4404,15 +4398,19 @@ describe("legacySurfaceCatalog", () => {
         "plugin_uninstall",
       ]),
     );
-    expect(agentCommandCatalog.deprecatedCommandReplacements).toMatchObject({
-      plugin_inspect_local_package: "pluginLocalPackage/inspect",
-      plugin_fetch_cloud_package: "pluginPackage/fetchCloud",
-      plugin_save_installed_state: "pluginInstalled/save",
-      plugin_list_installed: "pluginInstalled/list",
-      plugin_set_disabled: "pluginInstalled/disabled/set",
-      plugin_uninstall_rehearsal: "pluginInstalled/uninstall/rehearsal",
-      plugin_uninstall: "pluginInstalled/uninstall",
-    });
+    for (const command of [
+      "plugin_inspect_local_package",
+      "plugin_fetch_cloud_package",
+      "plugin_save_installed_state",
+      "plugin_list_installed",
+      "plugin_set_disabled",
+      "plugin_uninstall_rehearsal",
+      "plugin_uninstall",
+    ]) {
+      expect(
+        agentCommandCatalog.deprecatedCommandReplacements,
+      ).not.toHaveProperty(command);
+    }
   });
 
   it("应记录旧 API Key Provider 命令到 current 方法的替换关系", () => {

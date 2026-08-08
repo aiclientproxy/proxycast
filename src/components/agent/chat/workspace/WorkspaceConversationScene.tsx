@@ -146,12 +146,10 @@ function renderWorkspaceChatContent({
       pendingA2UISource.kind === "service_skill" ||
       Boolean(a2uiSubmissionNotice));
   const leadingMessageContent =
-    landingSurface.pluginHistoryRestoreLandingCard ||
     landingSurface.sceneAppExecutionSummaryCard ||
     stepProgressProps ||
     landingSurface.serviceSkillExecutionCard ? (
       <>
-        {landingSurface.pluginHistoryRestoreLandingCard}
         {landingSurface.sceneAppExecutionSummaryCard}
         {stepProgressProps ? <StepProgress {...stepProgressProps} /> : null}
         {landingSurface.serviceSkillExecutionCard}

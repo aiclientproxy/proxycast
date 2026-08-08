@@ -111,9 +111,7 @@ const fixtureSourceFiles = [
   "scripts/agent-runtime/claw-chat-current-fixture-right-surface-visual.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-content-factory-article-workspace.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-inline-image-article-workspace.mjs",
-  "scripts/agent-runtime/claw-chat-current-fixture-content-factory-worker-dogfood.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-content-factory-workspace-patches.mjs",
-  "scripts/lib/content-factory-host-generation-fixture.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-scenario-flow.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-common-assertions.mjs",
   "scripts/agent-runtime/claw-chat-current-fixture-scenario-assertions.mjs",
@@ -392,50 +390,6 @@ describe("claw chat current Electron fixture smoke guard", () => {
       sessionId: "skills-session",
       threadId: "skills-thread",
       turnId: "skills-turn",
-    });
-  });
-
-  it("binds content factory Gate B identity to the App Server worker turn", () => {
-    expect(
-      resolveGateBExpectedIdentity({
-        summary: {
-          contentFactoryArticleWorkspaceSessionCreation: {
-            identity: {
-              sessionId: "content-session",
-              threadId: "content-thread",
-            },
-          },
-          contentFactoryArticleWorkspaceWorkerTurnStart: {
-            turnId: "worker-turn",
-          },
-        },
-        options: { scenario: "content-factory-article-workspace" },
-        backendLedger: [],
-        appServerRequests: [
-          {
-            method: "turn/start",
-            params: {
-              threadId: "content-thread",
-            },
-            response: {
-              turnId: "worker-turn",
-            },
-          },
-          {
-            method: "thread/read",
-            params: { threadId: "content-thread" },
-            response: {
-              sessionId: "content-session",
-              threadId: "content-thread",
-              turns: [{ turnId: "worker-turn" }],
-            },
-          },
-        ],
-      }),
-    ).toEqual({
-      sessionId: "content-session",
-      threadId: "content-thread",
-      turnId: "worker-turn",
     });
   });
 
@@ -2668,7 +2622,6 @@ describe("claw chat current Electron fixture smoke guard", () => {
 
     expect(content).toContain("typed-error-retry-success");
     expect(content).toContain("typed-error-retry-failure");
-    expect(content).toContain("plugin_worker.retry");
     expect(content).toContain('type: "runtime.error"');
     expect(content).toContain("willRetry: false");
     expect(content).toContain('type: "turn.failed"');

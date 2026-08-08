@@ -84,12 +84,6 @@ function copyDefinedFields(
   );
 }
 
-function normalizePluginWorkerTimelineStatus(
-  status: string | undefined,
-): "completed" | "failed" {
-  return status === "failed" || status === "error" ? "failed" : "completed";
-}
-
 function normalizeHookTimelineStatus(
   status: string | undefined,
 ): "in_progress" | "completed" | "failed" {
@@ -193,99 +187,6 @@ export function readHookItemFromPayload(
       ...(metadata ?? {}),
       eventClass: event.type,
       raw: run,
-    },
-  };
-}
-
-export function readPluginWorkerHookItemFromPayload(
-  payload: Record<string, unknown>,
-  event: AppServerAgentEvent,
-): Record<string, unknown> {
-  const status = readString(payload, "status");
-  const hookKey = readString(payload, "hookKey", "hook_key") ?? "hook";
-  const hookEvent = readString(payload, "hookEvent", "hook_event");
-  const hookScope = readString(payload, "hookScope", "hook_scope");
-  const reasonCode = readString(payload, "reasonCode", "reason_code");
-  const resultSummary = readString(
-    payload,
-    "resultSummary",
-    "result_summary",
-    "message",
-    "summary",
-  );
-  const text =
-    resultSummary ??
-    [hookScope, hookEvent, hookKey, status, reasonCode]
-      .filter(Boolean)
-      .join(" · ");
-  return {
-    ...readAgentThreadItemBase(
-      payload,
-      event,
-      normalizePluginWorkerTimelineStatus(status),
-    ),
-    id: `${event.eventId}:plugin-worker-hook`,
-    type: "turn_summary",
-    text,
-    metadata: {
-      source: "plugin_worker.hook",
-      eventType: event.type,
-      status,
-      hookKey,
-      hookEvent,
-      hookScope,
-      reasonCode,
-      resultSummary,
-      pluginWorker: normalizeRecord(payload.pluginWorker),
-      plugin_worker: normalizeRecord(payload.plugin_worker),
-      raw: payload,
-    },
-  };
-}
-
-export function readPluginWorkerRetryItemFromPayload(
-  payload: Record<string, unknown>,
-  event: AppServerAgentEvent,
-): Record<string, unknown> {
-  const status = readString(payload, "status") ?? "failed";
-  const message =
-    readString(
-      payload,
-      "message",
-      "errorMessage",
-      "error_message",
-      "error",
-      "retryAdvice",
-      "retry_advice",
-    ) ?? "plugin_worker.retry";
-  return {
-    ...readAgentThreadItemBase(
-      payload,
-      event,
-      normalizePluginWorkerTimelineStatus(status),
-    ),
-    id: `${event.eventId}:plugin-worker-retry`,
-    type: "turn_summary",
-    text: message,
-    metadata: {
-      source: "plugin_worker.retry",
-      eventType: event.type,
-      status,
-      retryAttempt: readFiniteNumber(payload, "retryAttempt", "retry_attempt"),
-      retryMaxAttempts: readFiniteNumber(
-        payload,
-        "retryMaxAttempts",
-        "retry_max_attempts",
-      ),
-      failureCategory: readString(
-        payload,
-        "failureCategory",
-        "failure_category",
-      ),
-      errorCode: readString(payload, "errorCode", "error_code"),
-      pluginWorker: normalizeRecord(payload.pluginWorker),
-      plugin_worker: normalizeRecord(payload.plugin_worker),
-      raw: payload,
     },
   };
 }

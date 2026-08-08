@@ -30,7 +30,7 @@ mod workspace_scope;
 
 #[cfg(test)]
 pub(super) use session_config::session_config_from_request;
-pub(super) use session_config::session_config_from_request_with_plugin_activations;
+pub(super) use session_config::session_config_from_request_with_plugins;
 pub(super) use turn_context::turn_context_from_request;
 pub(super) use workspace_scope::request_workspace_scope;
 
@@ -589,6 +589,7 @@ fn should_use_responsive_chat_profile(
         && request.structured_output.is_none()
         && request.output_schema.is_none()
         && !request_tool_policy.requires_web_search()
+        && structured_control_mentions(request).is_empty()
         && !request_has_workspace_context(request)
         && !request
             .runtime_metadata()
@@ -719,10 +720,6 @@ fn app_server_turn_policy_runtime(
 
 fn metadata_requests_tool_surface(metadata: &Value) -> bool {
     [
-        "/harness/plugin_activation",
-        "/harness/pluginActivation",
-        "/plugin_activation",
-        "/pluginActivation",
         "/harness/workspace_skill_runtime_enable",
         "/harness/workspaceSkillRuntimeEnable",
         "/workspace_skill_runtime_enable",

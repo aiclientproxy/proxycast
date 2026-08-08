@@ -1431,7 +1431,7 @@
   "settings.memory.store.message.consolidateFailed": "메모리 노트 정리에 실패했습니다",
   "settings.memory.store.message.indexRebuilt": "메모리 인덱스를 파일 {{files}}개 기준으로 재생성했습니다",
   "settings.memory.store.message.indexRebuildFailed": "메모리 인덱스 재생성에 실패했습니다",
-  "settings.memory.store.message.resetDone": "메모리 파일을 초기화했습니다. 파일 {{files}}개와 폴더 {{directories}}개를 제거했습니다.",
+  "settings.memory.store.message.resetDone": "메모리 파일을 초기화했습니다.",
   "settings.memory.store.message.resetFailed": "메모리 파일 초기화에 실패했습니다",
   "settings.memory.store.noteTitle": "메모리 수정 추가",
   "settings.memory.store.noteDescription": "확인된 선호, 수정 사항 또는 장기 제약을 짧은 노트로 저장합니다. 파일 기반 메모리의 수정 노트에 들어가며 요약은 즉시 다시 쓰지 않습니다.",

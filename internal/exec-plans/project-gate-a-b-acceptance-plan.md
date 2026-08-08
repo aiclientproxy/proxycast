@@ -1147,7 +1147,6 @@ Multi-Agent、MCP 与 Skills：
 npm run smoke:agent-control-cold-restart-gate-b
 npm run smoke:agent-runtime-tool-execution:managed -- --batch mcp-deferred-tool-search-gate-b
 npm run smoke:mcp-config-electron-fixture
-npm run smoke:mcp-workspace-plugin-runtime-electron-fixture
 npm run smoke:mcp-elicitation-gate-b
 npm run smoke:claw-chat-current-fixture -- --scenario skills-runtime
 npm run smoke:claw-chat-current-fixture -- --scenario expert-plaza-skills-runtime

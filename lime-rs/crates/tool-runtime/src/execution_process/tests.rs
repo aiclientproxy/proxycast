@@ -111,6 +111,36 @@ async fn local_process_emits_stdout_stderr_and_exit_snapshot() {
 }
 
 #[tokio::test]
+async fn local_process_next_event_delivers_output_before_exit() {
+    let mut handle = start_local_execution_process(LocalExecutionRequest::new(
+        "process-local-events",
+        "tool-local-events",
+        "exec_command",
+        shell_command("printf stdout"),
+    ))
+    .expect("local process should start");
+
+    let output = tokio::time::timeout(Duration::from_secs(2), handle.next_event())
+        .await
+        .expect("output timeout")
+        .expect("output event");
+    let LocalExecutionProcessEvent::Output(output) = output else {
+        panic!("output must precede exit");
+    };
+    assert_eq!(output.raw_bytes, b"stdout");
+
+    let exited = tokio::time::timeout(Duration::from_secs(2), handle.next_event())
+        .await
+        .expect("exit timeout")
+        .expect("exit event");
+    let LocalExecutionProcessEvent::Exited(exited) = exited else {
+        panic!("expected exit event");
+    };
+    assert_eq!(exited.exit_code, Some(0));
+    assert!(handle.next_event().await.is_none());
+}
+
+#[tokio::test]
 async fn local_process_terminate_sets_terminal_status() {
     let mut handle = start_local_execution_process(LocalExecutionRequest::new(
         "process-local-terminate",

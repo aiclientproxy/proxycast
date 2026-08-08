@@ -18,13 +18,6 @@ import type {
   InputbarPluginSelectionOptions,
   InputbarPluginSkillCapability,
 } from "../components/Inputbar/pluginInputCapability";
-import contentFactoryFixture from "@/features/plugin/testing/fixtures/content-factory-app.json";
-import { buildPackageIdentity } from "@/features/plugin/install/packageIdentity";
-import { normalizeManifest } from "@/features/plugin/manifest/normalizeManifest";
-import { parseManifest } from "@/features/plugin/manifest/parseManifest";
-import type { InstalledPluginState } from "@/features/plugin/types";
-import { projectPluginRegistryFromInstalledPlugins } from "@/features/plugin";
-import { buildWorkspacePluginInputSuggestions } from "../workspace/workspacePluginInputSuggestions";
 
 describe("CharacterMention mention catalog", () => {
   it("@ 面板中的已安装技能应展示统一的轻量 skill 合同", async () => {
@@ -297,48 +290,17 @@ describe("CharacterMention mention catalog", () => {
     expect(document.body.textContent).toContain("写文章");
   });
 
-  it("内容工厂本地包需要维护时 @写 仍应展示写文章候选", async () => {
-    const parsedManifest = parseManifest(contentFactoryFixture);
-    const manifest = normalizeManifest(parsedManifest);
-    const installedState: InstalledPluginState = {
-      appId: manifest.appId,
-      identity: buildPackageIdentity({
-        manifest: parsedManifest,
-        loadedAt: "2026-06-30T00:00:00.000Z",
-      }),
-      manifest,
-      projection: {} as InstalledPluginState["projection"],
-      readiness: {
-        appId: manifest.appId,
-        status: "needs-setup",
-        checkedAt: "2026-06-30T00:00:00.000Z",
-        blockers: [],
-        warnings: [],
-        supportedCapabilities: [],
-        missingCapabilities: [],
-        entryReadiness: [],
-        installModes: [],
+  it("已停用 Plugin 在 @ 查询中仍应展示为不可用候选", async () => {
+    const pluginSuggestions: InputbarPluginCapability[] = [
+      {
+        pluginId: "content-factory-app",
+        displayName: "写文章",
+        trigger: "@写文章",
+        description: "生成文章草稿。",
+        disabled: true,
+        blockerCodes: ["PLUGIN_DISABLED"],
       },
-      installMode: "in_lime",
-      runtimeProfileSummary:
-        {} as InstalledPluginState["runtimeProfileSummary"],
-      setup: {} as InstalledPluginState["setup"],
-      disabled: false,
-      installedAt: "2026-06-30T00:00:00.000Z",
-      updatedAt: "2026-06-30T00:00:00.000Z",
-    };
-    const projection = projectPluginRegistryFromInstalledPlugins([
-      installedState,
-    ]);
-    const pluginSuggestions = buildWorkspacePluginInputSuggestions({
-      status: "inactive",
-      activationContext: null,
-      runtimeReadiness: null,
-      contracts: projection.contracts,
-      registry: projection.registry,
-      skippedAppIds: projection.skippedAppIds,
-      blockerCodes: [],
-    });
+    ];
     const container = renderHarness({
       pluginSuggestions,
     });
@@ -349,7 +311,6 @@ describe("CharacterMention mention catalog", () => {
     expect(getMentionPopoverContent()).not.toBeNull();
     expect(document.body.textContent).toContain("Plugins");
     expect(document.body.textContent).toContain("写文章");
-    expect(document.body.textContent).toContain("@写文章");
     expect(document.body.textContent).not.toContain("暂无可用 @命令");
   });
 

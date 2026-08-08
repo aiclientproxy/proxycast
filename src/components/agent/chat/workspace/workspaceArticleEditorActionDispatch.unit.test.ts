@@ -27,7 +27,7 @@ const intent: WorkspaceArticleWorkspaceActionIntent = {
     status: "needs_review",
     summary: "等待选择主图",
     source: {
-      outputArtifactKind: "content_factory.workspace_patch",
+      outputArtifactKind: "workspace_patch",
     },
   },
   articleWorkspace: {
@@ -88,7 +88,7 @@ describe("workspaceArticleEditorActionDispatch", () => {
       "content.image.generate",
     );
     expect(sendOptions?.systemPromptOverride).toContain(
-      "content_factory.workspace_patch",
+      "workspace_patch",
     );
     expect(sendOptions?.systemPromptOverride).toContain(
       "imageGenerationSet/image-set-1",
@@ -111,7 +111,7 @@ describe("workspaceArticleEditorActionDispatch", () => {
     expect(systemPrompt).toContain("imageGenerationSet/image-set-1");
     expect(systemPrompt).toContain("regenerate");
     expect(systemPrompt).toContain("content.image.generate");
-    expect(systemPrompt).toContain("content_factory.workspace_patch");
+    expect(systemPrompt).toContain("workspace_patch");
     expect(systemPrompt).toContain("Current edited article markdown");
     expect(systemPrompt).toContain("本地编辑正文");
     expect(systemPrompt).toContain("workspace patch");

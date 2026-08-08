@@ -9,7 +9,7 @@ use lime_agent::agent_tools::{read_agent_tool_inventory, AgentToolInventoryReadI
 use lime_agent::AgentRuntimeState;
 use lime_core::tool_calling::extract_tool_surface_metadata;
 use lime_mcp::McpToolDefinition;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use std::sync::Arc;
 
 pub(crate) async fn read_tool_inventory(
@@ -28,8 +28,6 @@ pub(crate) async fn read_tool_inventory(
     let request_metadata = merged_inventory_metadata(request.metadata, config_metadata);
     let persisted_execution_policy =
         persisted_tool_execution_policy_from_metadata(request_metadata.as_ref());
-    let plugin_mcp_targets = plugin_mcp_targets_from_metadata(request_metadata.as_ref());
-
     let mcp_snapshot = read_mcp_inventory_snapshot(app_data_source).await;
     let inventory = read_agent_tool_inventory(
         agent_state,
@@ -48,33 +46,17 @@ pub(crate) async fn read_tool_inventory(
         },
     )
     .await;
-    let mut value = serde_json::to_value(inventory)
+    let value = serde_json::to_value(inventory)
         .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
-    append_plugin_mcp_target_statuses(&mut value, &plugin_mcp_targets, &mcp_snapshot);
     Ok(value)
 }
 
 #[derive(Debug, Clone, Default)]
 struct McpInventorySnapshot {
-    servers: Vec<McpServerSnapshot>,
     server_names: Vec<String>,
     tools: Vec<McpToolDefinition>,
     resource_helpers_supported: bool,
     warnings: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct McpServerSnapshot {
-    name: String,
-    is_running: bool,
-}
-
-impl McpInventorySnapshot {
-    fn server(&self, server_id: &str) -> Option<&McpServerSnapshot> {
-        self.servers
-            .iter()
-            .find(|server| server.name.eq_ignore_ascii_case(server_id))
-    }
 }
 
 async fn read_mcp_inventory_snapshot(
@@ -110,10 +92,7 @@ fn apply_mcp_server_status_snapshot(
     for server in response.servers {
         let is_running = bool_field(&server, &["isRunning", "is_running"]).unwrap_or(false);
         if let Some(name) = string_field(&server, &["name"]) {
-            snapshot.server_names.push(name.clone());
-            snapshot
-                .servers
-                .push(McpServerSnapshot { name, is_running });
+            snapshot.server_names.push(name);
         }
 
         let supports_resources = bool_field(
@@ -170,205 +149,6 @@ fn hydrate_mcp_tool_metadata(tool: &mut McpToolDefinition) {
     if tool.input_examples.is_none() && !metadata.input_examples.is_empty() {
         tool.input_examples = Some(metadata.input_examples);
     }
-}
-
-fn plugin_mcp_targets_from_metadata(
-    metadata: Option<&Value>,
-) -> Vec<super::plugin_runtime_context::PluginRuntimeMcpTarget> {
-    metadata
-        .map(|metadata| super::plugin_runtime_context::plugin_runtime_mcp_targets(&[metadata]))
-        .unwrap_or_default()
-}
-
-fn append_plugin_mcp_target_statuses(
-    inventory: &mut Value,
-    targets: &[super::plugin_runtime_context::PluginRuntimeMcpTarget],
-    snapshot: &McpInventorySnapshot,
-) {
-    if targets.is_empty() {
-        return;
-    }
-    let values = targets
-        .iter()
-        .map(|target| plugin_mcp_target_status_value(target, snapshot))
-        .collect::<Vec<_>>();
-    if let Some(object) = inventory.as_object_mut() {
-        object.insert("plugin_mcp_targets".to_string(), Value::Array(values));
-    }
-}
-
-fn plugin_mcp_target_status_value(
-    target: &super::plugin_runtime_context::PluginRuntimeMcpTarget,
-    snapshot: &McpInventorySnapshot,
-) -> Value {
-    let configured_server = snapshot.server(&target.server_id);
-    let server_available = configured_server.is_some()
-        || snapshot
-            .server_names
-            .iter()
-            .any(|name| name.eq_ignore_ascii_case(&target.server_id));
-    let available_tool = snapshot
-        .tools
-        .iter()
-        .find(|tool| mcp_tool_matches_plugin_target(tool, target));
-    let server_running = available_tool.is_some()
-        || configured_server
-            .map(|server| server.is_running)
-            .unwrap_or(false);
-    let runtime_status =
-        plugin_mcp_runtime_status(server_available, server_running, available_tool.is_some());
-    let prepare_status = plugin_mcp_prepare_status(runtime_status, &target.provider);
-
-    json!({
-        "pluginId": target.plugin_id,
-        "serverId": target.server_id,
-        "toolKey": target.tool_key,
-        "provider": target.provider,
-        "required": target.required,
-        "caller": target.caller,
-        "expectedToolName": target.expected_tool_name,
-        "runtimeStatus": runtime_status,
-        "prepareStatus": prepare_status,
-        "serverAvailable": server_available,
-        "serverRunning": server_running,
-        "toolAvailable": available_tool.is_some(),
-        "resolvedToolName": available_tool.map(|tool| tool.name.clone()),
-        "toolListRequest": {
-            "caller": target.caller,
-            "includeDeferred": true,
-        },
-        "callProofRequest": plugin_mcp_call_proof_request(target),
-        "prepareRequests": plugin_mcp_prepare_requests(target, runtime_status),
-    })
-}
-
-fn plugin_mcp_runtime_status(
-    server_available: bool,
-    server_running: bool,
-    tool_available: bool,
-) -> &'static str {
-    if tool_available {
-        return "available";
-    }
-    if !server_available {
-        return "server_missing";
-    }
-    if !server_running {
-        return "server_stopped";
-    }
-    "server_available_tool_missing"
-}
-
-fn plugin_mcp_prepare_status(runtime_status: &str, provider: &str) -> &'static str {
-    match runtime_status {
-        "available" => "ready",
-        "server_missing" if plugin_mcp_import_app_type(provider).is_some() => "import_required",
-        "server_missing" => "configure_required",
-        "server_stopped" => "start_required",
-        "server_available_tool_missing" => "tool_missing",
-        _ => "unknown",
-    }
-}
-
-fn plugin_mcp_prepare_requests(
-    target: &super::plugin_runtime_context::PluginRuntimeMcpTarget,
-    runtime_status: &str,
-) -> Vec<Value> {
-    if runtime_status == "available" {
-        return Vec::new();
-    }
-
-    let mut requests = Vec::new();
-    if runtime_status == "server_missing" {
-        if let Some(app_type) = plugin_mcp_import_app_type(&target.provider) {
-            requests.push(json!({
-                "method": "mcpServer/importFromApp",
-                "params": {
-                    "appType": app_type,
-                },
-                "reason": "server_missing",
-                "status": "candidate",
-            }));
-        }
-    }
-    if runtime_status == "server_stopped" {
-        requests.push(json!({
-            "method": "mcpServer/start",
-            "params": {
-                "name": target.server_id,
-            },
-            "reason": "server_stopped",
-            "status": "candidate",
-        }));
-    }
-    requests.push(json!({
-        "method": "mcpTool/listForContext",
-        "params": {
-            "caller": target.caller,
-            "includeDeferred": true,
-        },
-        "reason": "tool_listing",
-        "status": "candidate",
-    }));
-    requests
-}
-
-fn plugin_mcp_call_proof_request(
-    target: &super::plugin_runtime_context::PluginRuntimeMcpTarget,
-) -> Value {
-    match target.call_proof_arguments.as_ref() {
-        Some(arguments) => json!({
-            "method": "mcpServer/tool/call",
-            "params": {
-                "server": target.server_id,
-                "tool": plugin_mcp_inner_tool_name(&target.tool_key),
-                "arguments": arguments,
-            },
-            "reason": "tool_call_proof",
-            "status": "candidate",
-        }),
-        None => Value::Null,
-    }
-}
-
-fn plugin_mcp_inner_tool_name(tool_key: &str) -> &str {
-    tool_key
-        .split_once('/')
-        .map(|(_, inner)| inner)
-        .unwrap_or(tool_key)
-        .trim()
-}
-
-fn plugin_mcp_import_app_type(provider: &str) -> Option<String> {
-    let normalized = provider
-        .trim()
-        .strip_prefix("app:")
-        .unwrap_or_else(|| provider.trim())
-        .to_ascii_lowercase();
-    matches!(normalized.as_str(), "lime" | "claude" | "codex" | "gemini").then_some(normalized)
-}
-
-fn mcp_tool_matches_plugin_target(
-    tool: &McpToolDefinition,
-    target: &super::plugin_runtime_context::PluginRuntimeMcpTarget,
-) -> bool {
-    tool.name.eq_ignore_ascii_case(&target.expected_tool_name)
-        || (tool.server_name.eq_ignore_ascii_case(&target.server_id)
-            && tool_name_matches_key(&tool.name, &target.tool_key))
-}
-
-fn tool_name_matches_key(tool_name: &str, tool_key: &str) -> bool {
-    let key = tool_key
-        .split_once('/')
-        .map(|(_, inner)| inner)
-        .unwrap_or(tool_key)
-        .trim();
-    !key.is_empty()
-        && (tool_name.eq_ignore_ascii_case(key)
-            || tool_name
-                .rsplit("__")
-                .next()
-                .is_some_and(|name| name.eq_ignore_ascii_case(key)))
 }
 
 fn string_field(value: &Value, keys: &[&str]) -> Option<String> {

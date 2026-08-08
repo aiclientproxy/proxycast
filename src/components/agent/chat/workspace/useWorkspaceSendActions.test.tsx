@@ -2,11 +2,6 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
-import contentFactoryFixture from "@/features/plugin/testing/fixtures/content-factory-app.json";
-import { buildPackageIdentity } from "@/features/plugin/install/packageIdentity";
-import { normalizeManifest } from "@/features/plugin/manifest/normalizeManifest";
-import { parseManifest } from "@/features/plugin/manifest/parseManifest";
-import type { InstalledPluginState } from "@/features/plugin/types";
 import { changeLimeLocale, getLimeI18n } from "@/i18n/createI18n";
 import type { ServiceSkillHomeItem } from "../service-skills/types";
 import type { Message } from "../types";
@@ -31,7 +26,6 @@ const mockResolveOemCloudRuntimeContext = vi.hoisted(() => vi.fn());
 const mockGetOemCloudBootstrapSnapshot = vi.hoisted(() => vi.fn());
 const mockUseGlobalMediaGenerationDefaults = vi.hoisted(() => vi.fn());
 const mockInstallSkillFromPromptInstruction = vi.hoisted(() => vi.fn());
-const mockListInstalledPlugins = vi.hoisted(() => vi.fn());
 
 vi.mock("../utils/browserAssistPreheat", () => ({
   preheatBrowserAssistInBackground: mockPreheatBrowserAssistInBackground,
@@ -68,11 +62,6 @@ vi.mock("@/lib/oemCloudSession", async () => {
 vi.mock("@/hooks/useGlobalMediaGenerationDefaults", () => ({
   readGlobalMediaGenerationDefaults: () =>
     mockUseGlobalMediaGenerationDefaults(),
-}));
-
-vi.mock("@/lib/api/plugins", () => ({
-  PLUGINS_CHANGED_EVENT: "lime:plugins-changed",
-  listInstalledPlugins: () => mockListInstalledPlugins(),
 }));
 
 vi.mock("@/lib/skills/skillInstallPrompt", async () => {
@@ -136,37 +125,6 @@ function createDeferred<T>() {
     reject = nextReject;
   });
   return { promise, resolve, reject };
-}
-
-function createInstalledContentFactory(): InstalledPluginState {
-  const parsedManifest = parseManifest(contentFactoryFixture);
-  const manifest = normalizeManifest(parsedManifest);
-  return {
-    appId: manifest.appId,
-    disabled: false,
-    identity: buildPackageIdentity({
-      manifest: parsedManifest,
-      loadedAt: "2026-06-28T00:00:00.000Z",
-    }),
-    manifest,
-    projection: {} as InstalledPluginState["projection"],
-    readiness: {
-      appId: manifest.appId,
-      status: "ready",
-      checkedAt: "2026-06-28T00:00:00.000Z",
-      blockers: [],
-      warnings: [],
-      supportedCapabilities: [],
-      missingCapabilities: [],
-      entryReadiness: [],
-      installModes: [],
-    },
-    installMode: "in_lime",
-    runtimeProfileSummary: {} as InstalledPluginState["runtimeProfileSummary"],
-    setup: {} as InstalledPluginState["setup"],
-    installedAt: "2026-06-28T00:00:00.000Z",
-    updatedAt: "2026-06-28T00:00:00.000Z",
-  } as InstalledPluginState;
 }
 
 function createGithubSiteSkill(): ServiceSkillHomeItem {
@@ -508,10 +466,6 @@ describe("useWorkspaceSendActions", () => {
     mockResolveImageWorkbenchCommandRequest.mockReturnValue(null);
     mockPrepareImageWorkbenchSkillSend.mockReturnValue(true);
     mockEnsureSessionForCommandMetadata.mockResolvedValue(null);
-    mockListInstalledPlugins.mockResolvedValue({
-      states: [],
-      issues: [],
-    });
     mockGetSkillCatalog.mockResolvedValue({ entries: [] });
     mockListSkillCatalogSceneEntries.mockReturnValue([]);
     mockGetOrCreateDefaultProject.mockResolvedValue({
@@ -633,380 +587,27 @@ describe("useWorkspaceSendActions", () => {
     }
   });
 
-  it("普通对话挂载和发送不应查询 Plugins 列表", async () => {
-    const harness = mountHook({
-      input: "帮我整理一下今天的重要新闻",
-    });
-
-    try {
-      expect(mockListInstalledPlugins).not.toHaveBeenCalled();
-      await act(async () => {
-        const started = await harness
-          .getValue()
-          .handleSend([], false, false, "帮我整理一下今天的重要新闻", "react");
-        expect(started).toBe(true);
-      });
-
-      expect(mockSendMessage).toHaveBeenCalledTimes(1);
-      expect(mockListInstalledPlugins).not.toHaveBeenCalled();
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("未安装内容工厂时 @内容工厂 不应注入 Plugin 激活 metadata", async () => {
-    const harness = mountHook({
-      input: "@内容工厂 写一篇公众号文章",
-    });
-    mockEnsureSessionForCommandMetadata.mockResolvedValueOnce(
-      "session-plugin-1",
-    );
-    mockListInstalledPlugins.mockResolvedValueOnce({
-      states: [],
-      issues: [],
-    });
+  it("@ mention 发送不应注入 Renderer 私有 Plugin activation metadata", async () => {
+    const text = "@内容工厂 写一篇公众号文章";
+    const harness = mountHook({ input: text });
 
     try {
       await act(async () => {
         const started = await harness
           .getValue()
-          .handleSend([], false, false, "@内容工厂 写一篇公众号文章", "react");
+          .handleSend([], false, false, text, "react");
         expect(started).toBe(true);
       });
 
-      expect(mockListInstalledPlugins).toHaveBeenCalledTimes(1);
       expect(mockSendMessage).toHaveBeenCalledTimes(1);
-      expect(mockSendMessage.mock.calls[0]?.[0]).toBe(
-        "@内容工厂 写一篇公众号文章",
+      expect(mockSendMessage.mock.calls[0]?.[0]).toBe(text);
+      const sendOptions = mockSendMessage.mock.calls[0]?.[8];
+      expect(sendOptions).not.toHaveProperty(
+        "requestMetadata.harness.plugin_activation",
       );
-      expect(mockSendMessage.mock.calls[0]?.[8]).not.toMatchObject({
-        requestMetadata: {
-          harness: {
-            plugin_activation: expect.anything(),
-          },
-        },
-      });
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("@内容工厂 安装后应解析为 Plugin 激活 metadata，并跳过图片命令解析", async () => {
-    const harness = mountHook({
-      input: "@内容工厂 写一篇公众号文章",
-    });
-    mockEnsureSessionForCommandMetadata.mockResolvedValueOnce(
-      "session-plugin-1",
-    );
-    mockListInstalledPlugins.mockResolvedValueOnce({
-      states: [createInstalledContentFactory()],
-      issues: [],
-    });
-
-    try {
-      await act(async () => {
-        const started = await harness
-          .getValue()
-          .handleSend([], false, false, "@内容工厂 写一篇公众号文章", "react");
-        expect(started).toBe(true);
-      });
-
-      expect(mockListInstalledPlugins).toHaveBeenCalledTimes(1);
-      expect(mockResolveImageWorkbenchCommandRequest).not.toHaveBeenCalled();
-      expect(mockSendMessage).toHaveBeenCalledTimes(1);
-      expect(mockSendMessage.mock.calls[0]?.[0]).toBe(
-        "@内容工厂 写一篇公众号文章",
+      expect(sendOptions).not.toHaveProperty(
+        "requestMetadata.harness.plugin_activation_intent",
       );
-      expect(mockSendMessage.mock.calls[0]?.[8]).toMatchObject({
-        requestMetadata: {
-          harness: {
-            plugin_activation: {
-              source: "plugin_explicit_mention",
-              trigger: "@内容工厂",
-              body: "写一篇公众号文章",
-              session_id: "session-plugin-1",
-              plugin_id: "content-factory-app",
-              active_plugin_ui_id: "content-factory-app",
-              active_entry_key: "content_factory_generate",
-              entry_workflow_key: "content_article_workflow",
-              intent_key: "content_factory_generate",
-              task_kind: "content.factory.generate",
-              intent_workflow_key: "content_article_workflow",
-              workflow_key: "content_article_workflow",
-              output_artifact_kind: "content_factory.workspace_patch",
-              right_surface: "articleWorkspace",
-              expected_objects: expect.arrayContaining(["articleDraft"]),
-              opened_tabs: ["articleWorkspace"],
-              selected_object_ref: {
-                plugin_id: "content-factory-app",
-                object_kind: "articleDraft",
-                object_id: "pending",
-              },
-              context_source: "user",
-            },
-          },
-        },
-      });
-      expect(
-        mockSendMessage.mock.calls[0]?.[8]?.systemPromptOverride,
-      ).toContain("本轮请求已命中 Plugin manifest intent。");
-      expect(
-        mockSendMessage.mock.calls[0]?.[8]?.systemPromptOverride,
-      ).not.toContain("已安装");
-      expect(
-        mockSendMessage.mock.calls[0]?.[8]?.systemPromptOverride,
-      ).toContain("content.factory.generate");
-      expect(
-        mockSendMessage.mock.calls[0]?.[8]?.systemPromptOverride,
-      ).toContain("不要调用 skill_search");
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("@写文章 应解析为内容工厂文章 Plugin 激活 metadata", async () => {
-    const harness = mountHook({
-      input: "@写文章 写一篇公众号文章",
-    });
-    mockEnsureSessionForCommandMetadata.mockResolvedValueOnce(
-      "session-write-article",
-    );
-    mockListInstalledPlugins.mockResolvedValueOnce({
-      states: [createInstalledContentFactory()],
-      issues: [],
-    });
-
-    try {
-      await act(async () => {
-        const started = await harness
-          .getValue()
-          .handleSend([], false, false, "@写文章 写一篇公众号文章", "react");
-        expect(started).toBe(true);
-      });
-
-      expect(mockListInstalledPlugins).toHaveBeenCalledTimes(1);
-      expect(mockResolveImageWorkbenchCommandRequest).not.toHaveBeenCalled();
-      expect(mockSendMessage).toHaveBeenCalledTimes(1);
-      expect(mockSendMessage.mock.calls[0]?.[0]).toBe(
-        "@写文章 写一篇公众号文章",
-      );
-      expect(mockSendMessage.mock.calls[0]?.[8]).toMatchObject({
-        requestMetadata: {
-          harness: {
-            plugin_activation: {
-              source: "plugin_explicit_mention",
-              trigger: "@写文章",
-              body: "写一篇公众号文章",
-              session_id: "session-write-article",
-              plugin_id: "content-factory-app",
-              active_plugin_ui_id: "content-factory-app",
-              active_entry_key: "content_article_generate",
-              entry_workflow_key: "content_article_workflow",
-              intent_key: "content_article_generate",
-              task_kind: "content.article.generate",
-              intent_workflow_key: "content_article_workflow",
-              workflow_key: "content_article_workflow",
-              output_artifact_kind: "content_factory.workspace_patch",
-              right_surface: "articleWorkspace",
-              expected_objects: expect.arrayContaining(["articleDraft"]),
-              opened_tabs: ["articleWorkspace"],
-            },
-            plugin_activation_intent: {
-              source: "plugin_manifest_intent",
-              app_id: "content-factory-app",
-              intent_key: "content_article_generate",
-              task_kind: "content.article.generate",
-              workflow_key: "content_article_workflow",
-              output_artifact_kind: "content_factory.workspace_patch",
-              right_surface: "articleWorkspace",
-            },
-          },
-        },
-      });
-      expect(mockSendMessage.mock.calls[0]?.[8]).not.toMatchObject({
-        requestMetadata: {
-          harness: {
-            browser_requirement: expect.anything(),
-          },
-        },
-      });
-      expect(
-        mockSendMessage.mock.calls[0]?.[8]?.systemPromptOverride,
-      ).toContain("本轮请求已命中 Plugin manifest intent。");
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("@写作 应解析为内容工厂文章 Plugin 激活 metadata，而不是旧 writing_runtime", async () => {
-    const harness = mountHook({
-      input: "@写作 要求:你帮我写一篇关于登山的文章",
-    });
-    mockEnsureSessionForCommandMetadata.mockResolvedValueOnce(
-      "session-writing-alias",
-    );
-    mockListInstalledPlugins.mockResolvedValueOnce({
-      states: [createInstalledContentFactory()],
-      issues: [],
-    });
-
-    try {
-      await act(async () => {
-        const started = await harness
-          .getValue()
-          .handleSend(
-            [],
-            false,
-            false,
-            "@写作 要求:你帮我写一篇关于登山的文章",
-            "react",
-          );
-        expect(started).toBe(true);
-      });
-
-      expect(mockListInstalledPlugins).toHaveBeenCalledTimes(1);
-      expect(mockSendMessage).toHaveBeenCalledTimes(1);
-      expect(mockSendMessage.mock.calls[0]?.[0]).toBe(
-        "@写作 要求:你帮我写一篇关于登山的文章",
-      );
-      expect(mockSendMessage.mock.calls[0]?.[0]).not.toContain(
-        "/content_post_with_cover",
-      );
-      expect(mockSendMessage.mock.calls[0]?.[8]).toMatchObject({
-        requestMetadata: {
-          harness: {
-            plugin_activation: {
-              source: "plugin_explicit_mention",
-              trigger: "@写作",
-              body: "要求:你帮我写一篇关于登山的文章",
-              session_id: "session-writing-alias",
-              plugin_id: "content-factory-app",
-              active_plugin_ui_id: "content-factory-app",
-              active_entry_key: "content_article_generate",
-              intent_key: "content_article_generate",
-              task_kind: "content.article.generate",
-              output_artifact_kind: "content_factory.workspace_patch",
-              right_surface: "articleWorkspace",
-              expected_objects: expect.arrayContaining(["articleDraft"]),
-              opened_tabs: ["articleWorkspace"],
-            },
-            plugin_activation_intent: {
-              source: "plugin_manifest_intent",
-              app_id: "content-factory-app",
-              intent_key: "content_article_generate",
-              task_kind: "content.article.generate",
-              output_artifact_kind: "content_factory.workspace_patch",
-              right_surface: "articleWorkspace",
-            },
-          },
-        },
-      });
-      expect(listMentionEntryUsage()).toEqual([]);
-      expect(listServiceSkillUsage()).toEqual([]);
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("@内容工厂 应优先于 catalog agent_turn mention route 激活 Plugin intent", async () => {
-    saveSkillCatalog(
-      {
-        version: "tenant-content-factory-command-conflict",
-        tenantId: "tenant-demo",
-        syncedAt: "2026-06-28T00:00:00.000Z",
-        groups: [
-          {
-            key: "plugins",
-            title: "Plugins",
-            summary: "Plugin shortcuts",
-            sort: 1,
-            itemCount: 0,
-          },
-        ],
-        items: [],
-        entries: [
-          {
-            id: "command:content_factory_runtime",
-            kind: "command",
-            title: "内容工厂",
-            summary: "旧 catalog mention route 不应抢走 Plugin intent。",
-            commandKey: "content_factory_runtime",
-            triggers: [{ mode: "mention", prefix: "@内容工厂" }],
-            binding: {
-              executionKind: "agent_turn",
-              requestDefaults: {
-                executionStrategy: "react",
-              },
-            },
-          },
-        ],
-      },
-      "bootstrap_sync",
-    );
-    const harness = mountHook({
-      input: "@内容工厂 写一篇公众号文章",
-    });
-    mockEnsureSessionForCommandMetadata.mockResolvedValueOnce(
-      "session-plugin-conflict",
-    );
-    mockListInstalledPlugins.mockResolvedValueOnce({
-      states: [createInstalledContentFactory()],
-      issues: [],
-    });
-
-    try {
-      await act(async () => {
-        const started = await harness
-          .getValue()
-          .handleSend([], false, false, "@内容工厂 写一篇公众号文章", "react");
-        expect(started).toBe(true);
-      });
-
-      expect(mockListInstalledPlugins).toHaveBeenCalledTimes(1);
-      expect(mockSendMessage).toHaveBeenCalledTimes(1);
-      expect(mockSendMessage.mock.calls[0]?.[0]).toBe(
-        "@内容工厂 写一篇公众号文章",
-      );
-      expect(mockSendMessage.mock.calls[0]?.[8]).toMatchObject({
-        requestMetadata: {
-          harness: {
-            plugin_activation: {
-              source: "plugin_explicit_mention",
-              trigger: "@内容工厂",
-              body: "写一篇公众号文章",
-              session_id: "session-plugin-conflict",
-              plugin_id: "content-factory-app",
-              active_plugin_ui_id: "content-factory-app",
-              intent_key: "content_factory_generate",
-              task_kind: "content.factory.generate",
-              output_artifact_kind: "content_factory.workspace_patch",
-              right_surface: "articleWorkspace",
-            },
-            plugin_activation_intent: {
-              source: "plugin_manifest_intent",
-              app_id: "content-factory-app",
-              intent_key: "content_factory_generate",
-              task_kind: "content.factory.generate",
-              output_artifact_kind: "content_factory.workspace_patch",
-              right_surface: "articleWorkspace",
-            },
-          },
-        },
-      });
-      expect(
-        mockSendMessage.mock.calls[0]?.[8]?.systemPromptOverride,
-      ).toContain("本轮请求已命中 Plugin manifest intent。");
-      expect(
-        mockSendMessage.mock.calls[0]?.[8]?.systemPromptOverride,
-      ).not.toContain("已安装");
-      expect(
-        mockSendMessage.mock.calls[0]?.[8]?.systemPromptOverride,
-      ).toContain("content.factory.generate");
-      expect(
-        mockSendMessage.mock.calls[0]?.[8]?.systemPromptOverride,
-      ).toContain("不要调用 skill_search");
-      expect(listMentionEntryUsage()).toEqual([]);
-      expect(listServiceSkillUsage()).toEqual([]);
     } finally {
       harness.unmount();
     }
@@ -1222,7 +823,6 @@ describe("useWorkspaceSendActions", () => {
       });
 
       expect(mockResolveImageWorkbenchCommandRequest).not.toHaveBeenCalled();
-      expect(mockListInstalledPlugins).not.toHaveBeenCalled();
       expect(mockSendMessage).toHaveBeenCalledTimes(1);
       expect(mockSendMessage.mock.calls[0]?.[0]).toBe("@配图 画一张封面");
       expect(mockSendMessage.mock.calls[0]?.[8]).toMatchObject({
@@ -2575,10 +2175,6 @@ Extract it into the Agent Skills directory.`,
     mockEnsureSessionForCommandMetadata.mockResolvedValueOnce(
       "session-write-article-fallback",
     );
-    mockListInstalledPlugins.mockResolvedValueOnce({
-      states: [createInstalledContentFactory()],
-      issues: [],
-    });
 
     try {
       await act(async () => {

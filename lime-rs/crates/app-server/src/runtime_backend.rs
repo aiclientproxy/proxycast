@@ -21,9 +21,6 @@ mod model_routing;
 mod native_tools;
 mod permission_preflight;
 mod plan_events;
-mod plugin_activation_context;
-mod plugin_runtime_context;
-mod plugin_worker_generation;
 mod proposed_plan_parser;
 mod provider_config;
 mod reasoning_events;
@@ -37,8 +34,6 @@ pub(crate) mod tool_process_metadata;
 mod tool_process_risk_metadata;
 mod tool_process_runtime_metadata;
 mod tool_search_tools;
-mod workspace_patch_host_execution;
-mod workspace_patch_host_tools;
 
 use crate::execution_process::ExecutionProcessServer;
 use crate::AppDataSource;
@@ -71,7 +66,7 @@ use request_context::{
     apply_app_server_turn_policy, direct_provider_config_from_request,
     request_tool_policy_from_request, resolve_runtime_model_selection,
     runtime_request_from_request, service_tier_from_request,
-    session_config_from_request_with_plugin_activations, session_scope_from_request,
+    session_config_from_request_with_plugins, session_scope_from_request,
     should_use_compact_tool_surface,
 };
 use route_support::{
@@ -391,8 +386,11 @@ impl RuntimeBackend {
                 &request,
                 &session_scope.session_id,
             );
-        let agent_skill_events =
-            agent_skills_telemetry::runtime_status_events_for_agent_skills(&request);
+        let plugin_snapshots = self.current_plugin_turn_snapshots().await?;
+        let agent_skill_events = agent_skills_telemetry::runtime_status_events_for_agent_skills(
+            &request,
+            &plugin_snapshots,
+        );
         for event in agent_skill_events {
             sink.emit(event)?;
         }
@@ -421,15 +419,13 @@ impl RuntimeBackend {
         let soul_style = tool_process_metadata::SoulStyleMetadata::from_config_metadata(
             config_metadata.as_ref(),
         );
-        let plugin_activations = self.current_plugin_activations().await?;
         let mention_selection = mention_selection::resolve_mentions(
             &request,
             self.current_app_data_source()?,
-            &plugin_activations,
+            &plugin_snapshots,
         )
         .await;
-        let turn_plugin_activations =
-            mention_selection.plugin_activations_for_turn(&plugin_activations);
+        let turn_plugin_snapshots = mention_selection.plugin_snapshots_for_turn(&plugin_snapshots);
         let mut emit_error = None;
         let mut coding_event_mirror = coding_events::CodingEventMirror::default();
         let mut proposed_plan_parser = proposed_plan_parser::ProposedPlanParser::default();
@@ -503,14 +499,14 @@ impl RuntimeBackend {
                 runtime_initialized = true;
             }
 
-            let mut session_config = session_config_from_request_with_plugin_activations(
+            let mut session_config = session_config_from_request_with_plugins(
                 &request,
                 host_request.as_ref(),
                 &session_scope,
                 &selection,
                 &request_tool_policy,
                 config_metadata.clone(),
-                &turn_plugin_activations,
+                &turn_plugin_snapshots,
             );
             mention_selection.apply_to_session_config(&mut session_config);
             let model_context_window = lime_agent::model_request_policy_from_turn_context(
@@ -722,11 +718,13 @@ impl RuntimeBackend {
             .map(|guard| guard.clone())
     }
 
-    async fn current_plugin_activations(&self) -> Result<Vec<Value>, RuntimeCoreError> {
+    async fn current_plugin_turn_snapshots(
+        &self,
+    ) -> Result<Vec<crate::runtime::PluginTurnSnapshot>, RuntimeCoreError> {
         let Some(app_data_source) = self.current_app_data_source()? else {
             return Ok(Vec::new());
         };
-        app_data_source.list_plugin_catalog_activations().await
+        app_data_source.list_enabled_plugin_turn_snapshots().await
     }
 }
 

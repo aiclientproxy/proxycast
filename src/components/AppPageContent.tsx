@@ -8,7 +8,6 @@ import { lazy, useCallback } from "react";
 import styled from "styled-components";
 import type {
   AgentPageParams,
-  PluginPageParams,
   PluginsPageParams,
   AutomationPageParams,
   BrowserRuntimePageParams,
@@ -20,7 +19,6 @@ import type {
   SettingsPageParams,
   SkillsPageParams,
 } from "@/types/page";
-import type { PluginRightSurfaceLaunchTarget } from "@/features/plugin/ui/pluginRightSurfaceLaunch";
 import type { AgentBackgroundSessionRuntimeSnapshot } from "./agent/chat";
 import { AutomationPage } from "./automation";
 import { ImConfigPage } from "./channels/ImConfigPage";
@@ -52,19 +50,11 @@ const loadKnowledgePage = () =>
   import("@/features/knowledge").then((module) => ({
     default: module.KnowledgePage,
   }));
-const loadPluginLabPage = () =>
-  import("@/features/plugin/ui/PluginLabPage").then((module) => ({
-    default: module.PluginLabPage,
-  }));
 const loadPluginsPage = () =>
   import("@/features/plugin/ui/PluginCatalogPage").then((module) => ({
     default: module.PluginCatalogPage,
   }));
 
-const loadPluginRuntimePage = () =>
-  import("@/features/plugin/ui/PluginRuntimePage").then((module) => ({
-    default: module.PluginRuntimePage,
-  }));
 const loadExpertPlazaPage = () =>
   import("./experts").then((module) => ({
     default: module.ExpertPlazaPage,
@@ -81,9 +71,7 @@ const loadAgentChatPage = () =>
 const ResourcesPage = lazy(loadResourcesPage);
 const SkillsWorkspacePage = lazy(loadSkillsWorkspacePage);
 const KnowledgePage = lazy(loadKnowledgePage);
-const PluginLabPage = lazy(loadPluginLabPage);
 const PluginsPage = lazy(loadPluginsPage);
-const PluginRuntimePage = lazy(loadPluginRuntimePage);
 const ExpertPlazaPage = lazy(loadExpertPlazaPage);
 const BrowserRuntimeWorkspace = lazy(loadBrowserRuntimeWorkspace);
 const AgentChatPage = lazy(loadAgentChatPage);
@@ -100,11 +88,6 @@ interface AppPageContentProps {
   onBackgroundSessionRuntimeChange?: (
     snapshot: AgentBackgroundSessionRuntimeSnapshot | null,
   ) => void;
-  activeAgentSessionTarget?: PluginRightSurfaceLaunchTarget | null;
-  agentSessionTargets?: PluginRightSurfaceLaunchTarget[] | null;
-  onAgentSessionTargetChange?: (
-    target: PluginRightSurfaceLaunchTarget | null,
-  ) => void;
 }
 
 export function AppPageContent({
@@ -117,30 +100,15 @@ export function AppPageContent({
   onAgentSessionChange,
   onAgentStreamingChange,
   onBackgroundSessionRuntimeChange,
-  activeAgentSessionTarget,
-  agentSessionTargets,
-  onAgentSessionTargetChange,
 }: AppPageContentProps) {
   const activePage = requestedPage ?? currentPage;
   const activePageParams = requestedPageParams ?? pageParams;
-  const agentSessionWorkspaceId =
-    activePage === "agent"
-      ? ((activePageParams as AgentPageParams).projectId ?? null)
-      : null;
   const handleAgentSessionChange = useCallback(
     (sessionId: string | null) => {
       const normalizedSessionId = sessionId?.trim();
       onAgentSessionChange?.(normalizedSessionId || null);
-      onAgentSessionTargetChange?.(
-        normalizedSessionId
-          ? {
-              sessionId: normalizedSessionId,
-              workspaceId: agentSessionWorkspaceId,
-            }
-          : null,
-      );
     },
-    [agentSessionWorkspaceId, onAgentSessionChange, onAgentSessionTargetChange],
+    [onAgentSessionChange],
   );
 
   if (activePage === "automation") {
@@ -273,30 +241,11 @@ export function AppPageContent({
     );
   }
 
-  if (activePage === "plugin-lab") {
-    return (
-      <div style={columnPageStyle}>
-        <PluginLabPage />
-      </div>
-    );
-  }
-
-  if (activePage === "plugin") {
-    return (
-      <div style={columnPageStyle}>
-        <PluginRuntimePage pageParams={activePageParams as PluginPageParams} />
-      </div>
-    );
-  }
-
   if (activePage === "plugins") {
     return (
       <div style={columnPageStyle}>
         <PluginsPage
-          onNavigate={onNavigate}
           pageParams={activePageParams as PluginsPageParams}
-          rightSurfaceTarget={activeAgentSessionTarget}
-          rightSurfaceTargets={agentSessionTargets}
         />
       </div>
     );

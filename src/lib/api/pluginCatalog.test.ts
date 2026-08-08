@@ -33,7 +33,7 @@ function client(): PluginCatalogClient {
   };
 }
 
-describe("Plugin v2 catalog API", () => {
+describe("Plugin catalog API", () => {
   it("只通过 typed App Server client 访问 catalog/install owner", async () => {
     const appServerClient = client();
 

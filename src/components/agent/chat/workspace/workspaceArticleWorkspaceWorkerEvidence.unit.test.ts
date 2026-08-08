@@ -20,7 +20,7 @@ describe("workspaceArticleWorkspaceWorkerEvidence", () => {
         outputSummary: "2 objects: 公众号文章草稿, 配图组",
         outputObjectCount: 2,
         artifactRef: "artifact-workspace-patch-1",
-        artifactKind: "content_factory.workspace_patch",
+        artifactKind: "workspace_patch",
         workflowKey: "content_article_workflow",
         subagents: ["content-researcher", "article-writer"],
         skillRefs: ["article-research", "article-writing"],
@@ -68,7 +68,7 @@ describe("workspaceArticleWorkspaceWorkerEvidence", () => {
       {
         id: "evt-hook:workerEvidence",
         status: "completed",
-        eventType: "plugin_worker.hook",
+        eventType: "artifact.snapshot",
         appId: "content-factory-app",
         taskId: "task-article-1",
         taskKind: "content.article.generate",
@@ -87,7 +87,7 @@ describe("workspaceArticleWorkspaceWorkerEvidence", () => {
       expect.objectContaining({
         id: "evt-hook:workerEvidence",
         status: "completed",
-        eventType: "plugin_worker.hook",
+        eventType: "artifact.snapshot",
         hookKey: "task-complete",
         hookEvent: "task.complete",
         hookScope: "task",
@@ -152,7 +152,7 @@ describe("workspaceArticleWorkspaceWorkerEvidence", () => {
         sourceArtifacts: [
           {
             artifactRef: "artifact-workspace-patch-1",
-            kind: "content_factory.workspace_patch",
+            kind: "workspace_patch",
             turnId: "turn-1",
           },
         ],

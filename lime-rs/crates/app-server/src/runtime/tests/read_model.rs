@@ -328,7 +328,6 @@ fn media_task_artifact_response(record: serde_json::Value) -> MediaTaskArtifactR
 
 mod article_workspace_artifact_documents;
 mod article_workspace_worker_evidence;
-mod article_workspace_worker_failure;
 mod artifacts;
 mod imports_items;
 mod messages_diagnostics;

@@ -47,24 +47,27 @@ export type AppServerArtifactSummary = protocol.ArtifactSummary;
 export type AppServerArtifactReadResponse = protocol.ArtifactReadResponse;
 export type AppServerArtifactWriteParams = protocol.ArtifactWriteParams;
 export type AppServerArtifactWriteResponse = protocol.ArtifactWriteResponse;
-export type AppServerFileSystemListDirectoryParams =
-  protocol.FileSystemListDirectoryParams;
-export type AppServerFileSystemReadFilePreviewParams =
-  protocol.FileSystemReadFilePreviewParams;
-export type AppServerFileSystemCreateFileParams =
-  protocol.FileSystemCreateFileParams;
-export type AppServerFileSystemCreateDirectoryParams =
-  protocol.FileSystemCreateDirectoryParams;
-export type AppServerFileSystemRenameFileParams =
-  protocol.FileSystemRenameFileParams;
-export type AppServerFileSystemDeleteFileParams =
-  protocol.FileSystemDeleteFileParams;
-export type AppServerFileSystemMutationResponse =
-  protocol.FileSystemMutationResponse;
-export type AppServerFileSystemDirectoryListing =
-  protocol.FileSystemDirectoryListing;
-export type AppServerFileSystemFileEntry = protocol.FileSystemFileEntry;
-export type AppServerFileSystemFilePreview = protocol.FileSystemFilePreview;
+export type AppServerFsReadFileParams = protocol.FsReadFileParams;
+export type AppServerFsReadFileResponse = protocol.FsReadFileResponse;
+export type AppServerFsWriteFileParams = protocol.FsWriteFileParams;
+export type AppServerFsWriteFileResponse = protocol.FsWriteFileResponse;
+export type AppServerFsCreateDirectoryParams = protocol.FsCreateDirectoryParams;
+export type AppServerFsCreateDirectoryResponse =
+  protocol.FsCreateDirectoryResponse;
+export type AppServerFsGetMetadataParams = protocol.FsGetMetadataParams;
+export type AppServerFsGetMetadataResponse = protocol.FsGetMetadataResponse;
+export type AppServerFsReadDirectoryParams = protocol.FsReadDirectoryParams;
+export type AppServerFsReadDirectoryResponse = protocol.FsReadDirectoryResponse;
+export type AppServerFsReadDirectoryEntry = protocol.FsReadDirectoryEntry;
+export type AppServerFsRemoveParams = protocol.FsRemoveParams;
+export type AppServerFsRemoveResponse = protocol.FsRemoveResponse;
+export type AppServerFsCopyParams = protocol.FsCopyParams;
+export type AppServerFsCopyResponse = protocol.FsCopyResponse;
+export type AppServerFsWatchParams = protocol.FsWatchParams;
+export type AppServerFsWatchResponse = protocol.FsWatchResponse;
+export type AppServerFsUnwatchParams = protocol.FsUnwatchParams;
+export type AppServerFsUnwatchResponse = protocol.FsUnwatchResponse;
+export type AppServerFsChangedNotification = protocol.FsChangedNotification;
 export type AppServerProjectGitStatusParams = protocol.ProjectGitStatusParams;
 export type AppServerProjectGitDiffBase = protocol.ProjectGitDiffBase;
 export type AppServerProjectGitDiffParams = protocol.ProjectGitDiffParams;
@@ -232,6 +235,16 @@ export type AppServerThreadShellCommandParams =
   protocol.ThreadShellCommandParams;
 export type AppServerThreadShellCommandResponse =
   protocol.ThreadShellCommandResponse;
+export type AppServerThreadBackgroundTerminal =
+  protocol.ThreadBackgroundTerminal;
+export type AppServerThreadBackgroundTerminalsListParams =
+  protocol.ThreadBackgroundTerminalsListParams;
+export type AppServerThreadBackgroundTerminalsListResponse =
+  protocol.ThreadBackgroundTerminalsListResponse;
+export type AppServerThreadBackgroundTerminalsTerminateParams =
+  protocol.ThreadBackgroundTerminalsTerminateParams;
+export type AppServerThreadBackgroundTerminalsTerminateResponse =
+  protocol.ThreadBackgroundTerminalsTerminateResponse;
 export type AppServerThreadArchiveParams = protocol.ThreadArchiveParams;
 export type AppServerThreadArchiveResponse = protocol.ThreadArchiveResponse;
 export type AppServerThreadUnarchiveParams = protocol.ThreadUnarchiveParams;
@@ -283,22 +296,6 @@ export type AppServerSessionFileResolvePathResponse =
 export type AppServerSessionFileListResponse = protocol.SessionFileListResponse;
 export type AppServerSessionFileMutationResponse =
   protocol.SessionFileMutationResponse;
-export type AppServerExecutionProcessDrainOutputParams =
-  protocol.ExecutionProcessDrainOutputParams;
-export type AppServerExecutionProcessDrainOutputResponse =
-  protocol.ExecutionProcessDrainOutputResponse;
-export type AppServerExecutionProcessEmptyResponse =
-  protocol.ExecutionProcessEmptyResponse;
-export type AppServerExecutionProcessIdParams =
-  protocol.ExecutionProcessIdParams;
-export type AppServerExecutionProcessStartParams =
-  protocol.ExecutionProcessStartParams;
-export type AppServerExecutionProcessStartResponse =
-  protocol.ExecutionProcessStartResponse;
-export type AppServerExecutionProcessStatusResponse =
-  protocol.ExecutionProcessStatusResponse;
-export type AppServerExecutionProcessWriteStdinParams =
-  protocol.ExecutionProcessWriteStdinParams;
 export type AppServerAgentSessionTurnStartResponse =
   protocol.AgentSessionTurnStartResponse;
 export type AppServerAgentSessionTurnCancelResponse =

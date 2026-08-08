@@ -707,7 +707,7 @@ fn read_session_projection_cursor_page_keeps_large_previous_assistant_summary() 
 }
 
 #[test]
-fn read_session_projection_keeps_plugin_workspace_events_outside_message_window() {
+fn read_session_projection_keeps_workspace_patch_artifacts_outside_message_window() {
     let temp = tempfile::tempdir().expect("tempdir");
     let projection = ProjectionStore::initialize(temp.path().join("projection_1.sqlite"))
         .expect("projection store");
@@ -736,20 +736,17 @@ fn read_session_projection_keeps_plugin_workspace_events_outside_message_window(
         events.push(user);
         events.push(delta);
     }
-    let mut worker_artifact = event(
+    let mut workspace_patch_artifact = event(
         30,
         "artifact.snapshot",
         "sess_1",
         "thread_1",
         Some("turn_worker"),
     );
-    worker_artifact.payload = json!({
+    workspace_patch_artifact.payload = json!({
         "artifact": {
             "metadata": {
-                "pluginWorker": {
-                    "taskId": "turn-content-article-generate:content_article_generate"
-                },
-                "contentFactoryWorkspacePatch": {
+                "workspacePatch": {
                     "objects": [
                         {
                             "ref": {
@@ -780,24 +777,7 @@ fn read_session_projection_keeps_plugin_workspace_events_outside_message_window(
             }
         }
     });
-    let mut worker_hook = event(
-        31,
-        "plugin_worker.hook",
-        "sess_1",
-        "thread_1",
-        Some("turn_worker"),
-    );
-    worker_hook.payload = json!({
-        "source": "plugin_task_worker",
-        "pluginWorker": {
-            "taskId": "turn-content-article-generate:content_article_generate"
-        },
-        "hookKey": "prompt-submit",
-        "hookEvent": "prompt.submit",
-        "status": "completed"
-    });
-    events.push(worker_artifact);
-    events.push(worker_hook);
+    events.push(workspace_patch_artifact);
     projection.apply_events(&events).expect("apply events");
 
     let session = projection
@@ -814,23 +794,19 @@ fn read_session_projection_keeps_plugin_workspace_events_outside_message_window(
         .item_events
         .iter()
         .any(|event| event.event_id == "evt-30"));
-    assert!(session
-        .item_events
-        .iter()
-        .any(|event| event.event_id == "evt-31"));
     let artifact = session
         .item_events
         .iter()
         .find(|event| event.event_id == "evt-30")
         .expect("worker artifact event");
     assert_eq!(
-        artifact.payload["artifact"]["metadata"]["contentFactoryWorkspacePatch"]["workerEvidence"]
-            [0]["workflowKey"],
+        artifact.payload["artifact"]["metadata"]["workspacePatch"]["workerEvidence"][0]
+            ["workflowKey"],
         "content_article_workflow"
     );
     assert_eq!(
-        artifact.payload["artifact"]["metadata"]["contentFactoryWorkspacePatch"]["workerEvidence"]
-            [0]["skillRefs"][1],
+        artifact.payload["artifact"]["metadata"]["workspacePatch"]["workerEvidence"][0]
+            ["skillRefs"][1],
         "article-image-plan"
     );
 }

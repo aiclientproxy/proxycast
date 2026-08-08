@@ -63,9 +63,9 @@ mod tests {
                     },
                     "artifact": {
                         "artifactId": "workspace-patch-1",
-                        "kind": "content_factory.workspace_patch",
+                        "kind": "workspace_patch",
                         "metadata": {
-                            "contentFactoryWorkspacePatch": {
+                            "workspacePatch": {
                                 "schemaVersion": "article-workspace.v1",
                                 "appId": "content-factory-app",
                                 "sessionId": "session-1",

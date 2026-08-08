@@ -152,9 +152,6 @@ afterEach(() => {
 describe("useWorkspaceConversationLandingSurfaceRuntime", () => {
   it("应集中产出入口 banner、leading card 与空态技能 props", () => {
     const onSelectServiceSkill = vi.fn();
-    const pluginHistoryRestoreLandingCard = (
-      <div data-testid="plugin-history-card" />
-    );
     const serviceSkills = [
       {
         id: "daily-trend-briefing",
@@ -165,7 +162,6 @@ describe("useWorkspaceConversationLandingSurfaceRuntime", () => {
       createDefaultProps({
         entryBannerVisible: true,
         entryBannerMessage: "继续上次的内容",
-        pluginHistoryRestoreLandingCard,
         serviceSkills,
         onSelectServiceSkill,
       }),
@@ -174,9 +170,6 @@ describe("useWorkspaceConversationLandingSurfaceRuntime", () => {
     const runtime = getValue();
     expect(runtime.entryBannerVisible).toBe(true);
     expect(runtime.entryBannerMessage).toBe("继续上次的内容");
-    expect(runtime.pluginHistoryRestoreLandingCard).toBe(
-      pluginHistoryRestoreLandingCard,
-    );
     expect(runtime.emptyStateProps.serviceSkills).toBe(serviceSkills);
     expect(runtime.emptyStateProps.onSelectServiceSkill).toBe(
       onSelectServiceSkill,

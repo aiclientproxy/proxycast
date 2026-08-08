@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "createdAtMs": {
+      "format": "int64",
+      "type": "integer"
+    },
+    "isDirectory": {
+      "type": "boolean"
+    },
+    "isFile": {
+      "type": "boolean"
+    },
+    "isSymlink": {
+      "type": "boolean"
+    },
+    "modifiedAtMs": {
+      "format": "int64",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "createdAtMs",
+    "isDirectory",
+    "isFile",
+    "isSymlink",
+    "modifiedAtMs"
+  ],
+  "title": "FsGetMetadataResponse",
+  "type": "object"
+}

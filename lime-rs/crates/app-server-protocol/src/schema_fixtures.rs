@@ -67,12 +67,10 @@ pub fn protocol_fixture_manifest() -> Value {
 fn request_serialization_scope_name(scope: AppServerRequestSerializationScope) -> &'static str {
     match scope {
         AppServerRequestSerializationScope::Thread => "thread",
-        AppServerRequestSerializationScope::ExecutionProcess => "executionProcess",
         AppServerRequestSerializationScope::ProjectShellSession => "projectShellSession",
         AppServerRequestSerializationScope::McpOauth => "mcpOauth",
         AppServerRequestSerializationScope::McpResourceSubscription => "mcpResourceSubscription",
         AppServerRequestSerializationScope::BrowserSession => "browserSession",
-        AppServerRequestSerializationScope::FileSystemMutation => "fileSystemMutation",
     }
 }
 

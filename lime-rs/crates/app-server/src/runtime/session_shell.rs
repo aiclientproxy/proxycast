@@ -6,16 +6,14 @@ use agent_runtime::session_loop::{
     RuntimeSessionTaskFailure, RuntimeSessionTaskKind,
 };
 use app_server_protocol::protocol::v2::{ThreadShellCommandParams, ThreadShellCommandResponse};
-use app_server_protocol::{
-    AgentTurn, AgentTurnStatus, ExecutionProcessIdParams, ExecutionProcessStartParams,
-    ExecutionProcessStatus,
-};
+use app_server_protocol::{AgentTurn, AgentTurnStatus};
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
+use tool_runtime::execution_process::{live::LiveExecutionRequest, ExecutionProcessStatus};
 use uuid::Uuid;
 
 const PROCESS_POLL_INTERVAL: Duration = Duration::from_millis(25);
@@ -355,12 +353,12 @@ impl RuntimeCore {
             .start_thread_process(
                 thread_id,
                 command,
-                ExecutionProcessStartParams {
+                LiveExecutionRequest {
                     process_id: process_id.to_string(),
                     tool_id: item_id.to_string(),
                     tool_name: tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME.to_string(),
                     command: tool_runtime::shell_runtime::platform_shell_argv(command),
-                    working_directory: cwd.to_string_lossy().to_string(),
+                    working_directory: cwd.to_path_buf(),
                     tty: false,
                     approval_policy: Some("never".to_string()),
                     sandbox_policy: Some("danger-full-access".to_string()),
@@ -368,7 +366,6 @@ impl RuntimeCore {
                         "surface": "user_shell",
                         "explicitUserCommand": true,
                     })),
-                    cwd: None,
                     env: HashMap::new(),
                 },
             )
@@ -387,16 +384,11 @@ impl RuntimeCore {
         loop {
             if cancellation_token.is_cancelled() && !canceled {
                 canceled = true;
-                let _ = server.terminate(ExecutionProcessIdParams {
-                    process_id: process_id.to_string(),
-                });
+                let _ = server.terminate(process_id);
             }
             let snapshot = server
-                .status(ExecutionProcessIdParams {
-                    process_id: process_id.to_string(),
-                })
-                .map_err(|error| error.to_string())?
-                .snapshot;
+                .status(process_id)
+                .map_err(|error| error.to_string())?;
             if matches!(
                 snapshot.status,
                 ExecutionProcessStatus::Exited

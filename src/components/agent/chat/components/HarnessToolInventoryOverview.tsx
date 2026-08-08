@@ -1,4 +1,4 @@
-import { Loader2, PlugZap, Wrench } from "lucide-react";
+import { Loader2, Wrench } from "lucide-react";
 import type { AgentRuntimeToolInventory } from "@/lib/api/agentRuntime/toolInventoryTypes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,10 +18,6 @@ interface HarnessToolInventoryOverviewProps {
   runtimeToolVisibleTotal: number;
   runtimeToolTotal: number;
   onRefreshToolInventory?: () => void;
-  mcpPrepareCandidateCount: number;
-  mcpPrepareLoading: boolean;
-  mcpPrepareError: string | null;
-  onPrepareMcpTargets?: () => void | Promise<void>;
   toolInventorySourceStats: ToolInventorySourceStats;
   toolInventoryWarnings: AgentRuntimeToolInventory["warnings"];
   runtimeToolAvailability: RuntimeToolAvailability;
@@ -35,10 +31,6 @@ export function HarnessToolInventoryOverview({
   runtimeToolVisibleTotal,
   runtimeToolTotal,
   onRefreshToolInventory,
-  mcpPrepareCandidateCount,
-  mcpPrepareLoading,
-  mcpPrepareError,
-  onPrepareMcpTargets,
   toolInventorySourceStats,
   toolInventoryWarnings,
   runtimeToolAvailability,
@@ -91,31 +83,6 @@ export function HarnessToolInventoryOverview({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {onPrepareMcpTargets ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="gap-2"
-              aria-label={agentText(
-                "agentChat.harness.mcpPrepare.actionAria",
-                "准备插件 MCP 工具",
-              )}
-              disabled={
-                mcpPrepareLoading ||
-                toolInventoryLoading ||
-                mcpPrepareCandidateCount === 0
-              }
-              onClick={onPrepareMcpTargets}
-            >
-              {mcpPrepareLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <PlugZap className="h-4 w-4" />
-              )}
-              {agentText("agentChat.harness.mcpPrepare.action", "准备 MCP")}
-            </Button>
-          ) : null}
           {onRefreshToolInventory ? (
             <Button
               type="button"
@@ -152,12 +119,6 @@ export function HarnessToolInventoryOverview({
       {toolInventoryError ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-3 text-sm text-destructive">
           {toolInventoryError}
-        </div>
-      ) : null}
-
-      {mcpPrepareError ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-3 text-sm text-destructive">
-          {mcpPrepareError}
         </div>
       ) : null}
 

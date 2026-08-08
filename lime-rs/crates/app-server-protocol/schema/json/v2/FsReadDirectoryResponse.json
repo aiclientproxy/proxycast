@@ -1,0 +1,37 @@
+{
+  "$defs": {
+    "FsReadDirectoryEntry": {
+      "properties": {
+        "fileName": {
+          "type": "string"
+        },
+        "isDirectory": {
+          "type": "boolean"
+        },
+        "isFile": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "fileName",
+        "isDirectory",
+        "isFile"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/FsReadDirectoryEntry"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "entries"
+  ],
+  "title": "FsReadDirectoryResponse",
+  "type": "object"
+}

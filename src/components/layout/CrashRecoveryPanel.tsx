@@ -22,7 +22,7 @@ import {
 import { getProjectByRootPath, updateProject } from "@/lib/api/project";
 import { cn } from "@/lib/utils";
 import { ClipboardPermissionGuideCard } from "@/components/settings-v2/system/shared/ClipboardPermissionGuideCard";
-import { open as openDialog } from "@/lib/desktop-host/plugin-dialog";
+import { open as openDialog } from "@/lib/desktop-host/dialog";
 import { notifyProjectRuntimeAgentsGuide } from "@/components/workspace/services/runtimeAgentsGuideService";
 import {
   buildCrashRecoveryReloadUrl,

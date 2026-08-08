@@ -8,7 +8,7 @@ import { createInitialDocumentState } from "@/components/workspace/canvas/canvas
 import type { ArtifactBlockRewriteCompletion } from "./artifactWorkbenchRewrite";
 import { useWorkspaceCanvasWorkflowActions } from "./useWorkspaceCanvasWorkflowActions";
 
-vi.mock("@/lib/desktop-host/plugin-dialog", () => ({
+vi.mock("@/lib/desktop-host/dialog", () => ({
   open: vi.fn(),
 }));
 

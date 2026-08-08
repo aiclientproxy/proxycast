@@ -1,5 +1,5 @@
 import { AppServerClient } from "@/lib/api/appServer";
-import { open as openDesktopDialog } from "@/lib/desktop-host/plugin-dialog";
+import { open as openDesktopDialog } from "@/lib/desktop-host/dialog";
 import type {
   AppServerPluginCatalogEnabledSetParams,
   AppServerPluginCatalogEnabledSetResponse,

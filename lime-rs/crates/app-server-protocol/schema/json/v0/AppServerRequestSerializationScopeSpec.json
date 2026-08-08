@@ -3,8 +3,6 @@
     "AppServerRequestSerializationScope": {
       "enum": [
         "browserSession",
-        "executionProcess",
-        "fileSystemMutation",
         "mcpOauth",
         "mcpResourceSubscription",
         "projectShellSession",

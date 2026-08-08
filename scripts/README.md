@@ -150,7 +150,6 @@ MCP current 使用链路 smoke 位于 `scripts/mcp/`。对外继续使用 `packa
 ```bash
 npm run smoke:mcp-current
 npm run smoke:mcp-current -- --allow-write-fixture
-npm run smoke:mcp-current -- --allow-plugin-runtime-fixture
 npm run smoke:mcp-current -- --allow-oauth-fixture
 npm run smoke:mcp-config-electron-fixture
 npm run smoke:mcp-oauth-notification-electron-fixture
@@ -169,12 +168,11 @@ npm run smoke:settings-mcp-lifecycle-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-provider-crud-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-memory-soul-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-archived-lifecycle-electron-fixture -- --run-id <run-id>
-npm run smoke:mcp-workspace-plugin-runtime-electron-fixture
 npm run smoke:mcp-context7-live-electron-fixture
 npm run smoke:mcp-elicitation-gate-b
 ```
 
-默认入口只通过 `app_server_handle_json_lines -> App Server JSON-RPC` 验证 `mcpServer/list`、`mcpServerStatus/list`、`mcpTool/list|listForContext|search`、`mcpPrompt/list`、`mcpResource/list` 读链，并禁止旧 `mcp_*` / `get_mcp_servers` Tauri facade 作为成功证据。`--allow-write-fixture` 会创建临时 stdio MCP server 与测试 Thread，覆盖 `mcpServer/create|start|stop|delete`、`mcpServer/tool/call` 与 `mcpServer/resource/read`，并断言工具 `outputSchema` 暴露 `structuredContent`、调用结果保留 `structuredContent`。同一轮还会启动一个必然失败的 server，要求其 `mcpServer/start` 错误以 JSON-RPC error 穿过 Desktop Host 返回，同时健康 server 继续保持 running，且 tool list/call 与 resource read 均可用。`--allow-plugin-runtime-fixture` 会复用临时 stdio MCP server，覆盖 `agentSession/toolInventory/read` 中 `plugin_runtime_capabilities.mcpBindings` 到 `plugin_mcp_targets` 的投影、caller-scoped `mcpTool/listForContext` proof、显式 `mcpServer/tool/call` proof，并断言无显式 `callProof` 时默认 list proof 不会调用工具。
+默认入口只通过 `app_server_handle_json_lines -> App Server JSON-RPC` 验证 `mcpServer/list`、`mcpServerStatus/list`、`mcpTool/list|listForContext|search`、`mcpPrompt/list`、`mcpResource/list` 读链，并禁止旧 `mcp_*` / `get_mcp_servers` Tauri facade 作为成功证据。`--allow-write-fixture` 会创建临时 stdio MCP server 与测试 Thread，覆盖 `mcpServer/create|start|stop|delete`、`mcpServer/tool/call` 与 `mcpServer/resource/read`，并断言工具 `outputSchema` 暴露 `structuredContent`、调用结果保留 `structuredContent`。同一轮还会启动一个必然失败的 server，要求其 `mcpServer/start` 错误以 JSON-RPC error 穿过 Desktop Host 返回，同时健康 server 继续保持 running，且 tool list/call 与 resource read 均可用。
 `--allow-oauth-fixture` 会创建本地 OAuth provider，覆盖 `mcpServer/oauth/login`、Electron `open_external_url` 系统浏览器网关、callback token exchange 与 `runtime_status.auth_status` 授权回流，用于复验动态 OAuth current 链路；该模式不依赖真实外部账号或 live Provider。
 
 `npm run smoke:mcp-oauth-notification-electron-fixture` 验证 OAuth callback completion 的 App Server typed notification 与 GUI 自动刷新；`npm run smoke:mcp-startup-notification-electron-fixture` 验证 MCP startup 的 `starting -> ready`、`starting -> failed` typed notification、Settings 连接态与终态 status/tool 刷新。两者都启动隔离的真实 Electron Desktop Host、preload/IPC 与 App Server runtime，不调用正式模型或 live Provider，并要求旧 MCP lifecycle Desktop event、renderer mock fallback 与 App Server mock backend 命中为零。
@@ -208,8 +206,6 @@ npm run smoke:mcp-elicitation-gate-b
 `npm run smoke:settings-execution-policy-electron-fixture -- --run-id <run-id>` 验证 Execution Policy Settings 的持久化策略输入和 Host 错误恢复：从 GUI 保存严格工作区限制与 Bash warning-bypass 输入，冷重启读回；再在隔离 userData 中把临时 `config.yaml` 短暂替换成同名目录，要求真实 `save_config` 返回且页面展示 `EISDIR`，随即恢复文件、重新加载、恢复原策略并再次冷重启确认。expected save failure 单列计数，`errors.*` 只统计 unexpected errors；evidence 不保存配置值、规则、prompt、路径或错误正文。该 B-F claim 不证明 RuntimeCore 实际执行某条允许/拒绝工具，后者必须单列 B-R。
 
 `npm run smoke:settings-browser-session-electron-fixture -- --run-id <run-id>` 启动隔离的本地 Chromium CDP 页面，并从真实 Browser Settings GUI 经 Electron preload/IPC、`app_server_handle_json_lines`、`browserSession/target/list|open|read|close` 与 RuntimeCore 完成检测、连接、读回和断开。该 Gate B-R 只证明 current CDP 会话生命周期，不声称扩展 relay、持久化 Profile、真实网站、用户浏览器数据或 packaged 平台行为；结构化 evidence 不记录页面正文、URL、session identity、端口、本机路径或浏览器日志。
-
-`npm run smoke:mcp-workspace-plugin-runtime-electron-fixture` 是真实 Electron + Workspace Harness 点击骨架 fixture：创建临时 stdio MCP server，在页面内注入最小 `harness-status-panel` 点击面板，点击“准备 MCP”后经 preload `app_server_handle_json_lines` 创建测试 Thread，并执行 `agentSession/toolInventory/read`、candidate `mcpServer/start`、caller-scoped `mcpTool/listForContext`、显式 `mcpServer/tool/call`，同时断言默认 list proof 不自动调用工具。该入口使用 `APP_SERVER_BACKEND_MODE=runtime` 读取 current tool inventory，但不调用正式模型后端或 live Provider；它证明 Electron / preload / App Server / MCP current JSON-RPC 与点击触发骨架可闭环，不声称完整插件安装、插件选择或生产 React Workspace UX 已验收。
 
 `npm run smoke:mcp-context7-live-electron-fixture` 是真实 Electron + 远程 Context7 live fixture：复用设置页 GUI 创建 Context7 配置，经 `app_server_handle_json_lines` 启动 server、通过 `mcpTool/search` 找到 `resolve-library-id` / `query-docs`，再创建真实 Thread 并调用 `mcpServer/tool/call` 查询 “AI Agent 是什么”。该入口会访问远程 Context7；summary 只记录 host、工具名、header 名、env var 名、content 类型 / 数量和 `isError`，不记录 key、header value 或工具正文。
 
@@ -328,21 +324,28 @@ Agent Runtime smoke 与 Service Skill 入口 smoke 已迁到 `scripts/agent-runt
 
 ### Plugin 脚本
 
-Plugin smoke、runtime fixture、connector production gate、standalone release helper 与配套测试统一放在 `scripts/plugin/`。对外继续使用 `package.json`、GitHub Actions 或路线图文档里的稳定入口，不直接依赖根目录脚本路径。
-
-Plugin UI/runtime 的真实 Electron fixture 使用：
+Plugin consumer runtime、独立 UI runtime、standalone shell、content-factory 发布链和 package handoff 已归类为 `dead / deleted / forbidden-to-restore`。`scripts/plugin/` 当前只保留 connector production delivery 的 current 检查：
 
 ```bash
-npm run smoke:plugin-ui-runtime-electron-fixture
-npm run smoke:plugin-runtime-electron-fixture
-npm run smoke:plugin-runtime-task-electron-fixture
+npm run plugin:connector-production-preflight
+npm run plugin:connector-production-delivery-gate
+npm run plugin:connector-production-webhook-delivery
 ```
 
-UI runtime fixture 从正式侧栏进入 Plugin iframe surface；runtime fixture 验证 task facade
-保持 typed RuntimeOptions；task fixture覆盖任务、host action 和 current read model。三者都只使用
-临时 app data 和显式 external fixture，不调用 live Provider，也不是生产 fallback。
+Plugin v3 标准包真实 Electron 验证使用：
 
-新增 Plugin 脚本继续进入 `scripts/plugin/` 或复用现有 `plugin:*` / `smoke:content-factory-*` npm scripts；共享实现仍放在 `scripts/lib/`。旧 Plugin 页面和 Lab smoke 已归类为 `dead`，不得作为 Plugin smoke 恢复。
+```bash
+npm run smoke:plugin-package-electron-gate-b
+```
+
+该 Gate B 从 App Center 安装只含根 `plugin.json`、根 `mcp.json` 和合法
+`skills/<name>/SKILL.md` 的本地标准包，经 Electron preload/IPC、
+`app_server_handle_json_lines`、App Server、RuntimeCore 和 GUI 完成启停、新 Thread
+隔离、canonical `plugin://<name>@<marketplace>` mention、Skill 正文注入、MCP tool、
+elicitation、Right Surface、reload/cold restore 与卸载后历史读取；生产 mock fallback、
+旧 worker 和旧 Plugin 命令命中必须为零。
+
+Plugin v3 标准包验证只允许围绕根 `plugin.json`、`skills/`、`mcp.json` 和 App Server current catalog 建立；不得恢复独立 worker、iframe host、standalone shell 或旧 package 发布 helper。新增 Plugin 脚本继续进入 `scripts/plugin/`，真实 Electron fixture 进入 `scripts/electron/`，共享实现进入 `scripts/lib/`。
 
 ### 项目热力图
 

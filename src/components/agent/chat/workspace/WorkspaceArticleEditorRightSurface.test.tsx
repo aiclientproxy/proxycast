@@ -113,7 +113,7 @@ const articleWorkspaceFixture: WorkspaceArticleWorkspace = {
     {
       id: "evt-worker-success:workerEvidence",
       status: "completed",
-      source: "plugin_task_worker",
+      source: "workspace_patch",
       eventType: "artifact.snapshot",
       appId: "content-factory-app",
       taskId: "task-article-1",
@@ -124,7 +124,7 @@ const articleWorkspaceFixture: WorkspaceArticleWorkspace = {
       outputSummary: "3 objects",
       outputObjectCount: 3,
       artifactRef: "artifact-workspace-patch-1",
-      artifactKind: "content_factory.workspace_patch",
+      artifactKind: "workspace_patch",
       errorCode: null,
       errorMessage: null,
       failureCategory: null,
@@ -534,7 +534,7 @@ describe("WorkspaceArticleEditorRightSurface", () => {
     expect(container.textContent).not.toContain("turn-retry");
   });
 
-  it("本地 host generation fixture 不应作为正式文章正文渲染", () => {
+  it("本地 fixture 模板不应作为正式文章正文渲染", () => {
     const fakeMarkdown = [
       "# 内容工厂插件化写文章",
       "",
@@ -552,12 +552,6 @@ describe("WorkspaceArticleEditorRightSurface", () => {
                 ...(item.source ?? {}),
                 documentText: fakeMarkdown,
                 finalMarkdown: fakeMarkdown,
-                hostManagedGeneration: {
-                  status: "completed",
-                  provider: "fixture-openai",
-                  model: "lime-fixture-chat",
-                  outputIds: ["article-draft-document"],
-                },
               },
             }
           : item,

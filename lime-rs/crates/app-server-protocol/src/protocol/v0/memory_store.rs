@@ -126,13 +126,6 @@ pub struct MemoryStoreReviewResolveParams {
     pub action: MemoryStoreReviewResolveAction,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct MemoryStoreResetParams {
-    #[serde(flatten)]
-    pub root: MemoryStoreRootParams,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MemoryStoreEntry {
@@ -263,16 +256,6 @@ pub struct MemoryStoreHealthResponse {
     pub memory_exists: bool,
     pub memory_bytes: u64,
     pub notes_count: usize,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct MemoryStoreResetResponse {
-    pub root_scope: MemoryStoreScope,
-    pub root_path: String,
-    pub removed_files: usize,
-    pub removed_directories: usize,
-    pub preserved_soul: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

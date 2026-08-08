@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn article_workspace_worker_evidence_merges_event_metadata_with_patch_evidence() {
+async fn article_workspace_reads_embedded_worker_evidence_from_workspace_patch() {
     let core = RuntimeCore::default();
     core.start_session(AgentSessionStartParams {
         session_id: Some("sess_worker_evidence_merge".to_string()),
@@ -38,18 +38,10 @@ async fn article_workspace_worker_evidence_merges_event_metadata_with_patch_evid
                 "artifact": {
                     "artifactId": "task-article:workspace-patch",
                     "artifactRef": "task-article:workspace-patch",
-                    "kind": "content_factory.workspace_patch",
+                    "kind": "workspace_patch",
                     "title": "Content Factory workspace patch",
                     "metadata": {
-                        "pluginWorker": {
-                            "appId": "content-factory-app",
-                            "taskId": "task-article",
-                            "taskKind": "content.article.generate",
-                            "turnId": "turn_worker_evidence_merge",
-                            "status": "completed",
-                            "outputArtifactKind": "content_factory.workspace_patch"
-                        },
-                        "contentFactoryWorkspacePatch": {
+                        "workspacePatch": {
                             "schemaVersion": "article-workspace.v1",
                             "appId": "content-factory-app",
                             "sessionId": "sess_worker_evidence_merge",
@@ -77,7 +69,7 @@ async fn article_workspace_worker_evidence_merges_event_metadata_with_patch_evid
                                     "taskKind": "content.article.generate",
                                     "turnId": "turn_worker_evidence_merge",
                                     "status": "completed",
-                                    "artifactKind": "content_factory.workspace_patch",
+                                    "artifactKind": "workspace_patch",
                                     "outputObjectCount": 1,
                                     "workflowKey": "content_article_workflow",
                                     "subagents": ["article-writer"],

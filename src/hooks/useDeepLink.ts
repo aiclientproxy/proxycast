@@ -16,7 +16,7 @@ import {
   type DeepLinkResult,
   type RelayInfo,
 } from "@/lib/api/connect";
-import { getCurrent, onOpenUrl } from "@/lib/desktop-host/plugin-deep-link";
+import { getCurrent, onOpenUrl } from "@/lib/desktop-host/deep-link";
 import { hasDesktopHostInvokeCapability } from "@/lib/desktop-runtime";
 import {
   completeOemCloudDesktopOAuthLogin,

@@ -45,12 +45,6 @@ function isOptionalBoolean(value: unknown): value is boolean | undefined {
   return value === undefined || typeof value === "boolean";
 }
 
-function isOptionalNullableString(
-  value: unknown,
-): value is string | null | undefined {
-  return value === undefined || value === null || typeof value === "string";
-}
-
 function isOptionalFiniteNumber(value: unknown): value is number | undefined {
   return (
     value === undefined || (typeof value === "number" && Number.isFinite(value))
@@ -227,42 +221,6 @@ function isMcpToolEntry(value: unknown): boolean {
   );
 }
 
-function isMcpCandidateRequest(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.method === "string" &&
-    (value.params === undefined || isRecord(value.params)) &&
-    isOptionalString(value.reason) &&
-    isOptionalString(value.status)
-  );
-}
-
-function isNullableMcpCandidateRequest(value: unknown): boolean {
-  return value === null || isMcpCandidateRequest(value);
-}
-
-function isPluginMcpTarget(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.pluginId === "string" &&
-    typeof value.serverId === "string" &&
-    typeof value.toolKey === "string" &&
-    typeof value.provider === "string" &&
-    typeof value.required === "boolean" &&
-    typeof value.caller === "string" &&
-    typeof value.expectedToolName === "string" &&
-    typeof value.runtimeStatus === "string" &&
-    typeof value.prepareStatus === "string" &&
-    typeof value.serverAvailable === "boolean" &&
-    typeof value.serverRunning === "boolean" &&
-    typeof value.toolAvailable === "boolean" &&
-    isOptionalNullableString(value.resolvedToolName) &&
-    isRecord(value.toolListRequest) &&
-    isNullableMcpCandidateRequest(value.callProofRequest) &&
-    isArrayOf(value.prepareRequests, isMcpCandidateRequest)
-  );
-}
-
 function isArrayOf(
   value: unknown,
   predicate: (item: unknown) => boolean,
@@ -287,9 +245,7 @@ function assertToolInventoryShape(
       !isArrayOf(value.runtime_tools, isRuntimeToolEntry)) ||
     !isArrayOf(value.extension_surfaces, isExtensionSurfaceEntry) ||
     !isArrayOf(value.extension_tools, isExtensionToolEntry) ||
-    !isArrayOf(value.mcp_tools, isMcpToolEntry) ||
-    (value.plugin_mcp_targets !== undefined &&
-      !isArrayOf(value.plugin_mcp_targets, isPluginMcpTarget))
+    !isArrayOf(value.mcp_tools, isMcpToolEntry)
   ) {
     throw new Error(
       "App Server agentSession/toolInventory/read did not return tool inventory",

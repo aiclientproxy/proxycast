@@ -4,7 +4,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { open as openDialog, save as saveDialog } from "@/lib/desktop-host/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@/lib/desktop-host/dialog";
 import { toast } from "sonner";
 import { skillsApi, type Skill } from "@/lib/api/skills";
 import { ensureSkillPackageExtension } from "./SkillsWorkspacePageContent";

@@ -187,15 +187,6 @@ function renderPanelWithProps({
   return container;
 }
 
-function fillInput(input: HTMLInputElement, value: string) {
-  const valueSetter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    "value",
-  )?.set;
-  valueSetter?.call(input, value);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
 beforeEach(() => {
   (
     globalThis as typeof globalThis & {
@@ -248,13 +239,9 @@ describe("CodingWorkbenchOutputPanel", () => {
     expect(container.textContent).toContain("event-command-1");
   });
 
-  it("应为 live execution process 渲染进程控制按钮并传递 processId", async () => {
-    const processControls: Required<CodingWorkbenchCommandProcessControls> = {
-      onInterruptProcess: vi.fn(),
-      onTerminateProcess: vi.fn(),
-      onRefreshProcessStatus: vi.fn(),
-      onDrainProcessOutput: vi.fn(),
-      onWriteProcessStdin: vi.fn(),
+  it("应为 live command 渲染后台终端终止按钮并传递 itemId", async () => {
+    const processControls: CodingWorkbenchCommandProcessControls = {
+      onTerminateBackgroundTerminal: vi.fn(),
     };
     const container = renderPanelWithProps({ processControls });
 
@@ -264,103 +251,22 @@ describe("CodingWorkbenchOutputPanel", () => {
       ),
     ).not.toBeNull();
 
-    const refresh = container.querySelector(
-      'button[aria-label="刷新进程 process-1 状态"]',
-    ) as HTMLButtonElement | null;
-    const drain = container.querySelector(
-      'button[aria-label="读取进程 process-1 的新增输出"]',
-    ) as HTMLButtonElement | null;
-    const interrupt = container.querySelector(
-      'button[aria-label="中断进程 process-1"]',
-    ) as HTMLButtonElement | null;
     const terminate = container.querySelector(
       'button[aria-label="终止进程 process-1"]',
     ) as HTMLButtonElement | null;
 
     await act(async () => {
-      refresh?.click();
-      drain?.click();
-      interrupt?.click();
       terminate?.click();
     });
 
-    expect(processControls.onRefreshProcessStatus).toHaveBeenCalledWith(
-      "process-1",
+    expect(processControls.onTerminateBackgroundTerminal).toHaveBeenCalledWith(
+      "command-1",
     );
-    expect(processControls.onDrainProcessOutput).toHaveBeenCalledWith(
-      "process-1",
-    );
-    expect(processControls.onInterruptProcess).toHaveBeenCalledWith(
-      "process-1",
-    );
-    expect(processControls.onTerminateProcess).toHaveBeenCalledWith(
-      "process-1",
-    );
-  });
-
-  it("应只在 live 且 stdin 可写时显示 stdin 输入并写入 process", async () => {
-    const onWriteProcessStdin = vi.fn(async () => true);
-    const container = renderPanelWithProps({
-      processControls: {
-        onWriteProcessStdin,
-      },
-      codingView: createCodingView({
-        commands: [
-          {
-            ...createCodingView().commands[0],
-            commandId: "command-writable",
-            processId: "process-writable",
-            stdinWritable: true,
-          },
-          {
-            ...createCodingView().commands[0],
-            commandId: "command-readonly",
-            processId: "process-readonly",
-            stdinWritable: false,
-          },
-        ],
-        tests: [],
-        actions: [],
-        diagnostics: [],
-      }),
-    });
-
-    const forms = container.querySelectorAll(
-      '[data-testid="coding-workbench-command-stdin-form"]',
-    );
-    expect(forms).toHaveLength(1);
-
-    const input = container.querySelector(
-      'input[aria-label="向进程 process-writable 写入 stdin"]',
-    ) as HTMLInputElement | null;
-    const submit = container.querySelector(
-      'button[aria-label="发送 stdin 到进程 process-writable"]',
-    ) as HTMLButtonElement | null;
-
-    expect(input).not.toBeNull();
-    expect(submit).not.toBeNull();
-    expect(submit?.disabled).toBe(true);
-
-    await act(async () => {
-      if (input) fillInput(input, "y");
-    });
-    expect(submit?.disabled).toBe(false);
-
-    await act(async () => {
-      submit?.click();
-    });
-
-    expect(onWriteProcessStdin).toHaveBeenCalledWith("process-writable", "y\n");
-    expect(input?.value).toBe("");
   });
 
   it("已结束或缺少 processId 的命令不应显示进程控制按钮", () => {
-    const processControls: Required<CodingWorkbenchCommandProcessControls> = {
-      onInterruptProcess: vi.fn(),
-      onTerminateProcess: vi.fn(),
-      onRefreshProcessStatus: vi.fn(),
-      onDrainProcessOutput: vi.fn(),
-      onWriteProcessStdin: vi.fn(),
+    const processControls: CodingWorkbenchCommandProcessControls = {
+      onTerminateBackgroundTerminal: vi.fn(),
     };
     const terminalCommand = {
       ...createCodingView().commands[0],

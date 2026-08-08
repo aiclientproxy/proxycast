@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "browser",
+  "version": "1.0.0",
+  "description": "Use Lime's managed browser session for research and inspection tasks.",
+  "author": {
+    "name": "Lime"
+  },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Browser",
+        "shortDescription": "Research and inspect pages in a managed browser session.",
+        "longDescription": "This bundled skill describes how to use Lime's existing browser session and Right Surface. It does not grant network, file, or external-action permissions by itself.",
+        "developerName": "Lime",
+        "category": "Productivity",
+        "capabilities": ["Read", "Interactive"]
+      }
+    }
+  }
+}

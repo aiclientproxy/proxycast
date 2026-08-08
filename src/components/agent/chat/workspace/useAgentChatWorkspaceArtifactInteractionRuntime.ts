@@ -12,10 +12,6 @@ type ArtifactSurfaceParams = UseWorkspaceArtifactSurfaceRuntimeParams;
 export type UseAgentChatWorkspaceArtifactInteractionRuntimeParams = {
   action: ArtifactActionParams;
   surface: {
-    pluginHistoryRestore: Omit<
-      ArtifactSurfaceParams["pluginHistoryRestore"],
-      "handleWorkspaceArtifactClick"
-    >;
     serviceSkillExecution: Omit<
       ArtifactSurfaceParams["serviceSkillExecution"],
       | "onOpenResultFile"
@@ -38,11 +34,6 @@ export function useAgentChatWorkspaceArtifactInteractionRuntime({
 }: UseAgentChatWorkspaceArtifactInteractionRuntimeParams) {
   const artifactActionRuntime = useWorkspaceArtifactActionRuntime(action);
   const artifactSurfaceRuntime = useWorkspaceArtifactSurfaceRuntime({
-    pluginHistoryRestore: {
-      ...surface.pluginHistoryRestore,
-      handleWorkspaceArtifactClick:
-        artifactActionRuntime.handleWorkspaceArtifactClick,
-    },
     serviceSkillExecution: {
       ...surface.serviceSkillExecution,
       onOpenBrowserRuntime: surface.serviceSkillExecution.onOpenBrowserRuntime,

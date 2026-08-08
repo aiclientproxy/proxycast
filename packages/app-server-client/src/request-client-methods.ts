@@ -2,7 +2,11 @@ import * as protocol from "./protocol.js";
 import type { AppServerClient } from "./request-client.js";
 
 export type RequestClientMethodKind = "request" | "notification";
-export type RequestClientParamsMode = "none" | "required" | "optional-empty";
+export type RequestClientParamsMode =
+  | "none"
+  | "omitted"
+  | "required"
+  | "optional-empty";
 
 export type AppServerRequestClientMethodSpec = {
   name: string;
@@ -632,84 +636,6 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "optional-empty",
     },
     {
-      name: "inspectPluginLocalPackage",
-      method: protocol.METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "exportPluginLocalPackage",
-      method: protocol.METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "fetchPluginCloudPackage",
-      method: protocol.METHOD_PLUGIN_PACKAGE_FETCH_CLOUD,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "savePluginInstalled",
-      method: protocol.METHOD_PLUGIN_INSTALLED_SAVE,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "listPluginInstalled",
-      method: protocol.METHOD_PLUGIN_INSTALLED_LIST,
-      kind: "request",
-      params: "none",
-    },
-    {
-      name: "setPluginInstalledDisabled",
-      method: protocol.METHOD_PLUGIN_INSTALLED_DISABLED_SET,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "previewPluginUninstall",
-      method: protocol.METHOD_PLUGIN_INSTALLED_UNINSTALL_REHEARSAL,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "uninstallPlugin",
-      method: protocol.METHOD_PLUGIN_INSTALLED_UNINSTALL,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "listPluginHostLifecycle",
-      method: protocol.METHOD_PLUGIN_HOST_LIFECYCLE_LIST,
-      kind: "request",
-      params: "none",
-    },
-    {
-      name: "preparePluginShell",
-      method: protocol.METHOD_PLUGIN_SHELL_PREPARE,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "startPluginUiRuntime",
-      method: protocol.METHOD_PLUGIN_UI_RUNTIME_START,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "getPluginUiRuntimeStatus",
-      method: protocol.METHOD_PLUGIN_UI_RUNTIME_STATUS,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "stopPluginUiRuntime",
-      method: protocol.METHOD_PLUGIN_UI_RUNTIME_STOP,
-      kind: "request",
-      params: "required",
-    },
-    {
       name: "listKnowledgePacks",
       method: protocol.METHOD_KNOWLEDGE_PACK_LIST,
       kind: "request",
@@ -1016,10 +942,10 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "required",
     },
     {
-      name: "resetMemoryStore",
-      method: protocol.METHOD_MEMORY_STORE_RESET,
+      name: "resetMemory",
+      method: protocol.METHOD_MEMORY_RESET,
       kind: "request",
-      params: "required",
+      params: "omitted",
     },
     {
       name: "rebuildMemoryStoreIndex",
@@ -1472,38 +1398,56 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "required",
     },
     {
-      name: "listDirectory",
-      method: protocol.METHOD_FILE_SYSTEM_LIST_DIRECTORY,
+      name: "readFile",
+      method: protocol.METHOD_FS_READ_FILE,
       kind: "request",
       params: "required",
     },
     {
-      name: "readFilePreview",
-      method: protocol.METHOD_FILE_SYSTEM_READ_FILE_PREVIEW,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "createFile",
-      method: protocol.METHOD_FILE_SYSTEM_CREATE_FILE,
+      name: "writeFile",
+      method: protocol.METHOD_FS_WRITE_FILE,
       kind: "request",
       params: "required",
     },
     {
       name: "createDirectory",
-      method: protocol.METHOD_FILE_SYSTEM_CREATE_DIRECTORY,
+      method: protocol.METHOD_FS_CREATE_DIRECTORY,
       kind: "request",
       params: "required",
     },
     {
-      name: "renameFile",
-      method: protocol.METHOD_FILE_SYSTEM_RENAME_FILE,
+      name: "getMetadata",
+      method: protocol.METHOD_FS_GET_METADATA,
       kind: "request",
       params: "required",
     },
     {
-      name: "deleteFile",
-      method: protocol.METHOD_FILE_SYSTEM_DELETE_FILE,
+      name: "readDirectory",
+      method: protocol.METHOD_FS_READ_DIRECTORY,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "remove",
+      method: protocol.METHOD_FS_REMOVE,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "copy",
+      method: protocol.METHOD_FS_COPY,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "watch",
+      method: protocol.METHOD_FS_WATCH,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "unwatch",
+      method: protocol.METHOD_FS_UNWATCH,
       kind: "request",
       params: "required",
     },
@@ -1570,42 +1514,6 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
     {
       name: "drainProjectShellSessionEvents",
       method: protocol.METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS,
-      kind: "request",
-      params: "optional-empty",
-    },
-    {
-      name: "startExecutionProcess",
-      method: protocol.METHOD_EXECUTION_PROCESS_START,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "writeExecutionProcessStdin",
-      method: protocol.METHOD_EXECUTION_PROCESS_WRITE_STDIN,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "interruptExecutionProcess",
-      method: protocol.METHOD_EXECUTION_PROCESS_INTERRUPT,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "terminateExecutionProcess",
-      method: protocol.METHOD_EXECUTION_PROCESS_TERMINATE,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "readExecutionProcessStatus",
-      method: protocol.METHOD_EXECUTION_PROCESS_STATUS,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "drainExecutionProcessOutput",
-      method: protocol.METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT,
       kind: "request",
       params: "optional-empty",
     },
@@ -1880,6 +1788,30 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "required",
     },
     {
+      name: "spawnProcess",
+      method: protocol.METHOD_PROCESS_SPAWN,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "writeProcessStdin",
+      method: protocol.METHOD_PROCESS_WRITE_STDIN,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "resizeProcessPty",
+      method: protocol.METHOD_PROCESS_RESIZE_PTY,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "killProcess",
+      method: protocol.METHOD_PROCESS_KILL,
+      kind: "request",
+      params: "required",
+    },
+    {
       name: "startTurn",
       method: protocol.METHOD_TURN_START,
       kind: "request",
@@ -1909,6 +1841,9 @@ function resolveParams(
   mode: RequestClientParamsMode,
   args: IArguments,
 ): unknown {
+  if (mode === "omitted") {
+    return undefined;
+  }
   if (mode === "none") {
     return {};
   }

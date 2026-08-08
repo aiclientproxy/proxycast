@@ -497,7 +497,7 @@ describe("MessageList message actions", () => {
                 objectId: "article-1",
                 surfaceKind: "document",
               },
-              contentFactoryWorkspacePatch: {
+              workspacePatch: {
                 workerEvidence: [
                   {
                     subagents: ["content-researcher", "article-writer"],

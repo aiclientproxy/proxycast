@@ -296,6 +296,138 @@
         }
       ]
     },
+    "FsCopyParams": {
+      "properties": {
+        "destinationPath": {
+          "type": "string"
+        },
+        "recursive": {
+          "type": "boolean"
+        },
+        "sourcePath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "destinationPath",
+        "sourcePath"
+      ],
+      "type": "object"
+    },
+    "FsCreateDirectoryParams": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "recursive": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "FsGetMetadataParams": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "FsReadDirectoryParams": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "FsReadFileParams": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "FsRemoveParams": {
+      "properties": {
+        "force": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "recursive": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "FsUnwatchParams": {
+      "properties": {
+        "watchId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "watchId"
+      ],
+      "type": "object"
+    },
+    "FsWatchParams": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "watchId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "watchId"
+      ],
+      "type": "object"
+    },
+    "FsWriteFileParams": {
+      "properties": {
+        "dataBase64": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataBase64",
+        "path"
+      ],
+      "type": "object"
+    },
     "HooksListParams": {
       "properties": {
         "cwds": {
@@ -611,6 +743,141 @@
         "workspace"
       ],
       "type": "string"
+    },
+    "ProcessKillParams": {
+      "properties": {
+        "processHandle": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "processHandle"
+      ],
+      "type": "object"
+    },
+    "ProcessResizePtyParams": {
+      "properties": {
+        "processHandle": {
+          "type": "string"
+        },
+        "size": {
+          "$ref": "#/$defs/ProcessTerminalSize"
+        }
+      },
+      "required": [
+        "processHandle",
+        "size"
+      ],
+      "type": "object"
+    },
+    "ProcessSpawnParams": {
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "outputBytesCap": {
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "processHandle": {
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProcessTerminalSize"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "streamStdin": {
+          "type": "boolean"
+        },
+        "streamStdoutStderr": {
+          "type": "boolean"
+        },
+        "timeoutMs": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "tty": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "command",
+        "cwd",
+        "processHandle"
+      ],
+      "type": "object"
+    },
+    "ProcessTerminalSize": {
+      "properties": {
+        "cols": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cols",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "ProcessWriteStdinParams": {
+      "properties": {
+        "closeStdin": {
+          "type": "boolean"
+        },
+        "deltaBase64": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "processHandle": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "processHandle"
+      ],
+      "type": "object"
     },
     "RequestId": {
       "anyOf": [
@@ -2794,6 +3061,22 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
+          "const": "memory/reset",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "method"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
           "const": "thread/shellCommand",
           "type": "string"
         },
@@ -3379,6 +3662,266 @@
         },
         "params": {
           "$ref": "#/$defs/TurnInterruptParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "fs/readFile",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FsReadFileParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "fs/writeFile",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FsWriteFileParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "fs/createDirectory",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FsCreateDirectoryParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "fs/getMetadata",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FsGetMetadataParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "fs/readDirectory",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FsReadDirectoryParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "fs/remove",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FsRemoveParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "fs/copy",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FsCopyParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "fs/watch",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FsWatchParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "fs/unwatch",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FsUnwatchParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "process/spawn",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProcessSpawnParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "process/writeStdin",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProcessWriteStdinParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "process/resizePty",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProcessResizePtyParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "process/kill",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProcessKillParams"
         }
       },
       "required": [

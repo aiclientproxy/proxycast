@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { open as openDialog } from "@/lib/desktop-host/plugin-dialog";
+import { open as openDialog } from "@/lib/desktop-host/dialog";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { useSkills } from "@/hooks/useSkills";

@@ -72,7 +72,7 @@ export function useAgentChatWorkspaceCommandRuntime({
     currentTurnId, turns, threadItems, queuedTurnCount, threadRead, threadGoal, threadGoalError, isThreadGoalLoading, activeExecutionRuntime, isSending, compactSession,
     stopSending, replayPendingAction, handlePermissionResponse, pendingActions, submittedActionsInFlight, triggerAIGuide,
     topics, isAutoRestoringSession, isSessionHydrating, sessionId, ensureSession, originalSwitchTopic, workspacePathMissing,
-    fixWorkspacePathAndRetry, dismissWorkspacePathError, setWorkspaceHealthError, expertWorkspaceSkillRuntimeEnableInput, workspacePluginRuntimeContext, workspaceRequestMetadataWithExpertSkills, workspaceSkillBindings, topicById,
+    fixWorkspacePathAndRetry, dismissWorkspacePathError, setWorkspaceHealthError, expertWorkspaceSkillRuntimeEnableInput, workspaceRequestMetadataWithExpertSkills, workspaceSkillBindings, topicById,
     autoCollapsedTopicSidebarRef, effectiveChatToolPreferences, canonicalChildren, hasRuntimeSessions, subagentsRuntimeVisible, handleOpenSubagentSession, imageWorkbenchSessionRuntime, currentImageWorkbenchState,
     imageWorkbenchSessionKey, updateCurrentImageWorkbenchState, artifactCanvasRuntime, artifacts, browserAssistArtifactOpenControl, applyAutoArtifactViewMode, browserAssistRequestAutoLaunch, browserAssistRequestPreferredBackend,
     browserAssistRequestProfileKey, browserAssistSessionState, currentCanvasArtifact, ensureBrowserAssistCanvas, setSelectedArtifactId, siteSkillExecutionState, upsertGeneralArtifact, handleOpenBrowserRuntimeForSiteSkillExecution,
@@ -384,11 +384,6 @@ export function useAgentChatWorkspaceCommandRuntime({
         workbenchRequests,
       },
       surface: {
-        pluginHistoryRestore: {
-          pluginRuntimeContext: workspacePluginRuntimeContext.context,
-          threadRead,
-          upsertGeneralArtifact,
-        },
         serviceSkillExecution: {
           onOpenBrowserRuntime: handleOpenBrowserRuntimeForSiteSkillExecution,
           state: siteSkillExecutionState,
@@ -439,7 +434,6 @@ export function useAgentChatWorkspaceCommandRuntime({
     sceneAppExecutionSummaryCard,
     sceneAppReviewDecisionDialogNode,
     serviceSkillExecutionCard,
-    workspacePluginHistoryRestoreLandingCard,
   } = artifactInteractionRuntime;
   useWorkspaceWorkbenchSideEffectRuntime({
     autoGuide: {
@@ -653,7 +647,7 @@ export function useAgentChatWorkspaceCommandRuntime({
     suppressHomeNavbarUtilityActions, taskCenterDraftMaterializedSessionIdsRef, taskCenterDraftWarmupSessionIdsRef, taskCenterHomeSurfaceState, taskCenterTabsNode, bindArticleEditorRightSurface, bindRightSurfacePendingActions, handleCodeBlockClick,
     handleHarnessLoadFilePreview, handleOpenArtifactFromTimeline, handleOpenMessagePreview, handleOpenSavedSiteContent, handleOpenServiceSkillResultFile, handleOpenUrlPreview, handleSaveArtifactDocument, handleWorkspaceArtifactClick,
     handleWorkspaceFileClick, openProjectFilePreviewInCanvas, openWorkspaceArtifactInWorkbench, preferredServiceSkillResultFileTarget, renderArtifactWorkbenchToolbarActions, shouldCollapseCodeBlockInChat, shouldCollapseCodeBlocks, handleWriteFile,
-    defaultCuratedTaskReferenceEntries, defaultCuratedTaskReferenceMemoryIds, handleJumpToTimelineItem, sceneAppExecutionSummaryCard, sceneAppReviewDecisionDialogNode, serviceSkillExecutionCard, workspacePluginHistoryRestoreLandingCard, generalWorkbenchActivityLogs,
+    defaultCuratedTaskReferenceEntries, defaultCuratedTaskReferenceMemoryIds, handleJumpToTimelineItem, sceneAppExecutionSummaryCard, sceneAppReviewDecisionDialogNode, serviceSkillExecutionCard, generalWorkbenchActivityLogs,
     generalWorkbenchWorkflowSteps, handleExpandGeneralWorkbenchSidebar, renderGeneralWorkbenchSidebarNode, planComposerPendingActions, planDecisionAccessory, handleSaveMessageAsSkill,
   };
 }

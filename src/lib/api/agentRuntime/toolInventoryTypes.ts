@@ -253,55 +253,6 @@ export interface AgentRuntimeToolInventoryMcpEntry {
   visible_in_context: boolean;
 }
 
-export type AgentRuntimeToolInventoryPluginMcpRuntimeStatus =
-  | "available"
-  | "server_missing"
-  | "server_stopped"
-  | "server_available_tool_missing"
-  | string;
-
-export type AgentRuntimeToolInventoryPluginMcpPrepareStatus =
-  | "ready"
-  | "import_required"
-  | "configure_required"
-  | "start_required"
-  | "tool_missing"
-  | "unknown"
-  | string;
-
-export interface AgentRuntimeMcpPrepareRequest {
-  method: string;
-  params?: Record<string, unknown>;
-  reason?: string;
-  status?: string;
-}
-
-export interface AgentRuntimeMcpCallProofRequest {
-  method: string;
-  params?: Record<string, unknown>;
-  reason?: string;
-  status?: string;
-}
-
-export interface AgentRuntimeToolInventoryPluginMcpTarget {
-  pluginId: string;
-  serverId: string;
-  toolKey: string;
-  provider: string;
-  required: boolean;
-  caller: string;
-  expectedToolName: string;
-  runtimeStatus: AgentRuntimeToolInventoryPluginMcpRuntimeStatus;
-  prepareStatus: AgentRuntimeToolInventoryPluginMcpPrepareStatus;
-  serverAvailable: boolean;
-  serverRunning: boolean;
-  toolAvailable: boolean;
-  resolvedToolName?: string | null;
-  toolListRequest: Record<string, unknown>;
-  callProofRequest: AgentRuntimeMcpCallProofRequest | null;
-  prepareRequests: AgentRuntimeMcpPrepareRequest[];
-}
-
 export interface AgentRuntimeToolInventoryCounts {
   catalog_total: number;
   catalog_current_total: number;
@@ -339,5 +290,4 @@ export interface AgentRuntimeToolInventory {
   extension_surfaces: AgentRuntimeToolInventoryExtensionSurfaceEntry[];
   extension_tools: AgentRuntimeToolInventoryExtensionToolEntry[];
   mcp_tools: AgentRuntimeToolInventoryMcpEntry[];
-  plugin_mcp_targets?: AgentRuntimeToolInventoryPluginMcpTarget[];
 }

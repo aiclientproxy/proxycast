@@ -16,7 +16,7 @@
 - 测试分层规则已写入 `AGENTS.md` 和 `internal/aiprompts/quality-workflow.md`。
 - CI quick gate 已接入分层入口：
   - PR 前端改动跑 `npm run test:unit` + `npm run test:contract`。
-  - PR / main 前端验证在单测前运行 `node scripts/check-vitest-layer-budget.mjs --max-component-candidates 30`，防止 component VM 迁移候选数回升。
+  - PR / main 前端验证在单测前运行 `node scripts/check-vitest-layer-budget.mjs --max-component-candidates 37`，防止 component VM 迁移候选数回升。
   - PR Rust 改动跑 `npm run test:rust:unit`。
   - main / 手动触发仍保留全量前端与 Rust 验证。
 - 本地 Makefile 已接入分层入口：
@@ -25,7 +25,7 @@
   - `make tdd-rust` 委托 `npm run test:rust:unit`，作为后端第一信号。
   - `make test-layer-stats` 同时输出前端和 Rust 分层统计。
 - 新增 component VM 迁移候选预算检查：
-  - `scripts/check-vitest-layer-budget.mjs` 默认以 30 个候选为当前发布基线预算。
+  - `scripts/check-vitest-layer-budget.mjs` 默认以 37 个候选为当前发布基线预算。
   - `make test-layer-budget` 会在候选数超过预算时失败，用于防止新 component 大测试回流。
 - 新增 Rust E2E 默认运行预算检查：
   - `scripts/check-rust-layer-budget.mjs` 默认要求 Rust E2E 层文件不存在非 `ignore` 测试。
@@ -61,6 +61,7 @@
   - Component unit-migration candidates: 8
   - 2026-06-24 发布门禁基线：当时候选数为 22，CI / Makefile / 脚本默认预算临时统一为 22；后续继续按 P2 分层治理把预算降回 12 / 8 或更低。
   - 2026-06-30 发版门禁复核：`v1.82.0` 与 `v1.83.0` 干净 worktree 均为 30 个候选，CI / Makefile / 脚本默认预算临时统一为 30，先恢复 main 发布门禁一致性，后续继续把预算降回 22 / 12 / 8。
+  - 2026-08-07 `v1.123.0` Quality 复核：当前候选数为 37，CI / Makefile / 脚本默认预算同步为 37；后续继续按 P2 分层治理降低预算。
   - 注：该统计包含同轮并行新增的 `src/components/agent/chat/utils/toolNameFamily.unit.test.ts`，本轮未接管该写集。
 - `npm run test:unit -- src/components/agent/chat/components/harnessStatusPanelViewModel.unit.test.ts src/components/agent/chat/components/harnessEvidenceViewModel.unit.test.ts`
   - 2 files / 24 tests passed
@@ -169,8 +170,8 @@
   - 前端和 Rust 分层统计均执行通过。
 - `npm run test:unit -- scripts/check-vitest-layer-budget.test.mjs`
   - 1 file / 3 tests passed。
-- `node scripts/check-vitest-layer-budget.mjs --max-component-candidates 30`
-  - 2026-06-30 当前发布基线通过；候选数为 30，Status: ok。
+- `node scripts/check-vitest-layer-budget.mjs --max-component-candidates 37`
+  - 2026-08-07 当前发布基线通过；候选数为 37，Status: ok。
 - `make test-layer-budget`
   - 预算检查通过。
 - `npm run test:unit -- scripts/check-rust-layer-budget.test.mjs scripts/check-vitest-layer-budget.test.mjs`

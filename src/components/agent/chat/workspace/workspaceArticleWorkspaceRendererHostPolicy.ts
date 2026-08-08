@@ -1,5 +1,3 @@
-import type { PluginRuntimeAuthorizationDecision } from "@/features/plugin/manifest/pluginRuntimeAuthorization";
-
 export type WorkspaceArticleWorkspaceRendererHostPolicyStatus =
   | "placeholder"
   | "blocked";
@@ -53,7 +51,7 @@ function readStringArray(value: unknown): string[] {
 }
 
 export function buildWorkspaceArticleWorkspaceRendererHostPolicy(
-  runtimeAuthorization: PluginRuntimeAuthorizationDecision | Record<string, unknown> | null,
+  runtimeAuthorization: Record<string, unknown> | null,
 ): WorkspaceArticleWorkspaceRendererHostPolicy {
   const authorization = asRecord(runtimeAuthorization);
   const status = readString(authorization?.status);

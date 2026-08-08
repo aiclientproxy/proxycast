@@ -74,7 +74,6 @@ export function useHarnessToolInventoryModel({
     toolInventoryExtensionTools: toolInventory?.extension_tools || [],
     toolInventoryFilter,
     toolInventoryMcpTools: toolInventory?.mcp_tools || [],
-    toolInventoryPluginMcpTargets: toolInventory?.plugin_mcp_targets || [],
     toolInventoryNativeTools: toolInventory?.native_tools || [],
     toolInventoryRuntimeTools,
     toolInventorySourceStats,

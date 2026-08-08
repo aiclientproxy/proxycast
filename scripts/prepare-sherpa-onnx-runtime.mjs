@@ -339,36 +339,59 @@ export function buildSherpaArchiveExtractCommand(plan) {
   };
 }
 
+export function missingSherpaRuntimeLibraries(
+  plan,
+  { exists = fs.existsSync } = {},
+) {
+  return plan.libs.filter((lib) => !exists(path.join(plan.libDir, lib)));
+}
+
+function downloadSherpaArchive(plan) {
+  console.log(`Downloading sherpa-onnx shared runtime: ${plan.url}`);
+  const partialPath = `${plan.archivePath}.part`;
+  runCommand("curl", [
+    "--fail",
+    "--location",
+    "--retry",
+    "5",
+    "--retry-connrefused",
+    "--connect-timeout",
+    "30",
+    "--output",
+    partialPath,
+    plan.url,
+  ]);
+  fs.renameSync(partialPath, plan.archivePath);
+}
+
+function extractSherpaArchive(plan) {
+  fs.rmSync(plan.extractedDir, { recursive: true, force: true });
+  const extraction = buildSherpaArchiveExtractCommand(plan);
+  runCommand("tar", extraction.args, { cwd: extraction.cwd });
+}
+
 function ensureArchiveExtracted(plan) {
   fs.mkdirSync(plan.prebuiltRoot, { recursive: true });
 
-  if (!fs.existsSync(plan.libDir)) {
-    if (!fs.existsSync(plan.archivePath)) {
-      console.log(`Downloading sherpa-onnx shared runtime: ${plan.url}`);
-      const partialPath = `${plan.archivePath}.part`;
-      runCommand("curl", [
-        "--fail",
-        "--location",
-        "--retry",
-        "5",
-        "--retry-connrefused",
-        "--connect-timeout",
-        "30",
-        "--output",
-        partialPath,
-        plan.url,
-      ]);
-      fs.renameSync(partialPath, plan.archivePath);
-    }
-
-    fs.rmSync(plan.extractedDir, { recursive: true, force: true });
-    const extraction = buildSherpaArchiveExtractCommand(plan);
-    runCommand("tar", extraction.args, { cwd: extraction.cwd });
+  if (missingSherpaRuntimeLibraries(plan).length === 0) {
+    return;
   }
 
-  if (!fs.existsSync(plan.libDir)) {
+  if (!fs.existsSync(plan.archivePath)) {
+    downloadSherpaArchive(plan);
+  }
+  extractSherpaArchive(plan);
+
+  if (missingSherpaRuntimeLibraries(plan).length > 0) {
+    fs.rmSync(plan.archivePath, { force: true });
+    downloadSherpaArchive(plan);
+    extractSherpaArchive(plan);
+  }
+
+  const missingLibraries = missingSherpaRuntimeLibraries(plan);
+  if (missingLibraries.length > 0) {
     fail(
-      `Downloaded sherpa-onnx archive did not contain expected lib directory: ${plan.libDir}`,
+      `Downloaded sherpa-onnx archive is missing expected libraries: ${missingLibraries.join(", ")}`,
     );
   }
 }

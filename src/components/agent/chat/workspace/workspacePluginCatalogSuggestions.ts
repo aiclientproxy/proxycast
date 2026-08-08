@@ -9,7 +9,7 @@ export function buildWorkspacePluginCatalogSuggestions(
   return plugins
     .filter((plugin) => plugin.installed)
     .map((plugin) => ({
-      pluginId: plugin.id,
+      pluginId: `${plugin.id}@${plugin.marketplaceId}`,
       displayName: plugin.name.trim() || plugin.id,
       description: plugin.description.trim() || plugin.id,
       disabled: !plugin.enabled,

@@ -1,8 +1,3 @@
-import { CONTENT_FACTORY_WORKSPACE_PATCH_KIND } from "./workspaceArticleWorkspaceMetadata";
-
-const CONTENT_FACTORY_APP_ID = "content-factory-app";
-const LEGACY_CREATOR_WORKSPACE_PATCH_KIND = "creator.workspace_patch";
-
 interface ArticleWorkspaceActionOutputKindIntent {
   articleWorkspace: {
     appId: string;
@@ -42,24 +37,9 @@ function readOutputArtifactKindFromRecord(
   return readString(
     record.outputArtifactKind,
     record.output_artifact_kind,
-    record.workerOutputArtifactKind,
-    record.worker_output_artifact_kind,
     record.artifactKind,
     record.artifact_kind,
   );
-}
-
-function normalizeArticleWorkspaceActionOutputArtifactKind(
-  intent: ArticleWorkspaceActionOutputKindIntent,
-  outputArtifactKind: string,
-): string {
-  if (
-    intent.articleWorkspace.appId === CONTENT_FACTORY_APP_ID &&
-    outputArtifactKind === LEGACY_CREATOR_WORKSPACE_PATCH_KIND
-  ) {
-    return CONTENT_FACTORY_WORKSPACE_PATCH_KIND;
-  }
-  return outputArtifactKind;
 }
 
 export function resolveWorkspaceArticleWorkspaceActionOutputArtifactKind(
@@ -69,23 +49,20 @@ export function resolveWorkspaceArticleWorkspaceActionOutputArtifactKind(
     asRecord(intent.object.source),
   );
   if (objectSourceOutput) {
-    return normalizeArticleWorkspaceActionOutputArtifactKind(
-      intent,
-      objectSourceOutput,
-    );
+    return objectSourceOutput;
   }
 
   for (const artifact of intent.articleWorkspace.sourceArtifacts ?? []) {
     const output = readOutputArtifactKindFromRecord(asRecord(artifact));
     if (output) {
-      return normalizeArticleWorkspaceActionOutputArtifactKind(intent, output);
+      return output;
     }
   }
 
   for (const evidence of intent.articleWorkspace.workerEvidence ?? []) {
     const output = evidence.artifactKind?.trim();
     if (output) {
-      return normalizeArticleWorkspaceActionOutputArtifactKind(intent, output);
+      return output;
     }
   }
 

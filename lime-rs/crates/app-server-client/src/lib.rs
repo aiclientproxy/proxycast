@@ -26,8 +26,16 @@ pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNARCHIVE;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNSUBSCRIBE;
 use app_server_protocol::protocol::v2::NOTIFICATION_METHODS;
 pub use app_server_protocol::protocol::v2::{
-    HookErrorInfo, HookMetadata, HookOutputEntry, HookOutputEntryKind, HookRunSummary,
-    HooksListEntry, HooksListParams, HooksListResponse, SkillDependencies, SkillErrorInfo,
+    FsChangedNotification, FsCopyParams, FsCopyResponse, FsCreateDirectoryParams,
+    FsCreateDirectoryResponse, FsGetMetadataParams, FsGetMetadataResponse, FsReadDirectoryEntry,
+    FsReadDirectoryParams, FsReadDirectoryResponse, FsReadFileParams, FsReadFileResponse,
+    FsRemoveParams, FsRemoveResponse, FsUnwatchParams, FsUnwatchResponse, FsWatchParams,
+    FsWatchResponse, FsWriteFileParams, FsWriteFileResponse, HookErrorInfo, HookMetadata,
+    HookOutputEntry, HookOutputEntryKind, HookRunSummary, HooksListEntry, HooksListParams,
+    HooksListResponse, ProcessExitedNotification, ProcessKillParams, ProcessKillResponse,
+    ProcessOutputDeltaNotification, ProcessOutputStream, ProcessResizePtyParams,
+    ProcessResizePtyResponse, ProcessSpawnParams, ProcessSpawnResponse, ProcessTerminalSize,
+    ProcessWriteStdinParams, ProcessWriteStdinResponse, SkillDependencies, SkillErrorInfo,
     SkillInterface, SkillMetadata, SkillScope, SkillToolDependency, SkillsListEntry,
     SkillsListParams, SkillsListResponse, SortDirection, ThreadApproveGuardianDeniedActionParams,
     ThreadApproveGuardianDeniedActionResponse, ThreadArchiveParams, ThreadArchiveResponse,
@@ -46,7 +54,10 @@ pub use app_server_protocol::protocol::v2::{
     ThreadSectionMoveResponse, ThreadSectionUpdateParams, ThreadSectionUpdateResponse,
     ThreadShellCommandParams, ThreadShellCommandResponse, ThreadSortKey, ThreadSourceKind,
     ThreadUnarchiveParams, ThreadUnarchiveResponse, ThreadUnsubscribeParams,
-    ThreadUnsubscribeResponse, ThreadUnsubscribeStatus,
+    ThreadUnsubscribeResponse, ThreadUnsubscribeStatus, METHOD_FS_COPY, METHOD_FS_CREATE_DIRECTORY,
+    METHOD_FS_GET_METADATA, METHOD_FS_READ_DIRECTORY, METHOD_FS_READ_FILE, METHOD_FS_REMOVE,
+    METHOD_FS_UNWATCH, METHOD_FS_WATCH, METHOD_FS_WRITE_FILE, METHOD_PROCESS_KILL,
+    METHOD_PROCESS_RESIZE_PTY, METHOD_PROCESS_SPAWN, METHOD_PROCESS_WRITE_STDIN,
 };
 pub use app_server_protocol::AgentSessionAnalysisHandoffExportParams;
 pub use app_server_protocol::AgentSessionAnalysisHandoffExportResponse;
@@ -119,16 +130,6 @@ pub use app_server_protocol::DiagnosticsRequestDedupDiagnostics;
 pub use app_server_protocol::DiagnosticsResponseCacheDiagnostics;
 pub use app_server_protocol::DiagnosticsTelemetrySummary;
 pub use app_server_protocol::EvidenceExportParams;
-pub use app_server_protocol::FileSystemCreateDirectoryParams;
-pub use app_server_protocol::FileSystemCreateFileParams;
-pub use app_server_protocol::FileSystemDeleteFileParams;
-pub use app_server_protocol::FileSystemDirectoryListing;
-pub use app_server_protocol::FileSystemFileEntry;
-pub use app_server_protocol::FileSystemFilePreview;
-pub use app_server_protocol::FileSystemListDirectoryParams;
-pub use app_server_protocol::FileSystemMutationResponse;
-pub use app_server_protocol::FileSystemReadFilePreviewParams;
-pub use app_server_protocol::FileSystemRenameFileParams;
 pub use app_server_protocol::GatewayChannelStatusParams;
 pub use app_server_protocol::GatewayChannelStatusResponse;
 pub use app_server_protocol::GatewayTunnelCloudflaredInstallParams;
@@ -190,6 +191,7 @@ pub use app_server_protocol::MediaTaskArtifactListParams;
 pub use app_server_protocol::MediaTaskArtifactListResponse;
 pub use app_server_protocol::MediaTaskArtifactLookupParams;
 pub use app_server_protocol::MediaTaskArtifactResponse;
+pub use app_server_protocol::MemoryResetResponse;
 pub use app_server_protocol::MemoryStoreAddNoteParams;
 pub use app_server_protocol::MemoryStoreAddNoteResponse;
 pub use app_server_protocol::MemoryStoreConsolidateParams;
@@ -200,8 +202,6 @@ pub use app_server_protocol::MemoryStoreListParams;
 pub use app_server_protocol::MemoryStoreListResponse;
 pub use app_server_protocol::MemoryStoreReadParams;
 pub use app_server_protocol::MemoryStoreReadResponse;
-pub use app_server_protocol::MemoryStoreResetParams;
-pub use app_server_protocol::MemoryStoreResetResponse;
 pub use app_server_protocol::MemoryStoreReviewListParams;
 pub use app_server_protocol::MemoryStoreReviewListResponse;
 pub use app_server_protocol::MemoryStoreReviewNote;
@@ -213,21 +213,6 @@ pub use app_server_protocol::MemoryStoreSearchParams;
 pub use app_server_protocol::MemoryStoreSearchResponse;
 pub use app_server_protocol::ModelListParams;
 pub use app_server_protocol::ModelProviderAliasReadParams;
-pub use app_server_protocol::PluginFetchCloudPackageParams;
-pub use app_server_protocol::PluginInstalledDisabledSetParams;
-pub use app_server_protocol::PluginInstalledListResponse;
-pub use app_server_protocol::PluginInstalledSaveParams;
-pub use app_server_protocol::PluginLocalPackageExportParams;
-pub use app_server_protocol::PluginLocalPackageExportResponse;
-pub use app_server_protocol::PluginLocalPackageInspectParams;
-pub use app_server_protocol::PluginShellPrepareParams;
-pub use app_server_protocol::PluginShellPrepareResponse;
-pub use app_server_protocol::PluginUiRuntimeStartParams;
-pub use app_server_protocol::PluginUiRuntimeStatusParams;
-pub use app_server_protocol::PluginUiRuntimeStatusResponse;
-pub use app_server_protocol::PluginUiRuntimeStopParams;
-pub use app_server_protocol::PluginUninstallParams;
-pub use app_server_protocol::PluginUninstallRehearsalParams;
 pub use app_server_protocol::ProjectMemoryReadParams;
 pub use app_server_protocol::ProjectMemoryReadResponse;
 use app_server_protocol::RequestId;
@@ -338,12 +323,6 @@ pub use app_server_protocol::METHOD_DIAGNOSTICS_SERVER_READ;
 pub use app_server_protocol::METHOD_DIAGNOSTICS_SUPPORT_BUNDLE_EXPORT;
 pub use app_server_protocol::METHOD_DIAGNOSTICS_WINDOWS_STARTUP_READ;
 pub use app_server_protocol::METHOD_EVIDENCE_EXPORT;
-pub use app_server_protocol::METHOD_FILE_SYSTEM_CREATE_DIRECTORY;
-pub use app_server_protocol::METHOD_FILE_SYSTEM_CREATE_FILE;
-pub use app_server_protocol::METHOD_FILE_SYSTEM_DELETE_FILE;
-pub use app_server_protocol::METHOD_FILE_SYSTEM_LIST_DIRECTORY;
-pub use app_server_protocol::METHOD_FILE_SYSTEM_READ_FILE_PREVIEW;
-pub use app_server_protocol::METHOD_FILE_SYSTEM_RENAME_FILE;
 pub use app_server_protocol::METHOD_GATEWAY_CHANNEL_STATUS;
 pub use app_server_protocol::METHOD_GATEWAY_TUNNEL_CLOUDFLARED_DETECT;
 pub use app_server_protocol::METHOD_GATEWAY_TUNNEL_CLOUDFLARED_INSTALL;
@@ -392,13 +371,13 @@ pub use app_server_protocol::METHOD_MEDIA_TASK_ARTIFACT_CANCEL;
 pub use app_server_protocol::METHOD_MEDIA_TASK_ARTIFACT_GET;
 pub use app_server_protocol::METHOD_MEDIA_TASK_ARTIFACT_IMAGE_CREATE;
 pub use app_server_protocol::METHOD_MEDIA_TASK_ARTIFACT_LIST;
+pub use app_server_protocol::METHOD_MEMORY_RESET;
 pub use app_server_protocol::METHOD_MEMORY_STORE_ADD_NOTE;
 pub use app_server_protocol::METHOD_MEMORY_STORE_CONSOLIDATE;
 pub use app_server_protocol::METHOD_MEMORY_STORE_HEALTH;
 pub use app_server_protocol::METHOD_MEMORY_STORE_INDEX_REBUILD;
 pub use app_server_protocol::METHOD_MEMORY_STORE_LIST;
 pub use app_server_protocol::METHOD_MEMORY_STORE_READ;
-pub use app_server_protocol::METHOD_MEMORY_STORE_RESET;
 pub use app_server_protocol::METHOD_MEMORY_STORE_REVIEW_LIST;
 pub use app_server_protocol::METHOD_MEMORY_STORE_REVIEW_RESOLVE;
 pub use app_server_protocol::METHOD_MEMORY_STORE_SEARCH;
@@ -409,18 +388,6 @@ pub use app_server_protocol::METHOD_MODEL_PROVIDER_ALIAS_READ;
 pub use app_server_protocol::METHOD_MODEL_PROVIDER_CATALOG_LIST;
 pub use app_server_protocol::METHOD_MODEL_PROVIDER_LIST;
 pub use app_server_protocol::METHOD_MODEL_SYNC_STATE_READ;
-pub use app_server_protocol::METHOD_PLUGIN_INSTALLED_DISABLED_SET;
-pub use app_server_protocol::METHOD_PLUGIN_INSTALLED_LIST;
-pub use app_server_protocol::METHOD_PLUGIN_INSTALLED_SAVE;
-pub use app_server_protocol::METHOD_PLUGIN_INSTALLED_UNINSTALL;
-pub use app_server_protocol::METHOD_PLUGIN_INSTALLED_UNINSTALL_REHEARSAL;
-pub use app_server_protocol::METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT;
-pub use app_server_protocol::METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT;
-pub use app_server_protocol::METHOD_PLUGIN_PACKAGE_FETCH_CLOUD;
-pub use app_server_protocol::METHOD_PLUGIN_SHELL_PREPARE;
-pub use app_server_protocol::METHOD_PLUGIN_UI_RUNTIME_START;
-pub use app_server_protocol::METHOD_PLUGIN_UI_RUNTIME_STATUS;
-pub use app_server_protocol::METHOD_PLUGIN_UI_RUNTIME_STOP;
 pub use app_server_protocol::METHOD_PROJECT_MEMORY_READ;
 pub use app_server_protocol::METHOD_SKILL_LOCAL_DETAIL_INSPECT;
 pub use app_server_protocol::METHOD_SKILL_LOCAL_RENAME;
@@ -1154,87 +1121,6 @@ impl AppServerClient {
         self.typed_request(typed::list_workspace_skill_bindings(params))
     }
 
-    pub fn inspect_plugin_local_package(
-        &mut self,
-        params: PluginLocalPackageInspectParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::inspect_plugin_local_package(params))
-    }
-
-    pub fn export_plugin_local_package(
-        &mut self,
-        params: PluginLocalPackageExportParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::export_plugin_local_package(params))
-    }
-
-    pub fn fetch_plugin_cloud_package(
-        &mut self,
-        params: PluginFetchCloudPackageParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::fetch_plugin_cloud_package(params))
-    }
-
-    pub fn save_plugin_installed(
-        &mut self,
-        params: PluginInstalledSaveParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::save_plugin_installed(params))
-    }
-
-    pub fn list_plugin_installed(&mut self) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::list_plugin_installed())
-    }
-
-    pub fn set_plugin_installed_disabled(
-        &mut self,
-        params: PluginInstalledDisabledSetParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::set_plugin_installed_disabled(params))
-    }
-
-    pub fn preview_plugin_uninstall(
-        &mut self,
-        params: PluginUninstallRehearsalParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::preview_plugin_uninstall(params))
-    }
-
-    pub fn uninstall_plugin(
-        &mut self,
-        params: PluginUninstallParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::uninstall_plugin(params))
-    }
-
-    pub fn prepare_plugin_shell(
-        &mut self,
-        params: PluginShellPrepareParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::prepare_plugin_shell(params))
-    }
-
-    pub fn start_plugin_ui_runtime(
-        &mut self,
-        params: PluginUiRuntimeStartParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::start_plugin_ui_runtime(params))
-    }
-
-    pub fn plugin_ui_runtime_status(
-        &mut self,
-        params: PluginUiRuntimeStatusParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::plugin_ui_runtime_status(params))
-    }
-
-    pub fn stop_plugin_ui_runtime(
-        &mut self,
-        params: PluginUiRuntimeStopParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::stop_plugin_ui_runtime(params))
-    }
-
     pub fn list_knowledge_packs(
         &mut self,
         params: KnowledgeListPacksParams,
@@ -1544,11 +1430,8 @@ impl AppServerClient {
         self.typed_request(typed::health_memory_store(params))
     }
 
-    pub fn reset_memory_store(
-        &mut self,
-        params: MemoryStoreResetParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::reset_memory_store(params))
+    pub fn reset_memory(&mut self) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::reset_memory())
     }
 
     pub fn rebuild_memory_store_index(
@@ -1636,46 +1519,49 @@ impl AppServerClient {
         self.typed_request(typed::read_artifacts(params))
     }
 
-    pub fn list_directory(
-        &mut self,
-        params: FileSystemListDirectoryParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::list_directory(params))
+    pub fn read_file(&mut self, params: FsReadFileParams) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::read_file(params))
     }
 
-    pub fn read_file_preview(
-        &mut self,
-        params: FileSystemReadFilePreviewParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::read_file_preview(params))
-    }
-
-    pub fn create_file(
-        &mut self,
-        params: FileSystemCreateFileParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::create_file(params))
+    pub fn write_file(&mut self, params: FsWriteFileParams) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::write_file(params))
     }
 
     pub fn create_directory(
         &mut self,
-        params: FileSystemCreateDirectoryParams,
+        params: FsCreateDirectoryParams,
     ) -> Result<JsonRpcRequest, ClientError> {
         self.typed_request(typed::create_directory(params))
     }
 
-    pub fn rename_file(
+    pub fn get_metadata(
         &mut self,
-        params: FileSystemRenameFileParams,
+        params: FsGetMetadataParams,
     ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::rename_file(params))
+        self.typed_request(typed::get_metadata(params))
     }
 
-    pub fn delete_file(
+    pub fn read_directory(
         &mut self,
-        params: FileSystemDeleteFileParams,
+        params: FsReadDirectoryParams,
     ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::delete_file(params))
+        self.typed_request(typed::read_directory(params))
+    }
+
+    pub fn remove(&mut self, params: FsRemoveParams) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::remove(params))
+    }
+
+    pub fn copy(&mut self, params: FsCopyParams) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::copy(params))
+    }
+
+    pub fn watch(&mut self, params: FsWatchParams) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::watch(params))
+    }
+
+    pub fn unwatch(&mut self, params: FsUnwatchParams) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::unwatch(params))
     }
 
     pub fn export_evidence(
@@ -1718,6 +1604,34 @@ impl AppServerClient {
         params: AgentSessionReviewDecisionSaveParams,
     ) -> Result<JsonRpcRequest, ClientError> {
         self.typed_request(typed::save_review_decision(params))
+    }
+
+    pub fn spawn_process(
+        &mut self,
+        params: ProcessSpawnParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::spawn_process(params))
+    }
+
+    pub fn write_process_stdin(
+        &mut self,
+        params: ProcessWriteStdinParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::write_process_stdin(params))
+    }
+
+    pub fn resize_process_pty(
+        &mut self,
+        params: ProcessResizePtyParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::resize_process_pty(params))
+    }
+
+    pub fn kill_process(
+        &mut self,
+        params: ProcessKillParams,
+    ) -> Result<JsonRpcRequest, ClientError> {
+        self.typed_request(typed::kill_process(params))
     }
 
     pub fn start_turn(
@@ -2198,74 +2112,6 @@ pub mod typed {
         TypedRequest::new(METHOD_WORKSPACE_SKILL_BINDINGS_LIST, params)
     }
 
-    pub fn inspect_plugin_local_package(
-        params: PluginLocalPackageInspectParams,
-    ) -> TypedRequest<PluginLocalPackageInspectParams> {
-        TypedRequest::new(METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT, params)
-    }
-
-    pub fn export_plugin_local_package(
-        params: PluginLocalPackageExportParams,
-    ) -> TypedRequest<PluginLocalPackageExportParams> {
-        TypedRequest::new(METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT, params)
-    }
-
-    pub fn fetch_plugin_cloud_package(
-        params: PluginFetchCloudPackageParams,
-    ) -> TypedRequest<PluginFetchCloudPackageParams> {
-        TypedRequest::new(METHOD_PLUGIN_PACKAGE_FETCH_CLOUD, params)
-    }
-
-    pub fn save_plugin_installed(
-        params: PluginInstalledSaveParams,
-    ) -> TypedRequest<PluginInstalledSaveParams> {
-        TypedRequest::new(METHOD_PLUGIN_INSTALLED_SAVE, params)
-    }
-
-    pub fn list_plugin_installed() -> TypedRequest<serde_json::Value> {
-        TypedRequest::new(METHOD_PLUGIN_INSTALLED_LIST, serde_json::json!({}))
-    }
-
-    pub fn set_plugin_installed_disabled(
-        params: PluginInstalledDisabledSetParams,
-    ) -> TypedRequest<PluginInstalledDisabledSetParams> {
-        TypedRequest::new(METHOD_PLUGIN_INSTALLED_DISABLED_SET, params)
-    }
-
-    pub fn preview_plugin_uninstall(
-        params: PluginUninstallRehearsalParams,
-    ) -> TypedRequest<PluginUninstallRehearsalParams> {
-        TypedRequest::new(METHOD_PLUGIN_INSTALLED_UNINSTALL_REHEARSAL, params)
-    }
-
-    pub fn uninstall_plugin(params: PluginUninstallParams) -> TypedRequest<PluginUninstallParams> {
-        TypedRequest::new(METHOD_PLUGIN_INSTALLED_UNINSTALL, params)
-    }
-
-    pub fn prepare_plugin_shell(
-        params: PluginShellPrepareParams,
-    ) -> TypedRequest<PluginShellPrepareParams> {
-        TypedRequest::new(METHOD_PLUGIN_SHELL_PREPARE, params)
-    }
-
-    pub fn start_plugin_ui_runtime(
-        params: PluginUiRuntimeStartParams,
-    ) -> TypedRequest<PluginUiRuntimeStartParams> {
-        TypedRequest::new(METHOD_PLUGIN_UI_RUNTIME_START, params)
-    }
-
-    pub fn plugin_ui_runtime_status(
-        params: PluginUiRuntimeStatusParams,
-    ) -> TypedRequest<PluginUiRuntimeStatusParams> {
-        TypedRequest::new(METHOD_PLUGIN_UI_RUNTIME_STATUS, params)
-    }
-
-    pub fn stop_plugin_ui_runtime(
-        params: PluginUiRuntimeStopParams,
-    ) -> TypedRequest<PluginUiRuntimeStopParams> {
-        TypedRequest::new(METHOD_PLUGIN_UI_RUNTIME_STOP, params)
-    }
-
     pub fn list_knowledge_packs(
         params: KnowledgeListPacksParams,
     ) -> TypedRequest<KnowledgeListPacksParams> {
@@ -2526,10 +2372,8 @@ pub mod typed {
         TypedRequest::new(METHOD_MEMORY_STORE_HEALTH, params)
     }
 
-    pub fn reset_memory_store(
-        params: MemoryStoreResetParams,
-    ) -> TypedRequest<MemoryStoreResetParams> {
-        TypedRequest::new(METHOD_MEMORY_STORE_RESET, params)
+    pub fn reset_memory() -> TypedRequest<serde_json::Value> {
+        TypedRequest::new(METHOD_MEMORY_RESET, serde_json::json!({}))
     }
 
     pub fn rebuild_memory_store_index(
@@ -2628,40 +2472,42 @@ pub mod typed {
         TypedRequest::new(METHOD_ARTIFACT_READ, params)
     }
 
-    pub fn list_directory(
-        params: FileSystemListDirectoryParams,
-    ) -> TypedRequest<FileSystemListDirectoryParams> {
-        TypedRequest::new(METHOD_FILE_SYSTEM_LIST_DIRECTORY, params)
+    pub fn read_file(params: FsReadFileParams) -> TypedRequest<FsReadFileParams> {
+        TypedRequest::new(METHOD_FS_READ_FILE, params)
     }
 
-    pub fn read_file_preview(
-        params: FileSystemReadFilePreviewParams,
-    ) -> TypedRequest<FileSystemReadFilePreviewParams> {
-        TypedRequest::new(METHOD_FILE_SYSTEM_READ_FILE_PREVIEW, params)
-    }
-
-    pub fn create_file(
-        params: FileSystemCreateFileParams,
-    ) -> TypedRequest<FileSystemCreateFileParams> {
-        TypedRequest::new(METHOD_FILE_SYSTEM_CREATE_FILE, params)
+    pub fn write_file(params: FsWriteFileParams) -> TypedRequest<FsWriteFileParams> {
+        TypedRequest::new(METHOD_FS_WRITE_FILE, params)
     }
 
     pub fn create_directory(
-        params: FileSystemCreateDirectoryParams,
-    ) -> TypedRequest<FileSystemCreateDirectoryParams> {
-        TypedRequest::new(METHOD_FILE_SYSTEM_CREATE_DIRECTORY, params)
+        params: FsCreateDirectoryParams,
+    ) -> TypedRequest<FsCreateDirectoryParams> {
+        TypedRequest::new(METHOD_FS_CREATE_DIRECTORY, params)
     }
 
-    pub fn rename_file(
-        params: FileSystemRenameFileParams,
-    ) -> TypedRequest<FileSystemRenameFileParams> {
-        TypedRequest::new(METHOD_FILE_SYSTEM_RENAME_FILE, params)
+    pub fn get_metadata(params: FsGetMetadataParams) -> TypedRequest<FsGetMetadataParams> {
+        TypedRequest::new(METHOD_FS_GET_METADATA, params)
     }
 
-    pub fn delete_file(
-        params: FileSystemDeleteFileParams,
-    ) -> TypedRequest<FileSystemDeleteFileParams> {
-        TypedRequest::new(METHOD_FILE_SYSTEM_DELETE_FILE, params)
+    pub fn read_directory(params: FsReadDirectoryParams) -> TypedRequest<FsReadDirectoryParams> {
+        TypedRequest::new(METHOD_FS_READ_DIRECTORY, params)
+    }
+
+    pub fn remove(params: FsRemoveParams) -> TypedRequest<FsRemoveParams> {
+        TypedRequest::new(METHOD_FS_REMOVE, params)
+    }
+
+    pub fn copy(params: FsCopyParams) -> TypedRequest<FsCopyParams> {
+        TypedRequest::new(METHOD_FS_COPY, params)
+    }
+
+    pub fn watch(params: FsWatchParams) -> TypedRequest<FsWatchParams> {
+        TypedRequest::new(METHOD_FS_WATCH, params)
+    }
+
+    pub fn unwatch(params: FsUnwatchParams) -> TypedRequest<FsUnwatchParams> {
+        TypedRequest::new(METHOD_FS_UNWATCH, params)
     }
 
     pub fn export_evidence(params: EvidenceExportParams) -> TypedRequest<EvidenceExportParams> {
@@ -2698,6 +2544,26 @@ pub mod typed {
         TypedRequest::new(METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE, params)
     }
 
+    pub fn spawn_process(params: ProcessSpawnParams) -> TypedRequest<ProcessSpawnParams> {
+        TypedRequest::new(METHOD_PROCESS_SPAWN, params)
+    }
+
+    pub fn write_process_stdin(
+        params: ProcessWriteStdinParams,
+    ) -> TypedRequest<ProcessWriteStdinParams> {
+        TypedRequest::new(METHOD_PROCESS_WRITE_STDIN, params)
+    }
+
+    pub fn resize_process_pty(
+        params: ProcessResizePtyParams,
+    ) -> TypedRequest<ProcessResizePtyParams> {
+        TypedRequest::new(METHOD_PROCESS_RESIZE_PTY, params)
+    }
+
+    pub fn kill_process(params: ProcessKillParams) -> TypedRequest<ProcessKillParams> {
+        TypedRequest::new(METHOD_PROCESS_KILL, params)
+    }
+
     pub fn start_turn(
         params: AgentSessionTurnStartParams,
     ) -> TypedRequest<AgentSessionTurnStartParams> {
@@ -2721,6 +2587,52 @@ mod tests {
     use app_server_protocol::ClientInfo;
     use app_server_protocol::JsonRpcError;
     use serde_json::json;
+
+    #[test]
+    fn process_requests_use_exact_v2_methods() {
+        let mut client = AppServerClient::new();
+        let spawn = client
+            .spawn_process(ProcessSpawnParams {
+                command: vec!["echo".to_string(), "hello".to_string()],
+                process_handle: "process-1".to_string(),
+                cwd: "/workspace".to_string(),
+                tty: false,
+                stream_stdin: false,
+                stream_stdout_stderr: true,
+                output_bytes_cap: Some(None),
+                timeout_ms: Some(None),
+                env: None,
+                size: None,
+            })
+            .expect("spawn request");
+        let write = client
+            .write_process_stdin(ProcessWriteStdinParams {
+                process_handle: "process-1".to_string(),
+                delta_base64: Some("aGVsbG8=".to_string()),
+                close_stdin: true,
+            })
+            .expect("write request");
+        let resize = client
+            .resize_process_pty(ProcessResizePtyParams {
+                process_handle: "process-1".to_string(),
+                size: ProcessTerminalSize { rows: 24, cols: 80 },
+            })
+            .expect("resize request");
+        let kill = client
+            .kill_process(ProcessKillParams {
+                process_handle: "process-1".to_string(),
+            })
+            .expect("kill request");
+
+        assert_eq!(spawn.method, METHOD_PROCESS_SPAWN);
+        assert_eq!(
+            spawn.params.expect("spawn params")["outputBytesCap"],
+            json!(null)
+        );
+        assert_eq!(write.method, METHOD_PROCESS_WRITE_STDIN);
+        assert_eq!(resize.method, METHOD_PROCESS_RESIZE_PTY);
+        assert_eq!(kill.method, METHOD_PROCESS_KILL);
+    }
 
     #[test]
     fn initialize_request_uses_stable_method_and_incrementing_id() {
@@ -3888,14 +3800,6 @@ mod tests {
     fn app_data_surface_helpers_use_current_methods() {
         let mut client = AppServerClient::new();
 
-        let installed = client.list_plugin_installed().expect("installed plugins");
-        let shell_prepare = client
-            .prepare_plugin_shell(PluginShellPrepareParams {
-                descriptor: json!({
-                    "appId": "content-factory-app",
-                }),
-            })
-            .expect("plugin shell prepare");
         let knowledge = client
             .list_knowledge_packs(KnowledgeListPacksParams {
                 working_dir: "/workspace/project".to_string(),
@@ -4133,14 +4037,7 @@ mod tests {
                 workspace_root: Some("/workspace/project".to_string()),
             })
             .expect("memory store health");
-        let memory_store_reset = client
-            .reset_memory_store(MemoryStoreResetParams {
-                root: MemoryStoreRootParams {
-                    scope: app_server_protocol::MemoryStoreScope::Workspace,
-                    workspace_root: Some("/workspace/project".to_string()),
-                },
-            })
-            .expect("memory store reset");
+        let memory_reset = client.reset_memory().expect("memory reset");
         let memory_store_index_rebuild = client
             .rebuild_memory_store_index(MemoryStoreRootParams {
                 scope: app_server_protocol::MemoryStoreScope::Workspace,
@@ -4156,17 +4053,6 @@ mod tests {
             .clear_diagnostic_log_history()
             .expect("clear diagnostic history");
 
-        assert_eq!(installed.method, METHOD_PLUGIN_INSTALLED_LIST);
-        assert_eq!(installed.params.expect("params"), json!({}));
-        assert_eq!(shell_prepare.method, METHOD_PLUGIN_SHELL_PREPARE);
-        assert_eq!(
-            shell_prepare.params.expect("params"),
-            json!({
-                "descriptor": {
-                    "appId": "content-factory-app",
-                },
-            })
-        );
         assert_eq!(knowledge.method, METHOD_KNOWLEDGE_PACK_LIST);
         assert_eq!(
             knowledge.params.expect("params"),
@@ -4430,14 +4316,8 @@ mod tests {
                 "workspaceRoot": "/workspace/project",
             })
         );
-        assert_eq!(memory_store_reset.method, METHOD_MEMORY_STORE_RESET);
-        assert_eq!(
-            memory_store_reset.params.expect("params"),
-            json!({
-                "scope": "workspace",
-                "workspaceRoot": "/workspace/project",
-            })
-        );
+        assert_eq!(memory_reset.method, METHOD_MEMORY_RESET);
+        assert_eq!(memory_reset.params.expect("params"), json!({}));
         assert_eq!(
             memory_store_index_rebuild.method,
             METHOD_MEMORY_STORE_INDEX_REBUILD
@@ -4499,92 +4379,96 @@ mod tests {
     }
 
     #[test]
-    fn file_system_helpers_use_current_methods() {
+    fn fs_helpers_use_exact_v2_methods() {
         let mut client = AppServerClient::new();
 
-        let listing = client
-            .list_directory(FileSystemListDirectoryParams {
-                path: "/workspace".to_string(),
-            })
-            .expect("listing");
-        let preview = client
-            .read_file_preview(FileSystemReadFilePreviewParams {
-                path: "/workspace/README.md".to_string(),
-                max_size: Some(1024),
-            })
-            .expect("preview");
-        let create_file = client
-            .create_file(FileSystemCreateFileParams {
-                path: "/workspace/new.md".to_string(),
-            })
-            .expect("create file");
-        let create_directory = client
-            .create_directory(FileSystemCreateDirectoryParams {
-                path: "/workspace/new-dir".to_string(),
-            })
-            .expect("create directory");
-        let rename_file = client
-            .rename_file(FileSystemRenameFileParams {
-                old_path: "/workspace/new.md".to_string(),
-                new_path: "/workspace/renamed.md".to_string(),
-            })
-            .expect("rename file");
-        let delete_file = client
-            .delete_file(FileSystemDeleteFileParams {
-                path: "/workspace/renamed.md".to_string(),
-                recursive: Some(false),
-            })
-            .expect("delete file");
+        let requests = [
+            client
+                .read_file(FsReadFileParams {
+                    path: "/workspace/README.md".to_string(),
+                })
+                .expect("read file"),
+            client
+                .write_file(FsWriteFileParams {
+                    path: "/workspace/new.md".to_string(),
+                    data_base64: "TGlNZQ==".to_string(),
+                })
+                .expect("write file"),
+            client
+                .create_directory(FsCreateDirectoryParams {
+                    path: "/workspace/new-dir".to_string(),
+                    recursive: Some(true),
+                })
+                .expect("create directory"),
+            client
+                .get_metadata(FsGetMetadataParams {
+                    path: "/workspace/new.md".to_string(),
+                })
+                .expect("get metadata"),
+            client
+                .read_directory(FsReadDirectoryParams {
+                    path: "/workspace".to_string(),
+                })
+                .expect("read directory"),
+            client
+                .remove(FsRemoveParams {
+                    path: "/workspace/new.md".to_string(),
+                    recursive: Some(false),
+                    force: Some(true),
+                })
+                .expect("remove"),
+            client
+                .copy(FsCopyParams {
+                    source_path: "/workspace/source".to_string(),
+                    destination_path: "/workspace/destination".to_string(),
+                    recursive: true,
+                })
+                .expect("copy"),
+            client
+                .watch(FsWatchParams {
+                    watch_id: "workspace".to_string(),
+                    path: "/workspace".to_string(),
+                })
+                .expect("watch"),
+            client
+                .unwatch(FsUnwatchParams {
+                    watch_id: "workspace".to_string(),
+                })
+                .expect("unwatch"),
+        ];
 
-        assert_eq!(listing.id, RequestId::Integer(1));
-        assert_eq!(listing.method, METHOD_FILE_SYSTEM_LIST_DIRECTORY);
+        let methods = requests
+            .iter()
+            .map(|request| request.method.as_str())
+            .collect::<Vec<_>>();
         assert_eq!(
-            listing.params.expect("params"),
-            json!({
-                "path": "/workspace",
-            })
+            methods,
+            vec![
+                METHOD_FS_READ_FILE,
+                METHOD_FS_WRITE_FILE,
+                METHOD_FS_CREATE_DIRECTORY,
+                METHOD_FS_GET_METADATA,
+                METHOD_FS_READ_DIRECTORY,
+                METHOD_FS_REMOVE,
+                METHOD_FS_COPY,
+                METHOD_FS_WATCH,
+                METHOD_FS_UNWATCH,
+            ]
         );
-        assert_eq!(preview.id, RequestId::Integer(2));
-        assert_eq!(preview.method, METHOD_FILE_SYSTEM_READ_FILE_PREVIEW);
+        assert_eq!(requests[0].id, RequestId::Integer(1));
         assert_eq!(
-            preview.params.expect("params"),
-            json!({
-                "path": "/workspace/README.md",
-                "maxSize": 1024,
-            })
-        );
-        assert_eq!(create_file.id, RequestId::Integer(3));
-        assert_eq!(create_file.method, METHOD_FILE_SYSTEM_CREATE_FILE);
-        assert_eq!(
-            create_file.params.expect("params"),
-            json!({
+            requests[1].params.as_ref().expect("write params"),
+            &json!({
                 "path": "/workspace/new.md",
+                "dataBase64": "TGlNZQ==",
             })
         );
-        assert_eq!(create_directory.id, RequestId::Integer(4));
-        assert_eq!(create_directory.method, METHOD_FILE_SYSTEM_CREATE_DIRECTORY);
         assert_eq!(
-            create_directory.params.expect("params"),
-            json!({
-                "path": "/workspace/new-dir",
-            })
-        );
-        assert_eq!(rename_file.id, RequestId::Integer(5));
-        assert_eq!(rename_file.method, METHOD_FILE_SYSTEM_RENAME_FILE);
-        assert_eq!(
-            rename_file.params.expect("params"),
-            json!({
-                "oldPath": "/workspace/new.md",
-                "newPath": "/workspace/renamed.md",
-            })
-        );
-        assert_eq!(delete_file.id, RequestId::Integer(6));
-        assert_eq!(delete_file.method, METHOD_FILE_SYSTEM_DELETE_FILE);
-        assert_eq!(
-            delete_file.params.expect("params"),
-            json!({
-                "path": "/workspace/renamed.md",
-                "recursive": false,
+            requests[6].params.as_ref().expect("copy params"),
+            &json!({
+                "sourcePath": "/workspace/source",
+                "destinationPath": "/workspace/destination",
+                "recursive": true,
             })
         );
     }
@@ -5000,16 +4884,18 @@ mod tests {
 
         assert!(methods.contains(&METHOD_INITIALIZE));
         assert!(methods.contains(&METHOD_ARTIFACT_READ));
-        assert!(methods.contains(&METHOD_FILE_SYSTEM_LIST_DIRECTORY));
-        assert!(methods.contains(&METHOD_FILE_SYSTEM_READ_FILE_PREVIEW));
-        assert!(methods.contains(&METHOD_FILE_SYSTEM_CREATE_FILE));
-        assert!(methods.contains(&METHOD_FILE_SYSTEM_CREATE_DIRECTORY));
-        assert!(methods.contains(&METHOD_FILE_SYSTEM_RENAME_FILE));
-        assert!(methods.contains(&METHOD_FILE_SYSTEM_DELETE_FILE));
+        assert!(methods.contains(&METHOD_FS_READ_FILE));
+        assert!(methods.contains(&METHOD_FS_WRITE_FILE));
+        assert!(methods.contains(&METHOD_FS_CREATE_DIRECTORY));
+        assert!(methods.contains(&METHOD_FS_GET_METADATA));
+        assert!(methods.contains(&METHOD_FS_READ_DIRECTORY));
+        assert!(methods.contains(&METHOD_FS_REMOVE));
+        assert!(methods.contains(&METHOD_FS_COPY));
+        assert!(methods.contains(&METHOD_FS_WATCH));
+        assert!(methods.contains(&METHOD_FS_UNWATCH));
         assert!(methods.contains(&METHOD_EVIDENCE_EXPORT));
         assert!(methods.contains(&METHOD_TURN_START));
         assert!(methods.contains(&METHOD_WORKSPACE_LIST));
-        assert!(methods.contains(&METHOD_PLUGIN_SHELL_PREPARE));
         assert!(methods.contains(&METHOD_WORKSPACE_READ));
         assert!(methods.contains(&METHOD_WORKSPACE_BY_PATH_READ));
         assert!(methods.contains(&METHOD_WORKSPACE_ENSURE));
@@ -5035,7 +4921,6 @@ mod tests {
         assert!(methods.contains(&METHOD_SKILL_PACKAGE_LOCAL_INSTALL));
         assert!(methods.contains(&METHOD_SKILL_PACKAGE_EXPORT));
         assert!(methods.contains(&METHOD_WORKSPACE_SKILL_BINDINGS_LIST));
-        assert!(methods.contains(&METHOD_PLUGIN_INSTALLED_LIST));
         assert!(methods.contains(&METHOD_KNOWLEDGE_PACK_LIST));
         assert!(methods.contains(&METHOD_KNOWLEDGE_PACK_READ));
         assert!(methods.contains(&METHOD_AUTOMATION_SCHEDULER_CONFIG_READ));
@@ -5055,18 +4940,15 @@ mod tests {
         assert!(methods.contains(&METHOD_AGENT_SESSION_EVENT));
         assert!(is_app_server_request_method(METHOD_CAPABILITY_LIST));
         assert!(is_app_server_request_method(METHOD_ARTIFACT_READ));
-        assert!(is_app_server_request_method(
-            METHOD_FILE_SYSTEM_LIST_DIRECTORY
-        ));
-        assert!(is_app_server_request_method(
-            METHOD_FILE_SYSTEM_READ_FILE_PREVIEW
-        ));
-        assert!(is_app_server_request_method(METHOD_FILE_SYSTEM_CREATE_FILE));
-        assert!(is_app_server_request_method(
-            METHOD_FILE_SYSTEM_CREATE_DIRECTORY
-        ));
-        assert!(is_app_server_request_method(METHOD_FILE_SYSTEM_RENAME_FILE));
-        assert!(is_app_server_request_method(METHOD_FILE_SYSTEM_DELETE_FILE));
+        assert!(is_app_server_request_method(METHOD_FS_READ_FILE));
+        assert!(is_app_server_request_method(METHOD_FS_WRITE_FILE));
+        assert!(is_app_server_request_method(METHOD_FS_CREATE_DIRECTORY));
+        assert!(is_app_server_request_method(METHOD_FS_GET_METADATA));
+        assert!(is_app_server_request_method(METHOD_FS_READ_DIRECTORY));
+        assert!(is_app_server_request_method(METHOD_FS_REMOVE));
+        assert!(is_app_server_request_method(METHOD_FS_COPY));
+        assert!(is_app_server_request_method(METHOD_FS_WATCH));
+        assert!(is_app_server_request_method(METHOD_FS_UNWATCH));
         assert!(is_app_server_request_method(METHOD_EVIDENCE_EXPORT));
         assert!(is_app_server_request_method(METHOD_WORKSPACE_LIST));
         assert!(is_app_server_request_method(
@@ -5097,7 +4979,6 @@ mod tests {
             METHOD_BROWSER_SESSION_ACTION_EXECUTE
         ));
         assert!(is_app_server_request_method(METHOD_SKILLS_LIST));
-        assert!(is_app_server_request_method(METHOD_PLUGIN_INSTALLED_LIST));
         assert!(is_app_server_request_method(METHOD_KNOWLEDGE_PACK_LIST));
         assert!(is_app_server_request_method(METHOD_KNOWLEDGE_PACK_READ));
         assert!(is_app_server_request_method(

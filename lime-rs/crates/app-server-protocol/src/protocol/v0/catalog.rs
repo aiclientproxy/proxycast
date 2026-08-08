@@ -27,12 +27,10 @@ pub struct AppServerMethodSpec {
 #[serde(rename_all = "camelCase")]
 pub enum AppServerRequestSerializationScope {
     Thread,
-    ExecutionProcess,
     ProjectShellSession,
     McpOauth,
     McpResourceSubscription,
     BrowserSession,
-    FileSystemMutation,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -64,18 +62,6 @@ pub enum AppServerRequestMethod {
     CapabilityList,
     #[serde(rename = "artifact/read")]
     ArtifactRead,
-    #[serde(rename = "fileSystem/listDirectory")]
-    FileSystemListDirectory,
-    #[serde(rename = "fileSystem/readFilePreview")]
-    FileSystemReadFilePreview,
-    #[serde(rename = "fileSystem/createFile")]
-    FileSystemCreateFile,
-    #[serde(rename = "fileSystem/createDirectory")]
-    FileSystemCreateDirectory,
-    #[serde(rename = "fileSystem/renameFile")]
-    FileSystemRenameFile,
-    #[serde(rename = "fileSystem/deleteFile")]
-    FileSystemDeleteFile,
     #[serde(rename = "projectGit/status")]
     ProjectGitStatus,
     #[serde(rename = "projectGit/diff")]
@@ -98,18 +84,6 @@ pub enum AppServerRequestMethod {
     ProjectShellSessionKill,
     #[serde(rename = "projectShell/session/drainEvents")]
     ProjectShellSessionDrainEvents,
-    #[serde(rename = "executionProcess/start")]
-    ExecutionProcessStart,
-    #[serde(rename = "executionProcess/writeStdin")]
-    ExecutionProcessWriteStdin,
-    #[serde(rename = "executionProcess/interrupt")]
-    ExecutionProcessInterrupt,
-    #[serde(rename = "executionProcess/terminate")]
-    ExecutionProcessTerminate,
-    #[serde(rename = "executionProcess/status")]
-    ExecutionProcessStatus,
-    #[serde(rename = "executionProcess/drainOutput")]
-    ExecutionProcessDrainOutput,
     #[serde(rename = "evidence/export")]
     EvidenceExport,
     #[serde(rename = "agentSession/handoffBundle/export")]
@@ -350,32 +324,6 @@ pub enum AppServerRequestMethod {
     BrowserSessionEventList,
     #[serde(rename = "browserSession/action/execute")]
     BrowserSessionActionExecute,
-    #[serde(rename = "pluginLocalPackage/inspect")]
-    PluginLocalPackageInspect,
-    #[serde(rename = "pluginLocalPackage/export")]
-    PluginLocalPackageExport,
-    #[serde(rename = "pluginPackage/fetchCloud")]
-    PluginPackageFetchCloud,
-    #[serde(rename = "pluginInstalled/save")]
-    PluginInstalledSave,
-    #[serde(rename = "pluginInstalled/list")]
-    PluginInstalledList,
-    #[serde(rename = "pluginInstalled/disabled/set")]
-    PluginInstalledDisabledSet,
-    #[serde(rename = "pluginInstalled/uninstall/rehearsal")]
-    PluginInstalledUninstallRehearsal,
-    #[serde(rename = "pluginInstalled/uninstall")]
-    PluginInstalledUninstall,
-    #[serde(rename = "pluginHostLifecycle/list")]
-    PluginHostLifecycleList,
-    #[serde(rename = "pluginShell/prepare")]
-    PluginShellPrepare,
-    #[serde(rename = "pluginUiRuntime/start")]
-    PluginUiRuntimeStart,
-    #[serde(rename = "pluginUiRuntime/status")]
-    PluginUiRuntimeStatus,
-    #[serde(rename = "pluginUiRuntime/stop")]
-    PluginUiRuntimeStop,
     #[serde(rename = "soulStylePack/install")]
     SoulStylePackInstall,
     #[serde(rename = "soulStylePack/list")]
@@ -482,8 +430,6 @@ pub enum AppServerRequestMethod {
     MemoryStoreReviewResolve,
     #[serde(rename = "memoryStore/health")]
     MemoryStoreHealth,
-    #[serde(rename = "memoryStore/reset")]
-    MemoryStoreReset,
     #[serde(rename = "memoryStore/index/rebuild")]
     MemoryStoreIndexRebuild,
     #[serde(rename = "log/list")]
@@ -590,12 +536,6 @@ impl AppServerRequestMethod {
             Self::Initialize => METHOD_INITIALIZE,
             Self::CapabilityList => METHOD_CAPABILITY_LIST,
             Self::ArtifactRead => METHOD_ARTIFACT_READ,
-            Self::FileSystemListDirectory => METHOD_FILE_SYSTEM_LIST_DIRECTORY,
-            Self::FileSystemReadFilePreview => METHOD_FILE_SYSTEM_READ_FILE_PREVIEW,
-            Self::FileSystemCreateFile => METHOD_FILE_SYSTEM_CREATE_FILE,
-            Self::FileSystemCreateDirectory => METHOD_FILE_SYSTEM_CREATE_DIRECTORY,
-            Self::FileSystemRenameFile => METHOD_FILE_SYSTEM_RENAME_FILE,
-            Self::FileSystemDeleteFile => METHOD_FILE_SYSTEM_DELETE_FILE,
             Self::ProjectGitStatus => METHOD_PROJECT_GIT_STATUS,
             Self::ProjectGitDiff => METHOD_PROJECT_GIT_DIFF,
             Self::ProjectGitCommitsList => METHOD_PROJECT_GIT_COMMITS_LIST,
@@ -607,12 +547,6 @@ impl AppServerRequestMethod {
             Self::ProjectShellSessionResize => METHOD_PROJECT_SHELL_SESSION_RESIZE,
             Self::ProjectShellSessionKill => METHOD_PROJECT_SHELL_SESSION_KILL,
             Self::ProjectShellSessionDrainEvents => METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS,
-            Self::ExecutionProcessStart => METHOD_EXECUTION_PROCESS_START,
-            Self::ExecutionProcessWriteStdin => METHOD_EXECUTION_PROCESS_WRITE_STDIN,
-            Self::ExecutionProcessInterrupt => METHOD_EXECUTION_PROCESS_INTERRUPT,
-            Self::ExecutionProcessTerminate => METHOD_EXECUTION_PROCESS_TERMINATE,
-            Self::ExecutionProcessStatus => METHOD_EXECUTION_PROCESS_STATUS,
-            Self::ExecutionProcessDrainOutput => METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT,
             Self::EvidenceExport => METHOD_EVIDENCE_EXPORT,
             Self::AgentSessionHandoffBundleExport => METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT,
             Self::AgentSessionReplayCaseExport => METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT,
@@ -743,19 +677,6 @@ impl AppServerRequestMethod {
             Self::BrowserSessionClose => METHOD_BROWSER_SESSION_CLOSE,
             Self::BrowserSessionEventList => METHOD_BROWSER_SESSION_EVENT_LIST,
             Self::BrowserSessionActionExecute => METHOD_BROWSER_SESSION_ACTION_EXECUTE,
-            Self::PluginLocalPackageInspect => METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT,
-            Self::PluginLocalPackageExport => METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT,
-            Self::PluginPackageFetchCloud => METHOD_PLUGIN_PACKAGE_FETCH_CLOUD,
-            Self::PluginInstalledSave => METHOD_PLUGIN_INSTALLED_SAVE,
-            Self::PluginInstalledList => METHOD_PLUGIN_INSTALLED_LIST,
-            Self::PluginInstalledDisabledSet => METHOD_PLUGIN_INSTALLED_DISABLED_SET,
-            Self::PluginInstalledUninstallRehearsal => METHOD_PLUGIN_INSTALLED_UNINSTALL_REHEARSAL,
-            Self::PluginInstalledUninstall => METHOD_PLUGIN_INSTALLED_UNINSTALL,
-            Self::PluginHostLifecycleList => METHOD_PLUGIN_HOST_LIFECYCLE_LIST,
-            Self::PluginShellPrepare => METHOD_PLUGIN_SHELL_PREPARE,
-            Self::PluginUiRuntimeStart => METHOD_PLUGIN_UI_RUNTIME_START,
-            Self::PluginUiRuntimeStatus => METHOD_PLUGIN_UI_RUNTIME_STATUS,
-            Self::PluginUiRuntimeStop => METHOD_PLUGIN_UI_RUNTIME_STOP,
             Self::SoulStylePackInstall => METHOD_SOUL_STYLE_PACK_INSTALL,
             Self::SoulStylePackList => METHOD_SOUL_STYLE_PACK_LIST,
             Self::SoulStylePackStatusSet => METHOD_SOUL_STYLE_PACK_STATUS_SET,
@@ -809,7 +730,6 @@ impl AppServerRequestMethod {
             Self::MemoryStoreReviewList => METHOD_MEMORY_STORE_REVIEW_LIST,
             Self::MemoryStoreReviewResolve => METHOD_MEMORY_STORE_REVIEW_RESOLVE,
             Self::MemoryStoreHealth => METHOD_MEMORY_STORE_HEALTH,
-            Self::MemoryStoreReset => METHOD_MEMORY_STORE_RESET,
             Self::MemoryStoreIndexRebuild => METHOD_MEMORY_STORE_INDEX_REBUILD,
             Self::LogList => METHOD_LOG_LIST,
             Self::LogPersistedTail => METHOD_LOG_PERSISTED_TAIL,
@@ -867,12 +787,6 @@ impl AppServerRequestMethod {
             METHOD_INITIALIZE => Some(Self::Initialize),
             METHOD_CAPABILITY_LIST => Some(Self::CapabilityList),
             METHOD_ARTIFACT_READ => Some(Self::ArtifactRead),
-            METHOD_FILE_SYSTEM_LIST_DIRECTORY => Some(Self::FileSystemListDirectory),
-            METHOD_FILE_SYSTEM_READ_FILE_PREVIEW => Some(Self::FileSystemReadFilePreview),
-            METHOD_FILE_SYSTEM_CREATE_FILE => Some(Self::FileSystemCreateFile),
-            METHOD_FILE_SYSTEM_CREATE_DIRECTORY => Some(Self::FileSystemCreateDirectory),
-            METHOD_FILE_SYSTEM_RENAME_FILE => Some(Self::FileSystemRenameFile),
-            METHOD_FILE_SYSTEM_DELETE_FILE => Some(Self::FileSystemDeleteFile),
             METHOD_PROJECT_GIT_STATUS => Some(Self::ProjectGitStatus),
             METHOD_PROJECT_GIT_DIFF => Some(Self::ProjectGitDiff),
             METHOD_PROJECT_GIT_COMMITS_LIST => Some(Self::ProjectGitCommitsList),
@@ -884,12 +798,6 @@ impl AppServerRequestMethod {
             METHOD_PROJECT_SHELL_SESSION_RESIZE => Some(Self::ProjectShellSessionResize),
             METHOD_PROJECT_SHELL_SESSION_KILL => Some(Self::ProjectShellSessionKill),
             METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS => Some(Self::ProjectShellSessionDrainEvents),
-            METHOD_EXECUTION_PROCESS_START => Some(Self::ExecutionProcessStart),
-            METHOD_EXECUTION_PROCESS_WRITE_STDIN => Some(Self::ExecutionProcessWriteStdin),
-            METHOD_EXECUTION_PROCESS_INTERRUPT => Some(Self::ExecutionProcessInterrupt),
-            METHOD_EXECUTION_PROCESS_TERMINATE => Some(Self::ExecutionProcessTerminate),
-            METHOD_EXECUTION_PROCESS_STATUS => Some(Self::ExecutionProcessStatus),
-            METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT => Some(Self::ExecutionProcessDrainOutput),
             METHOD_EVIDENCE_EXPORT => Some(Self::EvidenceExport),
             METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT => {
                 Some(Self::AgentSessionHandoffBundleExport)
@@ -1032,21 +940,6 @@ impl AppServerRequestMethod {
             METHOD_BROWSER_SESSION_CLOSE => Some(Self::BrowserSessionClose),
             METHOD_BROWSER_SESSION_EVENT_LIST => Some(Self::BrowserSessionEventList),
             METHOD_BROWSER_SESSION_ACTION_EXECUTE => Some(Self::BrowserSessionActionExecute),
-            METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT => Some(Self::PluginLocalPackageInspect),
-            METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT => Some(Self::PluginLocalPackageExport),
-            METHOD_PLUGIN_PACKAGE_FETCH_CLOUD => Some(Self::PluginPackageFetchCloud),
-            METHOD_PLUGIN_INSTALLED_SAVE => Some(Self::PluginInstalledSave),
-            METHOD_PLUGIN_INSTALLED_LIST => Some(Self::PluginInstalledList),
-            METHOD_PLUGIN_INSTALLED_DISABLED_SET => Some(Self::PluginInstalledDisabledSet),
-            METHOD_PLUGIN_INSTALLED_UNINSTALL_REHEARSAL => {
-                Some(Self::PluginInstalledUninstallRehearsal)
-            }
-            METHOD_PLUGIN_INSTALLED_UNINSTALL => Some(Self::PluginInstalledUninstall),
-            METHOD_PLUGIN_HOST_LIFECYCLE_LIST => Some(Self::PluginHostLifecycleList),
-            METHOD_PLUGIN_SHELL_PREPARE => Some(Self::PluginShellPrepare),
-            METHOD_PLUGIN_UI_RUNTIME_START => Some(Self::PluginUiRuntimeStart),
-            METHOD_PLUGIN_UI_RUNTIME_STATUS => Some(Self::PluginUiRuntimeStatus),
-            METHOD_PLUGIN_UI_RUNTIME_STOP => Some(Self::PluginUiRuntimeStop),
             METHOD_SOUL_STYLE_PACK_INSTALL => Some(Self::SoulStylePackInstall),
             METHOD_SOUL_STYLE_PACK_LIST => Some(Self::SoulStylePackList),
             METHOD_SOUL_STYLE_PACK_STATUS_SET => Some(Self::SoulStylePackStatusSet),
@@ -1102,7 +995,6 @@ impl AppServerRequestMethod {
             METHOD_MEMORY_STORE_REVIEW_LIST => Some(Self::MemoryStoreReviewList),
             METHOD_MEMORY_STORE_REVIEW_RESOLVE => Some(Self::MemoryStoreReviewResolve),
             METHOD_MEMORY_STORE_HEALTH => Some(Self::MemoryStoreHealth),
-            METHOD_MEMORY_STORE_RESET => Some(Self::MemoryStoreReset),
             METHOD_MEMORY_STORE_INDEX_REBUILD => Some(Self::MemoryStoreIndexRebuild),
             METHOD_LOG_LIST => Some(Self::LogList),
             METHOD_LOG_PERSISTED_TAIL => Some(Self::LogPersistedTail),
@@ -1210,30 +1102,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
-        method: METHOD_FILE_SYSTEM_LIST_DIRECTORY,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_FILE_SYSTEM_READ_FILE_PREVIEW,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_FILE_SYSTEM_CREATE_FILE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_FILE_SYSTEM_CREATE_DIRECTORY,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_FILE_SYSTEM_RENAME_FILE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_FILE_SYSTEM_DELETE_FILE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
         method: METHOD_PROJECT_GIT_STATUS,
         kind: AppServerMethodKind::Request,
     },
@@ -1275,30 +1143,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_EXECUTION_PROCESS_START,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_EXECUTION_PROCESS_WRITE_STDIN,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_EXECUTION_PROCESS_INTERRUPT,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_EXECUTION_PROCESS_TERMINATE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_EXECUTION_PROCESS_STATUS,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
@@ -1786,58 +1630,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
-        method: METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_PACKAGE_FETCH_CLOUD,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_INSTALLED_SAVE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_INSTALLED_LIST,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_INSTALLED_DISABLED_SET,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_INSTALLED_UNINSTALL_REHEARSAL,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_INSTALLED_UNINSTALL,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_HOST_LIFECYCLE_LIST,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_SHELL_PREPARE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_UI_RUNTIME_START,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_UI_RUNTIME_STATUS,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PLUGIN_UI_RUNTIME_STOP,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
         method: METHOD_SOUL_STYLE_PACK_INSTALL,
         kind: AppServerMethodKind::Request,
     },
@@ -2047,10 +1839,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_MEMORY_STORE_HEALTH,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_MEMORY_STORE_RESET,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
@@ -2377,22 +2165,6 @@ pub const APP_SERVER_REQUEST_SERIALIZATION_SCOPES: &[AppServerRequestSerializati
         scope: AppServerRequestSerializationScope::ProjectShellSession,
     },
     AppServerRequestSerializationScopeSpec {
-        method: METHOD_EXECUTION_PROCESS_START,
-        scope: AppServerRequestSerializationScope::ExecutionProcess,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_EXECUTION_PROCESS_WRITE_STDIN,
-        scope: AppServerRequestSerializationScope::ExecutionProcess,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_EXECUTION_PROCESS_INTERRUPT,
-        scope: AppServerRequestSerializationScope::ExecutionProcess,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_EXECUTION_PROCESS_TERMINATE,
-        scope: AppServerRequestSerializationScope::ExecutionProcess,
-    },
-    AppServerRequestSerializationScopeSpec {
         method: METHOD_MCP_SERVER_OAUTH_LOGIN,
         scope: AppServerRequestSerializationScope::McpOauth,
     },
@@ -2419,22 +2191,6 @@ pub const APP_SERVER_REQUEST_SERIALIZATION_SCOPES: &[AppServerRequestSerializati
     AppServerRequestSerializationScopeSpec {
         method: METHOD_BROWSER_SESSION_ACTION_EXECUTE,
         scope: AppServerRequestSerializationScope::BrowserSession,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_FILE_SYSTEM_CREATE_FILE,
-        scope: AppServerRequestSerializationScope::FileSystemMutation,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_FILE_SYSTEM_CREATE_DIRECTORY,
-        scope: AppServerRequestSerializationScope::FileSystemMutation,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_FILE_SYSTEM_RENAME_FILE,
-        scope: AppServerRequestSerializationScope::FileSystemMutation,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_FILE_SYSTEM_DELETE_FILE,
-        scope: AppServerRequestSerializationScope::FileSystemMutation,
     },
 ];
 

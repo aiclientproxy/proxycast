@@ -348,30 +348,6 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
         [],
     );
 
-    // 已安装插件表
-    // _需求: 1.2, 1.3_
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS installed_plugins (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            version TEXT NOT NULL,
-            description TEXT,
-            author TEXT,
-            install_path TEXT NOT NULL,
-            installed_at TEXT NOT NULL,
-            source_type TEXT NOT NULL,
-            source_data TEXT,
-            enabled INTEGER DEFAULT 1
-        )",
-        [],
-    )?;
-
-    // 创建 installed_plugins 索引
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_installed_plugins_name ON installed_plugins(name)",
-        [],
-    )?;
-
     // ============================================================================
     // Orchestrator 相关表
     // ============================================================================

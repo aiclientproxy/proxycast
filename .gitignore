@@ -336,3 +336,4 @@ benchmarks/*
 !benchmarks/lime-agent-runtime/**
 .tmp-smoke/
 packages/lime-cli-npm/bin/
+.gstack/

@@ -75,24 +75,19 @@ impl RequestProcessor {
             app_server_protocol::protocol::v2::METHOD_ARTIFACT_WRITE => {
                 self.handle_artifact_write_v2_impl(params).boxed()
             }
-            METHOD_FILE_SYSTEM_LIST_DIRECTORY => {
-                self.handle_file_system_list_directory_impl(params).boxed()
-            }
-            METHOD_FILE_SYSTEM_READ_FILE_PREVIEW => self
-                .handle_file_system_read_file_preview_impl(params)
+            v2::METHOD_FS_READ_FILE => self.handle_fs_read_file_impl(params).boxed(),
+            v2::METHOD_FS_WRITE_FILE => self.handle_fs_write_file_impl(params).boxed(),
+            v2::METHOD_FS_CREATE_DIRECTORY => self.handle_fs_create_directory_impl(params).boxed(),
+            v2::METHOD_FS_GET_METADATA => self.handle_fs_get_metadata_impl(params).boxed(),
+            v2::METHOD_FS_READ_DIRECTORY => self.handle_fs_read_directory_impl(params).boxed(),
+            v2::METHOD_FS_REMOVE => self.handle_fs_remove_impl(params).boxed(),
+            v2::METHOD_FS_COPY => self.handle_fs_copy_impl(params).boxed(),
+            v2::METHOD_FS_WATCH => self
+                .handle_fs_watch_impl(params, connection_request_id.clone())
                 .boxed(),
-            METHOD_FILE_SYSTEM_CREATE_FILE => {
-                self.handle_file_system_create_file_impl(params).boxed()
-            }
-            METHOD_FILE_SYSTEM_CREATE_DIRECTORY => self
-                .handle_file_system_create_directory_impl(params)
+            v2::METHOD_FS_UNWATCH => self
+                .handle_fs_unwatch_impl(params, connection_request_id.clone())
                 .boxed(),
-            METHOD_FILE_SYSTEM_RENAME_FILE => {
-                self.handle_file_system_rename_file_impl(params).boxed()
-            }
-            METHOD_FILE_SYSTEM_DELETE_FILE => {
-                self.handle_file_system_delete_file_impl(params).boxed()
-            }
             METHOD_PROJECT_GIT_STATUS => self.handle_project_git_status_impl(params).boxed(),
             METHOD_PROJECT_GIT_DIFF => self.handle_project_git_diff_impl(params).boxed(),
             METHOD_PROJECT_GIT_COMMITS_LIST => {
@@ -122,23 +117,17 @@ impl RequestProcessor {
             METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS => self
                 .handle_project_shell_session_drain_events_impl(params)
                 .boxed(),
-            METHOD_EXECUTION_PROCESS_START => {
-                self.handle_execution_process_start_impl(params).boxed()
-            }
-            METHOD_EXECUTION_PROCESS_WRITE_STDIN => self
-                .handle_execution_process_write_stdin_impl(params)
+            v2::METHOD_PROCESS_SPAWN => self
+                .handle_process_spawn_impl(params, connection_request_id.clone())
                 .boxed(),
-            METHOD_EXECUTION_PROCESS_INTERRUPT => {
-                self.handle_execution_process_interrupt_impl(params).boxed()
-            }
-            METHOD_EXECUTION_PROCESS_TERMINATE => {
-                self.handle_execution_process_terminate_impl(params).boxed()
-            }
-            METHOD_EXECUTION_PROCESS_STATUS => {
-                self.handle_execution_process_status_impl(params).boxed()
-            }
-            METHOD_EXECUTION_PROCESS_DRAIN_OUTPUT => self
-                .handle_execution_process_drain_output_impl(params)
+            v2::METHOD_PROCESS_WRITE_STDIN => self
+                .handle_process_write_stdin_impl(params, connection_request_id.clone())
+                .boxed(),
+            v2::METHOD_PROCESS_RESIZE_PTY => self
+                .handle_process_resize_pty_impl(params, connection_request_id.clone())
+                .boxed(),
+            v2::METHOD_PROCESS_KILL => self
+                .handle_process_kill_impl(params, connection_request_id.clone())
                 .boxed(),
             METHOD_EVIDENCE_EXPORT => self.handle_evidence_export(params).boxed(),
             METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT => {
@@ -237,6 +226,9 @@ impl RequestProcessor {
             }
             app_server_protocol::protocol::v2::METHOD_THREAD_MEMORY_MODE_SET => {
                 self.handle_thread_memory_mode_set_impl(params).boxed()
+            }
+            app_server_protocol::protocol::v2::METHOD_MEMORY_RESET => {
+                self.handle_memory_reset_impl().boxed()
             }
             app_server_protocol::protocol::v2::METHOD_THREAD_SHELL_COMMAND => {
                 self.handle_thread_shell_command_impl(params).boxed()
@@ -545,39 +537,6 @@ impl RequestProcessor {
             app_server_protocol::protocol::v2::METHOD_PLUGIN_ENABLED_SET => self
                 .handle_plugin_catalog_enabled_set_v2_impl(params)
                 .boxed(),
-            METHOD_PLUGIN_LOCAL_PACKAGE_INSPECT => self
-                .handle_plugin_local_package_inspect_impl(params)
-                .boxed(),
-            METHOD_PLUGIN_LOCAL_PACKAGE_EXPORT => {
-                self.handle_plugin_local_package_export_impl(params).boxed()
-            }
-            METHOD_PLUGIN_PACKAGE_FETCH_CLOUD => {
-                self.handle_plugin_package_fetch_cloud_impl(params).boxed()
-            }
-            METHOD_PLUGIN_INSTALLED_SAVE => self.handle_plugin_installed_save_impl(params).boxed(),
-            METHOD_PLUGIN_INSTALLED_LIST => self.handle_plugin_installed_list_impl().boxed(),
-            METHOD_PLUGIN_INSTALLED_DISABLED_SET => self
-                .handle_plugin_installed_disabled_set_impl(params)
-                .boxed(),
-            METHOD_PLUGIN_INSTALLED_UNINSTALL_REHEARSAL => self
-                .handle_plugin_installed_uninstall_rehearsal_impl(params)
-                .boxed(),
-            METHOD_PLUGIN_INSTALLED_UNINSTALL => {
-                self.handle_plugin_installed_uninstall_impl(params).boxed()
-            }
-            METHOD_PLUGIN_HOST_LIFECYCLE_LIST => {
-                self.handle_plugin_host_lifecycle_list_impl().boxed()
-            }
-            METHOD_PLUGIN_SHELL_PREPARE => self.handle_plugin_shell_prepare_impl(params).boxed(),
-            METHOD_PLUGIN_UI_RUNTIME_START => {
-                self.handle_plugin_ui_runtime_start_impl(params).boxed()
-            }
-            METHOD_PLUGIN_UI_RUNTIME_STATUS => {
-                self.handle_plugin_ui_runtime_status_impl(params).boxed()
-            }
-            METHOD_PLUGIN_UI_RUNTIME_STOP => {
-                self.handle_plugin_ui_runtime_stop_impl(params).boxed()
-            }
             METHOD_SOUL_STYLE_PACK_INSTALL => {
                 self.handle_soul_style_pack_install_impl(params).boxed()
             }
@@ -689,7 +648,6 @@ impl RequestProcessor {
                 self.handle_memory_store_review_resolve_impl(params).boxed()
             }
             METHOD_MEMORY_STORE_HEALTH => self.handle_memory_store_health_impl(params).boxed(),
-            METHOD_MEMORY_STORE_RESET => self.handle_memory_store_reset_impl(params).boxed(),
             METHOD_MEMORY_STORE_INDEX_REBUILD => {
                 self.handle_memory_store_index_rebuild_impl(params).boxed()
             }

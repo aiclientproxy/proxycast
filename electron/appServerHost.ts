@@ -43,16 +43,12 @@ import { AppServerDynamicToolHost } from "./appServerDynamicToolHost";
 const DEFAULT_APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
 const APP_SERVER_BACKEND_TIMEOUT_GRACE_MS = 30_000;
 const APP_SERVER_TURN_START_METHOD = "turn/start";
-const APP_SERVER_PLUGIN_UI_RUNTIME_START_METHOD = "pluginUiRuntime/start";
 const APP_SERVER_PROJECT_SHELL_DRAIN_EVENTS_METHOD =
   "projectShell/session/drainEvents";
 const APP_SERVER_CONVERSATION_IMPORT_THREAD_COMMIT_METHOD =
   "conversationImport/thread/commit";
 const APP_SERVER_CONVERSATION_IMPORT_JOB_READ_METHOD =
   "conversationImport/job/read";
-const APP_SERVER_PLUGIN_UI_RUNTIME_START_TIMEOUT_MS = 60_000;
-const APP_SERVER_PLUGIN_INSTALLED_SAVE_TIMEOUT_MS = 240_000;
-const APP_SERVER_PLUGIN_PACKAGE_INSPECT_TIMEOUT_MS = 240_000;
 const APP_SERVER_PROJECT_SHELL_DRAIN_EVENTS_TIMEOUT_MS = 3_000;
 const APP_SERVER_CONVERSATION_IMPORT_THREAD_COMMIT_TIMEOUT_MS = 180_000;
 const APP_SERVER_CONVERSATION_IMPORT_SCAN_TIMEOUT_MS = 120_000;
@@ -1044,15 +1040,6 @@ function resolveAppServerRequestTimeoutMs(
 }
 
 function resolveDefaultAppServerRequestTimeoutMs(method: string): number {
-  if (method === APP_SERVER_PLUGIN_UI_RUNTIME_START_METHOD) {
-    return APP_SERVER_PLUGIN_UI_RUNTIME_START_TIMEOUT_MS;
-  }
-  if (method === "pluginInstalled/save") {
-    return APP_SERVER_PLUGIN_INSTALLED_SAVE_TIMEOUT_MS;
-  }
-  if (method === "pluginLocalPackage/inspect") {
-    return APP_SERVER_PLUGIN_PACKAGE_INSPECT_TIMEOUT_MS;
-  }
   if (method === APP_SERVER_PROJECT_SHELL_DRAIN_EVENTS_METHOD) {
     return APP_SERVER_PROJECT_SHELL_DRAIN_EVENTS_TIMEOUT_MS;
   }

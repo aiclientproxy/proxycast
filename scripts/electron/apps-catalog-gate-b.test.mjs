@@ -19,7 +19,7 @@ describe("Apps catalog Gate B guard", () => {
     expect(content).toContain('"app/installed"');
     expect(content).toContain('"app/list/updated"');
     expect(content).toContain('data-testid="app-sidebar-nav-plugins"');
-    expect(content).toContain("plugin-v2-app-readiness-");
+    expect(content).toContain("plugin-catalog-app-readiness-");
     expect(content).toContain("notificationFreshReadObserved");
     expect(content).toContain("callable: false");
     expect(content).toContain("mockFallbackHitCount");

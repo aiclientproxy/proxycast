@@ -190,14 +190,8 @@ fn article_workspace_search_snapshot_payload(search_evidence: Value) -> Value {
         json!("2 objects: 公众号文章草稿, 配图组"),
     );
     worker.insert("outputObjectCount".to_string(), json!(2));
-    worker.insert(
-        "outputArtifactKind".to_string(),
-        json!("content_factory.workspace_patch"),
-    );
-    worker.insert(
-        "artifactKind".to_string(),
-        json!("content_factory.workspace_patch"),
-    );
+    worker.insert("outputArtifactKind".to_string(), json!("workspace_patch"));
+    worker.insert("artifactKind".to_string(), json!("workspace_patch"));
     worker.insert("workflowKey".to_string(), json!("content_article_workflow"));
     worker.insert(
         "subagents".to_string(),
@@ -250,15 +244,22 @@ fn article_workspace_search_snapshot_payload(search_evidence: Value) -> Value {
     );
     patch.insert(
         "workerEvidence".to_string(),
-        Value::Array(vec![Value::Object(worker.clone())]),
+        Value::Array(vec![
+            Value::Object(worker),
+            json!({
+                "taskId": "task-image-1",
+                "taskKind": "content.image.generate",
+                "turnId": "turn_article_workspace",
+                "status": "failed",
+                "source": "workspace_patch",
+                "artifactKind": "workspace_patch",
+                "errorCode": "worker_invalid_json_output"
+            }),
+        ]),
     );
 
     let mut metadata = serde_json::Map::new();
-    metadata.insert("pluginWorker".to_string(), Value::Object(worker));
-    metadata.insert(
-        "contentFactoryWorkspacePatch".to_string(),
-        Value::Object(patch),
-    );
+    metadata.insert("workspacePatch".to_string(), Value::Object(patch));
 
     let mut artifact = serde_json::Map::new();
     artifact.insert(
@@ -267,10 +268,10 @@ fn article_workspace_search_snapshot_payload(search_evidence: Value) -> Value {
     );
     artifact.insert(
         "path".to_string(),
-        json!(".lime/artifacts/content-factory-workspace-patch.json"),
+        json!(".lime/artifacts/workspace-patch.json"),
     );
     artifact.insert("title".to_string(), json!("内容工厂工作区补丁"));
-    artifact.insert("kind".to_string(), json!("content_factory.workspace_patch"));
+    artifact.insert("kind".to_string(), json!("workspace_patch"));
     artifact.insert("status".to_string(), json!("ready"));
     artifact.insert("metadata".to_string(), Value::Object(metadata));
 
@@ -398,10 +399,10 @@ async fn read_session_keeps_workspace_patch_in_thread_read_artifacts_only() {
                     "artifactId": "artifact-content-batch",
                     "path": ".lime/artifacts/content-batch.json",
                     "title": "Content Batch",
-                    "kind": "content_factory.workspace_patch",
+                    "kind": "workspace_patch",
                     "status": "ready",
                     "metadata": {
-                        "contentFactoryWorkspacePatch": {
+                        "workspacePatch": {
                             "kind": "content_batch",
                             "contentBatch": {
                                 "count": 1
@@ -437,10 +438,10 @@ async fn read_session_keeps_workspace_patch_in_thread_read_artifacts_only() {
     assert_eq!(artifacts.len(), 1);
     assert_eq!(artifacts[0]["artifactRef"], "artifact-content-batch");
     assert_eq!(artifacts[0]["path"], ".lime/artifacts/content-batch.json");
-    assert_eq!(artifacts[0]["kind"], "content_factory.workspace_patch");
+    assert_eq!(artifacts[0]["kind"], "workspace_patch");
     assert_eq!(artifacts[0]["status"], "ready");
     assert_eq!(
-        artifacts[0]["metadata"]["contentFactoryWorkspacePatch"]["kind"],
+        artifacts[0]["metadata"]["workspacePatch"]["kind"],
         "content_batch"
     );
     assert!(artifacts[0]["content"].is_null());
@@ -467,13 +468,13 @@ async fn read_session_keeps_workspace_patch_in_thread_read_artifacts_only() {
     );
     assert_eq!(
         artifact_read.artifacts[0].kind.as_deref(),
-        Some("content_factory.workspace_patch")
+        Some("workspace_patch")
     );
     assert_eq!(
         artifact_read.artifacts[0]
             .metadata
             .as_ref()
-            .expect("workspace patch metadata")["contentFactoryWorkspacePatch"]["kind"],
+            .expect("workspace patch metadata")["workspacePatch"]["kind"],
         "content_batch"
     );
 }
@@ -527,10 +528,10 @@ async fn article_workspace_artifact_documents_merge_version_history_across_turns
                             "artifactId": format!("artifact-workspace-patch-v{version}"),
                             "path": format!(".lime/artifacts/content-factory-workspace-patch-v{version}.json"),
                             "title": format!("内容工厂工作区补丁 v{version}"),
-                            "kind": "content_factory.workspace_patch",
+                            "kind": "workspace_patch",
                             "status": "ready",
                             "metadata": {
-                                "contentFactoryWorkspacePatch": {
+                                "workspacePatch": {
                                     "schemaVersion": 1,
                                     "appId": "content-factory-app",
                                     "sessionId": "sess_product_artifact_versions",
@@ -590,13 +591,13 @@ async fn article_workspace_artifact_documents_merge_version_history_across_turns
             .as_array()
             .expect("user visible artifacts")
             .iter()
-            .any(|artifact| artifact["kind"] == "content_factory.workspace_patch"),
+            .any(|artifact| artifact["kind"] == "workspace_patch"),
         "workspace patch must stay out of top-level user-visible artifacts"
     );
     assert!(
         artifacts.iter().any(
             |artifact| artifact["artifactRef"] == "artifact-workspace-patch-v1"
-                && artifact["kind"] == "content_factory.workspace_patch"
+                && artifact["kind"] == "workspace_patch"
         ),
         "thread read artifacts must keep workspace patch for Article Editor projection"
     );
@@ -710,10 +711,10 @@ async fn artifact_workbench_save_snapshot_merges_with_article_workspace_artifact
                         "artifactId": "artifact-workspace-patch-generated",
                         "path": ".lime/artifacts/content-factory-workspace-patch-generated.json",
                         "title": "内容工厂工作区补丁",
-                        "kind": "content_factory.workspace_patch",
+                        "kind": "workspace_patch",
                         "status": "ready",
                         "metadata": {
-                            "contentFactoryWorkspacePatch": {
+                            "workspacePatch": {
                                 "schemaVersion": 1,
                                 "appId": "content-factory-app",
                                 "sessionId": "sess_product_artifact_workbench_save",
@@ -906,7 +907,7 @@ async fn artifact_workbench_save_snapshot_merges_with_article_workspace_artifact
 }
 
 #[tokio::test]
-async fn read_session_materializes_content_factory_workspace_patch_into_article_workspace() {
+async fn read_session_materializes_workspace_patch_into_article_workspace() {
     let core = RuntimeCore::default();
     core.start_session(AgentSessionStartParams {
         session_id: Some("sess_article_workspace".to_string()),
@@ -960,32 +961,6 @@ async fn read_session_materializes_content_factory_workspace_patch_into_article_
                         "confidence": "host_verified"
                     }
                 ])),
-            ),
-            RuntimeEvent::new(
-                "runtime.error",
-                json!({
-                    "source": "plugin_task_worker",
-                    "appId": "content-factory-app",
-                    "taskId": "task-image-1",
-                    "taskKind": "content.image.generate",
-                    "turnId": "turn_article_workspace",
-                    "status": "failed",
-                    "errorCode": "worker_invalid_json_output",
-                    "errorMessage": "Plugin worker returned invalid JSON",
-                    "message": "Plugin task worker failed: Plugin worker returned invalid JSON",
-                    "metadata": {
-                        "pluginWorker": {
-                            "appId": "content-factory-app",
-                            "taskId": "task-image-1",
-                            "taskKind": "content.image.generate",
-                            "turnId": "turn_article_workspace",
-                            "status": "failed",
-                            "errorCode": "worker_invalid_json_output",
-                            "workerEntrypoint": "./runtime/content-factory-worker.mjs",
-                            "inputSummary": "prompt=生成图片; inputKeys=topic"
-                        }
-                    }
-                }),
             ),
             RuntimeEvent::new("turn.completed", json!({})),
         ],
@@ -1286,7 +1261,7 @@ async fn read_session_materializes_content_factory_workspace_patch_into_article_
                             "intent": "regenerate",
                             "risk": "write",
                             "task_kind": "content.image.generate",
-                            "output_artifact_kind": "content_factory.workspace_patch",
+                            "output_artifact_kind": "workspace_patch",
                             "prompt": "请重新生成「配图组」",
                             "object": {
                                 "app_id": "content-factory-app",
@@ -1330,22 +1305,10 @@ async fn read_session_materializes_content_factory_workspace_patch_into_article_
                         "artifactRef": "artifact-image-regenerate-workspace-patch",
                         "path": ".lime/artifacts/article-workspace/image-regenerate-workspace-patch.json",
                         "title": "配图组重新生成结果",
-                        "kind": "content_factory.workspace_patch",
+                        "kind": "workspace_patch",
                         "status": "ready",
                         "metadata": {
-                            "pluginWorker": {
-                                "appId": "content-factory-app",
-                                "taskId": "task-image-regenerate-1",
-                                "taskKind": "content.image.generate",
-                                "turnId": "turn_article_workspace_action",
-                                "workerEntrypoint": "./runtime/content-factory-worker.mjs",
-                                "status": "completed",
-                                "inputSummary": "action=regenerate; object=image-set-1",
-                                "outputSummary": "1 object: 配图组重新生成结果",
-                                "outputObjectCount": 1,
-                                "outputArtifactKind": "content_factory.workspace_patch"
-                            },
-                            "contentFactoryWorkspacePatch": {
+                            "workspacePatch": {
                                 "schemaVersion": 1,
                                 "appId": "content-factory-app",
                                 "sessionId": "sess_article_workspace",
@@ -1398,7 +1361,14 @@ async fn read_session_materializes_content_factory_workspace_patch_into_article_
                                     "activePaneKind": "imageGrid",
                                     "openTabKinds": ["articleWorkspace", "files"],
                                     "splitMode": "chat-right-dock"
-                                }
+                                },
+                                "workerEvidence": [{
+                                    "taskId": "task-image-regenerate-1",
+                                    "taskKind": "content.image.generate",
+                                    "turnId": "turn_article_workspace_action",
+                                    "status": "completed",
+                                    "source": "workspace_patch"
+                                }]
                             }
                         }
                     }
@@ -1443,7 +1413,7 @@ async fn read_session_materializes_content_factory_workspace_patch_into_article_
         .iter()
         .any(
             |artifact| artifact["artifactRef"] == "artifact-image-regenerate-workspace-patch"
-                && artifact["kind"] == "content_factory.workspace_patch"
+                && artifact["kind"] == "workspace_patch"
         ));
     assert_eq!(
         action_detail["article_workspace"]["actionHistory"][0],
@@ -1558,26 +1528,43 @@ async fn read_session_marks_failed_article_draft_as_non_deliverable_when_article
                 ])),
             ),
             RuntimeEvent::new(
-                "runtime.error",
+                "artifact.snapshot",
                 json!({
-                    "source": "plugin_task_worker",
-                    "appId": "content-factory-app",
-                    "taskId": "task-article-1",
-                    "taskKind": "content.article.generate",
-                    "turnId": "turn_article_workspace_failed",
-                    "status": "failed",
-                    "errorCode": "worker_invalid_json_output",
-                    "errorMessage": "Plugin worker returned invalid JSON",
-                    "message": "Plugin task worker failed: Plugin worker returned invalid JSON",
-                    "metadata": {
-                        "pluginWorker": {
-                            "appId": "content-factory-app",
-                            "taskId": "task-article-1",
-                            "taskKind": "content.article.generate",
-                            "turnId": "turn_article_workspace_failed",
-                            "status": "failed",
-                            "workerEntrypoint": "./runtime/content-factory-worker.mjs",
-                            "inputSummary": "prompt=生成文章; inputKeys=topic"
+                    "artifact": {
+                        "artifactId": "artifact-workspace-patch-failed",
+                        "kind": "workspace_patch",
+                        "metadata": {
+                            "workspacePatch": {
+                                "appId": "content-factory-app",
+                                "sessionId": "sess_article_workspace_failed",
+                                "objects": [{
+                                    "ref": {
+                                        "appId": "content-factory-app",
+                                        "kind": "articleDraft",
+                                        "id": "article-1",
+                                        "sessionId": "sess_article_workspace",
+                                        "sourceTaskId": "task-article-1"
+                                    },
+                                    "status": "ready",
+                                    "source": {
+                                        "taskId": "task-article-1",
+                                        "taskKind": "content.article.generate"
+                                    }
+                                }],
+                                "workerEvidence": [{
+                                    "source": "workspace_patch",
+                                    "eventType": "artifact.snapshot",
+                                    "artifactKind": "workspace_patch",
+                                    "errorCode": "worker_invalid_json_output",
+                                    "errorMessage": "Workspace patch generation failed",
+                                    "failureCategory": "invalid_output",
+                                    "appId": "content-factory-app",
+                                    "taskId": "task-article-1",
+                                    "taskKind": "content.article.generate",
+                                    "turnId": "turn_article_workspace_failed",
+                                    "status": "failed"
+                                }]
+                            }
                         }
                     }
                 }),
@@ -1604,9 +1591,11 @@ async fn read_session_marks_failed_article_draft_as_non_deliverable_when_article
         "写作失败，文章草稿未达到可交付状态"
     );
     assert_eq!(article_workspace["objects"][1]["status"], "needs_review");
-    assert_eq!(
-        article_workspace["workerEvidence"][1]["taskKind"],
-        "content.article.generate"
-    );
-    assert_eq!(article_workspace["workerEvidence"][1]["status"], "failed");
+    let failure = article_workspace["workerEvidence"]
+        .as_array()
+        .expect("worker evidence")
+        .iter()
+        .find(|item| item["taskKind"] == "content.article.generate" && item["status"] == "failed")
+        .expect("article failure evidence");
+    assert_eq!(failure["source"], "workspace_patch");
 }

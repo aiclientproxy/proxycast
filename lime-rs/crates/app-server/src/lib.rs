@@ -13,6 +13,7 @@ mod execution_process;
 mod external_backend;
 mod file_checkpoint;
 mod file_checkpoint_snapshot;
+mod fs;
 mod gateway_tunnel;
 mod knowledge_builder_runtime;
 mod local_data_source;
@@ -27,7 +28,7 @@ mod model_route_execution;
 mod model_task_contract;
 mod otel_trace;
 mod permission_server_request;
-mod plugin_packages;
+mod process;
 mod processor;
 mod project_shell;
 mod runtime;
@@ -346,6 +347,8 @@ impl AppServer {
             transport_notification_opt_out: transport_notification_opt_out.clone(),
         };
         let interrupt_router = server_requests.clone();
+        let process_notification_bridge = interrupt_bridge.clone();
+        let fs_notification_bridge = interrupt_bridge.clone();
         let notification_bridge = interrupt_bridge.clone();
         let skills_watcher_bridge = notification_bridge.clone();
         let turn_interrupt_hook: processor::TurnInterruptHook =
@@ -367,6 +370,30 @@ impl AppServer {
                         .await;
                 })
             });
+        let process_notification_hook: processor::ProcessNotificationHook =
+            Arc::new(move |connection_id, notification| {
+                let bridge = process_notification_bridge.clone();
+                Box::pin(async move {
+                    let _ = bridge
+                        .send_messages_to_connection(
+                            connection_id,
+                            &[JsonRpcMessage::Notification(notification)],
+                        )
+                        .await;
+                })
+            });
+        let fs_notification_hook: processor::FsNotificationHook =
+            Arc::new(move |connection_id, notification| {
+                let bridge = fs_notification_bridge.clone();
+                Box::pin(async move {
+                    let _ = bridge
+                        .send_messages_to_connection(
+                            connection_id,
+                            &[JsonRpcMessage::Notification(notification)],
+                        )
+                        .await;
+                })
+            });
         let skills_watcher = if cfg!(test) {
             None
         } else {
@@ -375,7 +402,9 @@ impl AppServer {
         Self {
             processor: RequestProcessor::new_with_thread_states(runtime, thread_states.clone())
                 .with_turn_interrupt_hook(turn_interrupt_hook)
-                .with_server_notification_hook(server_notification_hook),
+                .with_server_notification_hook(server_notification_hook)
+                .with_process_notification_hook(process_notification_hook)
+                .with_fs_notification_hook(fs_notification_hook),
             thread_states,
             runtime_event_receiver,
             runtime_event_pump_started: Arc::new(AtomicBool::new(false)),
@@ -791,6 +820,8 @@ impl AppServer {
             .expect("app-server transport notification opt-out mutex poisoned")
             .clear();
         for connection_id in connection_ids {
+            self.processor.close_process_connection(connection_id).await;
+            self.processor.close_fs_connection(connection_id).await;
             self.thread_states
                 .disconnect_connection(connection_id)
                 .await;
@@ -1219,6 +1250,8 @@ async fn run_transport_events(
                         }
                         TransportEvent::StdioClientInitialized { .. } => {}
                         TransportEvent::ConnectionClosed { connection_id } => {
+                            server.processor.close_process_connection(connection_id).await;
+                            server.processor.close_fs_connection(connection_id).await;
                             let idle_thread_ids = server
                                 .thread_states
                                 .disconnect_connection(connection_id)
@@ -1620,6 +1653,7 @@ fn spawn_transport_request(
     prepared_resume: Option<(String, thread_state::ThreadResumeBarrier)>,
 ) {
     tokio::spawn(async move {
+        let process_spawn_handle = process_spawn_handle(&message);
         let is_thread_delete = matches!(
             &message,
             JsonRpcMessage::Request(request)
@@ -1655,6 +1689,31 @@ fn spawn_transport_request(
             .await
         {
             Ok(mut messages) => {
+                if let Some(process_handle) = process_spawn_handle {
+                    let succeeded = messages
+                        .iter()
+                        .any(|message| matches!(message, JsonRpcMessage::Response(_)));
+                    for message in messages {
+                        if let Err(error) = server
+                            .send_to_transport_connection(connection_id, message)
+                            .await
+                        {
+                            server
+                                .processor
+                                .close_process_connection(connection_id)
+                                .await;
+                            let _ = streamed_tx.send(Err(error));
+                            return;
+                        }
+                    }
+                    if succeeded {
+                        server
+                            .processor
+                            .activate_process(connection_id, &process_handle)
+                            .await;
+                    }
+                    return;
+                }
                 if is_thread_delete
                     && publish_thread_delete_transport_result(&server, connection_id, &mut messages)
                         .await
@@ -1953,6 +2012,21 @@ fn should_spawn_transport_request(message: &JsonRpcMessage) -> bool {
         JsonRpcMessage::Request(request)
             if request.method != METHOD_INITIALIZE
     )
+}
+
+fn process_spawn_handle(message: &JsonRpcMessage) -> Option<String> {
+    let JsonRpcMessage::Request(request) = message else {
+        return None;
+    };
+    if request.method != app_server_protocol::protocol::v2::METHOD_PROCESS_SPAWN {
+        return None;
+    }
+    request
+        .params
+        .as_ref()
+        .and_then(|params| params.get("processHandle"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
 }
 
 #[cfg(test)]

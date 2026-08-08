@@ -2,7 +2,6 @@ import React from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { normalizePluginManifest } from "@/features/plugin";
 import type { WorkspaceRightSurfacePendingRequest } from "@/lib/api/workspaceRightSurface";
 import {
   applyWorkspaceRightSurfacePendingChanges,
@@ -41,7 +40,7 @@ const articleEditorPendingRequest: WorkspaceRightSurfacePendingRequest = {
   origin: "runtime",
   reason: "article_workspace_ready",
   metadata: {
-    contentFactoryWorkspacePatch: {
+    workspacePatch: {
       schemaVersion: "article-workspace.v1",
       appId: "content-factory-app",
       sessionId: "session-main",
@@ -77,50 +76,11 @@ const articleEditorArtifactPendingRequest: WorkspaceRightSurfacePendingRequest =
   metadata: {
     artifact: {
       artifactId: "artifact-workspace-patch-1",
-      path: ".lime/artifacts/content-factory-workspace-patch.json",
+      path: ".lime/artifacts/workspace-patch.json",
       title: "内容工厂工作区补丁",
-      kind: "content_factory.workspace_patch",
+      kind: "workspace_patch",
       status: "ready",
       metadata: articleEditorPendingRequest.metadata,
-    },
-  },
-};
-const appDeclaredRendererPendingRequest: WorkspaceRightSurfacePendingRequest = {
-  ...articleEditorPendingRequest,
-  requestId: "right_surface_creator_profile_1",
-  sessionId: "session-main",
-  surfaceKind: "articleWorkspace",
-  reason: "plugin_renderer_output_ready",
-  metadata: {
-    artifact: {
-      artifactId: "artifact-creator-workspace-patch-1",
-      kind: "creator.workspace_patch",
-      title: "创作工作台输出",
-    },
-    workspacePatch: {
-      schemaVersion: "article-workspace.v1",
-      appId: "creator-workbench",
-      sessionId: "session-main",
-      workspaceId: "workspace-main",
-      objects: [
-        {
-          ref: {
-            appId: "creator-workbench",
-            kind: "articleDraft",
-            id: "article-1",
-            sessionId: "session-main",
-            artifactIds: ["artifact-article-1"],
-          },
-          title: "文章草稿",
-          status: "ready",
-          source: {
-            taskKind: "creator.article.generate",
-          },
-        },
-      ],
-      layoutState: {
-        activePaneKind: "editor",
-      },
     },
   },
 };
@@ -477,7 +437,7 @@ describe("useWorkspaceRightSurfacePendingRuntime", () => {
             requestId: "right_surface_article_workspace_artifact_1",
             origin: "runtime",
             artifactRef: "artifact-workspace-patch-1",
-            kind: "content_factory.workspace_patch",
+            kind: "workspace_patch",
           },
         ],
         objects: [
@@ -488,91 +448,6 @@ describe("useWorkspaceRightSurfacePendingRuntime", () => {
         ],
       });
     });
-  });
-
-  it("应把 app-declared renderer 输出合同接入 pending Article Editor", async () => {
-    const plugin = normalizePluginManifest({
-      id: "creator-workbench",
-      displayName: "创作工作台",
-      version: "1.0.0",
-      artifactRenderers: [
-        {
-          artifactType: "articleDraft",
-          surfaceKind: "documentCanvas",
-          paneKind: "editor",
-          rendererKind: "app_declared",
-          outputArtifactKind: "creator.workspace_patch",
-        },
-      ],
-    });
-    const listPending = vi.fn(async () => ({
-      pending: [appDeclaredRendererPendingRequest],
-    }));
-    const { render, getValue } = renderHook({
-      listPending,
-      pluginContracts: [plugin],
-    });
-
-    await render();
-
-    await vi.waitFor(() => {
-      expect(getValue().pendingArticleWorkspace?.objects[0]?.source).toMatchObject(
-        {
-          rendererContract: {
-            pluginId: "creator-workbench",
-            artifactType: "articleDraft",
-            surfaceKind: "documentCanvas",
-            paneKind: "editor",
-            rendererKind: "app_declared",
-            outputArtifactKind: "creator.workspace_patch",
-          },
-          outputArtifactKind: "creator.workspace_patch",
-          artifactType: "articleDraft",
-          surfaceKind: "documentCanvas",
-          paneKind: "editor",
-        },
-      );
-    });
-  });
-
-  it("应合并显式插件激活投影的 Article Editor pending intent", async () => {
-    const listPending = vi.fn(async () => ({ pending: [] }));
-    const plugin = normalizePluginManifest({
-      id: "creator-workbench",
-      displayName: "创作工作台",
-      version: "1.0.0",
-      artifactRenderers: [
-        {
-          artifactType: "articleDraft",
-          surfaceKind: "documentCanvas",
-          rendererKind: "host_builtin",
-        },
-      ],
-    });
-    const { render, getValue } = renderHook({
-      listPending,
-      pluginActivationContext: {
-        sessionId: "session-main",
-        pluginId: "creator-workbench",
-        activeEntryKey: "creator",
-        selectedObjectRef: {
-          pluginId: "creator-workbench",
-          objectKind: "articleDraft",
-          objectId: "pending",
-        },
-        openedTabs: ["articleWorkspace"],
-        source: "user",
-      },
-      pluginContracts: [plugin],
-    });
-
-    await render();
-
-    await vi.waitFor(() => {
-      expect(listPending).toHaveBeenCalled();
-    });
-    expect(getValue().pendingRequests).toEqual([]);
-    expect(getValue().pendingIntents).toEqual([]);
   });
 
   it("应把 appSurface pending metadata 投影为右侧 Plugin Surface", async () => {

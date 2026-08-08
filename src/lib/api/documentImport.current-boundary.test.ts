@@ -6,7 +6,8 @@ import { readAppServerApiSources } from "../../test/appServerApiSources";
 
 const RETIRED_IMPORT_DOCUMENT_COMMAND = "import_document";
 const RETIRED_IMPORT_DOCUMENT_TO_SESSION_COMMAND = "import_document_to_session";
-const CURRENT_FILE_PREVIEW_METHOD = "fileSystem/readFilePreview";
+const CURRENT_FS_READ_FILE_METHOD = "fs/readFile";
+const RETIRED_FILE_PREVIEW_METHOD = "fileSystem/readFilePreview";
 
 const FORBIDDEN_IMPORT_DOCUMENT_SOURCES = [
   "electron/hostCommands.ts",
@@ -39,12 +40,12 @@ function expectStringLiteralAbsent(source: string, literal: string): void {
 }
 
 describe("Document Import current App Server boundary", () => {
-  it("importDocument 应固定走 App Server fileSystem/readFilePreview", () => {
+  it("importDocument 应固定走 exact fs/readFile 文件网关", () => {
     const source = readRepoFile("src/lib/api/session-files.ts");
 
-    expect(source).toContain("new AppServerClient().readFilePreview");
-    expect(source).toContain("maxSize: 2 * 1024 * 1024");
-    expect(source).toContain(CURRENT_FILE_PREVIEW_METHOD);
+    expect(source).toContain('from "@/lib/api/fileBrowser"');
+    expect(source).toContain("readFilePreview(filePath, 2 * 1024 * 1024)");
+    expectStringLiteralAbsent(source, RETIRED_FILE_PREVIEW_METHOD);
     expectStringLiteralAbsent(source, RETIRED_IMPORT_DOCUMENT_COMMAND);
     expectStringLiteralAbsent(
       source,
@@ -52,23 +53,29 @@ describe("Document Import current App Server boundary", () => {
     );
   });
 
-  it("App Server protocol / client 应保留 fileSystem/readFilePreview current 方法", () => {
+  it("App Server protocol / client 应只保留 exact fs/readFile current 方法", () => {
     const appServerSource = readAppServerApiSources();
+    const fileBrowserSource = readRepoFile("src/lib/api/fileBrowser.ts");
     const generatedClientProtocolSource = readRepoFile(
       "packages/app-server-client/src/generated/protocol-types.ts",
     );
     const rustProtocolSource = readRepoFile(
-      "lime-rs/crates/app-server-protocol/src/protocol/v0/method_names.rs",
+      "lime-rs/crates/app-server-protocol/src/protocol/v2/methods.rs",
     );
 
-    expect(appServerSource).toContain(
-      "APP_SERVER_METHOD_FILE_SYSTEM_READ_FILE_PREVIEW",
-    );
-    expect(appServerSource).toContain("readFilePreview(");
+    expect(appServerSource).toContain("APP_SERVER_METHOD_FS_READ_FILE");
+    expect(appServerSource).toContain("readFile(");
+    expect(fileBrowserSource).toContain(".readFile({ path })");
     expect(generatedClientProtocolSource).toContain(
-      `"${CURRENT_FILE_PREVIEW_METHOD}"`,
+      `"${CURRENT_FS_READ_FILE_METHOD}"`,
     );
-    expect(rustProtocolSource).toContain(`"${CURRENT_FILE_PREVIEW_METHOD}"`);
+    expect(rustProtocolSource).toContain(`"${CURRENT_FS_READ_FILE_METHOD}"`);
+    expectStringLiteralAbsent(appServerSource, RETIRED_FILE_PREVIEW_METHOD);
+    expectStringLiteralAbsent(
+      generatedClientProtocolSource,
+      RETIRED_FILE_PREVIEW_METHOD,
+    );
+    expectStringLiteralAbsent(rustProtocolSource, RETIRED_FILE_PREVIEW_METHOD);
   });
 
   it("旧 Document Import facade 不应回到 Electron、DevBridge、mock 或 legacy Rust", () => {

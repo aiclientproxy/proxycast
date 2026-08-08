@@ -1431,7 +1431,7 @@
   "settings.memory.store.message.consolidateFailed": "Failed to consolidate memory notes",
   "settings.memory.store.message.indexRebuilt": "Memory index rebuilt from {{files}} files",
   "settings.memory.store.message.indexRebuildFailed": "Failed to rebuild memory index",
-  "settings.memory.store.message.resetDone": "Memory files reset. Removed {{files}} files and {{directories}} folders.",
+  "settings.memory.store.message.resetDone": "Memory files reset.",
   "settings.memory.store.message.resetFailed": "Failed to reset memory files",
   "settings.memory.store.noteTitle": "Add memory correction",
   "settings.memory.store.noteDescription": "Save a confirmed preference, correction, or long-term constraint as a short note. It goes into file-backed correction notes and does not rewrite the summary immediately.",

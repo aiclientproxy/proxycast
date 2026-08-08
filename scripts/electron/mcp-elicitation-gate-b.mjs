@@ -28,14 +28,14 @@ import {
   sleep,
 } from "./mcp-config-fixture-smoke.mjs";
 import {
-  findPluginV2McpAppItems,
-  installPluginV2EmbeddedBrowserLifecycleCapture,
-  PLUGIN_V2_MCP_APP_MARKER,
-  PLUGIN_V2_MCP_APP_RESOURCE_URI,
-  pluginV2McpAppHtml,
-  waitForPluginV2McpAppHistoryUnavailable,
-  waitForPluginV2McpAppSurface,
-} from "./plugin-v2-mcp-app-gate-b.mjs";
+  findPluginPackageMcpAppItems,
+  installPluginPackageEmbeddedBrowserLifecycleCapture,
+  PLUGIN_PACKAGE_MCP_APP_MARKER,
+  PLUGIN_PACKAGE_MCP_APP_RESOURCE_URI,
+  pluginPackageMcpAppHtml,
+  waitForPluginPackageMcpAppHistoryUnavailable,
+  waitForPluginPackageMcpAppSurface,
+} from "./plugin-mcp-app-gate-b.mjs";
 
 const DEFAULTS = {
   evidenceDir: path.join(
@@ -56,18 +56,16 @@ const FINAL_TEXT = "MCP_ELICITATION_GATE_B_DONE";
 const DISABLED_BOUNDARY_FINAL_TEXT = "PLUGIN_DISABLED_BOUNDARY_DONE";
 const TOOL_SUFFIX = "release_check";
 const MCP_TOOL_CALL_ID = "call-mcp-elicitation-release-check";
-const PLUGIN_V2_ID = "mcp-elicitation-plugin";
-const PLUGIN_V2_SERVER_ID = "demo";
-const PLUGIN_V2_DISPLAY_NAME = "Plugin v2 MCP Gate B";
-const PLUGIN_V2_BUNDLED_ID = "browser";
-const PLUGIN_V2_BUNDLED_MARKETPLACE_ID = "openai-bundled";
-const PLUGIN_V2_BUNDLED_VERSION = "1.0.0";
-const LEGACY_PLUGIN_WORKER_COMMANDS = [
-  "plugin_runtime_start_task",
-  "plugin_runtime_get_task",
-  "plugin_runtime_submit_host_response",
-  "plugin_runtime_cancel_task",
-];
+const PLUGIN_PACKAGE_ID = "mcp-elicitation-plugin";
+const PLUGIN_PACKAGE_CONFIG_NAME = `${PLUGIN_PACKAGE_ID}@local`;
+const PLUGIN_PACKAGE_SERVER_ID = "demo";
+const PLUGIN_PACKAGE_SKILL_ID = "release-check";
+const PLUGIN_PACKAGE_SKILL_BODY_MARKER =
+  "Use the package MCP release check tool when the user asks for a release check.";
+const PLUGIN_PACKAGE_DISPLAY_NAME = PLUGIN_PACKAGE_ID;
+const PLUGIN_PACKAGE_BUNDLED_ID = "browser";
+const PLUGIN_PACKAGE_BUNDLED_MARKETPLACE_ID = "openai-bundled";
+const PLUGIN_PACKAGE_BUNDLED_VERSION = "1.0.0";
 const DYNAMIC_TOOL_NAME = "desktop__appInfo";
 const DYNAMIC_TOOL_CALL_ID = "call-desktop-app-info";
 const NAVIGATION_RESTORE_STORAGE_KEY = "lime.appNavigation.restore.v1";
@@ -85,7 +83,7 @@ const REQUIRED_METHODS = [
   "turn/start",
   "thread/read",
 ];
-const PLUGIN_V2_REQUIRED_METHODS = [
+const PLUGIN_PACKAGE_REQUIRED_METHODS = [
   "workspace/default/ensure",
   "modelProvider/create",
   "modelProvider/update",
@@ -206,8 +204,8 @@ async function readElectronRuntime(app) {
   }));
 }
 
-function pluginV2ServerName() {
-  return `plugin__${PLUGIN_V2_ID}__${PLUGIN_V2_SERVER_ID}`;
+function pluginPackageServerName() {
+  return `plugin__${PLUGIN_PACKAGE_ID}__${PLUGIN_PACKAGE_SERVER_ID}`;
 }
 
 function readJsonLines(filePath) {
@@ -236,8 +234,8 @@ function writeElicitationFixture() {
 import readline from "node:readline";
 
 const ledgerPath = process.argv[2];
-const mcpAppResourceUri = ${JSON.stringify(PLUGIN_V2_MCP_APP_RESOURCE_URI)};
-const mcpAppHtml = ${JSON.stringify(pluginV2McpAppHtml())};
+const mcpAppResourceUri = ${JSON.stringify(PLUGIN_PACKAGE_MCP_APP_RESOURCE_URI)};
+const mcpAppHtml = ${JSON.stringify(pluginPackageMcpAppHtml())};
 const pending = new Map();
 let nextElicitationId = 1;
 let initializedProtocolVersion = null;
@@ -391,34 +389,44 @@ rl.on("line", (line) => {
   return { ledgerPath, root, serverPath };
 }
 
-function preparePluginV2Package(fixture) {
-  const manifestDir = path.join(fixture.root, ".codex-plugin");
-  fs.mkdirSync(manifestDir, { recursive: true });
+function preparePluginPackage(fixture) {
+  const skillDir = path.join(
+    fixture.root,
+    "skills",
+    PLUGIN_PACKAGE_SKILL_ID,
+  );
+  fs.mkdirSync(skillDir, { recursive: true });
   fs.writeFileSync(
-    path.join(manifestDir, "plugin.json"),
+    path.join(skillDir, "SKILL.md"),
+    `---\nname: ${PLUGIN_PACKAGE_SKILL_ID}\ndescription: Use the package release check workflow.\n---\n\n# Release check\n\n${PLUGIN_PACKAGE_SKILL_BODY_MARKER}\n`,
+    "utf8",
+  );
+  fs.writeFileSync(
+    path.join(fixture.root, "plugin.json"),
     `${JSON.stringify(
       {
-        name: PLUGIN_V2_ID,
+        $schema:
+          "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+        name: PLUGIN_PACKAGE_ID,
         version: "1.0.0",
-        description: "Plugin v2 MCP Gate B fixture",
-        mcpServers: "./.mcp.json",
-        interface: { displayName: PLUGIN_V2_DISPLAY_NAME },
+        description: "Agent Plugins standard package Gate B fixture",
       },
       null,
       2,
     )}\n`,
   );
   fs.writeFileSync(
-    path.join(fixture.root, ".mcp.json"),
+    path.join(fixture.root, "mcp.json"),
     `${JSON.stringify(
       {
+        $schema:
+          "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
         mcpServers: {
-          [PLUGIN_V2_SERVER_ID]: {
-            command: process.execPath,
+          [PLUGIN_PACKAGE_SERVER_ID]: {
+            type: "stdio",
+            command: "node",
             args: [path.basename(fixture.serverPath), fixture.ledgerPath],
-            required: true,
-            startup_timeout: 10,
-            tool_timeout: 60,
+            cwd: "${PLUGIN_ROOT}",
           },
         },
       },
@@ -427,10 +435,11 @@ function preparePluginV2Package(fixture) {
     )}\n`,
   );
   return {
-    id: PLUGIN_V2_ID,
+    id: PLUGIN_PACKAGE_ID,
     root: fixture.root,
-    runtimeServerName: pluginV2ServerName(),
-    serverId: PLUGIN_V2_SERVER_ID,
+    runtimeServerName: pluginPackageServerName(),
+    serverId: PLUGIN_PACKAGE_SERVER_ID,
+    skillId: PLUGIN_PACKAGE_SKILL_ID,
     version: "1.0.0",
   };
 }
@@ -445,7 +454,7 @@ async function cleanupMcpServer(page, server) {
   }).catch(() => undefined);
 }
 
-async function cleanupPluginV2(page, plugin) {
+async function cleanupPluginPackage(page, plugin) {
   if (!page || !plugin?.id) return;
   await appServerCallFromPage(page, "plugin/uninstall", {
     pluginId: plugin.id,
@@ -479,11 +488,11 @@ async function observeAppServerMethodFromTrace(
 
 async function armControlledPluginSourceDialog(app, sourcePath) {
   await app.evaluate(({ dialog }, controlledSourcePath) => {
-    globalThis.__limePluginV2DirectoryDialogCalls = [];
+    globalThis.__limePluginPackageDirectoryDialogCalls = [];
     const originalShowOpenDialog = dialog.showOpenDialog.bind(dialog);
     dialog.showOpenDialog = async (...args) => {
       const dialogOptions = args.at(-1) ?? null;
-      globalThis.__limePluginV2DirectoryDialogCalls.push(dialogOptions);
+      globalThis.__limePluginPackageDirectoryDialogCalls.push(dialogOptions);
       dialog.showOpenDialog = originalShowOpenDialog;
       return {
         canceled: false,
@@ -495,8 +504,8 @@ async function armControlledPluginSourceDialog(app, sourcePath) {
 
 async function readControlledPluginSourceDialogCalls(app) {
   return app.evaluate(() =>
-    Array.isArray(globalThis.__limePluginV2DirectoryDialogCalls)
-      ? globalThis.__limePluginV2DirectoryDialogCalls
+    Array.isArray(globalThis.__limePluginPackageDirectoryDialogCalls)
+      ? globalThis.__limePluginPackageDirectoryDialogCalls
       : [],
   );
 }
@@ -526,18 +535,18 @@ async function waitForPluginInstalledState(
   );
 }
 
-async function openPluginV2AppCenter(
+async function openPluginPackageAppCenter(
   page,
   options,
   observedMethods,
   screenshotPath,
 ) {
   await page.locator('[data-testid="app-sidebar-nav-plugins"]').click();
-  await page.locator('[data-testid="plugin-v2-install-local"]').waitFor({
+  await page.locator('[data-testid="plugin-catalog-install-local"]').waitFor({
     state: "visible",
     timeout: options.timeoutMs,
   });
-  await page.locator('[data-testid="plugin-v2-loading"]').waitFor({
+  await page.locator('[data-testid="plugin-catalog-loading"]').waitFor({
     state: "hidden",
     timeout: options.timeoutMs,
   });
@@ -545,28 +554,28 @@ async function openPluginV2AppCenter(
   const catalog = await appServerCallFromPage(page, "plugin/list", {});
   observedMethods.add(catalog.method);
   const bundled = catalog.result?.plugins?.find(
-    (candidate) => candidate?.id === PLUGIN_V2_BUNDLED_ID,
+    (candidate) => candidate?.id === PLUGIN_PACKAGE_BUNDLED_ID,
   );
   assert(bundled, "plugin/list 未返回 bundled Browser Plugin");
   assert(
     bundled.source === "bundled" &&
-      bundled.marketplaceId === PLUGIN_V2_BUNDLED_MARKETPLACE_ID &&
-      bundled.version === PLUGIN_V2_BUNDLED_VERSION,
+      bundled.marketplaceId === PLUGIN_PACKAGE_BUNDLED_MARKETPLACE_ID &&
+      bundled.version === PLUGIN_PACKAGE_BUNDLED_VERSION,
     `bundled Plugin identity/version 不一致: ${JSON.stringify(bundled)}`,
   );
   const bundledCard = page.locator(
-    `[data-testid="plugin-v2-card-${PLUGIN_V2_BUNDLED_ID}"]`,
+    `[data-testid="plugin-catalog-card-${PLUGIN_PACKAGE_BUNDLED_ID}"]`,
   );
   await bundledCard.waitFor({ state: "visible", timeout: options.timeoutMs });
   assert(
-    (await bundledCard.textContent())?.includes(PLUGIN_V2_BUNDLED_VERSION),
+    (await bundledCard.textContent())?.includes(PLUGIN_PACKAGE_BUNDLED_VERSION),
     "App Center bundled 卡片未显示 manifest version",
   );
   await page.screenshot({ path: screenshotPath, fullPage: true });
   return { bundled, catalog };
 }
 
-async function installPluginV2FromAppCenter({
+async function installPluginPackageFromAppCenter({
   app,
   page,
   plugin,
@@ -575,8 +584,8 @@ async function installPluginV2FromAppCenter({
   screenshotPath,
 }) {
   await armControlledPluginSourceDialog(app, plugin.root);
-  await page.locator('[data-testid="plugin-v2-install-local"]').click();
-  const review = page.locator('[data-testid="plugin-v2-install-review"]');
+  await page.locator('[data-testid="plugin-catalog-install-local"]').click();
+  const review = page.locator('[data-testid="plugin-catalog-install-review"]');
   await review.waitFor({ state: "visible", timeout: options.timeoutMs });
   assert(
     (await review.textContent())?.includes(plugin.id),
@@ -590,7 +599,7 @@ async function installPluginV2FromAppCenter({
   );
   await page.screenshot({ path: screenshotPath, fullPage: true });
 
-  await page.locator('[data-testid="plugin-v2-confirm-install"]').click();
+  await page.locator('[data-testid="plugin-catalog-confirm-install"]').click();
   await review.waitFor({ state: "hidden", timeout: options.timeoutMs });
   await observeAppServerMethodFromTrace(
     page,
@@ -599,7 +608,7 @@ async function installPluginV2FromAppCenter({
     observedMethods,
   );
   await page
-    .locator(`[data-testid="plugin-v2-actions-${plugin.id}"]`)
+    .locator(`[data-testid="plugin-catalog-actions-${plugin.id}"]`)
     .waitFor({ state: "visible", timeout: options.timeoutMs });
 
   const installed = await waitForPluginInstalledState(
@@ -623,12 +632,34 @@ async function installPluginV2FromAppCenter({
     read.result?.plugin?.mcpServers?.some(
       (server) => server?.id === plugin.serverId,
     ),
-    "plugin/read 未投影 .mcp.json server",
+    "plugin/read 未投影标准 mcp.json server",
   );
-  return { directoryDialogCalls, installed, read };
+  assert(
+    summary?.mcpServersCount === 1,
+    `plugin/read 标准 mcp.json capability 数量异常: ${summary?.mcpServersCount}`,
+  );
+  assert(
+    read.result?.plugin?.skills?.some(
+      (skill) => skill?.id === plugin.skillId,
+    ),
+    "plugin/read 未投影标准 skills/<name>/SKILL.md",
+  );
+  assert(
+    summary?.skillsCount === 1,
+    `plugin/read 标准 Skill capability 数量异常: ${summary?.skillsCount}`,
+  );
+  return {
+    directoryDialogCalls,
+    installed,
+    pluginSkillProjected: true,
+    read,
+    standardManifestSeen:
+      summary?.id === plugin.id && summary?.version === plugin.version,
+    standardMcpConfigSeen: true,
+  };
 }
 
-async function setPluginV2EnabledFromAppCenter(
+async function setPluginPackageEnabledFromAppCenter(
   page,
   pluginId,
   enabled,
@@ -636,19 +667,19 @@ async function setPluginV2EnabledFromAppCenter(
   observedMethods,
 ) {
   await page.locator('[data-testid="app-sidebar-nav-plugins"]').click();
-  await page.locator('[data-testid="plugin-v2-install-local"]').waitFor({
+  await page.locator('[data-testid="plugin-catalog-install-local"]').waitFor({
     state: "visible",
     timeout: options.timeoutMs,
   });
-  await page.locator('[data-testid="plugin-v2-loading"]').waitFor({
+  await page.locator('[data-testid="plugin-catalog-loading"]').waitFor({
     state: "hidden",
     timeout: options.timeoutMs,
   });
   await page
-    .locator(`[data-testid="plugin-v2-actions-${pluginId}"]`)
+    .locator(`[data-testid="plugin-catalog-actions-${pluginId}"]`)
     .waitFor({ state: "visible", timeout: options.timeoutMs });
-  await page.locator(`[data-testid="plugin-v2-actions-${pluginId}"]`).click();
-  await page.locator(`[data-testid="plugin-v2-toggle-${pluginId}"]`).click();
+  await page.locator(`[data-testid="plugin-catalog-actions-${pluginId}"]`).click();
+  await page.locator(`[data-testid="plugin-catalog-toggle-${pluginId}"]`).click();
   await observeAppServerMethodFromTrace(
     page,
     "plugin/enabled/set",
@@ -664,7 +695,7 @@ async function setPluginV2EnabledFromAppCenter(
   );
 }
 
-async function verifyPluginV2DisabledNewThreadBoundary({
+async function verifyPluginPackageDisabledNewThreadBoundary({
   page,
   fixture,
   plugin,
@@ -710,7 +741,7 @@ async function verifyPluginV2DisabledNewThreadBoundary({
   await pluginPanel.waitFor({ state: "visible", timeout: options.timeoutMs });
   const disabledOption = pluginPanel
     .locator('[data-testid="inputbar-plugin-option"]')
-    .filter({ hasText: PLUGIN_V2_DISPLAY_NAME })
+    .filter({ hasText: PLUGIN_PACKAGE_DISPLAY_NAME })
     .first();
   await disabledOption.waitFor({
     state: "visible",
@@ -742,7 +773,7 @@ async function verifyPluginV2DisabledNewThreadBoundary({
       metadata: {
         kind: "application",
         value: JSON.stringify({
-          harness: { source: "smoke:plugin-v2-disabled-boundary" },
+          harness: { source: "smoke:plugin-catalog-disabled-boundary" },
           tool_scope: {
             allowed_tools: [
               DYNAMIC_TOOL_NAME,
@@ -789,7 +820,7 @@ async function verifyPluginV2DisabledNewThreadBoundary({
     "禁用 Plugin 的 MCP tool 泄露到新 Thread provider request",
   );
   assert(
-    findPluginV2McpAppItems(latestRead.result).length === 0,
+    findPluginPackageMcpAppItems(latestRead.result).length === 0,
     "禁用 Plugin 在新 Thread 生成了 MCP tool item",
   );
 
@@ -831,7 +862,7 @@ async function waitForPluginUninstalled(
   );
 }
 
-async function uninstallPluginV2FromAppCenter({
+async function uninstallPluginPackageFromAppCenter({
   page,
   pluginId,
   options,
@@ -839,20 +870,20 @@ async function uninstallPluginV2FromAppCenter({
   screenshotPath,
 }) {
   await page.locator('[data-testid="app-sidebar-nav-plugins"]').click();
-  await page.locator('[data-testid="plugin-v2-install-local"]').waitFor({
+  await page.locator('[data-testid="plugin-catalog-install-local"]').waitFor({
     state: "visible",
     timeout: options.timeoutMs,
   });
-  await page.locator('[data-testid="plugin-v2-loading"]').waitFor({
+  await page.locator('[data-testid="plugin-catalog-loading"]').waitFor({
     state: "hidden",
     timeout: options.timeoutMs,
   });
-  const actions = page.locator(`[data-testid="plugin-v2-actions-${pluginId}"]`);
+  const actions = page.locator(`[data-testid="plugin-catalog-actions-${pluginId}"]`);
   await actions.waitFor({ state: "visible", timeout: options.timeoutMs });
   await actions.click();
-  await page.locator(`[data-testid="plugin-v2-uninstall-${pluginId}"]`).click();
+  await page.locator(`[data-testid="plugin-catalog-uninstall-${pluginId}"]`).click();
   const confirmation = page.locator(
-    '[data-testid="plugin-v2-uninstall-confirm"]',
+    '[data-testid="plugin-catalog-uninstall-confirm"]',
   );
   await confirmation.waitFor({ state: "visible", timeout: options.timeoutMs });
   await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -1270,13 +1301,14 @@ async function selectRuntimeRouteInRenderer(
   };
 }
 
-function findPluginV2MentionIdentity(result) {
+function findPluginPackageMentionIdentity(result) {
   const thread = result?.thread;
   for (const turn of thread?.turns ?? []) {
     for (const item of turn?.items ?? []) {
       const mention = item?.content?.find(
         (part) =>
-          part?.type === "mention" && part?.path === `plugin://${PLUGIN_V2_ID}`,
+          part?.type === "mention" &&
+          part?.path === `plugin://${PLUGIN_PACKAGE_CONFIG_NAME}`,
       );
       if (mention) {
         return {
@@ -1291,7 +1323,7 @@ function findPluginV2MentionIdentity(result) {
   return null;
 }
 
-async function waitForPluginV2GuiTurn(
+async function waitForPluginPackageGuiTurn(
   page,
   threadId,
   options,
@@ -1305,7 +1337,7 @@ async function waitForPluginV2GuiTurn(
       includeTurns: true,
     });
     observedMethods.add(latest.method);
-    const identity = findPluginV2MentionIdentity(latest.result);
+    const identity = findPluginPackageMentionIdentity(latest.result);
     if (
       identity?.threadId === threadId &&
       identity.turnId &&
@@ -1316,11 +1348,11 @@ async function waitForPluginV2GuiTurn(
     await sleep(10);
   }
   throw new Error(
-    `Claw turn 未投影 plugin://${PLUGIN_V2_ID} mention: ${JSON.stringify(latest?.result)}`,
+    `Claw turn 未投影 plugin://${PLUGIN_PACKAGE_CONFIG_NAME} mention: ${JSON.stringify(latest?.result)}`,
   );
 }
 
-async function startPluginV2TurnFromGui({
+async function startPluginPackageTurnFromGui({
   page,
   runtime,
   options,
@@ -1335,7 +1367,7 @@ async function startPluginV2TurnFromGui({
     `textarea[name="agent-chat-message"][data-session-id="${runtime.sessionId}"]`,
   );
   await input.fill(
-    "Read the desktop app information, then run the release check through the available MCP tool.",
+    `Use $${PLUGIN_PACKAGE_SKILL_ID} to run the release check through the available MCP tool.`,
   );
   await page.locator('[data-testid="inputbar-plus-trigger"]').click();
   await page.locator('[data-testid="inputbar-plus-menu"]').waitFor({
@@ -1349,30 +1381,24 @@ async function startPluginV2TurnFromGui({
   await pluginPanel.waitFor({ state: "visible", timeout: options.timeoutMs });
   const pluginOption = pluginPanel
     .locator('[data-testid="inputbar-plugin-option"]')
-    .filter({ hasText: PLUGIN_V2_DISPLAY_NAME })
+    .filter({ hasText: PLUGIN_PACKAGE_DISPLAY_NAME })
     .first();
   await pluginOption.waitFor({ state: "visible", timeout: options.timeoutMs });
   await pluginOption.click();
   const badge = page.locator('[data-testid="inputbar-plugin-badge"]');
   await badge.waitFor({ state: "visible", timeout: options.timeoutMs });
   assert(
-    (await badge.textContent())?.includes(PLUGIN_V2_DISPLAY_NAME),
+    (await badge.textContent())?.includes(PLUGIN_PACKAGE_DISPLAY_NAME),
     "Claw Plugin badge identity 不一致",
   );
   assert(
-    (await input.inputValue()).startsWith(`@${PLUGIN_V2_DISPLAY_NAME}`),
+    (await input.inputValue()).startsWith(`@${PLUGIN_PACKAGE_DISPLAY_NAME}`),
     "Claw composer 未写入 Plugin 显式触发前缀",
   );
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
 
-  const dynamicLifecyclePromise = probeDynamicToolLifecycle(
-    page,
-    runtime.threadId,
-    options,
-    observedMethods,
-  );
   await page.locator('[data-testid="send-btn"]').last().click();
   await observeAppServerMethodFromTrace(
     page,
@@ -1380,15 +1406,14 @@ async function startPluginV2TurnFromGui({
     options,
     observedMethods,
   );
-  const guiTurn = await waitForPluginV2GuiTurn(
+  const guiTurn = await waitForPluginPackageGuiTurn(
     page,
     runtime.threadId,
     options,
     observedMethods,
   );
-  const dynamicLifecycle = await dynamicLifecyclePromise;
   return {
-    dynamicLifecycle,
+    dynamicLifecycle: { statuses: [], snapshots: [] },
     guiModelSelection,
     guiTurn,
     turn: {
@@ -1407,7 +1432,7 @@ async function startRuntimeTurn(
     fixture,
     observedMethods,
     options,
-    pluginV2 = false,
+    pluginPackage = false,
     pluginMentionScreenshotPath,
     serverName,
     workspaceRoot,
@@ -1436,8 +1461,8 @@ async function startRuntimeTurn(
   });
   observedMethods.add(update.method);
   const gui = await openRuntimeThreadInGui(page, sessionId, options);
-  if (pluginV2) {
-    const guiRuntime = await startPluginV2TurnFromGui({
+  if (pluginPackage) {
+    const guiRuntime = await startPluginPackageTurnFromGui({
       page,
       runtime: { route, sessionId, threadId },
       options,
@@ -1544,14 +1569,21 @@ async function submitElicitation(page, form, options) {
 }
 
 function providerRequestSummary(requests) {
-  return requests.map((request, index) => ({
-    index,
-    path: request.path,
-    stream: request.body?.stream === true,
-    toolNames: (request.body?.tools ?? [])
-      .map((tool) => String(tool?.function?.name || tool?.name || "").trim())
-      .filter(Boolean),
-  }));
+  return requests.map((request, index) => {
+    const serializedPrompt = JSON.stringify(request.body ?? {});
+    return {
+      index,
+      path: request.path,
+      pluginSkillContextSeen:
+        serializedPrompt.includes(
+          `<name>${PLUGIN_PACKAGE_SKILL_ID}</name>`,
+        ) && serializedPrompt.includes(PLUGIN_PACKAGE_SKILL_BODY_MARKER),
+      stream: request.body?.stream === true,
+      toolNames: (request.body?.tools ?? [])
+        .map((tool) => String(tool?.function?.name || tool?.name || "").trim())
+        .filter(Boolean),
+    };
+  });
 }
 
 function dynamicToolItems(value, items = []) {
@@ -1728,9 +1760,6 @@ function electronEvidence(traceRaw, observedMethods, requiredMethods) {
         (entry?.command === APP_SERVER_HANDLE_JSON_LINES_COMMAND &&
           entry?.transport !== "electron-ipc"),
     ).length,
-    pluginWorkerCommandsSeen: LEGACY_PLUGIN_WORKER_COMMANDS.filter((command) =>
-      commands.includes(command),
-    ),
     missingRequiredMethods: requiredMethods.filter(
       (method) => !methods.includes(method),
     ),
@@ -1738,8 +1767,8 @@ function electronEvidence(traceRaw, observedMethods, requiredMethods) {
   };
 }
 
-export async function run({ pluginV2 = false } = {}) {
-  const defaults = pluginV2
+export async function run({ pluginPackage = false } = {}) {
+  const defaults = pluginPackage
     ? {
         ...DEFAULTS,
         evidenceDir: path.join(
@@ -1747,14 +1776,14 @@ export async function run({ pluginV2 = false } = {}) {
           ".lime",
           "qc",
           "gui-evidence",
-          "plugin-v2-current-electron-fixture",
+          "plugin-package-electron-gate-b",
         ),
-        prefix: "plugin-v2-current-electron-fixture",
+        prefix: "plugin-package-electron-gate-b",
       }
     : DEFAULTS;
   const options = parseArgs(process.argv.slice(2), defaults);
-  const requiredMethods = pluginV2
-    ? PLUGIN_V2_REQUIRED_METHODS
+  const requiredMethods = pluginPackage
+    ? PLUGIN_PACKAGE_REQUIRED_METHODS
     : REQUIRED_METHODS;
   ensureElectronFixtureBuild({
     logPrefix: LOG_PREFIX,
@@ -1802,7 +1831,7 @@ export async function run({ pluginV2 = false } = {}) {
   const appServerBinary = resolveDevAppServerBinary({
     env: runtimeEnv.env,
     repoRoot: process.cwd(),
-    forceBuild: pluginV2,
+    forceBuild: pluginPackage,
   });
   const appServerEnv = resolveElectronAppServerRuntimeEnv({
     env: { ...runtimeEnv.env, APP_SERVER_BIN: appServerBinary },
@@ -1822,21 +1851,25 @@ export async function run({ pluginV2 = false } = {}) {
     repositoryCommit: readRepositoryCommit(process.cwd()),
     backendMode: "runtime",
     proofLevel: "Gate B",
-    scenario: pluginV2 ? "plugin-v2-mcp-runtime" : "mcp-elicitation",
-    pluginId: pluginV2 ? PLUGIN_V2_ID : null,
+    scenario: pluginPackage ? "plugin-package-mcp-runtime" : "mcp-elicitation",
+    pluginId: pluginPackage ? PLUGIN_PACKAGE_ID : null,
     pluginMarketplaceId: null,
     pluginSource: null,
     pluginVersion: null,
-    pluginRuntimeServerName: pluginV2 ? pluginV2ServerName() : null,
+    pluginRuntimeServerName: pluginPackage ? pluginPackageServerName() : null,
     pluginContentDigest: null,
+    standardManifestSeen: false,
+    standardMcpConfigSeen: false,
+    pluginSkillProjected: false,
+    pluginSkillContextSeen: false,
     sessionId: null,
     threadId: null,
     turnId: null,
     userItemId: null,
     toolItemId: null,
-    toolCallId: pluginV2 ? MCP_TOOL_CALL_ID : null,
+    toolCallId: pluginPackage ? MCP_TOOL_CALL_ID : null,
     surfaceId: null,
-    resourceUri: pluginV2 ? PLUGIN_V2_MCP_APP_RESOURCE_URI : null,
+    resourceUri: pluginPackage ? PLUGIN_PACKAGE_MCP_APP_RESOURCE_URI : null,
     appCenterBundledListVisible: false,
     appCenterBundledIdentityStable: false,
     appCenterInstallReviewVisible: false,
@@ -1856,7 +1889,9 @@ export async function run({ pluginV2 = false } = {}) {
     clawFixtureModelSelected: false,
     clawStructuredMentionObserved: false,
     clawThreadTurnItemIdentityStable: false,
-    pluginMentionPath: pluginV2 ? `plugin://${PLUGIN_V2_ID}` : null,
+    pluginMentionPath: pluginPackage
+      ? `plugin://${PLUGIN_PACKAGE_CONFIG_NAME}`
+      : null,
     pluginMentionUserItemId: null,
     uninstallViaAppCenterCompleted: false,
     installedProjectionClearedAfterUninstall: false,
@@ -1871,12 +1906,12 @@ export async function run({ pluginV2 = false } = {}) {
     coldRestoreMcpProcessRestarted: false,
     coldRestoreProviderNotReexecuted: false,
     coldRestoreToolNotReexecuted: false,
-    coldRestoreScreenshot: pluginV2 ? coldRestoreScreenshotPath : null,
+    coldRestoreScreenshot: pluginPackage ? coldRestoreScreenshotPath : null,
     mcpAppHistoryUnavailableAfterUninstall: false,
     historyToolNotReexecutedAfterUninstall: false,
-    pluginWorkerHitCount: null,
     productionMockFallbackHitCount: null,
     capabilityAdvertisementRequired: true,
+    dynamicToolRequired: !pluginPackage,
     capabilityMissingCount: null,
     managementElicitationCapabilityAbsent: false,
     runtimeClientCapabilities: null,
@@ -1892,7 +1927,7 @@ export async function run({ pluginV2 = false } = {}) {
     mcpAppCanonicalIdentityStable: false,
     mcpAppHtmlLoadCount: 0,
     mcpAppResourceReadCount: 0,
-    mcpAppResourceUri: pluginV2 ? PLUGIN_V2_MCP_APP_RESOURCE_URI : null,
+    mcpAppResourceUri: pluginPackage ? PLUGIN_PACKAGE_MCP_APP_RESOURCE_URI : null,
     mcpAppRestoredAfterReload: false,
     mcpAppRightSurfaceVisible: false,
     mcpAppToolCallCount: 0,
@@ -1906,11 +1941,11 @@ export async function run({ pluginV2 = false } = {}) {
     missingRequiredMethods: [...requiredMethods],
     legacyMcpCommandsSeen: [],
     screenshot: null,
-    appCenterScreenshot: pluginV2 ? appCenterScreenshotPath : null,
-    installReviewScreenshot: pluginV2 ? installReviewScreenshotPath : null,
-    pluginMentionScreenshot: pluginV2 ? pluginMentionScreenshotPath : null,
-    uninstallScreenshot: pluginV2 ? uninstallScreenshotPath : null,
-    postUninstallHistoryScreenshot: pluginV2
+    appCenterScreenshot: pluginPackage ? appCenterScreenshotPath : null,
+    installReviewScreenshot: pluginPackage ? installReviewScreenshotPath : null,
+    pluginMentionScreenshot: pluginPackage ? pluginMentionScreenshotPath : null,
+    uninstallScreenshot: pluginPackage ? uninstallScreenshotPath : null,
+    postUninstallHistoryScreenshot: pluginPackage
       ? postUninstallHistoryScreenshotPath
       : null,
     summary: summaryPath,
@@ -1931,16 +1966,20 @@ export async function run({ pluginV2 = false } = {}) {
 
   try {
     logStage("start-provider-fixture");
-    const serverName = pluginV2 ? pluginV2ServerName() : makeServerName();
+    const serverName = pluginPackage ? pluginPackageServerName() : makeServerName();
     const expectedToolName = toolName(serverName);
     fixture = await startOpenAiCompatibleFixtureServer({
       scriptedResponses: [
-        {
-          type: "tool_call",
-          id: DYNAMIC_TOOL_CALL_ID,
-          name: DYNAMIC_TOOL_NAME,
-          arguments: {},
-        },
+        ...(!pluginPackage
+          ? [
+              {
+                type: "tool_call",
+                id: DYNAMIC_TOOL_CALL_ID,
+                name: DYNAMIC_TOOL_NAME,
+                arguments: {},
+              },
+            ]
+          : []),
         {
           type: "tool_call",
           id: MCP_TOOL_CALL_ID,
@@ -1951,8 +1990,8 @@ export async function run({ pluginV2 = false } = {}) {
       ],
     });
     mcpFixture = writeElicitationFixture();
-    if (pluginV2) {
-      plugin = preparePluginV2Package(mcpFixture);
+    if (pluginPackage) {
+      plugin = preparePluginPackage(mcpFixture);
     }
 
     logStage("launch-electron");
@@ -1977,10 +2016,10 @@ export async function run({ pluginV2 = false } = {}) {
       handle.rendererSnapshot.electron &&
       handle.rendererSnapshot.hasInvokeBridge;
 
-    if (pluginV2) {
-      await installPluginV2EmbeddedBrowserLifecycleCapture(page);
-      logStage("open-plugin-v2-app-center");
-      const appCenterCatalog = await openPluginV2AppCenter(
+    if (pluginPackage) {
+      await installPluginPackageEmbeddedBrowserLifecycleCapture(page);
+      logStage("open-plugin-catalog-app-center");
+      const appCenterCatalog = await openPluginPackageAppCenter(
         page,
         options,
         observedMethods,
@@ -1990,8 +2029,8 @@ export async function run({ pluginV2 = false } = {}) {
       summary.appCenterBundledIdentityStable = true;
       raw.appCenterCatalog = sanitizeJson(appCenterCatalog);
 
-      logStage("install-plugin-v2-from-app-center");
-      const pluginLifecycle = await installPluginV2FromAppCenter({
+      logStage("install-plugin-catalog-from-app-center");
+      const pluginLifecycle = await installPluginPackageFromAppCenter({
         app,
         page,
         plugin,
@@ -2007,23 +2046,26 @@ export async function run({ pluginV2 = false } = {}) {
       summary.pluginSource = installedSummary?.source ?? null;
       summary.pluginVersion = installedSummary?.version ?? null;
       summary.pluginContentDigest = installedSummary?.contentDigest ?? null;
+      summary.standardManifestSeen = pluginLifecycle.standardManifestSeen;
+      summary.standardMcpConfigSeen = pluginLifecycle.standardMcpConfigSeen;
+      summary.pluginSkillProjected = pluginLifecycle.pluginSkillProjected;
       raw.pluginLifecycle = sanitizeJson(pluginLifecycle);
 
-      logStage("toggle-plugin-v2-from-app-center");
-      const disabled = await setPluginV2EnabledFromAppCenter(
+      logStage("toggle-plugin-catalog-from-app-center");
+      const disabled = await setPluginPackageEnabledFromAppCenter(
         page,
         plugin.id,
         false,
         options,
         observedMethods,
       );
-      logStage("verify-plugin-v2-disabled-new-thread-boundary");
+      logStage("verify-plugin-catalog-disabled-new-thread-boundary");
       disabledBoundaryFixture = await startOpenAiCompatibleFixtureServer({
         scriptedResponses: [
           { type: "text", content: DISABLED_BOUNDARY_FINAL_TEXT },
         ],
       });
-      const disabledBoundary = await verifyPluginV2DisabledNewThreadBoundary({
+      const disabledBoundary = await verifyPluginPackageDisabledNewThreadBoundary({
         page,
         fixture: disabledBoundaryFixture,
         plugin,
@@ -2041,7 +2083,7 @@ export async function run({ pluginV2 = false } = {}) {
         disabledBoundary.threadPluginItemsAbsent;
       raw.pluginDisabledBoundary = sanitizeJson(disabledBoundary);
 
-      const enabled = await setPluginV2EnabledFromAppCenter(
+      const enabled = await setPluginPackageEnabledFromAppCenter(
         page,
         plugin.id,
         true,
@@ -2094,7 +2136,7 @@ export async function run({ pluginV2 = false } = {}) {
       fixture,
       observedMethods,
       options,
-      pluginV2,
+      pluginPackage,
       pluginMentionScreenshotPath,
       serverName,
       workspaceRoot: workspace.rootPath,
@@ -2105,7 +2147,7 @@ export async function run({ pluginV2 = false } = {}) {
     summary.turnId = runtime.turnId ?? null;
     summary.userItemId = runtime.userItemId ?? null;
     raw.dynamicToolLifecycle = sanitizeJson(runtime.dynamicLifecycle);
-    if (pluginV2) {
+    if (pluginPackage) {
       summary.clawPluginPickerVisible = true;
       summary.clawPluginBadgeVisible = true;
       summary.clawFixtureModelSelected =
@@ -2156,7 +2198,7 @@ export async function run({ pluginV2 = false } = {}) {
       mcpFixture.ledgerPath,
       options,
       observedMethods,
-      { managementInitializeRequired: !pluginV2 },
+      { managementInitializeRequired: !pluginPackage },
     );
     raw.completion = sanitizeJson(completion.read);
     raw.mcpLedger = sanitizeJson(completion.ledger);
@@ -2174,9 +2216,12 @@ export async function run({ pluginV2 = false } = {}) {
       completion.capabilityEvidence.runtimeInitialize?.protocolVersion ?? null;
     const providerRequests = providerRequestSummary(fixture.requests);
     raw.providerRequests = sanitizeJson(providerRequests);
-    if (pluginV2) {
+    if (pluginPackage) {
       summary.enabledNewBoundaryCapabilityRestored =
         providerRequests[0]?.toolNames?.includes(expectedToolName) === true;
+      summary.pluginSkillContextSeen = providerRequests.some(
+        (request) => request.pluginSkillContextSeen,
+      );
     }
     summary.providerRequestCount = providerRequests.length;
     summary.dynamicToolProviderResultObserved = JSON.stringify(
@@ -2208,14 +2253,13 @@ export async function run({ pluginV2 = false } = {}) {
       evidence.appServerHandleJsonLinesSeen;
     summary.missingRequiredMethods = evidence.missingRequiredMethods;
     summary.legacyMcpCommandsSeen = evidence.legacyMcpCommandsSeen;
-    summary.pluginWorkerHitCount = evidence.pluginWorkerCommandsSeen.length;
     summary.productionMockFallbackHitCount = evidence.mockFallbackHitCount;
     raw.electronEvidence = sanitizeJson(evidence);
     summary.consoleErrors = [...consoleErrors];
 
-    if (pluginV2) {
-      logStage("verify-plugin-v2-mcp-app-surface");
-      const completionMention = findPluginV2MentionIdentity(
+    if (pluginPackage) {
+      logStage("verify-plugin-catalog-mcp-app-surface");
+      const completionMention = findPluginPackageMentionIdentity(
         completion.read.result,
       );
       assert(
@@ -2224,7 +2268,7 @@ export async function run({ pluginV2 = false } = {}) {
           completionMention?.userItemId === runtime.userItemId,
         "Claw structured Plugin mention 未保持 Thread/Turn/Item identity",
       );
-      const mcpAppItems = findPluginV2McpAppItems(completion.read.result);
+      const mcpAppItems = findPluginPackageMcpAppItems(completion.read.result);
       assert(
         mcpAppItems.length === 1,
         `thread/read 未观察到唯一 MCP App item: ${JSON.stringify(mcpAppItems)}`,
@@ -2233,7 +2277,7 @@ export async function run({ pluginV2 = false } = {}) {
       assert(runtime.mcpAppItemId, "MCP App item 缺少 canonical id");
       summary.toolItemId = runtime.mcpAppItemId;
       await openRuntimeThreadInGui(page, runtime.sessionId, options);
-      const firstSurface = await waitForPluginV2McpAppSurface({
+      const firstSurface = await waitForPluginPackageMcpAppSurface({
         app,
         page,
         options,
@@ -2245,27 +2289,27 @@ export async function run({ pluginV2 = false } = {}) {
         "首次显式恢复前后的 MCP App resource/HTML load 计数异常",
       );
       summary.mcpAppRightSurfaceVisible = true;
-      summary.mcpAppWebContentsMarker = PLUGIN_V2_MCP_APP_MARKER;
+      summary.mcpAppWebContentsMarker = PLUGIN_PACKAGE_MCP_APP_MARKER;
       summary.surfaceId = firstSurface.viewId;
       raw.mcpAppFirstSurface = sanitizeJson(firstSurface);
 
-      logStage("reload-plugin-v2-mcp-app-surface");
+      logStage("reload-plugin-catalog-mcp-app-surface");
       await openRuntimeThreadInGui(page, runtime.sessionId, options);
       const restoredRead = await appServerCallFromPage(page, "thread/read", {
         threadId: runtime.threadId,
         includeTurns: true,
       });
       observedMethods.add(restoredRead.method);
-      const restoredItems = findPluginV2McpAppItems(restoredRead.result);
+      const restoredItems = findPluginPackageMcpAppItems(restoredRead.result);
       assert(restoredItems.length === 1, "reload 后 MCP App item 数量不稳定");
       assert(
         restoredItems[0]?.id === runtime.mcpAppItemId &&
           restoredItems[0]?.mcpAppResourceUri ===
-            PLUGIN_V2_MCP_APP_RESOURCE_URI &&
-          restoredItems[0]?.pluginId === PLUGIN_V2_ID,
+            PLUGIN_PACKAGE_MCP_APP_RESOURCE_URI &&
+          restoredItems[0]?.pluginId === PLUGIN_PACKAGE_ID,
         "reload 后 Plugin/item/resource identity 漂移",
       );
-      const restoredSurface = await waitForPluginV2McpAppSurface({
+      const restoredSurface = await waitForPluginPackageMcpAppSurface({
         app,
         page,
         options,
@@ -2288,14 +2332,14 @@ export async function run({ pluginV2 = false } = {}) {
       const preColdRestoreResourceReadCount = preColdRestoreLedger.filter(
         (entry) =>
           entry?.type === "resource_read" &&
-          entry?.uri === PLUGIN_V2_MCP_APP_RESOURCE_URI,
+          entry?.uri === PLUGIN_PACKAGE_MCP_APP_RESOURCE_URI,
       ).length;
       const preColdRestoreToolCallCount = preColdRestoreLedger.filter(
         (entry) => entry?.type === "tool_call" && entry?.name === TOOL_SUFFIX,
       ).length;
       const preColdRestoreProviderRequestCount = fixture.requests.length;
 
-      logStage("cold-restart-plugin-v2-history");
+      logStage("cold-restart-plugin-package-history");
       await closeElectronFixture({ app });
       app = null;
       page = null;
@@ -2308,7 +2352,7 @@ export async function run({ pluginV2 = false } = {}) {
       });
       app = coldHandle.app;
       page = coldHandle.page;
-      await installPluginV2EmbeddedBrowserLifecycleCapture(page);
+      await installPluginPackageEmbeddedBrowserLifecycleCapture(page);
       const coldElectronRuntime = await readElectronRuntime(app);
       summary.electronLaunchCount = 2;
       summary.electronMainProcessPids.push(coldElectronRuntime.pid);
@@ -2339,15 +2383,15 @@ export async function run({ pluginV2 = false } = {}) {
         includeTurns: true,
       });
       observedMethods.add(coldRead.method);
-      const coldMention = findPluginV2MentionIdentity(coldRead.result);
-      const coldItems = findPluginV2McpAppItems(coldRead.result);
+      const coldMention = findPluginPackageMentionIdentity(coldRead.result);
+      const coldItems = findPluginPackageMcpAppItems(coldRead.result);
       assert(
         coldMention?.threadId === runtime.threadId &&
           coldMention?.turnId === runtime.turnId &&
           coldMention?.userItemId === runtime.userItemId &&
           coldItems.length === 1 &&
           coldItems[0]?.id === runtime.mcpAppItemId &&
-          coldItems[0]?.pluginId === PLUGIN_V2_ID,
+          coldItems[0]?.pluginId === PLUGIN_PACKAGE_ID,
         "cold restore 后 Plugin Thread/Turn/Item identity 漂移",
       );
       const coldSurfaceTab = page.locator(
@@ -2359,7 +2403,7 @@ export async function run({ pluginV2 = false } = {}) {
       });
       await coldSurfaceTab.click();
       summary.coldRestoreExplicitSurfaceOpen = true;
-      const coldSurface = await waitForPluginV2McpAppSurface({
+      const coldSurface = await waitForPluginPackageMcpAppSurface({
         app,
         page,
         options,
@@ -2374,7 +2418,7 @@ export async function run({ pluginV2 = false } = {}) {
       const coldResourceReadCount = coldLedger.filter(
         (entry) =>
           entry?.type === "resource_read" &&
-          entry?.uri === PLUGIN_V2_MCP_APP_RESOURCE_URI,
+          entry?.uri === PLUGIN_PACKAGE_MCP_APP_RESOURCE_URI,
       ).length;
       const coldToolCallCount = coldLedger.filter(
         (entry) => entry?.type === "tool_call" && entry?.name === TOOL_SUFFIX,
@@ -2423,8 +2467,8 @@ export async function run({ pluginV2 = false } = {}) {
         fullPage: true,
       });
 
-      logStage("uninstall-plugin-v2-from-app-center");
-      await uninstallPluginV2FromAppCenter({
+      logStage("uninstall-plugin-catalog-from-app-center");
+      await uninstallPluginPackageFromAppCenter({
         page,
         pluginId: plugin.id,
         options,
@@ -2434,7 +2478,7 @@ export async function run({ pluginV2 = false } = {}) {
       summary.uninstallViaAppCenterCompleted = true;
       summary.installedProjectionClearedAfterUninstall = true;
 
-      logStage("restore-plugin-v2-history-after-uninstall");
+      logStage("restore-plugin-catalog-history-after-uninstall");
       await openRuntimeThreadInGui(page, runtime.sessionId, options);
       const postUninstallRead = await appServerCallFromPage(
         page,
@@ -2445,10 +2489,10 @@ export async function run({ pluginV2 = false } = {}) {
         },
       );
       observedMethods.add(postUninstallRead.method);
-      const postUninstallMention = findPluginV2MentionIdentity(
+      const postUninstallMention = findPluginPackageMentionIdentity(
         postUninstallRead.result,
       );
-      const postUninstallItems = findPluginV2McpAppItems(
+      const postUninstallItems = findPluginPackageMcpAppItems(
         postUninstallRead.result,
       );
       assert(
@@ -2460,12 +2504,12 @@ export async function run({ pluginV2 = false } = {}) {
       assert(
         postUninstallItems.length === 1 &&
           postUninstallItems[0]?.id === runtime.mcpAppItemId &&
-          postUninstallItems[0]?.pluginId === PLUGIN_V2_ID,
+          postUninstallItems[0]?.pluginId === PLUGIN_PACKAGE_ID,
         "卸载后 Plugin MCP 历史 item 不可读或 identity 漂移",
       );
       summary.historyReadableAfterUninstall = true;
       const postUninstallSurface =
-        await waitForPluginV2McpAppHistoryUnavailable({
+        await waitForPluginPackageMcpAppHistoryUnavailable({
           app,
           page,
           options,
@@ -2490,7 +2534,7 @@ export async function run({ pluginV2 = false } = {}) {
       summary.mcpAppResourceReadCount = finalLedger.filter(
         (entry) =>
           entry?.type === "resource_read" &&
-          entry?.uri === PLUGIN_V2_MCP_APP_RESOURCE_URI,
+          entry?.uri === PLUGIN_PACKAGE_MCP_APP_RESOURCE_URI,
       ).length;
       summary.mcpAppToolCallCount = finalLedger.filter(
         (entry) => entry?.type === "tool_call" && entry?.name === TOOL_SUFFIX,
@@ -2541,7 +2585,6 @@ export async function run({ pluginV2 = false } = {}) {
         evidence.appServerHandleJsonLinesSeen;
       summary.missingRequiredMethods = evidence.missingRequiredMethods;
       summary.legacyMcpCommandsSeen = evidence.legacyMcpCommandsSeen;
-      summary.pluginWorkerHitCount = evidence.pluginWorkerCommandsSeen.length;
       summary.productionMockFallbackHitCount = evidence.mockFallbackHitCount;
       raw.electronEvidence = sanitizeJson(evidence);
     }
@@ -2559,7 +2602,7 @@ export async function run({ pluginV2 = false } = {}) {
       summary.legacyMcpCommandsSeen.length === 0,
       `观察到 legacy MCP facade: ${summary.legacyMcpCommandsSeen.join(", ")}`,
     );
-    if (pluginV2) {
+    if (pluginPackage) {
       assert(
         summary.appVersion &&
           summary.platform &&
@@ -2582,12 +2625,19 @@ export async function run({ pluginV2 = false } = {}) {
         "Plugin cold restore Gate B 未通过",
       );
       assert(
-        summary.pluginId === PLUGIN_V2_ID &&
+        summary.pluginId === PLUGIN_PACKAGE_ID &&
           summary.pluginMarketplaceId === "local" &&
           summary.pluginSource === "local" &&
           summary.pluginVersion === plugin.version &&
           String(summary.pluginContentDigest || "").startsWith("sha256:"),
         "Gate B evidence 缺少稳定 Plugin source/version/digest identity",
+      );
+      assert(
+        summary.standardManifestSeen &&
+          summary.standardMcpConfigSeen &&
+          summary.pluginSkillProjected &&
+          summary.pluginSkillContextSeen,
+        "Gate B 未证明标准 plugin.json、mcp.json 与 Skill provider context",
       );
       assert(
         summary.sessionId === runtime.sessionId &&
@@ -2597,7 +2647,7 @@ export async function run({ pluginV2 = false } = {}) {
           summary.toolItemId === runtime.mcpAppItemId &&
           summary.toolCallId === MCP_TOOL_CALL_ID &&
           summary.surfaceId &&
-          summary.resourceUri === PLUGIN_V2_MCP_APP_RESOURCE_URI,
+          summary.resourceUri === PLUGIN_PACKAGE_MCP_APP_RESOURCE_URI,
         "Gate B evidence 缺少 Thread/Turn/Item/tool/surface identity",
       );
       assert(
@@ -2644,11 +2694,11 @@ export async function run({ pluginV2 = false } = {}) {
       assert(
         !evidence.requestMethods.includes("mcpServer/create") &&
           !evidence.requestMethods.includes("mcpServer/start"),
-        "Plugin v2 MCP 不得通过管理面 mcpServer/create/start 注入",
+        "Plugin package MCP 不得通过管理面 mcpServer/create/start 注入",
       );
       assert(
         completion.capabilityEvidence.managementConnectionAbsent,
-        "Plugin v2 MCP Gate B 不得额外启动 management MCP connection",
+        "Plugin package MCP Gate B 不得额外启动 management MCP connection",
       );
       assert(
         summary.mcpAppRightSurfaceVisible,
@@ -2676,33 +2726,37 @@ export async function run({ pluginV2 = false } = {}) {
       );
     }
     assert(
-      providerRequests[0]?.toolNames?.includes(DYNAMIC_TOOL_NAME),
-      `首个 provider request 未携带 Electron dynamic tool: ${DYNAMIC_TOOL_NAME}`,
-    );
-    assert(
       providerRequests[0]?.toolNames?.includes(expectedToolName),
       `首个 provider request 未携带 scoped MCP tool: ${expectedToolName}`,
     );
     assert(
-      providerRequests.length >= 3,
-      "provider 未完成 dynamic tool 与 MCP tool result 后的后续请求",
+      providerRequests.length >= (pluginPackage ? 2 : 3),
+      pluginPackage
+        ? "provider 未完成 Plugin MCP tool result 后的后续请求"
+        : "provider 未完成 dynamic tool 与 MCP tool result 后的后续请求",
     );
-    assert(
-      summary.dynamicToolProviderResultObserved,
-      "dynamic tool response 未进入 provider 后续请求",
-    );
-    assert(
-      summary.dynamicToolCanonicalCompleted,
-      "thread/read 未观察到唯一 completed desktop/appInfo DynamicToolCall",
-    );
-    assert(
-      summary.dynamicToolStartedObserved,
-      "未观察到 desktop/appInfo DynamicToolCall inProgress 投影",
-    );
-    assert(
-      summary.dynamicToolRequestHiddenFromRenderer,
-      "item/tool/call reverse request 泄露到 Renderer",
-    );
+    if (!pluginPackage) {
+      assert(
+        providerRequests[0]?.toolNames?.includes(DYNAMIC_TOOL_NAME),
+        `首个 provider request 未携带 Electron dynamic tool: ${DYNAMIC_TOOL_NAME}`,
+      );
+      assert(
+        summary.dynamicToolProviderResultObserved,
+        "dynamic tool response 未进入 provider 后续请求",
+      );
+      assert(
+        summary.dynamicToolCanonicalCompleted,
+        "thread/read 未观察到唯一 completed desktop/appInfo DynamicToolCall",
+      );
+      assert(
+        summary.dynamicToolStartedObserved,
+        "未观察到 desktop/appInfo DynamicToolCall inProgress 投影",
+      );
+      assert(
+        summary.dynamicToolRequestHiddenFromRenderer,
+        "item/tool/call reverse request 泄露到 Renderer",
+      );
+    }
     assert(
       summary.rendererConfirmedSubmitted,
       "Renderer 未提交 confirmed=true",
@@ -2737,7 +2791,6 @@ export async function run({ pluginV2 = false } = {}) {
       consoleErrors.length === 0,
       `Renderer console error: ${JSON.stringify(consoleErrors)}`,
     );
-    assert(summary.pluginWorkerHitCount === 0, "观察到旧 Plugin worker 命中");
     assert(
       summary.productionMockFallbackHitCount === 0,
       "观察到 production mock fallback 命中",
@@ -2759,8 +2812,8 @@ export async function run({ pluginV2 = false } = {}) {
     summary.completedAt = new Date().toISOString();
     writeJsonFile(rawPath, raw);
     writeJsonFile(summaryPath, summary);
-    if (pluginV2) {
-      await cleanupPluginV2(page, plugin);
+    if (pluginPackage) {
+      await cleanupPluginPackage(page, plugin);
     } else {
       await cleanupMcpServer(page, server);
     }

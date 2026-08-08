@@ -1,10 +1,37 @@
-use app_server_protocol::{
-    protocol::v2::GrantedPermissionProfile, ExecutionProcessDrainOutputParams,
-    ExecutionProcessDrainOutputResponse, ExecutionProcessEmptyResponse, ExecutionProcessIdParams,
-    ExecutionProcessStartParams, ExecutionProcessStartResponse, ExecutionProcessStatusResponse,
-    ExecutionProcessWriteStdinParams,
-};
+use super::{ExecutionOutputDelta, ExecutionProcessSnapshot};
+use app_server_protocol::protocol::v2::GrantedPermissionProfile;
 use async_trait::async_trait;
+use serde_json::Value;
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveExecutionRequest {
+    pub process_id: String,
+    pub tool_id: String,
+    pub tool_name: String,
+    pub command: Vec<String>,
+    pub working_directory: PathBuf,
+    pub tty: bool,
+    pub approval_policy: Option<String>,
+    pub sandbox_policy: Option<String>,
+    pub runtime_metadata: Option<Value>,
+    pub env: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LiveExecutionOutputQuery {
+    pub process_id: Option<String>,
+    pub after_sequence: Option<u64>,
+    pub limit: Option<u16>,
+    pub max_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveExecutionOutputBatch {
+    pub deltas: Vec<ExecutionOutputDelta>,
+    pub next_sequence: Option<u64>,
+}
 
 /// App Server-owned process control used by the current provider tool loop.
 #[async_trait]
@@ -13,27 +40,18 @@ pub trait RuntimeLiveExecutionGateway: Send + Sync {
         &self,
         thread_id: &str,
         display_command: &str,
-        params: ExecutionProcessStartParams,
+        request: LiveExecutionRequest,
         granted_permissions: Option<GrantedPermissionProfile>,
-    ) -> Result<ExecutionProcessStartResponse, String>;
+    ) -> Result<ExecutionProcessSnapshot, String>;
 
-    fn write_stdin(
-        &self,
-        params: ExecutionProcessWriteStdinParams,
-    ) -> Result<ExecutionProcessEmptyResponse, String>;
+    fn write_stdin(&self, process_id: &str, data: &[u8]) -> Result<(), String>;
 
-    fn terminate(
-        &self,
-        params: ExecutionProcessIdParams,
-    ) -> Result<ExecutionProcessStatusResponse, String>;
+    fn terminate(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String>;
 
-    fn status(
-        &self,
-        params: ExecutionProcessIdParams,
-    ) -> Result<ExecutionProcessStatusResponse, String>;
+    fn status(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String>;
 
     fn drain_output(
         &self,
-        params: ExecutionProcessDrainOutputParams,
-    ) -> Result<ExecutionProcessDrainOutputResponse, String>;
+        query: LiveExecutionOutputQuery,
+    ) -> Result<LiveExecutionOutputBatch, String>;
 }

@@ -32,7 +32,6 @@ mod media_context;
 mod memory_prompt;
 mod pending_work_recovery;
 mod permission_preflight;
-mod plugin_worker_turn;
 mod queue;
 mod queue_order;
 mod queue_resume_audit;

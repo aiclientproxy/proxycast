@@ -6,7 +6,6 @@ import {
   useWorkspaceRightSurfacePendingRuntime,
   type WorkspaceRightSurfacePendingRuntime,
 } from "./useWorkspaceRightSurfacePendingRuntime";
-import type { WorkspacePluginRuntimeContext } from "./workspacePluginRuntimeContext";
 
 interface UseWorkspaceRightSurfacePendingBridgeRuntimeParams {
   bindRightSurfacePendingActions: (
@@ -14,7 +13,6 @@ interface UseWorkspaceRightSurfacePendingBridgeRuntimeParams {
   ) => void;
   canvasWorkbenchRootPath: string | null;
   manualRightSurface: WorkspaceRightSurfaceKind | null;
-  pluginRuntimeContext: WorkspacePluginRuntimeContext;
   runtimeWorkspaceId: string | null;
   sceneIsPreparingSend: boolean;
   sceneIsSending: boolean;
@@ -28,7 +26,6 @@ export function useWorkspaceRightSurfacePendingBridgeRuntime({
   bindRightSurfacePendingActions,
   canvasWorkbenchRootPath,
   manualRightSurface,
-  pluginRuntimeContext,
   runtimeWorkspaceId,
   sceneIsPreparingSend,
   sceneIsSending,
@@ -37,10 +34,6 @@ export function useWorkspaceRightSurfacePendingBridgeRuntime({
   sessionId,
   taskCenterHomeHotpathActive,
 }: UseWorkspaceRightSurfacePendingBridgeRuntimeParams): WorkspaceRightSurfacePendingRuntime {
-  const activePluginActivationContext =
-    pluginRuntimeContext.status === "active"
-      ? pluginRuntimeContext.activationContext
-      : null;
   const rightSurfacePendingSessionId = sessionId || sceneSessionId;
   const shouldAutoRefreshRightSurfacePending =
     shouldAutoRefreshWorkspaceRightSurfacePending({
@@ -52,7 +45,7 @@ export function useWorkspaceRightSurfacePendingBridgeRuntime({
       sceneLayoutMode,
       taskCenterHomeHotpathActive,
       manualRightSurfaceActive: manualRightSurface !== null,
-      pluginActivationActive: Boolean(activePluginActivationContext),
+      pluginActivationActive: false,
     });
   const rightSurfaceAppServerPendingRuntime =
     useWorkspaceRightSurfacePendingRuntime({
@@ -61,8 +54,6 @@ export function useWorkspaceRightSurfacePendingBridgeRuntime({
       workspaceId: runtimeWorkspaceId,
       workspaceRoot: canvasWorkbenchRootPath,
       sessionId: rightSurfacePendingSessionId,
-      pluginActivationContext: activePluginActivationContext,
-      pluginContracts: pluginRuntimeContext.contracts,
     });
 
   bindRightSurfacePendingActions({

@@ -8,18 +8,10 @@ import {
   type WorkspaceRightSurfaceLauncherProjection,
   type WorkspaceRightSurfaceState,
 } from "./right-surface";
-import type {
-  PluginActivationContext,
-  PluginContract,
-} from "@/features/plugin";
-
 export interface BuildWorkspaceRightSurfaceRuntimePendingIntentsParams {
   createdAt: number;
   harnessPendingCount: number;
   objectCanvasCandidateId?: string | null;
-  pluginActivationContext?: PluginActivationContext | null;
-  pluginContracts?: readonly PluginContract[];
-  pluginRightSurfaceIntentTtlMs?: number;
   preferredServiceSkillResultFileTargetRelativePath?: string | null;
   showHarnessToggle: boolean;
   suppressHomeNavbarUtilityActions: boolean;
@@ -45,10 +37,7 @@ export function hasWorkspaceRightSurfaceRuntimePendingSignals({
   preferredServiceSkillResultFileTargetRelativePath,
   showHarnessToggle,
   suppressHomeNavbarUtilityActions,
-}: Omit<
-  BuildWorkspaceRightSurfaceRuntimePendingIntentsParams,
-  "createdAt" | "pluginRightSurfaceIntentTtlMs"
->): boolean {
+}: Omit<BuildWorkspaceRightSurfaceRuntimePendingIntentsParams, "createdAt">): boolean {
   if (
     !suppressHomeNavbarUtilityActions &&
     showHarnessToggle &&

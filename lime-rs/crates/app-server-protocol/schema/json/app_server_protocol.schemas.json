@@ -4476,120 +4476,6 @@
               "$ref": "#/$defs/RequestId"
             },
             "method": {
-              "const": "fileSystem/listDirectory",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "fileSystem/readFilePreview",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "fileSystem/createFile",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "fileSystem/createDirectory",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "fileSystem/renameFile",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "fileSystem/deleteFile",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
               "const": "projectGit/status",
               "type": "string"
             },
@@ -4781,120 +4667,6 @@
             },
             "method": {
               "const": "projectShell/session/drainEvents",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "executionProcess/start",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "executionProcess/writeStdin",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "executionProcess/interrupt",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "executionProcess/terminate",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "executionProcess/status",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "executionProcess/drainOutput",
               "type": "string"
             },
             "params": {
@@ -7193,253 +6965,6 @@
               "$ref": "#/$defs/RequestId"
             },
             "method": {
-              "const": "pluginLocalPackage/inspect",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginLocalPackage/export",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginPackage/fetchCloud",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginInstalled/save",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginInstalled/list",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginInstalled/disabled/set",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginInstalled/uninstall/rehearsal",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginInstalled/uninstall",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginHostLifecycle/list",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginShell/prepare",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginUiRuntime/start",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginUiRuntime/status",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "pluginUiRuntime/stop",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
               "const": "soulStylePack/install",
               "type": "string"
             },
@@ -8429,25 +7954,6 @@
             },
             "method": {
               "const": "memoryStore/health",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "memoryStore/reset",
               "type": "string"
             },
             "params": {
@@ -9528,19 +9034,7 @@
         "diagnostics/windowsStartup/read",
         "discordChannel/probe",
         "evidence/export",
-        "executionProcess/drainOutput",
-        "executionProcess/interrupt",
-        "executionProcess/start",
-        "executionProcess/status",
-        "executionProcess/terminate",
-        "executionProcess/writeStdin",
         "feishuChannel/probe",
-        "fileSystem/createDirectory",
-        "fileSystem/createFile",
-        "fileSystem/deleteFile",
-        "fileSystem/listDirectory",
-        "fileSystem/readFilePreview",
-        "fileSystem/renameFile",
         "galleryMaterial/get",
         "galleryMaterial/listByImageCategory",
         "galleryMaterial/listByLayoutCategory",
@@ -9607,7 +9101,6 @@
         "memoryStore/index/rebuild",
         "memoryStore/list",
         "memoryStore/read",
-        "memoryStore/reset",
         "memoryStore/review/list",
         "memoryStore/review/resolve",
         "memoryStore/search",
@@ -9632,19 +9125,6 @@
         "modelProviderUiState/read",
         "modelProviderUiState/write",
         "modelSyncState/read",
-        "pluginHostLifecycle/list",
-        "pluginInstalled/disabled/set",
-        "pluginInstalled/list",
-        "pluginInstalled/save",
-        "pluginInstalled/uninstall",
-        "pluginInstalled/uninstall/rehearsal",
-        "pluginLocalPackage/export",
-        "pluginLocalPackage/inspect",
-        "pluginPackage/fetchCloud",
-        "pluginShell/prepare",
-        "pluginUiRuntime/start",
-        "pluginUiRuntime/status",
-        "pluginUiRuntime/stop",
         "projectGit/branch/checkout",
         "projectGit/branch/create",
         "projectGit/commits/list",
@@ -9749,8 +9229,6 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
         "browserSession",
-        "executionProcess",
-        "fileSystemMutation",
         "mcpOauth",
         "mcpResourceSubscription",
         "projectShellSession",
@@ -9764,8 +9242,6 @@
         "AppServerRequestSerializationScope": {
           "enum": [
             "browserSession",
-            "executionProcess",
-            "fileSystemMutation",
             "mcpOauth",
             "mcpResourceSubscription",
             "projectShellSession",
@@ -12722,6 +12198,138 @@
             }
           ]
         },
+        "FsCopyParams": {
+          "properties": {
+            "destinationPath": {
+              "type": "string"
+            },
+            "recursive": {
+              "type": "boolean"
+            },
+            "sourcePath": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "destinationPath",
+            "sourcePath"
+          ],
+          "type": "object"
+        },
+        "FsCreateDirectoryParams": {
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "recursive": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        },
+        "FsGetMetadataParams": {
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        },
+        "FsReadDirectoryParams": {
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        },
+        "FsReadFileParams": {
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        },
+        "FsRemoveParams": {
+          "properties": {
+            "force": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "recursive": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        },
+        "FsUnwatchParams": {
+          "properties": {
+            "watchId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "watchId"
+          ],
+          "type": "object"
+        },
+        "FsWatchParams": {
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "watchId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "watchId"
+          ],
+          "type": "object"
+        },
+        "FsWriteFileParams": {
+          "properties": {
+            "dataBase64": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "dataBase64",
+            "path"
+          ],
+          "type": "object"
+        },
         "HooksListParams": {
           "properties": {
             "cwds": {
@@ -13037,6 +12645,141 @@
             "workspace"
           ],
           "type": "string"
+        },
+        "ProcessKillParams": {
+          "properties": {
+            "processHandle": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processHandle"
+          ],
+          "type": "object"
+        },
+        "ProcessResizePtyParams": {
+          "properties": {
+            "processHandle": {
+              "type": "string"
+            },
+            "size": {
+              "$ref": "#/$defs/ProcessTerminalSize"
+            }
+          },
+          "required": [
+            "processHandle",
+            "size"
+          ],
+          "type": "object"
+        },
+        "ProcessSpawnParams": {
+          "properties": {
+            "command": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "env": {
+              "additionalProperties": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "outputBytesCap": {
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "processHandle": {
+              "type": "string"
+            },
+            "size": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ProcessTerminalSize"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "streamStdin": {
+              "type": "boolean"
+            },
+            "streamStdoutStderr": {
+              "type": "boolean"
+            },
+            "timeoutMs": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "tty": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "command",
+            "cwd",
+            "processHandle"
+          ],
+          "type": "object"
+        },
+        "ProcessTerminalSize": {
+          "properties": {
+            "cols": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "rows": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "cols",
+            "rows"
+          ],
+          "type": "object"
+        },
+        "ProcessWriteStdinParams": {
+          "properties": {
+            "closeStdin": {
+              "type": "boolean"
+            },
+            "deltaBase64": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "processHandle": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "processHandle"
+          ],
+          "type": "object"
         },
         "RequestId": {
           "anyOf": [
@@ -15220,6 +14963,22 @@
               "$ref": "#/$defs/RequestId"
             },
             "method": {
+              "const": "memory/reset",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
               "const": "thread/shellCommand",
               "type": "string"
             },
@@ -15805,6 +15564,266 @@
             },
             "params": {
               "$ref": "#/$defs/TurnInterruptParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "fs/readFile",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsReadFileParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "fs/writeFile",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsWriteFileParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "fs/createDirectory",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsCreateDirectoryParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "fs/getMetadata",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsGetMetadataParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "fs/readDirectory",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsReadDirectoryParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "fs/remove",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsRemoveParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "fs/copy",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsCopyParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "fs/watch",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsWatchParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "fs/unwatch",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsUnwatchParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "process/spawn",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProcessSpawnParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "process/writeStdin",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProcessWriteStdinParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "process/resizePty",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProcessResizePtyParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "process/kill",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProcessKillParams"
             }
           },
           "required": [
@@ -22910,550 +22929,6 @@
       "title": "EvidencePackSummary",
       "type": "object"
     },
-    "ExecutionProcessDrainOutputParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "afterSequence": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "limit": {
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "maxBytes": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "processId": {
-          "type": [
-            "null",
-            "string"
-          ]
-        }
-      },
-      "title": "ExecutionProcessDrainOutputParams",
-      "type": "object"
-    },
-    "ExecutionProcessDrainOutputResponse": {
-      "$defs": {
-        "ExecutionProcessOutputDelta": {
-          "properties": {
-            "bytes": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "delta": {
-              "type": "string"
-            },
-            "kind": {
-              "$ref": "#/$defs/ExecutionProcessOutputKind"
-            },
-            "omittedBytes": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "processId": {
-              "type": "string"
-            },
-            "sequence": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "toolId": {
-              "type": "string"
-            },
-            "truncated": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "bytes",
-            "delta",
-            "kind",
-            "omittedBytes",
-            "processId",
-            "sequence",
-            "toolId",
-            "truncated"
-          ],
-          "type": "object"
-        },
-        "ExecutionProcessOutputKind": {
-          "enum": [
-            "combined",
-            "stderr",
-            "stdout"
-          ],
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "deltas": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/ExecutionProcessOutputDelta"
-          },
-          "type": "array"
-        },
-        "nextSequence": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "title": "ExecutionProcessDrainOutputResponse",
-      "type": "object"
-    },
-    "ExecutionProcessEmptyResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "title": "ExecutionProcessEmptyResponse",
-      "type": "object"
-    },
-    "ExecutionProcessIdParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "processId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "processId"
-      ],
-      "title": "ExecutionProcessIdParams",
-      "type": "object"
-    },
-    "ExecutionProcessOutputDelta": {
-      "$defs": {
-        "ExecutionProcessOutputKind": {
-          "enum": [
-            "combined",
-            "stderr",
-            "stdout"
-          ],
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "bytes": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "delta": {
-          "type": "string"
-        },
-        "kind": {
-          "$ref": "#/$defs/ExecutionProcessOutputKind"
-        },
-        "omittedBytes": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "processId": {
-          "type": "string"
-        },
-        "sequence": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "toolId": {
-          "type": "string"
-        },
-        "truncated": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "bytes",
-        "delta",
-        "kind",
-        "omittedBytes",
-        "processId",
-        "sequence",
-        "toolId",
-        "truncated"
-      ],
-      "title": "ExecutionProcessOutputDelta",
-      "type": "object"
-    },
-    "ExecutionProcessOutputKind": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "enum": [
-        "combined",
-        "stderr",
-        "stdout"
-      ],
-      "title": "ExecutionProcessOutputKind",
-      "type": "string"
-    },
-    "ExecutionProcessSnapshot": {
-      "$defs": {
-        "ExecutionProcessStatus": {
-          "enum": [
-            "exited",
-            "failed",
-            "interrupted",
-            "running",
-            "starting",
-            "terminated"
-          ],
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "elapsedMs": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "exitCode": {
-          "format": "int32",
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "failure": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "outputBytes": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "outputOmittedBytes": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "outputTruncated": {
-          "type": "boolean"
-        },
-        "processId": {
-          "type": "string"
-        },
-        "retainedOutput": {
-          "type": "string"
-        },
-        "status": {
-          "$ref": "#/$defs/ExecutionProcessStatus"
-        },
-        "toolId": {
-          "type": "string"
-        },
-        "toolName": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "elapsedMs",
-        "outputBytes",
-        "outputOmittedBytes",
-        "outputTruncated",
-        "processId",
-        "retainedOutput",
-        "status",
-        "toolId",
-        "toolName"
-      ],
-      "title": "ExecutionProcessSnapshot",
-      "type": "object"
-    },
-    "ExecutionProcessStartParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "approvalPolicy": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "command": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "cwd": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "env": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "type": "object"
-        },
-        "processId": {
-          "type": "string"
-        },
-        "runtimeMetadata": true,
-        "sandboxPolicy": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "toolId": {
-          "type": "string"
-        },
-        "toolName": {
-          "type": "string"
-        },
-        "tty": {
-          "default": false,
-          "type": "boolean"
-        },
-        "workingDirectory": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "command",
-        "processId",
-        "toolId",
-        "toolName",
-        "workingDirectory"
-      ],
-      "title": "ExecutionProcessStartParams",
-      "type": "object"
-    },
-    "ExecutionProcessStartResponse": {
-      "$defs": {
-        "ExecutionProcessSnapshot": {
-          "properties": {
-            "elapsedMs": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "exitCode": {
-              "format": "int32",
-              "type": [
-                "integer",
-                "null"
-              ]
-            },
-            "failure": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "outputBytes": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "outputOmittedBytes": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "outputTruncated": {
-              "type": "boolean"
-            },
-            "processId": {
-              "type": "string"
-            },
-            "retainedOutput": {
-              "type": "string"
-            },
-            "status": {
-              "$ref": "#/$defs/ExecutionProcessStatus"
-            },
-            "toolId": {
-              "type": "string"
-            },
-            "toolName": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "elapsedMs",
-            "outputBytes",
-            "outputOmittedBytes",
-            "outputTruncated",
-            "processId",
-            "retainedOutput",
-            "status",
-            "toolId",
-            "toolName"
-          ],
-          "type": "object"
-        },
-        "ExecutionProcessStatus": {
-          "enum": [
-            "exited",
-            "failed",
-            "interrupted",
-            "running",
-            "starting",
-            "terminated"
-          ],
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "snapshot": {
-          "$ref": "#/$defs/ExecutionProcessSnapshot"
-        }
-      },
-      "required": [
-        "snapshot"
-      ],
-      "title": "ExecutionProcessStartResponse",
-      "type": "object"
-    },
-    "ExecutionProcessStatus": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "enum": [
-        "exited",
-        "failed",
-        "interrupted",
-        "running",
-        "starting",
-        "terminated"
-      ],
-      "title": "ExecutionProcessStatus",
-      "type": "string"
-    },
-    "ExecutionProcessStatusResponse": {
-      "$defs": {
-        "ExecutionProcessSnapshot": {
-          "properties": {
-            "elapsedMs": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "exitCode": {
-              "format": "int32",
-              "type": [
-                "integer",
-                "null"
-              ]
-            },
-            "failure": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "outputBytes": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "outputOmittedBytes": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "outputTruncated": {
-              "type": "boolean"
-            },
-            "processId": {
-              "type": "string"
-            },
-            "retainedOutput": {
-              "type": "string"
-            },
-            "status": {
-              "$ref": "#/$defs/ExecutionProcessStatus"
-            },
-            "toolId": {
-              "type": "string"
-            },
-            "toolName": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "elapsedMs",
-            "outputBytes",
-            "outputOmittedBytes",
-            "outputTruncated",
-            "processId",
-            "retainedOutput",
-            "status",
-            "toolId",
-            "toolName"
-          ],
-          "type": "object"
-        },
-        "ExecutionProcessStatus": {
-          "enum": [
-            "exited",
-            "failed",
-            "interrupted",
-            "running",
-            "starting",
-            "terminated"
-          ],
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "snapshot": {
-          "$ref": "#/$defs/ExecutionProcessSnapshot"
-        }
-      },
-      "required": [
-        "snapshot"
-      ],
-      "title": "ExecutionProcessStatusResponse",
-      "type": "object"
-    },
-    "ExecutionProcessWriteStdinParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "data": {
-          "type": "string"
-        },
-        "processId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "data",
-        "processId"
-      ],
-      "title": "ExecutionProcessWriteStdinParams",
-      "type": "object"
-    },
     "FileChangeApprovalDecision": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
@@ -23634,286 +23109,6 @@
       "title": "FileSystemAccessMode",
       "type": "string"
     },
-    "FileSystemCreateDirectoryParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "path": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "title": "FileSystemCreateDirectoryParams",
-      "type": "object"
-    },
-    "FileSystemCreateFileParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "path": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "title": "FileSystemCreateFileParams",
-      "type": "object"
-    },
-    "FileSystemDeleteFileParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "path": {
-          "type": "string"
-        },
-        "recursive": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "title": "FileSystemDeleteFileParams",
-      "type": "object"
-    },
-    "FileSystemDirectoryListing": {
-      "$defs": {
-        "FileSystemFileEntry": {
-          "properties": {
-            "fileType": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "iconDataUrl": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "isDir": {
-              "type": "boolean"
-            },
-            "isHidden": {
-              "default": false,
-              "type": "boolean"
-            },
-            "isSymlink": {
-              "default": false,
-              "type": "boolean"
-            },
-            "mimeType": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "mode": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
-            },
-            "modeStr": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "modifiedAt": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "name": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "size": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "isDir",
-            "modifiedAt",
-            "name",
-            "path",
-            "size"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "entries": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/FileSystemFileEntry"
-          },
-          "type": "array"
-        },
-        "error": {
-          "default": null,
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "parentPath": {
-          "default": null,
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "path": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "title": "FileSystemDirectoryListing",
-      "type": "object"
-    },
-    "FileSystemFileEntry": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "fileType": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "iconDataUrl": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "isDir": {
-          "type": "boolean"
-        },
-        "isHidden": {
-          "default": false,
-          "type": "boolean"
-        },
-        "isSymlink": {
-          "default": false,
-          "type": "boolean"
-        },
-        "mimeType": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "mode": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "modeStr": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "modifiedAt": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "name": {
-          "type": "string"
-        },
-        "path": {
-          "type": "string"
-        },
-        "size": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "isDir",
-        "modifiedAt",
-        "name",
-        "path",
-        "size"
-      ],
-      "title": "FileSystemFileEntry",
-      "type": "object"
-    },
-    "FileSystemFilePreview": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "content": {
-          "default": null,
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "error": {
-          "default": null,
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "isBinary": {
-          "type": "boolean"
-        },
-        "path": {
-          "type": "string"
-        },
-        "size": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "isBinary",
-        "path",
-        "size"
-      ],
-      "title": "FileSystemFilePreview",
-      "type": "object"
-    },
-    "FileSystemListDirectoryParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "path": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "title": "FileSystemListDirectoryParams",
-      "type": "object"
-    },
-    "FileSystemMutationResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "title": "FileSystemMutationResponse",
-      "type": "object"
-    },
     "FileSystemPath": {
       "$defs": {
         "FileSystemSpecialPath": {
@@ -24061,44 +23256,6 @@
         }
       ],
       "title": "FileSystemPath"
-    },
-    "FileSystemReadFilePreviewParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "maxSize": {
-          "format": "uint",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "path": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "title": "FileSystemReadFilePreviewParams",
-      "type": "object"
-    },
-    "FileSystemRenameFileParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "newPath": {
-          "type": "string"
-        },
-        "oldPath": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "newPath",
-        "oldPath"
-      ],
-      "title": "FileSystemRenameFileParams",
-      "type": "object"
     },
     "FileSystemSandboxEntry": {
       "$defs": {
@@ -24443,6 +23600,316 @@
       ],
       "title": "FramingKind",
       "type": "string"
+    },
+    "FsChangedNotification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "changedPaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "watchId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changedPaths",
+        "watchId"
+      ],
+      "title": "FsChangedNotification",
+      "type": "object"
+    },
+    "FsCopyParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "destinationPath": {
+          "type": "string"
+        },
+        "recursive": {
+          "type": "boolean"
+        },
+        "sourcePath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "destinationPath",
+        "sourcePath"
+      ],
+      "title": "FsCopyParams",
+      "type": "object"
+    },
+    "FsCopyResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "FsCopyResponse",
+      "type": "object"
+    },
+    "FsCreateDirectoryParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "recursive": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "FsCreateDirectoryParams",
+      "type": "object"
+    },
+    "FsCreateDirectoryResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "FsCreateDirectoryResponse",
+      "type": "object"
+    },
+    "FsGetMetadataParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "FsGetMetadataParams",
+      "type": "object"
+    },
+    "FsGetMetadataResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "createdAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "isDirectory": {
+          "type": "boolean"
+        },
+        "isFile": {
+          "type": "boolean"
+        },
+        "isSymlink": {
+          "type": "boolean"
+        },
+        "modifiedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "createdAtMs",
+        "isDirectory",
+        "isFile",
+        "isSymlink",
+        "modifiedAtMs"
+      ],
+      "title": "FsGetMetadataResponse",
+      "type": "object"
+    },
+    "FsReadDirectoryEntry": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "fileName": {
+          "type": "string"
+        },
+        "isDirectory": {
+          "type": "boolean"
+        },
+        "isFile": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "fileName",
+        "isDirectory",
+        "isFile"
+      ],
+      "title": "FsReadDirectoryEntry",
+      "type": "object"
+    },
+    "FsReadDirectoryParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "FsReadDirectoryParams",
+      "type": "object"
+    },
+    "FsReadDirectoryResponse": {
+      "$defs": {
+        "FsReadDirectoryEntry": {
+          "properties": {
+            "fileName": {
+              "type": "string"
+            },
+            "isDirectory": {
+              "type": "boolean"
+            },
+            "isFile": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "fileName",
+            "isDirectory",
+            "isFile"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/FsReadDirectoryEntry"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "title": "FsReadDirectoryResponse",
+      "type": "object"
+    },
+    "FsReadFileParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "FsReadFileParams",
+      "type": "object"
+    },
+    "FsReadFileResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "dataBase64": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataBase64"
+      ],
+      "title": "FsReadFileResponse",
+      "type": "object"
+    },
+    "FsRemoveParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "force": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "recursive": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "FsRemoveParams",
+      "type": "object"
+    },
+    "FsRemoveResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "FsRemoveResponse",
+      "type": "object"
+    },
+    "FsUnwatchParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "watchId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "watchId"
+      ],
+      "title": "FsUnwatchParams",
+      "type": "object"
+    },
+    "FsUnwatchResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "FsUnwatchResponse",
+      "type": "object"
+    },
+    "FsWatchParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "watchId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "watchId"
+      ],
+      "title": "FsWatchParams",
+      "type": "object"
+    },
+    "FsWatchResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "FsWatchResponse",
+      "type": "object"
+    },
+    "FsWriteFileParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "dataBase64": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataBase64",
+        "path"
+      ],
+      "title": "FsWriteFileParams",
+      "type": "object"
+    },
+    "FsWriteFileResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "FsWriteFileResponse",
+      "type": "object"
     },
     "GalleryMaterial": {
       "$defs": {
@@ -34746,6 +34213,11 @@
       "title": "MemoryCitationEntry",
       "type": "object"
     },
+    "MemoryResetResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "MemoryResetResponse",
+      "type": "object"
+    },
     "MemoryStoreAddNoteParams": {
       "$defs": {
         "MemoryStoreScope": {
@@ -35333,74 +34805,6 @@
         "truncated"
       ],
       "title": "MemoryStoreReadResponse",
-      "type": "object"
-    },
-    "MemoryStoreResetParams": {
-      "$defs": {
-        "MemoryStoreScope": {
-          "enum": [
-            "global",
-            "workspace"
-          ],
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "scope": {
-          "$ref": "#/$defs/MemoryStoreScope",
-          "default": "global"
-        },
-        "workspaceRoot": {
-          "type": [
-            "null",
-            "string"
-          ]
-        }
-      },
-      "title": "MemoryStoreResetParams",
-      "type": "object"
-    },
-    "MemoryStoreResetResponse": {
-      "$defs": {
-        "MemoryStoreScope": {
-          "enum": [
-            "global",
-            "workspace"
-          ],
-          "type": "string"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "preservedSoul": {
-          "type": "boolean"
-        },
-        "removedDirectories": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "removedFiles": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "rootPath": {
-          "type": "string"
-        },
-        "rootScope": {
-          "$ref": "#/$defs/MemoryStoreScope"
-        }
-      },
-      "required": [
-        "preservedSoul",
-        "removedDirectories",
-        "removedFiles",
-        "rootPath",
-        "rootScope"
-      ],
-      "title": "MemoryStoreResetResponse",
       "type": "object"
     },
     "MemoryStoreReviewListParams": {
@@ -35992,10 +35396,20 @@
         "app/list",
         "app/read",
         "artifact/write",
+        "fs/copy",
+        "fs/createDirectory",
+        "fs/getMetadata",
+        "fs/readDirectory",
+        "fs/readFile",
+        "fs/remove",
+        "fs/unwatch",
+        "fs/watch",
+        "fs/writeFile",
         "hooks/list",
         "mcpServer/resource/read",
         "mcpServer/tool/call",
         "media/read",
+        "memory/reset",
         "model/list",
         "plugin/enabled/set",
         "plugin/install",
@@ -36004,6 +35418,10 @@
         "plugin/read",
         "plugin/search",
         "plugin/uninstall",
+        "process/kill",
+        "process/resizePty",
+        "process/spawn",
+        "process/writeStdin",
         "skills/config/write",
         "skills/extraRoots/set",
         "skills/list",
@@ -41397,102 +40815,6 @@
       "title": "PlatformInfo",
       "type": "object"
     },
-    "PluginArticleWorkspaceContract": {
-      "$defs": {
-        "PluginArticleWorkspaceObject": {
-          "properties": {
-            "artifactKind": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "defaultPane": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "primary": {
-              "type": "boolean"
-            },
-            "title": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "defaultPane",
-            "kind",
-            "primary",
-            "title"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "objects": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/PluginArticleWorkspaceObject"
-          },
-          "type": "array"
-        },
-        "panes": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "rendererKinds": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "enabled"
-      ],
-      "title": "PluginArticleWorkspaceContract",
-      "type": "object"
-    },
-    "PluginArticleWorkspaceObject": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "artifactKind": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "defaultPane": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string"
-        },
-        "primary": {
-          "type": "boolean"
-        },
-        "title": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "defaultPane",
-        "kind",
-        "primary",
-        "title"
-      ],
-      "title": "PluginArticleWorkspaceObject",
-      "type": "object"
-    },
     "PluginAuthPolicy": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
@@ -42545,359 +41867,6 @@
       "title": "PluginCatalogUninstallResponse",
       "type": "object"
     },
-    "PluginCloudReleaseDescriptor": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appId": {
-          "type": "string"
-        },
-        "channel": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "loadedAt": {
-          "type": "string"
-        },
-        "manifestHash": {
-          "type": "string"
-        },
-        "packageHash": {
-          "type": "string"
-        },
-        "packageUrl": {
-          "type": "string"
-        },
-        "releaseId": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "signatureRef": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "sourceUri": {
-          "type": "string"
-        },
-        "tenantEnablementRef": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "tenantId": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "version": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "appId",
-        "loadedAt",
-        "manifestHash",
-        "packageHash",
-        "packageUrl",
-        "sourceUri",
-        "version"
-      ],
-      "title": "PluginCloudReleaseDescriptor",
-      "type": "object"
-    },
-    "PluginDeleteDataExecutionEvidence": {
-      "$defs": {
-        "PluginDeleteDataPostDeleteResidualAudit": {
-          "properties": {
-            "checkedAt": {
-              "type": "string"
-            },
-            "checkedTargetCount": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "failedTarget": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "remainingTargetCount": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "remainingTargets": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-              },
-              "type": "array"
-            },
-            "status": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "checkedAt",
-            "checkedTargetCount",
-            "remainingTargetCount",
-            "status"
-          ],
-          "type": "object"
-        },
-        "PluginDeleteDataTargetEvidence": {
-          "properties": {
-            "action": {
-              "type": "string"
-            },
-            "blockerCodes": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "error": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "kind": {
-              "type": "string"
-            },
-            "reason": {
-              "type": "string"
-            },
-            "status": {
-              "type": "string"
-            },
-            "value": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "action",
-            "kind",
-            "reason",
-            "status",
-            "value"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "blockedTargets": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-          },
-          "type": "array"
-        },
-        "blockerCodes": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "dataRoot": {
-          "type": "string"
-        },
-        "failedTarget": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "generatedAt": {
-          "type": "string"
-        },
-        "missingTargets": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-          },
-          "type": "array"
-        },
-        "postDeleteResidualAudit": {
-          "$ref": "#/$defs/PluginDeleteDataPostDeleteResidualAudit"
-        },
-        "removedTargets": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-          },
-          "type": "array"
-        },
-        "retainedTargets": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-          },
-          "type": "array"
-        },
-        "status": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "dataRoot",
-        "generatedAt",
-        "postDeleteResidualAudit",
-        "status"
-      ],
-      "title": "PluginDeleteDataExecutionEvidence",
-      "type": "object"
-    },
-    "PluginDeleteDataPostDeleteResidualAudit": {
-      "$defs": {
-        "PluginDeleteDataTargetEvidence": {
-          "properties": {
-            "action": {
-              "type": "string"
-            },
-            "blockerCodes": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "error": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "kind": {
-              "type": "string"
-            },
-            "reason": {
-              "type": "string"
-            },
-            "status": {
-              "type": "string"
-            },
-            "value": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "action",
-            "kind",
-            "reason",
-            "status",
-            "value"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "checkedAt": {
-          "type": "string"
-        },
-        "checkedTargetCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "failedTarget": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "remainingTargetCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "remainingTargets": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-          },
-          "type": "array"
-        },
-        "status": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "checkedAt",
-        "checkedTargetCount",
-        "remainingTargetCount",
-        "status"
-      ],
-      "title": "PluginDeleteDataPostDeleteResidualAudit",
-      "type": "object"
-    },
-    "PluginDeleteDataTargetEvidence": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "action": {
-          "type": "string"
-        },
-        "blockerCodes": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "error": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "kind": {
-          "type": "string"
-        },
-        "reason": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "action",
-        "kind",
-        "reason",
-        "status",
-        "value"
-      ],
-      "title": "PluginDeleteDataTargetEvidence",
-      "type": "object"
-    },
     "PluginDisabledReason": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
@@ -42908,865 +41877,6 @@
       ],
       "title": "PluginDisabledReason",
       "type": "string"
-    },
-    "PluginFetchCloudPackageParams": {
-      "$defs": {
-        "PluginCloudReleaseDescriptor": {
-          "properties": {
-            "appId": {
-              "type": "string"
-            },
-            "channel": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "loadedAt": {
-              "type": "string"
-            },
-            "manifestHash": {
-              "type": "string"
-            },
-            "packageHash": {
-              "type": "string"
-            },
-            "packageUrl": {
-              "type": "string"
-            },
-            "releaseId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "signatureRef": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "sourceUri": {
-              "type": "string"
-            },
-            "tenantEnablementRef": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "tenantId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "version": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "appId",
-            "loadedAt",
-            "manifestHash",
-            "packageHash",
-            "packageUrl",
-            "sourceUri",
-            "version"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "descriptor": {
-          "$ref": "#/$defs/PluginCloudReleaseDescriptor"
-        }
-      },
-      "required": [
-        "descriptor"
-      ],
-      "title": "PluginFetchCloudPackageParams",
-      "type": "object"
-    },
-    "PluginHistoryRestoreContract": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "defaultPane": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "defaultTab": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "fallback": {
-          "type": "string"
-        },
-        "restoreLayout": {
-          "type": "boolean"
-        },
-        "restoreSelection": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "enabled",
-        "fallback",
-        "restoreLayout",
-        "restoreSelection"
-      ],
-      "title": "PluginHistoryRestoreContract",
-      "type": "object"
-    },
-    "PluginHostFunctionState": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "blockers": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "currentOwner": {
-          "type": "string"
-        },
-        "followUps": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "key": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "currentOwner",
-        "key",
-        "status"
-      ],
-      "title": "PluginHostFunctionState",
-      "type": "object"
-    },
-    "PluginHostLifecycleListResponse": {
-      "$defs": {
-        "PluginArticleWorkspaceContract": {
-          "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "objects": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginArticleWorkspaceObject"
-              },
-              "type": "array"
-            },
-            "panes": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "rendererKinds": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "enabled"
-          ],
-          "type": "object"
-        },
-        "PluginArticleWorkspaceObject": {
-          "properties": {
-            "artifactKind": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "defaultPane": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "primary": {
-              "type": "boolean"
-            },
-            "title": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "defaultPane",
-            "kind",
-            "primary",
-            "title"
-          ],
-          "type": "object"
-        },
-        "PluginHistoryRestoreContract": {
-          "properties": {
-            "defaultPane": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "defaultTab": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "enabled": {
-              "type": "boolean"
-            },
-            "fallback": {
-              "type": "string"
-            },
-            "restoreLayout": {
-              "type": "boolean"
-            },
-            "restoreSelection": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "enabled",
-            "fallback",
-            "restoreLayout",
-            "restoreSelection"
-          ],
-          "type": "object"
-        },
-        "PluginHostFunctionState": {
-          "properties": {
-            "blockers": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "currentOwner": {
-              "type": "string"
-            },
-            "followUps": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "key": {
-              "type": "string"
-            },
-            "status": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "currentOwner",
-            "key",
-            "status"
-          ],
-          "type": "object"
-        },
-        "PluginHostLifecycleSnapshot": {
-          "properties": {
-            "appCenterStatus": {
-              "type": "string"
-            },
-            "appId": {
-              "type": "string"
-            },
-            "blockers": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "displayName": {
-              "type": "string"
-            },
-            "followUps": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "functions": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginHostFunctionState"
-              },
-              "type": "array"
-            },
-            "generatedAt": {
-              "type": "string"
-            },
-            "issueCategories": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginReadinessIssueCategorySummary"
-              },
-              "type": "array"
-            },
-            "primaryIssueCategory": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "profiles": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "publishBlocked": {
-              "type": "boolean"
-            },
-            "readinessStatus": {
-              "type": "string"
-            },
-            "rightSurface": {
-              "$ref": "#/$defs/PluginRightSurfaceContract"
-            },
-            "taskRuntime": {
-              "$ref": "#/$defs/PluginTaskRuntimeContract"
-            }
-          },
-          "required": [
-            "appCenterStatus",
-            "appId",
-            "displayName",
-            "generatedAt",
-            "publishBlocked",
-            "readinessStatus",
-            "rightSurface",
-            "taskRuntime"
-          ],
-          "type": "object"
-        },
-        "PluginReadinessIssueCategorySummary": {
-          "properties": {
-            "category": {
-              "type": "string"
-            },
-            "codes": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "count": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "category",
-            "count"
-          ],
-          "type": "object"
-        },
-        "PluginRightSurfaceContract": {
-          "properties": {
-            "articleWorkspace": {
-              "$ref": "#/$defs/PluginArticleWorkspaceContract"
-            },
-            "defaultActiveTab": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "dock": {
-              "type": "string"
-            },
-            "historyRestore": {
-              "$ref": "#/$defs/PluginHistoryRestoreContract"
-            },
-            "physicalDockCount": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "supportedTabs": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "articleWorkspace",
-            "dock",
-            "historyRestore",
-            "physicalDockCount"
-          ],
-          "type": "object"
-        },
-        "PluginTaskRuntimeContract": {
-          "properties": {
-            "blockers": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "contractPath": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "directFilesystemAccess": {
-              "type": "boolean"
-            },
-            "directProviderAccess": {
-              "type": "boolean"
-            },
-            "enabled": {
-              "type": "boolean"
-            },
-            "followUps": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "outputArtifactKind": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "packageRootPath": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "sampleRequestPath": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "taskKinds": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "workerEntrypoint": {
-              "type": [
-                "null",
-                "string"
-              ]
-            }
-          },
-          "required": [
-            "directFilesystemAccess",
-            "directProviderAccess",
-            "enabled"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "issues": {
-          "default": [],
-          "items": true,
-          "type": "array"
-        },
-        "snapshots": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/PluginHostLifecycleSnapshot"
-          },
-          "type": "array"
-        }
-      },
-      "title": "PluginHostLifecycleListResponse",
-      "type": "object"
-    },
-    "PluginHostLifecycleSnapshot": {
-      "$defs": {
-        "PluginArticleWorkspaceContract": {
-          "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "objects": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginArticleWorkspaceObject"
-              },
-              "type": "array"
-            },
-            "panes": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "rendererKinds": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "enabled"
-          ],
-          "type": "object"
-        },
-        "PluginArticleWorkspaceObject": {
-          "properties": {
-            "artifactKind": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "defaultPane": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "primary": {
-              "type": "boolean"
-            },
-            "title": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "defaultPane",
-            "kind",
-            "primary",
-            "title"
-          ],
-          "type": "object"
-        },
-        "PluginHistoryRestoreContract": {
-          "properties": {
-            "defaultPane": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "defaultTab": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "enabled": {
-              "type": "boolean"
-            },
-            "fallback": {
-              "type": "string"
-            },
-            "restoreLayout": {
-              "type": "boolean"
-            },
-            "restoreSelection": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "enabled",
-            "fallback",
-            "restoreLayout",
-            "restoreSelection"
-          ],
-          "type": "object"
-        },
-        "PluginHostFunctionState": {
-          "properties": {
-            "blockers": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "currentOwner": {
-              "type": "string"
-            },
-            "followUps": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "key": {
-              "type": "string"
-            },
-            "status": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "currentOwner",
-            "key",
-            "status"
-          ],
-          "type": "object"
-        },
-        "PluginReadinessIssueCategorySummary": {
-          "properties": {
-            "category": {
-              "type": "string"
-            },
-            "codes": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "count": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "category",
-            "count"
-          ],
-          "type": "object"
-        },
-        "PluginRightSurfaceContract": {
-          "properties": {
-            "articleWorkspace": {
-              "$ref": "#/$defs/PluginArticleWorkspaceContract"
-            },
-            "defaultActiveTab": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "dock": {
-              "type": "string"
-            },
-            "historyRestore": {
-              "$ref": "#/$defs/PluginHistoryRestoreContract"
-            },
-            "physicalDockCount": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "supportedTabs": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "articleWorkspace",
-            "dock",
-            "historyRestore",
-            "physicalDockCount"
-          ],
-          "type": "object"
-        },
-        "PluginTaskRuntimeContract": {
-          "properties": {
-            "blockers": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "contractPath": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "directFilesystemAccess": {
-              "type": "boolean"
-            },
-            "directProviderAccess": {
-              "type": "boolean"
-            },
-            "enabled": {
-              "type": "boolean"
-            },
-            "followUps": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "outputArtifactKind": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "packageRootPath": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "sampleRequestPath": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "taskKinds": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "workerEntrypoint": {
-              "type": [
-                "null",
-                "string"
-              ]
-            }
-          },
-          "required": [
-            "directFilesystemAccess",
-            "directProviderAccess",
-            "enabled"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appCenterStatus": {
-          "type": "string"
-        },
-        "appId": {
-          "type": "string"
-        },
-        "blockers": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "displayName": {
-          "type": "string"
-        },
-        "followUps": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "functions": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/PluginHostFunctionState"
-          },
-          "type": "array"
-        },
-        "generatedAt": {
-          "type": "string"
-        },
-        "issueCategories": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/PluginReadinessIssueCategorySummary"
-          },
-          "type": "array"
-        },
-        "primaryIssueCategory": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "profiles": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "publishBlocked": {
-          "type": "boolean"
-        },
-        "readinessStatus": {
-          "type": "string"
-        },
-        "rightSurface": {
-          "$ref": "#/$defs/PluginRightSurfaceContract"
-        },
-        "taskRuntime": {
-          "$ref": "#/$defs/PluginTaskRuntimeContract"
-        }
-      },
-      "required": [
-        "appCenterStatus",
-        "appId",
-        "displayName",
-        "generatedAt",
-        "publishBlocked",
-        "readinessStatus",
-        "rightSurface",
-        "taskRuntime"
-      ],
-      "title": "PluginHostLifecycleSnapshot",
-      "type": "object"
     },
     "PluginInstallPolicy": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -43786,57 +41896,6 @@
       ],
       "title": "PluginInstallPolicySource",
       "type": "string"
-    },
-    "PluginInstalledDisabledSetParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appId": {
-          "type": "string"
-        },
-        "disabled": {
-          "type": "boolean"
-        },
-        "updatedAt": {
-          "type": [
-            "null",
-            "string"
-          ]
-        }
-      },
-      "required": [
-        "appId",
-        "disabled"
-      ],
-      "title": "PluginInstalledDisabledSetParams",
-      "type": "object"
-    },
-    "PluginInstalledListResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "issues": {
-          "default": [],
-          "items": true,
-          "type": "array"
-        },
-        "states": {
-          "default": [],
-          "items": true,
-          "type": "array"
-        }
-      },
-      "title": "PluginInstalledListResponse",
-      "type": "object"
-    },
-    "PluginInstalledSaveParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "state": true
-      },
-      "required": [
-        "state"
-      ],
-      "title": "PluginInstalledSaveParams",
-      "type": "object"
     },
     "PluginInterface": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -43979,441 +42038,6 @@
         }
       },
       "title": "PluginInterface",
-      "type": "object"
-    },
-    "PluginLocalPackageExportParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appDir": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "appDir"
-      ],
-      "title": "PluginLocalPackageExportParams",
-      "type": "object"
-    },
-    "PluginLocalPackageExportResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appDir": {
-          "type": "string"
-        },
-        "contentType": {
-          "type": "string"
-        },
-        "exportedAt": {
-          "type": "string"
-        },
-        "fileCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "manifest": true,
-        "manifestHash": {
-          "type": "string"
-        },
-        "manifestSource": {
-          "type": "string"
-        },
-        "packageBase64": {
-          "type": "string"
-        },
-        "packageHash": {
-          "type": "string"
-        },
-        "pluginManifest": true,
-        "sizeBytes": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sourceKind": {
-          "type": "string"
-        },
-        "sourceUri": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "appDir",
-        "contentType",
-        "exportedAt",
-        "fileCount",
-        "manifest",
-        "manifestHash",
-        "manifestSource",
-        "packageBase64",
-        "packageHash",
-        "pluginManifest",
-        "sizeBytes",
-        "sourceKind",
-        "sourceUri"
-      ],
-      "title": "PluginLocalPackageExportResponse",
-      "type": "object"
-    },
-    "PluginLocalPackageInspectParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appDir": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "appDir"
-      ],
-      "title": "PluginLocalPackageInspectParams",
-      "type": "object"
-    },
-    "PluginLocalPackageInspectResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appDir": {
-          "type": "string"
-        },
-        "inspectedAt": {
-          "type": "string"
-        },
-        "manifest": true,
-        "manifestHash": {
-          "type": "string"
-        },
-        "manifestSource": {
-          "type": "string"
-        },
-        "packageHash": {
-          "type": "string"
-        },
-        "pluginManifest": true,
-        "sourceKind": {
-          "type": "string"
-        },
-        "sourceUri": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "appDir",
-        "inspectedAt",
-        "manifest",
-        "manifestHash",
-        "manifestSource",
-        "packageHash",
-        "pluginManifest",
-        "sourceKind",
-        "sourceUri"
-      ],
-      "title": "PluginLocalPackageInspectResponse",
-      "type": "object"
-    },
-    "PluginPackageCacheEntry": {
-      "$defs": {
-        "PluginPackageIdentity": {
-          "properties": {
-            "appId": {
-              "type": "string"
-            },
-            "appVersion": {
-              "type": "string"
-            },
-            "channel": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "loadedAt": {
-              "type": "string"
-            },
-            "manifestHash": {
-              "type": "string"
-            },
-            "packageHash": {
-              "type": "string"
-            },
-            "releaseId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "signatureRef": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "sourceKind": {
-              "type": "string"
-            },
-            "sourceUri": {
-              "type": "string"
-            },
-            "tenantEnablementRef": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "tenantId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            }
-          },
-          "required": [
-            "appId",
-            "appVersion",
-            "loadedAt",
-            "manifestHash",
-            "packageHash",
-            "sourceKind",
-            "sourceUri"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appId": {
-          "type": "string"
-        },
-        "cachePath": {
-          "type": "string"
-        },
-        "cachedAt": {
-          "type": "string"
-        },
-        "identity": {
-          "$ref": "#/$defs/PluginPackageIdentity"
-        },
-        "manifestHash": {
-          "type": "string"
-        },
-        "manifestSnapshot": true,
-        "packageHash": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "appId",
-        "cachePath",
-        "cachedAt",
-        "identity",
-        "manifestHash",
-        "manifestSnapshot",
-        "packageHash"
-      ],
-      "title": "PluginPackageCacheEntry",
-      "type": "object"
-    },
-    "PluginPackageIdentity": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appId": {
-          "type": "string"
-        },
-        "appVersion": {
-          "type": "string"
-        },
-        "channel": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "loadedAt": {
-          "type": "string"
-        },
-        "manifestHash": {
-          "type": "string"
-        },
-        "packageHash": {
-          "type": "string"
-        },
-        "releaseId": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "signatureRef": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "sourceKind": {
-          "type": "string"
-        },
-        "sourceUri": {
-          "type": "string"
-        },
-        "tenantEnablementRef": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "tenantId": {
-          "type": [
-            "null",
-            "string"
-          ]
-        }
-      },
-      "required": [
-        "appId",
-        "appVersion",
-        "loadedAt",
-        "manifestHash",
-        "packageHash",
-        "sourceKind",
-        "sourceUri"
-      ],
-      "title": "PluginPackageIdentity",
-      "type": "object"
-    },
-    "PluginRightSurfaceContract": {
-      "$defs": {
-        "PluginArticleWorkspaceContract": {
-          "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "objects": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginArticleWorkspaceObject"
-              },
-              "type": "array"
-            },
-            "panes": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "rendererKinds": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "enabled"
-          ],
-          "type": "object"
-        },
-        "PluginArticleWorkspaceObject": {
-          "properties": {
-            "artifactKind": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "defaultPane": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "primary": {
-              "type": "boolean"
-            },
-            "title": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "defaultPane",
-            "kind",
-            "primary",
-            "title"
-          ],
-          "type": "object"
-        },
-        "PluginHistoryRestoreContract": {
-          "properties": {
-            "defaultPane": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "defaultTab": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "enabled": {
-              "type": "boolean"
-            },
-            "fallback": {
-              "type": "string"
-            },
-            "restoreLayout": {
-              "type": "boolean"
-            },
-            "restoreSelection": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "enabled",
-            "fallback",
-            "restoreLayout",
-            "restoreSelection"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "articleWorkspace": {
-          "$ref": "#/$defs/PluginArticleWorkspaceContract"
-        },
-        "defaultActiveTab": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "dock": {
-          "type": "string"
-        },
-        "historyRestore": {
-          "$ref": "#/$defs/PluginHistoryRestoreContract"
-        },
-        "physicalDockCount": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "supportedTabs": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "articleWorkspace",
-        "dock",
-        "historyRestore",
-        "physicalDockCount"
-      ],
-      "title": "PluginRightSurfaceContract",
       "type": "object"
     },
     "PluginSearchParams": {
@@ -45806,157 +43430,6 @@
       "title": "PluginSharePrincipalType",
       "type": "string"
     },
-    "PluginShellPackageMount": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "kind": {
-          "type": "string"
-        },
-        "manifestHash": {
-          "type": "string"
-        },
-        "packageHash": {
-          "type": "string"
-        },
-        "path": {
-          "type": "string"
-        },
-        "readOnly": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "kind",
-        "manifestHash",
-        "packageHash",
-        "path",
-        "readOnly"
-      ],
-      "title": "PluginShellPackageMount",
-      "type": "object"
-    },
-    "PluginShellPrepareParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "descriptor": true
-      },
-      "required": [
-        "descriptor"
-      ],
-      "title": "PluginShellPrepareParams",
-      "type": "object"
-    },
-    "PluginShellPrepareResponse": {
-      "$defs": {
-        "PluginShellPackageMount": {
-          "properties": {
-            "kind": {
-              "type": "string"
-            },
-            "manifestHash": {
-              "type": "string"
-            },
-            "packageHash": {
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            },
-            "readOnly": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "kind",
-            "manifestHash",
-            "packageHash",
-            "path",
-            "readOnly"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appId": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "blockerCodes": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "descriptorVersion": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "devShell": {
-          "type": "boolean"
-        },
-        "entryKey": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "installMode": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "message": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "packageMount": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PluginShellPackageMount"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "preparedAt": {
-          "type": "string"
-        },
-        "shellKind": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "status": {
-          "type": "string"
-        },
-        "windowTitle": {
-          "type": [
-            "null",
-            "string"
-          ]
-        }
-      },
-      "required": [
-        "devShell",
-        "preparedAt",
-        "status"
-      ],
-      "title": "PluginShellPrepareResponse",
-      "type": "object"
-    },
     "PluginSource": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
@@ -46590,715 +44063,292 @@
       "title": "PluginSummary",
       "type": "object"
     },
-    "PluginTaskRuntimeContract": {
+    "ProcessExitedNotification": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
-        "blockers": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+        "exitCode": {
+          "format": "int32",
+          "type": "integer"
         },
-        "contractPath": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "directFilesystemAccess": {
-          "type": "boolean"
-        },
-        "directProviderAccess": {
-          "type": "boolean"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "followUps": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "outputArtifactKind": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "packageRootPath": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "sampleRequestPath": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "taskKinds": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "workerEntrypoint": {
-          "type": [
-            "null",
-            "string"
-          ]
-        }
-      },
-      "required": [
-        "directFilesystemAccess",
-        "directProviderAccess",
-        "enabled"
-      ],
-      "title": "PluginTaskRuntimeContract",
-      "type": "object"
-    },
-    "PluginUiRuntimeStartParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appId": {
+        "processHandle": {
           "type": "string"
         },
-        "entryKey": {
-          "type": [
-            "null",
-            "string"
-          ]
+        "stderr": {
+          "type": "string"
+        },
+        "stderrCapReached": {
+          "type": "boolean"
+        },
+        "stdout": {
+          "type": "string"
+        },
+        "stdoutCapReached": {
+          "type": "boolean"
         }
       },
       "required": [
-        "appId"
+        "exitCode",
+        "processHandle",
+        "stderr",
+        "stderrCapReached",
+        "stdout",
+        "stdoutCapReached"
       ],
-      "title": "PluginUiRuntimeStartParams",
+      "title": "ProcessExitedNotification",
       "type": "object"
     },
-    "PluginUiRuntimeStatusParams": {
+    "ProcessKillParams": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
-        "appId": {
+        "processHandle": {
           "type": "string"
         }
       },
       "required": [
-        "appId"
+        "processHandle"
       ],
-      "title": "PluginUiRuntimeStatusParams",
+      "title": "ProcessKillParams",
       "type": "object"
     },
-    "PluginUiRuntimeStatusResponse": {
+    "ProcessKillResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "ProcessKillResponse",
+      "type": "object"
+    },
+    "ProcessOutputDeltaNotification": {
       "$defs": {
-        "PluginTaskRuntimeContract": {
+        "ProcessOutputStream": {
+          "enum": [
+            "stderr",
+            "stdout"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "capReached": {
+          "type": "boolean"
+        },
+        "deltaBase64": {
+          "type": "string"
+        },
+        "processHandle": {
+          "type": "string"
+        },
+        "stream": {
+          "$ref": "#/$defs/ProcessOutputStream"
+        }
+      },
+      "required": [
+        "capReached",
+        "deltaBase64",
+        "processHandle",
+        "stream"
+      ],
+      "title": "ProcessOutputDeltaNotification",
+      "type": "object"
+    },
+    "ProcessOutputStream": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "stderr",
+        "stdout"
+      ],
+      "title": "ProcessOutputStream",
+      "type": "string"
+    },
+    "ProcessResizePtyParams": {
+      "$defs": {
+        "ProcessTerminalSize": {
           "properties": {
-            "blockers": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
+            "cols": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
             },
-            "contractPath": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "directFilesystemAccess": {
-              "type": "boolean"
-            },
-            "directProviderAccess": {
-              "type": "boolean"
-            },
-            "enabled": {
-              "type": "boolean"
-            },
-            "followUps": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "outputArtifactKind": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "packageRootPath": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "sampleRequestPath": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "taskKinds": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "workerEntrypoint": {
-              "type": [
-                "null",
-                "string"
-              ]
+            "rows": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
             }
           },
           "required": [
-            "directFilesystemAccess",
-            "directProviderAccess",
-            "enabled"
+            "cols",
+            "rows"
           ],
           "type": "object"
         }
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
-        "appId": {
+        "processHandle": {
           "type": "string"
         },
-        "baseUrl": {
+        "size": {
+          "$ref": "#/$defs/ProcessTerminalSize"
+        }
+      },
+      "required": [
+        "processHandle",
+        "size"
+      ],
+      "title": "ProcessResizePtyParams",
+      "type": "object"
+    },
+    "ProcessResizePtyResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "ProcessResizePtyResponse",
+      "type": "object"
+    },
+    "ProcessSpawnParams": {
+      "$defs": {
+        "ProcessTerminalSize": {
+          "properties": {
+            "cols": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "rows": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "cols",
+            "rows"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "type": [
             "null",
-            "string"
+            "object"
           ]
         },
-        "entryKey": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "entryUrl": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "message": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "pid": {
-          "format": "uint32",
+        "outputBytesCap": {
+          "format": "uint",
           "minimum": 0,
           "type": [
             "integer",
             "null"
           ]
         },
-        "port": {
+        "processHandle": {
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProcessTerminalSize"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "streamStdin": {
+          "type": "boolean"
+        },
+        "streamStdoutStderr": {
+          "type": "boolean"
+        },
+        "timeoutMs": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "tty": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "command",
+        "cwd",
+        "processHandle"
+      ],
+      "title": "ProcessSpawnParams",
+      "type": "object"
+    },
+    "ProcessSpawnResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "ProcessSpawnResponse",
+      "type": "object"
+    },
+    "ProcessTerminalSize": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "cols": {
           "format": "uint16",
           "maximum": 65535,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "route": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "status": {
-          "type": "string"
-        },
-        "taskRuntime": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PluginTaskRuntimeContract"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "appId",
-        "status"
-      ],
-      "title": "PluginUiRuntimeStatusResponse",
-      "type": "object"
-    },
-    "PluginUiRuntimeStopParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "appId"
-      ],
-      "title": "PluginUiRuntimeStopParams",
-      "type": "object"
-    },
-    "PluginUninstallParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appId": {
-          "type": "string"
-        },
-        "confirmationPhrase": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "mode": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "appId",
-        "mode"
-      ],
-      "title": "PluginUninstallParams",
-      "type": "object"
-    },
-    "PluginUninstallRehearsalParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appId": {
-          "type": "string"
-        },
-        "mode": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "appId",
-        "mode"
-      ],
-      "title": "PluginUninstallRehearsalParams",
-      "type": "object"
-    },
-    "PluginUninstallRehearsalResponse": {
-      "$defs": {
-        "PluginUninstallRehearsalTarget": {
-          "properties": {
-            "action": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "reason": {
-              "type": "string"
-            },
-            "safeToDelete": {
-              "type": "boolean"
-            },
-            "value": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "action",
-            "kind",
-            "reason",
-            "safeToDelete",
-            "value"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "appId": {
-          "type": "string"
-        },
-        "deletedTargetCount": {
-          "format": "uint",
-          "minimum": 0,
           "type": "integer"
         },
-        "generatedAt": {
-          "type": "string"
-        },
-        "mode": {
-          "type": "string"
-        },
-        "packageHash": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "retainedTargetCount": {
-          "format": "uint",
+        "rows": {
+          "format": "uint16",
+          "maximum": 65535,
           "minimum": 0,
           "type": "integer"
-        },
-        "targets": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/PluginUninstallRehearsalTarget"
-          },
-          "type": "array"
-        },
-        "warnings": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         }
       },
       "required": [
-        "appId",
-        "deletedTargetCount",
-        "generatedAt",
-        "mode",
-        "retainedTargetCount"
+        "cols",
+        "rows"
       ],
-      "title": "PluginUninstallRehearsalResponse",
+      "title": "ProcessTerminalSize",
       "type": "object"
     },
-    "PluginUninstallRehearsalTarget": {
+    "ProcessWriteStdinParams": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
-        "action": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string"
-        },
-        "reason": {
-          "type": "string"
-        },
-        "safeToDelete": {
+        "closeStdin": {
           "type": "boolean"
         },
-        "value": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "action",
-        "kind",
-        "reason",
-        "safeToDelete",
-        "value"
-      ],
-      "title": "PluginUninstallRehearsalTarget",
-      "type": "object"
-    },
-    "PluginUninstallResponse": {
-      "$defs": {
-        "PluginDeleteDataExecutionEvidence": {
-          "properties": {
-            "blockedTargets": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-              },
-              "type": "array"
-            },
-            "blockerCodes": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "dataRoot": {
-              "type": "string"
-            },
-            "failedTarget": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "generatedAt": {
-              "type": "string"
-            },
-            "missingTargets": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-              },
-              "type": "array"
-            },
-            "postDeleteResidualAudit": {
-              "$ref": "#/$defs/PluginDeleteDataPostDeleteResidualAudit"
-            },
-            "removedTargets": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-              },
-              "type": "array"
-            },
-            "retainedTargets": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-              },
-              "type": "array"
-            },
-            "status": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "dataRoot",
-            "generatedAt",
-            "postDeleteResidualAudit",
-            "status"
-          ],
-          "type": "object"
-        },
-        "PluginDeleteDataPostDeleteResidualAudit": {
-          "properties": {
-            "checkedAt": {
-              "type": "string"
-            },
-            "checkedTargetCount": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "failedTarget": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "remainingTargetCount": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "remainingTargets": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginDeleteDataTargetEvidence"
-              },
-              "type": "array"
-            },
-            "status": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "checkedAt",
-            "checkedTargetCount",
-            "remainingTargetCount",
-            "status"
-          ],
-          "type": "object"
-        },
-        "PluginDeleteDataTargetEvidence": {
-          "properties": {
-            "action": {
-              "type": "string"
-            },
-            "blockerCodes": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "error": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "kind": {
-              "type": "string"
-            },
-            "reason": {
-              "type": "string"
-            },
-            "status": {
-              "type": "string"
-            },
-            "value": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "action",
-            "kind",
-            "reason",
-            "status",
-            "value"
-          ],
-          "type": "object"
-        },
-        "PluginInstalledListResponse": {
-          "properties": {
-            "issues": {
-              "default": [],
-              "items": true,
-              "type": "array"
-            },
-            "states": {
-              "default": [],
-              "items": true,
-              "type": "array"
-            }
-          },
-          "type": "object"
-        },
-        "PluginUninstallRehearsalResponse": {
-          "properties": {
-            "appId": {
-              "type": "string"
-            },
-            "deletedTargetCount": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "generatedAt": {
-              "type": "string"
-            },
-            "mode": {
-              "type": "string"
-            },
-            "packageHash": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "retainedTargetCount": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "targets": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/PluginUninstallRehearsalTarget"
-              },
-              "type": "array"
-            },
-            "warnings": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "appId",
-            "deletedTargetCount",
-            "generatedAt",
-            "mode",
-            "retainedTargetCount"
-          ],
-          "type": "object"
-        },
-        "PluginUninstallRehearsalTarget": {
-          "properties": {
-            "action": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "reason": {
-              "type": "string"
-            },
-            "safeToDelete": {
-              "type": "boolean"
-            },
-            "value": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "action",
-            "kind",
-            "reason",
-            "safeToDelete",
-            "value"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "blockerCodes": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "deleteEvidence": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PluginDeleteDataExecutionEvidence"
-            },
-            {
-              "type": "null"
-            }
+        "deltaBase64": {
+          "type": [
+            "null",
+            "string"
           ]
         },
-        "list": {
-          "$ref": "#/$defs/PluginInstalledListResponse"
-        },
-        "missingTargetCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "rehearsal": {
-          "$ref": "#/$defs/PluginUninstallRehearsalResponse"
-        },
-        "removedTargetCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "status": {
+        "processHandle": {
           "type": "string"
         }
       },
       "required": [
-        "list",
-        "missingTargetCount",
-        "rehearsal",
-        "removedTargetCount",
-        "status"
+        "processHandle"
       ],
-      "title": "PluginUninstallResponse",
+      "title": "ProcessWriteStdinParams",
+      "type": "object"
+    },
+    "ProcessWriteStdinResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "ProcessWriteStdinResponse",
       "type": "object"
     },
     "ProjectGitBranchCheckoutParams": {
@@ -52119,6 +49169,24 @@
           ],
           "type": "object"
         },
+        "FsChangedNotification": {
+          "properties": {
+            "changedPaths": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "watchId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "changedPaths",
+            "watchId"
+          ],
+          "type": "object"
+        },
         "GitInfo": {
           "properties": {
             "branch": {
@@ -52890,6 +49958,68 @@
             "turnId"
           ],
           "type": "object"
+        },
+        "ProcessExitedNotification": {
+          "properties": {
+            "exitCode": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "processHandle": {
+              "type": "string"
+            },
+            "stderr": {
+              "type": "string"
+            },
+            "stderrCapReached": {
+              "type": "boolean"
+            },
+            "stdout": {
+              "type": "string"
+            },
+            "stdoutCapReached": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "exitCode",
+            "processHandle",
+            "stderr",
+            "stderrCapReached",
+            "stdout",
+            "stdoutCapReached"
+          ],
+          "type": "object"
+        },
+        "ProcessOutputDeltaNotification": {
+          "properties": {
+            "capReached": {
+              "type": "boolean"
+            },
+            "deltaBase64": {
+              "type": "string"
+            },
+            "processHandle": {
+              "type": "string"
+            },
+            "stream": {
+              "$ref": "#/$defs/ProcessOutputStream"
+            }
+          },
+          "required": [
+            "capReached",
+            "deltaBase64",
+            "processHandle",
+            "stream"
+          ],
+          "type": "object"
+        },
+        "ProcessOutputStream": {
+          "enum": [
+            "stderr",
+            "stdout"
+          ],
+          "type": "string"
         },
         "ReasoningSummaryPartAddedNotification": {
           "properties": {
@@ -55503,6 +52633,54 @@
             },
             "params": {
               "$ref": "#/$defs/ModelSafetyBufferingUpdatedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "fs/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FsChangedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "process/outputDelta",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProcessOutputDeltaNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "process/exited",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProcessExitedNotification"
             }
           },
           "required": [
@@ -112548,6 +109726,7 @@
               "app/list/updated",
               "configWarning",
               "error",
+              "fs/changed",
               "hook/completed",
               "hook/started",
               "initialized",
@@ -112562,10 +109741,13 @@
               "item/reasoning/textDelta",
               "item/started",
               "mcpServer/oauthLogin/completed",
+              "mcpServer/startupStatus/updated",
               "model/list/updated",
               "model/rerouted",
               "model/safetyBuffering/updated",
               "model/verification",
+              "process/exited",
+              "process/outputDelta",
               "serverRequest/resolved",
               "skills/changed",
               "thread/archived",
@@ -112644,19 +109826,16 @@
               "diagnostics/windowsStartup/read",
               "discordChannel/probe",
               "evidence/export",
-              "executionProcess/drainOutput",
-              "executionProcess/interrupt",
-              "executionProcess/start",
-              "executionProcess/status",
-              "executionProcess/terminate",
-              "executionProcess/writeStdin",
               "feishuChannel/probe",
-              "fileSystem/createDirectory",
-              "fileSystem/createFile",
-              "fileSystem/deleteFile",
-              "fileSystem/listDirectory",
-              "fileSystem/readFilePreview",
-              "fileSystem/renameFile",
+              "fs/copy",
+              "fs/createDirectory",
+              "fs/getMetadata",
+              "fs/readDirectory",
+              "fs/readFile",
+              "fs/remove",
+              "fs/unwatch",
+              "fs/watch",
+              "fs/writeFile",
               "galleryMaterial/get",
               "galleryMaterial/listByImageCategory",
               "galleryMaterial/listByLayoutCategory",
@@ -112721,13 +109900,13 @@
               "mediaTaskArtifact/image/create",
               "mediaTaskArtifact/list",
               "mediaTaskArtifact/video/create",
+              "memory/reset",
               "memoryStore/addNote",
               "memoryStore/consolidate",
               "memoryStore/health",
               "memoryStore/index/rebuild",
               "memoryStore/list",
               "memoryStore/read",
-              "memoryStore/reset",
               "memoryStore/review/list",
               "memoryStore/review/resolve",
               "memoryStore/search",
@@ -112760,19 +109939,10 @@
               "plugin/read",
               "plugin/search",
               "plugin/uninstall",
-              "pluginHostLifecycle/list",
-              "pluginInstalled/disabled/set",
-              "pluginInstalled/list",
-              "pluginInstalled/save",
-              "pluginInstalled/uninstall",
-              "pluginInstalled/uninstall/rehearsal",
-              "pluginLocalPackage/export",
-              "pluginLocalPackage/inspect",
-              "pluginPackage/fetchCloud",
-              "pluginShell/prepare",
-              "pluginUiRuntime/start",
-              "pluginUiRuntime/status",
-              "pluginUiRuntime/stop",
+              "process/kill",
+              "process/resizePty",
+              "process/spawn",
+              "process/writeStdin",
               "projectGit/branch/checkout",
               "projectGit/branch/create",
               "projectGit/commits/list",

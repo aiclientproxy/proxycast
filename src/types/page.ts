@@ -18,9 +18,7 @@ export type Page =
   | "agent"
   | "experts"
   | "skills"
-  | "plugin"
   | "plugins"
-  | "plugin-lab"
   | "knowledge"
   | "automation"
   | "channels"
@@ -189,33 +187,10 @@ export interface SkillsPageParams {
   initialView?: "store" | "builtin" | "installed" | "discover" | "manage";
 }
 
-export interface PluginLabPageParams {
-  source?: "fixture";
-}
-
 export interface PluginsPageParams {
   query?: string;
-  category?: string;
   selectedPluginId?: string;
-  projectId?: string;
-  launchPluginEntryKey?: string;
-  launchRequestKey?: number;
-  statusFilter?:
-    | "all"
-    | "installed"
-    | "installable"
-    | "activatable"
-    | "attention";
-}
-
-export interface PluginPageParams {
-  appId?: string;
-  entryKey?: string;
-  projectId?: string;
-  launchRequestKey?: number;
-  rightSurfaceTarget?:
-    | import("@/features/plugin/ui/pluginRightSurfaceLaunch").PluginRightSurfaceLaunchTarget
-    | null;
+  statusFilter?: "all" | "installed";
 }
 
 export interface KnowledgePageParams {
@@ -293,7 +268,5 @@ export type PageParams =
   | SettingsPageParams
   | SkillsPageParams
   | PluginsPageParams
-  | PluginPageParams
-  | PluginLabPageParams
   | KnowledgePageParams
   | Record<string, unknown>;

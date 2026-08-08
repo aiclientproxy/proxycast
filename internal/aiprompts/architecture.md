@@ -907,9 +907,11 @@ Architecture impact: major; this changes the Renderer live/read/resume Item stat
 
 ### 7.2 Plugin、Skills 与 MCP
 
-Plugin UI/worker 只通过 typed client 和 App Server method 进入 runtime；不得复制 turn start、cancel、tool dispatch 或 evidence 链。Skill 是产品与领域工作流单元，MCP 是标准化 tool/resource/prompt 接入；二者均由 App Server 和各自 runtime owner 注入当前 turn，而不是由 Renderer 直接执行。
-
-Plugin v2 的 catalog、installed state、enabled state、package identity 和安装事务由 App Server current domain 唯一持有。Renderer App Center 只能通过 `src/lib/api/pluginCatalog.ts` 调用 typed `plugin/list`、`plugin/read`、`plugin/install`、`plugin/uninstall`、`plugin/installed` 与 `plugin/enabled/set`；Electron 只转发 `app_server_handle_json_lines` 和提供原生目录选择，不扫描 `.codex-plugin/plugin.json`、不合并 marketplace，也不保存第二份 installed state。
+Plugin v3 的 portable contract 固定为 Agent Plugins v1.0.0：包根 `plugin.json` 是唯一
+manifest，包根 `skills/<skill>/SKILL.md` 与 `mcp.json` 是唯一组件位置。App Server plugin
+domain 唯一拥有 discovery、install、installed、enabled、activation 与 package identity；Skills
+与 MCP 分别由 `lime-skills`、`lime-mcp`、RuntimeCore 和 tool-runtime 注入当前 turn。Renderer
+只消费 typed projection，Electron 只提供 Host 能力和转发 `app_server_handle_json_lines`。
 
 ```text
 PluginCatalogPage
@@ -922,15 +924,25 @@ PluginCatalogPage
        catalog discovery
        package validation + sha256 identity
        staging + atomic installed record
-  -> <AgentRoot>/plugins/v2/{packages,installed,staging,marketplaces}
+  -> <AgentRoot>/plugins/v3/{packages,installed,staging,marketplaces,data}
 ```
 
-包合同只接受 Codex-compatible `.codex-plugin/plugin.json`；旧 `schemaVersion`、`contributions.runtime/workbench`、绝对或父级资源路径、symlink、超预算 package 必须 fail closed。安装 identity 至少包含 `pluginId + marketplaceId + version + contentDigest`。同 identity 同 digest 的重复安装幂等；同 identity 不同 digest 拒绝；更新必须先提交新版本和 installed record，失败时保留上一可用版本。`sourceUri` 只用于受控本地 catalog/install 响应，不进入 Thread 历史、日志或跨设备 metadata。
+标准 manifest 必须声明
+`https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`；`name` 必填，`version` 可选且
+不得被强制为 semver。未知顶层字段以及旧 `schemaVersion`、`contributions.runtime/workbench`
+只报告并忽略，且永不参与发现、安装或激活语义；`app.runtime.yaml`、绝对或父级资源路径、
+symlink 与超预算 package 必须 fail closed。安装 identity
+至少包含 `pluginId + marketplaceId + version + contentDigest`；同 identity 同 digest 幂等，同
+identity 不同 digest 拒绝。v3 不读取或转换旧 v2 installed/cache/data。
 
-installed+enabled Plugin 由同一 App Server store 生成 `plugin-activation/v2` 与 `plugin-runtime-capabilities/v2`。activation snapshot 冻结 `pluginId + version + contentDigest + marketplaceId + packageSourceUri`，其 Skills 进入现有 skill snapshot；Renderer 不得构造或注入 activation。Claw 的已安装候选只从 typed `plugin/installed` 投影，选择后把显示文本 `@DisplayName` 与结构化 `{ type: "mention", name, path: "plugin://<pluginId>" }` 同时送入 current turn contract。App Server 使用同一回合 activation snapshot 校验 mention：无显式 mention 时保留全部 enabled Plugin 供描述发现；有 `plugin://` 时只把解析成功的 Plugin activation 装配到该回合，未知、禁用或 identity 漂移必须 fail closed，不能查询旧 renderer registry 或旧 installed state 兜底。
+installed+enabled Plugin 由同一 store 生成 activation snapshot，冻结
+`pluginId + version + contentDigest + marketplaceId + packageSourceUri`。Skills 只扫描 `skills/`
+直接子目录并进入现有 skill snapshot；Claw 候选只从 typed `plugin/installed` 投影，Renderer
+不得构造 activation、扫描包目录或维护第二 registry。未知、禁用或 identity 漂移必须 fail
+closed，不能查询旧 renderer manifest/installed state 兜底。
 
 ```text
-App Server plugin v2 installed store
+App Server Agent Plugins v3 installed store
   -> enabled activation snapshot
   -> RuntimeCore session config / Skill snapshot
 
@@ -942,13 +954,26 @@ Claw @ picker
   -> selected activation -> Turn metadata / runtime context
 ```
 
-Plugin MCP 声明由唯一 package manifest `.codex-plugin/plugin.json` 选择：可以使用 manifest 内联 object、package-relative 配置路径，或包根默认 `.mcp.json`；`.mcp.json` 只是 MCP server 配置，不是第二份 Plugin manifest。installed+enabled Plugin 生成带稳定 `plugin__<plugin-id>__<server-id>` runtime identity 的 server spec，并进入既有 `McpThreadRuntime -> McpClientManager -> tool-runtime` lifecycle；disabled Plugin 不装配，非法 sibling 与越界 `cwd` fail closed。MCP App UI 从 canonical tool item 的 `resourceUri` 经 `mcpServer/resource/read { threadId, server, uri }` 进入现有 Right Surface/WebContentsView，并以 canonical identity 在 Renderer reload 后恢复，不启动 Plugin worker 或私有 UI runtime。
+Plugin MCP 只读取包根 `mcp.json`，必须声明 Agent Plugins v1 MCP schema。parser 先按官方
+`stdio` / `streamable-http` contract 严格解析，再 lower 到内部 `McpServerConfig`；注入绝对
+`PLUGIN_ROOT` 与持久化 `PLUGIN_DATA`，校验 placeholder、command/cwd containment、保留环境
+变量、HTTP(S) URL 与 headers。文件级错误只禁用该 Plugin 的 MCP 组件，server 级错误只隔离
+该 server；健康 sibling 继续进入 `McpThreadRuntime -> McpClientManager -> tool-runtime`。
 
-当前仍未完成独立 Plugin Apps（非 MCP App）与 Hooks activation、Plugin identity 到完整 Item/tool trace 的全量历史投影、跨进程 cold restore，以及 Browser/file/structured-result 的 Plugin 专项 Gate B；这些缺口不得通过旧 renderer registry、plugin worker 或独立 UI runtime fallback 填补。
+Agent Plugins v1 没有 Lime 私有 worker、独立 UI runtime、renderer registry 或发布后台语义。
+`pluginLocalPackage/*`、`pluginPackage/*`、`pluginInstalled/*`、`pluginHostLifecycle/*`、
+`pluginShell/*`、`pluginUiRuntime/*`、Electron `plugin_runtime_*`、旧 `PluginManager` 与
+`manifest.json` loader 全部属于 `dead / deleted / forbidden-to-restore`。Plugin MCP App 只从
+canonical MCP Tool Item / resource 进入 Right Surface；非 MCP App/Hooks 能力只能按未来标准在
+current owner 新建，禁止恢复旧 worker 或私有 manifest。
 
-2026-08-05 的 macOS controlled fixture 已证明 `plugin/install -> enabled activation -> runtime MCP tool -> elicitation -> provider final -> canonical item -> MCP App Right Surface -> Renderer reload restore`，且 preload/IPC 与 `app_server_handle_json_lines` 可见、legacy MCP command / production mock fallback / Plugin worker hit 均为 0。证据位于 `.lime/qc/gui-evidence/plugin-v2-current-electron-fixture/`；该证据不扩张为 App Center 安装点击、Claw `@` picker 点击、卸载历史或 Windows release gate 已通过。
+历史 v2 fixture 只能作为迁移 evidence，不是 v3 release evidence。v3 必须重新证明根标准包从
+`plugin/install` 进入 enabled activation、Skills/MCP、canonical Item 与 Right Surface，并覆盖
+Renderer reload/cold restore、卸载历史、macOS/Windows 和真实 Electron Gate B。
 
-Architecture impact: major; this adds the Plugin v2 App Server domain, moves the production App Center and Claw mention source to typed JSON-RPC catalog/activation state, and preserves Electron as transport host. Architecture diagram updated: this section. Responsible developer confirmation: pending.
+Architecture impact: major; portable package、runtime owner、Electron 边界与旧实现删除状态均已
+改变。Architecture diagram updated: this section. Responsible developer confirmation: root,
+2026-08-08.
 
 MCP server 的执行环境身份只来自 `McpServerConfig.environment_id`，由 `lime-mcp::McpEnvironmentRegistry`
 在 transport 启动前解析。当前 registry 只注册 `local`；未知显式身份必须 fail closed，禁止把
@@ -1935,3 +1960,118 @@ reusing the existing Plugin catalog owner. The product direction remains Electro
 -> RuntimeCore -> Thread/Turn/Item projection -> GUI; provider/model/media behavior remains owned by the Grok-aligned
 `model-provider` control plane. Responsible developer confirmation: root, 2026-08-07. Confirmation content: 已核对唯一
 Plugin catalog owner、`callable=false` fail-closed 边界、notification 数据流和 Desktop/TUI 分界。
+
+## 32. Exact Memory Reset Owner
+
+全局记忆重置复用现有 MemoryStore 领域 owner，不保留第二套 scoped reset wire：
+
+```text
+Desktop Settings
+  -> Renderer resetMemory()
+  -> App Server JSON-RPC memory/reset
+  -> RuntimeCore::reset_memory
+  -> MemoryAppDataSource::reset_memory
+  -> LocalMemoryBackend::reset
+  -> clear global memory root contents
+  -> recreate managed memory layout
+  -> {}
+```
+
+`memory/reset` 对齐 Codex 的无参数全局动作：omitted、`null` 和空对象 params 可接受，其他字段 fail closed；响应恒为
+空对象。`LocalMemoryBackend` 仍是唯一文件删除 owner，只清理 global memory root 并立即重建摘要、memory、notes、
+skills 与 index 等受管布局。ThreadStore、Thread/Turn/Item projection、event log、session history 和 memory root 外的
+soul 配置不在该删除边界内。
+
+v2 protocol/schema、App Server handler、RuntimeCore/AppDataSource 委托、Rust/TypeScript typed client、Renderer
+Settings 消费与 public JSON-RPC durable isolation test 为 `current`。旧 `memoryStore/reset`、scoped params、富计数
+response、typed clients 和设置页调用为 `dead / deleted / forbidden-to-restore`；没有 compat alias，也不保留未被产品
+消费的 workspace reset。
+
+Architecture impact: major because the public reset contract moved from a custom v0 method to the exact Codex v2
+boundary while retaining the existing storage owner. The product direction remains Electron Desktop Host -> App Server
+JSON-RPC -> RuntimeCore/domain owner -> GUI. Responsible developer confirmation: root, 2026-08-07. Confirmation content:
+已核对目录归属、删除边界、依赖方向、协议形态和 durable history 隔离门禁。
+
+## 33. Exact Process Control Owner
+
+Codex exact process lifecycle 复用 `tool-runtime` 的 local process supervisor，但 public handle ownership 只属于
+App Server transport connection：
+
+```text
+typed App Server client
+  -> process/spawn
+  -> App Server ProcessServer keyed by (ConnectionId, processHandle)
+  -> tool-runtime LocalExecutionProcessHandle
+  -> spawn response
+  -> process/outputDelta (zero or more)
+  -> process/exited (exactly one terminal notification)
+
+process/{writeStdin,resizePty,kill}
+  -> same (ConnectionId, processHandle)
+  -> same supervisor control handle
+```
+
+同一 `processHandle` 可以由不同连接独立使用，同一连接内重复 active handle 必须失败。spawn 在 response 成功发送后才
+activate notification pump，保证 response-before-notification；supervisor 通过单一 ordered event stream 保证全部 output
+先于 exited。连接关闭、response 发送失败或 notification writer 失败都清除 owner 并终止进程。stdout/stderr raw bytes
+以 base64 notification 投影；非流式终态保留 UTF-8 lossy 聚合文本，默认 output cap 为 1 MiB。`outputBytesCap` 与
+`timeoutMs` 保持 omitted/null/value 三态；stdin close 后的非空写入、非 TTY resize、零值 terminal size、未知 handle
+均 fail closed。
+
+Desktop 不复制 Codex TUI process UI。Workspace command Item 属于 Thread/Turn/Item projection，其后台终端控制继续走
+`thread/backgroundTerminals/list -> itemId 匹配 -> thread/backgroundTerminals/terminate`，不能把 command item 的
+`processId` 当成任意 transport connection 的 `processHandle`。因此旧 GUI status refresh、drain output、signal-only
+interrupt 和 stdin 控件均删除；Renderer 只保留 Codex 有明确 public Thread owner 的终止动作。
+
+v2 protocol/schema、App Server dispatcher/connection cleanup、`ProcessServer`、local supervisor、Rust/TypeScript typed
+clients 和 notification tests 为 `current`。内部 `tool-runtime::execution_process::live` 请求/查询类型和
+`ExecutionProcessServer` 继续服务 unified exec、Thread shell 与 background terminal，不进入 public protocol。
+旧 `executionProcess/*` JSON-RPC、v0 DTO/schema、typed helpers、Renderer gateway、status/drain/interrupt/stdin UI 为
+`dead / deleted / forbidden-to-restore`；`compat` 与 `deprecated` 均为空。
+
+Architecture impact: major because process ownership, notification ordering and Desktop projection boundaries now have one
+explicit cross-layer contract. The product direction remains Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore/domain
+owner -> Thread/Turn/Item projection -> GUI; process control does not create a second Electron backend. Responsible developer
+confirmation: root, 2026-08-08. Confirmation content: 已核对 connection/Thread owner 分界、目录归属、数据流、依赖方向、
+协议与 notification 顺序、删除边界和验证门禁。
+
+## 34. Exact Filesystem Owner
+
+Codex exact filesystem contract 由 App Server 独立 `FsServer` 承接，Desktop 只消费 typed wire 并投影富 GUI：
+
+```text
+Renderer fileBrowser/session-files gateway
+  -> typed App Server client
+  -> fs/readFile | fs/writeFile | fs/createDirectory
+  -> fs/getMetadata | fs/readDirectory | fs/remove | fs/copy
+  -> App Server FsServer
+  -> tokio filesystem
+
+fs/watch { watchId, absolute path }
+  -> FsServer keyed by (ConnectionId, watchId)
+  -> filesystem watcher
+  -> fs/changed { watchId, changedPaths[] }
+  -> owning connection only
+```
+
+协议路径必须为绝对路径，raw bytes 始终以 base64 传输。`readFile` 有 512 MiB 上限并在越界时 fail closed；
+`writeFile` 不创建父目录；`createDirectory.recursive`、`remove.recursive/force` 与 `copy.recursive` 保持 Codex wire
+语义。symlink metadata 显式投影，directory listing 只返回 exact entry shape；Desktop 再读取 metadata，生成文件类型、
+隐藏状态、预览文本和其他 GUI 字段，不把这些投影写回协议。
+
+watch owner 固定为 `(ConnectionId, watchId)`。同一连接重复 active watch id 失败，不同连接可独立复用同一 id；
+notification 只投递给 owner，断连仅清理该连接 watcher。rename 不扩充 public protocol，由 Desktop 组合
+`getMetadata -> copy -> remove`，明确为非原子操作。Electron 仍只拥有目录选择、系统快捷位置和图标读取等宿主能力，
+不成为第二套文件业务后端。
+
+v2 protocol/schema、App Server dispatcher/connection cleanup、`FsServer`、Rust/TypeScript typed clients、公共 JSON-RPC
+和 Renderer file gateway 为 `current`。旧 `fileSystem/*`、v0 DTO/schema、App Server RuntimeCore file projection、
+`processor/file.rs`、services `file_browser_service` 与 renderer aliases 为 `dead / deleted / forbidden-to-restore`；
+`compat` 与 `deprecated` 均为空。旧 preview 曾承担的 Office/PDF 文本提取不属于 exact raw-byte fs contract；若产品继续
+需要，必须在独立 current 文档能力 owner 中重建，不能恢复 `fileSystem/readFilePreview`。
+
+Architecture impact: major because the public file contract, watch ownership and Desktop projection boundary moved to one
+exact v2 owner. The product direction remains Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore/domain owner ->
+Thread/Turn/Item projection -> GUI; filesystem IO does not create a second Electron backend or copy Codex TUI. Responsible
+developer confirmation: root, 2026-08-08. Confirmation content: 已核对目录归属、绝对路径/base64 边界、connection watcher
+owner、Desktop GUI 投影、旧 owner 删除与验证门禁。

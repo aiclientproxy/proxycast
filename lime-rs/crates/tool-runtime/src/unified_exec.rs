@@ -1,4 +1,7 @@
-use crate::execution_process::live::RuntimeLiveExecutionGateway;
+use crate::execution_process::live::{
+    LiveExecutionOutputQuery, LiveExecutionRequest, RuntimeLiveExecutionGateway,
+};
+use crate::execution_process::ExecutionProcessStatus;
 use crate::tool_definition::RuntimeToolDefinition;
 use crate::tool_executor::{
     RuntimeToolExecutionError, RuntimeToolExecutionResult, RuntimeToolPolicyErrorKind,
@@ -6,10 +9,6 @@ use crate::tool_executor::{
 };
 use crate::tool_io::{
     estimate_tool_io_tokens, format_tool_output_for_model, ToolOutputTruncationPolicy,
-};
-use app_server_protocol::{
-    ExecutionProcessDrainOutputParams, ExecutionProcessIdParams, ExecutionProcessStartParams,
-    ExecutionProcessStatus, ExecutionProcessWriteStdinParams,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -281,12 +280,12 @@ async fn execute_command(
         .start_process(
             request.thread_id,
             &command,
-            ExecutionProcessStartParams {
+            LiveExecutionRequest {
                 process_id,
                 tool_id: call_id,
                 tool_name: EXEC_COMMAND_TOOL_NAME.to_string(),
                 command: shell_command,
-                working_directory: cwd_text,
+                working_directory: cwd,
                 tty: input.tty,
                 approval_policy: Some("never".to_string()),
                 sandbox_policy: effective_sandbox_policy(
@@ -296,7 +295,6 @@ async fn execute_command(
                 runtime_metadata: request
                     .turn_context
                     .map(|context| serde_json::to_value(context).unwrap_or(Value::Null)),
-                cwd: None,
                 env: request.environment,
             },
             request.granted_permissions,
@@ -338,10 +336,7 @@ async fn write_stdin(
             )));
         }
         gateway
-            .write_stdin(ExecutionProcessWriteStdinParams {
-                process_id: session.process_id.clone(),
-                data: input.chars.clone(),
-            })
+            .write_stdin(&session.process_id, input.chars.as_bytes())
             .map_err(unified_exec_error)?;
     }
     let stdin_summary = terminal_interaction_summary(&input.chars);
@@ -390,7 +385,7 @@ async fn collect_process_output(
             (session.process_id.clone(), session.after_sequence)
         };
         let drained = gateway
-            .drain_output(ExecutionProcessDrainOutputParams {
+            .drain_output(LiveExecutionOutputQuery {
                 process_id: Some(process_id.clone()),
                 after_sequence,
                 limit: Some(OUTPUT_DRAIN_LIMIT),
@@ -408,18 +403,13 @@ async fn collect_process_output(
             .as_ref()
             .is_some_and(CancellationToken::is_cancelled)
         {
-            let _ = gateway.terminate(ExecutionProcessIdParams {
-                process_id: process_id.clone(),
-            });
+            let _ = gateway.terminate(&process_id);
         }
 
-        let snapshot = gateway
-            .status(ExecutionProcessIdParams { process_id })
-            .map_err(unified_exec_error)?
-            .snapshot;
+        let snapshot = gateway.status(&process_id).map_err(unified_exec_error)?;
         if process_status_is_terminal(snapshot.status) {
             let final_drain = gateway
-                .drain_output(ExecutionProcessDrainOutputParams {
+                .drain_output(LiveExecutionOutputQuery {
                     process_id: Some(snapshot.process_id.clone()),
                     after_sequence: session.lock().await.after_sequence,
                     limit: Some(OUTPUT_DRAIN_LIMIT),

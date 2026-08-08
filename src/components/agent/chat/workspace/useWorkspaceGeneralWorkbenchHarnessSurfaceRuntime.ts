@@ -18,10 +18,6 @@ type HarnessInventoryRuntime = Pick<
   | "toolInventoryLoading"
   | "toolInventoryError"
   | "refreshToolInventory"
-  | "mcpPrepareCandidateCount"
-  | "mcpPrepareLoading"
-  | "mcpPrepareError"
-  | "prepareMcpTargets"
 >;
 type ReplayPendingRequestHandler = NonNullable<
   WorkspaceGeneralWorkbenchHarnessPanelBaseProps["onReplayPendingRequest"]
@@ -140,11 +136,6 @@ export function useWorkspaceGeneralWorkbenchHarnessSurfaceRuntime({
       toolInventoryLoading: harnessInventoryRuntime.toolInventoryLoading,
       toolInventoryError: harnessInventoryRuntime.toolInventoryError,
       onRefreshToolInventory: harnessInventoryRuntime.refreshToolInventory,
-      mcpPrepareCandidateCount:
-        harnessInventoryRuntime.mcpPrepareCandidateCount,
-      mcpPrepareLoading: harnessInventoryRuntime.mcpPrepareLoading,
-      mcpPrepareError: harnessInventoryRuntime.mcpPrepareError,
-      onPrepareMcpTargets: harnessInventoryRuntime.prepareMcpTargets,
       onOpenSubagentSession,
       onLoadFilePreview,
       onOpenFile,
@@ -159,10 +150,6 @@ export function useWorkspaceGeneralWorkbenchHarnessSurfaceRuntime({
       contextHarnessRuntime.harnessEnvironment,
       currentTurnId,
       executionStrategy,
-      harnessInventoryRuntime.mcpPrepareCandidateCount,
-      harnessInventoryRuntime.mcpPrepareError,
-      harnessInventoryRuntime.mcpPrepareLoading,
-      harnessInventoryRuntime.prepareMcpTargets,
       harnessInventoryRuntime.refreshToolInventory,
       harnessInventoryRuntime.toolInventory,
       harnessInventoryRuntime.toolInventoryError,

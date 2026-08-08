@@ -38,7 +38,7 @@ vi.mock("@/lib/api/oemCloudControlPlane", async (importOriginal) => {
   };
 });
 
-vi.mock("@/lib/desktop-host/plugin-shell", () => ({
+vi.mock("@/lib/desktop-host/shell", () => ({
   open: shellOpenMock,
 }));
 

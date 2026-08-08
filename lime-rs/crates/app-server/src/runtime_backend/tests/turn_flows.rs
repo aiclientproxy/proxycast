@@ -268,34 +268,3 @@ async fn runtime_backend_registers_current_gateway_tools_in_agent_registry() {
         "{TOOL_SEARCH_TOOL_NAME} should be registered as the current deferred tool search native tool"
     );
 }
-
-#[tokio::test]
-async fn runtime_backend_adds_content_factory_artifact_path_without_search_requests() {
-    let backend = RuntimeBackend::new();
-    let request = request_for_test("写一篇文章", None, None);
-    let mut events = vec![
-        RuntimeEvent::new("turn.started", json!({})),
-        article_workspace_snapshot_event_without_search(),
-        RuntimeEvent::new("turn.completed", json!({})),
-    ];
-
-    ExecutionBackend::prepare_runtime_worker_artifact_events(&backend, &request, &mut events)
-        .await
-        .expect("content factory artifact path");
-
-    assert_eq!(
-        events
-            .iter()
-            .map(|event| event.event_type.as_str())
-            .collect::<Vec<_>>(),
-        vec!["turn.started", "artifact.snapshot", "turn.completed"]
-    );
-    assert_eq!(
-        events[1].payload["artifact"]["filePath"],
-        ".lime/artifacts/content-factory/workspace-patch.json"
-    );
-    assert_eq!(
-        events[1].payload["artifact"]["path"],
-        ".lime/artifacts/content-factory/workspace-patch.json"
-    );
-}

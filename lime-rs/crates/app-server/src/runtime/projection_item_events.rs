@@ -37,8 +37,6 @@ const PROJECTED_THREAD_ITEM_EVENT_TYPES: &[&str] = &[
     "context.compaction.completed",
     "subagent.activity",
     "artifact.snapshot",
-    "plugin_worker.retry",
-    "plugin_worker.hook",
     "file.changed",
     "routing.decision.made",
     "routing.fallback.applied",
@@ -48,13 +46,7 @@ const PROJECTED_THREAD_ITEM_EVENT_TYPES: &[&str] = &[
     "runtime.error",
 ];
 
-const PROJECTED_PLUGIN_WORKSPACE_EVENT_TYPES: &[&str] = &[
-    "artifact.snapshot",
-    "plugin_worker.retry",
-    "plugin_worker.hook",
-    "runtime.error",
-    "turn.failed",
-];
+const PROJECTED_WORKSPACE_PATCH_EVENT_TYPES: &[&str] = &["artifact.snapshot"];
 
 pub(super) fn query_projected_session_item_events(
     conn: &Connection,
@@ -63,7 +55,7 @@ pub(super) fn query_projected_session_item_events(
 ) -> Result<Vec<AgentEvent>, String> {
     Ok(merge_projected_item_events(
         query_projected_window_item_events(conn, session_id, messages)?,
-        query_projected_plugin_workspace_events(conn, session_id)?,
+        query_projected_workspace_patch_events(conn, session_id)?,
     ))
 }
 
@@ -118,11 +110,11 @@ fn query_projected_window_item_events(
         .map(|events| events.into_iter().flatten().collect())
 }
 
-fn query_projected_plugin_workspace_events(
+fn query_projected_workspace_patch_events(
     conn: &Connection,
     session_id: &str,
 ) -> Result<Vec<AgentEvent>, String> {
-    let type_placeholders = placeholders(2, PROJECTED_PLUGIN_WORKSPACE_EVENT_TYPES.len());
+    let type_placeholders = placeholders(2, PROJECTED_WORKSPACE_PATCH_EVENT_TYPES.len());
     let sql = format!(
         "SELECT event_id, session_id, thread_id, turn_id, sequence,
                 item_type, payload_summary_json, created_at
@@ -133,13 +125,13 @@ fn query_projected_plugin_workspace_events(
     );
     let mut stmt = conn
         .prepare(&sql)
-        .map_err(|error| format!("无法准备 projected_items 插件工作区事件查询: {error}"))?;
+        .map_err(|error| format!("无法准备 projected_items workspace patch 事件查询: {error}"))?;
     let mut query_params = Vec::<rusqlite::types::Value>::with_capacity(
-        1 + PROJECTED_PLUGIN_WORKSPACE_EVENT_TYPES.len(),
+        1 + PROJECTED_WORKSPACE_PATCH_EVENT_TYPES.len(),
     );
     query_params.push(rusqlite::types::Value::from(session_id.to_string()));
     query_params.extend(
-        PROJECTED_PLUGIN_WORKSPACE_EVENT_TYPES
+        PROJECTED_WORKSPACE_PATCH_EVENT_TYPES
             .iter()
             .map(|item_type| rusqlite::types::Value::from((*item_type).to_string())),
     );
@@ -148,28 +140,28 @@ fn query_projected_plugin_workspace_events(
             rusqlite::params_from_iter(query_params),
             projected_event_row,
         )
-        .map_err(|error| format!("无法查询 projected_items 插件工作区事件: {error}"))?;
+        .map_err(|error| format!("无法查询 projected_items workspace patch 事件: {error}"))?;
     rows.map(|row| row.map(projected_event_from_row))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("无法读取 projected_items 插件工作区事件: {error}"))
+        .map_err(|error| format!("无法读取 projected_items workspace patch 事件: {error}"))
         .map(|events| {
             events
                 .into_iter()
                 .flatten()
-                .filter(is_plugin_workspace_projection_event)
+                .filter(is_workspace_patch_projection_event)
                 .collect()
         })
 }
 
 fn merge_projected_item_events(
     mut window_events: Vec<AgentEvent>,
-    plugin_workspace_events: Vec<AgentEvent>,
+    workspace_patch_events: Vec<AgentEvent>,
 ) -> Vec<AgentEvent> {
     let mut event_ids = window_events
         .iter()
         .map(|event| event.event_id.clone())
         .collect::<BTreeSet<_>>();
-    for event in plugin_workspace_events {
+    for event in workspace_patch_events {
         if event_ids.insert(event.event_id.clone()) {
             window_events.push(event);
         }
@@ -182,16 +174,8 @@ fn merge_projected_item_events(
     window_events
 }
 
-fn is_plugin_workspace_projection_event(event: &AgentEvent) -> bool {
-    match event.event_type.as_str() {
-        "artifact.snapshot" => payload_has_workspace_patch(&event.payload),
-        "plugin_worker.retry" | "plugin_worker.hook" | "runtime.error" | "turn.failed" => {
-            payload_has_plugin_worker_metadata(&event.payload)
-                || payload_string(Some(&event.payload), &["source"]).as_deref()
-                    == Some("plugin_task_worker")
-        }
-        _ => false,
-    }
+fn is_workspace_patch_projection_event(event: &AgentEvent) -> bool {
+    event.event_type == "artifact.snapshot" && payload_has_workspace_patch(&event.payload)
 }
 
 fn payload_has_workspace_patch(payload: &Value) -> bool {
@@ -203,49 +187,22 @@ fn payload_has_workspace_patch(payload: &Value) -> bool {
         payload.get("article_workspace"),
         payload.get("workspacePatch"),
         payload.get("workspace_patch"),
-        payload.get("contentFactoryWorkspacePatch"),
         metadata.and_then(|value| value.get("articleWorkspace")),
         metadata.and_then(|value| value.get("article_workspace")),
         metadata.and_then(|value| value.get("workspacePatch")),
         metadata.and_then(|value| value.get("workspace_patch")),
-        metadata.and_then(|value| value.get("contentFactoryWorkspacePatch")),
         artifact.and_then(|value| value.get("articleWorkspace")),
         artifact.and_then(|value| value.get("article_workspace")),
         artifact.and_then(|value| value.get("workspacePatch")),
         artifact.and_then(|value| value.get("workspace_patch")),
-        artifact.and_then(|value| value.get("contentFactoryWorkspacePatch")),
         artifact_metadata.and_then(|value| value.get("articleWorkspace")),
         artifact_metadata.and_then(|value| value.get("article_workspace")),
         artifact_metadata.and_then(|value| value.get("workspacePatch")),
         artifact_metadata.and_then(|value| value.get("workspace_patch")),
-        artifact_metadata.and_then(|value| value.get("contentFactoryWorkspacePatch")),
     ]
     .into_iter()
     .flatten()
     .any(|candidate| candidate.get("objects").and_then(Value::as_array).is_some())
-}
-
-fn payload_has_plugin_worker_metadata(payload: &Value) -> bool {
-    let artifact = payload.get("artifact");
-    [
-        payload.get("pluginWorker"),
-        payload.get("plugin_worker"),
-        payload
-            .get("metadata")
-            .and_then(|metadata| metadata.get("pluginWorker")),
-        payload
-            .get("metadata")
-            .and_then(|metadata| metadata.get("plugin_worker")),
-        artifact
-            .and_then(|artifact| artifact.get("metadata"))
-            .and_then(|metadata| metadata.get("pluginWorker")),
-        artifact
-            .and_then(|artifact| artifact.get("metadata"))
-            .and_then(|metadata| metadata.get("plugin_worker")),
-    ]
-    .into_iter()
-    .flatten()
-    .any(Value::is_object)
 }
 
 fn projected_window_turn_ids(messages: &[Value]) -> Vec<String> {

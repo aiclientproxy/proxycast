@@ -44,10 +44,10 @@ async fn article_workspace_artifact_documents_cover_media_storyboard_and_checkli
                         "artifactId": "artifact-workspace-patch-mvp",
                         "path": ".lime/artifacts/content-factory-workspace-patch-mvp.json",
                         "title": "内容工厂交付包",
-                        "kind": "content_factory.workspace_patch",
+                        "kind": "workspace_patch",
                         "status": "ready",
                         "metadata": {
-                            "contentFactoryWorkspacePatch": content_factory_mvp_workspace_patch()
+                            "workspacePatch": content_factory_mvp_workspace_patch()
                         }
                     }
                 }),

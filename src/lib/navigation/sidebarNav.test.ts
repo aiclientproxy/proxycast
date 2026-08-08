@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   FOOTER_SIDEBAR_NAV_ITEMS,
   MAIN_SIDEBAR_NAV_ITEMS,
-  buildMainSidebarNavItems,
   resolveEnabledSidebarNavItems,
 } from "./sidebarNav";
 
@@ -49,17 +48,5 @@ describe("sidebarNav", () => {
 
   it("旧 schema 中的 companion 不应被当作显式开启", () => {
     expect(resolveEnabledSidebarNavItems(["companion"], 2)).toEqual([]);
-  });
-
-  it("Plugin Lab 只在实验开关开启时进入左侧栏", () => {
-    expect(
-      buildMainSidebarNavItems({ labEnabled: false }).map((item) => item.id),
-    ).toContain("plugins");
-    expect(
-      buildMainSidebarNavItems({ labEnabled: true }).map((item) => item.id),
-    ).toContain("plugin-lab");
-    expect(
-      buildMainSidebarNavItems({ labEnabled: false }).map((item) => item.id),
-    ).not.toContain("plugin-lab");
   });
 });

@@ -82,10 +82,7 @@ pub trait MemoryBackend: Send + Sync {
         params: MemoryStoreRootParams,
     ) -> Result<MemoryStoreHealthResponse, RuntimeCoreError>;
 
-    async fn reset(
-        &self,
-        params: MemoryStoreResetParams,
-    ) -> Result<MemoryStoreResetResponse, RuntimeCoreError>;
+    async fn reset(&self) -> Result<(), RuntimeCoreError>;
 
     async fn rebuild_index(
         &self,
@@ -432,23 +429,13 @@ impl MemoryBackend for LocalMemoryBackend {
         })
     }
 
-    async fn reset(
-        &self,
-        params: MemoryStoreResetParams,
-    ) -> Result<MemoryStoreResetResponse, RuntimeCoreError> {
-        let root = self.resolve_root(&params.root)?;
+    async fn reset(&self) -> Result<(), RuntimeCoreError> {
+        let root = self.resolve_root(&MemoryStoreRootParams::default())?;
         fs::create_dir_all(&root).map_err(io_error)?;
         reject_symlink(&root)?;
-        let removed = remove_root_contents(&root)?;
+        remove_root_contents(&root)?;
         self.ensure_layout(&root)?;
-
-        Ok(MemoryStoreResetResponse {
-            root_scope: params.root.scope,
-            root_path: path_to_display_string(&root)?,
-            removed_files: removed.files,
-            removed_directories: removed.directories,
-            preserved_soul: true,
-        })
+        Ok(())
     }
 
     async fn rebuild_index(

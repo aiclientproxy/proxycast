@@ -138,55 +138,6 @@ describe("AppSidebar navigation", () => {
     ).not.toBeNull();
   });
 
-  it("进入 Plugin 运行页时应临时折叠导航栏并在离开后恢复", async () => {
-    localStorage.setItem(APP_SIDEBAR_COLLAPSED_STORAGE_KEY, "false");
-    const onNavigate = vi.fn();
-    const mounted = mountSidebar({
-      currentPage: "plugin",
-      onNavigate,
-    });
-    await flushEffects(2);
-
-    expect(
-      mounted.container
-        .querySelector('[data-testid="app-sidebar"]')
-        ?.getAttribute("data-collapsed"),
-    ).toBe("true");
-    expect(localStorage.getItem(APP_SIDEBAR_COLLAPSED_STORAGE_KEY)).toBe(
-      "false",
-    );
-
-    await act(async () => {
-      mounted.container
-        .querySelector<HTMLButtonElement>('button[aria-label="展开导航栏"]')
-        ?.click();
-      await Promise.resolve();
-    });
-    await flushEffects(2);
-
-    expect(
-      mounted.container
-        .querySelector('[data-testid="app-sidebar"]')
-        ?.getAttribute("data-collapsed"),
-    ).toBe("false");
-    expect(localStorage.getItem(APP_SIDEBAR_COLLAPSED_STORAGE_KEY)).toBe(
-      "false",
-    );
-
-    act(() => {
-      mounted.root.render(
-        <AppSidebar currentPage="agent" onNavigate={onNavigate} />,
-      );
-    });
-    await flushEffects(2);
-
-    expect(
-      mounted.container
-        .querySelector('[data-testid="app-sidebar"]')
-        ?.getAttribute("data-collapsed"),
-    ).toBe("false");
-  });
-
   it("默认应渲染一级主导航，并将系统入口收进用户弹框", async () => {
     const container = mountSidebarContainer({
       currentPage: "settings",

@@ -20,6 +20,9 @@ pub(super) fn start_local_pty_execution_process(
     if let Some(cwd) = &request.cwd {
         command.cwd(cwd);
     }
+    if request.env_clear {
+        command.env_clear();
+    }
     for (key, value) in &request.env {
         command.env(key, value);
     }
@@ -27,16 +30,18 @@ pub(super) fn start_local_pty_execution_process(
         command.env("TERM", "xterm-256color");
     }
 
+    let (rows, cols) = request.pty_size.unwrap_or((24, 120));
     let pair = native_pty_system()
         .openpty(PtySize {
-            rows: 24,
-            cols: 120,
+            rows,
+            cols,
             pixel_width: 0,
             pixel_height: 0,
         })
         .map_err(io_error)?;
     let reader = pair.master.try_clone_reader().map_err(io_error)?;
     let writer = pair.master.take_writer().map_err(io_error)?;
+    let master = pair.master;
     let child = pair.slave.spawn_command(command).map_err(io_error)?;
     drop(pair.slave);
 
@@ -65,7 +70,8 @@ pub(super) fn start_local_pty_execution_process(
     thread::spawn(move || {
         supervise_local_pty_process(
             child,
-            writer,
+            Some(writer),
+            master,
             reader_handle,
             process,
             state_tx,
@@ -112,7 +118,8 @@ fn read_pty_process_stream(
 #[allow(clippy::too_many_arguments)]
 fn supervise_local_pty_process(
     mut child: Box<dyn portable_pty::Child + Send + Sync>,
-    mut writer: Box<dyn io::Write + Send>,
+    mut writer: Option<Box<dyn io::Write + Send>>,
+    master: Box<dyn portable_pty::MasterPty + Send>,
     reader_handle: thread::JoinHandle<()>,
     process: Arc<Mutex<ExecutionProcess>>,
     state_tx: watch::Sender<ExecutionProcessSnapshot>,
@@ -125,7 +132,14 @@ fn supervise_local_pty_process(
             Ok(None) => {}
             Err(error) => break Err(error),
         }
-        drain_controls(&mut *child, &mut *writer, &process, &state_tx, &control_rx);
+        drain_controls(
+            &mut *child,
+            &mut writer,
+            &*master,
+            &process,
+            &state_tx,
+            &control_rx,
+        );
         thread::sleep(Duration::from_millis(25));
     };
 
@@ -147,7 +161,8 @@ fn supervise_local_pty_process(
 
 fn drain_controls(
     child: &mut dyn portable_pty::Child,
-    writer: &mut dyn io::Write,
+    writer: &mut Option<Box<dyn io::Write + Send>>,
+    master: &dyn portable_pty::MasterPty,
     process: &Arc<Mutex<ExecutionProcess>>,
     state_tx: &watch::Sender<ExecutionProcessSnapshot>,
     control_rx: &std::sync::mpsc::Receiver<LocalExecutionControl>,
@@ -155,8 +170,21 @@ fn drain_controls(
     loop {
         match control_rx.try_recv() {
             Ok(LocalExecutionControl::WriteStdin(bytes)) => {
-                let _ = writer.write_all(&bytes);
-                let _ = writer.flush();
+                if let Some(writer) = writer.as_mut() {
+                    let _ = writer.write_all(&bytes);
+                    let _ = writer.flush();
+                }
+            }
+            Ok(LocalExecutionControl::CloseStdin) => {
+                writer.take();
+            }
+            Ok(LocalExecutionControl::Resize { rows, cols }) => {
+                let _ = master.resize(PtySize {
+                    rows,
+                    cols,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                });
             }
             Ok(LocalExecutionControl::Interrupt) => {
                 update_process_status_blocking(
@@ -175,7 +203,15 @@ fn drain_controls(
                 let _ = child.kill();
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => break,
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                update_process_status_blocking(
+                    process,
+                    state_tx,
+                    ExecutionProcessStatus::Terminated,
+                );
+                let _ = child.kill();
+                break;
+            }
         }
     }
 }

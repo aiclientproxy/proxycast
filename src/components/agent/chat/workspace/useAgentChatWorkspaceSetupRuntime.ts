@@ -245,7 +245,6 @@ export function useAgentChatWorkspaceSetupRuntime({
     workspacePluginInputSuggestions,
     workspacePluginSuggestionsError,
     workspacePluginSuggestionsLoading,
-    workspacePluginRuntimeContext,
     workspaceRequestMetadataWithExpertSkills,
     workspaceSkillBindings,
   } = useWorkspaceExpertSkillPanelRuntime({
@@ -631,7 +630,6 @@ export function useAgentChatWorkspaceSetupRuntime({
     themeWorkbenchBackendRunState,
     themeWorkbenchActiveQueueItem,
     harnessPendingCount,
-    threadId: threadRead?.thread_id ?? null,
   });
 
   return {
@@ -703,7 +701,6 @@ export function useAgentChatWorkspaceSetupRuntime({
     workspacePluginInputSuggestions,
     workspacePluginSuggestionsError,
     workspacePluginSuggestionsLoading,
-    workspacePluginRuntimeContext,
     workspaceRequestMetadataWithExpertSkills,
     workspaceSkillBindings,
     restoredInteractiveMessageSnapshotRef,

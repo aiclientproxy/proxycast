@@ -20,9 +20,9 @@
       "clientNotification": 1
     },
     "byStatus": {
-      "implemented": 87,
+      "implemented": 108,
       "product-scope-excluded": 35,
-      "planned": 98
+      "planned": 77
     }
   },
   "groups": [
@@ -431,15 +431,22 @@
       ]
     },
     {
-      "id": "fs-planned",
+      "id": "fs-current",
       "direction": "clientRequest",
       "productArea": "filesystem",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "app-server filesystem owner",
-      "counterpartRule": "none",
-      "gap": "Legacy fileSystem methods have different names and shapes; the Codex fs contract has not replaced them.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "counterpartRule": "same-name",
+      "gap": "Exact fs is current; Desktop file browsing remains a Renderer projection over raw bytes and metadata.",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/fs.rs",
+        "lime-rs/crates/app-server/src/fs.rs",
+        "lime-rs/crates/app-server/src/processor/fs.rs",
+        "lime-rs/crates/app-server/tests/fs_jsonrpc.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/fileBrowser.ts"
+      ],
       "methods": [
         "fs/copy",
         "fs/createDirectory",
@@ -521,12 +528,18 @@
       "id": "memory-reset-planned",
       "direction": "clientRequest",
       "productArea": "memory",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "thread-store memory owner",
-      "counterpartRule": "none",
-      "gap": "Memory mode is current, but Codex reset semantics and durable evidence are missing.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/memory.rs",
+        "lime-rs/crates/app-server/src/processor/memory_store.rs",
+        "lime-rs/crates/app-server/tests/session_archive_jsonrpc.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/memoryStore.ts",
+        "src/components/settings-v2/general/memory/MemoryStoreStatusPanel.tsx"
+      ],
       "methods": ["memory/reset"]
     },
     {
@@ -602,15 +615,21 @@
       ]
     },
     {
-      "id": "process-planned",
+      "id": "process-current",
       "direction": "clientRequest",
       "productArea": "process",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "tool-runtime process owner + app-server",
-      "counterpartRule": "none",
-      "gap": "executionProcess is a different legacy contract and cannot be counted as Codex process parity.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "counterpartRule": "same-name",
+      "gap": "Exact connection-scoped process control is current; Thread-owned background terminals remain a separate product projection.",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/process.rs",
+        "lime-rs/crates/app-server/src/process.rs",
+        "lime-rs/crates/app-server/src/process/tests.rs",
+        "lime-rs/crates/app-server/src/processor/process.rs",
+        "packages/app-server-client/src/request-client-methods.ts"
+      ],
       "methods": [
         "process/kill",
         "process/resizePty",
@@ -761,15 +780,20 @@
       ]
     },
     {
-      "id": "fs-notification-planned",
+      "id": "fs-notification-current",
       "direction": "serverNotification",
       "productArea": "filesystem",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "app-server filesystem owner",
-      "counterpartRule": "none",
-      "gap": "Codex fs watch changes are not exposed by the current App Server contract.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "counterpartRule": "same-name",
+      "gap": "Exact fs/changed is emitted only to the connection that owns the watch id.",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/fs.rs",
+        "lime-rs/crates/app-server/src/fs.rs",
+        "lime-rs/crates/app-server/src/fs/tests.rs",
+        "lime-rs/crates/app-server/tests/fs_jsonrpc.rs"
+      ],
       "methods": ["fs/changed"]
     },
     {
@@ -788,15 +812,19 @@
       ]
     },
     {
-      "id": "hooks-notification-planned",
+      "id": "hooks-notification-current",
       "direction": "serverNotification",
       "productArea": "hooks",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "tool-runtime hook lifecycle + app-server",
-      "counterpartRule": "none",
-      "gap": "Hook start/completion is not emitted through the current public notification projector.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "counterpartRule": "same-name",
+      "gap": "Exact Hook lifecycle notifications are projected from paired current hook run events.",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/v2_notifications/hook.rs",
+        "src/lib/api/agentRuntime/appServerV2Notification.test.ts",
+        "scripts/agent-runtime/claw-chat-current-fixture-rpc.mjs"
+      ],
       "methods": ["hook/completed", "hook/started"]
     },
     {
@@ -816,15 +844,20 @@
       ]
     },
     {
-      "id": "mcp-notification-planned",
+      "id": "mcp-notification-current",
       "direction": "serverNotification",
       "productArea": "mcp",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "mcp manager + app-server notification projector",
-      "counterpartRule": "none",
-      "gap": "OAuth completion and startup status updates are not aligned to the Codex notification contract.",
-      "evidence": ["internal/aiprompts/commands.md"],
+      "counterpartRule": "same-name",
+      "gap": "Exact OAuth completion and startup status notifications are published by the MCP manager boundary.",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/mcp.rs",
+        "lime-rs/crates/app-server/src/processor/tests/mcp.rs",
+        "scripts/electron/mcp-oauth-notification-fixture-smoke.mjs",
+        "scripts/electron/mcp-startup-notification-fixture-smoke.mjs"
+      ],
       "methods": [
         "mcpServer/oauthLogin/completed",
         "mcpServer/startupStatus/updated"
@@ -880,15 +913,20 @@
       "methods": ["model/rerouted"]
     },
     {
-      "id": "process-notification-planned",
+      "id": "process-notification-current",
       "direction": "serverNotification",
       "productArea": "process",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "tool-runtime process owner + app-server",
-      "counterpartRule": "none",
-      "gap": "Codex process output and terminal lifecycle are not exposed by the current contract.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "counterpartRule": "same-name",
+      "gap": "Exact output and exit notifications are emitted to the owning initialized connection after spawn response delivery.",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/process.rs",
+        "lime-rs/crates/app-server/src/process.rs",
+        "lime-rs/crates/app-server/src/process/tests.rs",
+        "packages/app-server-client/src/connection-methods.ts"
+      ],
       "methods": ["process/exited", "process/outputDelta"]
     },
     {

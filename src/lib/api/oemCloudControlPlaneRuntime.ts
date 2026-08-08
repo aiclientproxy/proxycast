@@ -1,13 +1,5 @@
 import { resolveOemCloudRuntimeContext } from "./oemCloudRuntime";
 import type {
-  ClientPluginInstallState,
-  PluginMarketplaceActivationState,
-  PluginMarketplaceAuthenticationPolicy,
-  PluginMarketplaceInstallState,
-  PluginMarketplaceInstallationPolicy,
-  PluginMarketplaceSourceKind,
-} from "./pluginMarketplaceTypes";
-import type {
   ModelAliasSource,
   ModelDeploymentSource,
   ModelManagementPlane,
@@ -172,34 +164,6 @@ const MODEL_ALIAS_SOURCE_SET = new Set<ModelAliasSource>([
   "local",
 ]);
 
-const PLUGIN_MARKETPLACE_SOURCE_KIND_SET = new Set<PluginMarketplaceSourceKind>(
-  ["plugin_catalog"],
-);
-
-const PLUGIN_MARKETPLACE_INSTALLATION_POLICY_SET =
-  new Set<PluginMarketplaceInstallationPolicy>([
-    "NOT_AVAILABLE",
-    "AVAILABLE",
-    "INSTALLED_BY_DEFAULT",
-  ]);
-
-const PLUGIN_MARKETPLACE_AUTHENTICATION_POLICY_SET =
-  new Set<PluginMarketplaceAuthenticationPolicy>(["ON_INSTALL", "ON_USE"]);
-
-const PLUGIN_MARKETPLACE_INSTALL_STATE_SET =
-  new Set<PluginMarketplaceInstallState>(["available", "blocked"]);
-
-const PLUGIN_MARKETPLACE_ACTIVATION_STATE_SET =
-  new Set<PluginMarketplaceActivationState>(["activatable", "blocked"]);
-
-const CLIENT_PLUGIN_INSTALL_STATE_SET = new Set<ClientPluginInstallState>([
-  "installed",
-  "enabled",
-  "disabled",
-  "uninstalled",
-  "failed",
-]);
-
 export function parsePartnerHubAccessMode(
   value: unknown,
   fallback?: OemCloudPartnerHubAccessMode,
@@ -279,84 +243,6 @@ export function parseOptionalModelAliasSource(
   return normalized && MODEL_ALIAS_SOURCE_SET.has(normalized)
     ? normalized
     : undefined;
-}
-
-export function parsePluginMarketplaceSourceKind(
-  value: unknown,
-): PluginMarketplaceSourceKind {
-  const normalized = normalizeText(value) as
-    | PluginMarketplaceSourceKind
-    | undefined;
-  if (!normalized || !PLUGIN_MARKETPLACE_SOURCE_KIND_SET.has(normalized)) {
-    throw new OemCloudControlPlaneError("插件市场来源格式非法");
-  }
-  return normalized;
-}
-
-export function parsePluginMarketplaceInstallationPolicy(
-  value: unknown,
-): PluginMarketplaceInstallationPolicy {
-  const normalized = normalizeText(value) as
-    | PluginMarketplaceInstallationPolicy
-    | undefined;
-  if (
-    !normalized ||
-    !PLUGIN_MARKETPLACE_INSTALLATION_POLICY_SET.has(normalized)
-  ) {
-    throw new OemCloudControlPlaneError("插件安装策略格式非法");
-  }
-  return normalized;
-}
-
-export function parsePluginMarketplaceAuthenticationPolicy(
-  value: unknown,
-): PluginMarketplaceAuthenticationPolicy {
-  const normalized = normalizeText(value) as
-    | PluginMarketplaceAuthenticationPolicy
-    | undefined;
-  if (
-    !normalized ||
-    !PLUGIN_MARKETPLACE_AUTHENTICATION_POLICY_SET.has(normalized)
-  ) {
-    throw new OemCloudControlPlaneError("插件认证策略格式非法");
-  }
-  return normalized;
-}
-
-export function parsePluginMarketplaceInstallState(
-  value: unknown,
-): PluginMarketplaceInstallState {
-  const normalized = normalizeText(value) as
-    | PluginMarketplaceInstallState
-    | undefined;
-  if (!normalized || !PLUGIN_MARKETPLACE_INSTALL_STATE_SET.has(normalized)) {
-    throw new OemCloudControlPlaneError("插件安装状态格式非法");
-  }
-  return normalized;
-}
-
-export function parsePluginMarketplaceActivationState(
-  value: unknown,
-): PluginMarketplaceActivationState {
-  const normalized = normalizeText(value) as
-    | PluginMarketplaceActivationState
-    | undefined;
-  if (!normalized || !PLUGIN_MARKETPLACE_ACTIVATION_STATE_SET.has(normalized)) {
-    throw new OemCloudControlPlaneError("插件激活状态格式非法");
-  }
-  return normalized;
-}
-
-export function parseClientPluginInstallState(
-  value: unknown,
-): ClientPluginInstallState {
-  const normalized = normalizeText(value) as
-    | ClientPluginInstallState
-    | undefined;
-  if (!normalized || !CLIENT_PLUGIN_INSTALL_STATE_SET.has(normalized)) {
-    throw new OemCloudControlPlaneError("客户端插件安装态格式非法");
-  }
-  return normalized;
 }
 
 function unwrapEnvelope<T>(payload: unknown): {

@@ -95,7 +95,7 @@ describe("mockPriorityCommands", () => {
     ).toBe(false);
     expect(
       shouldDisallowMockFallbackInBrowser("plugin_runtime_start_task"),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       shouldDisallowMockFallbackInBrowser("plugin_inspect_local_package"),
     ).toBe(false);
@@ -115,25 +115,25 @@ describe("mockPriorityCommands", () => {
       false,
     );
     expect(shouldDisallowMockFallbackInBrowser("plugin_start_ui_runtime")).toBe(
-      true,
+      false,
     );
     expect(
       shouldDisallowMockFallbackInBrowser("plugin_get_ui_runtime_status"),
-    ).toBe(true);
+    ).toBe(false);
     expect(shouldDisallowMockFallbackInBrowser("plugin_stop_ui_runtime")).toBe(
-      true,
+      false,
     );
     expect(
       shouldDisallowMockFallbackInBrowser("plugin_runtime_cancel_task"),
-    ).toBe(true);
+    ).toBe(false);
     expect(shouldDisallowMockFallbackInBrowser("plugin_runtime_get_task")).toBe(
-      true,
+      false,
     );
     expect(
       shouldDisallowMockFallbackInBrowser(
         "plugin_runtime_submit_host_response",
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       shouldDisallowMockFallbackInBrowser(
         "agent_runtime_list_file_checkpoints",
@@ -228,13 +228,9 @@ describe("mockPriorityCommands", () => {
     expect(shouldDisallowMockFallbackInBrowser("session_files_save_file")).toBe(
       false,
     );
-    expect(shouldDisallowMockFallbackInBrowser("read_file_preview_cmd")).toBe(
-      false,
-    );
     expect(
       shouldDisallowMockFallbackInBrowser("session_files_resolve_file_path"),
     ).toBe(false);
-    expect(shouldDisallowMockFallbackInBrowser("list_dir")).toBe(false);
     expect(
       shouldDisallowMockFallbackInBrowser("get_file_manager_locations"),
     ).toBe(false);

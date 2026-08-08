@@ -6,7 +6,6 @@ import {
   buildWorkspaceRightSurfaceRuntimePendingIntents,
   hasWorkspaceRightSurfaceRuntimePendingSignals,
 } from "./workspaceRightSurfaceRuntimeProjection";
-import { normalizePluginManifest } from "@/features/plugin";
 
 describe("workspaceRightSurfaceRuntimeProjection", () => {
   it("普通 Claw 默认态没有右侧 surface runtime pending 信号", () => {
@@ -249,44 +248,5 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
       active: false,
       disabled: true,
     });
-  });
-
-  it("显式插件激活不应自动投影为 articleWorkspace runtime pending intent", () => {
-    const plugin = normalizePluginManifest({
-      id: "creator-workbench",
-      displayName: "创作工作台",
-      version: "1.0.0",
-      artifactRenderers: [
-        {
-          artifactType: "articleDraft",
-          surfaceKind: "documentCanvas",
-          rendererKind: "host_builtin",
-        },
-      ],
-    });
-
-    const intents = buildWorkspaceRightSurfaceRuntimePendingIntents({
-      createdAt: 100,
-      harnessPendingCount: 0,
-      objectCanvasCandidateId: null,
-      pluginActivationContext: {
-        sessionId: "session-1",
-        pluginId: "creator-workbench",
-        activeEntryKey: "creator",
-        selectedObjectRef: {
-          pluginId: "creator-workbench",
-          objectKind: "articleDraft",
-          objectId: "pending",
-        },
-        openedTabs: ["articleWorkspace"],
-        source: "user",
-      },
-      pluginContracts: [plugin],
-      preferredServiceSkillResultFileTargetRelativePath: null,
-      showHarnessToggle: false,
-      suppressHomeNavbarUtilityActions: false,
-    });
-
-    expect(intents).toEqual([]);
   });
 });

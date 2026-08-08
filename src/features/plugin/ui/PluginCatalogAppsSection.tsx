@@ -69,7 +69,7 @@ export function PluginCatalogAppsSection({
   }
 
   return (
-    <section data-testid="plugin-v2-apps-readiness">
+    <section data-testid="plugin-catalog-apps-readiness">
       <h3 className="text-xs font-semibold text-[color:var(--lime-text-strong)]">
         {t("plugin.catalog.v2.detail.apps")}
       </h3>
@@ -84,7 +84,7 @@ export function PluginCatalogAppsSection({
             <div
               key={item.id}
               className="flex min-w-0 items-center justify-between gap-3 py-2.5 text-xs"
-              data-testid={`plugin-v2-app-readiness-${item.id}`}
+              data-testid={`plugin-catalog-app-readiness-${item.id}`}
               data-enabled={String(item.enabled)}
               data-callable={String(item.callable)}
               data-status={item.status}
@@ -103,7 +103,7 @@ export function PluginCatalogAppsSection({
         <p
           className="mt-2 flex items-center gap-1.5 text-xs text-amber-700"
           role="status"
-          data-testid="plugin-v2-apps-readiness-error"
+          data-testid="plugin-catalog-apps-readiness-error"
         >
           <CircleAlert size={13} />
           {t("plugin.apps.center.status.partial")}

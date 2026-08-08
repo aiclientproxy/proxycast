@@ -3,7 +3,6 @@
 //! 定义请求处理过程中的上下文信息
 
 use crate::models::provider_type::ProviderType;
-use crate::plugin::PluginContext;
 use chrono::{DateTime, Utc};
 use std::time::Instant;
 
@@ -30,8 +29,6 @@ pub struct RequestContext {
     pub retry_count: u32,
     /// 是否为流式请求
     pub is_stream: bool,
-    /// 插件上下文
-    pub plugin_ctx: Option<PluginContext>,
     /// 元数据
     pub metadata: std::collections::HashMap<String, serde_json::Value>,
 }
@@ -50,7 +47,6 @@ impl RequestContext {
             credential_id: None,
             retry_count: 0,
             is_stream: false,
-            plugin_ctx: None,
             metadata: std::collections::HashMap::new(),
         }
     }
@@ -84,20 +80,6 @@ impl RequestContext {
     /// 获取已耗时（毫秒）
     pub fn elapsed_ms(&self) -> u64 {
         self.start_time.elapsed().as_millis() as u64
-    }
-
-    /// 初始化插件上下文
-    pub fn init_plugin_context(&mut self, provider: ProviderType) {
-        self.plugin_ctx = Some(PluginContext::new(
-            self.request_id.clone(),
-            provider,
-            self.resolved_model.clone(),
-        ));
-    }
-
-    /// 获取插件上下文的可变引用
-    pub fn plugin_context_mut(&mut self) -> Option<&mut PluginContext> {
-        self.plugin_ctx.as_mut()
     }
 
     /// 添加元数据

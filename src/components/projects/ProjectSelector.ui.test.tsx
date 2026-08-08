@@ -56,7 +56,7 @@ vi.mock("@/lib/api/fileSystem", () => ({
   revealPathInFinder: mockRevealPathInFinder,
 }));
 
-vi.mock("@/lib/desktop-host/plugin-dialog", () => ({
+vi.mock("@/lib/desktop-host/dialog", () => ({
   open: mockOpenDialog,
 }));
 

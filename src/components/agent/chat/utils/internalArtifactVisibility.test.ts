@@ -78,12 +78,7 @@ describe("isHiddenInternalArtifactPath", () => {
     ).toBe(true);
     expect(
       isHiddenConversationArtifactPath(
-        ".lime/artifacts/content-factory/workspace-patch.json",
-      ),
-    ).toBe(true);
-    expect(
-      isHiddenConversationArtifactPath(
-        ".lime/artifacts/content-factory-workspace-patch.json",
+        ".lime/artifacts/workspace-patch.json",
       ),
     ).toBe(true);
     expect(
@@ -92,10 +87,10 @@ describe("isHiddenInternalArtifactPath", () => {
           title: "内容工厂工作区补丁",
           content: "{}",
           meta: {
-            kind: "content_factory.workspace_patch",
+            kind: "workspace_patch",
           },
         },
-        "content-factory-workspace-patch.json",
+        "workspace-patch.json",
       ),
     ).toBe(true);
   });
@@ -109,7 +104,7 @@ describe("isHiddenInternalArtifactPath", () => {
           meta: {
             openedFrom: "right_surface_article_workspace",
             artifactKind: "report",
-            contentFactoryWorkspacePatch: {
+            workspacePatch: {
               appId: "content-factory-app",
               objects: [],
             },

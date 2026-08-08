@@ -63,15 +63,6 @@ import {
   listenOpenVoiceModelSettingsRequest,
   persistVoiceModelSettingsFocusRequest,
 } from "./lib/voiceModelSettingsNavigation";
-import type { PluginRightSurfaceLaunchTarget } from "./features/plugin/ui/pluginRightSurfaceLaunch";
-import { normalizePluginRightSurfaceLaunchTarget } from "./features/plugin/ui/pluginLaunchTargetPolicy";
-import {
-  DEFAULT_PLUGIN_RIGHT_SURFACE_TARGET_LIMIT,
-  loadPluginRightSurfaceLaunchTargetsFromStorage,
-  savePluginRightSurfaceLaunchTargetsToStorage,
-  upsertPluginRightSurfaceLaunchTarget,
-  type PluginLaunchTargetStorage,
-} from "./features/plugin/ui/pluginLaunchTargetPersistence";
 import type { AgentPageParams } from "./types/page";
 
 const AppContainer = styled.div`
@@ -148,32 +139,6 @@ const ConnectConfirmDialog = lazy(() =>
   })),
 );
 
-interface AgentSessionTargetState {
-  active: PluginRightSurfaceLaunchTarget | null;
-  recent: PluginRightSurfaceLaunchTarget[];
-}
-
-function getAgentSessionTargetStorage(): PluginLaunchTargetStorage | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-function loadInitialAgentSessionTargetState(): AgentSessionTargetState {
-  const recent = loadPluginRightSurfaceLaunchTargetsFromStorage(
-    getAgentSessionTargetStorage(),
-  );
-  return {
-    active: recent[0] ?? null,
-    recent,
-  };
-}
-
 function AppContent() {
   startupTracker.mark("AppContent: render start");
 
@@ -196,8 +161,6 @@ function AppContent() {
   const [activeAgentStreaming, setActiveAgentStreaming] = useState(false);
   const [backgroundAgentSessionRuntime, setBackgroundAgentSessionRuntime] =
     useState<AgentBackgroundSessionRuntimeSnapshot | null>(null);
-  const [agentSessionTargetState, setAgentSessionTargetState] =
-    useState<AgentSessionTargetState>(loadInitialAgentSessionTargetState);
   const activeAgentPage = requestedPage ?? currentPage;
   const activeAgentPageParams = requestedPageParams ?? pageParams;
   const activeAgentRouteSessionId =
@@ -468,12 +431,6 @@ function AppContent() {
     [],
   );
   useEffect(() => {
-    savePluginRightSurfaceLaunchTargetsToStorage(
-      getAgentSessionTargetStorage(),
-      agentSessionTargetState.recent,
-    );
-  }, [agentSessionTargetState.recent]);
-  useEffect(() => {
     if (activeAgentPage !== "agent") {
       setActiveAgentSessionId(null);
       setActiveAgentStreaming(false);
@@ -483,30 +440,6 @@ function AppContent() {
     setActiveAgentSessionId(activeAgentRouteSessionId);
   }, [activeAgentPage, activeAgentRouteSessionId]);
 
-  const handleAgentSessionTargetChange = useCallback(
-    (target: PluginRightSurfaceLaunchTarget | null) => {
-      const normalized = normalizePluginRightSurfaceLaunchTarget(target);
-      if (!normalized?.sessionId) {
-        setAgentSessionTargetState((current) => ({
-          ...current,
-          active: null,
-        }));
-        return;
-      }
-      setAgentSessionTargetState((current) => {
-        const recent = upsertPluginRightSurfaceLaunchTarget(
-          current.recent,
-          normalized,
-          DEFAULT_PLUGIN_RIGHT_SURFACE_TARGET_LIMIT,
-        );
-        return {
-          active: recent[0] ?? normalized,
-          recent,
-        };
-      });
-    },
-    [],
-  );
   const handleBackgroundSessionRuntimeChange = useCallback(
     (snapshot: AgentBackgroundSessionRuntimeSnapshot | null) => {
       const sessionId = snapshot?.sessionId.trim();
@@ -584,9 +517,6 @@ function AppContent() {
               onBackgroundSessionRuntimeChange={
                 handleBackgroundSessionRuntimeChange
               }
-              activeAgentSessionTarget={agentSessionTargetState.active}
-              agentSessionTargets={agentSessionTargetState.recent}
-              onAgentSessionTargetChange={handleAgentSessionTargetChange}
             />
           </Suspense>
         </MainContent>

@@ -96,65 +96,50 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerPluginCatalogListResponse>
     >;
-    listDirectory(
-      params: appServer.AppServerFileSystemListDirectoryParams,
+    readFile(
+      params: appServer.AppServerFsReadFileParams,
     ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerFileSystemDirectoryListing>
+      appServer.AppServerRequestResult<appServer.AppServerFsReadFileResponse>
     >;
-    readFilePreview(
-      params: appServer.AppServerFileSystemReadFilePreviewParams,
+    writeFile(
+      params: appServer.AppServerFsWriteFileParams,
     ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerFileSystemFilePreview>
-    >;
-    createFile(
-      params: appServer.AppServerFileSystemCreateFileParams,
-    ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerFileSystemMutationResponse>
+      appServer.AppServerRequestResult<appServer.AppServerFsWriteFileResponse>
     >;
     createDirectory(
-      params: appServer.AppServerFileSystemCreateDirectoryParams,
+      params: appServer.AppServerFsCreateDirectoryParams,
     ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerFileSystemMutationResponse>
+      appServer.AppServerRequestResult<appServer.AppServerFsCreateDirectoryResponse>
     >;
-    renameFile(
-      params: appServer.AppServerFileSystemRenameFileParams,
+    getMetadata(
+      params: appServer.AppServerFsGetMetadataParams,
     ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerFileSystemMutationResponse>
+      appServer.AppServerRequestResult<appServer.AppServerFsGetMetadataResponse>
     >;
-    deleteFile(
-      params: appServer.AppServerFileSystemDeleteFileParams,
+    readDirectory(
+      params: appServer.AppServerFsReadDirectoryParams,
     ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerFileSystemMutationResponse>
+      appServer.AppServerRequestResult<appServer.AppServerFsReadDirectoryResponse>
     >;
-    startExecutionProcess(
-      params: appServer.AppServerExecutionProcessStartParams,
+    remove(
+      params: appServer.AppServerFsRemoveParams,
     ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerExecutionProcessStartResponse>
+      appServer.AppServerRequestResult<appServer.AppServerFsRemoveResponse>
     >;
-    writeExecutionProcessStdin(
-      params: appServer.AppServerExecutionProcessWriteStdinParams,
+    copy(
+      params: appServer.AppServerFsCopyParams,
     ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerExecutionProcessEmptyResponse>
+      appServer.AppServerRequestResult<appServer.AppServerFsCopyResponse>
     >;
-    interruptExecutionProcess(
-      params: appServer.AppServerExecutionProcessIdParams,
+    watch(
+      params: appServer.AppServerFsWatchParams,
     ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerExecutionProcessStatusResponse>
+      appServer.AppServerRequestResult<appServer.AppServerFsWatchResponse>
     >;
-    terminateExecutionProcess(
-      params: appServer.AppServerExecutionProcessIdParams,
+    unwatch(
+      params: appServer.AppServerFsUnwatchParams,
     ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerExecutionProcessStatusResponse>
-    >;
-    readExecutionProcessStatus(
-      params: appServer.AppServerExecutionProcessIdParams,
-    ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerExecutionProcessStatusResponse>
-    >;
-    drainExecutionProcessOutput(
-      params?: appServer.AppServerExecutionProcessDrainOutputParams,
-    ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerExecutionProcessDrainOutputResponse>
+      appServer.AppServerRequestResult<appServer.AppServerFsUnwatchResponse>
     >;
     readProjectGitStatus(
       params: appServer.AppServerProjectGitStatusParams,
@@ -275,6 +260,16 @@ declare module "./appServerClient" {
       params: appServer.AppServerThreadShellCommandParams,
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerThreadShellCommandResponse>
+    >;
+    listThreadBackgroundTerminals(
+      params: appServer.AppServerThreadBackgroundTerminalsListParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadBackgroundTerminalsListResponse>
+    >;
+    terminateThreadBackgroundTerminal(
+      params: appServer.AppServerThreadBackgroundTerminalsTerminateParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadBackgroundTerminalsTerminateResponse>
     >;
     archiveThread(
       params: appServer.AppServerThreadArchiveParams,

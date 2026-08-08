@@ -10,16 +10,16 @@ import {
 } from "./pluginInputCapability";
 
 describe("pluginInputCapability", () => {
-  it("应从稳定 Plugin ID 构造结构化 mention", () => {
+  it("应从 canonical Plugin config name 构造结构化 mention", () => {
     expect(
       buildInputbarPluginMention({
-        pluginId: "browser",
+        pluginId: "browser@openai-bundled",
         displayName: "Browser",
       }),
     ).toEqual({
       type: "mention",
       name: "Browser",
-      path: "plugin://browser",
+      path: "plugin://browser@openai-bundled",
     });
   });
 

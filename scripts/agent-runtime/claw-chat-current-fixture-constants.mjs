@@ -114,7 +114,6 @@ export const APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_GET =
   "mediaTaskArtifact/get";
 export const APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_LIST =
   "mediaTaskArtifact/list";
-export const APP_SERVER_METHOD_PLUGIN_INSTALLED_SAVE = "pluginInstalled/save";
 export const APP_SERVER_METHOD_EVIDENCE_EXPORT = "evidence/export";
 export const APP_SERVER_METHOD_DIAGNOSTICS_TRACE_LIST =
   "diagnostics/trace/list";
@@ -357,12 +356,6 @@ export const CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_ID = `${SESSION_ID}-conte
 export const CONTENT_FACTORY_ARTICLE_WORKSPACE_THREAD_ID = `${CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_ID}-thread`;
 export const CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_TITLE =
   "内容工厂 Article Editor Fixture";
-export const CONTENT_FACTORY_ARTICLE_WORKSPACE_TURN_ID =
-  "turn_content_factory_article_workspace";
-export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKER_ACTION_KEY =
-  "worker_dogfood";
-export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKER_TURN_ID = `${CONTENT_FACTORY_ARTICLE_WORKSPACE_SESSION_ID}-worker-turn`;
-export const CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKER_TASK_ID = `${CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKER_TURN_ID}:${CONTENT_FACTORY_ARTICLE_WORKSPACE_WORKER_ACTION_KEY}`;
 export const CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID =
   "artifact-article-1";
 export const CONTENT_FACTORY_ARTICLE_WORKSPACE_IMAGE_ARTIFACT_ID =
@@ -660,8 +653,8 @@ export const CONTENT_FACTORY_ARTICLE_WORKSPACE_ASSERTION_KEYS = [
   "contentFactoryArticleWorkspaceArtifactReadContent",
   "contentFactoryArticleWorkspaceArticleCanvasSurfaceVisible",
   "contentFactoryArticleWorkspaceEditedDraftRestored",
-  "contentFactoryArticleWorkspaceWorkerTurnExecuted",
-  "contentFactoryArticleWorkspaceWorkerAuditFactsHidden",
+  "contentFactoryArticleWorkspaceWorkspacePatchEvidenceProjected",
+  "contentFactoryArticleWorkspaceWorkspacePatchEvidenceScoped",
   "contentFactoryArticleWorkspaceActionResultPatchProjected",
   "contentFactoryArticleWorkspaceStoryboardRendererContractPreserved",
   "contentFactoryArticleWorkspaceDoesNotUseModelTurn",

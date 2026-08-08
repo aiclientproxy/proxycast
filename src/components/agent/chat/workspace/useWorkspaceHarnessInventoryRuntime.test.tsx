@@ -9,41 +9,12 @@ import type {
 import { useWorkspaceHarnessInventoryRuntime } from "./useWorkspaceHarnessInventoryRuntime";
 
 const mockGetAgentRuntimeToolInventory = vi.hoisted(() => vi.fn());
-const mockExecutePrepareRequests = vi.hoisted(() => vi.fn());
-const mockExecuteCallProofRequests = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api/agentRuntime/inventoryClient", () => ({
   getAgentRuntimeToolInventory: mockGetAgentRuntimeToolInventory,
 }));
 
-vi.mock("@/lib/api/mcp", () => ({
-  mcpApi: {
-    executeCallProofRequests: mockExecuteCallProofRequests,
-    executePrepareRequests: mockExecutePrepareRequests,
-  },
-}));
-
-interface HookProps {
-  enabled: boolean;
-  chatMode: "agent" | "general" | "workbench";
-  mappedTheme: string;
-  harnessPanelVisible: boolean;
-  harnessRequestMetadata: Record<string, unknown>;
-  isThemeWorkbench: boolean;
-  themeWorkbenchRunState: "idle" | "auto_running" | "await_user_decision";
-  currentGate: {
-    title: string;
-    description: string;
-  };
-  themeWorkbenchBackendRunState: Parameters<
-    typeof useWorkspaceHarnessInventoryRuntime
-  >[0]["themeWorkbenchBackendRunState"];
-  themeWorkbenchActiveQueueItem: Parameters<
-    typeof useWorkspaceHarnessInventoryRuntime
-  >[0]["themeWorkbenchActiveQueueItem"];
-  harnessPendingCount: number;
-  threadId?: string | null;
-}
+type HookProps = Parameters<typeof useWorkspaceHarnessInventoryRuntime>[0];
 
 interface HookHarness {
   getValue: () => ReturnType<typeof useWorkspaceHarnessInventoryRuntime>;
@@ -73,7 +44,6 @@ function mountHook(initialProps?: Partial<HookProps>): HookHarness {
     themeWorkbenchBackendRunState: null,
     themeWorkbenchActiveQueueItem: null,
     harnessPendingCount: 0,
-    threadId: "thread-1",
     ...initialProps,
   };
 
@@ -83,10 +53,7 @@ function mountHook(initialProps?: Partial<HookProps>): HookHarness {
   }
 
   const render = (nextProps?: Partial<HookProps>) => {
-    currentProps = {
-      ...currentProps,
-      ...nextProps,
-    };
+    currentProps = { ...currentProps, ...nextProps };
     act(() => {
       root.render(<TestComponent />);
     });
@@ -111,13 +78,6 @@ function mountHook(initialProps?: Partial<HookProps>): HookHarness {
   };
 }
 
-async function flushHookEffects() {
-  await act(async () => {
-    await Promise.resolve();
-    await new Promise((resolve) => window.setTimeout(resolve, 0));
-  });
-}
-
 describe("useWorkspaceHarnessInventoryRuntime", () => {
   beforeEach(() => {
     (
@@ -126,13 +86,11 @@ describe("useWorkspaceHarnessInventoryRuntime", () => {
       }
     ).IS_REACT_ACT_ENVIRONMENT = true;
     mockGetAgentRuntimeToolInventory.mockReset();
-    mockExecutePrepareRequests.mockReset();
     mockGetAgentRuntimeToolInventory.mockResolvedValue({
-      sections: [],
-      toolCount: 0,
+      agent_initialized: true,
+      runtime_tools: [],
+      native_tools: [],
     });
-    mockExecutePrepareRequests.mockResolvedValue([]);
-    mockExecuteCallProofRequests.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -212,20 +170,6 @@ describe("useWorkspaceHarnessInventoryRuntime", () => {
   });
 
   it("详情面板未展开时不应预取工具库存", async () => {
-    mockGetAgentRuntimeToolInventory.mockResolvedValueOnce({
-      agent_initialized: true,
-      runtime_tools: [
-        { name: "WebSearch" },
-        { name: "Agent" },
-        { name: "SendMessage" },
-        { name: "TeamCreate" },
-        { name: "TeamDelete" },
-        { name: "ListPeers" },
-        { name: "update_plan" },
-      ],
-      native_tools: [],
-    });
-
     const harness = mountHook({
       enabled: true,
       harnessPanelVisible: false,
@@ -244,12 +188,6 @@ describe("useWorkspaceHarnessInventoryRuntime", () => {
   });
 
   it("详情面板展开时应读取工具库存", async () => {
-    mockGetAgentRuntimeToolInventory.mockResolvedValueOnce({
-      agent_initialized: true,
-      runtime_tools: [{ name: "WebSearch" }],
-      native_tools: [],
-    });
-
     const harness = mountHook({
       enabled: true,
       harnessPanelVisible: true,
@@ -264,458 +202,6 @@ describe("useWorkspaceHarnessInventoryRuntime", () => {
       expect(harness.getValue().toolInventory).toMatchObject({
         agent_initialized: true,
       });
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("应执行插件 MCP prepare requests 并刷新工具库存", async () => {
-    const prepareRequests = [
-      {
-        method: "mcpServer/start",
-        params: { name: "context7" },
-        reason: "server_stopped",
-        status: "candidate",
-      },
-      {
-        method: "mcpTool/listForContext",
-        params: { caller: "plugin:docs-plugin", includeDeferred: true },
-        reason: "tool_listing",
-        status: "candidate",
-      },
-    ];
-    mockGetAgentRuntimeToolInventory
-      .mockResolvedValueOnce({
-        agent_initialized: true,
-        plugin_mcp_targets: [
-          {
-            pluginId: "docs-plugin",
-            expectedToolName: "mcp__context7__resolve-library-id",
-            prepareRequests,
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        agent_initialized: true,
-        plugin_mcp_targets: [
-          {
-            pluginId: "docs-plugin",
-            prepareRequests: [],
-          },
-        ],
-      });
-
-    const harness = mountHook({
-      enabled: true,
-      harnessPanelVisible: true,
-    });
-    mockExecutePrepareRequests.mockResolvedValueOnce([
-      {
-        method: "mcpServer/start",
-        status: "completed",
-      },
-      {
-        method: "mcpTool/listForContext",
-        status: "completed",
-        toolCount: 1,
-        tools: [
-          {
-            name: "mcp__context7__resolve-library-id",
-            server_name: "context7",
-            description: "resolve",
-            input_schema: {},
-          },
-        ],
-      },
-    ]);
-
-    try {
-      await flushHookEffects();
-
-      expect(harness.getValue().mcpPrepareCandidateCount).toBe(2);
-      expect(mockExecutePrepareRequests).not.toHaveBeenCalled();
-
-      await act(async () => {
-        await harness.getValue().prepareMcpTargets();
-      });
-
-      expect(mockExecutePrepareRequests).toHaveBeenCalledTimes(1);
-      expect(mockExecutePrepareRequests).toHaveBeenCalledWith(prepareRequests);
-      expect(mockExecuteCallProofRequests).not.toHaveBeenCalled();
-      expect(mockGetAgentRuntimeToolInventory).toHaveBeenCalledTimes(2);
-      expect(harness.getValue().mcpPrepareError).toBeNull();
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("自动 list proof 未暴露目标工具时不刷新库存", async () => {
-    mockGetAgentRuntimeToolInventory.mockResolvedValueOnce({
-      agent_initialized: true,
-      plugin_mcp_targets: [
-        {
-          pluginId: "docs-plugin",
-          expectedToolName: "mcp__context7__resolve-library-id",
-          prepareRequests: [
-            {
-              method: "mcpTool/listForContext",
-              params: { caller: "plugin:docs-plugin", includeDeferred: true },
-              reason: "tool_listing",
-              status: "candidate",
-            },
-          ],
-        },
-      ],
-    });
-    mockExecutePrepareRequests.mockResolvedValueOnce([
-      {
-        method: "mcpTool/listForContext",
-        status: "completed",
-        toolCount: 1,
-        tools: [
-          {
-            name: "mcp__context7__search",
-            server_name: "context7",
-            description: "search",
-            input_schema: {},
-          },
-        ],
-      },
-    ]);
-
-    const harness = mountHook({
-      enabled: true,
-      harnessPanelVisible: true,
-    });
-
-    try {
-      await flushHookEffects();
-      await flushHookEffects();
-
-      expect(mockExecutePrepareRequests).toHaveBeenCalledTimes(1);
-      expect(mockExecuteCallProofRequests).not.toHaveBeenCalled();
-      expect(mockGetAgentRuntimeToolInventory).toHaveBeenCalledTimes(1);
-      expect(harness.getValue().mcpPrepareError).toBe("准备 MCP 工具失败");
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("MCP prepare 后应执行显式 call proof request 再刷新库存", async () => {
-    const prepareRequests = [
-      {
-        method: "mcpTool/listForContext",
-        params: { caller: "plugin:docs-plugin", includeDeferred: true },
-        reason: "tool_listing",
-        status: "candidate",
-      },
-    ];
-    const callProofRequest = {
-      method: "mcpServer/tool/call",
-      params: {
-        server: "context7",
-        tool: "resolve-library-id",
-        arguments: { libraryName: "react" },
-      },
-      reason: "tool_call_proof",
-      status: "candidate",
-    };
-    mockGetAgentRuntimeToolInventory
-      .mockResolvedValueOnce({
-        agent_initialized: true,
-        plugin_mcp_targets: [
-          {
-            pluginId: "docs-plugin",
-            expectedToolName: "mcp__context7__resolve-library-id",
-            callProofRequest,
-            prepareRequests,
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        agent_initialized: true,
-        plugin_mcp_targets: [
-          {
-            pluginId: "docs-plugin",
-            prepareRequests: [],
-          },
-        ],
-      });
-    mockExecutePrepareRequests.mockResolvedValueOnce([
-      {
-        method: "mcpTool/listForContext",
-        status: "completed",
-        toolCount: 1,
-        tools: [
-          {
-            name: "mcp__context7__resolve-library-id",
-            server_name: "context7",
-            description: "resolve",
-            input_schema: {},
-          },
-        ],
-      },
-    ]);
-    mockExecuteCallProofRequests.mockResolvedValueOnce([
-      {
-        method: "mcpServer/tool/call",
-        status: "completed",
-        result: {
-          content: [{ type: "text", text: "ok" }],
-          is_error: false,
-        },
-      },
-    ]);
-
-    const harness = mountHook({
-      enabled: true,
-      harnessPanelVisible: true,
-    });
-
-    try {
-      await flushHookEffects();
-
-      expect(harness.getValue().mcpPrepareCandidateCount).toBe(2);
-      expect(mockExecutePrepareRequests).not.toHaveBeenCalled();
-      expect(mockExecuteCallProofRequests).not.toHaveBeenCalled();
-
-      await act(async () => {
-        await harness.getValue().prepareMcpTargets();
-      });
-
-      expect(mockExecutePrepareRequests).toHaveBeenCalledWith(prepareRequests);
-      expect(mockExecuteCallProofRequests).toHaveBeenCalledWith(
-        [callProofRequest],
-        "thread-1",
-      );
-      expect(mockGetAgentRuntimeToolInventory).toHaveBeenCalledTimes(2);
-      expect(harness.getValue().mcpPrepareError).toBeNull();
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("MCP call proof 失败时不刷新库存", async () => {
-    const callProofRequest = {
-      method: "mcpServer/tool/call",
-      params: {
-        server: "context7",
-        tool: "resolve-library-id",
-        arguments: { libraryName: "react" },
-      },
-      reason: "tool_call_proof",
-      status: "candidate",
-    };
-    mockGetAgentRuntimeToolInventory.mockResolvedValueOnce({
-      agent_initialized: true,
-      plugin_mcp_targets: [
-        {
-          pluginId: "docs-plugin",
-          expectedToolName: "mcp__context7__resolve-library-id",
-          callProofRequest,
-          prepareRequests: [],
-        },
-      ],
-    });
-    mockExecuteCallProofRequests.mockRejectedValueOnce(
-      new Error("MCP 工具调用证明失败"),
-    );
-
-    const harness = mountHook({
-      enabled: true,
-      harnessPanelVisible: true,
-    });
-
-    try {
-      await flushHookEffects();
-
-      expect(harness.getValue().mcpPrepareCandidateCount).toBe(1);
-
-      await act(async () => {
-        await harness.getValue().prepareMcpTargets();
-      });
-
-      expect(mockExecutePrepareRequests).not.toHaveBeenCalled();
-      expect(mockExecuteCallProofRequests).toHaveBeenCalledWith(
-        [callProofRequest],
-        "thread-1",
-      );
-      expect(mockGetAgentRuntimeToolInventory).toHaveBeenCalledTimes(1);
-      expect(harness.getValue().mcpPrepareError).toBe("MCP 工具调用证明失败");
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("缺少显式 call proof 时应自动使用 toolListRequest 做默认可见性证明", async () => {
-    const defaultProofRequest = {
-      method: "mcpTool/listForContext",
-      params: { caller: "plugin:docs-plugin", includeDeferred: true },
-      reason: "tool_listing_default_proof",
-      status: "candidate",
-    };
-    mockGetAgentRuntimeToolInventory
-      .mockResolvedValueOnce({
-        agent_initialized: true,
-        plugin_mcp_targets: [
-          {
-            pluginId: "docs-plugin",
-            expectedToolName: "mcp__context7__resolve-library-id",
-            prepareRequests: [],
-            toolListRequest: {
-              caller: "plugin:docs-plugin",
-              includeDeferred: true,
-            },
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        agent_initialized: true,
-        plugin_mcp_targets: [
-          {
-            pluginId: "docs-plugin",
-            prepareRequests: [],
-          },
-        ],
-      });
-    mockExecutePrepareRequests.mockResolvedValueOnce([
-      {
-        method: "mcpTool/listForContext",
-        status: "completed",
-        toolCount: 1,
-        tools: [
-          {
-            name: "mcp__context7__resolve-library-id",
-            server_name: "context7",
-            description: "resolve",
-            input_schema: {},
-          },
-        ],
-      },
-    ]);
-
-    const harness = mountHook({
-      enabled: true,
-      harnessPanelVisible: true,
-    });
-
-    try {
-      await flushHookEffects();
-      await flushHookEffects();
-
-      expect(mockExecutePrepareRequests).toHaveBeenCalledWith([
-        defaultProofRequest,
-      ]);
-      expect(mockExecuteCallProofRequests).not.toHaveBeenCalled();
-      expect(mockGetAgentRuntimeToolInventory).toHaveBeenCalledTimes(2);
-      expect(harness.getValue().mcpPrepareError).toBeNull();
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("自动默认 list proof 缺少目标工具时不刷新库存", async () => {
-    mockGetAgentRuntimeToolInventory.mockResolvedValueOnce({
-      agent_initialized: true,
-      plugin_mcp_targets: [
-        {
-          pluginId: "docs-plugin",
-          expectedToolName: "mcp__context7__resolve-library-id",
-          prepareRequests: [],
-          toolListRequest: {
-            caller: "plugin:docs-plugin",
-            includeDeferred: true,
-          },
-        },
-      ],
-    });
-    mockExecutePrepareRequests.mockResolvedValueOnce([
-      {
-        method: "mcpTool/listForContext",
-        status: "completed",
-        toolCount: 1,
-        tools: [
-          {
-            name: "mcp__context7__search",
-            server_name: "context7",
-            description: "search",
-            input_schema: {},
-          },
-        ],
-      },
-    ]);
-
-    const harness = mountHook({
-      enabled: true,
-      harnessPanelVisible: true,
-    });
-
-    try {
-      await flushHookEffects();
-      await flushHookEffects();
-
-      expect(mockExecutePrepareRequests).toHaveBeenCalledTimes(1);
-      expect(mockExecuteCallProofRequests).not.toHaveBeenCalled();
-      expect(mockGetAgentRuntimeToolInventory).toHaveBeenCalledTimes(1);
-      expect(harness.getValue().mcpPrepareError).toBe("准备 MCP 工具失败");
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("没有 candidate prepare request 时不应调用 MCP API", async () => {
-    mockGetAgentRuntimeToolInventory.mockResolvedValueOnce({
-      agent_initialized: true,
-      plugin_mcp_targets: [
-        {
-          pluginId: "docs-plugin",
-          prepareRequests: [
-            {
-              method: "mcpTool/listForContext",
-              params: { caller: "plugin:docs-plugin" },
-              status: "ready",
-            },
-          ],
-        },
-      ],
-    });
-
-    const harness = mountHook({
-      enabled: true,
-      harnessPanelVisible: true,
-    });
-
-    try {
-      await flushHookEffects();
-
-      expect(harness.getValue().mcpPrepareCandidateCount).toBe(0);
-
-      await act(async () => {
-        await harness.getValue().prepareMcpTargets();
-      });
-
-      expect(mockExecutePrepareRequests).not.toHaveBeenCalled();
-      expect(mockExecuteCallProofRequests).not.toHaveBeenCalled();
-      expect(mockGetAgentRuntimeToolInventory).toHaveBeenCalledTimes(1);
-    } finally {
-      harness.unmount();
-    }
-  });
-
-  it("开关关闭时不应继续读取工具库存，也不应生成摘要", async () => {
-    const harness = mountHook({
-      enabled: false,
-      harnessPanelVisible: true,
-    });
-
-    try {
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      expect(mockGetAgentRuntimeToolInventory).not.toHaveBeenCalled();
-      expect(harness.getValue().toolInventory).toBeNull();
-      expect(harness.getValue().generalWorkbenchHarnessSummary).toBeNull();
     } finally {
       harness.unmount();
     }

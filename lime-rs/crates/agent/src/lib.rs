@@ -17,7 +17,6 @@ mod current_provider_turn;
 mod direct_text_generation;
 pub mod durable_memory_fs;
 pub mod filesystem_event_protocol;
-mod host_managed_generation;
 mod knowledge_builder_skill;
 pub mod lime_session_repository;
 mod live_execution_process;
@@ -57,12 +56,6 @@ pub use durable_memory_fs::{
     durable_memory_permission_pattern, is_virtual_memory_path, resolve_durable_memory_root,
     resolve_virtual_memory_path, to_virtual_memory_path, virtual_memory_relative_path,
     DURABLE_MEMORY_VIRTUAL_ROOT, LEGACY_DURABLE_MEMORY_ROOT_ENV, LIME_DURABLE_MEMORY_ROOT_ENV,
-};
-pub use host_managed_generation::{
-    host_managed_generation_session_id, run_host_managed_generation,
-    write_host_managed_generation_status, HostManagedGenerationPlan,
-    HostManagedGenerationRunRequest, HostManagedGenerationRunResult,
-    HOST_MANAGED_GENERATION_SCHEMA, HOST_MANAGED_GENERATION_SOURCE,
 };
 pub use knowledge_builder_skill::{
     run_knowledge_builder_skill, KnowledgeBuilderSkillRequest, KnowledgeBuilderSkillRunner,

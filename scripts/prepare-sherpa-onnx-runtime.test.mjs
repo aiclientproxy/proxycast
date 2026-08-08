@@ -4,6 +4,7 @@ import {
   ensureMacBinaryRpath,
   buildSherpaArchiveExtractCommand,
   MACOS_EXECUTABLE_RPATH,
+  missingSherpaRuntimeLibraries,
   readMachORpaths,
   resolveSherpaOnnxSysVersion,
   resolveSherpaRuntimePlan,
@@ -46,6 +47,19 @@ version = "1.13.0"
       "/repo/lime-rs/target/debug",
       "/repo/lime-rs/target/aarch64-apple-darwin/debug",
     ]);
+  });
+
+  it("不把缺少共享库的缓存目录视为已准备", () => {
+    const plan = {
+      libDir: "/repo/lime-rs/target/sherpa-onnx-prebuilt/runtime/lib",
+      libs: ["libonnxruntime.1.24.4.dylib", "libsherpa-onnx-c-api.dylib"],
+    };
+
+    expect(
+      missingSherpaRuntimeLibraries(plan, {
+        exists: (filePath) => filePath.endsWith("libonnxruntime.1.24.4.dylib"),
+      }),
+    ).toEqual(["libsherpa-onnx-c-api.dylib"]);
   });
 
   it("为 Windows 解析预置运行时归档和库文件", () => {

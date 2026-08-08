@@ -1,5 +1,5 @@
 use app_server_protocol::error_codes;
-use app_server_protocol::protocol::v2::{ClientRequest, Method};
+use app_server_protocol::protocol::v2::{ClientRequest, Method, METHOD_MEMORY_RESET};
 use app_server_protocol::{JsonRpcError, JsonRpcRequest, RequestId};
 
 pub(super) fn decode(request: &JsonRpcRequest) -> Result<Option<ClientRequest>, JsonRpcError> {
@@ -15,6 +15,17 @@ pub(super) fn decode(request: &JsonRpcRequest) -> Result<Option<ClientRequest>, 
         return Err(JsonRpcError::new(
             error_codes::INVALID_PARAMS,
             "v2 requests must use threadId; sessionId is not a supported field",
+        ));
+    }
+    let memory_reset_params_valid = match request.params.as_ref() {
+        None | Some(serde_json::Value::Null) => true,
+        Some(serde_json::Value::Object(params)) => params.is_empty(),
+        Some(_) => false,
+    };
+    if request.method == METHOD_MEMORY_RESET && !memory_reset_params_valid {
+        return Err(JsonRpcError::new(
+            error_codes::INVALID_PARAMS,
+            "memory/reset accepts only omitted, null, or empty object params",
         ));
     }
 
@@ -125,6 +136,9 @@ pub(super) fn into_parts(
         ClientRequest::ThreadMemoryModeSet { id, params } => {
             parts(id, Method::ThreadMemoryModeSet, params)
         }
+        ClientRequest::MemoryReset { id } => {
+            Ok((id, Method::MemoryReset.as_str().to_string(), None))
+        }
         ClientRequest::ThreadShellCommand { id, params } => {
             parts(id, Method::ThreadShellCommand, params)
         }
@@ -143,6 +157,25 @@ pub(super) fn into_parts(
         ClientRequest::TurnStart { id, params } => parts(id, Method::TurnStart, params),
         ClientRequest::TurnSteer { id, params } => parts(id, Method::TurnSteer, params),
         ClientRequest::TurnInterrupt { id, params } => parts(id, Method::TurnInterrupt, params),
+        ClientRequest::FsReadFile { id, params } => parts(id, Method::FsReadFile, params),
+        ClientRequest::FsWriteFile { id, params } => parts(id, Method::FsWriteFile, params),
+        ClientRequest::FsCreateDirectory { id, params } => {
+            parts(id, Method::FsCreateDirectory, params)
+        }
+        ClientRequest::FsGetMetadata { id, params } => parts(id, Method::FsGetMetadata, params),
+        ClientRequest::FsReadDirectory { id, params } => parts(id, Method::FsReadDirectory, params),
+        ClientRequest::FsRemove { id, params } => parts(id, Method::FsRemove, params),
+        ClientRequest::FsCopy { id, params } => parts(id, Method::FsCopy, params),
+        ClientRequest::FsWatch { id, params } => parts(id, Method::FsWatch, params),
+        ClientRequest::FsUnwatch { id, params } => parts(id, Method::FsUnwatch, params),
+        ClientRequest::ProcessSpawn { id, params } => parts(id, Method::ProcessSpawn, params),
+        ClientRequest::ProcessWriteStdin { id, params } => {
+            parts(id, Method::ProcessWriteStdin, params)
+        }
+        ClientRequest::ProcessResizePty { id, params } => {
+            parts(id, Method::ProcessResizePty, params)
+        }
+        ClientRequest::ProcessKill { id, params } => parts(id, Method::ProcessKill, params),
     }
 }
 
@@ -164,7 +197,7 @@ fn parts(
 mod tests {
     use super::*;
     use app_server_protocol::protocol::v2::{
-        METHOD_MEDIA_READ, METHOD_PLUGIN_ENABLED_SET, METHOD_PLUGIN_INSTALL,
+        METHOD_MEDIA_READ, METHOD_MEMORY_RESET, METHOD_PLUGIN_ENABLED_SET, METHOD_PLUGIN_INSTALL,
         METHOD_PLUGIN_INSTALLED, METHOD_PLUGIN_LIST, METHOD_PLUGIN_READ, METHOD_PLUGIN_UNINSTALL,
         METHOD_SKILLS_LIST, METHOD_THREAD_READ, METHOD_THREAD_RESUME, METHOD_TURN_INTERRUPT,
     };
@@ -187,6 +220,21 @@ mod tests {
         let request = request(METHOD_THREAD_READ, json!({ "threadId": 42 }));
 
         let error = decode(&request).expect_err("invalid v2 params must fail closed");
+        assert_eq!(error.code, error_codes::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn memory_reset_accepts_only_unit_params() {
+        for params in [None, Some(serde_json::Value::Null), Some(json!({}))] {
+            let request = JsonRpcRequest::new(RequestId::Integer(1), METHOD_MEMORY_RESET, params);
+            let decoded = decode(&request)
+                .expect("valid memory/reset params")
+                .expect("v2 request");
+            assert_eq!(decoded.method(), Method::MemoryReset);
+        }
+
+        let error = decode(&request(METHOD_MEMORY_RESET, json!({ "scope": "global" })))
+            .expect_err("legacy scoped reset params must fail closed");
         assert_eq!(error.code, error_codes::INVALID_PARAMS);
     }
 

@@ -98,29 +98,6 @@ function readString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function readNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
-function pickRestorablePluginParams(params: unknown): PageParams | null {
-  if (!isRecord(params)) {
-    return null;
-  }
-
-  const appId = readString(params.appId);
-  if (!appId) {
-    return null;
-  }
-
-  return {
-    appId,
-    entryKey: readString(params.entryKey),
-    launchRequestKey: readNumber(params.launchRequestKey),
-  };
-}
-
 function pickRestorableAgentParams(params: unknown): AgentPageParams | null {
   if (!isRecord(params)) {
     return null;
@@ -173,15 +150,12 @@ function readRestoredNavigationState(): {
     }
 
     const page = parsed.page;
-    if (page !== "plugin" && page !== "agent") {
+    if (page !== "agent") {
       clearRestoredNavigationState();
       return null;
     }
 
-    const params =
-      page === "plugin"
-        ? pickRestorablePluginParams(parsed.params)
-        : pickRestorableAgentParams(parsed.params);
+    const params = pickRestorableAgentParams(parsed.params);
     if (!params) {
       clearRestoredNavigationState();
       return null;
@@ -204,11 +178,7 @@ function persistRestorableNavigation(page: Page, params: PageParams): void {
 
   try {
     const restorableParams =
-      page === "plugin"
-        ? pickRestorablePluginParams(params)
-        : page === "agent"
-          ? pickRestorableAgentParams(params)
-          : null;
+      page === "agent" ? pickRestorableAgentParams(params) : null;
     if (!restorableParams) {
       clearRestoredNavigationState();
       return;

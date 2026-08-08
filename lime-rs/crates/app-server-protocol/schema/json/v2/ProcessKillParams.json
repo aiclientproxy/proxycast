@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "processHandle": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "processHandle"
+  ],
+  "title": "ProcessKillParams",
+  "type": "object"
+}

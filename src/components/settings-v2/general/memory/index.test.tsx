@@ -19,7 +19,7 @@ const {
   mockReadMemoryStore,
   mockRebuildMemoryStoreIndex,
   mockResolveMemoryStoreReviewNote,
-  mockResetMemoryStore,
+  mockResetMemory,
 } = vi.hoisted(() => ({
   mockAddMemoryStoreNote: vi.fn(),
   mockConsolidateMemoryStore: vi.fn(),
@@ -29,7 +29,7 @@ const {
   mockReadMemoryStore: vi.fn(),
   mockRebuildMemoryStoreIndex: vi.fn(),
   mockResolveMemoryStoreReviewNote: vi.fn(),
-  mockResetMemoryStore: vi.fn(),
+  mockResetMemory: vi.fn(),
 }));
 const {
   mockInstallSoulStylePack,
@@ -61,7 +61,7 @@ vi.mock("@/lib/api/memoryStore", () => ({
   readMemoryStore: mockReadMemoryStore,
   rebuildMemoryStoreIndex: mockRebuildMemoryStoreIndex,
   resolveMemoryStoreReviewNote: mockResolveMemoryStoreReviewNote,
-  resetMemoryStore: mockResetMemoryStore,
+  resetMemory: mockResetMemory,
 }));
 
 vi.mock("@/lib/api/soulStylePacks", () => ({
@@ -255,13 +255,7 @@ beforeEach(async () => {
     truncated: false,
     nextCursor: null,
   });
-  mockResetMemoryStore.mockResolvedValue({
-    rootScope: "global",
-    rootPath: "/data/memories",
-    removedFiles: 3,
-    removedDirectories: 4,
-    preservedSoul: true,
-  });
+  mockResetMemory.mockResolvedValue({});
   mockRebuildMemoryStoreIndex.mockResolvedValue({
     rootScope: "global",
     rootPath: "/data/memories",
@@ -383,14 +377,10 @@ describe("MemorySettings", () => {
     expect(window.confirm).toHaveBeenCalledWith(
       expect.stringContaining("AI personality"),
     );
-    expect(mockResetMemoryStore).toHaveBeenCalledWith({
-      scope: "global",
-    });
+    expect(mockResetMemory).toHaveBeenCalledWith();
     expect(mockListMemoryStoreReviewNotes).toHaveBeenCalledTimes(2);
     expect(mockListMemoryStore).toHaveBeenCalledTimes(2);
-    expect(document.body.textContent).toContain(
-      "Memory files reset. Removed 3 files and 4 folders.",
-    );
+    expect(document.body.textContent).toContain("Memory files reset.");
   });
 
   it("应展示待审阅笔记并通过 current API 接受或拒绝", async () => {

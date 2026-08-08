@@ -939,9 +939,9 @@ mod tests {
                     },
                     "artifact": {
                         "artifactId": "workspace-patch-current",
-                        "kind": "content_factory.workspace_patch",
+                        "kind": "workspace_patch",
                         "metadata": {
-                            "contentFactoryWorkspacePatch": {
+                            "workspacePatch": {
                                 "schemaVersion": "article-workspace.v1",
                                 "appId": "content-factory-app",
                                 "sessionId": thread.session_id,

@@ -11,7 +11,7 @@ import {
   readMemoryStore,
   rebuildMemoryStoreIndex,
   resolveMemoryStoreReviewNote,
-  resetMemoryStore,
+  resetMemory,
   type MemoryStoreHealthResponse,
   type MemoryStoreReviewNote,
 } from "@/lib/api/memoryStore";
@@ -204,10 +204,7 @@ export function MemoryStoreStatusPanel({
         setRolloutLoadFailed(true);
         if (showSuccess) {
           showMessage(
-            memoryPanelT(
-              t,
-              "settings.memory.store.message.rolloutLoadFailed",
-            ),
+            memoryPanelT(t, "settings.memory.store.message.rolloutLoadFailed"),
           );
         }
       } finally {
@@ -238,14 +235,9 @@ export function MemoryStoreStatusPanel({
     }
     setResetting(true);
     try {
-      const response = await resetMemoryStore({ scope: "global" });
+      await resetMemory();
       await refreshMemoryStorePanels();
-      showMessage(
-        memoryPanelT(t, "settings.memory.store.message.resetDone", {
-          files: response.removedFiles,
-          directories: response.removedDirectories,
-        }),
-      );
+      showMessage(memoryPanelT(t, "settings.memory.store.message.resetDone"));
     } catch (error) {
       console.error("重置记忆文件失败:", error);
       showMessage(memoryPanelT(t, "settings.memory.store.message.resetFailed"));
@@ -591,10 +583,7 @@ export function MemoryStoreStatusPanel({
           value={noteContent}
           onChange={(event) => setNoteContent(event.target.value)}
           data-testid="settings-memory-note-textarea"
-          placeholder={memoryPanelT(
-            t,
-            "settings.memory.store.notePlaceholder",
-          )}
+          placeholder={memoryPanelT(t, "settings.memory.store.notePlaceholder")}
           className="mt-3 min-h-24 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
         />
       </div>
@@ -672,7 +661,10 @@ export function MemoryStoreStatusPanel({
                               t,
                               "settings.memory.store.reviewResolving",
                             )
-                          : memoryPanelT(t, "settings.memory.store.reviewAccept")}
+                          : memoryPanelT(
+                              t,
+                              "settings.memory.store.reviewAccept",
+                            )}
                       </button>
                       <button
                         type="button"

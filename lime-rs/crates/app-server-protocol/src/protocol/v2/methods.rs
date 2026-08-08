@@ -28,6 +28,7 @@ pub const METHOD_THREAD_SEARCH: &str = "thread/search";
 pub const METHOD_THREAD_SEARCH_OCCURRENCES: &str = "thread/searchOccurrences";
 pub const METHOD_THREAD_SETTINGS_UPDATE: &str = "thread/settings/update";
 pub const METHOD_THREAD_MEMORY_MODE_SET: &str = "thread/memoryMode/set";
+pub const METHOD_MEMORY_RESET: &str = "memory/reset";
 pub const METHOD_THREAD_SHELL_COMMAND: &str = "thread/shellCommand";
 pub const METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION: &str = "thread/approveGuardianDeniedAction";
 pub const METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN: &str = "thread/backgroundTerminals/clean";
@@ -63,6 +64,22 @@ pub const METHOD_HOOK_COMPLETED: &str = "hook/completed";
 pub const METHOD_TURN_START: &str = "turn/start";
 pub const METHOD_TURN_STEER: &str = "turn/steer";
 pub const METHOD_TURN_INTERRUPT: &str = "turn/interrupt";
+pub const METHOD_FS_READ_FILE: &str = "fs/readFile";
+pub const METHOD_FS_WRITE_FILE: &str = "fs/writeFile";
+pub const METHOD_FS_CREATE_DIRECTORY: &str = "fs/createDirectory";
+pub const METHOD_FS_GET_METADATA: &str = "fs/getMetadata";
+pub const METHOD_FS_READ_DIRECTORY: &str = "fs/readDirectory";
+pub const METHOD_FS_REMOVE: &str = "fs/remove";
+pub const METHOD_FS_COPY: &str = "fs/copy";
+pub const METHOD_FS_WATCH: &str = "fs/watch";
+pub const METHOD_FS_UNWATCH: &str = "fs/unwatch";
+pub const METHOD_PROCESS_SPAWN: &str = "process/spawn";
+pub const METHOD_PROCESS_WRITE_STDIN: &str = "process/writeStdin";
+pub const METHOD_PROCESS_RESIZE_PTY: &str = "process/resizePty";
+pub const METHOD_PROCESS_KILL: &str = "process/kill";
+pub const METHOD_PROCESS_OUTPUT_DELTA: &str = "process/outputDelta";
+pub const METHOD_PROCESS_EXITED: &str = "process/exited";
+pub const METHOD_FS_CHANGED: &str = "fs/changed";
 pub const METHOD_THREAD_STARTED: &str = "thread/started";
 pub const METHOD_THREAD_ARCHIVED: &str = "thread/archived";
 pub const METHOD_THREAD_DELETED: &str = "thread/deleted";
@@ -165,6 +182,8 @@ pub enum Method {
     ThreadSettingsUpdate,
     #[serde(rename = "thread/memoryMode/set")]
     ThreadMemoryModeSet,
+    #[serde(rename = "memory/reset")]
+    MemoryReset,
     #[serde(rename = "thread/shellCommand")]
     ThreadShellCommand,
     #[serde(rename = "thread/approveGuardianDeniedAction")]
@@ -225,6 +244,32 @@ pub enum Method {
     TurnSteer,
     #[serde(rename = "turn/interrupt")]
     TurnInterrupt,
+    #[serde(rename = "fs/readFile")]
+    FsReadFile,
+    #[serde(rename = "fs/writeFile")]
+    FsWriteFile,
+    #[serde(rename = "fs/createDirectory")]
+    FsCreateDirectory,
+    #[serde(rename = "fs/getMetadata")]
+    FsGetMetadata,
+    #[serde(rename = "fs/readDirectory")]
+    FsReadDirectory,
+    #[serde(rename = "fs/remove")]
+    FsRemove,
+    #[serde(rename = "fs/copy")]
+    FsCopy,
+    #[serde(rename = "fs/watch")]
+    FsWatch,
+    #[serde(rename = "fs/unwatch")]
+    FsUnwatch,
+    #[serde(rename = "process/spawn")]
+    ProcessSpawn,
+    #[serde(rename = "process/writeStdin")]
+    ProcessWriteStdin,
+    #[serde(rename = "process/resizePty")]
+    ProcessResizePty,
+    #[serde(rename = "process/kill")]
+    ProcessKill,
 }
 
 impl Method {
@@ -257,6 +302,7 @@ impl Method {
             Self::ThreadSearchOccurrences => METHOD_THREAD_SEARCH_OCCURRENCES,
             Self::ThreadSettingsUpdate => METHOD_THREAD_SETTINGS_UPDATE,
             Self::ThreadMemoryModeSet => METHOD_THREAD_MEMORY_MODE_SET,
+            Self::MemoryReset => METHOD_MEMORY_RESET,
             Self::ThreadShellCommand => METHOD_THREAD_SHELL_COMMAND,
             Self::ThreadApproveGuardianDeniedAction => METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION,
             Self::ThreadBackgroundTerminalsClean => METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN,
@@ -289,6 +335,19 @@ impl Method {
             Self::TurnStart => METHOD_TURN_START,
             Self::TurnSteer => METHOD_TURN_STEER,
             Self::TurnInterrupt => METHOD_TURN_INTERRUPT,
+            Self::FsReadFile => METHOD_FS_READ_FILE,
+            Self::FsWriteFile => METHOD_FS_WRITE_FILE,
+            Self::FsCreateDirectory => METHOD_FS_CREATE_DIRECTORY,
+            Self::FsGetMetadata => METHOD_FS_GET_METADATA,
+            Self::FsReadDirectory => METHOD_FS_READ_DIRECTORY,
+            Self::FsRemove => METHOD_FS_REMOVE,
+            Self::FsCopy => METHOD_FS_COPY,
+            Self::FsWatch => METHOD_FS_WATCH,
+            Self::FsUnwatch => METHOD_FS_UNWATCH,
+            Self::ProcessSpawn => METHOD_PROCESS_SPAWN,
+            Self::ProcessWriteStdin => METHOD_PROCESS_WRITE_STDIN,
+            Self::ProcessResizePty => METHOD_PROCESS_RESIZE_PTY,
+            Self::ProcessKill => METHOD_PROCESS_KILL,
         }
     }
 
@@ -321,6 +380,7 @@ impl Method {
             METHOD_THREAD_SEARCH_OCCURRENCES => Some(Self::ThreadSearchOccurrences),
             METHOD_THREAD_SETTINGS_UPDATE => Some(Self::ThreadSettingsUpdate),
             METHOD_THREAD_MEMORY_MODE_SET => Some(Self::ThreadMemoryModeSet),
+            METHOD_MEMORY_RESET => Some(Self::MemoryReset),
             METHOD_THREAD_SHELL_COMMAND => Some(Self::ThreadShellCommand),
             METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION => {
                 Some(Self::ThreadApproveGuardianDeniedAction)
@@ -355,6 +415,19 @@ impl Method {
             METHOD_TURN_START => Some(Self::TurnStart),
             METHOD_TURN_STEER => Some(Self::TurnSteer),
             METHOD_TURN_INTERRUPT => Some(Self::TurnInterrupt),
+            METHOD_FS_READ_FILE => Some(Self::FsReadFile),
+            METHOD_FS_WRITE_FILE => Some(Self::FsWriteFile),
+            METHOD_FS_CREATE_DIRECTORY => Some(Self::FsCreateDirectory),
+            METHOD_FS_GET_METADATA => Some(Self::FsGetMetadata),
+            METHOD_FS_READ_DIRECTORY => Some(Self::FsReadDirectory),
+            METHOD_FS_REMOVE => Some(Self::FsRemove),
+            METHOD_FS_COPY => Some(Self::FsCopy),
+            METHOD_FS_WATCH => Some(Self::FsWatch),
+            METHOD_FS_UNWATCH => Some(Self::FsUnwatch),
+            METHOD_PROCESS_SPAWN => Some(Self::ProcessSpawn),
+            METHOD_PROCESS_WRITE_STDIN => Some(Self::ProcessWriteStdin),
+            METHOD_PROCESS_RESIZE_PTY => Some(Self::ProcessResizePty),
+            METHOD_PROCESS_KILL => Some(Self::ProcessKill),
             _ => None,
         }
     }
@@ -388,6 +461,7 @@ pub const METHODS: &[&str] = &[
     METHOD_THREAD_SEARCH_OCCURRENCES,
     METHOD_THREAD_SETTINGS_UPDATE,
     METHOD_THREAD_MEMORY_MODE_SET,
+    METHOD_MEMORY_RESET,
     METHOD_THREAD_SHELL_COMMAND,
     METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION,
     METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN,
@@ -418,6 +492,19 @@ pub const METHODS: &[&str] = &[
     METHOD_TURN_START,
     METHOD_TURN_STEER,
     METHOD_TURN_INTERRUPT,
+    METHOD_FS_READ_FILE,
+    METHOD_FS_WRITE_FILE,
+    METHOD_FS_CREATE_DIRECTORY,
+    METHOD_FS_GET_METADATA,
+    METHOD_FS_READ_DIRECTORY,
+    METHOD_FS_REMOVE,
+    METHOD_FS_COPY,
+    METHOD_FS_WATCH,
+    METHOD_FS_UNWATCH,
+    METHOD_PROCESS_SPAWN,
+    METHOD_PROCESS_WRITE_STDIN,
+    METHOD_PROCESS_RESIZE_PTY,
+    METHOD_PROCESS_KILL,
 ];
 
 pub const NOTIFICATION_METHODS: &[&str] = &[
@@ -426,6 +513,7 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_ERROR,
     METHOD_SKILLS_CHANGED,
     METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
+    METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED,
     METHOD_HOOK_STARTED,
     METHOD_HOOK_COMPLETED,
     METHOD_THREAD_STARTED,
@@ -458,6 +546,9 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_THREAD_GOAL_UPDATED,
     METHOD_THREAD_GOAL_CLEARED,
     METHOD_SERVER_REQUEST_RESOLVED,
+    METHOD_PROCESS_OUTPUT_DELTA,
+    METHOD_PROCESS_EXITED,
+    METHOD_FS_CHANGED,
 ];
 
 pub const SERVER_REQUEST_METHODS: &[&str] = &[

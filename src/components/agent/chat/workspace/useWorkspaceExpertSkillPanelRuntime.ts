@@ -3,7 +3,6 @@ import type { ExpertAgentLaunchParams } from "@/types/page";
 import { useExpertWorkspaceSkillRuntime } from "./useExpertWorkspaceSkillRuntime";
 import { useWorkspaceExpertAgentLaunchSyncRuntime } from "./useWorkspaceExpertAgentLaunchSyncRuntime";
 import { useWorkspacePluginCatalogSuggestions } from "./useWorkspacePluginCatalogSuggestions";
-import { useWorkspacePluginRuntimeContext } from "./useWorkspacePluginRuntimeContext";
 import {
   resolveExpertPanelRequestMetadata,
   resolveSessionExpertRequestMetadata,
@@ -117,9 +116,6 @@ export function useWorkspaceExpertSkillPanelRuntime({
   );
   const [pluginSuggestionsEnabled, setPluginSuggestionsEnabled] =
     useState(false);
-  const workspacePluginRuntimeContext = useWorkspacePluginRuntimeContext({
-    requestMetadata: workspaceRequestMetadataWithExpertSkills ?? undefined,
-  });
   const workspacePluginCatalogSuggestions =
     useWorkspacePluginCatalogSuggestions({ enabled: pluginSuggestionsEnabled });
   const refreshWorkspacePluginCatalogSuggestions =
@@ -150,7 +146,6 @@ export function useWorkspaceExpertSkillPanelRuntime({
     workspacePluginSuggestionsError: workspacePluginCatalogSuggestions.error,
     workspacePluginSuggestionsLoading:
       workspacePluginCatalogSuggestions.loading,
-    workspacePluginRuntimeContext,
     workspaceRequestMetadataWithExpertSkills,
     workspaceSkillBindings,
   };

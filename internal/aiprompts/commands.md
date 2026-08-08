@@ -95,7 +95,56 @@ hosted refresh。
 成功的 `plugin/install`、`plugin/uninstall`、`plugin/enabled/set` 与首页 `app/list` 读取经过现有 server
 notification hook 发布 typed `app/list/updated { data: AppInfo[] }`，Renderer 通过 App Server typed event bus 消费并
 重新读取 Apps。禁止新增第二 Apps catalog、`window` 自定义事件事实源、TUI Apps UI、compat wrapper 或生产 mock
-fallback；Apps 专用真实 Electron Gate B 与 hosted connector tool snapshot 是独立未完成证据，不由协议和单测冒充。
+fallback。Apps 专用真实 Electron Gate B 已完成：App Center 经 typed `app/list/updated` 触发 fresh
+`app/list + app/installed` 读取，并从本地 Plugin 的 `pending` 投影切换到停用后的 `disabled`。仍未完成的证据只剩
+hosted connector model-visible tool snapshot 与真实 `callable=true` provider readiness；不得用本地 Plugin enabled
+状态替代。
+
+## Memory Reset 主链
+
+全局记忆重置只允许走：
+
+`src/lib/api/memoryStore.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server memory/reset -> RuntimeCore -> MemoryAppDataSource -> LocalMemoryBackend`
+
+current method 为 exact `memory/reset`，只接受 omitted、`null` 或空对象 params，返回空对象。它只清理全局 memory
+root 并重建受管目录，不删除 Thread/Turn/Item、event log、projection store 或 memory root 外的 soul 配置。旧 scoped
+`memoryStore/reset`、`MemoryStoreResetParams/Response`、typed client 与设置页调用均为
+`dead / deleted / forbidden-to-restore`；workspace memory reset 不再作为未被产品消费的平级公开能力保留。
+
+## Process Control 主链
+
+Codex exact 子进程控制只允许走 connection-scoped App Server 主链：
+
+`typed App Server client -> process/{spawn,writeStdin,resizePty,kill} -> ProcessServer -> tool-runtime local process supervisor -> process/{outputDelta,exited}`
+
+`processHandle` 只在发起请求的 `ConnectionId` 内唯一；spawn response 必须先于该进程的 notification，output 必须先于
+exited。断连、response 发送失败或 notification writer 失败都终止该连接拥有的进程。stdin close 后的非空写入、
+非 TTY resize、零值 terminal size、重复 active handle 和未知 handle 均 fail closed；output cap 默认 1 MiB，
+omitted、`null` 与 value 保持三态，notification 的 `deltaBase64` 保留 raw bytes。
+
+Desktop Workspace 不直接消费 connection handle。代码工作台只允许通过
+`src/lib/api/backgroundTerminals.ts -> thread/backgroundTerminals/list -> command itemId 匹配 -> thread/backgroundTerminals/terminate`
+终止 Thread-owned 后台终端；不提供旧 status refresh、drain、signal-only interrupt 或任意 stdin 写入控件。旧公开
+`executionProcess/*`、v0 DTO/schema、typed helpers 和 Renderer gateway 均为
+`dead / deleted / forbidden-to-restore`；内部 `ExecutionProcessServer` 继续作为 Thread shell、unified exec 和后台终端
+的 current supervisor owner，不是公开兼容层。
+
+## Filesystem 主链
+
+Codex exact 文件 IO 与 watcher 只允许走 connection-aware App Server 主链：
+
+`src/lib/api/fileBrowser.ts -> typed App Server client -> fs/{readFile,writeFile,createDirectory,getMetadata,readDirectory,remove,copy,watch,unwatch} -> App Server FsServer -> fs/changed`
+
+所有路径必须为绝对路径；文件 bytes 在协议边界统一使用 base64。`watchId` 只在发起请求的 `ConnectionId` 内唯一，
+`fs/changed` 只发送给该 owner；断连只清理本连接的 watcher。Desktop 文件浏览器继续保留目录、预览、文件类型和
+symlink 等 GUI 投影，但不得定义第二套 file wire。rename 由 Renderer 组合 `getMetadata -> copy -> remove`，当前为非原子
+Desktop 操作，不新增 Codex 不存在的 rename method。
+
+旧 `fileSystem/*`、v0 DTO/schema、App Server `processor/file.rs`、RuntimeCore file projection、services
+`file_browser_service` 与旧 renderer aliases 均为 `dead / deleted / forbidden-to-restore`。`get_file_manager_locations`
+和 `get_file_icon_data_url` 仍是 Electron Desktop Host 的系统壳能力，不属于业务文件 IO，也不能承接 fs fallback。
+Office/PDF 文本提取不属于 `fs/readFile`；若产品继续需要，应在独立 current 文档能力 owner 中重建，禁止恢复旧
+`fileSystem/readFilePreview`。
 
 ## Browser Session 主链
 

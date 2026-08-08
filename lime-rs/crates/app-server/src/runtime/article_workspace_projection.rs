@@ -18,7 +18,6 @@ pub(super) fn article_workspace_from_events(
         for patch in workspace_patches_from_event(event) {
             workspace.apply_patch(event, &patch);
         }
-        workspace.apply_worker_evidence(event);
     }
     workspace.into_value()
 }
@@ -115,12 +114,6 @@ impl<'a> ArticleWorkspaceBuilder<'a> {
             self.push_worker_evidence(worker_evidence);
         }
         self.updated_at = Some(event.timestamp.clone());
-    }
-
-    fn apply_worker_evidence(&mut self, event: &AgentEvent) {
-        if let Some(worker_evidence) = worker_evidence_from_event(event) {
-            self.push_worker_evidence(worker_evidence);
-        }
     }
 
     fn should_reject_edited_draft(&self, edited_draft: &Value) -> bool {
@@ -241,22 +234,18 @@ fn workspace_patches_from_event(event: &AgentEvent) -> Vec<Value> {
         payload.get("article_workspace"),
         payload.get("workspacePatch"),
         payload.get("workspace_patch"),
-        payload.get("contentFactoryWorkspacePatch"),
         metadata.and_then(|value| value.get("articleWorkspace")),
         metadata.and_then(|value| value.get("article_workspace")),
         metadata.and_then(|value| value.get("workspacePatch")),
         metadata.and_then(|value| value.get("workspace_patch")),
-        metadata.and_then(|value| value.get("contentFactoryWorkspacePatch")),
         artifact.and_then(|value| value.get("articleWorkspace")),
         artifact.and_then(|value| value.get("article_workspace")),
         artifact.and_then(|value| value.get("workspacePatch")),
         artifact.and_then(|value| value.get("workspace_patch")),
-        artifact.and_then(|value| value.get("contentFactoryWorkspacePatch")),
         artifact_metadata.and_then(|value| value.get("articleWorkspace")),
         artifact_metadata.and_then(|value| value.get("article_workspace")),
         artifact_metadata.and_then(|value| value.get("workspacePatch")),
         artifact_metadata.and_then(|value| value.get("workspace_patch")),
-        artifact_metadata.and_then(|value| value.get("contentFactoryWorkspacePatch")),
     ]
     .into_iter()
     .flatten()
@@ -504,97 +493,6 @@ fn source_artifact_from_event(event: &AgentEvent) -> Option<Value> {
     }))
 }
 
-fn worker_evidence_from_event(event: &AgentEvent) -> Option<Value> {
-    let worker_metadata = worker_metadata_from_event(event);
-    let payload_source = string_field(&event.payload, &["source"]);
-    let is_worker_event =
-        worker_metadata.is_some() || payload_source.as_deref() == Some("plugin_task_worker");
-    if !is_worker_event {
-        return None;
-    }
-
-    let artifact = event.payload.get("artifact").unwrap_or(&event.payload);
-    let status = match event.event_type.as_str() {
-        "plugin_worker.retry" | "runtime.error" | "turn.failed" => "failed".to_string(),
-        "artifact.snapshot" => "completed".to_string(),
-        "plugin_worker.hook" => {
-            string_field(&event.payload, &["status"]).unwrap_or_else(|| "unknown".to_string())
-        }
-        _ => "unknown".to_string(),
-    };
-    let message = string_field(
-        &event.payload,
-        &[
-            "message",
-            "errorMessage",
-            "error_message",
-            "error",
-            "reason",
-        ],
-    );
-
-    let mut worker_evidence = json!({
-        "id": format!("{}:workerEvidence", event.event_id),
-        "eventId": event.event_id,
-        "turnId": worker_string_field(worker_metadata, &["turnId", "turn_id"])
-            .or_else(|| event.turn_id.clone()),
-        "status": status,
-        "source": "plugin_task_worker",
-        "eventType": event.event_type,
-        "appId": worker_string_field(worker_metadata, &["appId", "app_id"])
-            .or_else(|| string_field(&event.payload, &["appId", "app_id"])),
-        "taskId": worker_string_field(worker_metadata, &["taskId", "task_id"])
-            .or_else(|| string_field(&event.payload, &["taskId", "task_id"])),
-        "taskKind": worker_string_field(worker_metadata, &["taskKind", "task_kind"])
-            .or_else(|| string_field(&event.payload, &["taskKind", "task_kind"])),
-        "workerEntrypoint": worker_string_field(worker_metadata, &["workerEntrypoint", "worker_entrypoint"]),
-        "inputSummary": worker_string_field(worker_metadata, &["inputSummary", "input_summary"]),
-        "outputSummary": worker_string_field(worker_metadata, &["outputSummary", "output_summary"]),
-        "outputObjectCount": worker_number_field(worker_metadata, &["outputObjectCount", "output_object_count"]),
-        "artifactRef": string_field(artifact, &["artifactId", "artifact_id", "id", "artifactRef", "artifact_ref", "path"]),
-        "artifactKind": worker_string_field(worker_metadata, &["outputArtifactKind", "output_artifact_kind"])
-            .or_else(|| string_field(artifact, &["kind", "artifactKind", "artifact_kind"])),
-        "workflowKey": worker_string_field(worker_metadata, &["workflowKey", "workflow_key"]),
-        "subagents": worker_metadata_array_field(worker_metadata, &["subagents", "sub_agents"]),
-        "skillRefs": worker_metadata_array_field(worker_metadata, &["skillRefs", "skill_refs"]),
-        "cliRefs": worker_metadata_array_field(worker_metadata, &["cliRefs", "cli_refs"]),
-        "connectorRefs": worker_metadata_array_field(worker_metadata, &["connectorRefs", "connector_refs"]),
-        "hookPolicy": worker_metadata_object_field(worker_metadata, &["hookPolicy", "hook_policy"]),
-        "orchestration": worker_metadata_array_field(worker_metadata, &["orchestration"]),
-        "title": string_field(artifact, &["title", "artifactTitle", "artifact_title"]),
-        "errorCode": string_field(&event.payload, &["errorCode", "error_code"])
-            .or_else(|| worker_string_field(worker_metadata, &["errorCode", "error_code"])),
-        "errorMessage": message,
-        "failureCategory": string_field(&event.payload, &["failureCategory", "failure_category"])
-            .or_else(|| worker_string_field(worker_metadata, &["failureCategory", "failure_category"])),
-        "retryable": event.payload.get("retryable").and_then(Value::as_bool)
-            .or_else(|| worker_bool_field(worker_metadata, &["retryable"])),
-        "retryAdvice": string_field(&event.payload, &["retryAdvice", "retry_advice"])
-            .or_else(|| worker_string_field(worker_metadata, &["retryAdvice", "retry_advice"])),
-        "retryAttempt": event.payload.get("retryAttempt").or_else(|| event.payload.get("retry_attempt")).and_then(Value::as_u64)
-            .or_else(|| worker_number_field(worker_metadata, &["retryAttempt", "retry_attempt"])),
-        "retryMaxAttempts": event.payload.get("retryMaxAttempts").or_else(|| event.payload.get("retry_max_attempts")).and_then(Value::as_u64)
-            .or_else(|| worker_number_field(worker_metadata, &["retryMaxAttempts", "retry_max_attempts"])),
-        "hookKey": string_field(&event.payload, &["hookKey", "hook_key"])
-            .or_else(|| worker_string_field(worker_metadata, &["hookKey", "hook_key"])),
-        "hookEvent": string_field(&event.payload, &["hookEvent", "hook_event"])
-            .or_else(|| worker_string_field(worker_metadata, &["hookEvent", "hook_event"])),
-        "hookScope": string_field(&event.payload, &["hookScope", "hook_scope"])
-            .or_else(|| worker_string_field(worker_metadata, &["hookScope", "hook_scope"])),
-        "hookEntrypoint": string_field(&event.payload, &["hookEntrypoint", "hook_entrypoint"])
-            .or_else(|| worker_string_field(worker_metadata, &["hookEntrypoint", "hook_entrypoint"])),
-        "hookRequired": event.payload.get("hookRequired").or_else(|| event.payload.get("hook_required")).and_then(Value::as_bool)
-            .or_else(|| worker_bool_field(worker_metadata, &["hookRequired", "hook_required"])),
-        "reasonCode": string_field(&event.payload, &["reasonCode", "reason_code"])
-            .or_else(|| worker_string_field(worker_metadata, &["reasonCode", "reason_code"])),
-        "resultSummary": string_field(&event.payload, &["resultSummary", "result_summary"])
-            .or_else(|| worker_string_field(worker_metadata, &["resultSummary", "result_summary"])),
-        "updatedAt": event.timestamp,
-    });
-    sanitize_worker_evidence_for_article_workspace(&mut worker_evidence);
-    Some(worker_evidence)
-}
-
 fn worker_evidence_from_patch(event: &AgentEvent, patch: &Value) -> Vec<Value> {
     patch
         .get("workerEvidence")
@@ -630,7 +528,7 @@ fn worker_evidence_item_from_patch(
         .or_insert_with(|| json!(event.event_type));
     object
         .entry("source".to_string())
-        .or_insert_with(|| json!("plugin_task_worker"));
+        .or_insert_with(|| json!("workspace_patch"));
     object
         .entry("updatedAt".to_string())
         .or_insert_with(|| json!(event.timestamp));
@@ -694,16 +592,6 @@ fn worker_evidence_dedupe_key(worker_evidence: &Value) -> Option<String> {
     let task_id = string_field(worker_evidence, &["taskId", "task_id"])?;
     let turn_id = string_field(worker_evidence, &["turnId", "turn_id"]).unwrap_or_default();
     let status = string_field(worker_evidence, &["status"]).unwrap_or_default();
-    let event_type =
-        string_field(worker_evidence, &["eventType", "event_type"]).unwrap_or_default();
-    if event_type == "plugin_worker.hook" {
-        let hook_scope =
-            string_field(worker_evidence, &["hookScope", "hook_scope"]).unwrap_or_default();
-        let hook_key = string_field(worker_evidence, &["hookKey", "hook_key"]).unwrap_or_default();
-        return Some(format!(
-            "{turn_id}:{task_id}:{event_type}:{hook_scope}:{hook_key}:{status}"
-        ));
-    }
     let retry_attempt = worker_evidence
         .get("retryAttempt")
         .or_else(|| worker_evidence.get("retry_attempt"))
@@ -760,69 +648,6 @@ fn worker_evidence_value_score(value: &Value) -> usize {
                 .count()
         })
         .unwrap_or_default()
-}
-
-fn worker_metadata_from_event(event: &AgentEvent) -> Option<&Value> {
-    let payload = &event.payload;
-    let artifact = payload.get("artifact");
-    payload
-        .get("pluginWorker")
-        .or_else(|| payload.get("plugin_worker"))
-        .or_else(|| {
-            payload
-                .get("metadata")
-                .and_then(|metadata| metadata.get("pluginWorker"))
-        })
-        .or_else(|| {
-            payload
-                .get("metadata")
-                .and_then(|metadata| metadata.get("plugin_worker"))
-        })
-        .or_else(|| {
-            artifact
-                .and_then(|artifact| artifact.get("metadata"))
-                .and_then(|metadata| metadata.get("pluginWorker"))
-        })
-        .or_else(|| {
-            artifact
-                .and_then(|artifact| artifact.get("metadata"))
-                .and_then(|metadata| metadata.get("plugin_worker"))
-        })
-        .filter(|value| value.is_object())
-}
-
-fn worker_string_field(value: Option<&Value>, keys: &[&str]) -> Option<String> {
-    value.and_then(|value| string_field(value, keys))
-}
-
-fn worker_number_field(value: Option<&Value>, keys: &[&str]) -> Option<u64> {
-    value.and_then(|value| keys.iter().find_map(|key| value.get(*key)?.as_u64()))
-}
-
-fn worker_bool_field(value: Option<&Value>, keys: &[&str]) -> Option<bool> {
-    value.and_then(|value| keys.iter().find_map(|key| value.get(*key)?.as_bool()))
-}
-
-fn worker_metadata_array_field(value: Option<&Value>, keys: &[&str]) -> Option<Value> {
-    value.and_then(|value| {
-        keys.iter().find_map(|key| {
-            value
-                .get(*key)
-                .filter(|candidate| candidate.is_array())
-                .cloned()
-        })
-    })
-}
-
-fn worker_metadata_object_field(value: Option<&Value>, keys: &[&str]) -> Option<Value> {
-    value.and_then(|value| {
-        keys.iter().find_map(|key| {
-            value
-                .get(*key)
-                .filter(|candidate| candidate.is_object())
-                .cloned()
-        })
-    })
 }
 
 fn default_layout_state() -> Value {

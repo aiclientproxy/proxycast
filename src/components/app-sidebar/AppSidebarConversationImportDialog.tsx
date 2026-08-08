@@ -19,7 +19,7 @@ import {
   type ConversationImportThreadPreviewResponse,
   type ImportedThreadSummary,
 } from "@/lib/api/conversationImport";
-import { selectPluginDirectory } from "@/lib/api/plugins";
+import { open as openDesktopDialog } from "@/lib/desktop-host/dialog";
 import { formatNumber } from "@/i18n/format";
 import {
   DEFAULT_CONVERSATION_IMPORT_SOURCE_CLIENT,
@@ -333,14 +333,16 @@ export function AppSidebarConversationImportDialog({
     setSelectingSourceRoot(true);
     setError(null);
     try {
-      const result = await selectPluginDirectory({
+      const result = await openDesktopDialog({
         title: t(
           "navigation.sidebar.importDialog.sourceRoot.dialogTitle",
           "Select local history data directory",
         ),
+        directory: true,
+        multiple: false,
       });
-      const nextSourceRoot = normalizeOptional(result.path);
-      if (result.cancelled || !nextSourceRoot) {
+      const nextSourceRoot = normalizeOptional(result);
+      if (!nextSourceRoot) {
         return;
       }
       sourceRootRef.current = nextSourceRoot;

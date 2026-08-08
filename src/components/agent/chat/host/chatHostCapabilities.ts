@@ -1,22 +1,13 @@
-import * as chatHostDialog from "@/lib/desktop-host/plugin-dialog";
+import * as chatHostDialog from "@/lib/desktop-host/dialog";
 import type {
   OpenDialogOptions,
   SaveDialogOptions,
-} from "@/lib/desktop-host/plugin-dialog";
-import { selectPluginDirectory } from "@/lib/api/plugins";
-import { getElectronHostBridge } from "@/lib/electron-host";
+} from "@/lib/desktop-host/dialog";
 
 export async function requestChatHostOpenPath(
   options?: OpenDialogOptions & { multiple?: false },
 ): Promise<string | null> {
-  if (!options?.directory || getElectronHostBridge()?.dialog) {
-    return chatHostDialog.open(options);
-  }
-
-  const result = await selectPluginDirectory({
-    ...(options.title ? { title: options.title } : {}),
-  });
-  return result.cancelled ? null : result.path;
+  return chatHostDialog.open(options);
 }
 
 export function requestChatHostSavePath(

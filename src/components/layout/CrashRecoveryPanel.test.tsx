@@ -54,7 +54,7 @@ vi.mock(
   }),
 );
 
-vi.mock("@/lib/desktop-host/plugin-dialog", () => ({
+vi.mock("@/lib/desktop-host/dialog", () => ({
   open: vi.fn(async () => null),
 }));
 

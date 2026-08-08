@@ -12,7 +12,6 @@
 //! - `config`: 配置管理（类型、YAML、热重载、导入导出）
 //! - `connect`: Deep Link 协议和中转商注册表
 //! - `middleware`: HTTP 中间件（认证、限速）
-//! - `plugin`: 插件系统（加载、管理、UI、安装）
 //! - `session`: 会话管理（限速、粘性路由）
 //! - `session_files`: 会话文件存储
 
@@ -35,7 +34,6 @@ pub mod config;
 pub mod connect;
 pub mod errors;
 pub mod middleware;
-pub mod plugin;
 pub mod session;
 pub mod session_files;
 pub mod tool_calling;

@@ -1,6 +1,6 @@
 # Plugin v2 路线图
 
-状态：`active / macOS core Gate B passed`
+状态：`historical reference / superseded by Plugin v3`
 
 更新时间：2026-08-05
 
@@ -49,13 +49,13 @@ Marketplace / local package
 - 不保留旧 manifest 双读双写、旧 worker fallback 或 renderer mock 生产降级。
 - 不让 Electron main process 成为插件业务后端。
 
-## 当前阶段与下一刀
+## 历史实施快照
 
-当前阶段是 `V2-5 Claw 与 Right Surface / V2-7 release gate`。
+当时阶段是 `V2-5 Claw 与 Right Surface / V2-7 release gate`。
 
-已完成的 current 主链包括：唯一 `.codex-plugin/plugin.json` manifest、App Server typed catalog/install/enable store、Plugin Skill/MCP activation、结构化 `plugin://` mention、MCP tool/elicitation、MCP App Right Surface 与 Renderer reload 恢复。2026-08-05 fresh Gate B 证据位于 `.lime/qc/gui-evidence/plugin-v2-current-electron-fixture/`。
+历史快照包含：`.codex-plugin/plugin.json` manifest、App Server typed catalog/install/enable store、Plugin Skill/MCP activation、结构化 `plugin://` mention、MCP tool/elicitation、MCP App Right Surface 与 Renderer reload 恢复。2026-08-05 证据位于 `.lime/qc/gui-evidence/plugin-v2-current-electron-fixture/`；这些内容不构成 v3 标准符合性证明。
 
-下一刀是把 Gate B 从受控 runtime 安装动作推进到真实 App Center 安装点击、Claw `@` picker 点击和卸载后历史可读，补齐 GB-01/07/13；随后补跨进程 cold restore、Windows 安装到卸载证据和剩余 Apps/Hooks/Browser/file surface。旧实现的物理删除仍须先列出精确目标并取得用户确认，旧版高价值文档继续保留为历史资料。
+后续不再沿 v2 继续扩展；标准化、旧实现清退和新验证顺序统一转入 [Plugin v3](../v3/README.md)。
 
 当前路线图完成度：`75%`。核心 macOS runtime/Right Surface 闭环已通过，但尚未达到跨平台 release gate。
 

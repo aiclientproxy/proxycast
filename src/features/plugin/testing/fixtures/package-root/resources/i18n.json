@@ -1,9 +1,0 @@
-{
-  "locales": {
-    "zh-CN": "../locales/zh-CN.json",
-    "zh-TW": "../locales/zh-TW.json",
-    "en-US": "../locales/en-US.json",
-    "ja-JP": "../locales/ja-JP.json",
-    "ko-KR": "../locales/ko-KR.json"
-  }
-}

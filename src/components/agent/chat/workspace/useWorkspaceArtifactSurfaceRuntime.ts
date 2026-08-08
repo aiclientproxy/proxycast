@@ -1,14 +1,10 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import type { LayoutMode } from "@/lib/workspace/workbenchContract";
 import type { WorkspaceWorkbenchRequestsController } from "../hooks/useWorkspaceWorkbenchRequests";
-import { useWorkspacePluginHistoryRestoreRuntime } from "./useWorkspacePluginHistoryRestoreRuntime";
 import { useWorkspaceSceneAppExecutionSurfaceRuntime } from "./useWorkspaceSceneAppExecutionSurfaceRuntime";
 import { useWorkspaceServiceSkillExecutionCardRuntime } from "./useWorkspaceServiceSkillExecutionCardRuntime";
 
 export interface UseWorkspaceArtifactSurfaceRuntimeParams {
-  pluginHistoryRestore: Parameters<
-    typeof useWorkspacePluginHistoryRestoreRuntime
-  >[0];
   sceneAppExecution: Parameters<
     typeof useWorkspaceSceneAppExecutionSurfaceRuntime
   >[0];
@@ -20,14 +16,11 @@ export interface UseWorkspaceArtifactSurfaceRuntimeParams {
 }
 
 export function useWorkspaceArtifactSurfaceRuntime({
-  pluginHistoryRestore,
   sceneAppExecution,
   serviceSkillExecution,
   setLayoutMode,
   workbenchRequests,
 }: UseWorkspaceArtifactSurfaceRuntimeParams) {
-  const { landingCard: workspacePluginHistoryRestoreLandingCard } =
-    useWorkspacePluginHistoryRestoreRuntime(pluginHistoryRestore);
   const { card: serviceSkillExecutionCard } =
     useWorkspaceServiceSkillExecutionCardRuntime(serviceSkillExecution);
   const sceneAppExecutionSurfaceRuntime =
@@ -55,6 +48,5 @@ export function useWorkspaceArtifactSurfaceRuntime({
     sceneAppReviewDecisionDialogNode:
       sceneAppExecutionSurfaceRuntime.reviewDecisionDialogNode,
     serviceSkillExecutionCard,
-    workspacePluginHistoryRestoreLandingCard,
   };
 }

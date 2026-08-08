@@ -889,6 +889,24 @@
       ],
       "type": "object"
     },
+    "FsChangedNotification": {
+      "properties": {
+        "changedPaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "watchId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changedPaths",
+        "watchId"
+      ],
+      "type": "object"
+    },
     "GitInfo": {
       "properties": {
         "branch": {
@@ -1660,6 +1678,68 @@
         "turnId"
       ],
       "type": "object"
+    },
+    "ProcessExitedNotification": {
+      "properties": {
+        "exitCode": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "processHandle": {
+          "type": "string"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "stderrCapReached": {
+          "type": "boolean"
+        },
+        "stdout": {
+          "type": "string"
+        },
+        "stdoutCapReached": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "exitCode",
+        "processHandle",
+        "stderr",
+        "stderrCapReached",
+        "stdout",
+        "stdoutCapReached"
+      ],
+      "type": "object"
+    },
+    "ProcessOutputDeltaNotification": {
+      "properties": {
+        "capReached": {
+          "type": "boolean"
+        },
+        "deltaBase64": {
+          "type": "string"
+        },
+        "processHandle": {
+          "type": "string"
+        },
+        "stream": {
+          "$ref": "#/$defs/ProcessOutputStream"
+        }
+      },
+      "required": [
+        "capReached",
+        "deltaBase64",
+        "processHandle",
+        "stream"
+      ],
+      "type": "object"
+    },
+    "ProcessOutputStream": {
+      "enum": [
+        "stderr",
+        "stdout"
+      ],
+      "type": "string"
     },
     "ReasoningSummaryPartAddedNotification": {
       "properties": {
@@ -4273,6 +4353,54 @@
         },
         "params": {
           "$ref": "#/$defs/ModelSafetyBufferingUpdatedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "fs/changed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FsChangedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "process/outputDelta",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProcessOutputDeltaNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "process/exited",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProcessExitedNotification"
         }
       },
       "required": [

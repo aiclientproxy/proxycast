@@ -68,7 +68,7 @@ vi.mock("@/lib/api/voiceModels", () => ({
   testTranscribeVoiceModelFile: mockTestTranscribeVoiceModelFile,
 }));
 
-vi.mock("@/lib/desktop-host/plugin-dialog", () => ({
+vi.mock("@/lib/desktop-host/dialog", () => ({
   open: mockOpenDialog,
 }));
 

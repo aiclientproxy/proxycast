@@ -62,7 +62,6 @@ import { useAppSidebarProjectActions } from "@/components/app-sidebar/useAppSide
 import { useAppSidebarSessions } from "@/components/app-sidebar/useAppSidebarSessions";
 import type { SidebarOpenedProjectSummary } from "@/components/app-sidebar/sidebarConversationGroups";
 import {
-  PLUGIN_RUNTIME_SIDEBAR_COLLAPSE_SOURCE,
   APP_SIDEBAR_COLLAPSED_STORAGE_KEY,
   APP_SIDEBAR_COLLAPSE_EVENT,
   SIDEBAR_NAV_LABEL_KEYS,
@@ -250,7 +249,6 @@ export function AppSidebar({
     ?.agentEntry;
   const activeAgentPageParams = activePageParams as AgentPageParams | undefined;
   const isAgentWorkspace = activePage === "agent";
-  const isPluginRuntime = activePage === "plugin";
   const isClawTaskCenter = isAgentWorkspace && agentEntry === "claw";
   const isNewTaskHome = activePage === "agent" && agentEntry === "new-task";
   const [rememberedProjectId, setRememberedProjectId] = useState<string | null>(
@@ -340,7 +338,6 @@ export function AppSidebar({
   });
   const collapsedRef = useRef(collapsed);
   const collapseRestoreBySourceRef = useRef<Record<string, boolean>>({});
-  const pluginRuntimeSidebarManualOverrideRef = useRef(false);
   useEffect(() => {
     collapsedRef.current = collapsed;
   }, [collapsed]);
@@ -760,33 +757,9 @@ export function AppSidebar({
     setCollapsed(false);
   }, [isClawTaskCenter, isNewTaskHome]);
 
-  useEffect(() => {
-    const source = PLUGIN_RUNTIME_SIDEBAR_COLLAPSE_SOURCE;
-    if (isPluginRuntime) {
-      if (!(source in collapseRestoreBySourceRef.current)) {
-        collapseRestoreBySourceRef.current[source] = collapsedRef.current;
-        pluginRuntimeSidebarManualOverrideRef.current = false;
-      }
-      if (!pluginRuntimeSidebarManualOverrideRef.current) {
-        setCollapsed(true);
-      }
-      return;
-    }
-
-    pluginRuntimeSidebarManualOverrideRef.current = false;
-    const previous = collapseRestoreBySourceRef.current[source];
-    delete collapseRestoreBySourceRef.current[source];
-    if (typeof previous === "boolean") {
-      setCollapsed(previous);
-    }
-  }, [isPluginRuntime]);
-
   const toggleSidebarCollapsed = useCallback(() => {
-    if (isPluginRuntime) {
-      pluginRuntimeSidebarManualOverrideRef.current = true;
-    }
     setCollapsed((value) => !value);
-  }, [isPluginRuntime]);
+  }, []);
 
   const shouldShowConversationList =
     !collapsed &&

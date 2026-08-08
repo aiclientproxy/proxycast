@@ -92,7 +92,7 @@ vi.mock("@/lib/api/oemCloudControlPlane", () => {
   };
 });
 
-vi.mock("@/lib/desktop-host/plugin-shell", () => ({
+vi.mock("@/lib/desktop-host/shell", () => ({
   open: hoisted.shellOpenMock,
 }));
 

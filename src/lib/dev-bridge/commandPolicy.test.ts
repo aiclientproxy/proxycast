@@ -43,7 +43,6 @@ describe("commandPolicy", () => {
     expect(isBridgeTruthCommand("get_automation_jobs")).toBe(false);
     expect(isBridgeTruthCommand("project_memory_get")).toBe(false);
     for (const command of [
-      "plugin_select_directory",
       "save_layered_design_project_export",
       "read_layered_design_project_export",
       "recognize_layered_design_text",
@@ -52,6 +51,9 @@ describe("commandPolicy", () => {
       expect(isBridgeTruthCommand(command)).toBe(false);
       expect(shouldDisallowMockFallbackCommand(command)).toBe(true);
     }
+    expect(shouldDisallowMockFallbackCommand("plugin_select_directory")).toBe(
+      false,
+    );
     expect(isBridgeTruthCommand("get_local_skills_for_app")).toBe(false);
     expect(shouldDisallowMockFallbackCommand("get_local_skills_for_app")).toBe(
       false,
@@ -111,7 +113,7 @@ describe("commandPolicy", () => {
       "plugin_runtime_submit_host_response",
     ]) {
       expect(isBridgeTruthCommand(command)).toBe(false);
-      expect(shouldDisallowMockFallbackCommand(command)).toBe(true);
+      expect(shouldDisallowMockFallbackCommand(command)).toBe(false);
     }
     expect(isBridgeTruthCommand("create_image_generation_task_artifact")).toBe(
       false,
@@ -306,10 +308,10 @@ describe("commandPolicy", () => {
     ).toBe("default");
     expect(
       resolveDevBridgeCommandTimeoutProfile("plugin_runtime_get_task"),
-    ).toBe("agent-runtime");
+    ).toBe("default");
     expect(
       resolveDevBridgeCommandTimeoutProfile("plugin_start_ui_runtime"),
-    ).toBe("plugin-ui-runtime-start");
+    ).toBe("default");
     expect(
       resolveDevBridgeCommandTimeoutProfile(
         "save_layered_design_project_export",
@@ -322,7 +324,7 @@ describe("commandPolicy", () => {
     ).toBe("layered-design-project");
     expect(
       resolveDevBridgeCommandTimeoutProfile("plugin_select_directory"),
-    ).toBe("desktop-user-interaction");
+    ).toBe("default");
     expect(
       resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
         request: {
@@ -336,22 +338,6 @@ describe("commandPolicy", () => {
         },
       }),
     ).toBe("app-server-import");
-    expect(
-      resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
-        request: {
-          lines: [
-            JSON.stringify({
-              id: "ui-runtime-start",
-              method: "pluginUiRuntime/start",
-              params: {
-                appId: "content-factory-sdk-fixture-app",
-                entryKey: "dashboard",
-              },
-            }),
-          ],
-        },
-      }),
-    ).toBe("plugin-ui-runtime-start");
     expect(resolveDevBridgeCommandTimeoutProfile("execute_skill")).toBe(
       "default",
     );
@@ -496,51 +482,41 @@ describe("commandPolicy", () => {
         },
       }),
     ).toBe("app-server-read");
-    expect(
-      resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
-        request: {
-          lines: [
-            JSON.stringify({
-              id: "local-package-inspect",
-              method: "pluginLocalPackage/inspect",
-              params: {
-                appDir:
-                  "/Users/coso/Documents/dev/ai/limecloud/content-factory-app",
-              },
-            }),
-          ],
-        },
-      }),
-    ).toBe("plugin-package-inspect");
-    expect(
-      resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
-        request: {
-          lines: [
-            JSON.stringify({
-              id: "local-package-export",
-              method: "pluginLocalPackage/export",
-              params: {
-                appDir:
-                  "/Users/coso/Documents/dev/ai/limecloud/content-factory-app",
-              },
-            }),
-          ],
-        },
-      }),
-    ).toBe("plugin-package-inspect");
-    expect(
-      resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
-        request: {
-          lines: [
-            JSON.stringify({
-              id: "installed-save",
-              method: "pluginInstalled/save",
-              params: { state: { appId: "content-factory-app" } },
-            }),
-          ],
-        },
-      }),
-    ).toBe("plugin-installed-write");
+    for (const method of [
+      "plugin/list",
+      "plugin/search",
+      "plugin/read",
+      "plugin/install",
+      "plugin/uninstall",
+      "plugin/installed",
+      "plugin/enabled/set",
+    ]) {
+      expect(
+        resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
+          request: {
+            lines: [
+              JSON.stringify({ id: `plugin-${method}`, method, params: {} }),
+            ],
+          },
+        }),
+      ).toBe("app-server-read");
+    }
+    for (const method of [
+      "pluginLocalPackage/inspect",
+      "pluginLocalPackage/export",
+      "pluginInstalled/save",
+      "pluginUiRuntime/start",
+    ]) {
+      expect(
+        resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
+          request: {
+            lines: [
+              JSON.stringify({ id: `retired-${method}`, method, params: {} }),
+            ],
+          },
+        }),
+      ).toBe("truth");
+    }
     expect(
       resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
         request: {
@@ -745,8 +721,8 @@ describe("commandPolicy", () => {
           lines: [
             JSON.stringify({
               id: "file-write",
-              method: "fileSystem/createFile",
-              params: { path: "/tmp/demo.txt" },
+              method: "fs/writeFile",
+              params: { path: "/tmp/demo.txt", dataBase64: "" },
             }),
           ],
         },

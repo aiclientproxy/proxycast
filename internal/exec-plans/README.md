@@ -65,7 +65,7 @@
 - `@` 命令本地执行纠偏计划：`internal/exec-plans/at-command-local-execution-alignment-plan.md`
 - Agent QC 运营级测试体系执行计划：`internal/exec-plans/agent-qc-ops-testing-plan.md`
 - Agent App v2 独立安装与 Runtime 底座拆分执行计划：`internal/exec-plans/agentapp-v2-standalone-runtime.md`
-- Plugin v2 current 实施与 Gate B 计划：`internal/exec-plans/plugin-v2-current-plan.md`
+- Plugin v3 标准化与旧实现清退计划：`internal/exec-plans/plugin-v3-standardization-and-retirement-plan.md`
 - AI 图层化设计实现计划：`internal/exec-plans/ai-layered-design-implementation-plan.md`
 - 图片能力 feature-flag / extension-tool 执行计划：`internal/exec-plans/image-capability-feature-flag-extension-tool-plan.md`
 - 图片能力 feature-flag / extension-tool 进度：`internal/exec-plans/image-capability-feature-flag-extension-tool-progress.md`

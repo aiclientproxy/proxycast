@@ -1,12 +1,6 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Pause,
-  RefreshCw,
-  SendHorizontal,
-  Square,
-  Terminal,
-} from "lucide-react";
+import { Square, Terminal } from "lucide-react";
 import type { CodingWorkbenchView } from "@limecloud/agent-runtime-projection";
 import type { AgentRuntimeFileCheckpointThreadSummary } from "@/lib/api/agentRuntime/sessionTypes";
 import type { ActionRequired, ConfirmResponse } from "../types";
@@ -33,13 +27,8 @@ interface CodingWorkbenchOutputPanelProps {
 }
 
 export interface CodingWorkbenchCommandProcessControls {
-  onInterruptProcess?: (processId: string) => void | Promise<unknown>;
-  onTerminateProcess?: (processId: string) => void | Promise<unknown>;
-  onRefreshProcessStatus?: (processId: string) => void | Promise<unknown>;
-  onDrainProcessOutput?: (processId: string) => void | Promise<unknown>;
-  onWriteProcessStdin?: (
-    processId: string,
-    data: string,
+  onTerminateBackgroundTerminal?: (
+    itemId: string,
   ) => void | Promise<unknown>;
 }
 
@@ -162,10 +151,10 @@ export function CodingWorkbenchOutputPanel({
                   ) : null}
                   {command.processId ? (
                     <CodingWorkbenchCommandProcessRow
+                      itemId={command.commandId}
                       processId={command.processId}
                       executionProcessStatus={command.executionProcessStatus}
                       executionSurface={command.executionSurface}
-                      stdinWritable={command.stdinWritable}
                       processControls={processControls}
                     />
                   ) : null}
@@ -236,32 +225,22 @@ export function CodingWorkbenchOutputPanel({
 }
 
 function CodingWorkbenchCommandProcessRow({
+  itemId,
   processId,
   executionProcessStatus,
   executionSurface,
-  stdinWritable,
   processControls,
 }: {
+  itemId: string;
   processId: string;
   executionProcessStatus?: string;
   executionSurface?: string;
-  stdinWritable?: boolean;
   processControls?: CodingWorkbenchCommandProcessControls;
 }) {
   const { t } = useTranslation("agent");
   const live = isLiveExecutionProcessStatus(executionProcessStatus);
   const hasControls =
-    live &&
-    Boolean(
-      processControls?.onInterruptProcess ||
-      processControls?.onTerminateProcess ||
-      processControls?.onRefreshProcessStatus ||
-      processControls?.onDrainProcessOutput,
-    );
-  const canWriteStdin =
-    live &&
-    stdinWritable === true &&
-    Boolean(processControls?.onWriteProcessStdin);
+    live && Boolean(processControls?.onTerminateBackgroundTerminal);
 
   return (
     <div
@@ -293,25 +272,22 @@ function CodingWorkbenchCommandProcessRow({
         </div>
         {hasControls ? (
           <CodingWorkbenchCommandProcessButtons
+            itemId={itemId}
             processId={processId}
             processControls={processControls}
           />
         ) : null}
       </div>
-      {canWriteStdin ? (
-        <CodingWorkbenchCommandStdinForm
-          processId={processId}
-          onWriteProcessStdin={processControls?.onWriteProcessStdin}
-        />
-      ) : null}
     </div>
   );
 }
 
 function CodingWorkbenchCommandProcessButtons({
+  itemId,
   processId,
   processControls,
 }: {
+  itemId: string;
   processId: string;
   processControls?: CodingWorkbenchCommandProcessControls;
 }) {
@@ -320,12 +296,12 @@ function CodingWorkbenchCommandProcessButtons({
 
   const run = async (
     action: string,
-    handler: ((processId: string) => void | Promise<unknown>) | undefined,
+    handler: (() => void | Promise<unknown>) | undefined,
   ) => {
     if (!handler || pendingAction) return;
     setPendingAction(action);
     try {
-      await handler(processId);
+      await handler();
     } finally {
       setPendingAction(null);
     }
@@ -336,48 +312,7 @@ function CodingWorkbenchCommandProcessButtons({
       className="flex shrink-0 items-center gap-1"
       data-testid="coding-workbench-command-process-controls"
     >
-      {processControls?.onRefreshProcessStatus ? (
-        <ProcessControlButton
-          label={t(
-            "agentChat.canvasWorkbench.coding.outputs.processRefreshAria",
-            { id: processId },
-          )}
-          pending={pendingAction === "refresh"}
-          disabled={Boolean(pendingAction)}
-          onClick={() => run("refresh", processControls.onRefreshProcessStatus)}
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-        </ProcessControlButton>
-      ) : null}
-      {processControls?.onDrainProcessOutput ? (
-        <ProcessControlButton
-          label={t(
-            "agentChat.canvasWorkbench.coding.outputs.processDrainAria",
-            {
-              id: processId,
-            },
-          )}
-          pending={pendingAction === "drain"}
-          disabled={Boolean(pendingAction)}
-          onClick={() => run("drain", processControls.onDrainProcessOutput)}
-        >
-          <Terminal className="h-3.5 w-3.5" />
-        </ProcessControlButton>
-      ) : null}
-      {processControls?.onInterruptProcess ? (
-        <ProcessControlButton
-          label={t(
-            "agentChat.canvasWorkbench.coding.outputs.processInterruptAria",
-            { id: processId },
-          )}
-          pending={pendingAction === "interrupt"}
-          disabled={Boolean(pendingAction)}
-          onClick={() => run("interrupt", processControls.onInterruptProcess)}
-        >
-          <Pause className="h-3.5 w-3.5" />
-        </ProcessControlButton>
-      ) : null}
-      {processControls?.onTerminateProcess ? (
+      {processControls?.onTerminateBackgroundTerminal ? (
         <ProcessControlButton
           label={t(
             "agentChat.canvasWorkbench.coding.outputs.processTerminateAria",
@@ -385,79 +320,16 @@ function CodingWorkbenchCommandProcessButtons({
           )}
           pending={pendingAction === "terminate"}
           disabled={Boolean(pendingAction)}
-          onClick={() => run("terminate", processControls.onTerminateProcess)}
+          onClick={() =>
+            run("terminate", () =>
+              processControls.onTerminateBackgroundTerminal?.(itemId),
+            )
+          }
         >
           <Square className="h-3.5 w-3.5" />
         </ProcessControlButton>
       ) : null}
     </div>
-  );
-}
-
-function CodingWorkbenchCommandStdinForm({
-  processId,
-  onWriteProcessStdin,
-}: {
-  processId: string;
-  onWriteProcessStdin?: (
-    processId: string,
-    data: string,
-  ) => void | Promise<unknown>;
-}) {
-  const { t } = useTranslation("agent");
-  const [value, setValue] = useState("");
-  const [pending, setPending] = useState(false);
-  const canSubmit =
-    value.length > 0 && !pending && Boolean(onWriteProcessStdin);
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!canSubmit || !onWriteProcessStdin) return;
-    const data = value.endsWith("\n") ? value : `${value}\n`;
-    setPending(true);
-    try {
-      await onWriteProcessStdin(processId, data);
-      setValue("");
-    } finally {
-      setPending(false);
-    }
-  };
-
-  return (
-    <form
-      className="flex min-h-8 items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5"
-      data-testid="coding-workbench-command-stdin-form"
-      onSubmit={handleSubmit}
-    >
-      <input
-        type="text"
-        value={value}
-        aria-label={t(
-          "agentChat.canvasWorkbench.coding.outputs.stdinInputAria",
-          { id: processId },
-        )}
-        placeholder={t(
-          "agentChat.canvasWorkbench.coding.outputs.stdinPlaceholder",
-        )}
-        onChange={(event) => setValue(event.currentTarget.value)}
-        disabled={pending}
-        className="min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-      />
-      <button
-        type="submit"
-        aria-label={t(
-          "agentChat.canvasWorkbench.coding.outputs.stdinSendAria",
-          { id: processId },
-        )}
-        title={t("agentChat.canvasWorkbench.coding.outputs.stdinSendAria", {
-          id: processId,
-        })}
-        disabled={!canSubmit}
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <SendHorizontal className="h-3.5 w-3.5" />
-      </button>
-    </form>
   );
 }
 

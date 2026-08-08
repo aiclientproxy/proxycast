@@ -4,7 +4,6 @@
 //!
 //! ## 模块结构
 //! - `context_memory_service` - 上下文记忆服务
-//! - `file_browser_service` - 文件浏览服务
 //! - `sysinfo_service` - 系统信息服务
 //! - `update_check_service` - 更新检查服务
 
@@ -39,7 +38,6 @@
 
 // 无外部依赖的服务
 pub mod context_memory_service;
-pub mod file_browser_service;
 pub mod project_git_service;
 pub mod sysinfo_service;
 pub mod update_check_service;

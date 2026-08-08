@@ -19,15 +19,6 @@ import { SystemUtilityHost } from "./systemUtilityHost";
 import { VoiceModelHost } from "./voiceModelHost";
 
 const {
-  pluginShellHostGetUiRuntimeStatusMock,
-  pluginShellHostLaunchShellMock,
-  pluginShellHostSelectDirectoryMock,
-  pluginShellHostStartUiRuntimeMock,
-  pluginShellHostStopUiRuntimeMock,
-  pluginRuntimeTaskHostCancelTaskMock,
-  pluginRuntimeTaskHostGetTaskMock,
-  pluginRuntimeTaskHostStartTaskMock,
-  pluginRuntimeTaskHostSubmitHostResponseMock,
   browserWindowCtorMock,
   browserWindowGetAllWindowsMock,
   fileShellHostGetFileIconDataUrlMock,
@@ -120,15 +111,6 @@ const {
   return {
     browserWindowCtorMock,
     browserWindowGetAllWindowsMock,
-    pluginRuntimeTaskHostCancelTaskMock: vi.fn(),
-    pluginRuntimeTaskHostGetTaskMock: vi.fn(),
-    pluginRuntimeTaskHostStartTaskMock: vi.fn(),
-    pluginRuntimeTaskHostSubmitHostResponseMock: vi.fn(),
-    pluginShellHostGetUiRuntimeStatusMock: vi.fn(),
-    pluginShellHostLaunchShellMock: vi.fn(),
-    pluginShellHostSelectDirectoryMock: vi.fn(),
-    pluginShellHostStartUiRuntimeMock: vi.fn(),
-    pluginShellHostStopUiRuntimeMock: vi.fn(),
     contentViewAddChildViewMock,
     contentViewRemoveChildViewMock,
     fileShellHostGetFileIconDataUrlMock: vi.fn(),
@@ -210,25 +192,6 @@ vi.mock("./electronRuntime", () => ({
 
 vi.mock("./desktopNotificationHost", () => ({
   showDesktopNotification: showDesktopNotificationMock,
-}));
-
-vi.mock("./pluginShellHost", () => ({
-  PluginShellHost: vi.fn(() => ({
-    getUiRuntimeStatus: pluginShellHostGetUiRuntimeStatusMock,
-    launchShell: pluginShellHostLaunchShellMock,
-    selectDirectory: pluginShellHostSelectDirectoryMock,
-    startUiRuntime: pluginShellHostStartUiRuntimeMock,
-    stopUiRuntime: pluginShellHostStopUiRuntimeMock,
-  })),
-}));
-
-vi.mock("./pluginRuntimeTaskHost", () => ({
-  PluginRuntimeTaskHost: vi.fn(() => ({
-    cancelTask: pluginRuntimeTaskHostCancelTaskMock,
-    getTask: pluginRuntimeTaskHostGetTaskMock,
-    startTask: pluginRuntimeTaskHostStartTaskMock,
-    submitHostResponse: pluginRuntimeTaskHostSubmitHostResponseMock,
-  })),
 }));
 
 vi.mock("./fileShellHost", () => ({
@@ -341,33 +304,6 @@ async function withRemotePngServer<T>(
       server.close((error) => (error ? reject(error) : resolve()));
     });
   }
-}
-
-function buildPluginShellDescriptor(): Record<string, unknown> {
-  return {
-    descriptorVersion: 1,
-    appId: "content-factory-app",
-    packageHash: "package-fnv1a-current",
-    manifestHash: "manifest-fnv1a-current",
-    installMode: "standalone",
-    runtimeProfile: {
-      shellKind: "app_shell",
-      installMode: "standalone",
-    },
-    isolation: {
-      packageMount: "read-only",
-      secrets: "refs-only",
-      sideEffects: "runtime-broker",
-      evidence: "runtime-provenance",
-    },
-    entry: {
-      entryKey: "dashboard",
-    },
-    branding: {
-      name: "Content Factory",
-      windowTitle: "Content Factory",
-    },
-  };
 }
 
 afterEach(async () => {
@@ -853,77 +789,6 @@ describe("ElectronHostCommands local file shell facade", () => {
       engine: "electron_host_unsupported",
       message: "Electron Host 尚未接入 native structured analyzer provider",
     });
-  });
-
-  it("Plugin shell 命令应只分发到 PluginShellHost", async () => {
-    pluginShellHostSelectDirectoryMock.mockResolvedValueOnce({
-      path: "/tmp/plugin",
-      cancelled: false,
-    });
-    pluginShellHostLaunchShellMock.mockResolvedValueOnce({
-      status: "launched",
-      devShell: true,
-      blockerCodes: [],
-      launchedAt: "2026-05-15T00:00:00.000Z",
-    });
-    pluginShellHostStartUiRuntimeMock.mockResolvedValueOnce({
-      appId: "content-factory-app",
-      status: "running",
-    });
-    pluginShellHostGetUiRuntimeStatusMock.mockResolvedValueOnce({
-      appId: "content-factory-app",
-      status: "running",
-    });
-    pluginShellHostStopUiRuntimeMock.mockResolvedValueOnce({
-      appId: "content-factory-app",
-      status: "stopped",
-    });
-    const userDataDir = await createTempUserDataDir();
-    const host = createHost(userDataDir);
-
-    const selectArgs = { request: { title: "选择应用目录" } };
-    await expect(
-      host.invoke("plugin_select_directory", selectArgs),
-    ).resolves.toEqual({
-      path: "/tmp/plugin",
-      cancelled: false,
-    });
-
-    const launchArgs = {
-      request: {
-        descriptor: buildPluginShellDescriptor(),
-      },
-    };
-    await expect(
-      host.invoke("plugin_launch_shell", launchArgs),
-    ).resolves.toMatchObject({
-      status: "launched",
-      devShell: true,
-    });
-
-    const runtimeArgs = {
-      request: {
-        appId: "content-factory-app",
-        entryKey: "dashboard",
-      },
-    };
-    await expect(
-      host.invoke("plugin_start_ui_runtime", runtimeArgs),
-    ).resolves.toMatchObject({ status: "running" });
-    await expect(
-      host.invoke("plugin_get_ui_runtime_status", runtimeArgs),
-    ).resolves.toMatchObject({ status: "running" });
-    await expect(
-      host.invoke("plugin_stop_ui_runtime", runtimeArgs),
-    ).resolves.toMatchObject({ status: "stopped" });
-
-    expect(pluginShellHostSelectDirectoryMock).toHaveBeenCalledWith(selectArgs);
-    expect(pluginShellHostLaunchShellMock).toHaveBeenCalledWith(launchArgs);
-    expect(pluginShellHostStartUiRuntimeMock).toHaveBeenCalledWith(runtimeArgs);
-    expect(pluginShellHostGetUiRuntimeStatusMock).toHaveBeenCalledWith(
-      runtimeArgs,
-    );
-    expect(pluginShellHostStopUiRuntimeMock).toHaveBeenCalledWith(runtimeArgs);
   });
 
   it("File Shell 命令应只分发到 FileShellHost", async () => {
@@ -1488,52 +1353,6 @@ describe("ElectronHostCommands model provider current source", () => {
     expect(request).toHaveBeenCalledWith("model/list", {
       includeHidden: true,
     });
-  });
-});
-
-describe("ElectronHostCommands Plugin runtime dispatcher", () => {
-  it("plugin_runtime_* 命令应只分发到 PluginRuntimeTaskHost", async () => {
-    pluginRuntimeTaskHostStartTaskMock.mockResolvedValueOnce({
-      status: "accepted",
-    });
-    pluginRuntimeTaskHostGetTaskMock.mockResolvedValueOnce({
-      status: "thread_read_available",
-    });
-    pluginRuntimeTaskHostCancelTaskMock.mockResolvedValueOnce({
-      status: "cancelled",
-    });
-    pluginRuntimeTaskHostSubmitHostResponseMock.mockResolvedValueOnce({
-      status: "submitted",
-    });
-    const userDataDir = await createTempUserDataDir();
-    const host = createHost(userDataDir);
-
-    const startArgs = { request: { taskId: "task-start" } };
-    const getArgs = { request: { taskId: "task-get" } };
-    const cancelArgs = { request: { taskId: "task-cancel" } };
-    const responseArgs = { request: { taskId: "task-response" } };
-
-    await expect(
-      host.invoke("plugin_runtime_start_task", startArgs),
-    ).resolves.toEqual({ status: "accepted" });
-    await expect(
-      host.invoke("plugin_runtime_get_task", getArgs),
-    ).resolves.toEqual({ status: "thread_read_available" });
-    await expect(
-      host.invoke("plugin_runtime_cancel_task", cancelArgs),
-    ).resolves.toEqual({ status: "cancelled" });
-    await expect(
-      host.invoke("plugin_runtime_submit_host_response", responseArgs),
-    ).resolves.toEqual({ status: "submitted" });
-
-    expect(pluginRuntimeTaskHostStartTaskMock).toHaveBeenCalledWith(startArgs);
-    expect(pluginRuntimeTaskHostGetTaskMock).toHaveBeenCalledWith(getArgs);
-    expect(pluginRuntimeTaskHostCancelTaskMock).toHaveBeenCalledWith(
-      cancelArgs,
-    );
-    expect(pluginRuntimeTaskHostSubmitHostResponseMock).toHaveBeenCalledWith(
-      responseArgs,
-    );
   });
 });
 

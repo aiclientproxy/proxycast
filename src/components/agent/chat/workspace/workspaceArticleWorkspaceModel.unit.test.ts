@@ -88,28 +88,28 @@ const workspacePatch = {
     {
       id: "evt-worker-success:workerEvidence",
       status: "completed",
-      source: "plugin_task_worker",
+      source: "workspace_patch",
       appId: "content-factory-app",
       taskId: "task-article-1",
       taskKind: "content.article.generate",
       turnId: "turn-action-1",
       artifactRef: "artifact-workspace-patch-1",
-      artifactKind: "content_factory.workspace_patch",
+      artifactKind: "workspace_patch",
       updatedAt: "2026-06-24T00:00:00.000Z",
     },
     {
       id: "evt-worker-failed:workerEvidence",
       status: "failed",
-      source: "plugin_task_worker",
+      source: "workspace_patch",
       appId: "content-factory-app",
       taskId: "task-image-1",
       taskKind: "content.image.generate",
       turnId: "turn-action-2",
-      errorCode: "worker_invalid_json_output",
-      errorMessage: "Plugin worker returned invalid JSON",
-      failureCategory: "worker_output",
+      errorCode: "workspace_patch_invalid",
+      errorMessage: "Workspace patch is invalid",
+      failureCategory: "workspace_patch",
       retryable: false,
-      retryAdvice: "inspect_worker_output",
+      retryAdvice: "inspect_workspace_patch",
       retryAttempt: 0,
       retryMaxAttempts: 0,
       updatedAt: "2026-06-24T00:00:02.000Z",
@@ -290,7 +290,7 @@ describe("workspaceArticleWorkspaceModel", () => {
     });
   });
 
-  it("应继续兼容 Article Editor pending metadata 的旧 contentFactoryWorkspacePatch", () => {
+  it("Article Editor pending metadata 应拒绝旧 contentFactoryWorkspacePatch", () => {
     const profile = buildWorkspaceArticleWorkspaceFromPendingRequests([
       {
         requestId: "right_surface_article_workspace_legacy",
@@ -308,24 +308,10 @@ describe("workspaceArticleWorkspaceModel", () => {
       },
     ]);
 
-    expect(profile).toMatchObject({
-      source: "rightSurfacePending",
-      appId: "content-factory-app",
-      sessionId: "session-main",
-      workspaceId: "workspace-main",
-    });
+    expect(profile).toBeNull();
   });
 
-  it("Article Editor pending metadata 新旧字段同时存在时应优先使用 workspacePatch", () => {
-    const legacyWorkspacePatch = {
-      ...workspacePatch,
-      objects: [
-        {
-          ...workspacePatch.objects[0]!,
-          title: "旧字段草稿",
-        },
-      ],
-    };
+  it("Article Editor pending metadata 只使用 workspacePatch", () => {
     const profile = buildWorkspaceArticleWorkspaceFromPendingRequests([
       {
         requestId: "right_surface_article_workspace_current_first",
@@ -339,7 +325,6 @@ describe("workspaceArticleWorkspaceModel", () => {
         requestedAt: "2026-06-24T00:00:00.000Z",
         metadata: {
           workspacePatch,
-          contentFactoryWorkspacePatch: legacyWorkspacePatch,
         },
       },
     ]);
@@ -400,10 +385,10 @@ describe("workspaceArticleWorkspaceModel", () => {
       expect.objectContaining({
         status: "failed",
         taskId: "task-image-1",
-        errorCode: "worker_invalid_json_output",
-        failureCategory: "worker_output",
+        errorCode: "workspace_patch_invalid",
+        failureCategory: "workspace_patch",
         retryable: false,
-        retryAdvice: "inspect_worker_output",
+        retryAdvice: "inspect_workspace_patch",
       }),
     );
     expect(viewModel.workerEvidence).toHaveLength(2);
@@ -616,7 +601,7 @@ describe("workspaceArticleWorkspaceModel", () => {
           intent: "regenerate",
           risk: "write",
           task_kind: "content.image.generate",
-          output_artifact_kind: "content_factory.workspace_patch",
+          output_artifact_kind: "workspace_patch",
           prompt: "请重新生成「配图组」",
           edited_markdown:
             "# 本地编辑正文\n\n这是用户在 Article Editor 里改过的内容。",
@@ -635,7 +620,7 @@ describe("workspaceArticleWorkspaceModel", () => {
           intent: "regenerate",
           risk: "write",
           task_kind: "content.image.generate",
-          output_artifact_kind: "content_factory.workspace_patch",
+          output_artifact_kind: "workspace_patch",
           prompt: "请重新生成「配图组」",
           pane_kind: "imageGenerationSet",
           surface_kind: "articleWorkspace",
@@ -660,7 +645,7 @@ describe("workspaceArticleWorkspaceModel", () => {
     });
   });
 
-  it("内容工厂 Article Editor action 应把旧 creator workspace patch kind 归一为 current kind", () => {
+  it("Article Editor action 应保留 canonical workspace patch kind", () => {
     const profile = buildWorkspaceArticleWorkspaceFromThreadRead({
       thread_id: "thread-main",
       articleWorkspace: {
@@ -671,7 +656,7 @@ describe("workspaceArticleWorkspaceModel", () => {
                 ...object,
                 source: {
                   ...object.source,
-                  outputArtifactKind: "creator.workspace_patch",
+                  outputArtifactKind: "workspace_patch",
                 },
               }
             : object,
@@ -694,16 +679,11 @@ describe("workspaceArticleWorkspaceModel", () => {
 
     expect(metadata).toMatchObject({
       plugin: {
-        runtime_authorization: {
-          status: "allowed",
-          reason_code: "local_worker_output_allowed",
-          requested_output_artifact_kind: "content_factory.workspace_patch",
-        },
         article_workspace_action: {
-          output_artifact_kind: "content_factory.workspace_patch",
+          output_artifact_kind: "workspace_patch",
         },
         pane_action: {
-          output_artifact_kind: "content_factory.workspace_patch",
+          output_artifact_kind: "workspace_patch",
         },
       },
     });

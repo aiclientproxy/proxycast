@@ -28,10 +28,6 @@ interface HarnessToolInventorySectionProps {
     node: HTMLElement | null,
   ) => void;
   onRefreshToolInventory?: () => void;
-  mcpPrepareCandidateCount: number;
-  mcpPrepareLoading: boolean;
-  mcpPrepareError: string | null;
-  onPrepareMcpTargets?: () => void | Promise<void>;
   toolInventorySourceStats: ToolInventorySourceStats;
   toolInventoryWarnings: AgentRuntimeToolInventory["warnings"];
   runtimeToolAvailability: RuntimeToolAvailability;
@@ -47,9 +43,6 @@ interface HarnessToolInventorySectionProps {
   toolInventoryExtensionSurfaces: AgentRuntimeToolInventory["extension_surfaces"];
   toolInventoryExtensionTools: AgentRuntimeToolInventory["extension_tools"];
   toolInventoryMcpTools: AgentRuntimeToolInventory["mcp_tools"];
-  toolInventoryPluginMcpTargets: NonNullable<
-    AgentRuntimeToolInventory["plugin_mcp_targets"]
-  >;
 }
 
 export function HarnessToolInventorySection({
@@ -61,10 +54,6 @@ export function HarnessToolInventorySection({
   runtimeToolTotal,
   registerSectionRef,
   onRefreshToolInventory,
-  mcpPrepareCandidateCount,
-  mcpPrepareLoading,
-  mcpPrepareError,
-  onPrepareMcpTargets,
   toolInventorySourceStats,
   toolInventoryWarnings,
   runtimeToolAvailability,
@@ -78,7 +67,6 @@ export function HarnessToolInventorySection({
   toolInventoryExtensionSurfaces,
   toolInventoryExtensionTools,
   toolInventoryMcpTools,
-  toolInventoryPluginMcpTargets,
 }: HarnessToolInventorySectionProps) {
   if (!hasToolInventorySection) {
     return null;
@@ -107,10 +95,6 @@ export function HarnessToolInventorySection({
           runtimeToolVisibleTotal={runtimeToolVisibleTotal}
           runtimeToolTotal={runtimeToolTotal}
           onRefreshToolInventory={onRefreshToolInventory}
-          mcpPrepareCandidateCount={mcpPrepareCandidateCount}
-          mcpPrepareLoading={mcpPrepareLoading}
-          mcpPrepareError={mcpPrepareError}
-          onPrepareMcpTargets={onPrepareMcpTargets}
           toolInventorySourceStats={toolInventorySourceStats}
           toolInventoryWarnings={toolInventoryWarnings}
           runtimeToolAvailability={runtimeToolAvailability}
@@ -137,7 +121,6 @@ export function HarnessToolInventorySection({
               toolInventoryExtensionSurfaces={toolInventoryExtensionSurfaces}
               toolInventoryExtensionTools={toolInventoryExtensionTools}
               toolInventoryMcpTools={toolInventoryMcpTools}
-              toolInventoryPluginMcpTargets={toolInventoryPluginMcpTargets}
             />
           </>
         ) : !toolInventoryLoading && !toolInventoryError ? (

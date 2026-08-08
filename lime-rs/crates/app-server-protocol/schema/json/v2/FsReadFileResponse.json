@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "dataBase64": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "dataBase64"
+  ],
+  "title": "FsReadFileResponse",
+  "type": "object"
+}

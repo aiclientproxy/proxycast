@@ -5,7 +5,7 @@ import {
   useImperativeHandle,
   useRef,
 } from "react";
-import { open as openDialog } from "@/lib/desktop-host/plugin-dialog";
+import { open as openDialog } from "@/lib/desktop-host/dialog";
 import {
   ChevronDown,
   Cloud,
