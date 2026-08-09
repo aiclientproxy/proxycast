@@ -37,7 +37,7 @@
 - `npm run test:rust:related -- lime-rs/crates/app-server lime-rs/crates/mcp lime-rs/crates/skills lime-rs/crates/runtime-core lime-rs/crates/tool-runtime`：通过，`311 passed; 0 failed`。
 - `npm run smoke:agent-runtime-current-fixture`：通过，覆盖当前 Agent runtime 全部 fixture；报告 `liveProviderUsed=false`。
 - `git diff --check`：通过。
-- Release commit/tag/push：待执行。
+- Release commit：`8647d18fa`（`Release v1.125.0`）；evidence commit：`f55a35b49`（`Record Windows release runner result`）。`main` 与 `v1.125.0` 均已推送并完成远端复核。
 - Windows runner 首次 run `31311967541`：失败于 `actions/checkout`，原因是 `source_ref` 使用短 SHA `8647d18fa`，workflow checkout 无法解析该引用；未进入构建。
 - Windows runner 重试 run `31312029636`：Checkout、pnpm/Node/Rust/sccache、依赖安装均通过；`lime-mcp` Agent Plugin path contract 为 `10 passed / 3 failed`，失败集中在 Windows 扩展路径前缀与 8.3 短路径的字面断言（`agent_plugin_config_tests.rs`），未进入 sherpa、Electron、Squirrel smoke 或 Plugin Gate B，因此无 Windows 包 artifact。
 - Windows runner 结论：发布提交已被真实 Windows runner 检出，但 Windows path contract 门禁阻断；不改写已推送的 `v1.125.0` tag。
