@@ -105,6 +105,17 @@ async fn server(temp: &TempDir) -> AppServer {
 fn write_plugin(root: &std::path::Path, name: &str, display_name: &str) {
     fs::create_dir_all(root.join(".codex-plugin")).expect("create plugin manifest directory");
     fs::write(
+        root.join("plugin.json"),
+        serde_json::to_vec_pretty(&json!({
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": name,
+            "version": "1.0.0",
+            "description": format!("{display_name} description")
+        }))
+        .expect("serialize standard plugin manifest"),
+    )
+    .expect("write standard plugin manifest");
+    fs::write(
         root.join(".codex-plugin/plugin.json"),
         serde_json::to_vec_pretty(&json!({
             "name": name,

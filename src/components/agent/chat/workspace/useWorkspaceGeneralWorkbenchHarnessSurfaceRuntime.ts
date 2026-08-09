@@ -1,4 +1,5 @@
-import { useMemo, type ComponentProps } from "react";
+import { useCallback, useMemo, type ComponentProps } from "react";
+import { startReview } from "@/lib/api/review";
 import { GeneralWorkbenchHarnessSurfaceSection } from "./WorkspaceHarnessDialogs";
 import type { useWorkspaceContextHarnessRuntime } from "./useWorkspaceContextHarnessRuntime";
 import type { useWorkspaceHarnessInventoryRuntime } from "./useWorkspaceHarnessInventoryRuntime";
@@ -46,6 +47,7 @@ interface UseWorkspaceGeneralWorkbenchHarnessSurfaceRuntimeParams {
   onOpenSubagentSession: WorkspaceGeneralWorkbenchHarnessPanelBaseProps["onOpenSubagentSession"];
   onRespondToAction: WorkspaceGeneralWorkbenchHarnessPanelBaseProps["onRespondToAction"];
   onSubmitCodeFixPrompt: WorkspaceGeneralWorkbenchHarnessPanelBaseProps["onSubmitCodeFixPrompt"];
+  onStartReview?: WorkspaceGeneralWorkbenchHarnessPanelBaseProps["onStartReview"];
   pendingActions: WorkspaceGeneralWorkbenchHarnessPanelBaseProps["pendingActions"];
   projectId?: string | null;
   providerType?: string | null;
@@ -62,6 +64,7 @@ interface UseWorkspaceGeneralWorkbenchHarnessSurfaceRuntimeParams {
   threadRead: WorkspaceGeneralWorkbenchHarnessPanelBaseProps["threadRead"];
   turns: WorkspaceGeneralWorkbenchHarnessPanelBaseProps["turns"];
   workingDir?: string | null;
+  refreshSessionReadModel?: (targetSessionId?: string) => Promise<unknown>;
 }
 
 export function useWorkspaceGeneralWorkbenchHarnessSurfaceRuntime({
@@ -84,6 +87,7 @@ export function useWorkspaceGeneralWorkbenchHarnessSurfaceRuntime({
   onOpenSubagentSession,
   onRespondToAction,
   onSubmitCodeFixPrompt,
+  onStartReview: injectedOnStartReview,
   pendingActions,
   projectId,
   providerType,
@@ -97,7 +101,37 @@ export function useWorkspaceGeneralWorkbenchHarnessSurfaceRuntime({
   threadRead,
   turns,
   workingDir,
+  refreshSessionReadModel,
 }: UseWorkspaceGeneralWorkbenchHarnessSurfaceRuntimeParams): WorkspaceGeneralWorkbenchHarnessPanelBaseProps {
+  const reviewThreadId = threadRead?.thread_id?.trim() || "";
+  const onStartReview = useCallback(async () => {
+    if (injectedOnStartReview) {
+      return injectedOnStartReview();
+    }
+    if (!reviewThreadId) {
+      throw new Error("Review requires an active thread");
+    }
+    const result = await startReview(
+      {
+        threadId: reviewThreadId,
+        delivery: "inline",
+        target: { type: "uncommittedChanges" },
+      },
+      {
+        onTerminal: async () => {
+          await refreshSessionReadModel?.(sessionId || undefined);
+        },
+      },
+    );
+    await refreshSessionReadModel?.(sessionId || undefined);
+    return result;
+  }, [
+    injectedOnStartReview,
+    refreshSessionReadModel,
+    reviewThreadId,
+    sessionId,
+  ]);
+
   return useMemo(
     () => ({
       environment: contextHarnessRuntime.harnessEnvironment,
@@ -140,6 +174,7 @@ export function useWorkspaceGeneralWorkbenchHarnessSurfaceRuntime({
       onLoadFilePreview,
       onOpenFile,
       onSubmitCodeFixPrompt,
+      onStartReview,
     }),
     [
       activeExecutionRuntime?.model_name,
@@ -165,6 +200,7 @@ export function useWorkspaceGeneralWorkbenchHarnessSurfaceRuntime({
       onOpenSubagentSession,
       onRespondToAction,
       onSubmitCodeFixPrompt,
+      onStartReview,
       pendingActions,
       projectId,
       providerType,

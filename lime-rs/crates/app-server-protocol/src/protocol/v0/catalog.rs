@@ -27,7 +27,6 @@ pub struct AppServerMethodSpec {
 #[serde(rename_all = "camelCase")]
 pub enum AppServerRequestSerializationScope {
     Thread,
-    ProjectShellSession,
     McpOauth,
     McpResourceSubscription,
     BrowserSession,
@@ -74,16 +73,6 @@ pub enum AppServerRequestMethod {
     ProjectGitBranchCreate,
     #[serde(rename = "projectGit/worktree/create")]
     ProjectGitWorktreeCreate,
-    #[serde(rename = "projectShell/session/start")]
-    ProjectShellSessionStart,
-    #[serde(rename = "projectShell/session/write")]
-    ProjectShellSessionWrite,
-    #[serde(rename = "projectShell/session/resize")]
-    ProjectShellSessionResize,
-    #[serde(rename = "projectShell/session/kill")]
-    ProjectShellSessionKill,
-    #[serde(rename = "projectShell/session/drainEvents")]
-    ProjectShellSessionDrainEvents,
     #[serde(rename = "evidence/export")]
     EvidenceExport,
     #[serde(rename = "agentSession/handoffBundle/export")]
@@ -542,11 +531,6 @@ impl AppServerRequestMethod {
             Self::ProjectGitBranchCheckout => METHOD_PROJECT_GIT_BRANCH_CHECKOUT,
             Self::ProjectGitBranchCreate => METHOD_PROJECT_GIT_BRANCH_CREATE,
             Self::ProjectGitWorktreeCreate => METHOD_PROJECT_GIT_WORKTREE_CREATE,
-            Self::ProjectShellSessionStart => METHOD_PROJECT_SHELL_SESSION_START,
-            Self::ProjectShellSessionWrite => METHOD_PROJECT_SHELL_SESSION_WRITE,
-            Self::ProjectShellSessionResize => METHOD_PROJECT_SHELL_SESSION_RESIZE,
-            Self::ProjectShellSessionKill => METHOD_PROJECT_SHELL_SESSION_KILL,
-            Self::ProjectShellSessionDrainEvents => METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS,
             Self::EvidenceExport => METHOD_EVIDENCE_EXPORT,
             Self::AgentSessionHandoffBundleExport => METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT,
             Self::AgentSessionReplayCaseExport => METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT,
@@ -793,11 +777,6 @@ impl AppServerRequestMethod {
             METHOD_PROJECT_GIT_BRANCH_CHECKOUT => Some(Self::ProjectGitBranchCheckout),
             METHOD_PROJECT_GIT_BRANCH_CREATE => Some(Self::ProjectGitBranchCreate),
             METHOD_PROJECT_GIT_WORKTREE_CREATE => Some(Self::ProjectGitWorktreeCreate),
-            METHOD_PROJECT_SHELL_SESSION_START => Some(Self::ProjectShellSessionStart),
-            METHOD_PROJECT_SHELL_SESSION_WRITE => Some(Self::ProjectShellSessionWrite),
-            METHOD_PROJECT_SHELL_SESSION_RESIZE => Some(Self::ProjectShellSessionResize),
-            METHOD_PROJECT_SHELL_SESSION_KILL => Some(Self::ProjectShellSessionKill),
-            METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS => Some(Self::ProjectShellSessionDrainEvents),
             METHOD_EVIDENCE_EXPORT => Some(Self::EvidenceExport),
             METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT => {
                 Some(Self::AgentSessionHandoffBundleExport)
@@ -1123,26 +1102,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_PROJECT_GIT_WORKTREE_CREATE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PROJECT_SHELL_SESSION_START,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PROJECT_SHELL_SESSION_WRITE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PROJECT_SHELL_SESSION_RESIZE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PROJECT_SHELL_SESSION_KILL,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
@@ -2147,22 +2106,6 @@ pub const APP_SERVER_REQUEST_SERIALIZATION_SCOPES: &[AppServerRequestSerializati
     AppServerRequestSerializationScopeSpec {
         method: METHOD_THREAD_RESUME,
         scope: AppServerRequestSerializationScope::Thread,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_PROJECT_SHELL_SESSION_START,
-        scope: AppServerRequestSerializationScope::ProjectShellSession,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_PROJECT_SHELL_SESSION_WRITE,
-        scope: AppServerRequestSerializationScope::ProjectShellSession,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_PROJECT_SHELL_SESSION_RESIZE,
-        scope: AppServerRequestSerializationScope::ProjectShellSession,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_PROJECT_SHELL_SESSION_KILL,
-        scope: AppServerRequestSerializationScope::ProjectShellSession,
     },
     AppServerRequestSerializationScopeSpec {
         method: METHOD_MCP_SERVER_OAUTH_LOGIN,

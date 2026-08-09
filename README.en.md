@@ -1,6 +1,6 @@
 <div align="center"><a name="readme-top"></a>
 
-<img src="./docs/images/readme-hero-en.png" alt="Lime README hero banner: Spark ideas with a touch of green" width="100%" />
+<img src="./docs/images/readme-hero-en.png" alt="Lime README hero banner: An agent that can actually finish the work" width="100%" />
 
 # Lime
 
@@ -8,9 +8,9 @@
 
 **Open-source full-stack desktop AI agent**
 
-Full-stack AI agent for coding, files, terminals, tools, research, content, multimodal work, and multi-agent workflows.
+Full-stack AI agent for coding, files, terminals, tools, research, content, multimodal work, and multi-agent workflows worldwide.
 
-[简体中文](./README.md) · **English** · [Docs](./docs/README.md) · [Release Notes](./RELEASE_NOTES.en.md) · [Issues](https://github.com/limecloud/lime/issues)
+[简体中文](./README.zh-CN.md) · **English** · [Docs](./docs/README.md) · [Release Notes](./RELEASE_NOTES.en.md) · [Issues](https://github.com/limecloud/lime/issues)
 
 <p>
   <a href="https://github.com/limecloud/lime/releases"><img src="https://img.shields.io/github/v/release/limecloud/lime?label=release" alt="Lime GitHub Release" /></a>
@@ -21,7 +21,7 @@ Full-stack AI agent for coding, files, terminals, tools, research, content, mult
 
 Lime is more than a chat box: it understands context, calls tools, edits files, runs commands, organizes material, creates deliverables, and keeps moving a task forward from one desktop workspace.
 
-<sub>The Simplified Chinese README is the primary version. This English page is a companion for international readers.</sub>
+<sub>The Chinese and English READMEs are maintained together for users worldwide.</sub>
 
 </div>
 
@@ -48,9 +48,9 @@ Lime is more than a chat box: it understands context, calls tools, edits files, 
 
 ## What is Lime?
 
-Lime is an open-source full-stack AI agent for the desktop. It brings the Agent loop, filesystem, terminal processes, code changes, tool calls, MCP, Skills, multimodal input and output, model routing, and multi-agent collaboration into one traceable task chain.
+Lime is an open-source full-stack desktop AI agent for users and teams worldwide. It brings the Agent loop, filesystem, terminal processes, code changes, tool calls, MCP, Skills, multimodal input and output, model routing, and multi-agent collaboration into one traceable task chain.
 
-It belongs to the same category of hands-on agents as Claude Code, WorkBuddy, and Codex, while emphasizing a desktop GUI, visual workspace, configurable providers, and mixed engineering, research, and content workflows for Chinese users.
+It belongs to the same category of hands-on agents as Claude Code, WorkBuddy, and Codex, while emphasizing a desktop GUI, visual workspace, configurable providers, and mixed engineering, research, and content workflows for global users and teams.
 
 Lime works by:
 
@@ -69,7 +69,8 @@ Use Lime as an engineering partner, research assistant, content collaborator, or
 - **Terminal and process operations**: run scripts, builds, tests, dependency commands, long-running processes, and inspect their output within controlled permissions.
 - **Files and workspaces**: read and write text or structured files, organize directories, and create documents, reports, web drafts, and other artifacts.
 - **Tools, MCP, and Skills**: discover capabilities, call external tools or local Skills, and turn repeatable procedures into reusable execution units.
-- **Research and content delivery**: work with references, screenshots, images, and multi-turn context from analysis through publish-ready output.
+- **Multimodal understanding and generation**: work with text, code, images, screenshots, audio, video, PDFs, tables, and structured data in one task, then create images, audio, video, documents, charts, and other artifacts.
+- **Research and content delivery**: work with web pages, references, screenshots, images, audio, video, and multi-turn context from analysis through publish-ready output.
 - **Multi-agent and long-running work**: split subtasks, make progress in parallel, preserve state, and resume complex work in the same Thread.
 - **Provider and model control**: choose models per task and manage capability catalogs, credentials, routing, retries, and failure boundaries.
 
@@ -135,7 +136,9 @@ Lime does not lock you to one model service. Configure providers, models, and cr
 
 ## Product positioning
 
-Lime belongs to the full-stack AI agent, coding agent, desktop AI agent, and terminal agent category. It handles code tasks as well as research, writing, material organization, automation, and multimodal delivery; the goal is a set of verifiable actions, not just a generated paragraph.
+Lime belongs to the full-stack AI agent, coding agent, desktop AI agent, and terminal agent category for users and teams worldwide. It handles code tasks as well as research, writing, material organization, automation, and multimodal delivery; the goal is a set of verifiable actions, not just a generated paragraph.
+
+Multimodality is a core Agent workflow, not a separate attachment feature. One Thread can combine a written brief, a codebase, images and screenshots, voice or video material, PDFs, and spreadsheets so the Agent can cross-understand them, call tools, and produce delivery-ready results.
 
 ---
 
@@ -211,15 +214,3 @@ No. Describe the goal, constraints, context, and acceptance criteria. Reusable p
 This project is provided for learning and research purposes only. Users are responsible for their own use and risk.
 
 Lime does not directly provide AI model services. Model capabilities are provided by third-party AI service providers configured by the user.
-
----
-
-<div align="center">
-
-### WeChat Community
-
-<img src="./docs/images/coso.jpg" alt="Lime WeChat community QR code" width="180" />
-
-Scan the QR code and mention `Lime` to join the discussion group.
-
-</div>

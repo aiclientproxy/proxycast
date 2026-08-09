@@ -42,7 +42,7 @@ pub(super) fn responses_websocket(
     payload: Value,
     http_fallback: Arc<AtomicBool>,
     server_model: Option<String>,
-    allow_model_verification: bool,
+    allow_openai_response_metadata: bool,
 ) -> CurrentProviderStream {
     Box::pin(try_stream! {
         let mut lease = SocketLease {
@@ -57,7 +57,10 @@ pub(super) fn responses_websocket(
             )
         })?;
 
-        let mut reducer = ResponsesEventReducer::new(server_model.clone(), allow_model_verification);
+        let mut reducer = ResponsesEventReducer::new(
+            server_model.clone(),
+            allow_openai_response_metadata,
+        );
         if let Some(model) = server_model {
             yield runtime_core::CanonicalLlmEvent::ServerModel { model };
         }

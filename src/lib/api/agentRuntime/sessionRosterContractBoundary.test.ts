@@ -8,7 +8,7 @@ const CONTRACT_SOURCES = [
   "src/lib/api/agentRuntime/sessionNormalizers.ts",
   "src/lib/api/agentRuntime/normalizers.ts",
   "src/lib/api/agentRuntime/normalizers.d.ts",
-  "electron/pluginRuntimeTaskHost.ts",
+  "src/components/agent/chat/projection/canonicalChildThreadSummary.ts",
   "scripts/agent-runtime/tool-surface-page-smoke.mjs",
 ] as const;
 

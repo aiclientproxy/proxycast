@@ -127,7 +127,12 @@ function processNotification(
   if (directRoute) {
     if (
       notification.method === "warning" ||
+      notification.method === "guardianWarning" ||
       notification.method === "error" ||
+      notification.method === "item/autoApprovalReview/started" ||
+      notification.method === "item/autoApprovalReview/completed" ||
+      notification.method === "turn/diff/updated" ||
+      notification.method === "turn/moderationMetadata" ||
       notification.method === "turn/plan/updated"
     ) {
       return { kind: "accepted", notifications: [notification] };

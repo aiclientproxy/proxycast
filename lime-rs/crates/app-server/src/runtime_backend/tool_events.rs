@@ -6,9 +6,7 @@ use crate::RuntimeEvent;
 use agent_protocol::provider_trace::runtime_event_type_for_provider_trace_stage;
 #[cfg(test)]
 use agent_protocol::provider_trace::{ProviderTraceEvent, ProviderTraceStage};
-use agent_protocol::{
-    ItemId, ItemStatus, SessionId, ThreadId, ThreadItem, ThreadItemPayload, ToolOutput, TurnId,
-};
+use agent_protocol::{ThreadItem, ThreadItemPayload, ToolOutput};
 use lime_agent::AgentEvent as RuntimeAgentEvent;
 use model_provider::safety::SAFETY_BUFFERING_RUNTIME_EVENT_KIND;
 use serde_json::{json, Value};
@@ -78,42 +76,14 @@ pub(super) fn runtime_events_from_agent_event_with_soul_style(
 }
 
 fn hook_runtime_events(event: &RuntimeAgentEvent) -> Option<Vec<RuntimeEvent>> {
-    let (event_type, status, run) = match event {
-        RuntimeAgentEvent::HookStarted { run, .. } => ("hook.started", ItemStatus::InProgress, run),
-        RuntimeAgentEvent::HookCompleted { run, .. } => {
-            let status = match run.status {
-                agent_protocol::hook::HookRunStatus::Failed
-                | agent_protocol::hook::HookRunStatus::Blocked => ItemStatus::Failed,
-                agent_protocol::hook::HookRunStatus::Stopped => ItemStatus::Interrupted,
-                _ => ItemStatus::Completed,
-            };
-            ("hook.completed", status, run)
-        }
+    let (event_type, run) = match event {
+        RuntimeAgentEvent::HookStarted { run, .. } => ("hook.started", run),
+        RuntimeAgentEvent::HookCompleted { run, .. } => ("hook.completed", run),
         _ => return None,
     };
-    let mut item = ThreadItem::new(
-        SessionId::new("hook-session"),
-        ThreadId::new("hook-thread"),
-        TurnId::new("hook-turn"),
-        0,
-        0,
-        ThreadItemPayload::Hook { run: run.clone() },
-    );
-    item.item_id = ItemId::new(format!("item_{}", run.id));
-    item.status = status;
-    item.created_at_ms = run.started_at;
-    item.updated_at_ms = run.completed_at.unwrap_or(run.started_at);
-    item.completed_at_ms = status.is_terminal().then_some(item.updated_at_ms);
-    item.metadata = serde_json::json!({
-        "hookRunId": run.id,
-        "source": "codex_hook_runtime",
-    });
     Some(vec![RuntimeEvent::new(
         event_type,
-        serde_json::json!({
-            "run": run,
-            "item": item,
-        }),
+        serde_json::json!({ "run": run }),
     )])
 }
 
@@ -145,6 +115,10 @@ pub(super) fn runtime_event_type_from_raw(raw_type: &str) -> &'static str {
         "server_model" => "model.server_reported",
         "model_reroute" => "model.rerouted",
         "model_verification" => "model.verification",
+        "turn_moderation_metadata" => "turn.moderation_metadata",
+        "guardian_review_started" => "guardian.review.started",
+        "guardian_review_completed" => "guardian.review.completed",
+        "guardian_warning" => "guardian.warning",
         "provider_trace" => "provider.trace",
         "provider_usage" => "provider.usage",
         "provider_step" => "provider.step",
@@ -303,6 +277,14 @@ mod tests {
     }
 
     #[test]
+    fn guardian_warning_raw_runtime_event_maps_to_durable_guardian_warning() {
+        assert_eq!(
+            runtime_event_type_from_raw("guardian_warning"),
+            "guardian.warning"
+        );
+    }
+
+    #[test]
     fn model_facts_map_to_canonical_runtime_event_types() {
         let server_model = runtime_events_from_agent_event(&RuntimeAgentEvent::ServerModel {
             model: "gpt-5-codex".to_string(),
@@ -332,6 +314,17 @@ mod tests {
         assert_eq!(
             verification[0].payload["verifications"],
             json!(["trusted_access_for_cyber"])
+        );
+
+        let moderation =
+            runtime_events_from_agent_event(&RuntimeAgentEvent::TurnModerationMetadata {
+                metadata: json!({ "presentation": "inline" }),
+            })
+            .expect("turn moderation metadata event");
+        assert_eq!(moderation[0].event_type, "turn.moderation_metadata");
+        assert_eq!(
+            moderation[0].payload["metadata"],
+            json!({ "presentation": "inline" })
         );
     }
 

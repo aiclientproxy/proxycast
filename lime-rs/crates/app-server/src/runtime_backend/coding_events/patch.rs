@@ -155,7 +155,7 @@ fn patch_failure_category(tool: &TrackedTool, result: &AgentToolResult) -> &'sta
     }
 }
 
-fn patch_declined(result: &AgentToolResult) -> bool {
+pub(super) fn patch_declined(result: &AgentToolResult) -> bool {
     let metadata = result.metadata.as_ref();
     metadata
         .and_then(|metadata| metadata.get("reasonCode"))

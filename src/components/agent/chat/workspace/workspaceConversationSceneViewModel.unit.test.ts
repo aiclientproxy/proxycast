@@ -284,6 +284,27 @@ describe("workspaceConversationSceneViewModel", () => {
     expect(changeView?.onOpenFile).toBe(onOpenFile);
   });
 
+  it("应保留 canonical Turn 的空 diff，表示精确 net-zero", () => {
+    const codingView = projectCodingWorkbenchViewFromEvents({
+      executionEvents: [],
+      codingReadModel: {
+        thread_id: "thread-1",
+        active_turn_id: "turn-1",
+      },
+    });
+    const changeView = buildCanvasWorkbenchChangeViewFromCodingProjection({
+      codingView,
+      turnDiff: "",
+    });
+
+    expect(changeView).toEqual(
+      expect.objectContaining({
+        items: [],
+        turnDiff: "",
+      }),
+    );
+  });
+
   it("应直接投影 canonical fileChange，并保留 move 目标路径", () => {
     const codingView = projectCodingWorkbenchViewFromEvents({
       executionEvents: [],

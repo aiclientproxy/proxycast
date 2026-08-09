@@ -260,6 +260,34 @@ impl AgentMessagePhase {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GuardianReviewStatus {
+    InProgress,
+    Approved,
+    Denied,
+    TimedOut,
+    Aborted,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GuardianRiskLevel {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GuardianUserAuthorization {
+    Unknown,
+    Low,
+    Medium,
+    High,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AgentEvent {
@@ -453,6 +481,47 @@ pub enum AgentEvent {
     ModelVerification {
         verifications: Vec<ModelVerification>,
     },
+
+    #[serde(rename = "turn_moderation_metadata")]
+    TurnModerationMetadata { metadata: Value },
+
+    #[serde(rename = "guardian_review_started")]
+    GuardianReviewStarted {
+        review_id: String,
+        #[serde(rename = "targetItemId", skip_serializing_if = "Option::is_none")]
+        target_item_id: Option<String>,
+        #[serde(rename = "turnId")]
+        turn_id: String,
+        action: Value,
+        #[serde(rename = "startedAtMs")]
+        started_at_ms: i64,
+    },
+
+    #[serde(rename = "guardian_review_completed")]
+    GuardianReviewCompleted {
+        review_id: String,
+        #[serde(rename = "targetItemId", skip_serializing_if = "Option::is_none")]
+        target_item_id: Option<String>,
+        #[serde(rename = "turnId")]
+        turn_id: String,
+        status: GuardianReviewStatus,
+        #[serde(rename = "riskLevel", skip_serializing_if = "Option::is_none")]
+        risk_level: Option<GuardianRiskLevel>,
+        #[serde(rename = "userAuthorization", skip_serializing_if = "Option::is_none")]
+        user_authorization: Option<GuardianUserAuthorization>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        rationale: Option<String>,
+        #[serde(rename = "decisionSource")]
+        decision_source: String,
+        action: Value,
+        #[serde(rename = "startedAtMs")]
+        started_at_ms: i64,
+        #[serde(rename = "completedAtMs")]
+        completed_at_ms: i64,
+    },
+
+    #[serde(rename = "guardian_warning")]
+    GuardianWarning { message: String },
 
     #[serde(rename = "provider_trace")]
     ProviderTrace {
@@ -1248,6 +1317,16 @@ mod tests {
         assert_eq!(
             verification["verifications"],
             serde_json::json!(["trusted_access_for_cyber"])
+        );
+
+        let moderation = serde_json::to_value(AgentEvent::TurnModerationMetadata {
+            metadata: serde_json::json!({ "presentation": "inline" }),
+        })
+        .expect("serialize turn moderation metadata");
+        assert_eq!(moderation["type"], "turn_moderation_metadata");
+        assert_eq!(
+            moderation["metadata"],
+            serde_json::json!({ "presentation": "inline" })
         );
     }
 

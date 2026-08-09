@@ -9,6 +9,7 @@ import {
   rankFileChangesForOutput,
   resolveConfirmedFileChangeCount,
   resolveFocusDescriptionKey,
+  resolveLatestReviewBoundary,
   resolvePrimaryActionKey,
   resolveReviewFocusTone,
   resolveReviewStatusPresentation,
@@ -173,6 +174,39 @@ describe("CodeReviewSummaryPanelViewModel", () => {
     expect(selectLatestCheckpoint({ latest_checkpoint: null } as never)).toBe(
       null,
     );
+  });
+
+  it("应按 sequence 读取最新 review boundary", () => {
+    const base = {
+      id: "review-item",
+      thread_id: "thread-1",
+      turn_id: "turn-1",
+      sequence: 1,
+      status: "completed" as const,
+      started_at: "2026-06-06T00:00:00.000Z",
+      updated_at: "2026-06-06T00:00:00.000Z",
+      type: "review_boundary" as const,
+      boundary: "entered" as const,
+      review: "开始复核",
+    };
+
+    expect(
+      resolveLatestReviewBoundary([
+        base,
+        {
+          ...base,
+          id: "review-item-2",
+          sequence: 2,
+          boundary: "exited",
+          review: "发现 1 个问题",
+        },
+      ]),
+    ).toEqual({
+      status: "completed",
+      turnId: "turn-1",
+      review: "发现 1 个问题",
+    });
+    expect(resolveLatestReviewBoundary([])).toBeNull();
   });
 
 });

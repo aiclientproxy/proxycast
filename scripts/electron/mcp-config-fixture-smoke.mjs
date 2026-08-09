@@ -206,9 +206,12 @@ export async function launchElectronFixture({
   pageErrors = [],
   backendMode = "unavailable",
 }) {
+  const packagedExecutable = options.electronExecutable || null;
   const app = await electron.launch({
-    executablePath: electronPath,
-    args: ["--use-mock-keychain", "."],
+    executablePath: packagedExecutable || electronPath,
+    args: packagedExecutable
+      ? ["--use-mock-keychain"]
+      : ["--use-mock-keychain", "."],
     cwd: process.cwd(),
     env: {
       ...runtimeEnv.env,

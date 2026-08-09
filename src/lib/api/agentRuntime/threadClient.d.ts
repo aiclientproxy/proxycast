@@ -2,6 +2,8 @@ import {
   AppServerClient,
   type AppServerJsonRpcNotification,
   type AppServerThreadReadResponse,
+  type AppServerReviewStartParams,
+  type AppServerReviewStartResponse,
   type AppServerThreadSettingsUpdateParams,
   type AppServerThreadSettingsUpdateResponse,
   type AppServerThreadShellCommandParams,
@@ -45,6 +47,7 @@ export type AgentRuntimeAppServerClient = Pick<
   | "updateThreadSettings"
   | "runThreadShellCommand"
   | "startTurn"
+  | "startReview"
   | "steerTurn"
   | "cancelTurn"
   | "startThreadCompaction"
@@ -118,6 +121,9 @@ export declare function createThreadClient(
   steerAgentRuntimeTurn: (
     request: TurnSteerParams,
   ) => Promise<AppServerRequestResult<TurnSteerResponse>>;
+  submitAgentRuntimeReview: (
+    request: AppServerReviewStartParams,
+  ) => Promise<AppServerRequestResult<AppServerReviewStartResponse>>;
   submitAgentRuntimeTurn: (request: TurnStartParams) => Promise<void>;
 };
 export declare function publishAppServerAgentSessionNotifications(
@@ -176,6 +182,9 @@ export declare const compactAgentRuntimeSession: ReturnType<
   steerAgentRuntimeTurn: ReturnType<
     typeof createThreadClient
   >["steerAgentRuntimeTurn"],
+  submitAgentRuntimeReview: ReturnType<
+    typeof createThreadClient
+  >["submitAgentRuntimeReview"],
   submitAgentRuntimeTurn: ReturnType<
     typeof createThreadClient
   >["submitAgentRuntimeTurn"];

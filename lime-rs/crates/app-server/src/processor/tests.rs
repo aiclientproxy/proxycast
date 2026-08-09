@@ -13,6 +13,7 @@ mod mcp;
 mod project_git;
 mod request_cancel;
 mod request_serialization;
+mod review;
 mod right_surface;
 mod turn_steer;
 mod usage_stats;

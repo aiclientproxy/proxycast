@@ -5,7 +5,6 @@
         "browserSession",
         "mcpOauth",
         "mcpResourceSubscription",
-        "projectShellSession",
         "thread"
       ],
       "type": "string"

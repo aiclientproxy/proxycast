@@ -1,6 +1,6 @@
 # Plugin v3 清理账本
 
-状态：`active / major-deletions-complete`
+状态：`active / major-deletions-complete / final-platform-gate`
 
 ## 清理原则
 
@@ -16,7 +16,7 @@
 | App Server plugin domain | 继续作为唯一 catalog/install/activation owner |
 | `lime-mcp`、Skills、RuntimeCore、tool-runtime | 继续作为领域 owner；增加标准 lowering，不承载 package discovery |
 | typed Renderer gateway、Claw mention、Right Surface | 继续消费 projection，删除本地 registry 合并 |
-| Codex extension adapter | 仅保留明确外部生态需要的 adapter；禁止新增 Lime 私有 manifest 字段 |
+| Codex extension adapter | 仅保留 UI metadata 与 Apps 配置路径 adapter；禁止新增 Lime 私有 manifest 字段或恢复内联 Apps object |
 
 ## 已删除
 
@@ -32,13 +32,17 @@
 | MCP 私有 runtime fixture | `--allow-plugin-runtime-fixture`、`plugin_runtime_capabilities`、`plugin_mcp_targets` 正向 smoke、transport summary 与五语孤立文案 | Rust inventory 负向测试与 smoke source guard 禁止私有投影回流 |
 | 孤立 connector smoke | 无 npm/CI/文档入口且仍调用 `plugin_runtime_get_task` 的 `connector-outbox-smoke.mjs` | `scripts/plugin/` 只保留 connector production delivery current 检查 |
 | Plugin v2 active 执行计划 | `plugin-v2-current-plan.md` 与 exec-plan current 导航 | v3 执行计划是唯一 active Plugin 计划；v2 roadmap 仅保留历史快照 |
+| Plugin Lab i18n/sidebar | 五语言 `plugin.lab.*` 155 个 source key 与 `navigation.sidebar.items.pluginLab` 1 个 source key（共 780 条资源） | `plugin-lab-retired-i18n-keys` dead guard；禁止旧 Lab/sidebar 文案回流 |
+| 旧 Plugin 技术标准文档 | `internal/tech/plugin/README.md`、`lime-plugin-package-v1.md` 及现役入站导航 | 已物理删除；`docs:boundary` 的 Plugin v3 文档守卫禁止重新引用 |
 
 ## 剩余 residual
 
 | 分类 | Surface | 退出条件 |
 |---|---|---|
 | `verification-gap` | Windows junction/reparse point、环境变量大小写与数据根行为 | Windows 真实环境通过验证矩阵 |
-| `verification-gap` | Codex parity 独立矩阵与最终分层门禁 | parity 逐项可审计，contracts、治理、Rust related、Agent fixture、GUI smoke、`verify:local` 全通过 |
+| `verification-gap` | Windows packaged Electron Gate B 与 Codex parity | Windows runner 真实 artifact evidence；本机 macOS 不能替代 Windows 文件系统与 Squirrel 语义 |
+| `verification-complete` | `verify:local` 全量重验（macOS） | 2026-08-09 从头通过版本/i18n/lint、前端 120 批、contracts、Bridge、Rust workspace 全量与 GUI smoke；Windows platform-gap 仍独立保留 |
+| `verification-complete` | Plugin v3 现役文档回流守卫 | `npm run docs:boundary` 通过；Writing 与发布文档不再引用旧技术标准或旧 manifest 合同 |
 
 ## 已完成门槛：标准包 Gate B
 
@@ -46,7 +50,9 @@ macOS arm64 独立 Electron Gate B 已证明根 `plugin.json`、根 `mcp.json`�
 canonical Plugin mention、真实 Agent turn、canonical MCP Tool Item、elicitation、Right
 Surface、reload/cold restore 与卸载后历史读取；worker、legacy command、生产 mock fallback
 和 console error 命中均为零。证据位于
-`.lime/qc/gui-evidence/plugin-package-electron-gate-b/plugin-package-electron-gate-b-summary.json`。
+`.lime/qc/gui-evidence/plugin-package-electron-gate-b/plugin-package-electron-gate-b-summary.json`；最新运行
+`mcpAppResourceReadCount=4`、`mcpAppHtmlLoadCount=4`、`mcpAppToolCallCount=1`、
+`productionMockFallbackHitCount=0`、`consoleErrors=[]`。
 
 ## 已完成门槛：旧 server manager
 

@@ -207,6 +207,159 @@
       ],
       "type": "object"
     },
+    "CommandExecParams": {
+      "description": "Standalone command execution. It never creates a Thread or Turn.",
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cwd": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "disableOutputCap": {
+          "type": "boolean"
+        },
+        "disableTimeout": {
+          "type": "boolean"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "outputBytesCap": {
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "permissionProfile": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "processId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sandboxPolicy": true,
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommandExecTerminalSize"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "streamStdin": {
+          "type": "boolean"
+        },
+        "streamStdoutStderr": {
+          "type": "boolean"
+        },
+        "timeoutMs": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "tty": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    "CommandExecResizeParams": {
+      "properties": {
+        "processId": {
+          "type": "string"
+        },
+        "size": {
+          "$ref": "#/$defs/CommandExecTerminalSize"
+        }
+      },
+      "required": [
+        "processId",
+        "size"
+      ],
+      "type": "object"
+    },
+    "CommandExecTerminalSize": {
+      "properties": {
+        "cols": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cols",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "CommandExecTerminateParams": {
+      "properties": {
+        "processId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "processId"
+      ],
+      "type": "object"
+    },
+    "CommandExecWriteParams": {
+      "properties": {
+        "closeStdin": {
+          "type": "boolean"
+        },
+        "deltaBase64": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "processId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "processId"
+      ],
+      "type": "object"
+    },
     "DynamicToolFunctionSpec": {
       "properties": {
         "deferLoading": {
@@ -887,6 +1040,108 @@
         },
         {
           "type": "string"
+        }
+      ]
+    },
+    "ReviewDelivery": {
+      "enum": [
+        "detached",
+        "inline"
+      ],
+      "type": "string"
+    },
+    "ReviewStartParams": {
+      "properties": {
+        "delivery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewDelivery"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/ReviewTarget"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ReviewTarget": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "uncommittedChanges",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "branch": {
+              "type": "string"
+            },
+            "type": {
+              "const": "baseBranch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "branch",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "sha": {
+              "type": "string"
+            },
+            "title": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "type": {
+              "const": "commit",
+              "type": "string"
+            }
+          },
+          "required": [
+            "sha",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "instructions": {
+              "type": "string"
+            },
+            "type": {
+              "const": "custom",
+              "type": "string"
+            }
+          },
+          "required": [
+            "instructions",
+            "type"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -3677,6 +3932,26 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
+          "const": "review/start",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ReviewStartParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
           "const": "fs/readFile",
           "type": "string"
         },
@@ -3922,6 +4197,86 @@
         },
         "params": {
           "$ref": "#/$defs/ProcessKillParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "command/exec",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/CommandExecParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "command/exec/write",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/CommandExecWriteParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "command/exec/resize",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/CommandExecResizeParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "command/exec/terminate",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/CommandExecTerminateParams"
         }
       },
       "required": [

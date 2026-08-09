@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { startReview } from "@/lib/api/review";
 import type { ThreadGoal } from "@limecloud/app-server-client";
 import { StepProgress } from "@/components/workspace/layout/StepProgress";
 import { useWorkspaceNavigationActions } from "./useWorkspaceNavigationActions";
@@ -448,6 +449,26 @@ export function useWorkspaceConversationSceneRuntime({
     !isThemeWorkbench &&
     activeTheme === "general" &&
     layoutMode === "chat-canvas";
+  const onStartReview = useCallback(async () => {
+    const reviewThreadId = projectedThreadRead?.thread_id?.trim() || "";
+    if (!reviewThreadId) {
+      throw new Error("Review requires an active thread");
+    }
+    const result = await startReview(
+      {
+        threadId: reviewThreadId,
+        delivery: "inline",
+        target: { type: "uncommittedChanges" },
+      },
+      {
+        onTerminal: async () => {
+          await onRefreshSessionReadModel?.();
+        },
+      },
+    );
+    await onRefreshSessionReadModel?.();
+    return result;
+  }, [onRefreshSessionReadModel, projectedThreadRead?.thread_id]);
   const codingWorkbenchViews = useMemo(
     () =>
       buildWorkspaceConversationCodingViews({
@@ -464,6 +485,7 @@ export function useWorkspaceConversationSceneRuntime({
         onOpenFile: canvasScene.handleOpenCanvasWorkbenchPath,
         onRespondToAction: onPermissionResponse,
         onRefreshSessionReadModel,
+        onStartReview,
         onSubmitRecoveryPrompt: (
           prompt,
           recoveryContext?: CodingWorkbenchRecoveryContext,
@@ -487,6 +509,7 @@ export function useWorkspaceConversationSceneRuntime({
       handleSendFromEmptyState,
       onPermissionResponse,
       onRefreshSessionReadModel,
+      onStartReview,
       isSending,
       locale,
       projectedCurrentTurnId,

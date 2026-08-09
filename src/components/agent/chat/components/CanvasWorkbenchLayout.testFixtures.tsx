@@ -39,11 +39,11 @@ const hoisted = vi.hoisted(() => ({
   mockStopFindInEmbeddedBrowserView: vi.fn(),
   mockSetEmbeddedBrowserViewBounds: vi.fn(),
   mockOpenExternalUrlWithSystemBrowser: vi.fn(),
-  mockKillProjectShellSession: vi.fn(),
-  mockListenProjectShellSessionEvents: vi.fn(),
-  mockResizeProjectShellSession: vi.fn(),
-  mockStartProjectShellSession: vi.fn(),
-  mockWriteProjectShellSession: vi.fn(),
+  mockTerminateCommandExec: vi.fn(),
+  mockSubscribeCommandExecOutput: vi.fn(),
+  mockResizeCommandExec: vi.fn(),
+  mockExecCommand: vi.fn(),
+  mockWriteCommandExec: vi.fn(),
   mockFitAddonFit: vi.fn(),
   mockXtermDisposeInput: vi.fn(),
   mockXtermOnDataHandlers: [] as Array<(data: string) => void>,
@@ -101,15 +101,12 @@ export const mockSetEmbeddedBrowserViewBounds =
   hoisted.mockSetEmbeddedBrowserViewBounds;
 export const mockOpenExternalUrlWithSystemBrowser =
   hoisted.mockOpenExternalUrlWithSystemBrowser;
-export const mockKillProjectShellSession = hoisted.mockKillProjectShellSession;
-export const mockListenProjectShellSessionEvents =
-  hoisted.mockListenProjectShellSessionEvents;
-export const mockResizeProjectShellSession =
-  hoisted.mockResizeProjectShellSession;
-export const mockStartProjectShellSession =
-  hoisted.mockStartProjectShellSession;
-export const mockWriteProjectShellSession =
-  hoisted.mockWriteProjectShellSession;
+export const mockTerminateCommandExec = hoisted.mockTerminateCommandExec;
+export const mockSubscribeCommandExecOutput =
+  hoisted.mockSubscribeCommandExecOutput;
+export const mockResizeCommandExec = hoisted.mockResizeCommandExec;
+export const mockExecCommand = hoisted.mockExecCommand;
+export const mockWriteCommandExec = hoisted.mockWriteCommandExec;
 export const mockFitAddonFit = hoisted.mockFitAddonFit;
 export const mockXtermOnDataHandlers = hoisted.mockXtermOnDataHandlers;
 export const mockXtermLoadAddon = hoisted.mockXtermLoadAddon;
@@ -428,12 +425,12 @@ vi.mock("@/lib/api/externalUrl", () => ({
     hoisted.mockOpenExternalUrlWithSystemBrowser,
 }));
 
-vi.mock("@/lib/api/projectShell", () => ({
-  killProjectShellSession: hoisted.mockKillProjectShellSession,
-  listenProjectShellSessionEvents: hoisted.mockListenProjectShellSessionEvents,
-  resizeProjectShellSession: hoisted.mockResizeProjectShellSession,
-  startProjectShellSession: hoisted.mockStartProjectShellSession,
-  writeProjectShellSession: hoisted.mockWriteProjectShellSession,
+vi.mock("@/lib/api/commandExec", () => ({
+  terminateCommandExec: hoisted.mockTerminateCommandExec,
+  subscribeCommandExecOutput: hoisted.mockSubscribeCommandExecOutput,
+  resizeCommandExec: hoisted.mockResizeCommandExec,
+  execCommand: hoisted.mockExecCommand,
+  writeCommandExec: hoisted.mockWriteCommandExec,
 }));
 
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
@@ -763,19 +760,11 @@ beforeEach(() => {
   mockStopFindInEmbeddedBrowserView.mockResolvedValue(embeddedBrowserState);
   mockSetEmbeddedBrowserViewBounds.mockResolvedValue(embeddedBrowserState);
   mockOpenExternalUrlWithSystemBrowser.mockResolvedValue(undefined);
-  mockKillProjectShellSession.mockResolvedValue(undefined);
-  mockListenProjectShellSessionEvents.mockResolvedValue(vi.fn());
-  mockResizeProjectShellSession.mockResolvedValue(undefined);
-  mockStartProjectShellSession.mockResolvedValue({
-    sessionId: "canvas-workbench-shell-1",
-    cwd: "/workspace",
-    shell: "/bin/zsh",
-    title: "coso@host: workspace",
-    localEcho: true,
-    tty: false,
-    pid: 321,
-  });
-  mockWriteProjectShellSession.mockResolvedValue(undefined);
+  mockTerminateCommandExec.mockResolvedValue({});
+  mockSubscribeCommandExecOutput.mockReturnValue(vi.fn());
+  mockResizeCommandExec.mockResolvedValue({});
+  mockExecCommand.mockResolvedValue({ exitCode: 0, stdout: "", stderr: "" });
+  mockWriteCommandExec.mockResolvedValue({});
   mockXtermOnDataHandlers.length = 0;
   mockXtermTerminalOptions.length = 0;
 

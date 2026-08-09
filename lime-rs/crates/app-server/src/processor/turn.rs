@@ -311,7 +311,7 @@ fn v2_start_response(response: AgentSessionTurnStartResponse) -> TurnStartRespon
     }
 }
 
-fn v2_turn_from_agent_turn(turn: AgentTurn) -> V2Turn {
+pub(super) fn v2_turn_from_agent_turn(turn: AgentTurn) -> V2Turn {
     let status = match turn.status {
         AgentTurnStatus::Completed => V2TurnStatus::Completed,
         AgentTurnStatus::Canceled => V2TurnStatus::Interrupted,

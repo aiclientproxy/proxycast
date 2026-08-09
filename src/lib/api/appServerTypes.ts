@@ -181,6 +181,10 @@ export type AppServerAgentAttachment = protocol.AgentAttachment;
 export type AppServerRuntimeOptions = protocol.RuntimeOptions;
 export type AppServerAgentSessionTurnStartParams =
   protocol.AgentSessionTurnStartParams;
+export type AppServerReviewStartParams = protocol.ReviewStartParams;
+export type AppServerReviewStartResponse = protocol.ReviewStartResponse;
+export type AppServerReviewDelivery = protocol.ReviewDelivery;
+export type AppServerReviewTarget = protocol.ReviewTarget;
 export type AppServerAgentSessionTurnCancelParams =
   protocol.AgentSessionTurnCancelParams;
 export type AppServerTurnSteerParams = protocol.TurnSteerParams;
@@ -235,6 +239,21 @@ export type AppServerThreadShellCommandParams =
   protocol.ThreadShellCommandParams;
 export type AppServerThreadShellCommandResponse =
   protocol.ThreadShellCommandResponse;
+export type AppServerCommandExecParams = protocol.CommandExecParams;
+export type AppServerCommandExecResponse = protocol.CommandExecResponse;
+export type AppServerCommandExecWriteParams = protocol.CommandExecWriteParams;
+export type AppServerCommandExecWriteResponse =
+  protocol.CommandExecWriteResponse;
+export type AppServerCommandExecResizeParams =
+  protocol.CommandExecResizeParams;
+export type AppServerCommandExecResizeResponse =
+  protocol.CommandExecResizeResponse;
+export type AppServerCommandExecTerminateParams =
+  protocol.CommandExecTerminateParams;
+export type AppServerCommandExecTerminateResponse =
+  protocol.CommandExecTerminateResponse;
+export type AppServerCommandExecOutputDeltaNotification =
+  protocol.CommandExecOutputDeltaNotification;
 export type AppServerThreadBackgroundTerminal =
   protocol.ThreadBackgroundTerminal;
 export type AppServerThreadBackgroundTerminalsListParams =

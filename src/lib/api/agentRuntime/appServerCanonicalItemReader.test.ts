@@ -21,36 +21,6 @@ function item(value: Record<string, unknown>): Record<string, unknown> {
 }
 
 describe("readCanonicalThreadItem", () => {
-  it("projects a canonical Hook item with the stable run-based identity", () => {
-    const projected = readCanonicalThreadItem(
-      item({
-        type: "hook",
-        run: {
-          completedAt: 1_783_814_401_500,
-          displayOrder: 0,
-          entries: [{ kind: "feedback", text: "检查完成" }],
-          eventName: "preToolUse",
-          executionMode: "sync",
-          handlerType: "command",
-          id: "hook-run-1",
-          scope: "turn",
-          source: "project",
-          sourcePath: "/workspace/.codex/hooks/check.sh",
-          startedAt: 1_783_814_400_900,
-          status: "completed",
-        },
-      }),
-      { ...event, type: "hook.completed" },
-    );
-
-    expect(projected).toMatchObject({
-      id: "item_hook-run-1",
-      run_id: "hook-run-1",
-      status: "completed",
-      type: "hook",
-    });
-  });
-
   it("rejects internal snake_case detail items at the Codex v2 boundary", () => {
     for (const type of [
       "user_message",

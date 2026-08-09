@@ -554,6 +554,45 @@ impl ExecutionProcessServer {
     }
 }
 
+pub(crate) fn decide_command_execution(
+    command: &[String],
+    working_directory: &Path,
+    sandbox_policy: Option<&str>,
+) -> Result<(bool, Option<tool_runtime::sandbox::SandboxBackend>), String> {
+    let command_text = shell_command_text_from_argv(command);
+    let decision = decide_tool_execution(
+        ToolExecutionDecisionInput {
+            tool_name: tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME,
+            params: &json!({ "command": command_text }),
+            working_directory,
+            surface: "command_exec",
+            auto_mode: false,
+            bypass_restrictions: false,
+            approval_policy: None,
+            requested_sandbox_policy: sandbox_policy,
+            resolver_input: ToolExecutionResolverInput {
+                persisted_policy: None,
+                request_metadata: None,
+            },
+        },
+        app_server_tool_execution_policy_options(),
+    );
+    if !decision.allowed() {
+        return Err(format!("{}: {}", decision.reason_code, decision.reason));
+    }
+    validate_shell_execution_process_command(
+        tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME,
+        &command_text,
+        working_directory,
+        None,
+        sandbox_policy,
+    )?;
+    Ok((
+        decision.workspace_sandbox_backend_enforced(),
+        decision.sandbox_backend(),
+    ))
+}
+
 impl LiveExecutionProcessRegistry for ExecutionProcessServer {
     fn register_live_process(
         &self,

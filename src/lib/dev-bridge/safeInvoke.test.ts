@@ -344,16 +344,13 @@ describe("safeListen / safeEmit", () => {
       emit: vi.fn(),
     };
 
-    const safeUnlisten = await safeListen(
-      "project-shell-session-event",
-      vi.fn(),
-    );
+    const safeUnlisten = await safeListen("config-changed", vi.fn());
 
     safeUnlisten();
 
     expect(listen).not.toHaveBeenCalled();
     expect(mocks.listenViaHttpEvent).toHaveBeenCalledWith(
-      "project-shell-session-event",
+      "config-changed",
       expect.any(Function),
     );
     expect(unlisten).toHaveBeenCalledTimes(1);

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "metadata": true,
+    "threadId": {
+      "type": "string"
+    },
+    "turnId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "metadata",
+    "threadId",
+    "turnId"
+  ],
+  "title": "TurnModerationMetadataNotification",
+  "type": "object"
+}

@@ -635,21 +635,6 @@ export interface AppServerClient {
   createProjectGitWorktree(
     params: protocol.ProjectGitWorktreeCreateParams,
   ): protocol.JsonRpcRequest;
-  startProjectShellSession(
-    params: protocol.ProjectShellSessionStartParams,
-  ): protocol.JsonRpcRequest;
-  writeProjectShellSession(
-    params: protocol.ProjectShellSessionWriteParams,
-  ): protocol.JsonRpcRequest;
-  resizeProjectShellSession(
-    params: protocol.ProjectShellSessionResizeParams,
-  ): protocol.JsonRpcRequest;
-  killProjectShellSession(
-    params: protocol.ProjectShellSessionKillParams,
-  ): protocol.JsonRpcRequest;
-  drainProjectShellSessionEvents(
-    params?: protocol.ProjectShellSessionDrainEventsParams,
-  ): protocol.JsonRpcRequest;
   exportEvidence(
     params: protocol.EvidenceExportParams,
   ): protocol.JsonRpcRequest;
@@ -769,7 +754,18 @@ export interface AppServerClient {
     params: protocol.ProcessResizePtyParams,
   ): protocol.JsonRpcRequest;
   killProcess(params: protocol.ProcessKillParams): protocol.JsonRpcRequest;
+  execCommand(params: protocol.CommandExecParams): protocol.JsonRpcRequest;
+  writeCommandExec(
+    params: protocol.CommandExecWriteParams,
+  ): protocol.JsonRpcRequest;
+  resizeCommandExec(
+    params: protocol.CommandExecResizeParams,
+  ): protocol.JsonRpcRequest;
+  terminateCommandExec(
+    params: protocol.CommandExecTerminateParams,
+  ): protocol.JsonRpcRequest;
   startTurn(params: protocol.TurnStartParams): protocol.JsonRpcRequest;
+  startReview(params: protocol.ReviewStartParams): protocol.JsonRpcRequest;
   steerTurn(params: protocol.TurnSteerParams): protocol.JsonRpcRequest;
   cancelTurn(params: protocol.TurnInterruptParams): protocol.JsonRpcRequest;
   respondAction(

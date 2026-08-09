@@ -70,7 +70,7 @@
     { "method": "hook/started", "outlets": ["timeline", "header"] },
     { "method": "turn/completed", "outlets": ["timeline", "turnPanel"] },
     { "method": "hook/completed", "outlets": ["timeline"] },
-    { "method": "turn/diff/updated", "outlets": ["diagnostics"] },
+    { "method": "turn/diff/updated", "outlets": ["changes"] },
     { "method": "turn/plan/updated", "outlets": ["turnPanel"] },
     { "method": "item/started", "outlets": ["timeline"] },
     {

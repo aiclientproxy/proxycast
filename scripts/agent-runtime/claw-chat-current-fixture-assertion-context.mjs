@@ -74,6 +74,23 @@ export function resolveGateBExpectedIdentity({
   backendLedger,
   appServerRequests,
 }) {
+  if (
+    options?.scenario === CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO ||
+    options?.scenario === CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO
+  ) {
+    const identity =
+      summary?.contentFactoryArticleWorkspaceSessionCreation?.identity;
+    const sessionId =
+      typeof identity?.sessionId === "string" ? identity.sessionId.trim() : "";
+    const threadId =
+      typeof identity?.threadId === "string" ? identity.threadId.trim() : "";
+    if (!sessionId || !threadId) {
+      throw new Error(
+        "Gate B Content Factory identity requires the scenario-created sessionId and threadId",
+      );
+    }
+    return { sessionId, threadId };
+  }
   if (options?.scenario === ACTIVE_STEER_SCENARIO) {
     const turnId = summary?.activeSteer?.activeTurnId ?? null;
     if (!summary?.sessionId || !summary?.threadId || !turnId) {

@@ -3050,6 +3050,17 @@
       "allowedPaths": []
     },
     {
+      "id": "plugin-lab-retired-i18n-keys",
+      "classification": "dead",
+      "description": "旧 Plugin Lab 实验岛和 sidebar 入口已从产品链删除；五语言资源不得恢复 plugin.lab.* 或 pluginLab 文案",
+      "patterns": [
+        "plugin.lab.",
+        "navigation.sidebar.items.pluginLab"
+      ],
+      "includePathPrefixes": ["src/i18n/resources"],
+      "allowedPaths": []
+    },
+    {
       "id": "frontend-provider-pool-api-key-old-imports",
       "classification": "dead-candidate",
       "description": "前端不得继续 import 旧 provider-pool/api-key 路径；API Key Provider 当前目录为 src/components/api-key-provider",
@@ -4490,7 +4501,7 @@
     {
       "id": "sceneapp-active-launch-frontend-surface",
       "classification": "dead",
-      "description": "前端不得恢复 SceneApp 首页推荐卡片、最近 SceneApp 恢复入口、Workspace 启动 Hook 或 launch bridge；Plugin Lab / service skill scene 是 current",
+      "description": "前端不得恢复 SceneApp 首页推荐卡片、最近 SceneApp 恢复入口、Workspace 启动 Hook 或 launch bridge；标准 Plugin package / service skill scene 是 current",
       "patterns": [
         "useWorkspaceSceneAppEntryActions",
         "useSceneAppLaunchRuntime",

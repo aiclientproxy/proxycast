@@ -69,7 +69,7 @@ export function useAgentChatWorkspaceCommandRuntime({
   // prettier-ignore
   const {
     systemPrompt, agentChatRuntime, providerType, model, executionStrategy, accessMode, messages, setChatMessages,
-    currentTurnId, turns, threadItems, queuedTurnCount, threadRead, threadGoal, threadGoalError, isThreadGoalLoading, activeExecutionRuntime, isSending, compactSession,
+    currentTurnId, turns, threadItems, queuedTurnCount, threadRead, threadGoal, threadGoalError, isThreadGoalLoading, activeExecutionRuntime, isSending, compactSession, refreshSessionReadModel,
     stopSending, replayPendingAction, handlePermissionResponse, pendingActions, submittedActionsInFlight, triggerAIGuide,
     topics, isAutoRestoringSession, isSessionHydrating, sessionId, ensureSession, originalSwitchTopic, workspacePathMissing,
     fixWorkspacePathAndRetry, dismissWorkspacePathError, setWorkspaceHealthError, expertWorkspaceSkillRuntimeEnableInput, workspaceRequestMetadataWithExpertSkills, workspaceSkillBindings, topicById,
@@ -597,6 +597,7 @@ export function useAgentChatWorkspaceCommandRuntime({
       onOpenSubagentSession: handleOpenSubagentSession,
       onRespondToAction: handlePermissionResponse,
       onSubmitCodeFixPrompt: handleSubmitCodeFixPrompt,
+      refreshSessionReadModel,
       pendingActions: planComposerPendingActions,
       projectId,
       providerType,

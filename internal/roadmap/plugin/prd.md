@@ -1,8 +1,8 @@
 # Lime 插件产品需求文档
 
 更新时间：2026-06-25  
-状态：Draft
-事实源：`internal/roadmap/rightsurface/README.md`、`internal/roadmap/workbench/v3/*`、`internal/tech/plugin/README.md`、上游插件模型参考；旧 Plugin 标准仅作为迁移输入参考
+状态：Historical / superseded by Plugin v3
+事实源：`internal/roadmap/plugin/v3/README.md`、`internal/roadmap/plugin/v3/01-target-contract.md`、`internal/roadmap/rightsurface/README.md`；本文件仅保留产品决策证据，不是实现入口
 
 ## 1. 一句话目标
 

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
+import { pluginPackageMcpAppSurfaceReady } from "./plugin-mcp-app-gate-b.mjs";
 
 describe("Plugin package current Electron fixture guard", () => {
   it("uses the real Plugin package install and runtime MCP lifecycle", () => {
@@ -11,6 +12,10 @@ describe("Plugin package current Electron fixture guard", () => {
       "scripts/electron/mcp-elicitation-gate-b.mjs",
       "utf8",
     );
+    const fixture = fs.readFileSync(
+      "scripts/electron/mcp-config-fixture-smoke.mjs",
+      "utf8",
+    );
     const mcpAppGate = fs.readFileSync(
       "scripts/electron/plugin-mcp-app-gate-b.mjs",
       "utf8",
@@ -19,8 +24,24 @@ describe("Plugin package current Electron fixture guard", () => {
     expect(wrapper).toContain("run({ pluginPackage: true })");
     expect(gate).toContain("ensureElectronFixtureBuild");
     expect(gate).toContain("rootDir: process.cwd()");
-    expect(gate).toContain('"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"');
-    expect(gate).toContain('"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"');
+    expect(gate).toContain("--electron-executable");
+    expect(gate).toContain("options.electronExecutable");
+    expect(gate).toContain('{ APP_SERVER_BIN: "" }');
+    expect(gate).toContain("summary.electronPackaged");
+    expect(gate).toContain("summary.packagedElectronRequested");
+    expect(fixture).toContain("const packagedExecutable =");
+    expect(fixture).toContain(
+      "executablePath: packagedExecutable || electronPath",
+    );
+    expect(fixture).toMatch(
+      /args:\s*packagedExecutable\s*\?\s*\["--use-mock-keychain"\]/u,
+    );
+    expect(gate).toContain(
+      '"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"',
+    );
+    expect(gate).toContain(
+      '"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"',
+    );
     expect(gate).toContain('path.join(fixture.root, "plugin.json")');
     expect(gate).toContain('path.join(fixture.root, "mcp.json")');
     expect(gate).toContain('"skills",');
@@ -115,9 +136,7 @@ describe("Plugin package current Electron fixture guard", () => {
     expect(mcpAppGate).toContain(
       "request?.params?.threadId === runtime.threadId",
     );
-    expect(mcpAppGate).toContain(
-      "request?.params?.sessionId === undefined",
-    );
+    expect(mcpAppGate).toContain("request?.params?.sessionId === undefined");
     expect(mcpAppGate).toContain("args_preview?.request?.lines");
     expect(mcpAppGate).toMatch(/webContents\s*\.getAllWebContents\(\)/u);
     expect(mcpAppGate).not.toContain(
@@ -128,5 +147,29 @@ describe("Plugin package current Electron fixture guard", () => {
     expect(mcpAppGate).toContain("Promise.race([");
     expect(gate).toContain('backendMode: "runtime"');
     expect(gate).not.toContain('APP_SERVER_BACKEND_MODE: "mock"');
+  });
+
+  it("waits for the cumulative MCP App lifecycle before exact-count assertions", () => {
+    expect(
+      pluginPackageMcpAppSurfaceReady(
+        { resourceReadCount: 1, htmlLoadCount: 1 },
+        2,
+        2,
+      ),
+    ).toBe(false);
+    expect(
+      pluginPackageMcpAppSurfaceReady(
+        { resourceReadCount: 2, htmlLoadCount: 2 },
+        2,
+        2,
+      ),
+    ).toBe(true);
+    expect(
+      pluginPackageMcpAppSurfaceReady(
+        { resourceReadCount: 3, htmlLoadCount: 2 },
+        2,
+        2,
+      ),
+    ).toBe(true);
   });
 });

@@ -75,6 +75,7 @@ const {
   METHOD_TURN_INTERRUPT,
   METHOD_TURN_STEER,
   METHOD_TURN_START,
+  METHOD_REVIEW_START,
   METHOD_THREAD_ITEMS_LIST,
   METHOD_THREAD_ARCHIVE,
   METHOD_THREAD_DELETE,
@@ -147,11 +148,6 @@ const {
   METHOD_PROJECT_GIT_DIFF,
   METHOD_PROJECT_GIT_STATUS,
   METHOD_PROJECT_GIT_WORKTREE_CREATE,
-  METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS,
-  METHOD_PROJECT_SHELL_SESSION_KILL,
-  METHOD_PROJECT_SHELL_SESSION_RESIZE,
-  METHOD_PROJECT_SHELL_SESSION_START,
-  METHOD_PROJECT_SHELL_SESSION_WRITE,
   METHOD_DIAGNOSTICS_LOG_STORAGE_READ,
   METHOD_DIAGNOSTICS_SERVER_READ,
   METHOD_DIAGNOSTICS_SUPPORT_BUNDLE_EXPORT,
@@ -261,6 +257,11 @@ const {
   METHOD_PROCESS_RESIZE_PTY,
   METHOD_PROCESS_SPAWN,
   METHOD_PROCESS_WRITE_STDIN,
+  METHOD_COMMAND_EXEC,
+  METHOD_COMMAND_EXEC_OUTPUT_DELTA,
+  METHOD_COMMAND_EXEC_RESIZE,
+  METHOD_COMMAND_EXEC_TERMINATE,
+  METHOD_COMMAND_EXEC_WRITE,
   METHOD_PROJECT_MEMORY_READ,
   METHOD_SESSION_FILE_DELETE,
   METHOD_SESSION_FILE_GET_OR_CREATE,
@@ -416,6 +417,57 @@ test("process request helpers use exact v2 methods and payloads", () => {
   assert.equal(write.method, METHOD_PROCESS_WRITE_STDIN);
   assert.equal(resize.method, METHOD_PROCESS_RESIZE_PTY);
   assert.equal(kill.method, METHOD_PROCESS_KILL);
+});
+
+test("command/exec helpers use exact methods, connection-scoped process ids, and base64 stdin", () => {
+  const client = new AppServerClient();
+  const exec = client.execCommand({
+    command: ["/bin/sh", "-c", "printf hello"],
+    processId: "shell-1",
+    cwd: "/workspace",
+    tty: true,
+    streamStdin: true,
+    streamStdoutStderr: true,
+    outputBytesCap: 4096,
+    timeoutMs: 5000,
+    size: { rows: 24, cols: 80 },
+  });
+  const write = client.writeCommandExec({
+    processId: "shell-1",
+    deltaBase64: "aGVsbG8=",
+    closeStdin: true,
+  });
+  const resize = client.resizeCommandExec({
+    processId: "shell-1",
+    size: { rows: 40, cols: 120 },
+  });
+  const terminate = client.terminateCommandExec({ processId: "shell-1" });
+
+  assert.equal(exec.id, 1);
+  assert.equal(exec.method, METHOD_COMMAND_EXEC);
+  assert.deepEqual(exec.params, {
+    command: ["/bin/sh", "-c", "printf hello"],
+    processId: "shell-1",
+    cwd: "/workspace",
+    tty: true,
+    streamStdin: true,
+    streamStdoutStderr: true,
+    outputBytesCap: 4096,
+    timeoutMs: 5000,
+    size: { rows: 24, cols: 80 },
+  });
+  assert.equal(write.id, 2);
+  assert.equal(write.method, METHOD_COMMAND_EXEC_WRITE);
+  assert.deepEqual(write.params, {
+    processId: "shell-1",
+    deltaBase64: "aGVsbG8=",
+    closeStdin: true,
+  });
+  assert.equal(resize.id, 3);
+  assert.equal(resize.method, METHOD_COMMAND_EXEC_RESIZE);
+  assert.equal(terminate.id, 4);
+  assert.equal(terminate.method, METHOD_COMMAND_EXEC_TERMINATE);
+  assert.equal(METHOD_COMMAND_EXEC_OUTPUT_DELTA, "command/exec/outputDelta");
 });
 
 const repoRoot = join(
@@ -2280,27 +2332,6 @@ test("builds exact fs requests", () => {
     name: "agent-demo",
     baseBranch: "main",
   });
-  const shellStart = client.startProjectShellSession({
-    rootPath: "/workspace",
-    cols: 120,
-    rows: 16,
-  });
-  const shellWrite = client.writeProjectShellSession({
-    sessionId: "project-shell-1",
-    data: "pwd\r",
-  });
-  const shellResize = client.resizeProjectShellSession({
-    sessionId: "project-shell-1",
-    cols: 100,
-    rows: 24,
-  });
-  const shellKill = client.killProjectShellSession({
-    sessionId: "project-shell-1",
-  });
-  const shellDrain = client.drainProjectShellSessionEvents({
-    sessionId: "project-shell-1",
-    limit: 20,
-  });
 
   assert.equal(readFile.id, 1);
   assert.equal(readFile.method, METHOD_FS_READ_FILE);
@@ -2377,37 +2408,6 @@ test("builds exact fs requests", () => {
     rootPath: "/workspace",
     name: "agent-demo",
     baseBranch: "main",
-  });
-  assert.equal(shellStart.id, 16);
-  assert.equal(shellStart.method, METHOD_PROJECT_SHELL_SESSION_START);
-  assert.deepEqual(shellStart.params, {
-    rootPath: "/workspace",
-    cols: 120,
-    rows: 16,
-  });
-  assert.equal(shellWrite.id, 17);
-  assert.equal(shellWrite.method, METHOD_PROJECT_SHELL_SESSION_WRITE);
-  assert.deepEqual(shellWrite.params, {
-    sessionId: "project-shell-1",
-    data: "pwd\r",
-  });
-  assert.equal(shellResize.id, 18);
-  assert.equal(shellResize.method, METHOD_PROJECT_SHELL_SESSION_RESIZE);
-  assert.deepEqual(shellResize.params, {
-    sessionId: "project-shell-1",
-    cols: 100,
-    rows: 24,
-  });
-  assert.equal(shellKill.id, 19);
-  assert.equal(shellKill.method, METHOD_PROJECT_SHELL_SESSION_KILL);
-  assert.deepEqual(shellKill.params, {
-    sessionId: "project-shell-1",
-  });
-  assert.equal(shellDrain.id, 20);
-  assert.equal(shellDrain.method, METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS);
-  assert.deepEqual(shellDrain.params, {
-    sessionId: "project-shell-1",
-    limit: 20,
   });
 });
 
@@ -2614,6 +2614,7 @@ test("exports app-server method catalog from checked-in Rust manifest", () => {
   assert.equal(isAppServerRequestMethod(METHOD_INITIALIZE), true);
   assert.equal(isAppServerRequestMethod(METHOD_ARTIFACT_READ), true);
   assert.equal(isAppServerRequestMethod(METHOD_TURN_START), true);
+  assert.equal(isAppServerRequestMethod(METHOD_REVIEW_START), true);
   assert.equal(
     isAppServerRequestMethod(METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CHANGED),
     false,
@@ -2639,10 +2640,6 @@ test("exports app-server method catalog from checked-in Rust manifest", () => {
   assert.equal(
     getAppServerRequestSerializationScope(METHOD_TURN_START),
     "thread",
-  );
-  assert.equal(
-    getAppServerRequestSerializationScope(METHOD_PROJECT_SHELL_SESSION_START),
-    "projectShellSession",
   );
   assert.equal(
     getAppServerRequestSerializationScope(METHOD_MCP_SERVER_OAUTH_LOGIN),
@@ -2786,6 +2783,32 @@ test("builds typed v2 turn start requests", () => {
     }),
     undefined,
   );
+});
+
+test("builds typed v2 review start requests", () => {
+  const client = new AppServerClient();
+
+  const review = client.startReview({
+    threadId: "thread_external",
+    delivery: "inline",
+    target: {
+      type: "commit",
+      sha: "abc123",
+      title: "Tidy colors",
+    },
+  });
+
+  assert.equal(review.id, 1);
+  assert.equal(review.method, METHOD_REVIEW_START);
+  assert.deepEqual(review.params, {
+    threadId: "thread_external",
+    delivery: "inline",
+    target: {
+      type: "commit",
+      sha: "abc123",
+      title: "Tidy colors",
+    },
+  });
 });
 
 test("builds typed v2 turn steer requests", async () => {
@@ -4594,6 +4617,76 @@ test("routes turn plan updates only through the signal router", async () => {
 
   assert.equal(agentRuntimeLifecycleNotification(notification), undefined);
   assert.equal(await router.dispatch(notification), true);
+  assert.deepEqual(lifecycle, []);
+  assert.deepEqual(signals, [notification]);
+});
+
+test("routes strict turn diff updates only through the signal router", async () => {
+  const notification = {
+    method: "turn/diff/updated",
+    params: {
+      diff: "diff --git a/src/a.ts b/src/a.ts\n",
+      threadId: "thread_external",
+      turnId: "turn_external",
+    },
+  };
+  const router = new AppServerAgentEventRouter();
+  const lifecycle = [];
+  const signals = [];
+  router.subscribeLifecycle((event) => lifecycle.push(event));
+  router.subscribeSignal((event) => signals.push(event));
+
+  assert.equal(agentRuntimeLifecycleNotification(notification), undefined);
+  assert.equal(await router.dispatch(notification), true);
+  assert.equal(
+    await router.dispatch({
+      ...notification,
+      params: { ...notification.params, legacy: true },
+    }),
+    false,
+  );
+  assert.deepEqual(lifecycle, []);
+  assert.deepEqual(signals, [notification]);
+});
+
+test("routes strict opaque turn moderation metadata updates through the signal router", async () => {
+  const notification = {
+    method: "turn/moderationMetadata",
+    params: {
+      metadata: { presentation: "inline" },
+      threadId: "thread_external",
+      turnId: "turn_external",
+    },
+  };
+  const router = new AppServerAgentEventRouter();
+  const lifecycle = [];
+  const signals = [];
+  router.subscribeLifecycle((event) => lifecycle.push(event));
+  router.subscribeSignal((event) => signals.push(event));
+
+  assert.equal(agentRuntimeLifecycleNotification(notification), undefined);
+  assert.equal(await router.dispatch(notification), true);
+  assert.equal(
+    await router.dispatch({
+      ...notification,
+      params: { ...notification.params, legacy: true },
+    }),
+    false,
+  );
+  assert.equal(
+    await router.dispatch({
+      ...notification,
+      params: { threadId: "thread_external", turnId: "turn_external" },
+    }),
+    false,
+  );
+  assert.equal(
+    await router.dispatch({
+      ...notification,
+      params: { ...notification.params, metadata: Number.NaN },
+    }),
+    false,
+  );
   assert.deepEqual(lifecycle, []);
   assert.deepEqual(signals, [notification]);
 });

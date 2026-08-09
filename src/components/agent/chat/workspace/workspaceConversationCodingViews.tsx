@@ -47,6 +47,7 @@ interface WorkspaceConversationCodingViewsParams {
   onOpenFile?: (path: string) => void | Promise<void>;
   onRespondToAction?: (response: ConfirmResponse) => void | Promise<void>;
   onRefreshSessionReadModel?: () => void | Promise<unknown>;
+  onStartReview?: () => Promise<unknown>;
   onSubmitRecoveryPrompt?: (
     prompt: string,
     context?: CodingWorkbenchRecoveryContext,
@@ -90,6 +91,7 @@ export function buildWorkspaceConversationCodingViews({
   onOpenFile,
   onRespondToAction,
   onRefreshSessionReadModel,
+  onStartReview,
   onSubmitRecoveryPrompt,
 }: WorkspaceConversationCodingViewsParams): WorkspaceConversationCodingViews {
   const currentSessionTurn =
@@ -241,6 +243,12 @@ export function buildWorkspaceConversationCodingViews({
         codingView,
         fileCheckpointSummary,
         onOpenFile,
+        threadItems,
+        reviewThreadId: threadRead?.thread_id,
+        currentTurnId,
+        turnDiff: currentSessionTurn?.unified_diff,
+        canInterrupt: Boolean(isSending),
+        onStartReview,
       })
     : null;
 

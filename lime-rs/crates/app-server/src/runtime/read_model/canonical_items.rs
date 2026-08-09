@@ -407,21 +407,6 @@ fn canonical_payload_to_agent_detail(
             }
             "context_compaction"
         }
-        ThreadItemPayload::Hook { run } => {
-            detail.insert("run_id".to_string(), json!(run.id));
-            detail.insert("event_name".to_string(), json!(run.event_name));
-            detail.insert("handler_type".to_string(), json!(run.handler_type));
-            detail.insert("execution_mode".to_string(), json!(run.execution_mode));
-            detail.insert("scope".to_string(), json!(run.scope));
-            detail.insert("source_path".to_string(), json!(run.source_path));
-            detail.insert("source".to_string(), json!(run.source));
-            detail.insert("display_order".to_string(), json!(run.display_order));
-            detail.insert("hook_status".to_string(), json!(run.status));
-            detail.insert("status_message".to_string(), json!(run.status_message));
-            detail.insert("duration_ms".to_string(), json!(run.duration_ms));
-            detail.insert("entries".to_string(), json!(run.entries));
-            "hook"
-        }
         ThreadItemPayload::Unknown {
             upstream_type,
             field_names,
@@ -431,9 +416,25 @@ fn canonical_payload_to_agent_detail(
             "unknown_item"
         }
         ThreadItemPayload::Extension { name, data } => {
-            detail.insert("extension_name".to_string(), json!(name));
-            detail.insert("extension_data".to_string(), data.clone());
-            "extension"
+            if matches!(name.as_str(), "enteredReviewMode" | "exitedReviewMode") {
+                detail.insert(
+                    "review".to_string(),
+                    data.get("review").cloned().unwrap_or_else(|| json!("")),
+                );
+                detail.insert(
+                    "boundary".to_string(),
+                    json!(if name == "enteredReviewMode" {
+                        "entered"
+                    } else {
+                        "exited"
+                    }),
+                );
+                "review_boundary"
+            } else {
+                detail.insert("extension_name".to_string(), json!(name));
+                detail.insert("extension_data".to_string(), data.clone());
+                "extension"
+            }
         }
     };
     (item_type, detail)

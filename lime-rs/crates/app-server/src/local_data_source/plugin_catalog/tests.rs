@@ -202,6 +202,80 @@ fn manifest_matches_codex_agent_plugin_validation_and_extension_precedence() {
 }
 
 #[test]
+fn codex_apps_extension_uses_config_path_and_isolates_invalid_config() {
+    let temp = TempDir::new().unwrap();
+    let root = temp.path().join("source");
+    fs::create_dir_all(root.join(".codex-plugin")).unwrap();
+    fs::write(
+        root.join("plugin.json"),
+        r#"{
+          "$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "name":"acme.tools",
+          "extensions":{
+            "com.openai":{"apps":"./apps.json"}
+          }
+        }"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join(".codex-plugin/plugin.json"),
+        r#"{"apps":"./legacy-apps.json"}"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("apps.json"),
+        r#"{"apps":{"Calendar":{"id":"calendar","category":"productivity"}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("legacy-apps.json"),
+        r#"{"apps":{"Legacy":{"id":"legacy"}}}"#,
+    )
+    .unwrap();
+
+    let manifest = read_manifest(&root).unwrap();
+    let detail = build_capability_detail(&root, &manifest).unwrap();
+    assert_eq!(detail.apps.len(), 1);
+    assert_eq!(detail.apps[0].id, "calendar");
+    assert_eq!(detail.apps[0].name, "Calendar");
+
+    fs::write(root.join("apps.json"), r#"{"apps":{"Broken":{}}}"#).unwrap();
+    let manifest = read_manifest(&root).unwrap();
+    assert!(build_capability_detail(&root, &manifest)
+        .unwrap()
+        .apps
+        .is_empty());
+
+    fs::write(
+        root.join("plugin.json"),
+        r#"{
+          "$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "name":"acme.tools",
+          "extensions":{"com.openai":{"apps":"apps.json"}}
+        }"#,
+    )
+    .unwrap();
+    let manifest = read_manifest(&root).unwrap();
+    assert!(build_capability_detail(&root, &manifest)
+        .unwrap()
+        .apps
+        .is_empty());
+
+    fs::write(
+        root.join("plugin.json"),
+        r#"{
+          "$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+          "name":"acme.tools",
+          "extensions":{"com.openai":{"apps":{"inline":true}}}
+        }"#,
+    )
+    .unwrap();
+    assert!(read_manifest(&root)
+        .unwrap_err()
+        .contains("apps 必须是包内相对路径"));
+}
+
+#[test]
 fn manifest_rejects_invalid_declared_metadata_types() {
     let temp = TempDir::new().unwrap();
     let root = temp.path().join("source");
@@ -319,6 +393,7 @@ fn loads_default_mcp_file_and_resolves_cwd_to_installed_package_root() {
     assert_eq!(specs.len(), 1);
     assert_eq!(specs[0].name, "plugin__example-plugin__demo");
     assert_eq!(specs[0].plugin_id.as_deref(), Some("example-plugin"));
+    assert!(data_root.join("data/example-plugin").is_dir());
     assert_eq!(
         specs[0].config.sanitized_cwd(),
         Some(fs::canonicalize(data_root.join("v3/packages/example-plugin/1.2.3/scripts")).unwrap())
@@ -328,6 +403,30 @@ fn loads_default_mcp_file_and_resolves_cwd_to_installed_package_root() {
         snapshots[0].mcp_server_names,
         vec!["plugin__example-plugin__demo"]
     );
+}
+
+#[test]
+fn does_not_create_plugin_data_for_http_only_servers() {
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source");
+    fixture(&source);
+    fs::write(
+        source.join("mcp.json"),
+        r#"{
+          "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+          "mcpServers": {
+            "remote": {"type": "streamable-http", "url": "https://example.com/mcp"}
+          }
+        }"#,
+    )
+    .unwrap();
+    let data_root = temp.path().join("data");
+    install(&data_root, install_params(&source)).unwrap();
+
+    let specs = list_plugin_mcp_runtime_server_specs(&data_root).unwrap();
+
+    assert_eq!(specs.len(), 1);
+    assert!(!data_root.join("data/example-plugin").exists());
 }
 
 #[test]

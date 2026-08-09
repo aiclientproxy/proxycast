@@ -36,7 +36,6 @@ import {
 import { showDesktopNotification } from "./desktopNotificationHost";
 import { FileShellHost } from "./fileShellHost";
 import { LayeredDesignProjectHost } from "./layeredDesignProjectHost";
-import { ProjectShellHost } from "./projectShellHost";
 import { openResourceManagerWindow } from "./resourceManagerWindowHost";
 import { SystemUtilityHost } from "./systemUtilityHost";
 import { VoiceModelHost } from "./voiceModelHost";
@@ -77,7 +76,6 @@ export class ElectronHostCommands {
   readonly #emit: HostEventEmitter;
   readonly #fileShellHost = new FileShellHost();
   readonly #layeredDesignProjectHost = new LayeredDesignProjectHost();
-  readonly #projectShellHost: ProjectShellHost;
   readonly #systemUtilityHost: SystemUtilityHost;
   readonly #voiceModelHost: VoiceModelHost;
   readonly #appConfigHost: AppConfigHost;
@@ -94,11 +92,6 @@ export class ElectronHostCommands {
     this.#userDataDir = userDataDir;
     this.#emit = emit;
     this.#appConfigHost = new AppConfigHost(userDataDir);
-    this.#projectShellHost = new ProjectShellHost(
-      <T>(method: string, params: AppServerParams = {}) =>
-        this.#appServerRequest<T>(method, params),
-      emit,
-    );
     this.#systemUtilityHost = new SystemUtilityHost({
       appDataRoot,
       readConfig: () => this.#readConfig(),
@@ -132,16 +125,6 @@ export class ElectronHostCommands {
         return await this.#fileShellHost.openWithDefaultApp(args);
       case "open_project_path_with_tool":
         return await this.#openProjectPathWithTool(args);
-      case "run_project_shell_command":
-        return await this.#projectShellHost.runCommand(args);
-      case "project_shell_session_start":
-        return await this.#projectShellHost.startSession(args);
-      case "project_shell_session_write":
-        return await this.#projectShellHost.writeSession(args);
-      case "project_shell_session_resize":
-        return await this.#projectShellHost.resizeSession(args);
-      case "project_shell_session_kill":
-        return await this.#projectShellHost.killSession(args);
       case "save_exported_document":
         return await this.#saveExportedDocument(args);
       case "save_layered_design_project_export":
@@ -601,9 +584,6 @@ export class ElectronHostCommands {
     );
   }
 
-  disposeProjectShellSessionsForShutdown(): void {
-    this.#projectShellHost.disposeForShutdown();
-  }
 }
 
 function readRecord(

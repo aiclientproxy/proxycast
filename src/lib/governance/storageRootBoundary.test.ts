@@ -68,13 +68,9 @@ const PLUGIN_DATA_SOURCE_IMPL = join(
   REPO_ROOT,
   "lime-rs/crates/app-server/src/local_data_source/impls/plugins.rs",
 );
-const PLUGIN_PACKAGE_PATHS = join(
+const PLUGIN_CATALOG = join(
   REPO_ROOT,
-  "lime-rs/crates/app-server/src/plugin_packages/paths.rs",
-);
-const PLUGIN_TASK_RUNTIME = join(
-  REPO_ROOT,
-  "lime-rs/crates/app-server/src/runtime/plugin_task_runtime.rs",
+  "lime-rs/crates/app-server/src/local_data_source/plugin_catalog.rs",
 );
 const LOCAL_DIAGNOSTICS = join(
   REPO_ROOT,
@@ -480,26 +476,32 @@ describe("storage root boundary", () => {
     );
   });
 
-  it("Plugin package 与 runtime 只能使用 PluginDataSource 注入的 AgentRoot/plugins", () => {
+  it("Plugin catalog 与 runtime 只能使用 PluginDataSource 注入的 AgentRoot/plugins", () => {
     const localDataSource = readFileSync(LOCAL_APP_DATA_SOURCE, "utf8");
     const pluginDataSourceImpl = readFileSync(PLUGIN_DATA_SOURCE_IMPL, "utf8");
-    const pluginPackagePaths = readFileSync(PLUGIN_PACKAGE_PATHS, "utf8");
-    const pluginTaskRuntime = readFileSync(PLUGIN_TASK_RUNTIME, "utf8");
+    const pluginCatalog = readFileSync(PLUGIN_CATALOG, "utf8");
 
     expect(localDataSource).toContain(
-      "plugin_packages::plugin_data_dir_for_agent_root(&data_root)",
+      'let plugin_data_root = data_root.join("plugins");',
     );
     expect(pluginDataSourceImpl).toContain(
-      "plugins::fetch_plugin_cloud_package(&self.plugin_data_root, params)",
+      "plugin_catalog::enabled_plugin_turn_snapshots(\n            &self.plugin_data_root,",
     );
-    expect(pluginPackagePaths).toContain("agent_root.join(PLUGIN_DATA_DIR)");
-    expect(pluginPackagePaths).not.toContain("lime_core::app_paths");
-    expect(pluginPackagePaths).not.toContain("preferred_data_dir");
-    expect(pluginTaskRuntime).toContain(
-      'plugin_data_root.join("packages").join(package_dir_name)',
+    expect(pluginCatalog).toContain('const STORE_DIR: &str = "v3";');
+    expect(pluginCatalog).toContain(
+      'plugin_data_root.join("data").join(plugin_id)',
     );
-    expect(pluginTaskRuntime).not.toContain("lime_core::app_paths");
-    expect(pluginTaskRuntime).not.toContain("preferred_data_dir");
+    expect(pluginCatalog).toContain(
+      "plugin_data_root.join(STORE_DIR).join(PACKAGES_DIR)",
+    );
+    for (const source of [
+      localDataSource,
+      pluginDataSourceImpl,
+      pluginCatalog,
+    ]) {
+      expect(source).not.toContain("lime_core::app_paths");
+      expect(source).not.toContain("preferred_data_dir");
+    }
   });
 
   it("HostUserData 只能派生 host config/profile，不能派生 machine asset", () => {

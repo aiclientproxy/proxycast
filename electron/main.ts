@@ -1452,7 +1452,6 @@ app.on("activate", () => {
 app.on("before-quit", () => {
   isQuitting = true;
   globalShortcut.unregisterAll();
-  hostCommands.disposeProjectShellSessionsForShutdown();
   tray?.destroy();
   tray = null;
   devHttpBridge?.stop();

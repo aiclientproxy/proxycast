@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { collapseCanvasWorkbenchDiffContext } from "../../../utils/canvasWorkbenchDiff";
 import type { HarnessFilePreviewResult } from "../../HarnessStatusPanel";
+import { resolveLatestReviewBoundary } from "../../CodeReviewSummaryPanelViewModel";
 import type { CanvasWorkbenchDiffLine } from "../../../utils/canvasWorkbenchDiff";
 import type { CanvasWorkbenchResolvedSelection } from "../../CanvasWorkbenchLayoutViewModel";
 import {
@@ -61,6 +62,9 @@ export function CanvasWorkbenchChangesPanel({
   const [textDiffEnabled, setTextDiffEnabled] = useState(true);
   const [diffVariant, setDiffVariant] = useState<"inline" | "split">("inline");
   const [fileFilter, setFileFilter] = useState("");
+  const [reviewStartState, setReviewStartState] = useState<
+    "idle" | "starting" | "failed"
+  >("idle");
   const {
     filesPanelGridStyle,
     handleFilesPanelResizeStart,
@@ -124,6 +128,46 @@ export function CanvasWorkbenchChangesPanel({
     selectedBaseUsesGit && backendHasGitRepository === false
       ? "agentChat.canvasWorkbench.coding.changes.notGitRepository"
       : "agentChat.canvasWorkbench.coding.changes.empty";
+  const latestReviewBoundary = resolveLatestReviewBoundary(
+    changeView?.threadItems,
+  );
+  const reviewThreadId = changeView?.reviewThreadId?.trim() || "";
+  const reviewBlocked = !reviewThreadId || Boolean(changeView?.canInterrupt);
+  const reviewRunStatus =
+    reviewStartState === "starting"
+      ? "starting"
+      : reviewStartState === "failed"
+        ? "failed"
+        : latestReviewBoundary?.status || "idle";
+  const reviewStatusLabelKey =
+    reviewBlocked
+      ? "agentChat.harness.codeReview.status.blocked"
+      : reviewRunStatus === "starting"
+        ? "agentChat.harness.codeReview.status.starting"
+          : reviewRunStatus === "inProgress"
+            ? "agentChat.harness.codeReview.status.inProgress"
+          : reviewRunStatus === "completed"
+            ? "agentChat.harness.codeReview.status.completed"
+            : reviewRunStatus === "failed"
+              ? "agentChat.harness.codeReview.status.failed"
+              : "agentChat.harness.codeReview.action.start";
+  const reviewStartDisabled =
+    reviewBlocked ||
+    !changeView?.onStartReview ||
+    reviewRunStatus === "starting" ||
+    reviewRunStatus === "inProgress";
+  const handleStartReview = async () => {
+    if (reviewStartDisabled || !changeView?.onStartReview) {
+      return;
+    }
+    setReviewStartState("starting");
+    try {
+      await changeView.onStartReview();
+      setReviewStartState("idle");
+    } catch {
+      setReviewStartState("failed");
+    }
+  };
 
   useEffect(() => {
     if (
@@ -210,6 +254,10 @@ export function CanvasWorkbenchChangesPanel({
     onToggleWhitespace: () => setShowWhitespace((enabled) => !enabled),
     onToggleFilesPanel: handleToggleFilesPanel,
     ...props,
+    reviewRunStatus,
+    reviewStatusLabelKey,
+    reviewStartDisabled,
+    onStartReview: changeView?.onStartReview ? handleStartReview : undefined,
   });
 
   const filesPanelResizeHandle = filesPanelOpen ? (

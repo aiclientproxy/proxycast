@@ -125,6 +125,21 @@ export function createAppServerThreadClientMock(): AgentRuntimeAppServerClient {
       messages: [],
       notifications: [],
     }),
+    startReview: vi.fn().mockResolvedValue({
+      id: 7,
+      result: {
+        reviewThreadId: "thread-1",
+        turn: {
+          id: "turn-review",
+          items: [],
+          itemsView: "notLoaded",
+          status: "inProgress",
+        },
+      },
+      response: { id: 7, result: {} },
+      messages: [],
+      notifications: [],
+    }),
     startTurn: vi.fn().mockResolvedValue({}),
     cancelTurn: vi.fn().mockResolvedValue({}),
     startThreadCompaction: vi.fn().mockResolvedValue({

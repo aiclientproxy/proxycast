@@ -2,7 +2,7 @@
 
 状态：`in-progress / current-owner-established`
 
-更新时间：2026-08-08
+更新时间：2026-08-09
 
 ## 主目标
 
@@ -38,13 +38,13 @@ Electron Desktop Host
 |---|---|---|
 | V3-0 | `complete` | 标准合同、唯一 owner、删除口径和架构确认已落盘 |
 | V3-1 | `complete` | 根 `plugin.json`、直接子目录 Skills、根 `mcp.json` loader 已进入 App Server current owner |
-| V3-2 | `in-progress` | MCP lowering、安全校验、失败隔离和 activation snapshot 已实现；Codex parity matrix 仍需补齐独立证据 |
+| V3-2 | `complete on macOS/Unix / Windows gap` | MCP lowering、安全校验、失败隔离和 activation snapshot 已实现；Unix parity 已有独立测试，Windows 文件系统语义仍待真实 runner |
 | V3-3 | `complete` | `plugin/*` protocol/client/Renderer catalog 与标准包真实 Agent turn + Right Surface Gate B 已完成 |
 | V3-4 | `complete` | 旧 package API、发布链、SDK、renderer runtime 和 worker 已物理删除 |
 | V3-5 | `complete` | 旧 `PluginManager`、processor hook、孤立 DAO/schema/error surface 已物理删除 |
 | V3-6 | `in-progress` | macOS 标准包 Gate B 已通过；等待 parity、Windows 与最终全量门禁 |
 
-当前下一刀是完成 V3-2 parity evidence、Windows 路径矩阵与 V3-6 最终分层门禁，
+当前下一刀是完成 Windows 路径矩阵与 V3-6 最终分层门禁，
 不再继续扩展任何旧 Plugin 命名或兼容入口。
 
 ## v3 包合同
@@ -61,7 +61,7 @@ plugin-root/
 - Skills 只扫描 `skills/` 直接子目录。
 - MCP 只读取根 `mcp.json`，manifest 不得内联或重定向 MCP/Skills 位置。
 - `mcp.json` 必须使用官方 `$schema`、`mcpServers`、`stdio` 或 `streamable-http` 语义；
-  `sse` 可选。
+  legacy `sse` 输入必须 fail closed，不属于 v3 支持传输。
 - stdio 必须提供持久化 `PLUGIN_ROOT` 和 `PLUGIN_DATA`，实现官方 placeholder 与路径
   containment。
 - `.codex-plugin/plugin.json` 只作为显式 Codex 私有扩展 adapter，不是 portable owner。

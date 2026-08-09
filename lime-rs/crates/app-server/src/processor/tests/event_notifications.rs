@@ -51,6 +51,36 @@ fn event_notifications_jsonrpc_emits_direct_agent_message_delta() {
 }
 
 #[test]
+fn event_notifications_jsonrpc_emits_direct_turn_diff_update() {
+    let message = single_event_notification(AgentEvent {
+        event_id: "evt_diff_1".to_string(),
+        sequence: 2,
+        session_id: "sess_1".to_string(),
+        thread_id: Some("thread_1".to_string()),
+        turn_id: Some("turn_1".to_string()),
+        event_type: "turn.diff.updated".to_string(),
+        timestamp: "2026-07-05T00:00:00Z".to_string(),
+        payload: json!({
+            "diff": "diff --git a/src/a.ts b/src/a.ts\n"
+        }),
+    })
+    .expect("notification");
+
+    let JsonRpcMessage::Notification(notification) = message else {
+        panic!("expected notification");
+    };
+    assert_eq!(notification.method, "turn/diff/updated");
+    assert_eq!(
+        notification.params.expect("params"),
+        json!({
+            "threadId": "thread_1",
+            "turnId": "turn_1",
+            "diff": "diff --git a/src/a.ts b/src/a.ts\n"
+        })
+    );
+}
+
+#[test]
 fn event_notifications_jsonrpc_emits_direct_turn_plan_update() {
     let message = single_event_notification(AgentEvent {
         event_id: "evt_plan_1".to_string(),

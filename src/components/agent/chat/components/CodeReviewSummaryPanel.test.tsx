@@ -765,4 +765,141 @@ describe("CodeReviewSummaryPanel", () => {
       container.querySelector('[data-testid="code-review-summary-panel"]'),
     ).toBeNull();
   });
+
+  it("点击开始审查后应立即进入进行中状态", async () => {
+    const onStartReview = vi.fn(() => new Promise(() => {}));
+    const { container } = renderPanel({
+      reviewThreadId: "thread-1",
+      onStartReview,
+    });
+
+    const button = container.querySelector(
+      '[data-testid="code-review-summary-start-review"]',
+    ) as HTMLButtonElement | null;
+    expect(button?.disabled).toBe(false);
+
+    act(() => {
+      button?.click();
+    });
+
+    expect(onStartReview).toHaveBeenCalledTimes(1);
+    expect(
+      container.querySelector('[data-testid="code-review-summary-review-status"]')
+        ?.textContent,
+    ).toContain("正在启动");
+  });
+
+  it("review/start admission 成功后不应永久停留在正在启动", async () => {
+    const onStartReview = vi.fn().mockResolvedValue(undefined);
+    const { container } = renderPanel({
+      reviewThreadId: "thread-1",
+      onStartReview,
+    });
+    const button = container.querySelector(
+      '[data-testid="code-review-summary-start-review"]',
+    ) as HTMLButtonElement | null;
+
+    await act(async () => {
+      button?.click();
+      await Promise.resolve();
+    });
+
+    expect(onStartReview).toHaveBeenCalledTimes(1);
+    expect(button?.disabled).toBe(false);
+    expect(
+      container.querySelector('[data-testid="code-review-summary-review-status"]'),
+    ).toBeNull();
+  });
+
+  it("应从 canonical exited boundary 展示完成状态和审查结果", () => {
+    const { container } = renderPanel({
+      reviewThreadId: "thread-1",
+      onStartReview: vi.fn().mockResolvedValue(undefined),
+      threadItems: [
+        {
+          id: "review-boundary-1",
+          thread_id: "thread-1",
+          turn_id: "turn-review",
+          sequence: 4,
+          status: "completed",
+          started_at: "2026-06-06T00:00:00.000Z",
+          updated_at: "2026-06-06T00:00:01.000Z",
+          type: "review_boundary",
+          boundary: "exited",
+          review: "发现 2 个建议",
+        },
+      ],
+    });
+
+    expect(
+      container.querySelector('[data-testid="code-review-summary-review-status"]')
+        ?.textContent,
+    ).toContain("审查已完成");
+    expect(
+      container.querySelector('[data-testid="code-review-summary-review-result"]')
+        ?.textContent,
+    ).toContain("发现 2 个建议");
+  });
+
+  it("缺少 thread 或存在活动回合时应 fail closed", () => {
+    const missingThread = renderPanel({
+      onStartReview: vi.fn().mockResolvedValue(undefined),
+    });
+    const missingButton = missingThread.container.querySelector(
+      '[data-testid="code-review-summary-start-review"]',
+    ) as HTMLButtonElement | null;
+    expect(missingButton?.disabled).toBe(true);
+    expect(
+      missingThread.container.querySelector(
+        '[data-testid="code-review-summary-review-control"]',
+      )?.textContent,
+    ).toContain("请先开始一次对话");
+
+    const activeTurn = renderPanel({
+      reviewThreadId: "thread-1",
+      currentTurnId: "turn-active",
+      canInterrupt: true,
+      onStartReview: vi.fn().mockResolvedValue(undefined),
+    });
+    const activeButton = activeTurn.container.querySelector(
+      '[data-testid="code-review-summary-start-review"]',
+    ) as HTMLButtonElement | null;
+    expect(activeButton?.disabled).toBe(true);
+    expect(
+      activeTurn.container.querySelector(
+        '[data-testid="code-review-summary-review-control"]',
+      )?.textContent,
+    ).toContain("当前任务仍在运行");
+  });
+
+  it("启动失败应展示通用错误并允许重试", async () => {
+    const onStartReview = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("internal review error"))
+      .mockResolvedValueOnce(undefined);
+    const { container } = renderPanel({
+      reviewThreadId: "thread-1",
+      onStartReview,
+    });
+    const button = container.querySelector(
+      '[data-testid="code-review-summary-start-review"]',
+    ) as HTMLButtonElement | null;
+
+    await act(async () => {
+      button?.click();
+      await Promise.resolve();
+    });
+
+    expect(
+      container.querySelector('[data-testid="code-review-summary-review-error"]')
+        ?.textContent,
+    ).toContain("审查未能启动");
+    expect(button?.disabled).toBe(false);
+
+    await act(async () => {
+      button?.click();
+      await Promise.resolve();
+    });
+    expect(onStartReview).toHaveBeenCalledTimes(2);
+  });
 });

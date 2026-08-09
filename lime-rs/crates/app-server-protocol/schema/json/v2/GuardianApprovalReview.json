@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "GuardianApprovalReviewStatus": {
+      "enum": [
+        "aborted",
+        "approved",
+        "denied",
+        "inProgress",
+        "timedOut"
+      ],
+      "type": "string"
+    },
+    "GuardianRiskLevel": {
+      "enum": [
+        "critical",
+        "high",
+        "low",
+        "medium"
+      ],
+      "type": "string"
+    },
+    "GuardianUserAuthorization": {
+      "enum": [
+        "high",
+        "low",
+        "medium",
+        "unknown"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "rationale": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "riskLevel": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GuardianRiskLevel"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "$ref": "#/$defs/GuardianApprovalReviewStatus"
+    },
+    "userAuthorization": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GuardianUserAuthorization"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "GuardianApprovalReview",
+  "type": "object"
+}

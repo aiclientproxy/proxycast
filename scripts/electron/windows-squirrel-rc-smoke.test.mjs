@@ -82,10 +82,13 @@ describe("Windows Squirrel RC smoke", () => {
     const runProcessImpl = vi.fn().mockResolvedValue({ exitCode: 0 });
 
     await expect(
-      waitForWindowsProcessExit("C:\\Users\\runner\\AppData\\Local\\lime\\Update.exe", {
-        runProcessImpl,
-        timeoutMs: 12_000,
-      }),
+      waitForWindowsProcessExit(
+        "C:\\Users\\runner\\AppData\\Local\\lime\\Update.exe",
+        {
+          runProcessImpl,
+          timeoutMs: 12_000,
+        },
+      ),
     ).resolves.toEqual({
       executable: "C:\\Users\\runner\\AppData\\Local\\lime\\Update.exe",
       exitCode: 0,
@@ -304,14 +307,26 @@ describe("Windows Squirrel RC smoke", () => {
       const installDependencies = steps.find(
         (step) => step.name === "Install dependencies",
       );
+      const pluginPathTests = steps.find(
+        (step) => step.name === "Run Windows Agent Plugin path contract tests",
+      );
       const download = steps.find(
         (step) => step.name === "Download Windows N-1 Squirrel installer",
       );
       const smoke = steps.find(
         (step) => step.name === "Smoke installed Windows Squirrel candidate",
       );
+      const pluginGate = steps.find(
+        (step) => step.name === "Run installed Windows Agent Plugin Gate B",
+      );
       const upload = steps.find(
         (step) => step.name === "Upload Windows Squirrel RC evidence",
+      );
+      const pluginUpload = steps.find(
+        (step) => step.name === "Upload Windows Agent Plugin Gate B evidence",
+      );
+      const pluginPathUpload = steps.find(
+        (step) => step.name === "Upload Windows Agent Plugin path contract log",
       );
 
       expect(download?.run).toContain("gh release download");
@@ -320,6 +335,15 @@ describe("Windows Squirrel RC smoke", () => {
         "pnpm install --frozen-lockfile",
       );
       expect(installDependencies?.run).not.toContain("npm ci");
+      if (entry.job === "build-windows-test") {
+        expect(pluginPathTests?.run).toContain("cargo test");
+        expect(pluginPathTests?.run).toContain(
+          '--manifest-path "lime-rs/Cargo.toml"',
+        );
+        expect(pluginPathTests?.run).toContain("-p lime-mcp");
+        expect(pluginPathTests?.run).toContain("agent_plugin_config");
+        expect(pluginPathTests?.run).toContain("--nocapture");
+      }
       expect(smoke?.run).toContain(
         "scripts/electron/windows-squirrel-rc-smoke.mjs",
       );
@@ -327,6 +351,22 @@ describe("Windows Squirrel RC smoke", () => {
       expect(smoke?.run).toContain("--n-minus-one-installer-dir");
       expect(smoke?.run).toContain("--n-minus-one-version");
       expect(upload?.with?.path).toBe(".lime/qc/windows-squirrel-rc");
+      if (entry.job === "build-windows-test") {
+        expect(pluginGate?.run).toContain(
+          "npm run smoke:plugin-package-electron-gate-b",
+        );
+        expect(pluginGate?.run).toContain("--electron-executable");
+        expect(pluginGate?.run).toContain(
+          ".lime/qc/gui-evidence/plugin-package-electron-gate-b-windows",
+        );
+        expect(pluginUpload?.with?.path).toBe(
+          ".lime/qc/gui-evidence/plugin-package-electron-gate-b-windows",
+        );
+        expect(pluginPathUpload?.with?.path).toBe(
+          "windows-plugin-mcp-contract-tests.log",
+        );
+        expect(pluginPathUpload?.if).toBe("${{ always() }}");
+      }
     }
   });
 });

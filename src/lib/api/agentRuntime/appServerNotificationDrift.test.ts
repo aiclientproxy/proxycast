@@ -45,7 +45,6 @@ describe("App Server notification drift", () => {
   it("keeps excluded and deprecated notifications diagnostic-only", () => {
     for (const method of [
       "rawResponse/completed",
-      "turn/diff/updated",
       "process/outputDelta",
       "process/exited",
     ]) {
@@ -72,6 +71,41 @@ describe("App Server notification drift", () => {
         ),
       ).toBeNull();
     }
+  });
+
+  it("classifies turn diff as a projected current notification", () => {
+    const source = notification("turn/diff/updated", {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      diff: "diff --git a/a.txt b/a.txt\n",
+    });
+    expect(readAppServerNotificationDrift(source).disposition).toBe(
+      "known_projected",
+    );
+    expect(projectAppServerNotificationDriftPayload(source)).toBeNull();
+  });
+
+  it("classifies turn moderation metadata as projected without logging values", () => {
+    const source = notification("turn/moderationMetadata", {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      metadata: { secret: "must-not-leak" },
+    });
+    const diagnostic = readAppServerNotificationDrift(source);
+    expect(diagnostic.disposition).toBe("known_projected");
+    expect(JSON.stringify(diagnostic)).not.toContain("must-not-leak");
+    expect(projectAppServerNotificationDriftPayload(source)).toBeNull();
+  });
+
+  it("classifies guardianWarning as a projected current notification", () => {
+    const source = notification("guardianWarning", {
+      threadId: "thread-1",
+      message: "Guardian circuit breaker interrupted the turn.",
+    });
+    expect(readAppServerNotificationDrift(source).disposition).toBe(
+      "known_projected",
+    );
+    expect(projectAppServerNotificationDriftPayload(source)).toBeNull();
   });
 
   it("fails unknown notifications visibly when canonical identity is present", () => {

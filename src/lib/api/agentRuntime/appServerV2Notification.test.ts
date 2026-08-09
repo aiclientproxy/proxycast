@@ -278,6 +278,72 @@ describe("App Server v2 direct notifications", () => {
     ).toEqual([notification]);
   });
 
+  it("projects guardianWarning as an independent high-priority notice", () => {
+    const notification = directNotification("guardianWarning", {
+      message: "Guardian review rejected too many requests; turn interrupted.",
+      threadId,
+    });
+
+    expect(readAppServerV2NotificationRoute(notification)).toEqual({
+      terminal: false,
+      threadId,
+    });
+    const payload = projectAppServerV2NotificationPayload(notification);
+    expect(payload).toMatchObject({
+      code: "guardian_warning",
+      message:
+        "Guardian review rejected too many requests; turn interrupted.",
+      protocol_method: "guardianWarning",
+      type: "guardian_warning",
+    });
+    const event = conversationProjectionEventFromPayload(
+      payload as Record<string, unknown>,
+      "live",
+      "guardian-warning-1",
+    );
+    expect(event).toMatchObject({
+      type: "guardian_warning",
+      thread_id: threadId,
+      message:
+        "Guardian review rejected too many requests; turn interrupted.",
+    });
+    const reducer = createConversationProjectionReducer({ threadId });
+    reducer.dispatch(event!);
+    expect(reducer.getProjection().notices).toContainEqual({
+      id: "guardian-warning-1",
+      thread_id: threadId,
+      level: "warning",
+      code: "guardian_warning",
+      message:
+        "Guardian review rejected too many requests; turn interrupted.",
+    });
+    expect(
+      projectAgentRuntimeSequenceGateNotifications(
+        "agent_stream_direct_v2_guardian_warning",
+        notification,
+      ),
+    ).toEqual([notification]);
+  });
+
+  it("rejects guardianWarning payloads with missing or extra fields", () => {
+    expect(
+      readAppServerV2NotificationRoute(
+        directNotification("guardianWarning", {
+          message: "missing thread",
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      readAppServerV2NotificationRoute(
+        directNotification("guardianWarning", {
+          message: "extra field",
+          threadId,
+          severity: "high",
+        }),
+      ),
+    ).toBeNull();
+  });
+
   it("unknown Item 只投影脱敏字段名，不保留原始字段值", () => {
     const secretValue = "secret-value-must-not-leak";
     const projected = projectAppServerV2NotificationPayload(
@@ -1223,5 +1289,253 @@ describe("App Server v2 direct notifications", () => {
       expect(readAppServerV2NotificationRoute(malformed)).toBeNull();
       expect(projectAppServerV2NotificationPayload(malformed)).toBeNull();
     }
+  });
+
+  it("projects turn/diff/updated into the canonical turn projection", () => {
+    const notification = directNotification("turn/diff/updated", {
+      diff: "diff --git a/src/a.ts b/src/a.ts\n",
+      threadId,
+      turnId,
+    });
+
+    expect(readAppServerV2NotificationRoute(notification)).toEqual({
+      terminal: false,
+      threadId,
+      turnId,
+    });
+    const payload = projectAppServerV2NotificationPayload(notification);
+    expect(payload).toMatchObject({
+      type: "turn_diff_updated",
+      thread_id: threadId,
+      turn_id: turnId,
+      unified_diff: "diff --git a/src/a.ts b/src/a.ts\n",
+    });
+
+    const reducer = createConversationProjectionReducer({ threadId });
+    const turn = {
+      id: turnId,
+      thread_id: threadId,
+      prompt_text: "",
+      status: "running" as const,
+      started_at: "2026-08-09T00:00:00.000Z",
+      created_at: "2026-08-09T00:00:00.000Z",
+      updated_at: "2026-08-09T00:00:00.000Z",
+    };
+    reducer.dispatch({
+      type: "turn_started",
+      source: "live",
+      event_id: "turn-start",
+      turn,
+    });
+    const event = conversationProjectionEventFromPayload(
+      payload ?? {},
+      "live",
+      "turn-diff",
+    );
+    expect(event?.type).toBe("turn_diff_updated");
+    if (event) reducer.dispatch(event);
+    expect(reducer.getProjection().turns[0]?.unified_diff).toBe(
+      "diff --git a/src/a.ts b/src/a.ts\n",
+    );
+
+    expect(
+      projectAppServerV2NotificationPayload(
+        directNotification("turn/diff/updated", {
+          diff: "",
+          threadId,
+          turnId,
+          extra: true,
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("projects turn/moderationMetadata as opaque last-write-wins turn state", () => {
+    const firstNotification = directNotification("turn/moderationMetadata", {
+      metadata: { presentation: "inline" },
+      threadId,
+      turnId,
+    });
+    expect(readAppServerV2NotificationRoute(firstNotification)).toEqual({
+      terminal: false,
+      threadId,
+      turnId,
+    });
+    const firstPayload =
+      projectAppServerV2NotificationPayload(firstNotification);
+    expect(firstPayload).toMatchObject({
+      type: "turn_moderation_metadata",
+      thread_id: threadId,
+      turn_id: turnId,
+      moderation_metadata: { presentation: "inline" },
+    });
+
+    const reducer = createConversationProjectionReducer({ threadId });
+    const runningTurn = {
+      id: turnId,
+      thread_id: threadId,
+      prompt_text: "",
+      status: "running" as const,
+      started_at: "2026-08-09T00:00:00.000Z",
+      created_at: "2026-08-09T00:00:00.000Z",
+      updated_at: "2026-08-09T00:00:00.000Z",
+    };
+    reducer.dispatch({
+      type: "turn_started",
+      source: "live",
+      event_id: "moderation-turn-start",
+      turn: runningTurn,
+    });
+    const firstEvent = conversationProjectionEventFromPayload(
+      firstPayload ?? {},
+      "live",
+      "moderation-first",
+    );
+    expect(firstEvent?.type).toBe("turn_moderation_metadata");
+    if (firstEvent) reducer.dispatch(firstEvent);
+
+    const updatedPayload = projectAppServerV2NotificationPayload(
+      directNotification("turn/moderationMetadata", {
+        metadata: null,
+        threadId,
+        turnId,
+      }),
+    );
+    const updatedEvent = conversationProjectionEventFromPayload(
+      updatedPayload ?? {},
+      "live",
+      "moderation-second",
+    );
+    if (updatedEvent) reducer.dispatch(updatedEvent);
+    expect(reducer.getProjection().turns[0]?.moderation_metadata).toBeNull();
+
+    reducer.dispatch({
+      type: "turn_completed",
+      source: "read",
+      event_id: "moderation-terminal-snapshot",
+      turn: { ...runningTurn, status: "completed" },
+    });
+    expect(reducer.getProjection().turns[0]?.moderation_metadata).toBeNull();
+
+    for (const params of [
+      { threadId, turnId },
+      { metadata: {}, threadId, turnId, extra: true },
+    ]) {
+      expect(
+        projectAppServerV2NotificationPayload(
+          directNotification("turn/moderationMetadata", params),
+        ),
+      ).toBeNull();
+    }
+  });
+
+  it("projects Guardian review lifecycle into pending interaction state", () => {
+    const action = {
+      command: "rm -rf /workspace/build",
+      cwd: "/workspace",
+      source: "shell",
+      type: "command",
+    };
+    const startedNotification = directNotification(
+      "item/autoApprovalReview/started",
+      {
+        action,
+        review: { status: "inProgress" },
+        reviewId: "guardian-1",
+        startedAtMs: 1_783_814_400_100,
+        targetItemId: "item-command",
+        threadId,
+        turnId,
+      },
+    );
+    expect(readAppServerV2NotificationRoute(startedNotification)).toEqual({
+      itemId: "item-command",
+      terminal: false,
+      threadId,
+      turnId,
+    });
+    const startedPayload =
+      projectAppServerV2NotificationPayload(startedNotification);
+    expect(startedPayload).toMatchObject({
+      type: "guardian_review_started",
+      review_id: "guardian-1",
+      target_item_id: "item-command",
+      review: { status: "inProgress" },
+    });
+
+    const reducer = createConversationProjectionReducer({ threadId });
+    const startedEvent = conversationProjectionEventFromPayload(
+      startedPayload ?? {},
+      "live",
+      "guardian-start",
+    );
+    expect(startedEvent?.type).toBe("guardian_review_started");
+    if (startedEvent) reducer.dispatch(startedEvent);
+    expect(reducer.getProjection().pending_interactions).toMatchObject([
+      {
+        id: "guardian-1",
+        kind: "guardian_review",
+        status: "pending",
+        item_id: "item-command",
+      },
+    ]);
+
+    const completedNotification = directNotification(
+      "item/autoApprovalReview/completed",
+      {
+        action,
+        completedAtMs: 1_783_814_401_100,
+        decisionSource: "agent",
+        review: {
+          rationale: "命令删除构建产物，拒绝执行。",
+          riskLevel: "high",
+          status: "denied",
+          userAuthorization: "unknown",
+        },
+        reviewId: "guardian-1",
+        startedAtMs: 1_783_814_400_100,
+        targetItemId: "item-command",
+        threadId,
+        turnId,
+      },
+    );
+    const completedPayload = projectAppServerV2NotificationPayload(
+      completedNotification,
+    );
+    const completedEvent = conversationProjectionEventFromPayload(
+      completedPayload ?? {},
+      "live",
+      "guardian-complete",
+    );
+    expect(completedEvent?.type).toBe("guardian_review_completed");
+    if (completedEvent) reducer.dispatch(completedEvent);
+    expect(reducer.getProjection().pending_interactions).toMatchObject([
+      {
+        id: "guardian-1",
+        status: "declined",
+        payload: {
+          review: { status: "denied", risk_level: "high" },
+        },
+      },
+    ]);
+  });
+
+  it("rejects Guardian reviews with invalid optional field types", () => {
+    const event = conversationProjectionEventFromPayload(
+      {
+        action: {},
+        review: {
+          riskLevel: 42,
+          status: "inProgress",
+        },
+        reviewId: "guardian-invalid",
+        threadId,
+        turnId,
+        type: "guardian_review_started",
+      },
+      "live",
+    );
+
+    expect(event).toBeNull();
   });
 });

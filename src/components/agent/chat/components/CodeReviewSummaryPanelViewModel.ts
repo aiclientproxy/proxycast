@@ -1,5 +1,6 @@
 import type { AgentI18nKey } from "@/i18n/agentResources";
 import type { AgentRuntimeFileCheckpointThreadSummary } from "@/lib/api/agentRuntime/sessionTypes";
+import type { AgentThreadItem } from "@/lib/api/agentProtocolCoreTypes";
 import type { HarnessSessionState } from "../utils/harnessState";
 import type { CodeFixPromptFileChange } from "../utils/codeFixPrompt";
 import type { HarnessFileChangeReviewSummary } from "./HarnessStatusPanel";
@@ -17,6 +18,20 @@ export interface ReviewStatusPresentation {
 
 export type ReviewFocusTone = "danger" | "review" | "success" | "snapshot";
 
+export type CodeReviewRunStatus =
+  | "idle"
+  | "starting"
+  | "inProgress"
+  | "completed"
+  | "failed"
+  | "blocked";
+
+export interface LatestReviewBoundary {
+  status: "inProgress" | "completed";
+  turnId: string;
+  review: string;
+}
+
 export interface CodeReviewSummaryPresentationInput {
   failedOutputCount: number;
   fileChangeCount: number;
@@ -29,6 +44,40 @@ type HarnessOutputSignal = HarnessSessionState["outputSignals"][number];
 type HarnessFileEvent = HarnessSessionState["recentFileEvents"][number];
 
 const OUTPUT_PREVIEW_MAX_CHARS = 220;
+
+export function resolveLatestReviewBoundary(
+  threadItems: readonly AgentThreadItem[] | undefined,
+): LatestReviewBoundary | null {
+  const boundaries = (threadItems ?? []).filter(
+    (item): item is Extract<AgentThreadItem, { type: "review_boundary" }> =>
+      item.type === "review_boundary",
+  );
+  const latest = boundaries.reduce<
+    Extract<AgentThreadItem, { type: "review_boundary" }> | null
+  >((current, candidate) => {
+    if (!current) {
+      return candidate;
+    }
+    if (candidate.sequence !== current.sequence) {
+      return candidate.sequence > current.sequence ? candidate : current;
+    }
+    if (candidate.updated_at !== current.updated_at) {
+      return candidate.updated_at > current.updated_at ? candidate : current;
+    }
+    return (candidate.ordinal ?? 0) > (current.ordinal ?? 0)
+      ? candidate
+      : current;
+  }, null);
+
+  if (!latest) {
+    return null;
+  }
+  return {
+    status: latest.boundary === "entered" ? "inProgress" : "completed",
+    turnId: latest.turn_id,
+    review: latest.review.trim(),
+  };
+}
 
 export function outputMentionsFile(
   signal: HarnessOutputSignal | null,

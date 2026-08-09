@@ -1060,9 +1060,7 @@ async function waitForContentFactoryArticleWorkspaceGui(page, options) {
           reasonVisible: bodyText.includes(
             "app_declared_renderer_placeholder_only",
           ),
-          allowedOutputVisible: bodyText.includes(
-            "workspace_patch",
-          ),
+          allowedOutputVisible: bodyText.includes("workspace_patch"),
           entryVisible: bodyText.includes("./renderer/storyboard.tsx"),
           actionVisible: bodyText.includes("open_storyboard"),
         },
@@ -1749,6 +1747,7 @@ function summarizeContentFactoryArticleWorkspaceReadModel(result, identity) {
             workerDogfoodEvidence.task_kind,
           ),
           status: readString(workerDogfoodEvidence.status),
+          source: readString(workerDogfoodEvidence.source),
           artifactRef: readString(
             workerDogfoodEvidence.artifactRef,
             workerDogfoodEvidence.artifact_ref,

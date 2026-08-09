@@ -768,6 +768,9 @@ async fn provider_metadata_is_deduplicated_across_sampling_steps() {
             Ok(CanonicalLlmEvent::ModelVerification {
                 verifications: vec![ModelVerification::TrustedAccessForCyber],
             }),
+            Ok(CanonicalLlmEvent::TurnModerationMetadata {
+                metadata: serde_json::json!({ "presentation": "inline" }),
+            }),
         ]
     };
     let mut first = metadata();
@@ -853,6 +856,16 @@ async fn provider_metadata_is_deduplicated_across_sampling_steps() {
             .filter(|event| matches!(event, CurrentProviderTurnEvent::ModelVerification { .. }))
             .count(),
         1
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(
+                event,
+                CurrentProviderTurnEvent::TurnModerationMetadata { .. }
+            ))
+            .count(),
+        2
     );
 }
 

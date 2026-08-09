@@ -152,19 +152,35 @@ async fn install_plugin(
     let source = temp.path().join(plugin_id);
     fs::create_dir_all(source.join(".codex-plugin")).expect("plugin manifest directory");
     fs::write(
-        source.join(".codex-plugin/plugin.json"),
+        source.join("plugin.json"),
         serde_json::to_vec_pretty(&json!({
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
             "name": plugin_id,
             "version": "1.0.0",
-            "description": format!("{plugin_id} description"),
+            "description": format!("{plugin_id} description")
+        }))
+        .expect("serialize standard plugin manifest"),
+    )
+    .expect("write standard plugin manifest");
+    fs::write(
+        source.join(".codex-plugin/plugin.json"),
+        serde_json::to_vec_pretty(&json!({
             "interface": {"displayName": plugin_id},
+            "apps": "./apps.json"
+        }))
+        .expect("serialize Codex plugin extension"),
+    )
+    .expect("write Codex plugin extension");
+    fs::write(
+        source.join("apps.json"),
+        serde_json::to_vec_pretty(&json!({
             "apps": {
-                (app_id): {"command": "run"}
+                (app_id): {"id": app_id}
             }
         }))
-        .expect("serialize plugin manifest"),
+        .expect("serialize plugin apps"),
     )
-    .expect("write plugin manifest");
+    .expect("write plugin apps");
     request_ok(
         server,
         id,

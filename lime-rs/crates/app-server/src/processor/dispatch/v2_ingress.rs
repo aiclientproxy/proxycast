@@ -157,6 +157,7 @@ pub(super) fn into_parts(
         ClientRequest::TurnStart { id, params } => parts(id, Method::TurnStart, params),
         ClientRequest::TurnSteer { id, params } => parts(id, Method::TurnSteer, params),
         ClientRequest::TurnInterrupt { id, params } => parts(id, Method::TurnInterrupt, params),
+        ClientRequest::ReviewStart { id, params } => parts(id, Method::ReviewStart, params),
         ClientRequest::FsReadFile { id, params } => parts(id, Method::FsReadFile, params),
         ClientRequest::FsWriteFile { id, params } => parts(id, Method::FsWriteFile, params),
         ClientRequest::FsCreateDirectory { id, params } => {
@@ -176,6 +177,16 @@ pub(super) fn into_parts(
             parts(id, Method::ProcessResizePty, params)
         }
         ClientRequest::ProcessKill { id, params } => parts(id, Method::ProcessKill, params),
+        ClientRequest::CommandExec { id, params } => parts(id, Method::CommandExec, params),
+        ClientRequest::CommandExecWrite { id, params } => {
+            parts(id, Method::CommandExecWrite, params)
+        }
+        ClientRequest::CommandExecResize { id, params } => {
+            parts(id, Method::CommandExecResize, params)
+        }
+        ClientRequest::CommandExecTerminate { id, params } => {
+            parts(id, Method::CommandExecTerminate, params)
+        }
     }
 }
 

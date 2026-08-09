@@ -4,7 +4,7 @@ use super::event_store::{
 };
 use super::status::{agent_turn_blocks_queue_resume, agent_turn_is_active, agent_turn_is_terminal};
 use super::turn_start::{
-    user_input_text, validate_user_input, TurnStartInputKind, TurnStartRequest,
+    user_input_text, validate_user_input, ReviewContext, TurnStartInputKind, TurnStartRequest,
 };
 use super::workflow::cancel::workflow_cancel_events_from_audit_records;
 use super::workflow::events::{WORKFLOW_RUN_RESUMING, WORKFLOW_STEP_RESUMING};
@@ -444,6 +444,8 @@ pub(in crate::runtime) struct AppendingRuntimeEventSink<'a> {
     events: Vec<AgentEvent>,
     deferred_hub_events: Vec<AgentEvent>,
     message_lifecycle: CanonicalMessageLifecycleState,
+    review_context: Option<ReviewContext>,
+    review_output: String,
 }
 
 impl<'a> AppendingRuntimeEventSink<'a> {
@@ -484,6 +486,8 @@ impl<'a> AppendingRuntimeEventSink<'a> {
             events: Vec::new(),
             deferred_hub_events: Vec::new(),
             message_lifecycle,
+            review_context: None,
+            review_output: String::new(),
         }
     }
 
@@ -524,6 +528,8 @@ impl<'a> AppendingRuntimeEventSink<'a> {
             events: Vec::new(),
             deferred_hub_events: Vec::new(),
             message_lifecycle,
+            review_context: None,
+            review_output: String::new(),
         }
     }
 
@@ -555,6 +561,21 @@ impl<'a> AppendingRuntimeEventSink<'a> {
             }),
         ))
     }
+
+    fn enable_review(&mut self, context: ReviewContext) -> Result<(), RuntimeCoreError> {
+        self.emit(review_boundary_event(
+            "item.started",
+            "enteredReviewMode",
+            &self.session_id,
+            &self.thread_id,
+            &self.turn_id,
+            ItemStatus::InProgress,
+            &context,
+            &context.user_facing_hint,
+        ))?;
+        self.review_context = Some(context);
+        Ok(())
+    }
 }
 
 impl RuntimeEventSink for AppendingRuntimeEventSink<'_> {
@@ -562,6 +583,56 @@ impl RuntimeEventSink for AppendingRuntimeEventSink<'_> {
         if self.is_duplicate_accepted_event(&event) {
             return Ok(());
         }
+        self.observe_review_output(&event);
+        if let Some(context) = self.review_context.clone() {
+            if runtime_event_is_turn_terminal(&event.event_type) {
+                let review = if self.review_output.trim().is_empty() {
+                    context.user_facing_hint.clone()
+                } else {
+                    self.review_output.trim().to_string()
+                };
+                self.emit_durable(review_boundary_event(
+                    "item.completed",
+                    "exitedReviewMode",
+                    &self.session_id,
+                    &self.thread_id,
+                    &self.turn_id,
+                    ItemStatus::Completed,
+                    &context,
+                    &review,
+                ))?;
+                self.review_context = None;
+            }
+        }
+        self.emit_durable(event)
+    }
+
+    fn emit_preappended(&mut self, event: AgentEvent) -> Result<(), RuntimeCoreError> {
+        let is_turn_started = event.event_type == "turn.started";
+        self.target.publish(event.clone())?;
+        self.events.push(event);
+        if is_turn_started {
+            self.flush_deferred_hub_events()?;
+        }
+        Ok(())
+    }
+
+    fn emit_transient(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
+        self.target.publish(AgentEvent {
+            event_id: format!("transient-{}", Uuid::new_v4()),
+            sequence: 0,
+            session_id: self.session_id.clone(),
+            thread_id: Some(self.thread_id.clone()),
+            turn_id: Some(self.turn_id.clone()),
+            event_type: event.event_type,
+            timestamp: super::value_fields::timestamp(),
+            payload: event.payload,
+        })
+    }
+}
+
+impl AppendingRuntimeEventSink<'_> {
+    fn emit_durable(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
         let mut next_message_lifecycle = self.message_lifecycle.clone();
         let mut events = append_runtime_events_to_state_with_message_lifecycle(
             &self.state,
@@ -590,28 +661,71 @@ impl RuntimeEventSink for AppendingRuntimeEventSink<'_> {
         Ok(())
     }
 
-    fn emit_preappended(&mut self, event: AgentEvent) -> Result<(), RuntimeCoreError> {
-        let is_turn_started = event.event_type == "turn.started";
-        self.target.publish(event.clone())?;
-        self.events.push(event);
-        if is_turn_started {
-            self.flush_deferred_hub_events()?;
+    fn observe_review_output(&mut self, event: &RuntimeEvent) {
+        if !event.event_type.starts_with("message.") && !event.event_type.starts_with("item.") {
+            return;
         }
-        Ok(())
+        let payload = event
+            .payload
+            .get("item")
+            .and_then(|item| item.get("payload"))
+            .unwrap_or(&event.payload);
+        if payload
+            .get("role")
+            .or_else(|| payload.get("author"))
+            .and_then(Value::as_str)
+            .is_some_and(|role| role.eq_ignore_ascii_case("user"))
+        {
+            return;
+        }
+        let Some(text) = payload
+            .get("text")
+            .or_else(|| payload.get("delta"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+        else {
+            return;
+        };
+        if text.starts_with(&self.review_output) {
+            self.review_output = text.to_string();
+        } else if !self.review_output.starts_with(text) {
+            self.review_output.push_str(text);
+        }
     }
+}
 
-    fn emit_transient(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
-        self.target.publish(AgentEvent {
-            event_id: format!("transient-{}", Uuid::new_v4()),
-            sequence: 0,
-            session_id: self.session_id.clone(),
-            thread_id: Some(self.thread_id.clone()),
-            turn_id: Some(self.turn_id.clone()),
-            event_type: event.event_type,
-            timestamp: super::value_fields::timestamp(),
-            payload: event.payload,
-        })
-    }
+fn review_boundary_event(
+    event_type: &str,
+    item_name: &str,
+    session_id: &str,
+    thread_id: &str,
+    turn_id: &str,
+    status: ItemStatus,
+    context: &ReviewContext,
+    review: &str,
+) -> RuntimeEvent {
+    let mut item = ThreadItem::new(
+        agent_protocol::SessionId::new(session_id),
+        agent_protocol::ThreadId::new(thread_id),
+        agent_protocol::TurnId::new(turn_id),
+        0,
+        0,
+        ThreadItemPayload::Extension {
+            name: item_name.to_string(),
+            data: json!({
+                "review": review,
+                "target": context.target.clone(),
+            }),
+        },
+    );
+    item.item_id = agent_protocol::ItemId::new(format!("review-{item_name}-{turn_id}"));
+    item.status = status;
+    item.metadata = json!({
+        "source": "review/start",
+        "reviewTarget": context.target.clone(),
+    });
+    RuntimeEvent::new(event_type, json!({ "item": item }))
 }
 
 impl AppendingRuntimeEventSink<'_> {
@@ -792,12 +906,34 @@ impl RuntimeCore {
 
     pub(in crate::runtime) async fn start_turn_inner(
         &self,
+        params: TurnStartRequest,
+        host: RuntimeHostContext,
+        event_callback: Option<&mut RuntimeEventCallback<'_>>,
+        enable_goal_continuation: bool,
+        return_after_admission: bool,
+        input_kind: TurnStartInputKind,
+    ) -> Result<RuntimeCoreOutput<AgentSessionTurnStartResponse>, RuntimeCoreError> {
+        self.start_turn_inner_with_review_context(
+            params,
+            host,
+            event_callback,
+            enable_goal_continuation,
+            return_after_admission,
+            input_kind,
+            None,
+        )
+        .await
+    }
+
+    pub(in crate::runtime) async fn start_turn_inner_with_review_context(
+        &self,
         mut params: TurnStartRequest,
         host: RuntimeHostContext,
         mut event_callback: Option<&mut RuntimeEventCallback<'_>>,
         enable_goal_continuation: bool,
         return_after_admission: bool,
         input_kind: TurnStartInputKind,
+        review_context: Option<ReviewContext>,
     ) -> Result<RuntimeCoreOutput<AgentSessionTurnStartResponse>, RuntimeCoreError> {
         self.ensure_current_session_hydrated(&params.session_id)
             .await?;
@@ -984,10 +1120,17 @@ impl RuntimeCore {
 
         let mut provider_input = prepared_input.provider;
         provider_input.agent_only = input_kind.is_agent_only();
-        let agent_only_input_event = input_kind
-            .is_agent_only()
-            .then(|| super::turn_input_events::runtime_event_for_goal_continuation(&params.input))
-            .flatten();
+        let agent_only_input_event = match input_kind {
+            TurnStartInputKind::GoalContinuation => {
+                super::turn_input_events::runtime_event_for_goal_continuation(&params.input)
+            }
+            TurnStartInputKind::Review => {
+                super::turn_input_events::runtime_event_for_review(&params.input)
+            }
+            TurnStartInputKind::User
+            | TurnStartInputKind::QueuedUser
+            | TurnStartInputKind::PendingTriggerUser => None,
+        };
         self.prepare_media_prompt_context_from_provider_input(&mut params, &provider_input);
 
         let (session, previous_session, turn) = {
@@ -1241,6 +1384,20 @@ impl RuntimeCore {
                     return Err(error);
                 }
             }
+            if let Some(context) = review_context.clone() {
+                if let Err(error) = sink.enable_review(context) {
+                    let _ = submitted
+                        .session
+                        .interrupt_for_turn(Some(&turn.turn_id))
+                        .await;
+                    self.rollback_started_turn(
+                        &session.session_id,
+                        &turn.turn_id,
+                        previous_session,
+                    );
+                    return Err(error);
+                }
+            }
             if let Err(error) = sink.emit(RuntimeEvent::new(
                 "turn.accepted",
                 json!({
@@ -1343,20 +1500,22 @@ impl RuntimeCore {
                         pending_work_runtime_options,
                     )
                     .await;
-                let continuation_runtime = runtime.clone();
-                let continuation_hub = runtime.event_hub.clone();
-                let continuation_session_id = session_id.clone();
-                let runtime_handle = tokio::runtime::Handle::current();
-                let _ = tokio::task::spawn_blocking(move || {
-                    runtime_handle.block_on(
-                        continuation_runtime.maybe_continue_thread_goal_if_idle_with_hub(
-                            &continuation_session_id,
-                            goal_continuation_host,
-                            continuation_hub,
-                        ),
-                    );
-                })
-                .await;
+                if enable_goal_continuation {
+                    let continuation_runtime = runtime.clone();
+                    let continuation_hub = runtime.event_hub.clone();
+                    let continuation_session_id = session_id.clone();
+                    let runtime_handle = tokio::runtime::Handle::current();
+                    let _ = tokio::task::spawn_blocking(move || {
+                        runtime_handle.block_on(
+                            continuation_runtime.maybe_continue_thread_goal_if_idle_with_hub(
+                                &continuation_session_id,
+                                goal_continuation_host,
+                                continuation_hub,
+                            ),
+                        );
+                    })
+                    .await;
+                }
             });
             let mut events = pre_turn_events;
             events.extend(admission_events);

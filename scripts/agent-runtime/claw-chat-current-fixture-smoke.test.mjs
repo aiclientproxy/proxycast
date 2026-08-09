@@ -4,6 +4,8 @@ import { containsForbiddenTraceEvidenceFragment } from "./claw-chat-current-fixt
 import {
   APP_SERVER_METHOD_SESSION_TURN_CANCEL,
   APPROVAL_REQUEST_RESUME_REQUEST_ID,
+  CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO,
+  CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO,
   HOME_HOTPATH_GREETING_SCENARIO,
   HOME_HOTPATH_SCENARIO,
   IMAGE_FIXTURE_MODEL,
@@ -350,6 +352,32 @@ describe("claw chat current Electron fixture smoke guard", () => {
     ).toEqual({
       sessionId: "precreated-session",
       threadId: "precreated-thread",
+    });
+  });
+
+  it.each([
+    CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO,
+    CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO,
+  ])("binds %s Gate B identity to its scenario-created session", (scenario) => {
+    expect(
+      resolveGateBExpectedIdentity({
+        summary: {
+          sessionId: "precreated-session",
+          threadId: "precreated-thread",
+          contentFactoryArticleWorkspaceSessionCreation: {
+            identity: {
+              sessionId: "content-factory-session",
+              threadId: "content-factory-thread",
+            },
+          },
+        },
+        options: { scenario },
+        appServerRequests: [],
+        backendLedger: [],
+      }),
+    ).toEqual({
+      sessionId: "content-factory-session",
+      threadId: "content-factory-thread",
     });
   });
 

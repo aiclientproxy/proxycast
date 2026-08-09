@@ -144,18 +144,38 @@ function preparePluginPackage(runtimeEnv) {
   const manifestDir = path.join(root, ".codex-plugin");
   fs.mkdirSync(manifestDir, { recursive: true });
   fs.writeFileSync(
-    path.join(manifestDir, "plugin.json"),
+    path.join(root, "plugin.json"),
     `${JSON.stringify(
       {
+        $schema: "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
         name: PLUGIN_ID,
         version: "1.0.0",
         description: "Apps catalog Gate B fixture",
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  fs.writeFileSync(
+    path.join(manifestDir, "plugin.json"),
+    `${JSON.stringify(
+      {
         interface: {
           displayName: PLUGIN_NAME,
           shortDescription: "Apps catalog readiness fixture",
         },
+        apps: "./apps.json",
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  fs.writeFileSync(
+    path.join(root, "apps.json"),
+    `${JSON.stringify(
+      {
         apps: {
-          [APP_ID]: { command: "run" },
+          [PLUGIN_NAME]: { id: APP_ID, category: "productivity" },
         },
       },
       null,
@@ -452,7 +472,9 @@ export async function run(argv = process.argv.slice(2)) {
     await page
       .locator(`[data-testid="plugin-catalog-actions-${PLUGIN_ID}"]`)
       .click();
-    await page.locator(`[data-testid="plugin-catalog-toggle-${PLUGIN_ID}"]`).click();
+    await page
+      .locator(`[data-testid="plugin-catalog-toggle-${PLUGIN_ID}"]`)
+      .click();
     const refreshed = await waitForNotificationRefresh(
       page,
       options,

@@ -1,13 +1,12 @@
 import React from "react";
 import { agentText } from "./harnessPanelText";
 import {
-  killProjectShellSession,
-  listenProjectShellSessionEvents,
-  type ProjectShellSessionEvent,
-  resizeProjectShellSession,
-  startProjectShellSession,
-  writeProjectShellSession,
-} from "@/lib/api/projectShell";
+  execCommand,
+  resizeCommandExec,
+  subscribeCommandExecOutput,
+  terminateCommandExec,
+  writeCommandExec,
+} from "@/lib/api/commandExec";
 import "@xterm/xterm/css/xterm.css";
 
 type XTermTerminal = import("@xterm/xterm").Terminal;
@@ -36,10 +35,7 @@ interface ProjectShellTerminalProps {
   projectRootPath?: string | null;
   tabId: string;
   testIdPrefix?: string;
-  onStateChange: (
-    tabId: string,
-    state: Partial<ProjectShellTabState>,
-  ) => void;
+  onStateChange: (tabId: string, state: Partial<ProjectShellTabState>) => void;
 }
 
 const FALLBACK_COLS = 120;
@@ -79,14 +75,6 @@ function extractErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function isProjectShellSessionMissingError(message: string): boolean {
-  const normalizedMessage = message.toLowerCase();
-  return (
-    message.includes("会话不存在") ||
-    normalizedMessage.includes("session not found")
-  );
-}
-
 export const ProjectShellTerminal = React.forwardRef<
   ProjectShellTerminalHandle,
   ProjectShellTerminalProps
@@ -104,23 +92,15 @@ export const ProjectShellTerminal = React.forwardRef<
   const terminalContainerRef = React.useRef<HTMLDivElement | null>(null);
   const terminalRef = React.useRef<XTermTerminal | null>(null);
   const fitAddonRef = React.useRef<XTermFitAddon | null>(null);
-  const sessionIdRef = React.useRef<string | null>(null);
-  const bootGenerationRef = React.useRef(0);
-  const pendingWriteAfterReconnectRef = React.useRef<{
-    data: string;
-    retried: boolean;
-  } | null>(null);
+  const processIdRef = React.useRef<string | null>(null);
   const writeQueueRef = React.useRef<Promise<void>>(Promise.resolve());
   const terminalSizeRef = React.useRef({
     cols: FALLBACK_COLS,
     rows: FALLBACK_ROWS,
   });
-  const [restartNonce, setRestartNonce] = React.useState(0);
 
   const patchState = React.useCallback(
-    (state: Partial<ProjectShellTabState>) => {
-      onStateChange(tabId, state);
-    },
+    (state: Partial<ProjectShellTabState>) => onStateChange(tabId, state),
     [onStateChange, tabId],
   );
 
@@ -131,100 +111,41 @@ export const ProjectShellTerminal = React.forwardRef<
     fitTerminalToContainer({
       terminal,
       fitAddon,
-      sessionIdRef,
+      processIdRef,
       terminalSizeRef,
     });
   }, []);
 
-  const reconnectShell = React.useCallback(
-    (data?: string) => {
-      if (data) {
-        pendingWriteAfterReconnectRef.current = {
-          data,
-          retried: false,
-        };
-      }
-      sessionIdRef.current = null;
-      patchState({
-        ready: false,
-        statusText: agentText(
-          "agentChat.navbar.shell.reconnecting",
-          "正在重连 Shell",
-        ),
-      });
-      setRestartNonce((value) => value + 1);
-    },
-    [patchState],
-  );
-
-  const writeShellData = React.useCallback(
-    (data: string) => {
-      const sessionId = sessionIdRef.current;
-      if (!sessionId) {
-        return;
-      }
-
-      writeQueueRef.current = writeQueueRef.current
-        .catch(() => undefined)
-        .then(async () => {
-          if (sessionIdRef.current !== sessionId) {
-            return;
-          }
-          await writeProjectShellSession({ sessionId, data });
-          const pendingReconnectWrite = pendingWriteAfterReconnectRef.current;
-          if (
-            pendingReconnectWrite?.retried &&
-            pendingReconnectWrite.data === data
-          ) {
-            pendingWriteAfterReconnectRef.current = null;
-          }
-        })
-        .catch((error) => {
-          const message = extractErrorMessage(error);
-          if (isProjectShellSessionMissingError(message)) {
-            const pendingReconnectWrite = pendingWriteAfterReconnectRef.current;
-            if (pendingReconnectWrite?.retried) {
-              pendingWriteAfterReconnectRef.current = null;
-              terminalRef.current?.writeln(
-                `\r\n${agentText(
-                  "agentChat.navbar.shell.sessionLostRetryFailed",
-                  "Shell 会话已失效，请重新输入命令",
-                )}`,
-              );
-              return;
-            }
-            terminalRef.current?.writeln(
-              `\r\n${agentText(
-                "agentChat.navbar.shell.sessionLost",
-                "Shell 会话已失效，正在重连…",
-              )}`,
-            );
-            reconnectShell(data);
-            return;
-          }
-          terminalRef.current?.writeln(
-            `\r\n${agentText(
-              "agentChat.navbar.shell.writeFailed",
-              "写入 Shell 失败：{{message}}",
-              { message },
-            )}`,
-          );
+  const writeShellData = React.useCallback((data: string) => {
+    const processId = processIdRef.current;
+    if (!processId) return;
+    writeQueueRef.current = writeQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (processIdRef.current !== processId) return;
+        await writeCommandExec({
+          processId,
+          deltaBase64: encodeBase64(data),
         });
-    },
-    [reconnectShell],
-  );
+      })
+      .catch((error) => {
+        terminalRef.current?.writeln(
+          `\r\n${agentText(
+            "agentChat.navbar.shell.writeFailed",
+            "写入 Shell 失败：{{message}}",
+            { message: extractErrorMessage(error) },
+          )}`,
+        );
+      });
+  }, []);
 
   React.useImperativeHandle(
     ref,
     () => ({
       fit: fitTerminal,
-      focus: () => {
-        terminalRef.current?.focus();
-      },
+      focus: () => terminalRef.current?.focus(),
       runCommand: (command: string) => {
-        if (!sessionIdRef.current) {
-          return;
-        }
+        if (!processIdRef.current) return;
         writeShellData(`${command}\r`);
         terminalRef.current?.focus();
       },
@@ -234,21 +155,14 @@ export const ProjectShellTerminal = React.forwardRef<
 
   React.useEffect(() => {
     let disposed = false;
-    const bootGeneration = bootGenerationRef.current + 1;
-    bootGenerationRef.current = bootGeneration;
     let terminal: XTermTerminal | null = null;
     let fitAddon: XTermFitAddon | null = null;
     let inputDisposable: XTermDisposable | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let unlisten: (() => void) | null = null;
-    let sessionIdForBoot: string | null = null;
+    let processIdForBoot: string | null = null;
     let pendingInput = "";
     let inputFlushTimer: ReturnType<typeof setTimeout> | null = null;
-    const pendingEvents: ProjectShellSessionEvent[] = [];
-
-    function isCurrentBoot() {
-      return !disposed && bootGenerationRef.current === bootGeneration;
-    }
 
     function flushPendingInput() {
       if (inputFlushTimer) {
@@ -257,66 +171,24 @@ export const ProjectShellTerminal = React.forwardRef<
       }
       const data = pendingInput;
       pendingInput = "";
-      if (!data || !isCurrentBoot()) {
-        return;
-      }
-      writeShellData(data);
+      if (data && !disposed) writeShellData(data);
     }
 
     function scheduleInputFlush() {
-      if (inputFlushTimer) {
-        return;
+      if (!inputFlushTimer) {
+        inputFlushTimer = setTimeout(flushPendingInput, INPUT_FLUSH_DELAY_MS);
       }
-      inputFlushTimer = setTimeout(flushPendingInput, INPUT_FLUSH_DELAY_MS);
-    }
-
-    function applySessionEvent(event: ProjectShellSessionEvent) {
-      if (!terminal) {
-        return;
-      }
-      if (event.type === "data") {
-        terminal.write(event.data);
-        return;
-      }
-      if (event.type === "error") {
-        terminal.writeln(
-          `\r\n${agentText(
-            "agentChat.navbar.shell.sessionError",
-            "Shell 错误：{{message}}",
-            { message: event.message },
-          )}`,
-        );
-        patchState({
-          ready: false,
-          statusText: agentText("agentChat.navbar.shell.failed", "已断开"),
-        });
-        return;
-      }
-      terminal.writeln(
-        `\r\n${agentText(
-          "agentChat.navbar.shell.exited",
-          "Shell 已退出：{{code}}",
-          { code: event.exitCode ?? event.signal ?? "-" },
-        )}`,
-      );
-      patchState({
-        ready: false,
-        statusText: agentText("agentChat.navbar.shell.exitedStatus", "已退出"),
-      });
     }
 
     async function bootShell() {
       const container = terminalContainerRef.current;
-      if (!container) {
-        return;
-      }
+      if (!container) return;
       patchState({
         errorText: null,
         ready: false,
         shell: null,
         statusText: agentText("agentChat.navbar.shell.connecting", "连接中"),
       });
-
       if (!normalizedProjectRootPath) {
         patchState({
           errorText: agentText(
@@ -333,9 +205,7 @@ export const ProjectShellTerminal = React.forwardRef<
           import("@xterm/xterm"),
           import("@xterm/addon-fit"),
         ]);
-        if (!isCurrentBoot()) {
-          return;
-        }
+        if (disposed) return;
         terminal = new Terminal({
           cols: FALLBACK_COLS,
           rows: FALLBACK_ROWS,
@@ -350,149 +220,141 @@ export const ProjectShellTerminal = React.forwardRef<
           theme: PROJECT_SHELL_THEME,
         });
         fitAddon = new FitAddon();
-        const activeTerminal = terminal;
-        const activeFitAddon = fitAddon;
-        activeTerminal.loadAddon(activeFitAddon);
-        terminalRef.current = activeTerminal;
-        fitAddonRef.current = activeFitAddon;
-        activeTerminal.open(container);
+        terminal.loadAddon(fitAddon);
+        terminalRef.current = terminal;
+        fitAddonRef.current = fitAddon;
+        terminal.open(container);
         fitTerminalToContainer({
-          terminal: activeTerminal,
-          fitAddon: activeFitAddon,
-          sessionIdRef,
+          terminal,
+          fitAddon,
+          processIdRef,
           terminalSizeRef,
         });
         if (typeof ResizeObserver !== "undefined") {
-          resizeObserver = new ResizeObserver(() => {
+          resizeObserver = new ResizeObserver(() =>
             fitTerminalToContainer({
-              terminal: activeTerminal,
-              fitAddon: activeFitAddon,
-              sessionIdRef,
+              terminal: terminal!,
+              fitAddon: fitAddon!,
+              processIdRef,
               terminalSizeRef,
-            });
-          });
+            }),
+          );
           resizeObserver.observe(container);
         }
 
-        unlisten = await listenProjectShellSessionEvents((event) => {
-          const activeSessionId = sessionIdRef.current;
-          if (!activeSessionId) {
-            pendingEvents.push(event);
-            return;
-          }
-          if (event.sessionId !== activeSessionId) {
-            return;
-          }
-          applySessionEvent(event);
-        });
-
-        patchState({
-          statusText: agentText(
-            "agentChat.navbar.shell.starting",
-            "正在启动 Shell",
-          ),
+        const processId = createProcessId();
+        processIdForBoot = processId;
+        processIdRef.current = processId;
+        const shell = resolveInteractiveShell();
+        const decoder = new TextDecoder();
+        unlisten = subscribeCommandExecOutput(processId, (delta) => {
+          if (!disposed)
+            terminal?.write(
+              decoder.decode(decodeBytes(delta.deltaBase64), { stream: true }),
+            );
         });
         const size = terminalSizeRef.current;
-        const session = await startProjectShellSession({
-          rootPath: normalizedProjectRootPath,
-          cols: size.cols,
-          rows: size.rows,
-        });
-        if (!isCurrentBoot()) {
-          await killProjectShellSession({ sessionId: session.sessionId }).catch(
-            () => undefined,
-          );
-          return;
-        }
-        sessionIdForBoot = session.sessionId;
-        sessionIdRef.current = session.sessionId;
         patchState({
           ready: true,
-          shell: session.shell,
+          shell: shell[0],
           statusText: agentText("agentChat.navbar.shell.connected", "已连接"),
-          title: session.title,
+          title: buildShellTitle(normalizedProjectRootPath),
         });
-        for (const pendingEvent of pendingEvents.splice(0)) {
-          if (pendingEvent.sessionId === session.sessionId) {
-            applySessionEvent(pendingEvent);
-          }
-        }
+        fitTerminalToContainer({
+          terminal,
+          fitAddon,
+          processIdRef,
+          terminalSizeRef,
+        });
+        void execCommand({
+          command: shell,
+          processId,
+          tty: true,
+          streamStdin: true,
+          streamStdoutStderr: true,
+          disableOutputCap: true,
+          disableTimeout: true,
+          cwd: normalizedProjectRootPath,
+          size,
+        })
+          .then((result) => {
+            if (disposed) return;
+            terminal?.write(decoder.decode());
+            terminal?.writeln(
+              `\r\n${agentText(
+                "agentChat.navbar.shell.exited",
+                "Shell 已退出：{{code}}",
+                { code: result.exitCode },
+              )}`,
+            );
+            patchState({
+              ready: false,
+              statusText: agentText(
+                "agentChat.navbar.shell.exitedStatus",
+                "已退出",
+              ),
+            });
+          })
+          .catch((error) => {
+            if (disposed) return;
+            const message = extractErrorMessage(error);
+            patchState({
+              ready: false,
+              errorText: message,
+              statusText: agentText("agentChat.navbar.shell.failed", "已断开"),
+            });
+            terminal?.writeln(
+              `\r\n${agentText(
+                "agentChat.navbar.shell.startFailed",
+                "Shell 启动失败：{{message}}",
+                { message },
+              )}`,
+            );
+          });
 
         inputDisposable = terminal.onData((data) => {
           pendingInput += data;
           if (data.includes("\r") || data.includes("\n")) {
             flushPendingInput();
-            return;
+          } else {
+            scheduleInputFlush();
           }
-          scheduleInputFlush();
         });
-        const pendingReconnectWrite = pendingWriteAfterReconnectRef.current;
-        if (pendingReconnectWrite && !pendingReconnectWrite.retried) {
-          pendingWriteAfterReconnectRef.current = {
-            ...pendingReconnectWrite,
-            retried: true,
-          };
-          writeShellData(pendingReconnectWrite.data);
-        } else if (pendingReconnectWrite?.retried) {
-          pendingWriteAfterReconnectRef.current = null;
-        }
       } catch (error) {
-        if (!isCurrentBoot()) {
-          return;
-        }
+        if (disposed) return;
         const message = extractErrorMessage(error);
         patchState({
           errorText: message,
           ready: false,
           statusText: agentText("agentChat.navbar.shell.failed", "已断开"),
         });
-        terminalRef.current?.writeln(
-          `\r\n${agentText(
-            "agentChat.navbar.shell.startFailed",
-            "Shell 启动失败：{{message}}",
-            { message },
-          )}`,
-        );
       }
     }
 
     void bootShell();
-
     return () => {
       disposed = true;
       unlisten?.();
       inputDisposable?.dispose();
-      if (inputFlushTimer) {
-        clearTimeout(inputFlushTimer);
-        inputFlushTimer = null;
-      }
+      if (inputFlushTimer) clearTimeout(inputFlushTimer);
       pendingInput = "";
       resizeObserver?.disconnect();
-      const sessionId = sessionIdForBoot;
-      if (sessionId && sessionIdRef.current === sessionId) {
-        sessionIdRef.current = null;
-      }
-      if (sessionId) {
-        void killProjectShellSession({ sessionId }).catch(() => undefined);
+      if (processIdForBoot && processIdRef.current === processIdForBoot) {
+        processIdRef.current = null;
+        void terminateCommandExec({ processId: processIdForBoot }).catch(
+          () => undefined,
+        );
       }
       terminal?.dispose();
-      if (terminalRef.current === terminal) {
-        terminalRef.current = null;
-      }
-      if (fitAddonRef.current === fitAddon) {
-        fitAddonRef.current = null;
-      }
+      if (terminalRef.current === terminal) terminalRef.current = null;
+      if (fitAddonRef.current === fitAddon) fitAddonRef.current = null;
     };
-  }, [normalizedProjectRootPath, patchState, restartNonce, writeShellData]);
+  }, [normalizedProjectRootPath, patchState, writeShellData]);
 
   React.useEffect(() => {
-    if (!active) {
-      return;
-    }
+    if (!active) return;
     const animationFrame = requestAnimationFrame(fitTerminal);
-    return () => {
-      cancelAnimationFrame(animationFrame);
-    };
+    return () => cancelAnimationFrame(animationFrame);
   }, [active, fitTerminal]);
 
   return (
@@ -504,9 +366,7 @@ export const ProjectShellTerminal = React.forwardRef<
           ? `${testIdPrefix}-terminal-pane`
           : `${testIdPrefix}-terminal-pane-inactive`
       }
-      onClick={() => {
-        terminalRef.current?.focus();
-      }}
+      onClick={() => terminalRef.current?.focus()}
     >
       <div
         ref={terminalContainerRef}
@@ -528,12 +388,12 @@ export const ProjectShellTerminal = React.forwardRef<
 function fitTerminalToContainer({
   terminal,
   fitAddon,
-  sessionIdRef,
+  processIdRef,
   terminalSizeRef,
 }: {
   terminal: XTermTerminal;
   fitAddon: XTermFitAddon;
-  sessionIdRef: React.MutableRefObject<string | null>;
+  processIdRef: React.MutableRefObject<string | null>;
   terminalSizeRef: React.MutableRefObject<{ cols: number; rows: number }>;
 }) {
   try {
@@ -544,15 +404,34 @@ function fitTerminalToContainer({
   const cols = terminal.cols || FALLBACK_COLS;
   const rows = terminal.rows || FALLBACK_ROWS;
   const previous = terminalSizeRef.current;
-  if (previous.cols === cols && previous.rows === rows) {
-    return;
-  }
+  if (previous.cols === cols && previous.rows === rows) return;
   terminalSizeRef.current = { cols, rows };
-  const sessionId = sessionIdRef.current;
-  if (!sessionId) {
-    return;
-  }
-  void resizeProjectShellSession({ sessionId, cols, rows }).catch(
+  const processId = processIdRef.current;
+  if (!processId) return;
+  void resizeCommandExec({ processId, size: { cols, rows } }).catch(
     () => undefined,
   );
+}
+
+function createProcessId(): string {
+  return `shell-${crypto.randomUUID()}`;
+}
+
+function resolveInteractiveShell(): string[] {
+  if (/Windows/i.test(navigator.userAgent)) return ["cmd.exe", "/d"];
+  return ["/bin/sh", "-i"];
+}
+
+function buildShellTitle(rootPath: string): string {
+  return rootPath.split(/[\\/]/).filter(Boolean).pop() ?? "project";
+}
+
+function encodeBase64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function decodeBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }

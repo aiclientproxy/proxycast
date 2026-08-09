@@ -73,6 +73,10 @@ pub(super) fn thread_items_from_events(stored: &StoredSession) -> Vec<Value> {
                 }
             }
             "item.started" | "item.updated" | "item.completed" => {
+                if let Some(item) = review_item_from_item_event(stored, event) {
+                    items.push(item);
+                    continue;
+                }
                 if agent_message::upsert_from_item_event(
                     stored,
                     event,
@@ -123,6 +127,36 @@ pub(super) fn thread_items_from_events(stored: &StoredSession) -> Vec<Value> {
     items.extend(media_result_items.into_values());
     sort_thread_items(&mut items);
     items
+}
+
+fn review_item_from_item_event(stored: &StoredSession, event: &AgentEvent) -> Option<Value> {
+    let item = event.payload.get("item")?.as_object()?;
+    let payload = item.get("payload")?.as_object()?;
+    let name = payload.get("name")?.as_str()?;
+    let review = payload
+        .get("data")
+        .and_then(|data| data.get("review"))
+        .and_then(Value::as_str)?
+        .trim();
+    if review.is_empty() || !matches!(name, "enteredReviewMode" | "exitedReviewMode") {
+        return None;
+    }
+    let status = if event.event_type == "item.started" {
+        "in_progress"
+    } else {
+        "completed"
+    };
+    Some(base_item(
+        stored,
+        event,
+        "review_boundary",
+        status,
+        json!({
+            "boundary": if name == "enteredReviewMode" { "entered" } else { "exited" },
+            "review": review,
+            "metadata": event.payload.get("metadata").cloned().unwrap_or(Value::Null),
+        }),
+    ))
 }
 
 fn upsert_reasoning_item(

@@ -11,7 +11,7 @@ use app_server_protocol::protocol::v2::{
 };
 use chrono::Utc;
 use lime_mcp::agent_plugin_config::parse_agent_plugin_mcp_config;
-use lime_mcp::{McpRuntimeServerSpec, McpServerConfig};
+use lime_mcp::{McpRuntimeServerSpec, McpServerConfig, McpServerTransport};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -498,7 +498,24 @@ fn plugin_mcp_server_descriptors(
     let data_root = plugin_data_root.join("data").join(plugin_id);
     let content =
         fs::read_to_string(&path).map_err(io_error("读取 Agent Plugins mcp.json 失败"))?;
-    let outcome = parse_agent_plugin_mcp_config(&package_root, &data_root, &content)?;
+    let mut outcome = parse_agent_plugin_mcp_config(&package_root, &data_root, &content)?;
+    let has_stdio = outcome
+        .servers
+        .values()
+        .any(|config| matches!(&config.transport, McpServerTransport::Stdio { .. }));
+    if has_stdio {
+        if let Err(error) = fs::create_dir_all(&data_root) {
+            tracing::warn!(
+                plugin_id,
+                path = %data_root.display(),
+                %error,
+                "创建 Agent Plugins PLUGIN_DATA 目录失败，隔离 stdio MCP server"
+            );
+            outcome
+                .servers
+                .retain(|_, config| !matches!(&config.transport, McpServerTransport::Stdio { .. }));
+        }
+    }
     let mut descriptors = Vec::new();
     for (id, config) in outcome.servers {
         let runtime_name = plugin_mcp_runtime_name(plugin_id, &id)?;
@@ -816,14 +833,25 @@ struct CapabilityDetail {
 
 fn build_capability_detail(
     package_root: &Path,
-    _manifest: &Value,
+    manifest: &Value,
 ) -> Result<CapabilityDetail, String> {
     let skills = skill_capabilities(package_root)?;
     let mcp_servers = mcp_capabilities(package_root)?;
+    let apps = match app_capabilities(package_root, manifest.get("apps")) {
+        Ok(apps) => apps,
+        Err(error) => {
+            tracing::warn!(
+                path = %package_root.display(),
+                %error,
+                "禁用包含非法配置的 Codex Plugin Apps 组件"
+            );
+            Vec::new()
+        }
+    };
     Ok(CapabilityDetail {
         skills,
         mcp_servers,
-        apps: Vec::new(),
+        apps,
         hooks: Vec::new(),
         ui_resources: Vec::new(),
     })
@@ -879,6 +907,58 @@ fn mcp_capabilities(package_root: &Path) -> Result<Vec<PluginCatalogCapability>,
             requires_auth: false,
         })
         .collect())
+}
+
+fn app_capabilities(
+    package_root: &Path,
+    value: Option<&Value>,
+) -> Result<Vec<PluginCatalogCapability>, String> {
+    let Some(declared_path) = value.and_then(Value::as_str) else {
+        return Ok(Vec::new());
+    };
+    let relative_path = declared_path
+        .strip_prefix("./")
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| "Codex Plugin Apps 路径必须以 `./` 开头。".to_string())?;
+    if relative_path
+        .split(['/', '\\'])
+        .any(|component| component == "..")
+    {
+        return Err("Codex Plugin Apps 路径不得包含 `..`。".to_string());
+    }
+    let path = resource_path(package_root, relative_path)?;
+    let content = fs::read_to_string(&path).map_err(io_error("读取 Codex Plugin Apps 配置失败"))?;
+    let value: Value = serde_json::from_str(&content)
+        .map_err(|error| format!("解析 Codex Plugin Apps 配置失败: {error}"))?;
+    let apps = value
+        .get("apps")
+        .and_then(Value::as_object)
+        .ok_or_else(|| "Codex Plugin Apps 配置必须包含 apps object。".to_string())?;
+    let mut capabilities = Vec::new();
+    for (name, config) in apps {
+        let id = config
+            .get("id")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .ok_or_else(|| format!("Codex Plugin App `{name}` 缺少合法 id。"))?;
+        if config
+            .get("category")
+            .is_some_and(|category| !category.is_null() && !category.is_string())
+        {
+            return Err(format!(
+                "Codex Plugin App `{name}` 的 category 必须是 string。"
+            ));
+        }
+        capabilities.push(PluginCatalogCapability {
+            id: id.to_string(),
+            name: name.clone(),
+            description: String::new(),
+            requires_auth: false,
+        });
+    }
+    capabilities.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(capabilities)
 }
 
 fn discover_package_roots(path: &Path) -> Result<Vec<PathBuf>, String> {
@@ -1157,6 +1237,15 @@ fn apply_codex_manifest_extension(
             .as_object_mut()
             .expect("validated manifest object")
             .insert("interface".to_string(), interface.clone());
+    }
+    if let Some(apps) = extension.get("apps") {
+        if !apps.is_string() {
+            return Err("Codex Plugin extension apps 必须是包内相对路径。".to_string());
+        }
+        manifest
+            .as_object_mut()
+            .expect("validated manifest object")
+            .insert("apps".to_string(), apps.clone());
     }
     Ok(())
 }

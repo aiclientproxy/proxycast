@@ -130,7 +130,10 @@ App Server 是 Renderer、Electron、CLI、Plugin 与 runtime 的唯一跨应用
 
 App Server 的 request dispatcher 必须先把各 method handler future 装箱，再在单一 await 点执行；禁止让大型 async `match` 把所有分支 future 内联进同一个 poll 栈。stdio transport 在 `initialize` 完成前保持顺序执行；初始化后每个 client request 由独立 transport task 调度，notification/response 继续内联，并由 request id 关联响应、由 serialization scope 保证同一资源的共享/独占顺序。长 turn、MCP 或宿主 I/O 不得阻塞无冲突的 list/read request。
 
-Project Shell/Git 等宿主子进程必须有确定性测试注入和生产 deadline。测试不得读取真实用户 shell rc；plain directory 的 Git status 先通过 `.git` ancestor preflight 返回，仓库内 Git 命令使用异步 process、`kill_on_drop` 和 5 秒上限，不得在 async handler 中调用无界 `std::process::Command::output`。
+Desktop command/exec 与 Git 等宿主子进程必须有确定性测试注入和生产 deadline。测试不得读取真实用户 shell rc；
+plain directory 的 Git status 先通过 `.git` ancestor preflight 返回，仓库内 Git 命令使用异步 process、`kill_on_drop`
+和 5 秒上限，不得在 async handler 中调用无界 `std::process::Command::output`。交互终端必须复用 App Server
+`CommandExecServer`，Electron 不得持有第二套 session 状态。
 
 Server-originated request 使用与 client request 分离的 `serverRequest` catalog kind，并按以下方向流动：
 
@@ -1776,8 +1779,8 @@ thread identity fail closed in the current Agent Chat path. The generic protocol
 lifecycle. Full cold reads and limited projection-summary reads derive the warning beside canonical items from the same
 event log, preserving message, sequence and localization code without a second store. Live raw `agentSession/event`
 warning wrappers are `dead / forbidden-to-restore` and covered only by negative tests. `guardianWarning` stays `planned`
-because Lime has no Guardian review runtime producer; a schema-only or Renderer-fixture implementation would not make it
-current.
+because Lime has no independent high-priority Guardian warning producer; a schema-only or Renderer-fixture implementation
+would not make it current.
 
 Architecture impact: major because a live notification and recovery surface moved from the deprecated raw side channel
 to the v2 protocol/projector/Renderer boundary. The product direction remains Electron Desktop Host -> App Server
@@ -1887,33 +1890,40 @@ CODEX_HOME/config.toml + <cwd>/.codex/config.toml + active Plugin catalog
   -> Agent sampling step / command gate
   -> AgentEvent hook.started / hook.completed
   -> App Server v2 hook notifications
-  -> canonical ThreadItemPayload::Hook (item_<hookRunId>)
-  -> Thread/read + thread/items/list + Renderer timeline
+  -> Renderer transient Hook timeline projection
+
+canonical Thread/Turn/Item materializer
+  -> excludes hook.started / hook.completed
+  -> thread/read + thread/items/list contain no Hook lifecycle Item
 ```
 
 `hooks/list` is the sole public discovery contract. `tool-runtime` owns source loading, stable key/hash, trust and
 execution; Agent runtime owns lifecycle events; App Server owns JSON-RPC dispatch, notification projection, durable
-materialization and read-model lowering; the Renderer only validates and displays the canonical Hook Item. Started and
-completed notifications must carry the same run id and the same `item_<hookRunId>` identity. Terminal status is mapped
-to completed, failed or interrupted without creating a second generic item lifecycle.
+event append and public read-model exclusion; the Renderer validates the typed notification and may display a transient
+timeline row. Started and completed notifications must carry the same run id, but they do not create or update a
+canonical Item. This follows Codex's separate `hook/started` and `hook/completed` notifications and its ThreadItem union,
+which contains `HookPrompt` but no Hook lifecycle Item.
 
 The v2 protocol/schema/generated Rust and TypeScript clients, public JSON-RPC `hooks/list`, Hook event projector,
-canonical history materializer and five-locale timeline row are `current`. The former raw hook config shape,
-`known_unprojected` Hook drift path, bare run-id item identity and production mock/fallback execution are
-`dead / deleted / forbidden-to-restore`; no compatibility owner was added. Lime remains a compact Electron Desktop
-GUI and does not copy Codex TUI surfaces. Provider/model/media behavior remains owned by the Grok-aligned
-`model-provider` control plane.
+canonical history exclusion and five-locale transient timeline row are `current`. The former canonical
+`ThreadItemPayload::Hook`, `item_<hookRunId>` identity, public history recovery path, raw hook config shape,
+`known_unprojected` Hook drift path and production mock/fallback execution are `dead / deleted / forbidden-to-restore`;
+no compatibility owner was added. Lime remains a compact Electron Desktop GUI and does not copy Codex TUI surfaces.
+Provider/model/media behavior remains owned by the Grok-aligned `model-provider` control plane.
 
-Architecture impact: major because this adds a cross-layer protocol, lifecycle event, durable Item and recovery path.
-Architecture diagram updated: this section and the App Server notification -> Thread/Turn/Item projection path above.
-Responsible developer confirmation: root, 2026-08-07. Confirmation content: 已核对目录归属、数据流、依赖方向、协议边界和验证门禁。
+Architecture impact: major because the Hook lifecycle boundary is a typed live notification rather than a durable
+Thread Item and recovery contract. Architecture diagram updated: this section and the App Server notification versus
+Thread/Turn/Item projection split above. Responsible developer confirmation: root, 2026-08-09. Confirmation content:
+已核对 Codex notification/ThreadItem 边界、Lime EventStore 分类、公共历史排除、Renderer transient 投影和验证门禁。
 
 ## 31. Apps Catalog And Readiness Owner
 
 Apps/connectors 只有一个 catalog owner，并保持 Desktop 与 Codex TUI 的产品边界分离：
 
 ```text
-installed Plugin manifests with apps capability
+standard Agent Plugin root manifest
+  -> explicit Codex extension `apps: "./config.json"`
+  -> independent `apps.{name}.{id,category?}` config
   -> App Server PluginDataSource / local plugin_catalog
   -> RuntimeCore app/list | app/read | app/installed
   -> App Server JSON-RPC
@@ -1927,11 +1937,14 @@ successful plugin/install | plugin/uninstall | plugin/enabled/set
   -> Renderer typed watcher -> fresh Apps read
 ```
 
-`app/list` uses the installed Plugin manifest `apps` capability and keeps pagination in the same catalog. `app/read`
-deduplicates ids while preserving first-request order and returns `missingAppIds`; the processor rejects more than 100 ids
-with `INVALID_PARAMS`. Optional `threadId` on list/installed is validated against the loaded canonical Thread and fails
-closed with `SESSION_NOT_FOUND`. The local registry is read fresh on every request, so `forceRefetch` and `forceRefresh`
-never fabricate a hosted cache refresh.
+`app/list` never reads a portable top-level `apps` field. It follows Codex's explicit client extension adapter:
+`extensions.com.openai.apps`, with `.codex-plugin/plugin.json` only as the overlay fallback, must be a package-relative
+path to a separate Apps JSON document. Connector `id` is the catalog identity; inline Apps objects fail closed and an
+invalid Apps component is isolated from Skills/MCP and package installation. `app/read` deduplicates ids while preserving
+first-request order and returns `missingAppIds`; the processor rejects more than 100 ids with `INVALID_PARAMS`. Optional
+`threadId` on list/installed is validated against the loaded canonical Thread and fails closed with `SESSION_NOT_FOUND`.
+The local registry is read fresh on every request, so `forceRefetch` and `forceRefresh` never fabricate a hosted cache
+refresh.
 
 `callable` is a readiness boundary, not an install flag. Until a local Plugin app has a committed hosted connector
 model-visible tool snapshot, enabled local apps report `callable=false` and Desktop readiness remains false. No UI or
@@ -1944,16 +1957,26 @@ owner; Apps are projected inside the selected Plugin detail sidebar instead of c
 source. The consumer reads `app/list + app/installed`, renders `ready / disabled / pending`, and reruns the same fresh
 read after typed `app/list/updated` arrives through the App Server event bus.
 
-The Apps-specific Electron Gate B uses isolated app data and a local Plugin manifest with an `apps` capability. It
-proved real Electron renderer/preload/IPC, `app_server_handle_json_lines`, `plugin/list -> plugin/install`, exact
+The Apps-specific Electron Gate B runner now uses isolated app data, a standard root Agent Plugins manifest and a Codex
+extension path to an independent Apps JSON. Its prior 2026-08-07 artifact used the retired inline manifest shape and is
+historical only. The migrated runner passed on 2026-08-09 and proved the transport/UI flow across real Electron
+renderer/preload/IPC, `app_server_handle_json_lines`, `plugin/list -> plugin/install`, exact
 `app/list` / `app/read` / `app/installed`, GUI `plugin/enabled/set`, the subsequent fresh Apps read and the same visible
 row changing from `enabled=true / callable=false / pending` to `disabled`. Console, page, invoke, trace, legacy command
 and production mock fallback counts were all zero. Evidence:
-`.lime/qc/project-gates/standalone-apps-catalog-20260807T152703394Z-702520/apps-catalog-gate-b/apps-catalog-gate-b-summary.json`.
+`.lime/qc/project-gates/standalone-apps-catalog-20260809T054741397Z-147740/apps-catalog-gate-b/apps-catalog-gate-b-summary.json`.
+All seven required methods were observed; install notification and pending-to-disabled fresh read succeeded; console,
+page, invoke, trace, mock fallback and legacy command counts were zero.
 
 There is no second Apps catalog, `window` custom-event fact source, TUI-style Apps surface, compatibility wrapper or
 production mock fallback. Hosted connector model-visible tool snapshot and a real `callable=true` provider path remain
 open capability work; the local Gate B does not claim either one.
+
+Architecture impact: existing cross-layer Apps owner corrected in place; no second runtime or storage owner added.
+Architecture diagram updated: this section now distinguishes the portable Agent Plugins manifest from the explicit
+Codex Apps extension path and independent config file.
+Responsible developer confirmation: root, 2026-08-09. Confirmation content: 已核对 portable/extension
+边界、Apps identity、失败隔离、JSON-RPC 数据流与 Gate B 重验要求。
 
 Architecture impact: major because this adds a cross-layer catalog/readiness contract and live invalidation path while
 reusing the existing Plugin catalog owner. The product direction remains Electron Desktop Host -> App Server JSON-RPC
@@ -2035,6 +2058,41 @@ owner -> Thread/Turn/Item projection -> GUI; process control does not create a s
 confirmation: root, 2026-08-08. Confirmation content: 已核对 connection/Thread owner 分界、目录归属、数据流、依赖方向、
 协议与 notification 顺序、删除边界和验证门禁。
 
+### 33.1 Exact Command Exec Owner
+
+Codex standalone `command/exec` 是 Desktop coding terminal 的唯一 current owner；它与 Thread-owned command Item、
+Codex TUI 的 `process/*` 控制面分开，但共享 `tool-runtime` 本地进程 supervisor：
+
+```text
+Renderer commandExec gateway
+  -> typed App Server client
+  -> command/exec
+  -> App Server CommandExecServer keyed by (ConnectionId, processId)
+  -> tool-runtime LocalExecutionProcessHandle
+
+command/exec/write|resize|terminate
+  -> same (ConnectionId, processId)
+command/exec/outputDelta
+  -> same owner connection, raw bytes as deltaBase64
+```
+
+一次性命令 response 保留 UTF-8 聚合 stdout/stderr；开启流式输出时，所有 delta 在最终 response 前按顺序投影，
+response 的 stdout/stderr 为空。`command/exec` 的 `outputBytesCap` 和 `timeoutMs` 使用 Codex exact 三态字段，默认
+output cap 为 1 MiB，超时退出码为 `124`；PTY resize 只允许正数尺寸，stdin close 后非空写入失败。`processId` 可以由
+客户端提供，也可由服务端生成，但只在 originating ConnectionId 内有效；断连和终止都会清理 session。
+
+Desktop terminal 只消费 `src/lib/api/commandExec.ts`，通过 xterm 展示真实 outputDelta，不在 Renderer 伪造 prompt、
+session reconnect、明文 stdin 或 fallback output。Electron 仅承担既有 JSONL sidecar 转发职责。
+
+v2 protocol/schema、CommandExecServer、connection cleanup、typed client、Renderer gateway、GUI terminal 和负向回流
+guard 为 `current`；旧 `project_shell_*`、`run_project_shell_command`、Project Shell v0 DTO/schema、旧 gateway 与
+Electron host 为 `dead / deleted / forbidden-to-restore`；`compat` 与 `deprecated` 均为空。
+
+Architecture impact: major because a public JSON-RPC command family replaced the private Project Shell IPC/session owner.
+Architecture map updated: sections 6.1, 33.1 and command boundary document. Responsible developer confirmation: root,
+2026-08-08. Confirmation content: 已核对 Desktop/App Server/runtime owner、ConnectionId 隔离、notification 顺序、
+raw bytes lowering、删除边界和 GUI/contract 验证门禁。
+
 ## 34. Exact Filesystem Owner
 
 Codex exact filesystem contract 由 App Server 独立 `FsServer` 承接，Desktop 只消费 typed wire 并投影富 GUI：
@@ -2075,3 +2133,172 @@ exact v2 owner. The product direction remains Electron Desktop Host -> App Serve
 Thread/Turn/Item projection -> GUI; filesystem IO does not create a second Electron backend or copy Codex TUI. Responsible
 developer confirmation: root, 2026-08-08. Confirmation content: 已核对目录归属、绝对路径/base64 边界、connection watcher
 owner、Desktop GUI 投影、旧 owner 删除与验证门禁。
+
+## 35. Review Lifecycle Owner
+
+Desktop review 复用 RuntimeCore 的异步 turn admission 和 Thread/Turn/Item canonical lifecycle；它不复制 Codex TUI
+的 review UI 或后台入口：
+
+```text
+Desktop review gateway
+  -> App Server JSON-RPC review/start
+  -> RuntimeCore::start_review
+  -> admitted Turn (inProgress)
+  -> enteredReviewMode Extension Item
+  -> provider/backend review turn
+  -> exitedReviewMode Extension Item
+  -> turn.completed
+  -> v2 ThreadItem projection / GUI timeline
+```
+
+`review/start` 是 inline Desktop action。`threadId` 必须命中已加载 session，active turn、空 branch/sha/instructions
+和 `delivery=detached` 均 fail closed；detached review 明确不属于 Lime Desktop。base branch、commit sha/title 和 custom
+instructions 在 prompt 构造前统一 trim/校验，canonical boundary 与恢复数据只保存规范化后的 target，避免 prompt 与 read
+model 分叉。
+
+review admission 立即返回 v2 `turn.status=inProgress`，实际 backend 在 session loop 中异步执行。durable 事件至少保持
+`item.started(enteredReviewMode) -> turn.accepted -> item.completed(exitedReviewMode) -> turn.completed` 的 review-specific
+顺序；review 输出优先从 assistant message/item 事件聚合，没有输出时使用稳定的 user-facing hint。两个 Extension Item
+分别投影为 v2 `ThreadItem::EnteredReviewMode` 与 `ThreadItem::ExitedReviewMode`，未知 Extension 继续 fail closed。
+
+v2 protocol/schema、App Server review handler、RuntimeCore review context、canonical/read-model projection、Rust/TypeScript
+clients 与 review 定向测试为 `current`。Desktop review gateway 可消费该 current method；Electron 只转发 JSONL，不承接
+review runtime。Codex TUI 的 detached/background review、旧 raw side-channel 和未被 Desktop 消费的兼容入口为
+`dead / deleted / forbidden-to-restore`；`compat` 与 `deprecated` 均为空。
+
+Architecture impact: major because review now has one cross-layer asynchronous admission, durable boundary Item and v2
+projection contract. The product direction remains Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore ->
+Thread/Turn/Item projection -> GUI; model/provider behavior remains owned by the Grok-aligned `model-provider` control plane.
+Responsible developer confirmation: root, 2026-08-09. Confirmation content: 已核对 review owner、target 规范化、事件顺序、
+Desktop/TUI 边界、删除分类和 Rust/contract 验证门禁。真实 Electron Gate B review evidence 已建立：
+`.lime/qc/gui-evidence/code-artifact-workbench-electron-fixture/code-artifact-workbench-electron-fixture-summary.json`。
+证据确认真实 Electron preload/IPC 命中 `app_server_handle_json_lines` 与 typed `review/start`，backend `turnId` 与
+raw v2 `enteredReviewMode`/`exitedReviewMode` 及 canonical `thread/read` 同一身份；GUI 显示“代码审查完成：未发现阻塞性问题”
+和“审查已完成”，内部 Review prompt 不进入页面文本，生产 mock fallback 命中为零。共享壳证据为
+`.lime/qc/project-gates/standalone-shell-01-20260808231556-70202/shell-01-electron-smoke/summary.json`。
+
+## 36. Existing Current Method Classification Audit
+
+本轮不新增平行实现，只修正产品范围矩阵中把 current owner 混入 planned 组的分类漂移。以下 13 个 exact method 已有
+同方向 generated manifest、真实 owner、typed client/projection 和可追踪证据：
+
+```text
+PluginCatalogPage
+  -> typed pluginCatalog gateway
+  -> plugin/list | plugin/read | plugin/install | plugin/uninstall | plugin/installed
+  -> App Server Plugin processor / RuntimeCore PluginDataSource
+  -> local plugin_catalog
+
+RuntimeCore waiter
+  -> currentTime/read | item/permissions/requestApproval | item/tool/call
+  -> Electron Desktop Host / unified PendingInteraction exact responder
+  -> validated response identity
+  -> canonical continuation / permission grant / DynamicToolCall Item
+
+runtime.warning | runtime.error | command terminal interaction fact
+  -> App Server warning | error | item/commandExecution/terminalInteraction
+  -> typed client / canonical read model / Renderer projection
+
+update_plan completion
+  -> durable turn.plan.updated fact
+  -> App Server turn/plan/updated v2 notification
+  -> typed client / Renderer projection
+
+apply_patch exact Turn delta
+  -> durable turn.diff.updated fact
+  -> App Server turn/diff/updated v2 notification
+  -> typed client / canonical conversation Turn unified_diff
+  -> Desktop Changes previous-conversation projection
+```
+
+基础 Plugin catalog 五个方法已经由 Plugin v3 current owner 承接，并在真实 Electron fixture 中经过
+`app_server_handle_json_lines`；这不等于 Plugin share、`plugin/skill/read`、remote catalog watcher 或 hosted connector
+readiness 已完成。`currentTime/read` 仍只读取 Host 时钟；`item/permissions/requestApproval` 仍经 tool-runtime
+permission parser、App Server exact waiter 和统一 PendingInteractionController 返回 scope-bound grant；`item/tool/call`
+仍只响应冻结的 Desktop dynamic-tool binding，不开放任意 Electron IPC。typed `warning` / `error` 继续由 durable
+runtime fact 和 canonical read model 承接，terminal interaction 只保留 bounded redacted summary。
+`turn/plan/updated` 只投影 RuntimeCore producer 的 typed plan fact，不把 Renderer 本地 checklist 或 Tool Item 变成第二事实源。
+`turn/diff/updated` 只投影 `apply_patch` 在当前 Turn 内聚合出的精确 unified diff；连续 patch 由 RuntimeCore coding event tracker
+校验并合并，未知或不连续 mutation 发送空 diff 清理旧快照。App Server projector 与 typed client 严格拒绝额外字段，Renderer
+只把它归并到 canonical conversation Turn 的 `unified_diff`，Desktop Changes 在 previous-conversation 模式直接读取该字段。
+空字符串是有效 net-zero 结果，不得回退到由 GUI items 拼装的第二份 patch。该链路不复制 Codex TUI，也不改变 provider owner；
+多模型、多模态 sampling 和媒体 lowering 继续归 Grok-aligned `model-provider`。
+
+矩阵中的 `plugin/share/*`、`plugin/skill/read`、`guardianWarning` 与其余 review notifications 继续为 `planned`；
+`item/autoApprovalReview/*` 已由 Guardian current owner 承接；`turn/moderationMetadata` 由下一节 current
+主链接管。没有新增 `compat` 或
+`deprecated`；旧 Plugin 私有协议、Renderer 伪造 reverse request、raw diagnostic side-channel、未脱敏 terminal
+interaction 和生产 mock fallback 继续为 `dead / deleted / forbidden-to-restore`。
+
+`deprecationNotice` 已按 Desktop 产品范围裁决为 `product-scope-excluded`：它是 Codex 开发/设置诊断，不进入
+对话通知链；旧实现无外部兼容负担时直接替换或删除，不恢复同名通知包装。
+
+Architecture impact: major; 本节新增了从 Turn-scoped 精确 delta producer、durable event、v2 notification、canonical Turn
+到 Desktop Changes 的跨层数据流，并明确空 diff 清理与唯一事实源边界。Responsible developer confirmation: root,
+2026-08-09. Confirmation content: 已核对 `apply_patch` 连续 mutation 校验、EventLog/projector 顺序、typed client 严格
+解码、canonical Turn 恢复、Desktop/TUI 分界，以及多模型/多模态仍由 Grok-aligned `model-provider` 承接。
+
+## 37. Turn Moderation Metadata Projection
+
+Lime 只从 trusted first-party Responses transport 读取
+`response.metadata.openai_chatgpt_moderation_metadata`，不接受第三方兼容端点伪造该字段。SSE 与 WebSocket 共用同一
+Responses reducer，产生 provider-neutral `CanonicalLlmEvent::TurnModerationMetadata`；Agent runtime 不对该事件去重，
+每次 sampling 更新都生成 durable `turn.moderation_metadata` fact。App Server 按事件顺序投影 exact
+`turn/moderationMetadata { threadId, turnId, metadata }`，缺少 thread、turn 或 metadata 时 fail closed；显式 `null`
+仍是有效 metadata。
+
+```text
+trusted first-party Responses response.metadata
+  -> model-provider CanonicalLlmEvent::TurnModerationMetadata
+  -> agent-runtime CurrentProviderTurnEvent / AgentEvent
+  -> durable turn.moderation_metadata
+  -> App Server turn/moderationMetadata
+  -> typed client signal router
+  -> Renderer canonical Turn.moderation_metadata
+```
+
+`metadata` 是 opaque JSON value，可以是 object、array、scalar 或 `null`。各层不得猜测供应商私有字段、生成第二份
+typed schema 或直接展示 raw JSON；Renderer reducer 仅做 last-write-wins，后续不含该字段的 Turn snapshot 必须保留已有
+值，cold/hydrate reader 也读取同一 canonical Turn 字段。Codex TUI 当前忽略该通知，Lime Desktop 不复制 TUI UI；
+Electron 继续只转发 App Server JSONL，不新增 IPC 或第二业务后端。OpenAI moderation metadata 的可信 transport lowering
+归 `model-provider`，但多模型 catalog、默认选择、model switch、provider capability/readiness、retry/circuit breaker 与
+多模态 sampling/media lowering 仍由 Grok-aligned control plane 承接。
+
+Architecture impact: major; 本节新增 first-party provider metadata 到 durable Turn projection 的跨层数据流，并固定
+opaque JSON、无去重、last-write-wins 与 Desktop/TUI 分界。Responsible developer confirmation: root, 2026-08-09.
+Confirmation content: 已核对 SSE/WS 共用 reducer、first-party trust gate、App Server exact wire、canonical Turn 恢复、
+Electron 无新增业务边界，以及 Grok-aligned 多模型/多模态 owner 不变。
+
+## 38. Guardian Auto Approval Review Projection
+
+严格自动审查只在当前工具决策已经判定为 `strictAutoReview` 的 shell/`exec_command` 路径触发真实 Guardian
+reviewer；它不是用户审批的重命名，也不复制 Codex TUI 的 detached review UI。reviewer 复用当前 session 的
+`model-provider` 路由，以无工具结构化采样读取一次风险判断；provider 未就绪、取消、超时、非法 JSON 或不确定结果
+均 fail closed 为拒绝。
+
+```text
+strictAutoReview tool decision
+  -> agent-runtime Guardian reviewer (same session model-provider, no tools)
+  -> AgentEvent guardian_review_started/completed
+  -> App Server durable event projector
+  -> item/autoApprovalReview/started|completed
+  -> typed app-server client / Renderer sequence gate
+  -> ConversationProjection pending_interactions
+```
+
+started 以 `reviewId` 建立 `kind: guardian_review` 的 pending interaction，并携带目标 Item、action 和风险审查快照；
+completed 只接受 `agent` decision source 与 `approved|denied|timedOut|aborted` 终态，分别投影为
+`resolved|declined|cancelled`。缺失 start、错 thread/turn、额外字段或非终态 completion 均 fail closed；Reducer 不创建
+第二份审批 Item、Message synthesis 或独立 pending store。审查 rationale 是内部 bounded payload，GUI 不展示 provider
+原始 JSON 或 prompt。
+
+Electron 继续只转发 App Server JSONL，不新增 IPC 或第二业务后端。Codex TUI 的 detached/background review 不属于
+Lime Desktop 产品面；`guardianWarning` 仍是没有真实 producer 的独立 planned notification。Guardian 风险 lowering 归
+`model-provider`，而 Grok-aligned 多模型 catalog/default/model switch/provider capability/readiness/retry/circuit
+breaker 与多模态 sampling/media lowering owner 不变。
+
+Architecture impact: major；本节新增 Guardian review 从工具决策、provider sampling、durable AgentEvent、v2 notification
+到 GUI pending projection 的跨层数据流，并固定 fail-closed 与 Desktop/TUI 边界。Responsible developer confirmation:
+root, 2026-08-09。Confirmation content: 已核对 strictAutoReview producer 范围、session provider 复用、超时/取消/非法响应
+拒绝语义、App Server typed wire、Renderer pending 状态、Electron 无新增 IPC，以及 Grok-aligned 多模型/多模态 owner
+不变。

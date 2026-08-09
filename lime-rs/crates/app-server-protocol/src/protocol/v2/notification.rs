@@ -30,6 +30,15 @@ pub struct TurnPlanUpdatedNotification {
     pub plan: Vec<TurnPlanStep>,
 }
 
+/// Reports the latest aggregated unified diff for the current turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TurnDiffUpdatedNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub diff: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TurnPlanStep {
@@ -56,6 +65,14 @@ pub struct WarningNotification {
     /// Lime-owned warning code used for localized presentation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
+}
+
+/// Reports a high-priority Guardian circuit-breaker warning for a thread.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GuardianWarningNotification {
+    pub thread_id: String,
+    pub message: String,
 }
 
 /// Emitted after a server-initiated request reaches a terminal state.

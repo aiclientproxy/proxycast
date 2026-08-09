@@ -102,21 +102,6 @@ impl RequestProcessor {
             METHOD_PROJECT_GIT_WORKTREE_CREATE => {
                 self.handle_project_git_worktree_create_impl(params).boxed()
             }
-            METHOD_PROJECT_SHELL_SESSION_START => {
-                self.handle_project_shell_session_start_impl(params).boxed()
-            }
-            METHOD_PROJECT_SHELL_SESSION_WRITE => {
-                self.handle_project_shell_session_write_impl(params).boxed()
-            }
-            METHOD_PROJECT_SHELL_SESSION_RESIZE => self
-                .handle_project_shell_session_resize_impl(params)
-                .boxed(),
-            METHOD_PROJECT_SHELL_SESSION_KILL => {
-                self.handle_project_shell_session_kill_impl(params).boxed()
-            }
-            METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS => self
-                .handle_project_shell_session_drain_events_impl(params)
-                .boxed(),
             v2::METHOD_PROCESS_SPAWN => self
                 .handle_process_spawn_impl(params, connection_request_id.clone())
                 .boxed(),
@@ -128,6 +113,18 @@ impl RequestProcessor {
                 .boxed(),
             v2::METHOD_PROCESS_KILL => self
                 .handle_process_kill_impl(params, connection_request_id.clone())
+                .boxed(),
+            v2::METHOD_COMMAND_EXEC => self
+                .handle_command_exec_impl(params, connection_request_id.clone())
+                .boxed(),
+            v2::METHOD_COMMAND_EXEC_WRITE => self
+                .handle_command_exec_write_impl(params, connection_request_id.clone())
+                .boxed(),
+            v2::METHOD_COMMAND_EXEC_RESIZE => self
+                .handle_command_exec_resize_impl(params, connection_request_id.clone())
+                .boxed(),
+            v2::METHOD_COMMAND_EXEC_TERMINATE => self
+                .handle_command_exec_terminate_impl(params, connection_request_id.clone())
                 .boxed(),
             METHOD_EVIDENCE_EXPORT => self.handle_evidence_export(params).boxed(),
             METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT => {
@@ -762,6 +759,7 @@ impl RequestProcessor {
                 self.handle_turn_steer_impl(params, event_callback).boxed()
             }
             METHOD_TURN_INTERRUPT => self.handle_turn_interrupt_v2_impl(params).boxed(),
+            v2::METHOD_REVIEW_START => self.handle_review_start_v2_impl(params).boxed(),
             METHOD_AGENT_SESSION_ACTION_RESPOND => self.handle_action_respond(params).boxed(),
             METHOD_AGENT_SESSION_TOOL_INVENTORY_READ => {
                 self.handle_tool_inventory_read_impl(params).boxed()

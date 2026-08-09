@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 pub(super) const TURN_INPUT_EVENT_TYPE: &str = "message.created";
 pub(super) const THREAD_GOAL_CONTINUATION_EVENT_TYPE: &str = "thread.goal.continuation";
+pub(super) const REVIEW_INPUT_EVENT_TYPE: &str = "review.input";
 
 pub(super) fn runtime_event_for_turn_input(input: &[AgentInput]) -> Option<super::RuntimeEvent> {
     runtime_event_for_turn_input_with_client_id(input, None)
@@ -34,6 +35,16 @@ pub(super) fn runtime_event_for_goal_continuation(
         None,
         "agent_only",
         Some("thread_goal"),
+    )
+}
+
+pub(super) fn runtime_event_for_review(input: &[AgentInput]) -> Option<super::RuntimeEvent> {
+    runtime_event_for_turn_input_kind(
+        REVIEW_INPUT_EVENT_TYPE,
+        input,
+        None,
+        "agent_only",
+        Some("review"),
     )
 }
 
@@ -88,7 +99,7 @@ pub(super) fn is_turn_input_event(event: &AgentEvent) -> bool {
 pub(super) fn is_provider_input_event(event: &AgentEvent) -> bool {
     matches!(
         event.event_type.as_str(),
-        TURN_INPUT_EVENT_TYPE | THREAD_GOAL_CONTINUATION_EVENT_TYPE
+        TURN_INPUT_EVENT_TYPE | THREAD_GOAL_CONTINUATION_EVENT_TYPE | REVIEW_INPUT_EVENT_TYPE
     ) && event
         .payload
         .get("mailbox")
@@ -102,7 +113,7 @@ pub(super) fn is_turn_input_event_type(event_type: &str) -> bool {
 pub(super) fn runtime_event_is_provider_input(event: &RuntimeEvent) -> bool {
     matches!(
         event.event_type.as_str(),
-        TURN_INPUT_EVENT_TYPE | THREAD_GOAL_CONTINUATION_EVENT_TYPE
+        TURN_INPUT_EVENT_TYPE | THREAD_GOAL_CONTINUATION_EVENT_TYPE | REVIEW_INPUT_EVENT_TYPE
     ) && event
         .payload
         .get("mailbox")

@@ -5,7 +5,7 @@
 
 ## 1. Workflow 定义
 
-`content_article_workflow` 是内容工厂插件包声明的文章生产工作流。它不是宿主内置 parser，也不是普通聊天 prompt。
+`content_article_workflow` 是 App Server/runtime 从标准插件激活态生成的文章生产 workflow projection。它不是 portable manifest 字段，也不是普通聊天 prompt。
 
 右侧 dock / tab / pane 的统一规则见 `../rightsurface/README.md`；本文件只描述 articleDraft 产物、写作 workflow 和 Article Editor 子面内容。
 
@@ -36,7 +36,7 @@ content_article_generate
 
 | skill                | 责任                         | 备注                               |
 | -------------------- | ---------------------------- | ---------------------------------- |
-| `article-research`   | 资料检索、事实整理和引用归档。 | 内容工厂插件声明，不由宿主硬编码。 |
+| `article-research`   | 资料检索、事实整理和引用归档。 | 标准包 Skill，由插件提供，不由宿主硬编码。 |
 | `article-strategy`   | 选题、角度、受众和结构策划。   | 输出标题候选、大纲和写作计划。     |
 | `article-writing`    | 中文文章写作和正文成稿。       | 负责 `articleDraft.source.markdown`。 |
 | `article-editing`    | 审稿、校对、事实检查和表达调整。 | 输出审稿清单和修改建议。           |
@@ -46,11 +46,11 @@ content_article_generate
 
 | 能力                          | 责任                                                                       |
 | ----------------------------- | -------------------------------------------------------------------------- |
-| `search_query` / WebSearch    | 由 worker 声明 `searchRequests`，由宿主 connector / tool timeline 执行真实检索、事实补充和引用确认，并把 evidence 回填到 articleDraft metadata。 |
-| `content-factory-worker`      | 执行内容工厂 runtime task，产出 workspace patch。                          |
-| `content-factory` CLI         | 本地 inspect / run / validate，证明插件包、workflow 和 worker 自洽。       |
-| connectors                    | 声明搜索、知识库、云端账号、媒体生成等外部依赖和授权状态。                 |
-| toolRefs                      | 声明 worker / CLI / local tool 依赖与能力标签；它不是 connector 列表。     |
+| `search_query` / WebSearch    | 由 App Server/runtime projection 生成 `searchRequests`，由宿主 connector / tool timeline 执行真实检索、事实补充和引用确认，并把 evidence 回填到 articleDraft metadata。 |
+| runtime projection            | 执行内容工厂 workflow，产出 workspace patch 和结构化 evidence。              |
+| typed plugin projection       | 投影 Skills、MCP、工具、授权和可用性；不把这些运行时能力写回 manifest。       |
+| connectors                    | 由 App Server/runtime 记录搜索、知识库、云端账号、媒体生成等外部依赖和授权状态。 |
+| tool refs                     | 记录当前 turn 的工具依赖与能力标签；它不是 connector 列表。                  |
 | hooks                         | 在 prompt / tool / task 生命周期中注入运行约束、路由策略和 evidence 归档。 |
 | `artifact writer`             | 保存 Markdown / workspace patch / evidence。                               |
 | `right surface action router` | 处理继续改写、生成配图、导出等受控动作。                                   |
@@ -76,7 +76,7 @@ flowchart TD
 
 `ArtifactFrame` 是聊天区里的通用独立产物框，承担“承载产物、展示状态、流式更新、点击进入右侧画布”的入口。文章只是其中一种 renderer，后续还应支持图片集、表格、演示稿、网页、报告、代码和媒体产物。注册链以 `ArtifactFrame` 为事实源，不再使用 message 专用命名。写作流程里，任务卡和过程态先回显在对话区，最终文章成熟后才进入 `ArtifactFrame(articleArtifacts)`，右侧展开行为遵循 `../rightsurface/README.md`。
 
-当前 worker 的安全契约是 `directProviderAccess=false`、`directFilesystemAccess=false`：worker 可以输出 `searchRequests`、pending `searchEvidence`、`reviewChecklist` 和 `imagePlan`，但不能直接联网或读写宿主文件。真实检索必须由宿主 connector / tool timeline 执行并回填；在这一步完成前，不能把“多轮检索结构已生成”写成“真实搜索已完成”。
+当前 runtime projection 的安全契约是 `directProviderAccess=false`、`directFilesystemAccess=false`：runtime 可以输出 `searchRequests`、pending `searchEvidence`、`reviewChecklist` 和 `imagePlan`，但不能直接联网或读写宿主文件。真实检索必须由宿主 connector / tool timeline 执行并回填；在这一步完成前，不能把“多轮检索结构已生成”写成“真实搜索已完成”。
 
 通用框架必须包含：
 
@@ -132,8 +132,8 @@ flowchart TD
 
 - `@写文章` 输入建议来自 installed plugin contract。
 - activation metadata 包含 workflow、subagents、skills、CLI refs、connector refs 和 hook policy。
-- worker evidence 包含 `workflowKey` 和 `orchestration`。
-- worker evidence 包含 `searchRequests`、pending `searchEvidence`、`reviewChecklist` 和 `imagePlan`。
+- runtime evidence 包含 `workflowKey` 和 `orchestration`。
+- runtime evidence 包含 `searchRequests`、pending `searchEvidence`、`reviewChecklist` 和 `imagePlan`。
 - 宿主 connector 执行 `searchRequests` 后，真实检索结果回填到 articleDraft metadata 和工具时间线。
 - 聊天出现独立 `ArtifactFrame`，文章正文在框内流式输出。
 - 产物框点击能打开右侧 `articleDraft` Article Editor。

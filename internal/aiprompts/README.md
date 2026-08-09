@@ -41,7 +41,7 @@
 - `../tests/lime-agent-qc-rollout-plan.md` - Lime 样本产品的 Agent 运营级测试落地计划
 - `command-runtime.md` - `@` / `/` / 轻卡 / viewer / 功能方案包实施手册
 - `skill-standard.md` - 统一技能标准、skill / adapter / runtime binding 边界
-- `../tech/plugin/README.md` - Lime Plugin Package v1、Agent Skills 目录契约、worker / workbench / hooks / CLI / connector 打包标准
+- `../roadmap/plugin/v3/README.md` - Agent Plugins v1.0.0 portable 包、Skills/MCP 固定目录、Codex extension 与 Lime current owner 边界
 - `site-adapter-standard.md` - 站点适配器标准、来源导入边界、运行时收敛规则
 - `web-browser-scene-skill.md` - 网页 / 浏览器场景技能设计提案，说明如何把外部 web skill 思路收敛到 Lime 主线
 - `project-heatmap.md` - 仓库热力图与治理候选分析
@@ -93,7 +93,7 @@
 - **碰到 `src/lib/dev-bridge/**`**：先读 `commands.md`与`governance.md`；保留 current renderer bridge 传输，按命令组清 `commandPolicy`、`mockPriorityCommands`、旧 smoke、负向测试和 contract guard，把删不动的旧 policy 登记到对应执行计划；跨命令组长期 residual 必须同步回挂 `../exec-plans/tech-debt-tracker.md`的`CCD-012`
 - **改 `@` / `/` / 轻卡 / viewer / ServiceSkill 场景**：先读 `command-runtime.md`
 - **改 Claw 技能 / Service Skill / 统一 Skills 标准**：先读 `skill-standard.md`
-- **改插件包 / Plugin 包结构 / `plugin.json` / `app.runtime.yaml` / `skills/**/SKILL.md`**：先读 `../tech/plugin/README.md`，再看 `skill-standard.md`与`governance.md`
+- **改插件包 / Plugin 包结构 / `plugin.json` / `mcp.json` / `skills/**/SKILL.md`**：先读 `../roadmap/plugin/v3/README.md` 与 `../roadmap/plugin/v3/01-target-contract.md`，再看 `skill-standard.md` 与 `governance.md`
 - **改站点适配器 / 导入外部 adapter**：先读 `site-adapter-standard.md`，再看 `web-browser-scene-skill.md` 与 `quality-workflow.md`
 - **做网页登录态访问 / 网页导出 / Markdown 落盘场景**：先读 `web-browser-scene-skill.md`
 - **改 Workspace / GUI 壳 / 主路径**：先读 `workspace.md`、`quality-workflow.md`、`playwright-e2e.md`

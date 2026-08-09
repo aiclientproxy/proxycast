@@ -422,6 +422,11 @@ fn handle_provider_event<F>(
             AgentEvent::ModelVerification { verifications },
             on_event,
         ),
+        CurrentProviderTurnEvent::TurnModerationMetadata { metadata } => emit_with_artifacts(
+            artifact_events,
+            AgentEvent::TurnModerationMetadata { metadata },
+            on_event,
+        ),
         CurrentProviderTurnEvent::ProviderStep {
             attempt,
             completed,

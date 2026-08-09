@@ -78,6 +78,7 @@ pub use provider_history::ProviderTurnHistory;
 mod queued_turn_intent;
 mod read_model;
 mod read_model_turn_usage;
+mod review;
 mod right_surface;
 mod service_projection;
 mod session_control;

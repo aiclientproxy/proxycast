@@ -64,6 +64,7 @@ pub const METHOD_HOOK_COMPLETED: &str = "hook/completed";
 pub const METHOD_TURN_START: &str = "turn/start";
 pub const METHOD_TURN_STEER: &str = "turn/steer";
 pub const METHOD_TURN_INTERRUPT: &str = "turn/interrupt";
+pub const METHOD_REVIEW_START: &str = "review/start";
 pub const METHOD_FS_READ_FILE: &str = "fs/readFile";
 pub const METHOD_FS_WRITE_FILE: &str = "fs/writeFile";
 pub const METHOD_FS_CREATE_DIRECTORY: &str = "fs/createDirectory";
@@ -79,6 +80,11 @@ pub const METHOD_PROCESS_RESIZE_PTY: &str = "process/resizePty";
 pub const METHOD_PROCESS_KILL: &str = "process/kill";
 pub const METHOD_PROCESS_OUTPUT_DELTA: &str = "process/outputDelta";
 pub const METHOD_PROCESS_EXITED: &str = "process/exited";
+pub const METHOD_COMMAND_EXEC: &str = "command/exec";
+pub const METHOD_COMMAND_EXEC_WRITE: &str = "command/exec/write";
+pub const METHOD_COMMAND_EXEC_RESIZE: &str = "command/exec/resize";
+pub const METHOD_COMMAND_EXEC_TERMINATE: &str = "command/exec/terminate";
+pub const METHOD_COMMAND_EXEC_OUTPUT_DELTA: &str = "command/exec/outputDelta";
 pub const METHOD_FS_CHANGED: &str = "fs/changed";
 pub const METHOD_THREAD_STARTED: &str = "thread/started";
 pub const METHOD_THREAD_ARCHIVED: &str = "thread/archived";
@@ -89,9 +95,13 @@ pub const METHOD_THREAD_NAME_UPDATED: &str = "thread/name/updated";
 pub const METHOD_THREAD_STATUS_CHANGED: &str = "thread/status/changed";
 pub const METHOD_TURN_STARTED: &str = "turn/started";
 pub const METHOD_TURN_COMPLETED: &str = "turn/completed";
+pub const METHOD_TURN_DIFF_UPDATED: &str = "turn/diff/updated";
+pub const METHOD_TURN_MODERATION_METADATA: &str = "turn/moderationMetadata";
 pub const METHOD_TURN_PLAN_UPDATED: &str = "turn/plan/updated";
 pub const METHOD_ITEM_STARTED: &str = "item/started";
 pub const METHOD_ITEM_COMPLETED: &str = "item/completed";
+pub const METHOD_ITEM_AUTO_APPROVAL_REVIEW_STARTED: &str = "item/autoApprovalReview/started";
+pub const METHOD_ITEM_AUTO_APPROVAL_REVIEW_COMPLETED: &str = "item/autoApprovalReview/completed";
 pub const METHOD_AGENT_MESSAGE_DELTA: &str = "item/agentMessage/delta";
 pub const METHOD_COMMAND_EXECUTION_OUTPUT_DELTA: &str = "item/commandExecution/outputDelta";
 pub const METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION: &str =
@@ -112,6 +122,7 @@ pub const METHOD_THREAD_GOAL_CLEARED: &str = "thread/goal/cleared";
 pub const METHOD_SERVER_REQUEST_RESOLVED: &str = "serverRequest/resolved";
 pub const METHOD_CONFIG_WARNING: &str = "configWarning";
 pub const METHOD_WARNING: &str = "warning";
+pub const METHOD_GUARDIAN_WARNING: &str = "guardianWarning";
 pub const METHOD_ERROR: &str = "error";
 pub const METHOD_SKILLS_CHANGED: &str = "skills/changed";
 pub const METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED: &str = "mcpServer/oauthLogin/completed";
@@ -244,6 +255,8 @@ pub enum Method {
     TurnSteer,
     #[serde(rename = "turn/interrupt")]
     TurnInterrupt,
+    #[serde(rename = "review/start")]
+    ReviewStart,
     #[serde(rename = "fs/readFile")]
     FsReadFile,
     #[serde(rename = "fs/writeFile")]
@@ -270,6 +283,14 @@ pub enum Method {
     ProcessResizePty,
     #[serde(rename = "process/kill")]
     ProcessKill,
+    #[serde(rename = "command/exec")]
+    CommandExec,
+    #[serde(rename = "command/exec/write")]
+    CommandExecWrite,
+    #[serde(rename = "command/exec/resize")]
+    CommandExecResize,
+    #[serde(rename = "command/exec/terminate")]
+    CommandExecTerminate,
 }
 
 impl Method {
@@ -335,6 +356,7 @@ impl Method {
             Self::TurnStart => METHOD_TURN_START,
             Self::TurnSteer => METHOD_TURN_STEER,
             Self::TurnInterrupt => METHOD_TURN_INTERRUPT,
+            Self::ReviewStart => METHOD_REVIEW_START,
             Self::FsReadFile => METHOD_FS_READ_FILE,
             Self::FsWriteFile => METHOD_FS_WRITE_FILE,
             Self::FsCreateDirectory => METHOD_FS_CREATE_DIRECTORY,
@@ -348,6 +370,10 @@ impl Method {
             Self::ProcessWriteStdin => METHOD_PROCESS_WRITE_STDIN,
             Self::ProcessResizePty => METHOD_PROCESS_RESIZE_PTY,
             Self::ProcessKill => METHOD_PROCESS_KILL,
+            Self::CommandExec => METHOD_COMMAND_EXEC,
+            Self::CommandExecWrite => METHOD_COMMAND_EXEC_WRITE,
+            Self::CommandExecResize => METHOD_COMMAND_EXEC_RESIZE,
+            Self::CommandExecTerminate => METHOD_COMMAND_EXEC_TERMINATE,
         }
     }
 
@@ -415,6 +441,7 @@ impl Method {
             METHOD_TURN_START => Some(Self::TurnStart),
             METHOD_TURN_STEER => Some(Self::TurnSteer),
             METHOD_TURN_INTERRUPT => Some(Self::TurnInterrupt),
+            METHOD_REVIEW_START => Some(Self::ReviewStart),
             METHOD_FS_READ_FILE => Some(Self::FsReadFile),
             METHOD_FS_WRITE_FILE => Some(Self::FsWriteFile),
             METHOD_FS_CREATE_DIRECTORY => Some(Self::FsCreateDirectory),
@@ -428,6 +455,10 @@ impl Method {
             METHOD_PROCESS_WRITE_STDIN => Some(Self::ProcessWriteStdin),
             METHOD_PROCESS_RESIZE_PTY => Some(Self::ProcessResizePty),
             METHOD_PROCESS_KILL => Some(Self::ProcessKill),
+            METHOD_COMMAND_EXEC => Some(Self::CommandExec),
+            METHOD_COMMAND_EXEC_WRITE => Some(Self::CommandExecWrite),
+            METHOD_COMMAND_EXEC_RESIZE => Some(Self::CommandExecResize),
+            METHOD_COMMAND_EXEC_TERMINATE => Some(Self::CommandExecTerminate),
             _ => None,
         }
     }
@@ -492,6 +523,7 @@ pub const METHODS: &[&str] = &[
     METHOD_TURN_START,
     METHOD_TURN_STEER,
     METHOD_TURN_INTERRUPT,
+    METHOD_REVIEW_START,
     METHOD_FS_READ_FILE,
     METHOD_FS_WRITE_FILE,
     METHOD_FS_CREATE_DIRECTORY,
@@ -505,11 +537,16 @@ pub const METHODS: &[&str] = &[
     METHOD_PROCESS_WRITE_STDIN,
     METHOD_PROCESS_RESIZE_PTY,
     METHOD_PROCESS_KILL,
+    METHOD_COMMAND_EXEC,
+    METHOD_COMMAND_EXEC_WRITE,
+    METHOD_COMMAND_EXEC_RESIZE,
+    METHOD_COMMAND_EXEC_TERMINATE,
 ];
 
 pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_CONFIG_WARNING,
     METHOD_WARNING,
+    METHOD_GUARDIAN_WARNING,
     METHOD_ERROR,
     METHOD_SKILLS_CHANGED,
     METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
@@ -525,11 +562,15 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_THREAD_STATUS_CHANGED,
     METHOD_TURN_STARTED,
     METHOD_TURN_COMPLETED,
+    METHOD_TURN_DIFF_UPDATED,
     METHOD_TURN_PLAN_UPDATED,
     METHOD_ITEM_STARTED,
     METHOD_ITEM_COMPLETED,
+    METHOD_ITEM_AUTO_APPROVAL_REVIEW_STARTED,
+    METHOD_ITEM_AUTO_APPROVAL_REVIEW_COMPLETED,
     METHOD_AGENT_MESSAGE_DELTA,
     METHOD_COMMAND_EXECUTION_OUTPUT_DELTA,
+    METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION,
     METHOD_FILE_CHANGE_PATCH_UPDATED,
     METHOD_PLAN_DELTA,
     METHOD_MCP_TOOL_CALL_PROGRESS,
@@ -540,6 +581,7 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_MODEL_LIST_UPDATED,
     METHOD_APP_LIST_UPDATED,
     METHOD_MODEL_VERIFICATION,
+    METHOD_TURN_MODERATION_METADATA,
     METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
     METHOD_THREAD_SETTINGS_UPDATED,
     METHOD_THREAD_TOKEN_USAGE_UPDATED,
@@ -548,6 +590,7 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_SERVER_REQUEST_RESOLVED,
     METHOD_PROCESS_OUTPUT_DELTA,
     METHOD_PROCESS_EXITED,
+    METHOD_COMMAND_EXEC_OUTPUT_DELTA,
     METHOD_FS_CHANGED,
 ];
 

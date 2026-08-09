@@ -20,9 +20,9 @@
       "clientNotification": 1
     },
     "byStatus": {
-      "implemented": 108,
-      "product-scope-excluded": 35,
-      "planned": 77
+      "implemented": 130,
+      "product-scope-excluded": 36,
+      "planned": 54
     }
   },
   "groups": [
@@ -352,15 +352,22 @@
       "methods": ["collaborationMode/list"]
     },
     {
-      "id": "command-planned",
+      "id": "command-current",
       "direction": "clientRequest",
       "productArea": "command",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "tool-runtime + app-server command processor",
-      "counterpartRule": "none",
-      "gap": "Legacy executionProcess/projectShell names cannot stand in for Codex command/exec lifecycle.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/command_exec.rs",
+        "lime-rs/crates/app-server/src/processor/command_exec.rs",
+        "lime-rs/crates/app-server/src/command_exec.rs",
+        "lime-rs/crates/app-server/src/command_exec/tests.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/commandExec.ts",
+        "src/lib/api/commandExec.test.ts"
+      ],
       "methods": [
         "command/exec",
         "command/exec/resize",
@@ -591,27 +598,47 @@
       "methods": ["plugin/search"]
     },
     {
-      "id": "plugins-planned",
+      "id": "plugin-catalog-current",
       "direction": "clientRequest",
       "productArea": "plugins",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
-      "owner": "plugin registry + app-server",
-      "counterpartRule": "none",
-      "gap": "Legacy plugin methods do not satisfy Codex manifest, share, watcher, and readiness semantics.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "owner": "App Server Plugin catalog + local plugin_catalog",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/plugin.rs",
+        "lime-rs/crates/app-server/src/processor/plugin.rs",
+        "lime-rs/crates/app-server/src/runtime/plugins.rs",
+        "lime-rs/crates/app-server/src/local_data_source/plugin_catalog.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/pluginCatalog.ts",
+        "scripts/electron/mcp-elicitation-gate-b.mjs"
+      ],
       "methods": [
         "plugin/install",
         "plugin/installed",
         "plugin/list",
         "plugin/read",
+        "plugin/uninstall"
+      ]
+    },
+    {
+      "id": "plugins-share-planned",
+      "direction": "clientRequest",
+      "productArea": "plugins",
+      "status": "planned",
+      "priority": "P1",
+      "owner": "Plugin share and skill catalog owner",
+      "counterpartRule": "none",
+      "gap": "Plugin share mutations and plugin skill body reads still lack current Desktop lifecycle and evidence.",
+      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "methods": [
         "plugin/share/checkout",
         "plugin/share/delete",
         "plugin/share/list",
         "plugin/share/save",
         "plugin/share/updateTargets",
-        "plugin/skill/read",
-        "plugin/uninstall"
+        "plugin/skill/read"
       ]
     },
     {
@@ -638,16 +665,22 @@
       ]
     },
     {
-      "id": "review-planned",
+      "id": "review-current",
       "direction": "clientRequest",
       "productArea": "review",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "agent-runtime review lifecycle + app-server",
-      "counterpartRule": "none",
-      "gap": "Review items project internally, but review/start is not a public current method with recovery evidence.",
+      "counterpartRule": "same-name",
       "evidence": [
-        "packages/agent-runtime-projection/tests/reviewStartItem.test.mjs"
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/review.rs",
+        "lime-rs/crates/app-server/src/processor/review.rs",
+        "lime-rs/crates/app-server/src/processor/tests/review.rs",
+        "lime-rs/crates/app-server/src/runtime/review.rs",
+        "src/lib/api/review.ts",
+        "src/lib/api/review.test.ts",
+        "scripts/electron/code-artifact-workbench-fixture-smoke.mjs",
+        "scripts/electron/code-artifact-workbench-fixture-smoke.test.mjs"
       ],
       "methods": ["review/start"]
     },
@@ -700,28 +733,59 @@
       "methods": ["windowsSandbox/readiness", "windowsSandbox/setupStart"]
     },
     {
-      "id": "client-clock-planned",
+      "id": "client-clock-current",
       "direction": "serverRequest",
       "productArea": "client-capability",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P4",
-      "owner": "app-server server-request registry",
-      "counterpartRule": "none",
-      "gap": "External client clock request and capability gate are not implemented.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "owner": "Electron Desktop Host clock responder + App Server waiter",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/current_time.rs",
+        "lime-rs/crates/app-server/src/current_time.rs",
+        "lime-rs/crates/app-server/src/current_time_tests.rs",
+        "electron/appServerCurrentTimeHost.ts",
+        "electron/appServerHost.test.ts",
+        "lime-rs/crates/app-server-protocol/schema/json/manifest.json"
+      ],
       "methods": ["currentTime/read"]
     },
     {
-      "id": "item-server-request-planned",
+      "id": "permissions-approval-current",
       "direction": "serverRequest",
       "productArea": "item-approval",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
-      "owner": "app-server server-request registry + tool-runtime",
-      "counterpartRule": "none",
-      "gap": "Granular permission approval and client dynamic tool dispatch have no current typed lifecycle.",
-      "evidence": ["internal/refactor/v1/10-item-inventory-skeleton.md"],
-      "methods": ["item/permissions/requestApproval", "item/tool/call"]
+      "owner": "tool-runtime permission policy + App Server waiter + Renderer PendingInteractionController",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/request_permissions.rs",
+        "lime-rs/crates/tool-runtime/src/request_permissions.rs",
+        "lime-rs/crates/agent-runtime/src/request_permissions.rs",
+        "lime-rs/crates/app-server/src/permission_server_request.rs",
+        "src/lib/api/agentRuntime/pendingInteractionController.ts",
+        "src/lib/api/agentRuntime/pendingInteractionController.test.ts",
+        "internal/research/refactor/v2/13-evidence/2026-07-30-v2-04-host-capabilities-gate-b.md"
+      ],
+      "methods": ["item/permissions/requestApproval"]
+    },
+    {
+      "id": "dynamic-tool-call-current",
+      "direction": "serverRequest",
+      "productArea": "dynamic-tools",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "Electron Desktop Host dynamic tool binding + App Server RuntimeCore waiter",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/dynamic_tool.rs",
+        "lime-rs/crates/app-server/src/dynamic_tool_server_request.rs",
+        "electron/appServerDynamicToolHost.ts",
+        "electron/appServerDynamicToolHost.test.ts",
+        "src/lib/api/agentRuntime/appServerCanonicalItemReader.ts",
+        "scripts/electron/mcp-elicitation-gate-b.mjs"
+      ],
+      "methods": ["item/tool/call"]
     },
     {
       "id": "apps-notification-current",
@@ -741,28 +805,69 @@
       "methods": ["app/list/updated"]
     },
     {
-      "id": "command-notification-planned",
+      "id": "command-notification-current",
       "direction": "serverNotification",
       "productArea": "command",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "tool-runtime + app-server command processor",
-      "counterpartRule": "none",
-      "gap": "command/exec output streaming is not exposed as the Codex notification contract.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/command_exec.rs",
+        "lime-rs/crates/app-server/src/processor/command_exec.rs",
+        "lime-rs/crates/app-server/src/command_exec.rs",
+        "lime-rs/crates/app-server/src/command_exec/tests.rs",
+        "packages/app-server-client/src/server-notifications.ts",
+        "src/lib/api/commandExec.test.ts"
+      ],
       "methods": ["command/exec/outputDelta"]
     },
     {
-      "id": "diagnostics-notification-planned",
+      "id": "guardian-notification-planned",
       "direction": "serverNotification",
       "productArea": "diagnostics",
       "status": "planned",
       "priority": "P1",
-      "owner": "app-server notification projector",
+      "owner": "app-server notification projector + Guardian runtime owner",
       "counterpartRule": "none",
-      "gap": "Generic error/warning/deprecation and guardian warning shapes are not aligned to Codex.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
-      "methods": ["deprecationNotice", "error", "guardianWarning", "warning"]
+      "gap": "Lime has no Guardian review runtime producer that can emit a distinct high-priority warning.",
+      "evidence": [
+        "internal/refactor/v1/08-third-audit-gap-register.md",
+        "internal/refactor/v2/EVENT-PROJECTIONS.md"
+      ],
+      "methods": ["guardianWarning"]
+    },
+    {
+      "id": "deprecation-notification-excluded",
+      "direction": "serverNotification",
+      "productArea": "diagnostics",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "Deprecation notices are Codex development/settings diagnostics, not Desktop conversation state; Lime removes retired surfaces directly and does not need a compatibility notification.",
+      "evidence": ["internal/refactor/v2/EVENT-PROJECTIONS.md"],
+      "methods": ["deprecationNotice"]
+    },
+    {
+      "id": "runtime-diagnostics-current",
+      "direction": "serverNotification",
+      "productArea": "diagnostics",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "App Server runtime diagnostics projector + canonical read model",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/notification.rs",
+        "lime-rs/crates/app-server/src/processor/v2_notifications/warning.rs",
+        "lime-rs/crates/app-server/src/processor/v2_notifications/error.rs",
+        "lime-rs/crates/app-server/src/processor/tests/event_notifications.rs",
+        "lime-rs/crates/app-server/src/runtime/read_model/runtime_items.rs",
+        "packages/app-server-client/src/server-notifications.ts",
+        "src/lib/api/agentRuntime/appServerV2Notification.ts",
+        "scripts/agent-runtime/claw-chat-current-fixture-typed-error.mjs"
+      ],
+      "methods": ["error", "warning"]
     },
     {
       "id": "external-agent-config-notification-planned",
@@ -828,20 +933,47 @@
       "methods": ["hook/completed", "hook/started"]
     },
     {
-      "id": "item-notification-planned",
+      "id": "item-guardian-review-notification-current",
       "direction": "serverNotification",
       "productArea": "item",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
-      "owner": "tool-runtime + app-server v2 notification projector",
-      "counterpartRule": "none",
-      "gap": "Auto-approval review and terminal interaction lack runtime source events and typed projection.",
-      "evidence": ["internal/refactor/v1/10-item-inventory-skeleton.md"],
+      "owner": "agent-runtime Guardian reviewer + App Server v2 notification projector + Renderer ConversationProjection",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/agent/src/guardian_review.rs",
+        "lime-rs/crates/app-server/src/runtime/thread_guardian.rs",
+        "lime-rs/crates/app-server/src/processor/thread/guardian.rs",
+        "lime-rs/crates/app-server/src/processor/v2_notifications/guardian.rs",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/item.rs",
+        "packages/app-server-client/src/server-notifications.ts",
+        "src/lib/api/agentRuntime/appServerV2Notification.ts",
+        "src/lib/api/agentRuntime/conversationProjection/reducer.ts",
+        "src/lib/api/agentRuntime/appServerV2Notification.test.ts"
+      ],
       "methods": [
         "item/autoApprovalReview/completed",
-        "item/autoApprovalReview/started",
-        "item/commandExecution/terminalInteraction"
+        "item/autoApprovalReview/started"
       ]
+    },
+    {
+      "id": "command-terminal-interaction-current",
+      "direction": "serverNotification",
+      "productArea": "item",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "tool-runtime command lifecycle + App Server v2 notification projector",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/item.rs",
+        "lime-rs/crates/app-server/src/runtime_backend/coding_events.rs",
+        "lime-rs/crates/app-server/src/runtime_backend/coding_events/tests.rs",
+        "lime-rs/crates/app-server/src/processor/v2_notifications/command.rs",
+        "packages/app-server-client/src/server-notifications.ts",
+        "src/lib/api/agentRuntime/appServerV2Notification.ts",
+        "src/lib/api/agentRuntime/appServerV2Notification.test.ts"
+      ],
+      "methods": ["item/commandExecution/terminalInteraction"]
     },
     {
       "id": "mcp-notification-current",
@@ -982,20 +1114,62 @@
       ]
     },
     {
-      "id": "review-notification-planned",
+      "id": "turn-moderation-metadata-notification-current",
       "direction": "serverNotification",
       "productArea": "review",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
-      "owner": "agent-runtime review lifecycle + app-server",
-      "counterpartRule": "none",
-      "gap": "Review/plan/diff updates are not all represented by durable public notifications.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
-      "methods": [
-        "turn/diff/updated",
-        "turn/moderationMetadata",
-        "turn/plan/updated"
-      ]
+      "owner": "model-provider trusted Responses metadata + agent-runtime + App Server canonical Turn",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/model-provider/src/current_client/stream.rs",
+        "lime-rs/crates/agent-runtime/src/provider_turn.rs",
+        "lime-rs/crates/app-server/src/processor/v2_notifications.rs",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/model.rs",
+        "packages/app-server-client/src/server-notifications.ts",
+        "src/lib/api/agentRuntime/appServerV2Notification.ts",
+        "src/lib/api/agentRuntime/conversationProjection/reducer.ts"
+      ],
+      "methods": ["turn/moderationMetadata"]
+    },
+    {
+      "id": "turn-diff-notification-current",
+      "direction": "serverNotification",
+      "productArea": "coding-review",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "RuntimeCore coding event producer + App Server v2 notification projection + canonical Turn",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/tool-runtime/src/apply_patch.rs",
+        "lime-rs/crates/app-server/src/runtime_backend/coding_events/turn_diff.rs",
+        "lime-rs/crates/app-server/src/processor/v2_notifications/turn_diff.rs",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/notification.rs",
+        "packages/app-server-client/src/server-notifications.ts",
+        "src/lib/api/agentRuntime/appServerV2Notification.ts",
+        "src/lib/api/agentRuntime/conversationProjection/reducer.ts",
+        "src/components/agent/chat/workspace/workspaceConversationCodingViews.tsx"
+      ],
+      "methods": ["turn/diff/updated"]
+    },
+    {
+      "id": "turn-plan-notification-current",
+      "direction": "serverNotification",
+      "productArea": "plan",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "RuntimeCore plan producer + App Server v2 notification projection",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/notification.rs",
+        "lime-rs/crates/app-server/src/processor/v2_notifications/turn_plan.rs",
+        "lime-rs/crates/app-server/src/processor/tests/event_notifications.rs",
+        "lime-rs/crates/app-server/src/runtime_backend/plan_events.rs",
+        "packages/app-server-client/src/server-notifications.ts",
+        "src/lib/api/agentRuntime/appServerV2Notification.ts",
+        "scripts/agent-runtime/claw-chat-current-fixture-turn-plan-update.mjs"
+      ],
+      "methods": ["turn/plan/updated"]
     },
     {
       "id": "windows-sandbox-notification-planned",

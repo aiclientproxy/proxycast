@@ -832,6 +832,7 @@ impl CurrentProviderClient {
                             CanonicalLlmEvent::ServerModel { .. }
                                 | CanonicalLlmEvent::ModelReroute { .. }
                                 | CanonicalLlmEvent::ModelVerification { .. }
+                                | CanonicalLlmEvent::TurnModerationMetadata { .. }
                         );
                         yield Ok(event);
                     }

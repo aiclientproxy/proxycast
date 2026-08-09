@@ -371,8 +371,6 @@ fn canonical_item_from_event(
         "item.started"
             | "item.updated"
             | "item.completed"
-            | "hook.started"
-            | "hook.completed"
             | super::super::thread_fork::FORK_CANONICAL_ITEM_EVENT_TYPE
     ) {
         return None;
@@ -443,11 +441,6 @@ fn canonical_item_lifecycle_status(event_type: &str, nested_status: ItemStatus) 
     match event_type {
         "item.started" | "item.updated" => ItemStatus::InProgress,
         "item.completed" => match nested_status {
-            ItemStatus::Failed | ItemStatus::Interrupted | ItemStatus::Cancelled => nested_status,
-            _ => ItemStatus::Completed,
-        },
-        "hook.started" => ItemStatus::InProgress,
-        "hook.completed" => match nested_status {
             ItemStatus::Failed | ItemStatus::Interrupted | ItemStatus::Cancelled => nested_status,
             _ => ItemStatus::Completed,
         },

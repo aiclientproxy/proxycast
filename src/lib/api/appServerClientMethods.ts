@@ -261,6 +261,26 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerThreadShellCommandResponse>
     >;
+    execCommand(
+      params: appServer.AppServerCommandExecParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerCommandExecResponse>
+    >;
+    writeCommandExec(
+      params: appServer.AppServerCommandExecWriteParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerCommandExecWriteResponse>
+    >;
+    resizeCommandExec(
+      params: appServer.AppServerCommandExecResizeParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerCommandExecResizeResponse>
+    >;
+    terminateCommandExec(
+      params: appServer.AppServerCommandExecTerminateParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerCommandExecTerminateResponse>
+    >;
     listThreadBackgroundTerminals(
       params: appServer.AppServerThreadBackgroundTerminalsListParams,
     ): Promise<
@@ -399,6 +419,11 @@ declare module "./appServerClient" {
       params: appServer.AppServerAgentSessionTurnStartParams,
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerAgentSessionTurnStartResponse>
+    >;
+    startReview(
+      params: appServer.AppServerReviewStartParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerReviewStartResponse>
     >;
     cancelTurn(
       params: appServer.AppServerAgentSessionTurnCancelParams,

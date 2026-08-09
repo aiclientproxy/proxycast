@@ -217,6 +217,11 @@ export interface AgentEventTurnPlanUpdated {
   }>;
 }
 
+export interface AgentEventTurnDiffUpdated {
+  type: "turn_diff_updated";
+  unified_diff: string;
+}
+
 export interface AgentEventToolStart {
   type: "tool_start";
   tool_name: string;
@@ -578,6 +583,7 @@ export type AgentEvent = (
   | AgentEventReasoningEnded
   | AgentEventPlanDelta
   | AgentEventPlanFinal
+  | AgentEventTurnDiffUpdated
   | AgentEventTurnPlanUpdated
   | AgentEventToolStart
   | AgentEventToolEnd

@@ -41,6 +41,10 @@ pub struct AgentPluginMcpServerParseError {
     pub message: String,
 }
 
+#[cfg(test)]
+#[path = "agent_plugin_config_tests.rs"]
+mod agent_plugin_config_tests;
+
 #[derive(Debug, Default)]
 pub struct AgentPluginMcpConfigParseOutcome {
     pub servers: BTreeMap<String, McpServerConfig>,
@@ -102,9 +106,6 @@ pub fn parse_agent_plugin_mcp_config(
 
     let root = absolute_plugin_path(plugin_root)?;
     let data = absolute_plugin_path(plugin_data_root)?;
-    std::fs::create_dir_all(&data)
-        .map_err(|error| format!("创建 Plugin MCP data 目录失败: {error}"))?;
-    let data = absolute_plugin_path(&data)?;
 
     let mut outcome = AgentPluginMcpConfigParseOutcome::default();
     for (name, value) in mcp_servers {
@@ -267,7 +268,9 @@ fn normalize_http(
         transport: McpServerTransport::StreamableHttp {
             url,
             bearer_token_env_var: None,
-            http_headers: headers.map(|values| values.into_iter().collect()),
+            http_headers: headers
+                .filter(|values| !values.is_empty())
+                .map(|values| values.into_iter().collect()),
             env_http_headers: None,
         },
         environment_id: DEFAULT_MCP_SERVER_ENVIRONMENT_ID.to_string(),
@@ -375,9 +378,27 @@ fn parse_cwd_root(value: &str) -> Option<CwdRoot> {
 }
 
 fn expand_placeholders(value: &str, plugin_root: &str, plugin_data: &str) -> String {
-    value
-        .replace("${PLUGIN_ROOT}", plugin_root)
-        .replace("${PLUGIN_DATA}", plugin_data)
+    const ROOT: &str = "${PLUGIN_ROOT}";
+    const DATA: &str = "${PLUGIN_DATA}";
+    let mut output = String::with_capacity(value.len());
+    let mut remaining = value;
+    loop {
+        let next = match (remaining.find(ROOT), remaining.find(DATA)) {
+            (Some(root), Some(data)) if root <= data => Some((root, ROOT, plugin_root)),
+            (Some(_), Some(data)) => Some((data, DATA, plugin_data)),
+            (Some(root), None) => Some((root, ROOT, plugin_root)),
+            (None, Some(data)) => Some((data, DATA, plugin_data)),
+            (None, None) => None,
+        };
+        let Some((index, placeholder, replacement)) = next else {
+            output.push_str(remaining);
+            break;
+        };
+        output.push_str(&remaining[..index]);
+        output.push_str(replacement);
+        remaining = &remaining[index + placeholder.len()..];
+    }
+    output
 }
 
 fn absolute_plugin_path(path: &Path) -> Result<PathBuf, String> {
@@ -506,6 +527,7 @@ mod tests {
     fn lowers_stdio_placeholders_and_injects_reserved_paths() {
         let (_temp, root, data) = roots();
         std::fs::create_dir_all(root.join("bin")).unwrap();
+        std::fs::create_dir_all(&data).unwrap();
         let outcome = parse_agent_plugin_mcp_config(
             &root,
             &data,

@@ -1,0 +1,40 @@
+{
+  "$defs": {
+    "CommandExecTerminalSize": {
+      "properties": {
+        "cols": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cols",
+        "rows"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "processId": {
+      "type": "string"
+    },
+    "size": {
+      "$ref": "#/$defs/CommandExecTerminalSize"
+    }
+  },
+  "required": [
+    "processId",
+    "size"
+  ],
+  "title": "CommandExecResizeParams",
+  "type": "object"
+}

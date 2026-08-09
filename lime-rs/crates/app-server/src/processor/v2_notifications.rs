@@ -8,10 +8,13 @@ use std::collections::HashSet;
 mod command;
 pub(crate) mod error;
 mod file_change;
+mod guardian;
+mod guardian_warning;
 mod hook;
 mod mcp;
 mod plan;
 mod thread_status;
+mod turn_diff;
 mod turn_plan;
 mod warning;
 
@@ -97,6 +100,9 @@ impl V2NotificationProjector {
                     event,
                 )
             }
+            "guardian.review.started" => return guardian::project_started(event),
+            "guardian.review.completed" => return guardian::project_completed(event),
+            "guardian.warning" => return guardian_warning::project(event),
             "item.started" | "command.started" => self.project_item(event, false),
             "item.completed" | "command.exited" => self.project_item(event, true),
             "context.compaction.started" => self.project_item(event, false),
@@ -144,6 +150,7 @@ impl V2NotificationProjector {
                 )
             }
             "turn.plan.updated" => return turn_plan::project(event),
+            "turn.diff.updated" => return turn_diff::project(event),
             "tool.progress" => {
                 return mcp::project_progress(
                     &self.started_mcp_item_ids,
@@ -161,6 +168,7 @@ impl V2NotificationProjector {
             "model.server_reported" => return EventProjection::Direct(Vec::new()),
             "model.rerouted" => return self.project_model_rerouted(event),
             "model.verification" => return self.project_model_verification(event),
+            "turn.moderation_metadata" => return self.project_turn_moderation_metadata(event),
             "provider_safety_buffering" => self.project_model_safety_buffering(event),
             "runtime.warning" => return warning::project(event),
             _ if is_allowed_raw_side_channel_type(&event.event_type) => {
@@ -446,6 +454,26 @@ impl V2NotificationProjector {
         .into()])
     }
 
+    fn project_turn_moderation_metadata(&self, event: &AgentEvent) -> EventProjection {
+        let Some(thread_id) = required_event_id(event.thread_id.as_deref()) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let Some(turn_id) = required_event_id(event.turn_id.as_deref()) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        let Some(metadata) = event.payload.get("metadata").cloned() else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        EventProjection::Direct(vec![ServerNotification::TurnModerationMetadata(
+            v2::TurnModerationMetadataNotification {
+                thread_id,
+                turn_id,
+                metadata,
+            },
+        )
+        .into()])
+    }
+
     fn project_model_rerouted(&mut self, event: &AgentEvent) -> EventProjection {
         let Some(thread_id) = required_event_id(event.thread_id.as_deref()) else {
             return EventProjection::Reject(projection_error(event));
@@ -643,6 +671,7 @@ fn is_allowed_raw_side_channel_type(event_type: &str) -> bool {
             | "provider.failed"
             | "provider.canceled"
             | "image_task.created"
+            | "image_task.create_failed"
             | "image_task.parameters.required"
             | "image_task_parameters_required"
             | "image_task.presentation.generated"
@@ -1554,6 +1583,7 @@ mod tests {
             "provider.failed",
             "provider.canceled",
             "image_task.created",
+            "image_task.create_failed",
             "image_task.parameters.required",
             "image_task_parameters_required",
             "image_task.presentation.generated",
@@ -1691,6 +1721,66 @@ mod tests {
             .project(model_event)
             .expect("duplicate verification is ignored")
             .is_empty());
+    }
+
+    #[test]
+    fn maps_each_turn_moderation_metadata_update_to_exact_codex_notification() {
+        let mut projector = V2NotificationProjector::default();
+        let first = projector
+            .project(event(
+                "turn.moderation_metadata",
+                json!({ "metadata": { "presentation": "inline" } }),
+            ))
+            .expect("first moderation metadata notification");
+        let second = projector
+            .project(event(
+                "turn.moderation_metadata",
+                json!({ "metadata": null }),
+            ))
+            .expect("second moderation metadata notification");
+
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].method, "turn/moderationMetadata");
+        assert_eq!(
+            first[0].params.as_ref().expect("moderation params"),
+            &json!({
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "metadata": { "presentation": "inline" }
+            })
+        );
+        assert_eq!(second.len(), 1);
+        assert_eq!(
+            second[0]
+                .params
+                .as_ref()
+                .expect("updated moderation params"),
+            &json!({
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "metadata": null
+            })
+        );
+    }
+
+    #[test]
+    fn turn_moderation_metadata_fails_closed_without_identity_or_metadata() {
+        for payload in [json!({}), json!({ "legacyMetadata": {} })] {
+            let error = V2NotificationProjector::default()
+                .project(event("turn.moderation_metadata", payload))
+                .expect_err("missing moderation metadata must fail closed");
+            assert_eq!(error.code, error_codes::RUNTIME_ERROR);
+            assert!(error.message.contains("turn.moderation_metadata"));
+        }
+
+        let mut missing_identity = event(
+            "turn.moderation_metadata",
+            json!({ "metadata": { "presentation": "inline" } }),
+        );
+        missing_identity.thread_id = None;
+        assert!(V2NotificationProjector::default()
+            .project(missing_identity)
+            .is_err());
     }
 
     #[test]

@@ -6,6 +6,7 @@ import {
   type AppServerAgentSessionFileCheckpointRestoreResponse,
   type AppServerAgentSessionFileCheckpointSummary,
   type AppServerCapabilityListParams,
+  type AppServerReviewStartParams,
   type AppServerThreadReadParams,
   type AppServerThreadReadResponse,
   type AppServerThreadSettingsUpdateParams,
@@ -70,6 +71,7 @@ export type AgentRuntimeAppServerClient = Pick<
   | "updateThreadSettings"
   | "runThreadShellCommand"
   | "startTurn"
+  | "startReview"
   | "steerTurn"
   | "cancelTurn"
   | "startThreadCompaction"
@@ -150,6 +152,44 @@ export function createThreadClient(deps: AgentRuntimeThreadClientDeps = {}) {
           result.notifications,
         );
       }
+    } catch (error) {
+      publishAppServerRpcErrorNotifications(error, {
+        eventName,
+        sessionId: threadId,
+      });
+      throw error;
+    }
+  }
+
+  async function submitAgentRuntimeReview(
+    request: AppServerReviewStartParams,
+  ): Promise<
+    Awaited<ReturnType<AgentRuntimeAppServerClient["startReview"]>>
+  > {
+    assertAppServerTurnLifecycleAvailable(isAppServerTurnLifecycleAvailable);
+    const threadId = request.threadId.trim();
+    if (!threadId) {
+      throw new Error("threadId is required to start App Server review");
+    }
+    const eventName = `agentSession/event/${threadId}`;
+    const route = appServerEventRouter?.register({
+      eventName,
+      sessionId: threadId,
+    });
+    try {
+      const result = await appServerClient.startReview({
+        ...request,
+        threadId,
+      });
+      if (route) {
+        route.publish(result.notifications);
+      } else {
+        publishAppServerAgentSessionNotifications(
+          eventName,
+          result.notifications,
+        );
+      }
+      return result;
     } catch (error) {
       publishAppServerRpcErrorNotifications(error, {
         eventName,
@@ -466,6 +506,7 @@ export function createThreadClient(deps: AgentRuntimeThreadClientDeps = {}) {
     resumeThread,
     runUserShellCommand,
     steerAgentRuntimeTurn,
+    submitAgentRuntimeReview,
     submitAgentRuntimeTurn,
   };
 }
@@ -1079,5 +1120,6 @@ export const {
   resumeThread,
   runUserShellCommand,
   steerAgentRuntimeTurn,
+  submitAgentRuntimeReview,
   submitAgentRuntimeTurn,
 } = createThreadClient();

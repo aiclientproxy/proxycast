@@ -95,8 +95,11 @@ export function useCanvasWorkbenchReviewState({
     [backendChangeItems, changeView, selectedBaseUsesGit],
   );
   const fallbackPatch = useMemo(
-    () => buildCanvasWorkbenchGitApplyPatch(changeItems),
-    [changeItems],
+    () =>
+      changeView?.turnDiff !== undefined
+        ? changeView.turnDiff
+        : buildCanvasWorkbenchGitApplyPatch(changeItems),
+    [changeItems, changeView?.turnDiff],
   );
 
   const loadGitDiffBase = useCallback(

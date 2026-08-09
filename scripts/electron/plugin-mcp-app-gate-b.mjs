@@ -109,6 +109,17 @@ export function pluginPackageMcpAppTraceEvidence(traceRaw, runtime) {
   };
 }
 
+export function pluginPackageMcpAppSurfaceReady(
+  traceEvidence,
+  minimumResourceReadCount = 1,
+  minimumHtmlLoadCount = 1,
+) {
+  return (
+    traceEvidence?.resourceReadCount >= minimumResourceReadCount &&
+    traceEvidence?.htmlLoadCount >= minimumHtmlLoadCount
+  );
+}
+
 export async function installPluginPackageEmbeddedBrowserLifecycleCapture(page) {
   await page.evaluate(() => {
     const stateKey = "__LIME_PLUGIN_PACKAGE_EMBEDDED_BROWSER_LIFECYCLE__";
@@ -136,6 +147,8 @@ export async function waitForPluginPackageMcpAppSurface({
   page,
   options,
   runtime,
+  minimumResourceReadCount = 1,
+  minimumHtmlLoadCount = 1,
 }) {
   const { containerId, viewId } = await waitForPluginPackageMcpAppFrame({
     page,
@@ -161,8 +174,11 @@ export async function waitForPluginPackageMcpAppSurface({
       )
     ) {
       if (
-        latestTraceEvidence.resourceReadCount > 0 &&
-        latestTraceEvidence.htmlLoadCount > 0
+        pluginPackageMcpAppSurfaceReady(
+          latestTraceEvidence,
+          minimumResourceReadCount,
+          minimumHtmlLoadCount,
+        )
       ) {
         return {
           containerId,

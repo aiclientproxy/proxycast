@@ -49,6 +49,14 @@ type EntityLifecycleNotification = Extract<
       | "item/completed";
   }
 >;
+type GuardianReviewNotification = Extract<
+  AgentRuntimeLifecycleNotification,
+  {
+    method:
+      | "item/autoApprovalReview/started"
+      | "item/autoApprovalReview/completed";
+  }
+>;
 type ItemStreamingNotification = Extract<
   AgentRuntimeLifecycleNotification,
   {
@@ -129,6 +137,7 @@ export class AgentRuntimeEventSequenceGate {
     if (
       !this.#verifier ||
       isItemStreamingNotification(notification) ||
+      isGuardianReviewNotification(notification) ||
       notification.method === "thread/settings/updated"
     ) {
       return { accepted: true, violations: [] };
@@ -164,6 +173,15 @@ function isItemStreamingNotification(
     method === "item/reasoning/summaryTextDelta" ||
     method === "item/reasoning/summaryPartAdded" ||
     method === "item/reasoning/textDelta"
+  );
+}
+
+function isGuardianReviewNotification(
+  notification: AgentRuntimeLifecycleNotification,
+): notification is GuardianReviewNotification {
+  return (
+    notification.method === "item/autoApprovalReview/started" ||
+    notification.method === "item/autoApprovalReview/completed"
   );
 }
 

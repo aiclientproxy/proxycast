@@ -22,11 +22,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
             METHOD_PROJECT_GIT_BRANCH_CHECKOUT,
             METHOD_PROJECT_GIT_BRANCH_CREATE,
             METHOD_PROJECT_GIT_WORKTREE_CREATE,
-            METHOD_PROJECT_SHELL_SESSION_START,
-            METHOD_PROJECT_SHELL_SESSION_WRITE,
-            METHOD_PROJECT_SHELL_SESSION_RESIZE,
-            METHOD_PROJECT_SHELL_SESSION_KILL,
-            METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS,
             METHOD_EVIDENCE_EXPORT,
             METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT,
             METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT,
@@ -442,14 +437,6 @@ fn app_server_request_serialization_scope_covers_high_risk_methods() {
     assert_eq!(
         app_server_request_access(crate::protocol::v2::METHOD_THREAD_INJECT_ITEMS),
         AppServerRequestAccess::Exclusive
-    );
-    assert_eq!(
-        app_server_request_serialization_scope(METHOD_PROJECT_SHELL_SESSION_START),
-        Some(AppServerRequestSerializationScope::ProjectShellSession)
-    );
-    assert_eq!(
-        app_server_request_serialization_scope(METHOD_PROJECT_SHELL_SESSION_KILL),
-        Some(AppServerRequestSerializationScope::ProjectShellSession)
     );
     assert_eq!(
         app_server_request_serialization_scope(METHOD_MCP_SERVER_OAUTH_LOGIN),

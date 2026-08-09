@@ -1187,10 +1187,7 @@ describe("http-client", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(MockEventSource.instances).toHaveLength(1);
 
-    const shellUnlistenPromise = listenViaHttpEvent(
-      "project-shell-session-event",
-      vi.fn(),
-    );
+    const configUnlistenPromise = listenViaHttpEvent("config-changed", vi.fn());
     await vi.advanceTimersByTimeAsync(0);
     expect(MockEventSource.instances).toHaveLength(1);
 
@@ -1201,18 +1198,18 @@ describe("http-client", () => {
     expect(MockEventSource.instances[0]?.close).toHaveBeenCalledTimes(1);
     const nextUrl = new URL(MockEventSource.instances[1]!.url);
     expect(JSON.parse(nextUrl.searchParams.get("events") ?? "[]")).toEqual([
+      "config-changed",
       "lime-open-voice-model-settings",
-      "project-shell-session-event",
     ]);
 
     MockEventSource.instances[1]?.emitOpen();
-    const [voiceUnlisten, shellUnlisten] = await Promise.all([
+    const [voiceUnlisten, configUnlisten] = await Promise.all([
       voiceUnlistenPromise,
-      shellUnlistenPromise,
+      configUnlistenPromise,
     ]);
 
     voiceUnlisten();
-    shellUnlisten();
+    configUnlisten();
   });
 
   it("事件流如果在绑定 onopen 前已经打开，也应立即完成监听注册", async () => {

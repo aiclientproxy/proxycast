@@ -1,6 +1,6 @@
 # Plugin v3 当前基线
 
-状态：`implemented-baseline / 2026-08-08`
+状态：`implemented-baseline / 2026-08-09`
 
 ## 结论
 
@@ -17,7 +17,7 @@ macOS 标准包真实 Agent turn/Right Surface Gate B 已通过。剩余工作�
 | `current` | `lime-rs/crates/app-server/src/local_data_source/impls/plugins.rs`、App Server v2 `plugin/*` | JSON-RPC 与 typed projection 唯一产品边界 |
 | `current` | `lime-rs/crates/mcp/src/agent_plugin_config.rs`、`lime-rs/crates/skills`、`agent-runtime`、`tool-runtime` | 标准 MCP/Skills lowering 与 turn/tool 生命周期 owner |
 | `current` | Renderer `pluginCatalog`、Claw mention、Right Surface | 只消费 App Server projection，不解析包 |
-| `compat` | Codex `.codex-plugin/plugin.json` extension adapter | 只适配 `com.openai` UI metadata；不成为 portable owner，不解释 Lime 私有字段 |
+| `compat` | Codex `extensions.com.openai` / `.codex-plugin/plugin.json` adapter | 适配 UI metadata 与 `apps` 配置路径；不成为 portable owner，不解释旧内联 Apps object 或 Lime 私有字段 |
 | `dead` | 旧 package API/发布链、renderer SDK/runtime、Electron worker/UI runtime | 已删除并由 contract/governance guard 阻止回流 |
 | `dead` | `lime-core::plugin`、processor Plugin hook、`installed_plugins` DAO/schema、孤立 Plugin errors | 已删除，不保留构建或存储双轨 |
 | `dead` | MCP smoke 私有 runtime inventory fixture 与 `agentChat.harness.pluginMcpTargets.*` 文案 | 已删除；current inventory 明确忽略私有 metadata 且不投影私有 targets |
@@ -30,6 +30,9 @@ macOS 标准包真实 Agent turn/Right Surface Gate B 已通过。剩余工作�
   Skills、Codex extension precedence、symlink、根 `mcp.json` 和 enabled snapshot。
 - `agent_plugin_config.rs` 覆盖 `stdio` / `streamable-http`、placeholder、保留环境变量、
   cwd containment、URL 安全与 sibling failure isolation。
+- Codex Apps adapter 只接受 extension 中的包内相对配置路径，配置文件使用
+  `apps.{name}.{id,category?}`；旧顶层/内联 Apps object fail closed，非法 Apps 配置只禁用
+  Apps 组件。`apps_jsonrpc.rs` 与 `apps-catalog-gate-b.mjs` 均使用标准根 manifest。
 - `agentCommandCatalog.json` 只登记 `plugin/list|search|read|install|uninstall|installed|enabled/set`。
 - `runtime_backend_tool_inventory_does_not_project_plugin_private_targets` 固化私有 metadata
   不得进入 current inventory；MCP smoke 只验证标准 MCP JSON-RPC surface。

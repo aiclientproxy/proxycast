@@ -313,7 +313,7 @@ describe("code artifact workbench Electron fixture smoke guard", () => {
 
     expect(content).toContain("const turnScopedExecutionId = (baseId) =>");
     expect(content).toContain(
-      'isRecoveryTurn ? baseId + ":" + turnId : baseId',
+      'isRecoveryTurn || isReviewTurn ? baseId + ":" + turnId : baseId',
     );
     expect(content).toContain(
       'const assistantItemId = turnScopedExecutionId("code-artifact-workbench-electron:assistant")',
@@ -347,6 +347,25 @@ describe("code artifact workbench Electron fixture smoke guard", () => {
     expect(content).toContain("guiRecoveryTestRunId.length > 0");
     expect(content).toContain("guiRecoveryCommandId");
     expect(content).toContain("guiRecoveryTestRunId");
+  });
+
+  it("keeps review-start on a dedicated message lifecycle without exposing its internal prompt", () => {
+    const content = readSmokeScript();
+
+    expect(content).toContain(
+      'const isReviewTurn = inputText.startsWith("Review the current code changes")',
+    );
+    expect(content).toContain("const events = isReviewTurn ? [");
+    expect(content).toContain(
+      '"message.delta,message.completed,turn.completed"',
+    );
+    expect(content).toContain("reviewBackendUsesDedicatedMessageLifecycle");
+    expect(content).toContain("reviewPromptHiddenFromTranscript");
+    expect(content).toContain('item?.type === "enteredReviewMode"');
+    expect(content).toContain('item?.type === "exitedReviewMode"');
+    expect(content).toContain(
+      "item?.turnId === reviewBackendTurnStart?.turnId",
+    );
   });
 
   it("drives FileChange decline and cancel through the typed server request", () => {

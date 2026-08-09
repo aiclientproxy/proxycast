@@ -1,16 +1,15 @@
 # 插件中心内置发布工作台 PRD
 
 更新时间：2026-07-06  
-状态：MVP 工程闭环已实现并完成定向验证；Desktop 开发者云端 preflight、平台审核工作台与提交状态面板已接入；LimeCore console 运营后台 UI 仍待后续阶段  
+状态：Historical / superseded by Plugin v3；发布能力边界保留为云端控制面证据
 适用范围：Lime Desktop / 插件中心 / 插件开发者发布流 / LimeCore Plugin Marketplace
 
 事实源：
 
-- `internal/roadmap/plugin/prd.md`
-- `internal/roadmap/plugin/architecture.md`
-- `internal/roadmap/plugin/implementation-plan.md`
+- `internal/roadmap/plugin/v3/README.md`
+- `internal/roadmap/plugin/v3/01-target-contract.md`
+- `internal/roadmap/plugin/v3/03-execution-plan.md`
 - 服务端专项规划：`internal/roadmap/plugin/deverlop/plugin-publish-limecore-server-plan.md`
-- `internal/tech/plugin/lime-plugin-package-v1.md`
 - 旧参考：`/Users/coso/Documents/dev/ai/limecloud/lime-agent-app-studio`
 - Desktop current 主链：`src/lib/api/plugins.ts -> App Server JSON-RPC`
 - Desktop 发布 / 审核 current 主链：
@@ -33,7 +32,7 @@
   - `packages/types/index.ts`
   - `packages/api-client/index.ts`
   - `contracts/openapi/control-plane-svc/*`
-  - `internal/roadmap/plugin/implementation-plan.md`
+  - `internal/roadmap/plugin/v3/03-execution-plan.md`
   - `internal/roadmap/plugin/operations-runbook.md`
 
 ## 1. 一句话目标
@@ -42,7 +41,7 @@
 
 ```text
 旧时代：安装一个发布应用，再用它发布 Agent App
-新时代：插件中心内置开发者发布流，直接发布 Lime Plugin Package v1
+新时代：插件中心内置开发者发布流，直接发布 Agent Plugins v1.0.0 portable package
 ```
 
 ## 2. 背景
@@ -68,7 +67,7 @@
 | ---------- | ------------------------------ | ----------------------------------------------------- |
 | 产品入口   | 独立 Agent App Studio          | 插件中心内置发布工作台                                |
 | 机器事实源 | `APP.md` frontmatter           | `plugin.json`                                         |
-| 发布包语义 | `.lapp` Agent App 包           | Lime Plugin Package v1                                |
+| 发布包语义 | `.lapp` Agent App 包           | Agent Plugins v1.0.0 portable package                |
 | 用户心智   | 先安装发布应用，再发布应用     | 在插件中心管理、开发和发布插件                        |
 | 运行边界   | Agent App runtime package      | Plugin manifest / runtime / workbench contract        |
 | 市场事实源 | Agent App marketplace 历史形态 | LimeCore Plugin catalog / release / tenant enablement |
@@ -87,7 +86,7 @@
 ## 3. 目的
 
 1. 统一开发者发布入口，让插件中心同时承接“使用插件”和“发布插件”。
-2. 把发布事实源从 `APP.md` / `.lapp` 迁到 Lime Plugin Package v1。
+2. 把发布事实源从 `APP.md` / `.lapp` 迁到 Agent Plugins v1.0.0 portable package。
 3. 复用旧 Studio 中已经验证过的诊断、打包、dry-run、签名和 LimeCore 发布经验。
 4. 消除独立 App Studio 带来的安装成本、入口分裂和旧 Agent App 心智。
 5. 为后续插件审核、灰度、注册码、租户启用和发布回滚提供统一工作台。
@@ -107,7 +106,7 @@
 | Surface                                                    | 分类                | 规则                                                                                          |
 | ---------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------- |
 | 插件中心内置发布工作台                                     | `current`           | 后续发布 UX、开发者认证、dry-run、发布结果和发布历史都向这里收敛。                            |
-| Lime Plugin Package v1                                     | `current`           | 插件包、运行、工作区、skills、resources 和验证的机器事实源。                                  |
+| Agent Plugins v1.0.0 portable package                     | `current`           | `plugin.json`、`mcp.json`、Skills 和包安全校验的机器事实源。                                   |
 | `plugin.json`                                              | `current`           | 插件包唯一入口；插件中心、本地校验和云端 manifest summary 均从这里投影。                      |
 | LimeCore Plugin catalog / release / enablement             | `current`           | 云端发布、版本、租户可见性和 marketplace 列表事实源。                                         |
 | LimeCore `POST /api/v1/platform/plugins/bulk-publish`      | `current`           | 已打通 catalog、release、targets 的原子发布入口；新工作台必须复用。                           |
@@ -115,7 +114,7 @@
 | 旧 `lime-agent-app-studio` 诊断 / 打包 / dry-run 经验      | `compat`            | 只作为能力参考或迁移输入，不作为用户主入口。                                                  |
 | 旧 npm CLI                                                 | `deprecated`        | 仅可作为 CI/headless 自动化候选，不是 v1 产品入口；若保留，必须委托插件中心同一发布服务契约。 |
 | `APP.md` frontmatter 作为机器事实源                        | `dead for new work` | 新插件发布不得依赖；文档说明可保留给历史迁移。                                                |
-| `.lapp` 作为新插件主发布格式                               | `dead for new work` | 新发布流使用 Lime Plugin Package v1 的受控插件包。                                            |
+| `.lapp` 作为新插件主发布格式                               | `dead for new work` | 新发布流使用 Agent Plugins v1.0.0 的受控插件包。                                               |
 | 独立 Agent App Studio 可视化应用                           | `dead for new work` | 不再作为发布插件的产品入口。                                                                  |
 
 ## 6. 用户与角色
@@ -213,9 +212,9 @@
 
 | 编号  | 需求                                                 | 验收                                                          |
 | ----- | ---------------------------------------------------- | ------------------------------------------------------------- |
-| FR-05 | 校验 `plugin.json` 是否存在且 schemaVersion 合法。   | 缺失或版本不支持时 fail closed。                              |
-| FR-06 | 校验 contributions 路径。                            | 只允许插件包内相对路径；越界路径阻断发布。                    |
-| FR-07 | 校验 runtime / workbench / skills / resources 索引。 | 缺少必需文件时展示错误；可选能力缺失只给 warning。            |
+| FR-05 | 校验根 `plugin.json` 是否存在且符合 Agent Plugins v1.0.0 schema。 | 缺失或 schema 不支持时 fail closed。                         |
+| FR-06 | 校验根 `mcp.json` 与 `skills/` 目录路径。              | 只允许插件包内固定位置；越界路径阻断发布。                    |
+| FR-07 | 校验 MCP server 与 direct-child Skills。              | 缺少可选组件不阻断；非法组件按类型隔离并记录 warning。       |
 | FR-08 | 校验版本号和 release channel。                       | 版本不能低于或等于已发布 latest version，除非是明确重发策略。 |
 | FR-09 | 展示 warnings 与 blockers。                          | blockers 阻断打包和发布；warnings 不阻断但必须可见。          |
 
@@ -411,9 +410,8 @@ flowchart TD
 
   subgraph Local[本地插件包]
     PluginJson[plugin.json]
-    RuntimeYaml[app.runtime.yaml]
-    WorkbenchYaml[app.workbench.yaml]
-    Skills[skills / subagents / resources]
+    McpJson[mcp.json]
+    Skills[skills/<skill>/SKILL.md]
   end
 
   subgraph Desktop[Lime Desktop]
@@ -440,8 +438,7 @@ flowchart TD
   PublishWorkbench --> DirectoryPicker
   DirectoryPicker --> PluginJson
   PluginJson --> Validator
-  RuntimeYaml --> Validator
-  WorkbenchYaml --> Validator
+  McpJson --> Validator
   Skills --> Validator
   Validator --> Packager
   Packager --> Signature
@@ -466,7 +463,7 @@ flowchart TD
 | 层                        | 职责                                                                                                         | 不做什么                                       |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
 | 插件中心 UI               | 入口、状态展示、发布向导、错误呈现。                                                                         | 不拼 LimeCore payload 细节。                   |
-| 发布 View Model           | 目录状态、诊断结果、dry-run 计划、按钮可用性。                                                               | 不直接读取 provider key 或运行插件 worker。    |
+| 发布 View Model           | 目录状态、诊断结果、dry-run 计划、按钮可用性。                                                               | 不直接读取 provider key 或执行插件 runtime。    |
 | 本地发布服务              | 读取插件包、校验、打包、hash、签名证明。                                                                     | 不持久化明文 token。                           |
 | LimeCore client           | developer profile、package upload、release submission、platform review、marketplace refresh。                | 不通过 Lime App Server 中转 marketplace 发布。 |
 | LimeCore control-plane    | catalog / release / enablement / registration policy。                                                       | 不执行插件 runtime。                           |
@@ -559,7 +556,7 @@ sequenceDiagram
   Studio->>Studio: inspectProject(APP.md / dist/ui)
   Center->>Center: inspectPluginPackage(plugin.json / contributions)
   Studio->>Studio: packageProject(.lapp) + sha256
-  Center->>Center: packagePlugin(Lime Plugin Package v1) + sha256
+  Center->>Center: packagePlugin(Agent Plugins v1.0.0) + sha256
   Studio->>Studio: read app.signature.yaml
   Center->>Center: read plugin signature proof
   Studio->>Core: POST /v1/platform/plugins/bulk-publish
@@ -653,9 +650,9 @@ stateDiagram-v2
 | ------------------------------ | ------------------------------------- | --------------------------------------- |
 | 插件目录                       | 用户选择                              | 仅作为本次发布上下文，不写入 manifest。 |
 | `plugin.json`                  | 插件包                                | 唯一机器入口。                          |
-| `app.runtime.yaml`             | `plugin.json#contributions.runtime`   | 运行能力声明。                          |
-| `app.workbench.yaml`           | `plugin.json#contributions.workbench` | 产物、surface、action、历史恢复声明。   |
-| skills / subagents / resources | `plugin.json#contributions`           | 必须在插件包目录内。                    |
+| `mcp.json`                    | 根包文件                             | MCP server 声明；只允许标准 schema。    |
+| `skills/<skill>/SKILL.md`     | 根包目录                             | Skills 能力声明；只扫描直接子目录。     |
+| workflow / workspace evidence | App Server/read model                | 运行与产物投影，不是 manifest 字段。     |
 | 签名证明                       | 插件包或用户选择                      | 只读取签名结果，不生成私钥。            |
 | cloud session                  | Lime 宿主                             | 仅用于认证和发布请求，不写入插件包。    |
 
@@ -934,7 +931,7 @@ stateDiagram-v2
 | 旧能力                                     | 新落点                                                |
 | ------------------------------------------ | ----------------------------------------------------- |
 | `project inspect`                          | 插件中心本地诊断服务。                                |
-| `.lapp` 打包和 hash                        | Lime Plugin Package v1 打包和 hash。                  |
+| `.lapp` 打包和 hash                        | Agent Plugins v1.0.0 package 打包和 hash。            |
 | `publish --dry-run`                        | 插件中心 dry-run 发布计划。                           |
 | developer profile 检查                     | 插件中心发布前认证 gate。                             |
 | signature proof 读取                       | 插件发布签名校验步骤。                                |
@@ -972,7 +969,7 @@ stateDiagram-v2
 
 - [x] 插件中心存在内置发布工作台入口。
 - [x] 插件中心存在平台发布审核工作台入口。
-- [x] 用户可选择本地 Lime Plugin Package v1 目录。
+- [x] 用户可选择本地 Agent Plugins v1.0.0 标准包目录。
 - [x] `plugin.json` 缺失、schema 不支持、路径越界时 fail closed。
 - [x] 发布前展示 blockers、warnings、package hash、manifest hash、签名状态。
 - [x] dry-run 能展示 catalog / release / target impact 摘要；完整 tenant enablement 字段级 diff 仍是后续项。

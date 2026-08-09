@@ -190,4 +190,18 @@ describe("run-vitest-smart", () => {
       "src/example/b.test.ts",
     ]);
   });
+
+  it("AgentChatPage 集成测试必须使用独立进程批次", () => {
+    const batches = buildBatches([
+      "src/components/agent/chat/index.taskTabs02.test.tsx",
+      "src/components/agent/chat/index.workbench01.test.tsx",
+      "src/example/regular.test.ts",
+    ]);
+
+    expect(batches).toEqual([
+      ["src/components/agent/chat/index.taskTabs02.test.tsx"],
+      ["src/components/agent/chat/index.workbench01.test.tsx"],
+      ["src/example/regular.test.ts"],
+    ]);
+  });
 });

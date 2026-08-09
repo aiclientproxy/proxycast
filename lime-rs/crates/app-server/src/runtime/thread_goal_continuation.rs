@@ -196,7 +196,7 @@ impl RuntimeCore {
             request,
             host,
             Some(event_callback),
-            false,
+            true,
             true,
             TurnStartInputKind::GoalContinuation,
         ))

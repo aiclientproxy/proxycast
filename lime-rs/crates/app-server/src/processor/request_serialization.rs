@@ -15,7 +15,6 @@ const MISSING_SCOPE_KEY: &str = "<missing>";
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(super) enum RequestSerializationQueueKey {
     Thread(String),
-    ProjectShellSession(String),
     McpOauth(String),
     McpResourceSubscription(String),
     BrowserSession(String),
@@ -53,16 +52,6 @@ pub(super) async fn request_serialization_scope(
                 return Ok(None);
             };
             RequestSerializationQueueKey::Thread(key)
-        }
-        AppServerRequestSerializationScope::ProjectShellSession => {
-            let Some(key) = scope_param(
-                params,
-                &["sessionId", "session_id", "rootPath", "root_path"],
-            )?
-            else {
-                return Ok(None);
-            };
-            RequestSerializationQueueKey::ProjectShellSession(key)
         }
         AppServerRequestSerializationScope::McpOauth => {
             let Some(key) = scope_param(params, &["name"])? else {

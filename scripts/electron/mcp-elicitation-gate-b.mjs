@@ -122,7 +122,7 @@ MCP Elicitation Gate B
 
 选项:
   --evidence-dir <path> --prefix <name> --timeout-ms <ms>
-  --interval-ms <ms> --keep-temp -h|--help
+  --interval-ms <ms> --electron-executable <path> --keep-temp -h|--help
 `);
 }
 
@@ -155,6 +155,11 @@ function parseArgs(argv, defaults = DEFAULTS) {
       index += 1;
       continue;
     }
+    if (arg === "--electron-executable" && next) {
+      options.electronExecutable = path.resolve(next.trim());
+      index += 1;
+      continue;
+    }
     if (arg === "--keep-temp") {
       options.keepTemp = true;
       continue;
@@ -166,6 +171,14 @@ function parseArgs(argv, defaults = DEFAULTS) {
   }
   if (!Number.isFinite(options.intervalMs) || options.intervalMs < 100) {
     throw new Error("--interval-ms 必须是 >= 100 的数字");
+  }
+  if (
+    options.electronExecutable &&
+    !fs.existsSync(options.electronExecutable)
+  ) {
+    throw new Error(
+      `--electron-executable 不存在: ${options.electronExecutable}`,
+    );
   }
   return options;
 }
@@ -199,6 +212,7 @@ async function readElectronRuntime(app) {
     appVersion: electronApp.getVersion(),
     arch: process.arch,
     electronVersion: process.versions.electron ?? null,
+    isPackaged: electronApp.isPackaged,
     pid: process.pid,
     platform: process.platform,
   }));
@@ -1785,10 +1799,12 @@ export async function run({ pluginPackage = false } = {}) {
   const requiredMethods = pluginPackage
     ? PLUGIN_PACKAGE_REQUIRED_METHODS
     : REQUIRED_METHODS;
-  ensureElectronFixtureBuild({
-    logPrefix: LOG_PREFIX,
-    rootDir: process.cwd(),
-  });
+  if (!options.electronExecutable) {
+    ensureElectronFixtureBuild({
+      logPrefix: LOG_PREFIX,
+      rootDir: process.cwd(),
+    });
+  }
   fs.mkdirSync(options.evidenceDir, { recursive: true });
   const summaryPath = path.join(
     options.evidenceDir,
@@ -1828,14 +1844,18 @@ export async function run({ pluginPackage = false } = {}) {
     `${options.prefix}-failure.png`,
   );
   const runtimeEnv = createTempRuntimeEnv();
-  const appServerBinary = resolveDevAppServerBinary({
-    env: runtimeEnv.env,
-    repoRoot: process.cwd(),
-    forceBuild: pluginPackage,
-  });
-  const appServerEnv = resolveElectronAppServerRuntimeEnv({
-    env: { ...runtimeEnv.env, APP_SERVER_BIN: appServerBinary },
-  });
+  const appServerEnv = options.electronExecutable
+    ? { APP_SERVER_BIN: "" }
+    : resolveElectronAppServerRuntimeEnv({
+        env: {
+          ...runtimeEnv.env,
+          APP_SERVER_BIN: resolveDevAppServerBinary({
+            env: runtimeEnv.env,
+            repoRoot: process.cwd(),
+            forceBuild: pluginPackage,
+          }),
+        },
+      });
   const startedAt = new Date().toISOString();
   const summary = {
     ok: false,
@@ -1846,6 +1866,8 @@ export async function run({ pluginPackage = false } = {}) {
     platform: null,
     arch: null,
     electronVersion: null,
+    electronPackaged: false,
+    packagedElectronRequested: Boolean(options.electronExecutable),
     electronLaunchCount: 0,
     electronMainProcessPids: [],
     repositoryCommit: readRepositoryCommit(process.cwd()),
@@ -2008,6 +2030,7 @@ export async function run({ pluginPackage = false } = {}) {
     summary.appVersion = electronRuntime.appVersion;
     summary.arch = electronRuntime.arch;
     summary.electronVersion = electronRuntime.electronVersion;
+    summary.electronPackaged = electronRuntime.isPackaged === true;
     summary.platform = electronRuntime.platform;
     summary.electronLaunchCount = 1;
     summary.electronMainProcessPids = [electronRuntime.pid];
@@ -2282,16 +2305,20 @@ export async function run({ pluginPackage = false } = {}) {
         page,
         options,
         runtime,
+        minimumResourceReadCount: 2,
+        minimumHtmlLoadCount: 2,
       });
+      raw.mcpAppFirstSurface = sanitizeJson(firstSurface);
       assert(
         firstSurface.traceEvidence.resourceReadCount === 2 &&
           firstSurface.traceEvidence.htmlLoadCount === 2,
-        "首次显式恢复前后的 MCP App resource/HTML load 计数异常",
+        `首次显式恢复前后的 MCP App resource/HTML load 计数异常: ${JSON.stringify(
+          firstSurface.traceEvidence,
+        )}`,
       );
       summary.mcpAppRightSurfaceVisible = true;
       summary.mcpAppWebContentsMarker = PLUGIN_PACKAGE_MCP_APP_MARKER;
       summary.surfaceId = firstSurface.viewId;
-      raw.mcpAppFirstSurface = sanitizeJson(firstSurface);
 
       logStage("reload-plugin-catalog-mcp-app-surface");
       await openRuntimeThreadInGui(page, runtime.sessionId, options);
@@ -2314,6 +2341,8 @@ export async function run({ pluginPackage = false } = {}) {
         page,
         options,
         runtime,
+        minimumResourceReadCount: 3,
+        minimumHtmlLoadCount: 3,
       });
       assert(
         restoredSurface.traceEvidence.resourceReadCount === 3 &&
@@ -2603,6 +2632,12 @@ export async function run({ pluginPackage = false } = {}) {
       `观察到 legacy MCP facade: ${summary.legacyMcpCommandsSeen.join(", ")}`,
     );
     if (pluginPackage) {
+      if (summary.packagedElectronRequested) {
+        assert(
+          summary.electronPackaged,
+          "Plugin packaged Gate B 未直启 packaged Electron executable",
+        );
+      }
       assert(
         summary.appVersion &&
           summary.platform &&

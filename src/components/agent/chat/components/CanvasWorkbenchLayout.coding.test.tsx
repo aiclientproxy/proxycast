@@ -22,7 +22,7 @@ import {
   mockOpenExternalUrlWithSystemBrowser,
   mockReloadEmbeddedBrowserView,
   mockSetEmbeddedBrowserViewBounds,
-  mockStartProjectShellSession,
+  mockExecCommand,
   mockToast,
   mountHarness,
 } from "./CanvasWorkbenchLayout.testFixtures";
@@ -357,6 +357,49 @@ describe("CanvasWorkbenchLayout coding mode", () => {
     await flushEffects();
   });
 
+  it("coding 审查入口在 admission 成功后不应永久停留在正在启动", async () => {
+    const onStartReview = vi.fn().mockResolvedValue(undefined);
+    const container = mount({
+      artifacts: [],
+      canvasState: null,
+      taskFiles: [],
+      workspaceRoot: "/workspace",
+      workspaceUnavailable: false,
+      defaultPreview: null,
+      loadFilePreview: vi.fn(async (path: string) => ({
+        path,
+        content: "",
+        isBinary: false,
+        size: 0,
+        error: null,
+      })),
+      onOpenPath: vi.fn(async () => undefined),
+      onRevealPath: vi.fn(async () => undefined),
+      workbenchMode: "coding",
+      changeView: {
+        items: [],
+        reviewThreadId: "thread-1",
+        onStartReview,
+      },
+    });
+    await flushEffects();
+    const button = container.querySelector(
+      '[data-testid="code-review-summary-start-review"]',
+    ) as HTMLButtonElement | null;
+
+    await act(async () => {
+      button?.click();
+      await Promise.resolve();
+    });
+    await flushEffects();
+
+    expect(onStartReview).toHaveBeenCalledTimes(1);
+    expect(button?.disabled).toBe(false);
+    expect(
+      container.querySelector('[data-testid="code-review-summary-review-status"]'),
+    ).toBeNull();
+  });
+
   it("coding 模式应固定为预览优先标签，并把文件标签收进文件区", async () => {
     const loadFilePreview = vi.fn(async (path: string) => ({
       path,
@@ -550,11 +593,14 @@ describe("CanvasWorkbenchLayout coding mode", () => {
         '[data-testid="canvas-workbench-shell-terminal"]',
       ),
     ).not.toBeNull();
-    expect(mockStartProjectShellSession).toHaveBeenCalledWith({
-      rootPath: "/workspace",
-      cols: 120,
-      rows: 14,
-    });
+    expect(mockExecCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: ["/bin/sh", "-i"],
+        cwd: "/workspace",
+        tty: true,
+        size: { cols: 120, rows: 14 },
+      }),
+    );
 
     clickNewWorkbenchTool(container, "浏览器");
     await flushEffects();
@@ -917,6 +963,8 @@ describe("CanvasWorkbenchLayout coding mode", () => {
       changeView: {
         checkpointCount: 2,
         latestCheckpointPath: ".lime/artifacts/thread-1/index.v2.html",
+        turnDiff:
+          "diff --git a/src/turn-diff.ts b/src/turn-diff.ts\n--- a/src/turn-diff.ts\n+++ b/src/turn-diff.ts\n@@\n+export const exactTurnDiff = true;\n",
         onOpenFile: openChangedFile,
         items: [
           {
@@ -1190,6 +1238,24 @@ describe("CanvasWorkbenchLayout coding mode", () => {
     expect(
       container.querySelector('button[aria-label="选择审查基准"]')?.textContent,
     ).toContain("上轮对话");
+
+    clickByAriaLabel(container, "更多审查操作");
+    await flushEffects();
+    const previousConversationCopyButton = Array.from(
+      container.querySelectorAll(
+        '[data-testid="canvas-workbench-changes-more-menu"] button',
+      ),
+    ).find((button) => button.textContent?.includes("复制 git apply 命令"));
+    act(() => {
+      (previousConversationCopyButton as HTMLButtonElement).click();
+    });
+    await flushEffects();
+    expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
+      expect.stringContaining("exactTurnDiff = true"),
+    );
+    expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
+      expect.not.stringContaining("diff --git a/index.html b/index.html"),
+    );
 
     clickByAriaLabel(container, "更多审查操作");
     await flushEffects();

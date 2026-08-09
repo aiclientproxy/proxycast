@@ -8,11 +8,11 @@
 ```text
 Content Factory Plugin
   -> plugin.json
-  -> app.runtime.yaml / app.workbench.yaml
-  -> activationEntries / defaultPrompt
+  -> mcp.json + skills/<skill>/SKILL.md
+  -> App Server plugin activation snapshot
   -> task card / process state
-  -> content_article_workflow
-  -> subagents + skillRefs + CLI + connectors + hooks
+  -> content_article_workflow runtime projection
+  -> Skills + MCP + tool/runtime capabilities
   -> App Server Agent Runtime
   -> articleDraft artifact / workspace patch
   -> Claw ArtifactFrame(articleArtifacts renderer) final artifact
@@ -25,11 +25,11 @@ Content Factory Plugin
 flowchart LR
   User[用户] --> Composer[Claw 输入框]
   Composer --> Installed[Installed Plugin Registry]
-  Installed --> Contract[Plugin Contract]
+  Installed --> Contract[Typed Plugin Contract]
   Contract --> RuntimeMeta[plugin activation metadata]
   RuntimeMeta --> AppServer[App Server Agent Runtime]
-  AppServer --> Worker[Content Factory Worker]
-  Worker --> ArticleArtifacts[articleArtifacts]
+  AppServer --> Runtime[Workflow/runtime projection]
+  Runtime --> ArticleArtifacts[articleArtifacts]
   ArticleArtifacts --> Frame[聊天独立 ArtifactFrame]
   Frame --> RightSurface[右侧 Article Editor]
   Contract --> Marketplace[插件中心详情页]
@@ -39,11 +39,11 @@ flowchart LR
 
 | 层                 | 责任                                                                                                             | 不允许                                   |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 内容工厂插件       | 按 Lime Plugin Package v1 声明入口、workflow、subagents、skills、CLI、connectors、hooks、article renderer 契约。 | 直接控制 Lime 右侧栏布局。               |
-| Lime 插件 contract | 读取并归一化插件包能力。                                                                                         | 为内容工厂 hard code 入口或默认能力。    |
+| 内容工厂插件       | 提供标准 `plugin.json`、根 `mcp.json` 和 `skills/<skill>/SKILL.md`；通过这些能力参与写作。 | 直接控制 Lime 右侧栏布局或扩展私有 manifest。 |
+| Lime 插件 contract | 读取并归一化标准包，生成 typed catalog/activation projection。                                                     | 为内容工厂 hard code 入口或默认能力。       |
 | Claw 输入框        | 从 installed registry 生成 `@` 候选并发送 metadata，任务卡和过程态留在对话流里，再承接最终产物。                       | 未安装时伪造 `@写文章`。                 |
-| App Server Runtime | 执行 turn、注入 plugin activation context、保存 read model。                                                     | 让前端 mock 代替 worker 结果。           |
-| 内容工厂 worker    | 执行写作 workflow，产出 workspace patch 和 evidence。                                                            | 输出无法物化的长文本聊天正文。           |
+| App Server Runtime | 执行 turn、注入 plugin activation context、保存 read model。                                                     | 让前端 mock 代替 runtime 结果。         |
+| Workflow projection  | 执行写作 workflow，产出 workspace patch 和 evidence。                                                            | 让前端 mock 代替真实 runtime 结果。       |
 | 聊天消息区         | 展示运行状态、任务卡、过程态；独立 `ArtifactFrame` 只承载最终文章，文章 renderer 可在框内完整流式输出最终文章。                 | 把完整正文散落到普通 assistant message。 |
 | Right Surface      | 承载 Article Editor、编辑动作、历史恢复；dock / tab 规则见 `../rightsurface/README.md`。                          | 直接调用 provider 或插件私有文件系统。   |
 | Article Workspace  | 插件工作区事实、调度桥、历史恢复输入；右侧布局规则归 `../rightsurface/README.md` 统一。                            | 恢复旧 Profile 命名或兼容入口。          |
@@ -52,48 +52,27 @@ Writing 不再单独定义右侧 dock / tab / pane 机制，相关布局与 surf
 
 ## 4. 插件包事实源
 
-插件包标准见 [Lime Plugin Package v1](../../tech/plugin/lime-plugin-package-v1.md)。内容工厂插件必须以 `plugin.json` 作为唯一入口，并通过分层能力文件声明写作能力：
+插件包标准见 [Plugin v3 总览](../plugin/v3/README.md) 与 [目标合同](../plugin/v3/01-target-contract.md)。
+内容工厂插件只提交标准目录：
 
-```yaml
-plugin.json:
-  contributions:
-    runtime: ./app.runtime.yaml
-    workbench: ./app.workbench.yaml
-    skills: ./skills
-    subagents: ./subagents
-    clis: ./clis/clis.json
-    connectors: ./connectors/connectors.json
-    hooks: ./hooks
-app.runtime.yaml:
-  activationEntries:
-    - key: content_article_generate
-      aliases: ["@写文章", "@写作"]
-  workflows:
-    - key: content_article_workflow
-      steps:
-        - id: research
-          subagent: content-researcher
-          skillRefs: [article-research]
-        - id: strategy
-          subagent: content-strategist
-          skillRefs: [article-strategy]
-        - id: draft
-          subagent: article-writer
-          skillRefs: [article-writing]
-app.workbench.yaml:
-  productionObjects:
-    - kind: articleDraft
-  artifactFrames:
-    - key: article-artifact-frame
-      renderer: articleArtifacts
-      openTarget: article-editor
-  articleArtifacts:
-    - kind: articleDraft
-      renderer: article-editor
-      frame: article-artifact-frame
+```text
+plugin-root/
+├── plugin.json
+├── mcp.json
+└── skills/<skill>/SKILL.md
 ```
 
-宿主只消费这些标准事实源，不内置内容工厂写作入口。
+`plugin.json` 只声明标准身份和显式 Codex extension namespace；不得声明 workflow、独立执行器、
+工作区、renderer 或任意可执行路径。`mcp.json` 与 Skills 是可选能力入口，错误按组件
+隔离并 fail closed。
+
+`content_article_workflow`、activation entries、subagents、CLI/connectors/hooks、
+`articleDraft` 和 `articleArtifacts` 是 Lime App Server/runtime 的产品投影：App Server 从
+安装态与当前 turn 生成 activation metadata、workflow evidence 和 workspace patch，Thread/
+Turn/Item read model 再供 Claw 与 Right Surface 消费。它们不是插件 manifest 的第二套事实源。
+
+宿主只消费 typed projection，不读取包内旧声明、独立执行器或 renderer registry，也不在 renderer
+层维护 installed/activation 状态。
 
 ## 5. 数据模型
 
@@ -197,15 +176,15 @@ flowchart TD
 
 | 仓库                                                         | 责任                                                                                                                                                           |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/Users/coso/Documents/dev/ai/limecloud/content-factory-app` | 内容工厂插件包、`plugin.json`、runtime yaml、workbench yaml、skills、subagents、CLI、connectors、hooks、worker、workflow 文档和插件验证。                      |
-| `/Users/coso/Documents/dev/ai/aiclientproxy/lime`            | 插件安装态读取、manifest normalize、plugin contract、输入栏建议、activation metadata、ArtifactFrame、articleArtifacts、Article Editor、GUI / Playwright 验证。 |
+| `/Users/coso/Documents/dev/ai/limecloud/content-factory-app` | 内容工厂标准包、`plugin.json`、`mcp.json`、Skills 与外部产品验证；workflow 设计不扩展 portable manifest。 |
+| `/Users/coso/Documents/dev/ai/aiclientproxy/lime`            | 插件安装态读取、manifest normalize、typed plugin contract、输入栏建议、activation metadata、ArtifactFrame、articleArtifacts、Article Editor、GUI / Playwright 验证。 |
 
 ## 8. 架构风险
 
 | 风险                        | 约束                                                                                              |
 | --------------------------- | ------------------------------------------------------------------------------------------------- |
-| 宿主继续 hard code 内容工厂 | 所有 `@写文章`、workflow、subagent 断言绑定 manifest fixture / installed registry。               |
-| worker 只返回长正文         | schema 和测试要求返回 workspace patch、artifact、workerEvidence。                                 |
+| 宿主继续 hard code 内容工厂 | 所有 `@写文章`、workflow、subagent 断言绑定 typed activation projection / installed registry。   |
+| runtime 只返回长正文        | schema 和测试要求返回 workspace patch、artifact、evidence。                                        |
 | 插件中心只显示营销卡片      | 详情页必须投影 subagents、CLI tools、connectors、hooks、authorization、skills。                   |
 | 未登录阻断本地插件          | marketplace auth error 和 installed registry 分离。                                               |
 | 右侧栏被插件重建            | 右侧 dock 由 Host 管理，插件只声明 article renderer / surface contract。                          |

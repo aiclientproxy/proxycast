@@ -1,14 +1,11 @@
-import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   APP_SIDEBAR_COLLAPSED_STORAGE_KEY,
-  AppSidebar,
   act,
   cleanupAppSidebarTest,
   flushEffects,
   mockListAgentRuntimeSessions,
   mockScheduleMinimumDelayIdleTask,
-  mountSidebar,
   mountSidebarContainer,
   resetAppSidebarTest,
 } from "./AppSidebar.testFixtures";

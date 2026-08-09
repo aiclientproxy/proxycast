@@ -433,7 +433,7 @@ where
                 }
                 messages.push(CurrentProviderMessage::raw_response_item(item));
             }
-            "message.created" | "thread.goal.continuation" => {
+            "message.created" | "thread.goal.continuation" | "review.input" => {
                 flush_assistant(
                     &mut messages,
                     &mut assistant_content,
@@ -848,6 +848,32 @@ mod tests {
         assert!(matches!(
             &future[0].content[..],
             [CurrentProviderContent::Text(text)] if text == "continue the active goal"
+        ));
+    }
+
+    #[test]
+    fn review_input_is_restored_for_future_turns_but_not_duplicated_in_its_turn() {
+        let stored = stored_with_events(vec![event(
+            1,
+            super::super::turn_input_events::REVIEW_INPUT_EVENT_TYPE,
+            json!({
+                "visibility": "agent_only",
+                "source": "review",
+                "input": [{"type": "text", "text": "review current changes"}]
+            }),
+        )]);
+
+        let current = provider_history_excluding_current_turn_input(&stored, None, "turn-1")
+            .expect("current review history");
+        assert!(current.is_empty());
+
+        let future = provider_history_excluding_current_turn_input(&stored, None, "turn-2")
+            .expect("future review history");
+        assert_eq!(future.len(), 1);
+        assert_eq!(future[0].role, CurrentProviderRole::User);
+        assert!(matches!(
+            &future[0].content[..],
+            [CurrentProviderContent::Text(text)] if text == "review current changes"
         ));
     }
 

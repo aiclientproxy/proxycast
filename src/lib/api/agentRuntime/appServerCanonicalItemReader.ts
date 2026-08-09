@@ -247,45 +247,6 @@ export function readCanonicalThreadItem(
         fragments,
       };
     }
-    case "hook": {
-      const run = normalizeRecord(item.run);
-      const runId = readString(run ?? {}, "id");
-      const rawStatus = readString(run ?? {}, "status");
-      if (!run || !runId || !rawStatus) {
-        return null;
-      }
-      const hookStatus = normalizeHookStatus(rawStatus);
-      if (!hookStatus) {
-        return null;
-      }
-      const entries = readHookOutputEntries(run.entries);
-      const output =
-        readString(run, "statusMessage") ??
-        entries?.map((entry) => `${entry.kind}: ${entry.text}`).join("\n");
-      return {
-        ...base,
-        id: `item_${runId}`,
-        type: "hook",
-        run_id: runId,
-        event_name: readString(run, "eventName"),
-        handler_type: readString(run, "handlerType"),
-        execution_mode: readString(run, "executionMode"),
-        scope: readString(run, "scope"),
-        source_path: readString(run, "sourcePath"),
-        source: readString(run, "source"),
-        display_order: readFiniteNumber(run, "displayOrder"),
-        status_message: readString(run, "statusMessage"),
-        duration_ms: readFiniteNumber(run, "durationMs"),
-        entries,
-        output,
-        hook_status: rawStatus,
-        metadata: {
-          ...(normalizeRecord(item.metadata) ?? {}),
-          eventClass: event.type,
-          raw: run,
-        },
-      };
-    }
     case "sleep": {
       const durationMs = readOptionalNonNegativeInteger(item.durationMs);
       if (durationMs === null) {
@@ -641,11 +602,6 @@ function itemStatus(
   if (TOOL_ITEM_TYPES.has(type)) {
     return normalizeItemStatus(explicit, false);
   }
-  if (type === "hook") {
-    return normalizeHookStatus(
-      readString(normalizeRecord(item.run) ?? {}, "status"),
-    );
-  }
   return statusFromEventType(event.type);
 }
 
@@ -670,46 +626,12 @@ function normalizeItemStatus(
 function statusFromEventType(type: string): ItemStatus | null {
   switch (type) {
     case "item.started":
-    case "hook.started":
       return "in_progress";
     case "item.completed":
-    case "hook.completed":
       return "completed";
     default:
       return null;
   }
-}
-
-function normalizeHookStatus(status: string | undefined): ItemStatus | null {
-  switch (status) {
-    case "running":
-      return "in_progress";
-    case "completed":
-      return "completed";
-    case "failed":
-    case "blocked":
-    case "stopped":
-      return "failed";
-    default:
-      return null;
-  }
-}
-
-function readHookOutputEntries(
-  value: unknown,
-): Array<{ kind: string; text: string }> | undefined {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-  const entries = value
-    .map((entry) => {
-      const record = normalizeRecord(entry);
-      const kind = readString(record ?? {}, "kind", "type");
-      const text = readString(record ?? {}, "text", "message", "content");
-      return kind && text ? { kind, text } : null;
-    })
-    .filter((entry): entry is { kind: string; text: string } => Boolean(entry));
-  return entries.length > 0 ? entries : undefined;
 }
 
 function readUserMessageContent(

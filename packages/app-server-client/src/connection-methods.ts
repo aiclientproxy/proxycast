@@ -1036,30 +1036,6 @@ declare module "./connection.js" {
     ): Promise<
       AppServerRequestResult<protocol.ProjectGitWorktreeCreateResponse>
     >;
-    startProjectShellSession(
-      params: protocol.ProjectShellSessionStartParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.ProjectShellSessionStartResponse>
-    >;
-    writeProjectShellSession(
-      params: protocol.ProjectShellSessionWriteParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.ProjectShellEmptyResponse>>;
-    resizeProjectShellSession(
-      params: protocol.ProjectShellSessionResizeParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.ProjectShellEmptyResponse>>;
-    killProjectShellSession(
-      params: protocol.ProjectShellSessionKillParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.ProjectShellEmptyResponse>>;
-    drainProjectShellSessionEvents(
-      params?: protocol.ProjectShellSessionDrainEventsParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.ProjectShellSessionDrainEventsResponse>
-    >;
     exportEvidence(
       params: protocol.EvidenceExportParams,
       options?: AppServerRequestOptions,
@@ -1191,10 +1167,30 @@ declare module "./connection.js" {
       params: protocol.ProcessKillParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ProcessKillResponse>>;
+    execCommand(
+      params: protocol.CommandExecParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.CommandExecResponse>>;
+    writeCommandExec(
+      params: protocol.CommandExecWriteParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.CommandExecWriteResponse>>;
+    resizeCommandExec(
+      params: protocol.CommandExecResizeParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.CommandExecResizeResponse>>;
+    terminateCommandExec(
+      params: protocol.CommandExecTerminateParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.CommandExecTerminateResponse>>;
     startTurn(
       params: protocol.TurnStartParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.TurnStartResponse>>;
+    startReview(
+      params: protocol.ReviewStartParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ReviewStartResponse>>;
     steerTurn(
       params: protocol.TurnSteerParams,
       options?: AppServerRequestOptions,

@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "type": {
+          "const": "command",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "cwd",
+        "source",
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "argv": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "program": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "type": {
+          "const": "execve",
+          "type": "string"
+        }
+      },
+      "required": [
+        "argv",
+        "cwd",
+        "program",
+        "source",
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "cwd": {
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "applyPatch",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cwd",
+        "files",
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "type": {
+          "const": "networkAccess",
+          "type": "string"
+        }
+      },
+      "required": [
+        "host",
+        "port",
+        "protocol",
+        "target",
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "connector_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "connector_name": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "server": {
+          "type": "string"
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "tool_title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "type": {
+          "const": "mcpToolCall",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server",
+        "tool_name",
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "permissions": true,
+        "reason": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "type": {
+          "const": "requestPermissions",
+          "type": "string"
+        }
+      },
+      "required": [
+        "permissions",
+        "type"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "GuardianApprovalReviewAction"
+}

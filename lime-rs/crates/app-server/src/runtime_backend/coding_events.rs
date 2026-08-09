@@ -2,10 +2,12 @@ use crate::RuntimeEvent;
 use agent_protocol::{ItemId, ItemStatus, ThreadItem, ThreadItemPayload, ToolArgument, ToolOutput};
 use lime_agent::{AgentEvent as RuntimeAgentEvent, AgentToolResult};
 use serde_json::{json, Value};
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 mod command;
 mod patch;
+mod turn_diff;
 
 use command::{command_facts_from_arguments, command_facts_from_text, CommandFacts};
 use patch::{
@@ -28,6 +30,7 @@ struct TrackedTool {
 #[derive(Debug, Default)]
 pub(super) struct CodingEventMirror {
     tools: HashMap<String, TrackedTool>,
+    turn_diff: turn_diff::TurnDiffTracker,
 }
 
 #[derive(Debug, Default)]
@@ -207,12 +210,15 @@ impl CodingEventMirror {
         let Some(tool) = self.tools.remove(tool_id) else {
             return CodingMirrorEvents::default();
         };
-        let after_raw = match tool.name.as_str() {
+        let mut after_raw = match tool.name.as_str() {
             "Bash" | "PowerShell" => self.shell_tool_end_events(tool_id, &tool, result),
             "Read" => file_read_tool_end_events(tool_id, &tool, result),
             "Write" | "Edit" | "apply_patch" => file_tool_end_events(tool_id, &tool, result),
             _ => Vec::new(),
         };
+        if let Some(event) = self.turn_diff.update_from_result(&tool, result) {
+            after_raw.push(event);
+        }
         CodingMirrorEvents {
             before_raw: policy_block_events(tool_id, &tool, result),
             after_raw,
@@ -301,6 +307,12 @@ impl CodingEventMirror {
 
         events
     }
+}
+
+pub(super) fn runtime_event_for_persistence(
+    event: &RuntimeAgentEvent,
+) -> Cow<'_, RuntimeAgentEvent> {
+    turn_diff::runtime_event_for_persistence(event)
 }
 
 fn terminal_interaction_event(item: &ThreadItem) -> Option<RuntimeEvent> {

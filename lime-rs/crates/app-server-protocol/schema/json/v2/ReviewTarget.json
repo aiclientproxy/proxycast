@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "properties": {
+        "type": {
+          "const": "uncommittedChanges",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "type": {
+          "const": "baseBranch",
+          "type": "string"
+        }
+      },
+      "required": [
+        "branch",
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "sha": {
+          "type": "string"
+        },
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "type": {
+          "const": "commit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha",
+        "type"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "instructions": {
+          "type": "string"
+        },
+        "type": {
+          "const": "custom",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instructions",
+        "type"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "ReviewTarget"
+}

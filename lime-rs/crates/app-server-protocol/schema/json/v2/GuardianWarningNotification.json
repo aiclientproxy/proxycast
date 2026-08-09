@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Reports a high-priority Guardian circuit-breaker warning for a thread.",
+  "properties": {
+    "message": {
+      "type": "string"
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "message",
+    "threadId"
+  ],
+  "title": "GuardianWarningNotification",
+  "type": "object"
+}

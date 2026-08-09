@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "enum": [
+    "aborted",
+    "approved",
+    "denied",
+    "inProgress",
+    "timedOut"
+  ],
+  "title": "GuardianApprovalReviewStatus",
+  "type": "string"
+}

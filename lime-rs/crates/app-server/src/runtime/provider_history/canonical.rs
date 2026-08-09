@@ -93,7 +93,6 @@ where
         ThreadItemPayload::CollabAgentToolCall { .. }
         | ThreadItemPayload::Media { .. }
         | ThreadItemPayload::ContextCompaction { .. }
-        | ThreadItemPayload::Hook { .. }
         | ThreadItemPayload::Unknown { .. }
         | ThreadItemPayload::Extension { .. } => {
             return Err(format!(

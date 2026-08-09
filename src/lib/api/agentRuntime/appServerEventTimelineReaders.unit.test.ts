@@ -78,4 +78,21 @@ describe("readCanonicalAgentThreadTurn", () => {
       status: "interrupted",
     });
   });
+
+  it("保留 opaque moderation metadata 供冷恢复投影使用", () => {
+    expect(
+      readCanonicalAgentThreadTurn(
+        {
+          id: "turn-1",
+          status: "inProgress",
+          startedAt: "2026-07-21T00:00:00.000Z",
+          moderationMetadata: ["inline", 2],
+        },
+        event,
+        "running",
+      ),
+    ).toMatchObject({
+      moderation_metadata: ["inline", 2],
+    });
+  });
 });

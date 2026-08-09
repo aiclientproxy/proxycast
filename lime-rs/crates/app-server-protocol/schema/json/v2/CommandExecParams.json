@@ -1,0 +1,111 @@
+{
+  "$defs": {
+    "CommandExecTerminalSize": {
+      "properties": {
+        "cols": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cols",
+        "rows"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Standalone command execution. It never creates a Thread or Turn.",
+  "properties": {
+    "command": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "cwd": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "disableOutputCap": {
+      "type": "boolean"
+    },
+    "disableTimeout": {
+      "type": "boolean"
+    },
+    "env": {
+      "additionalProperties": {
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      "type": [
+        "null",
+        "object"
+      ]
+    },
+    "outputBytesCap": {
+      "format": "uint",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "permissionProfile": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "processId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "sandboxPolicy": true,
+    "size": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CommandExecTerminalSize"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "streamStdin": {
+      "type": "boolean"
+    },
+    "streamStdoutStderr": {
+      "type": "boolean"
+    },
+    "timeoutMs": {
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "tty": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "command"
+  ],
+  "title": "CommandExecParams",
+  "type": "object"
+}

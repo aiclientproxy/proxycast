@@ -5,6 +5,8 @@ import {
   isCommandExecutionOutputDeltaNotification,
   isCommandExecutionTerminalInteractionNotification,
   isErrorNotification,
+  isGuardianReviewCompletedNotification,
+  isGuardianReviewStartedNotification,
   isFileChangePatchUpdatedNotification,
   isItemCompletedNotification,
   isItemStartedNotification,
@@ -43,6 +45,68 @@ test("recognizes strict skills/changed catalog invalidation", () => {
   ]) {
     assert.equal(skillsChangedServerNotification(malformed), undefined);
     assert.equal(isSkillsChangedNotification(malformed), false);
+  }
+});
+
+test("recognizes strict Guardian auto approval review lifecycle", () => {
+  const action = {
+    command: "git status --short",
+    cwd: "/workspace",
+    source: "shell",
+    type: "command",
+  };
+  const started = {
+    method: "item/autoApprovalReview/started",
+    params: {
+      action,
+      review: { status: "inProgress" },
+      reviewId: "guardian-1",
+      startedAtMs: 1_783_814_400_100,
+      targetItemId: "item-command",
+      threadId,
+      turnId,
+    },
+  };
+  const completed = {
+    method: "item/autoApprovalReview/completed",
+    params: {
+      action,
+      completedAtMs: 1_783_814_401_100,
+      decisionSource: "agent",
+      review: {
+        rationale: "workspace read only",
+        riskLevel: "low",
+        status: "approved",
+        userAuthorization: "high",
+      },
+      reviewId: "guardian-1",
+      startedAtMs: 1_783_814_400_100,
+      targetItemId: "item-command",
+      threadId,
+      turnId,
+    },
+  };
+
+  assert.deepEqual(isGuardianReviewStartedNotification(started), true);
+  assert.deepEqual(isGuardianReviewCompletedNotification(completed), true);
+  assert.deepEqual(serverNotification(started), started);
+  assert.deepEqual(serverNotification(completed), completed);
+
+  for (const malformed of [
+    { ...started, params: { ...started.params, review: { status: "approved" } } },
+    { ...completed, params: { ...completed.params, decisionSource: "user" } },
+    { ...completed, params: { ...completed.params, extra: true } },
+    {
+      ...started,
+      params: {
+        ...started.params,
+        action: { ...action, type: "unknown" },
+      },
+    },
+  ]) {
+    assert.equal(isGuardianReviewStartedNotification(malformed), false);
+    assert.equal(isGuardianReviewCompletedNotification(malformed), false);
+    assert.equal(serverNotification(malformed), undefined);
   }
 });
 

@@ -260,6 +260,9 @@ pub enum CurrentProviderTurnEvent {
     ModelVerification {
         verifications: Vec<ModelVerification>,
     },
+    TurnModerationMetadata {
+        metadata: serde_json::Value,
+    },
     ProviderStep {
         attempt: u32,
         completed: bool,
@@ -951,6 +954,9 @@ where
                         model_verification_emitted = true;
                         on_event(CurrentProviderTurnEvent::ModelVerification { verifications });
                     }
+                }
+                CanonicalLlmEvent::TurnModerationMetadata { metadata } => {
+                    on_event(CurrentProviderTurnEvent::TurnModerationMetadata { metadata });
                 }
                 CanonicalLlmEvent::Finish { reason, usage, .. } => {
                     if let Some(usage) = usage {

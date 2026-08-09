@@ -4,6 +4,7 @@ mod artifact;
 mod automation;
 mod background_terminal;
 mod browser_session;
+mod command_exec;
 mod config_warning;
 mod connect;
 mod conversation_import;
@@ -23,9 +24,9 @@ mod plugin;
 mod process;
 mod project;
 mod project_git;
-mod project_shell;
 mod request_serialization;
 mod request_trace;
+mod review;
 mod right_surface;
 mod session_operations;
 mod skill;
@@ -42,9 +43,9 @@ mod wechat;
 mod workflow;
 mod workspace;
 
+use crate::command_exec::CommandExecServer;
 use crate::fs::FsServer;
 use crate::process::ProcessServer;
-use crate::project_shell::ProjectShellManager;
 use crate::thread_state::ThreadStateManager;
 use crate::AppServerError;
 use crate::RuntimeCore;
@@ -94,6 +95,7 @@ use request_serialization::{resolve_request_serialization_scope, RequestSerializ
 
 pub(crate) type TurnInterruptHook =
     Arc<dyn Fn(String, String) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
+pub(crate) use crate::command_exec::CommandExecNotificationHook;
 pub(crate) use crate::fs::FsNotificationHook;
 pub(crate) use crate::process::ProcessNotificationHook;
 pub(crate) type ServerNotificationHook = Arc<
@@ -109,8 +111,8 @@ pub struct RequestProcessor {
     state: Arc<Mutex<ProcessorState>>,
     runtime: Arc<RuntimeCore>,
     thread_states: ThreadStateManager,
-    project_shell: ProjectShellManager,
     process: ProcessServer,
+    command_exec: CommandExecServer,
     fs: FsServer,
     config_warning_provider: ConfigWarningProvider,
     request_serialization_queues: RequestSerializationQueues,
@@ -155,8 +157,8 @@ impl RequestProcessor {
             state: Arc::new(Mutex::new(ProcessorState::default())),
             runtime: Arc::new(runtime),
             thread_states,
-            project_shell: ProjectShellManager::default(),
             process: ProcessServer::default(),
+            command_exec: CommandExecServer::default(),
             fs: FsServer::default(),
             config_warning_provider: config_warning::default_config_warning_provider(),
             request_serialization_queues: RequestSerializationQueues::default(),
@@ -180,6 +182,14 @@ impl RequestProcessor {
         self
     }
 
+    pub(crate) fn with_command_exec_notification_hook(
+        mut self,
+        hook: CommandExecNotificationHook,
+    ) -> Self {
+        self.command_exec = self.command_exec.with_notification_hook(hook);
+        self
+    }
+
     pub(crate) fn with_fs_notification_hook(mut self, hook: FsNotificationHook) -> Self {
         self.fs = self.fs.with_notification_hook(hook);
         self
@@ -187,6 +197,10 @@ impl RequestProcessor {
 
     pub(crate) async fn close_process_connection(&self, connection_id: ConnectionId) {
         self.process.connection_closed(connection_id).await;
+    }
+
+    pub(crate) async fn close_command_exec_connection(&self, connection_id: ConnectionId) {
+        self.command_exec.connection_closed(connection_id).await;
     }
 
     pub(crate) async fn close_fs_connection(&self, connection_id: ConnectionId) {

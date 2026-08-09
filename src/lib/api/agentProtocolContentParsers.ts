@@ -330,6 +330,13 @@ export function parseAgentContentEvent(
           : {}),
       };
     }
+    case "turn_diff_updated":
+      return typeof event.unified_diff === "string"
+        ? {
+            type: "turn_diff_updated",
+            unified_diff: event.unified_diff,
+          }
+        : null;
     default:
       return null;
   }

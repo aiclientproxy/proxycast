@@ -238,6 +238,7 @@ async fn collect_provider_output(
             | CanonicalLlmEvent::ServerModel { .. }
             | CanonicalLlmEvent::ModelReroute { .. }
             | CanonicalLlmEvent::ModelVerification { .. }
+            | CanonicalLlmEvent::TurnModerationMetadata { .. }
             | CanonicalLlmEvent::StepStart { .. } => {}
         }
     }

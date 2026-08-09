@@ -163,6 +163,26 @@
       "method": "capability/list"
     },
     {
+      "kind": "request",
+      "method": "command/exec"
+    },
+    {
+      "kind": "notification",
+      "method": "command/exec/outputDelta"
+    },
+    {
+      "kind": "request",
+      "method": "command/exec/resize"
+    },
+    {
+      "kind": "request",
+      "method": "command/exec/terminate"
+    },
+    {
+      "kind": "request",
+      "method": "command/exec/write"
+    },
+    {
       "kind": "notification",
       "method": "configWarning"
     },
@@ -368,6 +388,10 @@
     },
     {
       "kind": "notification",
+      "method": "guardianWarning"
+    },
+    {
+      "kind": "notification",
       "method": "hook/completed"
     },
     {
@@ -392,11 +416,23 @@
     },
     {
       "kind": "notification",
+      "method": "item/autoApprovalReview/completed"
+    },
+    {
+      "kind": "notification",
+      "method": "item/autoApprovalReview/started"
+    },
+    {
+      "kind": "notification",
       "method": "item/commandExecution/outputDelta"
     },
     {
       "kind": "serverRequest",
       "method": "item/commandExecution/requestApproval"
+    },
+    {
+      "kind": "notification",
+      "method": "item/commandExecution/terminalInteraction"
     },
     {
       "kind": "notification",
@@ -884,23 +920,7 @@
     },
     {
       "kind": "request",
-      "method": "projectShell/session/drainEvents"
-    },
-    {
-      "kind": "request",
-      "method": "projectShell/session/kill"
-    },
-    {
-      "kind": "request",
-      "method": "projectShell/session/resize"
-    },
-    {
-      "kind": "request",
-      "method": "projectShell/session/start"
-    },
-    {
-      "kind": "request",
-      "method": "projectShell/session/write"
+      "method": "review/start"
     },
     {
       "kind": "notification",
@@ -1243,8 +1263,16 @@
       "method": "turn/completed"
     },
     {
+      "kind": "notification",
+      "method": "turn/diff/updated"
+    },
+    {
       "kind": "request",
       "method": "turn/interrupt"
+    },
+    {
+      "kind": "notification",
+      "method": "turn/moderationMetadata"
     },
     {
       "kind": "notification",
@@ -1476,22 +1504,6 @@
     {
       "method": "mcpServer/oauth/login",
       "scope": "mcpOauth"
-    },
-    {
-      "method": "projectShell/session/kill",
-      "scope": "projectShellSession"
-    },
-    {
-      "method": "projectShell/session/resize",
-      "scope": "projectShellSession"
-    },
-    {
-      "method": "projectShell/session/start",
-      "scope": "projectShellSession"
-    },
-    {
-      "method": "projectShell/session/write",
-      "scope": "projectShellSession"
     },
     {
       "method": "thread/approveGuardianDeniedAction",
@@ -1956,16 +1968,6 @@
       "ProjectMaterialUploadParams",
       "ProjectMemoryReadParams",
       "ProjectMemoryReadResponse",
-      "ProjectShellEmptyResponse",
-      "ProjectShellSessionDrainEventsParams",
-      "ProjectShellSessionDrainEventsResponse",
-      "ProjectShellSessionEvent",
-      "ProjectShellSessionKillParams",
-      "ProjectShellSessionResizeParams",
-      "ProjectShellSessionStartParams",
-      "ProjectShellSessionStartResponse",
-      "ProjectShellSessionStream",
-      "ProjectShellSessionWriteParams",
       "ProtocolKind",
       "ProviderInfo",
       "ProviderKeyInfo",
@@ -2169,6 +2171,7 @@
       "ArtifactWriteParams",
       "ArtifactWriteResponse",
       "ArtifactWriteSidecar",
+      "AutoReviewDecisionSource",
       "ClientRequest",
       "ClientResponse",
       "CodexErrorInfo",
@@ -2177,6 +2180,17 @@
       "CollabAgentTool",
       "CollabAgentToolCallStatus",
       "CommandAction",
+      "CommandExecOutputDeltaNotification",
+      "CommandExecOutputStream",
+      "CommandExecParams",
+      "CommandExecResizeParams",
+      "CommandExecResizeResponse",
+      "CommandExecResponse",
+      "CommandExecTerminalSize",
+      "CommandExecTerminateParams",
+      "CommandExecTerminateResponse",
+      "CommandExecWriteParams",
+      "CommandExecWriteResponse",
       "CommandExecutionApprovalDecision",
       "CommandExecutionOutputDeltaNotification",
       "CommandExecutionRequestApprovalParams",
@@ -2229,6 +2243,13 @@
       "FsWriteFileResponse",
       "GitInfo",
       "GrantedPermissionProfile",
+      "GuardianApprovalReview",
+      "GuardianApprovalReviewAction",
+      "GuardianApprovalReviewStatus",
+      "GuardianCommandReviewAction",
+      "GuardianRiskLevel",
+      "GuardianUserAuthorization",
+      "GuardianWarningNotification",
       "HookErrorInfo",
       "HookMetadata",
       "HookOutputEntry",
@@ -2243,6 +2264,8 @@
       "InputModality",
       "InstalledApp",
       "ItemCompletedNotification",
+      "ItemGuardianApprovalReviewCompletedNotification",
+      "ItemGuardianApprovalReviewStartedNotification",
       "ItemStartedNotification",
       "McpServerElicitationAction",
       "McpServerElicitationRequestParams",
@@ -2336,6 +2359,10 @@
       "ReasoningSummaryTextDeltaNotification",
       "ReasoningTextDeltaNotification",
       "RequestPermissionProfile",
+      "ReviewDelivery",
+      "ReviewStartParams",
+      "ReviewStartResponse",
+      "ReviewTarget",
       "ServerNotification",
       "ServerRequest",
       "ServerRequestResolvedNotification",
@@ -2470,11 +2497,13 @@
       "ToolRequestUserInputResponse",
       "Turn",
       "TurnCompletedNotification",
+      "TurnDiffUpdatedNotification",
       "TurnEnvironmentParams",
       "TurnError",
       "TurnInterruptParams",
       "TurnInterruptResponse",
       "TurnItemsView",
+      "TurnModerationMetadataNotification",
       "TurnPlanStep",
       "TurnPlanStepStatus",
       "TurnPlanUpdatedNotification",

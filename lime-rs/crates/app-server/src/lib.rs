@@ -5,6 +5,7 @@ mod agent_ui_sequence_verifier;
 mod approval_server_request;
 mod automation_execution;
 mod capability;
+mod command_exec;
 mod current_time;
 #[cfg(test)]
 mod current_time_tests;
@@ -30,7 +31,6 @@ mod otel_trace;
 mod permission_server_request;
 mod process;
 mod processor;
-mod project_shell;
 mod runtime;
 mod runtime_backend;
 mod runtime_factory;
@@ -348,6 +348,7 @@ impl AppServer {
         };
         let interrupt_router = server_requests.clone();
         let process_notification_bridge = interrupt_bridge.clone();
+        let command_exec_notification_bridge = interrupt_bridge.clone();
         let fs_notification_bridge = interrupt_bridge.clone();
         let notification_bridge = interrupt_bridge.clone();
         let skills_watcher_bridge = notification_bridge.clone();
@@ -382,6 +383,18 @@ impl AppServer {
                         .await;
                 })
             });
+        let command_exec_notification_hook: processor::CommandExecNotificationHook =
+            Arc::new(move |connection_id, notification| {
+                let bridge = command_exec_notification_bridge.clone();
+                Box::pin(async move {
+                    let _ = bridge
+                        .send_messages_to_connection(
+                            connection_id,
+                            &[JsonRpcMessage::Notification(notification)],
+                        )
+                        .await;
+                })
+            });
         let fs_notification_hook: processor::FsNotificationHook =
             Arc::new(move |connection_id, notification| {
                 let bridge = fs_notification_bridge.clone();
@@ -404,6 +417,7 @@ impl AppServer {
                 .with_turn_interrupt_hook(turn_interrupt_hook)
                 .with_server_notification_hook(server_notification_hook)
                 .with_process_notification_hook(process_notification_hook)
+                .with_command_exec_notification_hook(command_exec_notification_hook)
                 .with_fs_notification_hook(fs_notification_hook),
             thread_states,
             runtime_event_receiver,
@@ -821,6 +835,9 @@ impl AppServer {
             .clear();
         for connection_id in connection_ids {
             self.processor.close_process_connection(connection_id).await;
+            self.processor
+                .close_command_exec_connection(connection_id)
+                .await;
             self.processor.close_fs_connection(connection_id).await;
             self.thread_states
                 .disconnect_connection(connection_id)
@@ -1251,6 +1268,10 @@ async fn run_transport_events(
                         TransportEvent::StdioClientInitialized { .. } => {}
                         TransportEvent::ConnectionClosed { connection_id } => {
                             server.processor.close_process_connection(connection_id).await;
+                            server
+                                .processor
+                                .close_command_exec_connection(connection_id)
+                                .await;
                             server.processor.close_fs_connection(connection_id).await;
                             let idle_thread_ids = server
                                 .thread_states
@@ -1701,6 +1722,10 @@ fn spawn_transport_request(
                             server
                                 .processor
                                 .close_process_connection(connection_id)
+                                .await;
+                            server
+                                .processor
+                                .close_command_exec_connection(connection_id)
                                 .await;
                             let _ = streamed_tx.send(Err(error));
                             return;

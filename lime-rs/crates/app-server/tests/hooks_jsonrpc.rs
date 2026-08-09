@@ -5,9 +5,6 @@ use std::sync::{Arc, Mutex};
 use agent_protocol::hook::{
     HookEventName, HookExecutionMode, HookHandlerType, HookRunStatus, HookScope, HookSource,
 };
-use agent_protocol::{
-    ItemId, ItemStatus, SessionId, ThreadId, ThreadItem, ThreadItemPayload, TurnId,
-};
 use app_server::{
     AppServer, LocalAppDataSource, MockBackend, ProjectionStore, RuntimeCore, RuntimeEvent,
 };
@@ -22,7 +19,7 @@ use serde_json::{json, Value};
 use tempfile::TempDir;
 
 #[tokio::test]
-async fn hook_lifecycle_is_recoverable_from_public_thread_history() {
+async fn hook_lifecycle_stays_out_of_public_thread_history() {
     let temp = TempDir::new().expect("hook history temp dir");
     let projection_store = Arc::new(
         ProjectionStore::initialize(temp.path().join("projection.sqlite"))
@@ -76,10 +73,7 @@ async fn hook_lifecycle_is_recoverable_from_public_thread_history() {
         .append_external_runtime_events(
             &session_id,
             Some(&turn_id),
-            vec![
-                hook_event(&running, ItemStatus::InProgress),
-                hook_event(&completed, ItemStatus::Completed),
-            ],
+            vec![hook_event(&running), hook_event(&completed)],
         )
         .expect("persist hook lifecycle");
 
@@ -90,16 +84,13 @@ async fn hook_lifecycle_is_recoverable_from_public_thread_history() {
         json!({"threadId": thread_id, "includeTurns": true}),
     )
     .await;
-    let read_item = read["result"]["thread"]["turns"]
+    let read_items = read["result"]["thread"]["turns"]
         .as_array()
         .expect("read turns")
         .iter()
         .flat_map(|turn| turn["items"].as_array().into_iter().flatten())
-        .find(|item| item["type"] == "hook")
-        .expect("hook item in thread/read");
-    assert_eq!(read_item["id"], format!("item_{run_id}"));
-    assert_eq!(read_item["run"]["id"], run_id);
-    assert_eq!(read_item["run"]["status"], "completed");
+        .collect::<Vec<_>>();
+    assert!(read_items.iter().all(|item| item["type"] != "hook"));
 
     let items = request(
         &server,
@@ -109,14 +100,7 @@ async fn hook_lifecycle_is_recoverable_from_public_thread_history() {
     )
     .await;
     let entries = items["result"]["data"].as_array().expect("item list");
-    let entry = entries
-        .iter()
-        .find(|entry| entry["item"]["type"] == "hook")
-        .expect("hook item in thread/items/list");
-    assert_eq!(entry["turnId"], turn_id);
-    assert_eq!(entry["item"]["id"], format!("item_{run_id}"));
-    assert_eq!(entry["item"]["run"]["id"], run_id);
-    assert_eq!(entry["item"]["run"]["status"], "completed");
+    assert!(entries.iter().all(|entry| entry["item"]["type"] != "hook"));
 }
 
 #[tokio::test]
@@ -268,26 +252,12 @@ fn hook_run(
     }
 }
 
-fn hook_event(run: &agent_protocol::hook::HookRunSummary, status: ItemStatus) -> RuntimeEvent {
-    let mut item = ThreadItem::new(
-        SessionId::new("placeholder-session"),
-        ThreadId::new("placeholder-thread"),
-        TurnId::new("placeholder-turn"),
-        0,
-        0,
-        ThreadItemPayload::Hook { run: run.clone() },
-    );
-    item.item_id = ItemId::new(format!("item_{}", run.id));
-    item.status = status;
-    item.created_at_ms = run.started_at;
-    item.updated_at_ms = run.completed_at.unwrap_or(run.started_at);
-    item.completed_at_ms = status.is_terminal().then_some(item.updated_at_ms);
-    item.metadata = json!({"hookRunId": run.id, "source": "codex_hook_runtime"});
+fn hook_event(run: &agent_protocol::hook::HookRunSummary) -> RuntimeEvent {
     RuntimeEvent::new(
         match run.status {
             HookRunStatus::Running => "hook.started",
             _ => "hook.completed",
         },
-        json!({"run": run, "item": item}),
+        json!({"run": run}),
     )
 }

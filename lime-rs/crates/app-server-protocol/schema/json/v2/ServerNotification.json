@@ -303,6 +303,12 @@
       ],
       "type": "object"
     },
+    "AutoReviewDecisionSource": {
+      "enum": [
+        "agent"
+      ],
+      "type": "string"
+    },
     "ByteRange": {
       "properties": {
         "end": {
@@ -638,6 +644,36 @@
         }
       ]
     },
+    "CommandExecOutputDeltaNotification": {
+      "properties": {
+        "capReached": {
+          "type": "boolean"
+        },
+        "deltaBase64": {
+          "type": "string"
+        },
+        "processId": {
+          "type": "string"
+        },
+        "stream": {
+          "$ref": "#/$defs/CommandExecOutputStream"
+        }
+      },
+      "required": [
+        "capReached",
+        "deltaBase64",
+        "processId",
+        "stream"
+      ],
+      "type": "object"
+    },
+    "CommandExecOutputStream": {
+      "enum": [
+        "stderr",
+        "stdout"
+      ],
+      "type": "string"
+    },
     "CommandExecutionOutputDeltaNotification": {
       "properties": {
         "delta": {
@@ -928,6 +964,259 @@
           ]
         }
       },
+      "type": "object"
+    },
+    "GuardianApprovalReview": {
+      "properties": {
+        "rationale": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "riskLevel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardianRiskLevel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/GuardianApprovalReviewStatus"
+        },
+        "userAuthorization": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardianUserAuthorization"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "GuardianApprovalReviewAction": {
+      "oneOf": [
+        {
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "type": {
+              "const": "command",
+              "type": "string"
+            }
+          },
+          "required": [
+            "command",
+            "cwd",
+            "source",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "argv": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "program": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "type": {
+              "const": "execve",
+              "type": "string"
+            }
+          },
+          "required": [
+            "argv",
+            "cwd",
+            "program",
+            "source",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "cwd": {
+              "type": "string"
+            },
+            "files": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "applyPatch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "cwd",
+            "files",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "type": {
+              "const": "networkAccess",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host",
+            "port",
+            "protocol",
+            "target",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "connector_id": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "connector_name": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "server": {
+              "type": "string"
+            },
+            "tool_name": {
+              "type": "string"
+            },
+            "tool_title": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "type": {
+              "const": "mcpToolCall",
+              "type": "string"
+            }
+          },
+          "required": [
+            "server",
+            "tool_name",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "permissions": true,
+            "reason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "type": {
+              "const": "requestPermissions",
+              "type": "string"
+            }
+          },
+          "required": [
+            "permissions",
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "GuardianApprovalReviewStatus": {
+      "enum": [
+        "aborted",
+        "approved",
+        "denied",
+        "inProgress",
+        "timedOut"
+      ],
+      "type": "string"
+    },
+    "GuardianRiskLevel": {
+      "enum": [
+        "critical",
+        "high",
+        "low",
+        "medium"
+      ],
+      "type": "string"
+    },
+    "GuardianUserAuthorization": {
+      "enum": [
+        "high",
+        "low",
+        "medium",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "GuardianWarningNotification": {
+      "additionalProperties": false,
+      "description": "Reports a high-priority Guardian circuit-breaker warning for a thread.",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message",
+        "threadId"
+      ],
       "type": "object"
     },
     "HookCompletedNotification": {
@@ -1221,6 +1510,91 @@
       "required": [
         "completedAtMs",
         "item",
+        "threadId",
+        "turnId"
+      ],
+      "type": "object"
+    },
+    "ItemGuardianApprovalReviewCompletedNotification": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/GuardianApprovalReviewAction"
+        },
+        "completedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "decisionSource": {
+          "$ref": "#/$defs/AutoReviewDecisionSource"
+        },
+        "review": {
+          "$ref": "#/$defs/GuardianApprovalReview"
+        },
+        "reviewId": {
+          "type": "string"
+        },
+        "startedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "targetItemId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "completedAtMs",
+        "decisionSource",
+        "review",
+        "reviewId",
+        "startedAtMs",
+        "threadId",
+        "turnId"
+      ],
+      "type": "object"
+    },
+    "ItemGuardianApprovalReviewStartedNotification": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/GuardianApprovalReviewAction"
+        },
+        "review": {
+          "$ref": "#/$defs/GuardianApprovalReview"
+        },
+        "reviewId": {
+          "type": "string"
+        },
+        "startedAtMs": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "targetItemId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "review",
+        "reviewId",
+        "startedAtMs",
         "threadId",
         "turnId"
       ],
@@ -2303,36 +2677,6 @@
           "required": [
             "fragments",
             "id",
-            "type"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "type": "string"
-            },
-            "metadata": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ThreadItemMetadata"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "run": {
-              "$ref": "#/$defs/HookRunSummary"
-            },
-            "type": {
-              "const": "hook",
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "run",
             "type"
           ],
           "type": "object"
@@ -3523,6 +3867,27 @@
       ],
       "type": "object"
     },
+    "TurnDiffUpdatedNotification": {
+      "additionalProperties": false,
+      "description": "Reports the latest aggregated unified diff for the current turn.",
+      "properties": {
+        "diff": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "diff",
+        "threadId",
+        "turnId"
+      ],
+      "type": "object"
+    },
     "TurnError": {
       "additionalProperties": false,
       "properties": {
@@ -3558,6 +3923,24 @@
         "summary"
       ],
       "type": "string"
+    },
+    "TurnModerationMetadataNotification": {
+      "additionalProperties": false,
+      "properties": {
+        "metadata": true,
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "metadata",
+        "threadId",
+        "turnId"
+      ],
+      "type": "object"
     },
     "TurnPlanStep": {
       "additionalProperties": false,
@@ -3852,6 +4235,22 @@
     {
       "properties": {
         "method": {
+          "const": "guardianWarning",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/GuardianWarningNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
           "const": "error",
           "type": "string"
         },
@@ -4108,6 +4507,22 @@
     {
       "properties": {
         "method": {
+          "const": "turn/diff/updated",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/TurnDiffUpdatedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
           "const": "turn/plan/updated",
           "type": "string"
         },
@@ -4145,6 +4560,38 @@
         },
         "params": {
           "$ref": "#/$defs/ItemCompletedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "item/autoApprovalReview/started",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ItemGuardianApprovalReviewStartedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "item/autoApprovalReview/completed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ItemGuardianApprovalReviewCompletedNotification"
         }
       },
       "required": [
@@ -4348,6 +4795,22 @@
     {
       "properties": {
         "method": {
+          "const": "turn/moderationMetadata",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/TurnModerationMetadataNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
           "const": "model/safetyBuffering/updated",
           "type": "string"
         },
@@ -4401,6 +4864,22 @@
         },
         "params": {
           "$ref": "#/$defs/ProcessExitedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "command/exec/outputDelta",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/CommandExecOutputDeltaNotification"
         }
       },
       "required": [

@@ -8,6 +8,7 @@ import {
   buildCanvasWorkbenchDiff,
   type CanvasWorkbenchDiffLine,
 } from "../../../utils/canvasWorkbenchDiff";
+import type { AgentThreadItem } from "@/lib/api/agentProtocolCoreTypes";
 
 export type CanvasWorkbenchChangeKind =
   | "added"
@@ -41,6 +42,12 @@ export interface CanvasWorkbenchChangeView {
   checkpointCount?: number;
   latestCheckpointPath?: string | null;
   onOpenFile?: (path: string) => void | Promise<void>;
+  threadItems?: readonly AgentThreadItem[];
+  reviewThreadId?: string | null;
+  currentTurnId?: string | null;
+  turnDiff?: string;
+  canInterrupt?: boolean;
+  onStartReview?: () => Promise<unknown>;
 }
 
 export interface CanvasWorkbenchChangeDiffStats {

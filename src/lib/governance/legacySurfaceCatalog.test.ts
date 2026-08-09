@@ -391,6 +391,23 @@ describe("legacySurfaceCatalog", () => {
     );
   });
 
+  it("应封住已删除 Plugin Lab 的五语言 i18n key 回流", () => {
+    const monitor = legacySurfaceCatalogJson.frontendText.find(
+      (entry) => entry.id === "plugin-lab-retired-i18n-keys",
+    );
+
+    expect(monitor).toBeTruthy();
+    expect(monitor?.classification).toBe("dead");
+    expect(monitor?.includePathPrefixes).toEqual(["src/i18n/resources"]);
+    expect(monitor?.allowedPaths).toEqual([]);
+    expect(monitor?.patterns).toEqual(
+      expect.arrayContaining([
+        "plugin.lab.",
+        "navigation.sidebar.items.pluginLab",
+      ]),
+    );
+  });
+
   it("应为 AgentUI 标准防回流提供机械守卫", () => {
     const treeMonitor = legacySurfaceCatalogJson.frontendText.find(
       (entry) => entry.id === "agent-ui-nonstandard-tree-terminology",

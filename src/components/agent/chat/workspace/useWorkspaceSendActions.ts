@@ -2644,39 +2644,6 @@ export function useWorkspaceSendActions({
         }
       }
 
-      const hasMatchedWorkspaceMentionCommandWithoutAgentTurnRoute = Boolean(
-        parsedImageWorkbenchCommand ||
-        parsedPosterWorkbenchCommand ||
-        parsedCoverWorkbenchCommand ||
-        parsedVideoWorkbenchCommand ||
-        parsedBroadcastWorkbenchCommand ||
-        parsedResourceSearchWorkbenchCommand ||
-        parsedTranscriptionWorkbenchCommand ||
-        parsedSearchWorkbenchCommand ||
-        parsedReportWorkbenchCommand ||
-        parsedCompetitorWorkbenchCommand ||
-        parsedDeepSearchWorkbenchCommand ||
-        parsedSiteSearchWorkbenchCommand ||
-        parsedPdfWorkbenchCommand ||
-        parsedFileReadWorkbenchCommand ||
-        parsedSummaryWorkbenchCommand ||
-        parsedTranslationWorkbenchCommand ||
-        parsedComplianceWorkbenchCommand ||
-        parsedLogoDecompositionWorkbenchCommand ||
-        parsedAnalysisWorkbenchCommand ||
-        parsedUrlParseWorkbenchCommand ||
-        parsedTypesettingWorkbenchCommand ||
-        parsedPresentationWorkbenchCommand ||
-        parsedFormWorkbenchCommand ||
-        parsedWebpageWorkbenchCommand ||
-        parsedWritingWorkbenchCommand ||
-        parsedChannelPreviewWorkbenchCommand ||
-        parsedUploadWorkbenchCommand ||
-        parsedPublishWorkbenchCommand ||
-        parsedVoiceWorkbenchCommand ||
-        parsedGrowthWorkbenchCommand ||
-        parsedBrowserWorkbenchCommand,
-      );
       const trimmedSourceText = sourceText.trim();
       if (
         activeTheme === "general" &&

@@ -1,8 +1,17 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FileText, GitCompare, RotateCcw, TerminalSquare } from "lucide-react";
+import {
+  AlertCircle,
+  ClipboardCheck,
+  FileText,
+  GitCompare,
+  Loader2,
+  RotateCcw,
+  TerminalSquare,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import type { AgentThreadItem } from "@/lib/api/agentProtocolCoreTypes";
 import type { AgentRuntimeFileCheckpointThreadSummary } from "@/lib/api/agentRuntime/sessionTypes";
 import { cn } from "@/lib/utils";
 import type { HarnessSessionState } from "../utils/harnessState";
@@ -23,6 +32,7 @@ import {
   rankFileChangesForOutput,
   resolveConfirmedFileChangeCount,
   resolveFocusDescriptionKey,
+  resolveLatestReviewBoundary,
   resolvePrimaryActionKey,
   resolveReviewFocusTone,
   resolveReviewStatusPresentation,
@@ -37,6 +47,11 @@ export interface CodeReviewSummaryPanelProps {
   onOpenSection: (target: CodeWorkbenchGuideTarget) => void;
   onOpenFileCheckpoints?: () => void;
   onSubmitCodeFixPrompt?: (prompt: string) => void | Promise<void>;
+  threadItems?: readonly AgentThreadItem[];
+  reviewThreadId?: string | null;
+  currentTurnId?: string | null;
+  canInterrupt?: boolean;
+  onStartReview?: () => Promise<unknown>;
 }
 
 export function CodeReviewSummaryPanel({
@@ -46,9 +61,21 @@ export function CodeReviewSummaryPanel({
   onOpenSection,
   onOpenFileCheckpoints,
   onSubmitCodeFixPrompt,
+  threadItems,
+  reviewThreadId,
+  currentTurnId,
+  canInterrupt = false,
+  onStartReview,
 }: CodeReviewSummaryPanelProps) {
   const { t } = useTranslation("agent");
   const [fixSubmitting, setFixSubmitting] = useState(false);
+  const [reviewActionState, setReviewActionState] = useState<
+    "idle" | "starting" | "failed"
+  >("idle");
+  const latestReviewBoundary = useMemo(
+    () => resolveLatestReviewBoundary(threadItems),
+    [threadItems],
+  );
   const fileChanges = useMemo(
     () => resolveReviewableFileChanges(harnessState),
     [harnessState],
@@ -158,6 +185,53 @@ export function CodeReviewSummaryPanel({
     checkpointCount,
     reviewSummary,
   });
+  const normalizedReviewThreadId = reviewThreadId?.trim() || "";
+  const reviewBlockedReason = !normalizedReviewThreadId
+    ? "missingThread"
+    : canInterrupt && currentTurnId
+      ? "activeTurn"
+      : null;
+  const reviewRunStatus =
+    reviewActionState === "starting"
+      ? "starting"
+      : reviewActionState === "failed"
+        ? "failed"
+        : latestReviewBoundary?.status || "idle";
+  const reviewStatusClassName =
+    reviewBlockedReason
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : reviewRunStatus === "inProgress"
+      ? "border-sky-200 bg-sky-50 text-sky-700"
+      : reviewRunStatus === "completed"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : reviewRunStatus === "failed"
+          ? "border-rose-200 bg-rose-50 text-rose-700"
+          : "border-slate-200 bg-slate-50 text-slate-600";
+  const reviewStatusLabelKey =
+    reviewBlockedReason === "missingThread"
+      ? "agentChat.harness.codeReview.status.blocked"
+      : reviewBlockedReason === "activeTurn"
+        ? "agentChat.harness.codeReview.status.blocked"
+        : reviewRunStatus === "starting"
+          ? "agentChat.harness.codeReview.status.starting"
+          : reviewRunStatus === "inProgress"
+            ? "agentChat.harness.codeReview.status.inProgress"
+            : reviewRunStatus === "completed"
+              ? "agentChat.harness.codeReview.status.completed"
+              : reviewRunStatus === "failed"
+                ? "agentChat.harness.codeReview.status.failed"
+                : null;
+  const reviewActionLabelKey =
+    reviewRunStatus === "starting" || reviewRunStatus === "inProgress"
+      ? "agentChat.harness.codeReview.action.starting"
+      : reviewRunStatus === "completed" || reviewRunStatus === "failed"
+        ? "agentChat.harness.codeReview.action.retry"
+        : "agentChat.harness.codeReview.action.start";
+  const reviewActionDisabled =
+    !onStartReview ||
+    Boolean(reviewBlockedReason) ||
+    reviewRunStatus === "starting" ||
+    reviewRunStatus === "inProgress";
 
   if (!hasReviewSurface) {
     return null;
@@ -188,7 +262,7 @@ export function CodeReviewSummaryPanel({
               {t(reviewStatus.labelKey)}
             </span>
           </div>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
+          <div className="mt-1 text-xs leading-5 text-slate-600">
             {t("agentChat.harness.codeReview.description", {
               files: fileChanges.length,
               outputs: harnessState.outputSignals.length,
@@ -206,7 +280,84 @@ export function CodeReviewSummaryPanel({
                 })}
               </span>
             ) : null}
-          </p>
+            {onStartReview ? (
+              <div
+                className="mt-2 flex flex-wrap items-center gap-2"
+                data-testid="code-review-summary-review-control"
+              >
+                {reviewStatusLabelKey ? (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium",
+                      reviewStatusClassName,
+                    )}
+                    data-testid="code-review-summary-review-status"
+                  >
+                    {reviewRunStatus === "starting" ||
+                    reviewRunStatus === "inProgress" ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : reviewRunStatus === "failed" ? (
+                      <AlertCircle className="h-3 w-3" />
+                    ) : null}
+                    {t(reviewStatusLabelKey)}
+                  </span>
+                ) : null}
+                <span className="text-xs text-slate-500">
+                  {reviewBlockedReason === "missingThread"
+                    ? t("agentChat.harness.codeReview.reviewMissingThread")
+                    : reviewBlockedReason === "activeTurn"
+                      ? t("agentChat.harness.codeReview.reviewActiveTurn")
+                      : t("agentChat.harness.codeReview.reviewTarget")}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={reviewRunStatus === "completed" ? "outline" : "default"}
+                  disabled={reviewActionDisabled}
+                  onClick={async () => {
+                    if (reviewActionDisabled || !onStartReview) {
+                      return;
+                    }
+                    setReviewActionState("starting");
+                    try {
+                      await onStartReview();
+                      setReviewActionState("idle");
+                    } catch {
+                      setReviewActionState("failed");
+                    }
+                  }}
+                  data-testid="code-review-summary-start-review"
+                >
+                  {reviewRunStatus === "starting" ||
+                  reviewRunStatus === "inProgress" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ClipboardCheck className="h-3.5 w-3.5" />
+                  )}
+                  {t(reviewActionLabelKey)}
+                </Button>
+              </div>
+            ) : null}
+            {latestReviewBoundary?.status === "completed" &&
+            latestReviewBoundary.review ? (
+              <div
+                className="mt-1 whitespace-pre-wrap break-words text-xs text-slate-600"
+                data-testid="code-review-summary-review-result"
+              >
+                {t("agentChat.harness.codeReview.reviewResult", {
+                  review: latestReviewBoundary.review,
+                })}
+              </div>
+            ) : null}
+            {reviewRunStatus === "failed" ? (
+              <div
+                className="mt-1 text-xs text-rose-700"
+                data-testid="code-review-summary-review-error"
+              >
+                {t("agentChat.harness.codeReview.reviewError")}
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
           {canSubmitCodeFix ? (

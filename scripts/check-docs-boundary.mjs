@@ -65,6 +65,29 @@ const skippedExtensions = new Set([
   ".zip",
 ]);
 
+const pluginV3CurrentDocuments = [
+  "internal/aiprompts/README.md",
+  "internal/roadmap/Writing/README.md",
+  "internal/roadmap/Writing/architecture.md",
+  "internal/roadmap/Writing/workflow-design.md",
+  "internal/roadmap/Writing/sequence-diagrams.md",
+  "internal/roadmap/Writing/article-frame-fix-plan.md",
+  "internal/roadmap/Writing/implementation-plan.md",
+  "internal/roadmap/Writing/product-requirements.md",
+  "internal/roadmap/plugin/prd.md",
+  "internal/roadmap/plugin/deverlop/plugin-publish-center-prd.md",
+];
+
+const retiredPluginContractPatterns = [
+  /lime-plugin-package-v1\.md/,
+  /lime\.plugin\.package\.v1/,
+  /app\.runtime\.yaml/,
+  /app\.workbench\.yaml/,
+  /contributions\.runtime/,
+  /contributions\.workbench/,
+  /internal\/tech\/plugin(?:\/|[)`'"\s]|$)/,
+];
+
 function toRelativePath(absolutePath) {
   return path.relative(repoRoot, absolutePath).split(path.sep).join("/");
 }
@@ -180,8 +203,28 @@ function shouldScanFile(relativePath) {
   return stat.size <= 2 * 1024 * 1024;
 }
 
+function checkPluginV3DocumentationBoundary(failures) {
+  for (const relativePath of pluginV3CurrentDocuments) {
+    if (!isCurrentFile(relativePath)) {
+      failures.push(`Plugin v3 现役文档缺失: ${relativePath}`);
+      continue;
+    }
+
+    const source = readText(relativePath);
+    for (const pattern of retiredPluginContractPatterns) {
+      if (pattern.test(source)) {
+        failures.push(
+          `Plugin v3 现役文档回流旧合同 ${pattern}: ${relativePath}`,
+        );
+      }
+    }
+  }
+}
+
 function main() {
   const failures = [];
+
+  checkPluginV3DocumentationBoundary(failures);
 
   for (const relativePath of requiredFiles) {
     if (!fileExists(relativePath)) {

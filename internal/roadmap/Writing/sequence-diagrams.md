@@ -20,7 +20,7 @@ sequenceDiagram
   Page->>Installed: 读取本地已安装插件包
   Installed-->>Page: content-factory-app
   Page->>Contract: projectPluginRegistryFromInstalledPackages
-  Contract-->>Page: activationEntries / subagents / skills / CLI / connectors / hooks / workflows
+  Contract-->>Page: typed Skills / MCP / activation projection / readiness
   Page-->>User: 展示内容工厂和能力详情
 ```
 
@@ -37,7 +37,7 @@ sequenceDiagram
 
   User->>Composer: 输入 @写文章 写一篇文章
   Composer->>Registry: buildPluginActivationMentionCatalog
-  Registry-->>Composer: 内容工厂插件包 activation entry
+  Registry-->>Composer: 内容工厂 typed activation entry
   Composer->>Intent: resolveWorkspacePluginIntent
   Intent-->>Composer: content_article_generate + plugin contract
   Composer->>Runtime: agentSession/turn/start + plugin_activation metadata
@@ -50,7 +50,7 @@ sequenceDiagram
 sequenceDiagram
   autonumber
   participant Runtime as App Server Runtime
-  participant Worker as Content Factory Worker
+  participant Projection as Workflow Projection
   participant Research as content-researcher
   participant Strategy as content-strategist
   participant Writer as article-writer
@@ -58,18 +58,18 @@ sequenceDiagram
   participant Image as image-planner
   participant Store as Artifact / Read Model
 
-  Runtime->>Worker: content.article.generate
-  Worker->>Research: 搜索主题和事实
-  Research-->>Worker: research notes
-  Worker->>Strategy: 生成角度和大纲
-  Strategy-->>Worker: brief + outline
-  Worker->>Writer: 写正文
-  Writer-->>Worker: markdown draft
-  Worker->>Editor: 审稿校对
-  Editor-->>Worker: revised draft + issues
-  Worker->>Image: 规划配图
-  Image-->>Worker: image slots + prompts
-  Worker->>Store: workspace patch + worker evidence
+  Runtime->>Projection: content.article.generate
+  Projection->>Research: 搜索主题和事实
+  Research-->>Projection: research notes
+  Projection->>Strategy: 生成角度和大纲
+  Strategy-->>Projection: brief + outline
+  Projection->>Writer: 写正文
+  Writer-->>Projection: markdown draft
+  Projection->>Editor: 审稿校对
+  Editor-->>Projection: revised draft + issues
+  Projection->>Image: 规划配图
+  Image-->>Projection: image slots + prompts
+  Projection->>Store: workspace patch + runtime evidence
   Store-->>Runtime: articleDraft artifact refs
 ```
 

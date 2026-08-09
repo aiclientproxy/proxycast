@@ -14,11 +14,11 @@ const {
   mockCreateProjectGitWorktree,
   mockReadProjectGitDiff,
   mockReadProjectGitStatus,
-  mockKillProjectShellSession,
-  mockListenProjectShellSessionEvents,
-  mockResizeProjectShellSession,
-  mockStartProjectShellSession,
-  mockWriteProjectShellSession,
+  mockTerminateCommandExec,
+  mockSubscribeCommandExecOutput,
+  mockResizeCommandExec,
+  mockExecCommand,
+  mockWriteCommandExec,
   mockFitAddonFit,
   mockXtermDisposeInput,
   mockXtermOnDataHandlers,
@@ -34,11 +34,11 @@ const {
   mockCreateProjectGitWorktree: vi.fn(),
   mockReadProjectGitDiff: vi.fn(),
   mockReadProjectGitStatus: vi.fn(),
-  mockKillProjectShellSession: vi.fn(),
-  mockListenProjectShellSessionEvents: vi.fn(),
-  mockResizeProjectShellSession: vi.fn(),
-  mockStartProjectShellSession: vi.fn(),
-  mockWriteProjectShellSession: vi.fn(),
+  mockTerminateCommandExec: vi.fn(),
+  mockSubscribeCommandExecOutput: vi.fn(),
+  mockResizeCommandExec: vi.fn(),
+  mockExecCommand: vi.fn(),
+  mockWriteCommandExec: vi.fn(),
   mockFitAddonFit: vi.fn(),
   mockXtermDisposeInput: vi.fn(),
   mockXtermOnDataHandlers: [] as Array<(data: string) => void>,
@@ -64,12 +64,12 @@ vi.mock("@/lib/api/projectGit", () => ({
   readProjectGitStatus: mockReadProjectGitStatus,
 }));
 
-vi.mock("@/lib/api/projectShell", () => ({
-  killProjectShellSession: mockKillProjectShellSession,
-  listenProjectShellSessionEvents: mockListenProjectShellSessionEvents,
-  resizeProjectShellSession: mockResizeProjectShellSession,
-  startProjectShellSession: mockStartProjectShellSession,
-  writeProjectShellSession: mockWriteProjectShellSession,
+vi.mock("@/lib/api/commandExec", () => ({
+  terminateCommandExec: mockTerminateCommandExec,
+  subscribeCommandExecOutput: mockSubscribeCommandExecOutput,
+  resizeCommandExec: mockResizeCommandExec,
+  execCommand: mockExecCommand,
+  writeCommandExec: mockWriteCommandExec,
 }));
 
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
@@ -267,19 +267,11 @@ beforeEach(async () => {
     ],
     uncommittedFileCount: 3,
   });
-  mockKillProjectShellSession.mockResolvedValue(undefined);
-  mockListenProjectShellSessionEvents.mockResolvedValue(vi.fn());
-  mockResizeProjectShellSession.mockResolvedValue(undefined);
-  mockStartProjectShellSession.mockResolvedValue({
-    sessionId: "project-shell-1",
-    cwd: "/tmp/project",
-    shell: "/bin/zsh",
-    title: "coso@host: project",
-    localEcho: true,
-    tty: false,
-    pid: 123,
-  });
-  mockWriteProjectShellSession.mockResolvedValue(undefined);
+  mockTerminateCommandExec.mockResolvedValue({});
+  mockSubscribeCommandExecOutput.mockReturnValue(vi.fn());
+  mockResizeCommandExec.mockResolvedValue({});
+  mockExecCommand.mockReturnValue(new Promise(() => undefined));
+  mockWriteCommandExec.mockResolvedValue({});
   mockXtermOnDataHandlers.length = 0;
   mockXtermTerminalOptions.length = 0;
 });
@@ -1202,7 +1194,7 @@ describe("TaskCenterUtilityToolbar", () => {
 });
 
 describe("TaskCenterShellPanel", () => {
-  it("应固定渲染底部 xterm Shell 面板并启动项目 Shell 会话", async () => {
+  it("应固定渲染底部 xterm Shell 面板并启动 command/exec PTY", async () => {
     const onClose = vi.fn();
     const onHeightChange = vi.fn();
     const onToggleMaximize = vi.fn();
@@ -1229,15 +1221,25 @@ describe("TaskCenterShellPanel", () => {
     expect(
       container.querySelector('[data-testid="task-center-shell-run"]'),
     ).toBeNull();
-    expect(mockStartProjectShellSession).toHaveBeenCalledWith({
-      rootPath: "/tmp/project",
-      cols: 120,
-      rows: 14,
+    expect(mockExecCommand).toHaveBeenCalledWith({
+      command: ["/bin/sh", "-i"],
+      processId: expect.any(String),
+      tty: true,
+      streamStdin: true,
+      streamStdoutStderr: true,
+      disableOutputCap: true,
+      disableTimeout: true,
+      cwd: "/tmp/project",
+      size: { cols: 120, rows: 14 },
     });
-    expect(mockListenProjectShellSessionEvents).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("coso@host: project");
+    expect(mockSubscribeCommandExecOutput).toHaveBeenCalledTimes(1);
+    expect(mockSubscribeCommandExecOutput).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Function),
+    );
+    expect(container.textContent).toContain("project");
     expect(mockXtermLoadAddon).toHaveBeenCalledTimes(1);
-    expect(mockFitAddonFit).toHaveBeenCalledTimes(1);
+    expect(mockFitAddonFit).toHaveBeenCalled();
     expect(mockXtermTerminalOptions[0]).toMatchObject({
       theme: expect.objectContaining({
         background: "#ffffff",
@@ -1280,7 +1282,7 @@ describe("TaskCenterShellPanel", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("快捷动作应写入真实 Shell 会话而不是前端伪造输出", async () => {
+  it("快捷动作应通过 command/exec/write 写入真实 PTY，而不是前端伪造输出", async () => {
     vi.stubGlobal(
       "prompt",
       vi.fn(
@@ -1321,10 +1323,15 @@ describe("TaskCenterShellPanel", () => {
       await Promise.resolve();
     });
 
-    expect(mockWriteProjectShellSession).toHaveBeenLastCalledWith({
-      sessionId: "project-shell-1",
-      data: expect.stringContaining("ls -la"),
+    const processId = mockExecCommand.mock.calls[0]?.[0]?.processId;
+    expect(processId).toEqual(expect.any(String));
+    expect(mockWriteCommandExec).toHaveBeenLastCalledWith({
+      processId,
+      deltaBase64: expect.any(String),
     });
+    expect(atob(mockWriteCommandExec.mock.lastCall?.[0].deltaBase64)).toContain(
+      "ls -la",
+    );
 
     await act(async () => {
       viewFileButton?.click();
@@ -1333,10 +1340,13 @@ describe("TaskCenterShellPanel", () => {
     });
 
     expect(globalThis.prompt).toHaveBeenCalled();
-    expect(mockWriteProjectShellSession).toHaveBeenLastCalledWith({
-      sessionId: "project-shell-1",
-      data: expect.stringContaining("TaskCenterShellPanel.tsx"),
+    expect(mockWriteCommandExec).toHaveBeenLastCalledWith({
+      processId,
+      deltaBase64: expect.any(String),
     });
+    expect(atob(mockWriteCommandExec.mock.lastCall?.[0].deltaBase64)).toContain(
+      "TaskCenterShellPanel.tsx",
+    );
 
     await act(async () => {
       gitStatusButton?.click();
@@ -1345,13 +1355,13 @@ describe("TaskCenterShellPanel", () => {
       await Promise.resolve();
     });
 
-    expect(mockWriteProjectShellSession).toHaveBeenCalledWith({
-      sessionId: "project-shell-1",
-      data: "git -c color.status=always status --short --branch\r",
+    expect(mockWriteCommandExec).toHaveBeenCalledWith({
+      processId,
+      deltaBase64: btoa("git -c color.status=always status --short --branch\r"),
     });
-    expect(mockWriteProjectShellSession).toHaveBeenCalledWith({
-      sessionId: "project-shell-1",
-      data: "clear\r",
+    expect(mockWriteCommandExec).toHaveBeenCalledWith({
+      processId,
+      deltaBase64: btoa("clear\r"),
     });
     expect(mockXtermWriteln).not.toHaveBeenCalledWith(
       expect.stringContaining("TaskCenterShellPanel.tsx"),
@@ -1359,26 +1369,7 @@ describe("TaskCenterShellPanel", () => {
     vi.unstubAllGlobals();
   });
 
-  it("点击新增 Shell 会话应创建新 tab 并保留原会话可切换", async () => {
-    mockStartProjectShellSession
-      .mockResolvedValueOnce({
-        sessionId: "project-shell-1",
-        cwd: "/tmp/project",
-        shell: "/bin/zsh",
-        title: "coso@host: project",
-        localEcho: true,
-        tty: false,
-        pid: 123,
-      })
-      .mockResolvedValueOnce({
-        sessionId: "project-shell-2",
-        cwd: "/tmp/project",
-        shell: "/bin/zsh",
-        title: "coso@host: project 2",
-        localEcho: true,
-        tty: false,
-        pid: 124,
-      });
+  it("点击新增 Shell 会话应创建独立 command/exec process 并保留原 tab", async () => {
     const container = mount(
       <TaskCenterShellPanel
         heightPx={236}
@@ -1394,7 +1385,7 @@ describe("TaskCenterShellPanel", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(mockStartProjectShellSession).toHaveBeenCalledTimes(1);
+    expect(mockExecCommand).toHaveBeenCalledTimes(1);
     expect(
       container.querySelectorAll('[data-testid="task-center-shell-tab"]'),
     ).toHaveLength(1);
@@ -1408,12 +1399,15 @@ describe("TaskCenterShellPanel", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(mockStartProjectShellSession).toHaveBeenCalledTimes(2);
+    expect(mockExecCommand).toHaveBeenCalledTimes(2);
     expect(
       container.querySelectorAll('[data-testid="task-center-shell-tab"]'),
     ).toHaveLength(2);
-    expect(container.textContent).toContain("coso@host: project");
-    expect(container.textContent).toContain("coso@host: project 2");
+    const firstProcessId = mockExecCommand.mock.calls[0]?.[0]?.processId;
+    const secondProcessId = mockExecCommand.mock.calls[1]?.[0]?.processId;
+    expect(firstProcessId).toEqual(expect.any(String));
+    expect(secondProcessId).toEqual(expect.any(String));
+    expect(firstProcessId).not.toBe(secondProcessId);
 
     await act(async () => {
       container
@@ -1434,40 +1428,19 @@ describe("TaskCenterShellPanel", () => {
       await Promise.resolve();
     });
 
-    expect(mockWriteProjectShellSession).toHaveBeenLastCalledWith({
-      sessionId: "project-shell-1",
-      data: "clear\r",
+    expect(mockWriteCommandExec).toHaveBeenLastCalledWith({
+      processId: firstProcessId,
+      deltaBase64: btoa("clear\r"),
     });
-    expect(mockKillProjectShellSession).not.toHaveBeenCalledWith({
-      sessionId: "project-shell-1",
+    expect(mockTerminateCommandExec).not.toHaveBeenCalledWith({
+      processId: firstProcessId,
     });
   });
 
-  it("Shell 会话丢失时应重连当前 tab 并重放本次输入", async () => {
-    mockStartProjectShellSession
-      .mockResolvedValueOnce({
-        sessionId: "project-shell-stale",
-        cwd: "/tmp/project",
-        shell: "/bin/zsh",
-        title: "coso@host: project",
-        localEcho: true,
-        tty: false,
-        pid: 123,
-      })
-      .mockResolvedValueOnce({
-        sessionId: "project-shell-fresh",
-        cwd: "/tmp/project",
-        shell: "/bin/zsh",
-        title: "coso@host: project",
-        localEcho: true,
-        tty: false,
-        pid: 124,
-      });
-    mockWriteProjectShellSession
-      .mockRejectedValueOnce(
-        new Error("项目 Shell 会话不存在: project-shell-stale"),
-      )
-      .mockResolvedValueOnce(undefined);
+  it("command/exec 启动失败时应停留在失败态，不重建第二条旧 session 链", async () => {
+    mockExecCommand.mockRejectedValueOnce(
+      new Error("command/exec unavailable"),
+    );
     mount(
       <TaskCenterShellPanel
         heightPx={236}
@@ -1483,67 +1456,32 @@ describe("TaskCenterShellPanel", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    const inputHandler = mockXtermOnDataHandlers.at(-1);
-    expect(inputHandler).toBeDefined();
-
-    await act(async () => {
-      inputHandler?.("printf 'LIME_TAB_OK\\n'");
-      inputHandler?.("\r");
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    expect(mockWriteProjectShellSession).toHaveBeenNthCalledWith(1, {
-      sessionId: "project-shell-stale",
-      data: "printf 'LIME_TAB_OK\\n'\r",
-    });
-    expect(mockStartProjectShellSession).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    expect(mockWriteProjectShellSession).toHaveBeenNthCalledWith(2, {
-      sessionId: "project-shell-fresh",
-      data: "printf 'LIME_TAB_OK\\n'\r",
-    });
-    expect(mockXtermWriteln).toHaveBeenCalledWith(
-      expect.stringContaining("Shell 会话已失效，正在重连"),
-    );
+    expect(mockExecCommand).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).toContain("command/exec unavailable");
   });
 
-  it("应回放 session 建立前到达的 Shell 输出并在卸载时清理输入监听", async () => {
-    let sessionEventHandler:
+  it("应消费 command/exec/outputDelta 并在卸载时清理通知订阅和进程", async () => {
+    let outputHandler:
       | ((event: {
-          type: "data";
-          sessionId: string;
+          processId: string;
           stream: "stdout";
-          data: string;
+          deltaBase64: string;
+          capReached: boolean;
         }) => void)
       | null = null;
     const unlisten = vi.fn();
-    mockListenProjectShellSessionEvents.mockImplementationOnce(
-      async (handler) => {
-        sessionEventHandler = handler;
+    mockSubscribeCommandExecOutput.mockImplementationOnce(
+      (processId, handler) => {
+        outputHandler = handler;
         handler({
-          type: "data",
-          sessionId: "project-shell-1",
+          processId,
           stream: "stdout",
-          data: "early prompt",
+          deltaBase64: btoa("early prompt"),
+          capReached: false,
         });
         return unlisten;
       },
     );
-    mockStartProjectShellSession.mockResolvedValueOnce({
-      sessionId: "project-shell-1",
-      cwd: "/tmp/project",
-      shell: "/bin/zsh",
-      title: "coso@host: project",
-      localEcho: true,
-      tty: false,
-      pid: 123,
-    });
 
     const container = mount(
       <TaskCenterShellPanel
@@ -1560,7 +1498,7 @@ describe("TaskCenterShellPanel", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(sessionEventHandler).not.toBeNull();
+    expect(outputHandler).not.toBeNull();
     expect(mockXtermWrite).toHaveBeenCalledWith("early prompt");
 
     act(() => {
@@ -1570,8 +1508,8 @@ describe("TaskCenterShellPanel", () => {
 
     expect(unlisten).toHaveBeenCalledTimes(1);
     expect(mockXtermDisposeInput).toHaveBeenCalledTimes(1);
-    expect(mockKillProjectShellSession).toHaveBeenCalledWith({
-      sessionId: "project-shell-1",
+    expect(mockTerminateCommandExec).toHaveBeenCalledWith({
+      processId: expect.any(String),
     });
   });
 
@@ -1628,7 +1566,7 @@ describe("TaskCenterShellPanel", () => {
     let resolveFirstWrite: () => void = () => {
       throw new Error("first write promise was not created");
     };
-    mockWriteProjectShellSession
+    mockWriteCommandExec
       .mockImplementationOnce(
         () =>
           new Promise<void>((resolve) => {
@@ -1667,10 +1605,11 @@ describe("TaskCenterShellPanel", () => {
       await Promise.resolve();
     });
 
-    expect(mockWriteProjectShellSession).toHaveBeenCalledTimes(1);
-    expect(mockWriteProjectShellSession).toHaveBeenNthCalledWith(1, {
-      sessionId: "project-shell-1",
-      data: "first\r",
+    expect(mockWriteCommandExec).toHaveBeenCalledTimes(1);
+    const processId = mockExecCommand.mock.calls[0]?.[0]?.processId;
+    expect(mockWriteCommandExec).toHaveBeenNthCalledWith(1, {
+      processId,
+      deltaBase64: btoa("first\r"),
     });
 
     resolveFirstWrite();
@@ -1680,10 +1619,10 @@ describe("TaskCenterShellPanel", () => {
       await Promise.resolve();
     });
 
-    expect(mockWriteProjectShellSession).toHaveBeenCalledTimes(2);
-    expect(mockWriteProjectShellSession).toHaveBeenNthCalledWith(2, {
-      sessionId: "project-shell-1",
-      data: "second\r",
+    expect(mockWriteCommandExec).toHaveBeenCalledTimes(2);
+    expect(mockWriteCommandExec).toHaveBeenNthCalledWith(2, {
+      processId,
+      deltaBase64: btoa("second\r"),
     });
   });
 
@@ -1713,7 +1652,7 @@ describe("TaskCenterShellPanel", () => {
       onData?.("ntf");
     });
 
-    expect(mockWriteProjectShellSession).not.toHaveBeenCalled();
+    expect(mockWriteCommandExec).not.toHaveBeenCalled();
 
     act(() => {
       onData?.("\r");
@@ -1724,10 +1663,11 @@ describe("TaskCenterShellPanel", () => {
       await Promise.resolve();
     });
 
-    expect(mockWriteProjectShellSession).toHaveBeenCalledTimes(1);
-    expect(mockWriteProjectShellSession).toHaveBeenCalledWith({
-      sessionId: "project-shell-1",
-      data: "printf\r",
+    expect(mockWriteCommandExec).toHaveBeenCalledTimes(1);
+    const processId = mockExecCommand.mock.calls[0]?.[0]?.processId;
+    expect(mockWriteCommandExec).toHaveBeenCalledWith({
+      processId,
+      deltaBase64: btoa("printf\r"),
     });
     vi.useRealTimers();
   });

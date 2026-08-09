@@ -117,6 +117,14 @@ pub struct ModelVerificationNotification {
     pub verifications: Vec<ModelVerification>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TurnModerationMetadataNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub metadata: serde_json::Value,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelSafetyBufferingUpdatedNotification {

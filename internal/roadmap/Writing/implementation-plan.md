@@ -5,7 +5,7 @@
 
 ## 1. 当前主目标
 
-把写文章从宿主硬编码入口收敛为 Lime Plugin Package v1 下的内容工厂插件 workflow，并完成最小可用闭环：
+把写文章从宿主硬编码入口收敛为 Agent Plugins v1.0.0 portable 包下的内容工厂插件闭环，并完成最小可用闭环：
 
 ```text
 已安装内容工厂插件包 -> @写文章 -> 任务卡 / 过程态留在对话流 -> content_article_workflow -> ArtifactFrame(articleArtifacts renderer) -> 右侧 Article Editor（dock / tab 标准见 ../rightsurface/README.md）
@@ -13,12 +13,12 @@
 
 ## 2. 当前状态
 
-- 已有内容工厂外部包、runtime yaml、workbench yaml、worker、skills 和基础 workflow，是迁移输入。
-- 已有宿主 plugin contract、输入栏候选、activation metadata、ArtifactDocument / Workbench 基础路径，是迁移输入。
-- 内容工厂样板包骨架已迁到 Lime Plugin Package v1：`plugin.json` 成为入口，`subagents/`、`clis/`、`connectors/`、`hooks/`、`resources/` 已落盘并通过包内验证。
-- 插件包标准事实源已落到 `internal/tech/plugin/`。
-- 宿主本地安装链正在切到只读取 `plugin.json`，旧入口归类为 dead。
-- LimeCore 服务端控制面本轮暂不修改；本轮只把宿主本地安装、插件投影和内容工厂写作主链收敛到 `plugin.json`。等宿主 package v1 contract、manifest hash 和安装投影稳定后，再统一迁移云端 release / upload 校验。
+- 已有内容工厂标准包、Skills、MCP 和基础 workflow，是当前实现输入；workflow/evidence 不属于 portable manifest。
+- 已有宿主 typed plugin contract、输入栏候选、activation metadata、ArtifactDocument / Article Workspace 基础路径，是当前实现输入。
+- 内容工厂样板包已收敛为 `plugin.json`、`mcp.json` 与 `skills/<skill>/SKILL.md`；App Server/runtime 负责生成 workflow、subagent、CLI、connector、hook 和 Article Workspace projection。
+- 插件包标准事实源已落到 `internal/roadmap/plugin/v3/README.md` 与 `01-target-contract.md`。
+- 宿主本地安装链已收敛为只读取标准 `plugin.json`，旧入口归类为 dead。
+- LimeCore 服务端控制面本轮暂不修改；本轮只把宿主本地安装、插件投影和内容工厂写作主链收敛到标准 `plugin.json` / `mcp.json` / Skills。等 v3 package identity、manifest hash 和安装投影稳定后，再统一迁移云端 release / upload 校验。
 
 ## 3. 实施切片
 
@@ -26,18 +26,17 @@
 
 状态：完成骨架
 
-- [x] 在 `internal/tech/plugin/` 建立 Lime Plugin Package v1 标准文档。
-- [x] 内容工厂外部包新增 `plugin.json` 作为唯一插件包入口。
-- [x] 内容工厂外部包补齐 `subagents/`、`clis/`、`connectors/`、`hooks/`、`resources/` 标准目录。
+- [x] 在 `internal/roadmap/plugin/v3/` 建立 Agent Plugins v1.0.0 标准文档。
+- [x] 内容工厂外部包以 `plugin.json`、`mcp.json` 和 `skills/<skill>/SKILL.md` 作为唯一 portable 入口。
+- [x] workflow、subagents、CLI、connectors、hooks 和 resources 从 package manifest 移出，统一由 App Server/runtime projection 承接。
 - [x] 旧说明文档退出机器事实源。
-- [x] validator 按 v1 标准校验 `plugin.json`、runtime、workbench、skills、subagents、CLI、connectors、hooks、resources。
+- [x] validator 按 v3 标准校验 `plugin.json`、`mcp.json`、direct-child Skills、路径安全和组件隔离。
 
 ### P1：内容工厂样板包
 
 状态：骨架完成，runtime readiness 投影和 prompt/task hook 生命周期执行已接入，connector 授权仍待深化
 
-- [x] `app.runtime.yaml` 使用 v1 骨架声明 `content_article_workflow`。
-- [x] `app.workbench.yaml` 使用 v1 骨架声明 `articleDraft` 业务对象和 articleArtifacts contract。
+- [x] App Server/runtime projection 声明 `content_article_workflow`，并物化 `articleDraft` / `articleArtifacts` contract。
 - [x] workflow 明确绑定 research、strategy、draft、review、image-plan 五个步骤。
 - [x] 每个 subagent 有 `prompt.md` 和输出格式。
 - [x] skills 使用稳定 id，被 workflow 引用。
@@ -51,15 +50,15 @@
 
 状态：安装链、activation 投影、详情能力展示、`clis` / `hooks` 一等 contract、runtime readiness 投影和 hook lifecycle evidence 完成；旧 `contentFactoryWorkspacePatch` 临时字段与内容工厂 raw artifact path / kind 兼容读取均已收口到统一 helper / 插件模块白名单
 
-- [x] plugin contract 类型支持 `schemaVersion=lime.plugin.package.v1`、`contributions` 和 `plugin.json` 入口形状。
-- [x] plugin contract 可从 `contributions` 派生 runtime / workbench / skills / subagents / CLI / connectors / hooks 路径。
+- [x] plugin contract 类型支持 Agent Plugins v1.0.0 根 `plugin.json`、根 `mcp.json` 与 direct-child Skills。
+- [x] workflow / Article Workspace / renderer projection 由 App Server/read model 派生，不从 manifest 私有路径读取。
 - [x] 本地安装从 `plugin.json` 读取插件包入口。
 - [x] 本地安装不再支持旧入口；只有负向测试可写旧文件名证明拒绝。
-- [x] 本地 / 云包 inspect 从 `plugin.json` 读取 runtime / workbench，并投影 activation entries、workflow、worker、workbench 和 articleDraft 恢复 contract。
+- [x] 本地 / 云包 inspect 从标准包读取 identity、Skills、MCP，并由 App Server 投影 activation entries、workflow、Article Workspace 和 articleDraft 恢复 contract。
 - [x] App Server 包解析 / 投影从 `local_data_source/plugins` 抽到 `plugin_packages`，`local_data_source` 只保留 installed state / uninstall / 本地持久化委托。
-- [x] activation entry contract 保留 `taskKind`、`workflowKey`、`outputArtifactKind`、`rightSurface` 和 `expectedObjects`，不再在前端 contract 归一化时丢失插件包声明。
-- [x] 插件中心详情页展示 subagents、workflows、skills、CLI / worker、connectors、hooks、授权和可用性。
-- [x] marketplace summary 合并 installed plugin manifest 的 workflows / connectors / hooks / clis，不再只展示路径或少量摘要。
+- [x] activation entry contract 保留 `taskKind`、`workflowKey`、`outputArtifactKind`、`rightSurface` 和 `expectedObjects`，不再在前端 contract 归一化时丢失 App Server projection。
+- [x] 插件中心详情页展示 typed projection 的 subagents、workflows、skills、CLI、connectors、hooks、授权和可用性。
+- [x] marketplace summary 合并 installed plugin typed projection 的 workflows / connectors / hooks / clis，不再把这些运行时能力误写成 manifest 字段。
 - [x] `pluginContract.ts` 从 `1000` 行以上拆回阈值内；plugin package component normalizer、Plugin 投影和通用工具已拆分，并补齐 `clis` / `hooks` 的一等 contract 类型。
 - [x] workflow contract 保留 `cliRefs`、`connectorRefs` 和 `hookPolicy`，发送 metadata 同步写入 `runtime_readiness` / `plugin_runtime_readiness`，App Server `<plugin_activation_context>` 渲染 runtime readiness，历史恢复可反投影同一状态。
 - [x] 右侧 Article Workspace 预览 artifact 不再生产 `contentFactoryWorkspacePatch` 旧临时字段，只保留通用 `workspacePatch` / `articleWorkspace` metadata；读取侧暂保留旧历史兼容。
@@ -88,7 +87,7 @@
 - [x] 清理前一版把完整文章塞进非文章编辑器面板的偏航实现。
 - [x] 新增通用 `ArtifactFrame` shell：从 artifact contract 选择 renderer，支持文章、图片集、表格、演示稿、网页、报告等后续产物框。
 - [x] 新增通用 `artifact frame registry`：文章先作为首个 renderer，后续 artifact 只需注册自己的 renderer 与 matcher，不必改主列表分发。
-- [x] 新增 `articleArtifacts` renderer：从 articleDraft / worker artifact 在框内流式输出完整文章，不落到普通 assistant message。
+- [x] 新增 `articleArtifacts` renderer：从 articleDraft / runtime artifact 在框内流式输出完整文章，不落到普通 assistant message。
 - [x] 新增 Article Editor renderer：右侧显示可编辑正文、工具条、结构、引用、配图规划和动作。
 - [x] Article Editor 正文画布独立为 Tiptap 组件，避免继续膨胀右侧工作台主文件。
 - [x] Article Editor 后续 action 携带当前本地编辑 Markdown，避免改写 / 导出丢失画布内编辑上下文。
@@ -103,12 +102,12 @@
 
 ### P5：真实 workflow 执行质量
 
-状态：基础 worker dogfood 已跑通；worker 已输出 host 可执行检索请求、pending 检索证据、审稿清单和配图规划，宿主已回填真实检索 evidence，文章失败态已 fail closed
+状态：基础 runtime dogfood 已跑通；runtime 已输出 host 可执行检索请求、pending 检索证据、审稿清单和配图规划，宿主已回填真实检索 evidence，文章失败态已 fail closed
 
-- [x] 内容工厂 worker 拆出 `article-planning.mjs`，入口 worker 降到 800 行以下。
-- [x] fixture worker 输出 research -> strategy -> draft -> review -> image plan 的结构化写作对象。
+- [x] 内容工厂 runtime 拆出 `article-planning.mjs`，入口模块降到 800 行以下。
+- [x] runtime fixture 输出 research -> strategy -> draft -> review -> image plan 的结构化写作对象。
 - [x] 多轮检索 evidence 已进入 articleDraft metadata，并在聊天产物框与右侧 Article Editor 可见。
-- [x] `articleDraft` / `workerEvidence` 输出 `searchRequests`、`searchEvidence`、`reviewChecklist` 和 `imagePlan`。
+- [x] `articleDraft` / App Server evidence projection 输出 `searchRequests`、`searchEvidence`、`reviewChecklist` 和 `imagePlan`。
 - [x] 宿主 connector / tool timeline 执行 `searchRequests` 并把真实 evidence 回填到 articleDraft metadata。
 - [x] 写作失败时不产出假 articleDraft。
 - [x] 审稿和配图规划进入 articleDraft metadata。
@@ -131,31 +130,31 @@
 
 原因：
 
-- 宿主 `plugin.json` 安装链、runtime / workbench 投影、内容工厂 `@写文章` E2E 还在收敛中；服务端此时跟进会提前固化半成品合同。
-- 服务端当前边界是 catalog、release metadata、tenant enablement、license / registration、package URL / hash 下发，不执行插件 worker，不渲染 Article Editor，不托管 UI runtime。
-- `manifestHash` 已规划为投影后的 Plugin manifest hash，`packageHash` 已规划为包内容 hash；这两个口径必须先在宿主本地 fetch / install / review 链路稳定。
+- 宿主标准包安装链、activation projection、内容工厂 `@写文章` E2E 还在收敛中；服务端此时跟进会提前固化半成品合同。
+- 服务端当前边界是 catalog、release metadata、tenant enablement、license / registration、package URL / hash 下发，不执行插件 runtime，不渲染 Article Editor，不托管 UI runtime。
+- `manifestHash` 已规划为标准 manifest hash，`packageHash` 已规划为包内容 hash；这两个口径必须先在 `plugin/list` / `plugin/read` / `plugin/install` 链路稳定。
 - 内容工厂当前主风险在客户端主链：已安装插件可见、`@写文章` 激活、独立 ArtifactFrame、右侧 Article Editor、多轮搜索后写作。先改服务端不能直接证明这些主风险收口。
 
 本阶段服务端分类：
 
 - `current`：继续保持云端控制面，只负责可见性、授权、release metadata 和包引用下发。
-- `deferred`：v1 package upload 校验、release summary、OpenAPI / SDK / 类型同步。
-- `dead`：在服务端新增插件 worker 执行、UI runtime 托管、Article Editor 渲染或 `/plugins/*/run` 路由。
+- `deferred`：标准 package upload 校验、release summary、OpenAPI / SDK / 类型同步。
+- `dead`：在服务端新增插件 runtime 执行、UI runtime 托管、Article Editor 渲染或 `/plugins/*/run` 路由。
 
 后续进入条件：
 
-- 宿主 `agentAppLocalPackage/inspect`、`agentAppPackage/fetchCloud` 和前端 install review 均稳定只认 `plugin.json`。
-- Lime Plugin Package v1 的 `manifestHash` 口径固定为投影后的 Plugin manifest hash，`packageHash` 口径固定为包内容 hash。
-- 内容工厂外部包完成 v1 validator、sample runtime、local install 和 `@写文章` E2E。
+- 宿主 `plugin/list`、`plugin/read`、`plugin/install` 和前端 install review 均稳定只认标准包入口。
+- Agent Plugins v1.0.0 的 `manifestHash` 口径固定为标准 manifest hash，`packageHash` 口径固定为包内容 hash。
+- 内容工厂外部包完成 v3 validator、sample runtime、local install 和 `@写文章` E2E。
 
 服务端待办：
 
-- [ ] 平台 package upload 校验 zip / lapp 中必须存在唯一 `plugin.json`。
-- [ ] release metadata / manifestSummary 从旧 Plugin 摘要迁到 Lime Plugin Package v1 摘要。
+- [ ] 平台 package upload 校验发布包中必须存在唯一根 `plugin.json`、根 `mcp.json`（如声明 MCP）和 `skills/`。
+- [ ] release metadata / manifestSummary 从旧摘要迁到 Agent Plugins v1.0.0 摘要。
 - [ ] `content-factory-app` seeded catalog 指向 v1 package 版本和新 hash。
 - [ ] 未激活注册码时继续不下发 package URL / hash，避免本地绕过企业定制授权。
-- [ ] API client、OpenAPI、docs 和 contract tests 同步 v1 字段。
-- [ ] 保持 LimeCore 不执行插件 worker、不托管 UI runtime、不新增 `/plugins/*/run`。
+- [ ] API client、OpenAPI、docs 和 contract tests 同步 v3 字段。
+- [ ] 保持 LimeCore 不执行插件 runtime、不托管 UI runtime、不新增 `/plugins/*/run`。
 
 ## 4. 验证入口
 

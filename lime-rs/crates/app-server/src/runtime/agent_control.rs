@@ -937,8 +937,7 @@ fn validate_agent_control_fork_items(turn: &agent_protocol::Turn) -> Result<(), 
             | ThreadItemPayload::Command { .. }
             | ThreadItemPayload::File { .. }
             | ThreadItemPayload::Media { .. }
-            | ThreadItemPayload::SubAgent { .. }
-            | ThreadItemPayload::Hook { .. } => {}
+            | ThreadItemPayload::SubAgent { .. } => {}
             ThreadItemPayload::AgentMessage {
                 phase,
                 content_parts,

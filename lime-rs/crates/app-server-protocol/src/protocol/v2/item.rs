@@ -26,12 +26,6 @@ pub enum ThreadItem {
         metadata: Option<ThreadItemMetadata>,
         fragments: Vec<HookPromptFragment>,
     },
-    Hook {
-        id: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        metadata: Option<ThreadItemMetadata>,
-        run: super::HookRunSummary,
-    },
     AgentMessage {
         id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -504,6 +498,129 @@ pub struct ItemCompletedNotification {
     pub thread_id: String,
     pub turn_id: String,
     pub completed_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum GuardianApprovalReviewStatus {
+    InProgress,
+    Approved,
+    Denied,
+    TimedOut,
+    Aborted,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum AutoReviewDecisionSource {
+    Agent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum GuardianRiskLevel {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum GuardianUserAuthorization {
+    Unknown,
+    Low,
+    Medium,
+    High,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GuardianCommandReviewAction {
+    pub source: String,
+    pub command: String,
+    pub cwd: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum GuardianApprovalReviewAction {
+    Command {
+        source: String,
+        command: String,
+        cwd: String,
+    },
+    Execve {
+        source: String,
+        program: String,
+        argv: Vec<String>,
+        cwd: String,
+    },
+    ApplyPatch {
+        cwd: String,
+        files: Vec<String>,
+    },
+    NetworkAccess {
+        target: String,
+        host: String,
+        protocol: String,
+        port: u16,
+    },
+    McpToolCall {
+        server: String,
+        tool_name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        connector_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        connector_name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        tool_title: Option<String>,
+    },
+    RequestPermissions {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+        permissions: Value,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GuardianApprovalReview {
+    pub status: GuardianApprovalReviewStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub risk_level: Option<GuardianRiskLevel>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_authorization: Option<GuardianUserAuthorization>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rationale: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemGuardianApprovalReviewStartedNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub started_at_ms: i64,
+    pub review_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_item_id: Option<String>,
+    pub review: GuardianApprovalReview,
+    pub action: GuardianApprovalReviewAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemGuardianApprovalReviewCompletedNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub started_at_ms: i64,
+    pub completed_at_ms: i64,
+    pub review_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_item_id: Option<String>,
+    pub decision_source: AutoReviewDecisionSource,
+    pub review: GuardianApprovalReview,
+    pub action: GuardianApprovalReviewAction,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

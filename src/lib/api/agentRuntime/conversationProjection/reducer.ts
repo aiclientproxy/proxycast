@@ -11,6 +11,7 @@ import type {
   ConversationProjectionSource,
   ConversationProjectionState,
   ConversationProjectionStatus,
+  GuardianReviewProjection,
   ItemProjectionDelta,
   NoticeProjection,
   PendingInteractionProjection,
@@ -113,6 +114,24 @@ export function reduceConversationProjection(
         event.source,
         event.event_id,
       );
+    case "turn_diff_updated":
+      return applyTurnDiffUpdate(next, event);
+    case "turn_moderation_metadata":
+      return applyTurnModerationMetadata(next, event);
+    case "guardian_warning":
+      return addNotice(next, {
+        id:
+          event.event_id ??
+          `guardian-warning:${event.thread_id}:${event.message}`,
+        thread_id: event.thread_id,
+        level: "warning",
+        code: "guardian_warning",
+        message: event.message,
+      });
+    case "guardian_review_started":
+      return applyGuardianReviewStarted(next, event);
+    case "guardian_review_completed":
+      return applyGuardianReviewCompleted(next, event);
     case "item_started":
     case "item_updated":
     case "item_completed":
@@ -526,7 +545,17 @@ function upsertTurn(
   }
   const existing = state.turns[turn.id];
   const itemIds = existing?.item_ids ?? [];
-  const projected: TurnProjection = { ...turn, item_ids: itemIds };
+  const projected: TurnProjection = {
+    ...turn,
+    ...(turn.unified_diff === undefined && existing?.unified_diff !== undefined
+      ? { unified_diff: existing.unified_diff }
+      : {}),
+    ...(turn.moderation_metadata === undefined &&
+    existing?.moderation_metadata !== undefined
+      ? { moderation_metadata: existing.moderation_metadata }
+      : {}),
+    item_ids: itemIds,
+  };
   return {
     ...state,
     thread_id: state.thread_id ?? turn.thread_id,
@@ -536,6 +565,170 @@ function upsertTurn(
       ? state.turn_order
       : [...state.turn_order, turn.id],
   };
+}
+
+function applyTurnDiffUpdate(
+  state: ConversationProjectionState,
+  event: Extract<ConversationProjectionEvent, { type: "turn_diff_updated" }>,
+): ConversationProjectionState {
+  const turn = state.turns[event.turn_id];
+  if (!turn || turn.thread_id !== event.thread_id) {
+    return addDiagnostic(state, {
+      code: "turn_mismatch",
+      source: event.source,
+      event_id: event.event_id,
+      thread_id: event.thread_id,
+      turn_id: event.turn_id,
+      message: `Ignored diff update for unknown turn ${event.turn_id}.`,
+    });
+  }
+  if (turn.unified_diff === event.unified_diff) {
+    return state;
+  }
+  return {
+    ...state,
+    turns: {
+      ...state.turns,
+      [event.turn_id]: { ...turn, unified_diff: event.unified_diff },
+    },
+  };
+}
+
+function applyTurnModerationMetadata(
+  state: ConversationProjectionState,
+  event: Extract<
+    ConversationProjectionEvent,
+    { type: "turn_moderation_metadata" }
+  >,
+): ConversationProjectionState {
+  const turn = state.turns[event.turn_id];
+  if (!turn || turn.thread_id !== event.thread_id) {
+    return addDiagnostic(state, {
+      code: "turn_mismatch",
+      source: event.source,
+      event_id: event.event_id,
+      thread_id: event.thread_id,
+      turn_id: event.turn_id,
+      message: `Ignored moderation metadata for unknown turn ${event.turn_id}.`,
+    });
+  }
+  if (turn.moderation_metadata === event.moderation_metadata) {
+    return state;
+  }
+  return {
+    ...state,
+    turns: {
+      ...state.turns,
+      [event.turn_id]: {
+        ...turn,
+        moderation_metadata: event.moderation_metadata,
+      },
+    },
+  };
+}
+
+function applyGuardianReviewStarted(
+  state: ConversationProjectionState,
+  event: Extract<
+    ConversationProjectionEvent,
+    { type: "guardian_review_started" }
+  >,
+): ConversationProjectionState {
+  const existing = state.pending_interactions[event.review_id];
+  if (existing && existing.status !== "pending") {
+    return addDiagnostic(state, {
+      code: "protocol_drift",
+      source: event.source,
+      event_id: event.event_id,
+      thread_id: event.thread_id,
+      turn_id: event.turn_id,
+      message: `Ignored Guardian review ${event.review_id} after terminal state.`,
+    });
+  }
+  return {
+    ...state,
+    pending_interactions: {
+      ...state.pending_interactions,
+      [event.review_id]: {
+        id: event.review_id,
+        thread_id: event.thread_id,
+        turn_id: event.turn_id,
+        ...(event.target_item_id ? { item_id: event.target_item_id } : {}),
+        kind: "guardian_review",
+        status: "pending",
+        payload: {
+          action: event.action,
+          review: event.review,
+        },
+      },
+    },
+  };
+}
+
+function applyGuardianReviewCompleted(
+  state: ConversationProjectionState,
+  event: Extract<
+    ConversationProjectionEvent,
+    { type: "guardian_review_completed" }
+  >,
+): ConversationProjectionState {
+  const existing = state.pending_interactions[event.review_id];
+  if (!existing) {
+    return addDiagnostic(state, {
+      code: "guardian_review_completed_before_started",
+      source: event.source,
+      event_id: event.event_id,
+      thread_id: event.thread_id,
+      turn_id: event.turn_id,
+      message: `Ignored Guardian completion ${event.review_id} before its start.`,
+    });
+  }
+  const status = guardianInteractionStatus(event.review.status);
+  if (!status) {
+    return addDiagnostic(state, {
+      code: "protocol_drift",
+      source: event.source,
+      event_id: event.event_id,
+      thread_id: event.thread_id,
+      turn_id: event.turn_id,
+      message: `Ignored unsupported Guardian status for ${event.review_id}.`,
+    });
+  }
+  return {
+    ...state,
+    pending_interactions: {
+      ...state.pending_interactions,
+      [event.review_id]: {
+        ...existing,
+        thread_id: event.thread_id,
+        turn_id: event.turn_id,
+        ...(event.target_item_id ? { item_id: event.target_item_id } : {}),
+        status,
+        payload: {
+          ...(isRecord(existing.payload) ? existing.payload : {}),
+          action: event.action,
+          review: event.review,
+          decision_source: event.decision_source,
+        },
+      },
+    },
+  };
+}
+
+function guardianInteractionStatus(
+  status: GuardianReviewProjection["status"],
+): PendingInteractionProjection["status"] | null {
+  switch (status) {
+    case "approved":
+      return "resolved";
+    case "denied":
+      return "declined";
+    case "timedOut":
+    case "aborted":
+      return "cancelled";
+    default:
+      return null;
+  }
 }
 
 function ensureTurnForItem(
@@ -625,6 +818,13 @@ function eventThreadIdOf(
     case "turn_started":
     case "turn_completed":
       return event.turn.thread_id;
+    case "turn_diff_updated":
+    case "turn_moderation_metadata":
+    case "guardian_warning":
+      return event.thread_id;
+    case "guardian_review_started":
+    case "guardian_review_completed":
+      return event.thread_id;
     case "item_started":
     case "item_updated":
     case "item_completed":

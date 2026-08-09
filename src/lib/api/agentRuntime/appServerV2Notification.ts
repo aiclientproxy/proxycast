@@ -4,6 +4,11 @@ import type {
 } from "@/lib/api/appServer";
 import {
   isErrorNotification,
+  isGuardianWarningNotification,
+  isGuardianReviewCompletedNotification,
+  isGuardianReviewStartedNotification,
+  isTurnDiffUpdatedNotification,
+  isTurnModerationMetadataNotification,
   isTurnPlanUpdatedNotification,
 } from "@limecloud/app-server-client";
 import { readCanonicalThreadItem } from "./appServerCanonicalItemReader";
@@ -13,12 +18,17 @@ import { RENDER_PROJECTION_REFERENCE_REVISION } from "./conversationProjection";
 const DIRECT_V2_NOTIFICATION_METHODS = new Set([
   "error",
   "warning",
+  "guardianWarning",
+  "turn/diff/updated",
+  "turn/moderationMetadata",
   "turn/plan/updated",
   "thread/started",
   "turn/started",
   "turn/completed",
   "item/started",
   "item/completed",
+  "item/autoApprovalReview/started",
+  "item/autoApprovalReview/completed",
   "hook/started",
   "hook/completed",
   "item/agentMessage/delta",
@@ -93,8 +103,32 @@ export function readAppServerV2NotificationRoute(
         ? { terminal: false, threadId }
         : null;
     }
+    case "guardianWarning": {
+      if (!isGuardianWarningNotification(notification)) {
+        return null;
+      }
+      const threadId = readString(params, "threadId");
+      const message = readString(params, "message");
+      return threadId && message ? { terminal: false, threadId } : null;
+    }
     case "turn/plan/updated": {
       if (!isTurnPlanUpdatedNotification(notification)) {
+        return null;
+      }
+      const threadId = readString(params, "threadId");
+      const turnId = readString(params, "turnId");
+      return threadId && turnId ? { terminal: false, threadId, turnId } : null;
+    }
+    case "turn/diff/updated": {
+      if (!isTurnDiffUpdatedNotification(notification)) {
+        return null;
+      }
+      const threadId = readString(params, "threadId");
+      const turnId = readString(params, "turnId");
+      return threadId && turnId ? { terminal: false, threadId, turnId } : null;
+    }
+    case "turn/moderationMetadata": {
+      if (!isTurnModerationMetadataNotification(notification)) {
         return null;
       }
       const threadId = readString(params, "threadId");
@@ -139,6 +173,28 @@ export function readAppServerV2NotificationRoute(
       const timestampMs = readFiniteNumber(params, timestampKey);
       return threadId && turnId && itemId && timestampMs !== undefined
         ? { itemId, terminal: false, threadId, turnId }
+        : null;
+    }
+    case "item/autoApprovalReview/started":
+    case "item/autoApprovalReview/completed": {
+      const isStarted = notification.method.endsWith("/started");
+      const isValid = isStarted
+        ? isGuardianReviewStartedNotification(notification)
+        : isGuardianReviewCompletedNotification(notification);
+      if (!isValid) {
+        return null;
+      }
+      const threadId = readString(params, "threadId");
+      const turnId = readString(params, "turnId");
+      const reviewId = readString(params, "reviewId");
+      const itemId = readString(params, "targetItemId");
+      return threadId && turnId && reviewId
+        ? {
+            ...(itemId ? { itemId } : {}),
+            terminal: !isStarted,
+            threadId,
+            turnId,
+          }
         : null;
     }
     case "hook/started":
@@ -283,6 +339,20 @@ export function projectAppServerV2NotificationPayload(
           }
         : null;
     }
+    case "guardianWarning": {
+      if (!isGuardianWarningNotification(notification)) {
+        return null;
+      }
+      const message = readString(params, "message");
+      return message
+        ? {
+            ...basePayload,
+            type: "guardian_warning",
+            code: "guardian_warning",
+            message,
+          }
+        : null;
+    }
     case "turn/plan/updated": {
       const plan = readTurnPlan(params.plan);
       if (!plan) {
@@ -294,6 +364,54 @@ export function projectAppServerV2NotificationPayload(
         type: "turn_plan_updated",
         plan,
         ...(explanation === undefined ? {} : { explanation }),
+      };
+    }
+    case "turn/diff/updated":
+      return {
+        ...basePayload,
+        type: "turn_diff_updated",
+        unified_diff: params.diff,
+      };
+    case "turn/moderationMetadata":
+      return {
+        ...basePayload,
+        type: "turn_moderation_metadata",
+        moderation_metadata: params.metadata,
+      };
+    case "item/autoApprovalReview/started": {
+      const review = asRecord(params.review);
+      const action = asRecord(params.action);
+      const reviewId = readString(params, "reviewId");
+      if (!review || !action || !reviewId) {
+        return null;
+      }
+      const targetItemId = readString(params, "targetItemId");
+      return {
+        ...basePayload,
+        type: "guardian_review_started",
+        review_id: reviewId,
+        ...(targetItemId ? { target_item_id: targetItemId } : {}),
+        review,
+        action,
+      };
+    }
+    case "item/autoApprovalReview/completed": {
+      const review = asRecord(params.review);
+      const action = asRecord(params.action);
+      const reviewId = readString(params, "reviewId");
+      const decisionSource = readString(params, "decisionSource");
+      if (!review || !action || !reviewId || decisionSource !== "agent") {
+        return null;
+      }
+      const targetItemId = readString(params, "targetItemId");
+      return {
+        ...basePayload,
+        type: "guardian_review_completed",
+        review_id: reviewId,
+        decision_source: decisionSource,
+        ...(targetItemId ? { target_item_id: targetItemId } : {}),
+        review,
+        action,
       };
     }
     case "thread/started":
@@ -767,6 +885,15 @@ function notificationTimestampMs(
   }
   if (method === "item/completed") {
     return readFiniteNumber(params, "completedAtMs");
+  }
+  if (
+    method === "item/autoApprovalReview/started" ||
+    method === "item/autoApprovalReview/completed"
+  ) {
+    return readFiniteNumber(
+      params,
+      method.endsWith("/started") ? "startedAtMs" : "completedAtMs",
+    );
   }
   if (method === "hook/started" || method === "hook/completed") {
     const run = asRecord(params.run);

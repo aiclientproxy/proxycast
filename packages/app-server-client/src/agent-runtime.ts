@@ -38,6 +38,8 @@ export type AgentRuntimeLifecycleNotification = Extract<
       | "turn/completed"
       | "item/started"
       | "item/completed"
+      | "item/autoApprovalReview/started"
+      | "item/autoApprovalReview/completed"
       | "item/agentMessage/delta"
       | "item/commandExecution/outputDelta"
       | "item/commandExecution/terminalInteraction"
@@ -53,7 +55,13 @@ export type AgentRuntimeLifecycleNotification = Extract<
 
 export type AgentRuntimeSignalNotification = Extract<
   ServerNotification,
-  { method: "error" | "turn/plan/updated" }
+  {
+    method:
+      | "error"
+      | "turn/diff/updated"
+      | "turn/moderationMetadata"
+      | "turn/plan/updated";
+  }
 >;
 
 export type AgentRuntimeNotification =
@@ -336,6 +344,8 @@ function isAgentRuntimeSignalNotification(
 ): notification is AgentRuntimeSignalNotification {
   return (
     notification.method === "error" ||
+    notification.method === "turn/diff/updated" ||
+    notification.method === "turn/moderationMetadata" ||
     notification.method === "turn/plan/updated"
   );
 }

@@ -37,6 +37,13 @@ function readContentFactoryArticleWorkspaceScript() {
   );
 }
 
+function readContentFactoryArticleWorkspacePatchesScript() {
+  return fs.readFileSync(
+    "scripts/agent-runtime/claw-chat-current-fixture-content-factory-workspace-patches.mjs",
+    "utf8",
+  );
+}
+
 export function registerImageContentSmokeGuards({
   expect,
   it,
@@ -178,6 +185,8 @@ export function registerImageContentSmokeGuards({
   it("covers content factory Article Workspace through typed artifact write and read", () => {
     const content = readSmokeScript();
     const contentFactoryScenario = readContentFactoryArticleWorkspaceScript();
+    const contentFactoryWorkspacePatches =
+      readContentFactoryArticleWorkspacePatchesScript();
 
     expectAllToContain(expect, content, [
       "content-factory-article-workspace",
@@ -271,6 +280,13 @@ export function registerImageContentSmokeGuards({
       "metadataPanelsHidden",
       "snapshot.metadataPanelsHidden",
       "snapshot.hasFullArticleCanvas",
+      "source: readString(workerDogfoodEvidence.source)",
+    ]);
+    expectAllToContain(expect, contentFactoryWorkspacePatches, [
+      "const articleDraftMarkdown = [",
+      "markdown: articleDraftMarkdown",
+      "documentText: articleDraftMarkdown",
+      "finalMarkdown: articleDraftMarkdown",
     ]);
 
     const contentWithoutForbiddenMarkerGuard =

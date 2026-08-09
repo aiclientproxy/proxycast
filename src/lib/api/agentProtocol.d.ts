@@ -136,6 +136,8 @@ export interface AgentThreadTurn {
   started_at: string;
   completed_at?: string;
   error_message?: string;
+  unified_diff?: string;
+  moderation_metadata?: unknown;
   created_at: string;
   updated_at: string;
 }

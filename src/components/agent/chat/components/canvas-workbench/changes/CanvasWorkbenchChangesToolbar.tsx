@@ -1,11 +1,13 @@
 import {
   Check,
+  ClipboardCheck,
   ChevronDown,
   ChevronRight,
   FileDiff,
   FolderOpen,
   GitCompareArrows,
   ListChecks,
+  Loader2,
   MoreHorizontal,
   GitBranch,
 } from "lucide-react";
@@ -52,6 +54,10 @@ export interface CanvasWorkbenchChangesToolbarProps extends CanvasWorkbenchRevie
   onCopyGitApply?: () => void | Promise<void>;
   onToggleDiffVariant?: () => void;
   onToggleFilesPanel?: () => void;
+  reviewRunStatus?: "idle" | "starting" | "inProgress" | "completed" | "failed";
+  reviewStatusLabelKey?: string | null;
+  reviewStartDisabled?: boolean;
+  onStartReview?: () => void | Promise<void>;
 }
 
 export function CanvasWorkbenchChangesToolbar({
@@ -96,6 +102,10 @@ export function CanvasWorkbenchChangesToolbar({
   onToggleWhitespace,
   onToggleDiffVariant,
   onToggleFilesPanel,
+  reviewRunStatus = "idle",
+  reviewStatusLabelKey,
+  reviewStartDisabled = true,
+  onStartReview,
 }: CanvasWorkbenchChangesToolbarProps) {
   const filesPanelToggleLabel = translateWorkbench(
     filesPanelOpen
@@ -120,7 +130,11 @@ export function CanvasWorkbenchChangesToolbar({
   const toolbarButtonClassName =
     "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] border border-transparent bg-white text-slate-500 transition-colors hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300";
   const activeToolbarButtonClassName =
-    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] border border-slate-200 bg-slate-50 text-slate-700 transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300";
+      "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] border border-slate-200 bg-slate-50 text-slate-700 transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300";
+  const reviewButtonLabelKey =
+    reviewRunStatus === "completed" || reviewRunStatus === "failed"
+      ? "agentChat.harness.codeReview.action.retry"
+      : reviewStatusLabelKey || "agentChat.harness.codeReview.action.start";
 
   return (
     <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-1 border-b border-slate-200 bg-white px-3 py-2">
@@ -258,6 +272,38 @@ export function CanvasWorkbenchChangesToolbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
+        {onStartReview ? (
+          <button
+            type="button"
+            data-testid="code-review-summary-start-review"
+            aria-label={
+              translateWorkbench(reviewButtonLabelKey)
+            }
+            title={
+              translateWorkbench(reviewButtonLabelKey)
+            }
+            disabled={reviewStartDisabled}
+            onClick={() => void onStartReview()}
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[7px] border border-sky-200 bg-sky-50 px-2.5 text-[12px] font-medium text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300"
+          >
+            {reviewRunStatus === "starting" || reviewRunStatus === "inProgress" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ClipboardCheck className="h-3.5 w-3.5" />
+            )}
+            <span className="hidden lg:inline">
+              {translateWorkbench(reviewButtonLabelKey)}
+            </span>
+          </button>
+        ) : null}
+        {reviewStatusLabelKey && reviewRunStatus !== "idle" ? (
+          <span
+            className="hidden rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600 xl:inline"
+            data-testid="code-review-summary-review-status"
+          >
+            {translateWorkbench(reviewStatusLabelKey)}
+          </span>
+        ) : null}
         <div className="relative">
           <button
             type="button"

@@ -91,12 +91,15 @@ const DIAGNOSTIC_ONLY_NOTIFICATION_METHODS = new Set([
   "rawResponseItem/completed",
   "remoteControl/status/changed",
   "thread/compacted",
-  "turn/diff/updated",
-  "turn/moderationMetadata",
 ]);
 const PROJECTED_NOTIFICATION_METHODS = new Set([
   "hook/started",
   "hook/completed",
+  "item/autoApprovalReview/started",
+  "item/autoApprovalReview/completed",
+  "guardianWarning",
+  "turn/diff/updated",
+  "turn/moderationMetadata",
 ]);
 
 const MAX_DIAGNOSTIC_FIELDS = 32;

@@ -395,6 +395,9 @@ pub enum LlmEvent {
     ModelVerification {
         verifications: Vec<ModelVerification>,
     },
+    TurnModerationMetadata {
+        metadata: Value,
+    },
     StepFinish {
         index: u32,
         reason: FinishReason,

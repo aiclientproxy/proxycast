@@ -5,8 +5,8 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "1.124.0",
-  "description": "Open-source full-stack desktop AI agent for coding, research, content, tools, files, terminals, and multi-agent workflows.",
+  "version": "1.125.0",
+  "description": "Open-source full-stack desktop AI agent for global users: coding, research, content, files, terminals, tools, multimodal work, and multi-agent workflows.",
   "keywords": [
     "ai",
     "llm",
@@ -21,6 +21,7 @@
     "mcp",
     "skills",
     "multi-agent",
+    "multimodal",
     "coding",
     "research",
     "content-creation",

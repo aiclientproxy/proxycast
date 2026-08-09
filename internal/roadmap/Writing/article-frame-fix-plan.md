@@ -24,7 +24,7 @@
 | --- | --- | --- |
 | 对话流过程态误入产物框 | `src/components/agent/chat/components/ArticleArtifactFrame.tsx:32-79`（`processSteps`）、`:164-183`（渲染）、`:82-103`（`facts`）、`:217-232`（facts chips 渲染） | 已删除，过程态不再作为独立卡片的一部分。 |
 | "本轮执行已完成"兜底文案 | `src/components/agent/chat/hooks/agentStreamCompletionController.ts:16-21` + `agent.json:666` | 保持待查，若仍出现则单独修。 |
-| 一输入即完成态 | `lime-rs/.../plugin_worker_streaming.rs:19-81`（初始快照 `status:"streaming"`）+ 前端框头完成态汇总 | 已转成文章框流式状态，保留给最终产物展示。 |
+| 一输入即完成态 | App Server runtime streaming projection（初始快照 `status:"streaming"`）+ 前端框头完成态汇总 | 已转成文章框流式状态，保留给最终产物展示。 |
 
 点击展开右侧编辑器接线（`onArtifactClick`）已贯穿 `MessageList`，**无需改动**。
 
@@ -40,7 +40,7 @@
 **Tests**：`MessageArtifactCards.test.tsx` 已补充流式文章回归。
 
 ### Stage 2：消除"一输入即完成"的空回复兜底观感
-**Goal**：写文章 worker turn 流式期间仍显示文章框的 streaming 态，不回落成普通聊天长文。
+**Goal**：写文章 runtime turn 流式期间仍显示文章框的 streaming 态，不回落成普通聊天长文。
 **后续**：若还出现"本轮执行已完成"兜底，再单独定位 completion controller。
 
 ### Stage 3：文档与回归

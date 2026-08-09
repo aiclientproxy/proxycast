@@ -12,6 +12,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 pub const APPLY_PATCH_TOOL_NAME: &str = "apply_patch";
+pub const TURN_DIFF_DELTA_METADATA_KEY: &str = "turnDiffDelta";
 
 #[derive(Debug, Default)]
 pub struct RuntimeApplyPatchExecutor;
@@ -224,6 +225,10 @@ fn build_metadata(
         metadata.insert("path".to_string(), json!(first_path));
     }
     metadata.insert("file_changes".to_string(), report_to_value(workdir, report));
+    metadata.insert(
+        TURN_DIFF_DELTA_METADATA_KEY.to_string(),
+        turn_diff_delta_to_value(workdir, report),
+    );
     if let Some(first_change) = report.changes.first() {
         metadata.insert(
             "file_change".to_string(),
@@ -231,6 +236,49 @@ fn build_metadata(
         );
     }
     metadata
+}
+
+fn turn_diff_delta_to_value(workdir: &Path, report: &ApplyPatchReport) -> Value {
+    json!({
+        "changes": report
+            .changes
+            .iter()
+            .map(|change| turn_diff_change_to_value(workdir, change))
+            .collect::<Vec<_>>(),
+    })
+}
+
+fn turn_diff_change_to_value(workdir: &Path, change: &patch_apply::AppliedPatchChange) -> Value {
+    let path = display_path(workdir, &change.path);
+    match &change.change {
+        AppliedPatchFileChange::Add {
+            content,
+            overwritten_content,
+        } => compact_object(json!({
+            "type": "add",
+            "path": path,
+            "content": content,
+            "overwrittenContent": overwritten_content,
+        })),
+        AppliedPatchFileChange::Delete { content } => json!({
+            "type": "delete",
+            "path": path,
+            "content": content,
+        }),
+        AppliedPatchFileChange::Update {
+            move_path,
+            old_content,
+            overwritten_move_content,
+            new_content,
+        } => compact_object(json!({
+            "type": "update",
+            "path": path,
+            "movePath": move_path.as_ref().map(|path| display_path(workdir, path)),
+            "oldContent": old_content,
+            "overwrittenMoveContent": overwritten_move_content,
+            "newContent": new_content,
+        })),
+    }
 }
 
 fn report_to_value(workdir: &Path, report: &ApplyPatchReport) -> Value {
@@ -526,6 +574,14 @@ mod tests {
         assert!(file_change["checkpointRef"]
             .as_str()
             .is_some_and(|value| value.starts_with("checkpoint:file:")));
+        assert_eq!(
+            result.metadata[TURN_DIFF_DELTA_METADATA_KEY]["changes"][0],
+            json!({
+                "type": "add",
+                "path": "notes/live.md",
+                "content": "hello\n"
+            })
+        );
     }
 
     #[test]

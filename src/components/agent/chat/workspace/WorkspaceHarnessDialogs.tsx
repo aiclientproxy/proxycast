@@ -44,7 +44,9 @@ type HarnessPanelBaseProps = Pick<
   | "onOpenSubagentSession"
   | "onLoadFilePreview"
   | "onOpenFile"
->;
+> & {
+  onStartReview?: () => Promise<unknown>;
+};
 
 function isReviewableCodeFileAction(
   action: HarnessPanelBaseProps["harnessState"]["recentFileEvents"][number]["action"],
@@ -152,6 +154,7 @@ function renderCodeReviewSummaryPanel({
   fileChangeReviewSummary,
   onOpenFileCheckpoints,
   onSubmitCodeFixPrompt,
+  onStartReview,
 }: {
   panelBaseProps: HarnessPanelBaseProps;
   hasRuntimeWorkbenchSignals: boolean;
@@ -163,6 +166,7 @@ function renderCodeReviewSummaryPanel({
   fileChangeReviewSummary?: HarnessFileChangeReviewSummary | null;
   onOpenFileCheckpoints?: () => void;
   onSubmitCodeFixPrompt?: (prompt: string) => void | Promise<void>;
+  onStartReview?: () => Promise<unknown>;
 }) {
   if (!hasRuntimeWorkbenchSignals) {
     return null;
@@ -176,6 +180,11 @@ function renderCodeReviewSummaryPanel({
       onOpenSection={openHarnessSection}
       onOpenFileCheckpoints={onOpenFileCheckpoints}
       onSubmitCodeFixPrompt={onSubmitCodeFixPrompt}
+      threadItems={panelBaseProps.threadItems}
+      reviewThreadId={panelBaseProps.threadRead?.thread_id}
+      currentTurnId={panelBaseProps.currentTurnId}
+      canInterrupt={panelBaseProps.canInterrupt}
+      onStartReview={onStartReview}
     />
   );
 }
@@ -183,11 +192,13 @@ function renderCodeReviewSummaryPanel({
 interface UseGeneralWorkbenchHarnessSurfaceParams {
   panelBaseProps: HarnessPanelBaseProps;
   onSubmitCodeFixPrompt?: (prompt: string) => void | Promise<void>;
+  onStartReview?: () => Promise<unknown>;
 }
 
 function useGeneralWorkbenchHarnessSurface({
   panelBaseProps,
   onSubmitCodeFixPrompt,
+  onStartReview,
 }: UseGeneralWorkbenchHarnessSurfaceParams) {
   const [fileCheckpointDialogOpen, setFileCheckpointDialogOpen] =
     useState(false);
@@ -226,6 +237,7 @@ function useGeneralWorkbenchHarnessSurface({
               fileChangeReviewSummary,
               onOpenFileCheckpoints: openFileCheckpoints,
               onSubmitCodeFixPrompt,
+              onStartReview,
             })}
           </div>
         )
@@ -245,11 +257,13 @@ function useGeneralWorkbenchHarnessSurface({
 interface GeneralWorkbenchHarnessSurfaceSectionProps extends HarnessPanelBaseProps {
   enabled: boolean;
   onSubmitCodeFixPrompt?: (prompt: string) => void | Promise<void>;
+  onStartReview?: () => Promise<unknown>;
 }
 
 export function GeneralWorkbenchHarnessSurfaceSection({
   enabled,
   onSubmitCodeFixPrompt,
+  onStartReview,
   ...panelBaseProps
 }: GeneralWorkbenchHarnessSurfaceSectionProps) {
   const { t } = useTranslation("agent");
@@ -264,6 +278,7 @@ export function GeneralWorkbenchHarnessSurfaceSection({
   } = useGeneralWorkbenchHarnessSurface({
     panelBaseProps,
     onSubmitCodeFixPrompt,
+    onStartReview,
   });
 
   if (!enabled) {
@@ -317,6 +332,7 @@ interface GeneralWorkbenchDialogSectionProps extends HarnessPanelBaseProps {
     typeof AgentRuntimeStrip
   >["runtimeStatusTitle"];
   onSubmitCodeFixPrompt?: (prompt: string) => void | Promise<void>;
+  onStartReview?: () => Promise<unknown>;
 }
 
 export function GeneralWorkbenchDialogSection({
@@ -330,6 +346,7 @@ export function GeneralWorkbenchDialogSection({
   executionRuntime,
   runtimeStatusTitle,
   onSubmitCodeFixPrompt,
+  onStartReview,
   ...panelBaseProps
 }: GeneralWorkbenchDialogSectionProps) {
   const { t } = useTranslation("agent");
@@ -385,6 +402,7 @@ export function GeneralWorkbenchDialogSection({
                   fileChangeReviewSummary,
                   onOpenFileCheckpoints: openFileCheckpoints,
                   onSubmitCodeFixPrompt,
+                  onStartReview,
                 })}
                 <AgentRuntimeStrip
                   activeTheme={activeTheme}

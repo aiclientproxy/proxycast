@@ -35,12 +35,6 @@ const {
   showOpenDialogMock,
   showItemInFolderMock,
   openProjectPathWithLocalToolMock,
-  projectShellHostDisposeForShutdownMock,
-  projectShellHostKillSessionMock,
-  projectShellHostResizeSessionMock,
-  projectShellHostRunCommandMock,
-  projectShellHostStartSessionMock,
-  projectShellHostWriteSessionMock,
   systemUtilityHostGetBrowserBackendPolicyMock,
   systemUtilityHostGetBrowserBackendsStatusMock,
   systemUtilityHostGetBrowserConnectorInstallStatusMock,
@@ -127,12 +121,6 @@ const {
     showOpenDialogMock: vi.fn(),
     showItemInFolderMock: vi.fn(),
     openProjectPathWithLocalToolMock: vi.fn(),
-    projectShellHostDisposeForShutdownMock: vi.fn(),
-    projectShellHostKillSessionMock: vi.fn(),
-    projectShellHostResizeSessionMock: vi.fn(),
-    projectShellHostRunCommandMock: vi.fn(),
-    projectShellHostStartSessionMock: vi.fn(),
-    projectShellHostWriteSessionMock: vi.fn(),
     systemUtilityHostGetBrowserBackendPolicyMock: vi.fn(),
     systemUtilityHostGetBrowserBackendsStatusMock: vi.fn(),
     systemUtilityHostGetBrowserConnectorInstallStatusMock: vi.fn(),
@@ -202,17 +190,6 @@ vi.mock("./fileShellHost", () => ({
     openFilePreviewWindow: fileShellHostOpenFilePreviewWindowMock,
     openWithDefaultApp: fileShellHostOpenWithDefaultAppMock,
     revealInFinder: fileShellHostRevealInFinderMock,
-  })),
-}));
-
-vi.mock("./projectShellHost", () => ({
-  ProjectShellHost: vi.fn(() => ({
-    disposeForShutdown: projectShellHostDisposeForShutdownMock,
-    killSession: projectShellHostKillSessionMock,
-    resizeSession: projectShellHostResizeSessionMock,
-    runCommand: projectShellHostRunCommandMock,
-    startSession: projectShellHostStartSessionMock,
-    writeSession: projectShellHostWriteSessionMock,
   })),
 }));
 
@@ -916,78 +893,6 @@ describe("ElectronHostCommands local file shell facade", () => {
     );
   });
 
-  it("项目 Shell 命令应只分发到 ProjectShellHost", async () => {
-    projectShellHostRunCommandMock.mockResolvedValueOnce({
-      command: "pwd",
-      exitCode: 0,
-    });
-    projectShellHostStartSessionMock.mockResolvedValueOnce({
-      sessionId: "project-shell-1",
-      tty: true,
-    });
-    projectShellHostWriteSessionMock.mockResolvedValueOnce({});
-    projectShellHostResizeSessionMock.mockResolvedValueOnce({});
-    projectShellHostKillSessionMock.mockResolvedValueOnce({});
-    const userDataDir = await createTempUserDataDir();
-    const host = createHost(userDataDir);
-
-    const runArgs = {
-      rootPath: "/tmp/project",
-      command: " pwd ",
-      timeoutMs: 10,
-    };
-    await expect(
-      host.invoke("run_project_shell_command", runArgs),
-    ).resolves.toMatchObject({ command: "pwd", exitCode: 0 });
-
-    const startArgs = {
-      rootPath: "/tmp/project",
-      cols: 120,
-      rows: 14,
-    };
-    await expect(
-      host.invoke("project_shell_session_start", startArgs),
-    ).resolves.toMatchObject({
-      sessionId: "project-shell-1",
-      tty: true,
-    });
-    const writeArgs = {
-      sessionId: "project-shell-1",
-      data: "ls\r",
-    };
-    await expect(
-      host.invoke("project_shell_session_write", writeArgs),
-    ).resolves.toEqual({});
-    const resizeArgs = {
-      sessionId: "project-shell-1",
-      cols: 100,
-      rows: 20,
-    };
-    await expect(
-      host.invoke("project_shell_session_resize", resizeArgs),
-    ).resolves.toEqual({});
-    const killArgs = {
-      sessionId: "project-shell-1",
-    };
-    await expect(
-      host.invoke("project_shell_session_kill", killArgs),
-    ).resolves.toEqual({});
-
-    expect(projectShellHostRunCommandMock).toHaveBeenCalledWith(runArgs);
-    expect(projectShellHostStartSessionMock).toHaveBeenCalledWith(startArgs);
-    expect(projectShellHostWriteSessionMock).toHaveBeenCalledWith(writeArgs);
-    expect(projectShellHostResizeSessionMock).toHaveBeenCalledWith(resizeArgs);
-    expect(projectShellHostKillSessionMock).toHaveBeenCalledWith(killArgs);
-  });
-
-  it("disposeProjectShellSessionsForShutdown 应委托 ProjectShellHost", async () => {
-    const userDataDir = await createTempUserDataDir();
-    const host = createHost(userDataDir);
-
-    host.disposeProjectShellSessionsForShutdown();
-
-    expect(projectShellHostDisposeForShutdownMock).toHaveBeenCalledOnce();
-  });
 });
 
 describe("ElectronHostCommands app config persistence", () => {

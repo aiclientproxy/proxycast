@@ -668,6 +668,44 @@ fn warning_notification_round_trips_thread_scoped_lime_shape() {
 }
 
 #[test]
+fn guardian_warning_notification_round_trips_exact_thread_scoped_shape() {
+    let expected = json!({
+        "method": "guardianWarning",
+        "params": {
+            "threadId": "thread-guardian",
+            "message": "Guardian review interrupted this turn."
+        }
+    });
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode Guardian warning");
+    assert_eq!(notification.method(), METHOD_GUARDIAN_WARNING);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_GUARDIAN_WARNING);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC Guardian warning"),
+        notification
+    );
+    assert_eq!(serde_json::to_value(notification).unwrap(), expected);
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_GUARDIAN_WARNING));
+    for malformed in [
+        json!({
+            "method": "guardianWarning",
+            "params": { "threadId": "thread-guardian" }
+        }),
+        json!({
+            "method": "guardianWarning",
+            "params": {
+                "threadId": "thread-guardian",
+                "message": "warning",
+                "extra": true
+            }
+        }),
+    ] {
+        assert!(serde_json::from_value::<ServerNotification>(malformed).is_err());
+    }
+}
+
+#[test]
 fn error_notification_round_trips_exact_codex_shape() {
     let expected = json!({
         "method": "error",
@@ -1288,6 +1326,62 @@ fn model_verification_notification_round_trips_codex_shape() {
 }
 
 #[test]
+fn turn_moderation_metadata_notification_round_trips_codex_shape_and_rejects_unknown_fields() {
+    let expected = json!({
+        "method": "turn/moderationMetadata",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "metadata": { "presentation": "inline" }
+        }
+    });
+
+    let notification: ServerNotification = serde_json::from_value(expected.clone())
+        .expect("decode turn moderation metadata notification");
+    assert_eq!(notification.method(), METHOD_TURN_MODERATION_METADATA);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_TURN_MODERATION_METADATA);
+    assert_eq!(
+        ServerNotification::try_from(raw)
+            .expect("decode JSON-RPC turn moderation metadata notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode turn moderation metadata notification"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_TURN_MODERATION_METADATA));
+
+    for metadata in [
+        json!(null),
+        json!(["inline", 2]),
+        json!(true),
+        json!("opaque"),
+    ] {
+        let decoded = serde_json::from_value::<ServerNotification>(json!({
+            "method": "turn/moderationMetadata",
+            "params": {
+                "threadId": "thread_1",
+                "turnId": "turn_2",
+                "metadata": metadata
+            }
+        }));
+        assert!(decoded.is_ok(), "all JSON metadata shapes remain opaque");
+    }
+
+    assert!(serde_json::from_value::<ServerNotification>(json!({
+        "method": "turn/moderationMetadata",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "metadata": null,
+            "legacy": true
+        }
+    }))
+    .is_err());
+}
+
+#[test]
 fn thread_status_changed_notification_round_trips_codex_shape() {
     let expected = json!({
         "method": "thread/status/changed",
@@ -1342,6 +1436,44 @@ fn plan_delta_notification_round_trips_codex_shape() {
         expected
     );
     assert!(NOTIFICATION_METHODS.contains(&METHOD_PLAN_DELTA));
+}
+
+#[test]
+fn turn_diff_updated_notification_round_trips_codex_shape_and_rejects_unknown_fields() {
+    let expected = json!({
+        "method": "turn/diff/updated",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "diff": "diff --git a/a.txt b/a.txt\n"
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode turn diff update");
+    assert_eq!(notification.method(), METHOD_TURN_DIFF_UPDATED);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_TURN_DIFF_UPDATED);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC turn diff update"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode turn diff update"),
+        expected
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_TURN_DIFF_UPDATED));
+
+    assert!(serde_json::from_value::<ServerNotification>(json!({
+        "method": "turn/diff/updated",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "diff": "",
+            "legacy": true
+        }
+    }))
+    .is_err());
 }
 
 #[test]
@@ -2550,6 +2682,7 @@ fn typed_v2_envelope_schema_names_are_stable() {
         [
             "configWarning",
             "warning",
+            "guardianWarning",
             "error",
             "skills/changed",
             "mcpServer/oauthLogin/completed",
@@ -2566,9 +2699,12 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "thread/status/changed",
             "turn/started",
             "turn/completed",
+            "turn/diff/updated",
             "turn/plan/updated",
             "item/started",
             "item/completed",
+            "item/autoApprovalReview/started",
+            "item/autoApprovalReview/completed",
             "item/agentMessage/delta",
             "item/commandExecution/outputDelta",
             "item/commandExecution/terminalInteraction",
@@ -2581,10 +2717,12 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "model/rerouted",
             "model/list/updated",
             "model/verification",
+            "turn/moderationMetadata",
             "model/safetyBuffering/updated",
             "fs/changed",
             "process/outputDelta",
             "process/exited",
+            "command/exec/outputDelta",
             "thread/settings/updated",
             "thread/tokenUsage/updated",
             "thread/goal/updated",

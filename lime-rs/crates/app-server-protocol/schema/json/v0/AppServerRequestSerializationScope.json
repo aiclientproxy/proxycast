@@ -4,7 +4,6 @@
     "browserSession",
     "mcpOauth",
     "mcpResourceSubscription",
-    "projectShellSession",
     "thread"
   ],
   "title": "AppServerRequestSerializationScope",

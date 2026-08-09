@@ -97,7 +97,6 @@
     "scripts/site-adapter-catalog-smoke.mjs",
     "scripts/skills-current-smoke.mjs",
     "scripts/social-workbench-e2e-smoke.mjs",
-    "scripts/standalone-deprecated-artifact-adapter-guard.test.mjs",
     "scripts/start-web-bridge-dev.mjs",
     "scripts/test_image_api.py",
     "scripts/types.ts",

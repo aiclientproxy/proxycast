@@ -13,7 +13,7 @@
 
 出口代码：TL 时间线，TP Turn 面板，PI pending interaction，HS Header/状态区，GN 应用通知，DX 仅开发诊断。
 
-实施快照：direct `item/started -> item/commandExecution/outputDelta* -> item/completed` 通过 typed adapter 和共享 reducer；production `thread/resume` 安装同一 replay reducer，后续 live notification 继续复用。completed snapshot 权威覆盖 delta 草稿，输出限制为 256 KiB。`write_stdin` 复用原始 `exec_command` Item identity，typed terminal interaction 与 canonical cold read 只保留 `sent N chars` 脱敏摘要。`turn.plan.updated` 由 canonical `update_plan` 的 `ToolOutput.structured_content` 派生，实时与 canonical cold read 共用 checklist 投影；`update_plan` 工具项保留在 read model，但不生成 `ThreadItem.plan` 或 Plan UI。unknown Item 已沿 canonical typed payload、v2 `thread/read`、Renderer 终态合并与 direct TurnTimeline fail-visible，只保留 upstream type 和脱敏字段名，并有专项 Electron Gate B；unknown/known-unprojected notification drift recorder 仍只提供诊断，不能把 72 notification 中的 planned surface 标记完成。
+实施快照：direct `item/started -> item/commandExecution/outputDelta* -> item/completed` 通过 typed adapter 和共享 reducer；production `thread/resume` 安装同一 replay reducer，后续 live notification 继续复用。completed snapshot 权威覆盖 delta 草稿，输出限制为 256 KiB。`write_stdin` 复用原始 `exec_command` Item identity，typed terminal interaction 与 canonical cold read 只保留 `sent N chars` 脱敏摘要。`turn.plan.updated` 由 canonical `update_plan` 的 `ToolOutput.structured_content` 派生，实时与 canonical cold read 共用 checklist 投影；`update_plan` 工具项保留在 read model，但不生成 `ThreadItem.plan` 或 Plan UI。Hook lifecycle 由 current Hook runtime 产生 paired `hook.started`/`hook.completed`，只做 transient timeline 投影，不创建 canonical ThreadItem。trusted first-party Responses 的 moderation metadata 已走 `model-provider -> AgentEvent -> durable event -> v2 turn/moderationMetadata -> typed client -> canonical Turn`，保持 opaque JSON 与 last-write-wins。strictAutoReview 的 shell/`exec_command` 触发真实 Guardian reviewer，经同 session `model-provider` 无工具结构化采样生成 durable `guardian.review.started/completed`，再投影为 typed `item/autoApprovalReview/*` 与 Renderer `pending_interactions`；provider 不可用、取消、超时和非法响应全部拒绝。unknown Item 已沿 canonical typed payload、v2 `thread/read`、Renderer 终态合并与 direct TurnTimeline fail-visible，只保留 upstream type 和脱敏字段名，并有专项 Electron Gate B；unknown/known-unprojected notification drift recorder 仍只提供诊断，不能把 72 notification 中的 planned surface 标记完成。
 
 ## 1. Thread、Turn 与 Hook
 
@@ -35,10 +35,10 @@
 |  14 | thread/settings/updated         | HS       | current                | 下一 Turn model、reasoning、permission 摘要                       |
 |  15 | thread/tokenUsage/updated       | TP/HS    | current                | 本 Turn/总用量，节流更新                                          |
 |  16 | turn/started                    | TL/TP    | current                | 建立 Turn 与原始 Item 顺序                                        |
-|  17 | hook/started                    | TL/HS    | planned                | Hook activity，run id 保留                                        |
+|  17 | hook/started                    | TL/HS    | current                | current Hook producer 的 transient activity，run id 保留          |
 |  18 | turn/completed                  | TL/TP    | current                | 权威 Turn 终态并清理 pending                                      |
-|  19 | hook/completed                  | TL       | planned                | Hook status、duration、entries 与阻断结果                         |
-|  20 | turn/diff/updated               | DX       | product-scope-excluded | Codex raw unified diff；Lime 以 canonical FileChange 为唯一事实源 |
+|  19 | hook/completed                  | TL       | current                | paired Hook producer 的 transient status，不写入 canonical Item   |
+|  20 | turn/diff/updated               | DX       | current                | Lime exact Turn diff，canonical Turn/Changes 使用同一快照       |
 |  21 | turn/plan/updated               | TP       | current                | canonical update_plan checklist，实时/冷恢复一致                  |
 
 ## 2. Item 生命周期、流与进程
@@ -46,8 +46,8 @@
 |   # | Method                                    | 目标出口 | 当前裁决               | v2 投影                                                     |
 | --: | ----------------------------------------- | -------- | ---------------------- | ----------------------------------------------------------- |
 |  22 | item/started                              | TL       | current                | 按 typed 联合建立 Item；未知安全 fail visible               |
-|  23 | item/autoApprovalReview/started           | PI/TL    | planned                | 目标 Item 的 Guardian review 进行中                         |
-|  24 | item/autoApprovalReview/completed         | PI/TL    | planned                | approved/denied/timedOut/aborted 与风险摘要                 |
+|  23 | item/autoApprovalReview/started           | PI/TL    | current                | 目标 Item 的 Guardian review 进行中                         |
+|  24 | item/autoApprovalReview/completed         | PI/TL    | current                | approved/denied/timedOut/aborted 与风险摘要                 |
 |  25 | item/completed                            | TL       | current                | Item 权威终态覆盖流式草稿                                   |
 |  26 | rawResponseItem/completed                 | DX       | product-scope-excluded | 不参与正式 Item 或终态合成                                  |
 |  27 | rawResponse/completed                     | DX       | product-scope-excluded | 不进入普通时间线                                            |
@@ -87,7 +87,7 @@
 | --: | -------------------------------- | -------- | ---------------------- | ------------------------------------------------------------ |
 |  52 | model/rerouted                   | TL/HS    | current                | from/to 与 allowlisted reason；不改变 route owner            |
 |  53 | model/verification               | HS/DX    | current                | 脱敏验证结论                                                 |
-|  54 | turn/moderationMetadata          | DX       | product-scope-excluded | 只驱动受审核 policy                                          |
+|  54 | turn/moderationMetadata          | DX       | current                | trusted first-party metadata，opaque Turn state，last-write-wins    |
 |  55 | model/safetyBuffering/updated    | HS       | current                | 安全缓冲提示，不伪造模型选择                                 |
 |  56 | warning                          | HS/GN    | current                | typed threadId/message/code?；实时去重 toast 与冷读恢复      |
 |  57 | guardianWarning                  | HS/TL    | planned                | 高优先级安全 warning，不被普通 warning 吞掉                  |
@@ -112,7 +112,7 @@
 |  71 | windowsSandbox/setupCompleted     | GN/PI    | planned                | setup success/error 与下一步                 |
 |  72 | account/login/completed           | GN/PI    | product-scope-excluded | credential 流程不进入对话                    |
 
-v2 的实现门槛不是把所有 planned method 同时实现，而是首先将这张表固化为类型检查的 coverage map。新增 Codex method 时，CI 必须要求它先获得裁决，不能落入 default silent return。`turn/diff/updated`、`process/outputDelta` 与 `process/exited` 虽保留在 upstream method inventory 和 drift recorder 中，但明确为 `product-scope-excluded`：不得进入 Lime current protocol、Renderer projector、时间线或用户级通知；对应 standalone `process/spawn` 控制面与 raw unified diff 不能借 planned 名义回流。
+v2 的实现门槛不是把所有 planned method 同时实现，而是首先将这张表固化为类型检查的 coverage map。新增 Codex method 时，CI 必须要求它先获得裁决，不能落入 default silent return。standalone `process/outputDelta` 与 `process/exited` 虽保留在 upstream method inventory 和 drift recorder 中，但明确为 `product-scope-excluded`：不得进入 Lime current protocol、Renderer projector、时间线或用户级通知；对应 standalone `process/spawn` 控制面不能借 planned 名义回流。Lime exact `turn/diff/updated` 已由 `apply_patch -> durable fact -> v2 projector -> canonical Turn/Changes` current owner 承接，不等同于 Codex TUI 的 raw diff surface。
 
 ## 6. Lime-owned 扩展事件
 

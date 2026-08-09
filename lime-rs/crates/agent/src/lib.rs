@@ -17,6 +17,7 @@ mod current_provider_turn;
 mod direct_text_generation;
 pub mod durable_memory_fs;
 pub mod filesystem_event_protocol;
+mod guardian_review;
 mod knowledge_builder_skill;
 pub mod lime_session_repository;
 mod live_execution_process;
@@ -88,7 +89,8 @@ pub use protocol::{
     AgentEvent, AgentImageAttachment, AgentMessage, AgentMessageContent, AgentOp,
     AgentProviderTraceEvent, AgentProviderTraceStage, AgentRuntimeStatus, AgentTokenUsage,
     AgentToolImage, AgentToolProgressPayload, AgentToolResult, AgentUserInputOp,
-    AgentUserPreferences, TextDeltaBatchBoundary,
+    AgentUserPreferences, GuardianReviewStatus, GuardianRiskLevel, GuardianUserAuthorization,
+    TextDeltaBatchBoundary,
 };
 pub use protocol_projection::{project_item_runtime, project_turn_runtime};
 pub use provider_configuration::{

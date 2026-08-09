@@ -28,6 +28,17 @@ export interface PendingInteractionProjection {
   payload?: unknown;
 }
 
+export interface GuardianReviewProjection {
+  status: "inProgress" | "approved" | "denied" | "timedOut" | "aborted";
+  risk_level?: "low" | "medium" | "high" | "critical" | null;
+  user_authorization?: "unknown" | "low" | "medium" | "high" | null;
+  rationale?: string | null;
+}
+
+export type GuardianReviewActionProjection = Readonly<
+  Record<string, unknown>
+>;
+
 export interface NoticeProjection {
   id: string;
   thread_id: string;
@@ -47,6 +58,7 @@ export interface ConversationProjectionDiagnostic {
     | "item_delta_before_start"
     | "late_delta_rejected"
     | "orphan_delta_discarded"
+    | "guardian_review_completed_before_started"
     | "unsupported_delta"
     | "turn_terminal_late_event"
     | "protocol_drift";
@@ -102,6 +114,42 @@ export type ConversationProjectionEvent =
   | (ProjectionEventBase & {
       type: "turn_started" | "turn_completed";
       turn: AgentThreadTurn;
+    })
+  | (ProjectionEventBase & {
+      type: "turn_diff_updated";
+      thread_id: string;
+      turn_id: string;
+      unified_diff: string;
+    })
+  | (ProjectionEventBase & {
+      type: "turn_moderation_metadata";
+      thread_id: string;
+      turn_id: string;
+      moderation_metadata: unknown;
+    })
+  | (ProjectionEventBase & {
+      type: "guardian_warning";
+      thread_id: string;
+      message: string;
+    })
+  | (ProjectionEventBase & {
+      type: "guardian_review_started";
+      thread_id: string;
+      turn_id: string;
+      review_id: string;
+      target_item_id?: string;
+      review: GuardianReviewProjection;
+      action: GuardianReviewActionProjection;
+    })
+  | (ProjectionEventBase & {
+      type: "guardian_review_completed";
+      thread_id: string;
+      turn_id: string;
+      review_id: string;
+      target_item_id?: string;
+      decision_source: "agent";
+      review: GuardianReviewProjection;
+      action: GuardianReviewActionProjection;
     })
   | (ProjectionEventBase & {
       type: "item_started" | "item_updated" | "item_completed";

@@ -23,6 +23,15 @@ mcp.json -> 根 JSON 文档
 manifest 不得声明 `skills`、`mcpServers`、`apps` 或任意路径来覆盖固定位置。缺失组件是
 合法的“没有该能力”；组件错误只禁用该组件类型，不影响其它组件。
 
+## Codex Apps extension
+
+Portable manifest 仍不得出现顶层 `apps`。Codex client extension 可通过
+`extensions.com.openai.apps`，或在 inline extension 缺失时通过
+`.codex-plugin/plugin.json` 的 `apps`，声明一个包内相对 JSON 路径。该文件按 Codex
+`apps.{name}.{id,category?}` 形状解析：connector `id` 是 Apps catalog identity，name 是
+展示名。旧内联 Apps object 必须拒绝，非法/缺失 Apps 配置只禁用 Apps 组件；不得覆盖
+portable `name`、`version`、Skills 或 MCP 固定位置。
+
 ## MCP
 
 标准 parser 与内部 `McpServerConfig` 分离：先严格解析官方 `mcp.json`，再 lowering 到
@@ -35,13 +44,15 @@ manifest 不得声明 `skills`、`mcpServers`、`apps` 或任意路径来覆盖�
 - 禁止插件覆盖两个保留环境变量。
 - `streamable-http`：绝对 HTTP/HTTPS URL；非 loopback 必须 HTTPS；拒绝 userinfo 和
   fragment；`headers` 只能是 package 中的字面量，不能携带 secret。
+- legacy `sse` transport 必须 fail closed，不得进入 runtime。
 - 单个 server 失败只禁用该 server；顶层 mcp 文件错误只禁用 MCP 组件，不影响 Skills。
 
 ## Codex parity
 
 Codex parity 的范围是行为和测试：manifest format selection、direct-child Skills、MCP
-normalization、path containment、reserved env、failure isolation、installed/activated
-state 和 reload/cold restore。Codex 私有内部类型、存储和 UI 不复制到 Lime。
+normalization、Apps extension path/config、path containment、reserved env、failure isolation、
+installed/activated state 和 reload/cold restore。Codex 私有内部类型、存储和 UI 不复制到
+Lime。
 
 ## Lime integration
 

@@ -3,6 +3,8 @@ import { createConversationProjectionReducer } from "./reducer";
 import type {
   ConversationProjectionEvent,
   ConversationProjectionSource,
+  GuardianReviewActionProjection,
+  GuardianReviewProjection,
 } from "./contracts";
 import { RENDER_PROJECTION_REFERENCE_REVISION } from "./protocolDrift";
 
@@ -40,6 +42,104 @@ export function conversationProjectionEventFromPayload(
       const turn = readRecord(payload.turn);
       return isAgentThreadTurn(turn)
         ? { ...base, type, turn: turn as unknown as AgentThreadTurn }
+        : null;
+    }
+    case "turn_diff_updated": {
+      const threadId = readString(
+        payload,
+        "thread_id",
+        "threadId",
+        "session_id",
+      );
+      const turnId = readString(payload, "turn_id", "turnId");
+      const unifiedDiff = readString(payload, "unified_diff", "unifiedDiff");
+      return threadId && turnId && unifiedDiff !== undefined
+        ? {
+            ...base,
+            type,
+            thread_id: threadId,
+            turn_id: turnId,
+            unified_diff: unifiedDiff,
+          }
+        : null;
+    }
+    case "turn_moderation_metadata": {
+      const threadId = readString(
+        payload,
+        "thread_id",
+        "threadId",
+        "session_id",
+      );
+      const turnId = readString(payload, "turn_id", "turnId");
+      const metadata = readPresentValue(
+        payload,
+        "moderation_metadata",
+        "moderationMetadata",
+      );
+      return threadId && turnId && metadata
+        ? {
+            ...base,
+            type,
+            thread_id: threadId,
+            turn_id: turnId,
+            moderation_metadata: metadata.value,
+          }
+        : null;
+    }
+    case "guardian_warning": {
+      const threadId = readString(
+        payload,
+        "thread_id",
+        "threadId",
+        "session_id",
+      );
+      const message = readString(payload, "message");
+      return threadId && message
+        ? { ...base, type, thread_id: threadId, message }
+        : null;
+    }
+    case "guardian_review_started":
+    case "guardian_review_completed": {
+      const threadId = readString(
+        payload,
+        "thread_id",
+        "threadId",
+        "session_id",
+      );
+      const turnId = readString(payload, "turn_id", "turnId");
+      const reviewId = readString(payload, "review_id", "reviewId");
+      const review = readGuardianReview(
+        payload.review,
+        type === "guardian_review_started" ? "inProgress" : "terminal",
+      );
+      const action = readRecord(payload.action);
+      const targetItemId = readString(
+        payload,
+        "target_item_id",
+        "targetItemId",
+      );
+      const decisionSource = readString(
+        payload,
+        "decision_source",
+        "decisionSource",
+      );
+      if (!threadId || !turnId || !reviewId || !review || !action) {
+        return null;
+      }
+      const common = {
+        ...base,
+        thread_id: threadId,
+        turn_id: turnId,
+        review_id: reviewId,
+        ...(targetItemId ? { target_item_id: targetItemId } : {}),
+        review,
+        action: action as GuardianReviewActionProjection,
+      };
+      if (type === "guardian_review_started") {
+        return { ...common, type };
+      }
+      return decisionSource === "agent"
+        ? { ...common, type, decision_source: "agent" }
         : null;
     }
     case "item_started":
@@ -309,6 +409,71 @@ function readRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function readGuardianReview(
+  value: unknown,
+  expected: "inProgress" | "terminal",
+): GuardianReviewProjection | null {
+  const review = readRecord(value);
+  if (!review) return null;
+  const status = readString(review, "status");
+  const allowedStatuses =
+    expected === "inProgress"
+      ? ["inProgress"]
+      : ["approved", "denied", "timedOut", "aborted"];
+  if (!status || !allowedStatuses.includes(status)) return null;
+  const riskLevel = readOptionalNullableString(review, "riskLevel");
+  const userAuthorization = readOptionalNullableString(
+    review,
+    "userAuthorization",
+  );
+  const rationale = readOptionalNullableString(review, "rationale");
+  if (riskLevel === null || userAuthorization === null || rationale === null) {
+    return null;
+  }
+  if (
+    riskLevel !== undefined &&
+    riskLevel.value !== null &&
+    !["low", "medium", "high", "critical"].includes(riskLevel.value)
+  ) {
+    return null;
+  }
+  if (
+    userAuthorization !== undefined &&
+    userAuthorization.value !== null &&
+    !["unknown", "low", "medium", "high"].includes(userAuthorization.value)
+  ) {
+    return null;
+  }
+  return {
+    status: status as GuardianReviewProjection["status"],
+    ...(riskLevel !== undefined
+      ? {
+          risk_level: riskLevel.value as GuardianReviewProjection["risk_level"],
+        }
+      : {}),
+    ...(userAuthorization !== undefined
+      ? {
+          user_authorization:
+            userAuthorization.value as GuardianReviewProjection["user_authorization"],
+        }
+      : {}),
+    ...(rationale !== undefined ? { rationale: rationale.value } : {}),
+  };
+}
+
+type OptionalNullableString = { value: string | null };
+
+function readOptionalNullableString(
+  record: Record<string, unknown>,
+  key: string,
+): OptionalNullableString | null | undefined {
+  if (!Object.prototype.hasOwnProperty.call(record, key)) {
+    return undefined;
+  }
+  const value = record[key];
+  return value === null || typeof value === "string" ? { value } : null;
+}
+
 function readString(
   record: Record<string, unknown>,
   ...keys: string[]
@@ -328,4 +493,16 @@ function readFiniteNumber(
     if (typeof value === "number" && Number.isFinite(value)) return value;
   }
   return undefined;
+}
+
+function readPresentValue(
+  record: Record<string, unknown>,
+  ...keys: string[]
+): { value: unknown } | null {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(record, key)) {
+      return { value: record[key] };
+    }
+  }
+  return null;
 }

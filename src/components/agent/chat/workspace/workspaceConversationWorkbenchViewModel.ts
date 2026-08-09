@@ -1,4 +1,5 @@
 import type { AgentRuntimeFileCheckpointThreadSummary } from "@/lib/api/agentRuntime/sessionTypes";
+import type { AgentThreadItem } from "@/lib/api/agentProtocolCoreTypes";
 import type { CodingWorkbenchView } from "@limecloud/agent-runtime-projection";
 import type { CanvasWorkbenchHeaderView } from "../components/CanvasWorkbenchLayout";
 import type {
@@ -124,10 +125,22 @@ export function buildCanvasWorkbenchChangeViewFromCodingProjection({
   codingView,
   fileCheckpointSummary,
   onOpenFile,
+  threadItems,
+  reviewThreadId,
+  currentTurnId,
+  turnDiff,
+  canInterrupt,
+  onStartReview,
 }: {
   codingView: CodingWorkbenchView;
   fileCheckpointSummary?: AgentRuntimeFileCheckpointThreadSummary | null;
   onOpenFile?: (path: string) => void | Promise<void>;
+  threadItems?: readonly AgentThreadItem[];
+  reviewThreadId?: string | null;
+  currentTurnId?: string | null;
+  turnDiff?: string;
+  canInterrupt?: boolean;
+  onStartReview?: () => Promise<unknown>;
 }): CanvasWorkbenchChangeView | null {
   const items = codingView.changes.map(
     (change): CanvasWorkbenchChangeItem => ({
@@ -148,7 +161,11 @@ export function buildCanvasWorkbenchChangeViewFromCodingProjection({
       checkpointLabel: change.checkpointRef ? "snapshot" : null,
     }),
   );
-  if (items.length === 0 && !(fileCheckpointSummary?.count ?? 0)) {
+  if (
+    items.length === 0 &&
+    !(fileCheckpointSummary?.count ?? 0) &&
+    turnDiff === undefined
+  ) {
     return null;
   }
   const latestCheckpoint = fileCheckpointSummary?.latest_checkpoint || null;
@@ -158,5 +175,11 @@ export function buildCanvasWorkbenchChangeViewFromCodingProjection({
     latestCheckpointPath:
       latestCheckpoint?.snapshot_path || latestCheckpoint?.path || null,
     onOpenFile,
+    threadItems,
+    reviewThreadId,
+    currentTurnId,
+    turnDiff,
+    canInterrupt,
+    onStartReview,
   };
 }

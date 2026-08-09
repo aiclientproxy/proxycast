@@ -15,6 +15,17 @@ const CONTENT_FACTORY_ARTICLE_WORKSPACE_CHECKLIST_ARTIFACT_ID =
 
 export function buildWorkspacePatch(workspace, identity) {
   const { sessionId, sourceTaskId } = identity;
+  const articleDraftMarkdown = [
+    "# 内容工厂首版文章",
+    "",
+    "## 三轮资料检索",
+    "",
+    "本次 fixture 使用结构化 workspace patch 验证文章工作区投影，不调用独立 Plugin worker。资料卡保留主题、引用与编辑恢复所需的最小事实。",
+    "",
+    "## 正文草稿",
+    "",
+    "文章正文通过 artifact/write 进入 App Server，再由 Thread/Turn/Item read model 投影到右侧 Article Editor。这个路径只验证 current artifact owner，不声称执行了真实 Provider 写作任务。",
+  ].join("\n");
   return {
     schemaVersion: "article-workspace.v1",
     appId: CONTENT_FACTORY_APP_ID,
@@ -49,22 +60,15 @@ export function buildWorkspacePatch(workspace, identity) {
         title: "公众号文章草稿",
         status: "ready",
         summary: "已生成首版文章",
-        previewArtifactId: CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID,
+        previewArtifactId:
+          CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID,
         source: {
           taskKind: "content.article.generate",
           taskId: sourceTaskId,
           artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_ARTICLE_ARTIFACT_ID],
-          markdown: [
-            "# 内容工厂首版文章",
-            "",
-            "## 三轮资料检索",
-            "",
-            "本次 fixture 使用结构化 workspace patch 验证文章工作区投影，不调用独立 Plugin worker。资料卡保留主题、引用与编辑恢复所需的最小事实。",
-            "",
-            "## 正文草稿",
-            "",
-            "文章正文通过 artifact/write 进入 App Server，再由 Thread/Turn/Item read model 投影到右侧 Article Editor。这个路径只验证 current artifact owner，不声称执行了真实 Provider 写作任务。",
-          ].join("\n"),
+          markdown: articleDraftMarkdown,
+          documentText: articleDraftMarkdown,
+          finalMarkdown: articleDraftMarkdown,
           researchRounds: [
             {
               id: "research-1",
@@ -160,7 +164,9 @@ export function buildWorkspacePatch(workspace, identity) {
           kind: "videoStoryboard",
           id: STORYBOARD_OBJECT_ID,
           sessionId,
-          artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_STORYBOARD_ARTIFACT_ID],
+          artifactIds: [
+            CONTENT_FACTORY_ARTICLE_WORKSPACE_STORYBOARD_ARTIFACT_ID,
+          ],
           sourceTaskId: "storyboard_job_1",
         },
         title: "视频分镜",
@@ -171,7 +177,9 @@ export function buildWorkspacePatch(workspace, identity) {
         source: {
           taskKind: "content.video.storyboard.generate",
           taskId: "storyboard_job_1",
-          artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_STORYBOARD_ARTIFACT_ID],
+          artifactIds: [
+            CONTENT_FACTORY_ARTICLE_WORKSPACE_STORYBOARD_ARTIFACT_ID,
+          ],
           rendererContract: {
             pluginId: CONTENT_FACTORY_APP_ID,
             rendererKind: "app_declared",
@@ -206,7 +214,9 @@ export function buildWorkspacePatch(workspace, identity) {
           kind: "deliveryChecklist",
           id: CHECKLIST_OBJECT_ID,
           sessionId,
-          artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_CHECKLIST_ARTIFACT_ID],
+          artifactIds: [
+            CONTENT_FACTORY_ARTICLE_WORKSPACE_CHECKLIST_ARTIFACT_ID,
+          ],
           sourceTaskId: "delivery_checklist_job_1",
         },
         title: "交付检查清单",
@@ -217,7 +227,9 @@ export function buildWorkspacePatch(workspace, identity) {
         source: {
           taskKind: "content.delivery.review",
           taskId: "delivery_checklist_job_1",
-          artifactIds: [CONTENT_FACTORY_ARTICLE_WORKSPACE_CHECKLIST_ARTIFACT_ID],
+          artifactIds: [
+            CONTENT_FACTORY_ARTICLE_WORKSPACE_CHECKLIST_ARTIFACT_ID,
+          ],
           items: [
             {
               id: "article",

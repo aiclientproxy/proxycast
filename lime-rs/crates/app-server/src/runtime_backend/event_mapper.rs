@@ -61,6 +61,7 @@ pub(super) fn emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_s
     model_route_evidence: Option<&ModelRouteEvidence>,
 ) -> Result<(), RuntimeCoreError> {
     let coding_events = coding_event_mirror.process_event(event);
+    let persistence_event = coding_events::runtime_event_for_persistence(event);
     for event in coding_events.before_raw {
         sink.emit(event)?;
     }
@@ -147,7 +148,7 @@ pub(super) fn emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_s
             }
         }
         _ => emit_presentation_events(
-            event,
+            persistence_event.as_ref(),
             soul_style,
             model_route_evidence,
             proposed_plan_parser,

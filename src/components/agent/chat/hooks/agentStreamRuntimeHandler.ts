@@ -9,6 +9,7 @@ import {
   markThreadActionItemSubmitted,
   removeThreadItemState,
   upsertThreadItemState,
+  upsertThreadTurnState,
 } from "./agentThreadState";
 import {
   handleActionRequiredEvent,
@@ -1068,6 +1069,17 @@ export function handleTurnStreamEvent({
         })),
       );
       break;
+
+    case "turn_diff_updated": {
+      activateStream();
+      const projectedTurn = conversationProjectionUpdate?.projection.turns.find(
+        (turn) => turn.id === data.turn_id,
+      );
+      if (projectedTurn) {
+        setThreadTurns((turns) => upsertThreadTurnState(turns, projectedTurn));
+      }
+      break;
+    }
 
     case "plan_delta":
     case "plan_final": {

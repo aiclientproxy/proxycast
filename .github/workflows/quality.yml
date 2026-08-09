@@ -340,6 +340,9 @@ jobs:
       - name: Test Windows file browser directory creation
         run: cargo test --manifest-path lime-rs/Cargo.toml -p lime-services create_directory_creates_nested_directory_from_platform_path -- --test-threads=1
 
+      - name: Test Windows Agent Plugin MCP parity
+        run: cargo test --manifest-path lime-rs/Cargo.toml -p lime-mcp agent_plugin_config --lib -- --test-threads=1
+
   results:
     name: Quality results
     runs-on: ubuntu-latest

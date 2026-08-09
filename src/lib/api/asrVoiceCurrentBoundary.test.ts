@@ -196,6 +196,19 @@ function expectStringSetExcludes(
   }
 }
 
+function expectStringSetIncludes(
+  source: string,
+  setName: string,
+  commands: string[],
+): void {
+  const values = readStringSetLiteral(source, setName);
+  for (const command of commands) {
+    expect(values.has(command), `${setName} should include ${command}`).toBe(
+      true,
+    );
+  }
+}
+
 function findAsrProviderNamedImports(
   source: string,
   helpers: string[],
@@ -348,7 +361,7 @@ describe("ASR / Voice current boundary", () => {
     );
     expectStringSetExcludes(
       commandPolicySource,
-      "noMockFallbackCompatCommands",
+      "electronHostNoMockFallbackCommands",
       CURRENT_VOICE_MODEL_READ_COMMANDS,
     );
     expectStringSetExcludes(
@@ -405,9 +418,9 @@ describe("ASR / Voice current boundary", () => {
       "bridgeTruthCommands",
       CURRENT_VOICE_MODEL_DESKTOP_HOST_SIDE_EFFECT_COMMANDS,
     );
-    expectStringSetExcludes(
+    expectStringSetIncludes(
       commandPolicySource,
-      "noMockFallbackCompatCommands",
+      "electronHostNoMockFallbackCommands",
       CURRENT_VOICE_MODEL_DESKTOP_HOST_SIDE_EFFECT_COMMANDS,
     );
     expectStringSetExcludes(

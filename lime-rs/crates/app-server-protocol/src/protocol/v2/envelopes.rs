@@ -1,7 +1,10 @@
 use super::{
     AgentMessageDeltaNotification, AppListUpdatedNotification, AppsInstalledParams,
     AppsInstalledResponse, AppsListParams, AppsListResponse, AppsReadParams, AppsReadResponse,
-    ArtifactWriteParams, ArtifactWriteResponse, CommandExecutionOutputDeltaNotification,
+    ArtifactWriteParams, ArtifactWriteResponse, CommandExecOutputDeltaNotification,
+    CommandExecParams, CommandExecResizeParams, CommandExecResizeResponse, CommandExecResponse,
+    CommandExecTerminateParams, CommandExecTerminateResponse, CommandExecWriteParams,
+    CommandExecWriteResponse, CommandExecutionOutputDeltaNotification,
     CommandExecutionRequestApprovalParams, CommandExecutionTerminalInteractionNotification,
     ConfigWarningNotification, CurrentTimeReadParams, DynamicToolCallParams, ErrorNotification,
     FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, FsChangedNotification,
@@ -9,8 +12,10 @@ use super::{
     FsGetMetadataParams, FsGetMetadataResponse, FsReadDirectoryParams, FsReadDirectoryResponse,
     FsReadFileParams, FsReadFileResponse, FsRemoveParams, FsRemoveResponse, FsUnwatchParams,
     FsUnwatchResponse, FsWatchParams, FsWatchResponse, FsWriteFileParams, FsWriteFileResponse,
-    HookCompletedNotification, HookStartedNotification, HooksListParams, HooksListResponse,
-    ItemCompletedNotification, ItemStartedNotification, McpServerElicitationRequestParams,
+    GuardianWarningNotification, HookCompletedNotification, HookStartedNotification,
+    HooksListParams, HooksListResponse, ItemCompletedNotification,
+    ItemGuardianApprovalReviewCompletedNotification, ItemGuardianApprovalReviewStartedNotification,
+    ItemStartedNotification, McpServerElicitationRequestParams,
     McpServerOauthLoginCompletedNotification, McpServerResourceReadParams,
     McpServerResourceReadResponse, McpServerStatusUpdatedNotification, McpServerToolCallParams,
     McpServerToolCallResponse, McpToolCallProgressNotification, MediaReadParams, MediaReadResponse,
@@ -23,20 +28,20 @@ use super::{
     ProcessKillResponse, ProcessOutputDeltaNotification, ProcessResizePtyParams,
     ProcessResizePtyResponse, ProcessSpawnParams, ProcessSpawnResponse, ProcessWriteStdinParams,
     ProcessWriteStdinResponse, ReasoningSummaryPartAddedNotification,
-    ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification,
-    ServerRequestResolvedNotification, SkillsChangedNotification, SkillsConfigWriteParams,
-    SkillsConfigWriteResponse, SkillsExtraRootsSetParams, SkillsExtraRootsSetResponse,
-    SkillsListParams, SkillsListResponse, ThreadApproveGuardianDeniedActionParams,
-    ThreadApproveGuardianDeniedActionResponse, ThreadArchiveParams, ThreadArchiveResponse,
-    ThreadArchivedNotification, ThreadBackgroundTerminalsCleanParams,
-    ThreadBackgroundTerminalsCleanResponse, ThreadBackgroundTerminalsListParams,
-    ThreadBackgroundTerminalsListResponse, ThreadBackgroundTerminalsTerminateParams,
-    ThreadBackgroundTerminalsTerminateResponse, ThreadClosedNotification, ThreadCompactStartParams,
-    ThreadCompactStartResponse, ThreadDecrementElicitationParams,
-    ThreadDecrementElicitationResponse, ThreadDeleteParams, ThreadDeleteResponse,
-    ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse, ThreadGoalClearParams,
-    ThreadGoalClearResponse, ThreadGoalClearedNotification, ThreadGoalGetParams,
-    ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
+    ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification, ReviewStartParams,
+    ReviewStartResponse, ServerRequestResolvedNotification, SkillsChangedNotification,
+    SkillsConfigWriteParams, SkillsConfigWriteResponse, SkillsExtraRootsSetParams,
+    SkillsExtraRootsSetResponse, SkillsListParams, SkillsListResponse,
+    ThreadApproveGuardianDeniedActionParams, ThreadApproveGuardianDeniedActionResponse,
+    ThreadArchiveParams, ThreadArchiveResponse, ThreadArchivedNotification,
+    ThreadBackgroundTerminalsCleanParams, ThreadBackgroundTerminalsCleanResponse,
+    ThreadBackgroundTerminalsListParams, ThreadBackgroundTerminalsListResponse,
+    ThreadBackgroundTerminalsTerminateParams, ThreadBackgroundTerminalsTerminateResponse,
+    ThreadClosedNotification, ThreadCompactStartParams, ThreadCompactStartResponse,
+    ThreadDecrementElicitationParams, ThreadDecrementElicitationResponse, ThreadDeleteParams,
+    ThreadDeleteResponse, ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse,
+    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalClearedNotification,
+    ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
     ThreadGoalUpdatedNotification, ThreadIncrementElicitationParams,
     ThreadIncrementElicitationResponse, ThreadInjectItemsParams, ThreadInjectItemsResponse,
     ThreadItemsListParams, ThreadItemsListResponse, ThreadListParams, ThreadListResponse,
@@ -54,13 +59,15 @@ use super::{
     ThreadStatusChangedNotification, ThreadTokenUsageUpdatedNotification, ThreadTurnsListParams,
     ThreadTurnsListResponse, ThreadUnarchiveParams, ThreadUnarchiveResponse,
     ThreadUnarchivedNotification, ThreadUnsubscribeParams, ThreadUnsubscribeResponse,
-    ToolRequestUserInputParams, TurnCompletedNotification, TurnInterruptParams,
-    TurnInterruptResponse, TurnPlanUpdatedNotification, TurnStartParams, TurnStartResponse,
-    TurnStartedNotification, TurnSteerParams, TurnSteerResponse, WarningNotification,
-    METHOD_APP_LIST_UPDATED, METHOD_COMMAND_EXECUTION_OUTPUT_DELTA,
-    METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION, METHOD_CONFIG_WARNING, METHOD_CURRENT_TIME_READ,
-    METHOD_ERROR, METHOD_FILE_CHANGE_PATCH_UPDATED, METHOD_FS_CHANGED, METHOD_HOOK_COMPLETED,
-    METHOD_HOOK_STARTED, METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
+    ToolRequestUserInputParams, TurnCompletedNotification, TurnDiffUpdatedNotification,
+    TurnInterruptParams, TurnInterruptResponse, TurnModerationMetadataNotification,
+    TurnPlanUpdatedNotification, TurnStartParams, TurnStartResponse, TurnStartedNotification,
+    TurnSteerParams, TurnSteerResponse, WarningNotification, METHOD_APP_LIST_UPDATED,
+    METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION,
+    METHOD_COMMAND_EXEC_OUTPUT_DELTA, METHOD_CONFIG_WARNING, METHOD_CURRENT_TIME_READ,
+    METHOD_ERROR, METHOD_FILE_CHANGE_PATCH_UPDATED, METHOD_FS_CHANGED, METHOD_GUARDIAN_WARNING,
+    METHOD_HOOK_COMPLETED, METHOD_HOOK_STARTED, METHOD_ITEM_AUTO_APPROVAL_REVIEW_COMPLETED,
+    METHOD_ITEM_AUTO_APPROVAL_REVIEW_STARTED, METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
     METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL, METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
     METHOD_ITEM_TOOL_CALL, METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
     METHOD_MCP_SERVER_ELICITATION_REQUEST, METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
@@ -71,8 +78,8 @@ use super::{
     METHOD_REASONING_SUMMARY_TEXT_DELTA, METHOD_REASONING_TEXT_DELTA,
     METHOD_SERVER_REQUEST_RESOLVED, METHOD_SKILLS_CHANGED, METHOD_THREAD_CLOSED,
     METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED,
-    METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED, METHOD_TURN_PLAN_UPDATED,
-    METHOD_WARNING,
+    METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED, METHOD_TURN_DIFF_UPDATED,
+    METHOD_TURN_MODERATION_METADATA, METHOD_TURN_PLAN_UPDATED, METHOD_WARNING,
 };
 use crate::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use schemars::JsonSchema;
@@ -379,6 +386,11 @@ pub enum ClientRequest {
         id: RequestId,
         params: TurnInterruptParams,
     },
+    #[serde(rename = "review/start")]
+    ReviewStart {
+        id: RequestId,
+        params: ReviewStartParams,
+    },
     #[serde(rename = "fs/readFile")]
     FsReadFile {
         id: RequestId,
@@ -440,6 +452,26 @@ pub enum ClientRequest {
     ProcessKill {
         id: RequestId,
         params: ProcessKillParams,
+    },
+    #[serde(rename = "command/exec")]
+    CommandExec {
+        id: RequestId,
+        params: CommandExecParams,
+    },
+    #[serde(rename = "command/exec/write")]
+    CommandExecWrite {
+        id: RequestId,
+        params: CommandExecWriteParams,
+    },
+    #[serde(rename = "command/exec/resize")]
+    CommandExecResize {
+        id: RequestId,
+        params: CommandExecResizeParams,
+    },
+    #[serde(rename = "command/exec/terminate")]
+    CommandExecTerminate {
+        id: RequestId,
+        params: CommandExecTerminateParams,
     },
 }
 
@@ -504,6 +536,7 @@ impl ClientRequest {
             | Self::TurnStart { id, .. }
             | Self::TurnSteer { id, .. }
             | Self::TurnInterrupt { id, .. }
+            | Self::ReviewStart { id, .. }
             | Self::FsReadFile { id, .. }
             | Self::FsWriteFile { id, .. }
             | Self::FsCreateDirectory { id, .. }
@@ -517,6 +550,10 @@ impl ClientRequest {
             | Self::ProcessWriteStdin { id, .. }
             | Self::ProcessResizePty { id, .. }
             | Self::ProcessKill { id, .. } => id,
+            Self::CommandExec { id, .. }
+            | Self::CommandExecWrite { id, .. }
+            | Self::CommandExecResize { id, .. }
+            | Self::CommandExecTerminate { id, .. } => id,
         }
     }
 
@@ -584,6 +621,7 @@ impl ClientRequest {
             Self::TurnStart { .. } => Method::TurnStart,
             Self::TurnSteer { .. } => Method::TurnSteer,
             Self::TurnInterrupt { .. } => Method::TurnInterrupt,
+            Self::ReviewStart { .. } => Method::ReviewStart,
             Self::FsReadFile { .. } => Method::FsReadFile,
             Self::FsWriteFile { .. } => Method::FsWriteFile,
             Self::FsCreateDirectory { .. } => Method::FsCreateDirectory,
@@ -597,6 +635,10 @@ impl ClientRequest {
             Self::ProcessWriteStdin { .. } => Method::ProcessWriteStdin,
             Self::ProcessResizePty { .. } => Method::ProcessResizePty,
             Self::ProcessKill { .. } => Method::ProcessKill,
+            Self::CommandExec { .. } => Method::CommandExec,
+            Self::CommandExecWrite { .. } => Method::CommandExecWrite,
+            Self::CommandExecResize { .. } => Method::CommandExecResize,
+            Self::CommandExecTerminate { .. } => Method::CommandExecTerminate,
         }
     }
 }
@@ -665,6 +707,7 @@ pub enum ClientResponsePayload {
     TurnStart(TurnStartResponse),
     TurnSteer(TurnSteerResponse),
     TurnInterrupt(TurnInterruptResponse),
+    ReviewStart(ReviewStartResponse),
     FsReadFile(FsReadFileResponse),
     FsWriteFile(FsWriteFileResponse),
     FsCreateDirectory(FsCreateDirectoryResponse),
@@ -678,6 +721,10 @@ pub enum ClientResponsePayload {
     ProcessWriteStdin(ProcessWriteStdinResponse),
     ProcessResizePty(ProcessResizePtyResponse),
     ProcessKill(ProcessKillResponse),
+    CommandExec(CommandExecResponse),
+    CommandExecWrite(CommandExecWriteResponse),
+    CommandExecResize(CommandExecResizeResponse),
+    CommandExecTerminate(CommandExecTerminateResponse),
 }
 
 impl ClientResponsePayload {
@@ -736,6 +783,7 @@ impl ClientResponsePayload {
             Self::TurnStart(_) => Method::TurnStart,
             Self::TurnSteer(_) => Method::TurnSteer,
             Self::TurnInterrupt(_) => Method::TurnInterrupt,
+            Self::ReviewStart(_) => Method::ReviewStart,
             Self::FsReadFile(_) => Method::FsReadFile,
             Self::FsWriteFile(_) => Method::FsWriteFile,
             Self::FsCreateDirectory(_) => Method::FsCreateDirectory,
@@ -749,6 +797,10 @@ impl ClientResponsePayload {
             Self::ProcessWriteStdin(_) => Method::ProcessWriteStdin,
             Self::ProcessResizePty(_) => Method::ProcessResizePty,
             Self::ProcessKill(_) => Method::ProcessKill,
+            Self::CommandExec(_) => Method::CommandExec,
+            Self::CommandExecWrite(_) => Method::CommandExecWrite,
+            Self::CommandExecResize(_) => Method::CommandExecResize,
+            Self::CommandExecTerminate(_) => Method::CommandExecTerminate,
         }
     }
 
@@ -805,6 +857,7 @@ impl ClientResponsePayload {
             Self::TurnStart(response) => serde_json::to_value(response)?,
             Self::TurnSteer(response) => serde_json::to_value(response)?,
             Self::TurnInterrupt(response) => serde_json::to_value(response)?,
+            Self::ReviewStart(response) => serde_json::to_value(response)?,
             Self::FsReadFile(response) => serde_json::to_value(response)?,
             Self::FsWriteFile(response) => serde_json::to_value(response)?,
             Self::FsCreateDirectory(response) => serde_json::to_value(response)?,
@@ -818,6 +871,10 @@ impl ClientResponsePayload {
             Self::ProcessWriteStdin(response) => serde_json::to_value(response)?,
             Self::ProcessResizePty(response) => serde_json::to_value(response)?,
             Self::ProcessKill(response) => serde_json::to_value(response)?,
+            Self::CommandExec(response) => serde_json::to_value(response)?,
+            Self::CommandExecWrite(response) => serde_json::to_value(response)?,
+            Self::CommandExecResize(response) => serde_json::to_value(response)?,
+            Self::CommandExecTerminate(response) => serde_json::to_value(response)?,
         };
         Ok(ClientResponse { id, result })
     }
@@ -998,6 +1055,8 @@ pub enum ServerNotification {
     ConfigWarning(ConfigWarningNotification),
     #[serde(rename = "warning")]
     Warning(WarningNotification),
+    #[serde(rename = "guardianWarning")]
+    GuardianWarning(GuardianWarningNotification),
     #[serde(rename = "error")]
     Error(ErrorNotification),
     #[serde(rename = "skills/changed")]
@@ -1030,12 +1089,18 @@ pub enum ServerNotification {
     TurnStarted(TurnStartedNotification),
     #[serde(rename = "turn/completed")]
     TurnCompleted(TurnCompletedNotification),
+    #[serde(rename = "turn/diff/updated")]
+    TurnDiffUpdated(TurnDiffUpdatedNotification),
     #[serde(rename = "turn/plan/updated")]
     TurnPlanUpdated(TurnPlanUpdatedNotification),
     #[serde(rename = "item/started")]
     ItemStarted(ItemStartedNotification),
     #[serde(rename = "item/completed")]
     ItemCompleted(ItemCompletedNotification),
+    #[serde(rename = "item/autoApprovalReview/started")]
+    ItemAutoApprovalReviewStarted(ItemGuardianApprovalReviewStartedNotification),
+    #[serde(rename = "item/autoApprovalReview/completed")]
+    ItemAutoApprovalReviewCompleted(ItemGuardianApprovalReviewCompletedNotification),
     #[serde(rename = "item/agentMessage/delta")]
     AgentMessageDelta(AgentMessageDeltaNotification),
     #[serde(rename = "item/commandExecution/outputDelta")]
@@ -1060,6 +1125,8 @@ pub enum ServerNotification {
     ModelListUpdated(ModelListUpdatedNotification),
     #[serde(rename = "model/verification")]
     ModelVerification(ModelVerificationNotification),
+    #[serde(rename = "turn/moderationMetadata")]
+    TurnModerationMetadata(TurnModerationMetadataNotification),
     #[serde(rename = "model/safetyBuffering/updated")]
     ModelSafetyBufferingUpdated(ModelSafetyBufferingUpdatedNotification),
     #[serde(rename = "fs/changed")]
@@ -1068,6 +1135,8 @@ pub enum ServerNotification {
     ProcessOutputDelta(ProcessOutputDeltaNotification),
     #[serde(rename = "process/exited")]
     ProcessExited(ProcessExitedNotification),
+    #[serde(rename = "command/exec/outputDelta")]
+    CommandExecOutputDelta(CommandExecOutputDeltaNotification),
     #[serde(rename = "thread/settings/updated")]
     ThreadSettingsUpdated(ThreadSettingsUpdatedNotification),
     #[serde(rename = "thread/tokenUsage/updated")]
@@ -1085,6 +1154,7 @@ impl ServerNotification {
         match self {
             Self::ConfigWarning(_) => METHOD_CONFIG_WARNING,
             Self::Warning(_) => METHOD_WARNING,
+            Self::GuardianWarning(_) => METHOD_GUARDIAN_WARNING,
             Self::Error(_) => METHOD_ERROR,
             Self::SkillsChanged(_) => METHOD_SKILLS_CHANGED,
             Self::McpServerOauthLoginCompleted(_) => METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
@@ -1101,9 +1171,12 @@ impl ServerNotification {
             Self::ThreadStatusChanged(_) => METHOD_THREAD_STATUS_CHANGED,
             Self::TurnStarted(_) => "turn/started",
             Self::TurnCompleted(_) => "turn/completed",
+            Self::TurnDiffUpdated(_) => METHOD_TURN_DIFF_UPDATED,
             Self::TurnPlanUpdated(_) => METHOD_TURN_PLAN_UPDATED,
             Self::ItemStarted(_) => "item/started",
             Self::ItemCompleted(_) => "item/completed",
+            Self::ItemAutoApprovalReviewStarted(_) => METHOD_ITEM_AUTO_APPROVAL_REVIEW_STARTED,
+            Self::ItemAutoApprovalReviewCompleted(_) => METHOD_ITEM_AUTO_APPROVAL_REVIEW_COMPLETED,
             Self::AgentMessageDelta(_) => "item/agentMessage/delta",
             Self::CommandExecutionOutputDelta(_) => METHOD_COMMAND_EXECUTION_OUTPUT_DELTA,
             Self::CommandExecutionTerminalInteraction(_) => {
@@ -1118,10 +1191,12 @@ impl ServerNotification {
             Self::ModelRerouted(_) => METHOD_MODEL_REROUTED,
             Self::ModelListUpdated(_) => METHOD_MODEL_LIST_UPDATED,
             Self::ModelVerification(_) => METHOD_MODEL_VERIFICATION,
+            Self::TurnModerationMetadata(_) => METHOD_TURN_MODERATION_METADATA,
             Self::ModelSafetyBufferingUpdated(_) => METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
             Self::FsChanged(_) => METHOD_FS_CHANGED,
             Self::ProcessOutputDelta(_) => METHOD_PROCESS_OUTPUT_DELTA,
             Self::ProcessExited(_) => METHOD_PROCESS_EXITED,
+            Self::CommandExecOutputDelta(_) => METHOD_COMMAND_EXEC_OUTPUT_DELTA,
             Self::ThreadSettingsUpdated(_) => "thread/settings/updated",
             Self::ThreadTokenUsageUpdated(_) => METHOD_THREAD_TOKEN_USAGE_UPDATED,
             Self::ThreadGoalUpdated(_) => METHOD_THREAD_GOAL_UPDATED,
@@ -1142,6 +1217,9 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             METHOD_WARNING => serde_json::from_value(params)
                 .map(Self::Warning)
+                .map_err(|error| error.to_string()),
+            METHOD_GUARDIAN_WARNING => serde_json::from_value(params)
+                .map(Self::GuardianWarning)
                 .map_err(|error| error.to_string()),
             METHOD_ERROR => serde_json::from_value(params)
                 .map(Self::Error)
@@ -1191,6 +1269,9 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
             "turn/completed" => serde_json::from_value(params)
                 .map(Self::TurnCompleted)
                 .map_err(|error| error.to_string()),
+            METHOD_TURN_DIFF_UPDATED => serde_json::from_value(params)
+                .map(Self::TurnDiffUpdated)
+                .map_err(|error| error.to_string()),
             METHOD_TURN_PLAN_UPDATED => serde_json::from_value(params)
                 .map(Self::TurnPlanUpdated)
                 .map_err(|error| error.to_string()),
@@ -1199,6 +1280,12 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             "item/completed" => serde_json::from_value(params)
                 .map(Self::ItemCompleted)
+                .map_err(|error| error.to_string()),
+            METHOD_ITEM_AUTO_APPROVAL_REVIEW_STARTED => serde_json::from_value(params)
+                .map(Self::ItemAutoApprovalReviewStarted)
+                .map_err(|error| error.to_string()),
+            METHOD_ITEM_AUTO_APPROVAL_REVIEW_COMPLETED => serde_json::from_value(params)
+                .map(Self::ItemAutoApprovalReviewCompleted)
                 .map_err(|error| error.to_string()),
             "item/agentMessage/delta" => serde_json::from_value(params)
                 .map(Self::AgentMessageDelta)
@@ -1236,6 +1323,9 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
             METHOD_MODEL_VERIFICATION => serde_json::from_value(params)
                 .map(Self::ModelVerification)
                 .map_err(|error| error.to_string()),
+            METHOD_TURN_MODERATION_METADATA => serde_json::from_value(params)
+                .map(Self::TurnModerationMetadata)
+                .map_err(|error| error.to_string()),
             METHOD_MODEL_SAFETY_BUFFERING_UPDATED => serde_json::from_value(params)
                 .map(Self::ModelSafetyBufferingUpdated)
                 .map_err(|error| error.to_string()),
@@ -1247,6 +1337,9 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             METHOD_PROCESS_EXITED => serde_json::from_value(params)
                 .map(Self::ProcessExited)
+                .map_err(|error| error.to_string()),
+            METHOD_COMMAND_EXEC_OUTPUT_DELTA => serde_json::from_value(params)
+                .map(Self::CommandExecOutputDelta)
                 .map_err(|error| error.to_string()),
             "thread/settings/updated" => serde_json::from_value(params)
                 .map(Self::ThreadSettingsUpdated)
@@ -1275,6 +1368,9 @@ impl From<ServerNotification> for JsonRpcNotification {
                 jsonrpc_notification(METHOD_CONFIG_WARNING, params)
             }
             ServerNotification::Warning(params) => jsonrpc_notification(METHOD_WARNING, params),
+            ServerNotification::GuardianWarning(params) => {
+                jsonrpc_notification(METHOD_GUARDIAN_WARNING, params)
+            }
             ServerNotification::Error(params) => jsonrpc_notification(METHOD_ERROR, params),
             ServerNotification::SkillsChanged(params) => {
                 jsonrpc_notification(METHOD_SKILLS_CHANGED, params)
@@ -1319,12 +1415,21 @@ impl From<ServerNotification> for JsonRpcNotification {
             ServerNotification::TurnCompleted(params) => {
                 jsonrpc_notification("turn/completed", params)
             }
+            ServerNotification::TurnDiffUpdated(params) => {
+                jsonrpc_notification(METHOD_TURN_DIFF_UPDATED, params)
+            }
             ServerNotification::TurnPlanUpdated(params) => {
                 jsonrpc_notification(METHOD_TURN_PLAN_UPDATED, params)
             }
             ServerNotification::ItemStarted(params) => jsonrpc_notification("item/started", params),
             ServerNotification::ItemCompleted(params) => {
                 jsonrpc_notification("item/completed", params)
+            }
+            ServerNotification::ItemAutoApprovalReviewStarted(params) => {
+                jsonrpc_notification(METHOD_ITEM_AUTO_APPROVAL_REVIEW_STARTED, params)
+            }
+            ServerNotification::ItemAutoApprovalReviewCompleted(params) => {
+                jsonrpc_notification(METHOD_ITEM_AUTO_APPROVAL_REVIEW_COMPLETED, params)
             }
             ServerNotification::AgentMessageDelta(params) => {
                 jsonrpc_notification("item/agentMessage/delta", params)
@@ -1362,6 +1467,9 @@ impl From<ServerNotification> for JsonRpcNotification {
             ServerNotification::ModelVerification(params) => {
                 jsonrpc_notification(METHOD_MODEL_VERIFICATION, params)
             }
+            ServerNotification::TurnModerationMetadata(params) => {
+                jsonrpc_notification(METHOD_TURN_MODERATION_METADATA, params)
+            }
             ServerNotification::ModelSafetyBufferingUpdated(params) => {
                 jsonrpc_notification(METHOD_MODEL_SAFETY_BUFFERING_UPDATED, params)
             }
@@ -1373,6 +1481,9 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::ProcessExited(params) => {
                 jsonrpc_notification(METHOD_PROCESS_EXITED, params)
+            }
+            ServerNotification::CommandExecOutputDelta(params) => {
+                jsonrpc_notification(METHOD_COMMAND_EXEC_OUTPUT_DELTA, params)
             }
             ServerNotification::ThreadSettingsUpdated(params) => {
                 jsonrpc_notification("thread/settings/updated", params)

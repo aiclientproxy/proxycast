@@ -629,6 +629,49 @@ fn section_position_list_defaults_to_ascending_order() {
 }
 
 #[test]
+fn canonical_review_boundaries_project_to_exact_v2_items() {
+    for (name, review) in [
+        ("enteredReviewMode", "Review the selected commit"),
+        ("exitedReviewMode", "No blocking findings"),
+    ] {
+        let mut thread = canonical_thread(false);
+        thread.turns[0].items[0].item_id = canonical::ItemId::new(format!("{name}-1"));
+        thread.turns[0].items[0].kind = canonical::ItemKind::Extension;
+        thread.turns[0].items[0].payload = canonical::ThreadItemPayload::Extension {
+            name: name.to_string(),
+            data: json!({"review": review}),
+        };
+
+        let projected = project_thread(thread).expect("project review boundary");
+        match (&projected.turns[0].items[0], name) {
+            (
+                v2::ThreadItem::EnteredReviewMode {
+                    id,
+                    review: projected_review,
+                    ..
+                },
+                "enteredReviewMode",
+            ) => {
+                assert_eq!(id, "item_enteredReviewMode-1");
+                assert_eq!(projected_review, review);
+            }
+            (
+                v2::ThreadItem::ExitedReviewMode {
+                    id,
+                    review: projected_review,
+                    ..
+                },
+                "exitedReviewMode",
+            ) => {
+                assert_eq!(id, "item_exitedReviewMode-1");
+                assert_eq!(projected_review, review);
+            }
+            (item, _) => panic!("unexpected review boundary projection: {item:?}"),
+        }
+    }
+}
+
+#[test]
 fn unsupported_canonical_item_fails_closed() {
     let mut thread = canonical_thread(false);
     thread.turns[0].items[0].payload = canonical::ThreadItemPayload::Extension {

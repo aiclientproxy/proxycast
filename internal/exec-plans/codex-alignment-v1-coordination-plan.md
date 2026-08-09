@@ -3732,3 +3732,324 @@ Plugin/Workflow 实现。分类与进度：exact `fs/*`、FsServer、connection-
 3. `agentSession`/`protocol/v0`/`lime-providers` 不再是 production current surface；
 4. 所有产品范围内的 transport、method、Item、MCP、Multi-Agent、environment 和 evidence contract 有实现与验证，排除项有明确删除守卫；
 5. Gate A/B、workspace compile、治理扫描和回流 guard 全部通过。
+
+### 2026-08-08 Codex exact `command/exec*` current slice
+
+目标：将 Codex standalone `command/exec`、`command/exec/{write,resize,terminate}` 与
+`command/exec/outputDelta` 接入 Lime Desktop 的 App Server JSON-RPC current 主链。该能力不是
+Thread/TUI 专属：Desktop coding terminal 需要独立、connection-scoped 的 PTY/stdio 控制，但不得
+继续使用 Electron `project_shell_*`、旧 v0 DTO 或轮询 drain 协议。
+
+窄写集：`app-server-protocol` v2 command schema/envelope、App Server command processor 与
+connection notification hook、typed package/Renderer gateway、Electron command forwarder、旧
+Project Shell UI/bridge 删除、产品范围矩阵、架构与治理回流守卫。避让发布、provider、Plugin、OEM
+与其它并行未完成写集。
+
+退出条件：
+
+1. exact command request/response/notification shape 与 Codex 当前协议一致；process id 只在
+   originating ConnectionId 内有效，断连终止进程，output notification 在最终 response 前发出。
+2. Desktop terminal 只通过 App Server JSON-RPC current gateway 工作；生产代码零引用
+   `project_shell_*`、`run_project_shell_command`、旧 project shell v0 method。
+3. protocol schema/generated client、App Server lifecycle、Renderer/Electron contract 和
+   negative governance guard 同步，矩阵四个 client method 与 notification 从 `planned` 移入
+   `implemented`。
+4. 定向 Rust/TypeScript/contract/governance/GUI smoke 验证通过；若某项受环境阻断，记录具体原因。
+
+完成结果：Codex exact `command/exec`、`command/exec/write`、`command/exec/resize`、`command/exec/terminate` 与
+`command/exec/outputDelta` 已进入 v2 protocol/schema、App Server `CommandExecServer`、连接生命周期清理、typed
+package client、Renderer `commandExec` gateway 和 Desktop xterm terminal。一次性 stdout/stderr、流式 raw bytes、
+stdin close、PTY resize、terminate、连接隔离、重复 id、output cap 与 timeout 均有 Rust owner 测试；timeout 退出码固定
+为 `124`。Renderer 仅发送 base64 stdin，按 processId 过滤 outputDelta，卸载时终止 originating connection 的进程。
+
+直接替换结果：旧 Project Shell Rust DTO/processor/schema、Electron 私有 IPC/host、Renderer gateway、session reconnect
+语义、明文 stdin 和相关正向 fixture 已物理删除；未新增 compat/deprecated wrapper。旧命令名只保留在负向回流 guard、
+历史 execution plan 和 immutable evidence。
+
+验证证据：`cargo check -p app-server-protocol`、`cargo check -p app-server`、App Server command/exec Rust 定向测试
+（含 output cap/timeout）通过；`npx vitest run "src/components/agent/chat/components/TaskCenterUtilityToolbar.integration.test.tsx" "src/lib/api/commandExec.test.ts"`
+为 `36/36`；`npm run typecheck` 通过。相关 `npm run test:related` 的 smart runner 曾因把 `electron/` 目录误作输入触发
+Vite `EISDIR`，已改用直接文件 runner；该 runner 错误不计为产品测试失败。contracts、治理、GUI smoke 和全量 fmt/diff
+仍是本刀收尾门禁。
+
+分类与进度：exact command/exec protocol、App Server owner、connection cleanup、typed clients、Renderer gateway、
+Desktop terminal 和负向 guard 为 `current`；`compat` 与 `deprecated` 均为空；旧 Project Shell surface 为
+`dead / deleted / forbidden-to-restore`。产品范围矩阵由 `108 implemented / 77 planned / 35 product-scope-excluded`
+更新为 `113 implemented / 72 planned / 35 product-scope-excluded`，产品范围完成度 `113 / 185 = 61.1%`。架构影响：重大；
+`internal/aiprompts/architecture.md` 第 6.1、33.1 节与 `internal/aiprompts/commands.md` 已同步，责任开发者 root
+确认唯一 owner、跨层数据流、ConnectionId 边界、协议顺序、删除边界和验证门禁。
+
+下一刀回到剩余 P1 current owner，优先 review lifecycle 或 hosted connector readiness；不得恢复 Project Shell、旧
+`executionProcess/*`，也不得把 connection-scoped processId 与 Thread command item identity 混用。
+
+### 2026-08-09 Codex exact `review/start` Desktop lifecycle slice
+
+目标：继续按 Codex review lifecycle 对齐 Lime Desktop 的 `review/start`，保留 Desktop GUI 形态，不复制 Codex TUI
+detached/background review；多模型与多模态控制面仍分别归 Grok-aligned `model-provider` 和 canonical content lowering。
+
+窄写集：RuntimeCore review admission/context、App Server review handler、canonical/read-model/v2 ThreadItem projection、
+Rust processor/runtime tests，以及 architecture/commands 事实源。Electron 只作为既有 JSONL Desktop Host 转发边界；不新增
+第二 runtime、review transcript store、provider fallback 或 compat wrapper。
+
+完成结果：`review/start` 先校验真实 thread/session 和 active turn，规范化 branch/sha/title/instructions 后异步提交
+turn，立即返回 v2 `inProgress`。detached delivery 在 Desktop 明确 fail closed。review boundary 以
+`enteredReviewMode` / `exitedReviewMode` Extension Item 写入 canonical event log，review output 优先收集 assistant
+message/item 文本，没有输出时回退稳定 hint；v2 projection 分别返回 `EnteredReviewMode` 与 `ExitedReviewMode`。
+未知 Extension 保持 fail closed，不被 review-specific 缺字段错误遮蔽。
+
+根因与修复：GUI 监听建立晚于快速 Review 终态导致结果丢失；Workspace admission 后本地 `starting` 未复位；内部
+Review prompt 被错误投影为普通用户消息。`src/lib/api/review.ts` 现在在 admission 前订阅同 thread 的
+`agentSession/event/<threadId>`，捕获 `turn_completed`/`turn_failed`/`turn_canceled`、快速终态、请求失败和超时并解除
+监听；Workspace 两个 Review 调用点在 admission 与 terminal 都刷新 canonical read model；CodeReviewSummaryPanel 与
+Canvas Changes panel admission 后复位 `starting`；RuntimeCore 通过内部 `review.input`（`visibility=agent_only`、
+`source=review`）把 prompt 留在 provider history，不生成普通 `user_visible message.created`。Electron fixture 增加
+Review 专用 `message.delta -> message.completed -> turn.completed` 序列和 prompt 不可见、raw v2 boundary 与 backend
+`turnId` 绑定断言。
+
+定向验证：`cargo test -p app-server processor::thread::projection::tests` `20/20`、
+`cargo test -p app-server processor::tests::review` `4/4`、Review gateway `9/9`、CodeReviewSummaryPanel `20/20`、
+Canvas Workbench coding `10/10`、Electron fixture guard `8/8`、聚合 Vitest `47/47`、`npm run typecheck`、
+`node --check`、`cargo fmt --manifest-path "lime-rs/Cargo.toml" --all -- --check` 均通过。最终协议/治理门禁
+`npm run check:protocol-types`、`npm run test:contracts`（301 checks）、`npm run governance:legacy-report`（2112 文件，
+零引用候选/分类漂移/边界违规均为 0）、`npm run governance:scripts` 均通过。`npm run smoke:agent-runtime-current-fixture`
+全量通过，`liveProviderUsed=false`；`npm run verify:gui-smoke` 通过，证据为
+`.lime/qc/project-gates/standalone-shell-01-20260808231556-70202/shell-01-electron-smoke/summary.json`。
+专项 Review Gate B 证据为
+`.lime/qc/gui-evidence/code-artifact-workbench-electron-fixture/code-artifact-workbench-electron-fixture-summary.json`：
+真实 Electron/preload/IPC 命中 `app_server_handle_json_lines` 与 `review/start`，canonical session/turn identity、
+`enteredReviewMode`/`exitedReviewMode`、backend terminal、GUI 审查结果和内部 prompt 隔离断言全部通过，mock fallback 为零。
+早期 `npm run test:related` smart runner 将 `electron/` 目录当文件导致 `EISDIR`，已改用精确 Vitest 文件 runner；不属于
+Review 用例失败。
+
+分类与进度：review/start v2 method、RuntimeCore admission、canonical boundary、read model/v2 projection、typed clients、
+Desktop GUI gateway 与 Gate B evidence 为 `current`；`compat` 与 `deprecated` 均为空；旧 detached/background/raw
+review side-channel 与未消费 facade 为 `dead / deleted / forbidden-to-restore`。command/exec 旧 Project Shell surface
+同样保持 `dead / deleted / forbidden-to-restore`。产品范围矩阵已同步为 `114 implemented / 71 planned / 35
+product-scope-excluded`，完成度 `114 / 185 = 61.6%`。架构影响：重大；architecture 第 35 节已记录真实 Gate B
+证据、进程边界、identity 绑定和无 mock fallback，责任开发者 root 已确认。
+
+下一刀：回到剩余 P1 current owner，优先 hosted connector model-visible tool snapshot / `callable=true` provider
+readiness；不得恢复 TUI detached review、旧 raw review side-channel、Project Shell 或 compat wrapper。
+
+### 2026-08-09 existing current method classification audit
+
+目标与窄写集：继续清点 Codex exact method 矩阵，纠正已经存在 current owner、同名 generated manifest、typed
+client/projection 与真实证据，却仍混在 planned 组中的分类漂移。本刀只修改产品矩阵、架构/命令事实源和本执行记录；
+不改 Plugin/Provider/Workspace 业务热区，不新增 Electron backend、TUI surface 或 compat wrapper。
+
+核验结果：
+
+1. `plugin/list`、`plugin/read`、`plugin/install`、`plugin/uninstall`、`plugin/installed` 已接入 App Server Plugin
+   processor、RuntimeCore PluginDataSource、local `plugin_catalog`、typed package/Renderer gateway，并由真实 Electron
+   `mcp-elicitation-gate-b` 覆盖完整 list/install/read/installed/uninstall 生命周期。
+2. `currentTime/read` 已接入 v2 server-request manifest、App Server exact-id waiter、Electron Host clock responder、
+   timeout/range/invalid-response Rust 测试和 Host drain 隔离测试；它不暴露 Renderer clock API。
+3. `item/tool/call` 已接入 v2 dynamic-tool contract、RuntimeCore waiter、冻结的 Desktop `desktop.appInfo` binding、
+   canonical DynamicToolCall Item/read model 和 Electron Gate B；reverse request 不泄漏到 Renderer。
+4. `turn/plan/updated` 已由 RuntimeCore `update_plan` producer 生成 durable fact，经 App Server v2 projector、typed
+   package notification、Renderer projection 与 current fixture 投递。
+
+5. `item/permissions/requestApproval` 已接入 tool-runtime permission parser、App Server exact-id waiter、RuntimeCore
+   grant response 和统一 PendingInteractionController；profile、cwd、environment 与 response identity 均 fail closed。
+6. `warning` / `error` 已接入 durable runtime producer、App Server v2 projector、canonical read model、typed client 和
+   Renderer projection；typed error 的 retry success/failure 已有真实 Electron fixture guard。
+7. `item/commandExecution/terminalInteraction` 已接入 command completion producer、脱敏摘要、v2 notification、cold
+   read merge 与 Renderer bounded projection。
+
+矩阵拆组后，基础 Plugin catalog 五个方法、三个 reverse request、typed `warning`/`error`、command terminal
+interaction 和 `turn/plan/updated` 从 `planned` 移入 `implemented`；Plugin share/skill-read、deprecation/Guardian、
+auto-approval review、`turn/diff/updated` 和 `turn/moderationMetadata` 继续保持 planned。计数从
+`114 implemented / 71 planned / 35 product-scope-excluded` 更新为
+`126 implemented / 59 planned / 35 product-scope-excluded`，产品范围完成度为 `126 / 185 = 68.1%`。
+
+验证结果：产品范围矩阵、Plugin gateway、Electron current-time/dynamic-tool Host 与 Renderer plan projection 的精确
+Vitest `57/57`；Apps/Plugin Electron fixture guard 与 current agent fixture guard `86/86`；permission/error/terminal/matrix
+五组回归 `137/137`。Rust App Server `current_time` `5/5`、`turn_plan` `6/6`、`dynamic_tool_server_request` `1/1`、
+permission request `1/1`，tool-runtime permission `2/2`，agent-runtime permission `3/3`，runtime warning `3/3`、error
+`5/5`、terminal interaction `2/2`；`app-server-protocol` 全量 `110/110`。
+
+`item/commandExecution/terminalInteraction` 原有 producer、projector、typed client 与 Renderer projection，但
+`v2::NOTIFICATION_METHODS` 中央 catalog 漏列 exact method，导致 generated manifest 未覆盖该 notification；本刀已补入
+catalog，并重新生成 schema bundle 与 TypeScript protocol types。严格串行执行 `npm run generate:protocol-types`、
+`npm run check:protocol-types` 后确认 generated file 无 drift；最终 `npm run test:contracts` 全通过（App Server client
+`301 checks`，command、modality、scripts、Electron release、cleanup 与 docs boundary 全绿）。
+`npm run governance:legacy-report` 扫描 `2112` 个 current 文件与 `1376` 个测试文件，零引用候选、分类漂移和边界违规
+均为 `0`；`git diff --check` 通过。本刀没有改变 GUI、Bridge 或 Runtime 行为，因此不重复运行 `verify:gui-smoke`；
+真实 Electron coverage 复用并由 tracked guard 锁定的 Apps/Plugin 与 MCP elicitation Gate B。
+
+早期使用 Node 原生 test runner 执行三个 Vitest 文件触发 runner state 错误，已用正确的 Vitest runner 重跑并全部通过；
+另一次并行运行 protocol generator/check 触发 generated file 恢复竞态，改为严格串行生成与检查后消除。两者均属于
+执行入口问题，不是产品失败。
+
+分类：上述 12 个 exact method、current owners、typed clients/projections 与现有 Gate B/fixture 为 `current`；无新增
+`compat` 或 `deprecated`；旧 Plugin 私有协议、Renderer 伪造 reverse request 与生产 mock fallback 继续为
+`dead / deleted / forbidden-to-restore`。架构影响：无，本刀只让矩阵与既有架构一致；architecture 第 36 节已记录
+核验边界，责任开发者 root 确认。下一刀回到真正未完成的 P1 surface，优先 deprecation/Guardian、auto-approval
+review 或 remaining review notification；多模型和多模态继续由
+Grok-aligned `model-provider` catalog/capability/readiness/sampling owner 承接。
+
+### 2026-08-09 `turn/diff/updated` Desktop Changes slice
+
+目标与窄写集：把 Codex Turn 级精确代码变更事件接入 Lime Desktop 唯一主链，完成
+`apply_patch -> durable turn.diff.updated -> v2 turn/diff/updated -> typed client -> canonical Turn -> Desktop Changes`
+闭环。本刀只修改 `tool-runtime` apply-patch metadata 与 App Server coding-event/projector、v2 protocol/schema、typed
+package client、Renderer canonical conversation projection、Changes 工作台接线、产品范围矩阵和架构/命令事实源；不修改
+Electron Host 业务边界、Provider、Command Exec、Review、Plugin/MCP 热区，不恢复 Codex TUI，也不新增 compat wrapper。
+
+实现结果：
+
+1. `apply_patch` 为 Add/Delete/Update/Move 记录内部 Turn-scoped mutation metadata；tracker 校验连续 old/new 内容并在
+   Turn 内聚合精确 unified diff，支持纯 rename 与 net-zero。未知或不连续 mutation 会 invalidate 并发送空 diff 清理旧快照；
+   原始 tool item 持久化前剥离内部 metadata。
+2. Runtime durable `turn.diff.updated` 经 App Server v2 projector 发出严格 Codex shape：
+   `turn/diff/updated { threadId, turnId, diff }`。typed client、schema、Renderer notification parser 与 sequence gate 已同步，
+   额外字段 fail closed。
+3. Renderer 将通知归并为 canonical conversation `Turn.unified_diff`；后续 `turn_started`/`turn_completed` 快照缺少 diff
+   时保留已有值，空字符串保留为精确 net-zero。runtime handler 只回写 canonical Turn，不创建第二份 diff store。
+4. Desktop Changes 从当前 canonical Turn 读取 `turnDiff`。previous-conversation 复制 `git apply` 时只要该字段已定义就
+   优先使用精确 diff，即使为空也不回退到组件根据 item 拼装的 patch；Git branch/commit/unstaged 基准继续读取 Git backend。
+
+事实源分类：`tool-runtime` coding tracker、App Server durable/projector、v2 protocol/schema、typed client、canonical Turn
+projection 与 Desktop Changes 为 `current`；旧组件级 patch 拼装仅作为无 canonical diff 的历史 fixture fallback，不能覆盖已
+定义的空 diff；不存在 compat/deprecated 新路径。Codex TUI review/diff UI、Renderer 第二 diff store 和生产 mock fallback
+属于 `dead / deleted / forbidden-to-restore`。多模型、多模态控制面仍由 Grok-aligned `model-provider` owner 承接。
+
+矩阵同步：将 `turn/diff/updated` 从 `review-notification-planned` 拆出为 `turn-diff-notification-current`，计数更新为
+`127 implemented / 58 planned / 35 product-scope-excluded`，产品范围完成度 `127 / 185 = 68.6%`；`turn/moderationMetadata`
+仍为 planned。
+
+验证与退出条件：
+
+- Rust 定向：`tool-runtime` apply-patch 回归、App Server coding tracker/projector/notification tests 通过。
+- Protocol/schema：turn-diff round-trip、schema registry、`npm run generate:protocol-types`、`npm run check:protocol-types` 通过。
+- Typed/Renderer：app-server-client 85/85；`npm run typecheck`；V2 notification/drift/conversation projection 与工作台 view-model
+  回归通过；补 previous-conversation 精确 diff 优先级测试。
+- 本轮收尾门禁：`npm run test:contracts`、`npm run test:rust:related -- <turn-diff paths>`、
+  `npm run smoke:agent-runtime-current-fixture`、`npm run governance:legacy-report`、`npm run verify:gui-smoke`；若 GUI
+  fixture 环境阻塞，记录具体原因，不以浏览器投影替代 Gate B。
+
+下一刀：回到 remaining P1 review surface，优先 `turn/moderationMetadata` 或 deprecation/Guardian/auto-approval review
+notifications；不得恢复 TUI detached review、旧 raw side-channel 或 provider 平行 owner。
+
+### 2026-08-09 `turn/moderationMetadata` canonical Turn slice
+
+主目标与窄写集：把 Codex trusted first-party Responses moderation metadata 接入 Lime Desktop 唯一 Agent 主链，完成
+`Responses metadata -> model-provider canonical event -> agent-runtime -> durable event -> App Server exact notification ->
+typed client -> canonical Turn`。本刀只修改 provider/runtime/agent 事件、App Server v2 protocol/projector/schema、typed
+package client、Renderer canonical projection、产品矩阵和架构/命令事实源；不新增 Electron IPC、TUI UI、raw metadata
+展示、provider 平行 owner、mock fallback 或 compat wrapper。
+
+实现结果：
+
+1. `model-provider` 仅在 trusted first-party Responses route 读取
+   `response.metadata.openai_chatgpt_moderation_metadata`。SSE 与 WebSocket 复用同一 reducer；第三方兼容 route 不产生
+   moderation event。metadata 保持任意 JSON，包括 object、array、scalar 和 `null`。
+2. `CanonicalLlmEvent::TurnModerationMetadata` 经 `CurrentProviderTurnEvent`、`AgentEvent` 映射为 durable
+   `turn.moderation_metadata`。该事件跨 sampling step 不去重，每次更新均保留；provider proxy 的 OpenAI/Anthropic 输出
+   转换器明确忽略它，不泄漏 raw metadata。
+3. App Server 投影 exact
+   `turn/moderationMetadata { threadId, turnId, metadata }`；缺少 identity/metadata fail closed，wrapper 额外字段被拒绝，
+   `null` 是有效值。typed client signal router、direct notification routing、sequence gate 和 drift catalog 已同步。
+4. Renderer 将 opaque metadata 归并到 canonical `Turn.moderation_metadata`，按 last-write-wins 更新。后续未携带该字段的
+   Turn snapshot 不覆盖既有值，cold/hydrate reader 使用同一字段；没有新增用户可见 raw JSON surface。
+
+事实源分类：trusted Responses lowering、provider-neutral event、Agent durable event、App Server exact protocol/projector、
+typed client 与 canonical Turn projection 为 `current`；`compat`、`deprecated` 均为空；第三方 metadata 冒充、TUI
+surface、Electron 第二业务后端、raw side-channel 与生产 mock fallback 为 `dead / forbidden-to-restore`。Grok-aligned
+`model-provider` 继续拥有多模型 catalog/default/model switch/capability/readiness/retry/circuit breaker 与多模态 sampling。
+
+矩阵同步：`turn/moderationMetadata` 从 planned 移入 implemented，更新为
+`128 implemented / 57 planned / 35 product-scope-excluded`，产品范围完成度 `128 / 185 = 69.2%`。整体 Codex 对齐仍未
+完成，本刀不关闭总执行计划。
+
+验证结果与退出条件：
+
+- Rust：`model-provider` reducer `7/7`、`agent-runtime` metadata sampling `1/1`、`lime-agent` serde `1/1`、App Server
+  moderation projector `2/2`、`app-server-protocol` `112/112` 通过；`cargo check -p lime-server` 通过。
+- Protocol/schema：schema 先生成到临时目录，与仓库 schema 树逐文件一致；`npm run generate:protocol-types` 与
+  `npm run typecheck` 通过。
+- Typed/Renderer：app-server-client `113/113`，moderation notification/drift/timeline 三文件 `47/47` 通过。
+- 执行入口记录：Node 原生 test runner 无法运行 Vitest 文件，改用 package 正式入口后通过；`test:related` smart runner
+  因把 `electron/` 目录当文件读取而报 `EISDIR`，改用精确 Vitest 文件 runner 后通过，均非产品断言失败。
+- 收尾门禁已完成：`npm run test:contracts` 全绿（App Server client `301 checks`）、相关 Rust related layer 全绿（含
+  `lime-server` 的 provider metadata non-leak 分支）、`npm run smoke:agent-runtime-current-fixture` 通过且
+  `liveProviderUsed=false`、`npm run governance:legacy-report` 扫描 `2112`/`1376` 文件并保持零引用候选/分类漂移/边界违规、
+  `npm run verify:gui-smoke` 通过并生成真实 Electron/App Server evidence。矩阵守卫 `4/4` 与 `git diff --check` 也通过；GUI
+  本刀无新增可见 surface，Gate B 复用现有 Electron/App Server current 主链。
+
+架构影响：重大；`internal/aiprompts/architecture.md` 第 37 节已记录跨层数据流与边界。Responsible developer
+confirmation: root, 2026-08-09. 已确认 first-party trust、SSE/WS、opaque JSON、无去重、last-write-wins、Desktop/TUI
+分界、Electron 无新增 IPC，以及 Grok-aligned 多模型/多模态 owner 不变。
+
+下一刀：继续 remaining planned method，优先 deprecation/Guardian/auto-approval review notification；不得恢复旧 raw
+metadata 通道、TUI review UI、Provider 平行 owner 或兼容包装。
+
+### 2026-08-09 `deprecationNotice` Desktop 产品范围清退
+
+本轮先处理下一项候选中的分类漂移，而不是为没有 runtime producer 的诊断通知造协议壳。Codex 的
+`deprecationNotice` 是开发/设置诊断；V2 投影事实源已经将它标为 `product-scope-excluded`，Lime Desktop
+没有对话或全局通知消费者，也没有外部兼容负担。`guardianWarning` 仍因缺少真实 Guardian review producer
+保持 `planned`，`item/autoApprovalReview/*` 也不借现有用户审批或 `strictAutoReview` 标记冒充。
+
+改动：将 V1 fixture 的 diagnostics planned 组拆为 `guardian-notification-planned` 与
+`deprecation-notification-excluded`，同步 `inventory.byStatus`、产品范围矩阵和架构事实源。当前分类为
+`128 implemented / 56 planned / 36 product-scope-excluded`，产品范围完成度仍按
+`128 / (128 + 56) = 69.6%` 计算；总上游 inventory 仍为 220 个方向化 identity。无新增 `current`、`compat`
+或 `deprecated` 路径；deprecation surface 为 `product-scope-excluded`，现有旧实现若出现则按
+`dead / deleted / forbidden-to-restore` 处理。
+
+验证退出条件：V1 method scope boundary、`npm run test:contracts`、`npm run governance:legacy-report`、
+`git diff --check` 通过；本轮未新增运行时/GUI 行为，不重复执行 Electron Gate B。下一刀回到有真实
+producer 的 current owner，优先先完成 Guardian review producer/lifecycle，再接
+`item/autoApprovalReview/{started,completed}` 的 exact Codex wire；不得恢复 TUI detached review 或兼容包装。
+
+### 2026-08-09 V2 投影事实源漂移复核
+
+本轮只收文档事实源，不新增协议或 compat surface。`internal/refactor/v2/EVENT-PROJECTIONS.md` 已同步
+current owner：`hook/started` 与 `hook/completed` 是 Tool runtime 的 paired transient lifecycle，不创建
+canonical ThreadItem；`turn/diff/updated` 是 Lime exact Turn diff，经 canonical Turn/Changes 共用快照；
+`turn/moderationMetadata` 已由 trusted first-party Responses metadata 完成 `model-provider -> AgentEvent ->
+durable event -> v2 notification -> typed client -> canonical Turn` 主链。`guardianWarning` 与
+`item/autoApprovalReview/{started,completed}` 仍为 `planned`：当前没有 Guardian 第二模型 reviewer、风险决策、
+取消/超时状态或真实 producer，现有用户审批和 `strictAutoReview` 不得冒充。
+
+分类：文档修正为 `current` 的 Hook/Turn diff/moderation 继续由既有 owner 承接；无新增 `compat`、
+`deprecated` 或 `dead` surface。验证：`git diff --check`；后续涉及实现时必须回到 tool-runtime +
+model-provider + agent-runtime + App Server 这条唯一 Guardian 主链，并补 Rust owner 集成、typed protocol/client、
+Renderer pending/timeline 与 Electron Gate B 证据后才能更新矩阵状态。
+
+### 2026-08-09 Guardian auto-approval review current owner 收口
+
+本轮完成上一条计划中的 Guardian auto-approval review 主链，产品目标仍是 Lime Desktop；Codex TUI 的 detached/background
+review、raw side-channel 和第二套 Electron 业务后端不进入产品。唯一事实源为：
+
+`strictAutoReview -> agent-runtime Guardian reviewer -> current session model-provider -> AgentEvent -> App Server v2 notification -> typed client -> Renderer ConversationProjection`
+
+实现结果：
+
+1. `agent-runtime` 新增真实 Guardian reviewer，复用当前 session 的 `model-provider` 做无工具结构化采样；provider 不可用、取消、30 秒超时、非法 JSON 和不确定结果均 fail closed。结果只允许 `approved`/`denied`，并带风险、授权、rationale 和 action 摘要。
+2. durable `guardian_review_started/completed` AgentEvent 经 App Server v2 projector 投影为 exact
+   `item/autoApprovalReview/started` 与 `item/autoApprovalReview/completed`；typed protocol/schema、manifest、generated
+   TypeScript、strict decoder、lifecycle union、drift registry 和 sequence gate 同步更新。
+3. Renderer `ConversationProjection` 将 started 投影为 `pending_interactions`，approved/denied/timedOut/aborted
+   分别投影为 resolved/declined/cancelled；completed `inProgress` 被 App Server projector 拒绝。可选 Guardian 字段现在
+   对“字段存在但类型非法”与“字段缺失”严格区分，前者 fail closed。
+4. V1 方法矩阵将两个 `item/autoApprovalReview/*` 从 `planned` 移入 `implemented`，当前统计为
+   `130 implemented / 54 planned / 36 product-scope-excluded`，产品范围完成度 `130 / 184 = 70.7%`。`guardianWarning`
+   仍为 `planned`，因为没有独立的高优先级 warning producer，不能由 Guardian review lifecycle 冒充。
+
+分类：Guardian reviewer、AgentEvent、App Server v2 projector、typed client、Renderer pending/timeline projection 为
+`current`；无 `compat` 或新增 `deprecated`；TUI detached review、raw side-channel、生产 mock fallback 和旧审批冒充
+Guardian 均为 `dead / deleted / forbidden-to-restore`。Grok-aligned `model-provider` 继续拥有多模型 catalog/default/model
+switch/capability/readiness/retry/circuit breaker 与多模态 sampling，不复制 Codex TUI 控制面。
+
+本轮退出条件已全部通过：`npm run check:protocol-types`、app-server-client build、`npm run typecheck`、Guardian/Rust/Renderer
+定向回归、`npm run test:rust:related -- lime-rs/crates/app-server-protocol lime-rs/crates/app-server lime-rs/crates/agent lime-rs/crates/agent-runtime lime-rs/crates/model-provider lime-rs/crates/tool-runtime`、
+`npm run test:contracts`（301 checks）、`npm run governance:legacy-report`（0 引用候选/分类漂移/边界违规）、
+`git diff --check`、`npm run smoke:agent-runtime-current-fixture`（`liveProviderUsed=false`）与
+`npm run verify:gui-smoke`（standalone shell evidence：`.lime/qc/project-gates/standalone-shell-01-20260809110637-94994/shell-01-electron-smoke/summary.json`）。
+矩阵守卫最初拦截了 manifest 漏列 `item/autoApprovalReview/completed`；已补入 v2 `NOTIFICATION_METHODS` 中央 catalog，
+重新生成 manifest/schema/generated TypeScript 后矩阵守卫 `4/4` 与协议 `112/112` 通过。
+
+下一刀：回到 remaining planned producer/consumer，优先补 `guardianWarning` 的独立真实 producer 或其他 P1 current owner；
+不得恢复 TUI detached review、旧 raw side-channel、生产 mock fallback 或 compat wrapper。

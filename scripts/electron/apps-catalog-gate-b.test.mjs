@@ -11,6 +11,11 @@ describe("Apps catalog Gate B guard", () => {
     expect(content).toContain("ensureElectronFixtureBuild");
     expect(content).toContain("launchElectronFixture");
     expect(content).toContain('backendMode: "unavailable"');
+    expect(content).toContain(
+      "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+    );
+    expect(content).toContain('apps: "./apps.json"');
+    expect(content).toContain("[PLUGIN_NAME]: { id: APP_ID");
     expect(content).toContain('"plugin/list"');
     expect(content).toContain('"plugin/install"');
     expect(content).toContain('"plugin/enabled/set"');

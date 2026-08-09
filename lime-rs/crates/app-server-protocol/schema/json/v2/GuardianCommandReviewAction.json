@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "command": {
+      "type": "string"
+    },
+    "cwd": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "command",
+    "cwd",
+    "source"
+  ],
+  "title": "GuardianCommandReviewAction",
+  "type": "object"
+}

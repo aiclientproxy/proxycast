@@ -364,7 +364,6 @@ describe("AgentChatWorkspace general workbench harness surface boundary", () => 
     expect(ownerSource).toContain("threadGoal");
     for (const retiredObjectiveSurface of [
       "onObjectiveChanged",
-      "refreshSessionReadModel",
       "threadRead.managed_objective",
       "objectiveClient",
       "ManagedObjectivePanel",

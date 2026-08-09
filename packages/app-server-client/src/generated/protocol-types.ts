@@ -55,6 +55,11 @@ export const METHOD_BROWSER_SESSION_OPEN = "browserSession/open";
 export const METHOD_BROWSER_SESSION_READ = "browserSession/read";
 export const METHOD_BROWSER_SESSION_TARGET_LIST = "browserSession/target/list";
 export const METHOD_CAPABILITY_LIST = "capability/list";
+export const METHOD_COMMAND_EXEC = "command/exec";
+export const METHOD_COMMAND_EXEC_OUTPUT_DELTA = "command/exec/outputDelta";
+export const METHOD_COMMAND_EXEC_RESIZE = "command/exec/resize";
+export const METHOD_COMMAND_EXEC_TERMINATE = "command/exec/terminate";
+export const METHOD_COMMAND_EXEC_WRITE = "command/exec/write";
 export const METHOD_CONFIG_WARNING = "configWarning";
 export const METHOD_CONNECT_CALLBACK_SEND = "connectCallback/send";
 export const METHOD_CONNECT_DEEP_LINK_RESOLVE = "connectDeepLink/resolve";
@@ -124,16 +129,23 @@ export const METHOD_GATEWAY_TUNNEL_STATUS = "gatewayTunnel/status";
 export const METHOD_GATEWAY_TUNNEL_STOP = "gatewayTunnel/stop";
 export const METHOD_GATEWAY_TUNNEL_SYNC_WEBHOOK_URL =
   "gatewayTunnel/syncWebhookUrl";
+export const METHOD_GUARDIAN_WARNING = "guardianWarning";
 export const METHOD_HOOK_COMPLETED = "hook/completed";
 export const METHOD_HOOK_STARTED = "hook/started";
 export const METHOD_HOOKS_LIST = "hooks/list";
 export const METHOD_INITIALIZE = "initialize";
 export const METHOD_INITIALIZED = "initialized";
 export const METHOD_AGENT_MESSAGE_DELTA = "item/agentMessage/delta";
+export const METHOD_ITEM_AUTO_APPROVAL_REVIEW_COMPLETED =
+  "item/autoApprovalReview/completed";
+export const METHOD_ITEM_AUTO_APPROVAL_REVIEW_STARTED =
+  "item/autoApprovalReview/started";
 export const METHOD_COMMAND_EXECUTION_OUTPUT_DELTA =
   "item/commandExecution/outputDelta";
 export const METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL =
   "item/commandExecution/requestApproval";
+export const METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION =
+  "item/commandExecution/terminalInteraction";
 export const METHOD_ITEM_COMPLETED = "item/completed";
 export const METHOD_FILE_CHANGE_PATCH_UPDATED = "item/fileChange/patchUpdated";
 export const METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL =
@@ -275,13 +287,7 @@ export const METHOD_PROJECT_MATERIAL_LIST = "projectMaterial/list";
 export const METHOD_PROJECT_MATERIAL_UPDATE = "projectMaterial/update";
 export const METHOD_PROJECT_MATERIAL_UPLOAD = "projectMaterial/upload";
 export const METHOD_PROJECT_MEMORY_READ = "projectMemory/read";
-export const METHOD_PROJECT_SHELL_SESSION_DRAIN_EVENTS =
-  "projectShell/session/drainEvents";
-export const METHOD_PROJECT_SHELL_SESSION_KILL = "projectShell/session/kill";
-export const METHOD_PROJECT_SHELL_SESSION_RESIZE =
-  "projectShell/session/resize";
-export const METHOD_PROJECT_SHELL_SESSION_START = "projectShell/session/start";
-export const METHOD_PROJECT_SHELL_SESSION_WRITE = "projectShell/session/write";
+export const METHOD_REVIEW_START = "review/start";
 export const METHOD_SERVER_REQUEST_RESOLVED = "serverRequest/resolved";
 export const METHOD_SESSION_FILE_DELETE = "sessionFile/delete";
 export const METHOD_SESSION_FILE_GET_OR_CREATE = "sessionFile/getOrCreate";
@@ -375,7 +381,9 @@ export const METHOD_THREAD_SECTION_DELETE = "threadSection/delete";
 export const METHOD_THREAD_SECTION_LIST = "threadSection/list";
 export const METHOD_THREAD_SECTION_UPDATE = "threadSection/update";
 export const METHOD_TURN_COMPLETED = "turn/completed";
+export const METHOD_TURN_DIFF_UPDATED = "turn/diff/updated";
 export const METHOD_TURN_INTERRUPT = "turn/interrupt";
+export const METHOD_TURN_MODERATION_METADATA = "turn/moderationMetadata";
 export const METHOD_TURN_PLAN_UPDATED = "turn/plan/updated";
 export const METHOD_TURN_START = "turn/start";
 export const METHOD_TURN_STARTED = "turn/started";
@@ -597,6 +605,26 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "capability/list",
   },
   {
+    kind: "request",
+    method: "command/exec",
+  },
+  {
+    kind: "notification",
+    method: "command/exec/outputDelta",
+  },
+  {
+    kind: "request",
+    method: "command/exec/resize",
+  },
+  {
+    kind: "request",
+    method: "command/exec/terminate",
+  },
+  {
+    kind: "request",
+    method: "command/exec/write",
+  },
+  {
     kind: "notification",
     method: "configWarning",
   },
@@ -802,6 +830,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "notification",
+    method: "guardianWarning",
+  },
+  {
+    kind: "notification",
     method: "hook/completed",
   },
   {
@@ -826,11 +858,23 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "notification",
+    method: "item/autoApprovalReview/completed",
+  },
+  {
+    kind: "notification",
+    method: "item/autoApprovalReview/started",
+  },
+  {
+    kind: "notification",
     method: "item/commandExecution/outputDelta",
   },
   {
     kind: "serverRequest",
     method: "item/commandExecution/requestApproval",
+  },
+  {
+    kind: "notification",
+    method: "item/commandExecution/terminalInteraction",
   },
   {
     kind: "notification",
@@ -1318,23 +1362,7 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
-    method: "projectShell/session/drainEvents",
-  },
-  {
-    kind: "request",
-    method: "projectShell/session/kill",
-  },
-  {
-    kind: "request",
-    method: "projectShell/session/resize",
-  },
-  {
-    kind: "request",
-    method: "projectShell/session/start",
-  },
-  {
-    kind: "request",
-    method: "projectShell/session/write",
+    method: "review/start",
   },
   {
     kind: "notification",
@@ -1677,8 +1705,16 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "turn/completed",
   },
   {
+    kind: "notification",
+    method: "turn/diff/updated",
+  },
+  {
     kind: "request",
     method: "turn/interrupt",
+  },
+  {
+    kind: "notification",
+    method: "turn/moderationMetadata",
   },
   {
     kind: "notification",
@@ -1915,22 +1951,6 @@ export const GENERATED_APP_SERVER_REQUEST_SERIALIZATION_SCOPES = [
   {
     method: "mcpServer/oauth/login",
     scope: "mcpOauth",
-  },
-  {
-    method: "projectShell/session/kill",
-    scope: "projectShellSession",
-  },
-  {
-    method: "projectShell/session/resize",
-    scope: "projectShellSession",
-  },
-  {
-    method: "projectShell/session/start",
-    scope: "projectShellSession",
-  },
-  {
-    method: "projectShell/session/write",
-    scope: "projectShellSession",
   },
   {
     method: "thread/approveGuardianDeniedAction",
@@ -2590,31 +2610,6 @@ export type AppServerClientRequest =
   | {
       id: number | string;
       method: "projectGit/worktree/create";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "projectShell/session/start";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "projectShell/session/write";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "projectShell/session/resize";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "projectShell/session/kill";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "projectShell/session/drainEvents";
       params?: unknown;
     }
   | {
@@ -3903,11 +3898,6 @@ export type AppServerRequestMethod =
   | "projectMaterial/update"
   | "projectMaterial/upload"
   | "projectMemory/read"
-  | "projectShell/session/drainEvents"
-  | "projectShell/session/kill"
-  | "projectShell/session/resize"
-  | "projectShell/session/start"
-  | "projectShell/session/write"
   | "sessionFile/delete"
   | "sessionFile/getOrCreate"
   | "sessionFile/list"
@@ -3989,7 +3979,6 @@ export type AppServerRequestSerializationScope =
   | "browserSession"
   | "mcpOauth"
   | "mcpResourceSubscription"
-  | "projectShellSession"
   | "thread";
 
 export interface AppServerRequestSerializationScopeSpec {
@@ -4119,6 +4108,8 @@ export interface AuthMaterialRef {
   kind: AuthKind;
   providerId?: null | string;
 }
+
+export type AutoReviewDecisionSource = "agent";
 
 export interface AutomationJobCreateParams {
   request: unknown;
@@ -4667,6 +4658,11 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "review/start";
+      params: ReviewStartParams;
+    }
+  | {
+      id: number | string;
       method: "fs/readFile";
       params: FsReadFileParams;
     }
@@ -4729,6 +4725,26 @@ export type ClientRequest =
       id: number | string;
       method: "process/kill";
       params: ProcessKillParams;
+    }
+  | {
+      id: number | string;
+      method: "command/exec";
+      params: CommandExecParams;
+    }
+  | {
+      id: number | string;
+      method: "command/exec/write";
+      params: CommandExecWriteParams;
+    }
+  | {
+      id: number | string;
+      method: "command/exec/resize";
+      params: CommandExecResizeParams;
+    }
+  | {
+      id: number | string;
+      method: "command/exec/terminate";
+      params: CommandExecTerminateParams;
     };
 
 export interface ClientResponse {
@@ -4819,6 +4835,64 @@ export type CommandAction =
       command: string;
       type: "unknown";
     };
+
+export interface CommandExecOutputDeltaNotification {
+  capReached: boolean;
+  deltaBase64: string;
+  processId: string;
+  stream: CommandExecOutputStream;
+}
+
+export type CommandExecOutputStream = "stderr" | "stdout";
+
+export interface CommandExecParams {
+  command: string[];
+  cwd?: null | string;
+  disableOutputCap?: boolean;
+  disableTimeout?: boolean;
+  env?: null | Record<string, unknown>;
+  outputBytesCap?: number | null;
+  permissionProfile?: null | string;
+  processId?: null | string;
+  sandboxPolicy?: unknown;
+  size?: CommandExecTerminalSize | null;
+  streamStdin?: boolean;
+  streamStdoutStderr?: boolean;
+  timeoutMs?: number | null;
+  tty?: boolean;
+}
+
+export interface CommandExecResizeParams {
+  processId: string;
+  size: CommandExecTerminalSize;
+}
+
+export type CommandExecResizeResponse = Record<string, unknown>;
+
+export interface CommandExecResponse {
+  exitCode: number;
+  stderr: string;
+  stdout: string;
+}
+
+export interface CommandExecTerminalSize {
+  cols: number;
+  rows: number;
+}
+
+export interface CommandExecTerminateParams {
+  processId: string;
+}
+
+export type CommandExecTerminateResponse = Record<string, unknown>;
+
+export interface CommandExecWriteParams {
+  closeStdin?: boolean;
+  deltaBase64?: null | string;
+  processId: string;
+}
+
+export type CommandExecWriteResponse = Record<string, unknown>;
 
 export type CommandExecutionApprovalDecision =
   | "accept"
@@ -5755,6 +5829,75 @@ export interface GrantedPermissionProfile {
   network?: AdditionalNetworkPermissions | null;
 }
 
+export interface GuardianApprovalReview {
+  rationale?: null | string;
+  riskLevel?: GuardianRiskLevel | null;
+  status: GuardianApprovalReviewStatus;
+  userAuthorization?: GuardianUserAuthorization | null;
+}
+
+export type GuardianApprovalReviewAction =
+  | {
+      command: string;
+      cwd: string;
+      source: string;
+      type: "command";
+    }
+  | {
+      argv: string[];
+      cwd: string;
+      program: string;
+      source: string;
+      type: "execve";
+    }
+  | {
+      cwd: string;
+      files: string[];
+      type: "applyPatch";
+    }
+  | {
+      host: string;
+      port: number;
+      protocol: string;
+      target: string;
+      type: "networkAccess";
+    }
+  | {
+      connector_id?: null | string;
+      connector_name?: null | string;
+      server: string;
+      tool_name: string;
+      tool_title?: null | string;
+      type: "mcpToolCall";
+    }
+  | {
+      permissions: unknown;
+      reason?: null | string;
+      type: "requestPermissions";
+    };
+
+export type GuardianApprovalReviewStatus =
+  | "aborted"
+  | "approved"
+  | "denied"
+  | "inProgress"
+  | "timedOut";
+
+export interface GuardianCommandReviewAction {
+  command: string;
+  cwd: string;
+  source: string;
+}
+
+export type GuardianRiskLevel = "critical" | "high" | "low" | "medium";
+
+export type GuardianUserAuthorization = "high" | "low" | "medium" | "unknown";
+
+export interface GuardianWarningNotification {
+  message: string;
+  threadId: string;
+}
+
 export interface HookErrorInfo {
   message: string;
   path: string;
@@ -5890,6 +6033,28 @@ export interface InstalledApp {
 export interface ItemCompletedNotification {
   completedAtMs: number;
   item: ThreadItem;
+  threadId: string;
+  turnId: string;
+}
+
+export interface ItemGuardianApprovalReviewCompletedNotification {
+  action: GuardianApprovalReviewAction;
+  completedAtMs: number;
+  decisionSource: AutoReviewDecisionSource;
+  review: GuardianApprovalReview;
+  reviewId: string;
+  startedAtMs: number;
+  targetItemId?: null | string;
+  threadId: string;
+  turnId: string;
+}
+
+export interface ItemGuardianApprovalReviewStartedNotification {
+  action: GuardianApprovalReviewAction;
+  review: GuardianApprovalReview;
+  reviewId: string;
+  startedAtMs: number;
+  targetItemId?: null | string;
   threadId: string;
   turnId: string;
 }
@@ -6706,6 +6871,10 @@ export type Method =
   | "app/list"
   | "app/read"
   | "artifact/write"
+  | "command/exec"
+  | "command/exec/resize"
+  | "command/exec/terminate"
+  | "command/exec/write"
   | "fs/copy"
   | "fs/createDirectory"
   | "fs/getMetadata"
@@ -6732,6 +6901,7 @@ export type Method =
   | "process/resizePty"
   | "process/spawn"
   | "process/writeStdin"
+  | "review/start"
   | "skills/config/write"
   | "skills/extraRoots/set"
   | "skills/list"
@@ -7699,69 +7869,6 @@ export interface ProjectMemoryReadResponse {
   memory: unknown;
 }
 
-export type ProjectShellEmptyResponse = Record<string, unknown>;
-
-export interface ProjectShellSessionDrainEventsParams {
-  limit?: number | null;
-  sessionId?: null | string;
-}
-
-export interface ProjectShellSessionDrainEventsResponse {
-  events?: ProjectShellSessionEvent[];
-}
-
-export type ProjectShellSessionEvent =
-  | {
-      data: string;
-      session_id: string;
-      stream: ProjectShellSessionStream;
-      type: "data";
-    }
-  | {
-      exit_code?: number | null;
-      session_id: string;
-      signal?: null | string;
-      type: "exit";
-    }
-  | {
-      message: string;
-      session_id: string;
-      type: "error";
-    };
-
-export interface ProjectShellSessionKillParams {
-  sessionId: string;
-}
-
-export interface ProjectShellSessionResizeParams {
-  cols: number;
-  rows: number;
-  sessionId: string;
-}
-
-export interface ProjectShellSessionStartParams {
-  cols?: number | null;
-  rootPath: string;
-  rows?: number | null;
-}
-
-export interface ProjectShellSessionStartResponse {
-  cwd: string;
-  localEcho: boolean;
-  pid?: number | null;
-  sessionId: string;
-  shell: string;
-  title: string;
-  tty: boolean;
-}
-
-export type ProjectShellSessionStream = "stderr" | "stdout";
-
-export interface ProjectShellSessionWriteParams {
-  data: string;
-  sessionId: string;
-}
-
 export type ProtocolKind =
   | "anthropic_messages"
   | "bedrock_converse"
@@ -7854,6 +7961,37 @@ export interface ResolvedModelRoute {
   protocol: ProtocolKind;
   transport: TransportKind;
 }
+
+export type ReviewDelivery = "detached" | "inline";
+
+export interface ReviewStartParams {
+  delivery?: ReviewDelivery | null;
+  target: ReviewTarget;
+  threadId: string;
+}
+
+export interface ReviewStartResponse {
+  reviewThreadId: string;
+  turn: Turn;
+}
+
+export type ReviewTarget =
+  | {
+      type: "uncommittedChanges";
+    }
+  | {
+      branch: string;
+      type: "baseBranch";
+    }
+  | {
+      sha: string;
+      title?: null | string;
+      type: "commit";
+    }
+  | {
+      instructions: string;
+      type: "custom";
+    };
 
 export interface RouteDefaults {
   promptCacheMode?: null | string;
@@ -7998,6 +8136,10 @@ export type ServerNotification =
       params: WarningNotification;
     }
   | {
+      method: "guardianWarning";
+      params: GuardianWarningNotification;
+    }
+  | {
       method: "error";
       params: ErrorNotification;
     }
@@ -8062,6 +8204,10 @@ export type ServerNotification =
       params: TurnCompletedNotification;
     }
   | {
+      method: "turn/diff/updated";
+      params: TurnDiffUpdatedNotification;
+    }
+  | {
       method: "turn/plan/updated";
       params: TurnPlanUpdatedNotification;
     }
@@ -8072,6 +8218,14 @@ export type ServerNotification =
   | {
       method: "item/completed";
       params: ItemCompletedNotification;
+    }
+  | {
+      method: "item/autoApprovalReview/started";
+      params: ItemGuardianApprovalReviewStartedNotification;
+    }
+  | {
+      method: "item/autoApprovalReview/completed";
+      params: ItemGuardianApprovalReviewCompletedNotification;
     }
   | {
       method: "item/agentMessage/delta";
@@ -8122,6 +8276,10 @@ export type ServerNotification =
       params: ModelVerificationNotification;
     }
   | {
+      method: "turn/moderationMetadata";
+      params: TurnModerationMetadataNotification;
+    }
+  | {
       method: "model/safetyBuffering/updated";
       params: ModelSafetyBufferingUpdatedNotification;
     }
@@ -8136,6 +8294,10 @@ export type ServerNotification =
   | {
       method: "process/exited";
       params: ProcessExitedNotification;
+    }
+  | {
+      method: "command/exec/outputDelta";
+      params: CommandExecOutputDeltaNotification;
     }
   | {
       method: "thread/settings/updated";
@@ -8947,12 +9109,6 @@ export type ThreadItem =
     }
   | {
       id: string;
-      metadata?: ThreadItemMetadata | null;
-      run: HookRunSummary;
-      type: "hook";
-    }
-  | {
-      id: string;
       memoryCitation?: MemoryCitation | null;
       metadata?: ThreadItemMetadata | null;
       phase?: MessagePhase | null;
@@ -9560,6 +9716,12 @@ export interface TurnCompletedNotification {
   turn: Turn;
 }
 
+export interface TurnDiffUpdatedNotification {
+  diff: string;
+  threadId: string;
+  turnId: string;
+}
+
 export interface TurnEnvironmentParams {
   cwd: string;
   environmentId: string;
@@ -9580,6 +9742,12 @@ export interface TurnInterruptParams {
 export type TurnInterruptResponse = Record<string, unknown>;
 
 export type TurnItemsView = "full" | "notLoaded" | "summary";
+
+export interface TurnModerationMetadataNotification {
+  metadata: unknown;
+  threadId: string;
+  turnId: string;
+}
 
 export interface TurnPlanStep {
   status: TurnPlanStepStatus;

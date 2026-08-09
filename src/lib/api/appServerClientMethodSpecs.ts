@@ -238,6 +238,26 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
+    name: "execCommand",
+    method: constants.APP_SERVER_METHOD_COMMAND_EXEC,
+    params: "required",
+  },
+  {
+    name: "writeCommandExec",
+    method: constants.APP_SERVER_METHOD_COMMAND_EXEC_WRITE,
+    params: "required",
+  },
+  {
+    name: "resizeCommandExec",
+    method: constants.APP_SERVER_METHOD_COMMAND_EXEC_RESIZE,
+    params: "required",
+  },
+  {
+    name: "terminateCommandExec",
+    method: constants.APP_SERVER_METHOD_COMMAND_EXEC_TERMINATE,
+    params: "required",
+  },
+  {
     name: "archiveThread",
     method: constants.APP_SERVER_METHOD_THREAD_ARCHIVE,
     params: "required",
@@ -395,6 +415,11 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
   {
     name: "startTurn",
     method: constants.APP_SERVER_METHOD_TURN_START,
+    params: "required",
+  },
+  {
+    name: "startReview",
+    method: constants.APP_SERVER_METHOD_REVIEW_START,
     params: "required",
   },
   {

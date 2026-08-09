@@ -19,7 +19,7 @@ use model_provider::current_client::{
     CurrentProviderError, CurrentProviderHealthRegistry, CurrentProviderHealthSnapshot,
 };
 use model_provider::runtime_provider::RuntimeProviderConfig;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -39,6 +39,7 @@ pub struct AgentRuntimeState {
     mcp_runtime_lifecycle: Arc<Mutex<()>>,
     action_required: Arc<agent_runtime::action_required::ActionRequiredState>,
     permission_grants: Arc<RwLock<PermissionGrantState>>,
+    guardian_denials: Arc<Mutex<HashMap<(String, String), GuardianDenialState>>>,
     live_execution_gateway:
         Arc<RwLock<Option<Arc<dyn crate::live_execution_process::LiveExecutionProcessGateway>>>>,
 }
@@ -57,6 +58,7 @@ impl Clone for AgentRuntimeState {
             mcp_runtime_lifecycle: Arc::clone(&self.mcp_runtime_lifecycle),
             action_required: Arc::clone(&self.action_required),
             permission_grants: Arc::clone(&self.permission_grants),
+            guardian_denials: Arc::clone(&self.guardian_denials),
             live_execution_gateway: Arc::clone(&self.live_execution_gateway),
         }
     }
@@ -84,6 +86,7 @@ impl AgentRuntimeState {
                 agent_runtime::action_required::ActionRequiredState::default(),
             ),
             permission_grants: Arc::new(RwLock::new(PermissionGrantState::default())),
+            guardian_denials: Arc::new(Mutex::new(HashMap::new())),
             live_execution_gateway: Arc::new(RwLock::new(None)),
         }
     }
@@ -133,6 +136,41 @@ impl AgentRuntimeState {
     pub async fn close_provider_session(&self, session_id: &str) {
         self.providers.write().await.remove(session_id);
         self.clear_permission_grants(session_id).await;
+        self.guardian_denials
+            .lock()
+            .await
+            .retain(|(candidate_session_id, _), _| candidate_session_id != session_id);
+    }
+
+    pub(crate) async fn record_guardian_non_denial(&self, session_id: &str, turn_id: &str) {
+        self.guardian_denials
+            .lock()
+            .await
+            .remove(&(session_id.to_string(), turn_id.to_string()));
+    }
+
+    pub(crate) async fn record_guardian_denial(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Option<(u32, u32)> {
+        const RECENT_DENIAL_WINDOW: usize = 5;
+        const CONSECUTIVE_DENIAL_LIMIT: u32 = 3;
+
+        let mut denials = self.guardian_denials.lock().await;
+        let state = denials
+            .entry((session_id.to_string(), turn_id.to_string()))
+            .or_default();
+        state.consecutive = state.consecutive.saturating_add(1);
+        state.recent.push_back(());
+        while state.recent.len() > RECENT_DENIAL_WINDOW {
+            state.recent.pop_front();
+        }
+        if state.consecutive >= CONSECUTIVE_DENIAL_LIMIT && !state.warning_emitted {
+            state.warning_emitted = true;
+            return Some((state.consecutive, state.recent.len() as u32));
+        }
+        None
     }
 
     pub(crate) fn gateway_tools(&self) -> &RuntimeGatewayToolExecutionRegistry {
@@ -559,6 +597,13 @@ pub struct EffectivePermissionGrant {
 struct PermissionGrantState {
     session: HashMap<String, EffectivePermissionGrant>,
     turn: HashMap<(String, String), EffectivePermissionGrant>,
+}
+
+#[derive(Default)]
+struct GuardianDenialState {
+    consecutive: u32,
+    recent: VecDeque<()>,
+    warning_emitted: bool,
 }
 
 fn merge_granted_permissions(

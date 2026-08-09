@@ -7,7 +7,7 @@
 
 当前用户目标不是“打开一个内容工厂页面”，而是在 Lime 中完成一件具体任务：写一篇文章。01Agent 的交互可以参考，但 Lime 的布局边界不同：Lime 的中间区域是 Claw 对话和运行过程，画布 / 侧边栏在右侧，不应复制 01Agent 的左侧或全屏画布。
 
-内容工厂已经作为插件存在，因此写作入口不应再通过宿主硬编码。正确路径是让内容工厂按 Lime Plugin Package v1 声明自己能写文章，声明需要哪些子智能体、skills、CLI、connectors、hooks 和 workflow；宿主只负责安装态发现、显式激活、运行 metadata 透传、独立 `ArtifactFrame`、article renderer 和右侧 Article Editor，右侧布局标准统一见 `../rightsurface/README.md`。
+内容工厂已经作为插件存在，因此写作入口不应再通过宿主硬编码。正确路径是让内容工厂按 Agent Plugins v1.0.0 portable 包提供 `plugin.json`、`mcp.json` 和 Skills；workflow、子智能体、CLI、connectors、hooks、运行 metadata 和 Article Workspace 属于 App Server/runtime projection，不再写入私有 manifest。宿主只负责安装态发现、显式激活、独立 `ArtifactFrame`、article renderer 和右侧 Article Editor，右侧布局标准统一见 `../rightsurface/README.md`。
 
 前一版把 Profile 当成右侧文章主界面是错误方向。当前不再保留这条兼容路径；Article Workspace 承接插件工作区事实，用户看到的产物界面必须是 Article Editor 画布，并遵循 `../rightsurface/README.md` 的 dock / tab 规则。
 
@@ -25,7 +25,7 @@
 | ----------- | ---------------------------------------------------------------------------------------------------- |
 | 普通用户    | 用一句“写一篇文章”进入完整写作流程，不需要理解插件包或 workflow 概念。                               |
 | 内容创作者  | 能在右侧 Article Editor 中看到文章结构、引用、配图建议和审稿状态，后续可继续改写。                   |
-| 插件开发者  | 能通过 Lime 插件包自描述入口、子 Agent、skills、CLI、hooks 和 article renderer，不需要宿主写死能力。 |
+| 插件开发者  | 能通过标准插件包提供 Skills/MCP，并由 typed activation projection 暴露写作能力，不需要宿主写死能力。 |
 | Lime 宿主   | 保持 Claw / Right Surface / 历史恢复的一致架构，不为单个插件新增分叉页面。                           |
 | 运营 / 分发 | 插件中心能解释“内容工厂用了哪些 Agent、工具、授权和 skills”，降低黑盒感。                            |
 
@@ -38,7 +38,7 @@
 | WS-03 | 作为用户，我希望文章产物在一个独立框里完整输出，而不是混进普通聊天正文。 | 过程说明留在对话区，`ArtifactFrame` 内只展示最终文章并可流式输出。                                               |
 | WS-04 | 作为用户，我想点击文章产物框后在右侧继续编辑或生成配图。                 | `ArtifactFrame` 打开入口点击后打开右侧 `articleDraft` Article Editor。                                          |
 | WS-05 | 作为用户，我即使没有登录云端账号，也能使用本地已安装内容工厂。           | cloud marketplace 401/403 只影响云端列表，不阻断 installed registry。                                           |
-| WS-06 | 作为插件开发者，我想在内容工厂插件包里声明写作 workflow。                | 宿主读取 `activationEntries`、`workflows`、`subagents`、`skillRefs`、CLI、connectors 和 hooks，不靠 hard code。 |
+| WS-06 | 作为插件开发者，我想让标准包参与写作 workflow。                            | App Server 从安装态与 Skills/MCP 生成 `activationEntries`、`workflows`、`subagents`、`skillRefs`、CLI、connectors 和 hooks，不靠 hard code。 |
 
 ## 5. 用户用例
 

@@ -109,6 +109,8 @@ fn canonical_notification_target(event: &AgentEvent) -> Option<CanonicalNotifica
     if matches!(
         event_type,
         "approval.session_cache.hit"
+            | "hook.started"
+            | "hook.completed"
             | "item.removed"
             | "item.deleted"
             | "message.removed"
@@ -198,6 +200,28 @@ mod tests {
     #[test]
     fn thread_goal_continuation_is_internal_context_without_an_item_notification() {
         assert!(canonical_notification_target(&event("thread.goal.continuation")).is_none());
+    }
+
+    #[test]
+    fn hook_lifecycle_uses_dedicated_notifications_without_item_entities() {
+        for event_type in ["hook.started", "hook.completed"] {
+            assert!(canonical_notification_target(&event(event_type)).is_none());
+        }
+    }
+
+    #[test]
+    fn unknown_hook_notification_still_fails_closed() {
+        let unknown = event("hook.future");
+        assert!(matches!(
+            canonical_notification_target(&unknown),
+            Some(CanonicalNotificationTarget::Item)
+        ));
+
+        let error = notification_events_with_canonical_entities(&stored_session(), &[unknown])
+            .expect_err("unknown hook notification must fail closed");
+        assert!(error
+            .to_string()
+            .contains("canonical materializer produced no item"));
     }
 
     #[test]

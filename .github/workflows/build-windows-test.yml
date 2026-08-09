@@ -73,6 +73,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --config.node-linker=hoisted
 
+      - name: Run Windows Agent Plugin path contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test \
+            --manifest-path "lime-rs/Cargo.toml" \
+            -p lime-mcp \
+            --lib \
+            agent_plugin_config \
+            -- \
+            --nocapture \
+            2>&1 | tee "windows-plugin-mcp-contract-tests.log"
+
       - name: Prepare sherpa-onnx runtime
         shell: bash
         run: |
@@ -158,6 +171,18 @@ jobs:
             --n-minus-one-version "$N_MINUS_ONE_VERSION" \
             --version "$VERSION"
 
+      - name: Run installed Windows Agent Plugin Gate B
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          PLUGIN_GATE_EXECUTABLE="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));const executable=summary.evidence?.installation?.executable;if(!executable)throw new Error('Windows Squirrel evidence is missing the installed executable');process.stdout.write(executable);")"
+          npm run smoke:plugin-package-electron-gate-b -- \
+            --electron-executable "$PLUGIN_GATE_EXECUTABLE" \
+            --evidence-dir ".lime/qc/gui-evidence/plugin-package-electron-gate-b-windows" \
+            --prefix "plugin-package-electron-gate-b-windows" \
+            --timeout-ms 600000
+
       - name: Upload Windows Squirrel RC evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -167,6 +192,15 @@ jobs:
           retention-days: ${{ github.event.inputs.retention_days || 7 }}
           path: .lime/qc/windows-squirrel-rc
 
+      - name: Upload Windows Agent Plugin Gate B evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lime-windows-agent-plugin-gate-b-evidence
+          if-no-files-found: warn
+          retention-days: ${{ github.event.inputs.retention_days || 7 }}
+          path: .lime/qc/gui-evidence/plugin-package-electron-gate-b-windows
+
       - name: Upload Windows test package
         uses: actions/upload-artifact@v4
         with:
@@ -174,3 +208,12 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ github.event.inputs.retention_days || 7 }}
           path: windows-test-package/*
+
+      - name: Upload Windows Agent Plugin path contract log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lime-windows-agent-plugin-path-contract-tests
+          if-no-files-found: error
+          retention-days: ${{ github.event.inputs.retention_days || 7 }}
+          path: windows-plugin-mcp-contract-tests.log

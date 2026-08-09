@@ -1,17 +1,24 @@
 use agent_protocol::{AgentInput, ImageDetail};
 use app_server_protocol::{AgentAttachment, AgentSessionTurnStartParams, RuntimeOptions};
 
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct ReviewContext {
+    pub(super) user_facing_hint: String,
+    pub(super) target: serde_json::Value,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TurnStartInputKind {
     User,
     QueuedUser,
     PendingTriggerUser,
     GoalContinuation,
+    Review,
 }
 
 impl TurnStartInputKind {
     pub(super) fn is_agent_only(self) -> bool {
-        matches!(self, Self::GoalContinuation)
+        matches!(self, Self::GoalContinuation | Self::Review)
     }
 
     pub(super) fn runs_idle_scheduler(self) -> bool {

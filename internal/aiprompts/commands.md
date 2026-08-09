@@ -85,8 +85,11 @@ Apps/connectors 只允许走同一个 Plugin catalog owner：
 
 `src/lib/api/apps.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server app/* -> RuntimeCore -> PluginDataSource -> local plugin_catalog`
 
-current method 为 `app/list`、`app/read`、`app/installed` 与 `app/list/updated`。`app/list` 从已安装 Plugin manifest 的
-`apps` capability 构建分页 catalog；`app/read` 最多接收 100 个 id，去重并保持首次请求顺序，未知 id 放入
+current method 为 `app/list`、`app/read`、`app/installed` 与 `app/list/updated`。Portable
+Agent Plugins manifest 不允许顶层 `apps`；`app/list` 只从显式 Codex
+`extensions.com.openai.apps`（或 overlay fallback）指向的独立 Apps JSON 构建分页 catalog，
+配置项的 connector `id` 是 catalog identity。旧内联 Apps object fail closed；非法 Apps
+配置只禁用该组件。`app/read` 最多接收 100 个 id，去重并保持首次请求顺序，未知 id 放入
 `missingAppIds`；携带 `threadId` 时必须命中已加载 canonical Thread。`app/installed` 只报告有效 enabled/runtime
 state；本地 Plugin 没有 hosted connector model-visible tool snapshot 时，`callable` 强制为 `false`，Desktop 不得
 把安装或启用状态冒充模型 readiness。`forceRefetch` / `forceRefresh` 在本地 registry 上只是 fresh read，不伪造
@@ -110,6 +113,22 @@ current method 为 exact `memory/reset`，只接受 omitted、`null` 或空对�
 root 并重建受管目录，不删除 Thread/Turn/Item、event log、projection store 或 memory root 外的 soul 配置。旧 scoped
 `memoryStore/reset`、`MemoryStoreResetParams/Response`、typed client 与设置页调用均为
 `dead / deleted / forbidden-to-restore`；workspace memory reset 不再作为未被产品消费的平级公开能力保留。
+
+## Command Exec 主链
+
+Codex exact 独立命令执行与 Desktop 交互终端只允许走 connection-scoped App Server JSON-RPC：
+
+`src/lib/api/commandExec.ts -> typed App Server client -> command/exec -> App Server CommandExecServer -> tool-runtime local process supervisor`
+
+一次性命令通过 `command/exec` 返回 `exitCode/stdout/stderr`；流式命令通过
+`command/exec/outputDelta` 投影 raw bytes 的 `deltaBase64`，并由同一连接内的 `processId` 过滤。交互终端的
+输入、PTY 尺寸和终止分别使用 `command/exec/write`、`command/exec/resize`、`command/exec/terminate`。
+`outputBytesCap`、`timeoutMs` 保持 omitted/null/value 语义；stdin close 后的非空写入、非 TTY resize、零值尺寸、
+未知 process id 和同一连接重复 active id 均 fail closed。断连、response 发送失败或 notification writer 失败都清理该
+连接拥有的进程。Electron 只转发 App Server JSONL，不持有第二套终端会话、轮询 drain 或 renderer mock fallback。
+
+旧 `project_shell_*`、`run_project_shell_command`、Project Shell v0 DTO/schema、旧 API gateway 和 Electron 私有
+session host 均为 `dead / deleted / forbidden-to-restore`；没有 compat/deprecated wrapper。
 
 ## Process Control 主链
 
@@ -153,3 +172,71 @@ Office/PDF 文本提取不属于 `fs/readFile`；若产品继续需要，应在�
 `src/lib/api/browserRuntime.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server browserSession/* -> BrowserRuntimeManager`
 
 Settings 的浏览器页只消费 `browserSession/target/list`、`browserSession/open`、`browserSession/read` 与 `browserSession/close`；Renderer 只展示带 debugger endpoint 的 `page` target。旧 connector install、Chrome relay endpoint、backend priority 与静态 Electron diagnostic facade 不得回到 Settings 产品面。Browser Workspace 尚未迁完的旧 facade 属于 PAGE-08 blocker，不能作为 Settings 或 Browser Runtime current evidence。
+
+## Review 主链
+
+Desktop code review 只允许走 current `review/start`：
+
+`src/lib/api/review.ts -> typed App Server client -> app_server_handle_json_lines -> App Server review/start -> RuntimeCore::start_review -> Thread/Turn/Item projection`
+
+请求必须携带真实 `threadId` 和 typed `target`（`uncommittedChanges`、`baseBranch`、`commit` 或 `custom`）。App Server
+拒绝 detached delivery；RuntimeCore 先检查 session/active turn，再规范化 target 字段并提交异步 turn。响应立即返回
+`reviewThreadId` 与 `turn.status=inProgress`，review 结果通过同一 thread 的 canonical events/read model 回流 GUI。
+
+review boundary 使用 `enteredReviewMode` / `exitedReviewMode` Extension Item，分别投影为 v2 `EnteredReviewMode` /
+`ExitedReviewMode`，并在 turn terminal 前完成退出 item。Renderer 不扫描工作区猜测 review 状态，不创建第二套
+review transcript，也不把 Codex TUI detached/background review 伪装成 Desktop 能力。
+
+旧 review facade、raw `agentSession/event` review side-channel、detached/background 入口和生产 mock fallback 均为
+`dead / deleted / forbidden-to-restore`；没有 compat/deprecated wrapper。该边界的最低验证是
+`cargo test -p app-server processor::thread::projection::tests`、`cargo test -p app-server processor::tests::review`
+和 `npm run test:contracts`。真实 Electron Gate B evidence 已建立于
+`.lime/qc/gui-evidence/code-artifact-workbench-electron-fixture/code-artifact-workbench-electron-fixture-summary.json`，
+证明 preload/IPC 命中 `app_server_handle_json_lines`、`review/start` 与 backend turn identity 绑定，GUI 可见终态与
+内部 prompt 隔离，且无生产 mock fallback；不得用 TUI 或浏览器投影冒充该证据。
+
+## Host Reverse Requests, Plan And Diff Notifications
+
+`currentTime/read`、`item/permissions/requestApproval`、`item/tool/call` 使用同一 App Server server-request dispatcher：
+
+```text
+RuntimeCore waiter
+  -> App Server JSON-RPC server-request
+  -> Electron Desktop Host / PendingInteraction responder
+  -> exact response id
+  -> RuntimeCore continuation
+```
+
+`currentTime/read` 只能由 Electron Host 读取系统时钟，App Server 负责 thread scope、超时和响应校验；它不创建
+Thread Item，也不提供 Renderer 时钟 API。`item/permissions/requestApproval` 只接受 tool-runtime 规范化后的
+permission profile 和 canonical session/thread/turn/item/environment identity；统一 `PendingInteractionController`
+只能返回 turn/session-scoped grant 或空 grant，不能扩大请求权限。`item/tool/call` 只能命中
+`thread/start`/`thread/resume` 后冻结的 Desktop dynamic-tool binding，调用 identity、namespace、tool 和参数必须逐项
+匹配；结果由 canonical DynamicToolCall Item 投影，Renderer 不得伪造 server request 或直接执行宿主能力。
+
+`turn/plan/updated` 是 RuntimeCore `update_plan` producer 生成的 server notification，经 App Server v2 projector、
+typed client 和 Renderer projection 进入同一 Thread/Turn/Item read model。计划 snapshot 的权威 owner 是 canonical
+Plan Item；Renderer 本地 checklist 只做投影，不得替代 durable plan fact。
+
+`turn.diff.updated` 是 RuntimeCore `apply_patch` coding event producer 在 Turn 范围内聚合精确 mutation 后生成的 durable
+fact，经 App Server JSON-RPC projector 投影为 exact `turn/diff/updated { threadId, turnId, diff }`，再由 typed client
+和 Renderer conversation reducer 写入 canonical Turn 的 `unified_diff`。Desktop Changes 的 previous-conversation 模式只
+消费该字段；空字符串是有效 net-zero 清除信号，不得回退到本地 patch 拼装或第二份 diff store。Renderer 不承接 Codex
+TUI 的 review surface，Electron 只做既有 Desktop Host JSONL 转发，不新增业务后端。
+
+这条通知的 owner 是 App Server JSON-RPC + RuntimeCore durable event 链，不是 Electron IPC、旧 facade 或 provider。
+多模型 catalog、model switch、provider capability/readiness、retry/circuit breaker 和多模态 sampling/media lowering
+继续归 Grok-aligned `model-provider`；Codex 对齐只覆盖 Agent loop、Thread/Turn/Item、工具生命周期和 GUI 投影边界。
+
+`turn.moderation_metadata` 是 trusted first-party Responses metadata producer 生成的 durable fact，经 App Server
+JSON-RPC projector 投影为 exact
+`turn/moderationMetadata { threadId, turnId, metadata }`。`metadata` 必须原样保持 JSON value；object、array、scalar 与
+`null` 都有效，缺失字段或 wrapper 额外字段 fail closed。该事件不去重，每次更新都经 typed client signal router 写入
+canonical Turn 的 `moderation_metadata`，Renderer 只做 last-write-wins 且不展示 raw JSON。Electron 不新增 IPC，Codex
+TUI 忽略该通知的行为不复制为 Desktop UI；多模型与多模态控制面仍由 Grok-aligned `model-provider` 承接。
+
+runtime diagnostics 与 command terminal interaction 只允许走 typed server notification：`runtime.warning` / `runtime.error`
+由 App Server 分别投影为 `warning` / `error`，live 与 cold read 共用 durable event owner；`error.willRetry` 不直接生成
+Turn terminal。`item/commandExecution/terminalInteraction` 只发送脱敏、bounded summary，并与 canonical
+CommandExecution read model 合并。raw diagnostic side-channel、未脱敏 stdin/stdout 和 Renderer 自建 terminal history
+均为 `dead / forbidden-to-restore`。

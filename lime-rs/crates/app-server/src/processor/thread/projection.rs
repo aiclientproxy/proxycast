@@ -563,11 +563,6 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                 metadata: projected_metadata,
             })
         }
-        canonical::ThreadItemPayload::Hook { run } => Ok(v2::ThreadItem::Hook {
-            id,
-            metadata: projected_metadata,
-            run: v2::HookRunSummary::from(&run),
-        }),
         canonical::ThreadItemPayload::Unknown {
             upstream_type,
             field_names,
@@ -577,9 +572,37 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             upstream_type,
             field_names,
         }),
-        canonical::ThreadItemPayload::Extension { name, .. } => Err(projection_error(format!(
-            "canonical extension item {id} ({name}) has no v2 ThreadItem representation"
-        ))),
+        canonical::ThreadItemPayload::Extension { name, data } => {
+            match name.as_str() {
+                "enteredReviewMode" | "exitedReviewMode" => {
+                    let review = data
+                        .get("review")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                        .ok_or_else(|| {
+                            projection_error(format!(
+                                "canonical review item {id} ({name}) is missing review text"
+                            ))
+                        })?;
+                    if name == "enteredReviewMode" {
+                        Ok(v2::ThreadItem::EnteredReviewMode {
+                            id,
+                            metadata: projected_metadata,
+                            review,
+                        })
+                    } else {
+                        Ok(v2::ThreadItem::ExitedReviewMode {
+                            id,
+                            metadata: projected_metadata,
+                            review,
+                        })
+                    }
+                }
+                _ => Err(projection_error(format!(
+                    "canonical extension item {id} ({name}) has no v2 ThreadItem representation"
+                ))),
+            }
+        }
     }
 }
 

@@ -42,6 +42,7 @@ const FINAL_PAGE_OPERATION_TIMEOUT_MS = 15_000;
 const APP_SERVER_HANDLE_JSON_LINES_COMMAND = "app_server_handle_json_lines";
 const APP_SERVER_METHOD_THREAD_START = "thread/start";
 const APP_SERVER_METHOD_TURN_START = "turn/start";
+const APP_SERVER_METHOD_REVIEW_START = "review/start";
 const APP_SERVER_METHOD_THREAD_READ = "thread/read";
 const APP_SERVER_METHOD_THREAD_LIST = "thread/list";
 const APP_SERVER_METHOD_ARTIFACT_WRITE = "artifact/write";
@@ -127,7 +128,7 @@ Code Artifact Workbench Electron Fixture Smoke
   --app-url <url>        可选 renderer dev server，例如 http://127.0.0.1:1420/
   --evidence-dir <path>  证据目录
   --prefix <name>        证据文件前缀
-  --scenario <name>      direct-session | gui-coding-input | file-change-batch，默认 direct-session
+  --scenario <name>      direct-session | gui-coding-input | file-change-batch | review-start，默认 direct-session
   --timeout-ms <ms>      总超时，默认 180000
   --interval-ms <ms>     轮询间隔，默认 500
   --keep-temp            保留临时目录便于调试
@@ -195,10 +196,11 @@ function parseArgs(argv) {
       "direct-session",
       "gui-coding-input",
       FILE_CHANGE_BATCH_SCENARIO,
+      "review-start",
     ].includes(options.scenario)
   ) {
     throw new Error(
-      "--scenario 只能是 direct-session、gui-coding-input 或 file-change-batch",
+      "--scenario 只能是 direct-session、gui-coding-input、file-change-batch 或 review-start",
     );
   }
   return options;
@@ -443,21 +445,24 @@ if (ledgerPath) {
 
 ${renderFileChangeGateBBackendScript()}
 
-if (input.kind === "turnStart") {
-  const isRecoveryTurn =
-    inputText.includes(${JSON.stringify(CODING_RECOVERY_PROMPT_INTRO)}) &&
-    inputText.includes("${CODING_COMMAND_TEXT}") &&
-    inputText.includes("${CODING_COMMAND_FAILURE_PREVIEW}");
+  if (input.kind === "turnStart") {
+    const isRecoveryTurn =
+      inputText.includes(${JSON.stringify(CODING_RECOVERY_PROMPT_INTRO)}) &&
+      inputText.includes("${CODING_COMMAND_TEXT}") &&
+      inputText.includes("${CODING_COMMAND_FAILURE_PREVIEW}");
+    const isReviewTurn = inputText.startsWith("Review the current code changes");
   const isCodingPrompt = inputText.includes("coding-target.test.ts") || isRecoveryTurn;
   const commandPreview = isCodingPrompt && !isRecoveryTurn
     ? "${CODING_COMMAND_FAILURE_PREVIEW}"
     : "${CODING_COMMAND_SUCCESS_PREVIEW}";
   const commandExitCode = isCodingPrompt && !isRecoveryTurn ? 1 : 0;
-  const assistantText = isRecoveryTurn
-    ? "已继续修复 coding-target，并通过 npm test -- coding-target。"
-    : "${ASSISTANT_ARTIFACT_TEXT}";
+  const assistantText = isReviewTurn
+    ? "代码审查完成：未发现阻塞性问题。"
+    : isRecoveryTurn
+      ? "已继续修复 coding-target，并通过 npm test -- coding-target。"
+      : "${ASSISTANT_ARTIFACT_TEXT}";
   const turnScopedExecutionId = (baseId) =>
-    isRecoveryTurn ? baseId + ":" + turnId : baseId;
+    isRecoveryTurn || isReviewTurn ? baseId + ":" + turnId : baseId;
   const assistantItemId = turnScopedExecutionId("code-artifact-workbench-electron:assistant");
   const toolCallId = turnScopedExecutionId("${TOOL_CALL_ID}");
   const fileChangeItemId = turnScopedExecutionId("${CODING_ARTIFACT_ID}");
@@ -567,7 +572,34 @@ if (input.kind === "turnStart") {
       }
     };
   };
-  const events = [
+  const events = isReviewTurn ? [
+      {
+        type: "message.delta",
+        payload: {
+          itemId: assistantItemId,
+          role: "assistant",
+          text: assistantText,
+          phase: "final_answer"
+        }
+      },
+      {
+        type: "message.completed",
+        payload: {
+          itemId: assistantItemId,
+          role: "assistant",
+          text: assistantText,
+          phase: "final_answer",
+          status: "completed"
+        }
+      },
+      {
+        type: "turn.completed",
+        payload: {
+          status: "completed",
+          text: assistantText
+        }
+      }
+    ] : [
       {
         type: "message.delta",
         payload: {
@@ -1077,6 +1109,17 @@ async function inspectHistoricalTimelineSummary(page, options) {
       continue;
     }
     lastSnapshot = snapshot;
+    if (/审查失败|Review failed|レビュー失敗|검토 실패|審查失敗/u.test(snapshot.statusText)) {
+      const diagnostics = await evaluatePageSnapshot(page, () => ({
+        invokeErrors: window.localStorage.getItem("lime_invoke_error_buffer_v1"),
+        trace: window.localStorage.getItem("lime_invoke_trace_buffer_v1"),
+      }));
+      throw new Error(
+        `代码审查启动失败: ${JSON.stringify(
+          sanitizeJson({ snapshot, diagnostics }),
+        )}`,
+      );
+    }
     if (
       snapshot.historicalTimelinePreviewCount > 0 &&
       snapshot.toolCallRowCount === 0 &&
@@ -2524,6 +2567,124 @@ async function openWorkbench(page, options) {
   throw new Error("点击工作台后未出现工作台内容");
 }
 
+async function startReviewFromGui(page, options) {
+  const changesTabClicked = await evaluatePageSnapshot(page, () => {
+    const isVisible = (element) => {
+      if (!(element instanceof HTMLElement)) return false;
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    };
+    const tab = Array.from(
+      document.querySelectorAll('[data-canvas-tab-key="changes"]'),
+    ).find(isVisible);
+    if (tab instanceof HTMLElement) {
+      tab.click();
+      return true;
+    }
+    return false;
+  });
+  assert(changesTabClicked, "未找到可见的 Canvas 变更标签");
+  const button = page.locator(
+    '[data-testid="code-review-summary-start-review"]',
+  ).first();
+  await button.waitFor({ state: "visible", timeout: options.timeoutMs });
+  assert(
+    await button.isEnabled(),
+    "代码审查按钮不可用，可能仍有活动回合或缺少当前 Thread",
+  );
+  await button.click();
+
+  const startedAt = Date.now();
+  let lastSnapshot = null;
+  while (Date.now() - startedAt < options.timeoutMs) {
+    const snapshot = await evaluatePageSnapshot(page, () => {
+      const status = document.querySelector(
+        '[data-testid="code-review-summary-review-status"]',
+      );
+      const boundaries = document.querySelectorAll(
+        '[data-testid="timeline-review-boundary"]',
+      );
+      const statusText = status?.textContent?.trim() || "";
+      return {
+        statusText,
+        reviewBoundaryCount: boundaries.length,
+        bodyText: document.body?.innerText || "",
+      };
+    });
+    if (!snapshot) {
+      await sleep(options.intervalMs);
+      continue;
+    }
+    lastSnapshot = snapshot;
+    if (
+      /审查已完成|Review complete|レビュー完了|검토 완료|審查已完成/u.test(
+        snapshot.statusText,
+      ) &&
+      /代码审查完成|Code review complete|コードレビュー完了|코드 검토 완료|程式碼審查完成/u.test(
+        snapshot.bodyText,
+      )
+    ) {
+      return {
+        clicked: true,
+        completed: true,
+        statusText: snapshot.statusText,
+        reviewBoundaryCount: snapshot.reviewBoundaryCount,
+        bodyText: snapshot.bodyText,
+      };
+    }
+    await sleep(options.intervalMs);
+  }
+  throw new Error(
+    `代码审查未在 GUI 中完成: ${JSON.stringify(sanitizeJson(lastSnapshot))}`,
+  );
+}
+
+function readReviewBoundaries(readResult) {
+  const turns = Array.isArray(readResult?.thread?.turns)
+    ? readResult.thread.turns
+    : [];
+  return turns.flatMap((turn) =>
+    (Array.isArray(turn?.items) ? turn.items : [])
+      .filter((item) =>
+        ["enteredReviewMode", "exitedReviewMode"].includes(item?.type),
+      )
+      .map((item) => ({ ...item, turnId: turn?.id || null })),
+  );
+}
+
+function hasReviewBoundaryProjection(value) {
+  const types = readReviewBoundaries(value).map((item) => item.type);
+  return (
+    types.includes("enteredReviewMode") &&
+    types.includes("exitedReviewMode")
+  );
+}
+
+async function waitForReviewTerminalReadModel(page, options) {
+  const startedAt = Date.now();
+  let lastRead = null;
+  while (Date.now() - startedAt < options.timeoutMs) {
+    const response = await invokeAppServerFromPage(page, APP_SERVER_METHOD_THREAD_READ, {
+      threadId: THREAD_ID,
+      includeTurns: true,
+    });
+    lastRead = response.result;
+    if (
+      hasReviewBoundaryProjection(lastRead) &&
+      readLatestThreadTurn(lastRead)?.status === "completed"
+    ) {
+      return lastRead;
+    }
+    await sleep(options.intervalMs);
+  }
+  throw new Error(
+    `review/start 后 thread/read 未出现 completed review boundary: ${JSON.stringify(
+      sanitizeJson(lastRead),
+    )}`,
+  );
+}
+
 async function collectCodingWorkbenchGuiEvidence(
   page,
   options,
@@ -3071,6 +3232,10 @@ async function run() {
     guiSessionOpenAfterInput: null,
     sessionHydrated: null,
     workbench: null,
+    reviewStart: null,
+    reviewRead: null,
+    reviewBackendEvidence: null,
+    reviewTraceEvidence: null,
     codingWorkbenchGuiEvidence: null,
     codingRecoveryEvidence: null,
     assertions: {},
@@ -3484,6 +3649,17 @@ async function run() {
       }),
     );
 
+    if (options.scenario === "review-start") {
+      logStage("start-review-from-gui");
+      summary.reviewStart = sanitizeJson(
+        await startReviewFromGui(page, options),
+      );
+      logStage("wait-review-read-model");
+      summary.reviewRead = sanitizeJson(
+        await waitForReviewTerminalReadModel(page, options),
+      );
+    }
+
     if (options.scenario === "gui-coding-input") {
       logStage("click-coding-workbench-recovery");
       summary.codingRecoveryEvidence = sanitizeJson(
@@ -3555,6 +3731,39 @@ async function run() {
         ].filter(Boolean),
       ),
     );
+    const reviewBackendTurnStart =
+      options.scenario === "review-start"
+        ? backendLedger.find(
+            (entry) =>
+              entry.kind === "turnStart" &&
+              entry.turnId &&
+              entry.turnId !== summary.sessionCreation?.turnId,
+          )
+        : null;
+    const reviewBackendEvents = reviewBackendTurnStart
+      ? backendLedger.find(
+          (entry) =>
+            entry.kind === "backendEvents" &&
+            entry.turnId === reviewBackendTurnStart.turnId,
+        )
+      : null;
+    const reviewTraceMessages =
+      options.scenario === "review-start"
+        ? traceMessages.filter(
+            (entry) =>
+              entry?.command === APP_SERVER_HANDLE_JSON_LINES_COMMAND &&
+              decodeJsonRpcLines(entry?.args_preview?.request?.lines).some(
+                (message) => message.method === APP_SERVER_METHOD_REVIEW_START,
+              ),
+          )
+        : [];
+    if (options.scenario === "review-start") {
+      summary.reviewBackendEvidence = sanitizeJson({
+        turnStart: reviewBackendTurnStart,
+        events: reviewBackendEvents,
+      });
+      summary.reviewTraceEvidence = sanitizeJson(reviewTraceMessages);
+    }
     const backendRecoveryTurnStart = backendLedger.find(
       (entry) =>
         entry.kind === "turnStart" &&
@@ -3633,6 +3842,7 @@ async function run() {
           items.every((item) => item?.status !== "inProgress")
         );
       });
+    const reviewBoundaries = readReviewBoundaries(summary.reviewRead);
     const assertions = {
       electronPreloadBridge: rendererSnapshot.electron === true,
       appServerJsonRpcUsed: appServerJsonRpcObserved,
@@ -3788,6 +3998,49 @@ async function run() {
           "turn.cancelled",
         ].includes(type),
       ),
+      reviewGuiSubmitted:
+        options.scenario !== "review-start" ||
+        (summary.reviewStart?.clicked === true &&
+          summary.reviewStart?.completed === true),
+      reviewStartElectronIpcTrace:
+        options.scenario !== "review-start" ||
+        reviewTraceMessages.some(
+          (entry) =>
+            entry?.transport === "electron-ipc" &&
+            entry?.command === APP_SERVER_HANDLE_JSON_LINES_COMMAND,
+        ),
+      reviewStartTypedMethodObserved:
+        options.scenario !== "review-start" ||
+        appServerRequestMethods.includes(APP_SERVER_METHOD_REVIEW_START),
+      reviewBackendTurnIdentity:
+        options.scenario !== "review-start" ||
+        (reviewBackendTurnStart?.sessionId === SESSION_ID &&
+          reviewBackendTurnStart?.threadId === THREAD_ID &&
+          typeof reviewBackendTurnStart?.turnId === "string" &&
+          reviewBackendTurnStart.turnId.length > 0 &&
+          reviewBackendEvents?.sessionId === SESSION_ID &&
+          reviewBackendEvents?.threadId === THREAD_ID &&
+          reviewBackendEvents?.turnId === reviewBackendTurnStart.turnId),
+      reviewCanonicalBoundaries:
+        options.scenario !== "review-start" ||
+        (reviewBoundaries.some((item) => item?.type === "enteredReviewMode") &&
+          reviewBoundaries.some((item) => item?.type === "exitedReviewMode") &&
+          reviewBoundaries.every(
+            (item) => item?.turnId === reviewBackendTurnStart?.turnId,
+          )),
+      reviewBackendTerminal:
+        options.scenario !== "review-start" ||
+        reviewBackendEvents?.eventTypes?.includes("turn.completed"),
+      reviewBackendUsesDedicatedMessageLifecycle:
+        options.scenario !== "review-start" ||
+        reviewBackendEvents?.eventTypes?.join(",") ===
+          "message.delta,message.completed,turn.completed",
+      reviewPromptHiddenFromTranscript:
+        options.scenario !== "review-start" ||
+        (!pageText.includes("Review the current code changes") &&
+          !String(summary.reviewStart?.bodyText || "").includes(
+            "Review the current code changes",
+          )),
       noInvokeErrors: !errorRaw,
     };
 

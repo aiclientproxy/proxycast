@@ -10,12 +10,17 @@ export type RuntimeServerNotification = Extract<
   {
     method:
       | "error"
+      | "guardianWarning"
+      | "turn/diff/updated"
+      | "turn/moderationMetadata"
       | "turn/plan/updated"
       | "thread/started"
       | "turn/started"
       | "turn/completed"
       | "item/started"
       | "item/completed"
+      | "item/autoApprovalReview/started"
+      | "item/autoApprovalReview/completed"
       | "item/agentMessage/delta"
       | "item/commandExecution/outputDelta"
       | "item/commandExecution/terminalInteraction"
@@ -54,6 +59,55 @@ export type McpServerStatusUpdatedServerNotification = Extract<
   { method: "mcpServer/startupStatus/updated" }
 >;
 
+export type CommandExecOutputDeltaServerNotification = Extract<
+  ServerNotification,
+  { method: "command/exec/outputDelta" }
+>;
+
+export type GuardianReviewStartedServerNotification = Extract<
+  ServerNotification,
+  { method: "item/autoApprovalReview/started" }
+>;
+
+export type GuardianReviewCompletedServerNotification = Extract<
+  ServerNotification,
+  { method: "item/autoApprovalReview/completed" }
+>;
+
+export type GuardianWarningServerNotification = Extract<
+  ServerNotification,
+  { method: "guardianWarning" }
+>;
+
+export function commandExecOutputDeltaServerNotification(
+  message: JsonRpcMessage,
+): CommandExecOutputDeltaServerNotification | undefined {
+  if (
+    !isJsonRpcNotification(message) ||
+    message.method !== "command/exec/outputDelta"
+  ) {
+    return undefined;
+  }
+  const params = record(message.params);
+  if (
+    !params ||
+    typeof params.processId !== "string" ||
+    !params.processId.trim() ||
+    (params.stream !== "stdout" && params.stream !== "stderr") ||
+    typeof params.deltaBase64 !== "string" ||
+    typeof params.capReached !== "boolean"
+  ) {
+    return undefined;
+  }
+  return message as CommandExecOutputDeltaServerNotification;
+}
+
+export function isCommandExecOutputDeltaServerNotification(
+  message: JsonRpcMessage,
+): message is CommandExecOutputDeltaServerNotification {
+  return commandExecOutputDeltaServerNotification(message) !== undefined;
+}
+
 export type ServerNotificationFor<
   Method extends RuntimeServerNotification["method"],
 > = Extract<RuntimeServerNotification, { method: Method }>;
@@ -69,6 +123,18 @@ export function serverNotification(
     case "error":
       return hasErrorNotification(message.params)
         ? (message as ServerNotificationFor<"error">)
+        : undefined;
+    case "guardianWarning":
+      return hasGuardianWarningNotification(message.params)
+        ? (message as ServerNotificationFor<"guardianWarning">)
+        : undefined;
+    case "turn/diff/updated":
+      return hasTurnDiffUpdatedNotification(message.params)
+        ? (message as ServerNotificationFor<"turn/diff/updated">)
+        : undefined;
+    case "turn/moderationMetadata":
+      return hasTurnModerationMetadataNotification(message.params)
+        ? (message as ServerNotificationFor<"turn/moderationMetadata">)
         : undefined;
     case "turn/plan/updated":
       return hasTurnPlanUpdatedNotification(message.params)
@@ -97,6 +163,14 @@ export function serverNotification(
     case "item/completed":
       return hasItemNotification(message.params, "completedAtMs")
         ? (message as ServerNotificationFor<"item/completed">)
+        : undefined;
+    case "item/autoApprovalReview/started":
+      return hasGuardianReviewStartedNotification(message.params)
+        ? (message as ServerNotificationFor<"item/autoApprovalReview/started">)
+        : undefined;
+    case "item/autoApprovalReview/completed":
+      return hasGuardianReviewCompletedNotification(message.params)
+        ? (message as ServerNotificationFor<"item/autoApprovalReview/completed">)
         : undefined;
     case "item/agentMessage/delta":
       return hasItemTextDelta(message.params)
@@ -303,6 +377,18 @@ export function isTurnPlanUpdatedNotification(
   return serverNotification(message)?.method === "turn/plan/updated";
 }
 
+export function isTurnDiffUpdatedNotification(
+  message: JsonRpcMessage,
+): message is ServerNotificationFor<"turn/diff/updated"> {
+  return serverNotification(message)?.method === "turn/diff/updated";
+}
+
+export function isTurnModerationMetadataNotification(
+  message: JsonRpcMessage,
+): message is ServerNotificationFor<"turn/moderationMetadata"> {
+  return serverNotification(message)?.method === "turn/moderationMetadata";
+}
+
 export function isTurnStartedNotification(
   message: JsonRpcMessage,
 ): message is ServerNotificationFor<"turn/started"> {
@@ -325,6 +411,24 @@ export function isItemCompletedNotification(
   message: JsonRpcMessage,
 ): message is ServerNotificationFor<"item/completed"> {
   return serverNotification(message)?.method === "item/completed";
+}
+
+export function isGuardianReviewStartedNotification(
+  message: JsonRpcMessage,
+): message is GuardianReviewStartedServerNotification {
+  return serverNotification(message)?.method === "item/autoApprovalReview/started";
+}
+
+export function isGuardianReviewCompletedNotification(
+  message: JsonRpcMessage,
+): message is GuardianReviewCompletedServerNotification {
+  return serverNotification(message)?.method === "item/autoApprovalReview/completed";
+}
+
+export function isGuardianWarningNotification(
+  message: JsonRpcMessage,
+): message is GuardianWarningServerNotification {
+  return serverNotification(message)?.method === "guardianWarning";
 }
 
 export function isAgentMessageDeltaNotification(
@@ -425,6 +529,15 @@ function hasErrorNotification(value: unknown): boolean {
   );
 }
 
+function hasGuardianWarningNotification(value: unknown): boolean {
+  const params = record(value);
+  return (
+    hasOnlyKeys(params, ["message", "threadId"]) &&
+    hasString(params, "threadId") &&
+    hasString(params, "message")
+  );
+}
+
 function hasTurnPlanUpdatedNotification(value: unknown): boolean {
   const params = record(value);
   if (
@@ -448,6 +561,45 @@ function hasTurnPlanUpdatedNotification(value: unknown): boolean {
         step?.status === "completed")
     );
   });
+}
+
+function hasTurnDiffUpdatedNotification(value: unknown): boolean {
+  const params = record(value);
+  return (
+    hasOnlyKeys(params, ["diff", "threadId", "turnId"]) &&
+    hasString(params, "threadId") &&
+    hasString(params, "turnId") &&
+    typeof params?.diff === "string"
+  );
+}
+
+function hasTurnModerationMetadataNotification(value: unknown): boolean {
+  const params = record(value);
+  return (
+    hasOnlyKeys(params, ["metadata", "threadId", "turnId"]) &&
+    hasString(params, "threadId") &&
+    hasString(params, "turnId") &&
+    Object.prototype.hasOwnProperty.call(params, "metadata") &&
+    isJsonValue(params?.metadata)
+  );
+}
+
+function isJsonValue(value: unknown): boolean {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "string"
+  ) {
+    return true;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+  const object = record(value);
+  return Boolean(object && Object.values(object).every(isJsonValue));
 }
 
 function hasOnlyKeys(
@@ -555,6 +707,180 @@ function hasItemTextDelta(value: unknown): boolean {
     hasString(params, "turnId") &&
     hasString(params, "itemId") &&
     typeof params?.delta === "string"
+  );
+}
+
+function hasGuardianReviewStartedNotification(value: unknown): boolean {
+  const params = record(value);
+  const review = record(params?.review);
+  return (
+    hasOnlyKeys(params, [
+      "action",
+      "review",
+      "reviewId",
+      "startedAtMs",
+      "targetItemId",
+      "threadId",
+      "turnId",
+    ]) &&
+    hasString(params, "threadId") &&
+    hasString(params, "turnId") &&
+    hasString(params, "reviewId") &&
+    hasFiniteNumber(params, "startedAtMs") &&
+    isGuardianAction(params?.action) &&
+    isGuardianReview(review, "inProgress")
+  );
+}
+
+function hasGuardianReviewCompletedNotification(value: unknown): boolean {
+  const params = record(value);
+  const review = record(params?.review);
+  return (
+    hasOnlyKeys(params, [
+      "action",
+      "completedAtMs",
+      "decisionSource",
+      "review",
+      "reviewId",
+      "startedAtMs",
+      "targetItemId",
+      "threadId",
+      "turnId",
+    ]) &&
+    hasString(params, "threadId") &&
+    hasString(params, "turnId") &&
+    hasString(params, "reviewId") &&
+    hasFiniteNumber(params, "startedAtMs") &&
+    hasFiniteNumber(params, "completedAtMs") &&
+    params?.decisionSource === "agent" &&
+    isGuardianAction(params?.action) &&
+    isGuardianReview(review, "terminal")
+  );
+}
+
+function isGuardianReview(
+  value: Record<string, unknown> | undefined,
+  status: "inProgress" | "terminal",
+): boolean {
+  if (
+    !hasOnlyKeys(value, [
+      "rationale",
+      "riskLevel",
+      "status",
+      "userAuthorization",
+    ])
+  ) {
+    return false;
+  }
+  const allowedStatuses =
+    status === "inProgress"
+      ? ["inProgress"]
+      : ["approved", "denied", "timedOut", "aborted"];
+  return (
+    typeof value?.status === "string" &&
+    allowedStatuses.includes(value.status) &&
+    hasOptionalNullableStringValue(value, "rationale") &&
+    hasOptionalNullableEnum(value, "riskLevel", [
+      "low",
+      "medium",
+      "high",
+      "critical",
+    ]) &&
+    hasOptionalNullableEnum(value, "userAuthorization", [
+      "unknown",
+      "low",
+      "medium",
+      "high",
+    ])
+  );
+}
+
+function isGuardianAction(value: unknown): boolean {
+  const action = record(value);
+  const type = readString(action, "type");
+  if (!action || !type) return false;
+  switch (type) {
+    case "command":
+      return (
+        hasOnlyKeys(action, ["command", "cwd", "source", "type"]) &&
+        hasString(action, "source") &&
+        hasString(action, "command") &&
+        hasString(action, "cwd")
+      );
+    case "execve":
+      return (
+        hasOnlyKeys(action, ["argv", "cwd", "program", "source", "type"]) &&
+        hasString(action, "source") &&
+        hasString(action, "program") &&
+        hasString(action, "cwd") &&
+        Array.isArray(action.argv) &&
+        action.argv.every((value) => typeof value === "string")
+      );
+    case "applyPatch":
+      return (
+        hasOnlyKeys(action, ["cwd", "files", "type"]) &&
+        hasString(action, "cwd") &&
+        Array.isArray(action.files) &&
+        action.files.every((value) => typeof value === "string")
+      );
+    case "networkAccess":
+      return (
+        hasOnlyKeys(action, ["host", "port", "protocol", "target", "type"]) &&
+        hasString(action, "target") &&
+        hasString(action, "host") &&
+        hasString(action, "protocol") &&
+        Number.isSafeInteger(action.port) &&
+        (action.port as number) >= 0 &&
+        (action.port as number) <= 65_535
+      );
+    case "mcpToolCall":
+      return (
+        hasOnlyKeys(action, [
+          "connectorId",
+          "connectorName",
+          "server",
+          "toolName",
+          "toolTitle",
+          "type",
+        ]) &&
+        hasString(action, "server") &&
+        hasString(action, "toolName") &&
+        hasOptionalNullableStringValue(action, "connectorId") &&
+        hasOptionalNullableStringValue(action, "connectorName") &&
+        hasOptionalNullableStringValue(action, "toolTitle")
+      );
+    case "requestPermissions":
+      return (
+        hasOnlyKeys(action, ["permissions", "reason", "type"]) &&
+        Object.prototype.hasOwnProperty.call(action, "permissions") &&
+        isJsonValue(action.permissions) &&
+        hasOptionalNullableStringValue(action, "reason")
+      );
+    default:
+      return false;
+  }
+}
+
+function hasOptionalNullableStringValue(
+  value: Record<string, unknown>,
+  key: string,
+): boolean {
+  return (
+    !Object.prototype.hasOwnProperty.call(value, key) ||
+    value[key] === null ||
+    typeof value[key] === "string"
+  );
+}
+
+function hasOptionalNullableEnum(
+  value: Record<string, unknown>,
+  key: string,
+  allowed: readonly string[],
+): boolean {
+  return (
+    !Object.prototype.hasOwnProperty.call(value, key) ||
+    value[key] === null ||
+    (typeof value[key] === "string" && allowed.includes(value[key]))
   );
 }
 

@@ -224,7 +224,6 @@ describe("Codex render projection coverage boundary", () => {
   it("product-scope-excluded notifications remain diagnostics-only and outside the current projector", () => {
     const coverage = readJson<CoverageFixture>(COVERAGE_PATH);
     const excludedMethods = [
-      "turn/diff/updated",
       "process/outputDelta",
       "process/exited",
     ];

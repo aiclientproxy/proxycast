@@ -522,6 +522,12 @@ function canonicalTurnToRuntimeTurn(
         ? undefined
         : canonicalTimestamp(completedAtMs),
     error_message: errorMessage,
+    unified_diff: readOptionalStringField(value, "unifiedDiff"),
+    moderation_metadata: readField(
+      value,
+      "moderationMetadata",
+      "moderation_metadata",
+    ),
     created_at: startedAt,
     updated_at: canonicalTimestamp(
       canonicalThreadTime(value, "updatedAt") ?? completedAtMs ?? createdAtMs,

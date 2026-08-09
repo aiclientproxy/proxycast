@@ -127,6 +127,21 @@ function appServerClientMock(): AgentRuntimeAppServerClient {
       messages: [],
       notifications: [],
     }),
+    startReview: vi.fn().mockResolvedValue({
+      id: 7,
+      result: {
+        reviewThreadId: "thread-1",
+        turn: {
+          id: "turn-review",
+          items: [],
+          itemsView: "notLoaded",
+          status: "inProgress",
+        },
+      },
+      response: { id: 7, result: {} },
+      messages: [],
+      notifications: [],
+    }),
     startTurn: vi.fn().mockResolvedValue({}),
     steerTurn: vi.fn().mockResolvedValue({
       id: 3,
@@ -1334,6 +1349,119 @@ describe("agentRuntime threadClient", () => {
         text: "失败前已接收的文本",
         thread_id: "thread-error",
         turn_id: "turn-error",
+      }),
+    });
+    unlisten();
+  });
+
+  it("App Server review 应把 response notification 投递到当前 thread event route", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.startReview).mockResolvedValueOnce({
+      id: 8,
+      result: {
+        reviewThreadId: "thread-review",
+        turn: {
+          id: "turn-review",
+          items: [],
+          itemsView: "notLoaded",
+          status: "inProgress",
+        },
+      },
+      response: { id: 8, result: {} },
+      messages: [],
+      notifications: [
+        {
+          method: "item/agentMessage/delta",
+          params: {
+            delta: "审查已开始",
+            itemId: "item-review",
+            threadId: "thread-review",
+            turnId: "turn-review",
+          },
+        },
+      ],
+    });
+    const client = createThreadClient({
+      appServerClient,
+      invokeCommand: vi.fn() as unknown as AgentRuntimeCommandInvoke,
+      isAppServerTurnLifecycleAvailable: () => true,
+      enableAppServerEventDrain: true,
+    });
+    const listener = vi.fn();
+    const eventName = "agentSession/event/thread-review";
+    const unlisten = await listenAgentRuntimeEvent(eventName, listener);
+
+    await expect(
+      client.submitAgentRuntimeReview({
+        threadId: " thread-review ",
+        delivery: "inline",
+        target: { type: "uncommittedChanges" },
+      }),
+    ).resolves.toMatchObject({
+      result: { reviewThreadId: "thread-review" },
+    });
+
+    expect(appServerClient.startReview).toHaveBeenCalledWith({
+      threadId: "thread-review",
+      delivery: "inline",
+      target: { type: "uncommittedChanges" },
+    });
+    expect(listener).toHaveBeenCalledWith({
+      payload: expect.objectContaining({
+        type: "text_delta",
+        text: "审查已开始",
+        thread_id: "thread-review",
+        turn_id: "turn-review",
+      }),
+    });
+    unlisten();
+  });
+
+  it("App Server review 失败时应把 RPC error 投递到当前 thread event route", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.startReview).mockRejectedValueOnce(
+      new AppServerRpcError(
+        {
+          id: 9,
+          error: { code: -32000, message: "review failed" },
+        },
+        [
+          {
+            method: "error",
+            params: {
+              error: { message: "review failed" },
+              threadId: "thread-review-error",
+              turnId: "turn-review-error",
+              willRetry: false,
+            },
+          },
+        ],
+      ),
+    );
+    const client = createThreadClient({
+      appServerClient,
+      invokeCommand: vi.fn() as unknown as AgentRuntimeCommandInvoke,
+      isAppServerTurnLifecycleAvailable: () => true,
+      enableAppServerEventDrain: true,
+    });
+    const listener = vi.fn();
+    const eventName = "agentSession/event/thread-review-error";
+    const unlisten = await listenAgentRuntimeEvent(eventName, listener);
+
+    await expect(
+      client.submitAgentRuntimeReview({
+        threadId: "thread-review-error",
+        delivery: "inline",
+        target: { type: "uncommittedChanges" },
+      }),
+    ).rejects.toThrow("review failed");
+
+    expect(listener).toHaveBeenCalledWith({
+      payload: expect.objectContaining({
+        type: "error",
+        message: "review failed",
+        thread_id: "thread-review-error",
+        turn_id: "turn-review-error",
       }),
     });
     unlisten();

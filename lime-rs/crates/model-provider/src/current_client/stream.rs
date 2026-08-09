@@ -306,7 +306,7 @@ struct ResponsesStreamState {
     active_reasoning_id: Option<String>,
     server_model: Option<String>,
     emitted_verifications: HashSet<ModelVerification>,
-    allow_model_verification: bool,
+    allow_openai_response_metadata: bool,
 }
 
 pub(super) struct ResponsesEventBatch {
@@ -320,11 +320,11 @@ pub(super) struct ResponsesEventReducer {
 }
 
 impl ResponsesEventReducer {
-    pub(super) fn new(server_model: Option<String>, allow_model_verification: bool) -> Self {
+    pub(super) fn new(server_model: Option<String>, allow_openai_response_metadata: bool) -> Self {
         Self {
             state: ResponsesStreamState {
                 server_model,
-                allow_model_verification,
+                allow_openai_response_metadata,
                 ..ResponsesStreamState::default()
             },
         }
@@ -344,13 +344,16 @@ impl ResponsesEventReducer {
             }
         }
         match event_type {
-            "response.metadata" if self.state.allow_model_verification => {
+            "response.metadata" if self.state.allow_openai_response_metadata => {
                 let verifications = response_model_verifications(payload)
                     .into_iter()
                     .filter(|verification| self.state.emitted_verifications.insert(*verification))
                     .collect::<Vec<_>>();
                 if !verifications.is_empty() {
                     events.push(LlmEvent::ModelVerification { verifications });
+                }
+                if let Some(metadata) = response_turn_moderation_metadata(payload) {
+                    events.push(LlmEvent::TurnModerationMetadata { metadata });
                 }
             }
             "response.output_text.delta" => {
@@ -581,11 +584,14 @@ impl ResponsesEventReducer {
 
 pub(super) fn responses_sse(
     response: Response,
-    allow_model_verification: bool,
+    allow_openai_response_metadata: bool,
 ) -> impl Stream<Item = Result<LlmEvent, CurrentProviderError>> + Send {
     let server_model = response_header_model(response.headers());
     try_stream! {
-        let mut reducer = ResponsesEventReducer::new(server_model.clone(), allow_model_verification);
+        let mut reducer = ResponsesEventReducer::new(
+            server_model.clone(),
+            allow_openai_response_metadata,
+        );
         if let Some(model) = server_model {
             yield LlmEvent::ServerModel { model };
         }
@@ -666,6 +672,12 @@ fn response_model_verifications(payload: &Value) -> Vec<ModelVerification> {
             _ => None,
         })
         .collect()
+}
+
+fn response_turn_moderation_metadata(payload: &Value) -> Option<Value> {
+    payload
+        .pointer("/metadata/openai_chatgpt_moderation_metadata")
+        .cloned()
 }
 
 fn take_responses_calls(
@@ -1110,6 +1122,59 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn trusted_responses_metadata_preserves_each_moderation_update_as_opaque_json() {
+        let mut reducer = ResponsesEventReducer::new(None, true);
+        let first = reducer
+            .push(&json!({
+                "type": "response.metadata",
+                "metadata": {
+                    "openai_chatgpt_moderation_metadata": {
+                        "presentation": "inline"
+                    }
+                }
+            }))
+            .expect("first moderation metadata");
+        let second = reducer
+            .push(&json!({
+                "type": "response.metadata",
+                "metadata": {
+                    "openai_chatgpt_moderation_metadata": ["updated", 2]
+                }
+            }))
+            .expect("second moderation metadata");
+
+        assert_eq!(
+            first.events,
+            vec![LlmEvent::TurnModerationMetadata {
+                metadata: json!({ "presentation": "inline" }),
+            }]
+        );
+        assert_eq!(
+            second.events,
+            vec![LlmEvent::TurnModerationMetadata {
+                metadata: json!(["updated", 2]),
+            }]
+        );
+    }
+
+    #[test]
+    fn untrusted_responses_metadata_does_not_emit_moderation_metadata() {
+        let events = ResponsesEventReducer::new(None, false)
+            .push(&json!({
+                "type": "response.metadata",
+                "metadata": {
+                    "openai_chatgpt_moderation_metadata": {
+                        "presentation": "inline"
+                    }
+                }
+            }))
+            .expect("ignored moderation metadata")
+            .events;
+
+        assert!(events.is_empty());
     }
 
     #[test]

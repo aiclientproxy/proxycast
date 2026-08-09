@@ -589,6 +589,13 @@ export function readCanonicalAgentThreadTurn(
       readString(turn, "error_message", "errorMessage", "message") ??
       readString(error ?? {}, "message") ??
       (fallbackStatus === "failed" ? "App Server turn failed" : undefined),
+    unified_diff: readString(turn, "unified_diff", "unifiedDiff"),
+    moderation_metadata: Object.prototype.hasOwnProperty.call(
+      turn,
+      "moderation_metadata",
+    )
+      ? turn.moderation_metadata
+      : turn.moderationMetadata,
     created_at: createdAt,
     updated_at: readTurnTimestamp(
       turn,
