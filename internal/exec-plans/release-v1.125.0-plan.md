@@ -41,3 +41,16 @@
 - Windows runner 首次 run `31311967541`：失败于 `actions/checkout`，原因是 `source_ref` 使用短 SHA `8647d18fa`，workflow checkout 无法解析该引用；未进入构建。
 - Windows runner 重试 run `31312029636`：Checkout、pnpm/Node/Rust/sccache、依赖安装均通过；`lime-mcp` Agent Plugin path contract 为 `10 passed / 3 failed`，失败集中在 Windows 扩展路径前缀与 8.3 短路径的字面断言（`agent_plugin_config_tests.rs`），未进入 sherpa、Electron、Squirrel smoke 或 Plugin Gate B，因此无 Windows 包 artifact。
 - Windows runner 结论：发布提交已被真实 Windows runner 检出，但 Windows path contract 门禁阻断；不改写已推送的 `v1.125.0` tag。
+
+## Windows 门禁修复
+
+状态：fix-validated-locally
+
+- 根因一：`build-windows-test` 直接把短 commit SHA 交给 `actions/checkout`，与输入声明的 commit SHA 能力不一致。
+- 根因二：Windows MCP path contract 将同一文件系统路径的普通路径、extended-length 路径和 8.3 alias 做字面比较。
+- 根因三：`guardianWarning` 已进入 generated notification union，但漏出 `AgentRuntimeSignalNotification`，导致 release/Quality 的 typecheck、GUI smoke 和三平台 Electron build 同源失败；该一行修复已由当前并发写集提供，本轮不覆盖。
+- 窄写集：`.github/workflows/build-windows-test.yml`、`lime-rs/crates/mcp/src/agent_plugin_config{,_tests}.rs`、`scripts/electron/windows-squirrel-rc-smoke.test.mjs`、本计划。
+- 退出条件：短 SHA 先解析为完整 commit SHA；Windows 断言按文件身份/Path component 比较；MCP 定向测试、workflow contract、typecheck 通过，并在真实 Windows runner 复核。
+- 本地验证：MCP `8/8`、Windows workflow contract `16/16`、`npm run typecheck`、`npm run test:contracts`、`npm run governance:electron-release-workflow`、app-server-client 定向 `100/100`、`npm run verify:gui-smoke` 均通过；GUI evidence `standalone-shell-01-20260809135003-43144`。
+- `npm run test:related -- packages/app-server-client/src/agent-runtime.ts`：入口在 Electron 目录解析时触发既有 `EISDIR`，未作为通过证据；改用直接 app-server-client 测试文件运行并通过。
+- 真实 Windows runner：待提交并推送修复后复核。

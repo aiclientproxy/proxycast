@@ -58,6 +58,7 @@ export type AgentRuntimeSignalNotification = Extract<
   {
     method:
       | "error"
+      | "guardianWarning"
       | "turn/diff/updated"
       | "turn/moderationMetadata"
       | "turn/plan/updated";

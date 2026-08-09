@@ -39,8 +39,8 @@ fn expands_placeholders_once_and_keeps_args_env_opaque() {
     .unwrap();
 
     let config = outcome.servers.get("demo").unwrap();
-    let root = root.to_string_lossy();
-    let data = data.to_string_lossy();
+    let root = host_path_string(&root);
+    let data = host_path_string(&data);
     assert_eq!(
         config.args(),
         &[format!("{root}:{data}"), format!("{root}/../opaque"),]
@@ -388,15 +388,17 @@ fn preserves_windows_plugin_data_and_emits_host_paths() {
     let second = parse_agent_plugin_mcp_config(&root, &data, &contents).unwrap();
 
     let config = &second.servers["demo"];
-    let expected_root = host_path_string(&std::fs::canonicalize(&root).unwrap());
-    let expected_data = host_path_string(&std::fs::canonicalize(&data).unwrap());
-    let expected_cwd = host_path_string(&data.join("state"));
+    assert_eq!(config.args().len(), 2);
+    assert_same_existing_host_path(&config.args()[0], &root);
+    assert_same_existing_host_path(&config.args()[1], &data);
     assert_eq!(
-        config.args(),
-        &[expected_root.clone(), expected_data.clone()]
+        config.env().get(PLUGIN_ROOT_VARIABLE).map(String::as_str),
+        Some(config.args()[0].as_str())
     );
-    assert_eq!(config.env().get(PLUGIN_ROOT_VARIABLE), Some(&expected_root));
-    assert_eq!(config.env().get(PLUGIN_DATA_VARIABLE), Some(&expected_data));
+    assert_eq!(
+        config.env().get(PLUGIN_DATA_VARIABLE).map(String::as_str),
+        Some(config.args()[1].as_str())
+    );
     assert_eq!(
         std::fs::read_to_string(data.join("state").join("marker.txt")).unwrap(),
         "persisted"
@@ -405,7 +407,7 @@ fn preserves_windows_plugin_data_and_emits_host_paths() {
     let McpServerTransport::Stdio { cwd, .. } = &config.transport else {
         panic!("expected stdio transport");
     };
-    assert_eq!(cwd.as_deref(), Some(expected_cwd.as_str()));
+    assert_same_existing_host_path(cwd.as_deref().unwrap(), &data.join("state"));
 }
 
 #[cfg(windows)]

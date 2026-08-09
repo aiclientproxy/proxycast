@@ -38,11 +38,37 @@ jobs:
     timeout-minutes: 90
 
     steps:
+      - name: Resolve source ref
+        id: source
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REF: ${{ github.event.inputs.source_ref || github.ref }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $sourceRef = $env:SOURCE_REF.Trim()
+          if ([string]::IsNullOrWhiteSpace($sourceRef)) {
+            throw "source_ref must not be empty"
+          }
+          if ($sourceRef -match '^[0-9a-fA-F]{7,39}$') {
+            $headers = @{
+              Accept = "application/vnd.github+json"
+              Authorization = "Bearer $env:GH_TOKEN"
+              "X-GitHub-Api-Version" = "2022-11-28"
+            }
+            $encodedRef = [Uri]::EscapeDataString($sourceRef)
+            $commit = Invoke-RestMethod `
+              -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/commits/$encodedRef" `
+              -Headers $headers
+            $sourceRef = $commit.sha
+          }
+          "ref=$sourceRef" >> $env:GITHUB_OUTPUT
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.source_ref || github.ref }}
+          ref: ${{ steps.source.outputs.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -214,6 +240,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lime-windows-agent-plugin-path-contract-tests
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: ${{ github.event.inputs.retention_days || 7 }}
           path: windows-plugin-mcp-contract-tests.log

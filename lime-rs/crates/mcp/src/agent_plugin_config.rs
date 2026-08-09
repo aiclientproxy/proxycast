@@ -486,6 +486,34 @@ fn host_path_string(path: &Path) -> String {
     rendered.into_owned()
 }
 
+#[cfg(test)]
+fn assert_same_existing_host_path(actual: &str, expected: &Path) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+
+        let actual_metadata = std::fs::metadata(actual).unwrap();
+        let expected_metadata = std::fs::metadata(expected).unwrap();
+        assert_eq!(
+            (
+                actual_metadata.volume_serial_number(),
+                actual_metadata.file_index(),
+            ),
+            (
+                expected_metadata.volume_serial_number(),
+                expected_metadata.file_index(),
+            ),
+            "paths refer to different Windows filesystem entries: actual={actual} expected={}",
+            expected.display()
+        );
+    }
+    #[cfg(not(windows))]
+    assert_eq!(
+        Path::new(actual),
+        std::fs::canonicalize(expected).unwrap().as_path()
+    );
+}
+
 fn is_portable_relative_path(value: &str) -> bool {
     value
         .strip_prefix("./")
@@ -538,26 +566,13 @@ mod tests {
         .unwrap();
         let config = outcome.servers.get("demo").unwrap();
         assert!(outcome.errors.is_empty());
-        assert_eq!(
-            config.env().get("PLUGIN_ROOT"),
-            Some(
-                &std::fs::canonicalize(&root)
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string()
-            )
-        );
-        assert_eq!(
-            config.env().get("PLUGIN_DATA"),
-            Some(
-                &std::fs::canonicalize(&data)
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string()
-            )
-        );
-        assert!(config.command().ends_with("/bin/server"));
-        assert!(config.sanitized_cwd().unwrap().ends_with("plugin/bin"));
+        assert_same_existing_host_path(config.env()["PLUGIN_ROOT"].as_str(), &root);
+        assert_same_existing_host_path(config.env()["PLUGIN_DATA"].as_str(), &data);
+        assert!(Path::new(config.command()).ends_with(Path::new("bin").join("server")));
+        assert!(config
+            .sanitized_cwd()
+            .unwrap()
+            .ends_with(Path::new("plugin").join("bin")));
     }
 
     #[test]

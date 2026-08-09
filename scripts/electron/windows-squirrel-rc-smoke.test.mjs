@@ -304,6 +304,10 @@ describe("Windows Squirrel RC smoke", () => {
     for (const entry of workflows) {
       const workflow = YAML.parse(fs.readFileSync(entry.path, "utf8"));
       const steps = workflow.jobs[entry.job].steps;
+      const resolveSourceRef = steps.find(
+        (step) => step.name === "Resolve source ref",
+      );
+      const checkout = steps.find((step) => step.name === "Checkout");
       const installDependencies = steps.find(
         (step) => step.name === "Install dependencies",
       );
@@ -336,6 +340,14 @@ describe("Windows Squirrel RC smoke", () => {
       );
       expect(installDependencies?.run).not.toContain("npm ci");
       if (entry.job === "build-windows-test") {
+        expect(resolveSourceRef?.id).toBe("source");
+        expect(resolveSourceRef?.env?.SOURCE_REF).toBe(
+          "${{ github.event.inputs.source_ref || github.ref }}",
+        );
+        expect(resolveSourceRef?.run).toContain(
+          "repos/$env:GITHUB_REPOSITORY/commits/$encodedRef",
+        );
+        expect(checkout?.with?.ref).toBe("${{ steps.source.outputs.ref }}");
         expect(pluginPathTests?.run).toContain("cargo test");
         expect(pluginPathTests?.run).toContain(
           '--manifest-path "lime-rs/Cargo.toml"',
@@ -365,6 +377,7 @@ describe("Windows Squirrel RC smoke", () => {
         expect(pluginPathUpload?.with?.path).toBe(
           "windows-plugin-mcp-contract-tests.log",
         );
+        expect(pluginPathUpload?.with?.["if-no-files-found"]).toBe("warn");
         expect(pluginPathUpload?.if).toBe("${{ always() }}");
       }
     }
