@@ -34,8 +34,24 @@ struct InitializedDatabase {
     storage_roots: Option<StorageRoots>,
 }
 
+fn main() -> anyhow::Result<()> {
+    #[cfg(windows)]
+    {
+        return std::thread::Builder::new()
+            .name("app-server-main".to_string())
+            .stack_size(8 * 1024 * 1024)
+            .spawn(async_main)
+            .map_err(|error| anyhow::anyhow!("failed to spawn app-server main thread: {error}"))?
+            .join()
+            .map_err(|_| anyhow::anyhow!("app-server main thread panicked"))?;
+    }
+
+    #[cfg(not(windows))]
+    async_main()
+}
+
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn async_main() -> anyhow::Result<()> {
     let config = parse_args()?;
     let transport_base_dir = match config.data_dir.clone() {
         Some(data_dir) => data_dir,

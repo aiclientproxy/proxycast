@@ -61,3 +61,9 @@
 - 失败原因：Windows `std::os::windows::fs::MetadataExt::volume_serial_number` 与 `file_index` 仍依赖未稳定的 `windows_by_handle`，不能用于当前稳定 Rust toolchain。
 - 修复方式：测试 helper 改用稳定标准库 `std::fs::canonicalize`，去除 extended-length 前缀后按 Windows 大小写不敏感比较；不引入生产依赖。
 - runner `31317378340` 已确认 checkout、依赖安装成功，但未进入 sherpa、Squirrel、Gate B；需追加提交并重新触发 Windows runner。
+
+## Windows packaged smoke 修复
+
+- runner `31317797587`：path contract、sherpa runtime、Electron Squirrel package build 与 N-1 installer download 均通过；installed Squirrel smoke 在 app-server sidecar 首次启动时报 `thread 'main' has overflowed its stack`（退出码 `3221225725`），未进入 Plugin Gate B。
+- 修复方式：Windows `app-server` 入口在 8 MiB 显式栈线程中启动 Tokio main；macOS/Linux 保持原入口。
+- 本地验证：默认 target `cargo check -p app-server --bin app-server` 通过；Windows target 交叉 check 受本机缺少 MSVC C 头文件阻塞（`ring` 构建找不到 `assert.h`），需由 Windows runner 复核。
