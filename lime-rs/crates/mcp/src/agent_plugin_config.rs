@@ -490,21 +490,11 @@ fn host_path_string(path: &Path) -> String {
 fn assert_same_existing_host_path(actual: &str, expected: &Path) {
     #[cfg(windows)]
     {
-        use std::os::windows::fs::MetadataExt;
-
-        let actual_metadata = std::fs::metadata(actual).unwrap();
-        let expected_metadata = std::fs::metadata(expected).unwrap();
-        assert_eq!(
-            (
-                actual_metadata.volume_serial_number(),
-                actual_metadata.file_index(),
-            ),
-            (
-                expected_metadata.volume_serial_number(),
-                expected_metadata.file_index(),
-            ),
-            "paths refer to different Windows filesystem entries: actual={actual} expected={}",
-            expected.display()
+        let actual = host_path_string(&std::fs::canonicalize(actual).unwrap());
+        let expected = host_path_string(&std::fs::canonicalize(expected).unwrap());
+        assert!(
+            actual.eq_ignore_ascii_case(&expected),
+            "paths refer to different Windows filesystem entries: actual={actual} expected={expected}"
         );
     }
     #[cfg(not(windows))]

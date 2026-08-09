@@ -54,3 +54,10 @@
 - 本地验证：MCP `8/8`、Windows workflow contract `16/16`、`npm run typecheck`、`npm run test:contracts`、`npm run governance:electron-release-workflow`、app-server-client 定向 `100/100`、`npm run verify:gui-smoke` 均通过；GUI evidence `standalone-shell-01-20260809135003-43144`。
 - `npm run test:related -- packages/app-server-client/src/agent-runtime.ts`：入口在 Electron 目录解析时触发既有 `EISDIR`，未作为通过证据；改用直接 app-server-client 测试文件运行并通过。
 - 真实 Windows runner：待提交并推送修复后复核。
+
+## Windows runner 复核
+
+- 修复提交 `b696976f3` 已推送到 `main`，但 runner `31317378340` 在编译 `lime-mcp` 测试时失败。
+- 失败原因：Windows `std::os::windows::fs::MetadataExt::volume_serial_number` 与 `file_index` 仍依赖未稳定的 `windows_by_handle`，不能用于当前稳定 Rust toolchain。
+- 修复方式：测试 helper 改用稳定标准库 `std::fs::canonicalize`，去除 extended-length 前缀后按 Windows 大小写不敏感比较；不引入生产依赖。
+- runner `31317378340` 已确认 checkout、依赖安装成功，但未进入 sherpa、Squirrel、Gate B；需追加提交并重新触发 Windows runner。
