@@ -97,6 +97,25 @@ describe("App Server notification drift", () => {
     }
   });
 
+  it("keeps experimental fuzzy search session notifications diagnostic-only", () => {
+    for (const method of [
+      "fuzzyFileSearch/sessionUpdated",
+      "fuzzyFileSearch/sessionCompleted",
+    ]) {
+      const source = notification(method, {
+        sessionId: "search-session",
+        query: "secret-query",
+        files: ["private/path.ts"],
+      });
+
+      const diagnostic = readAppServerNotificationDrift(source);
+      expect(diagnostic.disposition).toBe("known_diagnostic_only");
+      expect(JSON.stringify(diagnostic)).not.toContain("secret-query");
+      expect(JSON.stringify(diagnostic)).not.toContain("private/path.ts");
+      expect(projectAppServerNotificationDriftPayload(source)).toBeNull();
+    }
+  });
+
   it("classifies turn diff as a projected current notification", () => {
     const source = notification("turn/diff/updated", {
       threadId: "thread-1",

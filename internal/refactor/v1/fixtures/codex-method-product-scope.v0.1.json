@@ -20,9 +20,9 @@
       "clientNotification": 1
     },
     "byStatus": {
-      "implemented": 139,
-      "product-scope-excluded": 54,
-      "planned": 28
+      "implemented": 140,
+      "product-scope-excluded": 59,
+      "planned": 22
     }
   },
   "groups": [
@@ -523,17 +523,38 @@
       ]
     },
     {
-      "id": "fuzzy-search-planned",
+      "id": "fuzzy-search-current",
       "direction": "clientRequest",
       "productArea": "filesystem-search",
-      "status": "planned",
-      "priority": "P4",
+      "status": "implemented",
+      "priority": "P1",
       "owner": "app-server filesystem search owner",
+      "counterpartRule": "same-name",
+      "gap": "Exact one-shot fuzzy search is consumed by the Desktop Composer file mention flow.",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/fuzzy_file_search.rs",
+        "lime-rs/crates/app-server/src/fuzzy_file_search.rs",
+        "lime-rs/crates/app-server/tests/fuzzy_file_search_jsonrpc.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/fuzzyFileSearch.ts",
+        "src/components/agent/chat/skill-selection/useProjectFileMentionSearch.ts"
+      ],
+      "methods": ["fuzzyFileSearch"]
+    },
+    {
+      "id": "fuzzy-search-session-excluded",
+      "direction": "clientRequest",
+      "productArea": "filesystem-search",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "Desktop Composer one-shot fuzzy search boundary",
       "counterpartRule": "none",
-      "gap": "Codex fuzzy search request/session lifecycle is not exposed by the current App Server.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "rationale": "Codex marks the session requests experimental. Lime Desktop uses one-shot fuzzyFileSearch with request cancellation and stale-response rejection, so a second long-lived search session registry has no product consumer.",
+      "evidence": [
+        "internal/refactor/v1/08-third-audit-gap-register.md",
+        "src/lib/governance/codexMethodProductScopeBoundary.test.ts"
+      ],
       "methods": [
-        "fuzzyFileSearch",
         "fuzzyFileSearch/sessionStart",
         "fuzzyFileSearch/sessionStop",
         "fuzzyFileSearch/sessionUpdate"
@@ -1003,15 +1024,18 @@
       "methods": ["fs/changed"]
     },
     {
-      "id": "fuzzy-search-notification-planned",
+      "id": "fuzzy-search-session-notification-excluded",
       "direction": "serverNotification",
       "productArea": "filesystem-search",
-      "status": "planned",
-      "priority": "P4",
-      "owner": "app-server filesystem search owner",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "Renderer notification drift diagnostics",
       "counterpartRule": "none",
-      "gap": "Fuzzy search session progress and completion notifications are missing.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "rationale": "The experimental Codex session notifications belong to the excluded long-lived search flow. Lime keeps method-only drift diagnostics but does not project them into Composer state or pending interactions.",
+      "evidence": [
+        "src/lib/api/agentRuntime/appServerNotificationDrift.ts",
+        "src/lib/governance/renderProjectionCoverageBoundary.test.ts"
+      ],
       "methods": [
         "fuzzyFileSearch/sessionCompleted",
         "fuzzyFileSearch/sessionUpdated"

@@ -1,0 +1,51 @@
+{
+  "$defs": {
+    "FuzzyFileSearchMatchType": {
+      "enum": [
+        "directory",
+        "file"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "file_name": {
+      "type": "string"
+    },
+    "indices": {
+      "items": {
+        "format": "uint32",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "match_type": {
+      "$ref": "#/$defs/FuzzyFileSearchMatchType"
+    },
+    "path": {
+      "type": "string"
+    },
+    "root": {
+      "type": "string"
+    },
+    "score": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "file_name",
+    "match_type",
+    "path",
+    "root",
+    "score"
+  ],
+  "title": "FuzzyFileSearchResult",
+  "type": "object"
+}

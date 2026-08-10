@@ -47,6 +47,11 @@ export type AppServerArtifactSummary = protocol.ArtifactSummary;
 export type AppServerArtifactReadResponse = protocol.ArtifactReadResponse;
 export type AppServerArtifactWriteParams = protocol.ArtifactWriteParams;
 export type AppServerArtifactWriteResponse = protocol.ArtifactWriteResponse;
+export type AppServerFuzzyFileSearchParams = protocol.FuzzyFileSearchParams;
+export type AppServerFuzzyFileSearchResponse = protocol.FuzzyFileSearchResponse;
+export type AppServerFuzzyFileSearchResult = protocol.FuzzyFileSearchResult;
+export type AppServerFuzzyFileSearchMatchType =
+  protocol.FuzzyFileSearchMatchType;
 export type AppServerFsReadFileParams = protocol.FsReadFileParams;
 export type AppServerFsReadFileResponse = protocol.FsReadFileResponse;
 export type AppServerFsWriteFileParams = protocol.FsWriteFileParams;
@@ -244,8 +249,7 @@ export type AppServerCommandExecResponse = protocol.CommandExecResponse;
 export type AppServerCommandExecWriteParams = protocol.CommandExecWriteParams;
 export type AppServerCommandExecWriteResponse =
   protocol.CommandExecWriteResponse;
-export type AppServerCommandExecResizeParams =
-  protocol.CommandExecResizeParams;
+export type AppServerCommandExecResizeParams = protocol.CommandExecResizeParams;
 export type AppServerCommandExecResizeResponse =
   protocol.CommandExecResizeResponse;
 export type AppServerCommandExecTerminateParams =

@@ -24,6 +24,7 @@
     "fs/unwatch",
     "fs/watch",
     "fs/writeFile",
+    "fuzzyFileSearch",
     "hooks/list",
     "mcpServer/resource/read",
     "mcpServer/tool/call",

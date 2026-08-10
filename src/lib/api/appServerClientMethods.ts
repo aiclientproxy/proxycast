@@ -61,6 +61,12 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerArtifactWriteResponse>
     >;
+    searchFiles(
+      params: appServer.AppServerFuzzyFileSearchParams,
+      options?: appServer.AppServerRequestOptions,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerFuzzyFileSearchResponse>
+    >;
     listPluginCatalog(
       params?: appServer.AppServerPluginCatalogListParams,
     ): Promise<

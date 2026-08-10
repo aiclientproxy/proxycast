@@ -106,6 +106,7 @@ export const METHOD_FS_REMOVE = "fs/remove";
 export const METHOD_FS_UNWATCH = "fs/unwatch";
 export const METHOD_FS_WATCH = "fs/watch";
 export const METHOD_FS_WRITE_FILE = "fs/writeFile";
+export const METHOD_FUZZY_FILE_SEARCH = "fuzzyFileSearch";
 export const METHOD_GALLERY_MATERIAL_GET = "galleryMaterial/get";
 export const METHOD_GALLERY_MATERIAL_LIST_BY_IMAGE_CATEGORY =
   "galleryMaterial/listByImageCategory";
@@ -780,6 +781,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "fs/writeFile",
+  },
+  {
+    kind: "request",
+    method: "fuzzyFileSearch",
   },
   {
     kind: "request",
@@ -4749,6 +4754,11 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "fuzzyFileSearch";
+      params: FuzzyFileSearchParams;
+    }
+  | {
+      id: number | string;
       method: "fs/readFile";
       params: FsReadFileParams;
     }
@@ -5854,6 +5864,27 @@ export interface FsWriteFileParams {
 }
 
 export type FsWriteFileResponse = Record<string, unknown>;
+
+export type FuzzyFileSearchMatchType = "directory" | "file";
+
+export interface FuzzyFileSearchParams {
+  cancellationToken?: null | string;
+  query: string;
+  roots: string[];
+}
+
+export interface FuzzyFileSearchResponse {
+  files: FuzzyFileSearchResult[];
+}
+
+export interface FuzzyFileSearchResult {
+  file_name: string;
+  indices?: number[] | null;
+  match_type: FuzzyFileSearchMatchType;
+  path: string;
+  root: string;
+  score: number;
+}
 
 export interface GalleryMaterial {
   content?: null | string;
@@ -7123,6 +7154,7 @@ export type Method =
   | "fs/unwatch"
   | "fs/watch"
   | "fs/writeFile"
+  | "fuzzyFileSearch"
   | "hooks/list"
   | "mcpServer/resource/read"
   | "mcpServer/tool/call"

@@ -12542,6 +12542,30 @@
           ],
           "type": "object"
         },
+        "FuzzyFileSearchParams": {
+          "properties": {
+            "cancellationToken": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "query": {
+              "type": "string"
+            },
+            "roots": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "query",
+            "roots"
+          ],
+          "type": "object"
+        },
         "HooksListParams": {
           "properties": {
             "cwds": {
@@ -16101,6 +16125,26 @@
             },
             "params": {
               "$ref": "#/$defs/ReviewStartParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "fuzzyFileSearch",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FuzzyFileSearchParams"
             }
           },
           "required": [
@@ -26175,6 +26219,157 @@
     "FsWriteFileResponse": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "title": "FsWriteFileResponse",
+      "type": "object"
+    },
+    "FuzzyFileSearchMatchType": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "directory",
+        "file"
+      ],
+      "title": "FuzzyFileSearchMatchType",
+      "type": "string"
+    },
+    "FuzzyFileSearchParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "cancellationToken": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "query": {
+          "type": "string"
+        },
+        "roots": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "query",
+        "roots"
+      ],
+      "title": "FuzzyFileSearchParams",
+      "type": "object"
+    },
+    "FuzzyFileSearchResponse": {
+      "$defs": {
+        "FuzzyFileSearchMatchType": {
+          "enum": [
+            "directory",
+            "file"
+          ],
+          "type": "string"
+        },
+        "FuzzyFileSearchResult": {
+          "properties": {
+            "file_name": {
+              "type": "string"
+            },
+            "indices": {
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "match_type": {
+              "$ref": "#/$defs/FuzzyFileSearchMatchType"
+            },
+            "path": {
+              "type": "string"
+            },
+            "root": {
+              "type": "string"
+            },
+            "score": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "file_name",
+            "match_type",
+            "path",
+            "root",
+            "score"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "files": {
+          "items": {
+            "$ref": "#/$defs/FuzzyFileSearchResult"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "title": "FuzzyFileSearchResponse",
+      "type": "object"
+    },
+    "FuzzyFileSearchResult": {
+      "$defs": {
+        "FuzzyFileSearchMatchType": {
+          "enum": [
+            "directory",
+            "file"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "file_name": {
+          "type": "string"
+        },
+        "indices": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "match_type": {
+          "$ref": "#/$defs/FuzzyFileSearchMatchType"
+        },
+        "path": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "score": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "file_name",
+        "match_type",
+        "path",
+        "root",
+        "score"
+      ],
+      "title": "FuzzyFileSearchResult",
       "type": "object"
     },
     "GalleryMaterial": {
@@ -38220,6 +38415,7 @@
         "fs/unwatch",
         "fs/watch",
         "fs/writeFile",
+        "fuzzyFileSearch",
         "hooks/list",
         "mcpServer/resource/read",
         "mcpServer/tool/call",
@@ -111375,6 +111571,7 @@
               "fs/unwatch",
               "fs/watch",
               "fs/writeFile",
+              "fuzzyFileSearch",
               "galleryMaterial/get",
               "galleryMaterial/listByImageCategory",
               "galleryMaterial/listByLayoutCategory",

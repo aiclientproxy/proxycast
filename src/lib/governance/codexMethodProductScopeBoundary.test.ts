@@ -197,4 +197,32 @@ describe("Codex method product scope boundary", () => {
       ),
     ).toBe(false);
   });
+
+  it("only the one-shot fuzzy file search belongs to the Desktop manifest", () => {
+    const matrix = readJson<Matrix>(MATRIX_PATH);
+    const manifest = readJson<Manifest>(MANIFEST_PATH);
+    const entries = flatten(matrix).filter(({ method }) =>
+      method.startsWith("fuzzyFileSearch"),
+    );
+    const contracts = new Set(
+      manifest.methods.map(({ kind, method }) => `${kind}:${method}`),
+    );
+    const oneShot = entries.find(
+      ({ direction, method }) =>
+        direction === "clientRequest" && method === "fuzzyFileSearch",
+    );
+    const sessionEntries = entries.filter(
+      ({ method }) => method !== "fuzzyFileSearch",
+    );
+
+    expect(oneShot?.status).toBe("implemented");
+    expect(contracts.has("request:fuzzyFileSearch")).toBe(true);
+    expect(sessionEntries).toHaveLength(5);
+    for (const entry of sessionEntries) {
+      expect(entry.status).toBe("product-scope-excluded");
+      expect(
+        contracts.has(`${manifestKind(entry.direction)}:${entry.method}`),
+      ).toBe(false);
+    }
+  });
 });

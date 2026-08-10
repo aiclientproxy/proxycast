@@ -332,6 +332,10 @@
     },
     {
       "kind": "request",
+      "method": "fuzzyFileSearch"
+    },
+    {
+      "kind": "request",
       "method": "galleryMaterial/get"
     },
     {
@@ -2293,6 +2297,10 @@
       "FsWatchResponse",
       "FsWriteFileParams",
       "FsWriteFileResponse",
+      "FuzzyFileSearchMatchType",
+      "FuzzyFileSearchParams",
+      "FuzzyFileSearchResponse",
+      "FuzzyFileSearchResult",
       "GitInfo",
       "GrantedPermissionProfile",
       "GuardianApprovalReview",

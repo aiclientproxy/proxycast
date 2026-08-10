@@ -604,6 +604,7 @@ export interface AppServerClient {
   ): protocol.JsonRpcRequest;
   readArtifacts(params: protocol.ArtifactReadParams): protocol.JsonRpcRequest;
   writeArtifact(params: protocol.ArtifactWriteParams): protocol.JsonRpcRequest;
+  searchFiles(params: protocol.FuzzyFileSearchParams): protocol.JsonRpcRequest;
   readFile(params: protocol.FsReadFileParams): protocol.JsonRpcRequest;
   writeFile(params: protocol.FsWriteFileParams): protocol.JsonRpcRequest;
   createDirectory(

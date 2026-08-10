@@ -734,10 +734,7 @@ fn resolve_windows_child_environment(
 }
 
 #[cfg(any(test, target_os = "windows"))]
-fn should_preserve_windows_job(
-    wait_failed: bool,
-    process_status: ExecutionProcessStatus,
-) -> bool {
+fn should_preserve_windows_job(wait_failed: bool, process_status: ExecutionProcessStatus) -> bool {
     !wait_failed && !process_status.is_terminal()
 }
 

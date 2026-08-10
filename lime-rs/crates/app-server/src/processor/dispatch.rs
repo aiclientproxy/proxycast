@@ -75,6 +75,7 @@ impl RequestProcessor {
             app_server_protocol::protocol::v2::METHOD_ARTIFACT_WRITE => {
                 self.handle_artifact_write_v2_impl(params).boxed()
             }
+            v2::METHOD_FUZZY_FILE_SEARCH => self.handle_fuzzy_file_search_impl(params).boxed(),
             v2::METHOD_FS_READ_FILE => self.handle_fs_read_file_impl(params).boxed(),
             v2::METHOD_FS_WRITE_FILE => self.handle_fs_write_file_impl(params).boxed(),
             v2::METHOD_FS_CREATE_DIRECTORY => self.handle_fs_create_directory_impl(params).boxed(),

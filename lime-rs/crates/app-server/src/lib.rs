@@ -15,6 +15,7 @@ mod external_backend;
 mod file_checkpoint;
 mod file_checkpoint_snapshot;
 mod fs;
+mod fuzzy_file_search;
 mod gateway_tunnel;
 mod knowledge_builder_runtime;
 mod local_data_source;

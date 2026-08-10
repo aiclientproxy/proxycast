@@ -715,6 +715,30 @@
       ],
       "type": "object"
     },
+    "FuzzyFileSearchParams": {
+      "properties": {
+        "cancellationToken": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "query": {
+          "type": "string"
+        },
+        "roots": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "query",
+        "roots"
+      ],
+      "type": "object"
+    },
     "HooksListParams": {
       "properties": {
         "cwds": {
@@ -4274,6 +4298,26 @@
         },
         "params": {
           "$ref": "#/$defs/ReviewStartParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "fuzzyFileSearch",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/FuzzyFileSearchParams"
         }
       },
       "required": [

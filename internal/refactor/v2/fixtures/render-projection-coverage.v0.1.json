@@ -4,6 +4,7 @@
   "upstream": {
     "repository": "/Users/coso/Documents/dev/rust/codex",
     "revision": "c4f42d161ae44a8d696ee9fb595709661979d187",
+    "methodRevision": "c9c6c0daa994109cec50fddcb57d076fdf9e738c",
     "itemSource": "codex-rs/app-server-protocol/src/protocol/v2/item.rs",
     "itemSchemaSource": "codex-rs/app-server-protocol/schema/json/codex_app_server_protocol.v2.schemas.json",
     "itemSchemaSha256": "e586a601162c6c5fdb35580579baebbe86014d9796c0005cbe10011b8428f880",
@@ -150,11 +151,11 @@
     { "method": "configWarning", "outlets": ["globalNotice"] },
     {
       "method": "fuzzyFileSearch/sessionUpdated",
-      "outlets": ["pendingInteraction"]
+      "outlets": ["diagnostics"]
     },
     {
       "method": "fuzzyFileSearch/sessionCompleted",
-      "outlets": ["pendingInteraction"]
+      "outlets": ["diagnostics"]
     },
     { "method": "thread/realtime/started", "outlets": ["diagnostics"] },
     { "method": "thread/realtime/itemAdded", "outlets": ["diagnostics"] },

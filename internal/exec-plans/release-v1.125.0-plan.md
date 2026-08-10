@@ -1,13 +1,13 @@
 # Lime v1.125.0 发布执行计划
 
-状态：released-with-windows-blocker
+状态：release-git-confirmation-pending / windows-runner-pending
 日期：2026-08-09
 目标版本：`1.125.0`
 目标 tag：`v1.125.0`
 
 ## 主目标
 
-在不覆盖已发布的 `v1.124.0` tag 的前提下，发布当前工作树中的 Agent runtime、App Server/protocol、Plugin v3、GUI、文档与质量治理改动。
+在不移动或覆盖已存在的 `v1.125.0` tag 的前提下，发布当前工作树中的 Agent runtime、App Server/protocol、Plugin v3、GUI、文档与质量治理改动。
 
 ## Release Candidate
 
@@ -140,3 +140,29 @@
 - 根因 owner：`readCanonicalThreadDetail` 已读取 current `Thread.modelProvider` 与 `Thread.extra.modelName`，但未投影 `AgentSessionDetail.execution_runtime`，使 hook 层失去 current route 事实源。
 - 修复：canonical Thread projection 从顶层 `modelProvider`（优先于可能 stale 的 extra provider）和 metadata `modelName` 构造 session execution runtime；保留 imported source markers；补顶层 current provider 覆盖 stale extra provider 的回归测试。
 - 本地验证：canonical projection/App Server session client/metadata controller Vitest `48 passed; 0 failed`；`npm run typecheck` 与 projection ESLint `--max-warnings 0` 通过；本机 packaged Plugin Gate B 复跑 `ok=true`、enabled provider request `2`、MCP elicitation/final text 完成、production mock fallback `0`。Windows packaged Gate B 待新完整 SHA 复核。
+
+## Windows runner `31378335257`
+
+状态：`navigation-fix-validated-locally / windows-runner-pending`
+
+- 使用完整 SHA `88b5bf6a74dd8d911d71e46b1418c0f1dea1210c`；Windows path contract、sherpa runtime、Electron Windows x64 Squirrel package、N-1 installer download 与 installed Squirrel smoke 全部通过。
+- Plugin Gate B 尚未进入安装、provider route 或 turn，在 `open-plugin-catalog-app-center` 等待 bundled Browser Plugin 卡片 600 秒超时。失败截图显示最终页面回到新建任务首页；原脚本此前已观察到插件页安装入口，证明一次侧边栏导航在 Windows packaged 启动尾部时序中被覆盖，而不是 `plugin/list` 或 canonical execution runtime 失败。
+- `fb465072f..88b5bf6a7` 没有侧边栏、App Navigation、App Center 或 Gate B 脚本改动；本轮不把该平台时序误归因到 canonical route 修复。
+- 修复：Plugin Gate B 继续只走真实侧边栏点击，但要求插件页安装入口、loading terminal 与 bundled Browser Plugin 卡片在同一次短窗口内共同收敛；Windows 启动尾部导航覆盖时最多重试 3 次，每次上限 30 秒，不再用全局 600 秒盲等。最终失败会附带 URL、active sidebar、可见 testid 与主内容摘要。
+- 本地验证：脚本 `node --check`、定向 ESLint、Plugin Gate B guard 通过；本机 packaged Plugin Gate B 完整通过，`ok=true`、App Center 安装/启停与 disabled boundary 通过、provider request `2`、MCP elicitation accepted、provider final text observed、cold restore/卸载后历史通过、production mock fallback `0`。
+- 本轮补充验证：`npm run verify:app-version`、`npm run typecheck`、`npm run test:contracts`、`npm run test:rust:related -- lime-rs/crates/app-server-protocol lime-rs/crates/app-server`、`cargo test --manifest-path lime-rs/Cargo.toml -p app-server --test fuzzy_file_search_jsonrpc`、`cargo fmt --all -- --check`、`npm run verify:gui-smoke` 均通过；GUI evidence `standalone-shell-01-20260810111610-3054`。
+- 当前 release candidate 继续纳入完整工作树，包括同期 fuzzy file search App Server v2 协议、schema、processor、公共 JSON-RPC 集成测试与协调计划；`v1.125.0` tag 保持指向既有 release commit，不移动或覆盖。
+- 下一步：完成当前整批 Rust/protocol/contracts/typecheck/版本门禁后提交并推送新完整 SHA，重新触发 `build-windows-test.yml` 并跟踪 installed Plugin Gate B 与 artifact 最终结论。
+
+## Release candidate 当前收口
+
+- 全部 tracked/untracked 改动均纳入，无排除项；新增 fuzzy file search 使用 Codex current 一发式 `fuzzyFileSearch` 协议和 snake_case 结果字段，未恢复已排除的 sessionStart/sessionUpdate/sessionStop 双轨。
+- `npm run typecheck`：通过。
+- `npm run test:contracts`：通过，协议生成无漂移、App Server client `301 checks`、脚本治理、Electron release workflow 与 docs boundary 均通过。
+- `npm run verify:app-version`：通过，版本事实源统一为 `1.125.0`。
+- Composer/fuzzy file mention Vitest：`32 passed; 0 failed`；App Server client fuzzy Vitest：`2 passed; 0 failed`；Gate B 脚本契约 Vitest：`5 passed; 0 failed`。
+- `cargo test --manifest-path lime-rs/Cargo.toml -p app-server --test fuzzy_file_search_jsonrpc`：`1 passed; 0 failed`。
+- `cargo fmt --manifest-path lime-rs/Cargo.toml --all -- --check`、定向 ESLint、`git diff --check`：通过。
+- `npm run verify:gui-smoke`：通过；最新 Electron evidence `standalone-shell-01-20260810112853-16763`，App Server `1.125.0`。
+- 本机 packaged Plugin Gate B 既有证据保持通过：`ok=true`、provider request `2`、MCP elicitation accepted、provider final text、cold restore/卸载历史和 `productionMockFallbackHitCount=0`。
+- 当前阻塞只剩危险 Git 写操作确认，以及新完整 SHA 推送后的 Windows runner Plugin Gate B/artifact 复核；既有 `v1.125.0` tag 固定在 `8647d18fa358e3a9c86e520348d39e4b3eba6041`。

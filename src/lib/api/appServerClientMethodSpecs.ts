@@ -97,6 +97,11 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
+    name: "searchFiles",
+    method: constants.APP_SERVER_METHOD_FUZZY_FILE_SEARCH,
+    params: "required",
+  },
+  {
     name: "readFile",
     method: constants.APP_SERVER_METHOD_FS_READ_FILE,
     params: "required",

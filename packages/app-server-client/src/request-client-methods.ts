@@ -1398,6 +1398,12 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "required",
     },
     {
+      name: "searchFiles",
+      method: protocol.METHOD_FUZZY_FILE_SEARCH,
+      kind: "request",
+      params: "required",
+    },
+    {
       name: "readFile",
       method: protocol.METHOD_FS_READ_FILE,
       kind: "request",

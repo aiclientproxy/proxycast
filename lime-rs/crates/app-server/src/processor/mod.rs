@@ -14,6 +14,7 @@ mod diagnostics;
 mod dispatch;
 mod experimental_feature;
 mod fs;
+mod fuzzy_file_search;
 mod gallery;
 mod gateway;
 mod hook;
@@ -50,6 +51,7 @@ mod workspace;
 
 use crate::command_exec::CommandExecServer;
 use crate::fs::FsServer;
+use crate::fuzzy_file_search::FuzzyFileSearchServer;
 use crate::process::ProcessServer;
 use crate::thread_state::ThreadStateManager;
 use crate::AppServerError;
@@ -119,6 +121,7 @@ pub struct RequestProcessor {
     process: ProcessServer,
     command_exec: CommandExecServer,
     fs: FsServer,
+    fuzzy_file_search: FuzzyFileSearchServer,
     config_warning_provider: ConfigWarningProvider,
     request_serialization_queues: RequestSerializationQueues,
     turn_interrupt_hook: Option<TurnInterruptHook>,
@@ -165,6 +168,7 @@ impl RequestProcessor {
             process: ProcessServer::default(),
             command_exec: CommandExecServer::default(),
             fs: FsServer::default(),
+            fuzzy_file_search: FuzzyFileSearchServer::default(),
             config_warning_provider: config_warning::default_config_warning_provider(),
             request_serialization_queues: RequestSerializationQueues::default(),
             turn_interrupt_hook: None,

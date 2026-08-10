@@ -555,38 +555,93 @@ async function openPluginPackageAppCenter(
   observedMethods,
   screenshotPath,
 ) {
-  await page.locator('[data-testid="app-sidebar-nav-plugins"]').click();
-  await page.locator('[data-testid="plugin-catalog-install-local"]').waitFor({
-    state: "visible",
-    timeout: options.timeoutMs,
-  });
-  await page.locator('[data-testid="plugin-catalog-loading"]').waitFor({
-    state: "hidden",
-    timeout: options.timeoutMs,
-  });
-
-  const catalog = await appServerCallFromPage(page, "plugin/list", {});
-  observedMethods.add(catalog.method);
-  const bundled = catalog.result?.plugins?.find(
-    (candidate) => candidate?.id === PLUGIN_PACKAGE_BUNDLED_ID,
+  const sidebarPlugins = page.locator(
+    '[data-testid="app-sidebar-nav-plugins"]',
   );
-  assert(bundled, "plugin/list 未返回 bundled Browser Plugin");
-  assert(
-    bundled.source === "bundled" &&
-      bundled.marketplaceId === PLUGIN_PACKAGE_BUNDLED_MARKETPLACE_ID &&
-      bundled.version === PLUGIN_PACKAGE_BUNDLED_VERSION,
-    `bundled Plugin identity/version 不一致: ${JSON.stringify(bundled)}`,
+  const installLocal = page.locator(
+    '[data-testid="plugin-catalog-install-local"]',
   );
+  const loading = page.locator('[data-testid="plugin-catalog-loading"]');
   const bundledCard = page.locator(
     `[data-testid="plugin-catalog-card-${PLUGIN_PACKAGE_BUNDLED_ID}"]`,
   );
-  await bundledCard.waitFor({ state: "visible", timeout: options.timeoutMs });
-  assert(
-    (await bundledCard.textContent())?.includes(PLUGIN_PACKAGE_BUNDLED_VERSION),
-    "App Center bundled 卡片未显示 manifest version",
+  const navigationTimeoutMs = Math.min(options.timeoutMs, 30_000);
+  let lastError = null;
+  let lastRoute = null;
+
+  // Windows packaged startup can emit a late home navigation while the shell
+  // is settling. Require the target page and its catalog card to converge
+  // together, then retry the real sidebar click a bounded number of times.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await sidebarPlugins.click();
+      await installLocal.waitFor({
+        state: "visible",
+        timeout: navigationTimeoutMs,
+      });
+      await loading.waitFor({
+        state: "hidden",
+        timeout: navigationTimeoutMs,
+      });
+
+      const catalog = await appServerCallFromPage(page, "plugin/list", {});
+      observedMethods.add(catalog.method);
+      const bundled = catalog.result?.plugins?.find(
+        (candidate) => candidate?.id === PLUGIN_PACKAGE_BUNDLED_ID,
+      );
+      assert(bundled, "plugin/list 未返回 bundled Browser Plugin");
+      assert(
+        bundled.source === "bundled" &&
+          bundled.marketplaceId === PLUGIN_PACKAGE_BUNDLED_MARKETPLACE_ID &&
+          bundled.version === PLUGIN_PACKAGE_BUNDLED_VERSION,
+        `bundled Plugin identity/version 不一致: ${JSON.stringify(bundled)}`,
+      );
+      await bundledCard.waitFor({
+        state: "visible",
+        timeout: navigationTimeoutMs,
+      });
+      assert(
+        (await bundledCard.textContent())?.includes(
+          PLUGIN_PACKAGE_BUNDLED_VERSION,
+        ),
+        "App Center bundled 卡片未显示 manifest version",
+      );
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      return { bundled, catalog };
+    } catch (error) {
+      lastError = error;
+      lastRoute = await page
+        .evaluate(() => ({
+          href: window.location.href,
+          activeSidebarPages: Array.from(
+            document.querySelectorAll(
+              '[data-testid^="app-sidebar-nav-"][aria-current="page"]',
+            ),
+          ).map((element) => element.getAttribute("data-testid")),
+          visibleTestIds: Array.from(document.querySelectorAll("[data-testid]"))
+            .filter((element) => {
+              const rect = element.getBoundingClientRect();
+              return rect.width > 0 && rect.height > 0;
+            })
+            .map((element) => element.getAttribute("data-testid"))
+            .filter(Boolean)
+            .slice(-80),
+          mainText: document.querySelector("main")?.textContent?.slice(0, 240) ?? "",
+        }))
+        .catch(() => null);
+      if (attempt === 3) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `插件中心导航未收敛: attempts=${attempt} lastRoute=${JSON.stringify(lastRoute)} cause=${message}`,
+        );
+      }
+      await sleep(Math.max(options.intervalMs, 500));
+    }
+  }
+
+  throw new Error(
+    `插件中心导航未收敛: lastRoute=${JSON.stringify(lastRoute)} cause=${String(lastError)}`,
   );
-  await page.screenshot({ path: screenshotPath, fullPage: true });
-  return { bundled, catalog };
 }
 
 async function installPluginPackageFromAppCenter({

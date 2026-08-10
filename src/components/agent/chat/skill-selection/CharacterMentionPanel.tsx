@@ -2,6 +2,7 @@ import React from "react";
 import {
   Blocks,
   Command as CommandIcon,
+  File,
   ImagePlus,
   Sparkles,
   User,
@@ -36,6 +37,8 @@ import {
 import { buildCuratedTaskTemplateCopy } from "../utils/curatedTaskTemplates";
 import type { CuratedTaskReferenceEntry } from "../utils/curatedTaskReferenceSelection";
 import type { AgentI18nResource } from "@/i18n/agentResources";
+import type { ProjectFileSearchResult } from "@/lib/api/fuzzyFileSearch";
+import type { ProjectFileMentionSearchStatus } from "./useProjectFileMentionSearch";
 
 type AgentI18nKey = keyof AgentI18nResource;
 
@@ -51,6 +54,8 @@ interface CharacterMentionPanelProps {
   filteredCharacters: Character[];
   installedSkills: Skill[];
   availableSkills: Skill[];
+  projectFiles?: ProjectFileSearchResult[];
+  projectFileSearchStatus?: ProjectFileMentionSearchStatus;
   projectId?: string | null;
   sessionId?: string | null;
   referenceEntries?: CuratedTaskReferenceEntry[];
@@ -61,6 +66,7 @@ interface CharacterMentionPanelProps {
   commandRef: React.RefObject<HTMLDivElement>;
   onQueryChange: (query: string) => void;
   onSelectCapability: (item: InputCapabilityDescriptor) => void;
+  onSelectProjectFile?: (file: ProjectFileSearchResult) => void;
   onNavigateToSettings?: () => void;
 }
 
@@ -76,6 +82,8 @@ export const CharacterMentionPanel: React.FC<CharacterMentionPanelProps> = ({
   filteredCharacters,
   installedSkills,
   availableSkills,
+  projectFiles = [],
+  projectFileSearchStatus = "idle",
   projectId,
   sessionId,
   referenceEntries = [],
@@ -86,6 +94,7 @@ export const CharacterMentionPanel: React.FC<CharacterMentionPanelProps> = ({
   commandRef,
   onQueryChange,
   onSelectCapability,
+  onSelectProjectFile,
   onNavigateToSettings,
 }) => {
   const { t } = useTranslation("agent");
@@ -150,6 +159,13 @@ export const CharacterMentionPanel: React.FC<CharacterMentionPanelProps> = ({
   const hasFilteredResults = sections.some(
     (section) => section.items.length > 0,
   );
+  const showProjectFileSection =
+    mode === "mention" &&
+    mentionQuery.trim().length > 0 &&
+    (projectFiles.length > 0 ||
+      projectFileSearchStatus === "loading" ||
+      projectFileSearchStatus === "ready" ||
+      projectFileSearchStatus === "error");
   const isEmptySlashQuery =
     mode === "slash" && mentionQuery.trim().length === 0;
   const isEmptyMentionQuery =
@@ -328,7 +344,7 @@ export const CharacterMentionPanel: React.FC<CharacterMentionPanelProps> = ({
         onValueChange={onQueryChange}
       />
       <CommandList>
-        {!hasFilteredResults ? (
+        {!hasFilteredResults && !showProjectFileSection ? (
           <div className="px-3 py-6 text-center text-sm text-muted-foreground">
             <div>
               {mode === "slash"
@@ -346,6 +362,55 @@ export const CharacterMentionPanel: React.FC<CharacterMentionPanelProps> = ({
               </button>
             ) : null}
           </div>
+        ) : null}
+        {showProjectFileSection ? (
+          <CommandGroup heading={t("inputCapabilities.heading.projectFiles")}>
+            {projectFileSearchStatus === "loading" &&
+            projectFiles.length === 0 ? (
+              <div
+                className="px-2 py-2 text-xs text-slate-500"
+                data-testid="project-file-search-loading"
+              >
+                {t("inputCapabilities.projectFiles.loading")}
+              </div>
+            ) : null}
+            {projectFileSearchStatus === "error" ? (
+              <div
+                className="px-2 py-2 text-xs text-rose-600"
+                data-testid="project-file-search-error"
+              >
+                {t("inputCapabilities.projectFiles.error")}
+              </div>
+            ) : null}
+            {projectFileSearchStatus === "ready" &&
+            projectFiles.length === 0 ? (
+              <div
+                className="px-2 py-2 text-xs text-slate-500"
+                data-testid="project-file-search-empty"
+              >
+                {t("inputCapabilities.projectFiles.empty")}
+              </div>
+            ) : null}
+            {projectFiles.map((file) => (
+              <CommandItem
+                key={`${file.root}:${file.path}`}
+                value={`project-file:${file.path}`}
+                className="items-start gap-3 px-2 py-2.5"
+                data-testid="project-file-search-result"
+                onSelect={() => onSelectProjectFile?.(file)}
+              >
+                <File className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="truncate text-sm font-medium text-slate-900">
+                    {file.file_name}
+                  </div>
+                  <div className="truncate text-[11px] leading-5 text-slate-500">
+                    {file.path}
+                  </div>
+                </div>
+              </CommandItem>
+            ))}
+          </CommandGroup>
         ) : null}
         {sections.map((section) => (
           <CommandGroup

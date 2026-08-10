@@ -26,9 +26,13 @@ import type {
 
 const hoistedMocks = vi.hoisted(() => ({
   mockListServiceSkills: vi.fn(),
+  mockGetProject: vi.fn(),
+  mockSearchProjectFiles: vi.fn(),
 }));
 
 export const mockListServiceSkills = hoistedMocks.mockListServiceSkills;
+export const mockGetProject = hoistedMocks.mockGetProject;
+export const mockSearchProjectFiles = hoistedMocks.mockSearchProjectFiles;
 
 vi.mock("sonner", () => ({
   toast: {
@@ -43,6 +47,24 @@ vi.mock("@/lib/api/serviceSkills", async (importOriginal) => {
   return {
     ...actual,
     listServiceSkills: () => hoistedMocks.mockListServiceSkills(),
+  };
+});
+
+vi.mock("@/lib/api/project", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/project")>();
+  return {
+    ...actual,
+    getProject: (...args: unknown[]) => hoistedMocks.mockGetProject(...args),
+  };
+});
+
+vi.mock("@/lib/api/fuzzyFileSearch", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/api/fuzzyFileSearch")>();
+  return {
+    ...actual,
+    searchProjectFiles: (...args: unknown[]) =>
+      hoistedMocks.mockSearchProjectFiles(...args),
   };
 });
 
@@ -298,6 +320,8 @@ afterEach(() => {
 
 beforeEach(() => {
   mockListServiceSkills.mockResolvedValue([]);
+  mockGetProject.mockResolvedValue(null);
+  mockSearchProjectFiles.mockResolvedValue([]);
 });
 
 export interface HarnessProps {

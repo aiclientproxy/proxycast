@@ -33,10 +33,7 @@ import type {
   ServiceSkillHomeItem,
 } from "@/components/agent/chat/service-skills/types";
 import { toast } from "sonner";
-import {
-  filterSlashCommands,
-  type SlashCommandDefinition,
-} from "../commands";
+import { filterSlashCommands, type SlashCommandDefinition } from "../commands";
 import {
   filterBuiltinCommands,
   filterRuntimeSceneSlashCommands,
@@ -84,6 +81,9 @@ import type {
   CuratedTaskReferenceEntry,
   CuratedTaskReferenceSelection,
 } from "../utils/curatedTaskReferenceSelection";
+import type { ProjectFileSearchResult } from "@/lib/api/fuzzyFileSearch";
+import { replaceProjectFileMentionToken } from "./projectFileMention";
+import { useProjectFileMentionSearch } from "./useProjectFileMentionSearch";
 
 interface CharacterMentionProps {
   /** 角色列表 */
@@ -349,6 +349,11 @@ export function CharacterMention({
     () => partitionMentionableSkills(skills, mentionQuery),
     [skills, mentionQuery],
   );
+  const projectFileSearch = useProjectFileMentionSearch({
+    active: showMentions && triggerMode === "mention",
+    projectId,
+    query: mentionQuery,
+  });
 
   const updateMentionState = useCallback(() => {
     if (!inputCompletionEnabled) {
@@ -531,6 +536,35 @@ export function CharacterMention({
       const newCursorPos =
         activeTrigger.triggerIndex + character.name.length + 2;
       textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
+
+  const handleSelectProjectFile = (file: ProjectFileSearchResult) => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    const currentValue = textarea.value || value;
+    const cursorPos = textarea.selectionStart ?? currentValue.length;
+    const activeTrigger =
+      activeTriggerRef.current?.mode === "mention"
+        ? activeTriggerRef.current
+        : resolveActiveTrigger(currentValue, cursorPos);
+    if (!activeTrigger || activeTrigger.mode !== "mention") {
+      return;
+    }
+
+    const selection = replaceProjectFileMentionToken({
+      value: currentValue,
+      tokenStart: activeTrigger.triggerIndex,
+      tokenEnd: activeTrigger.triggerIndex + activeTrigger.query.length + 1,
+      path: file.path,
+    });
+    onChange(selection.value);
+    setShowMentions(false);
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(selection.cursorPos, selection.cursorPos);
     }, 0);
   };
 
@@ -1316,6 +1350,8 @@ export function CharacterMention({
                 filteredCharacters={filteredCharacters}
                 installedSkills={installedSkills}
                 availableSkills={availableSkills}
+                projectFiles={projectFileSearch.files}
+                projectFileSearchStatus={projectFileSearch.status}
                 projectId={projectId}
                 sessionId={sessionId}
                 referenceEntries={defaultCuratedTaskReferenceEntries}
@@ -1328,6 +1364,7 @@ export function CharacterMention({
                 commandRef={commandRef}
                 onQueryChange={setMentionQuery}
                 onSelectCapability={handleSelectCapabilityDescriptor}
+                onSelectProjectFile={handleSelectProjectFile}
                 onNavigateToSettings={
                   onNavigateToSettings
                     ? () => {

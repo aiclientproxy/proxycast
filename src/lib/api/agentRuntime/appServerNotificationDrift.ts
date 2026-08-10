@@ -88,6 +88,8 @@ const DIAGNOSTIC_ONLY_NOTIFICATION_METHODS = new Set([
   "deprecationNotice",
   "externalAgentConfig/import/completed",
   "externalAgentConfig/import/progress",
+  "fuzzyFileSearch/sessionCompleted",
+  "fuzzyFileSearch/sessionUpdated",
   "item/fileChange/outputDelta",
   "process/exited",
   "process/outputDelta",

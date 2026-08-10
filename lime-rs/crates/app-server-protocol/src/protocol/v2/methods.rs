@@ -73,6 +73,7 @@ pub const METHOD_TURN_START: &str = "turn/start";
 pub const METHOD_TURN_STEER: &str = "turn/steer";
 pub const METHOD_TURN_INTERRUPT: &str = "turn/interrupt";
 pub const METHOD_REVIEW_START: &str = "review/start";
+pub const METHOD_FUZZY_FILE_SEARCH: &str = "fuzzyFileSearch";
 pub const METHOD_FS_READ_FILE: &str = "fs/readFile";
 pub const METHOD_FS_WRITE_FILE: &str = "fs/writeFile";
 pub const METHOD_FS_CREATE_DIRECTORY: &str = "fs/createDirectory";
@@ -281,6 +282,8 @@ pub enum Method {
     TurnInterrupt,
     #[serde(rename = "review/start")]
     ReviewStart,
+    #[serde(rename = "fuzzyFileSearch")]
+    FuzzyFileSearch,
     #[serde(rename = "fs/readFile")]
     FsReadFile,
     #[serde(rename = "fs/writeFile")]
@@ -389,6 +392,7 @@ impl Method {
             Self::TurnSteer => METHOD_TURN_STEER,
             Self::TurnInterrupt => METHOD_TURN_INTERRUPT,
             Self::ReviewStart => METHOD_REVIEW_START,
+            Self::FuzzyFileSearch => METHOD_FUZZY_FILE_SEARCH,
             Self::FsReadFile => METHOD_FS_READ_FILE,
             Self::FsWriteFile => METHOD_FS_WRITE_FILE,
             Self::FsCreateDirectory => METHOD_FS_CREATE_DIRECTORY,
@@ -484,6 +488,7 @@ impl Method {
             METHOD_TURN_STEER => Some(Self::TurnSteer),
             METHOD_TURN_INTERRUPT => Some(Self::TurnInterrupt),
             METHOD_REVIEW_START => Some(Self::ReviewStart),
+            METHOD_FUZZY_FILE_SEARCH => Some(Self::FuzzyFileSearch),
             METHOD_FS_READ_FILE => Some(Self::FsReadFile),
             METHOD_FS_WRITE_FILE => Some(Self::FsWriteFile),
             METHOD_FS_CREATE_DIRECTORY => Some(Self::FsCreateDirectory),
@@ -574,6 +579,7 @@ pub const METHODS: &[&str] = &[
     METHOD_TURN_STEER,
     METHOD_TURN_INTERRUPT,
     METHOD_REVIEW_START,
+    METHOD_FUZZY_FILE_SEARCH,
     METHOD_FS_READ_FILE,
     METHOD_FS_WRITE_FILE,
     METHOD_FS_CREATE_DIRECTORY,

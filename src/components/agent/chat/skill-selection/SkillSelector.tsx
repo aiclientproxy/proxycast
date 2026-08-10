@@ -162,6 +162,7 @@ export const SkillSelectorContent: React.FC<SkillSelectorContentProps> = ({
           commandRef={commandRef}
           onQueryChange={onQueryChange}
           onSelectCapability={handleSelectCapability}
+          onSelectProjectFile={() => undefined}
           onNavigateToSettings={onNavigateToSettings}
         />
         {canRefresh || canImport ? (

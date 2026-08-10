@@ -182,6 +182,7 @@ pub(super) fn into_parts(
         ClientRequest::TurnSteer { id, params } => parts(id, Method::TurnSteer, params),
         ClientRequest::TurnInterrupt { id, params } => parts(id, Method::TurnInterrupt, params),
         ClientRequest::ReviewStart { id, params } => parts(id, Method::ReviewStart, params),
+        ClientRequest::FuzzyFileSearch { id, params } => parts(id, Method::FuzzyFileSearch, params),
         ClientRequest::FsReadFile { id, params } => parts(id, Method::FsReadFile, params),
         ClientRequest::FsWriteFile { id, params } => parts(id, Method::FsWriteFile, params),
         ClientRequest::FsCreateDirectory { id, params } => {

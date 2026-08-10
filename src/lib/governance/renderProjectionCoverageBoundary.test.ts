@@ -28,6 +28,7 @@ interface CoverageFixture {
   upstream: {
     repository: string;
     revision: string;
+    methodRevision: string;
     itemSchemaSource: string;
     itemSchemaSha256: string;
     notificationSchemaSource: string;
@@ -224,6 +225,8 @@ describe("Codex render projection coverage boundary", () => {
   it("product-scope-excluded notifications remain diagnostics-only and outside the current projector", () => {
     const coverage = readJson<CoverageFixture>(COVERAGE_PATH);
     const excludedMethods = [
+      "fuzzyFileSearch/sessionCompleted",
+      "fuzzyFileSearch/sessionUpdated",
       "process/outputDelta",
       "process/exited",
       "thread/realtime/closed",
@@ -293,7 +296,7 @@ describe("Codex render projection coverage boundary", () => {
       true,
     );
     expect(coverage.upstream.revision).toBe(itemInventory.upstream.revision);
-    expect(coverage.upstream.revision).toBe(methodScope.upstream.revision);
+    expect(coverage.upstream.methodRevision).toBe(methodScope.upstream.revision);
     expect(coverage.upstream.itemSchemaSource).toBe(
       itemInventory.upstream.schemaSource,
     );

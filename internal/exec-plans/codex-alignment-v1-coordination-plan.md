@@ -4504,7 +4504,7 @@ Grok 多模态对齐。
 
 ### 2026-08-10 Codex HEAD registry 与 current 字段增量审计
 
-状态：in progress。
+状态：completed。
 
 目标与窄写集：将 method matrix 从 Codex `c4f42d161ae44a8d696ee9fb595709661979d187` 增量审计到
 `c9c6c0daa994109cec50fddcb57d076fdf9e738c`，并只收敛已有 current boundary 的字段变化。写集限定为
@@ -4521,3 +4521,51 @@ Grok 多模态对齐。
 验证计划：生成 Rust schema 与 typed client，运行 App Server protocol/Hook/model 定向 Rust 测试、Renderer
 model registry 与 method boundary Vitest、`npm run test:contracts`、`npm run governance:legacy-report`、typecheck、
 格式和 diff 检查。本切片不改变 GUI 交互、Electron/preload 或 Thread/Turn/Item producer，因此不重复运行 Gate B。
+
+完成结果：Codex HEAD 已更新为 `c9c6c0daa994109cec50fddcb57d076fdf9e738c`。新增
+`server/diagnostics` 已进入 method matrix 的 `product-scope-excluded / forbidden-to-restore`，没有进入 Lime manifest、
+Electron 诊断后端或 provider readiness 事实源。`model/list.multiAgentVersion` 由 Grok-aligned model catalog 的显式
+`multi_agent_version` 元数据透传，缺失保持 `null`；Hook `executionMode` 由冻结的 `HookSnapshot` 投影，缺省为 `sync`。
+生成 schema 与 typed client 已同步。产品矩阵为 `139 implemented / 28 planned / 54 product-scope-excluded`，产品范围
+完成度保持 `139 / 167 = 83.2%`。
+
+验证结果：App Server protocol Model wire、App Server model propagation、公共 `hooks/list` JSON-RPC、Renderer model
+registry `18/18` 与 method product-scope boundary `6/6` 定向测试通过；`npm run test:contracts` 通过（generated protocol
+types `955`、App Server client contract `301` checks）；`npm run typecheck`、`npm run check:protocol-types`、定向
+Prettier、`git diff --check` 与 `npm run governance:legacy-report` 通过，后者为零引用候选、零分类漂移、零边界违规。
+Rust fmt 已完成。本切片没有改变 GUI、Electron/preload、Thread/Turn/Item producer 或 live provider sampling，故未重复
+运行 Gate A/Gate B；已有 Electron 证据不被本字段增量冒充为新证据。
+
+分类：新增 Model/Hook 字段、generated contract、Renderer registry projection 与 method matrix 为 `current`；
+`server/diagnostics` 为 `product-scope-excluded / forbidden-to-restore`；没有新增 `compat` 或 `deprecated`。下一刀从剩余
+`28` 个 planned method 中重新核对真实 Desktop consumer，优先选择已有唯一 owner、无需恢复 TUI 或第二套 provider
+控制面的能力；Windows setup 仍受真机证据阻塞。
+
+### 2026-08-10 Desktop fuzzy file mention current slice
+
+状态：in progress。
+
+主目标：把 Composer 已有 `@` 输入面板缺失的项目文件检索接到 Codex exact 一发式
+`fuzzyFileSearch { query, roots, cancellationToken }`，形成
+`Desktop Composer -> Renderer typed gateway -> App Server JSON-RPC -> filesystem search owner` 唯一主链。选中结果只替换
+当前 `@token` 为相对项目路径，沿用 Codex 的输入语义；不把文件路径伪装成 connector/plugin `Mention`，不复制 Codex TUI，
+不改变 Grok-aligned 多模型/多模态 owner。
+
+产品裁决：Codex `fuzzyFileSearch/sessionStart|sessionUpdate|sessionStop` 与
+`fuzzyFileSearch/sessionUpdated|sessionCompleted` 在 upstream 文档中属于 experimental legacy fuzzy search flow。Lime
+Desktop 使用请求级 cancellation token 丢弃陈旧结果，无需第二套长生命周期 session registry；因此本轮只把一发式
+`fuzzyFileSearch` 提升为 `current`，其余五个 session surface 改为
+`product-scope-excluded / forbidden-to-restore`。
+
+窄写集：App Server v2 fuzzy file search protocol/schema/generated client、App Server filesystem search owner 与公共
+JSON-RPC 测试、Renderer `src/lib/api` gateway、Composer file mention hook/pure insertion helper/panel wiring、五语言
+`agentSkills` 文案、method/product/render matrix、`internal/aiprompts/{architecture,commands}.md` 与本执行计划。已有超过
+`1000` 行的 `envelopes.rs`、`CharacterMention.tsx` 只允许协议注册或依赖注入接线；搜索、取消、状态与文本替换逻辑必须
+落在新的短领域模块，不继续堆入超大文件。不触碰 Windows runner、Thread/Turn/Item producer、provider lowering 或并行
+release 计划。
+
+退出条件：空 query/空 root 返回空结果；root 必须是绝对目录；同一 cancellation token 的新请求取消旧扫描且不误删新
+请求状态；结果限制、排序、相对路径、file/directory type 与 indices 有定向测试；Renderer 丢弃陈旧响应；只在 mention
+模式且存在项目 root 时查询；选中带空格路径时正确加引号并只替换当前 `@token`。同步 generated contracts、五语言、产品
+矩阵与回流守卫，并运行 Rust related/public JSON-RPC、Renderer unit/component、`npm run test:contracts`、
+`npm run governance:legacy-report`、typecheck、GUI smoke 与风险匹配的 Gate A/Gate B。

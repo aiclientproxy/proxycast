@@ -972,6 +972,10 @@ declare module "./connection.js" {
       params: protocol.ArtifactWriteParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ArtifactWriteResponse>>;
+    searchFiles(
+      params: protocol.FuzzyFileSearchParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.FuzzyFileSearchResponse>>;
     readFile(
       params: protocol.FsReadFileParams,
       options?: AppServerRequestOptions,

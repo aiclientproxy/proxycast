@@ -2671,6 +2671,50 @@ fn lifecycle_notifications_round_trip_only_the_v2_shapes() {
 }
 
 #[test]
+fn fuzzy_file_search_matches_codex_request_and_response_wire() {
+    let request = json!({
+        "method": "fuzzyFileSearch",
+        "id": 40,
+        "params": {
+            "query": "app",
+            "roots": ["/workspace"],
+            "cancellationToken": "composer"
+        }
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(request.clone()).expect("decode fuzzyFileSearch request");
+    assert_eq!(decoded.method(), Method::FuzzyFileSearch);
+    assert_eq!(
+        serde_json::to_value(decoded).expect("encode fuzzyFileSearch request"),
+        request
+    );
+
+    let response = FuzzyFileSearchResponse {
+        files: vec![FuzzyFileSearchResult {
+            root: "/workspace".to_string(),
+            path: "src/app.rs".to_string(),
+            match_type: FuzzyFileSearchMatchType::File,
+            file_name: "app.rs".to_string(),
+            score: 84,
+            indices: Some(vec![4, 5, 6]),
+        }],
+    };
+    assert_eq!(
+        serde_json::to_value(response).expect("encode fuzzyFileSearch response"),
+        json!({
+            "files": [{
+                "root": "/workspace",
+                "path": "src/app.rs",
+                "match_type": "file",
+                "file_name": "app.rs",
+                "score": 84,
+                "indices": [4, 5, 6]
+            }]
+        })
+    );
+}
+
+#[test]
 fn plugin_search_matches_codex_request_and_response_wire() {
     let request = json!({
         "method": "plugin/search",
