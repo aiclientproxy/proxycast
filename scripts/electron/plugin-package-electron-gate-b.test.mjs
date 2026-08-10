@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-import { pluginPackageMcpAppSurfaceReady } from "./plugin-mcp-app-gate-b.mjs";
+import {
+  pluginPackageMcpAppLifecycleDelta,
+  pluginPackageMcpAppSurfaceReady,
+} from "./plugin-mcp-app-gate-b.mjs";
 
 describe("Plugin package current Electron fixture guard", () => {
   it("uses the real Plugin package install and runtime MCP lifecycle", () => {
@@ -106,7 +109,7 @@ describe("Plugin package current Electron fixture guard", () => {
     expect(gate).toContain("summary.coldRestoreMcpProcessRestarted");
     expect(gate).toContain("summary.coldRestoreProviderNotReexecuted");
     expect(gate).toContain("summary.coldRestoreToolNotReexecuted");
-    expect(gate).toContain("summary.mcpAppResourceReadCount >= 4");
+    expect(gate).toContain("summary.mcpAppResourceReadCount >= 3");
     expect(gate).toContain(
       "summary.mcpAppHtmlLoadCount === summary.mcpAppResourceReadCount",
     );
@@ -171,5 +174,20 @@ describe("Plugin package current Electron fixture guard", () => {
         2,
       ),
     ).toBe(true);
+  });
+
+  it("measures reload proof relative to the observed first surface", () => {
+    expect(
+      pluginPackageMcpAppLifecycleDelta(
+        { resourceReadCount: 1, htmlLoadCount: 1 },
+        { resourceReadCount: 2, htmlLoadCount: 2 },
+      ),
+    ).toEqual({ resourceReadCount: 1, htmlLoadCount: 1 });
+    expect(
+      pluginPackageMcpAppLifecycleDelta(
+        { resourceReadCount: 2, htmlLoadCount: 2 },
+        { resourceReadCount: 3, htmlLoadCount: 3 },
+      ),
+    ).toEqual({ resourceReadCount: 1, htmlLoadCount: 1 });
   });
 });

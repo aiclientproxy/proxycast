@@ -166,3 +166,14 @@
 - `npm run verify:gui-smoke`：通过；最新 Electron evidence `standalone-shell-01-20260810112853-16763`，App Server `1.125.0`。
 - 本机 packaged Plugin Gate B 既有证据保持通过：`ok=true`、provider request `2`、MCP elicitation accepted、provider final text、cold restore/卸载历史和 `productionMockFallbackHitCount=0`。
 - 当前阻塞只剩危险 Git 写操作确认，以及新完整 SHA 推送后的 Windows runner Plugin Gate B/artifact 复核；既有 `v1.125.0` tag 固定在 `8647d18fa358e3a9c86e520348d39e4b3eba6041`。
+
+## Windows runner `31384560366`
+
+状态：`fix-validated-locally / windows-runner-pending`
+
+- 使用完整 SHA `668699a4d29a4302e7db46aaab58644f2e46b61a`；Windows Plugin path contract、sherpa runtime、Electron Windows x64 Squirrel package、N-1 installer 下载与 installed Squirrel smoke 全部通过。
+- Plugin Gate B 已通过 App Center 安装/启停、禁用边界、provider 两次请求、MCP elicitation、最终文本与 canonical MCP App item 投影；唯一失败是首次显式恢复后等待固定累计 `2` 次 resource read/HTML load。
+- 失败 evidence 同时证明 WebContents marker 已加载且 MCP ledger 已有 `1` 次 `resource_read`。脚本在 reload 前没有等待隐式首次挂载，Windows 上 reload 抢先后只有一次有效加载；随后 60 秒等待使 240 条 invoke trace ring buffer 被 drain 记录覆盖，最终诊断误显示计数为 `0`。
+- 修复：首次显式恢复只要求至少一组 resource read/HTML load 且一一对应；下一次 Renderer reload 按已观察基线要求各精确增加一次；cold restore 继续要求独立进程增加一次。最终有效最小计数从依赖隐式竞态的 `4` 收敛为确定性的 `3`，不放宽任何真实产品边界。
+- 本地验证：Gate B 脚本 Vitest `8 passed; 0 failed`、定向 ESLint、Node 语法检查、`npm run typecheck`、`npm run test:contracts`、`npm run verify:app-version` 全部通过。本机真实 Electron Plugin Gate B `ok=true`，resource read/HTML load `4/4`、launch `2`、provider request `2`、reload/cold restore/卸载历史全部通过、`productionMockFallbackHitCount=0`、`missingRequiredMethods=[]`。
+- 下一步：通过 Gate B 脚本单测、定向 ESLint、contracts 与本机 packaged Gate B 后，提交/推送窄修复并以新完整 SHA 重跑 Windows runner；`v1.125.0` tag 不移动。

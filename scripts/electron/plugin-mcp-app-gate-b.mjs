@@ -120,6 +120,17 @@ export function pluginPackageMcpAppSurfaceReady(
   );
 }
 
+export function pluginPackageMcpAppLifecycleDelta(previous, current) {
+  return {
+    htmlLoadCount:
+      readLifecycleCount(current?.htmlLoadCount) -
+      readLifecycleCount(previous?.htmlLoadCount),
+    resourceReadCount:
+      readLifecycleCount(current?.resourceReadCount) -
+      readLifecycleCount(previous?.resourceReadCount),
+  };
+}
+
 export async function installPluginPackageEmbeddedBrowserLifecycleCapture(page) {
   await page.evaluate(() => {
     const stateKey = "__LIME_PLUGIN_PACKAGE_EMBEDDED_BROWSER_LIFECYCLE__";
@@ -488,4 +499,8 @@ function parseJsonRpcLine(lines) {
   } catch {
     return null;
   }
+}
+
+function readLifecycleCount(value) {
+  return Number.isInteger(value) && value >= 0 ? value : 0;
 }

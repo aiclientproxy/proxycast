@@ -32,6 +32,7 @@ import {
   installPluginPackageEmbeddedBrowserLifecycleCapture,
   PLUGIN_PACKAGE_MCP_APP_MARKER,
   PLUGIN_PACKAGE_MCP_APP_RESOURCE_URI,
+  pluginPackageMcpAppLifecycleDelta,
   pluginPackageMcpAppHtml,
   waitForPluginPackageMcpAppHistoryUnavailable,
   waitForPluginPackageMcpAppSurface,
@@ -2452,14 +2453,15 @@ export async function run({ pluginPackage = false } = {}) {
         page,
         options,
         runtime,
-        minimumResourceReadCount: 2,
-        minimumHtmlLoadCount: 2,
+        minimumResourceReadCount: 1,
+        minimumHtmlLoadCount: 1,
       });
       raw.mcpAppFirstSurface = sanitizeJson(firstSurface);
       assert(
-        firstSurface.traceEvidence.resourceReadCount === 2 &&
-          firstSurface.traceEvidence.htmlLoadCount === 2,
-        `首次显式恢复前后的 MCP App resource/HTML load 计数异常: ${JSON.stringify(
+        firstSurface.traceEvidence.resourceReadCount >= 1 &&
+          firstSurface.traceEvidence.resourceReadCount ===
+            firstSurface.traceEvidence.htmlLoadCount,
+        `首次显式恢复的 MCP App resource/HTML load 计数异常: ${JSON.stringify(
           firstSurface.traceEvidence,
         )}`,
       );
@@ -2488,13 +2490,18 @@ export async function run({ pluginPackage = false } = {}) {
         page,
         options,
         runtime,
-        minimumResourceReadCount: 3,
-        minimumHtmlLoadCount: 3,
+        minimumResourceReadCount:
+          firstSurface.traceEvidence.resourceReadCount + 1,
+        minimumHtmlLoadCount: firstSurface.traceEvidence.htmlLoadCount + 1,
       });
+      const restoredLifecycleDelta = pluginPackageMcpAppLifecycleDelta(
+        firstSurface.traceEvidence,
+        restoredSurface.traceEvidence,
+      );
       assert(
-        restoredSurface.traceEvidence.resourceReadCount === 3 &&
-          restoredSurface.traceEvidence.htmlLoadCount === 3,
-        "Renderer reload 后 MCP App resource/HTML load 计数异常",
+        restoredLifecycleDelta.resourceReadCount === 1 &&
+          restoredLifecycleDelta.htmlLoadCount === 1,
+        `Renderer reload 后 MCP App resource/HTML load 增量异常: ${JSON.stringify(restoredLifecycleDelta)}`,
       );
       summary.mcpAppRestoredAfterReload = true;
       summary.mcpAppCanonicalIdentityStable =
@@ -2502,6 +2509,9 @@ export async function run({ pluginPackage = false } = {}) {
         restoredSurface.viewId === firstSurface.viewId;
       raw.mcpAppRestoredRead = sanitizeJson(restoredRead);
       raw.mcpAppRestoredSurface = sanitizeJson(restoredSurface);
+      raw.mcpAppRestoredLifecycleDelta = sanitizeJson(
+        restoredLifecycleDelta,
+      );
       await page.screenshot({ path: screenshotPath, fullPage: true });
 
       const preColdRestoreLedger = readJsonLines(mcpFixture.ledgerPath);
@@ -2895,7 +2905,7 @@ export async function run({ pluginPackage = false } = {}) {
         "Plugin MCP App canonical identity 不稳定",
       );
       assert(
-        summary.mcpAppResourceReadCount >= 4,
+        summary.mcpAppResourceReadCount >= 3,
         `Plugin MCP App resource read 次数异常: ${summary.mcpAppResourceReadCount}`,
       );
       assert(
