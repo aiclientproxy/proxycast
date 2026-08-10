@@ -71,3 +71,9 @@
 - runner `31318811255`：Windows path contract、sherpa runtime、Electron Windows package、N-1 installer download 与 Squirrel smoke 均通过；Plugin Gate B 在等待 MCP elicitation 表单 90 秒后超时。MCP server 已 initialize，但 ledger 没有 `tool_call`，启用插件后的 provider 请求数为 `0`，因此未产生用户可见的 `mcp_elicitation` pending interaction。
 - 根因定位：入口线程栈修复已生效，但 Tokio worker 仍使用默认栈；App Server 的深层 agent/plugin 调用在 worker 上仍可能溢出或提前终止，导致 Gate B 没有进入 elicitation。
 - 下一项修复：显式构造 Tokio multi-thread runtime，并在 Windows 将 worker stack 同样设置为 8 MiB；非 Windows 保持默认 worker stack 行为。
+
+## Windows packaged Gate B 复核
+
+- runner `31343997706` 使用 `dd97f79e6eb0a9fa2428416658fccefb13d03906`；Plugin 安装、启停边界、标准 manifest/mcp.json/Skill、MCP initialize capability 与 packaged Electron 均通过，但 `turn/start` 后 provider request 为 `0`，仅留下 MCP initialize，Gate B 超时。
+- macOS packaged follow-up 使用同一当前工作树资源完成完整 Plugin Gate B，证明 packaged sidecar 资源解析和通用 Plugin/MCP runtime 主链可用；剩余问题限定为 Windows packaged turn execution 诊断。
+- Gate B failure path 已补只读诊断，失败时保存 `thread/read`、`log/list`、`log/persistedTail`、`diagnostics/server/read`、renderer invoke trace、provider request 与 MCP ledger，供下一次 Windows runner 定位 turn 终态/错误；不改变通过条件。

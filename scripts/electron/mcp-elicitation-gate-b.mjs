@@ -1781,6 +1781,47 @@ function electronEvidence(traceRaw, observedMethods, requiredMethods) {
   };
 }
 
+async function collectFailureDiagnostics({ page, runtime, fixture, ledgerPath }) {
+  const diagnostics = {
+    providerRequests: fixture ? providerRequestSummary(fixture.requests) : [],
+    mcpLedger: ledgerPath ? readJsonLines(ledgerPath) : [],
+  };
+  if (!page) {
+    return diagnostics;
+  }
+
+  diagnostics.renderer = await page
+    .evaluate(() => ({
+      invokeTrace: window.localStorage.getItem("lime_invoke_trace_buffer_v1"),
+      invokeErrors: window.localStorage.getItem("lime_invoke_error_buffer_v1"),
+    }))
+    .catch((error) => ({ error: sanitizeText(error) }));
+
+  const readOnlyCalls = [
+    [
+      "thread/read",
+      runtime?.threadId
+        ? { threadId: runtime.threadId, includeTurns: true }
+        : null,
+    ],
+    ["log/list", {}],
+    ["log/persistedTail", { lines: 200 }],
+    ["diagnostics/server/read", {}],
+  ];
+  diagnostics.appServer = {};
+  for (const [method, params] of readOnlyCalls) {
+    if (params === null) continue;
+    diagnostics.appServer[method] = await appServerCallFromPage(
+      page,
+      method,
+      params,
+    )
+      .then((response) => sanitizeJson(response))
+      .catch((error) => ({ error: sanitizeText(error) }));
+  }
+  return diagnostics;
+}
+
 export async function run({ pluginPackage = false } = {}) {
   const defaults = pluginPackage
     ? {
@@ -2836,6 +2877,12 @@ export async function run({ pluginPackage = false } = {}) {
       error instanceof Error ? error.stack || error.message : String(error),
     );
     summary.consoleErrors = [...consoleErrors];
+    raw.failureDiagnostics = await collectFailureDiagnostics({
+      page,
+      runtime: raw.runtime,
+      fixture,
+      ledgerPath: mcpFixture?.ledgerPath,
+    });
     if (page) {
       await page
         .screenshot({ path: failureScreenshotPath, fullPage: true })
