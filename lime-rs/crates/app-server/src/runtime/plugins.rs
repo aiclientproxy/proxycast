@@ -72,6 +72,7 @@ impl RuntimeCore {
         &self,
         params: PluginCatalogInstallParams,
     ) -> Result<PluginCatalogInstallResponse, RuntimeCoreError> {
+        self.backend.invalidate_mcp_runtimes().await;
         self.app_data_source.install_plugin_catalog(params).await
     }
 
@@ -79,6 +80,7 @@ impl RuntimeCore {
         &self,
         params: PluginCatalogUninstallParams,
     ) -> Result<PluginCatalogUninstallResponse, RuntimeCoreError> {
+        self.backend.invalidate_mcp_runtimes().await;
         self.app_data_source.uninstall_plugin_catalog(params).await
     }
 
@@ -95,8 +97,11 @@ impl RuntimeCore {
         &self,
         params: PluginCatalogEnabledSetParams,
     ) -> Result<PluginCatalogEnabledSetResponse, RuntimeCoreError> {
-        self.app_data_source
+        let response = self
+            .app_data_source
             .set_plugin_catalog_enabled(params)
-            .await
+            .await?;
+        self.backend.invalidate_mcp_runtimes().await;
+        Ok(response)
     }
 }

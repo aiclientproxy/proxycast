@@ -240,6 +240,10 @@ impl ExecutionBackend for RuntimeBackend {
         Ok(())
     }
 
+    async fn invalidate_mcp_runtimes(&self) {
+        self.agent_state.clear_mcp_runtimes().await;
+    }
+
     async fn respond_action(
         &self,
         request: ActionRespondRequest,

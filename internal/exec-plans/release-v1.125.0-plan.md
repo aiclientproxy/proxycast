@@ -177,3 +177,17 @@
 - 修复：首次显式恢复只要求至少一组 resource read/HTML load 且一一对应；下一次 Renderer reload 按已观察基线要求各精确增加一次；cold restore 继续要求独立进程增加一次。最终有效最小计数从依赖隐式竞态的 `4` 收敛为确定性的 `3`，不放宽任何真实产品边界。
 - 本地验证：Gate B 脚本 Vitest `8 passed; 0 failed`、定向 ESLint、Node 语法检查、`npm run typecheck`、`npm run test:contracts`、`npm run verify:app-version` 全部通过。本机真实 Electron Plugin Gate B `ok=true`，resource read/HTML load `4/4`、launch `2`、provider request `2`、reload/cold restore/卸载历史全部通过、`productionMockFallbackHitCount=0`、`missingRequiredMethods=[]`。
 - 下一步：通过 Gate B 脚本单测、定向 ESLint、contracts 与本机 packaged Gate B 后，提交/推送窄修复并以新完整 SHA 重跑 Windows runner；`v1.125.0` tag 不移动。
+
+## Windows runner `31393287417`
+
+状态：`uninstall-runtime-lifecycle-fix-in-progress`
+
+- 使用完整 SHA `d0fc751d6b80fade928c0941ebfff516e4b97578`；Windows path contract、sherpa runtime、Electron Windows x64 Squirrel package、N-1 installer download、installed Squirrel smoke、Plugin MCP App 首次 surface、reload 与 cold restore 均已通过。
+- Gate B 最终失败在 App Center 卸载：确认按钮已点击，但产品返回 `The process cannot access the file because it is being used by another process. (os error 32)`；`plugin/uninstall` 未成功完成，确认框按错误恢复语义保持可见。
+- 根因：Lime 的 Plugin catalog 变更只更新磁盘与 installed record，没有像 Codex `invalidate_mcp_runtimes()` 一样失效当前 MCP runtimes。Windows stdio MCP 子进程以 Plugin package 为 cwd，卸载直接删除 package 时目录仍被占用。
+- 修复：复用 `AgentRuntimeState::clear_mcp_runtimes()` 作为唯一进程生命周期 owner；安装先失效旧 runtime 再替换 package，卸载在删除 package 前等待 runtime 关闭，启停在状态写入成功后失效旧 runtime，避免旧 Plugin MCP 配置继续运行。
+- 窄写集：`lime-rs/crates/app-server/src/runtime.rs`、`runtime_backend/execution_backend.rs`、`runtime/plugins.rs`、`runtime/tests/plugins.rs`、`runtime/tests.rs` 与本计划；不触碰并发架构/refactor 文档和 projection guard 改动。
+- 退出条件：App Server 定向 Rust 回归证明 `invalidate -> uninstall` 顺序；contracts、版本、Gate B 脚本守卫及本机真实 Electron Plugin Gate B 通过；随后以新完整 SHA 重跑 Windows runner，且不移动 `v1.125.0` tag。
+- 本地验证：`cargo test --manifest-path lime-rs/Cargo.toml -p app-server plugin_uninstall_invalidates_mcp_runtimes_before_removing_package` 通过；`npm run test:rust:related -- lime-rs/crates/app-server/src/runtime.rs lime-rs/crates/app-server/src/runtime/plugins.rs lime-rs/crates/app-server/src/runtime_backend/execution_backend.rs lime-rs/crates/app-server/src/runtime/tests/plugins.rs` 通过，`app-server` lib `1642 passed / 0 failed`；`cargo fmt --all -- --check` 与 `git diff --check` 通过。
+- `npm run typecheck`、`npm run test:contracts`、`npm run verify:app-version`、`npm run verify:gui-smoke` 均通过。真实 macOS packaged Plugin Gate B 通过：`ok=true`、卸载/installed projection/history recovery 全部通过、MCP App resource/HTML `4/4`、provider request `2`、`productionMockFallbackHitCount=0`、`missingRequiredMethods=[]`。
+- 当前状态：`fix-validated-locally / release-git-confirmation-pending / windows-runner-pending`；下一步获得危险 Git 写操作确认后提交并推送窄修复，以新完整 SHA 重跑 Windows runner，不移动已发布 `v1.125.0` tag。

@@ -425,6 +425,8 @@ pub trait ExecutionBackend: Send + Sync {
         Ok(())
     }
 
+    async fn invalidate_mcp_runtimes(&self) {}
+
     async fn respond_action(
         &self,
         request: ActionRespondRequest,
