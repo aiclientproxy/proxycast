@@ -28,6 +28,7 @@ import {
 import type { ExecutionPolicyFocusContext } from "@/types/page";
 import { resolveExecutionPolicyNetworkRuleFocus } from "./executionPolicyFocus";
 import { ExecutionPolicyNetworkFocusPanel } from "./ExecutionPolicyNetworkFocusPanel";
+import { WindowsSandboxReadinessStatus } from "./WindowsSandboxReadinessStatus";
 
 type RuleKind = "shell" | "network";
 type MatchType = NonNullable<ToolExecutionCommandRuleConfig["match_type"]>;
@@ -1027,6 +1028,7 @@ export function ExecutionPolicySettings({
                   updateWorkspaceSandbox({ notify_on_fallback: checked })
                 }
               />
+              <WindowsSandboxReadinessStatus />
             </div>
           </section>
 

@@ -431,6 +431,66 @@ export async function appServerCallFromPage(page, method, params = {}) {
   );
 }
 
+function valuesEqual(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export async function readConfigFromPage(page) {
+  const response = await appServerCallFromPage(page, "config/read", {
+    includeLayers: true,
+  });
+  const config = response.result?.config;
+  const layers = response.result?.layers;
+  const layer = Array.isArray(layers) && layers.length === 1 ? layers[0] : null;
+  const version = layer?.version;
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    throw new Error("config/read 未返回有效配置");
+  }
+  if (typeof version !== "string" || !version) {
+    throw new Error("config/read 未返回有效配置版本");
+  }
+  return {
+    config,
+    version,
+    filePath:
+      layer?.name?.type === "user" && typeof layer.name.file === "string"
+        ? layer.name.file
+        : null,
+    response,
+  };
+}
+
+export async function writeConfigEditsFromPage(
+  page,
+  { edits, expectedVersion },
+) {
+  if (!Array.isArray(edits) || edits.length === 0) return null;
+  const response = await appServerCallFromPage(page, "config/batchWrite", {
+    edits,
+    expectedVersion,
+    reloadUserConfig: true,
+  });
+  if (response.result?.status !== "ok") {
+    throw new Error("config/batchWrite 未返回有效写入结果");
+  }
+  return response;
+}
+
+export async function updateConfigFromPage(page, updater) {
+  const snapshot = await readConfigFromPage(page);
+  const nextConfig = await updater(snapshot.config);
+  const edits = Object.entries(nextConfig).flatMap(([keyPath, value]) =>
+    valuesEqual(snapshot.config[keyPath], value)
+      ? []
+      : [{ keyPath, value, mergeStrategy: "replace" }],
+  );
+  const write = await writeConfigEditsFromPage(page, {
+    edits,
+    expectedVersion: snapshot.version,
+  });
+  return { ...snapshot, config: nextConfig, write };
+}
+
 export async function waitForContext7Server(page, options) {
   const startedAt = Date.now();
   let lastResult = null;

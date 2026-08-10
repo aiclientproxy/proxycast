@@ -14,7 +14,14 @@ const RUN_ID = "standalone-settings-b-test";
 
 function traceRaw(transport = "electron-ipc", methods = undefined) {
   return JSON.stringify([
-    { command: "get_config", transport, status: "success" },
+    {
+      command: "app_server_handle_json_lines",
+      transport,
+      status: "success",
+      args_preview: {
+        request: { lines: [JSON.stringify({ method: "config/read" })] },
+      },
+    },
     ...(methods ?? DEVELOPER_REQUIRED_APP_SERVER_METHODS).map((method) => ({
       command: "app_server_handle_json_lines",
       transport,
@@ -100,12 +107,10 @@ describe("Settings Developer Gate B evidence", () => {
 
   it("requires every current diagnostic method and Host config read", () => {
     expect(summarizeSettingsDeveloperTrace(traceRaw())).toMatchObject({
-      appServerIpcHitCount: DEVELOPER_REQUIRED_APP_SERVER_METHODS.length,
-      methods: DEVELOPER_REQUIRED_APP_SERVER_METHODS,
+      appServerIpcHitCount: DEVELOPER_REQUIRED_APP_SERVER_METHODS.length + 1,
+      methods: ["config/read", ...DEVELOPER_REQUIRED_APP_SERVER_METHODS],
       missingMethods: [],
-      hostIpcHitCount: 1,
-      hostCommands: ["get_config"],
-      missingHostCommands: [],
+      missingConfigMethods: [],
       legacyCommands: [],
       mockFallbackHitCount: 0,
     });
@@ -147,7 +152,7 @@ describe("Settings Developer Gate B evidence", () => {
         ),
       }),
     ).toThrow(
-      /appServerElectronIpc.*allCurrentDiagnosticMethods.*hostElectronIpc.*hostCurrentConfigRead.*diagnosticPayloadShape.*mockFallbackZero/,
+      /appServerElectronIpc.*allCurrentDiagnosticMethods.*configCurrentRead.*diagnosticPayloadShape.*mockFallbackZero/,
     );
   });
 });

@@ -164,6 +164,10 @@
     },
     {
       "kind": "request",
+      "method": "collaborationMode/list"
+    },
+    {
+      "kind": "request",
       "method": "command/exec"
     },
     {
@@ -181,6 +185,18 @@
     {
       "kind": "request",
       "method": "command/exec/write"
+    },
+    {
+      "kind": "request",
+      "method": "config/batchWrite"
+    },
+    {
+      "kind": "request",
+      "method": "config/read"
+    },
+    {
+      "kind": "request",
+      "method": "config/value/write"
     },
     {
       "kind": "notification",
@@ -261,6 +277,14 @@
     {
       "kind": "request",
       "method": "evidence/export"
+    },
+    {
+      "kind": "request",
+      "method": "experimentalFeature/enablement/set"
+    },
+    {
+      "kind": "request",
+      "method": "experimentalFeature/list"
     },
     {
       "kind": "request",
@@ -805,6 +829,10 @@
     {
       "kind": "request",
       "method": "modelSyncState/read"
+    },
+    {
+      "kind": "request",
+      "method": "permissionProfile/list"
     },
     {
       "kind": "request",
@@ -1381,6 +1409,10 @@
     {
       "kind": "request",
       "method": "wechatChannel/runtimeModel/set"
+    },
+    {
+      "kind": "request",
+      "method": "windowsSandbox/readiness"
     },
     {
       "kind": "request",
@@ -2149,6 +2181,7 @@
       "WorkspaceUpdateResponse"
     ],
     "v2": [
+      "ActivePermissionProfile",
       "AdditionalContextEntry",
       "AdditionalContextKind",
       "AdditionalFileSystemPermissions",
@@ -2179,6 +2212,9 @@
       "CollabAgentStatus",
       "CollabAgentTool",
       "CollabAgentToolCallStatus",
+      "CollaborationModeListParams",
+      "CollaborationModeListResponse",
+      "CollaborationModeMask",
       "CommandAction",
       "CommandExecOutputDeltaNotification",
       "CommandExecOutputStream",
@@ -2199,7 +2235,17 @@
       "CommandExecutionStatus",
       "CommandExecutionTerminalInteraction",
       "CommandExecutionTerminalInteractionNotification",
+      "ConfigBatchWriteParams",
+      "ConfigEdit",
+      "ConfigLayer",
+      "ConfigLayerMetadata",
+      "ConfigLayerSource",
+      "ConfigReadParams",
+      "ConfigReadResponse",
+      "ConfigValueWriteParams",
       "ConfigWarningNotification",
+      "ConfigWriteErrorCode",
+      "ConfigWriteResponse",
       "ConnectorMetadata",
       "CurrentTimeReadParams",
       "CurrentTimeReadResponse",
@@ -2212,6 +2258,12 @@
       "DynamicToolNamespaceTool",
       "DynamicToolSpec",
       "ErrorNotification",
+      "ExperimentalFeature",
+      "ExperimentalFeatureEnablementSetParams",
+      "ExperimentalFeatureEnablementSetResponse",
+      "ExperimentalFeatureListParams",
+      "ExperimentalFeatureListResponse",
+      "ExperimentalFeatureStage",
       "FileChangeApprovalDecision",
       "FileChangePatchUpdatedNotification",
       "FileChangeRequestApprovalParams",
@@ -2289,6 +2341,7 @@
       "MemoryCitation",
       "MemoryCitationEntry",
       "MemoryResetResponse",
+      "MergeStrategy",
       "Method",
       "Model",
       "ModelAvailabilityNux",
@@ -2303,9 +2356,13 @@
       "ModelVerification",
       "ModelVerificationNotification",
       "NonSteerableTurnKind",
+      "OverriddenMetadata",
       "PatchApplyStatus",
       "PatchChangeKind",
       "PermissionGrantScope",
+      "PermissionProfileListParams",
+      "PermissionProfileListResponse",
+      "PermissionProfileSummary",
       "PermissionsRequestApprovalParams",
       "PermissionsRequestApprovalResponse",
       "PlanDeltaNotification",
@@ -2516,7 +2573,11 @@
       "TurnsPage",
       "UserInput",
       "WarningNotification",
-      "WebSearchItem"
+      "WebSearchItem",
+      "WindowsSandboxReadiness",
+      "WindowsSandboxReadinessParams",
+      "WindowsSandboxReadinessResponse",
+      "WriteStatus"
     ]
   }
 }

@@ -14,6 +14,25 @@ export interface AgentAccessRuntimePolicies {
   sandboxPolicy: AgentSandboxPolicy;
 }
 
+export type BuiltinPermissionProfileId =
+  | ":read-only"
+  | ":workspace"
+  | ":danger-full-access";
+
+export function permissionProfileIdFromAccessMode(
+  accessMode?: AgentAccessMode | null,
+): BuiltinPermissionProfileId {
+  switch (normalizeAccessMode(accessMode)) {
+    case "read-only":
+      return ":read-only";
+    case "full-access":
+      return ":danger-full-access";
+    case "current":
+    default:
+      return ":workspace";
+  }
+}
+
 export function createRuntimePoliciesFromAccessMode(
   accessMode?: AgentAccessMode | null,
 ): AgentAccessRuntimePolicies {

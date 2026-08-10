@@ -472,6 +472,49 @@ export async function invokeAppServerFromPage(
   throw lastError ?? new Error(`${method} App Server invocation failed`);
 }
 
+export async function readConfigFromPage(page, requestLog) {
+  const response = await invokeAppServerFromPage(
+    page,
+    "config/read",
+    { includeLayers: true },
+    requestLog,
+  );
+  const config = response.result?.config;
+  const layers = response.result?.layers;
+  const version = layers?.length === 1 ? layers[0]?.version : null;
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    throw new Error("config/read 未返回有效配置");
+  }
+  if (typeof version !== "string" || !version) {
+    throw new Error("config/read 未返回有效配置版本");
+  }
+  return { config, version, response };
+}
+
+export async function updateConfigFromPage(page, updater, requestLog) {
+  const snapshot = await readConfigFromPage(page, requestLog);
+  const nextConfig = await updater(snapshot.config);
+  const edits = Object.entries(nextConfig).flatMap(([keyPath, value]) =>
+    JSON.stringify(snapshot.config[keyPath]) === JSON.stringify(value)
+      ? []
+      : [{ keyPath, value, mergeStrategy: "replace" }],
+  );
+  const write =
+    edits.length === 0
+      ? null
+      : await invokeAppServerFromPage(
+          page,
+          "config/batchWrite",
+          {
+            edits,
+            expectedVersion: snapshot.version,
+            reloadUserConfig: true,
+          },
+          requestLog,
+        );
+  return { ...snapshot, config: nextConfig, write };
+}
+
 export function summarizeAppServerInvocationResult(method, result) {
   if (method === APP_SERVER_METHOD_SESSION_TURN_START) {
     const turn = readRecord(result?.turn) ?? {};
@@ -630,38 +673,27 @@ export async function ensureFixtureImageProvider(
     "fixture 图片 Provider 未通过 modelProvider/fetchModels 返回显式模型能力",
   );
 
-  const configBinding = await page.evaluate(
-    async ({
-      providerId,
-      modelId,
-      localImageServerApiKey,
-      localImageServerHost,
-      localImageServerPort,
-    }) => {
-      const invoke = window.electronAPI?.invoke;
-      if (typeof invoke !== "function") {
-        throw new Error("Electron preload invoke bridge is unavailable");
-      }
-      const currentConfig = await invoke("get_config");
-      const nextConfig = {
+  const configBindingResult = await updateConfigFromPage(
+    page,
+    (currentConfig) => ({
         ...(currentConfig || {}),
         server: {
           ...(currentConfig?.server || {}),
           host:
-            typeof localImageServerHost === "string" &&
-            localImageServerHost.trim()
-              ? localImageServerHost.trim()
+            typeof options.localImageServerHost === "string" &&
+            options.localImageServerHost.trim()
+              ? options.localImageServerHost.trim()
               : currentConfig?.server?.host,
           port:
-            typeof localImageServerPort === "number" &&
-            Number.isFinite(localImageServerPort) &&
-            localImageServerPort > 0
-              ? localImageServerPort
+            typeof options.localImageServerPort === "number" &&
+            Number.isFinite(options.localImageServerPort) &&
+            options.localImageServerPort > 0
+              ? options.localImageServerPort
               : currentConfig?.server?.port,
           api_key:
-            typeof localImageServerApiKey === "string" &&
-            localImageServerApiKey.trim()
-              ? localImageServerApiKey.trim()
+            typeof options.localImageServerApiKey === "string" &&
+            options.localImageServerApiKey.trim()
+              ? options.localImageServerApiKey.trim()
               : currentConfig?.server?.api_key,
         },
         workspace_preferences: {
@@ -670,13 +702,16 @@ export async function ensureFixtureImageProvider(
             ...(currentConfig?.workspace_preferences?.media_defaults || {}),
             image: {
               preferredProviderId: providerId,
-              preferredModelId: modelId,
+              preferredModelId: IMAGE_FIXTURE_MODEL,
               allowFallback: false,
             },
           },
         },
-      };
-      await invoke("save_config", { config: nextConfig });
+      }),
+    requestLog,
+  );
+  const configBinding = await page.evaluate(
+    ({ providerId, modelId, nextConfig }) => {
       try {
         window.localStorage.setItem(
           "lime.app-config.changed-at",
@@ -709,9 +744,7 @@ export async function ensureFixtureImageProvider(
     {
       providerId,
       modelId: IMAGE_FIXTURE_MODEL,
-      localImageServerApiKey: options.localImageServerApiKey ?? null,
-      localImageServerHost: options.localImageServerHost ?? null,
-      localImageServerPort: options.localImageServerPort ?? null,
+      nextConfig: configBindingResult.config,
     },
   );
 

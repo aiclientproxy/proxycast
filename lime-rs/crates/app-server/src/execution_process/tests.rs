@@ -107,6 +107,7 @@ async fn execution_process_server_tracks_registered_live_process() {
         stdin: true,
         env_clear: false,
         pty_size: None,
+        sandbox: None,
     })
     .expect("local process should start");
 

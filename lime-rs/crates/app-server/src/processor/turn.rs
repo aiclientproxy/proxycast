@@ -20,6 +20,8 @@ use app_server_protocol::{
 };
 use serde_json::{Map, Value};
 
+use super::permission_profile::resolve_permission_profile;
+
 const DIRECT_INPUT_TO_PARENT_OWNED_THREAD_ERROR: &str =
     "direct app-server input is not allowed for parent-owned threads";
 
@@ -153,6 +155,11 @@ fn lower_turn_start_params(
 }
 
 fn lower_runtime_options(params: &TurnStartParams) -> Result<Option<RuntimeOptions>, JsonRpcError> {
+    if params.permissions.is_some() && params.sandbox_policy.is_some() {
+        return Err(invalid_params(
+            "permissions cannot be combined with sandboxPolicy",
+        ));
+    }
     let mut options = RuntimeOptions::default();
     options.output_schema = params.output_schema.clone();
     let mut request = RuntimeRequest::default();
@@ -220,7 +227,16 @@ fn lower_runtime_options(params: &TurnStartParams) -> Result<Option<RuntimeOptio
         }
     }
     if let Some(value) = params.permissions.as_ref() {
-        metadata.insert("permissions".to_string(), Value::String(value.clone()));
+        let profile = resolve_permission_profile(value)?;
+        request.sandbox_policy = Some(profile.sandbox_policy.to_string());
+        metadata.insert(
+            "permissions".to_string(),
+            Value::String(profile.id.to_string()),
+        );
+        metadata.insert(
+            "activePermissionProfile".to_string(),
+            serde_json::json!({"id": profile.id}),
+        );
     }
     if let Some(value) = params
         .client_user_message_id
@@ -607,6 +623,57 @@ mod tests {
         let error = lower_runtime_options(&params).expect_err("empty model must fail closed");
         assert_eq!(error.code, error_codes::INVALID_PARAMS);
         assert!(error.message.contains("settings.model must not be empty"));
+    }
+
+    #[test]
+    fn permission_profile_resolves_to_runtime_policy_and_provenance() {
+        let params = TurnStartParams {
+            thread_id: "thread-1".to_string(),
+            input: vec![UserInput::Text {
+                text: "hello".to_string(),
+                text_elements: Vec::new(),
+            }],
+            approval_policy: Some(json!("on-request")),
+            permissions: Some(":workspace".to_string()),
+            ..TurnStartParams::default()
+        };
+
+        let options = lower_runtime_options(&params)
+            .expect("known permission profile")
+            .expect("runtime options");
+        let request = options.runtime_request.expect("runtime request");
+        assert_eq!(request.approval_policy.as_deref(), Some("on-request"));
+        assert_eq!(request.sandbox_policy.as_deref(), Some("workspace-write"));
+        assert_eq!(
+            request
+                .metadata
+                .as_ref()
+                .and_then(Value::as_object)
+                .and_then(|metadata| metadata.get("activePermissionProfile")),
+            Some(&json!({"id": ":workspace"}))
+        );
+    }
+
+    #[test]
+    fn permission_profile_rejects_unknown_and_sandbox_combination() {
+        let mut params = TurnStartParams {
+            thread_id: "thread-1".to_string(),
+            input: vec![UserInput::Text {
+                text: "hello".to_string(),
+                text_elements: Vec::new(),
+            }],
+            permissions: Some("custom".to_string()),
+            ..TurnStartParams::default()
+        };
+        let error = lower_runtime_options(&params).expect_err("unknown profile must fail closed");
+        assert_eq!(error.code, error_codes::INVALID_PARAMS);
+        assert!(error.message.contains("unknown permission profile"));
+
+        params.permissions = Some(":read-only".to_string());
+        params.sandbox_policy = Some(json!("read-only"));
+        let error = lower_runtime_options(&params).expect_err("mixed policy must fail closed");
+        assert_eq!(error.code, error_codes::INVALID_PARAMS);
+        assert!(error.message.contains("cannot be combined"));
     }
 
     #[test]

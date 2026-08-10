@@ -137,6 +137,9 @@ export function useAgentContext(options: UseAgentContextOptions) {
     new Map<string, PendingModelSelection>(),
   );
   const activeSessionProviderSelectionSyncRef = useRef(new Set<string>());
+  const sessionProviderSelectionSyncPromiseRef = useRef(
+    new Map<string, Promise<void>>(),
+  );
   const syncedSessionProviderSelectionRef = useRef(
     new Map<string, SessionModelPreference>(),
   );
@@ -305,9 +308,21 @@ export function useAgentContext(options: UseAgentContextOptions) {
         reasoningEffort: targetReasoningEffort,
       });
       const active = activeSessionProviderSelectionSyncRef.current;
-      if (active.has(trimmedSessionId)) {
+      if (
+        active.has(trimmedSessionId) ||
+        sessionProviderSelectionSyncPromiseRef.current.has(trimmedSessionId)
+      ) {
         return;
       }
+
+      let resolveSync: (() => void) | undefined;
+      const syncPromise = new Promise<void>((resolve) => {
+        resolveSync = resolve;
+      });
+      sessionProviderSelectionSyncPromiseRef.current.set(
+        trimmedSessionId,
+        syncPromise,
+      );
 
       queueMicrotask(() => {
         if (active.has(trimmedSessionId)) {
@@ -374,6 +389,16 @@ export function useAgentContext(options: UseAgentContextOptions) {
             }
           } finally {
             active.delete(trimmedSessionId);
+            if (
+              sessionProviderSelectionSyncPromiseRef.current.get(
+                trimmedSessionId,
+              ) === syncPromise
+            ) {
+              sessionProviderSelectionSyncPromiseRef.current.delete(
+                trimmedSessionId,
+              );
+            }
+            resolveSync?.();
           }
         })();
       });
@@ -384,6 +409,20 @@ export function useAgentContext(options: UseAgentContextOptions) {
       runtime.setSessionProviderSelection,
       sessionIdRef,
     ],
+  );
+
+  const waitForSessionProviderSelectionSync = useCallback(
+    (targetSessionId: string): Promise<void> => {
+      const trimmedSessionId = targetSessionId.trim();
+      if (!trimmedSessionId) {
+        return Promise.resolve();
+      }
+      return (
+        sessionProviderSelectionSyncPromiseRef.current.get(trimmedSessionId) ||
+        Promise.resolve()
+      );
+    },
+    [],
   );
 
   const filterSessionsByWorkspace = useCallback(
@@ -802,6 +841,7 @@ export function useAgentContext(options: UseAgentContextOptions) {
     getWorkspaceIdForSubmit,
     persistSessionAccessMode,
     loadSessionAccessMode,
+    waitForSessionProviderSelectionSync,
     persistSessionModelPreference,
     loadSessionModelPreference,
     applyWorkspaceModelPreference,

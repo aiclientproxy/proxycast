@@ -21,6 +21,7 @@ describe("sendAgentStreamMessage", () => {
     ({
       sessionIdRef: { current: "session-existing" },
       ensureSession: vi.fn(async () => "session-existing"),
+      waitForSessionProviderSelectionSync: vi.fn(async () => undefined),
       ...overrides,
     }) as never;
 
@@ -133,6 +134,45 @@ describe("sendAgentStreamMessage", () => {
       skipSessionRestore: true,
       skipSessionStartHooks: true,
     });
+    expect(dispatchPreparedAgentStreamSend).toHaveBeenCalledWith({
+      preparedSend,
+      env,
+    });
+  });
+
+  it("应等待目标会话模型选择同步后再准备发送", async () => {
+    const order: string[] = [];
+    let releaseSelectionSync: (() => void) | undefined;
+    const selectionSync = new Promise<void>((resolve) => {
+      releaseSelectionSync = resolve;
+    });
+    const waitForSessionProviderSelectionSync = vi.fn(
+      async (sessionId: string) => {
+        order.push(`wait:${sessionId}`);
+        await selectionSync;
+      },
+    );
+    const env = createEnv({ waitForSessionProviderSelectionSync });
+    const preparedSend = { prepared: true };
+    vi.mocked(prepareAgentStreamUserInputSend).mockImplementation(() => {
+      order.push("prepare");
+      return preparedSend as never;
+    });
+
+    const send = sendAgentStreamMessage({
+      content: "使用刚选择的模型",
+      images: [],
+      env,
+    });
+    await Promise.resolve();
+
+    expect(order).toEqual(["wait:session-existing"]);
+    expect(prepareAgentStreamUserInputSend).not.toHaveBeenCalled();
+
+    releaseSelectionSync?.();
+    await send;
+
+    expect(order).toEqual(["wait:session-existing", "prepare"]);
     expect(dispatchPreparedAgentStreamSend).toHaveBeenCalledWith({
       preparedSend,
       env,

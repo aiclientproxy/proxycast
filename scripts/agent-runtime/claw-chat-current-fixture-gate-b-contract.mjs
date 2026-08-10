@@ -98,11 +98,13 @@ export function buildGateBContractEvidence({
     pageCrashCount: crashes.length,
     identity: execution.identity,
     outcome: execution.outcome,
+    collaborationMode: execution.collaborationMode,
+    permissionProfile: execution.permissionProfile,
   };
 }
 
 export function buildGateBContractAssertions(evidence) {
-  return {
+  const assertions = {
     runIdPresent:
       typeof evidence.run.id === "string" && evidence.run.id.trim().length > 0,
     screenshotCaptured: evidence.run.screenshotCaptured === true,
@@ -120,6 +122,25 @@ export function buildGateBContractAssertions(evidence) {
     noPageCrashes: evidence.pageCrashCount === 0,
     identityConsistent: evidence.identity.consistent === true,
     explicitTerminalOrPending: evidence.outcome.explicit === true,
+  };
+  if (evidence.permissionProfile.runtime.matchedPrimaryTurn !== true) {
+    return assertions;
+  }
+  return {
+    ...assertions,
+    permissionProfileCatalogRequested:
+      evidence.permissionProfile.catalogRequestCount > 0,
+    permissionProfileResolvedBeforeTurnStart:
+      evidence.permissionProfile.catalogBeforeTurnStart === true,
+    permissionProfileAppliedOnDesktopWire:
+      typeof evidence.permissionProfile.wire.profileId === "string" &&
+      evidence.permissionProfile.wire.legacySandboxPolicyPresent === false,
+    permissionProfileReachedRuntime:
+      typeof evidence.permissionProfile.runtime.sandboxPolicy === "string" &&
+      evidence.permissionProfile.runtime.activePermissionProfileId ===
+        evidence.permissionProfile.wire.profileId,
+    permissionProfileWireRuntimeConsistent:
+      evidence.permissionProfile.wireRuntimeConsistent === true,
   };
 }
 

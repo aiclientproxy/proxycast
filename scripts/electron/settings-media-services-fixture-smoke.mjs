@@ -18,6 +18,7 @@ import {
 } from "./mcp-config-fixture-smoke.mjs";
 import {
   MEDIA_SERVICES_REQUIRED_HOST_COMMANDS,
+  MEDIA_SERVICES_REQUIRED_CONFIG_METHODS,
   MEDIA_SERVICES_REQUIRED_METHODS,
   applyFailedSettingsMediaServicesEvidence,
   applyPassingSettingsMediaServicesEvidence,
@@ -52,7 +53,7 @@ async function readMediaServicesState(page, options) {
   return await waitForPageCondition(
     page,
     options,
-    ({ requiredMethods, requiredHostCommands }) => {
+    ({ requiredMethods, requiredConfigMethods, requiredHostCommands }) => {
       const bodyText = document.body?.innerText ?? "";
       const active =
         document
@@ -117,6 +118,7 @@ async function readMediaServicesState(page, options) {
         !voiceServiceVisible ||
         !configControlsReady ||
         !requiredMethods.every((method) => methods.includes(method)) ||
+        !requiredConfigMethods.every((method) => methods.includes(method)) ||
         !requiredHostCommands.every((command) => hostCommands.includes(command))
       ) {
         return null;
@@ -138,6 +140,7 @@ async function readMediaServicesState(page, options) {
     "Media Services Settings did not reach terminal current readiness",
     {
       requiredMethods: MEDIA_SERVICES_REQUIRED_METHODS,
+      requiredConfigMethods: MEDIA_SERVICES_REQUIRED_CONFIG_METHODS,
       requiredHostCommands: MEDIA_SERVICES_REQUIRED_HOST_COMMANDS,
     },
   );

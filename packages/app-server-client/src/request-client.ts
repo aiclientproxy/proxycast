@@ -668,6 +668,28 @@ export interface AppServerClient {
   readAgentSessionToolInventory(
     params?: protocol.AgentSessionToolInventoryReadParams,
   ): protocol.JsonRpcRequest;
+  readConfig(params?: protocol.ConfigReadParams): protocol.JsonRpcRequest;
+  writeConfigValue(
+    params: protocol.ConfigValueWriteParams,
+  ): protocol.JsonRpcRequest;
+  writeConfigBatch(
+    params: protocol.ConfigBatchWriteParams,
+  ): protocol.JsonRpcRequest;
+  listCollaborationModes(
+    params?: protocol.CollaborationModeListParams,
+  ): protocol.JsonRpcRequest;
+  listExperimentalFeatures(
+    params?: protocol.ExperimentalFeatureListParams,
+  ): protocol.JsonRpcRequest;
+  setExperimentalFeatureEnablement(
+    params: protocol.ExperimentalFeatureEnablementSetParams,
+  ): protocol.JsonRpcRequest;
+  listPermissionProfiles(
+    params?: protocol.PermissionProfileListParams,
+  ): protocol.JsonRpcRequest;
+  readWindowsSandboxReadiness(
+    params?: protocol.WindowsSandboxReadinessParams,
+  ): protocol.JsonRpcRequest;
   listModels(params?: protocol.ModelListParams): protocol.JsonRpcRequest;
   listModelPreferences(): protocol.JsonRpcRequest;
   readModelSyncState(): protocol.JsonRpcRequest;

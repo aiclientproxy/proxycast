@@ -58,8 +58,6 @@ export async function waitForElectronSmokeMemorySettingsReady(
         return Number.isFinite(timestamp) && timestamp >= startedAt;
       };
       const memorySettingsErrorCommands = [
-        "get_config",
-        "save_config",
         "app_server_handle_json_lines",
         "app_server_drain_events",
       ];

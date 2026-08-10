@@ -13,7 +13,6 @@ const RUN_ID = "standalone-settings-b-test";
 
 function traceRaw() {
   return JSON.stringify([
-    { command: "get_config", transport: "electron-ipc", status: "success" },
     {
       command: "get_environment_preview",
       transport: "electron-ipc",
@@ -63,8 +62,8 @@ describe("Settings Environment Gate B evidence", () => {
     expect(summarizeSettingsEnvironmentTrace(traceRaw())).toMatchObject({
       appServerIpcHitCount: 1,
       appServerMethods: ["thread/list"],
-      hostIpcHitCount: 2,
-      hostCommands: ["get_config", "get_environment_preview"],
+      hostIpcHitCount: 1,
+      hostCommands: ["get_environment_preview"],
       missingHostCommands: [],
       legacyCommands: [],
       mockFallbackHitCount: 0,

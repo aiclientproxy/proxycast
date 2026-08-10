@@ -12,6 +12,7 @@ import {
   createTempRuntimeEnv,
   launchElectronFixture,
   openSettings,
+  readConfigFromPage,
   parseInvokeTraceRaw,
   sanitizeText,
   waitForPageCondition,
@@ -85,17 +86,11 @@ async function readEnvironmentState(page, options) {
 }
 
 async function probeCurrentConfig(page) {
-  return await page.evaluate(async () => {
-    const invoke = window.electronAPI?.invoke;
-    if (typeof invoke !== "function") return false;
-    const config = await invoke("get_config");
-    return Boolean(
-      config &&
-      typeof config === "object" &&
-      typeof config.default_provider === "string" &&
+  const { config } = await readConfigFromPage(page);
+  return Boolean(
+    typeof config.default_provider === "string" &&
       config.default_provider.trim(),
-    );
-  });
+  );
 }
 
 async function run() {

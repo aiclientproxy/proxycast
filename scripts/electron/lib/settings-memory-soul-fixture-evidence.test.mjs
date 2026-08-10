@@ -16,16 +16,6 @@ const RUN_ID = "standalone-settings-b-test";
 function traceRaw() {
   return JSON.stringify([
     {
-      command: "get_config",
-      transport: "electron-ipc",
-      status: "success",
-    },
-    {
-      command: "save_config",
-      transport: "electron-ipc",
-      status: "success",
-    },
-    {
       command: "app_server_handle_json_lines",
       transport: "electron-ipc",
       status: "success",
@@ -36,6 +26,12 @@ function traceRaw() {
               jsonrpc: "2.0",
               id: "soulStylePack/list",
               method: "soulStylePack/list",
+              params: {},
+            }),
+            JSON.stringify({ id: 2, method: "config/read", params: {} }),
+            JSON.stringify({
+              id: 3,
+              method: "config/batchWrite",
               params: {},
             }),
           ],
@@ -107,10 +103,14 @@ describe("Settings Memory Soul Gate B evidence", () => {
 
   it("requires current style pack methods and host config writes", () => {
     expect(summarizeSettingsMemorySoulTrace(traceRaw())).toMatchObject({
-      methods: MEMORY_SOUL_REQUIRED_METHODS,
+      methods: [
+        ...MEMORY_SOUL_REQUIRED_METHODS,
+        "config/read",
+        "config/batchWrite",
+      ],
       missingMethods: [],
-      hostCommands: ["get_config", "save_config"],
-      missingHostCommands: [],
+      configMethods: ["soulStylePack/list", "config/read", "config/batchWrite"],
+      missingConfigMethods: [],
       legacyCommands: [],
       mockFallbackHitCount: 0,
     });

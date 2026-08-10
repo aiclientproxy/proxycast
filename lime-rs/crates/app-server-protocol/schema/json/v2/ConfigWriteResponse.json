@@ -1,0 +1,211 @@
+{
+  "$defs": {
+    "ConfigLayerMetadata": {
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/ConfigLayerSource"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "ConfigLayerSource": {
+      "description": "Source of one effective configuration layer.",
+      "oneOf": [
+        {
+          "properties": {
+            "domain": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "type": {
+              "const": "mdm",
+              "type": "string"
+            }
+          },
+          "required": [
+            "domain",
+            "key",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "type": {
+              "const": "system",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "enterpriseManaged",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "profile": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "type": {
+              "const": "user",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "dotCodexFolder": {
+              "type": "string"
+            },
+            "type": {
+              "const": "project",
+              "type": "string"
+            }
+          },
+          "required": [
+            "dotCodexFolder",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "sessionFlags",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "type": {
+              "const": "legacyManagedConfigTomlFromFile",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "legacyManagedConfigTomlFromMdm",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "OverriddenMetadata": {
+      "properties": {
+        "effectiveValue": true,
+        "message": {
+          "type": "string"
+        },
+        "overridingLayer": {
+          "$ref": "#/$defs/ConfigLayerMetadata"
+        }
+      },
+      "required": [
+        "effectiveValue",
+        "message",
+        "overridingLayer"
+      ],
+      "type": "object"
+    },
+    "WriteStatus": {
+      "enum": [
+        "ok",
+        "okOverridden"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "filePath": {
+      "type": "string"
+    },
+    "overriddenMetadata": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OverriddenMetadata"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "$ref": "#/$defs/WriteStatus"
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "filePath",
+    "status",
+    "version"
+  ],
+  "title": "ConfigWriteResponse",
+  "type": "object"
+}

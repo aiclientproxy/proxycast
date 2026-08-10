@@ -720,6 +720,19 @@ describe("commandPolicy", () => {
         request: {
           lines: [
             JSON.stringify({
+              id: "collaboration-mode-list",
+              method: "collaborationMode/list",
+              params: {},
+            }),
+          ],
+        },
+      }),
+    ).toBe("app-server-read");
+    expect(
+      resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
+        request: {
+          lines: [
+            JSON.stringify({
               id: "file-write",
               method: "fs/writeFile",
               params: { path: "/tmp/demo.txt", dataBase64: "" },

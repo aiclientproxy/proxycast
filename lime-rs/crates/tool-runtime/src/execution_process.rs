@@ -1,3 +1,5 @@
+use crate::sandbox::{prepare_sandbox_command, SandboxBackend, SandboxCommandRequest};
+use app_server_protocol::protocol::v2::GrantedPermissionProfile;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
@@ -12,6 +14,8 @@ use tokio::task::JoinHandle;
 
 pub mod live;
 mod pty;
+#[cfg(target_os = "windows")]
+mod windows;
 
 const DEFAULT_OUTPUT_RETAIN_BYTES: usize = 128 * 1024;
 const PROCESS_OUTPUT_CHUNK_BYTES: usize = 8 * 1024;
@@ -361,6 +365,13 @@ impl ExecutionProcessManager {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalExecutionSandbox {
+    pub backend: SandboxBackend,
+    pub requested_policy: Option<String>,
+    pub granted_permissions: Option<GrantedPermissionProfile>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalExecutionRequest {
     pub process_id: String,
     pub tool_id: String,
@@ -372,6 +383,7 @@ pub struct LocalExecutionRequest {
     pub stdin: bool,
     pub env_clear: bool,
     pub pty_size: Option<(u16, u16)>,
+    pub sandbox: Option<LocalExecutionSandbox>,
 }
 
 impl LocalExecutionRequest {
@@ -392,6 +404,7 @@ impl LocalExecutionRequest {
             stdin: true,
             env_clear: false,
             pty_size: None,
+            sandbox: None,
         }
     }
 }
@@ -600,8 +613,37 @@ impl LocalExecutionControlSender {
 }
 
 pub fn start_local_execution_process(
-    request: LocalExecutionRequest,
+    mut request: LocalExecutionRequest,
 ) -> io::Result<LocalExecutionProcessHandle> {
+    if let Some(sandbox) = request.sandbox.take() {
+        if sandbox.backend == SandboxBackend::RestrictedToken {
+            #[cfg(target_os = "windows")]
+            {
+                return windows::start_windows_restricted_execution_process(request, sandbox);
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "restricted token sandbox is only available on Windows",
+                ));
+            }
+        }
+        let working_directory = request.cwd.as_deref().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "sandboxed local execution requires a working directory",
+            )
+        })?;
+        request.command = prepare_sandbox_command(SandboxCommandRequest {
+            backend: sandbox.backend,
+            requested_policy: sandbox.requested_policy.as_deref(),
+            command: request.command,
+            working_directory,
+            granted_permissions: sandbox.granted_permissions.as_ref(),
+        })
+        .map_err(|error| io::Error::other(error.to_string()))?;
+    }
     if request.tty {
         return pty::start_local_pty_execution_process(request);
     }
@@ -667,6 +709,36 @@ pub fn start_local_execution_process(
         final_rx: Some(final_rx),
         final_snapshot: None,
     })
+}
+
+#[cfg(any(test, target_os = "windows"))]
+fn resolve_windows_child_environment(
+    env_clear: bool,
+    inherited: impl IntoIterator<Item = (String, String)>,
+    overrides: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let mut resolved = HashMap::new();
+    if !env_clear {
+        resolved.extend(
+            inherited
+                .into_iter()
+                .map(|(key, value)| (key.to_uppercase(), value)),
+        );
+    }
+    resolved.extend(
+        overrides
+            .iter()
+            .map(|(key, value)| (key.to_uppercase(), value.clone())),
+    );
+    resolved
+}
+
+#[cfg(any(test, target_os = "windows"))]
+fn should_preserve_windows_job(
+    wait_failed: bool,
+    process_status: ExecutionProcessStatus,
+) -> bool {
+    !wait_failed && !process_status.is_terminal()
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -11,6 +11,17 @@ import type { AgentRuntimeAdapter } from "./agentRuntimeAdapter";
 import { submitAgentStreamUserInput } from "./agentStreamUserInputSubmission";
 import { buildWaitingAgentRuntimeStatus } from "../utils/agentRuntimeStatus";
 
+const { resolveAllowedPermissionProfileMock } = vi.hoisted(() => ({
+  resolveAllowedPermissionProfileMock: vi.fn(async (id: string) => ({
+    id,
+    allowed: true,
+  })),
+}));
+
+vi.mock("@/lib/api/permissionProfiles", () => ({
+  resolveAllowedPermissionProfile: resolveAllowedPermissionProfileMock,
+}));
+
 function createStateSetter<T>(getValue: () => T, setValue: (value: T) => void) {
   return (next: T | ((prev: T) => T)) => {
     setValue(
@@ -72,6 +83,7 @@ describe("agentStreamUserInputSubmission", () => {
       sessionIdRef: { current: null } as MutableRefObject<string | null>,
       runPreparedSubmit: async (task) => task(),
       getWorkspaceIdForSubmit: () => "workspace-1",
+      waitForSessionProviderSelectionSync: async () => undefined,
       getThreadIdForSubmit: () => "thread-1",
       getSyncedSessionModelPreference: () => null,
       getSyncedSessionExecutionStrategy: () => "react",
@@ -147,7 +159,7 @@ describe("agentStreamUserInputSubmission", () => {
           threadId: "thread-1",
           input: [{ type: "text", text: "继续生成提纲" }],
           approvalPolicy: "on-request",
-          sandboxPolicy: "workspace-write",
+          permissions: ":workspace",
         }),
       }),
     );

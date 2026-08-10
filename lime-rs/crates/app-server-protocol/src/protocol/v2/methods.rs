@@ -42,6 +42,14 @@ pub const METHOD_ARTIFACT_WRITE: &str = "artifact/write";
 pub const METHOD_MEDIA_READ: &str = "media/read";
 pub const METHOD_MCP_SERVER_RESOURCE_READ: &str = "mcpServer/resource/read";
 pub const METHOD_MCP_SERVER_TOOL_CALL: &str = "mcpServer/tool/call";
+pub const METHOD_CONFIG_READ: &str = "config/read";
+pub const METHOD_CONFIG_VALUE_WRITE: &str = "config/value/write";
+pub const METHOD_CONFIG_BATCH_WRITE: &str = "config/batchWrite";
+pub const METHOD_COLLABORATION_MODE_LIST: &str = "collaborationMode/list";
+pub const METHOD_EXPERIMENTAL_FEATURE_LIST: &str = "experimentalFeature/list";
+pub const METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET: &str = "experimentalFeature/enablement/set";
+pub const METHOD_PERMISSION_PROFILE_LIST: &str = "permissionProfile/list";
+pub const METHOD_WINDOWS_SANDBOX_READINESS: &str = "windowsSandbox/readiness";
 pub const METHOD_MODEL_LIST: &str = "model/list";
 pub const METHOD_APP_READ: &str = "app/read";
 pub const METHOD_APP_LIST: &str = "app/list";
@@ -219,6 +227,22 @@ pub enum Method {
     McpServerResourceRead,
     #[serde(rename = "mcpServer/tool/call")]
     McpServerToolCall,
+    #[serde(rename = "config/read")]
+    ConfigRead,
+    #[serde(rename = "config/value/write")]
+    ConfigValueWrite,
+    #[serde(rename = "config/batchWrite")]
+    ConfigBatchWrite,
+    #[serde(rename = "collaborationMode/list")]
+    CollaborationModeList,
+    #[serde(rename = "experimentalFeature/list")]
+    ExperimentalFeatureList,
+    #[serde(rename = "experimentalFeature/enablement/set")]
+    ExperimentalFeatureEnablementSet,
+    #[serde(rename = "permissionProfile/list")]
+    PermissionProfileList,
+    #[serde(rename = "windowsSandbox/readiness")]
+    WindowsSandboxReadiness,
     #[serde(rename = "model/list")]
     ModelList,
     #[serde(rename = "app/read")]
@@ -338,6 +362,14 @@ impl Method {
             Self::MediaRead => METHOD_MEDIA_READ,
             Self::McpServerResourceRead => METHOD_MCP_SERVER_RESOURCE_READ,
             Self::McpServerToolCall => METHOD_MCP_SERVER_TOOL_CALL,
+            Self::ConfigRead => METHOD_CONFIG_READ,
+            Self::ConfigValueWrite => METHOD_CONFIG_VALUE_WRITE,
+            Self::ConfigBatchWrite => METHOD_CONFIG_BATCH_WRITE,
+            Self::CollaborationModeList => METHOD_COLLABORATION_MODE_LIST,
+            Self::ExperimentalFeatureList => METHOD_EXPERIMENTAL_FEATURE_LIST,
+            Self::ExperimentalFeatureEnablementSet => METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET,
+            Self::PermissionProfileList => METHOD_PERMISSION_PROFILE_LIST,
+            Self::WindowsSandboxReadiness => METHOD_WINDOWS_SANDBOX_READINESS,
             Self::ModelList => METHOD_MODEL_LIST,
             Self::AppRead => METHOD_APP_READ,
             Self::AppList => METHOD_APP_LIST,
@@ -423,6 +455,16 @@ impl Method {
             METHOD_MEDIA_READ => Some(Self::MediaRead),
             METHOD_MCP_SERVER_RESOURCE_READ => Some(Self::McpServerResourceRead),
             METHOD_MCP_SERVER_TOOL_CALL => Some(Self::McpServerToolCall),
+            METHOD_CONFIG_READ => Some(Self::ConfigRead),
+            METHOD_CONFIG_VALUE_WRITE => Some(Self::ConfigValueWrite),
+            METHOD_CONFIG_BATCH_WRITE => Some(Self::ConfigBatchWrite),
+            METHOD_COLLABORATION_MODE_LIST => Some(Self::CollaborationModeList),
+            METHOD_EXPERIMENTAL_FEATURE_LIST => Some(Self::ExperimentalFeatureList),
+            METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET => {
+                Some(Self::ExperimentalFeatureEnablementSet)
+            }
+            METHOD_PERMISSION_PROFILE_LIST => Some(Self::PermissionProfileList),
+            METHOD_WINDOWS_SANDBOX_READINESS => Some(Self::WindowsSandboxReadiness),
             METHOD_MODEL_LIST => Some(Self::ModelList),
             METHOD_APP_READ => Some(Self::AppRead),
             METHOD_APP_LIST => Some(Self::AppList),
@@ -505,6 +547,14 @@ pub const METHODS: &[&str] = &[
     METHOD_MEDIA_READ,
     METHOD_MCP_SERVER_RESOURCE_READ,
     METHOD_MCP_SERVER_TOOL_CALL,
+    METHOD_CONFIG_READ,
+    METHOD_CONFIG_VALUE_WRITE,
+    METHOD_CONFIG_BATCH_WRITE,
+    METHOD_COLLABORATION_MODE_LIST,
+    METHOD_EXPERIMENTAL_FEATURE_LIST,
+    METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET,
+    METHOD_PERMISSION_PROFILE_LIST,
+    METHOD_WINDOWS_SANDBOX_READINESS,
     METHOD_MODEL_LIST,
     METHOD_APP_READ,
     METHOD_APP_LIST,

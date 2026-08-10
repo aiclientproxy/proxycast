@@ -1,16 +1,8 @@
 /* global Buffer, process */
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { parse as parseYaml } from "yaml";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ElectronHostCommands } from "./hostCommands";
@@ -892,7 +884,6 @@ describe("ElectronHostCommands local file shell facade", () => {
       "terminal",
     );
   });
-
 });
 
 describe("ElectronHostCommands app config persistence", () => {
@@ -919,175 +910,19 @@ describe("ElectronHostCommands app config persistence", () => {
     );
   });
 
-  it("save_config 应只写入 App Server current config.yaml", async () => {
-    const userDataDir = await createTempUserDataDir();
-    const host = createHost(userDataDir);
+  it.each(["get_config", "save_config"])(
+    "%s 已从 Electron Host 退场，配置只能走 App Server current API",
+    async (command) => {
+      const userDataDir = await createTempUserDataDir();
+      const request = vi.fn();
+      const host = createHost(userDataDir, () => undefined, request);
 
-    await expect(
-      host.invoke("save_config", {
-        config: {
-          default_provider: "anthropic",
-          workspace_preferences: {
-            media_defaults: {
-              image: {
-                preferredProviderId: "relay-openai",
-                preferredModelId: "gpt-images-2",
-                allowFallback: true,
-              },
-            },
-          },
-        },
-      }),
-    ).resolves.toBeNull();
-
-    const yamlConfig = parseYaml(
-      await readFile(path.join(userDataDir, "config.yaml"), "utf8"),
-    ) as Record<string, unknown>;
-
-    expect(yamlConfig).toMatchObject({
-      workspace_preferences: {
-        media_defaults: {
-          image: {
-            preferredProviderId: "relay-openai",
-            preferredModelId: "gpt-images-2",
-            allowFallback: true,
-          },
-        },
-      },
-    });
-    await expect(stat(path.join(userDataDir, "config.json"))).rejects.toThrow();
-  });
-
-  it("save_config 写入微信模型配置时不应生成重复 YAML 键", async () => {
-    const userDataDir = await createTempUserDataDir();
-    const host = createHost(userDataDir);
-
-    await expect(
-      host.invoke("save_config", {
-        config: {
-          channels: {
-            wechat: {
-              enabled: false,
-              default_model: "lime-hub/claude-sonnet-4-6",
-              dm_policy: "pairing",
-              group_policy: "allowlist",
-              streaming: "off",
-              reply_to_mode: "off",
-            },
-          },
-        },
-      }),
-    ).resolves.toBeNull();
-
-    const yamlContent = await readFile(
-      path.join(userDataDir, "config.yaml"),
-      "utf8",
-    );
-    const parsedConfig = parseYaml(yamlContent) as Record<string, unknown>;
-
-    expect(parsedConfig).toMatchObject({
-      channels: {
-        wechat: {
-          default_model: "lime-hub/claude-sonnet-4-6",
-          streaming: "off",
-          reply_to_mode: "off",
-        },
-      },
-    });
-    expect(yamlContent.match(/^\s{4}streaming:/gm)).toHaveLength(1);
-    expect(yamlContent.match(/^\s{4}reply_to_mode:/gm)).toHaveLength(1);
-  });
-
-  it("get_config 应读取 App Server current config.yaml", async () => {
-    const userDataDir = await createTempUserDataDir();
-    await mkdir(userDataDir, { recursive: true });
-    await writeFile(
-      path.join(userDataDir, "config.yaml"),
-      [
-        "default_provider: yaml-provider",
-        "workspace_preferences:",
-        "  media_defaults:",
-        "    image:",
-        "      preferredProviderId: relay-openai",
-        "      preferredModelId: gpt-images-2",
-      ].join("\n"),
-      "utf8",
-    );
-
-    await expect(
-      createHost(userDataDir).invoke("get_config"),
-    ).resolves.toMatchObject({
-      default_provider: "yaml-provider",
-      workspace_preferences: {
-        media_defaults: {
-          image: {
-            preferredProviderId: "relay-openai",
-            preferredModelId: "gpt-images-2",
-          },
-        },
-      },
-    });
-  });
-
-  it("get_config 不再读取旧 config.json", async () => {
-    const userDataDir = await createTempUserDataDir();
-    await mkdir(userDataDir, { recursive: true });
-    await writeFile(
-      path.join(userDataDir, "config.json"),
-      JSON.stringify({ default_provider: "legacy-json-provider" }, null, 2),
-      "utf8",
-    );
-
-    await expect(
-      createHost(userDataDir).invoke("get_config"),
-    ).resolves.toMatchObject({
-      default_provider: "openai",
-    });
-  });
-});
-
-describe("ElectronHostCommands experimental config", () => {
-  it("默认读取关闭的 WebMCP 预留配置", async () => {
-    const userDataDir = await createTempUserDataDir();
-    const host = createHost(userDataDir);
-
-    await expect(host.invoke("get_experimental_config")).resolves.toEqual({
-      webmcp: { enabled: false },
-    });
-  });
-
-  it("保存实验配置时合并完整配置并保留未知实验字段", async () => {
-    const userDataDir = await createTempUserDataDir();
-    await mkdir(userDataDir, { recursive: true });
-    await createHost(userDataDir).invoke("save_config", {
-      config: {
-        default_provider: "anthropic",
-        experimental: {
-          webmcp: { enabled: false },
-          update_check: { enabled: true },
-        },
-      },
-    });
-
-    const host = createHost(userDataDir);
-    await expect(
-      host.invoke("save_experimental_config", {
-        experimentalConfig: {
-          webmcp: { enabled: true },
-          update_check: { enabled: true },
-        },
-      }),
-    ).resolves.toBeNull();
-
-    await expect(host.invoke("get_experimental_config")).resolves.toEqual({
-      webmcp: { enabled: true },
-      update_check: { enabled: true },
-    });
-    const savedConfig = parseYaml(
-      await readFile(path.join(userDataDir, "config.yaml"), "utf8"),
-    ) as Record<string, unknown>;
-    expect(savedConfig.default_provider).toBe("anthropic");
-  });
+      await expect(host.invoke(command)).rejects.toThrow(
+        `Electron host command is not implemented: ${command}`,
+      );
+      expect(request).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("ElectronHostCommands retired MCP legacy facade", () => {
@@ -1145,10 +980,10 @@ describe("ElectronHostCommands retired Knowledge legacy facade", () => {
 describe("ElectronHostCommands model provider current source", () => {
   it("get_default_provider 应忽略旧配置值并返回 App Server 当前已配置 Provider", async () => {
     const userDataDir = await createTempUserDataDir();
-    await createHost(userDataDir).invoke("save_config", {
-      config: { default_provider: "retired-provider" },
-    });
     const request = vi.fn(async (method: string, _params?: unknown) => {
+      if (method === "config/read") {
+        return { config: { default_provider: "retired-provider" } };
+      }
       if (method === "modelProvider/list") {
         return {
           providers: [
@@ -1172,15 +1007,16 @@ describe("ElectronHostCommands model provider current source", () => {
     const host = createHost(userDataDir, () => undefined, request);
 
     await expect(host.invoke("get_default_provider")).resolves.toBe("lime-hub");
+    expect(request).toHaveBeenCalledWith("config/read", {});
     expect(request).toHaveBeenCalledWith("modelProvider/list", {});
   });
 
   it("get_runtime_provider_selection 应按 opaque route 选择当前 Provider 模型", async () => {
     const userDataDir = await createTempUserDataDir();
-    await createHost(userDataDir).invoke("save_config", {
-      config: { default_provider: "retired-provider" },
-    });
     const request = vi.fn(async (method: string) => {
+      if (method === "config/read") {
+        return { config: { default_provider: "retired-provider" } };
+      }
       if (method === "modelProvider/list") {
         return {
           providers: [
@@ -1254,6 +1090,7 @@ describe("ElectronHostCommands model provider current source", () => {
       provider_selector: "lime-hub",
       model_name: "gpt-5.6-sol",
     });
+    expect(request).toHaveBeenCalledWith("config/read", {});
     expect(request).toHaveBeenCalledWith("modelProvider/list", {});
     expect(request).toHaveBeenCalledWith("model/list", {
       includeHidden: true,

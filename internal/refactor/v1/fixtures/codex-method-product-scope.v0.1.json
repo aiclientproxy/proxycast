@@ -20,9 +20,9 @@
       "clientNotification": 1
     },
     "byStatus": {
-      "implemented": 130,
-      "product-scope-excluded": 36,
-      "planned": 54
+      "implemented": 139,
+      "product-scope-excluded": 39,
+      "planned": 42
     }
   },
   "groups": [
@@ -340,15 +340,21 @@
       "methods": ["app/installed", "app/list", "app/read"]
     },
     {
-      "id": "collaboration-mode-planned",
+      "id": "collaboration-mode-current",
       "direction": "clientRequest",
       "productArea": "multi-agent",
-      "status": "planned",
-      "priority": "P3",
-      "owner": "agent-runtime + app-server",
-      "counterpartRule": "none",
-      "gap": "Agent graph exists, but Codex collaboration mode discovery is not a public current method.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "app-server collaboration mode catalog + agent-runtime",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/collaboration_mode.rs",
+        "lime-rs/crates/app-server/src/processor/collaboration_mode.rs",
+        "lime-rs/crates/app-server/tests/collaboration_mode_jsonrpc.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/collaborationModes.ts",
+        "src/components/agent/chat/hooks/agentStreamSubmitExecution.ts"
+      ],
       "methods": ["collaborationMode/list"]
     },
     {
@@ -376,22 +382,58 @@
       ]
     },
     {
-      "id": "config-planned",
+      "id": "config-current",
       "direction": "clientRequest",
       "productArea": "config",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P2",
       "owner": "app-server config owner",
-      "counterpartRule": "none",
-      "gap": "Current config APIs do not expose the Codex typed read/write/requirements contract.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/config.rs",
+        "lime-rs/crates/app-server/src/processor/config.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/appConfig.ts",
+        "scripts/electron/mcp-config-fixture-smoke.mjs"
+      ],
       "methods": [
         "config/batchWrite",
-        "config/mcpServer/reload",
         "config/read",
-        "config/value/write",
-        "configRequirements/read"
+        "config/value/write"
       ]
+    },
+    {
+      "id": "config-requirements-excluded",
+      "direction": "clientRequest",
+      "productArea": "config",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "Codex configRequirements/read exposes MDM and requirements/config.toml policy layers. Lime Desktop has no enterprise MDM or project requirements owner; introducing the method would create an unconsumed policy surface.",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/config.rs",
+        "internal/aiprompts/commands.md",
+        "internal/aiprompts/architecture.md"
+      ],
+      "methods": ["configRequirements/read"]
+    },
+    {
+      "id": "mcp-config-reload-excluded",
+      "direction": "clientRequest",
+      "productArea": "mcp",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "Codex reloads externally edited config.toml MCP entries. Lime Desktop owns MCP configuration through App Server list/create/update/delete and explicit start/stop lifecycle, so adding this method would create a second config fact source.",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/mcp.rs",
+        "src/lib/api/mcp.ts",
+        "scripts/README.md",
+        "internal/refactor/v1/11-codex-method-product-scope-matrix.md"
+      ],
+      "methods": ["config/mcpServer/reload"]
     },
     {
       "id": "environment-planned",
@@ -406,15 +448,21 @@
       "methods": ["environment/add", "environment/info", "environment/status"]
     },
     {
-      "id": "experimental-feature-planned",
+      "id": "experimental-feature-current",
       "direction": "clientRequest",
       "productArea": "capability",
-      "status": "planned",
-      "priority": "P2",
-      "owner": "app-server capability registry",
-      "counterpartRule": "none",
-      "gap": "Initialize capability gating exists only partially; feature discovery and enablement are not aligned.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "app-server experimental feature catalog + lime_core config",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/config.rs",
+        "lime-rs/crates/app-server/src/processor/experimental_feature.rs",
+        "lime-rs/crates/app-server/tests/experimental_feature_jsonrpc.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/experimentalFeatures.ts",
+        "src/components/settings-v2/system/experimental/index.tsx"
+      ],
       "methods": [
         "experimentalFeature/enablement/set",
         "experimentalFeature/list"
@@ -568,14 +616,18 @@
       "id": "permission-profile-planned",
       "direction": "clientRequest",
       "productArea": "model",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P2",
       "owner": "app-server permission policy owner",
-      "counterpartRule": "none",
-      "gap": "Permission profile results are not yet frozen into the Codex-shaped current contract.",
+      "counterpartRule": "same-name",
       "evidence": [
-        "internal/refactor/v1/02-multi-model-grok-build.md",
-        "internal/refactor/v1/08-third-audit-gap-register.md"
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/permission_profile.rs",
+        "lime-rs/crates/app-server/src/processor/permission_profile.rs",
+        "lime-rs/crates/app-server/tests/permission_profile_jsonrpc.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/permissionProfiles.ts",
+        "src/lib/api/permissionProfiles.test.ts",
+        "src/components/agent/chat/hooks/agentStreamSubmitExecution.ts"
       ],
       "methods": ["permissionProfile/list"]
     },
@@ -628,18 +680,34 @@
       "productArea": "plugins",
       "status": "planned",
       "priority": "P1",
-      "owner": "Plugin share and skill catalog owner",
+      "owner": "Plugin share owner",
       "counterpartRule": "none",
-      "gap": "Plugin share mutations and plugin skill body reads still lack current Desktop lifecycle and evidence.",
+      "gap": "Remote plugin share mutations still lack current Desktop lifecycle and evidence.",
       "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
       "methods": [
         "plugin/share/checkout",
         "plugin/share/delete",
         "plugin/share/list",
         "plugin/share/save",
-        "plugin/share/updateTargets",
-        "plugin/skill/read"
+        "plugin/share/updateTargets"
       ]
+    },
+    {
+      "id": "remote-plugin-skill-read-excluded",
+      "direction": "clientRequest",
+      "productArea": "plugins",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
+      "counterpartRule": "none",
+      "rationale": "Codex reads skill markdown from an uninstalled remote plugin service by remote marketplace and plugin ids. Lime Desktop reads installed local skill bodies through its Skills catalog and skill/read, so mapping that owner to this remote wire would be semantically incorrect.",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/skill.rs",
+        "lime-rs/crates/app-server/src/local_data_source/skills/catalog.rs",
+        "src/lib/api/skill-execution.ts",
+        "internal/refactor/v1/11-codex-method-product-scope-matrix.md"
+      ],
+      "methods": ["plugin/skill/read"]
     },
     {
       "id": "process-current",
@@ -721,16 +789,34 @@
       ]
     },
     {
-      "id": "windows-sandbox-planned",
+      "id": "windows-sandbox-readiness-current",
+      "direction": "clientRequest",
+      "productArea": "sandbox",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "tool-runtime sandbox + App Server + Desktop Settings",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/windows_sandbox.rs",
+        "lime-rs/crates/app-server/src/processor/windows_sandbox.rs",
+        "lime-rs/crates/app-server/tests/windows_sandbox_jsonrpc.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/windowsSandbox.ts",
+        "src/components/settings-v2/system/execution-policy/WindowsSandboxReadinessStatus.tsx"
+      ],
+      "methods": ["windowsSandbox/readiness"]
+    },
+    {
+      "id": "windows-sandbox-setup-planned",
       "direction": "clientRequest",
       "productArea": "sandbox",
       "status": "planned",
       "priority": "P1",
       "owner": "tool-runtime sandbox + Desktop Host",
       "counterpartRule": "none",
-      "gap": "Windows readiness/setup must be rebuilt in current owners and validated on Windows.",
+      "gap": "Windows setup must be rebuilt in current owners and validated on a real Windows runner; readiness must not be upgraded before enforcement exists.",
       "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
-      "methods": ["windowsSandbox/readiness", "windowsSandbox/setupStart"]
+      "methods": ["windowsSandbox/setupStart"]
     },
     {
       "id": "client-clock-current",
@@ -823,17 +909,21 @@
       "methods": ["command/exec/outputDelta"]
     },
     {
-      "id": "guardian-notification-planned",
+      "id": "guardian-notification-current",
       "direction": "serverNotification",
       "productArea": "diagnostics",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
-      "owner": "app-server notification projector + Guardian runtime owner",
-      "counterpartRule": "none",
-      "gap": "Lime has no Guardian review runtime producer that can emit a distinct high-priority warning.",
+      "owner": "agent-runtime Guardian circuit breaker + app-server v2 notification projector",
+      "counterpartRule": "same-name",
       "evidence": [
-        "internal/refactor/v1/08-third-audit-gap-register.md",
-        "internal/refactor/v2/EVENT-PROJECTIONS.md"
+        "lime-rs/crates/agent/src/runtime_state.rs",
+        "lime-rs/crates/agent/src/current_provider_turn/tool_executor.rs",
+        "lime-rs/crates/app-server/src/runtime_backend/tool_events.rs",
+        "lime-rs/crates/app-server/src/processor/v2_notifications/guardian_warning.rs",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/notification.rs",
+        "packages/app-server-client/src/server-notifications.ts",
+        "src/lib/api/agentRuntime/appServerV2Notification.ts"
       ],
       "methods": ["guardianWarning"]
     },

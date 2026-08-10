@@ -64,6 +64,205 @@ fn v2_display_items_match_codex_tagged_nullable_wire() {
 }
 
 #[test]
+fn experimental_feature_methods_keep_codex_wire_shapes() {
+    let list_request = json!({
+        "id": 7,
+        "method": "experimentalFeature/list",
+        "params": {"limit": 10}
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(list_request.clone()).expect("decode feature list request");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), list_request);
+    assert_eq!(
+        Method::parse(METHOD_EXPERIMENTAL_FEATURE_LIST),
+        Some(Method::ExperimentalFeatureList)
+    );
+
+    let set_request = json!({
+        "id": 8,
+        "method": "experimentalFeature/enablement/set",
+        "params": {"enablement": {"webmcp": true}}
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(set_request.clone()).expect("decode feature set request");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), set_request);
+    assert_eq!(
+        serde_json::to_value(ExperimentalFeatureListResponse {
+            data: vec![ExperimentalFeature {
+                name: "webmcp".to_string(),
+                stage: ExperimentalFeatureStage::UnderDevelopment,
+                display_name: Some("WebMCP".to_string()),
+                description: None,
+                announcement: None,
+                enabled: true,
+                default_enabled: false,
+            }],
+            next_cursor: None,
+        })
+        .unwrap(),
+        json!({
+            "data": [{
+                "name": "webmcp",
+                "stage": "underDevelopment",
+                "displayName": "WebMCP",
+                "enabled": true,
+                "defaultEnabled": false
+            }]
+        })
+    );
+}
+
+#[test]
+fn config_methods_keep_codex_wire_shapes() {
+    let read = json!({
+        "id": 41,
+        "method": "config/read",
+        "params": {"includeLayers": true}
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(read.clone()).expect("decode config/read request");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), read);
+    assert_eq!(Method::parse(METHOD_CONFIG_READ), Some(Method::ConfigRead));
+
+    let write = json!({
+        "id": 42,
+        "method": "config/value/write",
+        "params": {
+            "keyPath": "language",
+            "value": "en-US",
+            "mergeStrategy": "replace"
+        }
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(write.clone()).expect("decode config/value/write request");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), write);
+    assert_eq!(
+        Method::parse(METHOD_CONFIG_VALUE_WRITE),
+        Some(Method::ConfigValueWrite)
+    );
+
+    let batch = json!({
+        "id": 43,
+        "method": "config/batchWrite",
+        "params": {
+            "edits": [{
+                "keyPath": "developer.enabled",
+                "value": true,
+                "mergeStrategy": "upsert"
+            }],
+            "expectedVersion": "v1",
+            "reloadUserConfig": true
+        }
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(batch.clone()).expect("decode config/batchWrite request");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), batch);
+    assert_eq!(
+        Method::parse(METHOD_CONFIG_BATCH_WRITE),
+        Some(Method::ConfigBatchWrite)
+    );
+}
+
+#[test]
+fn permission_profile_list_keeps_codex_wire_shape() {
+    let request = json!({
+        "id": 9,
+        "method": "permissionProfile/list",
+        "params": {"cursor": "1", "limit": 2, "cwd": "/workspace"}
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(request.clone()).expect("decode permission profile list request");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), request);
+    assert_eq!(
+        Method::parse(METHOD_PERMISSION_PROFILE_LIST),
+        Some(Method::PermissionProfileList)
+    );
+
+    assert_eq!(
+        serde_json::to_value(PermissionProfileListResponse {
+            data: vec![PermissionProfileSummary {
+                id: ":workspace".to_string(),
+                description: None,
+                allowed: true,
+            }],
+            next_cursor: Some("2".to_string()),
+        })
+        .unwrap(),
+        json!({
+            "data": [{"id": ":workspace", "allowed": true}],
+            "nextCursor": "2"
+        })
+    );
+}
+
+#[test]
+fn collaboration_mode_list_keeps_codex_wire_shape() {
+    let request = json!({
+        "id": 9,
+        "method": "collaborationMode/list",
+        "params": {}
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(request.clone()).expect("decode collaboration mode list request");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), request);
+    assert_eq!(
+        Method::parse(METHOD_COLLABORATION_MODE_LIST),
+        Some(Method::CollaborationModeList)
+    );
+
+    assert_eq!(
+        serde_json::to_value(CollaborationModeListResponse {
+            data: vec![CollaborationModeMask {
+                name: "Plan".to_string(),
+                mode: Some(agent_protocol::ModeKind::Plan),
+                model: None,
+                reasoning_effort: Some(Some("medium".to_string())),
+            }],
+        })
+        .unwrap(),
+        json!({
+            "data": [{
+                "name": "Plan",
+                "mode": "plan",
+                "model": null,
+                "reasoning_effort": "medium"
+            }]
+        })
+    );
+}
+
+#[test]
+fn windows_sandbox_readiness_accepts_codex_optional_params() {
+    let omitted = json!({
+        "id": 10,
+        "method": "windowsSandbox/readiness"
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(omitted.clone()).expect("decode omitted readiness params");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), omitted);
+
+    let empty = json!({
+        "id": 11,
+        "method": "windowsSandbox/readiness",
+        "params": {}
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(empty.clone()).expect("decode empty readiness params");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), empty);
+    assert_eq!(
+        Method::parse(METHOD_WINDOWS_SANDBOX_READINESS),
+        Some(Method::WindowsSandboxReadiness)
+    );
+    assert_eq!(
+        serde_json::to_value(WindowsSandboxReadinessResponse {
+            status: WindowsSandboxReadiness::UpdateRequired,
+        })
+        .unwrap(),
+        json!({"status": "updateRequired"})
+    );
+}
+
+#[test]
 fn v2_agent_message_phase_uses_the_canonical_enum_owner() {
     let item = json!({
         "type": "agentMessage",

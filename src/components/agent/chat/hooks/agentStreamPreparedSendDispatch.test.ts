@@ -69,6 +69,7 @@ describe("agentStreamPreparedSendDispatch", () => {
       sessionIdRef: { current: null } as MutableRefObject<string | null>,
       runPreparedSubmit,
       getWorkspaceIdForSubmit: () => "workspace-1",
+      waitForSessionProviderSelectionSync: async () => undefined,
       getThreadIdForSubmit: () => "thread-1",
       getSyncedSessionModelPreference: () => null,
       getSyncedSessionExecutionStrategy: (_sessionId) => "react",

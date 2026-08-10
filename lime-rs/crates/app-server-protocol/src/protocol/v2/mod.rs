@@ -1,6 +1,7 @@
 mod approval;
 mod apps;
 mod artifact;
+mod collaboration_mode;
 mod command_exec;
 mod common;
 mod config;
@@ -16,6 +17,7 @@ mod memory;
 mod methods;
 mod model;
 mod notification;
+mod permission_profile;
 mod plugin;
 mod process;
 mod request_permissions;
@@ -27,10 +29,12 @@ mod thread;
 mod thread_control;
 mod turn;
 mod user_input;
+mod windows_sandbox;
 
 pub use approval::*;
 pub use apps::*;
 pub use artifact::*;
+pub use collaboration_mode::*;
 pub use command_exec::*;
 pub use common::*;
 pub use config::*;
@@ -46,6 +50,7 @@ pub use memory::*;
 pub use methods::*;
 pub use model::*;
 pub use notification::*;
+pub use permission_profile::*;
 pub use plugin::*;
 pub use process::*;
 pub use request_permissions::*;
@@ -56,6 +61,7 @@ pub use thread::*;
 pub use thread_control::*;
 pub use turn::*;
 pub use user_input::*;
+pub use windows_sandbox::*;
 
 #[cfg(test)]
 mod tests;

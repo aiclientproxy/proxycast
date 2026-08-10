@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Codex-compatible lifecycle stage for an experimental feature.",
+  "enum": [
+    "beta",
+    "deprecated",
+    "removed",
+    "stable",
+    "underDevelopment"
+  ],
+  "title": "ExperimentalFeatureStage",
+  "type": "string"
+}

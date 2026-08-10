@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "allowed": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "allowed",
+    "id"
+  ],
+  "title": "PermissionProfileSummary",
+  "type": "object"
+}

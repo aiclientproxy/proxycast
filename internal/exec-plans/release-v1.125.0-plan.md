@@ -91,3 +91,24 @@
 - 窄写集：`src/components/agent/chat/hooks/useAgentSession.ts`、`agentStreamSubmitExecution.ts`、`agentStreamPreparedSendEnv.ts`、`useAgentStream.ts`、`agentStreamSubmitExecution.test.ts` 与本计划。上述部分文件同时含并发工作树改动，提交前必须重新确认 release candidate 范围。
 - 本地验证：相关 Vitest `10/10` 通过；`npm run typecheck` 通过；`npm run smoke:plugin-package-electron-gate-b -- --timeout-ms 180000 --keep-temp` 通过，enabled provider request `2`、MCP elicitation accepted、provider final text observed、production mock fallback `0`。
 - 下一步：提交并推送完整依赖闭包后，以新完整 SHA 重触发 `build-windows-test.yml`，持续跟踪到 Plugin Gate B 与 artifact 结论；不移动已发布的 `v1.125.0` tag。
+
+## Windows provider selection sync 修复
+
+状态：`fix-validated-locally / windows-runner-pending`
+
+- runner `31352212702` 使用 `a5aae4e45bfd8b4e7379b0ba19c6a2af67080d01`；Windows path contract、sherpa runtime、Electron Windows 包、N-1 Squirrel 安装 smoke 均通过，Gate B 在 `mcp_elicitation` 等待 90 秒后失败。
+- 失败证据显示 enabled thread 的公开 `modelProvider` 已是 enabled provider，但 durable `extra.providerSelector/providerName` 仍为 disabled provider；enabled 只收到 `/v1/models`，后续 `/v1/chat/completions` 仍进入 disabled provider。
+- 根因：模型选择通过 microtask 异步执行 `thread/settings/update`，发送链只等待 UI 选择器状态，未等待目标 session 的 durable provider/model selection 写入完成；Windows 慢时序下 `turn/start` 先读取旧 route。
+- 修复：`useAgentContext` 为每个 session 建立 selection-sync Promise 并暴露等待函数；`agentStreamSend` 在 prepare 前等待当前/目标 session，`useAgentStream` 将该能力注入真实 prepared send env；补 hook/send 时序回归。
+- 本地验证：相关 Vitest `41/41`、改动文件 ESLint 通过；本地 macOS packaged Electron Gate B 通过，`ok=true`、`providerRequestCount=2`、MCP elicitation 已提交、provider final text 已观察、`productionMockFallbackHitCount=0`；Gate B evidence `plugin-package-electron-gate-b-20260810120829`（实际目录以本机生成结果为准）。
+- 全量 `npx tsc --noEmit` 仍被工作树既有测试/协议类型错误阻断；过滤本轮文件未发现等待修复引入的新错误。Windows packaged Gate B 待新完整 commit 推送后复核。
+
+## 当前发布候选复核
+
+- `npm run typecheck`：通过（renderer 与 node 两个 tsconfig 均通过）。
+- `npm run verify:app-version`：通过，版本事实源仍统一为 `1.125.0`。
+- provider selection sync 窄写集 Vitest：7 个文件、`29 passed; 0 failed`。
+- provider selection sync 窄写集 ESLint：通过，`--max-warnings 0`。
+- `npm run test:contracts`：通过；protocol 生成无漂移、App Server client `301 checks`、命令/harness/modality/scripts/electron release/docs 边界均通过。
+- 当前状态：`fix-validated-locally / release-git-confirmation-pending / windows-runner-pending`。
+- 下一刀：获得危险操作确认后，将当前工作树全部纳入一个完整 release commit，创建并推送新的提交；由于 `v1.125.0` 已存在且不能覆盖，Windows workflow 使用该新完整 SHA 触发，继续跟踪 Plugin Gate B 与 artifact。

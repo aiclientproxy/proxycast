@@ -150,8 +150,8 @@ describe("useAgentChat 兼容接口 - topics", () => {
       expect(
         mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.approvalPolicy,
       ).toBe("on-request");
-      expect(mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.sandboxPolicy).toBe(
-        "read-only",
+      expect(mockSubmitAgentRuntimeTurn.mock.calls[0]?.[0]?.permissions).toBe(
+        ":read-only",
       );
     } finally {
       harness.unmount();

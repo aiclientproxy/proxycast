@@ -281,6 +281,7 @@ export function buildScenarioAssertions(context) {
     expertPanelSkillsRuntimeTurnStart,
     expertSkillsRuntimeTurnStart,
     expectedImageIntentRoutedPrompt,
+    gateBContract,
     goalObjectiveText,
     goalTurnStart,
     homeHotpathPrompt,
@@ -350,6 +351,7 @@ export function buildScenarioAssertions(context) {
     reasoningFirstVisibleTurnStart,
     workspace,
   } = context;
+  const planCollaborationModeGateB = gateBContract?.collaborationMode;
   const rightSurfaceVisualMatrix = summary.rightSurfaceVisualMatrix ?? {};
   const rightSurfaceVisualCaptures = rightSurfaceVisualMatrix.captures ?? {};
   const rightSurfaceVisualAppSurface =
@@ -571,6 +573,35 @@ export function buildScenarioAssertions(context) {
                       planTurnStart?.inputText === PLAN_PROMPT,
                     planCollaborationModeReachedBackend:
                       collaborationMode === "plan",
+                    planPresetCatalogRequested:
+                      planCollaborationModeGateB?.catalogRequestCount > 0,
+                    planPresetResolvedBeforeTurnStart:
+                      planCollaborationModeGateB?.catalogBeforeTurnStart ===
+                      true,
+                    planPresetAppliedOnDesktopWire:
+                      planCollaborationModeGateB?.wire?.collaborationMode
+                        ?.mode === "plan" &&
+                      planCollaborationModeGateB?.wire?.collaborationMode
+                        ?.settings?.reasoning_effort === "medium" &&
+                      planCollaborationModeGateB?.wire?.effort === "medium" &&
+                      planCollaborationModeGateB?.wire?.collaborationMode
+                        ?.settings?.model === planTurnStart?.modelPreference &&
+                      planCollaborationModeGateB?.wire?.collaborationMode
+                        ?.settings?.developer_instructions === null,
+                    planPresetReachedRuntime:
+                      planCollaborationModeGateB?.runtime?.collaborationMode
+                        ?.mode === "plan" &&
+                      planCollaborationModeGateB?.runtime?.collaborationMode
+                        ?.settings?.reasoning_effort === "medium" &&
+                      planCollaborationModeGateB?.runtime?.reasoningEffort ===
+                        "medium" &&
+                      planCollaborationModeGateB?.runtime?.modelPreference ===
+                        planTurnStart?.modelPreference &&
+                      planCollaborationModeGateB?.runtime?.collaborationMode
+                        ?.settings?.developer_instructions === null,
+                    planPresetWireRuntimeConsistent:
+                      planCollaborationModeGateB?.wireRuntimeConsistent ===
+                      true,
                     guiPlanRailVisible:
                       summary.guiPlanCompleted?.hasPlanSection === true &&
                       summary.guiPlanCompleted?.planOwnerHasAllSteps === true &&

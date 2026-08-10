@@ -27,6 +27,7 @@ describe("createAgentStreamPreparedSendEnv", () => {
       getThreadIdForSubmit: () => "thread-1",
       runPreparedSubmit: async (task) => task(),
       getWorkspaceIdForSubmit: () => "workspace-1",
+      waitForSessionProviderSelectionSync: async () => undefined,
       getSyncedSessionModelPreference: () => null,
       getSyncedSessionExecutionStrategy: () => "react",
       listenerMapRef: { current: new Map() },

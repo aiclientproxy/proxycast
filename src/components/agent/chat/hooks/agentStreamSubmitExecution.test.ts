@@ -19,9 +19,27 @@ import type { StreamRequestState } from "./agentStreamSubmissionLifecycle";
 import { executeAgentStreamSubmit } from "./agentStreamSubmitExecution";
 import { MODEL_SELECTION_REQUIRED_ERROR_MESSAGE } from "../utils/agentRuntimeErrorPresentation";
 
-const { getModelRegistryMock, setThreadGoalMock } = vi.hoisted(() => ({
+const {
+  getModelRegistryMock,
+  resolveCollaborationModeMaskMock,
+  resolveAllowedPermissionProfileMock,
+  setThreadGoalMock,
+} = vi.hoisted(() => ({
   getModelRegistryMock: vi.fn(),
+  resolveCollaborationModeMaskMock: vi.fn(),
+  resolveAllowedPermissionProfileMock: vi.fn(async (id: string) => ({
+    id,
+    allowed: true,
+  })),
   setThreadGoalMock: vi.fn(),
+}));
+
+vi.mock("@/lib/api/collaborationModes", () => ({
+  resolveCollaborationModeMask: resolveCollaborationModeMaskMock,
+}));
+
+vi.mock("@/lib/api/permissionProfiles", () => ({
+  resolveAllowedPermissionProfile: resolveAllowedPermissionProfileMock,
 }));
 
 vi.mock("@/lib/api/agentRuntime/threadGoalClient", () => ({
@@ -173,6 +191,12 @@ describe("agentStreamSubmitExecution", () => {
   });
 
   it("应串起 submit context、listener 绑定与 submitOp", async () => {
+    resolveCollaborationModeMaskMock.mockResolvedValueOnce({
+      name: "Plan",
+      mode: "plan",
+      model: null,
+      reasoning_effort: "medium",
+    });
     const unlisten = vi.fn();
     const submitOp = vi.fn(async () => {});
     const ensureSession = vi.fn(async () => "session-1");
@@ -214,6 +238,8 @@ describe("agentStreamSubmitExecution", () => {
       effectiveProviderType: "openai",
       effectiveModel: "gpt-5.4",
       effectiveExecutionStrategy: "react",
+      collaborationMode: "plan",
+      reasoningEffort: "high",
       webSearch: true,
       thinking: true,
       skipSessionRestore: true,
@@ -263,8 +289,17 @@ describe("agentStreamSubmitExecution", () => {
           threadId: "thread-1",
           input: [{ type: "text", text: "继续生成提纲" }],
           model: "gpt-5.4",
+          effort: "medium",
+          collaborationMode: {
+            mode: "plan",
+            settings: {
+              model: "gpt-5.4",
+              reasoning_effort: "medium",
+              developer_instructions: null,
+            },
+          },
           approvalPolicy: "on-request",
-          sandboxPolicy: "read-only",
+          permissions: ":read-only",
         }),
       }),
     );
@@ -284,6 +319,10 @@ describe("agentStreamSubmitExecution", () => {
       skipSessionRestore: true,
       skipSessionStartHooks: true,
     });
+    expect(resolveCollaborationModeMaskMock).toHaveBeenCalledWith("plan");
+    expect(resolveAllowedPermissionProfileMock).toHaveBeenCalledWith(
+      ":read-only",
+    );
     expect(setThreadGoalMock).toHaveBeenCalledWith({
       threadId: "thread-1",
       objective: "持续推进真实 E2E 目标",
@@ -511,7 +550,7 @@ describe("agentStreamSubmitExecution", () => {
           input: [{ type: "text", text: "从草稿进入正式会话" }],
           model: "gpt-5.4",
           approvalPolicy: "on-request",
-          sandboxPolicy: "read-only",
+          permissions: ":read-only",
         }),
       }),
     );
@@ -749,7 +788,7 @@ describe("agentStreamSubmitExecution", () => {
         ],
         model: "gpt-4.1-vision",
         approvalPolicy: "on-request",
-        sandboxPolicy: "read-only",
+        permissions: ":read-only",
       },
     });
     const metadataEntry = submittedOp.turn.additionalContext?.metadata;
@@ -915,7 +954,7 @@ describe("agentStreamSubmitExecution", () => {
           },
         ],
         approvalPolicy: "on-request",
-        sandboxPolicy: "workspace-write",
+        permissions: ":workspace",
       },
     });
     expect(submittedOp.turn).not.toHaveProperty("model");
@@ -1017,7 +1056,7 @@ describe("agentStreamSubmitExecution", () => {
           input: [{ type: "text", text: "继续生成提纲" }],
           model: "gpt-5.4",
           approvalPolicy: "on-request",
-          sandboxPolicy: "read-only",
+          permissions: ":read-only",
         }),
       }),
     );

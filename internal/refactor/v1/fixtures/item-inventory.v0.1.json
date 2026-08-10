@@ -29,13 +29,13 @@
       "method": "item/autoApprovalReview/started",
       "kind": "notification",
       "codex": "experimental",
-      "lime": "gap"
+      "lime": "current"
     },
     {
       "method": "item/autoApprovalReview/completed",
       "kind": "notification",
       "codex": "experimental",
-      "lime": "gap"
+      "lime": "current"
     },
     {
       "method": "rawResponseItem/completed",

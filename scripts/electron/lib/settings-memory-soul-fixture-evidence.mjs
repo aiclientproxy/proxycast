@@ -3,7 +3,10 @@ import path from "node:path";
 export const MEMORY_SOUL_SCENARIO_ID = "memory-soul-persistence";
 export const MEMORY_SOUL_PROFILE_ID = "cheeky_sassy_executor";
 export const MEMORY_SOUL_REQUIRED_METHODS = ["soulStylePack/list"];
-export const MEMORY_SOUL_REQUIRED_HOST_COMMANDS = ["get_config", "save_config"];
+export const MEMORY_SOUL_REQUIRED_CONFIG_METHODS = [
+  "config/read",
+  "config/batchWrite",
+];
 export const MEMORY_SOUL_RUNTIME_MARKERS = [
   "hasInteractionSoul",
   "hasMemorySoulSchema",
@@ -161,11 +164,9 @@ export function summarizeSettingsMemorySoulTrace(traceRaws) {
     missingMethods: MEMORY_SOUL_REQUIRED_METHODS.filter(
       (method) => !methods.includes(method),
     ),
-    hostCommands: MEMORY_SOUL_REQUIRED_HOST_COMMANDS.filter((command) =>
-      commands.has(command),
-    ),
-    missingHostCommands: MEMORY_SOUL_REQUIRED_HOST_COMMANDS.filter(
-      (command) => !commands.has(command),
+    configMethods: methods,
+    missingConfigMethods: MEMORY_SOUL_REQUIRED_CONFIG_METHODS.filter(
+      (method) => !methods.includes(method),
     ),
     legacyCommands: LEGACY_MEMORY_COMMANDS.filter((command) =>
       commands.has(command),
@@ -202,7 +203,7 @@ export function createSettingsMemorySoulEvidence({
     priority: "P0",
     proofLevel: "Gate B-R",
     claimBoundary:
-      "Real Electron Memory/Soul Settings save and cold-restart recovery through get_config/save_config plus current soulStylePack/list, combined with a separate isolated current soul-style runtime fixture using the same canonical profile to prove RuntimeCore prompt marker injection. It does not store Soul text, prompt text, user content, paths, provider requests, or secrets, and it does not claim the GUI and runtime launches share one process or app-data directory.",
+      "Real Electron Memory/Soul Settings save and cold-restart recovery through App Server config/read and config/batchWrite plus current soulStylePack/list, combined with a separate isolated current soul-style runtime fixture using the same canonical profile to prove RuntimeCore prompt marker injection. It does not store Soul text, prompt text, user content, paths, provider requests, or secrets, and it does not claim the GUI and runtime launches share one process or app-data directory.",
     candidateRunId: validateName(candidateRunId, "run-id"),
     testOnly: true,
     startedAt,
@@ -257,9 +258,9 @@ export function applyPassingSettingsMemorySoulEvidence(summary, facts) {
     appServerIpcHitCount: trace.appServerIpcHitCount,
     methods: trace.methods,
   };
-  summary.host = {
-    commands: trace.hostCommands,
-    requiredCommandsComplete: trace.missingHostCommands.length === 0,
+  summary.config = {
+    methods: trace.configMethods,
+    requiredMethodsComplete: trace.missingConfigMethods.length === 0,
   };
   summary.lifecycle = {
     isolatedUserData: facts.isolatedUserData === true,
@@ -292,7 +293,7 @@ export function applyPassingSettingsMemorySoulEvidence(summary, facts) {
     ["twoPreloadInvokeBridges", summary.bridge.preloadInvoke],
     ["appServerElectronIpc", summary.bridge.appServerIpcHitCount > 0],
     ["currentSoulStyleMethod", trace.missingMethods.length === 0],
-    ["hostConfigCommands", summary.host.requiredCommandsComplete],
+    ["configMethods", summary.config.requiredMethodsComplete],
     ["isolatedUserData", summary.lifecycle.isolatedUserData],
     ["guiSaved", summary.lifecycle.guiSaved],
     ["restartReadback", summary.lifecycle.restartReadback],

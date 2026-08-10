@@ -5063,7 +5063,7 @@ const checks = [
       "input: buildTurnInput(",
       "compaction.shouldSubmitModel",
       "approvalPolicy: runtimePolicies.approvalPolicy",
-      "sandboxPolicy: runtimePolicies.sandboxPolicy",
+      "permissions: permissionProfileIdFromAccessMode(effectiveAccessMode)",
       "const collaborationMode = buildCollaborationMode(",
       "metadata: compaction.metadata",
       "collaborationMode ? { collaborationMode } : {}",
@@ -5081,6 +5081,7 @@ const checks = [
       "turnId,",
       "lowerCollaborationMode",
       "collaboration_mode",
+      "sandboxPolicy: runtimePolicies.sandboxPolicy",
     ],
   },
   {

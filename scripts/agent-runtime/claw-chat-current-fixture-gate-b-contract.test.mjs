@@ -33,13 +33,35 @@ describe("claw chat Gate B contract evidence", () => {
               lines: [
                 JSON.stringify({
                   jsonrpc: "2.0",
+                  id: 0,
+                  method: "permissionProfile/list",
+                  params: {},
+                }),
+                JSON.stringify({
+                  jsonrpc: "2.0",
                   id: 1,
+                  method: "collaborationMode/list",
+                  params: {},
+                }),
+                JSON.stringify({
+                  jsonrpc: "2.0",
+                  id: 2,
                   method: "turn/start",
                   params: {
                     sessionId: "session-1",
                     threadId: "thread-1",
                     turnId: "turn-1",
                     input: { text: "private prompt" },
+                    permissions: ":workspace",
+                    effort: "medium",
+                    collaborationMode: {
+                      mode: "plan",
+                      settings: {
+                        model: "gpt-5.4",
+                        reasoning_effort: "medium",
+                        developer_instructions: null,
+                      },
+                    },
                   },
                 }),
               ],
@@ -79,7 +101,28 @@ describe("claw chat Gate B contract evidence", () => {
         },
       ],
       backendLedger: [
-        { kind: "turnStart", sessionId: "session-1", turnId: "turn-1" },
+        {
+          kind: "turnStart",
+          sessionId: "session-1",
+          turnId: "turn-1",
+          runtimeRequest: {
+            modelPreference: "gpt-5.4",
+            reasoningEffort: "medium",
+            sandboxPolicy: "workspace-write",
+            metadata: {
+              permissions: ":workspace",
+              activePermissionProfile: { id: ":workspace" },
+            },
+            collaborationMode: {
+              mode: "plan",
+              settings: {
+                model: "gpt-5.4",
+                reasoning_effort: "medium",
+                developer_instructions: null,
+              },
+            },
+          },
+        },
         {
           kind: "backendEmit",
           sessionId: "session-1",
@@ -106,7 +149,11 @@ describe("claw chat Gate B contract evidence", () => {
       url: RENDERER.url,
     });
     expect(evidence.appServerIpcHitCount).toBe(1);
-    expect(evidence.appServerIpcMethods).toEqual(["turn/start"]);
+    expect(evidence.appServerIpcMethods).toEqual([
+      "permissionProfile/list",
+      "collaborationMode/list",
+      "turn/start",
+    ]);
     expect(JSON.stringify(evidence)).not.toContain("private prompt");
     expect(evidence.legacyCommandHitCount).toBe(0);
     expect(evidence.mockFallbackHitCount).toBe(0);
@@ -117,6 +164,52 @@ describe("claw chat Gate B contract evidence", () => {
       kind: "terminal",
       readModelStatus: "completed",
       explicit: true,
+    });
+    expect(evidence.collaborationMode).toEqual({
+      catalogMethod: "collaborationMode/list",
+      catalogRequestCount: 1,
+      catalogBeforeTurnStart: true,
+      wire: {
+        model: null,
+        effort: "medium",
+        collaborationMode: {
+          mode: "plan",
+          settings: {
+            model: "gpt-5.4",
+            reasoning_effort: "medium",
+            developer_instructions: null,
+          },
+        },
+      },
+      runtime: {
+        modelPreference: "gpt-5.4",
+        reasoningEffort: "medium",
+        collaborationMode: {
+          mode: "plan",
+          settings: {
+            model: "gpt-5.4",
+            reasoning_effort: "medium",
+            developer_instructions: null,
+          },
+        },
+      },
+      wireRuntimeConsistent: true,
+    });
+    expect(evidence.permissionProfile).toEqual({
+      catalogMethod: "permissionProfile/list",
+      catalogRequestCount: 1,
+      catalogBeforeTurnStart: true,
+      wire: {
+        profileId: ":workspace",
+        legacySandboxPolicyPresent: false,
+      },
+      runtime: {
+        matchedPrimaryTurn: true,
+        turnId: "turn-1",
+        sandboxPolicy: "workspace-write",
+        activePermissionProfileId: ":workspace",
+      },
+      wireRuntimeConsistent: true,
     });
     expect(Object.values(buildGateBContractAssertions(evidence))).not.toContain(
       false,
@@ -380,5 +473,99 @@ describe("claw chat Gate B contract evidence", () => {
     expect(evidence.identity.sources.appServer.turnId).toBeNull();
     expect(evidence.identity.consistent).toBe(true);
     expect(evidence.outcome.explicit).toBe(true);
+  });
+
+  it("does not mix permission wire evidence with an unrelated runtime turn", () => {
+    vi.spyOn(fs, "existsSync").mockReturnValue(true);
+    const evidence = buildGateBContractEvidence({
+      rendererSnapshot: RENDERER,
+      traceMessages: [
+        {
+          command: "app_server_handle_json_lines",
+          transport: "electron-ipc",
+          status: "success",
+          args_preview: {
+            request: {
+              lines: [
+                JSON.stringify({
+                  jsonrpc: "2.0",
+                  id: 1,
+                  method: "permissionProfile/list",
+                  params: {},
+                }),
+                JSON.stringify({
+                  jsonrpc: "2.0",
+                  id: 2,
+                  method: "turn/start",
+                  params: {
+                    threadId: "thread-media",
+                    input: [{ type: "text", text: "generate an image" }],
+                    permissions: ":workspace",
+                  },
+                }),
+              ],
+            },
+          },
+        },
+      ],
+      pageErrors: [],
+      pageLifecycleEvents: [],
+      runId: "candidate-media-workflow",
+      artifacts: {
+        summary: "/tmp/candidate-media-workflow/scenario-summary.json",
+        backendLedger: "/tmp/candidate-media-workflow/scenario-ledger.json",
+        screenshot: "/tmp/candidate-media-workflow/scenario.png",
+      },
+      appServerRequests: [
+        {
+          method: "thread/read",
+          response: {
+            sessionId: "thread-media",
+            threadId: "thread-media",
+            latestTurnStatus: "completed",
+            turns: [{ turnId: "turn-media", status: "completed" }],
+            items: [],
+          },
+        },
+      ],
+      backendLedger: [
+        {
+          kind: "turnStart",
+          sessionId: "thread-text",
+          turnId: "turn-text",
+          runtimeRequest: {
+            sandboxPolicy: "workspace-write",
+            metadata: {
+              activePermissionProfile: { id: ":workspace" },
+            },
+          },
+        },
+      ],
+      guiEvidence: {
+        sessionId: "thread-media",
+        turnId: "turn-media",
+        state: "terminal",
+      },
+      expectedIdentity: {
+        sessionId: "thread-media",
+        threadId: "thread-media",
+      },
+    });
+
+    expect(evidence.permissionProfile.runtime).toEqual({
+      matchedPrimaryTurn: false,
+      turnId: null,
+      sandboxPolicy: null,
+      activePermissionProfileId: null,
+    });
+    expect(buildGateBContractAssertions(evidence)).not.toHaveProperty(
+      "permissionProfileCatalogRequested",
+    );
+    expect(buildGateBContractAssertions(evidence)).not.toHaveProperty(
+      "permissionProfileReachedRuntime",
+    );
+    expect(buildGateBContractAssertions(evidence)).not.toHaveProperty(
+      "permissionProfileWireRuntimeConsistent",
+    );
   });
 });

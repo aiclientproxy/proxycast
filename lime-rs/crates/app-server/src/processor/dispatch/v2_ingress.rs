@@ -109,6 +109,30 @@ pub(super) fn into_parts(
         ClientRequest::McpServerToolCall { id, params } => {
             parts(id, Method::McpServerToolCall, params)
         }
+        ClientRequest::ConfigRead { id, params } => parts(id, Method::ConfigRead, params),
+        ClientRequest::ConfigValueWrite { id, params } => {
+            parts(id, Method::ConfigValueWrite, params)
+        }
+        ClientRequest::ConfigBatchWrite { id, params } => {
+            parts(id, Method::ConfigBatchWrite, params)
+        }
+        ClientRequest::CollaborationModeList { id, params } => {
+            parts(id, Method::CollaborationModeList, params)
+        }
+        ClientRequest::ExperimentalFeatureList { id, params } => {
+            parts(id, Method::ExperimentalFeatureList, params)
+        }
+        ClientRequest::ExperimentalFeatureEnablementSet { id, params } => {
+            parts(id, Method::ExperimentalFeatureEnablementSet, params)
+        }
+        ClientRequest::PermissionProfileList { id, params } => {
+            parts(id, Method::PermissionProfileList, params)
+        }
+        ClientRequest::WindowsSandboxReadiness { id, .. } => Ok((
+            id,
+            Method::WindowsSandboxReadiness.as_str().to_string(),
+            None,
+        )),
         ClientRequest::ModelList { id, params } => parts(id, Method::ModelList, params),
         ClientRequest::AppRead { id, params } => parts(id, Method::AppRead, params),
         ClientRequest::AppList { id, params } => parts(id, Method::AppList, params),
@@ -211,6 +235,7 @@ mod tests {
         METHOD_MEDIA_READ, METHOD_MEMORY_RESET, METHOD_PLUGIN_ENABLED_SET, METHOD_PLUGIN_INSTALL,
         METHOD_PLUGIN_INSTALLED, METHOD_PLUGIN_LIST, METHOD_PLUGIN_READ, METHOD_PLUGIN_UNINSTALL,
         METHOD_SKILLS_LIST, METHOD_THREAD_READ, METHOD_THREAD_RESUME, METHOD_TURN_INTERRUPT,
+        METHOD_WINDOWS_SANDBOX_READINESS,
     };
     use app_server_protocol::RequestId;
     use serde_json::json;
@@ -246,6 +271,30 @@ mod tests {
 
         let error = decode(&request(METHOD_MEMORY_RESET, json!({ "scope": "global" })))
             .expect_err("legacy scoped reset params must fail closed");
+        assert_eq!(error.code, error_codes::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn windows_sandbox_readiness_accepts_only_optional_empty_params() {
+        for params in [None, Some(serde_json::Value::Null), Some(json!({}))] {
+            let request = JsonRpcRequest::new(
+                RequestId::Integer(1),
+                METHOD_WINDOWS_SANDBOX_READINESS,
+                params,
+            );
+            let decoded = decode(&request)
+                .expect("valid windowsSandbox/readiness params")
+                .expect("v2 request");
+            let (_, method, lowered_params) = into_parts(decoded).expect("lower readiness");
+            assert_eq!(method, METHOD_WINDOWS_SANDBOX_READINESS);
+            assert!(lowered_params.is_none());
+        }
+
+        let error = decode(&request(
+            METHOD_WINDOWS_SANDBOX_READINESS,
+            json!({"mode": "elevated"}),
+        ))
+        .expect_err("readiness must reject setup params");
         assert_eq!(error.code, error_codes::INVALID_PARAMS);
     }
 

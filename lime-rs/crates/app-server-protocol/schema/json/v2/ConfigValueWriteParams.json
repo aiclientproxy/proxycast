@@ -1,0 +1,40 @@
+{
+  "$defs": {
+    "MergeStrategy": {
+      "enum": [
+        "replace",
+        "upsert"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "expectedVersion": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "filePath": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "keyPath": {
+      "type": "string"
+    },
+    "mergeStrategy": {
+      "$ref": "#/$defs/MergeStrategy"
+    },
+    "value": true
+  },
+  "required": [
+    "keyPath",
+    "mergeStrategy",
+    "value"
+  ],
+  "title": "ConfigValueWriteParams",
+  "type": "object"
+}

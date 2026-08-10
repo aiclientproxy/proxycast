@@ -1775,12 +1775,12 @@ does not select providers, mutate runtime state, or create another warning owner
 thread identity fail closed in the current Agent Chat path. The generic protocol can still decode a global
 `threadId: null` warning, but no global GUI delivery is claimed until a real global producer and GN owner exist.
 
-`runtime.warning` remains the sole durable fact. It is not forced into `ThreadItemPayload` and does not create an Item
-lifecycle. Full cold reads and limited projection-summary reads derive the warning beside canonical items from the same
-event log, preserving message, sequence and localization code without a second store. Live raw `agentSession/event`
-warning wrappers are `dead / forbidden-to-restore` and covered only by negative tests. `guardianWarning` stays `planned`
-because Lime has no independent high-priority Guardian warning producer; a schema-only or Renderer-fixture implementation
-would not make it current.
+`runtime.warning` remains the ordinary durable warning fact. It is not forced into `ThreadItemPayload` and does not create
+an Item lifecycle. Full cold reads and limited projection-summary reads derive the ordinary warning beside canonical items
+from the same event log, preserving message, sequence and localization code without a second store. Live raw
+`agentSession/event` warning wrappers are `dead / forbidden-to-restore` and covered only by negative tests.
+`guardian.warning` is a separate durable fact produced only by the Guardian denial circuit breaker; it projects to the
+strict `guardianWarning` v2 notification and Desktop `NoticeProjection`, and must never be represented as ordinary `warning`.
 
 Architecture impact: major because a live notification and recovery surface moved from the deprecated raw side channel
 to the v2 protocol/projector/Renderer boundary. The product direction remains Electron Desktop Host -> App Server
@@ -2224,7 +2224,7 @@ runtime fact 和 canonical read model 承接，terminal interaction 只保留 bo
 空字符串是有效 net-zero 结果，不得回退到由 GUI items 拼装的第二份 patch。该链路不复制 Codex TUI，也不改变 provider owner；
 多模型、多模态 sampling 和媒体 lowering 继续归 Grok-aligned `model-provider`。
 
-矩阵中的 `plugin/share/*`、`plugin/skill/read`、`guardianWarning` 与其余 review notifications 继续为 `planned`；
+矩阵中的 `plugin/share/*`、`plugin/skill/read` 与其余 review notifications 继续为 `planned`；
 `item/autoApprovalReview/*` 已由 Guardian current owner 承接；`turn/moderationMetadata` 由下一节 current
 主链接管。没有新增 `compat` 或
 `deprecated`；旧 Plugin 私有协议、Renderer 伪造 reverse request、raw diagnostic side-channel、未脱敏 terminal
@@ -2293,7 +2293,7 @@ completed 只接受 `agent` decision source 与 `approved|denied|timedOut|aborte
 原始 JSON 或 prompt。
 
 Electron 继续只转发 App Server JSONL，不新增 IPC 或第二业务后端。Codex TUI 的 detached/background review 不属于
-Lime Desktop 产品面；`guardianWarning` 仍是没有真实 producer 的独立 planned notification。Guardian 风险 lowering 归
+Lime Desktop 产品面；`guardianWarning` 由独立 Guardian denial circuit breaker producer 接入 current 主链。Guardian 风险 lowering 归
 `model-provider`，而 Grok-aligned 多模型 catalog/default/model switch/provider capability/readiness/retry/circuit
 breaker 与多模态 sampling/media lowering owner 不变。
 
@@ -2302,3 +2302,141 @@ Architecture impact: major；本节新增 Guardian review 从工具决策、prov
 root, 2026-08-09。Confirmation content: 已核对 strictAutoReview producer 范围、session provider 复用、超时/取消/非法响应
 拒绝语义、App Server typed wire、Renderer pending 状态、Electron 无新增 IPC，以及 Grok-aligned 多模型/多模态 owner
 不变。
+
+## 39. Guardian Warning Circuit Breaker Projection
+
+Guardian review denial 的高优先级告警现在由唯一的 `agent-runtime` current owner 产生。对同一 session/turn，状态机维护
+连续拒绝计数和最近 5 次 review 窗口；连续 3 次拒绝时只发出一次 `AgentEvent::GuardianWarning`，并取消当前 turn。
+provider 不可用导致的 Guardian denial 也进入同一计数器；approved 会清理该 turn 的计数，关闭 provider session 会清理
+session 状态，不建立第二份持久化 store。
+
+```text
+strictAutoReview denial
+  -> AgentRuntimeState guardian denial circuit breaker (3 consecutive / 5-review window)
+  -> AgentEvent guardian_warning
+  -> durable guardian.warning
+  -> App Server v2 guardianWarning { threadId, message }
+  -> typed client signal
+  -> Renderer ConversationProjection NoticeProjection(code = guardian_warning)
+```
+
+`guardianWarning` 必须保持独立于普通 `warning`、Guardian review completed 和用户审批；非法 thread/message、额外协议字段
+和未知 producer 均 fail closed。Lime Desktop 只呈现高优先级 notice，不复制 Codex TUI detached review UI；Electron 仍只
+转发 App Server JSONL，不新增 IPC 或第二业务后端。无 `compat`/`deprecated`；旧 raw side-channel、普通 warning 冒充和
+生产 mock fallback 为 `dead / deleted / forbidden-to-restore`。多模型、多模态控制面仍由 Grok-aligned `model-provider`
+承接，Guardian lowering 只复用当前 session provider。
+
+Architecture impact: major；本节新增 denial circuit breaker 到 Desktop notice 的跨层数据流，并固定一次性告警、turn
+中断、fail-closed 和 Desktop/TUI 边界。Responsible developer confirmation: root, 2026-08-09。
+
+## 40. Experimental Feature Configuration Owner
+
+Lime Desktop 实验特性由 App Server catalog 与 `lime_core config.yaml` 共同构成唯一 current owner。Settings 不再通过
+Electron 业务命令直接读写配置；Electron 只保留通用 App Server JSONL 转发职责。
+
+```text
+Settings Experimental
+  -> Renderer typed experimentalFeatures gateway
+  -> app_server_handle_json_lines
+  -> experimentalFeature/list | experimentalFeature/enablement/set
+  -> App Server feature catalog
+  -> lime_core config.yaml
+```
+
+catalog 当前只包含真实 Desktop consumer `webmcp`。`threadId` 仅接受已加载 Thread identity；Lime 没有 Codex
+project-local feature config，因此 Thread 不建立第二份 enablement store。Settings 写入是 Desktop 持久化配置语义，
+未知 feature key 被忽略；多模型/多模态 catalog、provider capability/readiness、retry/circuit breaker 仍归 Grok-aligned
+`model-provider`，不由 experimental feature catalog 承接。
+
+旧 Electron `get_experimental_config` / `save_experimental_config`、Renderer IPC 直连、legacy Tauri facade 与生产 mock
+fallback 为 `dead / deleted / forbidden-to-restore`；无 `compat` 或 `deprecated`。Architecture impact: major；本节将实验
+配置业务 owner 从 Electron 收敛到 App Server current 主链。Responsible developer confirmation: root, 2026-08-10。
+
+## 41. Desktop Permission Profile Owner
+
+Lime Desktop 的新回合权限选择由 App Server permission profile catalog 与 Turn lowering 共同构成唯一 current owner。
+Renderer 的 access mode 只是用户选择意图，不能直接把本地 sandbox 字符串当作 runtime 事实。
+
+```text
+Desktop access mode
+  -> Renderer typed permissionProfiles gateway
+  -> app_server_handle_json_lines
+  -> permissionProfile/list
+  -> unique allowed built-in profile
+  -> turn/start { approvalPolicy, permissions }
+  -> App Server profile resolver
+  -> RuntimeRequest sandbox policy
+  -> tool-runtime
+```
+
+catalog 只公开 `:read-only`、`:workspace`、`:danger-full-access` 三个 Desktop 内建 profile，并按 Codex 内建顺序返回。
+Renderer 在每次新 Turn 提交前解析唯一且 `allowed=true` 的目标；App Server 分别 lowering 为 `read-only`、
+`workspace-write`、`danger-full-access`，同时在 Turn metadata 保留 `permissions` 和 `activePermissionProfile` provenance。
+未知/禁止/重复 profile、无效 catalog 以及 `permissions + sandboxPolicy` 组合均 fail closed。
+
+Electron 仍只负责通用 App Server JSONL 转发，不新增权限 IPC 或第二份 catalog。Lime Desktop 不复制 Codex TUI picker，
+也不读取 project-local `.codex/config.toml` 自定义 profile；`thread/settings/update.permissions` 尚未进入同一 resolver，
+保持 planned/fail-closed。旧 Renderer 新回合 `sandboxPolicy` wire 为 `dead / deleted / forbidden-to-restore`；历史导入、
+read model/evidence 中的 canonical sandbox fact 不属于兼容入口。多模型 catalog、默认选择、model switch、provider
+capability/readiness、retry/circuit breaker 与多模态 sampling/media lowering 仍由 Grok-aligned `model-provider` 承接。
+
+Architecture impact: major；本节新增 Desktop access mode 经 exact catalog 到 runtime sandbox owner 的跨层数据流，并固定
+fail-closed、Desktop/TUI 分界和 settings mutation blocker。Responsible developer confirmation: root, 2026-08-10。
+
+## Config Control Plane
+
+Desktop 配置的唯一业务 owner 是 App Server config processor 与单一全局用户 `lime_core config.yaml`：
+
+```text
+Settings / fixture / internal provider selection
+  -> AppServerClient config/read|config/value/write|config/batchWrite
+  -> Electron app_server_handle_json_lines
+  -> App Server config processor
+  -> lime_core config.yaml
+```
+
+`config/read` 只暴露用户层并返回版本；写入必须经过当前版本、已知 key 和当前绝对 `filePath` 校验。project-local、
+MDM、requirements 层与 Codex `configRequirements/read` 不属于 Lime Desktop 产品范围，必须 fail closed 或保持
+product-scope-excluded。Electron 不承接配置业务，不恢复 `get_config` / `save_config`，Settings/Claw fixture 的证据只
+记录 `app_server_handle_json_lines` 与 `config/*` method。MCP 外部 `config.toml` reload 同样 excluded，避免第二配置 owner。
+
+Architecture impact: major；本节完成 Electron config facade 到 App Server config control plane 的 owner 迁移，并同步
+Settings/Claw evidence。Responsible developer confirmation: root, 2026-08-10。
+
+## 42. Windows Sandbox Readiness Owner
+
+Windows sandbox readiness 是 Desktop 控制面能力；Windows restricted-token runner 的当前基础也已归入
+`tool-runtime`，但 readiness 仍必须以真实平台 enforcement 证据为准。唯一数据流为：
+
+```text
+Settings execution policy
+  -> typed windowsSandbox/readiness gateway
+  -> app_server_handle_json_lines
+  -> App Server windowsSandbox/readiness
+  -> tool-runtime::plan_sandbox_backend
+  -> WindowsSandboxReadiness { notConfigured | updateRequired | ready }
+```
+
+非 Windows 平台或未启用 workspace sandbox 返回 `notConfigured`；Windows 已启用但 backend 不是
+`Ready + enforced=true` 返回 `updateRequired`；只有真实 enforcement 才能返回 `ready`。`tool-runtime`
+当前拥有 target-gated restricted-token runner：受限 token、capability SID、workspace/explicit write-root
+ACL lease、`.git/.codex/.agents` 写入拒绝、Job Object 进程树、显式继承句柄列表、stdout/stderr reader
+和既有有界 retained output 均在同一 owner。Windows 环境块继承父环境并按大小写不敏感应用请求覆盖；正常根进程
+退出时遵循 Codex 语义关闭 `KILL_ON_JOB_CLOSE`，由 reaper 持有 Job 与 ACL lease 到 Job 为空，取消、超时、控制断开或
+等待失败则终止整棵进程树并立即 rollback；TTY/ConPTY、elevated setup、WFP/firewall 强网络隔离和
+Windows 真机证据尚未完成。命令 lowering 仍对 `RestrictedToken` fail closed，但执行入口会在 Windows
+直接进入 runner，不把 command wrapper 当作第二套 owner。因平台 evidence 尚未具备，当前
+`SandboxBackendStatus::Planned`、`enforced=false` 保持不变，不能由 runner 源码、Settings 或 setup 文案
+推断 ready。`windowsSandbox/setupStart`、`windows/worldWritableWarning` 与 `windowsSandbox/setupCompleted`
+保持 planned，后续必须在 Windows 平台完成 runner/ConPTY/网络能力裁决与 Gate B evidence 后再推进。
+
+Electron 只转发 App Server JSONL，不新增 Windows 业务 IPC 或第二套设置后端；Desktop Settings 只消费 readiness
+状态，不复制 Codex TUI 的 setup UI。Windows runner 的 token、ACL、进程生命周期和网络/读限制仍归
+`tool-runtime` sandbox owner；多模型、多模态 sampling/media lowering 与 provider readiness 仍归
+Grok-aligned `model-provider`，与此控制面无关。
+
+Architecture impact: major；本节固定 Windows readiness 与实际 enforcement 的 fail-closed 边界，并把
+Desktop Settings、App Server 与 tool-runtime 的唯一数据流写入架构事实源。Responsible developer confirmation:
+root, 2026-08-10。Confirmation content: 已核对 `SandboxBackendStatus::Planned`、`enforced=false`、
+`prepare_sandbox_command(RestrictedToken)` 拒绝路径、非 Windows/未配置状态，以及 Desktop/TUI、Codex runtime 和
+Grok model/multimodal owner 分界。

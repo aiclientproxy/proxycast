@@ -1,10 +1,8 @@
 import path from "node:path";
 
 export const ENVIRONMENT_SCENARIO_ID = "environment-current-read";
-export const ENVIRONMENT_REQUIRED_HOST_COMMANDS = [
-  "get_config",
-  "get_environment_preview",
-];
+export const ENVIRONMENT_REQUIRED_CONFIG_METHODS = ["config/read"];
+export const ENVIRONMENT_REQUIRED_HOST_COMMANDS = ["get_environment_preview"];
 
 const APP_SERVER_COMMAND = "app_server_handle_json_lines";
 const LEGACY_ENVIRONMENT_COMMANDS = [
@@ -135,9 +133,13 @@ export function summarizeSettingsEnvironmentTrace(traceRaw) {
     ENVIRONMENT_REQUIRED_HOST_COMMANDS.includes(entry?.command),
   );
   const commands = new Set(entries.map((entry) => entry?.command));
+  const methods = appServerMethods(appServerIpcEntries);
   return {
     appServerIpcHitCount: appServerIpcEntries.length,
-    appServerMethods: appServerMethods(appServerIpcEntries),
+    appServerMethods: methods,
+    missingConfigMethods: ENVIRONMENT_REQUIRED_CONFIG_METHODS.filter(
+      (method) => !methods.includes(method),
+    ),
     hostIpcHitCount: hostEntries.filter(
       (entry) => entry.transport === "electron-ipc",
     ).length,

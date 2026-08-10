@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { safeInvoke } from "@/lib/dev-bridge";
 import {
+  METHOD_CONFIG_BATCH_WRITE,
+  METHOD_CONFIG_READ,
+} from "@limecloud/app-server-client";
+import {
   getConfig,
   getDefaultProvider,
   invalidateAppConfigCache,
@@ -9,9 +13,50 @@ import {
   updateConfig,
 } from "./appConfig";
 
+const { appServerRequest } = vi.hoisted(() => ({
+  appServerRequest: vi.fn(),
+}));
+
+vi.mock("./appServer", () => ({
+  AppServerClient: class {
+    request = appServerRequest;
+  },
+}));
+
 vi.mock("@/lib/dev-bridge", () => ({
   safeInvoke: vi.fn(),
 }));
+
+function configReadResult(config: unknown, version = "version-1") {
+  return {
+    result: {
+      config,
+      origins: {},
+      layers: [
+        {
+          name: {
+            type: "user",
+            file: "/tmp/lime/config.yaml",
+            profile: null,
+          },
+          version,
+          config,
+        },
+      ],
+    },
+  };
+}
+
+function configWriteResult(version = "version-2") {
+  return {
+    result: {
+      status: "ok",
+      version,
+      filePath: "/tmp/lime/config.yaml",
+      overriddenMetadata: null,
+    },
+  };
+}
 
 describe("appConfig API", () => {
   beforeEach(() => {
@@ -20,9 +65,11 @@ describe("appConfig API", () => {
     invalidateAppConfigCache();
   });
 
-  it("应代理读取配置命令", async () => {
+  it("配置读取走 App Server，宿主环境能力保持 Electron owner", async () => {
+    appServerRequest.mockResolvedValueOnce(
+      configReadResult({ default_provider: "claude" }),
+    );
     vi.mocked(safeInvoke)
-      .mockResolvedValueOnce({ default_provider: "claude" })
       .mockResolvedValueOnce({ entries: [] })
       .mockResolvedValueOnce("claude");
 
@@ -33,6 +80,18 @@ describe("appConfig API", () => {
       expect.objectContaining({ entries: [] }),
     );
     await expect(getDefaultProvider()).resolves.toBe("claude");
+
+    expect(appServerRequest).toHaveBeenCalledWith(METHOD_CONFIG_READ, {
+      includeLayers: true,
+    });
+    expect(vi.mocked(safeInvoke)).toHaveBeenNthCalledWith(
+      1,
+      "get_environment_preview",
+    );
+    expect(vi.mocked(safeInvoke)).toHaveBeenNthCalledWith(
+      2,
+      "get_default_provider",
+    );
   });
 
   it("环境预览应接收 Electron Host current 返回的局部 Shell 导入状态", async () => {
@@ -59,15 +118,8 @@ describe("appConfig API", () => {
     });
   });
 
-  it("环境预览遇到顶层 Electron degraded diagnostic facade 时应 fail closed", async () => {
+  it("环境预览遇到 degraded diagnostic facade 时应 fail closed", async () => {
     vi.mocked(safeInvoke).mockResolvedValueOnce({
-      shellImport: {
-        enabled: false,
-        status: "disabled",
-        message: "Electron current 暂未接入 shell 环境导入预览。",
-        importedCount: 0,
-        durationMs: null,
-      },
       entries: [],
       diagnostic: {
         source: "electron-host-diagnostic",
@@ -81,44 +133,40 @@ describe("appConfig API", () => {
     );
   });
 
-  it("读取配置遇到 diagnostic facade 或无效配置时应 fail closed", async () => {
+  it("config/read 遇到无效配置或缺少单一用户层时应 fail closed", async () => {
+    appServerRequest
+      .mockResolvedValueOnce(configReadResult({ success: true }))
+      .mockResolvedValueOnce(configReadResult({ default_provider: "" }))
+      .mockResolvedValueOnce({
+        result: {
+          config: { default_provider: "claude" },
+          origins: {},
+          layers: [],
+        },
+      });
+
+    await expect(getConfig()).rejects.toThrow("config/read 未返回有效配置");
+    await expect(getConfig()).rejects.toThrow("config/read 未返回有效配置");
+    await expect(getConfig()).rejects.toThrow(
+      "config/read 未返回唯一 Desktop 用户配置层",
+    );
+  });
+
+  it("默认 Provider 命令遇到 diagnostic facade 或无效形态时 fail closed", async () => {
     vi.mocked(safeInvoke)
       .mockResolvedValueOnce({
         diagnostic: {
           source: "electron-host-diagnostic",
-          command: "get_config",
+          command: "get_default_provider",
           status: "degraded",
         },
       })
       .mockResolvedValueOnce({ success: true })
-      .mockResolvedValueOnce({ default_provider: "" });
-
-    await expect(getConfig()).rejects.toThrow(
-      "get_config 尚未接入真实配置 current 通道，收到 electron-host-diagnostic 诊断返回。",
-    );
-    await expect(getConfig()).rejects.toThrow("get_config 未返回有效配置");
-    await expect(getConfig()).rejects.toThrow("get_config 未返回有效配置");
-  });
-
-  it("默认 Provider 命令遇到 diagnostic facade 时应 fail closed", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({
-      diagnostic: {
-        source: "electron-host-diagnostic",
-        command: "get_default_provider",
-        status: "degraded",
-      },
-    });
+      .mockResolvedValueOnce("");
 
     await expect(getDefaultProvider()).rejects.toThrow(
       "get_default_provider 尚未接入真实默认 Provider current 通道，收到 electron-host-diagnostic 诊断返回。",
     );
-  });
-
-  it("默认 Provider 命令应校验返回形态", async () => {
-    vi.mocked(safeInvoke)
-      .mockResolvedValueOnce({ success: true })
-      .mockResolvedValueOnce("");
-
     await expect(getDefaultProvider()).rejects.toThrow(
       "get_default_provider 未返回有效默认 Provider",
     );
@@ -127,198 +175,110 @@ describe("appConfig API", () => {
     );
   });
 
-  it("写配置命令遇到 diagnostic facade 时应 fail closed", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({
-      diagnostic: {
-        source: "electron-host-diagnostic",
-        command: "save_config",
-        status: "degraded",
-      },
-    });
-
-    await expect(
-      saveConfig({ default_provider: "claude" } as never),
-    ).rejects.toThrow(
-      "save_config 尚未接入真实配置 current 通道，收到 electron-host-diagnostic 诊断返回。",
-    );
-  });
-
-  it("写配置命令遇到 mock-like payload 时应 fail closed", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({ success: true });
-
-    await expect(
-      saveConfig({ default_provider: "claude" } as never),
-    ).rejects.toThrow("save_config did not return void result");
-  });
-
-  it("应代理写配置命令", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce(undefined);
-
-    await expect(
-      saveConfig({ default_provider: "claude" } as never),
-    ).resolves.toBeUndefined();
-  });
-
-  it("应返回 workspace_preferences 配置", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({
-      default_provider: "claude",
-      workspace_preferences: {
-        schema_version: 2,
-        media_defaults: {
-          image: {
-            preferredProviderId: "fal",
-          },
-        },
-        service_models: {
-          topic: {
-            preferredProviderId: "openai",
-            preferredModelId: "gpt-5.4-mini",
-          },
-          prompt_rewrite: {
-            enabled: false,
-          },
-        },
-      },
-    });
-
-    await expect(getConfig()).resolves.toEqual(
-      expect.objectContaining({
-        default_provider: "claude",
-        workspace_preferences: expect.objectContaining({
-          media_defaults: expect.objectContaining({
-            image: expect.objectContaining({
-              preferredProviderId: "fal",
-            }),
-          }),
-          service_models: expect.objectContaining({
-            topic: expect.objectContaining({
-              preferredProviderId: "openai",
-              preferredModelId: "gpt-5.4-mini",
-            }),
-            prompt_rewrite: expect.objectContaining({
-              enabled: false,
-            }),
-          }),
+  it("saveConfig 通过 batchWrite 写入变化字段并携带版本", async () => {
+    appServerRequest
+      .mockResolvedValueOnce(
+        configReadResult({
+          default_provider: "claude",
+          language: "zh-CN",
+          navigation: { schema_version: 3, enabled_items: [] },
         }),
-      }),
-    );
-    const config = await getConfig();
-    expect(config.workspace_preferences).toEqual(
-      expect.objectContaining({
-        media_defaults: expect.objectContaining({
-          image: expect.objectContaining({
-            preferredProviderId: "fal",
-          }),
-        }),
-        service_models: expect.objectContaining({
-          topic: expect.objectContaining({
-            preferredProviderId: "openai",
-            preferredModelId: "gpt-5.4-mini",
-          }),
-          prompt_rewrite: expect.objectContaining({
-            enabled: false,
-          }),
-        }),
-      }),
-    );
-  });
+      )
+      .mockResolvedValueOnce(configWriteResult());
 
-  it("saveConfig 应写入 workspace_preferences", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce(undefined);
-
-    const config = {
+    await saveConfig({
       default_provider: "claude",
-      workspace_preferences: {
-        media_defaults: {
-          voice: { preferredProviderId: "openai" },
-        },
-        service_models: {
-          topic: {
-            preferredProviderId: "openai",
-            preferredModelId: "gpt-5.4-mini",
-          },
-        },
-      },
-    } as never;
-
-    await expect(saveConfig(config)).resolves.toBeUndefined();
-
-    expect(vi.mocked(safeInvoke)).toHaveBeenCalledWith("save_config", {
-      config,
-    });
-  });
-
-  it("getConfig 应缓存并复用同一轮读取结果", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({
-      default_provider: "claude",
+      language: "en-US",
       navigation: { schema_version: 3, enabled_items: ["companion"] },
-    });
+    } as never);
+
+    expect(appServerRequest).toHaveBeenNthCalledWith(
+      2,
+      METHOD_CONFIG_BATCH_WRITE,
+      {
+        edits: [
+          {
+            keyPath: "language",
+            value: "en-US",
+            mergeStrategy: "replace",
+          },
+        ],
+        expectedVersion: "version-1",
+        reloadUserConfig: true,
+      },
+    );
+  });
+
+  it("saveConfig 对无效写响应 fail closed，并失效旧缓存", async () => {
+    appServerRequest
+      .mockResolvedValueOnce(
+        configReadResult({ default_provider: "claude", language: "zh-CN" }),
+      )
+      .mockResolvedValueOnce({ result: { status: "ok" } })
+      .mockResolvedValueOnce(
+        configReadResult(
+          { default_provider: "claude", language: "zh-CN" },
+          "version-2",
+        ),
+      );
+
+    await getConfig();
+    await expect(
+      saveConfig({ default_provider: "claude", language: "en-US" } as never),
+    ).rejects.toThrow("config/batchWrite 未返回有效写入结果");
+    await getConfig();
+
+    expect(
+      appServerRequest.mock.calls.filter(
+        ([method]) => method === METHOD_CONFIG_READ,
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("getConfig 缓存结果并清理 navigation 旧入口", async () => {
+    appServerRequest.mockResolvedValueOnce(
+      configReadResult({
+        default_provider: "claude",
+        navigation: { schema_version: 2, enabled_items: ["companion"] },
+      }),
+    );
 
     const [first, second] = await Promise.all([getConfig(), getConfig()]);
 
-    expect(vi.mocked(safeInvoke)).toHaveBeenCalledTimes(1);
-    expect(first).toEqual(
-      expect.objectContaining({ default_provider: "claude" }),
-    );
-    expect(second).toEqual(
-      expect.objectContaining({ default_provider: "claude" }),
-    );
+    expect(appServerRequest).toHaveBeenCalledTimes(1);
+    expect(first.navigation).toEqual({ schema_version: 3, enabled_items: [] });
+    expect(second).toEqual(first);
     expect(first).not.toBe(second);
   });
 
-  it("getConfig 应把旧 schema 的桌宠入口迁移为默认关闭", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({
-      default_provider: "claude",
-      navigation: { schema_version: 2, enabled_items: ["companion"] },
-    });
+  it("saveConfig 成功后更新版本化缓存", async () => {
+    appServerRequest
+      .mockResolvedValueOnce(
+        configReadResult({ default_provider: "openai", language: "zh-CN" }),
+      )
+      .mockResolvedValueOnce(configWriteResult("version-2"));
 
-    await expect(getConfig()).resolves.toEqual(
-      expect.objectContaining({
-        navigation: { schema_version: 3, enabled_items: [] },
-      }),
-    );
-  });
-
-  it("getConfig 应清理 current schema 下残留的 companion 入口", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({
-      default_provider: "claude",
-      navigation: { schema_version: 3, enabled_items: ["companion"] },
-    });
-
-    await expect(getConfig()).resolves.toEqual(
-      expect.objectContaining({
-        navigation: { schema_version: 3, enabled_items: [] },
-      }),
-    );
-  });
-
-  it("saveConfig 后后续 getConfig 应直接命中新缓存", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce(undefined);
-
-    const nextConfig = {
+    await getConfig();
+    await saveConfig({
       default_provider: "openai",
-      navigation: { schema_version: 3, enabled_items: ["companion"] },
-    } as never;
-
-    await expect(saveConfig(nextConfig)).resolves.toBeUndefined();
+      language: "ja-JP",
+    } as never);
     await expect(getConfig()).resolves.toEqual(
-      expect.objectContaining({
-        default_provider: "openai",
-        navigation: { schema_version: 3, enabled_items: [] },
-      }),
+      expect.objectContaining({ language: "ja-JP" }),
     );
 
-    expect(vi.mocked(safeInvoke)).toHaveBeenCalledTimes(1);
+    expect(appServerRequest).toHaveBeenCalledTimes(2);
   });
 
-  it("updateConfig 应串行合并连续 mutation，避免后写入覆盖前一笔 Provider", async () => {
+  it("updateConfig 串行合并连续 mutation，避免后写覆盖前一笔", async () => {
     let releaseFirstSave: (() => void) | undefined;
     let saveCount = 0;
     let secondUpdaterProvider: string | undefined;
+    const writeParams: unknown[] = [];
 
-    vi.mocked(safeInvoke).mockImplementation(async (command) => {
-      if (command === "get_config") {
-        return {
+    appServerRequest.mockImplementation(async (method, params) => {
+      if (method === METHOD_CONFIG_READ) {
+        return configReadResult({
           default_provider: "openai",
           workspace_preferences: {
             media_defaults: {
@@ -329,18 +289,19 @@ describe("appConfig API", () => {
               },
             },
           },
-        };
+        });
       }
-      if (command === "save_config") {
+      if (method === METHOD_CONFIG_BATCH_WRITE) {
+        writeParams.push(params);
         saveCount += 1;
         if (saveCount === 1) {
           await new Promise<void>((resolve) => {
             releaseFirstSave = resolve;
           });
         }
-        return undefined;
+        return configWriteResult(`version-${saveCount + 1}`);
       }
-      throw new Error(`unexpected command: ${command}`);
+      throw new Error(`unexpected method: ${method}`);
     });
 
     const providerUpdate = updateConfig((current) => ({
@@ -375,28 +336,15 @@ describe("appConfig API", () => {
       };
     });
 
-    await vi.waitFor(() => {
-      expect(saveCount).toBe(1);
-    });
+    await vi.waitFor(() => expect(saveCount).toBe(1));
     expect(secondUpdaterProvider).toBeUndefined();
-
     releaseFirstSave?.();
-    await expect(Promise.all([providerUpdate, modelUpdate])).resolves.toEqual([
-      expect.any(Object),
-      expect.any(Object),
-    ]);
+    await Promise.all([providerUpdate, modelUpdate]);
 
     expect(secondUpdaterProvider).toBe("new-provider");
-    const saveCalls = vi
-      .mocked(safeInvoke)
-      .mock.calls.filter(([command]) => command === "save_config");
-    expect(saveCalls).toHaveLength(2);
-    expect(
-      saveCalls[1]?.[1]?.config.workspace_preferences.media_defaults.image,
-    ).toEqual({
-      preferredProviderId: "new-provider",
-      preferredModelId: "new-model",
-      allowFallback: false,
-    });
+    expect(writeParams).toHaveLength(2);
+    expect(writeParams[1]).toEqual(
+      expect.objectContaining({ expectedVersion: "version-2" }),
+    );
   });
 });

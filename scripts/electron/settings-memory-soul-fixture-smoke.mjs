@@ -71,7 +71,7 @@ async function waitForTraceCommand(page, command, options) {
   while (Date.now() - startedAt < Math.min(options.timeoutMs, 45_000)) {
     const buffers = await readInvokeBuffers(page);
     const trace = summarizeSettingsMemorySoulTrace([buffers.traceRaw]);
-    if (trace.hostCommands.includes(command)) return trace;
+    if (trace.configMethods.includes(command)) return trace;
     await sleep(options.intervalMs);
   }
   throw new Error(`Memory Soul GUI did not invoke ${command}`);
@@ -259,7 +259,7 @@ async function run() {
       .locator('[data-testid="settings-memory-soul-template-direct"]')
       .click();
     await page.locator('[data-testid="settings-memory-save"]').click();
-    await waitForTraceCommand(page, "save_config", options);
+    await waitForTraceCommand(page, "config/batchWrite", options);
     await assertMemorySoulEnabled(page);
     await profileButton.waitFor({ state: "visible" });
     if ((await profileButton.getAttribute("aria-pressed")) !== "true") {
@@ -322,7 +322,7 @@ async function run() {
       isolatedUserData: runtimeEnv.electronUserDataDir.startsWith(
         runtimeEnv.tempRoot,
       ),
-      guiSaved: trace.hostCommands.includes("save_config"),
+      guiSaved: trace.configMethods.includes("config/batchWrite"),
       restartReadback: true,
       memoryEnabled: true,
       soulEnabled: true,
@@ -346,7 +346,7 @@ async function run() {
     });
     writeJsonFile(rawEvidencePath, {
       lifecycle: summary.lifecycle,
-      hostCommands: trace.hostCommands,
+      configMethods: trace.configMethods,
       appServerMethods: trace.methods.filter((method) =>
         MEMORY_SOUL_REQUIRED_METHODS.includes(method),
       ),

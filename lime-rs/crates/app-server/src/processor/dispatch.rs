@@ -680,6 +680,24 @@ impl RequestProcessor {
             METHOD_USAGE_STATS_DAILY_TRENDS_LIST => {
                 self.handle_usage_stats_daily_trends_list(params).boxed()
             }
+            v2::METHOD_COLLABORATION_MODE_LIST => {
+                self.handle_collaboration_mode_list_impl(params).boxed()
+            }
+            v2::METHOD_EXPERIMENTAL_FEATURE_LIST => {
+                self.handle_experimental_feature_list_impl(params).boxed()
+            }
+            v2::METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET => self
+                .handle_experimental_feature_enablement_set_impl(params)
+                .boxed(),
+            v2::METHOD_PERMISSION_PROFILE_LIST => {
+                self.handle_permission_profile_list_impl(params).boxed()
+            }
+            v2::METHOD_WINDOWS_SANDBOX_READINESS => {
+                self.handle_windows_sandbox_readiness_impl(params).boxed()
+            }
+            v2::METHOD_CONFIG_READ => self.handle_config_read_impl(params).boxed(),
+            v2::METHOD_CONFIG_VALUE_WRITE => self.handle_config_value_write_impl(params).boxed(),
+            v2::METHOD_CONFIG_BATCH_WRITE => self.handle_config_batch_write_impl(params).boxed(),
             METHOD_MODEL_LIST => self.handle_model_list_impl(params).boxed(),
             METHOD_MODEL_PREFERENCES_LIST => self.handle_model_preferences_list_impl().boxed(),
             METHOD_MODEL_SYNC_STATE_READ => self.handle_model_sync_state_read_impl().boxed(),

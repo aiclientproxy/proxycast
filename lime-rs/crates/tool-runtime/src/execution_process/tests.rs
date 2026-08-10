@@ -194,6 +194,89 @@ async fn local_pty_process_accepts_stdin_and_emits_combined_output() {
         .all(|delta| delta.kind == ExecutionOutputKind::Combined));
 }
 
+#[cfg(not(target_os = "windows"))]
+#[test]
+fn restricted_token_sandbox_fails_closed_off_windows() {
+    let mut request = LocalExecutionRequest::new(
+        "process-restricted-token",
+        "tool-restricted-token",
+        "exec_command",
+        shell_command("printf restricted"),
+    );
+    request.sandbox = Some(LocalExecutionSandbox {
+        backend: SandboxBackend::RestrictedToken,
+        requested_policy: Some("workspace-write".to_string()),
+        granted_permissions: None,
+    });
+
+    let error =
+        start_local_execution_process(request).expect_err("restricted token must fail closed");
+    assert_eq!(error.kind(), std::io::ErrorKind::Unsupported);
+    assert!(error.to_string().contains("only available on Windows"));
+}
+
+#[test]
+fn windows_environment_inherits_and_applies_case_insensitive_overrides() {
+    let inherited = [
+        ("Path".to_string(), "C:\\Windows".to_string()),
+        ("SystemRoot".to_string(), "C:\\Windows".to_string()),
+    ];
+    let overrides = HashMap::from([
+        ("PATH".to_string(), "C:\\Tools".to_string()),
+        ("custom_value".to_string(), "enabled".to_string()),
+    ]);
+
+    let environment = resolve_windows_child_environment(false, inherited, &overrides);
+
+    assert_eq!(
+        environment.get("PATH").map(String::as_str),
+        Some("C:\\Tools")
+    );
+    assert_eq!(
+        environment.get("SYSTEMROOT").map(String::as_str),
+        Some("C:\\Windows")
+    );
+    assert_eq!(
+        environment.get("CUSTOM_VALUE").map(String::as_str),
+        Some("enabled")
+    );
+    assert_eq!(environment.len(), 3);
+}
+
+#[test]
+fn windows_environment_clear_drops_inherited_values() {
+    let inherited = [("SystemRoot".to_string(), "C:\\Windows".to_string())];
+    let overrides = HashMap::from([("Path".to_string(), "C:\\Tools".to_string())]);
+
+    let environment = resolve_windows_child_environment(true, inherited, &overrides);
+
+    assert_eq!(
+        environment.get("PATH").map(String::as_str),
+        Some("C:\\Tools")
+    );
+    assert!(!environment.contains_key("SYSTEMROOT"));
+}
+
+#[test]
+fn windows_job_preserves_only_after_normal_root_exit() {
+    assert!(should_preserve_windows_job(
+        false,
+        ExecutionProcessStatus::Running
+    ));
+    assert!(!should_preserve_windows_job(
+        true,
+        ExecutionProcessStatus::Running
+    ));
+    assert!(!should_preserve_windows_job(
+        false,
+        ExecutionProcessStatus::Interrupted
+    ));
+    assert!(!should_preserve_windows_job(
+        false,
+        ExecutionProcessStatus::Terminated
+    ));
+}
+
 fn shell_command(script: &str) -> Vec<String> {
     if cfg!(windows) {
         vec![

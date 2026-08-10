@@ -1,27 +1,31 @@
 use super::{
     AgentMessageDeltaNotification, AppListUpdatedNotification, AppsInstalledParams,
     AppsInstalledResponse, AppsListParams, AppsListResponse, AppsReadParams, AppsReadResponse,
-    ArtifactWriteParams, ArtifactWriteResponse, CommandExecOutputDeltaNotification,
-    CommandExecParams, CommandExecResizeParams, CommandExecResizeResponse, CommandExecResponse,
-    CommandExecTerminateParams, CommandExecTerminateResponse, CommandExecWriteParams,
-    CommandExecWriteResponse, CommandExecutionOutputDeltaNotification,
-    CommandExecutionRequestApprovalParams, CommandExecutionTerminalInteractionNotification,
-    ConfigWarningNotification, CurrentTimeReadParams, DynamicToolCallParams, ErrorNotification,
-    FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, FsChangedNotification,
-    FsCopyParams, FsCopyResponse, FsCreateDirectoryParams, FsCreateDirectoryResponse,
-    FsGetMetadataParams, FsGetMetadataResponse, FsReadDirectoryParams, FsReadDirectoryResponse,
-    FsReadFileParams, FsReadFileResponse, FsRemoveParams, FsRemoveResponse, FsUnwatchParams,
-    FsUnwatchResponse, FsWatchParams, FsWatchResponse, FsWriteFileParams, FsWriteFileResponse,
-    GuardianWarningNotification, HookCompletedNotification, HookStartedNotification,
-    HooksListParams, HooksListResponse, ItemCompletedNotification,
-    ItemGuardianApprovalReviewCompletedNotification, ItemGuardianApprovalReviewStartedNotification,
-    ItemStartedNotification, McpServerElicitationRequestParams,
-    McpServerOauthLoginCompletedNotification, McpServerResourceReadParams,
-    McpServerResourceReadResponse, McpServerStatusUpdatedNotification, McpServerToolCallParams,
-    McpServerToolCallResponse, McpToolCallProgressNotification, MediaReadParams, MediaReadResponse,
-    MemoryResetResponse, Method, ModelListParams, ModelListUpdatedNotification,
-    ModelReroutedNotification, ModelSafetyBufferingUpdatedNotification,
-    ModelVerificationNotification, PermissionsRequestApprovalParams, PlanDeltaNotification,
+    ArtifactWriteParams, ArtifactWriteResponse, CollaborationModeListParams,
+    CommandExecOutputDeltaNotification, CommandExecParams, CommandExecResizeParams,
+    CommandExecResizeResponse, CommandExecResponse, CommandExecTerminateParams,
+    CommandExecTerminateResponse, CommandExecWriteParams, CommandExecWriteResponse,
+    CommandExecutionOutputDeltaNotification, CommandExecutionRequestApprovalParams,
+    CommandExecutionTerminalInteractionNotification, ConfigBatchWriteParams, ConfigReadParams,
+    ConfigValueWriteParams, ConfigWarningNotification, CurrentTimeReadParams,
+    DynamicToolCallParams, ErrorNotification, ExperimentalFeatureEnablementSetParams,
+    ExperimentalFeatureEnablementSetResponse, ExperimentalFeatureListParams,
+    ExperimentalFeatureListResponse, FileChangePatchUpdatedNotification,
+    FileChangeRequestApprovalParams, FsChangedNotification, FsCopyParams, FsCopyResponse,
+    FsCreateDirectoryParams, FsCreateDirectoryResponse, FsGetMetadataParams, FsGetMetadataResponse,
+    FsReadDirectoryParams, FsReadDirectoryResponse, FsReadFileParams, FsReadFileResponse,
+    FsRemoveParams, FsRemoveResponse, FsUnwatchParams, FsUnwatchResponse, FsWatchParams,
+    FsWatchResponse, FsWriteFileParams, FsWriteFileResponse, GuardianWarningNotification,
+    HookCompletedNotification, HookStartedNotification, HooksListParams, HooksListResponse,
+    ItemCompletedNotification, ItemGuardianApprovalReviewCompletedNotification,
+    ItemGuardianApprovalReviewStartedNotification, ItemStartedNotification,
+    McpServerElicitationRequestParams, McpServerOauthLoginCompletedNotification,
+    McpServerResourceReadParams, McpServerResourceReadResponse, McpServerStatusUpdatedNotification,
+    McpServerToolCallParams, McpServerToolCallResponse, McpToolCallProgressNotification,
+    MediaReadParams, MediaReadResponse, MemoryResetResponse, Method, ModelListParams,
+    ModelListUpdatedNotification, ModelReroutedNotification,
+    ModelSafetyBufferingUpdatedNotification, ModelVerificationNotification,
+    PermissionProfileListParams, PermissionsRequestApprovalParams, PlanDeltaNotification,
     PluginCatalogEnabledSetParams, PluginCatalogInstallParams, PluginCatalogInstalledParams,
     PluginCatalogListParams, PluginCatalogReadParams, PluginCatalogUninstallParams,
     PluginSearchParams, PluginSearchResponse, ProcessExitedNotification, ProcessKillParams,
@@ -62,7 +66,8 @@ use super::{
     ToolRequestUserInputParams, TurnCompletedNotification, TurnDiffUpdatedNotification,
     TurnInterruptParams, TurnInterruptResponse, TurnModerationMetadataNotification,
     TurnPlanUpdatedNotification, TurnStartParams, TurnStartResponse, TurnStartedNotification,
-    TurnSteerParams, TurnSteerResponse, WarningNotification, METHOD_APP_LIST_UPDATED,
+    TurnSteerParams, TurnSteerResponse, WarningNotification, WindowsSandboxReadinessParams,
+    WindowsSandboxReadinessResponse, METHOD_APP_LIST_UPDATED,
     METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION,
     METHOD_COMMAND_EXEC_OUTPUT_DELTA, METHOD_CONFIG_WARNING, METHOD_CURRENT_TIME_READ,
     METHOD_ERROR, METHOD_FILE_CHANGE_PATCH_UPDATED, METHOD_FS_CHANGED, METHOD_GUARDIAN_WARNING,
@@ -296,6 +301,47 @@ pub enum ClientRequest {
         id: RequestId,
         params: McpServerToolCallParams,
     },
+    #[serde(rename = "config/read")]
+    ConfigRead {
+        id: RequestId,
+        params: ConfigReadParams,
+    },
+    #[serde(rename = "config/value/write")]
+    ConfigValueWrite {
+        id: RequestId,
+        params: ConfigValueWriteParams,
+    },
+    #[serde(rename = "config/batchWrite")]
+    ConfigBatchWrite {
+        id: RequestId,
+        params: ConfigBatchWriteParams,
+    },
+    #[serde(rename = "collaborationMode/list")]
+    CollaborationModeList {
+        id: RequestId,
+        params: CollaborationModeListParams,
+    },
+    #[serde(rename = "experimentalFeature/list")]
+    ExperimentalFeatureList {
+        id: RequestId,
+        params: ExperimentalFeatureListParams,
+    },
+    #[serde(rename = "experimentalFeature/enablement/set")]
+    ExperimentalFeatureEnablementSet {
+        id: RequestId,
+        params: ExperimentalFeatureEnablementSetParams,
+    },
+    #[serde(rename = "permissionProfile/list")]
+    PermissionProfileList {
+        id: RequestId,
+        params: PermissionProfileListParams,
+    },
+    #[serde(rename = "windowsSandbox/readiness")]
+    WindowsSandboxReadiness {
+        id: RequestId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        params: Option<WindowsSandboxReadinessParams>,
+    },
     #[serde(rename = "model/list")]
     ModelList {
         id: RequestId,
@@ -518,6 +564,14 @@ impl ClientRequest {
             | Self::MediaRead { id, .. }
             | Self::McpServerResourceRead { id, .. }
             | Self::McpServerToolCall { id, .. }
+            | Self::ConfigRead { id, .. }
+            | Self::ConfigValueWrite { id, .. }
+            | Self::ConfigBatchWrite { id, .. }
+            | Self::CollaborationModeList { id, .. }
+            | Self::ExperimentalFeatureList { id, .. }
+            | Self::ExperimentalFeatureEnablementSet { id, .. }
+            | Self::PermissionProfileList { id, .. }
+            | Self::WindowsSandboxReadiness { id, .. }
             | Self::ModelList { id, .. }
             | Self::AppRead { id, .. }
             | Self::AppList { id, .. }
@@ -603,6 +657,16 @@ impl ClientRequest {
             Self::MediaRead { .. } => Method::MediaRead,
             Self::McpServerResourceRead { .. } => Method::McpServerResourceRead,
             Self::McpServerToolCall { .. } => Method::McpServerToolCall,
+            Self::ConfigRead { .. } => Method::ConfigRead,
+            Self::ConfigValueWrite { .. } => Method::ConfigValueWrite,
+            Self::ConfigBatchWrite { .. } => Method::ConfigBatchWrite,
+            Self::CollaborationModeList { .. } => Method::CollaborationModeList,
+            Self::ExperimentalFeatureList { .. } => Method::ExperimentalFeatureList,
+            Self::ExperimentalFeatureEnablementSet { .. } => {
+                Method::ExperimentalFeatureEnablementSet
+            }
+            Self::PermissionProfileList { .. } => Method::PermissionProfileList,
+            Self::WindowsSandboxReadiness { .. } => Method::WindowsSandboxReadiness,
             Self::ModelList { .. } => Method::ModelList,
             Self::AppRead { .. } => Method::AppRead,
             Self::AppList { .. } => Method::AppList,
@@ -696,6 +760,9 @@ pub enum ClientResponsePayload {
     MediaRead(MediaReadResponse),
     McpServerResourceRead(McpServerResourceReadResponse),
     McpServerToolCall(McpServerToolCallResponse),
+    WindowsSandboxReadiness(WindowsSandboxReadinessResponse),
+    ExperimentalFeatureList(ExperimentalFeatureListResponse),
+    ExperimentalFeatureEnablementSet(ExperimentalFeatureEnablementSetResponse),
     AppRead(AppsReadResponse),
     AppList(AppsListResponse),
     AppInstalled(AppsInstalledResponse),
@@ -772,6 +839,9 @@ impl ClientResponsePayload {
             Self::MediaRead(_) => Method::MediaRead,
             Self::McpServerResourceRead(_) => Method::McpServerResourceRead,
             Self::McpServerToolCall(_) => Method::McpServerToolCall,
+            Self::WindowsSandboxReadiness(_) => Method::WindowsSandboxReadiness,
+            Self::ExperimentalFeatureList(_) => Method::ExperimentalFeatureList,
+            Self::ExperimentalFeatureEnablementSet(_) => Method::ExperimentalFeatureEnablementSet,
             Self::AppRead(_) => Method::AppRead,
             Self::AppList(_) => Method::AppList,
             Self::AppInstalled(_) => Method::AppInstalled,
@@ -846,6 +916,9 @@ impl ClientResponsePayload {
             Self::MediaRead(response) => serde_json::to_value(response)?,
             Self::McpServerResourceRead(response) => serde_json::to_value(response)?,
             Self::McpServerToolCall(response) => serde_json::to_value(response)?,
+            Self::WindowsSandboxReadiness(response) => serde_json::to_value(response)?,
+            Self::ExperimentalFeatureList(response) => serde_json::to_value(response)?,
+            Self::ExperimentalFeatureEnablementSet(response) => serde_json::to_value(response)?,
             Self::AppRead(response) => serde_json::to_value(response)?,
             Self::AppList(response) => serde_json::to_value(response)?,
             Self::AppInstalled(response) => serde_json::to_value(response)?,

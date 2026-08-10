@@ -267,6 +267,57 @@ describe("useAgentContext", () => {
     harness.unmount();
   });
 
+  it("发送前等待应覆盖目标会话尚未完成的 provider selection 写入", async () => {
+    let releaseSelectionSync: (() => void) | undefined;
+    mockSetSessionProviderSelection.mockImplementationOnce(
+      () =>
+        new Promise<undefined>((resolve) => {
+          releaseSelectionSync = () => resolve(undefined);
+        }),
+    );
+    const harness = mountHook("workspace-1", "session-target");
+
+    act(() => {
+      harness.getValue().setProviderType("provider-enabled");
+      harness.getValue().setModel("shared-model");
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let waitCompleted = false;
+    const wait = harness
+      .getValue()
+      .waitForSessionProviderSelectionSync("session-target")
+      .then(() => {
+        waitCompleted = true;
+      });
+    await Promise.resolve();
+
+    expect(mockSetSessionProviderSelection).toHaveBeenCalledWith(
+      "session-target",
+      "provider-enabled",
+      "shared-model",
+      "",
+    );
+    expect(waitCompleted).toBe(false);
+
+    await act(async () => {
+      releaseSelectionSync?.();
+      await wait;
+    });
+
+    expect(waitCompleted).toBe(true);
+    expect(
+      harness.getValue().getSyncedSessionModelPreference("session-target"),
+    ).toEqual({
+      providerType: "provider-enabled",
+      model: "shared-model",
+    });
+
+    harness.unmount();
+  });
+
   it("thread model settings 更新失败时应保留原 UI 和持久化状态", async () => {
     const error = new Error("provider route unavailable");
     mockSetSessionProviderSelection.mockRejectedValueOnce(error);

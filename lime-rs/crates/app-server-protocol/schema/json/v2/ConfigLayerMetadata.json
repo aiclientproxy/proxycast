@@ -1,0 +1,158 @@
+{
+  "$defs": {
+    "ConfigLayerSource": {
+      "description": "Source of one effective configuration layer.",
+      "oneOf": [
+        {
+          "properties": {
+            "domain": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "type": {
+              "const": "mdm",
+              "type": "string"
+            }
+          },
+          "required": [
+            "domain",
+            "key",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "type": {
+              "const": "system",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "enterpriseManaged",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "profile": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "type": {
+              "const": "user",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "dotCodexFolder": {
+              "type": "string"
+            },
+            "type": {
+              "const": "project",
+              "type": "string"
+            }
+          },
+          "required": [
+            "dotCodexFolder",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "sessionFlags",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "type": {
+              "const": "legacyManagedConfigTomlFromFile",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "legacyManagedConfigTomlFromMdm",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "name": {
+      "$ref": "#/$defs/ConfigLayerSource"
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "version"
+  ],
+  "title": "ConfigLayerMetadata",
+  "type": "object"
+}

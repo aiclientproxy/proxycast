@@ -43,6 +43,9 @@ export interface AgentStreamPreparedSendEnv {
   sessionIdRef: MutableRefObject<string | null>;
   runPreparedSubmit: <T>(task: () => Promise<T>) => Promise<T>;
   getWorkspaceIdForSubmit: () => string | undefined;
+  waitForSessionProviderSelectionSync?: (
+    sessionId: string,
+  ) => Promise<void>;
   getThreadIdForSubmit: (targetSessionId?: string) => string | undefined;
   getSyncedSessionModelPreference: (
     sessionId: string,

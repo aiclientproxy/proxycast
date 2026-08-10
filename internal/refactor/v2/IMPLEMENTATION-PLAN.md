@@ -6,7 +6,7 @@
 
 当前阶段：V2-05 notification、host capability 与 recovery；V2-00、V2-01、V2-02、V2-03、V2-04 已关闭，direct TurnTimeline、production replay、session history、长列表性能、MCP elicitation、Multi-Agent、三项 product-scope reverse request、media read v2、unknown Item fail-visible recovery、`skills/changed` catalog invalidation、typed `error` retry/terminal、`turn/plan/updated` checklist、`mcpServer/oauthLogin/completed`、`mcpServer/startupStatus/updated` 与 unified exec terminal interaction Gate B 已通过
 
-下一刀：V2-05 已关闭 media transient bypass、unknown Item fail-visible recovery、`configWarning` owner 迁移、thread-scoped `warning` typed/recovery、`skills/changed` catalog invalidation、typed `error` retry/terminal、`turn/plan/updated` checklist、MCP OAuth completion、MCP startup status、unified exec terminal interaction、Hook lifecycle、`turn/diff/updated` typed/recovery 与 Guardian auto-approval review typed/recovery 链；standalone `process/*` 仍为 product-scope-excluded。继续审计具备真实 producer/consumer 的 planned notification、host capability 或 recovery，`guardianWarning` 因仍没有独立真实 producer 保持 planned。不重复改写已关闭 owner，也不恢复 raw unified diff、unsandboxed process/spawn、Message synthesis、unknown null drop、extension fallback、v0 media/config owner、旧 MCP Desktop lifecycle event、旧 Team 工具、第二 pending store、第二 Skill catalog owner、Plan ThreadItem、独立 `write_stdin` Tool Item 或由 error 抢占 Turn terminal 的旁路状态机。
+下一刀：V2-05 已关闭 media transient bypass、unknown Item fail-visible recovery、`configWarning` owner 迁移、thread-scoped `warning` typed/recovery、`skills/changed` catalog invalidation、typed `error` retry/terminal、`turn/plan/updated` checklist、MCP OAuth completion、MCP startup status、unified exec terminal interaction、Hook lifecycle、`turn/diff/updated` typed/recovery、Guardian auto-approval review typed/recovery 与 Guardian denial circuit breaker `guardianWarning` 主链；standalone `process/*` 仍为 product-scope-excluded。继续审计具备真实 producer/consumer 的 remaining planned notification、host capability 或 recovery。不重复改写已关闭 owner，也不恢复 raw unified diff、unsandboxed process/spawn、Message synthesis、unknown null drop、extension fallback、v0 media/config owner、旧 MCP Desktop lifecycle event、旧 Team 工具、第二 pending store、第二 Skill catalog owner、Plan ThreadItem、独立 `write_stdin` Tool Item 或由 error 抢占 Turn terminal 的旁路状态机。
 
 ## 1. 约束与非目标
 
@@ -801,7 +801,34 @@ Guardian 专项 Electron Gate B 或 live provider evidence；聚合 `smoke:agent
 
 治理分类：Guardian agent/provider/App Server/typed client/ConversationProjection 为 `current`；无 `compat` 或
 `deprecated`；旧人工审批冒充 auto review、raw side-channel、TUI detached review、生产 mock fallback 与未接入 producer
-的 Guardian 扩展为 `dead / forbidden-to-restore`，`guardianWarning` 继续 `planned`。
+的 Guardian 扩展为 `dead / forbidden-to-restore`。`guardianWarning` 不在本条目中冒充完成，随后由独立 denial circuit
+breaker 切片收口。
 
-架构确认：已同步 `internal/aiprompts/architecture.md` 第 38 节；责任开发者确认：root，2026-08-09。下一刀回到剩余
-planned producer/consumer 或补 Guardian 真实 Electron Gate B，不恢复旧双轨。
+架构确认：已同步 `internal/aiprompts/architecture.md` 第 38 节；责任开发者确认：root，2026-08-09。下一刀进入
+Guardian denial circuit breaker 的独立 `guardianWarning` producer/consumer 切片，不恢复旧双轨。
+
+### 2026-08-09：V2-05 Guardian denial circuit breaker warning closure
+
+状态：该垂直切片 `completed`；V2-05 与 v2 总体仍为 `in-progress`，不得标记 release-ready。
+
+本轮实现：
+
+- 同一 session/turn 的 Guardian denial 维护最近 5 次窗口；连续 3 次拒绝只触发一次高优先级
+  `guardian_warning`，并中断当前 turn。approved、关闭 session 和新 turn 都清理 circuit-breaker 状态。
+- `AgentEvent::GuardianWarning` 经 durable `guardian.warning` 进入 App Server v2 `guardianWarning`，严格要求非空
+  `threadId` 与 `message`，不降级为普通 `warning`，不复用 Guardian review completed 或用户审批。
+- typed protocol/schema、generated client、strict signal decoder、Renderer sequence/drift guard 与
+  `ConversationProjection` 的 `NoticeProjection` 已同步；Electron 继续只转发 App Server JSONL，不新增 IPC 或 TUI
+  detached/background review UI。
+
+验证：`cargo test -p lime-agent runtime_state` 18/18、`cargo test -p app-server-protocol --lib` 113/113、App Server
+durable mapper 20/20、v2 notification projector 49/49、Renderer 定向 Vitest 49/49、`npm run typecheck`、
+`npm run test:contracts`（301 checks）、`npm run governance:legacy-report`（零分类漂移/边界违规）、
+`npm run smoke:agent-runtime-current-fixture`、`npm run verify:gui-smoke`、产品矩阵守卫 4/4 与 `git diff --check`
+均通过。GUI smoke 证据为 `.lime/qc/project-gates/standalone-shell-01-20260809121633-64660/shell-01-electron-smoke/summary.json`。
+
+治理分类：circuit breaker、AgentEvent、durable mapper、App Server v2 projector、typed client 与 Desktop notice 为
+`current`；无 `compat` 或 `deprecated`。普通 warning 冒充、raw side-channel、TUI detached UI 与生产 mock fallback
+为 `dead / deleted / forbidden-to-restore`。当前产品范围统计为 `131 implemented / 53 planned /
+36 product-scope-excluded`，完成度 `131 / 184 = 71.2%`。下一刀继续从 remaining planned 集合中选择有完整
+producer/consumer、恢复语义和 Gate B 证据的 owner。

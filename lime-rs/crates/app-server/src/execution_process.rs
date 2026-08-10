@@ -16,8 +16,8 @@ use tool_runtime::execution_process::{
     live::{LiveExecutionOutputBatch, LiveExecutionOutputQuery, LiveExecutionRequest},
     start_local_execution_process, ExecutionOutputDelta, ExecutionProcessSnapshot,
     LiveExecutionProcessRegistry, LocalExecutionProcessControlHandle, LocalExecutionRequest,
+    LocalExecutionSandbox,
 };
-use tool_runtime::sandbox::{prepare_sandbox_command, SandboxCommandRequest};
 use tool_runtime::shell::{is_shell_tool_name, shell_command_text_from_argv};
 use tool_runtime::shell_permission::{check_shell_command_permission, ShellPermissionDecision};
 
@@ -248,21 +248,18 @@ impl ExecutionProcessServer {
         )
         .map_err(ExecutionProcessError::Policy)?;
 
-        let command = if decision.workspace_sandbox_backend_enforced() {
-            prepare_sandbox_command(SandboxCommandRequest {
+        let sandbox = if decision.workspace_sandbox_backend_enforced() {
+            Some(LocalExecutionSandbox {
                 backend: decision.sandbox_backend().ok_or_else(|| {
                     ExecutionProcessError::Sandbox(
                         "execution decision did not identify a sandbox backend".to_string(),
                     )
                 })?,
-                requested_policy: request.sandbox_policy.as_deref(),
-                command: request.command,
-                working_directory: &working_directory,
-                granted_permissions: granted_permissions.as_ref(),
+                requested_policy: request.sandbox_policy.clone(),
+                granted_permissions,
             })
-            .map_err(|error| ExecutionProcessError::Sandbox(error.to_string()))?
         } else {
-            request.command
+            None
         };
         let process_id = request.process_id.clone();
         let background = thread_scope.map(|(thread_id, display_command)| BackgroundTerminalEntry {
@@ -297,13 +294,14 @@ impl ExecutionProcessServer {
             process_id: process_id.clone(),
             tool_id: request.tool_id,
             tool_name: canonical_tool_name.to_string(),
-            command,
+            command: request.command,
             cwd: Some(working_directory),
             env: request.env,
             tty: request.tty,
             stdin: true,
             env_clear: false,
             pty_size: None,
+            sandbox,
         };
         let mut handle = match start_local_execution_process(request) {
             Ok(handle) => handle,

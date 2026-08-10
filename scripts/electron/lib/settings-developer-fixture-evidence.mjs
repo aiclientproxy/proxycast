@@ -10,7 +10,8 @@ export const DEVELOPER_REQUIRED_APP_SERVER_METHODS = [
   "modelProvider/list",
   "mcpServerStatus/list",
 ];
-export const DEVELOPER_REQUIRED_HOST_COMMANDS = ["get_config"];
+export const DEVELOPER_REQUIRED_CONFIG_METHODS = ["config/read"];
+export const DEVELOPER_REQUIRED_HOST_COMMANDS = [];
 
 const APP_SERVER_COMMAND = "app_server_handle_json_lines";
 const LEGACY_DEVELOPER_COMMANDS = [
@@ -140,9 +141,7 @@ export function summarizeSettingsDeveloperTrace(traceRaw) {
     (entry) => entry.transport === "electron-ipc",
   );
   const methods = appServerMethods(appServerIpcEntries);
-  const hostEntries = entries.filter((entry) =>
-    DEVELOPER_REQUIRED_HOST_COMMANDS.includes(entry?.command),
-  );
+  const hostEntries = [];
   const hostIpcEntries = hostEntries.filter(
     (entry) => entry.transport === "electron-ipc",
   );
@@ -158,8 +157,8 @@ export function summarizeSettingsDeveloperTrace(traceRaw) {
     ),
     hostIpcHitCount: hostIpcEntries.length,
     hostCommands,
-    missingHostCommands: DEVELOPER_REQUIRED_HOST_COMMANDS.filter(
-      (command) => !hostCommands.includes(command),
+    missingConfigMethods: DEVELOPER_REQUIRED_CONFIG_METHODS.filter(
+      (method) => !methods.includes(method),
     ),
     legacyCommands: LEGACY_DEVELOPER_COMMANDS.filter((command) =>
       commands.has(command),
@@ -260,8 +259,7 @@ export function applyPassingSettingsDeveloperEvidence(summary, facts) {
     ["preloadInvokeBridge", summary.bridge.preloadInvoke],
     ["appServerElectronIpc", summary.bridge.appServerIpcHitCount > 0],
     ["allCurrentDiagnosticMethods", trace.missingMethods.length === 0],
-    ["hostElectronIpc", trace.hostIpcHitCount > 0],
-    ["hostCurrentConfigRead", trace.missingHostCommands.length === 0],
+    ["configCurrentRead", trace.missingConfigMethods.length === 0],
     ["isolatedUserData", facts.isolatedUserData === true],
     ["developerTabActive", facts.developerTabActive === true],
     ["developerLabActive", facts.developerLabActive === true],

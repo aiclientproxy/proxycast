@@ -123,11 +123,10 @@ async function readWebSearchState(
         !routeControlReady ||
         loadingVisible ||
         errorVisible ||
-        !commands.includes("get_config") ||
-        appServerMethods.length === 0 ||
+        !appServerMethods.includes("config/read") ||
         (expectedEngine && engine !== expectedEngine) ||
         (requireSave &&
-          (!commands.includes("save_config") ||
+          (!appServerMethods.includes("config/batchWrite") ||
             !saveConfirmed ||
             !allSavedVisible))
       ) {

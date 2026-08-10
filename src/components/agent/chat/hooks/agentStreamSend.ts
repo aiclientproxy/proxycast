@@ -50,6 +50,11 @@ export async function sendAgentStreamMessage(
     });
   }
 
+  const activeSessionId = env.sessionIdRef.current?.trim() || targetSessionId;
+  if (activeSessionId) {
+    await env.waitForSessionProviderSelectionSync?.(activeSessionId);
+  }
+
   const preparedSend = prepareAgentStreamUserInputSend({
     content,
     images,

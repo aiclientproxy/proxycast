@@ -1,115 +1,67 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { safeInvoke } from "@/lib/dev-bridge";
+import { describe, expect, it, vi } from "vitest";
+import {
+  METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET,
+  METHOD_EXPERIMENTAL_FEATURE_LIST,
+} from "@limecloud/app-server-client";
 import {
   getExperimentalConfig,
   saveExperimentalConfig,
 } from "./experimentalFeatures";
 
-vi.mock("@/lib/dev-bridge", () => ({
-  safeInvoke: vi.fn(),
-}));
+function appServerClient(result: unknown) {
+  return {
+    request: vi.fn().mockResolvedValue({ result }),
+  };
+}
 
 describe("experimentalFeatures API", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  it("通过 App Server catalog 读取 WebMCP 状态", async () => {
+    const client = appServerClient({
+      data: [
+        {
+          name: "webmcp",
+          stage: "underDevelopment",
+          enabled: false,
+          defaultEnabled: false,
+        },
+      ],
+      nextCursor: null,
+    });
+
+    await expect(getExperimentalConfig(client)).resolves.toEqual({
+      webmcp: { enabled: false },
+    });
+    expect(client.request).toHaveBeenCalledWith(
+      METHOD_EXPERIMENTAL_FEATURE_LIST,
+      {},
+    );
   });
 
-  it("应代理实验配置读取与保存", async () => {
-    vi.mocked(safeInvoke)
-      .mockResolvedValueOnce({
-        webmcp: { enabled: false },
-      })
-      .mockResolvedValueOnce(undefined);
+  it("通过 App Server enablement 更新 WebMCP 状态", async () => {
+    const client = appServerClient({
+      enablement: { webmcp: true },
+    });
 
-    await expect(getExperimentalConfig()).resolves.toEqual(
-      expect.objectContaining({
-        webmcp: expect.any(Object),
-      }),
-    );
     await expect(
-      saveExperimentalConfig({
-        webmcp: { enabled: true },
-      }),
+      saveExperimentalConfig({ webmcp: { enabled: true } }, client),
     ).resolves.toBeUndefined();
-    expect(safeInvoke).toHaveBeenNthCalledWith(1, "get_experimental_config");
-    expect(safeInvoke).toHaveBeenNthCalledWith(2, "save_experimental_config", {
-      experimentalConfig: {
-        webmcp: { enabled: true },
-      },
-    });
-  });
-
-  it("读取实验配置遇到 diagnostic facade 时应 fail closed", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({
-      diagnostic: {
-        command: "get_experimental_config",
-        source: "electron",
-      },
-    });
-
-    await expect(getExperimentalConfig()).rejects.toThrow(
-      "get_experimental_config 尚未接入真实 Experimental config current 通道",
+    expect(client.request).toHaveBeenCalledWith(
+      METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET,
+      { enablement: { webmcp: true } },
     );
   });
 
-  it("读取实验配置遇到非配置对象时应 fail closed", async () => {
-    vi.mocked(safeInvoke)
-      .mockResolvedValueOnce({ success: true })
-      .mockResolvedValueOnce({
-        error: {
-          code: "COMMAND_UNSUPPORTED",
-          message: "not available",
-        },
-      })
-      .mockResolvedValueOnce({ webmcp: {} });
-
-    await expect(getExperimentalConfig()).rejects.toThrow(
-      "get_experimental_config did not return experimental config",
-    );
-    await expect(getExperimentalConfig()).rejects.toThrow(
-      "get_experimental_config did not return experimental config",
-    );
-    await expect(getExperimentalConfig()).rejects.toThrow(
-      "get_experimental_config did not return experimental config",
+  it("缺少 WebMCP catalog entry 时 fail closed", async () => {
+    const client = appServerClient({ data: [] });
+    await expect(getExperimentalConfig(client)).rejects.toThrow(
+      "did not return the webmcp feature",
     );
   });
 
-  it("保存实验配置遇到 diagnostic facade 时应 fail closed", async () => {
-    vi.mocked(safeInvoke).mockResolvedValueOnce({
-      diagnostic: {
-        command: "save_experimental_config",
-        source: "electron",
-      },
-    });
-
+  it("enablement 响应未确认目标值时 fail closed", async () => {
+    const client = appServerClient({ enablement: { webmcp: false } });
     await expect(
-      saveExperimentalConfig({
-        webmcp: { enabled: true },
-      }),
-    ).rejects.toThrow(
-      "save_experimental_config 尚未接入真实 Experimental config current 通道",
-    );
-  });
-
-  it("保存实验配置遇到 mock-like 返回时应 fail closed", async () => {
-    vi.mocked(safeInvoke)
-      .mockResolvedValueOnce({ success: true })
-      .mockResolvedValueOnce({
-        error: {
-          code: "COMMAND_UNSUPPORTED",
-          message: "not available",
-        },
-      });
-
-    await expect(
-      saveExperimentalConfig({
-        webmcp: { enabled: true },
-      }),
-    ).rejects.toThrow("save_experimental_config did not return void result");
-    await expect(
-      saveExperimentalConfig({
-        webmcp: { enabled: true },
-      }),
-    ).rejects.toThrow("save_experimental_config did not return void result");
+      saveExperimentalConfig({ webmcp: { enabled: true } }, client),
+    ).rejects.toThrow("did not apply webmcp");
   });
 });

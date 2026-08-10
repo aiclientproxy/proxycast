@@ -13,8 +13,6 @@ const RUN_ID = "standalone-settings-b-test";
 
 function traceRaw(transport = "electron-ipc") {
   return JSON.stringify([
-    { command: "get_config", transport, status: "success" },
-    { command: "save_config", transport, status: "success" },
     {
       command: "app_server_handle_json_lines",
       transport,
@@ -25,7 +23,13 @@ function traceRaw(transport = "electron-ipc") {
             JSON.stringify({
               jsonrpc: "2.0",
               id: 1,
-              method: "modelPreferences/list",
+              method: "config/read",
+              params: {},
+            }),
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 2,
+              method: "config/batchWrite",
               params: {},
             }),
           ],
@@ -89,10 +93,9 @@ describe("Settings Profile Gate B evidence", () => {
   it("requires current config read/write and App Server IPC", () => {
     expect(summarizeSettingsProfileTrace(traceRaw())).toMatchObject({
       appServerIpcHitCount: 1,
-      methods: ["modelPreferences/list"],
-      hostIpcHitCount: 2,
-      hostCommands: ["get_config", "save_config"],
-      missingHostCommands: [],
+      methods: ["config/read", "config/batchWrite"],
+      configIpcHitCount: 1,
+      missingConfigMethods: [],
       legacyCommands: [],
       mockFallbackHitCount: 0,
     });
@@ -125,7 +128,7 @@ describe("Settings Profile Gate B evidence", () => {
         trace: summarizeSettingsProfileTrace(traceRaw("renderer-mock")),
       }),
     ).toThrow(
-      /appServerElectronIpc.*appServerCurrentMethod.*hostElectronIpc.*hostCurrentReadWrite.*restorationReadback.*mockFallbackZero/,
+        /appServerElectronIpc.*appServerCurrentMethod.*configElectronIpc.*configCurrentReadWrite.*restorationReadback.*mockFallbackZero/,
     );
   });
 });

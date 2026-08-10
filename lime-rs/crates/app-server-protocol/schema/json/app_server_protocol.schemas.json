@@ -1,5 +1,24 @@
 {
   "$defs": {
+    "ActivePermissionProfile": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "extends": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "ActivePermissionProfile",
+      "type": "object"
+    },
     "AdditionalContextEntry": {
       "$defs": {
         "AdditionalContextKind": {
@@ -11991,6 +12010,10 @@
           ],
           "type": "object"
         },
+        "CollaborationModeListParams": {
+          "description": "EXPERIMENTAL - list collaboration mode presets.",
+          "type": "object"
+        },
         "CollaborationModeSettings": {
           "description": "Collaboration mode settings copied from the Codex protocol shape.",
           "properties": {
@@ -12168,6 +12191,95 @@
           ],
           "type": "object"
         },
+        "ConfigBatchWriteParams": {
+          "properties": {
+            "edits": {
+              "items": {
+                "$ref": "#/$defs/ConfigEdit"
+              },
+              "type": "array"
+            },
+            "expectedVersion": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "filePath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "reloadUserConfig": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "edits"
+          ],
+          "type": "object"
+        },
+        "ConfigEdit": {
+          "properties": {
+            "keyPath": {
+              "type": "string"
+            },
+            "mergeStrategy": {
+              "$ref": "#/$defs/MergeStrategy"
+            },
+            "value": true
+          },
+          "required": [
+            "keyPath",
+            "mergeStrategy",
+            "value"
+          ],
+          "type": "object"
+        },
+        "ConfigReadParams": {
+          "properties": {
+            "cwd": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "includeLayers": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "ConfigValueWriteParams": {
+          "properties": {
+            "expectedVersion": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "filePath": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "keyPath": {
+              "type": "string"
+            },
+            "mergeStrategy": {
+              "$ref": "#/$defs/MergeStrategy"
+            },
+            "value": true
+          },
+          "required": [
+            "keyPath",
+            "mergeStrategy",
+            "value"
+          ],
+          "type": "object"
+        },
         "DynamicToolFunctionSpec": {
           "properties": {
             "deferLoading": {
@@ -12256,6 +12368,47 @@
               "type": "object"
             }
           ]
+        },
+        "ExperimentalFeatureEnablementSetParams": {
+          "description": "Process-wide feature enablement updates.",
+          "properties": {
+            "enablement": {
+              "additionalProperties": {
+                "type": "boolean"
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "enablement"
+          ],
+          "type": "object"
+        },
+        "ExperimentalFeatureListParams": {
+          "description": "Parameters for `experimentalFeature/list`.",
+          "properties": {
+            "cursor": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "limit": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "threadId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "type": "object"
         },
         "FsCopyParams": {
           "properties": {
@@ -12499,6 +12652,13 @@
           ],
           "type": "object"
         },
+        "MergeStrategy": {
+          "enum": [
+            "replace",
+            "upsert"
+          ],
+          "type": "string"
+        },
         "ModeKind": {
           "description": "Initial collaboration mode for a turn or session.",
           "enum": [
@@ -12555,6 +12715,31 @@
               "type": "object"
             }
           ]
+        },
+        "PermissionProfileListParams": {
+          "properties": {
+            "cursor": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "cwd": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "limit": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
         },
         "PluginCatalogEnabledSetParams": {
           "properties": {
@@ -14573,6 +14758,11 @@
               "type": "object"
             }
           ]
+        },
+        "WindowsSandboxReadinessParams": {
+          "additionalProperties": false,
+          "description": "Empty parameters are accepted so the method can be called with `{}` by the\nDesktop client while the ingress also accepts Codex's omitted-params form.",
+          "type": "object"
         }
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -15371,6 +15561,172 @@
             "id",
             "method",
             "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "config/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ConfigReadParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "config/value/write",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ConfigValueWriteParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "config/batchWrite",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ConfigBatchWriteParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "collaborationMode/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CollaborationModeListParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "experimentalFeature/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ExperimentalFeatureListParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "experimentalFeature/enablement/set",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ExperimentalFeatureEnablementSetParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "permissionProfile/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PermissionProfileListParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "windowsSandbox/readiness",
+              "type": "string"
+            },
+            "params": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WindowsSandboxReadinessParams"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "method"
           ],
           "type": "object"
         },
@@ -16339,6 +16695,119 @@
       "title": "CollabAgentToolCallStatus",
       "type": "string"
     },
+    "CollaborationModeListParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "EXPERIMENTAL - list collaboration mode presets.",
+      "title": "CollaborationModeListParams",
+      "type": "object"
+    },
+    "CollaborationModeListResponse": {
+      "$defs": {
+        "CollaborationModeMask": {
+          "description": "EXPERIMENTAL - collaboration mode preset metadata for clients.",
+          "properties": {
+            "mode": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModeKind"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "model": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "reasoning_effort": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "ModeKind": {
+          "description": "Initial collaboration mode for a turn or session.",
+          "enum": [
+            "default",
+            "plan"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "EXPERIMENTAL - collaboration mode presets response.",
+      "properties": {
+        "data": {
+          "items": {
+            "$ref": "#/$defs/CollaborationModeMask"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "title": "CollaborationModeListResponse",
+      "type": "object"
+    },
+    "CollaborationModeMask": {
+      "$defs": {
+        "ModeKind": {
+          "description": "Initial collaboration mode for a turn or session.",
+          "enum": [
+            "default",
+            "plan"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "EXPERIMENTAL - collaboration mode preset metadata for clients.",
+      "properties": {
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModeKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CollaborationModeMask",
+      "type": "object"
+    },
     "CommandAction": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
@@ -16922,6 +17391,818 @@
       "title": "CommandExecutionTerminalInteractionNotification",
       "type": "object"
     },
+    "ConfigBatchWriteParams": {
+      "$defs": {
+        "ConfigEdit": {
+          "properties": {
+            "keyPath": {
+              "type": "string"
+            },
+            "mergeStrategy": {
+              "$ref": "#/$defs/MergeStrategy"
+            },
+            "value": true
+          },
+          "required": [
+            "keyPath",
+            "mergeStrategy",
+            "value"
+          ],
+          "type": "object"
+        },
+        "MergeStrategy": {
+          "enum": [
+            "replace",
+            "upsert"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "edits": {
+          "items": {
+            "$ref": "#/$defs/ConfigEdit"
+          },
+          "type": "array"
+        },
+        "expectedVersion": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "filePath": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "reloadUserConfig": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "edits"
+      ],
+      "title": "ConfigBatchWriteParams",
+      "type": "object"
+    },
+    "ConfigEdit": {
+      "$defs": {
+        "MergeStrategy": {
+          "enum": [
+            "replace",
+            "upsert"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "keyPath": {
+          "type": "string"
+        },
+        "mergeStrategy": {
+          "$ref": "#/$defs/MergeStrategy"
+        },
+        "value": true
+      },
+      "required": [
+        "keyPath",
+        "mergeStrategy",
+        "value"
+      ],
+      "title": "ConfigEdit",
+      "type": "object"
+    },
+    "ConfigLayer": {
+      "$defs": {
+        "ConfigLayerSource": {
+          "description": "Source of one effective configuration layer.",
+          "oneOf": [
+            {
+              "properties": {
+                "domain": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "mdm",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "domain",
+                "key",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "system",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "enterpriseManaged",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "profile": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "user",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "dotCodexFolder": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "project",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "dotCodexFolder",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "sessionFlags",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "legacyManagedConfigTomlFromFile",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "legacyManagedConfigTomlFromMdm",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "config": true,
+        "disabledReason": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/ConfigLayerSource"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "config",
+        "name",
+        "version"
+      ],
+      "title": "ConfigLayer",
+      "type": "object"
+    },
+    "ConfigLayerMetadata": {
+      "$defs": {
+        "ConfigLayerSource": {
+          "description": "Source of one effective configuration layer.",
+          "oneOf": [
+            {
+              "properties": {
+                "domain": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "mdm",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "domain",
+                "key",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "system",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "enterpriseManaged",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "profile": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "user",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "dotCodexFolder": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "project",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "dotCodexFolder",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "sessionFlags",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "legacyManagedConfigTomlFromFile",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "legacyManagedConfigTomlFromMdm",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/ConfigLayerSource"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "ConfigLayerMetadata",
+      "type": "object"
+    },
+    "ConfigLayerSource": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Source of one effective configuration layer.",
+      "oneOf": [
+        {
+          "properties": {
+            "domain": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "type": {
+              "const": "mdm",
+              "type": "string"
+            }
+          },
+          "required": [
+            "domain",
+            "key",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "type": {
+              "const": "system",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "enterpriseManaged",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "profile": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "type": {
+              "const": "user",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "dotCodexFolder": {
+              "type": "string"
+            },
+            "type": {
+              "const": "project",
+              "type": "string"
+            }
+          },
+          "required": [
+            "dotCodexFolder",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "sessionFlags",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "type": {
+              "const": "legacyManagedConfigTomlFromFile",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "legacyManagedConfigTomlFromMdm",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "ConfigLayerSource"
+    },
+    "ConfigReadParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "cwd": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "includeLayers": {
+          "type": "boolean"
+        }
+      },
+      "title": "ConfigReadParams",
+      "type": "object"
+    },
+    "ConfigReadResponse": {
+      "$defs": {
+        "ConfigLayer": {
+          "properties": {
+            "config": true,
+            "disabledReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "name": {
+              "$ref": "#/$defs/ConfigLayerSource"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "config",
+            "name",
+            "version"
+          ],
+          "type": "object"
+        },
+        "ConfigLayerMetadata": {
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/ConfigLayerSource"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "version"
+          ],
+          "type": "object"
+        },
+        "ConfigLayerSource": {
+          "description": "Source of one effective configuration layer.",
+          "oneOf": [
+            {
+              "properties": {
+                "domain": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "mdm",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "domain",
+                "key",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "system",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "enterpriseManaged",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "profile": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "user",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "dotCodexFolder": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "project",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "dotCodexFolder",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "sessionFlags",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "legacyManagedConfigTomlFromFile",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "legacyManagedConfigTomlFromMdm",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "config": true,
+        "layers": {
+          "items": {
+            "$ref": "#/$defs/ConfigLayer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "origins": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ConfigLayerMetadata"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "config",
+        "origins"
+      ],
+      "title": "ConfigReadResponse",
+      "type": "object"
+    },
+    "ConfigValueWriteParams": {
+      "$defs": {
+        "MergeStrategy": {
+          "enum": [
+            "replace",
+            "upsert"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "expectedVersion": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "filePath": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "keyPath": {
+          "type": "string"
+        },
+        "mergeStrategy": {
+          "$ref": "#/$defs/MergeStrategy"
+        },
+        "value": true
+      },
+      "required": [
+        "keyPath",
+        "mergeStrategy",
+        "value"
+      ],
+      "title": "ConfigValueWriteParams",
+      "type": "object"
+    },
     "ConfigWarningNotification": {
       "$defs": {
         "TextPosition": {
@@ -16997,6 +18278,231 @@
         "summary"
       ],
       "title": "ConfigWarningNotification",
+      "type": "object"
+    },
+    "ConfigWriteErrorCode": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "configLayerReadonly",
+        "configPathNotFound",
+        "configRequirementReadonly",
+        "configSchemaUnknownKey",
+        "configValidationError",
+        "configVersionConflict",
+        "userLayerNotFound"
+      ],
+      "title": "ConfigWriteErrorCode",
+      "type": "string"
+    },
+    "ConfigWriteResponse": {
+      "$defs": {
+        "ConfigLayerMetadata": {
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/ConfigLayerSource"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "version"
+          ],
+          "type": "object"
+        },
+        "ConfigLayerSource": {
+          "description": "Source of one effective configuration layer.",
+          "oneOf": [
+            {
+              "properties": {
+                "domain": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "mdm",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "domain",
+                "key",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "system",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "enterpriseManaged",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "profile": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "user",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "dotCodexFolder": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "project",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "dotCodexFolder",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "sessionFlags",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "legacyManagedConfigTomlFromFile",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "legacyManagedConfigTomlFromMdm",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "OverriddenMetadata": {
+          "properties": {
+            "effectiveValue": true,
+            "message": {
+              "type": "string"
+            },
+            "overridingLayer": {
+              "$ref": "#/$defs/ConfigLayerMetadata"
+            }
+          },
+          "required": [
+            "effectiveValue",
+            "message",
+            "overridingLayer"
+          ],
+          "type": "object"
+        },
+        "WriteStatus": {
+          "enum": [
+            "ok",
+            "okOverridden"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "filePath": {
+          "type": "string"
+        },
+        "overriddenMetadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OverriddenMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/WriteStatus"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "filePath",
+        "status",
+        "version"
+      ],
+      "title": "ConfigWriteResponse",
       "type": "object"
     },
     "ConnectCallbackSendParams": {
@@ -23478,6 +24984,216 @@
       ],
       "title": "EvidencePackSummary",
       "type": "object"
+    },
+    "ExperimentalFeature": {
+      "$defs": {
+        "ExperimentalFeatureStage": {
+          "description": "Codex-compatible lifecycle stage for an experimental feature.",
+          "enum": [
+            "beta",
+            "deprecated",
+            "removed",
+            "stable",
+            "underDevelopment"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Feature metadata and current enablement state.",
+      "properties": {
+        "announcement": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "defaultEnabled": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "displayName": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "stage": {
+          "$ref": "#/$defs/ExperimentalFeatureStage"
+        }
+      },
+      "required": [
+        "defaultEnabled",
+        "enabled",
+        "name",
+        "stage"
+      ],
+      "title": "ExperimentalFeature",
+      "type": "object"
+    },
+    "ExperimentalFeatureEnablementSetParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Process-wide feature enablement updates.",
+      "properties": {
+        "enablement": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "enablement"
+      ],
+      "title": "ExperimentalFeatureEnablementSetParams",
+      "type": "object"
+    },
+    "ExperimentalFeatureEnablementSetResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Applied feature enablement updates.",
+      "properties": {
+        "enablement": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "enablement"
+      ],
+      "title": "ExperimentalFeatureEnablementSetResponse",
+      "type": "object"
+    },
+    "ExperimentalFeatureListParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Parameters for `experimentalFeature/list`.",
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "title": "ExperimentalFeatureListParams",
+      "type": "object"
+    },
+    "ExperimentalFeatureListResponse": {
+      "$defs": {
+        "ExperimentalFeature": {
+          "description": "Feature metadata and current enablement state.",
+          "properties": {
+            "announcement": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "defaultEnabled": {
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "displayName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "stage": {
+              "$ref": "#/$defs/ExperimentalFeatureStage"
+            }
+          },
+          "required": [
+            "defaultEnabled",
+            "enabled",
+            "name",
+            "stage"
+          ],
+          "type": "object"
+        },
+        "ExperimentalFeatureStage": {
+          "description": "Codex-compatible lifecycle stage for an experimental feature.",
+          "enum": [
+            "beta",
+            "deprecated",
+            "removed",
+            "stable",
+            "underDevelopment"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Response for `experimentalFeature/list`.",
+      "properties": {
+        "data": {
+          "items": {
+            "$ref": "#/$defs/ExperimentalFeature"
+          },
+          "type": "array"
+        },
+        "nextCursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "title": "ExperimentalFeatureListResponse",
+      "type": "object"
+    },
+    "ExperimentalFeatureStage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Codex-compatible lifecycle stage for an experimental feature.",
+      "enum": [
+        "beta",
+        "deprecated",
+        "removed",
+        "stable",
+        "underDevelopment"
+      ],
+      "title": "ExperimentalFeatureStage",
+      "type": "string"
     },
     "FileChangeApprovalDecision": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -36436,6 +38152,15 @@
       "title": "MemoryStoreSearchResponse",
       "type": "object"
     },
+    "MergeStrategy": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "replace",
+        "upsert"
+      ],
+      "title": "MergeStrategy",
+      "type": "string"
+    },
     "Method": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
@@ -36443,10 +38168,16 @@
         "app/list",
         "app/read",
         "artifact/write",
+        "collaborationMode/list",
         "command/exec",
         "command/exec/resize",
         "command/exec/terminate",
         "command/exec/write",
+        "config/batchWrite",
+        "config/read",
+        "config/value/write",
+        "experimentalFeature/enablement/set",
+        "experimentalFeature/list",
         "fs/copy",
         "fs/createDirectory",
         "fs/getMetadata",
@@ -36462,6 +38193,7 @@
         "media/read",
         "memory/reset",
         "model/list",
+        "permissionProfile/list",
         "plugin/enabled/set",
         "plugin/install",
         "plugin/installed",
@@ -36514,7 +38246,8 @@
         "threadSection/update",
         "turn/interrupt",
         "turn/start",
-        "turn/steer"
+        "turn/steer",
+        "windowsSandbox/readiness"
       ],
       "title": "Method",
       "type": "string"
@@ -41188,6 +42921,181 @@
       "title": "OpenDeepLinkPayload",
       "type": "object"
     },
+    "OverriddenMetadata": {
+      "$defs": {
+        "ConfigLayerMetadata": {
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/ConfigLayerSource"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "version"
+          ],
+          "type": "object"
+        },
+        "ConfigLayerSource": {
+          "description": "Source of one effective configuration layer.",
+          "oneOf": [
+            {
+              "properties": {
+                "domain": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "mdm",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "domain",
+                "key",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "system",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "enterpriseManaged",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "profile": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "type": {
+                  "const": "user",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "dotCodexFolder": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "project",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "dotCodexFolder",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "sessionFlags",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "legacyManagedConfigTomlFromFile",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "const": "legacyManagedConfigTomlFromMdm",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "effectiveValue": true,
+        "message": {
+          "type": "string"
+        },
+        "overridingLayer": {
+          "$ref": "#/$defs/ConfigLayerMetadata"
+        }
+      },
+      "required": [
+        "effectiveValue",
+        "message",
+        "overridingLayer"
+      ],
+      "title": "OverriddenMetadata",
+      "type": "object"
+    },
     "PatchApplyStatus": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
@@ -41255,6 +43163,101 @@
       ],
       "title": "PermissionGrantScope",
       "type": "string"
+    },
+    "PermissionProfileListParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "cwd": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "title": "PermissionProfileListParams",
+      "type": "object"
+    },
+    "PermissionProfileListResponse": {
+      "$defs": {
+        "PermissionProfileSummary": {
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "description": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "allowed",
+            "id"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "data": {
+          "items": {
+            "$ref": "#/$defs/PermissionProfileSummary"
+          },
+          "type": "array"
+        },
+        "nextCursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "title": "PermissionProfileListResponse",
+      "type": "object"
+    },
+    "PermissionProfileSummary": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "allowed",
+        "id"
+      ],
+      "title": "PermissionProfileSummary",
+      "type": "object"
     },
     "PermissionsRequestApprovalParams": {
       "$defs": {
@@ -107685,6 +109688,48 @@
       "title": "WechatRuntimeModelSetResponse",
       "type": "object"
     },
+    "WindowsSandboxReadiness": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Current Windows sandbox capability state exposed by the Desktop control plane.",
+      "enum": [
+        "notConfigured",
+        "ready",
+        "updateRequired"
+      ],
+      "title": "WindowsSandboxReadiness",
+      "type": "string"
+    },
+    "WindowsSandboxReadinessParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Empty parameters are accepted so the method can be called with `{}` by the\nDesktop client while the ingress also accepts Codex's omitted-params form.",
+      "title": "WindowsSandboxReadinessParams",
+      "type": "object"
+    },
+    "WindowsSandboxReadinessResponse": {
+      "$defs": {
+        "WindowsSandboxReadiness": {
+          "description": "Current Windows sandbox capability state exposed by the Desktop control plane.",
+          "enum": [
+            "notConfigured",
+            "ready",
+            "updateRequired"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/WindowsSandboxReadiness"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "WindowsSandboxReadinessResponse",
+      "type": "object"
+    },
     "WindowsStartupCheck": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -109031,6 +111076,15 @@
       "title": "WorkspaceUpdateResponse",
       "type": "object"
     },
+    "WriteStatus": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "ok",
+        "okOverridden"
+      ],
+      "title": "WriteStatus",
+      "type": "string"
+    },
     "jsonRpcError": {
       "additionalProperties": false,
       "properties": {
@@ -109205,10 +111259,14 @@
               "browserSession/read",
               "browserSession/target/list",
               "capability/list",
+              "collaborationMode/list",
               "command/exec",
               "command/exec/resize",
               "command/exec/terminate",
               "command/exec/write",
+              "config/batchWrite",
+              "config/read",
+              "config/value/write",
               "connectCallback/send",
               "connectDeepLink/resolve",
               "connectOpenDeepLink/resolve",
@@ -109226,6 +111284,8 @@
               "diagnostics/windowsStartup/read",
               "discordChannel/probe",
               "evidence/export",
+              "experimentalFeature/enablement/set",
+              "experimentalFeature/list",
               "feishuChannel/probe",
               "fs/copy",
               "fs/createDirectory",
@@ -109332,6 +111392,7 @@
               "modelProviderUiState/read",
               "modelProviderUiState/write",
               "modelSyncState/read",
+              "permissionProfile/list",
               "plugin/enabled/set",
               "plugin/install",
               "plugin/installed",
@@ -109455,6 +111516,7 @@
               "wechatChannel/login/wait",
               "wechatChannel/probe",
               "wechatChannel/runtimeModel/set",
+              "windowsSandbox/readiness",
               "workflow/cancel",
               "workflow/read",
               "workflow/respond",

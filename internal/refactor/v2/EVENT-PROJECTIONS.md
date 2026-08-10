@@ -15,6 +15,8 @@
 
 实施快照：direct `item/started -> item/commandExecution/outputDelta* -> item/completed` 通过 typed adapter 和共享 reducer；production `thread/resume` 安装同一 replay reducer，后续 live notification 继续复用。completed snapshot 权威覆盖 delta 草稿，输出限制为 256 KiB。`write_stdin` 复用原始 `exec_command` Item identity，typed terminal interaction 与 canonical cold read 只保留 `sent N chars` 脱敏摘要。`turn.plan.updated` 由 canonical `update_plan` 的 `ToolOutput.structured_content` 派生，实时与 canonical cold read 共用 checklist 投影；`update_plan` 工具项保留在 read model，但不生成 `ThreadItem.plan` 或 Plan UI。Hook lifecycle 由 current Hook runtime 产生 paired `hook.started`/`hook.completed`，只做 transient timeline 投影，不创建 canonical ThreadItem。trusted first-party Responses 的 moderation metadata 已走 `model-provider -> AgentEvent -> durable event -> v2 turn/moderationMetadata -> typed client -> canonical Turn`，保持 opaque JSON 与 last-write-wins。strictAutoReview 的 shell/`exec_command` 触发真实 Guardian reviewer，经同 session `model-provider` 无工具结构化采样生成 durable `guardian.review.started/completed`，再投影为 typed `item/autoApprovalReview/*` 与 Renderer `pending_interactions`；provider 不可用、取消、超时和非法响应全部拒绝。unknown Item 已沿 canonical typed payload、v2 `thread/read`、Renderer 终态合并与 direct TurnTimeline fail-visible，只保留 upstream type 和脱敏字段名，并有专项 Electron Gate B；unknown/known-unprojected notification drift recorder 仍只提供诊断，不能把 72 notification 中的 planned surface 标记完成。
 
+Guardian warning 当前已完成独立 producer：同一 turn 内连续 3 次 Guardian denial 触发一次 circuit breaker，写入 durable `guardian.warning`，由 v2 `guardianWarning`、typed client 和 Desktop `NoticeProjection` 以高优先级呈现并中断 turn；它不降级为普通 `warning`，也不复制 Codex TUI 的 detached review UI。
+
 ## 1. Thread、Turn 与 Hook
 
 |   # | Method                          | 目标出口 | 当前裁决               | v2 投影                                                           |
@@ -90,7 +92,7 @@
 |  54 | turn/moderationMetadata          | DX       | current                | trusted first-party metadata，opaque Turn state，last-write-wins    |
 |  55 | model/safetyBuffering/updated    | HS       | current                | 安全缓冲提示，不伪造模型选择                                 |
 |  56 | warning                          | HS/GN    | current                | typed threadId/message/code?；实时去重 toast 与冷读恢复      |
-|  57 | guardianWarning                  | HS/TL    | planned                | 高优先级安全 warning，不被普通 warning 吞掉                  |
+|  57 | guardianWarning                  | HS/TL    | current                | Guardian denial circuit breaker 的高优先级 warning，独立于普通 warning |
 |  58 | deprecationNotice                | GN       | product-scope-excluded | 开发/设置诊断，不污染对话流                                  |
 |  59 | configWarning                    | GN       | current                | initialize/turn producer；typed path/range 经去重 toast 展示 |
 |  60 | fuzzyFileSearch/sessionUpdated   | PI       | planned                | Composer mention 搜索，丢弃陈旧 session                      |

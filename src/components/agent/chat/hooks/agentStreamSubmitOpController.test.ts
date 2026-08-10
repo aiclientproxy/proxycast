@@ -22,7 +22,7 @@ describe("agentStreamSubmitOpController", () => {
         input: [{ type: "text", text: "只回答一个字：好" }],
         model: "deepseek-chat",
         approvalPolicy: "on-request",
-        sandboxPolicy: "workspace-write",
+        permissions: ":workspace",
       },
     });
     for (const field of [

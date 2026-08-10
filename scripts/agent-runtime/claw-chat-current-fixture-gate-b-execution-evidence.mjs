@@ -2,6 +2,13 @@ import { decodeJsonRpcLines } from "./claw-chat-current-fixture-rpc.mjs";
 
 const TURN_START_METHOD = "turn/start";
 const SESSION_READ_METHOD = "thread/read";
+const COLLABORATION_MODE_LIST_METHOD = "collaborationMode/list";
+const PERMISSION_PROFILE_LIST_METHOD = "permissionProfile/list";
+const PERMISSION_PROFILE_SANDBOX_POLICIES = new Map([
+  [":read-only", "read-only"],
+  [":workspace", "workspace-write"],
+  [":danger-full-access", "danger-full-access"],
+]);
 const TERMINAL_STATUSES = new Set([
   "canceled",
   "cancelled",
@@ -191,6 +198,7 @@ export function buildGateBExecutionEvidence({
     .filter(Boolean);
   const backendTurns = ledger.filter((entry) => entry?.kind === "turnStart");
   const traceTurnStarts = collectTraceTurnStarts(traceMessages);
+  const traceRequests = collectTraceJsonRpcRequests(traceMessages);
   const primaryTurnId = firstString(
     guiEvidence?.turnId,
     turnStartRequests.at(-1)?.response?.turnId,
@@ -264,6 +272,14 @@ export function buildGateBExecutionEvidence({
         : guiState === "idle" && !primaryTurnId
           ? "terminal"
           : "unknown";
+  const collaborationMode = buildCollaborationModeEvidence({
+    traceRequests,
+    backendTurn,
+  });
+  const permissionProfile = buildPermissionProfileEvidence({
+    traceRequests,
+    backendTurn,
+  });
 
   return {
     identity,
@@ -275,7 +291,151 @@ export function buildGateBExecutionEvidence({
       turnId: primaryTurnId,
       explicit: kind === "terminal" || kind === "pending",
     },
+    collaborationMode,
+    permissionProfile,
   };
+}
+
+function buildPermissionProfileEvidence({ traceRequests, backendTurn }) {
+  const turnStartIndex = findLastRequestIndex(
+    traceRequests,
+    (entry) => entry.method === TURN_START_METHOD,
+  );
+  const catalogIndexes = traceRequests
+    .map((entry, index) =>
+      entry.method === PERMISSION_PROFILE_LIST_METHOD ? index : -1,
+    )
+    .filter((index) => index >= 0);
+  const latestCatalogIndex = catalogIndexes.at(-1) ?? -1;
+  const turnStart = turnStartIndex >= 0 ? traceRequests[turnStartIndex] : null;
+  const params = turnStart?.params ?? {};
+  const runtimeRequest = backendTurn?.runtimeRequest ?? {};
+  const metadata = runtimeRequest.metadata ?? {};
+  const profileId = normalizedString(params.permissions);
+  const runtimeSandboxPolicy = normalizedString(
+    runtimeRequest.sandboxPolicy ?? runtimeRequest.sandbox_policy,
+  );
+  const activePermissionProfileId = normalizedString(
+    metadata.activePermissionProfile?.id ??
+      metadata.active_permission_profile?.id,
+  );
+  const expectedSandboxPolicy =
+    PERMISSION_PROFILE_SANDBOX_POLICIES.get(profileId) ?? null;
+
+  return {
+    catalogMethod: PERMISSION_PROFILE_LIST_METHOD,
+    catalogRequestCount: catalogIndexes.length,
+    catalogBeforeTurnStart:
+      latestCatalogIndex >= 0 && turnStartIndex > latestCatalogIndex,
+    wire: {
+      profileId,
+      legacySandboxPolicyPresent: Object.prototype.hasOwnProperty.call(
+        params,
+        "sandboxPolicy",
+      ),
+    },
+    runtime: {
+      matchedPrimaryTurn: backendTurn != null,
+      turnId: normalizedString(backendTurn?.turnId),
+      sandboxPolicy: runtimeSandboxPolicy,
+      activePermissionProfileId,
+    },
+    wireRuntimeConsistent:
+      profileId != null &&
+      !Object.prototype.hasOwnProperty.call(params, "sandboxPolicy") &&
+      expectedSandboxPolicy === runtimeSandboxPolicy &&
+      activePermissionProfileId === profileId,
+  };
+}
+
+function buildCollaborationModeEvidence({ traceRequests, backendTurn }) {
+  const turnStartIndex = findLastRequestIndex(
+    traceRequests,
+    (entry) => entry.method === TURN_START_METHOD,
+  );
+  const catalogIndexes = traceRequests
+    .map((entry, index) =>
+      entry.method === COLLABORATION_MODE_LIST_METHOD ? index : -1,
+    )
+    .filter((index) => index >= 0);
+  const latestCatalogIndex = catalogIndexes.at(-1) ?? -1;
+  const turnStart = turnStartIndex >= 0 ? traceRequests[turnStartIndex] : null;
+  const params = turnStart?.params ?? {};
+  const runtimeRequest = backendTurn?.runtimeRequest ?? {};
+  const wireMode = compactCollaborationMode(params.collaborationMode);
+  const runtimeMode = compactCollaborationMode(
+    runtimeRequest.collaborationMode,
+  );
+  const wire = {
+    model: normalizedString(params.model),
+    effort: normalizedString(params.effort),
+    collaborationMode: wireMode,
+  };
+  const runtime = {
+    modelPreference: normalizedString(runtimeRequest.modelPreference),
+    reasoningEffort: normalizedString(runtimeRequest.reasoningEffort),
+    collaborationMode: runtimeMode,
+  };
+
+  return {
+    catalogMethod: COLLABORATION_MODE_LIST_METHOD,
+    catalogRequestCount: catalogIndexes.length,
+    catalogBeforeTurnStart:
+      latestCatalogIndex >= 0 && turnStartIndex > latestCatalogIndex,
+    wire,
+    runtime,
+    wireRuntimeConsistent:
+      wireMode.mode != null &&
+      JSON.stringify(wireMode) === JSON.stringify(runtimeMode) &&
+      wire.effort === runtime.reasoningEffort &&
+      wireMode.settings.model === runtime.modelPreference,
+  };
+}
+
+function collectTraceJsonRpcRequests(traceMessages) {
+  return (Array.isArray(traceMessages) ? traceMessages : [])
+    .filter(
+      (entry) =>
+        entry?.command === "app_server_handle_json_lines" &&
+        entry?.transport === "electron-ipc" &&
+        entry?.status === "success",
+    )
+    .flatMap((entry) =>
+      decodeJsonRpcLines(entry?.args_preview?.request?.lines)
+        .filter((message) => typeof message?.method === "string")
+        .map((message) => ({
+          method: message.method,
+          params: message.params ?? {},
+        })),
+    );
+}
+
+function findLastRequestIndex(entries, predicate) {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    if (predicate(entries[index])) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function compactCollaborationMode(value) {
+  const settings = value?.settings ?? {};
+  return {
+    mode: normalizedString(value?.mode),
+    settings: {
+      model: normalizedString(settings.model),
+      reasoning_effort: normalizedString(settings.reasoning_effort),
+      developer_instructions:
+        typeof settings.developer_instructions === "string"
+          ? settings.developer_instructions
+          : null,
+    },
+  };
+}
+
+function normalizedString(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function collectTraceTurnStarts(traceMessages) {

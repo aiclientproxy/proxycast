@@ -19,7 +19,7 @@ interface ExpectedCurrentTurnStartWire {
   effort?: string;
   collaborationMode?: CollaborationMode;
   approvalPolicy: string;
-  sandboxPolicy: string;
+  permissions: string;
   eventName: string;
   metadata?: Record<string, unknown>;
 }
@@ -88,7 +88,7 @@ function createExpectedTurn(
       ? { collaborationMode: expected.collaborationMode }
       : {}),
     approvalPolicy: expected.approvalPolicy,
-    sandboxPolicy: expected.sandboxPolicy,
+    permissions: expected.permissions,
     ...(Object.keys(additionalContext).length > 0 ? { additionalContext } : {}),
   };
 }
@@ -241,7 +241,7 @@ describe("buildUserInputSubmitOp", () => {
       mentions: [{ name: "Browser", path: "plugin://browser" }],
       imageUrls: ["data:image/png;base64,base64-image"],
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_x",
     });
 
@@ -252,7 +252,7 @@ describe("buildUserInputSubmitOp", () => {
       mentions: [{ name: "Browser", path: "plugin://browser" }],
       imageUrls: ["data:image/png;base64,base64-image"],
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_x",
     });
   });
@@ -281,7 +281,12 @@ describe("buildUserInputSubmitOp", () => {
       images: [],
       threadId: "thread-plan",
       eventName: "agent_stream_plan",
-      collaborationMode: "plan",
+      collaborationMode: {
+        name: "Plan",
+        mode: "plan",
+        model: null,
+        reasoning_effort: "medium",
+      },
       reasoningEffort: "high",
       requestMetadata: {
         harness: {
@@ -296,7 +301,7 @@ describe("buildUserInputSubmitOp", () => {
       mode: "plan" as const,
       settings: {
         model: "gpt-5.4",
-        reasoning_effort: "high",
+        reasoning_effort: "medium",
         developer_instructions: null,
       },
     };
@@ -304,10 +309,10 @@ describe("buildUserInputSubmitOp", () => {
       threadId: "thread-plan",
       text: "先制定计划",
       model: "gpt-5.4",
-      effort: "high",
+      effort: "medium",
       collaborationMode,
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_plan",
       metadata: {
         harness: {
@@ -375,7 +380,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "切到发布确认",
       model: "gpt-5",
       approvalPolicy: "never",
-      sandboxPolicy: "danger-full-access",
+      permissions: ":danger-full-access",
       eventName: "agent_stream_y",
       metadata: {
         harness: {
@@ -390,7 +395,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "切到发布确认",
       model: "gpt-5",
       approvalPolicy: "never",
-      sandboxPolicy: "danger-full-access",
+      permissions: ":danger-full-access",
       eventName: "agent_stream_y",
       metadata: {
         harness: {
@@ -444,7 +449,7 @@ describe("buildUserInputSubmitOp", () => {
       imageUrls: ["data:image/png;base64,base64-image"],
       model: "fixture-model",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_image_unknown",
     });
   });
@@ -474,7 +479,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "继续",
       model: "deepseek-v4-flash",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_model_pending",
     });
   });
@@ -505,7 +510,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "继续",
       model: "mimo-v2.5-pro",
       approvalPolicy: "never",
-      sandboxPolicy: "danger-full-access",
+      permissions: ":danger-full-access",
       eventName: "agent_stream_app_server_current",
     });
   });
@@ -546,7 +551,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "使用翻译服务模型",
       model: "translation-model",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_translation",
     });
   });
@@ -568,7 +573,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "只回答一个字：好",
       model: "deepseek-chat",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_fast",
     } satisfies ExpectedCurrentTurnStartWire;
 
@@ -611,7 +616,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "只回答一个字：好",
       model: "deepseek-v4-pro",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_fast_routing",
       metadata: {
         harness: {
@@ -648,7 +653,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "分析这个文件夹",
       model: "gpt-5.5",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_partial_model",
     });
   });
@@ -677,7 +682,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "@Nanobanana Pro 生成一张广州塔春天照片",
       model: "deepseek-v4-pro",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_image",
       metadata: createImageCommandMetadata(
         "一张广州塔春天照片",
@@ -723,7 +728,7 @@ describe("buildUserInputSubmitOp", () => {
       threadId: "thread-image-2",
       text: "@Nanobanana Pro 生成一张广州塔春天照片",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_image_synced",
       metadata: createImageCommandMetadata(
         "一张广州塔春天照片",
@@ -763,7 +768,7 @@ describe("buildUserInputSubmitOp", () => {
       threadId: "thread-image-agnes",
       text: "@Agnes Image 2.1 Flash 生成一张广州夏天照片",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_image_agnes",
       metadata: createImageCommandMetadata(
         "一张广州夏天照片",
@@ -800,7 +805,7 @@ describe("buildUserInputSubmitOp", () => {
       threadId: "thread-image-no-text-model",
       text: "@Agnes Image 2.1 Flash 生成一张广州夏天照片",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_image_no_text",
       metadata: createImageCommandMetadata(
         "一张广州夏天照片",
@@ -830,7 +835,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "请搜索最新 AI 新闻",
       model: "deepseek-chat",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_search",
     } satisfies ExpectedCurrentTurnStartWire;
 
@@ -857,7 +862,7 @@ describe("buildUserInputSubmitOp", () => {
       model: "gpt-5.5",
       effort: "high",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_reasoning_effort",
     } satisfies ExpectedCurrentTurnStartWire;
 
@@ -903,7 +908,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "搜索并深度分析今天的 AI 新闻",
       model: "gpt-5.5",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_search_thinking",
     } satisfies ExpectedCurrentTurnStartWire;
 
@@ -940,7 +945,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "启用搜索和思考",
       model: "gpt-5.5",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_legacy_prefs",
       metadata: {
         harness: {
@@ -970,7 +975,7 @@ describe("buildUserInputSubmitOp", () => {
       text: "整理今天的国际新闻",
       model: "gpt-5.5",
       approvalPolicy: "on-request",
-      sandboxPolicy: "workspace-write",
+      permissions: ":workspace",
       eventName: "agent_stream_news",
     } satisfies ExpectedCurrentTurnStartWire;
 

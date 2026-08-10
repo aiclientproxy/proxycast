@@ -306,7 +306,7 @@ async function run() {
       },
       clipboard: state.clipboard,
       appServerMethods: trace.methods,
-      hostCommands: trace.hostCommands,
+      configMethods: trace.methods,
     });
     writeJsonFile(summaryPath, summary);
     console.log(`[smoke:settings-developer-fixture] summary=${summaryPath}`);

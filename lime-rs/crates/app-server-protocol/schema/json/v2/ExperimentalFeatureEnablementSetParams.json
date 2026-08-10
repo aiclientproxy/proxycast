@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Process-wide feature enablement updates.",
+  "properties": {
+    "enablement": {
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "enablement"
+  ],
+  "title": "ExperimentalFeatureEnablementSetParams",
+  "type": "object"
+}

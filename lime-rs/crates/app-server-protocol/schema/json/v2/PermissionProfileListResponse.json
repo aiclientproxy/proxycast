@@ -1,0 +1,45 @@
+{
+  "$defs": {
+    "PermissionProfileSummary": {
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "allowed",
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "data": {
+      "items": {
+        "$ref": "#/$defs/PermissionProfileSummary"
+      },
+      "type": "array"
+    },
+    "nextCursor": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ],
+  "title": "PermissionProfileListResponse",
+  "type": "object"
+}

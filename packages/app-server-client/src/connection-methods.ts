@@ -1084,6 +1084,44 @@ declare module "./connection.js" {
     ): Promise<
       AppServerRequestResult<protocol.AgentSessionToolInventoryReadResponse>
     >;
+    readConfig(
+      params?: protocol.ConfigReadParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ConfigReadResponse>>;
+    writeConfigValue(
+      params: protocol.ConfigValueWriteParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ConfigWriteResponse>>;
+    writeConfigBatch(
+      params: protocol.ConfigBatchWriteParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ConfigWriteResponse>>;
+    listCollaborationModes(
+      params?: protocol.CollaborationModeListParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.CollaborationModeListResponse>>;
+    listExperimentalFeatures(
+      params?: protocol.ExperimentalFeatureListParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.ExperimentalFeatureListResponse>
+    >;
+    setExperimentalFeatureEnablement(
+      params: protocol.ExperimentalFeatureEnablementSetParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.ExperimentalFeatureEnablementSetResponse>
+    >;
+    listPermissionProfiles(
+      params?: protocol.PermissionProfileListParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.PermissionProfileListResponse>>;
+    readWindowsSandboxReadiness(
+      params?: protocol.WindowsSandboxReadinessParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.WindowsSandboxReadinessResponse>
+    >;
     listModels(
       params?: protocol.ModelListParams,
       options?: AppServerRequestOptions,

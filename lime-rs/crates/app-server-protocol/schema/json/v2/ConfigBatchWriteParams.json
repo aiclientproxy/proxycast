@@ -1,0 +1,57 @@
+{
+  "$defs": {
+    "ConfigEdit": {
+      "properties": {
+        "keyPath": {
+          "type": "string"
+        },
+        "mergeStrategy": {
+          "$ref": "#/$defs/MergeStrategy"
+        },
+        "value": true
+      },
+      "required": [
+        "keyPath",
+        "mergeStrategy",
+        "value"
+      ],
+      "type": "object"
+    },
+    "MergeStrategy": {
+      "enum": [
+        "replace",
+        "upsert"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "edits": {
+      "items": {
+        "$ref": "#/$defs/ConfigEdit"
+      },
+      "type": "array"
+    },
+    "expectedVersion": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "filePath": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "reloadUserConfig": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "edits"
+  ],
+  "title": "ConfigBatchWriteParams",
+  "type": "object"
+}

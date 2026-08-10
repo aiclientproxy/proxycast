@@ -24,6 +24,7 @@ const {
   mockReplayAgentRuntimeRequest,
   mockRespondAgentRuntimeAction,
   mockParseAgentEvent,
+  mockSafeInvoke,
   mockSafeListen,
   mockToast,
   mockWechatChannelSetRuntimeModel,
@@ -69,6 +70,34 @@ const {
     mockReplayAgentRuntimeRequest: vi.fn(),
     mockRespondAgentRuntimeAction: vi.fn(),
     mockParseAgentEvent: vi.fn((payload: unknown) => payload),
+    mockSafeInvoke: vi.fn(async (command: string, payload?: unknown) => {
+      if (command !== "app_server_handle_json_lines") {
+        return undefined;
+      }
+      const request = (payload as { request?: { lines?: string[] } } | undefined)
+        ?.request;
+      const line = request?.lines?.[0];
+      const message = line ? (JSON.parse(line) as { id?: number }) : {};
+      return {
+        lines: [
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: message.id ?? 1,
+            result: {
+              data: [
+                { id: ":read-only", description: "只读", allowed: true },
+                { id: ":workspace", description: "工作区", allowed: true },
+                {
+                  id: ":danger-full-access",
+                  description: "完全访问",
+                  allowed: true,
+                },
+              ],
+            },
+          }),
+        ],
+      };
+    }),
     mockSafeListen: vi.fn(),
     mockToast: {
       success: vi.fn(),
@@ -105,6 +134,7 @@ export {
   mockReplayAgentRuntimeRequest,
   mockRespondAgentRuntimeAction,
   mockParseAgentEvent,
+  mockSafeInvoke,
   mockSafeListen,
   mockToast,
   mockWechatChannelSetRuntimeModel,
@@ -159,6 +189,7 @@ vi.mock("@/lib/api/agentProtocol", async () => {
 });
 
 vi.mock("@/lib/dev-bridge", () => ({
+  safeInvoke: mockSafeInvoke,
   safeListen: mockSafeListen,
   hasDevBridgeEventListenerCapability: vi.fn(() => false),
   isDevBridgeAvailable: vi.fn(() => false),

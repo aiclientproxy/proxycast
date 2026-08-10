@@ -416,6 +416,8 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
     currentStreamingEventNameRef,
     warnedKeysRef: tools.warnedKeysRef,
     getWorkspaceIdForSubmit: context.getWorkspaceIdForSubmit,
+    waitForSessionProviderSelectionSync:
+      context.waitForSessionProviderSelectionSync,
     getThreadIdForSubmit: session.getThreadIdForSubmit,
     setWorkspacePathMissing: context.setWorkspacePathMissing,
     getMessages: () => session.messages,

@@ -1,5 +1,10 @@
-import { safeInvoke } from "@/lib/dev-bridge";
-import { assertNotDiagnosticFacade } from "./diagnosticFacade";
+import { AppServerClient } from "@/lib/api/appServer";
+import {
+  METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET,
+  METHOD_EXPERIMENTAL_FEATURE_LIST,
+  type ExperimentalFeatureEnablementSetResponse,
+  type ExperimentalFeatureListResponse,
+} from "@limecloud/app-server-client";
 import type { ExperimentalFeatures } from "./experimentalFeatureTypes";
 
 export type {
@@ -9,47 +14,37 @@ export type {
 } from "./experimentalFeatureTypes";
 export { DEFAULT_EXPERIMENTAL_FEATURES } from "./experimentalFeatureTypes";
 
-function isExperimentalFeatures(value: unknown): value is ExperimentalFeatures {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const config = value as Partial<ExperimentalFeatures>;
-  return (
-    Boolean(config.webmcp) &&
-    typeof config.webmcp === "object" &&
-    typeof config.webmcp.enabled === "boolean"
+export async function getExperimentalConfig(
+  appServerClient: Pick<AppServerClient, "request"> = new AppServerClient(),
+): Promise<ExperimentalFeatures> {
+  const response = await appServerClient.request<ExperimentalFeatureListResponse>(
+    METHOD_EXPERIMENTAL_FEATURE_LIST,
+    {},
   );
-}
-
-function assertVoidResult(command: string, value: unknown): void {
-  if (value !== null && value !== undefined) {
-    throw new Error(`${command} did not return void result`);
-  }
-}
-
-export async function getExperimentalConfig(): Promise<ExperimentalFeatures> {
-  const result = await safeInvoke<unknown>("get_experimental_config");
-  assertNotDiagnosticFacade(
-    "get_experimental_config",
-    result,
-    "真实 Experimental config current 通道",
+  const feature = response.result.data.find(
+    (candidate) => candidate.name === "webmcp",
   );
-  if (!isExperimentalFeatures(result)) {
-    throw new Error("get_experimental_config did not return experimental config");
+  if (!feature || typeof feature.enabled !== "boolean") {
+    throw new Error(
+      "App Server experimentalFeature/list did not return the webmcp feature",
+    );
   }
-  return result;
+  return { webmcp: { enabled: feature.enabled } };
 }
 
 export async function saveExperimentalConfig(
   config: ExperimentalFeatures,
+  appServerClient: Pick<AppServerClient, "request"> = new AppServerClient(),
 ): Promise<void> {
-  const result = await safeInvoke("save_experimental_config", {
-    experimentalConfig: config,
+  const response = await appServerClient.request<
+    ExperimentalFeatureEnablementSetResponse
+  >(METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET, {
+    enablement: { webmcp: Boolean(config.webmcp?.enabled) },
   });
-  assertNotDiagnosticFacade(
-    "save_experimental_config",
-    result,
-    "真实 Experimental config current 通道",
-  );
-  assertVoidResult("save_experimental_config", result);
+  const enablement = response.result.enablement as Record<string, unknown>;
+  if (enablement.webmcp !== Boolean(config.webmcp?.enabled)) {
+    throw new Error(
+      "App Server experimentalFeature/enablement/set did not apply webmcp",
+    );
+  }
 }

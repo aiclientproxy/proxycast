@@ -1,0 +1,78 @@
+{
+  "$defs": {
+    "ExperimentalFeature": {
+      "description": "Feature metadata and current enablement state.",
+      "properties": {
+        "announcement": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "defaultEnabled": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "displayName": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "stage": {
+          "$ref": "#/$defs/ExperimentalFeatureStage"
+        }
+      },
+      "required": [
+        "defaultEnabled",
+        "enabled",
+        "name",
+        "stage"
+      ],
+      "type": "object"
+    },
+    "ExperimentalFeatureStage": {
+      "description": "Codex-compatible lifecycle stage for an experimental feature.",
+      "enum": [
+        "beta",
+        "deprecated",
+        "removed",
+        "stable",
+        "underDevelopment"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Response for `experimentalFeature/list`.",
+  "properties": {
+    "data": {
+      "items": {
+        "$ref": "#/$defs/ExperimentalFeature"
+      },
+      "type": "array"
+    },
+    "nextCursor": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ],
+  "title": "ExperimentalFeatureListResponse",
+  "type": "object"
+}

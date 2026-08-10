@@ -7,9 +7,9 @@ export const MEDIA_SERVICES_REQUIRED_METHODS = [
   "modelSyncState/read",
 ];
 export const MEDIA_SERVICES_REQUIRED_HOST_COMMANDS = [
-  "get_config",
   "voice_models_list_catalog",
 ];
+export const MEDIA_SERVICES_REQUIRED_CONFIG_METHODS = ["config/read"];
 
 const APP_SERVER_COMMAND = "app_server_handle_json_lines";
 const LEGACY_MEDIA_SERVICES_COMMANDS = [
@@ -154,6 +154,10 @@ export function summarizeSettingsMediaServicesTrace(traceRaw) {
     ),
     hostIpcHitCount: hostIpcEntries.length,
     hostCommands,
+    configMethods: methods,
+    missingConfigMethods: MEDIA_SERVICES_REQUIRED_CONFIG_METHODS.filter(
+      (method) => !methods.includes(method),
+    ),
     missingHostCommands: MEDIA_SERVICES_REQUIRED_HOST_COMMANDS.filter(
       (command) => !hostCommands.includes(command),
     ),

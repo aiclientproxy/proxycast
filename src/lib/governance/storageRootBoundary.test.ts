@@ -108,7 +108,6 @@ const COMPOSITION_ROOT_ALLOWLIST: UsageBaseline = {
 };
 
 const CURRENT_HOST_USER_DATA_CHILDREN: UsageBaseline = {
-  "electron/appConfigHost.ts": { CONFIG_YAML_FILE: 1 },
   "electron/appServerHost.ts": { APP_SERVER_CONFIG_FILE_NAME: 1 },
   "electron/main.ts": { startup: 1 },
 };

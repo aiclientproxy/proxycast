@@ -34,7 +34,16 @@ function traceRaw(transport = "electron-ipc") {
     },
   }));
   return JSON.stringify([
-    { command: "get_config", transport, status: "success" },
+    {
+      command: "app_server_handle_json_lines",
+      transport,
+      status: "success",
+      args_preview: {
+        request: {
+          lines: [JSON.stringify({ method: "config/read", params: {} })],
+        },
+      },
+    },
     {
       command: "voice_models_list_catalog",
       transport,
@@ -98,11 +107,13 @@ describe("Settings Media Services Gate B evidence", () => {
 
   it("requires model selector methods and both current Host reads", () => {
     expect(summarizeSettingsMediaServicesTrace(traceRaw())).toMatchObject({
-      appServerIpcHitCount: 3,
-      methods: ["model/list", "modelPreferences/list", "modelSyncState/read"],
+      appServerIpcHitCount: 4,
+      methods: ["config/read", "model/list", "modelPreferences/list", "modelSyncState/read"],
+      configMethods: ["config/read", "model/list", "modelPreferences/list", "modelSyncState/read"],
+      missingConfigMethods: [],
       missingMethods: [],
-      hostIpcHitCount: 2,
-      hostCommands: ["get_config", "voice_models_list_catalog"],
+      hostIpcHitCount: 1,
+      hostCommands: ["voice_models_list_catalog"],
       missingHostCommands: [],
       legacyCommands: [],
       mockFallbackHitCount: 0,

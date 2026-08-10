@@ -1,0 +1,24 @@
+{
+  "$defs": {
+    "WindowsSandboxReadiness": {
+      "description": "Current Windows sandbox capability state exposed by the Desktop control plane.",
+      "enum": [
+        "notConfigured",
+        "ready",
+        "updateRequired"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "status": {
+      "$ref": "#/$defs/WindowsSandboxReadiness"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "WindowsSandboxReadinessResponse",
+  "type": "object"
+}

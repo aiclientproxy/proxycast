@@ -81,14 +81,14 @@ async function readProfileState(page, options, { requireSave = false } = {}) {
         "lime_invoke_trace_buffer_v1",
       );
       let commands = [];
-      let appServerMethodCount = 0;
+      let appServerMethods = [];
       try {
         const entries = JSON.parse(traceRaw || "[]");
         const safeEntries = Array.isArray(entries) ? entries : [];
         commands = safeEntries
           .filter((entry) => entry?.transport === "electron-ipc")
           .map((entry) => entry?.command);
-        appServerMethodCount = safeEntries.flatMap((entry) => {
+        appServerMethods = safeEntries.flatMap((entry) => {
           if (
             entry?.command !== "app_server_handle_json_lines" ||
             entry?.transport !== "electron-ipc"
@@ -98,10 +98,10 @@ async function readProfileState(page, options, { requireSave = false } = {}) {
           return Array.isArray(entry?.args_preview?.request?.lines)
             ? entry.args_preview.request.lines
             : [];
-        }).length;
+        });
       } catch {
         commands = [];
-        appServerMethodCount = 0;
+        appServerMethods = [];
       }
       if (
         !active ||
@@ -109,9 +109,9 @@ async function readProfileState(page, options, { requireSave = false } = {}) {
         !(editButton instanceof HTMLButtonElement) ||
         loadingVisible ||
         errorVisible ||
-        !commands.includes("get_config") ||
-        appServerMethodCount === 0 ||
-        (requireSave && (!commands.includes("save_config") || !saveConfirmed))
+        !appServerMethods.includes("config/read") ||
+        (requireSave &&
+          (!saveConfirmed || !appServerMethods.includes("config/batchWrite")))
       ) {
         return null;
       }

@@ -183,6 +183,10 @@
       ],
       "type": "object"
     },
+    "CollaborationModeListParams": {
+      "description": "EXPERIMENTAL - list collaboration mode presets.",
+      "type": "object"
+    },
     "CollaborationModeSettings": {
       "description": "Collaboration mode settings copied from the Codex protocol shape.",
       "properties": {
@@ -360,6 +364,95 @@
       ],
       "type": "object"
     },
+    "ConfigBatchWriteParams": {
+      "properties": {
+        "edits": {
+          "items": {
+            "$ref": "#/$defs/ConfigEdit"
+          },
+          "type": "array"
+        },
+        "expectedVersion": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "filePath": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "reloadUserConfig": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "edits"
+      ],
+      "type": "object"
+    },
+    "ConfigEdit": {
+      "properties": {
+        "keyPath": {
+          "type": "string"
+        },
+        "mergeStrategy": {
+          "$ref": "#/$defs/MergeStrategy"
+        },
+        "value": true
+      },
+      "required": [
+        "keyPath",
+        "mergeStrategy",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ConfigReadParams": {
+      "properties": {
+        "cwd": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "includeLayers": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "ConfigValueWriteParams": {
+      "properties": {
+        "expectedVersion": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "filePath": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "keyPath": {
+          "type": "string"
+        },
+        "mergeStrategy": {
+          "$ref": "#/$defs/MergeStrategy"
+        },
+        "value": true
+      },
+      "required": [
+        "keyPath",
+        "mergeStrategy",
+        "value"
+      ],
+      "type": "object"
+    },
     "DynamicToolFunctionSpec": {
       "properties": {
         "deferLoading": {
@@ -448,6 +541,47 @@
           "type": "object"
         }
       ]
+    },
+    "ExperimentalFeatureEnablementSetParams": {
+      "description": "Process-wide feature enablement updates.",
+      "properties": {
+        "enablement": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "enablement"
+      ],
+      "type": "object"
+    },
+    "ExperimentalFeatureListParams": {
+      "description": "Parameters for `experimentalFeature/list`.",
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
     },
     "FsCopyParams": {
       "properties": {
@@ -691,6 +825,13 @@
       ],
       "type": "object"
     },
+    "MergeStrategy": {
+      "enum": [
+        "replace",
+        "upsert"
+      ],
+      "type": "string"
+    },
     "ModeKind": {
       "description": "Initial collaboration mode for a turn or session.",
       "enum": [
@@ -747,6 +888,31 @@
           "type": "object"
         }
       ]
+    },
+    "PermissionProfileListParams": {
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "cwd": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
     },
     "PluginCatalogEnabledSetParams": {
       "properties": {
@@ -2765,6 +2931,11 @@
           "type": "object"
         }
       ]
+    },
+    "WindowsSandboxReadinessParams": {
+      "additionalProperties": false,
+      "description": "Empty parameters are accepted so the method can be called with `{}` by the\nDesktop client while the ingress also accepts Codex's omitted-params form.",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -3563,6 +3734,172 @@
         "id",
         "method",
         "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "config/read",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ConfigReadParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "config/value/write",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ConfigValueWriteParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "config/batchWrite",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ConfigBatchWriteParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "collaborationMode/list",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/CollaborationModeListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "experimentalFeature/list",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ExperimentalFeatureListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "experimentalFeature/enablement/set",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ExperimentalFeatureEnablementSetParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "permissionProfile/list",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PermissionProfileListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "windowsSandbox/readiness",
+          "type": "string"
+        },
+        "params": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WindowsSandboxReadinessParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "method"
       ],
       "type": "object"
     },

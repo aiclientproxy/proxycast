@@ -18,6 +18,7 @@ use tokio::sync::Mutex;
 use tool_runtime::execution_process::{
     start_local_execution_process, ExecutionOutputDelta, ExecutionOutputKind,
     LocalExecutionProcessControlHandle, LocalExecutionProcessEvent, LocalExecutionRequest,
+    LocalExecutionSandbox,
 };
 
 const DEFAULT_OUTPUT_BYTES_CAP: usize = 1024 * 1024;
@@ -92,21 +93,16 @@ impl CommandExecServer {
             sandbox_policy.as_deref(),
         )
         .map_err(invalid_runtime)?;
-        let command = if decision.0 {
-            tool_runtime::sandbox::prepare_sandbox_command(
-                tool_runtime::sandbox::SandboxCommandRequest {
-                    backend: decision.1.ok_or_else(|| {
-                        invalid_runtime("command/exec sandbox backend is unavailable")
-                    })?,
-                    requested_policy: sandbox_policy.as_deref(),
-                    command: params.command.clone(),
-                    working_directory: &cwd,
-                    granted_permissions: None,
-                },
-            )
-            .map_err(|error| invalid_runtime(error.to_string()))?
+        let sandbox = if decision.0 {
+            Some(LocalExecutionSandbox {
+                backend: decision.1.ok_or_else(|| {
+                    invalid_runtime("command/exec sandbox backend is unavailable")
+                })?,
+                requested_policy: sandbox_policy.clone(),
+                granted_permissions: None,
+            })
         } else {
-            params.command.clone()
+            None
         };
         let mut env = std::env::vars().collect::<HashMap<_, _>>();
         if let Some(overrides) = &params.env {
@@ -137,13 +133,14 @@ impl CommandExecServer {
             process_id: process_id.clone(),
             tool_id: process_id.clone(),
             tool_name: "command/exec".to_string(),
-            command,
+            command: params.command.clone(),
             cwd: Some(cwd),
             env,
             tty: params.tty,
             stdin: stream_stdin,
             env_clear: false,
             pty_size: params.size.map(|size| (size.rows, size.cols)),
+            sandbox,
         };
         let mut handle = start_local_execution_process(request)
             .map_err(|error| invalid_runtime(format!("failed to spawn command/exec: {error}")))?;

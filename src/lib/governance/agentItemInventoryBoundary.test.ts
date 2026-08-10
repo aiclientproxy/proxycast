@@ -5,8 +5,7 @@ import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = process.cwd();
-const INVENTORY_PATH =
-  "internal/refactor/v1/fixtures/item-inventory.v0.1.json";
+const INVENTORY_PATH = "internal/refactor/v1/fixtures/item-inventory.v0.1.json";
 const EVENT_VERIFIER_PATH =
   "packages/agent-runtime-client/src/eventVerifier.ts";
 const THREAD_ITEM_SCHEMA_PATH =
@@ -83,7 +82,9 @@ function canonicalItemTypesFromClient(): string[] {
         ? declaration.initializer.expression
         : declaration.initializer;
       if (!ts.isArrayLiteralExpression(initializer)) {
-        throw new TypeError("CANONICAL_ITEM_TYPES must remain an array literal");
+        throw new TypeError(
+          "CANONICAL_ITEM_TYPES must remain an array literal",
+        );
       }
       return initializer.elements.map((element) => {
         if (!ts.isStringLiteral(element)) {
@@ -136,7 +137,9 @@ function resolveLocalDefinition(
 ): JsonSchemaNode {
   const prefix = "#/$defs/";
   if (!reference.startsWith(prefix)) {
-    throw new TypeError(`Unsupported ThreadItem schema reference: ${reference}`);
+    throw new TypeError(
+      `Unsupported ThreadItem schema reference: ${reference}`,
+    );
   }
   const definition = schema.$defs?.[reference.slice(prefix.length)];
   if (!definition) {
@@ -246,7 +249,9 @@ describe("Codex v2 Item inventory boundary", () => {
         entry.kind === "notification"
           ? notificationMethods
           : serverRequestMethods;
-      expect(limeMethods.has(entry.method)).toBe(entry.lime === "current");
+      expect(limeMethods.has(entry.method), entry.method).toBe(
+        entry.lime === "current",
+      );
       if (entry.codex === "deprecated" || entry.codex === "internal") {
         expect(entry.lime).toBe("excluded");
       }

@@ -699,8 +699,6 @@ const channelsRuntimeCommandSelectors = [
 }));
 
 const experimentalFeaturesCommandSelectors = [
-  "get_experimental_config",
-  "save_experimental_config",
   "validate_shortcut",
   "update_screenshot_shortcut",
 ].map((command) => ({

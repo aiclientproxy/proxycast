@@ -44,6 +44,9 @@ import {
   extractAgentUiPerformanceTraceMetadata,
   mergeAgentUiPerformanceTraceMetadata,
 } from "./agentStreamPerformanceMetrics";
+import { resolveCollaborationModeMask } from "@/lib/api/collaborationModes";
+import { resolveAllowedPermissionProfile } from "@/lib/api/permissionProfiles";
+import { permissionProfileIdFromAccessMode } from "../utils/accessModeRuntime";
 
 type MessageParts = NonNullable<Message["contentParts"]>;
 
@@ -469,6 +472,12 @@ export async function executeAgentStreamSubmit(
           ),
         );
       }
+      const collaborationModePreset = collaborationMode
+        ? await resolveCollaborationModeMask(collaborationMode)
+        : undefined;
+      await resolveAllowedPermissionProfile(
+        permissionProfileIdFromAccessMode(effectiveAccessMode),
+      );
       const submitOp = buildAgentStreamSubmitOp({
         content,
         images,
@@ -477,7 +486,7 @@ export async function executeAgentStreamSubmit(
         clientUserMessageId,
         eventName,
         requestMetadata: resolvedRequestMetadata,
-        collaborationMode,
+        collaborationMode: collaborationModePreset,
         executionRuntime: resolvedExecutionRuntime,
         syncedRecentPreferences,
         syncedSessionModelPreference,

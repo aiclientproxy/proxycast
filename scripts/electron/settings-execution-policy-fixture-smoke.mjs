@@ -12,6 +12,7 @@ import {
   createTempRuntimeEnv,
   launchElectronFixture,
   openSettings,
+  readConfigFromPage,
   sanitizeText,
   waitForPageCondition,
 } from "./mcp-config-fixture-smoke.mjs";
@@ -102,21 +103,31 @@ async function readPolicyState(
       } catch {
         entries = [];
       }
-      const getConfigSuccess = entries.some(
-        (entry) =>
-          entry?.command === "get_config" &&
-          entry?.transport === "electron-ipc" &&
-          entry?.status === "success",
+      const appServerRequests = entries.flatMap((entry) => {
+        if (
+          entry?.command !== "app_server_handle_json_lines" ||
+          entry?.transport !== "electron-ipc"
+        ) return [];
+        return Array.isArray(entry?.args_preview?.request?.lines)
+          ? entry.args_preview.request.lines.flatMap((line) => {
+              try {
+                const request = JSON.parse(String(line));
+                return typeof request?.method === "string" ? [request] : [];
+              } catch {
+                return [];
+              }
+            })
+          : [];
+      });
+      const getConfigSuccess = appServerRequests.some(
+        (request) => request.method === "config/read",
       );
-      const saveSuccessCount = entries.filter(
-        (entry) =>
-          entry?.command === "save_config" &&
-          entry?.transport === "electron-ipc" &&
-          entry?.status === "success",
+      const saveSuccessCount = appServerRequests.filter(
+        (request) => request.method === "config/batchWrite",
       ).length;
       const saveErrorEntries = entries.filter(
         (entry) =>
-          entry?.command === "save_config" &&
+          entry?.command === "app_server_handle_json_lines" &&
           entry?.transport === "electron-ipc" &&
           entry?.status === "error",
       );
@@ -490,7 +501,7 @@ async function run() {
         finalRestorationReadback: true,
       },
       expectedFailure: {
-        command: "save_config",
+        method: "config/batchWrite",
         transport: "electron-ipc",
         cause: "isolated-config-path-is-directory",
         traceErrorCount: trace.expectedSaveTraceErrorCount,

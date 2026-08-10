@@ -67,9 +67,10 @@ describe("electron/ipcChannels", () => {
     expect(isElectronHostCommand("workspace_ensure")).toBe(true);
     expect(isElectronHostCommand("workspace_get_by_path")).toBe(true);
     expect(isElectronHostCommand("workspace_set_default")).toBe(false);
-    expect(isElectronHostCommand("get_config")).toBe(true);
-    expect(isElectronHostCommand("get_experimental_config")).toBe(true);
-    expect(isElectronHostCommand("save_experimental_config")).toBe(true);
+    expect(isElectronHostCommand("get_config")).toBe(false);
+    expect(isElectronHostCommand("save_config")).toBe(false);
+    expect(isElectronHostCommand("get_experimental_config")).toBe(false);
+    expect(isElectronHostCommand("save_experimental_config")).toBe(false);
     expect(isElectronHostCommand("get_file_icon_data_url")).toBe(true);
     expect(isElectronHostCommand("get_file_manager_locations")).toBe(true);
     expect(isElectronHostCommand("get_home_dir")).toBe(true);

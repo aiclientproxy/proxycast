@@ -103,6 +103,34 @@ fallback。Apps 专用真实 Electron Gate B 已完成：App Center 经 typed `a
 hosted connector model-visible tool snapshot 与真实 `callable=true` provider readiness；不得用本地 Plugin enabled
 状态替代。
 
+## Collaboration Mode Catalog 主链
+
+Desktop Composer 的协作模式发现只允许走：
+
+`src/lib/api/collaborationModes.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server collaborationMode/list -> collaboration mode catalog`
+
+current method 为 exact `collaborationMode/list`，返回 Codex mask shape：`data[{name,mode,model,reasoning_effort}]`。
+App Server 是 Default/Plan preset 的唯一事实源；Plan 固定以 `reasoning_effort=medium` 覆盖当前 Turn effort，`model=null`
+表示继续使用 Grok-aligned `model-provider` 当前模型选择。Renderer 的 `task_mode` 只表达用户选择意图，真正提交前必须解析
+唯一 Plan preset；catalog 缺失、重复或形状非法时 fail closed。不得在 Renderer 重建本地 preset、复制 Codex TUI picker、
+新增 Electron 业务命令，或让 collaboration catalog 承接模型 catalog/capability/readiness。
+
+## Experimental Feature 主链
+
+Desktop 实验特性设置只允许走：
+
+`Settings Experimental -> src/lib/api/experimentalFeatures.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server experimentalFeature/* -> lime_core config.yaml`
+
+current method 为 exact `experimentalFeature/list` 与 `experimentalFeature/enablement/set`。catalog 当前只公开真实
+Settings consumer 使用的 `webmcp`，默认关闭，stage 为 `underDevelopment`；enablement 只更新已知 key，未知 key
+忽略，空 map 为 no-op。`list` 支持 cursor/limit；携带 `threadId` 时必须命中已加载 Thread，但 Lime Desktop 没有
+Codex project-local feature config，enablement 仍由单一 `config.yaml` owner 计算并持久化。
+
+Electron 只转发 App Server JSONL，不再读写实验配置。旧 `get_experimental_config`、`save_experimental_config`、
+Renderer 直连 IPC、默认 mock handler 和 legacy Tauri facade 为 `dead / deleted / forbidden-to-restore`；不得新增 compat
+wrapper 或让 Initialize capability/model catalog 冒充实验特性目录。多模型、多模态 catalog/capability/readiness 继续归
+Grok-aligned `model-provider`，不进入 experimental feature owner。
+
 ## Memory Reset 主链
 
 全局记忆重置只允许走：
@@ -240,3 +268,34 @@ runtime diagnostics 与 command terminal interaction 只允许走 typed server n
 Turn terminal。`item/commandExecution/terminalInteraction` 只发送脱敏、bounded summary，并与 canonical
 CommandExecution read model 合并。raw diagnostic side-channel、未脱敏 stdin/stdout 和 Renderer 自建 terminal history
 均为 `dead / forbidden-to-restore`。
+
+## Config Control Plane 主链
+
+Desktop 配置只允许走单一全局用户层：
+
+`Settings/fixture -> AppServerClient.request(config/read|config/value/write|config/batchWrite) -> app_server_handle_json_lines -> App Server config processor -> lime_core config.yaml`
+
+`config/read` 只返回 Lime 用户配置层；`cwd`、project-local layer、MDM/requirements layer 和非当前绝对
+`filePath` 均 fail closed。写入必须携带当前版本，未知 key、版本冲突和无效 schema 均拒绝。Electron 只转发
+`app_server_handle_json_lines`，不得恢复 `get_config` / `save_config` 或新增第二套配置业务后端。
+
+Codex `configRequirements/read` 暂不属于 Lime Desktop 产品范围：仓库没有 MDM 或 `requirements/config.toml`
+owner，不建立未消费的策略层。`config/mcpServer/reload` 同样 excluded，MCP 配置继续由
+`mcpServer/list|create|update|delete` 与 `mcpServer/start|stop` 负责。
+
+## Permission Profile 主链
+
+Desktop 新回合的权限选择只允许走：
+
+`Desktop access mode -> src/lib/api/permissionProfiles.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server permissionProfile/list -> turn/start { approvalPolicy, permissions } -> RuntimeRequest sandbox policy -> tool-runtime`
+
+catalog 只公开 `:read-only`、`:workspace`、`:danger-full-access` 三个 Lime Desktop 内建 profile。Renderer 提交前必须
+解析唯一且 `allowed=true` 的目标 profile；catalog 缺失、重复、禁止或形状非法时 fail closed。App Server 将 profile id
+映射为 `read-only`、`workspace-write`、`danger-full-access` runtime sandbox policy，并在 Turn metadata 写入
+`permissions` 与 `activePermissionProfile` provenance。`permissions + sandboxPolicy` 双传和未知 profile 必须拒绝。
+
+Electron 不新增权限业务命令或本地 catalog；Renderer 不再从新回合 wire 发送 legacy `sandboxPolicy`。Lime Desktop
+不复制 Codex TUI picker，也不读取 project-local `.codex/config.toml` 自定义 profile。`thread/settings/update.permissions`
+尚未接入同一 resolver，保持 planned/fail-closed；不得用现有 list/Turn lowering 冒充 settings mutation 已完成。多模型
+catalog、model switch、provider capability/readiness、retry/circuit breaker 与多模态 sampling/media lowering 继续归
+Grok-aligned `model-provider`。

@@ -27,6 +27,7 @@ import {
 } from "./asrProvider";
 
 const appServerMocks = vi.hoisted(() => ({
+  request: vi.fn(),
   listVoiceAsrCredentials: vi.fn(),
   createVoiceAsrCredential: vi.fn(),
   updateVoiceAsrCredential: vi.fn(),
@@ -45,6 +46,9 @@ vi.mock("@/lib/dev-bridge", () => ({
 }));
 
 vi.mock("./appServer", () => ({
+  AppServerClient: class {
+    request = appServerMocks.request;
+  },
   APP_SERVER_METHOD_VOICE_ASR_CREDENTIAL_LIST: "voiceAsrCredential/list",
   APP_SERVER_METHOD_VOICE_ASR_CREDENTIAL_CREATE: "voiceAsrCredential/create",
   APP_SERVER_METHOD_VOICE_ASR_CREDENTIAL_UPDATE: "voiceAsrCredential/update",
@@ -61,6 +65,21 @@ vi.mock("./appServer", () => ({
     "voiceTranscription/polishText",
   createAppServerClient: () => appServerMocks,
 }));
+
+function configReadResult(config: unknown, version = "version-1") {
+  return {
+    result: {
+      config,
+      layers: [
+        {
+          name: { type: "user", file: "/tmp/lime/config.yaml", profile: null },
+          version,
+          config,
+        },
+      ],
+    },
+  };
+}
 
 describe("asrProvider API", () => {
   beforeEach(() => {
@@ -350,27 +369,41 @@ describe("asrProvider API", () => {
       translate_instruction_id: "default",
     };
 
-    vi.mocked(safeInvoke)
-      .mockResolvedValueOnce({
-        default_provider: "openai",
-        experimental: {
-          webmcp: { enabled: false },
-          voice_input: {
-            ...config,
-            asr_credentials: [{ id: "cred-1" }],
-          },
+    const currentConfig = {
+      default_provider: "openai",
+      experimental: {
+        webmcp: { enabled: false },
+        voice_input: {
+          ...config,
+          asr_credentials: [{ id: "cred-1" }],
         },
-      })
-      .mockResolvedValueOnce({
-        default_provider: "openai",
-        experimental: {
-          webmcp: { enabled: false },
-          voice_input: {
-            asr_credentials: [{ id: "cred-1" }],
+      },
+    };
+    appServerMocks.request
+      .mockResolvedValueOnce(configReadResult(currentConfig))
+      .mockResolvedValueOnce(
+        configReadResult(
+          {
+            ...currentConfig,
+            experimental: {
+              ...currentConfig.experimental,
+              voice_input: {
+                ...currentConfig.experimental.voice_input,
+                enabled: false,
+              },
+            },
           },
+          "version-2",
+        ),
+      )
+      .mockResolvedValueOnce({
+        result: {
+          status: "ok",
+          version: "version-3",
+          filePath: "/tmp/lime/config.yaml",
+          overriddenMetadata: null,
         },
-      })
-      .mockResolvedValueOnce(undefined);
+      });
     appServerMocks.listVoiceInstructions.mockResolvedValueOnce({
       result: {
         instructions: [
@@ -398,18 +431,27 @@ describe("asrProvider API", () => {
     ).resolves.toBeUndefined();
     await expect(deleteVoiceInstruction("inst-2")).resolves.toBeUndefined();
 
-    expect(safeInvoke).toHaveBeenNthCalledWith(1, "get_config");
-    expect(safeInvoke).toHaveBeenNthCalledWith(2, "get_config");
-    expect(safeInvoke).toHaveBeenNthCalledWith(3, "save_config", {
-      config: expect.objectContaining({
-        experimental: expect.objectContaining({
-          voice_input: expect.objectContaining({
-            enabled: true,
-            asr_credentials: [{ id: "cred-1" }],
-          }),
-        }),
+    expect(appServerMocks.request).toHaveBeenNthCalledWith(
+      1,
+      "config/read",
+      { includeLayers: true },
+    );
+    expect(appServerMocks.request).toHaveBeenNthCalledWith(
+      2,
+      "config/read",
+      { includeLayers: true },
+    );
+    expect(appServerMocks.request).toHaveBeenNthCalledWith(
+      3,
+      "config/batchWrite",
+      expect.objectContaining({
+        expectedVersion: "version-2",
+        reloadUserConfig: true,
+        edits: expect.any(Array),
       }),
-    });
+    );
+    expect(safeInvoke).not.toHaveBeenCalledWith("get_config");
+    expect(safeInvoke).not.toHaveBeenCalledWith("save_config", expect.anything());
     expect(safeInvoke).not.toHaveBeenCalledWith("get_voice_input_config");
     expect(safeInvoke).not.toHaveBeenCalledWith(
       "save_voice_input_config",

@@ -25,6 +25,9 @@ export function sanitizeBackendLedgerForEvidence(backendLedger) {
         inputText: entry.inputText,
         providerPreference: entry.providerPreference,
         modelPreference: entry.modelPreference,
+        runtimeModelPreference: entry.runtimeRequest?.modelPreference ?? null,
+        runtimeReasoningEffort: entry.runtimeRequest?.reasoningEffort ?? null,
+        collaborationMode: entry.runtimeRequest?.collaborationMode ?? null,
         runtimeMetadataHarnessSource: runtimeHarness?.source ?? null,
         workspaceSkillRuntimeEnable: runtimeEnable,
         expert: {

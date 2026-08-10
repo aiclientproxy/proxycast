@@ -1,7 +1,10 @@
 import path from "node:path";
 
 export const APPEARANCE_SCENARIO_ID = "appearance-persistence";
-export const APPEARANCE_REQUIRED_HOST_COMMANDS = ["get_config", "save_config"];
+export const APPEARANCE_REQUIRED_CONFIG_METHODS = [
+  "config/read",
+  "config/batchWrite",
+];
 
 const APP_SERVER_COMMAND = "app_server_handle_json_lines";
 const LEGACY_APPEARANCE_COMMANDS = [
@@ -128,28 +131,20 @@ export function summarizeSettingsAppearanceTrace(traceRaws) {
   const appServerIpcEntries = appServerEntries.filter(
     (entry) => entry.transport === "electron-ipc",
   );
-  const hostEntries = entries.filter((entry) =>
-    APPEARANCE_REQUIRED_HOST_COMMANDS.includes(entry?.command),
-  );
-  const hostIpcEntries = hostEntries.filter(
-    (entry) => entry.transport === "electron-ipc",
-  );
-  const hostCommands = Array.from(
-    new Set(hostIpcEntries.map((entry) => entry.command)),
-  );
   const commands = new Set(entries.map((entry) => entry?.command));
+  const configMethods = appServerMethods(appServerIpcEntries);
   return {
     appServerIpcHitCount: appServerIpcEntries.length,
-    methods: appServerMethods(appServerIpcEntries),
-    hostIpcHitCount: hostIpcEntries.length,
-    hostCommands,
-    missingHostCommands: APPEARANCE_REQUIRED_HOST_COMMANDS.filter(
-      (command) => !hostCommands.includes(command),
+    methods: configMethods,
+    configIpcHitCount: appServerIpcEntries.length,
+    configMethods,
+    missingConfigMethods: APPEARANCE_REQUIRED_CONFIG_METHODS.filter(
+      (method) => !configMethods.includes(method),
     ),
     legacyCommands: LEGACY_APPEARANCE_COMMANDS.filter((command) =>
       commands.has(command),
     ),
-    mockFallbackHitCount: [...appServerEntries, ...hostEntries].filter(
+    mockFallbackHitCount: appServerEntries.filter(
       (entry) => entry.transport !== "electron-ipc",
     ).length,
   };
@@ -221,9 +216,9 @@ export function applyPassingSettingsAppearanceEvidence(summary, facts) {
     appServerIpcHitCount: trace.appServerIpcHitCount,
     methods: trace.methods,
   };
-  summary.host = {
-    transport: trace.hostIpcHitCount > 0 ? "electron-ipc" : null,
-    commands: trace.hostCommands,
+  summary.config = {
+    transport: trace.configIpcHitCount > 0 ? "electron-ipc" : null,
+    methods: trace.configMethods,
   };
   summary.lifecycle = {
     isolatedUserData: facts.isolatedUserData === true,
@@ -248,8 +243,8 @@ export function applyPassingSettingsAppearanceEvidence(summary, facts) {
     ["threePreloadInvokeBridges", summary.bridge.preloadInvoke],
     ["appServerElectronIpc", summary.bridge.appServerIpcHitCount > 0],
     ["appServerCurrentMethod", summary.bridge.methods.length > 0],
-    ["hostElectronIpc", trace.hostIpcHitCount > 0],
-    ["hostCurrentReadWrite", trace.missingHostCommands.length === 0],
+    ["configElectronIpc", trace.configIpcHitCount > 0],
+    ["configCurrentReadWrite", trace.missingConfigMethods.length === 0],
     ["isolatedUserData", summary.lifecycle.isolatedUserData],
     ["appearanceTabActive", facts.appearanceTabActive === true],
     ["themeControlReady", facts.themeControlReady === true],

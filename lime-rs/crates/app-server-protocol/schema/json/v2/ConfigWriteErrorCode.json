@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "enum": [
+    "configLayerReadonly",
+    "configPathNotFound",
+    "configRequirementReadonly",
+    "configSchemaUnknownKey",
+    "configValidationError",
+    "configVersionConflict",
+    "userLayerNotFound"
+  ],
+  "title": "ConfigWriteErrorCode",
+  "type": "string"
+}

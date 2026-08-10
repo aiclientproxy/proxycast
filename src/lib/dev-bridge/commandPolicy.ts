@@ -204,6 +204,7 @@ const APP_SERVER_CURRENT_METHODS = new Set([
   "sessionFile/read",
   "sessionFile/resolvePath",
   "sessionFile/delete",
+  "collaborationMode/list",
   "model/list",
   "modelPreferences/list",
   "modelSyncState/read",

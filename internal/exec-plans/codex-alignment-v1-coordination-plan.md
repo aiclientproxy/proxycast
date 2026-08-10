@@ -22,6 +22,28 @@ Electron Desktop Host
 
 ## 0. Codex 迁移原则
 
+### 2026-08-10 Config Control Plane 收口
+
+主目标：将 Codex `config/read`、`config/value/write`、`config/batchWrite` 接入 Lime Desktop 唯一 App Server
+配置主链，并把 Settings/Claw fixture/evidence 从旧 Electron `get_config/save_config` 迁出；`configRequirements/read`
+按无 MDM/requirements owner 的产品范围裁决为 excluded。
+
+窄写集：`scripts/electron/mcp-config-fixture-smoke.mjs`、Settings/Claw fixture 与 evidence、
+`scripts/README.md`、`internal/aiprompts/{commands,architecture}.md`、产品范围矩阵/fixture。
+
+唯一数据流：
+
+`Desktop Settings/fixture -> app_server_handle_json_lines -> config/read|config/value/write|config/batchWrite -> lime_core config.yaml`
+
+退出条件：旧配置命令不再出现在正向生产/fixture调用；证据只记录 App Server method；单一用户层、版本冲突、未知 key、
+project-local/非当前 filePath fail closed；矩阵统计同步为 `139 implemented / 42 planned / 39 product-scope-excluded`，产品范围完成度为
+`139 / 181 = 76.8%`。
+
+验证：八组 Settings evidence 定向 Vitest `32/32`，ASR provider 配置迁移测试 `7/7`，产品矩阵守卫 `4/4`，所有迁移脚本
+`node --check`，`npm run test:contracts`（301 checks）与 `npm run governance:legacy-report`（0 分类漂移、0 边界违规）通过；
+`npm run smoke:agent-runtime-current-fixture` 已通过且 `liveProviderUsed=false`。剩余旁路：Electron crash diagnostics 与
+desktop-host mock/retired tests 仍保留历史 `get_config/save_config` 文本，只能作为负向 retired guard，不能作为 current surface。
+
 凡是 Codex 已有且不依赖 ChatGPT-only 产品的能力，优先直接复制对应 Rust 模块、类型、
 状态机和测试，再做 Lime 的 credential、Electron、产品范围适配；不先手写一个“相似版本”。
 参考路径必须记录到车道回报中，例如：
@@ -4053,3 +4075,365 @@ switch/capability/readiness/retry/circuit breaker 与多模态 sampling，不复
 
 下一刀：回到 remaining planned producer/consumer，优先补 `guardianWarning` 的独立真实 producer 或其他 P1 current owner；
 不得恢复 TUI detached review、旧 raw side-channel、生产 mock fallback 或 compat wrapper。
+
+### 2026-08-09 `guardianWarning` denial circuit breaker current owner 收口
+
+主目标与窄写集：在 Lime Desktop 唯一 Agent 主链中补齐 Codex `guardianWarning` 的真实 producer 和消费链；不复制 Codex
+TUI detached review UI，不新增 Electron IPC、第二业务后端、provider 平行 owner 或 compat wrapper。唯一数据流为：
+
+`strictAutoReview denial -> AgentRuntimeState circuit breaker -> AgentEvent guardian_warning -> durable guardian.warning -> App Server v2 guardianWarning -> typed client signal -> Renderer NoticeProjection`
+
+实现结果：
+
+1. `lime-agent` 为每个 session/turn 维护最近 5 次 denial 窗口和连续拒绝计数；同一 turn 连续 3 次拒绝只产生一次
+   `AgentEvent::GuardianWarning`，取消当前 turn。provider unavailable denial 也计入；approved 和关闭 session 清理状态。
+2. App Server durable mapper 将 `guardian_warning` lower 到 `guardian.warning`；v2 projector 严格要求非空 thread/message，
+   输出独立 `guardianWarning { threadId, message }`，不降级为普通 `warning`。
+3. protocol、Schema manifest/bundle、generated TypeScript、typed client strict decoder、signal union、Renderer direct
+   route/sequence gate/drift registry 和 ConversationProjection notice 均已同步。Renderer 使用 `type: guardian_warning`、
+   `code: guardian_warning` 的 warning notice，保留高优先级语义。
+4. V1 产品矩阵将 `guardianWarning` 从 planned 移入 implemented，当前统计为 `131 implemented / 53 planned /
+36 product-scope-excluded`，产品范围完成度 `131 / 184 = 71.2%`。
+
+事实源分类：circuit breaker、AgentEvent、durable mapper、App Server v2 projector、typed client、Renderer notice 为
+`current`；无 `compat` 或新增 `deprecated`；raw side-channel、普通 warning 冒充、TUI detached UI 和生产 mock fallback
+为 `dead / deleted / forbidden-to-restore`。Grok-aligned `model-provider` 继续拥有多模型 catalog/default/model switch/
+capability/readiness/retry/circuit breaker 与多模态 sampling/media lowering；Guardian 只复用当前 session provider。
+
+验证结果：`cargo test -p lime-agent runtime_state`（18/18）、`cargo test -p app-server-protocol --lib`（113/113）、
+`cargo test -p app-server runtime_backend::tool_events`（20/20）、`cargo test -p app-server processor::v2_notifications`
+（49/49）、Schema writer、`npm run generate:protocol-types`、`npm run check:protocol-types`、app-server-client build，以及
+Renderer V2/drift Vitest（49/49）均通过。收尾门禁也已完成：`npm run test:contracts`（301 checks）、`npm run typecheck`、
+`npm run smoke:agent-runtime-current-fixture`、`npm run verify:gui-smoke`、`npm run governance:legacy-report`（零分类漂移/边界违规）、
+产品矩阵守卫（4/4）、`npm run verify:local` 与 `git diff --check` 均通过。下一步回到 remaining planned producer/consumer，
+只选择具备唯一 owner、真实 Desktop consumer、恢复语义和 Gate B 证据的切片；不得为提升完成度制造协议 facade、compat 或生产 mock。
+
+### 2026-08-09 `config/mcpServer/reload` Desktop 产品范围裁决
+
+本轮继续 remaining planned producer/consumer 审计，选择 Codex `config/mcpServer/reload` 复核其是否应进入 Lime current
+主链。Codex 语义是外部编辑 `config.toml` 后从磁盘重载 MCP registry，并在 loaded thread 下一次 active turn 刷新；Lime
+Desktop 没有该配置入口。MCP 配置唯一事实源已经是
+`Settings GUI -> App Server JSON-RPC mcpServer/list|create|update|delete -> RuntimeCore repository`，显式运行状态走
+`mcpServer/start|stop` 与 typed startup notification。已有 Settings MCP lifecycle Gate B 证明 create/update/cold-read/delete，
+且没有 legacy/mock fallback。
+
+产品裁决：将 `config/mcpServer/reload` 从 `config-planned` 拆出并移入 `product-scope-excluded`。新增 exact method 会为同一
+MCP 配置建立第二份 external-file owner，违反 Desktop 唯一事实源；不新增 protocol facade、Electron IPC、compat wrapper
+或生产 mock。其余 `config/batchWrite`、`config/read`、`config/value/write` 与 `configRequirements/read` 仍保持 `planned`，
+不能由 Lime MCP CRUD 冒充完成。
+
+分类更新为 `131 implemented / 52 planned / 37 product-scope-excluded`，产品范围完成度
+`131 / 183 = 71.6%`；总 inventory 仍为 220。`current` 是现有 App Server MCP CRUD/lifecycle，`compat` 与
+`deprecated` 均无新增；Codex external-config reload 在 Lime 产品面为 `product-scope-excluded / forbidden-to-restore`。
+本刀不改变架构 owner，不需要更新架构图；下一刀继续审计 remaining planned，优先选择具备真实 Desktop consumer 的
+config 或 Plugin skill-read 切片。
+
+### 2026-08-09 `plugin/skill/read` 远端预览产品范围裁决
+
+本轮对照 Codex exact contract 与实现确认：`plugin/skill/read` 强制接收 `remoteMarketplaceName`、`remotePluginId`、
+`skillName`，通过 remote plugin service 读取未安装插件的 Skill markdown；它不是本地 Skill body read。Lime Desktop 的
+本地能力已经沿 `Skills catalog -> App Server skill/read -> local SKILL.md -> GUI/Agent runtime` 主链消费，且严格使用稳定
+Skill identity 与 locator。把该路径包装成 `plugin/skill/read` 会把本地 catalog 冒充远端 marketplace backend。
+
+产品裁决：从 `plugins-share-planned` 中拆出 `plugin/skill/read` 并移入 `product-scope-excluded`；不新增远端服务 facade、
+alias、compat wrapper 或生产 mock。五个 `plugin/share/*` 方法仍保持 `planned`，本刀不顺带改变其未来产品裁决。
+
+分类更新为 `131 implemented / 51 planned / 38 product-scope-excluded`，产品范围完成度
+`131 / 182 = 72.0%`；总 inventory 仍为 220。Lime 本地 Skills catalog、`skill/read` 和按需 Skill body load 为
+`current`；无新增 `compat`/`deprecated`；Codex remote uninstalled Plugin Skill preview 在 Lime 产品面为
+`product-scope-excluded / forbidden-to-restore`。本刀不改变架构 owner；下一刀继续检查 remaining planned 中是否存在
+可由真实 Desktop consumer 承接的 config capability。
+
+### 2026-08-09 `collaborationMode/list` Desktop preset current owner 收口
+
+主目标与窄写集：把已有 typed `CollaborationMode`、Plan tool gate 和 Composer Plan 开关收敛到 Codex exact
+`collaborationMode/list`，但不复制 Codex TUI picker，不把 Grok-aligned model catalog 搬进 Agent owner。写集限定为 v2
+collaboration mode protocol/schema/catalog、App Server handler/public JSON-RPC、package typed client、Renderer gateway/submit
+builder、命令事实源、产品矩阵与定向测试。
+
+唯一主链：`Desktop Plan intent -> src/lib/api/collaborationModes.ts -> app_server_handle_json_lines -> App Server
+collaborationMode/list -> unique Plan mask -> typed turn/start collaborationMode -> RuntimeCore`。App Server 按 Codex 顺序返回
+Plan/Default；Plan 的 `reasoning_effort=medium` 同时覆盖 collaboration settings 与 top-level Turn effort，`model=null` 继续使用
+当前 Grok-aligned provider/model route。catalog 缺失、重复或非法时 Renderer fail closed，不回退本地 preset 或 production mock。
+
+实现分类：protocol、handler、typed client、Renderer gateway 与 submit consumer 为 `current`；旧 Renderer
+`buildCollaborationMode("plan", currentEffort)` 本地 preset 语义为 `dead / deleted / forbidden-to-restore`；无 compat/deprecated。
+该切片不改变既有依赖方向和 model owner，因此不属于重大架构变更，不修改架构图。产品矩阵更新为
+`132 implemented / 50 planned / 38 product-scope-excluded`，产品范围完成度 `132 / 182 = 72.5%`，总 inventory 仍为 220。
+
+### 2026-08-09 `collaborationMode/list` Desktop Gate B 真实链路验收
+
+本轮补齐上一节尚未完成的真实桌面证据。现有 `plan` Electron fixture 已直接复用 Composer Plan 开关和真实
+`Electron preload -> app_server_handle_json_lines -> App Server JSON-RPC -> RuntimeCore -> GUI/read model` 主链；没有复制
+Codex TUI picker，也没有引入第二套 Electron 业务后端或 Grok model catalog。Gate B evidence 现在额外固化：
+
+`collaborationMode/list` 成功请求先于 `turn/start`，Desktop wire 使用 `mode=plan`、当前 `fixture-model`、
+`settings.reasoning_effort=medium`、顶层 `effort=medium`，App Server lowering 后 runtime request 保留同一模型和
+`reasoningEffort=medium`，wire/runtime mask 完全一致；Plan completed/read model/history hydrate 和 GUI decision drawer
+仍然通过。
+
+证据文件：
+
+- 专项 Plan Gate B：`.lime/qc/gui-evidence/collaboration-mode-plan-gate-b/collaboration-mode-plan-current-summary.json`
+- 专项 backend ledger：`.lime/qc/gui-evidence/collaboration-mode-plan-gate-b/collaboration-mode-plan-current-backend-ledger.json`
+- 聚合 Agent fixture 的 Plan history hydrate：`.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-plan-history-hydrate-regression-summary.json`
+- 独立 GUI shell Gate B：`.lime/qc/project-gates/standalone-shell-01-20260809154918-95017/shell-01-electron-smoke/summary.json`
+
+实现补充：Gate B execution evidence 解析成功 Electron IPC trace 的 JSON-RPC 顺序，并对 wire/runtime collaboration mask
+做严格一致性比较；backend ledger evidence 只保留脱敏后的 model、effort 和 collaboration mode 字段。Plan 场景断言
+对 catalog-before-turn、medium effort、模型保持和 fail-closed runtime lowering 全部设为必需项。
+
+验证结果与退出条件：
+
+- `npm run smoke:agent-runtime-current-fixture` 通过，覆盖聚合中的 Plan revisioned thread item + history hydrate，且
+  `liveProviderUsed=false`；专项 Plan Electron fixture 同样通过，`planPresetCatalogRequested`、
+  `planPresetResolvedBeforeTurnStart`、`planPresetAppliedOnDesktopWire`、`planPresetReachedRuntime`、
+  `planPresetWireRuntimeConsistent` 全为 `true`。
+- `npm run verify:gui-smoke` 通过，真实 Electron/App Server shell evidence `result=pass`，无 renderer/page error、无
+  legacy command、无 mock fallback。
+- `npm run governance:legacy-report` 通过：扫描 `2113` 个源码文件、`1377` 个测试文件，零引用候选、零分类漂移、零
+  边界违规。
+- 定向 Gate B/fixture Vitest `88/88`、Prettier check、`git diff --check` 全通过；既有协议、client、typecheck、contracts
+  与 Rust related 验证沿用上一节结果。
+
+事实源分类：`collaborationMode/list` handler、protocol/schema、typed client、Renderer resolver、Gate B evidence 与
+Plan fixture 为 `current`；旧本地 `buildCollaborationMode` preset 语义为 `dead / deleted / forbidden-to-restore`；无新增
+`compat` 或 `deprecated`。Codex TUI picker、Electron 第二后端、provider/model 平行 catalog、生产 mock fallback 均不在
+产品路径中。产品矩阵保持 `132 implemented / 50 planned / 38 product-scope-excluded`，完成度 `72.5%`。
+
+本轮退出条件已满足，执行计划第 4 步可标记完成。下一刀继续检查剩余 planned 中具备真实 Desktop consumer 的唯一
+owner；保持 Codex runtime 对齐、Grok model/multimodal owner、Desktop/TUI 分界和无兼容策略，不恢复旧入口。
+
+### 2026-08-10 `experimentalFeature/*` Desktop config owner 收口
+
+主目标与窄写集：将 Codex exact `experimentalFeature/list` 与
+`experimentalFeature/enablement/set` 接入 Lime Desktop Settings 的唯一 App Server 主链；不复制 Codex TUI，不把
+experimental catalog 扩成 Grok model catalog，不新增 Electron 业务后端或 compat wrapper。
+
+唯一数据流：
+
+`Settings Experimental -> src/lib/api/experimentalFeatures.ts -> AppServerClient -> app_server_handle_json_lines -> App Server experimentalFeature/* -> lime_core config.yaml`
+
+实现结果：
+
+1. v2 protocol、schema manifest/bundle、generated TypeScript、typed client 与 public JSON-RPC handler 已同步。catalog
+   当前只包含真实 Desktop consumer `webmcp`，stage 为 `underDevelopment`，默认关闭；list 支持 cursor/limit。
+2. enablement 只接受 `webmcp`，未知 key 忽略，空 map 为 no-op，并通过 `lime_core config.yaml` 持久化 Settings 选择。
+   携带 `threadId` 时要求命中已加载 Thread；Lime 没有 Codex project-local feature config，不建立第二份 Thread store。
+3. Settings Experimental 已迁移到 typed App Server gateway。旧 Electron `get_experimental_config` /
+   `save_experimental_config`、IPC 白名单、正向 host contract、Renderer 直连和生产 mock handler 已删除；旧字符串只保留
+   在负向 retired guard。
+4. 产品矩阵将两个 method 从 planned 移入 implemented，统计更新为
+   `134 implemented / 48 planned / 38 product-scope-excluded`，产品范围完成度 `134 / 182 = 73.6%`。
+
+事实源分类：App Server protocol/handler、`lime_core config.yaml`、typed package client、Renderer Settings gateway 与
+experimental catalog 为 `current`；旧 Electron/Tauri 配置业务入口、Renderer IPC 直连和生产 mock fallback 为
+`dead / deleted / forbidden-to-restore`；无新增 `compat` 或 `deprecated`。多模型、多模态 sampling/media lowering 与
+provider catalog/readiness/retry/circuit breaker 仍由 Grok-aligned `model-provider` 承接。
+
+验证结果：App Server protocol `115/115`、public JSON-RPC experimental integration `1/1`、Settings/API/matrix
+Vitest `15/15`、`npm run typecheck`、`npm run test:contracts`（App Server client `301` checks）、
+`npm run governance:legacy-report`（扫描 `2113` 个源码文件、`1377` 个测试文件，零分类漂移/边界违规）、Prettier 与
+`git diff --check` 均通过。首次 integration build 下载 `sherpa-onnx` 依赖耗时较长，但缓存完成后明确重跑通过，不再是
+阻塞。`npm run verify:gui-smoke` 通过真实 Electron/preload/IPC/App Server shell，证据：
+`.lime/qc/project-gates/standalone-shell-01-20260809165926-60736/shell-01-electron-smoke/summary.json`。本切片未新增
+实验设置专项 Gate B 场景；Settings 页面行为由 component test 覆盖。
+
+统一本地门禁的实际状态：`npm run verify:local` 在前端全量第 55/120 批由 Item inventory 漂移拦截，暴露
+`item/autoApprovalReview/{started,completed}` 已实现但 fixture 仍标为 `gap`。修正为 `current` 并让守卫输出具体 method 后，
+`npm run test:resume` 从第 55 批续跑至第 120 批；`.lime/test/vitest-smart-last-run.json` 最终记录 `status=passed`、
+`120/120` 批通过。`local-ci.mjs` 没有跨阶段续跑能力，直接重启会无差别重跑全部前端批次，因此没有把多个独立成功
+误报为“同一次 wrapper 通过”；原 wrapper 尚未触达的门禁已按其 task planner 等价补齐：`npm run test:contracts`、
+`npm run test:rust:changed` 与 `npm run verify:gui-smoke` 均通过。changed-scope Rust 覆盖 19 个相关/反向依赖 crate，包含
+`app-server` `1629/1629`、`app-server-protocol` `115/115`，命令退出码为 0。至此该切片达到本地可交付门槛，但总 Codex/Grok
+对齐计划仍未完成；下一刀继续从 48 个 planned method 中选择具备真实 Desktop consumer 和唯一 current owner 的缺口。
+
+### 2026-08-10 `permissionProfile/list` Desktop Turn permission owner 收口
+
+主目标与窄写集：把 Codex exact `permissionProfile/list` 接入 Lime Desktop 已有只读、按需确认、完全访问选择器，并让
+每次新 Turn 通过 App Server catalog 解析权限；不复制 Codex TUI picker，不读取 project-local 自定义 profile，不改变
+Grok-aligned 多模型/多模态 owner。写集限定为 v2 permission profile protocol/schema、App Server handler/Turn lowering、
+package typed client、Renderer gateway/submit builder、产品矩阵与命令/架构事实源。
+
+唯一数据流：
+
+`Desktop access mode -> permissionProfile/list -> unique allowed built-in profile -> turn/start { approvalPolicy, permissions } -> App Server resolver -> RuntimeRequest sandbox policy -> tool-runtime`
+
+实现结果：
+
+1. v2 protocol、schema manifest/bundle、generated TypeScript、typed client 与 public JSON-RPC handler 已同步。catalog 按
+   Codex 内建顺序只公开 `:read-only`、`:workspace`、`:danger-full-access`，全部为 Desktop allowed profile。
+2. Renderer 新回合提交前调用 typed gateway，要求目标 profile 唯一且 `allowed=true`；提交 wire 已从 legacy
+   `sandboxPolicy` 直接替换为 `permissions`，catalog 缺失、重复、禁止或形状非法时不调用 `turn/start`。
+3. App Server 将三个 profile 分别 lowering 为 `read-only`、`workspace-write`、`danger-full-access` runtime sandbox
+   policy，并写入 `permissions` 与 `activePermissionProfile` provenance。未知 profile 和
+   `permissions + sandboxPolicy` 双传均 fail closed。
+4. `thread/settings/update.permissions` 仍在 RuntimeCore 边界明确拒绝，Codex project-local custom profile 不进入 Desktop；
+   本切片不把 list/新 Turn lowering 冒充 settings mutation 完成。
+5. 产品矩阵将 `permissionProfile/list` 从 planned 移入 implemented，统计更新为
+   `135 implemented / 47 planned / 38 product-scope-excluded`，产品范围完成度 `135 / 182 = 74.2%`。
+
+事实源分类：protocol/handler/catalog、typed package client、Renderer gateway、Turn resolver/lowering 与 runtime sandbox
+policy 为 `current`；无新增 `compat` 或 `deprecated`；Renderer 新回合 legacy `sandboxPolicy` wire、Electron 权限业务命令、
+本地重复 catalog、Codex TUI picker 与生产 mock fallback 为 `dead / deleted / forbidden-to-restore`。历史导入、read model 和
+evidence 里的 canonical sandbox fact 继续属于 current projection，不是兼容入口。多模型、多模态 sampling/media lowering
+与 provider catalog/readiness/retry/circuit breaker 仍由 Grok-aligned `model-provider` 承接。
+
+最终验证：App Server protocol `116/116`、permission resolver/Turn lowering `3/3`、public JSON-RPC integration `1/1`、
+app-server-client `116/116`、Renderer gateway/request builder/submit `35/35`、schema writer、generated type drift check 与
+`npm run typecheck` 均通过。`npm run test:contracts` 通过 `301` 项 App Server client checks；
+`npm run governance:legacy-report` 扫描结果为零分类漂移、零边界违规；
+`npm run test:rust:related -- lime-rs/crates/app-server-protocol lime-rs/crates/app-server` 覆盖 `19` 个相关/反向依赖 crate
+并全部通过。`npm run verify:gui-smoke` 已证明真实 Electron/preload/IPC/App Server shell；
+`npm run smoke:agent-runtime-current-fixture` 已证明 current Agent fixture 聚合主链，且 `liveProviderUsed=false`。
+
+Gate B evidence 额外断言 `permissionProfile/list` 先于 `turn/start`、Desktop wire 只含 `permissions`、runtime sandbox
+policy 与 profile mapping 一致、`activePermissionProfile` provenance 到达匹配的 primary runtime Turn。合同回归为 `6/6`。
+聚合 fixture 首次重跑暴露 image-command media workflow 没有匹配的 external text runtime Turn，而旧 evidence helper
+错误地把全局最后一个 permission wire 与 primary GUI Turn 的空 runtime evidence 拼接；现已按 primary Turn identity
+限定权限断言的适用范围。原始 `image-command` Electron 场景与完整 `smoke:agent-runtime-current-fixture` 均重新通过，
+避免以不相关 runtime 证据制造假失败或假成功。相关 Prettier 检查、`npm run governance:scripts` 与最终
+`git diff --check` 均通过；收尾重跑 `npm run test:contracts` 仍为 `301` 项 checks 全通过。
+
+本切片达到当前 Lime Desktop 可交付门槛，但总 Codex/Grok 对齐计划仍未完成。下一刀继续从 `47` 个 planned method 中
+选择具备真实 Desktop consumer 与唯一 current owner 的缺口；继续保持 Codex runtime、Grok model/multimodal 与
+Desktop/TUI 产品边界，不恢复 legacy sandbox wire 或平行权限 catalog。
+
+### 2026-08-10 配置控制面收口后的最终本地门禁与回归修复
+
+本轮完成 Config Control Plane 切片的最终验证闭环。`verify:local` 的 smart Vitest 首次续跑在第 81/120 批暴露
+`agentStreamUserInputSubmission.test.ts` 仍依赖旧 harness：测试未注入 current `permissionProfile/list` resolver，导致
+无 Electron bridge 的单测环境提前失败，`submitOp` 未执行。修复为显式 mock current `resolveAllowedPermissionProfile`，并将
+断言从 legacy `sandboxPolicy: "workspace-write"` 更新为 current `permissions: ":workspace"`；没有恢复旧命令或添加兼容层。
+
+修复后使用 `npm test -- --resume` 从第 81 批继续，`.lime/test/vitest-smart-last-run.json` 最终为
+`status=passed`、`120/120` 批通过。最终收尾门禁全部通过：`git diff --check`；`npm run governance:legacy-report`
+（源码 2114、测试 1378、零引用候选、零分类漂移、零边界违规）；`npm run test:contracts`（301 checks，含生成类型无漂移、
+命令/bridge、modality、脚本与文档边界）。`get_config/save_config` 扫描命中仅保留于负向 retired guard、历史诊断文本或
+Rust 内部 YAML 持久化函数名，不存在 current Desktop/Renderer/fixture 调用。
+
+事实源分类保持不变：Settings/Claw 配置读写走
+`Desktop -> app_server_handle_json_lines -> config/read|config/batchWrite -> lime_core config.yaml`，为 `current`；
+旧 Electron 配置命令、旧 `sandboxPolicy` wire 和未注入 current resolver 的测试假路径为 `dead / deleted / forbidden-to-restore`；
+无新增 `compat` 或 `deprecated`。产品矩阵保持 `138 implemented / 43 planned / 39 product-scope-excluded`，产品范围完成度
+`138 / 181 = 76.2%`。此前已通过的 `npm run smoke:agent-runtime-current-fixture`（`liveProviderUsed=false`）与
+`npm run verify:gui-smoke`（真实 Electron/App Server shell、Settings/Claw/Memory/reload）继续作为 Gate 证据。
+
+本轮把配置控制面主链和验证证据完整落库；总 Codex/Grok 对齐仍未完成，下一刀回到剩余 `43` 个 planned 中具备真实
+Desktop consumer 的唯一 current owner，不恢复 TUI 专属 surface、第二套 Electron 后端或旧兼容入口。
+
+### 2026-08-10 Windows Sandbox Readiness current slice
+
+主目标与窄写集：只交付 Codex exact `windowsSandbox/readiness` 的 Desktop current control surface；不把尚未存在的
+Windows restricted-token runner、setup flow 或通知伪装成完成，不复制 Codex TUI，并保持 Grok-aligned 多模型/多模态 owner
+不变。写集限定为 v2 protocol/schema、App Server handler、typed package client、Renderer gateway、Execution Policy
+Settings、五语言资源、产品矩阵与当前路线图事实源。
+
+唯一数据流：
+
+`Settings execution policy -> windowsSandbox/readiness -> App Server JSON-RPC -> tool-runtime sandbox plan -> Desktop status`
+
+实现结果：
+
+1. 新增 `WindowsSandboxReadiness` response/params/status enum，ingress 接受 omitted 或 `{}`，非空 params fail closed；
+   handler 读取 `lime_core config`，复用 `plan_sandbox_backend`，只有 `Ready + enforced=true` 才映射为 `ready`。
+2. typed package client 新增 `readWindowsSandboxReadiness`，schema/generated types 与 public JSON-RPC integration 已同步；
+   Renderer gateway fail closed 校验三态，Settings execution-policy 只在 Windows 展示状态行和可重试入口。
+3. 当前 Windows backend 仍由 `tool-runtime` 返回 `SandboxBackendStatus::Planned/enforced=false`，
+   `prepare_sandbox_command(RestrictedToken)` 继续拒绝，因此 UI 显示 `需要更新`，没有 `setupStart` 假成功。
+4. `windowsSandbox/setupStart`、`windows/worldWritableWarning` 与 `windowsSandbox/setupCompleted` 继续 planned；
+   后续必须在 Windows 完成 runner enforcement、setup lifecycle 与 platform/Gate B evidence 后再提升状态。
+
+事实源分类：protocol/handler、tool-runtime readiness mapping、typed client、Renderer gateway、Settings 状态投影和矩阵
+为 `current`；未实现的 Windows runner/setup/notifications 为 `planned`；无新增 `compat` 或 `deprecated`。旧路线图中声称
+Windows runner 已 enforce 的 current 文案已修正为 planned/fail-closed；历史执行记录保留为 evidence，不作为 owner。
+
+验证：app-server-protocol readiness unit `1/1`，App Server readiness/ingress unit `4/4`，public JSON-RPC integration `1/1`，
+`cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server --test windows_sandbox_jsonrpc --no-fail-fast` `1/1`，
+app-server-client `118/118`，Renderer API/Settings component `9/9`，`npx vitest run
+"src/lib/governance/codexMethodProductScopeBoundary.test.ts"` `4/4`，`npm run test:contracts`、
+`npm run governance:legacy-report`、`npm run test:rust:related -- lime-rs/crates/app-server-protocol lime-rs/crates/app-server`、
+`npm run verify:gui-smoke` 均通过；`npm run check:protocol-types` 无漂移，Prettier、Rust fmt check 与 `git diff --check`
+通过。Gate B 已由真实 macOS Electron Desktop Host、preload、App Server sidecar 和 GUI smoke 证明，但该证据不代表
+Windows runner enforcement。尚未在 Windows 真机执行 runner/platform smoke，因此本 slice 只完成 readiness，不关闭
+Windows runner blocker。产品矩阵更新为 `139 implemented / 42 planned / 39 product-scope-excluded`，产品范围完成度
+`139 / 181 = 76.8%`。
+
+统一本地门禁补充：`npm run verify:local` 首次在 lint 暴露
+`WindowsSandboxReadinessStatus.tsx` 导出平台 helper 违反 `react-refresh/only-export-components`，已将 helper 移入独立
+`windowsSandboxPlatform.ts`；第二次在前端第 `55/120` 批暴露旧治理断言仍要求过时的 ACL/token hardening 文案，已让
+`legacySurfaceCatalog.test.ts` 对齐 current blocker“先在 `tool-runtime` 实现 runner”，定向回归 `224/224` 通过。
+随后使用 `npm test -- --resume` 从第 55 批续跑至第 120 批，全部通过。`verify:local` wrapper 因第 55 批失败提前退出，
+没有伪报为同一次 wrapper 全绿；其未触达阶段已按 task planner 分别完成：`npm run test:contracts`、
+`npm run test:rust:related -- lime-rs/crates/app-server-protocol lime-rs/crates/app-server`、
+`npm run verify:gui-smoke`、`npm run governance:legacy-report`、全量 Renderer/Node typecheck、src lint、i18n coverage 与
+hardcoded copy scan 均通过。当前 readiness 切片达到本地可交付门槛，Windows 平台 runner 仍需独立实机证据。
+
+下一刀回到 `windowsSandbox/setupStart` 前置的真实 restricted-token runner：在 `tool-runtime` current owner 建立
+Windows 执行边界，先补 workspace write、外部路径拒绝、ACL 恢复、timeout 终止进程树和有界输出的平台证据；在此之前
+不得新增 setup 成功通知或把 `ready` 作为默认状态。`setupStart`、`windows/worldWritableWarning`、
+`windowsSandbox/setupCompleted` 继续 `planned`，无 `compat`/`deprecated` 新增；旧 runner 文案仅保留为 superseded
+historical evidence，分类为 `dead / forbidden-to-restore` 的旧入口不得恢复。
+
+### 2026-08-10 Windows restricted-token runner foundation
+
+本轮沿 Codex `windows-sandbox-rs` 的 current owner 继续推进上一切片的 readiness blocker，写集限定为
+`lime-rs/crates/tool-runtime/src/execution_process/{windows.rs,windows_acl.rs,windows_attr.rs}`、App Server
+typed sandbox launch 接线、`tool-runtime` Windows 目标依赖、architecture 与本执行计划。Lime 仍是 Desktop：不复制
+Codex TUI 的 setup/picker surface；多模型、多模态、provider catalog/readiness、retry/circuit breaker 和 media
+lowering 继续归 Grok-aligned `model-provider`。
+
+实现结果：
+
+1. `LocalExecutionRequest` 增加 typed `LocalExecutionSandbox`；App Server 将 backend/policy/permission profile
+   传给 `tool-runtime`，Seatbelt/bwrap 仍在 `tool-runtime` lowering，Windows `RestrictedToken` 进入专用 runner，
+   不再由 App Server 拼接第二套 sandbox command。
+2. Windows runner 使用 `OpenProcessToken`、`CreateRestrictedToken`、capability SID、默认 DACL 与
+   `SeChangeNotifyPrivilege`；workspace/explicit write-root 通过 `icacls` 建立短生命周期 ACL lease，失败和 supervisor
+   结束均 rollback，非法外部路径、glob、Unix special path 和非 existing path fail closed。
+3. 进程使用 `CreateProcessAsUserW`、Job Object `KILL_ON_JOB_CLOSE`、`PROC_THREAD_ATTRIBUTE_JOB_LIST` 与显式
+   `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`；stdout/stderr 由 blocking pipe reader 接入既有 `ExecutionProcess`，复用
+   128 KiB retained output、sequence、omitted bytes、timeout/interrupt/terminate 的 process-tree cleanup。
+4. TTY/ConPTY 当前明确返回 `Unsupported`；网络策略只保留 Codex legacy 同层级的 offline env/proxy lowering，
+   不宣称 WFP/firewall 强隔离。`windowsSandbox/setupStart`、`windows/worldWritableWarning`、
+   `windowsSandbox/setupCompleted` 不在本轮伪造成功通知。
+
+事实源分类：上述 target-gated runner、ACL plan/lease、typed launch request 与 App Server 接线为 `current` foundation；
+`SandboxBackendStatus::Planned/enforced=false`、Windows readiness `updateRequired`、ConPTY/elevated setup/WFP 与
+真实 Windows/Gate B evidence 仍为 `planned`/blocker；没有新增 `compat` 或 `deprecated`。旧 command wrapper、旧
+runtime vendor、TUI setup surface 和 mock fallback 继续 `dead / deleted / forbidden-to-restore`，不得恢复。
+
+验证：`rustfmt` 相关 Windows 文件、`git diff --check`、macOS `cargo check --manifest-path "lime-rs/Cargo.toml" -p
+tool-runtime -p app-server` 通过；`cargo test --manifest-path "lime-rs/Cargo.toml" -p tool-runtime execution_process`
+通过 `9/9`，此前 `app-server execution_process` 通过 `6/6`。Windows target 已安装但当前 macOS 宿主缺 MSVC/Windows
+C toolchain，cross-check 在 `ring`/`zstd-sys` 原生依赖阶段阻塞，尚未取得 Windows API 类型检查或真机运行证据；不能把
+runner 或 readiness 写成已交付 ready。
+
+本轮推进了 readiness 前置的 `tool-runtime` current owner，但未关闭 Windows 平台 blocker。下一刀应在真实 Windows
+toolchain/机器补 workspace write success、外部/metadata write denial、ACL rollback、timeout descendant kill、
+bounded output 和 TTY/网络能力裁决；证据完成前保持 `ready` fail closed，继续不实现 setup 通知。
+
+### 2026-08-10 Windows runner lifecycle and target API alignment follow-up
+
+本轮继续沿同一窄写集复核 `tool-runtime` Windows runner，没有扩展到 Desktop/TUI setup surface 或 Grok model-provider。
+实现修正：
+
+1. Windows child environment 现在在 `env_clear=false` 时继承父环境，并按 Windows 大小写不敏感规则应用请求覆盖；
+   `env_clear=true` 只保留显式覆盖。环境块补空环境双 NUL 终止和 embedded-NUL/非法变量名 fail-closed 校验，
+   离线 lowering 补齐 `SBX_NONET_ACTIVE`、PIP/Git 约束标记。
+2. Job Object 初始启用 `KILL_ON_JOB_CLOSE | BREAKAWAY_OK`。正常根进程退出后只移除 kill-on-close，reaper
+   轮询 `ActiveProcesses` 并持有 ACL lease 到 Job 为空；interrupt、terminate、控制断开和 wait error 继续终止整棵树。
+   这与 Codex `JobObject::preserve_descendants` 的根进程正常退出语义一致，同时不让短生命周期 ACL 在后代仍运行时提前 rollback。
+3. 对照本地 `windows-sys 0.52` SDK 符号修正 `WAIT_*`/`SECURITY_ATTRIBUTES` 所属模块、`Win32_System_IO` feature 和
+   `ReadFile`/`WriteFile` buffer 指针类型；ACL lease 在 icacls 部分失败时先登记路径，保证 rollback 覆盖已部分应用的 ACE。
+
+验证：macOS `cargo test --manifest-path "lime-rs/Cargo.toml" -p tool-runtime execution_process` `13/13`、
+`cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server execution_process` `6/6`、
+`cargo check --manifest-path "lime-rs/Cargo.toml" -p tool-runtime -p app-server` 通过，Rust fmt 与 `git diff --check`
+通过；`npm run test:rust:related -- lime-rs/crates/tool-runtime lime-rs/crates/app-server` 的 7 个相关/反向依赖 crate
+共 `2699` tests 全部通过。Windows target API 只完成本地 SDK 源码静态核对；完整 `x86_64-pc-windows-msvc` build 仍受 macOS 宿主缺少
+MSVC/Windows C toolchain（`ring`/`zstd-sys` 缺少 Windows 头文件）阻塞，Windows 真机 runner/platform smoke 尚未执行。
+因此 readiness 仍为 `SandboxBackendStatus::Planned/enforced=false`，`setupStart`、`windows/worldWritableWarning`、
+`windowsSandbox/setupCompleted` 继续 `planned`；无新增 `compat`/`deprecated`，旧 runner/TUI setup surface 仍为
+`dead / deleted / forbidden-to-restore`。本轮证明了 runner current owner 的生命周期和启动环境边界继续向 Codex
+Windows sandbox 收敛，但没有关闭平台证据 blocker；下一刀仍是 Windows toolchain/真机 Gate B，之后才裁决 readiness 提升。

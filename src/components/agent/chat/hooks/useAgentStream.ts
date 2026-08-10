@@ -145,6 +145,9 @@ interface UseAgentStreamOptions {
   currentStreamingEventNameRef: MutableRefObject<string | null>;
   warnedKeysRef: MutableRefObject<Set<string>>;
   getWorkspaceIdForSubmit: () => string | undefined;
+  waitForSessionProviderSelectionSync: (
+    sessionId: string,
+  ) => Promise<void>;
   getThreadIdForSubmit: (targetSessionId?: string) => string | undefined;
   setWorkspacePathMissing: Dispatch<
     SetStateAction<WorkspacePathMissingState | null>
@@ -194,6 +197,7 @@ export function useAgentStream(options: UseAgentStreamOptions) {
     currentStreamingEventNameRef,
     warnedKeysRef,
     getWorkspaceIdForSubmit,
+    waitForSessionProviderSelectionSync,
     getThreadIdForSubmit,
     setWorkspacePathMissing,
     getMessages,
@@ -258,6 +262,7 @@ export function useAgentStream(options: UseAgentStreamOptions) {
         sessionIdRef,
         runPreparedSubmit: (task) => preparedSubmitGateRef.current.run(task),
         getWorkspaceIdForSubmit,
+        waitForSessionProviderSelectionSync,
         getThreadIdForSubmit,
         getSyncedSessionModelPreference,
         getSyncedSessionExecutionStrategy,
@@ -294,6 +299,7 @@ export function useAgentStream(options: UseAgentStreamOptions) {
       clawTraceEnabled,
       soulCopy,
       getWorkspaceIdForSubmit,
+      waitForSessionProviderSelectionSync,
       getThreadIdForSubmit,
       getSyncedSessionModelPreference,
       getSyncedSessionExecutionStrategy,

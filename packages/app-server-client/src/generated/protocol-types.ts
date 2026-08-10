@@ -55,11 +55,15 @@ export const METHOD_BROWSER_SESSION_OPEN = "browserSession/open";
 export const METHOD_BROWSER_SESSION_READ = "browserSession/read";
 export const METHOD_BROWSER_SESSION_TARGET_LIST = "browserSession/target/list";
 export const METHOD_CAPABILITY_LIST = "capability/list";
+export const METHOD_COLLABORATION_MODE_LIST = "collaborationMode/list";
 export const METHOD_COMMAND_EXEC = "command/exec";
 export const METHOD_COMMAND_EXEC_OUTPUT_DELTA = "command/exec/outputDelta";
 export const METHOD_COMMAND_EXEC_RESIZE = "command/exec/resize";
 export const METHOD_COMMAND_EXEC_TERMINATE = "command/exec/terminate";
 export const METHOD_COMMAND_EXEC_WRITE = "command/exec/write";
+export const METHOD_CONFIG_BATCH_WRITE = "config/batchWrite";
+export const METHOD_CONFIG_READ = "config/read";
+export const METHOD_CONFIG_VALUE_WRITE = "config/value/write";
 export const METHOD_CONFIG_WARNING = "configWarning";
 export const METHOD_CONNECT_CALLBACK_SEND = "connectCallback/send";
 export const METHOD_CONNECT_DEEP_LINK_RESOLVE = "connectDeepLink/resolve";
@@ -88,6 +92,9 @@ export const METHOD_DIAGNOSTICS_WINDOWS_STARTUP_READ =
 export const METHOD_DISCORD_CHANNEL_PROBE = "discordChannel/probe";
 export const METHOD_ERROR = "error";
 export const METHOD_EVIDENCE_EXPORT = "evidence/export";
+export const METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET =
+  "experimentalFeature/enablement/set";
+export const METHOD_EXPERIMENTAL_FEATURE_LIST = "experimentalFeature/list";
 export const METHOD_FEISHU_CHANNEL_PROBE = "feishuChannel/probe";
 export const METHOD_FS_CHANGED = "fs/changed";
 export const METHOD_FS_COPY = "fs/copy";
@@ -258,6 +265,7 @@ export const METHOD_MODEL_PROVIDER_UI_STATE_READ = "modelProviderUiState/read";
 export const METHOD_MODEL_PROVIDER_UI_STATE_WRITE =
   "modelProviderUiState/write";
 export const METHOD_MODEL_SYNC_STATE_READ = "modelSyncState/read";
+export const METHOD_PERMISSION_PROFILE_LIST = "permissionProfile/list";
 export const METHOD_PLUGIN_ENABLED_SET = "plugin/enabled/set";
 export const METHOD_PLUGIN_INSTALL = "plugin/install";
 export const METHOD_PLUGIN_INSTALLED = "plugin/installed";
@@ -419,6 +427,7 @@ export const METHOD_WECHAT_CHANNEL_LOGIN_WAIT = "wechatChannel/login/wait";
 export const METHOD_WECHAT_CHANNEL_PROBE = "wechatChannel/probe";
 export const METHOD_WECHAT_CHANNEL_RUNTIME_MODEL_SET =
   "wechatChannel/runtimeModel/set";
+export const METHOD_WINDOWS_SANDBOX_READINESS = "windowsSandbox/readiness";
 export const METHOD_WORKFLOW_CANCEL = "workflow/cancel";
 export const METHOD_WORKFLOW_READ = "workflow/read";
 export const METHOD_WORKFLOW_RESPOND = "workflow/respond";
@@ -606,6 +615,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
+    method: "collaborationMode/list",
+  },
+  {
+    kind: "request",
     method: "command/exec",
   },
   {
@@ -623,6 +636,18 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "command/exec/write",
+  },
+  {
+    kind: "request",
+    method: "config/batchWrite",
+  },
+  {
+    kind: "request",
+    method: "config/read",
+  },
+  {
+    kind: "request",
+    method: "config/value/write",
   },
   {
     kind: "notification",
@@ -703,6 +728,14 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "evidence/export",
+  },
+  {
+    kind: "request",
+    method: "experimentalFeature/enablement/set",
+  },
+  {
+    kind: "request",
+    method: "experimentalFeature/list",
   },
   {
     kind: "request",
@@ -1247,6 +1280,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "modelSyncState/read",
+  },
+  {
+    kind: "request",
+    method: "permissionProfile/list",
   },
   {
     kind: "request",
@@ -1826,6 +1863,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
+    method: "windowsSandbox/readiness",
+  },
+  {
+    kind: "request",
     method: "workflow/cancel",
   },
   {
@@ -2059,6 +2100,11 @@ export type GeneratedAppServerRequestSerializationScopeSpec =
 
 export type GeneratedAppServerRequestSerializationScope =
   GeneratedAppServerRequestSerializationScopeSpec["scope"];
+
+export interface ActivePermissionProfile {
+  extends?: null | string;
+  id: string;
+}
 
 export interface AdditionalContextEntry {
   kind: AdditionalContextKind;
@@ -4568,6 +4614,46 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "config/read";
+      params: ConfigReadParams;
+    }
+  | {
+      id: number | string;
+      method: "config/value/write";
+      params: ConfigValueWriteParams;
+    }
+  | {
+      id: number | string;
+      method: "config/batchWrite";
+      params: ConfigBatchWriteParams;
+    }
+  | {
+      id: number | string;
+      method: "collaborationMode/list";
+      params: CollaborationModeListParams;
+    }
+  | {
+      id: number | string;
+      method: "experimentalFeature/list";
+      params: ExperimentalFeatureListParams;
+    }
+  | {
+      id: number | string;
+      method: "experimentalFeature/enablement/set";
+      params: ExperimentalFeatureEnablementSetParams;
+    }
+  | {
+      id: number | string;
+      method: "permissionProfile/list";
+      params: PermissionProfileListParams;
+    }
+  | {
+      id: number | string;
+      method: "windowsSandbox/readiness";
+      params?: WindowsSandboxReadinessParams | null;
+    }
+  | {
+      id: number | string;
       method: "model/list";
       params: ModelListParams;
     }
@@ -4813,6 +4899,19 @@ export type CollabAgentTool =
 
 export type CollabAgentToolCallStatus = "completed" | "failed" | "inProgress";
 
+export type CollaborationModeListParams = Record<string, unknown>;
+
+export interface CollaborationModeListResponse {
+  data: CollaborationModeMask[];
+}
+
+export interface CollaborationModeMask {
+  mode?: ModeKind | null;
+  model?: null | string;
+  name: string;
+  reasoning_effort?: null | string;
+}
+
 export type CommandAction =
   | {
       command: string;
@@ -4948,11 +5047,106 @@ export interface CommandExecutionTerminalInteractionNotification {
   turnId: string;
 }
 
+export interface ConfigBatchWriteParams {
+  edits: ConfigEdit[];
+  expectedVersion?: null | string;
+  filePath?: null | string;
+  reloadUserConfig?: boolean;
+}
+
+export interface ConfigEdit {
+  keyPath: string;
+  mergeStrategy: MergeStrategy;
+  value: unknown;
+}
+
+export interface ConfigLayer {
+  config: unknown;
+  disabledReason?: null | string;
+  name: ConfigLayerSource;
+  version: string;
+}
+
+export interface ConfigLayerMetadata {
+  name: ConfigLayerSource;
+  version: string;
+}
+
+export type ConfigLayerSource =
+  | {
+      domain: string;
+      key: string;
+      type: "mdm";
+    }
+  | {
+      file: string;
+      type: "system";
+    }
+  | {
+      id: string;
+      name: string;
+      type: "enterpriseManaged";
+    }
+  | {
+      file: string;
+      profile?: null | string;
+      type: "user";
+    }
+  | {
+      dotCodexFolder: string;
+      type: "project";
+    }
+  | {
+      type: "sessionFlags";
+    }
+  | {
+      file: string;
+      type: "legacyManagedConfigTomlFromFile";
+    }
+  | {
+      type: "legacyManagedConfigTomlFromMdm";
+    };
+
+export interface ConfigReadParams {
+  cwd?: null | string;
+  includeLayers?: boolean;
+}
+
+export interface ConfigReadResponse {
+  config: unknown;
+  layers?: ConfigLayer[] | null;
+  origins: Record<string, unknown>;
+}
+
+export interface ConfigValueWriteParams {
+  expectedVersion?: null | string;
+  filePath?: null | string;
+  keyPath: string;
+  mergeStrategy: MergeStrategy;
+  value: unknown;
+}
+
 export interface ConfigWarningNotification {
   details?: null | string;
   path?: null | string;
   range?: TextRange | null;
   summary: string;
+}
+
+export type ConfigWriteErrorCode =
+  | "configLayerReadonly"
+  | "configPathNotFound"
+  | "configRequirementReadonly"
+  | "configSchemaUnknownKey"
+  | "configValidationError"
+  | "configVersionConflict"
+  | "userLayerNotFound";
+
+export interface ConfigWriteResponse {
+  filePath: string;
+  overriddenMetadata?: OverriddenMetadata | null;
+  status: WriteStatus;
+  version: string;
 }
 
 export interface ConnectCallbackSendParams {
@@ -5462,6 +5656,42 @@ export interface EvidencePackSummary {
   threadStatus: string;
   turnCount: number;
 }
+
+export interface ExperimentalFeature {
+  announcement?: null | string;
+  defaultEnabled: boolean;
+  description?: null | string;
+  displayName?: null | string;
+  enabled: boolean;
+  name: string;
+  stage: ExperimentalFeatureStage;
+}
+
+export interface ExperimentalFeatureEnablementSetParams {
+  enablement: Record<string, unknown>;
+}
+
+export interface ExperimentalFeatureEnablementSetResponse {
+  enablement: Record<string, unknown>;
+}
+
+export interface ExperimentalFeatureListParams {
+  cursor?: null | string;
+  limit?: number | null;
+  threadId?: null | string;
+}
+
+export interface ExperimentalFeatureListResponse {
+  data: ExperimentalFeature[];
+  nextCursor?: null | string;
+}
+
+export type ExperimentalFeatureStage =
+  | "beta"
+  | "deprecated"
+  | "removed"
+  | "stable"
+  | "underDevelopment";
 
 export type FileChangeApprovalDecision =
   | "accept"
@@ -6866,15 +7096,23 @@ export interface MemoryStoreSearchResponse {
   truncated: boolean;
 }
 
+export type MergeStrategy = "replace" | "upsert";
+
 export type Method =
   | "app/installed"
   | "app/list"
   | "app/read"
   | "artifact/write"
+  | "collaborationMode/list"
   | "command/exec"
   | "command/exec/resize"
   | "command/exec/terminate"
   | "command/exec/write"
+  | "config/batchWrite"
+  | "config/read"
+  | "config/value/write"
+  | "experimentalFeature/enablement/set"
+  | "experimentalFeature/list"
   | "fs/copy"
   | "fs/createDirectory"
   | "fs/getMetadata"
@@ -6890,6 +7128,7 @@ export type Method =
   | "media/read"
   | "memory/reset"
   | "model/list"
+  | "permissionProfile/list"
   | "plugin/enabled/set"
   | "plugin/install"
   | "plugin/installed"
@@ -6942,7 +7181,8 @@ export type Method =
   | "threadSection/update"
   | "turn/interrupt"
   | "turn/start"
-  | "turn/steer";
+  | "turn/steer"
+  | "windowsSandbox/readiness";
 
 export interface Model {
   additionalSpeedTiers: string[];
@@ -7357,6 +7597,12 @@ export interface OpenDeepLinkPayload {
   version?: null | string;
 }
 
+export interface OverriddenMetadata {
+  effectiveValue: unknown;
+  message: string;
+  overridingLayer: ConfigLayerMetadata;
+}
+
 export type PatchApplyStatus =
   | "completed"
   | "declined"
@@ -7376,6 +7622,23 @@ export type PatchChangeKind =
     };
 
 export type PermissionGrantScope = "session" | "turn";
+
+export interface PermissionProfileListParams {
+  cursor?: null | string;
+  cwd?: null | string;
+  limit?: number | null;
+}
+
+export interface PermissionProfileListResponse {
+  data: PermissionProfileSummary[];
+  nextCursor?: null | string;
+}
+
+export interface PermissionProfileSummary {
+  allowed: boolean;
+  description?: null | string;
+  id: string;
+}
 
 export interface PermissionsRequestApprovalParams {
   cwd: string;
@@ -10117,6 +10380,17 @@ export interface WechatRuntimeModelSetResponse {
   runtimeModel: string;
 }
 
+export type WindowsSandboxReadiness =
+  | "notConfigured"
+  | "ready"
+  | "updateRequired";
+
+export type WindowsSandboxReadinessParams = Record<string, never>;
+
+export interface WindowsSandboxReadinessResponse {
+  status: WindowsSandboxReadiness;
+}
+
 export interface WindowsStartupCheck {
   detail?: null | string;
   key: string;
@@ -10380,6 +10654,8 @@ export interface WorkspaceUpdateParams {
 export interface WorkspaceUpdateResponse {
   workspace: unknown;
 }
+
+export type WriteStatus = "ok" | "okOverridden";
 
 export interface jsonRpcError {
   error: {

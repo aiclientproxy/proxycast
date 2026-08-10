@@ -1,34 +1,30 @@
 import fs from "node:fs";
 import path from "node:path";
-import { invokeAppServerFromPage } from "./claw-chat-current-fixture-rpc.mjs";
+import {
+  updateConfigFromPage,
+  invokeAppServerFromPage,
+} from "./claw-chat-current-fixture-rpc.mjs";
 import { assert, sanitizeJson } from "./claw-chat-current-fixture-utils.mjs";
 import { normalizedString } from "./claw-image-live-smoke-common.mjs";
 
 const AGNES_PROVIDER_NAME = "Agnes";
 
 export async function bindImageDefaultsFromPage(page, options) {
-  return await page.evaluate(
-    async ({ providerId, modelId }) => {
-      const invoke = window.electronAPI?.invoke;
-      if (typeof invoke !== "function") {
-        throw new Error("Electron preload invoke bridge is unavailable");
-      }
-      const currentConfig = await invoke("get_config");
-      const nextConfig = {
+  const result = await updateConfigFromPage(page, (currentConfig) => ({
         ...(currentConfig || {}),
         workspace_preferences: {
           ...(currentConfig?.workspace_preferences || {}),
           media_defaults: {
             ...(currentConfig?.workspace_preferences?.media_defaults || {}),
             image: {
-              preferredProviderId: providerId,
-              preferredModelId: modelId,
+              preferredProviderId: options.providerPreference,
+              preferredModelId: options.modelPreference,
               allowFallback: false,
             },
           },
         },
-      };
-      await invoke("save_config", { config: nextConfig });
+      }), options.requestLog);
+  await page.evaluate(() => {
       window.dispatchEvent(new Event("lime:app-config-changed"));
       window.dispatchEvent(
         new CustomEvent("provider-data-changed", {
@@ -38,18 +34,12 @@ export async function bindImageDefaultsFromPage(page, options) {
           },
         }),
       );
-      return {
-        providerId,
-        modelId,
-        imageDefaults:
-          nextConfig.workspace_preferences?.media_defaults?.image ?? null,
-      };
-    },
-    {
-      providerId: options.providerPreference,
-      modelId: options.modelPreference,
-    },
-  );
+  });
+  return {
+    providerId: options.providerPreference,
+    modelId: options.modelPreference,
+    imageDefaults: result.config.workspace_preferences?.media_defaults?.image ?? null,
+  };
 }
 
 export function copyElectronConfigToAppServerConfig(runtimeEnv) {

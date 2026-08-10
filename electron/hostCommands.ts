@@ -1,6 +1,7 @@
 /* global process */
 import { app, shell } from "./electronRuntime";
 import {
+  METHOD_CONFIG_READ,
   METHOD_MODEL_LIST,
   METHOD_MODEL_PROVIDER_LIST,
   METHOD_WORKSPACE_BY_PATH_READ,
@@ -14,6 +15,7 @@ import {
   METHOD_WORKSPACE_READ,
   decodeModelRouteSelector,
   type Model,
+  type ConfigReadResponse,
   type ModelListResponse,
   type ModelProviderListResponse,
   type WorkspaceEnsureProjectResponse,
@@ -28,7 +30,6 @@ import { createServer, type Server } from "node:http";
 import path from "node:path";
 import type { ElectronAppServerHost } from "./appServerHost";
 import { resolveCurrentDesktopStorageRoots } from "./appDataPaths";
-import { AppConfigHost, buildDefaultConfig } from "./appConfigHost";
 import {
   openProjectPathWithLocalTool,
   type ProjectPathOpenTool,
@@ -78,7 +79,6 @@ export class ElectronHostCommands {
   readonly #layeredDesignProjectHost = new LayeredDesignProjectHost();
   readonly #systemUtilityHost: SystemUtilityHost;
   readonly #voiceModelHost: VoiceModelHost;
-  readonly #appConfigHost: AppConfigHost;
   #oauthCallbackBridgeServer: Server | null = null;
   #oauthCallbackBridgeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -91,7 +91,6 @@ export class ElectronHostCommands {
     this.#appServerHost = appServerHost;
     this.#userDataDir = userDataDir;
     this.#emit = emit;
-    this.#appConfigHost = new AppConfigHost(userDataDir);
     this.#systemUtilityHost = new SystemUtilityHost({
       appDataRoot,
       readConfig: () => this.#readConfig(),
@@ -101,14 +100,6 @@ export class ElectronHostCommands {
 
   async invoke(command: string, args?: HostArgs): Promise<unknown> {
     switch (command) {
-      case "get_config":
-        return await this.#readConfig();
-      case "save_config":
-        return await this.#saveConfig(args);
-      case "get_experimental_config":
-        return await this.#getExperimentalConfig();
-      case "save_experimental_config":
-        return await this.#saveExperimentalConfig(args);
       case "open_external_url":
         return await this.#systemUtilityHost.openExternalUrl(args);
       case "open_file_preview_window":
@@ -320,7 +311,7 @@ export class ElectronHostCommands {
     model_name?: string;
   }> {
     const [config, providers, models] = await Promise.all([
-      this.#readConfig().catch(() => buildDefaultConfig()),
+      this.#readConfig().catch(() => ({ default_provider: "openai" })),
       this.#listModelProviders().catch(() => []),
       this.#listModels().catch(() => []),
     ]);
@@ -366,28 +357,6 @@ export class ElectronHostCommands {
       this.#listModelProviders(),
     ]);
     return resolveCurrentDefaultProvider(config.default_provider, providers);
-  }
-
-  async #getExperimentalConfig(): Promise<Record<string, unknown>> {
-    const config = await this.#readConfig();
-    return normalizeExperimentalConfig(config.experimental);
-  }
-
-  async #saveExperimentalConfig(args: HostArgs): Promise<null> {
-    const request = readRequest(args);
-    const experimentalConfig =
-      readRecord(request, "experimentalConfig") ??
-      readRecord(request, "experimental_config");
-    if (!experimentalConfig) {
-      throw new Error("save_experimental_config requires experimentalConfig");
-    }
-    const config = await this.#readConfig();
-    return await this.#saveConfig({
-      config: {
-        ...config,
-        experimental: normalizeExperimentalConfig(experimentalConfig),
-      },
-    });
   }
 
   async #listModelProviders(): Promise<unknown[]> {
@@ -559,11 +528,18 @@ export class ElectronHostCommands {
   }
 
   async #readConfig(): Promise<Record<string, unknown>> {
-    return await this.#appConfigHost.readConfig();
-  }
-
-  async #saveConfig(args: HostArgs): Promise<null> {
-    return await this.#appConfigHost.saveConfig(args);
+    const response = await this.#appServerRequest<ConfigReadResponse>(
+      METHOD_CONFIG_READ,
+      {},
+    );
+    if (
+      !response.config ||
+      typeof response.config !== "object" ||
+      Array.isArray(response.config)
+    ) {
+      throw new Error("config/read returned invalid Desktop config");
+    }
+    return response.config as Record<string, unknown>;
   }
 
   #reportFrontendDebugLog(args: HostArgs): void {
@@ -583,7 +559,6 @@ export class ElectronHostCommands {
       report,
     );
   }
-
 }
 
 function readRecord(
@@ -652,14 +627,6 @@ function readProjectPathOpenTool(
   throw new Error(`不支持的项目打开工具: ${tool}`);
 }
 
-function readBoolean(value: unknown, key: string): boolean | null {
-  const record = toRecord(value);
-  if (!record || typeof record[key] !== "boolean") {
-    return null;
-  }
-  return record[key];
-}
-
 function findProvider(
   providers: unknown[],
   providerId: string,
@@ -715,18 +682,6 @@ function toRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
-}
-
-function normalizeExperimentalConfig(value: unknown): Record<string, unknown> {
-  const record = toRecord(value) ?? {};
-  const webmcp = toRecord(record.webmcp);
-  return {
-    ...record,
-    webmcp: {
-      ...webmcp,
-      enabled: readBoolean(webmcp, "enabled") ?? false,
-    },
-  };
 }
 
 function normalizeCallbackBridgeValue(value: string | null): string | null {

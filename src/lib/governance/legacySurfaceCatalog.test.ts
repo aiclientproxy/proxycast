@@ -4705,7 +4705,7 @@ describe("legacySurfaceCatalog", () => {
       "P1/P2/P3/P4/P5/P7/P8 的骨架闭环已经具备 current facts、projection、GUI smoke、evidence export 与生产 mock / legacy command 防回流守卫",
     );
     expect(readmeSource).toContain(
-      "推进 Windows restricted token ACL / token enforcement，补齐 Windows 平台 sandbox 真实 enforce",
+      "Windows 机器上先在 `tool-runtime` current owner 实现 restricted-token runner",
     );
     expect(implementationSource).toContain(
       "P8 residual 盘点结论：生产 `src / packages / electron` 主路径未发现 `agent_runtime_*` 直接命令调用",

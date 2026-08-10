@@ -1,9 +1,17 @@
 import { safeInvoke } from "@/lib/dev-bridge";
 import {
+  METHOD_CONFIG_BATCH_WRITE,
+  METHOD_CONFIG_READ,
+  type ConfigBatchWriteParams,
+  type ConfigReadResponse,
+  type ConfigWriteResponse,
+} from "@limecloud/app-server-client";
+import {
   CURRENT_SIDEBAR_NAV_SCHEMA_VERSION,
   type Config,
   type EnvironmentPreview,
 } from "./appConfigTypes";
+import { AppServerClient } from "./appServer";
 import { assertNotDiagnosticFacade } from "./diagnosticFacade";
 
 const APP_CONFIG_CHANGE_STAMP_KEY = "lime.app-config.changed-at";
@@ -12,6 +20,7 @@ const APP_CONFIG_CHANGED_EVENT = "lime:app-config-changed";
 let configCache: Config | null = null;
 let configLoadingPromise: Promise<Config> | null = null;
 let configCacheStamp: string | null = null;
+let configCacheVersion: string | null = null;
 let configMutationTail: Promise<void> = Promise.resolve();
 
 export type ConfigUpdater = (current: Config) => Config;
@@ -117,6 +126,7 @@ function invalidateConfigCache(): void {
   configCache = null;
   configLoadingPromise = null;
   configCacheStamp = null;
+  configCacheVersion = null;
 }
 
 function assertNonEmptyString(
@@ -131,7 +141,7 @@ function assertNonEmptyString(
 
 function assertConfigShape(value: unknown): asserts value is Config {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("get_config 未返回有效配置");
+    throw new Error("config/read 未返回有效配置");
   }
 
   const defaultProvider = (value as { default_provider?: unknown })
@@ -140,13 +150,57 @@ function assertConfigShape(value: unknown): asserts value is Config {
     typeof defaultProvider !== "string" ||
     defaultProvider.trim().length === 0
   ) {
-    throw new Error("get_config 未返回有效配置");
+    throw new Error("config/read 未返回有效配置");
   }
 }
 
-function assertVoidResult(command: string, value: unknown): void {
-  if (value !== null && value !== undefined) {
-    throw new Error(`${command} did not return void result`);
+function readConfigVersion(response: ConfigReadResponse): string {
+  const layers = response.layers;
+  if (!Array.isArray(layers) || layers.length !== 1) {
+    throw new Error("config/read 未返回唯一 Desktop 用户配置层");
+  }
+  const version = layers[0]?.version;
+  if (typeof version !== "string" || version.length === 0) {
+    throw new Error("config/read 未返回有效配置版本");
+  }
+  return version;
+}
+
+function configValuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function buildConfigEdits(
+  current: Config,
+  next: Config,
+): ConfigBatchWriteParams["edits"] {
+  return Object.entries(next)
+    .filter(([key, value]) => {
+      return !configValuesEqual(
+        (current as unknown as Record<string, unknown>)[key],
+        value,
+      );
+    })
+    .map(([key, value]) => ({
+      keyPath: key,
+      value,
+      mergeStrategy: "replace" as const,
+    }));
+}
+
+function assertConfigWriteResponse(
+  value: unknown,
+): asserts value is ConfigWriteResponse {
+  const response = value as Partial<ConfigWriteResponse> | null;
+  if (
+    !response ||
+    response.status !== "ok" ||
+    typeof response.version !== "string" ||
+    response.version.length === 0 ||
+    typeof response.filePath !== "string" ||
+    response.filePath.length === 0
+  ) {
+    throw new Error("config/batchWrite 未返回有效写入结果");
   }
 }
 
@@ -194,15 +248,14 @@ export async function getConfig(
   }
 
   if (!configLoadingPromise) {
-    configLoadingPromise = safeInvoke<unknown>("get_config")
-      .then((config) => {
-        assertNotDiagnosticFacade(
-          "get_config",
-          config,
-          "真实配置 current 通道",
-        );
-        assertConfigShape(config);
-        configCache = normalizeConfig(config);
+    configLoadingPromise = new AppServerClient()
+      .request<ConfigReadResponse>(METHOD_CONFIG_READ, {
+        includeLayers: true,
+      })
+      .then((response) => {
+        assertConfigShape(response.result.config);
+        configCache = normalizeConfig(response.result.config);
+        configCacheVersion = readConfigVersion(response.result);
         configCacheStamp = readAppConfigChangeStamp();
         return configCache;
       })
@@ -216,10 +269,40 @@ export async function getConfig(
 
 export async function saveConfig(config: Config): Promise<void> {
   const normalizedConfig = normalizeConfig(config);
-  const result = await safeInvoke("save_config", { config: normalizedConfig });
-  assertNotDiagnosticFacade("save_config", result, "真实配置 current 通道");
-  assertVoidResult("save_config", result);
-  configCache = cloneConfig(normalizedConfig);
+  const currentConfig = configCache
+    ? cloneConfig(configCache)
+    : await getConfig();
+  const expectedVersion = configCacheVersion;
+  if (!expectedVersion) {
+    invalidateConfigCache();
+    throw new Error("config/read 未提供保存所需的配置版本");
+  }
+  const edits = buildConfigEdits(currentConfig, normalizedConfig);
+  if (edits.length === 0) {
+    return;
+  }
+
+  let result: ConfigWriteResponse;
+  try {
+    const response = await new AppServerClient().request<ConfigWriteResponse>(
+      METHOD_CONFIG_BATCH_WRITE,
+      {
+        edits,
+        expectedVersion,
+        reloadUserConfig: true,
+      },
+    );
+    assertConfigWriteResponse(response.result);
+    result = response.result;
+  } catch (error) {
+    invalidateConfigCache();
+    throw error;
+  }
+  configCache = cloneConfig({
+    ...currentConfig,
+    ...normalizedConfig,
+  });
+  configCacheVersion = result.version;
   configCacheStamp = markAppConfigChanged();
 }
 

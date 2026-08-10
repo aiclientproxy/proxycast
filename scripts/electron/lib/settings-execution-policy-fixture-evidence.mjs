@@ -2,10 +2,11 @@ import path from "node:path";
 
 export const EXECUTION_POLICY_SCENARIO_ID =
   "execution-policy-allow-deny-error";
-export const EXECUTION_POLICY_REQUIRED_HOST_COMMANDS = [
-  "get_config",
-  "save_config",
+export const EXECUTION_POLICY_REQUIRED_CONFIG_METHODS = [
+  "config/read",
+  "config/batchWrite",
 ];
+export const EXECUTION_POLICY_REQUIRED_HOST_COMMANDS = [];
 
 const APP_SERVER_COMMAND = "app_server_handle_json_lines";
 const LEGACY_EXECUTION_POLICY_COMMANDS = [
@@ -126,7 +127,7 @@ function appServerMethods(entries) {
 
 function isExpectedSaveError(entry) {
   return (
-    entry?.command === "save_config" &&
+    entry?.command === APP_SERVER_COMMAND &&
     entry?.transport === "electron-ipc" &&
     EXPECTED_SAVE_ERROR.test(String(entry?.error ?? ""))
   );
@@ -148,36 +149,26 @@ export function summarizeSettingsExecutionPolicyTrace({
   const appServerIpcEntries = appServerEntries.filter(
     (entry) => entry.transport === "electron-ipc",
   );
-  const hostEntries = traceEntries.filter((entry) =>
-    EXECUTION_POLICY_REQUIRED_HOST_COMMANDS.includes(entry?.command),
-  );
-  const hostIpcEntries = hostEntries.filter(
-    (entry) => entry.transport === "electron-ipc",
-  );
-  const hostSuccessCommands = Array.from(
-    new Set(
-      hostIpcEntries
-        .filter((entry) => entry.status === "success")
-        .map((entry) => entry.command),
-    ),
-  );
+  const hostEntries = [];
+  const hostIpcEntries = [];
+  const configMethods = appServerMethods(appServerIpcEntries);
   const commands = new Set(traceEntries.map((entry) => entry?.command));
-  const expectedTraceErrors = hostIpcEntries.filter(isExpectedSaveError);
+  const expectedTraceErrors = appServerEntries.filter(isExpectedSaveError);
   const expectedInvokeErrors = errorEntries.filter(isExpectedSaveError);
   return {
     appServerIpcHitCount: appServerIpcEntries.length,
     methods: appServerMethods(appServerIpcEntries),
-    hostIpcHitCount: hostIpcEntries.length,
-    hostSuccessCommands,
-    missingHostSuccessCommands: EXECUTION_POLICY_REQUIRED_HOST_COMMANDS.filter(
-      (command) => !hostSuccessCommands.includes(command),
+    hostIpcHitCount: 0,
+    configMethods,
+    missingConfigMethods: EXECUTION_POLICY_REQUIRED_CONFIG_METHODS.filter(
+      (method) => !configMethods.includes(method),
     ),
-    successfulSaveCount: hostIpcEntries.filter(
-      (entry) => entry.command === "save_config" && entry.status === "success",
+    successfulSaveCount: appServerIpcEntries.filter(
+      (entry) => entry.status === "success" && configMethods.includes("config/batchWrite"),
     ).length,
     expectedSaveTraceErrorCount: expectedTraceErrors.length,
     expectedSaveInvokeErrorCount: expectedInvokeErrors.length,
-    unexpectedHostTraceErrorCount: hostIpcEntries.filter(
+    unexpectedHostTraceErrorCount: appServerEntries.filter(
       (entry) => entry.status === "error" && !isExpectedSaveError(entry),
     ).length,
     unexpectedInvokeErrorCount: errorEntries.filter(
@@ -275,7 +266,7 @@ export function applyPassingSettingsExecutionPolicyEvidence(summary, facts) {
     finalRestorationReadback: facts.finalRestorationReadback === true,
   };
   summary.expectedFailure = {
-    command: "save_config",
+    method: "config/batchWrite",
     transport: "electron-ipc",
     cause: "isolated-config-path-is-directory",
     traceErrorCount: trace.expectedSaveTraceErrorCount,
@@ -296,8 +287,8 @@ export function applyPassingSettingsExecutionPolicyEvidence(summary, facts) {
     ["threePreloadInvokeBridges", summary.bridge.preloadInvoke],
     ["appServerElectronIpc", summary.bridge.appServerIpcHitCount > 0],
     ["appServerCurrentMethod", summary.bridge.methods.length > 0],
-    ["hostElectronIpc", trace.hostIpcHitCount > 0],
-    ["hostCurrentReadWrite", trace.missingHostSuccessCommands.length === 0],
+    ["configElectronIpc", trace.appServerIpcHitCount > 0],
+    ["configCurrentReadWrite", trace.missingConfigMethods.length === 0],
     ["twoSuccessfulSaves", trace.successfulSaveCount >= 2],
     ["isolatedUserData", summary.lifecycle.isolatedUserData],
     ["executionPolicyTabActive", facts.executionPolicyTabActive === true],

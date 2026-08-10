@@ -8,13 +8,19 @@ import {
   buildModelCapabilitySendGateInput,
 } from "@/lib/model/modelCapabilitySendGate";
 import type { AgentSessionExecutionRuntime } from "@/lib/api/agentExecutionRuntime";
-import type { CollaborationMode, ModeKind } from "@limecloud/app-server-client";
+import type {
+  CollaborationMode,
+  CollaborationModeMask,
+} from "@limecloud/app-server-client";
 import type { AgentAccessMode } from "../hooks/agentChatStorage";
 import type { SessionModelPreference } from "../hooks/agentChatShared";
 import type { AgentInputMention } from "../hooks/agentChatShared";
 import type { MessageImage } from "../types";
 import type { ChatToolPreferences } from "./chatToolPreferences";
-import { createRuntimePoliciesFromAccessMode } from "./accessModeRuntime";
+import {
+  createRuntimePoliciesFromAccessMode,
+  permissionProfileIdFromAccessMode,
+} from "./accessModeRuntime";
 import { buildMessageImageDataUrl } from "./imageAttachments";
 import { buildSubmitOpRuntimeCompaction } from "./submitOpRuntimeCompaction";
 
@@ -25,7 +31,7 @@ export interface BuildUserInputSubmitOpOptions {
   clientUserMessageId?: string;
   eventName: string;
   requestMetadata?: Record<string, unknown>;
-  collaborationMode?: ModeKind;
+  collaborationMode?: CollaborationModeMask;
   executionRuntime?: AgentSessionExecutionRuntime | null;
   syncedRecentPreferences?: ChatToolPreferences | null;
   syncedSessionModelPreference?: SessionModelPreference | null;
@@ -46,19 +52,23 @@ export interface BuildTurnInputOptions {
 }
 
 function buildCollaborationMode(
-  mode: ModeKind | undefined,
+  preset: CollaborationModeMask | undefined,
   model: string,
   reasoningEffort: string | undefined,
 ): CollaborationMode | undefined {
-  if (mode !== "plan") {
+  if (!preset) {
     return undefined;
+  }
+  if (!preset.mode) {
+    throw new Error("collaboration mode preset must include mode");
   }
 
   return {
-    mode: "plan",
+    mode: preset.mode,
     settings: {
-      model,
-      reasoning_effort: reasoningEffort?.trim() || null,
+      model: preset.model?.trim() || model,
+      reasoning_effort:
+        preset.reasoning_effort?.trim() || reasoningEffort?.trim() || null,
       developer_instructions: null,
     },
   };
@@ -104,7 +114,7 @@ export function buildUserInputSubmitOp(
     clientUserMessageId,
     eventName,
     requestMetadata,
-    collaborationMode: collaborationModeKind,
+    collaborationMode: collaborationModePreset,
     executionRuntime,
     syncedRecentPreferences,
     syncedSessionModelPreference,
@@ -133,10 +143,12 @@ export function buildUserInputSubmitOp(
     throw new Error("threadId is required to build App Server turn/start");
   }
   const collaborationMode = buildCollaborationMode(
-    collaborationModeKind,
+    collaborationModePreset,
     turnModel,
     reasoningEffort,
   );
+  const turnReasoningEffort =
+    collaborationMode?.settings.reasoning_effort ?? reasoningEffort?.trim();
   const additionalContext = createApplicationAdditionalContext({
     metadata: compaction.metadata,
   });
@@ -157,9 +169,9 @@ export function buildUserInputSubmitOp(
       }),
       ...(collaborationMode ? { collaborationMode } : {}),
       ...(compaction.shouldSubmitModel ? { model: turnModel } : {}),
-      ...(reasoningEffort?.trim() ? { effort: reasoningEffort.trim() } : {}),
+      ...(turnReasoningEffort ? { effort: turnReasoningEffort } : {}),
       approvalPolicy: runtimePolicies.approvalPolicy,
-      sandboxPolicy: runtimePolicies.sandboxPolicy,
+      permissions: permissionProfileIdFromAccessMode(effectiveAccessMode),
       ...(Object.keys(additionalContext).length > 0
         ? { additionalContext }
         : {}),

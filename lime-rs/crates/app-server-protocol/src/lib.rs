@@ -20,11 +20,23 @@ pub use jsonrpc_lite::*;
 pub use protocol::app_server_method_catalog;
 pub use protocol::v0::*;
 pub use protocol::v2::{
-    CurrentTimeReadParams, CurrentTimeReadResponse, InputModality, MemoryResetResponse, Model,
-    ModelAvailabilityNux, ModelListParams, ModelListResponse, ModelListUpdatedNotification,
-    ModelServiceTier, ModelUpgradeInfo, ReasoningEffortOption, METHOD_CURRENT_TIME_READ,
-    METHOD_MEMORY_RESET, METHOD_MODEL_LIST, METHOD_MODEL_LIST_UPDATED, METHOD_THREAD_COMPACT_START,
+    CollaborationModeListParams, CollaborationModeListResponse, CollaborationModeMask,
+    ConfigBatchWriteParams, ConfigEdit, ConfigLayer, ConfigLayerMetadata, ConfigLayerSource,
+    ConfigReadParams, ConfigReadResponse, ConfigValueWriteParams, ConfigWriteErrorCode,
+    ConfigWriteResponse, CurrentTimeReadParams, CurrentTimeReadResponse, ExperimentalFeature,
+    ExperimentalFeatureEnablementSetParams, ExperimentalFeatureEnablementSetResponse,
+    ExperimentalFeatureListParams, ExperimentalFeatureListResponse, ExperimentalFeatureStage,
+    InputModality, MemoryResetResponse, MergeStrategy, Model, ModelAvailabilityNux,
+    ModelListParams, ModelListResponse, ModelListUpdatedNotification, ModelServiceTier,
+    ModelUpgradeInfo, OverriddenMetadata, PermissionProfileListParams,
+    PermissionProfileListResponse, PermissionProfileSummary, ReasoningEffortOption,
+    WindowsSandboxReadiness, WindowsSandboxReadinessParams, WindowsSandboxReadinessResponse,
+    WriteStatus, METHOD_COLLABORATION_MODE_LIST, METHOD_CONFIG_BATCH_WRITE, METHOD_CONFIG_READ,
+    METHOD_CONFIG_VALUE_WRITE, METHOD_CURRENT_TIME_READ,
+    METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET, METHOD_EXPERIMENTAL_FEATURE_LIST,
+    METHOD_MEMORY_RESET, METHOD_MODEL_LIST, METHOD_MODEL_LIST_UPDATED,
+    METHOD_PERMISSION_PROFILE_LIST, METHOD_THREAD_COMPACT_START,
     METHOD_THREAD_DECREMENT_ELICITATION, METHOD_THREAD_INCREMENT_ELICITATION,
     METHOD_THREAD_LOADED_LIST, METHOD_THREAD_RESUME, METHOD_THREAD_SEARCH_OCCURRENCES,
-    V2_SCHEMA_TYPE_NAMES,
+    METHOD_WINDOWS_SANDBOX_READINESS, V2_SCHEMA_TYPE_NAMES,
 };

@@ -77,6 +77,7 @@ import {
   ensureFixtureTextProvider,
   initializeAppServer,
   invokeAppServerFromPage,
+  updateConfigFromPage,
   readTraceMessages,
   waitForAppUrlReady,
   waitForRendererReady,
@@ -1170,10 +1171,10 @@ async function run() {
       logStage("enable-soul-style-config");
       runtimeEnv.writeFixtureConfig(fixtureConfigSoulOverrides);
       summary.soulStyleConfig = sanitizeJson(
-        await page.evaluate(
-          async ({ profileId }) => {
-            const currentConfig = await window.electronAPI.invoke("get_config");
-            const nextConfig = {
+        (
+          await updateConfigFromPage(
+            page,
+            (currentConfig) => ({
               ...(currentConfig || {}),
               memory: {
                 ...(currentConfig?.memory || {}),
@@ -1181,26 +1182,22 @@ async function run() {
                 soul: {
                   ...(currentConfig?.memory?.soul || {}),
                   enabled: true,
-                  style_profile_id: profileId,
+                  style_profile_id: soulStyleSelection.profileId,
                   imported_from: "manual",
                 },
               },
-            };
-            await window.electronAPI.invoke("save_config", {
-              config: nextConfig,
-            });
-            window.localStorage.setItem(
-              "lime.app-config.changed-at",
-              String(Date.now()),
-            );
-            window.dispatchEvent(new Event("lime:app-config-changed"));
-            return nextConfig.memory.soul;
-          },
-          {
-            profileId: soulStyleSelection.profileId,
-          },
-        ),
+            }),
+            appServerRequests,
+          )
+        ).config.memory.soul,
       );
+      await page.evaluate(() => {
+        window.localStorage.setItem(
+          "lime.app-config.changed-at",
+          String(Date.now()),
+        );
+        window.dispatchEvent(new Event("lime:app-config-changed"));
+      });
     }
 
     logStage("ensure-fixture-image-provider");

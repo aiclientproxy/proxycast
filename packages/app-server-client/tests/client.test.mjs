@@ -196,6 +196,10 @@ const {
   METHOD_KNOWLEDGE_PACK_READ,
   METHOD_KNOWLEDGE_PACK_STATUS_UPDATE,
   METHOD_KNOWLEDGE_SOURCE_IMPORT,
+  METHOD_COLLABORATION_MODE_LIST,
+  METHOD_CONFIG_BATCH_WRITE,
+  METHOD_CONFIG_READ,
+  METHOD_CONFIG_VALUE_WRITE,
   METHOD_MODEL_LIST,
   METHOD_HOOKS_LIST,
   METHOD_SKILLS_CONFIG_WRITE,
@@ -620,6 +624,98 @@ test("builds Codex v2 model list requests with opaque pagination", () => {
     limit: 25,
     includeHidden: true,
   });
+});
+
+test("builds Codex v2 collaboration mode list requests", () => {
+  const client = new AppServerClient();
+
+  const modes = client.listCollaborationModes();
+
+  assert.equal(modes.id, 1);
+  assert.equal(modes.method, METHOD_COLLABORATION_MODE_LIST);
+  assert.deepEqual(modes.params, {});
+});
+
+test("builds Codex v2 config read and write requests", () => {
+  const client = new AppServerClient();
+
+  const read = client.readConfig({ includeLayers: true });
+  const write = client.writeConfigValue({
+    keyPath: "language",
+    value: "en-US",
+    mergeStrategy: "replace",
+    expectedVersion: "v1",
+  });
+  const batch = client.writeConfigBatch({
+    edits: [
+      {
+        keyPath: "developer.enabled",
+        value: true,
+        mergeStrategy: "upsert",
+      },
+    ],
+    expectedVersion: "v2",
+    reloadUserConfig: true,
+  });
+
+  assert.deepEqual(read, {
+    id: 1,
+    method: METHOD_CONFIG_READ,
+    params: { includeLayers: true },
+  });
+  assert.deepEqual(write, {
+    id: 2,
+    method: METHOD_CONFIG_VALUE_WRITE,
+    params: {
+      keyPath: "language",
+      value: "en-US",
+      mergeStrategy: "replace",
+      expectedVersion: "v1",
+    },
+  });
+  assert.deepEqual(batch, {
+    id: 3,
+    method: METHOD_CONFIG_BATCH_WRITE,
+    params: {
+      edits: [
+        {
+          keyPath: "developer.enabled",
+          value: true,
+          mergeStrategy: "upsert",
+        },
+      ],
+      expectedVersion: "v2",
+      reloadUserConfig: true,
+    },
+  });
+});
+
+test("builds Codex v2 permission profile list requests", () => {
+  const client = new AppServerClient();
+
+  const profiles = client.listPermissionProfiles({
+    cursor: "1",
+    limit: 2,
+    cwd: "/workspace",
+  });
+
+  assert.equal(profiles.id, 1);
+  assert.equal(profiles.method, "permissionProfile/list");
+  assert.deepEqual(profiles.params, {
+    cursor: "1",
+    limit: 2,
+    cwd: "/workspace",
+  });
+});
+
+test("builds Codex v2 Windows sandbox readiness requests", () => {
+  const client = new AppServerClient();
+
+  const readiness = client.readWindowsSandboxReadiness();
+
+  assert.equal(readiness.id, 1);
+  assert.equal(readiness.method, "windowsSandbox/readiness");
+  assert.deepEqual(readiness.params, {});
 });
 
 test("decodes opaque model route selectors without exposing provider fields in Model", () => {

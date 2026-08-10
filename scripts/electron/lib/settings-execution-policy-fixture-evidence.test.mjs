@@ -26,23 +26,26 @@ function appServerEntry(method) {
 
 function traceRaw() {
   return JSON.stringify([
-    { command: "get_config", transport: "electron-ipc", status: "success" },
-    { command: "save_config", transport: "electron-ipc", status: "success" },
     {
-      command: "save_config",
+      ...appServerEntry("config/read"),
+    },
+    {
+      ...appServerEntry("config/batchWrite"),
+    },
+    {
+      command: "app_server_handle_json_lines",
       transport: "electron-ipc",
       status: "error",
       error: "EISDIR: illegal operation on a directory",
     },
-    { command: "save_config", transport: "electron-ipc", status: "success" },
-    appServerEntry("thread/list"),
+    appServerEntry("config/batchWrite"),
   ]);
 }
 
 function errorRaw() {
   return JSON.stringify([
     {
-      command: "save_config",
+      command: "app_server_handle_json_lines",
       transport: "electron-ipc",
       error: "EISDIR: illegal operation on a directory",
     },
@@ -114,11 +117,11 @@ describe("Settings Execution Policy Gate B evidence", () => {
         errorRaws: [errorRaw()],
       }),
     ).toMatchObject({
-      appServerIpcHitCount: 1,
-      methods: ["thread/list"],
-      hostSuccessCommands: ["get_config", "save_config"],
-      missingHostSuccessCommands: [],
-      successfulSaveCount: 2,
+      appServerIpcHitCount: 4,
+      methods: ["config/read", "config/batchWrite"],
+      configMethods: ["config/read", "config/batchWrite"],
+      missingConfigMethods: [],
+      successfulSaveCount: 3,
       expectedSaveTraceErrorCount: 1,
       expectedSaveInvokeErrorCount: 1,
       unexpectedHostTraceErrorCount: 0,
@@ -152,7 +155,7 @@ describe("Settings Execution Policy Gate B evidence", () => {
     const unexpectedError = JSON.stringify([
       ...JSON.parse(errorRaw()),
       {
-        command: "get_config",
+        command: "app_server_handle_json_lines",
         transport: "electron-ipc",
         error: "unexpected",
       },

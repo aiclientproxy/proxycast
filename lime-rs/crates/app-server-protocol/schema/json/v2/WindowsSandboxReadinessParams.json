@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Empty parameters are accepted so the method can be called with `{}` by the\nDesktop client while the ingress also accepts Codex's omitted-params form.",
+  "title": "WindowsSandboxReadinessParams",
+  "type": "object"
+}
