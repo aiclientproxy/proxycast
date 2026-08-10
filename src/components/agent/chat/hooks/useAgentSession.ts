@@ -519,6 +519,9 @@ export function useAgentSession(options: UseAgentSessionOptions) {
   const threadTurnsRef = useRef<AgentThreadTurn[]>(threadTurns);
   const threadItemsRef = useRef<AgentThreadItem[]>(threadItems);
   const threadReadRef = useRef<AgentRuntimeThreadReadModel | null>(threadRead);
+  const canonicalThreadIdBySessionIdRef = useRef<Map<string, string>>(
+    new Map(),
+  );
   const sessionHistoryWindowRef = useRef<AgentSessionHistoryWindow | null>(
     sessionHistoryWindow,
   );
@@ -733,6 +736,14 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       threadTurnsRef.current = stableSnapshot.threadTurns;
       threadItemsRef.current = stableSnapshot.threadItems;
       threadReadRef.current = resolvedThreadRead;
+      const resolvedSessionId = stableSnapshot.sessionId?.trim();
+      const canonicalThreadId = resolvedThreadRead?.thread_id?.trim();
+      if (resolvedSessionId && canonicalThreadId) {
+        canonicalThreadIdBySessionIdRef.current.set(
+          resolvedSessionId,
+          canonicalThreadId,
+        );
+      }
       executionRuntimeRef.current = stableSnapshot.executionRuntime;
       sessionWorkingDirRef.current = stableSnapshot.workingDir;
       setSessionId(stableSnapshot.sessionId);
@@ -757,13 +768,33 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         mergeAgentSessionReadModelThreadItems(currentItems, snapshot),
       );
       threadReadRef.current = snapshot.threadRead;
+      const currentSessionId = sessionIdRef.current?.trim();
+      const canonicalThreadId = snapshot.threadRead.thread_id?.trim();
+      if (currentSessionId && canonicalThreadId) {
+        canonicalThreadIdBySessionIdRef.current.set(
+          currentSessionId,
+          canonicalThreadId,
+        );
+      }
       setThreadRead(snapshot.threadRead);
     },
-    [setThreadItemsState],
+    [setThreadItemsState, sessionIdRef],
   );
   const getThreadIdForSubmit = useCallback(
-    () => threadReadRef.current?.thread_id,
-    [],
+    (targetSessionId?: string) => {
+      const resolvedTargetSessionId = targetSessionId?.trim();
+      if (resolvedTargetSessionId) {
+        return canonicalThreadIdBySessionIdRef.current.get(
+          resolvedTargetSessionId,
+        );
+      }
+      return (
+        canonicalThreadIdBySessionIdRef.current.get(
+          sessionIdRef.current?.trim() ?? "",
+        ) || threadReadRef.current?.thread_id
+      );
+    },
+    [sessionIdRef],
   );
 
   const hasActiveStreamingTimelineNow = useCallback(
@@ -1505,6 +1536,14 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       persistSessionRestoreCandidate(resolvedSessionId);
 
       if (detail) {
+        const canonicalThreadId =
+          detail.thread_read?.thread_id?.trim() || detail.thread_id?.trim();
+        if (canonicalThreadId) {
+          canonicalThreadIdBySessionIdRef.current.set(
+            resolvedSessionId,
+            canonicalThreadId,
+          );
+        }
         setTopics((prev) =>
           upsertTopicFromSessionDetail(
             prev,

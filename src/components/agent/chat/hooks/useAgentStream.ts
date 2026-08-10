@@ -145,7 +145,7 @@ interface UseAgentStreamOptions {
   currentStreamingEventNameRef: MutableRefObject<string | null>;
   warnedKeysRef: MutableRefObject<Set<string>>;
   getWorkspaceIdForSubmit: () => string | undefined;
-  getThreadIdForSubmit: () => string | undefined;
+  getThreadIdForSubmit: (targetSessionId?: string) => string | undefined;
   setWorkspacePathMissing: Dispatch<
     SetStateAction<WorkspacePathMissingState | null>
   >;

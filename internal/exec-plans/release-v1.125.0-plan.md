@@ -79,3 +79,15 @@
 - Gate B failure path 已补只读诊断，失败时保存 `thread/read`、`log/list`、`log/persistedTail`、`diagnostics/server/read`、renderer invoke trace、provider request 与 MCP ledger，供下一次 Windows runner 定位 turn 终态/错误；不改变通过条件。
 - runner `31345998150` 使用完整 SHA `c228ffde93f14000d7ee6daa99113c96164a0a7a`；Checkout、插件路径契约、sherpa runtime、Electron Windows 包、N-1 Squirrel 下载与安装 smoke 均通过，Plugin Gate B 仍在 `submit-renderer-form` 等待 90 秒后失败。失败诊断确认 enabled turn 已 `completed/idle`、provider request 为 `0`、MCP ledger 仅有 runtime `initialize`，且失败截图显示 disabled boundary 文本；尚未取得结构化 turn/item 错误字段。
 - 为下一轮 Windows runner 增加安全的 `thread/read` turn/item 状态摘要与 localhost provider connection diagnostics；本地 Plugin Gate B 已通过。下一步用该证据确认是 runtime turn 终态错误、Plugin snapshot/Skill 解析，还是 renderer session 投影漂移，再实施窄产品修复。
+
+## Windows target session 投影修复
+
+状态：`fix-validated-locally / windows-runner-pending`
+
+- runner `31347609969` 使用完整 SHA `22a96e5e1df9b771120ba6ea26ab7f562d5eafcd`；Windows path contract、sherpa runtime、Electron Windows package、N-1 Squirrel 安装 smoke 均通过，Plugin Gate B 仍在等待 `mcp_elicitation` 90 秒后失败。
+- 失败证据确认 enabled canonical turn 已 `completed`、thread 已 `idle`，items 只有 user message 与空 agent message；enabled provider 只有 `/v1/models`，没有 `/v1/chat/completions`，而 disabled boundary provider 收到后续请求。失败截图标题已进入 enabled 会话，但正文仍显示 disabled boundary 结果，证明 renderer 的目标 session 与提交 thread 发生漂移。
+- 根因：显式 `targetSessionId` 发送链完成 `ensureSession(target)` 后，canonical thread lookup 仍读取全局 `threadReadRef`。Windows 慢时序下该 ref 可能仍绑定旧会话，导致 enabled 请求提交到 disabled boundary thread/provider。
+- 修复：`useAgentSession` 按 session 记录 canonical `thread_id`；显式目标提交只允许按目标 session 查询，映射缺失时刷新该目标的 read model，禁止回退旧会话 thread；同步收紧 prepared send / stream 类型契约并补时序回归测试。
+- 窄写集：`src/components/agent/chat/hooks/useAgentSession.ts`、`agentStreamSubmitExecution.ts`、`agentStreamPreparedSendEnv.ts`、`useAgentStream.ts`、`agentStreamSubmitExecution.test.ts` 与本计划。上述部分文件同时含并发工作树改动，提交前必须重新确认 release candidate 范围。
+- 本地验证：相关 Vitest `10/10` 通过；`npm run typecheck` 通过；`npm run smoke:plugin-package-electron-gate-b -- --timeout-ms 180000 --keep-temp` 通过，enabled provider request `2`、MCP elicitation accepted、provider final text observed、production mock fallback `0`。
+- 下一步：提交并推送完整依赖闭包后，以新完整 SHA 重触发 `build-windows-test.yml`，持续跟踪到 Plugin Gate B 与 artifact 结论；不移动已发布的 `v1.125.0` tag。

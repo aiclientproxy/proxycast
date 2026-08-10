@@ -400,6 +400,18 @@ describe("agentStreamSubmitExecution", () => {
     const unlisten = vi.fn();
     const submitOp = vi.fn(async () => {});
     const ensureSession = vi.fn(async () => "session-materialized");
+    const threadIdBySessionId = new Map<string, string>();
+    const getThreadIdForSubmit = vi.fn((targetSessionId?: string) =>
+      targetSessionId
+        ? threadIdBySessionId.get(targetSessionId)
+        : "thread-previous",
+    );
+    const refreshSessionReadModel = vi.fn(async (targetSessionId?: string) => {
+      if (targetSessionId) {
+        threadIdBySessionId.set(targetSessionId, "thread-materialized");
+      }
+      return true;
+    });
     const registerListener = vi.fn();
     const activateStream = vi.fn();
     const runtime = {
@@ -420,12 +432,12 @@ describe("agentStreamSubmitExecution", () => {
       runtime,
       ensureSession,
       attemptSilentTurnRecovery: async () => false,
-      refreshSessionReadModel: async () => true,
+      refreshSessionReadModel,
       sessionIdRef: {
         current: "session-previous",
       } as MutableRefObject<string | null>,
       getWorkspaceIdForSubmit: () => "workspace-1",
-      getThreadIdForSubmit: () => "thread-materialized",
+      getThreadIdForSubmit,
       getSyncedSessionExecutionStrategy: () => "react",
       getSyncedSessionRecentPreferences: () => null,
       effectiveAccessMode: "read-only",
@@ -482,6 +494,10 @@ describe("agentStreamSubmitExecution", () => {
       skipSessionRestore: true,
       skipSessionStartHooks: true,
     });
+    expect(getThreadIdForSubmit).toHaveBeenCalledWith("session-materialized");
+    expect(refreshSessionReadModel).toHaveBeenCalledWith(
+      "session-materialized",
+    );
     expect(runtime.listenToTurnEvents).toHaveBeenCalledWith(
       "event-materialized",
       expect.any(Function),

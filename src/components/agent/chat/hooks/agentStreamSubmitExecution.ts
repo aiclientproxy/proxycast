@@ -63,7 +63,7 @@ interface ExecuteAgentStreamSubmitOptions {
   refreshSessionReadModel: (targetSessionId?: string) => Promise<boolean>;
   sessionIdRef: MutableRefObject<string | null>;
   getWorkspaceIdForSubmit: () => string | undefined;
-  getThreadIdForSubmit: () => string | undefined;
+  getThreadIdForSubmit: (targetSessionId?: string) => string | undefined;
   getSyncedSessionExecutionStrategy: (
     sessionId: string,
   ) => AgentExecutionStrategy | null;
@@ -292,10 +292,10 @@ export async function executeAgentStreamSubmit(
   if (!resolvedActiveSessionId) {
     throw new Error("缺少会话 ID，无法启动流式任务");
   }
-  let resolvedThreadId = getThreadIdForSubmit()?.trim();
+  let resolvedThreadId = getThreadIdForSubmit(targetSessionId)?.trim();
   if (!resolvedThreadId) {
     await refreshSessionReadModel(resolvedActiveSessionId);
-    resolvedThreadId = getThreadIdForSubmit()?.trim();
+    resolvedThreadId = getThreadIdForSubmit(resolvedActiveSessionId)?.trim();
   }
   if (!resolvedThreadId) {
     throw new Error("缺少 canonical threadId，无法启动流式任务");
