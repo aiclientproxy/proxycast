@@ -823,6 +823,7 @@ pub(super) fn v2_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<v2::ModelAvailabilityNux>("ModelAvailabilityNux"),
         typed_schema::<v2::ModelServiceTier>("ModelServiceTier"),
         typed_schema::<v2::ModelUpgradeInfo>("ModelUpgradeInfo"),
+        typed_schema::<v2::MultiAgentVersion>("MultiAgentVersion"),
         typed_schema::<v2::ReasoningEffortOption>("ReasoningEffortOption"),
         typed_schema::<v2::Model>("Model"),
         typed_schema::<v2::ModelListResponse>("ModelListResponse"),

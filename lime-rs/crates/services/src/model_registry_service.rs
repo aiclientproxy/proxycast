@@ -3444,6 +3444,7 @@ impl ModelRegistryService {
             input_modalities: taxonomy.input_modalities,
             output_modalities: taxonomy.output_modalities,
             runtime_features: taxonomy.runtime_features,
+            multi_agent_version: None,
             deployment_source: taxonomy.deployment_source,
             management_plane: taxonomy.management_plane,
             canonical_model_id: taxonomy.canonical_model_id,

@@ -98,6 +98,9 @@ export type ModelRuntimeFeature =
   | "chat_completions_api"
   | "images_api";
 
+/** 模型显式声明支持的 Multi-Agent runtime 版本。 */
+export type ModelMultiAgentVersion = "disabled" | "v1" | "v2";
+
 /** 模型部署来源 */
 export type ModelDeploymentSource = "local" | "user_cloud" | "oem_cloud";
 
@@ -204,6 +207,8 @@ export interface EnhancedModelMetadata {
   output_modalities?: ModelModality[];
   /** 运行时特性 */
   runtime_features?: ModelRuntimeFeature[];
+  /** 模型显式声明支持的 Multi-Agent runtime；缺失时不得推断。 */
+  multi_agent_version?: ModelMultiAgentVersion | null;
   /** 部署来源 */
   deployment_source?: ModelDeploymentSource;
   /** 管理面 */

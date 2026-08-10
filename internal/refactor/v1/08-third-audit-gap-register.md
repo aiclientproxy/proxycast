@@ -70,7 +70,7 @@ serialization scope 和 v2 schema 绑定；README 还要求每条连接执行
 
 已补 machine-readable method matrix：
 `internal/refactor/v1/fixtures/codex-method-product-scope.v0.1.json`。矩阵覆盖 Codex
-注册表的 220 个方向化 method，每个只能标记为 `implemented`、`product-scope-excluded`
+注册表的 221 个方向化 method，每个只能标记为 `implemented`、`product-scope-excluded`
 或 `planned`，并由
 `src/lib/governance/codexMethodProductScopeBoundary.test.ts` 固定方向计数、唯一性、
 owner/evidence、planned gap、excluded rationale 和 Lime generated manifest 同方向契约。

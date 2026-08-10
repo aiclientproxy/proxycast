@@ -3,7 +3,7 @@
   "kind": "codex-app-server-method-product-scope",
   "upstream": {
     "repository": "/Users/coso/Documents/dev/rust/codex",
-    "revision": "c4f42d161ae44a8d696ee9fb595709661979d187",
+    "revision": "c9c6c0daa994109cec50fddcb57d076fdf9e738c",
     "source": "codex-rs/app-server-protocol/src/protocol/common.rs"
   },
   "lime": {
@@ -12,16 +12,16 @@
   },
   "allowedStatuses": ["implemented", "product-scope-excluded", "planned"],
   "inventory": {
-    "total": 220,
+    "total": 221,
     "byDirection": {
-      "clientRequest": 136,
+      "clientRequest": 137,
       "serverRequest": 11,
       "serverNotification": 72,
       "clientNotification": 1
     },
     "byStatus": {
       "implemented": 139,
-      "product-scope-excluded": 53,
+      "product-scope-excluded": 54,
       "planned": 28
     }
   },
@@ -55,6 +55,18 @@
         "packages/app-server-client/src/request-client-methods.ts"
       ],
       "methods": ["initialized"]
+    },
+    {
+      "id": "server-diagnostics-excluded",
+      "direction": "clientRequest",
+      "productArea": "codex-internal",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "forbidden-to-restore guard",
+      "counterpartRule": "none",
+      "rationale": "Codex server/diagnostics only exposes process-local, content-free diagnostics for upstream development and does not have a Lime Desktop consumer or user workflow.",
+      "evidence": ["internal/refactor/v1/README.md"],
+      "methods": ["server/diagnostics"]
     },
     {
       "id": "thread-current",
@@ -396,11 +408,7 @@
         "src/lib/api/appConfig.ts",
         "scripts/electron/mcp-config-fixture-smoke.mjs"
       ],
-      "methods": [
-        "config/batchWrite",
-        "config/read",
-        "config/value/write"
-      ]
+      "methods": ["config/batchWrite", "config/read", "config/value/write"]
     },
     {
       "id": "config-requirements-excluded",

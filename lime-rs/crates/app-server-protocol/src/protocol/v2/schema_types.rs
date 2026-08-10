@@ -144,6 +144,7 @@ pub const V2_SCHEMA_TYPE_NAMES: &[&str] = &[
     "ModelAvailabilityNux",
     "ModelServiceTier",
     "ModelUpgradeInfo",
+    "MultiAgentVersion",
     "ReasoningEffortOption",
     "Model",
     "ModelListResponse",

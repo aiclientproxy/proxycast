@@ -8,6 +8,33 @@ import {
 const CREATED_AT_SECONDS = 1_780_704_000;
 
 describe("appServerCanonicalThreadProjection", () => {
+  it("从 current Thread route 投影 execution runtime，并优先顶层 provider", () => {
+    const detail = readCanonicalThreadDetail({
+      thread: {
+        id: "thread-current-route",
+        sessionId: "session-current-route",
+        status: { type: "idle" },
+        createdAt: CREATED_AT_SECONDS,
+        updatedAt: CREATED_AT_SECONDS + 1,
+        modelProvider: "provider-enabled",
+        extra: {
+          providerSelector: "provider-stale-storage",
+          providerName: "provider-stale-storage",
+          modelName: "shared-model",
+        },
+        turns: [],
+      },
+    });
+
+    expect(detail?.execution_runtime).toMatchObject({
+      session_id: "session-current-route",
+      provider_selector: "provider-enabled",
+      provider_name: "provider-stale-storage",
+      model_name: "shared-model",
+      source: "session",
+    });
+  });
+
   it("从最新成功 update_plan 恢复 checklist，且不生成 Plan Item", () => {
     const detail = readCanonicalThreadDetail({
       thread: {

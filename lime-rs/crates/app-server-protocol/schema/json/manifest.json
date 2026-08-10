@@ -2355,6 +2355,7 @@
       "ModelUpgradeInfo",
       "ModelVerification",
       "ModelVerificationNotification",
+      "MultiAgentVersion",
       "NonSteerableTurnKind",
       "OverriddenMetadata",
       "PatchApplyStatus",

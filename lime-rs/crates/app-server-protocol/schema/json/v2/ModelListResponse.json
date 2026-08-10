@@ -133,6 +133,16 @@
         "model": {
           "type": "string"
         },
+        "multiAgentVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MultiAgentVersion"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "providerId": {
           "type": "string"
         },
@@ -351,6 +361,14 @@
         "model"
       ],
       "type": "object"
+    },
+    "MultiAgentVersion": {
+      "enum": [
+        "disabled",
+        "v1",
+        "v2"
+      ],
+      "type": "string"
     },
     "ReasoningEffortOption": {
       "properties": {

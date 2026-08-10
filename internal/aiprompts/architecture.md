@@ -1425,7 +1425,10 @@ catalog grouping and display, but RuntimeCore must reject it before provider exe
 non-empty. Direct runtime config is authoritative only when it carries an explicit capability snapshot. Renderer
 `model/list` projection preserves Codex picker, reasoning-effort and input-modality fields while forwarding the selected
 catalog record's typed `providerId` and `capabilitySnapshot` unchanged. It also forwards known context/output limits. The
-Renderer reads capabilities, task families, input/output modalities and runtime features from that snapshot and must not
+optional `multiAgentVersion` is forwarded only when the catalog explicitly declares `disabled`, `v1`, or `v2`; absence
+remains `null`, and provider name, model name, task family or tool capability must never infer a version. This model-declared
+runtime support field does not replace the Grok-aligned provider route/readiness owner or Lime's Multi-Agent lifecycle
+owner. The Renderer reads capabilities, task families, input/output modalities and runtime features from that snapshot and must not
 synthesize tools, streaming, JSON mode, function calling, capability provenance or limits. `inferred_hint` is excluded
 from executable `model/list` rather than being relabeled locally. Executable chat entries are checked by the same canonical
 `ModelTaskRequest + route_capability_gap` contract used by Turn admission: they must explicitly advertise the `chat` task
@@ -2238,6 +2241,10 @@ interaction 和生产 mock fallback 继续为 `dead / deleted / forbidden-to-res
 
 `deprecationNotice` 已按 Desktop 产品范围裁决为 `product-scope-excluded`：它是 Codex 开发/设置诊断，不进入
 对话通知链；旧实现无外部兼容负担时直接替换或删除，不恢复同名通知包装。
+
+Codex `server/diagnostics` 同样保持 `product-scope-excluded / forbidden-to-restore`。它只返回进程本地、无内容的
+上游诊断指标，Lime Desktop 没有对应用户流程；Electron 不新增诊断业务后端，也不把该接口的指标当作模型
+capability、provider readiness 或 sandbox enforcement 证据。
 
 Architecture impact: major; 本节新增了从 Turn-scoped 精确 delta producer、durable event、v2 notification、canonical Turn
 到 Desktop Changes 的跨层数据流，并明确空 diff 清理与唯一事实源边界。Responsible developer confirmation: root,

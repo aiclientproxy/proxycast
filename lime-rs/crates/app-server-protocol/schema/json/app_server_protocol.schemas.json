@@ -28446,6 +28446,13 @@
           ],
           "type": "string"
         },
+        "HookExecutionMode": {
+          "enum": [
+            "async",
+            "sync"
+          ],
+          "type": "string"
+        },
         "HookHandlerType": {
           "enum": [
             "agent",
@@ -28508,6 +28515,10 @@
         },
         "eventName": {
           "$ref": "#/$defs/HookEventName"
+        },
+        "executionMode": {
+          "$ref": "#/$defs/HookExecutionMode",
+          "default": "sync"
         },
         "handlerType": {
           "$ref": "#/$defs/HookHandlerType"
@@ -28827,6 +28838,13 @@
           ],
           "type": "string"
         },
+        "HookExecutionMode": {
+          "enum": [
+            "async",
+            "sync"
+          ],
+          "type": "string"
+        },
         "HookHandlerType": {
           "enum": [
             "agent",
@@ -28863,6 +28881,10 @@
             },
             "eventName": {
               "$ref": "#/$defs/HookEventName"
+            },
+            "executionMode": {
+              "$ref": "#/$defs/HookExecutionMode",
+              "default": "sync"
             },
             "handlerType": {
               "$ref": "#/$defs/HookHandlerType"
@@ -29026,6 +29048,13 @@
           ],
           "type": "string"
         },
+        "HookExecutionMode": {
+          "enum": [
+            "async",
+            "sync"
+          ],
+          "type": "string"
+        },
         "HookHandlerType": {
           "enum": [
             "agent",
@@ -29062,6 +29091,10 @@
             },
             "eventName": {
               "$ref": "#/$defs/HookEventName"
+            },
+            "executionMode": {
+              "$ref": "#/$defs/HookExecutionMode",
+              "default": "sync"
             },
             "handlerType": {
               "$ref": "#/$defs/HookHandlerType"
@@ -38483,6 +38516,14 @@
           ],
           "type": "object"
         },
+        "MultiAgentVersion": {
+          "enum": [
+            "disabled",
+            "v1",
+            "v2"
+          ],
+          "type": "string"
+        },
         "ReasoningEffortOption": {
           "properties": {
             "description": {
@@ -38568,6 +38609,16 @@
         },
         "model": {
           "type": "string"
+        },
+        "multiAgentVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MultiAgentVersion"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "providerId": {
           "type": "string"
@@ -39304,6 +39355,16 @@
             "model": {
               "type": "string"
             },
+            "multiAgentVersion": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MultiAgentVersion"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "providerId": {
               "type": "string"
             },
@@ -39522,6 +39583,14 @@
             "model"
           ],
           "type": "object"
+        },
+        "MultiAgentVersion": {
+          "enum": [
+            "disabled",
+            "v1",
+            "v2"
+          ],
+          "type": "string"
         },
         "ReasoningEffortOption": {
           "properties": {
@@ -42876,6 +42945,16 @@
       ],
       "title": "ModelVerificationNotification",
       "type": "object"
+    },
+    "MultiAgentVersion": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "disabled",
+        "v1",
+        "v2"
+      ],
+      "title": "MultiAgentVersion",
+      "type": "string"
     },
     "NonSteerableTurnKind": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",

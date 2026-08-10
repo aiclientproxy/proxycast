@@ -194,6 +194,15 @@ pub enum ModelRuntimeFeature {
     ImagesApi,
 }
 
+/// 模型显式声明支持的 Multi-Agent runtime 版本。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelMultiAgentVersion {
+    Disabled,
+    V1,
+    V2,
+}
+
 /// 模型部署来源
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -433,6 +442,9 @@ pub struct EnhancedModelMetadata {
     /// 运行时特性
     #[serde(default)]
     pub runtime_features: Vec<ModelRuntimeFeature>,
+    /// 模型显式声明支持的 Multi-Agent runtime；缺失时不得推断。
+    #[serde(default)]
+    pub multi_agent_version: Option<ModelMultiAgentVersion>,
     /// 部署来源
     #[serde(default)]
     pub deployment_source: ModelDeploymentSource,
@@ -490,6 +502,7 @@ impl EnhancedModelMetadata {
             input_modalities: vec![],
             output_modalities: vec![],
             runtime_features: vec![],
+            multi_agent_version: None,
             deployment_source: ModelDeploymentSource::UserCloud,
             management_plane: ModelManagementPlane::LocalSettings,
             canonical_model_id: None,
@@ -842,6 +855,7 @@ impl ModelsDevModel {
             input_modalities: vec![],
             output_modalities: vec![],
             runtime_features: vec![],
+            multi_agent_version: None,
             deployment_source: ModelDeploymentSource::UserCloud,
             management_plane: ModelManagementPlane::LocalSettings,
             canonical_model_id: None,

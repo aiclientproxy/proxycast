@@ -42,6 +42,12 @@ hook_enum!(HookHandlerType {
     Agent,
 });
 hook_enum!(HookExecutionMode { Sync, Async });
+
+impl Default for HookExecutionMode {
+    fn default() -> Self {
+        Self::Sync
+    }
+}
 hook_enum!(HookScope { Thread, Turn });
 hook_enum!(HookSource {
     System,
@@ -105,6 +111,8 @@ pub struct HookMetadata {
     pub key: String,
     pub event_name: HookEventName,
     pub handler_type: HookHandlerType,
+    #[serde(default)]
+    pub execution_mode: HookExecutionMode,
     pub matcher: Option<String>,
     pub command: Option<String>,
     pub timeout_sec: u64,
@@ -126,6 +134,7 @@ impl From<&core::HookSnapshot> for HookMetadata {
             key: value.key.clone(),
             event_name: value.event_name.into(),
             handler_type: value.handler_type.into(),
+            execution_mode: value.execution_mode.into(),
             matcher: value.matcher.clone(),
             command: value.command.clone(),
             timeout_sec: value.timeout_sec,

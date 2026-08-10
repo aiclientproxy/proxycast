@@ -332,6 +332,7 @@ function toRegistryModel(model: Model): EnhancedModelMetadata {
     input_modalities: inputModalities,
     output_modalities: outputModalities,
     runtime_features: runtimeFeatures,
+    multi_agent_version: model.multiAgentVersion ?? null,
     deployment_source: "user_cloud",
     management_plane: "local_settings",
     canonical_model_id: route.modelId,

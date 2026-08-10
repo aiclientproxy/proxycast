@@ -132,6 +132,7 @@ function createCatalogModel(
     contextWindow: null,
     maxOutputTokens: null,
     supportsPersonality: false,
+    multiAgentVersion: null,
     additionalSpeedTiers: [],
     serviceTiers: [],
     defaultServiceTier: null,
@@ -336,6 +337,7 @@ describe("modelRegistry API", () => {
           },
           contextWindow: 400_000,
           maxOutputTokens: 128_000,
+          multiAgentVersion: "v2",
         }),
       ],
       nextCursor: null,
@@ -434,6 +436,7 @@ describe("modelRegistry API", () => {
           "json_schema",
           "reasoning",
         ],
+        multi_agent_version: "v2",
         limits: {
           context_length: 400_000,
           max_output_tokens: 128_000,

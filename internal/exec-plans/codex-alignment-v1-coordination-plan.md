@@ -4501,3 +4501,23 @@ Lime generated manifest。无 `compat`、`deprecated` 新增，旧 realtime GUI/
 边界写回架构、产品矩阵和 Renderer 守卫。下一刀从剩余 `28` 个 planned method 中选择具备真实 Desktop consumer
 与唯一 current owner 的 surface，或回到 Windows 真机 sandbox evidence；不得用 Codex realtime/TUI surface 冒充
 Grok 多模态对齐。
+
+### 2026-08-10 Codex HEAD registry 与 current 字段增量审计
+
+状态：in progress。
+
+目标与窄写集：将 method matrix 从 Codex `c4f42d161ae44a8d696ee9fb595709661979d187` 增量审计到
+`c9c6c0daa994109cec50fddcb57d076fdf9e738c`，并只收敛已有 current boundary 的字段变化。写集限定为
+`app-server-protocol` Model/Hook types、Grok-aligned model catalog projection、Renderer model registry、method 产品矩阵、
+架构事实源和对应定向测试；不触碰 Windows runner 热区，不恢复 realtime/TUI，也不创建配置或诊断第二 owner。
+
+增量裁决：Codex 新增的 `server/diagnostics` 只返回进程本地、无内容指标，没有 Lime Desktop 用户流程，归入
+`product-scope-excluded / forbidden-to-restore`；矩阵变为 `139 implemented / 28 planned / 54 excluded`，总数
+`221`，产品范围完成度仍为 `139 / 167 = 83.2%`。`model/list.multiAgentVersion` 从 model catalog 显式元数据透传，
+缺失保持 `null`，禁止按 provider/model 名称或工具能力推断；Hook `executionMode` 直接来自冻结的
+`HookSnapshot`。`configRequirements.autoReview` 与 MCP hook handler 仍没有本轮授权的 current 配置 consumer，
+不以协议字段存在冒充实现。
+
+验证计划：生成 Rust schema 与 typed client，运行 App Server protocol/Hook/model 定向 Rust 测试、Renderer
+model registry 与 method boundary Vitest、`npm run test:contracts`、`npm run governance:legacy-report`、typecheck、
+格式和 diff 检查。本切片不改变 GUI 交互、Electron/preload 或 Thread/Turn/Item producer，因此不重复运行 Gate B。

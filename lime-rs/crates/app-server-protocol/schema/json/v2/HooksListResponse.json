@@ -31,6 +31,13 @@
       ],
       "type": "string"
     },
+    "HookExecutionMode": {
+      "enum": [
+        "async",
+        "sync"
+      ],
+      "type": "string"
+    },
     "HookHandlerType": {
       "enum": [
         "agent",
@@ -67,6 +74,10 @@
         },
         "eventName": {
           "$ref": "#/$defs/HookEventName"
+        },
+        "executionMode": {
+          "$ref": "#/$defs/HookExecutionMode",
+          "default": "sync"
         },
         "handlerType": {
           "$ref": "#/$defs/HookHandlerType"

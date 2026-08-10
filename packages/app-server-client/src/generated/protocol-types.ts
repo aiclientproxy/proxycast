@@ -6140,6 +6140,7 @@ export interface HookMetadata {
   displayOrder: number;
   enabled: boolean;
   eventName: HookEventName;
+  executionMode?: HookExecutionMode;
   handlerType: HookHandlerType;
   isManaged: boolean;
   key: string;
@@ -7199,6 +7200,7 @@ export interface Model {
   isDefault: boolean;
   maxOutputTokens?: number | null;
   model: string;
+  multiAgentVersion?: MultiAgentVersion | null;
   providerId: string;
   serviceTiers: ModelServiceTier[];
   supportedReasoningEfforts: ReasoningEffortOption[];
@@ -7586,6 +7588,8 @@ export interface ModelVerificationNotification {
   turnId: string;
   verifications: ModelVerification[];
 }
+
+export type MultiAgentVersion = "disabled" | "v1" | "v2";
 
 export type NonSteerableTurnKind = "compact" | "review";
 
@@ -10737,6 +10741,8 @@ export type HookEventName =
   | "subagentStop"
   | "userPromptSubmit";
 
+export type HookExecutionMode = "async" | "sync";
+
 export type HookHandlerType = "agent" | "command" | "prompt";
 
 export type HookSource =
@@ -10753,8 +10759,6 @@ export type HookSource =
   | "user";
 
 export type HookTrustStatus = "managed" | "modified" | "trusted" | "untrusted";
-
-export type HookExecutionMode = "async" | "sync";
 
 export type HookRunStatus =
   | "blocked"

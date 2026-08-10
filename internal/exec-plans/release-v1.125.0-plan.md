@@ -131,3 +131,12 @@
 - 本地验证：`npm run typecheck` 通过；metadata controller/scheduler/context Vitest `30 passed; 0 failed`；本轮 ESLint `--max-warnings 0` 通过。
 - 本机 packaged Plugin Gate B 复跑通过：evidence `plugin-package-electron-gate-b-summary.json`，`ok=true`、`providerRequestCount=2`、MCP elicitation accepted、provider final text observed、`productionMockFallbackHitCount=0`。
 - 下一步：确认本轮 release candidate 后提交并推送完整 SHA，重新触发 `.github/workflows/build-windows-test.yml`，继续跟踪 Plugin Gate B 与 artifact；不移动已发布的 `v1.125.0` tag。
+
+## Windows runner `31372663997`
+
+- 使用完整 SHA `fb465072fbe14551aeadee530bf36c9c165a06c4`；Windows path contract、sherpa runtime、Electron Windows x64 Squirrel package、N-1 installer download 与 installed Squirrel smoke 全部通过，仍仅失败于 Plugin Gate B 等待 `mcp_elicitation` 90 秒超时。
+- enabled provider 仍只有 `GET /v1/models`，disabled provider 收到后续 `/v1/chat/completions`；MCP ledger 只有 `initialize`。失败时 `thread.modelProvider` 保持 enabled provider，但 `thread.extra.providerSelector/providerName` 已回到 disabled provider。
+- 新证据修正竞态顺序：Renderer provider selection 先于 hydration fallback 排队，因此 selection 时还没有可取消句柄；`finalizeResolvedTopicDetail` 随后因为 canonical `AgentSessionDetail` 缺少 `execution_runtime`，把 current thread 错判为“缺少 runtime route”，再次从旧 session storage 生成 provider fallback。
+- 根因 owner：`readCanonicalThreadDetail` 已读取 current `Thread.modelProvider` 与 `Thread.extra.modelName`，但未投影 `AgentSessionDetail.execution_runtime`，使 hook 层失去 current route 事实源。
+- 修复：canonical Thread projection 从顶层 `modelProvider`（优先于可能 stale 的 extra provider）和 metadata `modelName` 构造 session execution runtime；保留 imported source markers；补顶层 current provider 覆盖 stale extra provider 的回归测试。
+- 本地验证：canonical projection/App Server session client/metadata controller Vitest `48 passed; 0 failed`；`npm run typecheck` 与 projection ESLint `--max-warnings 0` 通过；本机 packaged Plugin Gate B 复跑 `ok=true`、enabled provider request `2`、MCP elicitation/final text 完成、production mock fallback `0`。Windows packaged Gate B 待新完整 SHA 复核。

@@ -41,6 +41,14 @@ pub struct ModelUpgradeInfo {
     pub migration_markdown: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MultiAgentVersion {
+    Disabled,
+    V1,
+    V2,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReasoningEffortOption {
@@ -67,6 +75,7 @@ pub struct Model {
     pub context_window: Option<u32>,
     pub max_output_tokens: Option<u32>,
     pub supports_personality: bool,
+    pub multi_agent_version: Option<MultiAgentVersion>,
     pub additional_speed_tiers: Vec<String>,
     pub service_tiers: Vec<ModelServiceTier>,
     pub default_service_tier: Option<String>,

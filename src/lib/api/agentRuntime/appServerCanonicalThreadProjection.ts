@@ -5,6 +5,7 @@ import type {
   AgentThreadTurn,
   AgentThreadTurnStatus,
 } from "../agentProtocol";
+import type { AgentSessionExecutionRuntime } from "../agentExecutionRuntime";
 import type {
   AgentRuntimeProfileStatus,
   AgentSessionDetail,
@@ -235,6 +236,11 @@ export function readCanonicalThreadDetail(
       readOptionalStringField(thread, "cwd"),
     execution_strategy: executionStrategyFromProtocol(
       metadataString(metadata, "executionStrategy", "execution_strategy"),
+    ),
+    execution_runtime: canonicalThreadExecutionRuntime(
+      thread,
+      metadata,
+      sessionId,
     ),
     messages_count: canonicalThreadMessageCount(rawTurns, metadata),
     messages: [],
@@ -664,6 +670,48 @@ function canonicalThreadMetadata(
   return extra
     ? (readOptionalObjectField(extra, "metadata") ?? extra)
     : undefined;
+}
+
+function canonicalThreadExecutionRuntime(
+  thread: Record<string, unknown>,
+  metadata: Record<string, unknown> | undefined,
+  sessionId: string,
+): AgentSessionExecutionRuntime | undefined {
+  const providerSelector =
+    readOptionalStringField(thread, "modelProvider", "model_provider")
+      ?.trim() ||
+    metadataString(metadata, "providerSelector", "provider_selector");
+  const providerName = metadataString(
+    metadata,
+    "providerName",
+    "provider_name",
+  );
+  const modelName = metadataString(metadata, "modelName", "model_name");
+  if (!providerSelector && !providerName && !modelName) {
+    return undefined;
+  }
+
+  return {
+    session_id: sessionId,
+    provider_selector: providerSelector,
+    provider_name: providerName,
+    model_name: modelName,
+    source_client: metadataString(metadata, "sourceClient", "source_client"),
+    imported_continuation: metadataRecord(
+      metadata,
+      "importedContinuation",
+      "imported_continuation",
+    ),
+    imported_thread_settings: metadataRecord(
+      metadata,
+      "importedThreadSettings",
+      "imported_thread_settings",
+    ),
+    execution_strategy: executionStrategyFromProtocol(
+      metadataString(metadata, "executionStrategy", "execution_strategy"),
+    ),
+    source: "session",
+  };
 }
 
 /**

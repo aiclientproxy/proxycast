@@ -65,7 +65,7 @@ function manifestKind(direction: Direction) {
 }
 
 describe("Codex method product scope boundary", () => {
-  it("220 个上游方法必须且只能落入一个三态分类", () => {
+  it("221 个上游方法必须且只能落入一个三态分类", () => {
     const matrix = readJson<Matrix>(MATRIX_PATH);
     const entries = flatten(matrix);
     const identities = entries.map(
@@ -99,7 +99,7 @@ describe("Codex method product scope boundary", () => {
       createHash("sha256")
         .update(identities.toSorted().join("\n"))
         .digest("hex"),
-    ).toBe("44c63050d2b736b40c2060ffba2783e64c5f81f17b5926cbe99da60a667c8dc9");
+    ).toBe("a91f5bdaedc5382cd957b82b44824922c7594aa16b33293916b6f48af4d8f899");
   });
 
   it("每组必须声明 owner、证据、优先级以及 planned/excluded 原因", () => {
@@ -179,5 +179,22 @@ describe("Codex method product scope boundary", () => {
         contracts.has(`${manifestKind(entry.direction)}:${entry.method}`),
       ).toBe(false);
     }
+  });
+
+  it("Codex process-local diagnostics must stay outside the Desktop manifest", () => {
+    const matrix = readJson<Matrix>(MATRIX_PATH);
+    const manifest = readJson<Manifest>(MANIFEST_PATH);
+    const entry = flatten(matrix).find(
+      ({ direction, method }) =>
+        direction === "clientRequest" && method === "server/diagnostics",
+    );
+
+    expect(entry?.status).toBe("product-scope-excluded");
+    expect(
+      manifest.methods.some(
+        ({ kind, method }) =>
+          kind === "request" && method === "server/diagnostics",
+      ),
+    ).toBe(false);
   });
 });

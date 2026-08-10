@@ -1,10 +1,12 @@
 use super::super::{ProviderModelCatalog, RuntimeCore, RuntimeCoreError};
+use app_server_protocol::protocol::v2::MultiAgentVersion;
 use app_server_protocol::protocol::v2::{ThreadSettings, ThreadSettingsUpdateParams};
 use app_server_protocol::*;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use lime_core::models::model_registry::{
-    EnhancedModelMetadata, ModelCapabilityProvenance, ModelModality, ModelVisibility,
+    EnhancedModelMetadata, ModelCapabilityProvenance, ModelModality, ModelMultiAgentVersion,
+    ModelVisibility,
 };
 
 impl RuntimeCore {
@@ -575,6 +577,11 @@ fn model_from_catalog(provider_id: &str, metadata: EnhancedModelMetadata) -> Mod
         context_window: metadata.limits.context_length,
         max_output_tokens: metadata.limits.max_output_tokens,
         supports_personality: false,
+        multi_agent_version: metadata.multi_agent_version.map(|version| match version {
+            ModelMultiAgentVersion::Disabled => MultiAgentVersion::Disabled,
+            ModelMultiAgentVersion::V1 => MultiAgentVersion::V1,
+            ModelMultiAgentVersion::V2 => MultiAgentVersion::V2,
+        }),
         additional_speed_tiers: Vec::new(),
         service_tiers,
         default_service_tier,
@@ -810,6 +817,22 @@ mod tests {
         );
         assert_eq!(projected.context_window, Some(256_000));
         assert_eq!(projected.max_output_tokens, Some(64_000));
+    }
+
+    #[test]
+    fn model_list_preserves_only_explicit_multi_agent_version() {
+        let implicit = model("openai", "implicit", ModelVisibility::List);
+        let mut explicit = model("openai", "explicit", ModelVisibility::List);
+        explicit.multi_agent_version = Some(ModelMultiAgentVersion::V2);
+
+        assert_eq!(
+            model_from_catalog("openai", implicit).multi_agent_version,
+            None
+        );
+        assert_eq!(
+            model_from_catalog("openai", explicit).multi_agent_version,
+            Some(MultiAgentVersion::V2)
+        );
     }
 
     #[test]

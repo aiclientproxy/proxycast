@@ -170,6 +170,7 @@ additionalContextLimit = 4096
     let hook = &entry["hooks"][0];
     assert_eq!(hook["eventName"], "preToolUse");
     assert_eq!(hook["handlerType"], "command");
+    assert_eq!(hook["executionMode"], "sync");
     assert_eq!(hook["matcher"], "Bash");
     assert_eq!(hook["command"], "python3 /tmp/project-hook.py");
     assert_eq!(hook["timeoutSec"], 7);

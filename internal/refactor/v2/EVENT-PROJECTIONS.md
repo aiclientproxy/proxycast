@@ -2,7 +2,7 @@
 
 状态：implementation in progress / coverage baseline
 
-上游事实源是 Codex c4f42d161ae44a8d696ee9fb595709661979d187。表中的 72 个 notification 和 11 个 reverse request 是审计全集，不代表 Lime 会无条件复制所有 Codex 产品功能。xuanlan 原稿记录的 10 类 request 未包含当前 revision 的 currentTime/read，本文件以 Codex/v1 机器清单为准。
+上游事实源是 Codex c4f42d161ae44a8d696ee9fb595709661979d187。表中的 72 个 notification 和 11 个 reverse request 是审计全集，不代表 Lime 会无条件复制所有 Codex 产品功能。Codex c9c6c0daa994109cec50fddcb57d076fdf9e738c 的 method 增量只新增 `server/diagnostics` client request，notification 与 reverse request 集合未变化；xuanlan 原稿记录的 10 类 request 未包含当前 revision 的 currentTime/read，本文件以 Codex/v1 机器清单为准。
 
 每项必须有且只有一种裁决：
 
@@ -107,7 +107,7 @@ Guardian warning 当前已完成独立 producer：同一 turn 内连续 3 次 Gu
 |  64 | thread/realtime/transcript/delta  | DX       | product-scope-excluded | Grok-aligned STT 不复用 Codex realtime wire |
 |  65 | thread/realtime/transcript/done   | DX       | product-scope-excluded | Grok-aligned STT 不复用 Codex realtime wire |
 |  66 | thread/realtime/outputAudio/delta | DX       | product-scope-excluded | 不在 Renderer 建立 Codex 音频播放队列       |
-|  67 | thread/realtime/sdp               | DX       | product-scope-excluded | 不恢复 WebRTC/SDP 通道                       |
+|  67 | thread/realtime/sdp               | DX       | product-scope-excluded | 不恢复 WebRTC/SDP 通道                      |
 |  68 | thread/realtime/error             | DX       | product-scope-excluded | 只记录脱敏 method/field 诊断                |
 |  69 | thread/realtime/closed            | DX       | product-scope-excluded | 只记录脱敏 method/field 诊断                |
 |  70 | windows/worldWritableWarning      | GN       | planned                | Windows 安全摘要和设置入口                  |
