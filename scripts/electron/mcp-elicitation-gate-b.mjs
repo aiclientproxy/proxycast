@@ -1781,9 +1781,53 @@ function electronEvidence(traceRaw, observedMethods, requiredMethods) {
   };
 }
 
+function failureThreadSummary(result) {
+  const thread = result?.thread;
+  if (!thread || typeof thread !== "object") return null;
+  const summarizeItem = (item) => {
+    if (!item || typeof item !== "object") return null;
+    const error = item.error;
+    const errorMessage =
+      (typeof error === "string" && error) ||
+      error?.message ||
+      error?.errorMessage ||
+      error?.details ||
+      null;
+    return {
+      id: item.id ?? item.itemId ?? null,
+      type: item.type ?? item.kind ?? item.itemType ?? null,
+      status: item.status ?? null,
+      name: item.name ?? item.toolName ?? item.mcpToolName ?? null,
+      pluginId: item.pluginId ?? null,
+      serverName: item.serverName ?? item.mcpServerName ?? null,
+      error: errorMessage ? sanitizeText(errorMessage) : null,
+    };
+  };
+  return {
+    id: thread.id ?? null,
+    sessionId: thread.sessionId ?? null,
+    status: thread.status?.type ?? thread.status ?? null,
+    modelProvider: thread.modelProvider ?? null,
+    modelName: thread.extra?.modelName ?? null,
+    turns: Array.isArray(thread.turns)
+      ? thread.turns.slice(-5).map((turn) => ({
+          id: turn?.id ?? turn?.turnId ?? null,
+          status: turn?.status ?? null,
+          startedAt: turn?.startedAt ?? null,
+          completedAt: turn?.completedAt ?? null,
+          itemsView: turn?.itemsView ?? null,
+          items: Array.isArray(turn?.items)
+            ? turn.items.slice(-20).map(summarizeItem).filter(Boolean)
+            : [],
+        }))
+      : [],
+  };
+}
+
 async function collectFailureDiagnostics({ page, runtime, fixture, ledgerPath }) {
   const diagnostics = {
     providerRequests: fixture ? providerRequestSummary(fixture.requests) : [],
+    providerConnections: fixture?.connectionDiagnostics ?? [],
     mcpLedger: ledgerPath ? readJsonLines(ledgerPath) : [],
   };
   if (!page) {
@@ -1816,7 +1860,12 @@ async function collectFailureDiagnostics({ page, runtime, fixture, ledgerPath })
       method,
       params,
     )
-      .then((response) => sanitizeJson(response))
+      .then((response) => {
+        if (method === "thread/read") {
+          diagnostics.thread = failureThreadSummary(response.result);
+        }
+        return sanitizeJson(response);
+      })
       .catch((error) => ({ error: sanitizeText(error) }));
   }
   return diagnostics;
@@ -2032,6 +2081,7 @@ export async function run({ pluginPackage = false } = {}) {
     const serverName = pluginPackage ? pluginPackageServerName() : makeServerName();
     const expectedToolName = toolName(serverName);
     fixture = await startOpenAiCompatibleFixtureServer({
+      connectionDiagnostics: true,
       scriptedResponses: [
         ...(!pluginPackage
           ? [
@@ -2125,6 +2175,7 @@ export async function run({ pluginPackage = false } = {}) {
       );
       logStage("verify-plugin-catalog-disabled-new-thread-boundary");
       disabledBoundaryFixture = await startOpenAiCompatibleFixtureServer({
+        connectionDiagnostics: true,
         scriptedResponses: [
           { type: "text", content: DISABLED_BOUNDARY_FINAL_TEXT },
         ],

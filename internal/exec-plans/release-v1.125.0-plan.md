@@ -77,3 +77,5 @@
 - runner `31343997706` 使用 `dd97f79e6eb0a9fa2428416658fccefb13d03906`；Plugin 安装、启停边界、标准 manifest/mcp.json/Skill、MCP initialize capability 与 packaged Electron 均通过，但 `turn/start` 后 provider request 为 `0`，仅留下 MCP initialize，Gate B 超时。
 - macOS packaged follow-up 使用同一当前工作树资源完成完整 Plugin Gate B，证明 packaged sidecar 资源解析和通用 Plugin/MCP runtime 主链可用；剩余问题限定为 Windows packaged turn execution 诊断。
 - Gate B failure path 已补只读诊断，失败时保存 `thread/read`、`log/list`、`log/persistedTail`、`diagnostics/server/read`、renderer invoke trace、provider request 与 MCP ledger，供下一次 Windows runner 定位 turn 终态/错误；不改变通过条件。
+- runner `31345998150` 使用完整 SHA `c228ffde93f14000d7ee6daa99113c96164a0a7a`；Checkout、插件路径契约、sherpa runtime、Electron Windows 包、N-1 Squirrel 下载与安装 smoke 均通过，Plugin Gate B 仍在 `submit-renderer-form` 等待 90 秒后失败。失败诊断确认 enabled turn 已 `completed/idle`、provider request 为 `0`、MCP ledger 仅有 runtime `initialize`，且失败截图显示 disabled boundary 文本；尚未取得结构化 turn/item 错误字段。
+- 为下一轮 Windows runner 增加安全的 `thread/read` turn/item 状态摘要与 localhost provider connection diagnostics；本地 Plugin Gate B 已通过。下一步用该证据确认是 runtime turn 终态错误、Plugin snapshot/Skill 解析，还是 renderer session 投影漂移，再实施窄产品修复。
