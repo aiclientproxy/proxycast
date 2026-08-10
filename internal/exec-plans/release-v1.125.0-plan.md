@@ -112,3 +112,11 @@
 - `npm run test:contracts`：通过；protocol 生成无漂移、App Server client `301 checks`、命令/harness/modality/scripts/electron release/docs 边界均通过。
 - 当前状态：`fix-validated-locally / release-git-confirmation-pending / windows-runner-pending`。
 - 下一刀：获得危险操作确认后，将当前工作树全部纳入一个完整 release commit，创建并推送新的提交；由于 `v1.125.0` 已存在且不能覆盖，Windows workflow 使用该新完整 SHA 触发，继续跟踪 Plugin Gate B 与 artifact。
+
+## Windows runner `31357775139`
+
+- 使用完整 SHA `bc2d2aacc897deee60fd50c6479ff2c2aa483a15`，checkout、环境初始化和依赖安装通过。
+- 在 Windows Agent Plugin path contract 编译阶段失败，错误为 `windows.rs` 的 `mod windows_acl` / `mod windows_attr` 找不到 sibling 文件；未进入 sherpa、Electron、Squirrel 或 Plugin Gate B。
+- 根因：Rust 在内联模块文件 `execution_process/windows.rs` 中按默认规则寻找 `execution_process/windows/<module>.rs`，而两个模块文件位于 `execution_process/` 同级；macOS/Linux 的 cfg 未编译该路径，故本地未暴露。
+- 修复：为两个声明增加显式 `#[path = "windows_acl.rs"]` 与 `#[path = "windows_attr.rs"]`；host 侧 tool-runtime related 测试通过，Windows 源文件 rustfmt 通过。本机 Windows target 交叉 check 仍受缺少 MSVC C 头文件阻断，待下一次 Windows runner 验证。
+- 下一步：推送修复提交后重新触发 workflow，继续追踪到 Gate B 和 artifact。

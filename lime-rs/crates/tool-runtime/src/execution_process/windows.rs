@@ -34,7 +34,9 @@ use windows_sys::Win32::System::Threading::{
     EXTENDED_STARTUPINFO_PRESENT, PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
 };
 
+#[path = "windows_acl.rs"]
 mod windows_acl;
+#[path = "windows_attr.rs"]
 mod windows_attr;
 use windows_acl::{build_acl_plan, AclLease};
 use windows_attr::ProcessAttributeList;
