@@ -40,17 +40,27 @@ fn main() -> anyhow::Result<()> {
         return std::thread::Builder::new()
             .name("app-server-main".to_string())
             .stack_size(8 * 1024 * 1024)
-            .spawn(async_main)
+            .spawn(run_async_main)
             .map_err(|error| anyhow::anyhow!("failed to spawn app-server main thread: {error}"))?
             .join()
             .map_err(|_| anyhow::anyhow!("app-server main thread panicked"))?;
     }
 
     #[cfg(not(windows))]
-    async_main()
+    run_async_main()
 }
 
-#[tokio::main]
+fn run_async_main() -> anyhow::Result<()> {
+    let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
+    runtime_builder.enable_all();
+    #[cfg(windows)]
+    runtime_builder.thread_stack_size(8 * 1024 * 1024);
+    runtime_builder
+        .build()
+        .map_err(|error| anyhow::anyhow!("failed to build app-server runtime: {error}"))?
+        .block_on(async_main())
+}
+
 async fn async_main() -> anyhow::Result<()> {
     let config = parse_args()?;
     let transport_base_dir = match config.data_dir.clone() {

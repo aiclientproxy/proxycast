@@ -67,3 +67,7 @@
 - runner `31317797587`：path contract、sherpa runtime、Electron Squirrel package build 与 N-1 installer download 均通过；installed Squirrel smoke 在 app-server sidecar 首次启动时报 `thread 'main' has overflowed its stack`（退出码 `3221225725`），未进入 Plugin Gate B。
 - 修复方式：Windows `app-server` 入口在 8 MiB 显式栈线程中启动 Tokio main；macOS/Linux 保持原入口。
 - 本地验证：默认 target `cargo check -p app-server --bin app-server` 通过；Windows target 交叉 check 受本机缺少 MSVC C 头文件阻塞（`ring` 构建找不到 `assert.h`），需由 Windows runner 复核。
+
+- runner `31318811255`：Windows path contract、sherpa runtime、Electron Windows package、N-1 installer download 与 Squirrel smoke 均通过；Plugin Gate B 在等待 MCP elicitation 表单 90 秒后超时。MCP server 已 initialize，但 ledger 没有 `tool_call`，启用插件后的 provider 请求数为 `0`，因此未产生用户可见的 `mcp_elicitation` pending interaction。
+- 根因定位：入口线程栈修复已生效，但 Tokio worker 仍使用默认栈；App Server 的深层 agent/plugin 调用在 worker 上仍可能溢出或提前终止，导致 Gate B 没有进入 elicitation。
+- 下一项修复：显式构造 Tokio multi-thread runtime，并在 Windows 将 worker stack 同样设置为 8 MiB；非 Windows 保持默认 worker stack 行为。
