@@ -40,11 +40,17 @@ interface HookHarness {
   getValue: () => ReturnType<typeof useAgentContext>;
   unmount: () => void;
   sendMessage: ReturnType<typeof vi.fn>;
+  pendingSessionMetadataSyncCancelRef: {
+    current: (() => void) | null;
+  };
 }
 
 function mountHook(
   workspaceId = "workspace-1",
   sessionId: string | null = null,
+  pendingSessionMetadataSyncCancelRef = {
+    current: null as (() => void) | null,
+  },
 ): HookHarness {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -57,6 +63,7 @@ function mountHook(
     hookValue = useAgentContext({
       workspaceId,
       sessionIdRef: { current: sessionId },
+      pendingSessionMetadataSyncCancelRef,
       topicsUpdaterRef: { current: mockTopicsUpdater },
       sendMessageRef: { current: sendMessage },
       runtime: {
@@ -85,6 +92,7 @@ function mountHook(
       container.remove();
     },
     sendMessage,
+    pendingSessionMetadataSyncCancelRef,
   };
 }
 
@@ -97,12 +105,16 @@ function mountRerenderableHook(
   const root = createRoot(container);
 
   const sendMessage = vi.fn(async () => undefined);
+  const pendingSessionMetadataSyncCancelRef = {
+    current: null as (() => void) | null,
+  };
   let hookValue: ReturnType<typeof useAgentContext> | null = null;
 
   function TestComponent({ workspaceId }: { workspaceId: string }) {
     hookValue = useAgentContext({
       workspaceId,
       sessionIdRef: { current: sessionId },
+      pendingSessionMetadataSyncCancelRef,
       topicsUpdaterRef: { current: mockTopicsUpdater },
       sendMessageRef: { current: sendMessage },
       runtime: {
@@ -136,6 +148,7 @@ function mountRerenderableHook(
       container.remove();
     },
     sendMessage,
+    pendingSessionMetadataSyncCancelRef,
   };
 }
 
@@ -315,6 +328,27 @@ describe("useAgentContext", () => {
       model: "shared-model",
     });
 
+    harness.unmount();
+  });
+
+  it("用户切换 provider/model 时应取消 hydration metadata 回填", async () => {
+    const cancelPendingMetadataSync = vi.fn();
+    const harness = mountHook("workspace-1", "session-target", {
+      current: cancelPendingMetadataSync,
+    });
+
+    act(() => {
+      harness.getValue().setProviderType("provider-enabled");
+      harness.getValue().setModel("shared-model");
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(cancelPendingMetadataSync).toHaveBeenCalledTimes(1);
+    expect(
+      harness.pendingSessionMetadataSyncCancelRef.current,
+    ).toBeNull();
     harness.unmount();
   });
 

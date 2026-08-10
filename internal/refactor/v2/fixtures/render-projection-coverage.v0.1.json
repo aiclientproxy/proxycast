@@ -156,29 +156,23 @@
       "method": "fuzzyFileSearch/sessionCompleted",
       "outlets": ["pendingInteraction"]
     },
-    {
-      "method": "thread/realtime/started",
-      "outlets": ["header", "pendingInteraction"]
-    },
-    { "method": "thread/realtime/itemAdded", "outlets": ["timeline"] },
+    { "method": "thread/realtime/started", "outlets": ["diagnostics"] },
+    { "method": "thread/realtime/itemAdded", "outlets": ["diagnostics"] },
     {
       "method": "thread/realtime/transcript/delta",
-      "outlets": ["timeline", "pendingInteraction"]
+      "outlets": ["diagnostics"]
     },
-    { "method": "thread/realtime/transcript/done", "outlets": ["timeline"] },
+    {
+      "method": "thread/realtime/transcript/done",
+      "outlets": ["diagnostics"]
+    },
     {
       "method": "thread/realtime/outputAudio/delta",
-      "outlets": ["pendingInteraction"]
+      "outlets": ["diagnostics"]
     },
     { "method": "thread/realtime/sdp", "outlets": ["diagnostics"] },
-    {
-      "method": "thread/realtime/error",
-      "outlets": ["header", "pendingInteraction"]
-    },
-    {
-      "method": "thread/realtime/closed",
-      "outlets": ["header", "pendingInteraction"]
-    },
+    { "method": "thread/realtime/error", "outlets": ["diagnostics"] },
+    { "method": "thread/realtime/closed", "outlets": ["diagnostics"] },
     { "method": "windows/worldWritableWarning", "outlets": ["globalNotice"] },
     {
       "method": "windowsSandbox/setupCompleted",

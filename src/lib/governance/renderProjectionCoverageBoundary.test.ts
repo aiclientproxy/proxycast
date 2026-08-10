@@ -226,6 +226,14 @@ describe("Codex render projection coverage boundary", () => {
     const excludedMethods = [
       "process/outputDelta",
       "process/exited",
+      "thread/realtime/closed",
+      "thread/realtime/error",
+      "thread/realtime/itemAdded",
+      "thread/realtime/outputAudio/delta",
+      "thread/realtime/sdp",
+      "thread/realtime/started",
+      "thread/realtime/transcript/delta",
+      "thread/realtime/transcript/done",
     ];
 
     for (const method of excludedMethods) {

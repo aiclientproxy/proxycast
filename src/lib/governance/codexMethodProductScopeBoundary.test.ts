@@ -161,4 +161,23 @@ describe("Codex method product scope boundary", () => {
     expect(methods).toContain("thread/compact/start");
     expect(methods).not.toContain("agentSession/compact");
   });
+
+  it("Codex realtime surface must stay outside the Desktop manifest", () => {
+    const matrix = readJson<Matrix>(MATRIX_PATH);
+    const manifest = readJson<Manifest>(MANIFEST_PATH);
+    const realtimeEntries = flatten(matrix).filter(({ method }) =>
+      method.startsWith("thread/realtime/"),
+    );
+    const contracts = new Set(
+      manifest.methods.map(({ kind, method }) => `${kind}:${method}`),
+    );
+
+    expect(realtimeEntries).toHaveLength(14);
+    for (const entry of realtimeEntries) {
+      expect(entry.status).toBe("product-scope-excluded");
+      expect(
+        contracts.has(`${manifestKind(entry.direction)}:${entry.method}`),
+      ).toBe(false);
+    }
+  });
 });

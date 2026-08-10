@@ -90,9 +90,9 @@ describe("turnTimelineRenderProjection", () => {
       content: "相同的问题",
     });
 
-    expect(
-      messageMatchesCanonicalUserMessage(firstMessage, secondItem),
-    ).toBe(false);
+    expect(messageMatchesCanonicalUserMessage(firstMessage, secondItem)).toBe(
+      false,
+    );
   });
 
   it("无 Message 锚点时仍按 canonical sequence 保留正文与过程交错顺序", () => {
@@ -214,6 +214,56 @@ describe("turnTimelineRenderProjection", () => {
         ],
       },
     ]);
+  });
+
+  it("reasoning Item 补全或追加后，过程段 identity 仍保持 turn 级稳定", () => {
+    const currentTurn = turn("turn-stable-process-identity");
+    const baseItems = [
+      item("canonical-user-stable", currentTurn.id, 1, {
+        type: "user_message",
+        content: "验证思考展开",
+      }),
+      item("reasoning-live", currentTurn.id, 2, {
+        type: "reasoning",
+        status: "in_progress",
+        text: "先确认用户意图。",
+        summary: ["先确认用户意图。"],
+      }),
+      item("canonical-agent-stable", currentTurn.id, 3, {
+        type: "agent_message",
+        text: "最终答复",
+      }),
+    ];
+    const baseProjection = buildTurnTimelineRenderProjection({
+      messageGroups: [],
+      renderedTurns: [currentTurn],
+      renderedThreadItems: baseItems,
+    });
+
+    const persistedProjection = buildTurnTimelineRenderProjection({
+      messageGroups: [],
+      renderedTurns: [currentTurn],
+      renderedThreadItems: [
+        ...baseItems,
+        item("reasoning-persisted", currentTurn.id, 4, {
+          type: "reasoning",
+          text: "先确认用户意图。",
+          summary: ["先确认用户意图。"],
+        }),
+      ],
+    });
+
+    const baseProcess = baseProjection[0];
+    const persistedProcess = persistedProjection[0];
+    expect(baseProcess.kind).toBe("canonical_turn");
+    expect(persistedProcess.kind).toBe("canonical_turn");
+    expect(
+      baseProcess.segments.find((segment) => segment.kind === "process")?.id,
+    ).toBe("process:turn-stable-process-identity:0");
+    expect(
+      persistedProcess.segments.find((segment) => segment.kind === "process")
+        ?.id,
+    ).toBe("process:turn-stable-process-identity:0");
   });
 
   it("canonical turn 只有用户消息时仍保留 pending assistant 首字占位", () => {

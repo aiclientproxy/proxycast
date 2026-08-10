@@ -97,8 +97,12 @@ export function scheduleSessionMetadataSync(params: {
 
   params.pendingCancel?.();
 
-  const cancel = params.scheduler.schedule(
+  let cancelled = false;
+  const scheduledCancel = params.scheduler.schedule(
     () => {
+      if (cancelled) {
+        return;
+      }
       params.setPendingCancel(null);
 
       const currentSessionId = params.getCurrentSessionId() ?? null;
@@ -138,6 +142,10 @@ export function scheduleSessionMetadataSync(params: {
       idleTimeoutMs: params.idleTimeoutMs,
     },
   );
+  const cancel = () => {
+    cancelled = true;
+    scheduledCancel();
+  };
   params.setPendingCancel(cancel);
   return "scheduled";
 }

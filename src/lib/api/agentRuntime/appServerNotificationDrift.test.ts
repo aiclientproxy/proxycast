@@ -73,6 +73,30 @@ describe("App Server notification drift", () => {
     }
   });
 
+  it("keeps Codex realtime notifications outside the Desktop projection", () => {
+    for (const method of [
+      "thread/realtime/started",
+      "thread/realtime/itemAdded",
+      "thread/realtime/transcript/delta",
+      "thread/realtime/transcript/done",
+      "thread/realtime/outputAudio/delta",
+      "thread/realtime/sdp",
+      "thread/realtime/error",
+      "thread/realtime/closed",
+    ]) {
+      const source = notification(method, {
+        threadId: "thread-realtime",
+        transcript: "must-not-reach-the-timeline",
+        audio: "must-not-reach-the-player",
+      });
+
+      expect(readAppServerNotificationDrift(source).disposition).toBe(
+        "known_diagnostic_only",
+      );
+      expect(projectAppServerNotificationDriftPayload(source)).toBeNull();
+    }
+  });
+
   it("classifies turn diff as a projected current notification", () => {
     const source = notification("turn/diff/updated", {
       threadId: "thread-1",

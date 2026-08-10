@@ -379,6 +379,12 @@ action-required/approval 与 ask-user 的 live continuation 归 `agent-runtime` 
 | `patch-apply`                                    | 受控 patch 应用领域能力。                                                                                                                |
 | `browser-runtime`、`media-runtime`、`voice-core` | 浏览器、媒体、语音等独立 runtime domain。                                                                                                |
 
+Codex `thread/realtime/*` 的 WebRTC/session control 与通知不进入 Lime Desktop 产品协议，分类为
+`product-scope-excluded / forbidden-to-restore`。旧录音、麦克风和 realtime voice GUI 已退役；不得为了
+Codex method parity 恢复第二套 Thread lifecycle、SDP 通道或 Renderer 音频队列。音频、语音和媒体能力继续按
+grok-build 对齐 `model-provider` 的 catalog/capability/readiness 与 sampling/lowering，再由
+`voice-core` / `media-runtime` 承接领域执行和 artifact 生命周期。
+
 模型目录控制面固定为：
 
 ```text

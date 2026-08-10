@@ -4437,3 +4437,67 @@ MSVC/Windows C toolchain（`ring`/`zstd-sys` 缺少 Windows 头文件）阻塞�
 `windowsSandbox/setupCompleted` 继续 `planned`；无新增 `compat`/`deprecated`，旧 runner/TUI setup surface 仍为
 `dead / deleted / forbidden-to-restore`。本轮证明了 runner current owner 的生命周期和启动环境边界继续向 Codex
 Windows sandbox 收敛，但没有关闭平台证据 blocker；下一刀仍是 Windows toolchain/真机 Gate B，之后才裁决 readiness 提升。
+
+### 2026-08-10 Windows sandbox diagnostics fact-source correction
+
+目标与范围：收敛 runner foundation 已接入后仍残留的“未实现”诊断，不改变 readiness、执行准入或 Desktop setup
+surface。写集限定为 `tool-runtime` backend plan、对应 Agent 回归、coding active roadmap 与本执行计划。
+
+完成结果：Windows plan 的 reason code 从 `sandbox_backend_windows_runner_not_implemented` 直接替换为
+`sandbox_backend_windows_runner_platform_evidence_pending`，reason 明确 current execution process owner 已有
+target-gated foundation，真正 blocker 是 Windows toolchain 与真机 enforcement evidence。状态继续为
+`SandboxBackendStatus::Planned`、`enforced=false`，因此 App Server production decision 仍不会把未验证 runner
+伪装为可交付 backend；Windows readiness 继续 `updateRequired`，没有新增 setup 成功通知。
+
+分类：typed runner、ACL/Job/pipe lifecycle 与新诊断为 `current foundation`；Windows/MSVC build、真机 sandbox
+smoke、ConPTY、elevated setup、WFP 与 Windows Electron Gate B 为 `planned`；旧“runner 完全未实现”诊断和指向已删除
+owner 的 current 文案为 `dead / deleted / forbidden-to-restore`；无 `compat`、`deprecated`。下一刀仍是 Windows
+toolchain/真机平台证据，不用 macOS 单测或源码存在推断 `Ready`。
+
+### 2026-08-10 Desktop reasoning 完成态展开 identity 收口
+
+目标与用户闭环：修复完成回合的思考摘要在点击展开后因 read-model 补全而重新折叠、点击目标从 DOM
+消失的问题。用户从“已处理 / 已完成思考”摘要开始，一次点击后必须稳定看到 canonical reasoning 正文，且最终
+回答继续位于思考过程之后。写集限定为 Turn timeline render projection、projection 回归、Claw 真实 Electron
+fixture 展开断言和本执行计划。
+
+根因与修复：`ConversationTurnTimeline` 以 process segment ID 保存历史详情展开状态并作为 React key；旧
+`buildCanonicalTurnSegments` 用首尾 Item ID 生成该 identity。同一回合从 live reasoning Item 刷新为 App Server
+read model 的两个 reasoning Item 后，segment ID 改变，展开集合失配并把真实 `AgentThreadTimeline` 换回
+`HistoricalTimelinePreview`。process segment identity 已改为稳定的 `process:<turnId>:<ordinal>`；新增回归证明
+reasoning Item 补全或追加不改变既有过程段 ID。fixture 只在过程块尚未打开时点击内部 summary，避免完成态默认
+展开时先反向关闭再重开。
+
+验证：projection Vitest `18/18`、Claw fixture guard `83/83`、Renderer/Node typecheck、scoped Prettier、
+`node --check` 与 `git diff --check` 通过。`npm run test:related -- ...` 仍被仓库既有 Vitest 收集器
+`EISDIR .../electron` 阻塞，已由上述精确测试入口替代。原始 Gate B 场景
+`npm run smoke:claw-chat-current-fixture -- --scenario reasoning-first-visible --timeout-ms 240000` 通过：真实
+Electron/preload/IPC、`app_server_handle_json_lines`、App Server/read model 与 GUI identity 一致；reasoning 在
+final 前可见，完成态 canonical content 展开后稳定保留，`reasoningItemCount=2`；console/page error、legacy
+command 与 production mock fallback 均为 `0`。证据：
+`.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-summary.json` 与同目录 chat 截图。
+
+分类：稳定 Turn/process identity、canonical reasoning Item/read model、Desktop 展开交互与 Gate B fixture 为
+`current`；首尾 Item 拼接 identity 和 fixture 对默认展开过程块的反向点击为 `dead / deleted /
+forbidden-to-restore`；无 `compat`、`deprecated`。本切片不改变 Thread/Turn/Item 协议、provider lowering 或
+架构 owner，因此无需更新架构图。
+
+### 2026-08-10 Codex realtime / Grok multimodal 产品边界收口
+
+目标与裁决：修正 method matrix、Renderer coverage 与既有产品架构之间的事实源冲突。Codex
+`thread/realtime/*` 的 WebRTC/session request 与 notification 不进入 Lime Desktop；旧麦克风、录音和 realtime
+voice GUI 已退役，恢复该 wire 会建立第二套 Thread lifecycle 和 Renderer 媒体队列。音频、语音和媒体能力继续按
+grok-build 对齐 `model-provider` 的 catalog/capability/readiness 与 sampling/lowering，并由
+`voice-core` / `media-runtime` 承接领域执行和 artifact 生命周期。
+
+完成结果：14 个 realtime 方向化 method 从 `planned` 移入 `product-scope-excluded`，产品矩阵更新为
+`139 implemented / 28 planned / 53 product-scope-excluded`，产品范围完成度为 `139 / 167 = 83.2%`。
+upstream notification inventory 继续保留用于 drift 检测，但八个 realtime notification 统一只记录脱敏
+method/field diagnostics，不进入 timeline、header、pending interaction 或音频播放；新增边界回归锁定它们不得进入
+Lime generated manifest。无 `compat`、`deprecated` 新增，旧 realtime GUI/wire 继续为
+`dead / deleted / forbidden-to-restore`。
+
+架构确认：confirmed；责任开发者 root，2026-08-10。本切片没有新增 runtime 或协议，而是把既有 Desktop/Grok
+边界写回架构、产品矩阵和 Renderer 守卫。下一刀从剩余 `28` 个 planned method 中选择具备真实 Desktop consumer
+与唯一 current owner 的 surface，或回到 Windows 真机 sandbox evidence；不得用 Codex realtime/TUI surface 冒充
+Grok 多模态对齐。

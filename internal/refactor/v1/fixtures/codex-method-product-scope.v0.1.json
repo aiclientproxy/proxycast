@@ -21,8 +21,8 @@
     },
     "byStatus": {
       "implemented": 139,
-      "product-scope-excluded": 39,
-      "planned": 42
+      "product-scope-excluded": 53,
+      "planned": 28
     }
   },
   "groups": [
@@ -770,15 +770,18 @@
       "methods": ["skills/config/write", "skills/extraRoots/set", "skills/list"]
     },
     {
-      "id": "thread-realtime-planned",
+      "id": "thread-realtime-excluded",
       "direction": "clientRequest",
       "productArea": "realtime",
-      "status": "planned",
-      "priority": "P2",
-      "owner": "agent-runtime realtime owner + model-provider",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "model-provider + voice-core/media-runtime",
       "counterpartRule": "none",
-      "gap": "Realtime text/audio/speech session control has no current Thread owner or Gate B evidence.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "rationale": "Lime Desktop has retired the unimplemented realtime voice GUI and does not expose Codex realtime WebRTC/session control. Audio, speech, and media capabilities remain in the Grok-aligned model-provider plus voice-core/media-runtime owners instead of a second Thread protocol.",
+      "evidence": [
+        "internal/aiprompts/architecture.md",
+        "internal/exec-plans/production-command-current-migration-plan.md"
+      ],
       "methods": [
         "thread/realtime/appendAudio",
         "thread/realtime/appendSpeech",
@@ -1183,15 +1186,18 @@
       ]
     },
     {
-      "id": "realtime-notification-planned",
+      "id": "realtime-notification-excluded",
       "direction": "serverNotification",
       "productArea": "realtime",
-      "status": "planned",
-      "priority": "P2",
-      "owner": "agent-runtime realtime owner + app-server",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "model-provider + voice-core/media-runtime",
       "counterpartRule": "none",
-      "gap": "Realtime item/audio/transcript/session lifecycle has no current projection or Gate B evidence.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "rationale": "Codex realtime notifications belong to the excluded realtime WebRTC/session surface. Lime Desktop must not project them into Thread/Turn/Item or restore the retired voice GUI; Grok-aligned audio and speech lifecycles use their domain owners.",
+      "evidence": [
+        "internal/aiprompts/architecture.md",
+        "internal/exec-plans/production-command-current-migration-plan.md"
+      ],
       "methods": [
         "thread/realtime/closed",
         "thread/realtime/error",

@@ -266,6 +266,7 @@ interface UseAgentSessionOptions {
   accessMode: AgentAccessMode;
   providerTypeRef: MutableRefObject<string>;
   modelRef: MutableRefObject<string>;
+  pendingSessionMetadataSyncCancelRef?: MutableRefObject<(() => void) | null>;
   sessionIdRef: MutableRefObject<string | null>;
   currentAssistantMsgIdRef: MutableRefObject<string | null>;
   currentStreamingSessionIdRef: MutableRefObject<string | null>;
@@ -320,6 +321,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     accessMode,
     providerTypeRef,
     modelRef,
+    pendingSessionMetadataSyncCancelRef: sharedPendingSessionMetadataSyncCancelRef,
     sessionIdRef,
     currentAssistantMsgIdRef,
     currentStreamingSessionIdRef,
@@ -500,7 +502,12 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     requestVersion: number;
     topicId: string;
   } | null>(null);
-  const pendingSessionMetadataSyncCancelRef = useRef<(() => void) | null>(null);
+  const localPendingSessionMetadataSyncCancelRef = useRef<(() => void) | null>(
+    null,
+  );
+  const pendingSessionMetadataSyncCancelRef =
+    sharedPendingSessionMetadataSyncCancelRef ??
+    localPendingSessionMetadataSyncCancelRef;
   const createFreshSessionPromiseRef = useRef<Promise<string | null> | null>(
     null,
   );
@@ -555,7 +562,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       pendingSessionMetadataSyncCancelRef.current?.();
       pendingSessionMetadataSyncCancelRef.current = null;
     };
-  }, []);
+  }, [pendingSessionMetadataSyncCancelRef]);
 
   const resetStreamingRefs = useCallback(() => {
     detachStreamBindingsRef.current?.();
@@ -642,7 +649,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     pendingSessionMetadataSyncCancelRef.current = null;
     sessionSwitchRequestVersionRef.current += 1;
     return sessionSwitchRequestVersionRef.current;
-  }, []);
+  }, [pendingSessionMetadataSyncCancelRef]);
 
   const listWorkspaceTopics = useCallback(async () => {
     const startedAt = Date.now();
@@ -2119,6 +2126,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       markSessionExecutionStrategySynced,
       markSessionModelPreferenceSynced,
       normalizedWorkingDir,
+      pendingSessionMetadataSyncCancelRef,
       persistSessionAccessMode,
       persistSessionRestoreCandidate,
       resolveSessionHistoryWindow,

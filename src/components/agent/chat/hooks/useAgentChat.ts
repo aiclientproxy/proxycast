@@ -90,6 +90,9 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
   } | null>(null);
   const runtimeReadyWorkspaceRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const pendingSessionMetadataSyncCancelRef = useRef<(() => void) | null>(
+    null,
+  );
   const currentAssistantMsgIdRef = useRef<string | null>(null);
   const currentStreamingSessionIdRef = useRef<string | null>(null);
   const currentStreamingEventNameRef = useRef<string | null>(null);
@@ -110,6 +113,7 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
   const context = useAgentContext({
     workspaceId,
     sessionIdRef,
+    pendingSessionMetadataSyncCancelRef,
     topicsUpdaterRef,
     sendMessageRef,
     runtime,
@@ -128,6 +132,7 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
     accessMode: context.accessMode,
     providerTypeRef: context.providerTypeRef,
     modelRef: context.modelRef,
+    pendingSessionMetadataSyncCancelRef,
     sessionIdRef,
     currentAssistantMsgIdRef,
     currentStreamingSessionIdRef,

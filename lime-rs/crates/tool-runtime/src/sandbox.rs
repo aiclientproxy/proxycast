@@ -287,8 +287,8 @@ pub fn plan_sandbox_backend(input: SandboxBackendPlanInput<'_>) -> SandboxBacken
             SandboxBackend::RestrictedToken,
             SandboxBackendStatus::Planned,
             false,
-            "sandbox_backend_windows_runner_not_implemented",
-            "Windows restricted token runner 尚未接入 current execution process owner",
+            "sandbox_backend_windows_runner_platform_evidence_pending",
+            "Windows restricted token runner foundation 已接入 current execution process owner，但仍缺 Windows toolchain 与真机 enforcement 证据",
         ),
         SandboxBackendPlatform::Unsupported => (
             SandboxBackend::None,

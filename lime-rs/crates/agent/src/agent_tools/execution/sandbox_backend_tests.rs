@@ -75,7 +75,7 @@ fn test_sandbox_backend_plan_maps_supported_platforms() {
 }
 
 #[test]
-fn test_windows_restricted_token_backend_is_planned_until_runner_is_current() {
+fn test_windows_restricted_token_backend_is_planned_until_platform_evidence_exists() {
     let metadata = json!({ "workspaceSandbox": { "enabled": true } });
     let plan = plan_sandbox_backend(SandboxBackendPlanInput {
         sandbox_profile: ToolExecutionSandboxProfile::WorkspaceCommand,
@@ -90,11 +90,11 @@ fn test_windows_restricted_token_backend_is_planned_until_runner_is_current() {
     assert!(!plan.enforced);
     assert_eq!(
         plan.reason_code,
-        "sandbox_backend_windows_runner_not_implemented"
+        "sandbox_backend_windows_runner_platform_evidence_pending"
     );
     assert_eq!(
         plan.reason,
-        "Windows restricted token runner 尚未接入 current execution process owner"
+        "Windows restricted token runner foundation 已接入 current execution process owner，但仍缺 Windows toolchain 与真机 enforcement 证据"
     );
 }
 

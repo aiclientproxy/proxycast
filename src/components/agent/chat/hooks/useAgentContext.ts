@@ -45,6 +45,7 @@ import { normalizeChatSessionModelPreference } from "../utils/sessionExecutionRu
 interface UseAgentContextOptions {
   workspaceId: string;
   sessionIdRef: MutableRefObject<string | null>;
+  pendingSessionMetadataSyncCancelRef?: MutableRefObject<(() => void) | null>;
   topicsUpdaterRef: MutableRefObject<
     | ((sessionId: string, executionStrategy: AgentExecutionStrategy) => void)
     | null
@@ -86,6 +87,7 @@ export function useAgentContext(options: UseAgentContextOptions) {
   const {
     workspaceId,
     sessionIdRef,
+    pendingSessionMetadataSyncCancelRef,
     topicsUpdaterRef,
     sendMessageRef,
     runtime,
@@ -295,6 +297,12 @@ export function useAgentContext(options: UseAgentContextOptions) {
       targetModel: string,
       targetReasoningEffort: ModelReasoningEffortLevel | "",
     ) => {
+      const cancelPendingSessionMetadataSync =
+        pendingSessionMetadataSyncCancelRef?.current;
+      if (cancelPendingSessionMetadataSync) {
+        cancelPendingSessionMetadataSync();
+        pendingSessionMetadataSyncCancelRef.current = null;
+      }
       const syncSelection = runtime.setSessionProviderSelection;
       const trimmedSessionId = targetSessionId.trim();
       if (!trimmedSessionId) {
@@ -405,6 +413,7 @@ export function useAgentContext(options: UseAgentContextOptions) {
     },
     [
       markSessionModelPreferenceSynced,
+      pendingSessionMetadataSyncCancelRef,
       persistSessionModelPreference,
       runtime.setSessionProviderSelection,
       sessionIdRef,

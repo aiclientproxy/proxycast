@@ -120,3 +120,14 @@
 - 根因：Rust 在内联模块文件 `execution_process/windows.rs` 中按默认规则寻找 `execution_process/windows/<module>.rs`，而两个模块文件位于 `execution_process/` 同级；macOS/Linux 的 cfg 未编译该路径，故本地未暴露。
 - 修复：为两个声明增加显式 `#[path = "windows_acl.rs"]` 与 `#[path = "windows_attr.rs"]`；host 侧 tool-runtime related 测试通过，Windows 源文件 rustfmt 通过。本机 Windows target 交叉 check 仍受缺少 MSVC C 头文件阻断，待下一次 Windows runner 验证。
 - 下一步：推送修复提交后重新触发 workflow，继续追踪到 Gate B 和 artifact。
+
+## Windows runner `31358312342`
+
+- 使用完整 SHA `05cd3e2b3c4d9a1a099732308bb0403423c90dd3`；checkout、Windows Agent Plugin path contract、sherpa runtime、Electron Windows x64 Squirrel package、N-1 installer download 与 Squirrel smoke 前置均通过。
+- Plugin Gate B 在等待 `[data-testid="pending-interaction-layer"][data-interaction-kind="mcp_elicitation"]` 90 秒后失败；失败 artifact 已保存到本机临时目录，包含 summary/raw JSON、failure/install-review/plugin-mention 截图。
+- 失败证据：enabled session `019fea2c-3d0a-7ad1-816f-f3ad959465b5` 的顶层 `thread.modelProvider` 已是新 provider，但 `thread.extra.providerName/providerSelector` 仍是旧 disabled provider；enabled provider 只收到 `GET /v1/models`，后续 `/v1/chat/completions` 进入旧 provider；MCP ledger 只有 `initialize`，enabled turn 最终为 `completed/idle`，没有 elicitation pending interaction。
+- 根因：hydration 时 `useAgentSession.finalizeResolvedTopicDetail` 根据旧 session storage preference 延迟排队 metadata fallback；随后 Renderer 的 provider/model selection 虽通过 `useAgentContext` 写入新 route，但没有取消该 fallback，延迟 `thread/settings/update` 覆盖了 durable metadata。
+- 修复：`useAgentChat` 共享 pending metadata cancel ref；`useAgentContext` 在用户 provider/model/reasoning selection 前取消旧 hydration fallback；`sessionMetadataSyncScheduler` 对包装任务增加取消标记，确保已进入 scheduler 队列的取消任务不再发起 RPC；补 context 与 scheduler 回归测试。
+- 本地验证：`npm run typecheck` 通过；metadata controller/scheduler/context Vitest `30 passed; 0 failed`；本轮 ESLint `--max-warnings 0` 通过。
+- 本机 packaged Plugin Gate B 复跑通过：evidence `plugin-package-electron-gate-b-summary.json`，`ok=true`、`providerRequestCount=2`、MCP elicitation accepted、provider final text observed、`productionMockFallbackHitCount=0`。
+- 下一步：确认本轮 release candidate 后提交并推送完整 SHA，重新触发 `.github/workflows/build-windows-test.yml`，继续跟踪 Plugin Gate B 与 artifact；不移动已发布的 `v1.125.0` tag。

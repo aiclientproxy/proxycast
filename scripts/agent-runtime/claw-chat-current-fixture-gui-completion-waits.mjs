@@ -679,14 +679,18 @@ export async function waitForGuiReasoningFirstVisibleCompleted(page, options) {
         "true";
       assert(detailsAvailable, "Claw GUI 完成态 reasoning 过程块不可展开");
       const reasoningSummary = reasoningBlock.locator(":scope > summary");
-      let reasoningOpenedByClick = false;
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        await reasoningSummary.click();
-        reasoningOpenedByClick = await reasoningBlock.evaluate(
-          (node) => node instanceof HTMLDetailsElement && node.open,
-        );
-        if (reasoningOpenedByClick) {
-          break;
+      let reasoningOpenedByClick = await reasoningBlock.evaluate(
+        (node) => node instanceof HTMLDetailsElement && node.open,
+      );
+      if (!reasoningOpenedByClick) {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          await reasoningSummary.click();
+          reasoningOpenedByClick = await reasoningBlock.evaluate(
+            (node) => node instanceof HTMLDetailsElement && node.open,
+          );
+          if (reasoningOpenedByClick) {
+            break;
+          }
         }
       }
       assert(

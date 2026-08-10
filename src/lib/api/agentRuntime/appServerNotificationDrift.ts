@@ -2,6 +2,17 @@ import { logAgentDebug } from "@/lib/agentDebug";
 import type { AppServerJsonRpcNotification } from "@/lib/api/appServer";
 import { RENDER_PROJECTION_REFERENCE_REVISION } from "./conversationProjection";
 
+const CODEX_REALTIME_NOTIFICATION_METHODS = [
+  "thread/realtime/closed",
+  "thread/realtime/error",
+  "thread/realtime/itemAdded",
+  "thread/realtime/outputAudio/delta",
+  "thread/realtime/sdp",
+  "thread/realtime/started",
+  "thread/realtime/transcript/delta",
+  "thread/realtime/transcript/done",
+] as const;
+
 const CODEX_V2_NOTIFICATION_METHODS = new Set([
   "account/login/completed",
   "account/rateLimits/updated",
@@ -54,14 +65,7 @@ const CODEX_V2_NOTIFICATION_METHODS = new Set([
   "thread/goal/cleared",
   "thread/goal/updated",
   "thread/name/updated",
-  "thread/realtime/closed",
-  "thread/realtime/error",
-  "thread/realtime/itemAdded",
-  "thread/realtime/outputAudio/delta",
-  "thread/realtime/sdp",
-  "thread/realtime/started",
-  "thread/realtime/transcript/delta",
-  "thread/realtime/transcript/done",
+  ...CODEX_REALTIME_NOTIFICATION_METHODS,
   "thread/settings/updated",
   "thread/started",
   "thread/status/changed",
@@ -91,6 +95,7 @@ const DIAGNOSTIC_ONLY_NOTIFICATION_METHODS = new Set([
   "rawResponseItem/completed",
   "remoteControl/status/changed",
   "thread/compacted",
+  ...CODEX_REALTIME_NOTIFICATION_METHODS,
 ]);
 const PROJECTED_NOTIFICATION_METHODS = new Set([
   "hook/started",

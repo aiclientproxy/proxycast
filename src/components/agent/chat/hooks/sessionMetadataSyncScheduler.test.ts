@@ -111,7 +111,7 @@ describe("sessionMetadataSyncScheduler", () => {
   });
 
   it("应取消上一次调度并按 idle 参数安排 metadata sync", async () => {
-    const { cancel, scheduledTasks, scheduler } = createScheduler();
+    const { scheduledTasks, scheduler } = createScheduler();
     const previousCancel = vi.fn();
     const setPendingCancel = vi.fn();
     const runtime = {
@@ -153,7 +153,8 @@ describe("sessionMetadataSyncScheduler", () => {
       idleTimeoutMs: 15_000,
       minimumDelayMs: 8_000,
     });
-    expect(setPendingCancel).toHaveBeenLastCalledWith(cancel);
+    const scheduledCancel = setPendingCancel.mock.lastCall?.[0];
+    expect(scheduledCancel).toEqual(expect.any(Function));
 
     scheduledTasks[0]?.task();
     await flushPromises();
@@ -163,6 +164,42 @@ describe("sessionMetadataSyncScheduler", () => {
       accessMode: "current",
       executionStrategy: "react",
     });
+  });
+
+  it("取消后即使 scheduler 回调任务也不应触发 metadata sync", async () => {
+    const { scheduledTasks, scheduler } = createScheduler();
+    const setPendingCancel = vi.fn();
+    const runtime = {
+      updateSessionMetadata: vi.fn().mockResolvedValue(undefined),
+      setSessionExecutionStrategy: vi.fn(),
+      setSessionProviderSelection: vi.fn(),
+    };
+
+    scheduleSessionMetadataSync({
+      getCurrentRequestVersion: () => 1,
+      getCurrentSessionId: () => "topic-a",
+      hasRuntimeInvokeCapability: true,
+      idleTimeoutMs: 15_000,
+      minimumDelayMs: 8_000,
+      onError: vi.fn(),
+      onSkipped: vi.fn(),
+      onSynced: vi.fn(),
+      plan: metadataPlan(),
+      runtime,
+      scheduler,
+      sessionId: "topic-a",
+      setPendingCancel,
+      switchRequestVersion: 1,
+    });
+
+    const cancel = setPendingCancel.mock.lastCall?.[0] as
+      | (() => void)
+      | undefined;
+    cancel?.();
+    scheduledTasks[0]?.task();
+    await flushPromises();
+
+    expect(runtime.updateSessionMetadata).not.toHaveBeenCalled();
   });
 
   it("调度执行时如果会话已过期，应跳过 metadata sync", () => {

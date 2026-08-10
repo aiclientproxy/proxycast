@@ -454,23 +454,26 @@ function buildCanonicalTurnEntry(
     kind: "canonical_turn",
     id: `canonical-turn:${owner.turn.id}`,
     turn: owner.turn,
-    segments: buildCanonicalTurnSegments(owner.items),
+    segments: buildCanonicalTurnSegments(owner.turn.id, owner.items),
     isActive: owner.turn.id === currentTurnId,
   };
 }
 
 function buildCanonicalTurnSegments(
+  turnId: string,
   items: readonly AgentThreadItem[],
 ): CanonicalTurnRenderSegment[] {
   const segments: CanonicalTurnRenderSegment[] = [];
   let processItems: AgentThreadItem[] = [];
+  let processSegmentIndex = 0;
   const flushProcessItems = () => {
     if (processItems.length === 0) return;
     segments.push({
       kind: "process",
-      id: `process:${processItems[0]!.id}:${processItems.at(-1)!.id}`,
+      id: `process:${turnId}:${processSegmentIndex}`,
       items: processItems,
     });
+    processSegmentIndex += 1;
     processItems = [];
   };
 

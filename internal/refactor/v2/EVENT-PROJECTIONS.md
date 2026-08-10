@@ -19,29 +19,29 @@ Guardian warning 当前已完成独立 producer：同一 turn 内连续 3 次 Gu
 
 ## 1. Thread、Turn 与 Hook
 
-|   # | Method                          | 目标出口 | 当前裁决               | v2 投影                                                           |
-| --: | ------------------------------- | -------- | ---------------------- | ----------------------------------------------------------------- |
-|   1 | error                           | TP/HS    | current                | typed live/durable；true 重试，false 等权威 Turn                  |
-|   2 | thread/started                  | HS       | current                | 建立 Thread metadata，不把空 turns 当完整 history                 |
-|   3 | thread/status/changed           | HS/PI    | current                | notLoaded、idle、systemError、active 与 waiting flags             |
-|   4 | thread/archived                 | GN/HS    | current                | 侧栏归档，当前页只读                                              |
-|   5 | thread/deleted                  | GN       | current                | 当前页已删除态，不删除 Project                                    |
-|   6 | thread/unarchived               | GN/HS    | current                | 恢复可见/可操作状态                                               |
-|   7 | thread/closed                   | HS       | current                | 清除 live spinner 和 pending interaction                          |
-|   8 | skills/changed                  | GN       | current                | 瞬时失效并重新读取 Composer current Skill catalog                 |
-|   9 | thread/name/updated             | HS       | current                | Header 与侧栏名称                                                 |
-|  10 | thread/goal/updated             | HS       | current                | goal/阶段入口，不映射 Rust ProductionPlan                         |
-|  11 | thread/goal/cleared             | HS       | current                | 清除当前 goal indicator                                           |
-|  12 | thread/environment/connected    | HS       | planned                | 受控环境状态，无本地 fallback                                     |
-|  13 | thread/environment/disconnected | HS       | planned                | 断开与受影响能力                                                  |
-|  14 | thread/settings/updated         | HS       | current                | 下一 Turn model、reasoning、permission 摘要                       |
-|  15 | thread/tokenUsage/updated       | TP/HS    | current                | 本 Turn/总用量，节流更新                                          |
-|  16 | turn/started                    | TL/TP    | current                | 建立 Turn 与原始 Item 顺序                                        |
-|  17 | hook/started                    | TL/HS    | current                | current Hook producer 的 transient activity，run id 保留          |
-|  18 | turn/completed                  | TL/TP    | current                | 权威 Turn 终态并清理 pending                                      |
-|  19 | hook/completed                  | TL       | current                | paired Hook producer 的 transient status，不写入 canonical Item   |
-|  20 | turn/diff/updated               | DX       | current                | Lime exact Turn diff，canonical Turn/Changes 使用同一快照       |
-|  21 | turn/plan/updated               | TP       | current                | canonical update_plan checklist，实时/冷恢复一致                  |
+|   # | Method                          | 目标出口 | 当前裁决 | v2 投影                                                         |
+| --: | ------------------------------- | -------- | -------- | --------------------------------------------------------------- |
+|   1 | error                           | TP/HS    | current  | typed live/durable；true 重试，false 等权威 Turn                |
+|   2 | thread/started                  | HS       | current  | 建立 Thread metadata，不把空 turns 当完整 history               |
+|   3 | thread/status/changed           | HS/PI    | current  | notLoaded、idle、systemError、active 与 waiting flags           |
+|   4 | thread/archived                 | GN/HS    | current  | 侧栏归档，当前页只读                                            |
+|   5 | thread/deleted                  | GN       | current  | 当前页已删除态，不删除 Project                                  |
+|   6 | thread/unarchived               | GN/HS    | current  | 恢复可见/可操作状态                                             |
+|   7 | thread/closed                   | HS       | current  | 清除 live spinner 和 pending interaction                        |
+|   8 | skills/changed                  | GN       | current  | 瞬时失效并重新读取 Composer current Skill catalog               |
+|   9 | thread/name/updated             | HS       | current  | Header 与侧栏名称                                               |
+|  10 | thread/goal/updated             | HS       | current  | goal/阶段入口，不映射 Rust ProductionPlan                       |
+|  11 | thread/goal/cleared             | HS       | current  | 清除当前 goal indicator                                         |
+|  12 | thread/environment/connected    | HS       | planned  | 受控环境状态，无本地 fallback                                   |
+|  13 | thread/environment/disconnected | HS       | planned  | 断开与受影响能力                                                |
+|  14 | thread/settings/updated         | HS       | current  | 下一 Turn model、reasoning、permission 摘要                     |
+|  15 | thread/tokenUsage/updated       | TP/HS    | current  | 本 Turn/总用量，节流更新                                        |
+|  16 | turn/started                    | TL/TP    | current  | 建立 Turn 与原始 Item 顺序                                      |
+|  17 | hook/started                    | TL/HS    | current  | current Hook producer 的 transient activity，run id 保留        |
+|  18 | turn/completed                  | TL/TP    | current  | 权威 Turn 终态并清理 pending                                    |
+|  19 | hook/completed                  | TL       | current  | paired Hook producer 的 transient status，不写入 canonical Item |
+|  20 | turn/diff/updated               | DX       | current  | Lime exact Turn diff，canonical Turn/Changes 使用同一快照       |
+|  21 | turn/plan/updated               | TP       | current  | canonical update_plan checklist，实时/冷恢复一致                |
 
 ## 2. Item 生命周期、流与进程
 
@@ -85,36 +85,36 @@ Guardian warning 当前已完成独立 producer：同一 turn 内连续 3 次 Gu
 
 ## 4. Model、安全、告警与搜索
 
-|   # | Method                           | 目标出口 | 当前裁决               | v2 投影                                                      |
-| --: | -------------------------------- | -------- | ---------------------- | ------------------------------------------------------------ |
-|  52 | model/rerouted                   | TL/HS    | current                | from/to 与 allowlisted reason；不改变 route owner            |
-|  53 | model/verification               | HS/DX    | current                | 脱敏验证结论                                                 |
-|  54 | turn/moderationMetadata          | DX       | current                | trusted first-party metadata，opaque Turn state，last-write-wins    |
-|  55 | model/safetyBuffering/updated    | HS       | current                | 安全缓冲提示，不伪造模型选择                                 |
-|  56 | warning                          | HS/GN    | current                | typed threadId/message/code?；实时去重 toast 与冷读恢复      |
+|   # | Method                           | 目标出口 | 当前裁决               | v2 投影                                                                |
+| --: | -------------------------------- | -------- | ---------------------- | ---------------------------------------------------------------------- |
+|  52 | model/rerouted                   | TL/HS    | current                | from/to 与 allowlisted reason；不改变 route owner                      |
+|  53 | model/verification               | HS/DX    | current                | 脱敏验证结论                                                           |
+|  54 | turn/moderationMetadata          | DX       | current                | trusted first-party metadata，opaque Turn state，last-write-wins       |
+|  55 | model/safetyBuffering/updated    | HS       | current                | 安全缓冲提示，不伪造模型选择                                           |
+|  56 | warning                          | HS/GN    | current                | typed threadId/message/code?；实时去重 toast 与冷读恢复                |
 |  57 | guardianWarning                  | HS/TL    | current                | Guardian denial circuit breaker 的高优先级 warning，独立于普通 warning |
-|  58 | deprecationNotice                | GN       | product-scope-excluded | 开发/设置诊断，不污染对话流                                  |
-|  59 | configWarning                    | GN       | current                | initialize/turn producer；typed path/range 经去重 toast 展示 |
-|  60 | fuzzyFileSearch/sessionUpdated   | PI       | planned                | Composer mention 搜索，丢弃陈旧 session                      |
-|  61 | fuzzyFileSearch/sessionCompleted | PI       | planned                | 终结 loading、显示空/失败态                                  |
+|  58 | deprecationNotice                | GN       | product-scope-excluded | 开发/设置诊断，不污染对话流                                            |
+|  59 | configWarning                    | GN       | current                | initialize/turn producer；typed path/range 经去重 toast 展示           |
+|  60 | fuzzyFileSearch/sessionUpdated   | PI       | planned                | Composer mention 搜索，丢弃陈旧 session                                |
+|  61 | fuzzyFileSearch/sessionCompleted | PI       | planned                | 终结 loading、显示空/失败态                                            |
 
 ## 5. Realtime、Windows 与登录
 
-|   # | Method                            | 目标出口 | 当前裁决               | v2 投影                                      |
-| --: | --------------------------------- | -------- | ---------------------- | -------------------------------------------- |
-|  62 | thread/realtime/started           | HS/PI    | planned                | 建立语音会话状态                             |
-|  63 | thread/realtime/itemAdded         | TL       | planned                | 以结构化 Item 投影，不 stringify raw payload |
-|  64 | thread/realtime/transcript/delta  | TL/PI    | planned                | provisional 语音转写                         |
-|  65 | thread/realtime/transcript/done   | TL       | planned                | final transcript 替换 provisional            |
-|  66 | thread/realtime/outputAudio/delta | PI       | planned                | 有界音频播放队列                             |
-|  67 | thread/realtime/sdp               | DX       | product-scope-excluded | Electron/WebRTC owner 消费                   |
-|  68 | thread/realtime/error             | HS/PI    | planned                | 可恢复错误，不推断普通 Turn failed           |
-|  69 | thread/realtime/closed            | HS/PI    | planned                | 释放媒体状态，保留最终 transcript            |
-|  70 | windows/worldWritableWarning      | GN       | planned                | Windows 安全摘要和设置入口                   |
-|  71 | windowsSandbox/setupCompleted     | GN/PI    | planned                | setup success/error 与下一步                 |
-|  72 | account/login/completed           | GN/PI    | product-scope-excluded | credential 流程不进入对话                    |
+|   # | Method                            | 目标出口 | 当前裁决               | v2 投影                                     |
+| --: | --------------------------------- | -------- | ---------------------- | ------------------------------------------- |
+|  62 | thread/realtime/started           | DX       | product-scope-excluded | 不恢复已退役 realtime voice GUI             |
+|  63 | thread/realtime/itemAdded         | DX       | product-scope-excluded | 不建立第二套 Thread Item lifecycle          |
+|  64 | thread/realtime/transcript/delta  | DX       | product-scope-excluded | Grok-aligned STT 不复用 Codex realtime wire |
+|  65 | thread/realtime/transcript/done   | DX       | product-scope-excluded | Grok-aligned STT 不复用 Codex realtime wire |
+|  66 | thread/realtime/outputAudio/delta | DX       | product-scope-excluded | 不在 Renderer 建立 Codex 音频播放队列       |
+|  67 | thread/realtime/sdp               | DX       | product-scope-excluded | 不恢复 WebRTC/SDP 通道                       |
+|  68 | thread/realtime/error             | DX       | product-scope-excluded | 只记录脱敏 method/field 诊断                |
+|  69 | thread/realtime/closed            | DX       | product-scope-excluded | 只记录脱敏 method/field 诊断                |
+|  70 | windows/worldWritableWarning      | GN       | planned                | Windows 安全摘要和设置入口                  |
+|  71 | windowsSandbox/setupCompleted     | GN/PI    | planned                | setup success/error 与下一步                |
+|  72 | account/login/completed           | GN/PI    | product-scope-excluded | credential 流程不进入对话                   |
 
-v2 的实现门槛不是把所有 planned method 同时实现，而是首先将这张表固化为类型检查的 coverage map。新增 Codex method 时，CI 必须要求它先获得裁决，不能落入 default silent return。standalone `process/outputDelta` 与 `process/exited` 虽保留在 upstream method inventory 和 drift recorder 中，但明确为 `product-scope-excluded`：不得进入 Lime current protocol、Renderer projector、时间线或用户级通知；对应 standalone `process/spawn` 控制面不能借 planned 名义回流。Lime exact `turn/diff/updated` 已由 `apply_patch -> durable fact -> v2 projector -> canonical Turn/Changes` current owner 承接，不等同于 Codex TUI 的 raw diff surface。
+v2 的实现门槛不是把所有 planned method 同时实现，而是首先将这张表固化为类型检查的 coverage map。新增 Codex method 时，CI 必须要求它先获得裁决，不能落入 default silent return。standalone `process/outputDelta`、`process/exited` 与全部 `thread/realtime/*` 通知虽保留在 upstream method inventory 和 drift recorder 中，但明确为 `product-scope-excluded`：不得进入 Lime current protocol、Renderer projector、时间线或用户级通知；对应 standalone `process/spawn` 与 Codex realtime/WebRTC 控制面不能借 planned 名义回流。Lime exact `turn/diff/updated` 已由 `apply_patch -> durable fact -> v2 projector -> canonical Turn/Changes` current owner 承接，不等同于 Codex TUI 的 raw diff surface。音频、语音和媒体能力继续由 Grok-aligned `model-provider` 与 `voice-core` / `media-runtime` 承接。
 
 ## 6. Lime-owned 扩展事件
 
