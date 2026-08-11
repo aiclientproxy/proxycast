@@ -210,4 +210,4 @@
 
 - 修复提交 `8738c8a623a763c50267d208facb4667ca9736c6` 已推送到 `origin/main`。Windows runner [`31444743300`](https://github.com/limecloud/lime/actions/runs/31444743300) 与 Job `93636406363` 均为 `success`；Windows path contract、sherpa runtime、Electron x64 Squirrel 构建、N-1 installer 下载、真实安装/升级 smoke 和 installed Plugin Gate B 全部通过。
 - Windows Gate B Artifact `9084355493`（`lime-windows-agent-plugin-gate-b-evidence`）已下载并审计：`ok=true`、`appVersion=1.125.0`、`platform=win32`、`arch=x64`、packaged/preload/App Server JSONL 真链成立、provider request `2`、MCP ledger accepted、reload/cold restore 通过、resource read/HTML load `3/3`、Electron launch `2`、卸载/installed projection 清理/历史恢复全部通过；卸载后没有重启 MCP runtime、重跑 provider 或 tool，`productionMockFallbackHitCount=0`、`missingRequiredMethods=[]`、`legacyMcpCommandsSeen=[]`、`consoleErrors=[]`。
-- 退出条件已满足。远端 `main` 指向 `8738c8a623a763c50267d208facb4667ca9736c6`；本地与远端 `v1.125.0` tag 均继续固定在 `8647d18fa358e3a9c86e520348d39e4b3eba6041`，未移动或覆盖。
+- 退出条件已满足。Windows runner 检出的产品修复 SHA 为 `8738c8a623a763c50267d208facb4667ca9736c6`；本地与远端 `v1.125.0` tag 均继续固定在 `8647d18fa358e3a9c86e520348d39e4b3eba6041`，未移动或覆盖。
