@@ -1,6 +1,6 @@
 # Lime v1.125.0 发布执行计划
 
-状态：release-git-confirmation-pending / windows-runner-pending
+状态：windows-gate-b-timeout-fix-in-progress
 日期：2026-08-09
 目标版本：`1.125.0`
 目标 tag：`v1.125.0`
@@ -191,3 +191,16 @@
 - 本地验证：`cargo test --manifest-path lime-rs/Cargo.toml -p app-server plugin_uninstall_invalidates_mcp_runtimes_before_removing_package` 通过；`npm run test:rust:related -- lime-rs/crates/app-server/src/runtime.rs lime-rs/crates/app-server/src/runtime/plugins.rs lime-rs/crates/app-server/src/runtime_backend/execution_backend.rs lime-rs/crates/app-server/src/runtime/tests/plugins.rs` 通过，`app-server` lib `1642 passed / 0 failed`；`cargo fmt --all -- --check` 与 `git diff --check` 通过。
 - `npm run typecheck`、`npm run test:contracts`、`npm run verify:app-version`、`npm run verify:gui-smoke` 均通过。真实 macOS packaged Plugin Gate B 通过：`ok=true`、卸载/installed projection/history recovery 全部通过、MCP App resource/HTML `4/4`、provider request `2`、`productionMockFallbackHitCount=0`、`missingRequiredMethods=[]`。
 - 当前状态：`fix-validated-locally / release-git-confirmation-pending / windows-runner-pending`；下一步获得危险 Git 写操作确认后提交并推送窄修复，以新完整 SHA 重跑 Windows runner，不移动已发布 `v1.125.0` tag。
+
+## Windows runner `31422354829`
+
+状态：`bridge-timeout-fix-in-progress / windows-runner-pending`
+
+- 使用完整 SHA `cd5bc4eae8211a2f4bdc1a7843b310618df18dc4`；Windows Plugin path contract、sherpa runtime、Electron Windows x64 Squirrel package、N-1 installer download 与 installed Squirrel smoke 全部通过。上一轮 `os error 32` 未复现，但 Gate B 在 reload 后的 session hydration 阶段失败，尚未执行到卸载。
+- 失败 evidence 已证明首次 MCP App surface、`mcpServer/resource/read`、HTML load、reload 后 canonical MCP item/plugin/resource URI 均正确；直接错误是 `thread/items/list` 经 `app_server_handle_json_lines` 在 5000ms 内未返回，Renderer fail closed 后主内容与 App surface 消失。
+- 根因：`commandPolicy.ts` 用手工 `APP_SERVER_CURRENT_METHODS` 同步 JSON-RPC method，漏掉 `thread/items/list` 与 `thread/turns/list`，导致新 read method 退回普通 truth 命令的 5 秒超时。该集合是 App Server protocol 之外的重复事实源。
+- 修复：保留 `turn/start`、conversation import、startup、knowledge compile、long-running 与 provider network 专项 profile；专项匹配后，所有 `app_server_handle_json_lines` 统一使用 `app-server-read` 的 30 秒窗口。删除手工 current method catalog 及判断 helper；method 合法性继续由 App Server protocol/handler fail closed，不由 bridge timeout policy 承担。
+- 窄写集：`src/lib/dev-bridge/commandPolicy.ts`、`src/lib/dev-bridge/commandPolicy.test.ts` 与本计划；不触碰并发架构、命令文档、projection drift 和治理 fixture 改动。
+- 本地验证：commandPolicy Vitest `11 passed / 0 failed`；定向 ESLint、`npm run typecheck`、`npm run test:contracts`、`npm run verify:app-version`、`npm run verify:gui-smoke` 与 `git diff --check` 均通过。GUI evidence：`standalone-shell-01-20260810194309-62252`。
+- 本机真实 packaged Plugin Gate B 通过：summary `ok=true`、provider request `2`、provider final text、MCP App 首次/reload/cold restore、App Center 卸载、installed projection 清理、卸载后历史恢复全部通过，`productionMockFallbackHitCount=0`、`missingRequiredMethods=[]`。
+- 退出条件：定向回归覆盖 `thread/items/list`、`thread/turns/list` 和未来 App Server method 均归 `app-server-read`；typecheck、contracts、GUI smoke 与本机真实 Electron Plugin Gate B 通过；随后提交并推送新完整 SHA，重新跟踪 Windows Gate B 到卸载、installed projection 清理与历史恢复全部通过。`v1.125.0` tag 保持不动。

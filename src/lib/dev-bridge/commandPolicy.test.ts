@@ -440,6 +440,35 @@ describe("commandPolicy", () => {
         },
       }),
     ).toBe("app-server-read");
+    for (const method of [
+      "thread/items/list",
+      "thread/turns/list",
+      "futureDomain/futureMethod",
+    ]) {
+      expect(
+        resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
+          request: {
+            lines: [JSON.stringify({ id: `read-${method}`, method, params: {} })],
+          },
+        }),
+      ).toBe("app-server-read");
+    }
+    for (const method of [
+      "pluginLocalPackage/inspect",
+      "pluginLocalPackage/export",
+      "pluginInstalled/save",
+      "pluginUiRuntime/start",
+    ]) {
+      expect(
+        resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
+          request: {
+            lines: [
+              JSON.stringify({ id: `retired-${method}`, method, params: {} }),
+            ],
+          },
+        }),
+      ).toBe("app-server-read");
+    }
     expect(
       resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
         request: {
@@ -500,22 +529,6 @@ describe("commandPolicy", () => {
           },
         }),
       ).toBe("app-server-read");
-    }
-    for (const method of [
-      "pluginLocalPackage/inspect",
-      "pluginLocalPackage/export",
-      "pluginInstalled/save",
-      "pluginUiRuntime/start",
-    ]) {
-      expect(
-        resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
-          request: {
-            lines: [
-              JSON.stringify({ id: `retired-${method}`, method, params: {} }),
-            ],
-          },
-        }),
-      ).toBe("truth");
     }
     expect(
       resolveDevBridgeCommandTimeoutProfile("app_server_handle_json_lines", {
